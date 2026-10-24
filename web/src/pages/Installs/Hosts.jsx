@@ -4,17 +4,22 @@ import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
+import EmptyState from '../../components/EmptyState.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
-import { hostInfo, installName } from '../../lib/hosts.js'
+import { hostInfo, installName, removeLayer } from '../../lib/hosts.js'
 
 // Join key for the MCP-target -> install pairing: an install owns the targets the API tags
 // with its (host, root). Keying on the install identity (not the config's dirname) is what
 // lets a Claude global target, whose ~/.claude.json sits OUTSIDE its ~/.claude root, still
 // attach to the right install.
 const installKey = (host, root) => `${host} ${root}`
+
+// The hosts whose project install keeps its data under a marker folder (js/hosts/hosts.mjs
+// CLAUDE_STYLE): the claude-family rows of HOSTS.
+const CLAUDE_STYLE = ['claude', 'bob', 'openclaude']
 
 const STATE = { active: ['Active', 'ok'], disabled: ['Disabled', 'warn'] }
 
@@ -28,12 +33,12 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
       <table className="tbl hosts-tbl" aria-label={label}>
         <thead>
           <tr>
-            <th>{project ? 'Project' : 'Host'}</th>
-            <th>{project ? 'Host' : 'Path'}</th>
-            <th>Voice</th>
-            <th>Footprint</th>
-            <th>State</th>
-            <th>
+            <th scope="col">{project ? 'Project' : 'Host'}</th>
+            <th scope="col">{project ? 'Host' : 'Path'}</th>
+            <th scope="col">Voice</th>
+            <th scope="col">Footprint</th>
+            <th scope="col">State</th>
+            <th scope="col">
               <span className="sr-only">Selected</span>
             </th>
           </tr>
@@ -142,15 +147,25 @@ export default function Hosts({
   onMutated,
 }) {
   const confirm = useConfirm()
-  const { data: instData, error: instErr } = useAsync(() => api.installs(), [dataRev])
-  const { data: mcpData, error: mcpErr } = useAsync(() => api.mcp(), [dataRev])
-  const [note, setNote] = useState('')
+  const {
+    data: instData,
+    error: instErr,
+    reload: reloadInst,
+  } = useAsync(() => api.installs(), [dataRev])
+  const { data: mcpData, error: mcpErr, reload: reloadMcp } = useAsync(() => api.mcp(), [dataRev])
+  // null | { text, tone }: 'bad' is a failure (an alert), 'ok' a done act, '' a progress
+  // note, so "Opening…" is never painted as an error.
+  const [note, setNote] = useState(null)
   const [busyKey, setBusyKey] = useState('') // install toggle in flight
   // Each install's build choices, keyed by id: { theme, footprint, posture, mode, trust }, each
   // key present only once the user has picked it (choiceFor fills the rest).
   const [picks, setPicks] = useState({})
   const [deploying, setDeploying] = useState(false)
-  const [removing, setRemoving] = useState(null) // null | { id, host, path, memory }
+  // What Uninstall does to memory + notebook, bound to the install it was chosen on: the
+  // panel's fallback install can change under a toggle or refresh without a pick, and a
+  // "delete" must never follow it there.
+  const [memPick, setMemPick] = useState({ id: '', value: 'keep' })
+  const memoryFor = (inst) => (memPick.id === inst?.id ? memPick.value : 'keep')
   const [picked, setPicked] = useState('') // the install shown in the panel
 
   const mcpByInstall = useMemo(() => {
@@ -162,7 +177,16 @@ export default function Hosts({
     return m
   }, [mcpData])
 
-  if (instErr || mcpErr) return <ErrorState error={instErr || mcpErr} />
+  if (instErr || mcpErr)
+    return (
+      <ErrorState
+        error={instErr || mcpErr}
+        onRetry={() => {
+          reloadInst()
+          reloadMcp()
+        }}
+      />
+    )
   if (!instData || !mcpData) return <Loading />
 
   // Globals first, then the per-repo installs; within each, active before the rest.
@@ -216,11 +240,13 @@ export default function Hosts({
   // through the 'install' action (a non-destructive in-place emit), streamed to the console.
   const applyVoice = async (inst) => {
     const { theme, footprint, posture, mode, trust } = choiceFor(inst)
+    const tool = hostInfo(inst.host).label
+    const axes = `${footprint} footprint, ${posture} posture, ${mode} mode, ${trust} loop trust`
     const msg =
       inst.state === 'absent'
-        ? `Install Geneseed into ${inst.path} with the “${theme}” voice (${footprint} footprint, ${posture} posture, ${mode} mode)? ` +
+        ? `Install Geneseed for ${tool} into ${inst.path} with the “${theme}” voice (${axes})? ` +
           `Files are added non-destructively (your own config is left untouched); deactivate or uninstall later.`
-        : `Rebuild this install (voice “${theme}”, ${footprint} footprint, ${posture} posture, ${mode} mode)? It rebuilds in place, non-destructive.`
+        : `Rebuild this ${tool} install (voice “${theme}”, ${axes})? It rebuilds in place, non-destructive.`
     const ok = await confirm(msg, {
       title: inst.state === 'absent' ? 'Install Geneseed?' : 'Rebuild this install?',
       confirmLabel: inst.state === 'absent' ? 'Install' : 'Rebuild',
@@ -248,7 +274,7 @@ export default function Hosts({
     )
       return
     setBusyKey(inst.id)
-    setNote('')
+    setNote(null)
     try {
       const res = await api.installToggle(
         inst.host,
@@ -257,42 +283,81 @@ export default function Hosts({
       )
       if (!res.ok) {
         const failed = Array.isArray(res.failed) ? res.failed.join(', ') : ''
-        setNote(res.error || (failed && `unrestored: ${failed}`) || 'action failed')
+        setNote({
+          text: res.error || (failed && `unrestored: ${failed}`) || 'action failed',
+          tone: 'bad',
+        })
         return
       }
       onMutated?.()
     } catch (e) {
-      setNote(e.message)
+      setNote({ text: e.message, tone: 'bad' })
     } finally {
       setBusyKey('')
     }
   }
 
-  // Permanently delete an install. Destructive and irreversible: the inline question and
-  // its memory disposition are the only guards.
-  const confirmRemove = async () => {
-    const r = removing
-    if (!r) return
-    setBusyKey(r.id)
-    setNote('')
+  // Where an install's memory/ and notebook/ live, so the confirm names what "delete"
+  // removes: a Claude-style project keeps them under its marker folder, any other install
+  // in its root.
+  // shortcut: mirrors installDataDir; upgrade when /api/installs carries data_dir
+  // Joined with the separator the path already uses, so a Windows path reads as one.
+  const memPath = (inst, store) => {
+    const sep = inst.path.includes('\\') && !inst.path.includes('/') ? '\\' : '/'
+    const root = inst.path.replace(/[\\/]+$/, '')
+    const data =
+      inst.scope === 'project' && CLAUDE_STYLE.includes(inst.host)
+        ? `${root}${sep}.${inst.host}`
+        : root
+    return `${data}${sep}${store}`
+  }
+
+  // Permanently delete an install. Destructive and irreversible, so a danger confirm that
+  // names the layer it deletes and what the panel's memory choice does; with "delete" it
+  // names the two folders and says so on its button.
+  const confirmRemove = async (inst) => {
+    const memory = memoryFor(inst)
+    const where =
+      inst.scope === 'project' ? ' and de-lists it' : '; the row stays, marked “not installed”'
+    const mem =
+      memory === 'delete'
+        ? `, and permanently deletes ${memPath(inst, 'memory')} and ${memPath(inst, 'notebook')}`
+        : memory === 'archive'
+          ? '; memory and notebook are archived aside'
+          : '; memory and notebook stay in place'
+    const ok = await confirm(
+      `Uninstall ${hostInfo(inst.host).label} · ${inst.scope}? It deletes ` +
+        `${removeLayer(inst.host, inst.scope)}${where}${mem}. This can’t be undone.`,
+      {
+        title: inst.scope === 'project' ? 'Remove this harness?' : 'Remove the global install?',
+        confirmLabel: memory === 'delete' ? 'Remove and delete memory' : 'Remove',
+        tone: 'danger',
+      },
+    )
+    if (!ok) return
+    setBusyKey(inst.id)
+    setNote(null)
     try {
-      const res = await api.installRemove(r.host, r.path, r.memory)
+      const res = await api.installRemove(inst.host, inst.path, memory)
       if (!res.ok) {
-        setNote(res.error || 'remove failed')
+        setNote({ text: res.error || 'remove failed', tone: 'bad' })
         return
       }
-      setRemoving(null)
+      // A removed global stays as a "not installed" row: a later reinstall starts at keep.
+      setMemPick({ id: '', value: 'keep' })
       // An owned file the user edited is left on disk as theirs; say so, or the cleared row
       // reads as "everything is gone".
       if (res.kept?.length) {
-        setNote(
-          `Removed. Kept ${res.kept.length} file(s) you edited: ${res.kept.join(', ')} — they ` +
+        setNote({
+          text:
+            `Removed. Kept ${res.kept.length} file(s) you edited: ${res.kept.join(', ')} — they ` +
             'are yours now (the CLI geneseed uninstall --force deletes edited files too).',
-        )
+          tone: 'ok',
+        })
       }
       onMutated?.()
     } catch (e) {
-      setNote(e.message)
+      setNote({ text: e.message, tone: 'bad' })
     } finally {
       setBusyKey('')
     }
@@ -302,12 +367,15 @@ export default function Hosts({
   // holding the config on the machine running the daemon. `ok` means the request went out,
   // not that a window appeared, so the note names the folder.
   const revealMcp = async (target) => {
-    setNote('')
+    setNote(null)
     try {
       const r = await api.mcpReveal(target.path)
-      setNote(`Opening ${r.dir}. If no window appeared, open that folder by hand.`)
+      setNote({
+        text: `Opening ${r.dir}. If no window appeared, open that folder by hand.`,
+        tone: '',
+      })
     } catch (e) {
-      setNote(e.message)
+      setNote({ text: e.message, tone: 'bad' })
     }
   }
 
@@ -321,7 +389,6 @@ export default function Hosts({
   const projects = installs.filter((i) => i.scope !== 'global')
   const pick = (id) => {
     setPicked(id)
-    setRemoving(null)
   }
 
   return (
@@ -340,9 +407,13 @@ export default function Hosts({
             </div>
           ) : null}
         </div>
-        {note ? (
-          <p className="tag bad note" role="status">
-            {note}
+        {note?.tone === 'bad' ? (
+          <p className="tag bad note" role="alert">
+            {note.text}
+          </p>
+        ) : note ? (
+          <p className={`tag ${note.tone === 'ok' ? 'ok ' : ''}note`} role="status">
+            {note.text}
           </p>
         ) : null}
         <section className="panel flush" aria-labelledby="inst-global">
@@ -381,7 +452,7 @@ export default function Hosts({
                 options={options}
                 onAction={onAction}
                 onClose={() => setDeploying(false)}
-                onNote={setNote}
+                onNote={(t) => setNote(t ? { text: t, tone: 'bad' } : null)}
               />
             </div>
           ) : null}
@@ -394,9 +465,9 @@ export default function Hosts({
               label="Per-project installs"
             />
           ) : (
-            <div className="empty inst-empty">
+            <EmptyState>
               No repo has its own harness yet. Deploy one to give a project its own rules and voice.
-            </div>
+            </EmptyState>
           )}
         </section>
         <Checkout setup={setup} overview={overview} />
@@ -413,15 +484,11 @@ export default function Hosts({
           onPick={(key, v) => setPick(current, key, v)}
           canAct={!!onAction}
           busy={busyKey === current.id}
-          removing={removing?.id === current.id ? removing : null}
-          onRemoving={(r) =>
-            setRemoving(
-              r && { id: current.id, host: current.host, path: current.path, memory: r.memory },
-            )
-          }
+          memory={memoryFor(current)}
+          onMemory={(value) => setMemPick({ id: current.id, value })}
           onApply={() => applyVoice(current)}
           onToggleInstall={() => toggleInstall(current)}
-          onRemove={confirmRemove}
+          onRemove={() => confirmRemove(current)}
           onRevealMcp={revealMcp}
         />
       ) : null}

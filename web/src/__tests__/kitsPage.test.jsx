@@ -176,4 +176,38 @@ describe('Kits page', () => {
     expect(screen.queryByText('This Geneseed ships no kit.')).toBeNull()
     expect(screen.getByText(/bad kit manifest/)).toBeTruthy()
   })
+
+  // KT-13: two kits need no Status filter in the rail, and the rail's only link pointed at the
+  // page it sits on.
+  it('a short list gets no rail categories and no self-link', async () => {
+    await mount({
+      kits: [kit('spring-boot'), kit('other', { credits: [] })],
+      installs: [row({ kits: ['spring-boot'] })],
+    })
+    expect(document.querySelector('.rail-cats')).toBeNull()
+    expect(document.querySelector('.lib-kinds a[href="#/kits"]')).toBeNull()
+  })
+
+  // The other side of the threshold: at eight kits in two statuses the filter comes back.
+  it('a list of eight kits gets its Status categories', async () => {
+    const names = ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8']
+    await mount({
+      kits: names.map((n) => kit(n, { credits: [] })),
+      installs: [row({ kits: ['k1'] })],
+    })
+    expect(document.querySelector('.rail-cats')).not.toBeNull()
+  })
+
+  // Several kits can credit the same upstream: the link says which commit it compares.
+  it('names the compare link by repo and commit', async () => {
+    await mount({ kits: [kit('a')], installs: [] })
+    expect(screen.getByRole('link', { name: /^Compare acme\/spring-kit @ abcdef1/ })).toBeTruthy()
+  })
+
+  it('has at most one filled button', async () => {
+    await mount({ kits: [kit('a')], installs: [row(), row(PROJECT)] })
+    expect(
+      document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length,
+    ).toBeLessThanOrEqual(1)
+  })
 })

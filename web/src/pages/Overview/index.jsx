@@ -3,10 +3,13 @@ import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+import Seg from '../../components/Seg.jsx'
 import StaleBanner from '../../components/StaleBanner.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
 import Ledger from './Ledger.jsx'
 import { docsHostOf } from '../../hooks/useHarness.js'
+import { LAYOUTS } from '../../hooks/useLayout.js'
 import { readSeen, TRACK_GROUP } from '../Docs/Track.jsx'
 
 const DISMISS_KEY = 'geneseed-newhere-dismissed'
@@ -46,7 +49,7 @@ export function NewHere({ harness }) {
           ))}
         </div>
       </div>
-      <a className="btn" href={`#/docs/${encodeURIComponent(pages[next].id)}`}>
+      <a className="btn ghost" href={`#/docs/${encodeURIComponent(pages[next].id)}`}>
         {done ? `Continue · step ${next + 1}` : 'Start'}
       </a>
       <button
@@ -59,6 +62,27 @@ export function NewHere({ harness }) {
         ×
       </button>
     </section>
+  )
+}
+
+// The Overview's View control: which of the five views this page shows. Both arms put it in
+// their header, so a lens is never a dead end back to the Ledger.
+function ViewSeg({ layout, onLayout }) {
+  return (
+    <Seg aria-label="View">
+      {LAYOUTS.map((l) => (
+        <button
+          key={l.id}
+          type="button"
+          className={layout === l.id ? 'on' : ''}
+          aria-pressed={layout === l.id}
+          title={l.tagline}
+          onClick={() => onLayout(l.id)}
+        >
+          {l.short}
+        </button>
+      ))}
+    </Seg>
   )
 }
 
@@ -75,16 +99,15 @@ export default function Overview({
   runs,
   onAction,
   layout = 'overview',
+  onLayout,
   dataRev,
 }) {
   if (!overview)
     return overviewError ? (
-      <div>
-        <ErrorState error={`Could not load the harness overview: ${overviewError}`} />
-        <button type="button" className="btn" onClick={onRetry}>
-          Retry
-        </button>
-      </div>
+      <ErrorState
+        error={`Could not load the harness overview: ${overviewError}`}
+        onRetry={onRetry}
+      />
     ) : (
       <Loading />
     )
@@ -92,6 +115,7 @@ export default function Overview({
   if (!overview.deployed) return <Onboarding onAction={onAction} />
 
   const banner = <NewHere harness={docsHostOf(overview.emit)} />
+  const view = onLayout ? <ViewSeg layout={layout} onLayout={onLayout} /> : null
   if (layout === 'overview') {
     return (
       <Ledger
@@ -100,6 +124,7 @@ export default function Overview({
         onAction={onAction}
         onRetry={onRetry}
         dataRev={dataRev}
+        view={view}
         banner={
           <>
             {/* The older dashboards render their own (Dashboard/index.jsx). */}
@@ -113,28 +138,33 @@ export default function Overview({
   // One of the four older dashboards, chosen in the Appearance palette.
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="h">Overview</h1>
-          <p className="sub">
-            {[
-              overview.theme && `${overview.theme} voice`,
-              overview.footprint && `${overview.footprint} footprint`,
-              overview.target,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
-        <div className="page-actions">
-          <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
-            Run doctor
-          </button>
+      {/* The one header and the one action row: each lens used to carry its own as well. */}
+      <PageHeader
+        title="Overview"
+        sub={[
+          overview.theme && `${overview.theme} voice`,
+          overview.footprint && `${overview.footprint} footprint`,
+          overview.target,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        primary={
           <button type="button" className="btn" onClick={() => onAction('build-all')}>
             Rebuild
           </button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <button type="button" className="btn ghost" onClick={() => onAction('update')}>
+              Update
+            </button>
+            <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
+              Run doctor
+            </button>
+            {view}
+          </>
+        }
+      />
       {banner}
       <Suspense fallback={<Loading />}>
         <Dashboard

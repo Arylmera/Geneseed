@@ -1,11 +1,11 @@
-import React, { useLayoutEffect, useRef } from 'react'
-import { animate, svg, utils } from 'animejs'
+import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
+import Ring from '../../components/Ring.jsx'
 import { editCount, relTime } from '../../lib/format.js'
 import { bucketJobsByDay, jobSummary, newestJobs } from '../../lib/jobBuckets.js'
 import { headlineFor } from '../../lib/headlines.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
-import { CountUp, motionOK, settle } from '../../lib/motion.js'
+import { CountUp } from '../../lib/motion.js'
 import VerdictBadge from './VerdictBadge.jsx'
 
 // Recent-activity panel: how many jobs to list.
@@ -16,97 +16,29 @@ const MAX_TIMELINE_JOBS = 12
 // so a colour assigned to "agents" stays the same regardless of theme voice.
 const B_CATS = ['#2BB673', '#16A6A6', '#E8A23B', '#E07A5F', '#8E7DBE', '#5BD08A', '#79856E']
 
-// Donut chart. Plain SVG arcs — no chart library. Centre shows the running
-// total under a caption; legend reads alongside the chart. The caption is a
-// prop so the same donut serves both the capability mix and the doctor-checks
-// readiness ring without mislabelling one as the other.
-//
-// The arcs SWEEP in, one after another clockwise, each taking its share of the sweep's
-// time — so the chart reads as one ring being filled, not as slices popping in. Keyed on
-// the values, so the doctor ring (which arrives empty and fills when the checks land)
-// sweeps again when its numbers do.
+// Donut chart: the shared ring, with the running total and its caption over the centre. The
+// caption is a prop so the same donut serves both the capability mix and the doctor-checks
+// readiness ring without mislabelling one as the other. `segments` are the ring's own
+// [{ key, label, n, tone }].
 const DONUT_SWEEP_MS = 650
 function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) {
-  // `sum` is what the centre says; `total` only guards the divisions. The centre used to
-  // print the `|| 1` guard itself, so a doctor ring with no checks yet read "1 checks".
-  const sum = segments.reduce((s, x) => s + x.value, 0)
-  const total = sum || 1
-  const arcs = useRef(null)
-  const sig = segments.map((x) => x.value).join(',')
-  useLayoutEffect(() => {
-    const paths = arcs.current?.querySelectorAll('path')
-    if (!paths?.length || !motionOK()) return
-    const fr = segments.filter((x) => x.value > 0).map((x) => x.value / total)
-    const at = fr.map((_, i) => fr.slice(0, i).reduce((a, b) => a + b, 0))
-    const drawn = svg.createDrawable(paths)
-    // Hidden BEFORE paint (this is a layout effect), not on the first animation frame —
-    // otherwise the full ring flashes for one frame before the sweep starts.
-    utils.set(drawn, { draw: '0 0' })
-    const anim = animate(drawn, {
-      draw: ['0 0', '0 1'],
-      duration: (_, i) => Math.max(DONUT_SWEEP_MS * fr[i], 60),
-      delay: (_, i) => DONUT_SWEEP_MS * at[i],
-      ease: 'linear',
-    })
-    return settle(anim, DONUT_SWEEP_MS)
-    // `sig` IS the segments' identity here; the array itself is rebuilt every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sig])
-  const r = size / 2 - stroke / 2
-  const cx = size / 2
-  const cy = size / 2
-  // Each arc's running start, computed before the JSX: the map callback below
-  // must not reassign a render-scope variable (react-hooks/immutability).
-  const starts = []
-  let acc = 0
-  for (const seg of segments) {
-    starts.push(acc)
-    acc += seg.value
-  }
+  const sum = segments.reduce((s, x) => s + x.n, 0)
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
-      <g ref={arcs}>
-        {segments.map((seg, i) => {
-          const frac = seg.value / total
-          if (frac <= 0) return null
-          const start = (starts[i] / total) * 2 * Math.PI - Math.PI / 2
-          const end = ((starts[i] + seg.value) / total) * 2 * Math.PI - Math.PI / 2
-          const x1 = cx + r * Math.cos(start)
-          const y1 = cy + r * Math.sin(start)
-          const x2 = cx + r * Math.cos(end)
-          const y2 = cy + r * Math.sin(end)
-          const large = end - start > Math.PI ? 1 : 0
-          // A whole ring has its start ON its end, and an SVG arc between two equal points
-          // draws nothing — an all-pass doctor ring was blank. Two half-arcs through the
-          // opposite point, kept in ONE path so the sweep above still draws it as one.
-          const d =
-            frac >= 0.9999
-              ? `M ${x1} ${y1} A ${r} ${r} 0 1 1 ${2 * cx - x1} ${2 * cy - y1} A ${r} ${r} 0 1 1 ${x1} ${y1}`
-              : `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`
-          return (
-            <path
-              key={i}
-              d={d}
-              fill="none"
-              stroke={seg.color}
-              strokeWidth={stroke}
-              strokeLinecap="butt"
-            >
-              <title>
-                {seg.label}: {seg.value}
-              </title>
-            </path>
-          )
-        })}
-      </g>
-      <text x={cx} y={cy - 4} textAnchor="middle" className="donut-c-num">
-        <CountUp value={sum} duration={DONUT_SWEEP_MS} />
-      </text>
-      <text x={cx} y={cy + 16} textAnchor="middle" className="donut-c-cap">
-        {caption}
-      </text>
-    </svg>
+    <div className="ring-box">
+      <Ring
+        segments={segments}
+        size={size}
+        stroke={stroke}
+        label={caption}
+        sweepMs={DONUT_SWEEP_MS}
+      />
+      <div className="ring-center">
+        <div className="donut-c-num">
+          <CountUp value={sum} duration={DONUT_SWEEP_MS} />
+        </div>
+        <div className="donut-c-cap">{caption}</div>
+      </div>
+    </div>
   )
 }
 
@@ -217,12 +149,15 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
   const shown = newestJobs(jobs, MAX_TIMELINE_JOBS)
   const edits = editCount(overview.diff)
 
+  // `tone-cat<i>` is B_CATS[i] for the ring's arc; the legend paints B_CATS itself.
   const mix = SECTION_ORDER.filter((k) => (c[k] || 0) > 0).map((k, i) => ({
+    key: k,
     label: SECTIONS[k].label,
-    value: c[k] || 0,
+    n: c[k] || 0,
+    tone: 'cat' + (i % B_CATS.length),
     color: B_CATS[i % B_CATS.length],
   }))
-  const mixTotal = mix.reduce((s, m) => s + m.value, 0)
+  const mixTotal = mix.reduce((s, m) => s + m.n, 0)
   const series = bucketJobsByDay(jobs || [], 10)
   const runsTotal = series.reduce((s, d) => s + d.v, 0)
 
@@ -231,21 +166,11 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
       <div className="b-greet">
         <div>
           <div className="eyebrow">your harness</div>
-          <h1 className="h b-h">{headline}</h1>
+          <h2 className="h b-h">{headline}</h2>
           <VerdictBadge verdict={lens?.verdict} />
           <p className="sub">
             {sigil || 'A friendly read of every layer growing in your harness.'}
           </p>
-        </div>
-        <div className="row gap-8">
-          <button className="btn" onClick={() => onAction('update')}>
-            <Icon name="refresh" />
-            Update
-          </button>
-          <button className="btn ghost" onClick={() => onAction('build-all')}>
-            <Icon name="build" />
-            Rebuild
-          </button>
         </div>
       </div>
 
@@ -254,8 +179,13 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
           <div className="b-hero-ring">
             <Donut
               segments={[
-                { label: 'pass', value: pass, color: B_CATS[0] },
-                { label: 'attention', value: Math.max(total - pass, 0), color: B_CATS[2] },
+                { key: 'pass', label: 'pass', n: pass, tone: 'good' },
+                {
+                  key: 'attention',
+                  label: 'attention',
+                  n: Math.max(total - pass, 0),
+                  tone: 'warn',
+                },
               ]}
               size={168}
               stroke={20}
@@ -271,7 +201,11 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
                   : 'Checking…'}
             </h3>
             {doctorState === 'failed' && (
-              <button className="btn ghost b-hero-retry" onClick={() => onAction('doctor')}>
+              <button
+                className="btn ghost b-hero-retry"
+                aria-label="Run doctor again"
+                onClick={() => onAction('doctor')}
+              >
                 <Icon name="doctor" />
                 Run doctor
               </button>
@@ -299,7 +233,7 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
             )}
             <div className="b-chips">
               <span className="b-chip">
-                <b style={{ textTransform: 'capitalize' }}>{overview.theme}</b> voice
+                <b className="t-cap">{overview.theme}</b> voice
               </span>
               <span className="b-chip">
                 <b>{overview.emit}</b>
@@ -360,9 +294,9 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
                   <span className="b-leg-dot" style={{ background: m.color }} />
                   <span className="b-leg-name">{m.label}</span>
                   <span className="b-leg-bar">
-                    <i style={{ width: `${(m.value / mixTotal) * 100}%`, background: m.color }} />
+                    <i style={{ width: `${(m.n / mixTotal) * 100}%`, background: m.color }} />
                   </span>
-                  <span className="b-leg-val">{m.value}</span>
+                  <span className="b-leg-val">{m.n}</span>
                 </div>
               ))}
             </div>

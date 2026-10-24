@@ -1,56 +1,12 @@
 import React from 'react'
-import { removeLayer, hostInfo, installName } from '../../lib/hosts.js'
+import { hostInfo, installName } from '../../lib/hosts.js'
 import { PickSelects, Switch } from './controls.jsx'
 import ExclusionsCard from './ExclusionsCard.jsx'
 
-// What removing an install deletes, and what happens to its memory. Permanent, so it is an
-// inline question with a memory disposition rather than a yes/no dialog: the choice of what
-// happens to memory is part of the question.
-function RemoveConfirm({ inst, memory, busy, onMemory, onRemove, onCancel }) {
-  return (
-    <div className="h-remove">
-      <p className="hr-msg">
-        <strong>
-          {inst.scope === 'project'
-            ? 'Remove this harness from the folder?'
-            : `Remove the global ${inst.host} install?`}
-        </strong>{' '}
-        <span className="sub">
-          Deletes <code>{removeLayer(inst.host, inst.scope)}</code>
-          {inst.scope === 'project'
-            ? ' and de-lists it.'
-            : '; the row stays, marked “not installed.”'}{' '}
-          This can’t be undone.
-        </span>
-      </p>
-      <label className="field">
-        <span>Memory and notebook</span>
-        <select
-          className="sel"
-          aria-label="memory disposition"
-          value={memory}
-          onChange={(e) => onMemory(e.target.value)}
-        >
-          <option value="keep">keep in place</option>
-          <option value="archive">archive aside</option>
-          <option value="delete">delete too</option>
-        </select>
-      </label>
-      <div className="row gap-8">
-        <button type="button" className="btn danger" disabled={busy} onClick={onRemove}>
-          {busy ? 'Removing…' : 'Remove'}
-        </button>
-        <button type="button" className="btn ghost" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // The MCP servers an active install's config already holds, read-only. Which servers to wire
 // depends on the user and on the host, so this shows what is there and where the file lives;
-// adding or switching one is an edit to that file, by hand.
+// adding or switching one is an edit to that file, by hand. A file not written yet has
+// nothing to edit, so it is named, with no folder to open.
 function McpList({ targets, onReveal }) {
   const servers = targets.flatMap((t) => t.servers)
   return (
@@ -62,16 +18,23 @@ function McpList({ targets, onReveal }) {
         <div className="mcp-target" key={t.path}>
           <div className="mt-head">
             <code title={t.path}>{t.label}</code>
-            <button
-              type="button"
-              className="btn ghost sm"
-              onClick={() => onReveal(t)}
-              title={`Open the folder holding ${t.path} to edit it`}
-            >
-              Open folder
-            </button>
+            {t.exists ? (
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => onReveal(t)}
+                aria-label={`Open the folder holding ${t.label}`}
+                title={`Open the folder holding ${t.path} to edit it`}
+              >
+                Open folder
+              </button>
+            ) : null}
           </div>
-          {t.servers.length ? (
+          {!t.exists ? (
+            <p className="sub">
+              No MCP file yet (it would be <code>{t.path}</code>).
+            </p>
+          ) : t.servers.length ? (
             t.servers.map((s) => (
               <div className="mcp-row" key={s.name}>
                 <span className="mono">{s.name}</span>
@@ -97,8 +60,9 @@ const BADGE = {
 
 // The side panel for the install picked in the table: its build choices, its MCP wiring,
 // and, set apart at the bottom, the one destructive act. Stateless: the Hosts tab owns the
-// picks, the remove question and what is in flight, so switching rows never strands a
-// half-made choice on the wrong install.
+// picks, the memory disposition and what is in flight, so switching rows never strands a
+// half-made choice on the wrong install. The disposition sits beside Uninstall… because it
+// is part of what that act does; the danger confirm then names what it deletes.
 export default function InstallPanel({
   inst,
   targets,
@@ -108,14 +72,14 @@ export default function InstallPanel({
   onPick,
   canAct,
   busy,
-  removing,
-  onRemoving,
+  memory,
+  onMemory,
   onApply,
   onToggleInstall,
   onRemove,
   onRevealMcp,
 }) {
-  const who = `${inst.host} · ${inst.scope}`
+  const who = `${hostInfo(inst.host).label} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
   const active = inst.state === 'active'
   const absent = inst.state === 'absent'
@@ -135,8 +99,8 @@ export default function InstallPanel({
 
       {absent ? (
         <p className="sub">
-          Install Geneseed here as <strong>{inst.host}</strong>. Files are added non-destructively;
-          deactivate or uninstall later.
+          Install Geneseed here as <strong>{hostInfo(inst.host).label}</strong>. Files are added
+          non-destructively; deactivate or uninstall later.
         </p>
       ) : null}
       {(active || absent) && canAct ? (
@@ -173,28 +137,27 @@ export default function InstallPanel({
             </button>
           ) : null}
           {!absent ? (
-            <button
-              type="button"
-              className="btn ghost danger-line"
-              aria-label={`remove ${who} from ${inst.path}`}
-              aria-expanded={!!removing}
-              disabled={busy}
-              onClick={() => onRemoving(removing ? null : { memory: 'keep' })}
-            >
-              Uninstall…
-            </button>
+            <>
+              <label className="field">
+                <span>On uninstall, memory and notebook</span>
+                <select className="sel" value={memory} onChange={(e) => onMemory(e.target.value)}>
+                  <option value="keep">keep in place</option>
+                  <option value="archive">archive aside</option>
+                  <option value="delete">delete too</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn ghost danger-line"
+                aria-label={`remove ${who} from ${inst.path}`}
+                disabled={busy}
+                onClick={onRemove}
+              >
+                Uninstall…
+              </button>
+            </>
           ) : null}
         </div>
-      ) : null}
-      {removing ? (
-        <RemoveConfirm
-          inst={inst}
-          memory={removing.memory}
-          busy={busy}
-          onMemory={(memory) => onRemoving({ memory })}
-          onRemove={onRemove}
-          onCancel={() => onRemoving(null)}
-        />
       ) : null}
     </aside>
   )

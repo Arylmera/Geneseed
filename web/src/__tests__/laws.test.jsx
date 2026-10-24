@@ -249,6 +249,35 @@ describe('Constitution page', () => {
     // The tier strip lights the tier the table shows.
     expect(container.querySelector('.tier.on .tier-name').textContent).toBe('Doctrines')
   })
+  // The strip's Dictates and Doctrines cells are buttons that drive the same tab: a click shows
+  // that tier, a click on the lit cell returns to All. Ethos is not a tab, so its cell is not a
+  // control; Your rules stays a link. Queried by rank, the start of each cell's name, so the
+  // tabs' own `/^Dictates/` and `/^All/` names stay theirs alone.
+  it('narrows to a tier from the tier strip, and back to All from the lit cell', async () => {
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(screen.getByText('Sealed Secrets')).toBeTruthy())
+    const dictates = screen.getByRole('button', { name: /^RANK 1/ })
+    const doctrines = screen.getByRole('button', { name: /^RANK 4/ })
+    expect(screen.queryByRole('button', { name: /^RANK 3/ })).toBeNull()
+    expect(container.querySelector('a.tier .tier-name').textContent).toBe('Your rules')
+    expect(dictates.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(dictates)
+    expect(dictates.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Dictates 3' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.queryByText('Automate Repetition')).toBeNull()
+    expect(screen.getByText('Sealed Secrets')).toBeTruthy()
+    fireEvent.click(doctrines)
+    expect(doctrines.getAttribute('aria-pressed')).toBe('true')
+    expect(dictates.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByText('Sealed Secrets')).toBeNull()
+    fireEvent.click(doctrines)
+    expect(screen.getByRole('button', { name: 'All 10' }).getAttribute('aria-pressed')).toBe('true')
+    expect(doctrines.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByText('Sealed Secrets')).toBeTruthy()
+    expect(screen.getByText('Automate Repetition')).toBeTruthy()
+  })
   // A gate in the Gate asks card takes you to its rule: the whole entry is the control, and
   // a tab or filter hiding the rule is lifted first, so the row is there to land on.
   it('jumps from a gate to its rule, lifting a tab that hides it', async () => {
@@ -379,7 +408,39 @@ describe('Constitution page — doctrine toggles', () => {
       'false',
     )
     expect(container.querySelector('.pack-state').textContent).toBe('2 of 3 active')
-    expect(applyBtn().disabled).toBe(true)
+    // Nothing staged, so nothing to apply: no Apply at all, not a disabled one.
+    expect(screen.queryByRole('button', { name: /^Apply/ })).toBeNull()
+  })
+
+  // ⚠ ONE FILLED BUTTON PER VIEW. Apply is the page's primary action, so it sits in the page
+  // header's action slot, appears only once something is staged, and is then the only filled
+  // button on the page: every other control is secondary (ghost, soft, danger-line) or not a
+  // `.btn` at all. Its label counts the staged rules: craft.3 switched on makes 5 of the 7.
+  it('shows Apply as the one primary action, in the page header, only once something is staged', async () => {
+    const { container } = render(withInstall())
+    await settled(container)
+    expect(screen.queryAllByRole('button', { name: /^Apply/ })).toHaveLength(0)
+    fireEvent.click(sw(container, 'Documentation in Step'))
+    const apply = screen.getAllByRole('button', { name: /^Apply/ })
+    expect(apply).toHaveLength(1)
+    expect(apply[0].textContent).toBe('Apply (5/7 rules)')
+    expect(apply[0].closest('.page-head .page-actions')).toBeTruthy()
+    const filled = container.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)')
+    expect([...filled]).toEqual([apply[0]])
+  })
+
+  // The pack bars were aria-hidden spans, telling a reader nothing. Each is now an image whose
+  // name reads the pack and its count against the largest pack (3 rules, craft), the scale the
+  // bars are drawn on.
+  it('names each pack bar with its rules on', async () => {
+    const { container } = render(withInstall())
+    await settled(container)
+    const bars = [...container.querySelectorAll('.pack-list [role="img"]')]
+    expect(bars.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Craft rules on: 2 of 3',
+      'Process rules on: 2 of 3',
+      'Ops rules on: 0 of 3',
+    ])
   })
 
   it('a pack switch stages all of its rules at once, still applied once', async () => {
@@ -729,7 +790,8 @@ describe('Constitution page — an opened rule', () => {
     // A rejected fetch used to show "Loading…" for ever: the error was never read.
     api.item.mockRejectedValueOnce(new Error('daemon gone'))
     render(<Laws selected="II" />)
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('daemon gone'))
+    // The alert is ErrorState's: the message and its Retry, together.
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('daemon gone'))
     expect(screen.queryByText(/The canonical text/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
@@ -804,13 +866,21 @@ describe('Constitution page — the Gate asks card', () => {
     )
     await waitFor(() => expect(document.querySelectorAll('.gate-row').length).toBe(2))
     const [first, second] = document.querySelectorAll('.gate-row')
+    // The bar is the row button's sibling in the same entry (a button may not hold a div).
+    const bar = (row) => row.closest('li').querySelector('[role="img"]')
     expect(first.textContent).toContain('process.1')
     expect(first.querySelector('.off')).toBeNull()
-    expect(first.querySelector('.hbar').classList.contains('warn')).toBe(true)
+    expect(bar(first).querySelector('.tone-warn')).toBeTruthy()
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
     expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
     expect(second.querySelector('.off').textContent).toBe('off')
-    expect(second.querySelector('.hbar').classList.contains('warn')).toBe(false)
+    expect(bar(second).querySelector('.tone-warn')).toBeNull()
+    expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
+    // Each bar is named by its gate, so a reader can tell them apart; the count is against the
+    // busiest gate (135 asks). process.1 has no row in this fixture, so its address names it.
+    expect(bar(first).getAttribute('aria-label')).toBe('process.1 asks: 6 of 135')
+    expect(bar(second).getAttribute('aria-label')).toBe('Deletion Is Deliberate asks: 135 of 135')
+    expect(first.querySelector('[role="img"]')).toBeNull()
   })
 })
 

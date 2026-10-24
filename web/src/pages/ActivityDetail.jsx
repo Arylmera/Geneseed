@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
-import { STATUS, ELLIPSIS, baseName, compact, Elapsed } from '../lib/activity.jsx'
+import { baseName, compact, SessionHeader } from '../lib/activity.jsx'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 import { usePoll } from '../hooks/usePoll.js'
 
 // Timeline-row dot colour by record kind/outcome.
@@ -30,29 +32,24 @@ function StreamRow({ rec }) {
   const soft = !you && (rec.kind === 'text' || rec.kind === 'thinking' || rec.kind === 'step')
   const label = you ? rec.text : rec.label || rec.snippet || rec.kind
   return (
-    <div className="row gap-10" style={{ alignItems: 'baseline' }}>
-      <span
-        className={`badge ${you ? '' : 'acc'}`}
-        style={{ flexShrink: 0, minWidth: 52, justifyContent: 'center' }}
-      >
-        {you ? 'you' : 'agent'}
-      </span>
-      <div style={{ minWidth: 0, flex: 1, fontSize: 13 }}>
-        {!you && (
-          <span
-            className={`feed-dot ${dotFor(rec) || 'acc'}`}
-            style={{ display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }}
-          />
-        )}
+    <div className="row gap-10 act-line">
+      <span className={`badge act-who ${you ? '' : 'acc'}`}>{you ? 'you' : 'agent'}</span>
+      <div className="act-grow act-sm">
+        {!you && <span className={`feed-dot act-inline-dot ${dotFor(rec) || 'acc'}`} />}
         {rec.kind === 'thinking' && <span className="dim">thinking: </span>}
         {soft ? <span className="dim">{label}</span> : you ? label : <b>{label}</b>}
         {rec.error && <span className="dim">: {rec.error}</span>}
       </div>
-      {meta.length > 0 && (
-        <span className="dim mono" style={{ flexShrink: 0, fontSize: 12 }}>
-          {meta.join(' · ')}
-        </span>
-      )}
+      {meta.length > 0 && <span className="dim mono act-xs act-fixed">{meta.join(' · ')}</span>}
+      {rec.t ? (
+        <time
+          className="mono dim act-xs act-fixed"
+          dateTime={new Date(rec.t).toISOString()}
+          title={`${relTime(rec.t / 1000)} ago`}
+        >
+          {new Date(rec.t).toTimeString().slice(0, 8)}
+        </time>
+      ) : null}
     </div>
   )
 }
@@ -61,27 +58,16 @@ function StreamRow({ rec }) {
 // transcript of bounded turns (you / agent), oldest → newest.
 function Conversation({ turns }) {
   if (!turns || turns.length === 0) {
-    return (
-      <div className="dim" style={{ fontSize: 13 }}>
-        No conversation captured yet.
-      </div>
-    )
+    return <div className="dim act-sm">No conversation captured yet.</div>
   }
   return (
     <div className="stack gap-12">
       {turns.map((m, i) => {
         const you = m.role === 'user'
         return (
-          <div key={i} className="row gap-10" style={{ alignItems: 'baseline' }}>
-            <span
-              className={`badge ${you ? '' : 'acc'}`}
-              style={{ flexShrink: 0, minWidth: 52, justifyContent: 'center' }}
-            >
-              {you ? 'you' : 'agent'}
-            </span>
-            <div style={{ minWidth: 0, fontSize: 13, color: you ? 'inherit' : 'var(--text-2)' }}>
-              {m.text}
-            </div>
+          <div key={i} className="row gap-10 act-line">
+            <span className={`badge act-who ${you ? '' : 'acc'}`}>{you ? 'you' : 'agent'}</span>
+            <div className={`act-min act-sm${you ? '' : ' muted'}`}>{m.text}</div>
           </div>
         )
       })}
@@ -94,36 +80,37 @@ export default function ActivityDetail({ sid }) {
   const [error, setError] = useState('')
   const [gone, setGone] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const streamId = useId()
 
   // Poll the per-session endpoint on the same 2s HUD cadence; a 404 means the
-  // session ended (pruned), which is a normal terminal state, not an error.
+  // session ended (pruned), which is a normal terminal state, not an error. An ended
+  // session never comes back under the same id (App remounts on a new one), so `gone`
+  // stops the poll instead of asking for the same 404 every two seconds.
   usePoll(
     (alive) =>
-      api.activityDetail(sid).then(
-        (d) => {
-          if (alive()) {
-            setData(d)
-            setError('')
-            setGone(false)
-          }
-        },
-        (e) => {
-          if (!alive()) return
-          if (e.status === 404) setGone(true)
-          else setError(e.message)
-        },
-      ),
+      gone
+        ? undefined
+        : api.activityDetail(sid).then(
+            (d) => {
+              if (alive()) {
+                setData(d)
+                setError('')
+                setGone(false)
+              }
+            },
+            (e) => {
+              if (!alive()) return
+              if (e.status === 404) setGone(true)
+              else setError(e.message)
+            },
+          ),
     2000,
-    [sid],
+    [sid, gone],
   )
 
   const back = (
-    <a
-      className="btn ghost sm"
-      href="#/activity"
-      style={{ marginBottom: 12, display: 'inline-flex', gap: 6 }}
-    >
-      <Icon name="arrow" style={{ transform: 'rotate(180deg)' }} /> Activity
+    <a className="btn ghost sm act-back" href="#/activity">
+      <Icon name="arrow" /> Activity
     </a>
   )
 
@@ -131,10 +118,9 @@ export default function ActivityDetail({ sid }) {
     return (
       <div className="narrow">
         {back}
-        <div className="empty">
-          <div className="big">Session ended</div>
-          It&apos;s no longer live. <a href="#/activity">Back to Activity</a>.
-        </div>
+        <EmptyState title="Session ended" action={<a href="#/activity">Back to Activity</a>}>
+          It&apos;s no longer live.
+        </EmptyState>
       </div>
     )
   }
@@ -149,7 +135,6 @@ export default function ActivityDetail({ sid }) {
   }
 
   const s = data.session
-  const st = STATUS[s.status] || STATUS.idle
   const files = s.files
   const todos = s.todos
   const filesShown = !!(files && files.items && files.items.length > 0)
@@ -169,90 +154,46 @@ export default function ActivityDetail({ sid }) {
   return (
     <div className="narrow">
       {back}
+      <PageHeader
+        title={s.title || baseName(s.cwd) || s.session_id}
+        sub={
+          s.cwd ? (
+            <span className="mono act-cwd" title={s.cwd}>
+              {s.cwd}
+            </span>
+          ) : null
+        }
+      />
       {error && (
-        <p className="badge bad" style={{ marginBottom: 12 }}>
-          {error}
-        </p>
+        <div className="act-gap">
+          <ErrorState error={error} />
+        </div>
       )}
 
       <div className="card pad-md">
-        <div className="row between wrap gap-12">
-          <div style={{ minWidth: 0 }}>
-            <h1 className="h" style={{ margin: 0 }}>
-              {s.title || baseName(s.cwd) || s.session_id}
-            </h1>
-            {s.cwd && (
-              <div className="dim mono" style={{ fontSize: 12, ...ELLIPSIS }} title={s.cwd}>
-                {s.cwd}
-              </div>
-            )}
-          </div>
-          <div className="row gap-8" style={{ flexShrink: 0 }}>
-            {s.model && <span className="badge mono">{s.model}</span>}
-            {s.agent && <span className="badge">{s.agent}</span>}
-            <span className={`badge ${st.cls}`}>
-              <span className="dot" />
-              {st.label}
-            </span>
-          </div>
-        </div>
-        {s.phase && (
-          <div className="row gap-8" style={{ marginTop: 10, fontSize: 14 }}>
-            <Icon name="activity" />
-            <span style={ELLIPSIS}>{s.phase}</span>
-          </div>
-        )}
-        <div
-          className="row wrap"
-          style={{ gap: 16, marginTop: 12, fontSize: 13, color: 'var(--text-2)' }}
-        >
-          {s.tokens > 0 && <span>{compact(s.tokens)} tok</span>}
-          {s.cost > 0 && <span>${s.cost.toFixed(2)}</span>}
-          {s.turn_started_at ? (
-            <span>
-              <Elapsed startedAt={s.turn_started_at} />
-            </span>
-          ) : null}
-          <span className="dim">updated {relTime(s.updated_at)} ago</span>
-        </div>
-        {(s.error || s.blocked_on) && (
-          <div style={{ marginTop: 10 }}>
-            <span className="badge bad" style={{ maxWidth: '100%', ...ELLIPSIS }}>
-              {s.error || s.blocked_on}
-            </span>
-          </div>
-        )}
+        <SessionHeader s={s} />
+        <div className="dim act-updated">updated {relTime(s.updated_at)} ago</div>
       </div>
 
       {(filesShown || todosShown) && (
-        <div
-          className="grid gap-12"
-          style={{
-            marginTop: 12,
-            // Both present → even halves; only one → it takes the full width.
-            gridTemplateColumns: filesShown && todosShown ? 'minmax(0, 1fr) minmax(0, 1fr)' : '1fr',
-          }}
-        >
+        // Both present → even halves; only one → it takes the full width.
+        <div className={`grid gap-12 act-panels${filesShown && todosShown ? ' two' : ''}`}>
           {filesShown && (
             <div className="card pad-md">
               <div className="card-head">
-                <h3>
+                <h2>
                   Files touched <span className="dim">({files.count})</span>
-                </h3>
+                </h2>
               </div>
-              <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+              <div className="stack act-list">
                 {files.items.map((f) => (
-                  <div key={f.file} className="row between gap-12" style={{ fontSize: 13 }}>
-                    <span
-                      className="mono"
-                      style={{ ...ELLIPSIS, minWidth: 0, flex: 1 }}
-                      title={f.file}
-                    >
+                  <div key={f.file} className="row between gap-12 act-sm">
+                    <span className="mono act-ell act-grow" title={f.file}>
                       {f.file}
                     </span>
-                    <span style={{ flexShrink: 0 }}>
-                      <span style={{ color: 'var(--good)' }}>+{f.additions}</span>{' '}
-                      <span style={{ color: 'var(--bad)' }}>−{f.deletions}</span>
+                    <span className="act-fixed">
+                      <span className="t-good">+{f.additions}</span>{' '}
+                      <span className="t-bad">−{f.deletions}</span>
                     </span>
                   </div>
                 ))}
@@ -262,25 +203,20 @@ export default function ActivityDetail({ sid }) {
           {todosShown && (
             <div className="card pad-md">
               <div className="card-head">
-                <h3>
+                <h2>
                   Plan{' '}
                   <span className="dim">
                     ({todos.done}/{todos.total})
                   </span>
-                </h3>
+                </h2>
               </div>
-              <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+              <div className="stack act-list">
                 {todos.items.map((t, i) => (
-                  <div key={i} className="row gap-8" style={{ fontSize: 13 }}>
+                  <div key={i} className="row gap-8 act-sm">
                     <span
                       className={`feed-dot ${t.status === 'completed' ? 'ok' : t.status === 'in_progress' ? 'acc' : ''}`}
                     />
-                    <span
-                      style={{
-                        textDecoration: t.status === 'completed' ? 'line-through' : 'none',
-                        color: t.status === 'completed' ? 'var(--text-3)' : 'inherit',
-                      }}
-                    >
+                    <span className={t.status === 'completed' ? 'act-done' : undefined}>
                       {t.content}
                     </span>
                   </div>
@@ -291,24 +227,31 @@ export default function ActivityDetail({ sid }) {
         </div>
       )}
 
-      <div className="card pad-md" style={{ marginTop: 12 }}>
-        <div className="card-head" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-          <h3>Timeline</h3>
+      <div className="card pad-md act-mt">
+        <div className="card-head act-tl-head">
+          <h2>Timeline</h2>
           {steps.length > 0 && (
-            <button className="btn ghost sm" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Show conversation' : `Show all ${steps.length} steps`}
+            <button
+              className="btn ghost sm"
+              aria-expanded={expanded}
+              aria-controls={streamId}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? 'Show conversation' : `Show full stream (${stream.length})`}
             </button>
           )}
         </div>
-        {expanded ? (
-          <div className="stack gap-12">
-            {stream.map((rec, i) => (
-              <StreamRow key={i} rec={rec} />
-            ))}
-          </div>
-        ) : (
-          <Conversation turns={conversation} />
-        )}
+        <div id={streamId}>
+          {expanded ? (
+            <div className="stack gap-12">
+              {stream.map((rec, i) => (
+                <StreamRow key={i} rec={rec} />
+              ))}
+            </div>
+          ) : (
+            <Conversation turns={conversation} />
+          )}
+        </div>
       </div>
     </div>
   )

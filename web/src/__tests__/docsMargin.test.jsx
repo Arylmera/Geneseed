@@ -1,7 +1,8 @@
 import React from 'react'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import Margin, { glossaryHits } from '../pages/Docs/Margin.jsx'
+import CliPage from '../pages/Docs/CliPage.jsx'
 
 // The Handbook margin: the page's H2/H3 outline, then a card per glossary term the page
 // uses. A term matches as a whole word, any case, with a plural "s" allowed — so "Skills"
@@ -39,6 +40,21 @@ describe('Margin', () => {
       'See the guide',
       'A skill and snake_case',
     ])
+  })
+
+  // A CLI page has no markdown body: its outline is its commands, each landing on the id
+  // CliPage gives that command's heading.
+  it('outlines a CLI page by its commands, on the ids the page carries', () => {
+    const page = { kind: 'cli', title: 'CLI', commands: [{ name: 'build' }, { name: 'doctor' }] }
+    const { container } = render(
+      <>
+        <CliPage page={page} />
+        <Margin page={page} glossaryRows={[]} />
+      </>,
+    )
+    const hrefs = [...container.querySelectorAll('.docs-toc a')].map((a) => a.getAttribute('href'))
+    expect(hrefs).toEqual(['#cmd-build', '#cmd-doctor'])
+    expect(screen.getByRole('heading', { level: 2, name: 'build' }).id).toBe('cmd-build')
   })
 
   it('needs a whole word: Webhooks is not a hook', () => {

@@ -636,4 +636,59 @@ describe('Loops › Active', () => {
     expect(await screen.findByText('No loops yet')).toBeTruthy()
     expect(document.querySelector('.empty').textContent).toContain('geneseed loop init')
   })
+
+  // VS-30: with nothing registered the reader was a blank pane; it now says what a loop is.
+  it('explains what a loop is in the reader when none is registered', async () => {
+    render(<Loops tab="active" />)
+    await screen.findByText('No loops yet')
+    expect(reader().querySelector('a[href="#/docs/loops"]')).toBeTruthy()
+  })
+
+  // The history is a named table with column headers a screen reader can announce.
+  it('names the iterations table and its columns', async () => {
+    show([RUN])
+    render(<Loops tab="active" />)
+    await screen.findByText('Guard the null user')
+    const table = screen.getByRole('table', { name: 'Iterations' })
+    const heads = [...table.querySelectorAll('th')]
+    expect(heads.map((h) => h.getAttribute('scope'))).toEqual(Array(6).fill('col'))
+  })
+
+  // LP-3: a preset is a risk level; the reader links the page that says what each one allows.
+  it('links what the presets mean', async () => {
+    show([RUN])
+    render(<Loops tab="active" />)
+    await screen.findByLabelText('Preset for Fix the login bug')
+    expect(reader().querySelector('a[href="#/docs/loop-risk"]')).toBeTruthy()
+  })
+})
+
+// LP-3: each section opens with one sentence saying what it lists and a link to learn more.
+// LP-14: the bar that summed three unrelated counts is gone. One filled button at most.
+describe('Loops — what the page explains', () => {
+  const railLinks = () =>
+    [...document.querySelectorAll('.lib-kinds .lib-lede a')].map((a) => a.getAttribute('href'))
+
+  it.each([
+    ['templates', ['#/docs/loops', '#/docs/loop-which-template']],
+    ['bricks', ['#/docs/loop-bricks']],
+    ['active', ['#/docs/loop-running']],
+  ])('the %s section links its docs', async (tab, hrefs) => {
+    render(<Loops tab={tab} />)
+    await waitFor(() => expect(railLinks()).toEqual(hrefs))
+  })
+
+  it('draws no composition bar in the rail', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('The smallest loop.')
+    expect(document.querySelector('.lib-kinds .stackbar')).toBeNull()
+  })
+
+  it('has at most one filled button', async () => {
+    render(<Loops tab="templates" />)
+    await screen.findByText('The smallest loop.')
+    expect(
+      document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length,
+    ).toBeLessThanOrEqual(1)
+  })
 })

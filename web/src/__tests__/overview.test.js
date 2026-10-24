@@ -6,6 +6,7 @@ import {
   gateRows,
   ledgerNeeds,
   needsAttention,
+  needsRebuild,
   neverFired,
   skillsByStage,
 } from '../lib/overview.js'
@@ -366,5 +367,21 @@ describe('applyAccent', () => {
     applyAccent(el, 'cyan', 'dark')
     expect(el.style.getPropertyValue('--warn')).toBe('')
     expect(el.style.getPropertyValue('--warn-text')).toBe('')
+  })
+})
+
+describe('needsRebuild', () => {
+  // The fleet row's (and the header count's) test: an active install that is behind, has
+  // hand edits or missing files, or has stale files. A disabled install never needs one.
+  const zero = { edited: 0, added: 0, missing: 0 }
+  it.each([
+    ['behind', { state: 'active', verdict: 'behind', drift: zero }, true],
+    ['edited', { state: 'active', verdict: 'synced', drift: { ...zero, edited: 1 } }, true],
+    ['stale', { state: 'active', verdict: 'synced', drift: { ...zero, stale: 2 } }, true],
+    ['in step', { state: 'active', verdict: 'synced', drift: zero }, false],
+    ['in step, no drift read', { state: 'active', verdict: 'synced', drift: null }, false],
+    ['disabled', { state: 'disabled', verdict: 'behind', drift: { ...zero, edited: 3 } }, false],
+  ])('%s', (_, install, want) => {
+    expect(needsRebuild(install)).toBe(want)
   })
 })

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import StatusBadge from './StatusBadge.jsx'
 import FilterInput from './FilterInput.jsx'
 
@@ -25,10 +25,34 @@ export function filterRows(rows, q) {
 // and the scroller holding the caller's rows (`children`), arrow-key walkable and keeping the
 // active row in view (`inView` is what moves it: the section and the selection). `matched` is
 // how many rows the filter left, so a filter that leaves none says so.
+//
+// The rows are ONE tab stop (a roving tabindex, `rove`): Tab enters on the focused row, else
+// the open one, else the first, and the next Tab leaves the list. ArrowDown in the filter
+// enters it. The open row is announced in a live region, since a click or Enter changes the
+// reader beside the list, which a screen reader does not otherwise hear.
 export function LibList({ label, count, extra, q, onQ, matched, inView, children }) {
   const rowsRef = useActiveRowInView(inView)
+  // After every render: the caller owns the rows, so any render may add or drop them.
+  useLayoutEffect(() => rove(rowsRef.current))
+  const [said, setSaid] = useState('')
+  const first = useRef(true)
+  useEffect(() => {
+    // The selection a page opens on is not news; only a change is.
+    if (first.current) {
+      first.current = false
+      return
+    }
+    setSaid(rowsRef.current?.querySelector('.lib-row.on')?.dataset.title || '')
+    // `inView` is the caller's trigger (the section and the selection).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, inView)
+  const onKeyDown = (e) => {
+    if (e.key !== 'ArrowDown' || !e.target.classList?.contains('lib-filter')) return
+    e.preventDefault()
+    rowsRef.current?.querySelector('.lib-row')?.focus()
+  }
   return (
-    <section className="lib-list" aria-label={label}>
+    <section className="lib-list" aria-label={label} onKeyDown={onKeyDown}>
       <div className="lib-list-head">
         <b>
           {label} <span className="mono dim">{count}</span>
@@ -41,7 +65,12 @@ export function LibList({ label, count, extra, q, onQ, matched, inView, children
         placeholder={`Filter ${label.toLowerCase()}`}
         label={`Filter ${label}`}
       />
-      <div className="lib-rows" ref={rowsRef} onKeyDown={walkRows}>
+      <div
+        className="lib-rows"
+        ref={rowsRef}
+        onKeyDown={walkRows}
+        onFocus={(e) => rove(e.currentTarget)}
+      >
         {children}
         {q.trim() && matched === 0 && (
           <div className="empty" style={{ padding: 32 }}>
@@ -50,6 +79,11 @@ export function LibList({ label, count, extra, q, onQ, matched, inView, children
           </div>
         )}
       </div>
+      {/* Outside the scroller: an absolute .sr-only inside it escapes the overflow and
+          stretches the document. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {said ? `${said} opened` : ''}
+      </p>
     </section>
   )
 }
@@ -63,6 +97,7 @@ export function LibRow({ item, isOpen, href, children }) {
       className={`lib-row${isOpen ? ' on' : ''}`}
       href={href}
       aria-current={isOpen ? 'true' : undefined}
+      data-title={item.title || item.name}
     >
       <span className="lr-name">
         {item.title || item.name}
@@ -103,15 +138,31 @@ export function GroupedRows({ rows, activeName, hrefOf, pills }) {
   return out
 }
 
-// Arrow keys walk the list's links; Enter follows the focused one. The rows' scroller's
-// onKeyDown.
+// Arrow keys walk the list's links, Home and End jump to its ends; Enter follows the focused
+// one. The rows' scroller's onKeyDown.
 export function walkRows(e) {
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
   const rows = [...e.currentTarget.querySelectorAll('.lib-row')]
   const idx = rows.indexOf(document.activeElement)
   if (idx === -1) return
+  const to = {
+    ArrowDown: Math.min(idx + 1, rows.length - 1),
+    ArrowUp: Math.max(idx - 1, 0),
+    Home: 0,
+    End: rows.length - 1,
+  }[e.key]
+  if (to === undefined) return
   e.preventDefault()
-  rows[e.key === 'ArrowDown' ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0)]?.focus()
+  rows[to].focus()
+}
+
+// The roving tab stop: the focused row, else the open one, else the first; every other row
+// is tabIndex -1, so the list is one Tab stop and the arrows walk inside it.
+function rove(box) {
+  if (!box) return
+  const rows = [...box.querySelectorAll('.lib-row')]
+  const stop =
+    rows.find((r) => r === document.activeElement) || box.querySelector('.lib-row.on') || rows[0]
+  for (const r of rows) r.tabIndex = r === stop ? 0 : -1
 }
 
 // Keep the active row in view inside the list scroller, without scrollIntoView (which would

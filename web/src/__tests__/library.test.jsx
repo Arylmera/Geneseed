@@ -14,7 +14,8 @@ vi.mock('../api/index.js', () => ({
 const { askConfirm } = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }))
 vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
 
-import Library, { splitSkills } from '../pages/Library.jsx'
+import Library, { splitSkills, bodyHead } from '../pages/Library.jsx'
+import ManifestDoc from '../components/ManifestDoc.jsx'
 import { api } from '../api/index.js'
 
 const overview = (counts) => ({ counts })
@@ -289,5 +290,130 @@ describe('skill classes', () => {
     rerender(<Library section="skills" overview={overview({ skills: 5 })} />)
     await waitFor(() => expect([...document.querySelectorAll('.lib-row')].length).toBe(5))
     expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+// A filled button is the page's one primary action; every other action is ghost, soft or a
+// danger line (brief V5b). The Library has none today, so the guard is that it never grows two.
+const filled = () =>
+  document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length
+
+describe('Library reader head', () => {
+  // An agent's body opens with its own `# Adept: name` and repeats the description as a
+  // blockquote. The reader already prints a title and the lede, so both go from the body, and
+  // the H1 text replaces a title that is only the slug.
+  it('names the entry by its H1, and prints neither the H1 nor the lede twice', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({ section, items: [{ name: 'x', title: 'x', desc: 'Dlede' }] }),
+    )
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        title: 'x',
+        desc: 'Dlede',
+        body: '# Adept: x\n\n> Dlede\n\n## W\n\nbody',
+        links: [],
+      }),
+    )
+    render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-doc h2')).toBeTruthy())
+    const reader = document.querySelector('.lib-reader')
+    expect(reader.querySelector('.reader-title').textContent).toBe('Adept: x')
+    expect(reader.querySelectorAll('h1').length).toBe(0)
+    expect(reader.querySelector('blockquote')).toBeNull()
+    expect(reader.textContent.split('Dlede').length - 1).toBe(1)
+  })
+
+  // The helper on its own: a body without a leading H1 is untouched, and a blockquote that is
+  // not the description is the author's, so it stays.
+  it('bodyHead strips only a leading H1 and a blockquote that repeats the description', () => {
+    expect(bodyHead('para\n\n# Late', 'D')).toEqual({ title: null, body: 'para\n\n# Late' })
+    expect(bodyHead('# T\n\n> Other words\n\nrest', 'D')).toEqual({
+      title: 'T',
+      body: '> Other words\n\nrest',
+    })
+    expect(bodyHead('# T\n\n> Long\n> lede\n\nrest', 'Long lede')).toEqual({
+      title: 'T',
+      body: 'rest',
+    })
+    expect(bodyHead('> D\n\nrest', 'D')).toEqual({ title: null, body: '> D\n\nrest' })
+  })
+
+  // The shape real agents ship: the frontmatter description is the quote plus its "Use when:"
+  // trigger, so the quote is a prefix of the description, not equal to it — still a repeat.
+  it('bodyHead strips a blockquote the description starts with', () => {
+    expect(
+      bodyHead(
+        '# Adept: dev\n\n> Forges the change.\n\n## Duty',
+        'Forges the change. Use when: x.',
+      ),
+    ).toEqual({ title: 'Adept: dev', body: '## Duty' })
+    expect(bodyHead('# T\n\n>\n\nrest', 'D')).toEqual({ title: 'T', body: '>\n\nrest' })
+    // A prefix that stops mid-word is not a repeat.
+    expect(bodyHead('# T\n\n> Fo\n\nrest', 'Foo bar')).toEqual({ title: 'T', body: '> Fo\n\nrest' })
+  })
+
+  // CommonMark edges: a `#` with no space before it is part of the title, a spaced closing run
+  // is not, four spaces of indent make a code block (no H1), and CRLF bodies strip like LF ones.
+  it('bodyHead reads the H1 the way CommonMark does', () => {
+    expect(bodyHead('# C#\nx', '').title).toBe('C#')
+    expect(bodyHead('# Title ##\nx', '').title).toBe('Title')
+    expect(bodyHead('    # code\nx', '')).toEqual({ title: null, body: '    # code\nx' })
+    expect(bodyHead('# T\r\n\r\n> D\r\n\r\nrest', 'D')).toEqual({ title: 'T', body: 'rest' })
+  })
+})
+
+describe('Library empty kind', () => {
+  // An empty Wiki says what a wiki is and where to declare one; the reader no longer asks the
+  // user to pick an entry that cannot exist.
+  it('says how to get a wiki, and asks for no selection', async () => {
+    render(<Library section="wiki" overview={overview({ wiki: 0 })} />)
+    expect(await screen.findByText('No wiki entries')).toBeTruthy()
+    const list = document.querySelector('.lib-rows')
+    expect(list.querySelector('a[href="#/section/config"]')).toBeTruthy()
+    expect(list.querySelector('a[href="#/docs/wiki"]')).toBeTruthy()
+    expect(screen.queryByText('Select an entry')).toBeNull()
+  })
+})
+
+describe('Library rail', () => {
+  // The old composition bar borrowed the constitution's colours and had no legend.
+  it('draws no composition bar over the kinds', async () => {
+    render(<Library section="agents" overview={overview({ skills: 2, agents: 2 })} />)
+    await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(0))
+    expect(document.querySelector('.lib-kinds .stackbar')).toBeNull()
+  })
+
+  it('has at most one filled button', async () => {
+    render(<Library section="memory" overview={overview({})} />)
+    await screen.findByText('Forget this fact')
+    expect(filled()).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('ManifestDoc', () => {
+  const manifest = {
+    kind: 'context',
+    context: [{ path: 'docs/', load: 'eager', description: 'd' }],
+  }
+  it('names the entry columns for assistive tech', () => {
+    render(<ManifestDoc manifest={manifest} body="{}" />)
+    const heads = screen.getAllByRole('columnheader')
+    expect(heads.map((h) => [h.textContent, h.getAttribute('scope')])).toEqual([
+      ['Path', 'col'],
+      ['Load', 'col'],
+      ['Description', 'col'],
+    ])
+  })
+
+  it('the raw-source toggle is a button that says whether it is open, and what it opens', () => {
+    render(<ManifestDoc manifest={manifest} body="{}" />)
+    const t = screen.getByRole('button', { name: /Raw source/ })
+    expect(t.getAttribute('type')).toBe('button')
+    expect(t.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(t)
+    expect(t.getAttribute('aria-expanded')).toBe('true')
+    const pre = document.querySelector('.mf-raw-pre')
+    expect(pre.id).toBeTruthy()
+    expect(t.getAttribute('aria-controls')).toBe(pre.id)
   })
 })

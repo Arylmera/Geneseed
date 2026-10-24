@@ -1,5 +1,6 @@
 import React from 'react'
 import Tabs from '../../components/Tabs.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
 import { driftTotal } from '../../lib/format.js'
 import Hosts from './Hosts.jsx'
 import Kits from './Kits.jsx'
@@ -29,14 +30,11 @@ export default function Installs({
   }
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="h">Installs</h1>
-          <p className="sub">
-            Where the harness lives on this machine, and how each copy is built.
-          </p>
-        </div>
-      </div>
+      {/* No primary here: each tab holds its own one filled action, under its own h2. */}
+      <PageHeader
+        title="Installs"
+        sub="Where the harness lives on this machine, and how each copy is built."
+      />
       <Tabs page="installs" current={tab} badges={badges} label="Installs" />
       {tab === 'hosts' && (
         <Hosts
@@ -50,8 +48,10 @@ export default function Installs({
         />
       )}
       {tab === 'kits' && <Kits onAction={onAction} dataRev={dataRev} />}
-      {tab === 'edits' && <Diff onMutated={onMutated} onAction={onAction} dataRev={dataRev} />}
-      {tab === 'doctor' && <Doctor />}
+      {tab === 'edits' && (
+        <Diff onMutated={onMutated} onAction={onAction} dataRev={dataRev} overview={overview} />
+      )}
+      {tab === 'doctor' && <Doctor dataRev={dataRev} />}
       {tab === 'server' && <Settings overview={overview} onAction={onAction} {...appearance} />}
     </>
   )

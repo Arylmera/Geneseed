@@ -1,8 +1,10 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
 
 import Sidebar, { TabBar } from '../components/Sidebar.jsx'
+import VoicePopover from '../components/VoicePopover.jsx'
+import { ConfirmContext } from '../hooks/useConfirm.jsx'
 
 const overview = {
   counts: {
@@ -76,25 +78,90 @@ describe('Sidebar', () => {
     const v = document.querySelector('.sb-vitals')
     expect(v.textContent).toContain('clean')
     expect(v.querySelector('div:nth-child(2) b').textContent).toBe('2')
-    expect(screen.getByRole('button', { name: /switch voice|imperial/i })).toBeTruthy()
+    expect(
+      within(document.querySelector('.sb-vitals')).getByRole('button', {
+        name: /switch voice|imperial/i,
+      }),
+    ).toBeTruthy()
+  })
+
+  // At tablet width (721-960px) the rail is icons only and hides the vitals, voice button
+  // included: this icon button is the voice switch there. CSS shows it in that tier only.
+  it('carries an icon voice button outside the vitals, naming the current voice', () => {
+    const onOpenVoice = vi.fn()
+    render(<Sidebar route={{ page: 'overview' }} overview={overview} onOpenVoice={onOpenVoice} />)
+    const btn = screen.getByRole('button', { name: 'Switch voice, now imperial' })
+    expect(btn.closest('.sb-vitals')).toBeNull()
+    fireEvent.click(btn)
+    expect(onOpenVoice).toHaveBeenCalledTimes(1)
   })
 })
 
-// The phone bar: the same seven pages as the rail. At 360px each cell is ~51px, so the labels
-// that cannot fit at 11px (Constitution, Overview) carry a short name; the rail keeps the full one.
+// A voice switch rebuilds the deployed harness, so the pick is confirmed first; the list is
+// a dialog of toggle buttons, not a menu (it has no menu keyboard model).
+describe('VoicePopover', () => {
+  const themes = [
+    { name: 'imperial', accent: 'gold' },
+    { name: 'plain', accent: 'blue' },
+  ]
+  const mount = (answer) => {
+    const ask = vi.fn(async () => answer)
+    const onPick = vi.fn()
+    render(
+      <ConfirmContext.Provider value={ask}>
+        <VoicePopover themes={themes} current="imperial" onPick={onPick} onClose={() => {}} />
+      </ConfirmContext.Provider>,
+    )
+    return { ask, onPick }
+  }
+
+  it('asks before rebuilding, and a No rebuilds nothing', async () => {
+    const { ask, onPick } = mount(false)
+    await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
+    expect(ask).toHaveBeenCalledTimes(1)
+    expect(onPick).not.toHaveBeenCalled()
+  })
+
+  it('a Yes picks the voice', async () => {
+    const { onPick } = mount(true)
+    await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
+    expect(onPick).toHaveBeenCalledWith('plain')
+  })
+
+  it('is a labelled dialog of pressed buttons, not a menu', () => {
+    mount(true)
+    expect(screen.queryByRole('menu')).toBeNull()
+    const dlg = screen.getByRole('dialog', { name: 'Switch voice' })
+    expect(within(dlg).getByRole('button', { name: 'imperial' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+  })
+})
+
+// The phone bar: five cells, so each holds its full label at 360px (~72px a cell). The four
+// pages a visit starts from, then More, which opens the drawer holding every page.
 describe('TabBar', () => {
-  it('carries the seven pages, Constitution shortened to fit a phone cell', () => {
-    render(<TabBar route={{ page: 'loops' }} />)
+  it('carries four pages with their full names, then More', () => {
+    render(<TabBar route={{ page: 'library' }} />)
     const links = [...document.querySelectorAll('nav.tabbar a')]
     expect(links.map((a) => a.textContent)).toEqual([
-      'Home',
-      'Laws',
+      'Overview',
+      'Constitution',
       'Library',
-      'Kits',
-      'Loops',
-      'Personal',
       'Installs',
     ])
-    expect(links[4].getAttribute('aria-current')).toBe('page')
+    expect(links[2].getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('button', { name: 'More' }).classList.contains('on')).toBe(false)
+  })
+
+  it('More opens the drawer, and is lit on a page only the drawer lists', () => {
+    const onMore = vi.fn()
+    render(<TabBar route={{ page: 'loops' }} navOpen={false} onMore={onMore} />)
+    const more = screen.getByRole('button', { name: 'More' })
+    expect(more.getAttribute('aria-controls')).toBe('rail-nav')
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    expect(more.classList.contains('on')).toBe(true)
+    fireEvent.click(more)
+    expect(onMore).toHaveBeenCalledTimes(1)
   })
 })

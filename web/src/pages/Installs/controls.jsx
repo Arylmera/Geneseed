@@ -66,7 +66,7 @@ const PICKS = [
 // The five selects, each in its own label: the install side panel and the deploy-to-folder
 // form both lay them out this way. `value` is { theme, footprint, posture, mode, trust };
 // `options` the same keys -> option lists; `who` finishes each accessible label ("voice for
-// claude · global").
+// Claude Code · global").
 export function PickSelects({ value, options, onChange, who }) {
   return PICKS.map((p) => (
     <label className="dp-field" key={p.key}>

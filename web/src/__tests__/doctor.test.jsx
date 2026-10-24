@@ -88,4 +88,74 @@ describe('Doctor', () => {
     await act(async () => {})
     expect(screen.getByText(/Running every check/)).toBeTruthy()
   })
+
+  // The verdict says when it was taken: the HH:MM part of the payload's `checked_at`.
+  it('shows when the checks last ran', async () => {
+    api.doctor.mockResolvedValueOnce({
+      themes: ['neutral'],
+      ok: true,
+      problems: [],
+      checked_at: '2026-10-24 14:05',
+      groups: [{ check: 'parity', label: 'Theme parity', problems: [] }],
+    })
+    render(<Doctor />)
+    await waitFor(() => expect(screen.getByText(/checked 14:05/)).toBeTruthy())
+  })
+
+  // Problems lead; clean checks fold into one closed <details> that counts them.
+  it('lists failing groups first and folds clean ones into a closed details', async () => {
+    api.doctor.mockResolvedValueOnce({
+      themes: ['neutral'],
+      ok: false,
+      problems: ['dead link x in AGENT.md'],
+      groups: [
+        { check: 'parity', label: 'Theme parity', problems: [] },
+        { check: 'build', label: 'Build scan (neutral)', problems: ['dead link x in AGENT.md'] },
+        { check: 'links', label: 'Link check', problems: [] },
+      ],
+    })
+    render(<Doctor />)
+    await waitFor(() => expect(screen.getByText('Build scan (neutral)')).toBeTruthy())
+    const details = document.querySelector('details')
+    expect(details).toBeTruthy()
+    expect(details.open).toBe(false)
+    expect(details.querySelector('summary').textContent).toMatch(/2 clean check/)
+    expect(details.contains(screen.getByText('Theme parity'))).toBe(true)
+    expect(details.contains(screen.getByText('Link check'))).toBe(true)
+    const bad = screen.getByText('Build scan (neutral)')
+    expect(details.contains(bad)).toBe(false)
+    // The failing group sits before the folded clean ones in document order.
+    expect(bad.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  // A finished job bumps dataRev; the page re-reads the cached verdict, never a fresh run.
+  it('re-reads the cached verdict when dataRev changes', async () => {
+    const { rerender } = render(<Doctor dataRev={1} />)
+    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    api.doctor.mockClear()
+    rerender(<Doctor dataRev={2} />)
+    await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(1))
+    expect(api.doctor).toHaveBeenLastCalledWith(false)
+  })
+
+  // Re-run spends the fresh flag: the next dataRev read after it is the cached one again.
+  it('reads cached after a fresh re-run when dataRev changes', async () => {
+    const { rerender } = render(<Doctor dataRev={1} />)
+    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    api.doctor.mockClear()
+    fireEvent.click(screen.getByText(/Re-run checks/))
+    await waitFor(() => expect(api.doctor).toHaveBeenLastCalledWith(true))
+    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    rerender(<Doctor dataRev={2} />)
+    await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(2))
+    expect(api.doctor).toHaveBeenLastCalledWith(false)
+  })
+
+  it('holds exactly one filled button, Re-run checks, once loaded', async () => {
+    const { container } = render(<Doctor />)
+    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    const filled = container.querySelectorAll('.btn:not(.ghost)')
+    expect(filled).toHaveLength(1)
+    expect(filled[0].textContent).toMatch(/Re-run checks/)
+  })
 })

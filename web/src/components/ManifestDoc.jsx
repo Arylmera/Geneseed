@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import { Icon } from './Icon.jsx'
 
 // Load-mode pill. `eager` reads every session, `lazy` on demand, `exclude`
@@ -16,6 +16,14 @@ function EntryTable({ entries }) {
   if (!entries.length) return null
   return (
     <table className="mf-entries">
+      {/* Off screen: the columns read plainly by eye, but a screen reader needs them named. */}
+      <thead className="sr-only">
+        <tr>
+          <th scope="col">Path</th>
+          <th scope="col">Load</th>
+          <th scope="col">Description</th>
+        </tr>
+      </thead>
       <tbody>
         {entries.map((e, i) => {
           const excluded = String(e.load).toLowerCase() === 'exclude'
@@ -71,14 +79,25 @@ function VaultCard({ wiki }) {
 // Collapsible raw source, so the parsed view never hides the literal file.
 function RawSource({ body }) {
   const [open, setOpen] = useState(false)
+  const id = useId()
   if (!body) return null
   return (
     <div className="mf-raw">
-      <button className="mf-raw-toggle" onClick={() => setOpen((v) => !v)}>
+      <button
+        type="button"
+        className="mf-raw-toggle"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((v) => !v)}
+      >
         <Icon name="chevron" className={`glyph mf-caret ${open ? 'on' : ''}`} />
         Raw source
       </button>
-      {open ? <pre className="mf-raw-pre">{body.replace(/^```json\n|\n```$/g, '')}</pre> : null}
+      {open ? (
+        <pre id={id} className="mf-raw-pre">
+          {body.replace(/^```json\n|\n```$/g, '')}
+        </pre>
+      ) : null}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
+import { hostInfo } from '../../lib/hosts.js'
 
 // Sovereign-repo exclusions: folders where every global install goes dormant. Its own
 // small card, self-contained (own fetch/reload) so it doesn't need to thread through the
@@ -56,8 +57,13 @@ export default function ExclusionsCard() {
       {(data.excludes || []).map((e) => (
         <div className="row wrap between gap-12" key={e.path}>
           <code>{e.path}</code>
-          <span className="mono muted">[{e.hosts.join(', ')}]</span>
-          <button className="btn ghost sm" disabled={busy} onClick={() => mutate('remove', e.path)}>
+          <span className="mono muted">{e.hosts.map((h) => hostInfo(h).label).join(', ')}</span>
+          <button
+            className="btn ghost sm"
+            disabled={busy}
+            aria-label={`Stop excluding ${e.path}`}
+            onClick={() => mutate('remove', e.path)}
+          >
             Remove
           </button>
         </div>

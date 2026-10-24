@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { marked } from 'marked'
 import { sanitizeHtml } from '../../components/Markdown.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
 import { renderDoc } from './headings.js'
 
 export { splitAtMapTable } from './headings.js'
@@ -26,7 +27,7 @@ export default function MapPage({ page, overview, onAction }) {
   const row = page.rows[sel] || page.rows[0]
   return (
     <div className="detail-doc">
-      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
+      <PageHeader title={page.title} />
       <div className="markdown" dangerouslySetInnerHTML={{ __html: before }} />
       <div className="docs-map">
         <ul className="map-tree" aria-label="Pieces">
@@ -50,9 +51,9 @@ export default function MapPage({ page, overview, onAction }) {
         </ul>
         {row && (
           <div className="card pad-md map-detail" aria-live="polite">
-            <h3 style={{ margin: '0 0 8px' }}>
+            <h2>
               <Inline text={row.piece} />
-            </h3>
+            </h2>
             <Chip kind={row.kind} />
             <dl>
               <dt>Does</dt>

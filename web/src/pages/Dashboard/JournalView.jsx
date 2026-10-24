@@ -7,13 +7,14 @@ import VerdictBadge from './VerdictBadge.jsx'
 
 // THE FIELD JOURNAL — the fourth Status lens, and the one that answers "what is this
 // harness, today" instead of "is it healthy". The health readout is still one click away
-// (the rail's vitals card carries the germination ring on every page, and Doctor is a
-// button in this header); what this lens leads with is the shape of the thing: how much
+// (the rail's vitals card carries the germination ring on every page, and Run doctor is in
+// the Overview header above this lens); what this lens leads with is the shape of the thing: how much
 // has grown in each section, what grew most recently, and the constitution that governs
 // all of it, drawn rather than tallied.
 //
-// It brings its own header because it is a page, not a panel — Dashboard's shell hands it
-// the whole pane. The other two directions are a quiet line at the bottom rather than a
+// It brings its own date line and title (an h2: the Overview header above holds the page's
+// h1 and its actions) because it is a page, not a panel — Dashboard's shell hands it the
+// whole pane. The other two directions are a quiet line at the bottom rather than a
 // segmented control at the top: they are data dives, and the journal's own subject is the
 // harness, not the choice of view.
 
@@ -108,23 +109,15 @@ function FreshlyGrown({ recent, buildEpoch }) {
   )
 }
 
-export default function JournalView({ overview, recent, lens, onAction, onDirection, dataRev }) {
+export default function JournalView({ overview, recent, lens, onDirection, dataRev }) {
   const counts = overview?.counts || {}
   return (
     <>
       <div className="head-row jr-head">
         <div>
           <div className="eyebrow">Field journal · {today()}</div>
-          <h1 className="h">Today in this harness</h1>
+          <h2 className="h">Today in this harness</h2>
           <VerdictBadge verdict={lens?.verdict} />
-        </div>
-        <div className="row wrap gap-10">
-          <button className="btn primary" onClick={() => onAction?.('update')}>
-            Update &amp; rebuild
-          </button>
-          <button className="btn" onClick={() => go('#/doctor')}>
-            Doctor
-          </button>
         </div>
       </div>
 

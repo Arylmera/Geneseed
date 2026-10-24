@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon.jsx'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // Map a unified-diff line to its display class. Headers (+++/---) and hunk
@@ -15,7 +16,10 @@ function lineKind(ln) {
   return 'ctx'
 }
 
-export default function Diff({ onMutated, onAction, dataRev }) {
+// Past this many diff lines in all, files load collapsed: a wall of lines buries the file list.
+const OPEN_BUDGET = 300
+
+export default function Diff({ onMutated, onAction, dataRev, overview }) {
   const confirm = useConfirm()
   const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
   const [busy, setBusy] = useState(false)
@@ -23,15 +27,17 @@ export default function Diff({ onMutated, onAction, dataRev }) {
   const [sel, setSel] = useState(() => new Set())
   const [open, setOpen] = useState(() => new Set())
 
-  // Seed the selection (none) and the expanded set (all files) whenever a fresh
-  // diff loads — including after a restore or export refetch. Adjusted during
-  // render against the last-seen payload rather than in an effect, so the fresh
-  // diff never paints once with the previous diff's selection.
+  // Seed the selection (none) and the expanded set whenever a fresh diff loads —
+  // including after a restore or export refetch: every file when the diff fits
+  // OPEN_BUDGET lines, none past it (Expand all opens them). Adjusted during render
+  // against the last-seen payload rather than in an effect, so the fresh diff never
+  // paints once with the previous diff's selection.
   const [seeded, setSeeded] = useState(null)
   if (data && data !== seeded) {
     setSeeded(data)
     setSel(new Set())
-    setOpen(new Set(data.files.map((f) => f.rel)))
+    const total = data.files.reduce((n, f) => n + f.diff.length, 0)
+    setOpen(new Set(total <= OPEN_BUDGET ? data.files.map((f) => f.rel) : []))
   }
 
   const toggle = (rel) =>
@@ -75,22 +81,19 @@ export default function Diff({ onMutated, onAction, dataRev }) {
     }
   }
 
-  if (error) return <ErrorState error={error} />
+  if (error) return <ErrorState error={error} onRetry={reload} />
   if (!data) return <Loading />
   if (!data.deployed)
-    return (
-      <div className="empty">
-        <div className="big">No deployed harness</div>
-        Nothing to diff against.
-      </div>
-    )
+    return <EmptyState title="No deployed harness">Nothing to diff against.</EmptyState>
 
   if (!data.diffable)
     return (
-      <div className="empty">
-        <div className="big">No drift check for this install</div>
+      <EmptyState
+        title="No drift check for this install"
+        docs={{ href: '#/installs/hosts', label: 'Pick a global install in Hosts' }}
+      >
         The drift check covers global installs only.
-      </div>
+      </EmptyState>
     )
 
   // A linked path is the user's own link, which no restore or rebuild touches: it is listed
@@ -115,6 +118,13 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       <div className="head-row mb-16">
         <div>
           <h2 className="h">Local edits</h2>
+          {data.target ? (
+            <p className="sub">
+              Comparing <code>{data.target}</code>
+              {data.theme ? ` (${data.theme} voice)` : ''} with source{' '}
+              {overview?.version || 'unknown'}.
+            </p>
+          ) : null}
           {editedCount > 0 ? (
             <p className="sub">
               The agent refines its own deployed files in place. A rebuild keeps an edited file,
@@ -128,7 +138,11 @@ export default function Diff({ onMutated, onAction, dataRev }) {
           ) : null}
         </div>
         <div className="row gap-10">
-          <button className="btn ghost" disabled={busy || sel.size === 0} onClick={restore}>
+          <button
+            className="btn ghost danger-line"
+            disabled={busy || sel.size === 0}
+            onClick={restore}
+          >
             Restore{sel.size ? ` (${sel.size})` : ''}
           </button>
           <button className="btn" disabled={busy} onClick={exportImprovements}>
@@ -146,25 +160,22 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       ) : null}
 
       {files.length === 0 && stale.length === 0 ? (
-        <div className="empty">
-          <div className="big">In sync</div>
-          Deployed harness matches source.
-        </div>
+        <EmptyState title="In sync">Deployed harness matches source.</EmptyState>
       ) : (
         <>
           <div className="row between mb-14">
             <div className="row gap-10">
-              <span className="badge">
-                <span className="dot" style={{ background: 'var(--warn)' }} />
+              <span className="badge warn">
+                <span className="dot" />
                 {editedCount} edited
               </span>
               <span className="badge">
-                <span className="dot" style={{ background: 'var(--good)' }} />
+                <span className="dot" />
                 {addedCount} added
               </span>
               {missingCount > 0 && (
-                <span className="badge">
-                  <span className="dot" style={{ background: 'var(--bad)' }} />
+                <span className="badge bad">
+                  <span className="dot" />
                   {missingCount} missing
                 </span>
               )}
@@ -175,32 +186,39 @@ export default function Diff({ onMutated, onAction, dataRev }) {
                 </span>
               )}
             </div>
-            {files.length ? (
-              <label className="row dim" style={{ gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  style={{ accentColor: 'var(--accent)' }}
-                  checked={sel.size === files.length}
-                  onChange={toggleAll}
-                />
-                Select all
-              </label>
-            ) : null}
+            <div className="row gap-10">
+              <button
+                className="btn ghost sm"
+                onClick={() => setOpen(new Set(data.files.map((f) => f.rel)))}
+              >
+                Expand all
+              </button>
+              <button className="btn ghost sm" onClick={() => setOpen(new Set())}>
+                Collapse all
+              </button>
+              {files.length ? (
+                <label className="row gap-8 dim sel-all">
+                  <input type="checkbox" checked={sel.size === files.length} onChange={toggleAll} />
+                  Select all
+                </label>
+              ) : null}
+            </div>
           </div>
 
           <div className="stack gap-12">{files.map((f) => fileCard(f, true))}</div>
 
           {stale.length ? (
-            <div className="stack gap-12" style={{ marginTop: 24 }}>
-              <h3 style={{ margin: 0 }}>Behind source</h3>
+            <div className="stack gap-12 diff-behind">
+              <h3>Behind source</h3>
               <div className="row between">
-                <p className="sub" style={{ margin: 0 }}>
+                <p className="sub">
                   This install is built from older source — rebuild to bring these files up to date.
                 </p>
                 <button
                   className="btn ghost"
                   disabled={busy}
                   onClick={() => onAction?.('build-all')}
+                  aria-label="Rebuild all installs"
                 >
                   Rebuild
                 </button>
@@ -214,17 +232,12 @@ export default function Diff({ onMutated, onAction, dataRev }) {
   )
 
   // One file's card. Only a local change is selectable for Restore; a stale file is updated by
-  // the rebuild, so it carries no checkbox and a neutral badge.
+  // the rebuild, so it carries no checkbox and a neutral badge, as does an added file: a
+  // difference, not a success, so it never wears the good colour.
   function fileCard(f, selectable) {
     const isOpen = open.has(f.rel)
     const statusClass =
-      f.status === 'stale'
-        ? ''
-        : f.status === 'added'
-          ? 'ok'
-          : f.status === 'missing'
-            ? 'bad'
-            : 'warn'
+      f.status === 'stale' || f.status === 'added' ? '' : f.status === 'missing' ? 'bad' : 'warn'
     return (
       <div className={`card diff-file${isOpen ? ' open' : ''}`} key={f.rel}>
         <div className="diff-head">
@@ -243,13 +256,10 @@ export default function Diff({ onMutated, onAction, dataRev }) {
             <span className="dot" />
             {f.status === 'stale' ? 'behind source' : f.status}
           </span>
-          <span className="dim mono" style={{ marginLeft: 'auto', fontSize: 11 }}>
-            {f.diff.length} lines
-          </span>
+          <span className="dim mono diff-lines">{f.diff.length} lines</span>
           <button
             className="iconbtn"
             onClick={() => toggleOpenFile(f.rel)}
-            style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
             aria-label={isOpen ? `Collapse ${f.rel}` : `Expand ${f.rel}`}
             aria-expanded={isOpen}
           >

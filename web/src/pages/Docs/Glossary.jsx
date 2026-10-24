@@ -1,4 +1,5 @@
 import React from 'react'
+import PageHeader from '../../components/PageHeader.jsx'
 
 // Side-by-side glossary: each invented term shown as the neutral word and the
 // word your deployed theme actually substitutes, so the agent's vocabulary
@@ -8,13 +9,17 @@ export default function Glossary({ page }) {
   const theme = page.theme || 'neutral'
   return (
     <div className="detail-doc">
-      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
-      <p className="sub" style={{ marginTop: 4 }}>
-        Geneseed&apos;s invented vocabulary, decoded. Left: the neutral, plain-English term. Right:
-        the word your <code style={{ textTransform: 'capitalize' }}>{theme}</code> theme actually
-        uses in the agent&apos;s voice. Last: the developer idea it maps to.
-      </p>
-      <div className="card pad-md" style={{ marginTop: 18 }}>
+      <PageHeader
+        title={page.title}
+        sub={
+          <>
+            Geneseed&apos;s invented vocabulary, decoded. Left: the neutral, plain-English term.
+            Right: the word your <code className="cap">{theme}</code> theme actually uses in the
+            agent&apos;s voice. Last: the developer idea it maps to.
+          </>
+        }
+      />
+      <div className="card pad-md">
         <table className="glossary-table">
           <thead>
             <tr>

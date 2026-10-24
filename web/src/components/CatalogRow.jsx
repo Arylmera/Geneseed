@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
+import ErrorState from './ErrorState.jsx'
 
 // One expandable row of the constitution table (Laws' LawRow: invariants, doctrine rules,
 // the ethos): it lazy-loads its full body via /api/item/law/<addr> the first time it opens
@@ -38,12 +39,7 @@ export default function CatalogRow({
   const expand = isOpen && (
     <div className="law-expand" id={id}>
       {error ? (
-        <p>
-          <span role="alert">{error}</span>{' '}
-          <button type="button" className="btn ghost" onClick={reload}>
-            Retry
-          </button>
-        </p>
+        <ErrorState error={error} onRetry={reload} />
       ) : detail ? (
         renderBody(detail)
       ) : (

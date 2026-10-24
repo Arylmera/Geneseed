@@ -19,10 +19,9 @@ function CheckCard({ group, i }) {
         className="check-head"
         onClick={() => setOpen((v) => !v)}
         disabled={clean}
-        style={{ cursor: clean ? 'default' : 'pointer' }}
         aria-expanded={clean ? undefined : open}
       >
-        <span className={`feed-dot ${clean ? 'ok' : 'bad'}`} style={{ width: 9, height: 9 }} />
+        <span className={`feed-dot ${clean ? 'ok' : 'bad'}`} />
         <h3>{group.label}</h3>
         <span className={`badge ${clean ? 'ok' : 'bad'}`}>
           <span className="dot" />
@@ -46,10 +45,15 @@ function CheckCard({ group, i }) {
   )
 }
 
-export default function Doctor() {
-  // Mount reads the daemon's cached verdict; only Re-run asks for a fresh one.
+export default function Doctor({ dataRev }) {
+  // Mount and every `dataRev` bump (a finished job) read the daemon's cached verdict; only
+  // Re-run asks for a fresh one. The loader spends the flag, so the next read is cached again.
   const fresh = useRef(false)
-  const { data, error, reload, setData } = useAsync(() => api.doctor(fresh.current), [])
+  const { data, error, reload, setData } = useAsync(() => {
+    const f = fresh.current
+    fresh.current = false
+    return api.doctor(f)
+  }, [dataRev])
   // Re-running clears the result first so the button reads "Running…" and the
   // sandbox-build loading copy shows while every theme is re-validated.
   const rerun = () => {
@@ -58,7 +62,11 @@ export default function Doctor() {
     reload()
   }
 
-  if (error) return <ErrorState error={error} />
+  if (error) return <ErrorState error={error} onRetry={reload} />
+
+  // Problems lead; clean checks fold into one closed <details> — a wall of green buried them.
+  const dirty = data ? data.groups.filter((g) => g.problems.length) : []
+  const clean = data ? data.groups.filter((g) => !g.problems.length) : []
 
   return (
     <div className="narrow">
@@ -70,7 +78,7 @@ export default function Doctor() {
             link integrity, parity, and drift.
           </p>
         </div>
-        <button className="btn ghost" onClick={rerun} disabled={!data}>
+        <button className="btn" onClick={rerun} disabled={!data}>
           <Icon name="refresh" />
           {data ? 'Re-run checks' : 'Running…'}
         </button>
@@ -80,14 +88,19 @@ export default function Doctor() {
         <Loading label="Running every check (builds each theme in a sandbox)…" />
       ) : (
         <>
-          <div className="card pad-md mb-16">
+          <div className="card pad-md mb-16 doc-summary">
             <div className="row wrap between gap-12">
-              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                <span className="dim mono" style={{ fontSize: 12 }}>
+              <div className="row wrap gap-10">
+                <span className="dim mono">
                   validated {data.themes.length} theme{data.themes.length === 1 ? '' : 's'}
                 </span>
+                {data.checked_at ? (
+                  <span className="dim mono" title={data.checked_at}>
+                    checked {data.checked_at.slice(11)}
+                  </span>
+                ) : null}
                 {data.themes.map((t) => (
-                  <span key={t} className="badge" style={{ textTransform: 'capitalize' }}>
+                  <span key={t} className="badge cap">
                     {t}
                   </span>
                 ))}
@@ -106,9 +119,21 @@ export default function Doctor() {
             </div>
           </div>
           <div className="stack gap-12">
-            {data.groups.map((g, i) => (
+            {dirty.map((g, i) => (
               <CheckCard key={g.label} group={g} i={i} />
             ))}
+            {clean.length ? (
+              <details className="check-fold">
+                <summary>
+                  {clean.length} clean check{clean.length === 1 ? '' : 's'}
+                </summary>
+                <div className="stack gap-12">
+                  {clean.map((g, i) => (
+                    <CheckCard key={g.label} group={g} i={dirty.length + i} />
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
         </>
       )}

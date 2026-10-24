@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { promptPath } from '../lib/format.js'
 import { Icon } from './Icon.jsx'
 import Search from './Search.jsx'
@@ -24,6 +24,7 @@ export default function Topbar({
   onSwitch,
 }) {
   const [appearanceOpen, setAppearanceOpen] = useState(false)
+  const apRef = useRef(null)
   const inst = overview?.install
   const where = inst ? `${inst.host}:${inst.scope}` : promptPath(overview?.target)
   const tab = route.tab && TAB_LABELS[route.tab]
@@ -41,41 +42,54 @@ export default function Topbar({
       >
         <Icon name={navOpen ? 'x' : 'menu'} />
       </button>
+      {/* An ordered list, like PageHeader's crumbs: every level above the current one links
+          back to it. The separators are CSS (`li + li::before`), not text. */}
       <nav className="crumbs" aria-label="Breadcrumb">
-        <span className="crumb-root mono" title={overview?.target || undefined}>
-          {where}
-        </span>
-        <span aria-hidden="true">/</span>
-        <span className={tab ? '' : 'crumb-here'} aria-current={tab ? undefined : 'page'}>
-          {PAGES[route.page]}
-        </span>
-        {tab ? (
-          <>
-            <span aria-hidden="true">/</span>
-            <span className="crumb-here" aria-current="page">
-              {tab}
-            </span>
-          </>
-        ) : null}
+        <ol>
+          <li className="crumb-root mono">
+            <a href="#/installs" title={overview?.target || undefined}>
+              {where}
+            </a>
+          </li>
+          <li>
+            {tab ? (
+              <a href={route.page === 'overview' ? '#/' : `#/${route.page}`}>{PAGES[route.page]}</a>
+            ) : (
+              <span className="crumb-here" aria-current="page">
+                {PAGES[route.page]}
+              </span>
+            )}
+          </li>
+          {tab ? (
+            <li>
+              <span className="crumb-here" aria-current="page">
+                {tab}
+              </span>
+            </li>
+          ) : null}
+        </ol>
       </nav>
       <div className="topbar-spacer" />
       <HarnessSelector installs={installs} onSwitch={onSwitch} />
       <Search value={query} onChange={onQuery} dataRev={dataRev} />
-      <div className="tb-pop-anchor">
-        <button
-          type="button"
-          className="iconbtn"
-          aria-label="Appearance"
-          title="Appearance"
-          aria-expanded={appearanceOpen}
-          onClick={() => setAppearanceOpen((v) => !v)}
-        >
-          <Icon name="themes" />
-        </button>
-        {appearanceOpen ? (
-          <AppearancePopover {...appearance} onClose={() => setAppearanceOpen(false)} />
-        ) : null}
-      </div>
+      <button
+        type="button"
+        className="iconbtn"
+        ref={apRef}
+        aria-label="Appearance"
+        title="Appearance"
+        aria-expanded={appearanceOpen}
+        onClick={() => setAppearanceOpen((v) => !v)}
+      >
+        <Icon name="themes" />
+      </button>
+      {appearanceOpen ? (
+        <AppearancePopover
+          {...appearance}
+          anchorRef={apRef}
+          onClose={() => setAppearanceOpen(false)}
+        />
+      ) : null}
       {/* Icon-only: `title` is a hover hint sighted mouse users get, so it also carries an
           aria-label; the Icon SVGs are aria-hidden and name nothing. */}
       <button

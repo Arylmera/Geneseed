@@ -1,16 +1,17 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import { useFileEditor } from '../hooks/useFileEditor.js'
 
 // Rules — the user's own standing rules (user-rules.md beside the deployed
 // AGENT.md). The page is the curation surface for the file the agent obeys
-// alongside the Laws: list with status/scope chips, add/edit/retire, and the
-// budget meter that keeps the set lean (a bloated rule set is ignored, not
-// obeyed — Design decision 7). Every mutation carries the fingerprint of the
+// alongside the Laws: list with status/scope chips and add/edit/retire. The
+// budget that keeps the set lean (a bloated rule set is ignored, not obeyed —
+// Design decision 7) is Personal's "Rule budget" panel, above. Every mutation carries the fingerprint of the
 // content we last read; a 409 means an agent session edited the file first,
 // and we reload instead of clobbering its write. The open form is a useFileEditor
 // draft, so a reload never wipes it and leaving with it unsaved asks first.
@@ -44,41 +45,50 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy }) {
   const bodyError = f.body.trim().split(LINE_BREAK).some(isRuleEdge)
     ? 'A line cannot start with “## ” — user-rules.md reads it as a new rule heading. Use ### or plain text.'
     : ''
-  const valid = f.title.trim() && f.body.trim() && !bodyError
+  const missing = !(f.title.trim() && f.body.trim())
+  const valid = !missing && !bodyError
   return (
     <div className="rule-form">
-      <input
-        className="lib-filter"
-        type="text"
-        value={f.title}
-        onChange={set('title')}
-        placeholder="Title — short and imperative (e.g. No emoji in commit subjects)"
-        aria-label="Rule title"
-      />
-      <textarea
-        className="rule-body-input"
-        value={f.body}
-        onChange={set('body')}
-        rows={4}
-        placeholder="The rule, stated plainly and testably, in one short paragraph."
-        aria-label="Rule body"
-        aria-invalid={bodyError ? true : undefined}
-        aria-describedby={bodyError ? 'rule-body-error' : undefined}
-      />
+      <label className="field">
+        <span>Rule title</span>
+        <input
+          className="lib-filter"
+          type="text"
+          value={f.title}
+          onChange={set('title')}
+          placeholder="Title — short and imperative (e.g. No emoji in commit subjects)"
+          autoFocus
+        />
+      </label>
+      <label className="field">
+        <span>Rule body</span>
+        <textarea
+          className="rule-body-input"
+          value={f.body}
+          onChange={set('body')}
+          rows={4}
+          placeholder="The rule, stated plainly and testably, in one short paragraph."
+          aria-invalid={bodyError ? true : undefined}
+          aria-describedby={bodyError ? 'rule-body-error' : undefined}
+        />
+      </label>
       {bodyError ? (
         <p id="rule-body-error" className="sub rule-notice" role="alert">
           {bodyError}
         </p>
       ) : null}
-      <div className="row" style={{ flexWrap: 'wrap' }}>
-        <select className="sel" value={f.scope} onChange={set('scope')} aria-label="Rule scope">
-          <option value="project">scope: project (this repo, committable)</option>
-          <option value="user">scope: user (personal)</option>
-          <option value="global">scope: global (every repository)</option>
-          {SCOPES.includes(scope0) ? null : (
-            <option value={scope0}>scope: {scope0} (as written in the file)</option>
-          )}
-        </select>
+      <div className="row wrap">
+        <label className="field">
+          <span>Rule scope</span>
+          <select className="sel" value={f.scope} onChange={set('scope')}>
+            <option value="project">scope: project (this repo, committable)</option>
+            <option value="user">scope: user (personal)</option>
+            <option value="global">scope: global (every repository)</option>
+            {SCOPES.includes(scope0) ? null : (
+              <option value={scope0}>scope: {scope0} (as written in the file)</option>
+            )}
+          </select>
+        </label>
         <label className="rule-trial-label">
           trial until
           <input
@@ -89,8 +99,13 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy }) {
             aria-label="Trial until date (optional)"
           />
         </label>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn sm" disabled={!valid || busy} onClick={() => onSave(f)}>
+        <div className="row gap-8" style={{ marginLeft: 'auto' }}>
+          <button
+            className="btn sm"
+            disabled={!valid || busy}
+            onClick={() => onSave(f)}
+            aria-describedby={missing ? 'rule-form-hint' : undefined}
+          >
             {busy ? 'Saving…' : 'Save rule'}
           </button>
           <button className="btn ghost sm" disabled={busy} onClick={onCancel}>
@@ -98,6 +113,11 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy }) {
           </button>
         </div>
       </div>
+      {missing ? (
+        <p id="rule-form-hint" className="panel-note">
+          A rule needs a title and a body.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -105,7 +125,12 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy }) {
 function RuleRow({ rule, isOpen, onToggle, onEdit, onDelete, onGraduate }) {
   return (
     <div className={`rule-row ${isOpen ? 'on' : ''}`}>
-      <button className="rule-head" onClick={onToggle} aria-expanded={isOpen}>
+      <button
+        className="rule-head"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        data-rule-head={rule.id}
+      >
         <span className="rule-no">R{rule.id}</span>
         <span className="rule-title">{rule.title}</span>
         <span className={`rule-chip ${rule.scope === 'user' ? 'user' : ''}`}>{rule.scope}</span>
@@ -119,20 +144,21 @@ function RuleRow({ rule, isOpen, onToggle, onEdit, onDelete, onGraduate }) {
         <div className="rule-expand">
           <p>{rule.body}</p>
           {rule.source ? <div className="rule-src">source: {rule.source}</div> : null}
-          <div className="row" style={{ marginTop: 10, gap: 8 }}>
+          <div className="row gap-8" style={{ marginTop: 10 }}>
             {rule.status === 'trial' && (
               <button
-                className="btn sm"
+                className="btn ghost sm"
                 onClick={onGraduate}
                 title="Adopt for good — drop the trial marker"
+                aria-label={`Graduate R${rule.id}`}
               >
                 Graduate
               </button>
             )}
-            <button className="btn ghost sm" onClick={onEdit}>
+            <button className="btn ghost sm" onClick={onEdit} aria-label={`Edit R${rule.id}`}>
               Edit
             </button>
-            <button className="btn ghost sm" onClick={onDelete}>
+            <button className="btn ghost sm" onClick={onDelete} aria-label={`Retire R${rule.id}`}>
               Retire
             </button>
           </div>
@@ -151,17 +177,32 @@ export default function Rules({ onChanged }) {
   // draft: { target: 'new' | rule id, title0: the rule's title when opened, form }
   const editor = useFileEditor({ data, reload })
   const { draft, busy, notice } = editor
+  // Where focus goes once the act has re-rendered: 'add' (the Add rule button) or a rule id
+  // (that rule's row head). A closed form unmounts the element that had focus, which would
+  // drop it on <body>; the target exists only after the render, hence the effect. The target
+  // is a ref, taken once (one attempt: a target missing now must not steal focus later); the
+  // tick only asks for the render, so the effect never sets state.
+  const focusTo = useRef(null)
+  const [focusTick, setFocusTick] = useState(0)
+  const setFocusTo = (to) => {
+    focusTo.current = to
+    setFocusTick((n) => n + 1)
+  }
+  const addRef = useRef(null)
+  const listRef = useRef(null)
+  useEffect(() => {
+    const to = focusTo.current
+    focusTo.current = null
+    if (to === null) return
+    const el =
+      to === 'add' ? addRef.current : listRef.current?.querySelector(`[data-rule-head="${to}"]`)
+    el?.focus()
+  }, [focusTick])
 
-  if (error) return <ErrorState error={error} />
+  if (error) return <ErrorState error={error} onRetry={reload} />
   if (!data) return <Loading />
 
   const rules = data.rules || []
-  const { stats } = data
-  // The meter reads whichever budget is closer to spent — count or tokens.
-  const pct = Math.round(
-    Math.max(stats.rules / stats.max_rules, stats.tokens / stats.max_tokens) * 100,
-  )
-  const meterClass = pct >= 100 ? 'over' : pct >= 70 ? 'warn' : ''
 
   // A draft's rule is GONE when no rule has both its id and the title it had when opened:
   // after a renumber the id names a different rule, and an update would overwrite that one.
@@ -178,8 +219,16 @@ export default function Rules({ onChanged }) {
     })
     if (res && fromDraft) editor.close()
     onChanged?.()
+    return res
   }
   const setForm = (form) => editor.setDraft({ ...draft, form })
+  // A refused save keeps the form open, and focus with it.
+  const saveThen = async (body, to) => {
+    if (await mutate(body, true)) setFocusTo(to)
+  }
+  const cancelThen = async (to) => {
+    if (await editor.discard()) setFocusTo(to)
+  }
 
   const onDelete = async (r) => {
     const ok = await confirm(
@@ -191,11 +240,12 @@ export default function Rules({ onChanged }) {
       },
     )
     if (!ok) return
-    mutate({ op: 'delete', id: r.id })
+    // With a draft open there is no Add rule button to land on.
+    if ((await mutate({ op: 'delete', id: r.id })) && draft === null) setFocusTo('add')
   }
   // Graduate = same rule, trial marker dropped (adopted for good).
-  const onGraduate = (r) =>
-    mutate({
+  const onGraduate = async (r) => {
+    const res = await mutate({
       op: 'update',
       id: r.id,
       title: r.title,
@@ -204,6 +254,8 @@ export default function Rules({ onChanged }) {
       source: r.source,
       trial_until: '',
     })
+    if (res) setFocusTo(r.id)
+  }
 
   return (
     <>
@@ -221,6 +273,7 @@ export default function Rules({ onChanged }) {
         {data.exists && draft === null && (
           <button
             className="btn"
+            ref={addRef}
             onClick={() => editor.open({ target: 'new', title0: '', form: EMPTY_FORM })}
           >
             Add rule
@@ -228,23 +281,11 @@ export default function Rules({ onChanged }) {
         )}
       </div>
 
-      {data.exists && (
-        <div className={`rules-meter ${meterClass}`}>
-          <div className="rules-meter-bar">
-            <div className="rules-meter-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
-          </div>
-          <span className="rules-meter-label">
-            {stats.rules}/{stats.max_rules} rules · ~{stats.tokens} tokens
-            {pct >= 100
-              ? ' — over budget: a bloated rule set dilutes the rules that matter'
-              : pct >= 70
-                ? ' — getting heavy; consider merging or pruning'
-                : ''}
-          </span>
-        </div>
-      )}
-
-      {notice ? <p className="sub rule-notice">{notice}</p> : null}
+      {notice ? (
+        <p className="sub rule-notice" role="status">
+          {notice}
+        </p>
+      ) : null}
       {(data.warnings || []).map((w) => (
         <p key={w} className="sub rule-notice">
           format warning: {w}
@@ -257,7 +298,7 @@ export default function Rules({ onChanged }) {
             new rule
           </div>
           {gone ? (
-            <p className="sub rule-notice">
+            <p className="sub rule-notice" role="status">
               Rule R{target} is no longer in user-rules.md (an agent session removed or renumbered
               it). Your draft is kept — Save adds it as a new rule.
             </p>
@@ -266,27 +307,25 @@ export default function Rules({ onChanged }) {
             value={draft.form}
             onChange={setForm}
             busy={busy}
-            onCancel={editor.discard}
-            onSave={(f) => mutate({ op: 'add', ...f }, true)}
+            onCancel={() => cancelThen('add')}
+            onSave={(f) => saveThen({ op: 'add', ...f }, 'add')}
           />
         </div>
       )}
 
       {!data.exists ? (
-        <div className="empty" style={{ padding: 48 }}>
-          <div className="big">No user-rules.md here yet</div>
+        <EmptyState title="No user-rules.md here yet">
           The build seeds it beside AGENT.md — run a build/update from the Dashboard (or{' '}
           <code className="mono">geneseed update</code>) and it appears, ready for your rules.
-        </div>
+        </EmptyState>
       ) : rules.length === 0 && !newCard ? (
-        <div className="empty" style={{ padding: 48 }}>
-          <div className="big">No rules yet</div>
+        <EmptyState title="No rules yet">
           The file is seeded and loaded every session — it is just empty. Add your first standing
           rule here, ask the agent for one in-session (the rule skill), or promote a recurring
           memory fact from the Library.
-        </div>
+        </EmptyState>
       ) : (
-        <div className="card rules-list">
+        <div className="card rules-list" ref={listRef}>
           {rules.map((r) =>
             !gone && target === r.id ? (
               <div className="rule-row on" key={r.id}>
@@ -295,8 +334,10 @@ export default function Rules({ onChanged }) {
                     value={draft.form}
                     onChange={setForm}
                     busy={busy}
-                    onCancel={editor.discard}
-                    onSave={(f) => mutate({ op: 'update', id: r.id, source: r.source, ...f }, true)}
+                    onCancel={() => cancelThen(r.id)}
+                    onSave={(f) =>
+                      saveThen({ op: 'update', id: r.id, source: r.source, ...f }, r.id)
+                    }
                   />
                 </div>
               </div>

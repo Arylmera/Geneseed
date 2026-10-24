@@ -12,6 +12,7 @@ import StatusBadge from '../components/StatusBadge.jsx'
 import { GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import AgentGlyph from '../components/AgentGlyph.jsx'
 
@@ -37,6 +38,28 @@ function EmptyDoc({ section, source }) {
       </span>
     </div>
   )
+}
+
+// An entry body's own head, split off: its leading `# …` (the reader already prints a title,
+// so a second one breaks the heading outline) and the `> …` paragraph right after it when that
+// is only the description again (the reader prints it as the lede). "Again" is a prefix match:
+// a real agent's description is the quote plus "Use when: …", so equality never holds; the
+// prefix must end on a word boundary. Returns the H1 text so the reader can use it where the
+// title is just the slug. Any other blockquote is the author's. The H1 follows CommonMark: at
+// most three spaces of indent (four is a code block), and a closing `#` run only after a space.
+const norm = (s) => s.replace(/\s+/g, ' ').trim()
+const dropBlank = (s) => s.replace(/^(?:[ \t]*\n)+/, '')
+export function bodyHead(body, desc) {
+  const lf = body.replace(/\r\n/g, '\n')
+  const h1 = /^(?:[ \t]*\n)*[ ]{0,3}#[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*(?:\n|$)/.exec(lf)
+  if (!h1) return { title: null, body }
+  let rest = dropBlank(lf.slice(h1[0].length))
+  const quote = /^(?:>[^\n]*(?:\n|$))+/.exec(rest)
+  const said = quote ? norm(quote[0].replace(/^>[ \t]?/gm, '')) : ''
+  const d = desc ? norm(desc) : ''
+  if (said && (d === said || d.startsWith(said + ' ')))
+    rest = dropBlank(rest.slice(quote[0].length))
+  return { title: h1[1].trim(), body: rest }
 }
 
 const resolveSec = (s, lock) => lock || (s && LIBRARY_ORDER.includes(s) ? s : LIBRARY_ORDER[0])
@@ -204,29 +227,23 @@ export default function Library({
     }
   }
 
-  // The composition bar over the kinds column: skills, agents, and everything else the
-  // agent keeps, as shares of the whole library.
-  const total = LIBRARY_ORDER.reduce((n, k) => n + (counts[k] ?? 0), 0)
-  const rest = total - (counts.skills ?? 0) - (counts.agents ?? 0)
-  const share = (n) => `${total ? (n / total) * 100 : 0}%`
+  const head = item?.body ? bodyHead(item.body, item.desc || activeItem?.desc) : null
+  const named = item?.title || activeItem?.title || activeItem?.name
+  const title = named === activeItem?.name && head?.title ? head.title : named
+  const empty = catalog?.section === sec && items.length === 0
   const status = item?.status || activeItem?.status
   const skillCat = sec === 'skills' ? SKILL_CATS[fromCatalog?.klass] : null
   const label = SECTIONS[sec].label
 
   return (
     <>
-      {err ? <ErrorState error={err} style={{ margin: '0 0 12px' }} /> : null}
+      <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
       <div className={`library${lock ? ' locked' : ''}`}>
         {lock ? null : (
           <aside className="lib-kinds" aria-label="Library kinds">
             <div className="lib-title">
               <h1 className="h">Library</h1>
               <span className="dim">What the agent knows</span>
-            </div>
-            <div className="stackbar thin" aria-hidden="true">
-              <span className="sb-invariants" style={{ width: share(counts.skills ?? 0) }} />
-              <span className="sb-doctrines" style={{ width: share(counts.agents ?? 0) }} />
-              <span className="sb-rest" style={{ width: share(rest) }} />
             </div>
             <nav className="kind-list" aria-label="Kinds">
               {LIBRARY_ORDER.map((k) => (
@@ -270,12 +287,21 @@ export default function Library({
               Showing {CAP} of {items.length}; type to search the rest.
             </div>
           )}
-          {catalog?.section === sec && items.length === 0 && (
-            <div className="empty" style={{ padding: 32 }}>
-              <div className="big">Nothing here yet</div>
-              Once the harness produces entries they appear here.
-            </div>
-          )}
+          {empty &&
+            (sec === 'wiki' ? (
+              <EmptyState
+                title="No wiki entries"
+                action={<a href="#/section/config">Open the setup files</a>}
+                docs={{ href: '#/docs/wiki', label: 'How to configure a wiki →' }}
+              >
+                Declare a wiki in <code className="mono">geneseed-wiki.jsonc</code> and its entries
+                appear here.
+              </EmptyState>
+            ) : (
+              <EmptyState title="Nothing here yet">
+                Once the harness produces entries they appear here.
+              </EmptyState>
+            ))}
         </LibList>
 
         <article className="lib-reader" aria-label="Entry">
@@ -290,9 +316,7 @@ export default function Library({
                 <StatusBadge status={status} />
               </div>
               <div className="reader-head">
-                <h2 className="reader-title">
-                  {item?.title || activeItem.title || activeItem.name}
-                </h2>
+                <h2 className="reader-title">{title}</h2>
                 {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
                 {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
               </div>
@@ -334,7 +358,7 @@ export default function Library({
                 )
               ) : item?.body ? (
                 <div className="lib-doc detail-doc">
-                  <Markdown body={item.body} links={item.links || []} />
+                  <Markdown body={head.body} links={item.links || []} />
                 </div>
               ) : item === null && activeName ? (
                 <p className="sub">Loading…</p>
@@ -342,11 +366,11 @@ export default function Library({
                 <EmptyDoc section={sec} source={libSource(sec, activeItem.name)} />
               )}
             </>
-          ) : (
-            <div className="empty">
-              <div className="big">Select an entry</div>
+          ) : empty ? null : (
+            // An empty kind has nothing to pick; the list pane already says how to fill it.
+            <EmptyState title="Select an entry">
               Pick something from the list to read it.
-            </div>
+            </EmptyState>
           )}
         </article>
       </div>

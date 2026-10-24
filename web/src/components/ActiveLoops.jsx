@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { usePoll } from '../hooks/usePoll.js'
 import RingGraph from './RingGraph.jsx'
+import DataTable from './DataTable.jsx'
 
 const POLL_MS = 5000
 const PRESETS = ['prudent', 'balanced', 'aggressive']
@@ -37,31 +38,33 @@ export function useActiveLoops() {
   return { loops: data?.loops ?? null, error, onPreset }
 }
 
+const num = (key) => ({
+  key,
+  label: key,
+  align: 'right',
+  render: (h) => <span className="num">{h[key]}</span>,
+})
+const HISTORY_COLS = [
+  num('iteration'),
+  { key: 'intent', label: 'intent' },
+  num('declared'),
+  num('actual'),
+  { key: 'decision', label: 'decision' },
+  { key: 'tests', label: 'tests' },
+]
+
 function History({ history }) {
   if (!history.length) return <p className="panel-note">No iteration finished yet.</p>
   return (
     <div className="loop-history">
-      <table className="tbl">
-        <thead>
-          <tr>
-            {['iteration', 'intent', 'declared', 'actual', 'decision', 'tests'].map((h) => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {history.map((h) => (
-            <tr key={h.iteration}>
-              <td className="num">{h.iteration}</td>
-              <td>{h.intent}</td>
-              <td className="num">{h.declared}</td>
-              <td className="num">{h.actual}</td>
-              <td>{h.decision}</td>
-              <td>{h.tests}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* The caption stays off screen: the "Iterations" heading above already says it. */}
+      <DataTable
+        caption="Iterations"
+        captionHidden
+        columns={HISTORY_COLS}
+        rows={history}
+        rowKey={(h) => h.iteration}
+      />
     </div>
   )
 }
@@ -112,6 +115,8 @@ export function ActiveDetail({ loop, bricks, onPreset }) {
               ))}
             </select>
           </label>
+          {/* Beside the picker, not inside its label: the link must not join the select's name. */}
+          <a href="#/docs/loop-risk">What presets mean →</a>
           <hr className="hr" />
           <div className="loop-graph">
             <RingGraph graph={loop.graph} bricks={bricks} highlight={loop.node} />

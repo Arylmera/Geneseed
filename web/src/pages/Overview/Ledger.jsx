@@ -3,6 +3,7 @@ import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
+import PageHeader from '../../components/PageHeader.jsx'
 import { CountUp, useCountUp } from '../../lib/motion.js'
 import {
   COST_PARTS,
@@ -11,6 +12,7 @@ import {
   fleetVerdict,
   gateRows,
   ledgerNeeds,
+  needsRebuild,
   neverFired,
 } from '../../lib/overview.js'
 
@@ -28,7 +30,9 @@ const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
 // request; it only bounds how long an open page goes without learning what the daemon learnt.
 export const UPDATE_POLL_MS = 60 * 60 * 1000
 
-function VersionChip({ update, onAction }) {
+// `canFill` false: the page already has its one primary (a rebuild is due), so a due Update
+// stays ghost instead of becoming a second filled button.
+function VersionChip({ update, onAction, canFill = true }) {
   if (!update) return null
   // `install` picks the route; a daemon older than the field only sent `git`.
   const install = update.install ?? (update.git ? 'git' : 'npm-global')
@@ -81,7 +85,7 @@ function VersionChip({ update, onAction }) {
       {chip}
       <button
         type="button"
-        className={due ? 'btn' : 'btn ghost'}
+        className={due && canFill ? 'btn' : 'btn ghost'}
         title={title}
         onClick={() => onAction('update')}
       >
@@ -170,7 +174,12 @@ function FleetRow({ i, n, onAction, onOpen }) {
         <td />
         <td />
         <td className="ldg-act">
-          <button type="button" className="btn ghost sm" onClick={() => onOpen(i)}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            aria-label={`Open ${i.host} · ${i.scope}`}
+            onClick={() => onOpen(i)}
+          >
             Open
           </button>
         </td>
@@ -242,12 +251,24 @@ function FleetRow({ i, n, onAction, onOpen }) {
       </td>
       <td className="mono dim">{i.built_epoch ? `${relTime(i.built_epoch)} ago` : 'never'}</td>
       <td className="ldg-act">
-        {i.verdict === 'behind' || drift || stale ? (
-          <button type="button" className="btn sm" onClick={() => onAction('build-all')}>
-            Rebuild
+        {/* The verb is the machine-wide rebuild, so it says so: it never rebuilds one row. */}
+        {needsRebuild(i) ? (
+          <button
+            type="button"
+            className="btn ghost sm"
+            aria-label={`Rebuild all installs (${i.host} · ${i.scope} needs it)`}
+            title="Rebuilds every install on this machine"
+            onClick={() => onAction('build-all')}
+          >
+            Rebuild all
           </button>
         ) : (
-          <button type="button" className="btn ghost sm" onClick={() => onOpen(i)}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            aria-label={`Open ${i.host} · ${i.scope}`}
+            onClick={() => onOpen(i)}
+          >
             Open
           </button>
         )}
@@ -281,12 +302,13 @@ function Needs({ rows, onAction }) {
                 <button
                   type="button"
                   className="needs-verb linkish"
+                  aria-label={`${n.verb}: ${n.title}`}
                   onClick={() => onAction(n.act)}
                 >
                   {n.verb}
                 </button>
               ) : (
-                <a className="needs-verb" href={n.href}>
+                <a className="needs-verb" href={n.href} aria-label={`${n.verb}: ${n.title}`}>
                   {n.verb}
                 </a>
               )}
@@ -503,7 +525,8 @@ function GatesChart({ gates, laws }) {
   )
 }
 
-export default function Ledger({ overview, setup, onAction, onRetry, dataRev, banner }) {
+// `view` is the Overview's View control, handed down so both arms carry the same one.
+export default function Ledger({ overview, setup, onAction, onRetry, dataRev, banner, view }) {
   // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
   // last good answer on a failed reload, so a blip shows the old table under an error line.
   const {
@@ -562,21 +585,41 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
     skills,
     laws,
   })
+  // One primary per page: a rebuild that is due outranks an update that is due. It is the
+  // machine-wide rebuild (every install, not only the N behind), so the label says "all".
+  const behind = installs.filter(needsRebuild).length
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="h">Overview</h1>
-          <p className="sub mono">{fleet ? `${installs.length} installed · machine-wide` : ' '}</p>
-        </div>
-        <div className="page-actions">
-          <VersionChip update={update} onAction={onAction} />
-          <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
-            Run doctor
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Overview"
+        sub={
+          <span className="mono">
+            {fleet ? `${installs.length} installed · machine-wide` : ' '}
+          </span>
+        }
+        primary={
+          behind ? (
+            <button
+              type="button"
+              className="btn"
+              title="Rebuilds every install on this machine"
+              onClick={() => onAction('build-all')}
+            >
+              Rebuild all ({behind} behind)
+            </button>
+          ) : null
+        }
+        actions={
+          <>
+            <VersionChip update={update} onAction={onAction} canFill={!behind} />
+            <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
+              Run doctor
+            </button>
+            {view}
+          </>
+        }
+      />
       {banner}
       <div className="ov-stack ldg">
         <Verdict fleet={fleet} error={fleetError} />
@@ -595,15 +638,18 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
           ) : null}
           <div className="ldg-scroll">
             <table className="ldg-fleet">
+              <caption className="sr-only">Installs</caption>
               <thead>
                 <tr>
-                  <th>Install</th>
-                  <th>Voice</th>
-                  <th>Sync</th>
-                  <th>Hand edits</th>
-                  <th>Always-on</th>
-                  <th>Built</th>
-                  <th />
+                  <th scope="col">Install</th>
+                  <th scope="col">Voice</th>
+                  <th scope="col">Sync</th>
+                  <th scope="col">Hand edits</th>
+                  <th scope="col">Always-on</th>
+                  <th scope="col">Built</th>
+                  <th scope="col">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

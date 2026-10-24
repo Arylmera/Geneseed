@@ -1,5 +1,4 @@
 import React from 'react'
-import { Icon } from '../../components/Icon.jsx'
 import { editCount, relTime } from '../../lib/format.js'
 import { bucketJobsByDay, jobSummary, newestJobs } from '../../lib/jobBuckets.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
@@ -84,7 +83,7 @@ function runMix(jobs) {
 // Operator HUD Status lens — flat instrument panels, mono everywhere, real
 // data only (overview counts, doctor groups, job log). Modelled on the
 // design's flavourC dashboard but reshaped to the React app's data shapes.
-export default function OperatorHudView({ overview, jobs, lens, onAction }) {
+export default function OperatorHudView({ overview, jobs, lens }) {
   const c = overview.counts || {}
   const total = SECTION_ORDER.reduce((s, k) => s + (c[k] || 0), 0)
   const max = Math.max(...SECTION_ORDER.map((k) => c[k] || 0), 1)
@@ -110,7 +109,7 @@ export default function OperatorHudView({ overview, jobs, lens, onAction }) {
         <span className="c-pill warn">NOT DEPLOYED</span>
       ),
     ],
-    ['voice', <span style={{ textTransform: 'capitalize' }}>{overview.theme}</span>],
+    ['voice', <span className="t-cap">{overview.theme}</span>],
     ['mode', overview.emit],
     [
       'doctor',
@@ -136,21 +135,9 @@ export default function OperatorHudView({ overview, jobs, lens, onAction }) {
     <div className="c-root">
       <div className="c-titlebar">
         <div>
-          <h1 className="c-h1">HARNESS // STATUS READOUT</h1>
+          <h2 className="c-h1">HARNESS // STATUS READOUT</h2>
           <div className="c-sub">{overview.target} · rendered from src/ · inherited everywhere</div>
           <VerdictBadge verdict={lens?.verdict} />
-        </div>
-        <div className="row gap-8">
-          <button className="btn" onClick={() => onAction('update')}>
-            <Icon name="refresh" />
-            UPDATE
-          </button>
-          <button className="btn ghost" onClick={() => onAction('build-all')}>
-            REBUILD
-          </button>
-          <button className="btn ghost" onClick={() => onAction('doctor')}>
-            DOCTOR
-          </button>
         </div>
       </div>
 
@@ -234,7 +221,7 @@ export default function OperatorHudView({ overview, jobs, lens, onAction }) {
               </div>
             </>
           ) : (
-            <p className="c-dim mono" style={{ fontSize: 11 }}>
+            <p className="c-dim mono c-fine">
               {doctorState === 'failed'
                 ? 'Doctor did not answer.'
                 : doctorState === 'ok'
@@ -278,9 +265,7 @@ export default function OperatorHudView({ overview, jobs, lens, onAction }) {
               </tbody>
             </table>
           ) : (
-            <p className="c-dim mono" style={{ fontSize: 11 }}>
-              No runs logged.
-            </p>
+            <p className="c-dim mono c-fine">No runs logged.</p>
           )}
         </CMod>
 
@@ -313,7 +298,7 @@ export default function OperatorHudView({ overview, jobs, lens, onAction }) {
               })}
               {(!jobs || jobs.length === 0) && (
                 <tr>
-                  <td colSpan="3" className="c-dim" style={{ fontSize: 11 }}>
+                  <td colSpan="3" className="c-dim c-fine">
                     No runs logged.
                   </td>
                 </tr>

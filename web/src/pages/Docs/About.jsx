@@ -1,5 +1,6 @@
 import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
 
 // About: live install snapshot + the static external links. Keeps version
 // info close to the docs so a reader knows which version their docs reflect.
@@ -18,11 +19,11 @@ export default function About({ page }) {
   ]
   return (
     <div className="detail-doc">
-      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
-      <p className="sub" style={{ marginTop: 4 }}>
-        Live snapshot of the install behind this UI, plus where to go next.
-      </p>
-      <div className="card pad-md" style={{ marginTop: 18 }}>
+      <PageHeader
+        title={page.title}
+        sub="Live snapshot of the install behind this UI, plus where to go next."
+      />
+      <div className="card pad-md mb-18">
         {rows.map(([k, val]) => (
           <div className="kv" key={k}>
             <span className="k">{k}</span>
@@ -30,7 +31,7 @@ export default function About({ page }) {
           </div>
         ))}
       </div>
-      <div className="row wrap gap-10" style={{ marginTop: 18 }}>
+      <div className="row wrap gap-10">
         <a className="btn ghost" href={page.repo} target="_blank" rel="noreferrer">
           <Icon name="external" />
           {page.repo_is_github ? 'GitHub repo' : 'Source repo'}

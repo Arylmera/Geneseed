@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { renderDoc } from './headings.js'
+import { cmdId } from './CliPage.jsx'
 
 const MAX_CARDS = 5
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -28,7 +29,14 @@ const jump = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'sm
 // page the reader pane renders, so each entry lands on an id the page carries.
 export default function Margin({ page, glossaryRows }) {
   const body = page?.body
-  const toc = useMemo(() => renderDoc(page).toc, [page])
+  // A CLI page has no markdown body: its outline is its commands.
+  const toc = useMemo(
+    () =>
+      page?.kind === 'cli'
+        ? (page.commands || []).map((c) => ({ id: cmdId(c.name), title: c.name, level: 2 }))
+        : renderDoc(page).toc,
+    [page],
+  )
   const cards = useMemo(() => glossaryHits(body, glossaryRows), [body, glossaryRows])
   if (!toc.length && !cards.length) return null
   return (

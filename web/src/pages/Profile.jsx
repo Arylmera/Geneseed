@@ -4,6 +4,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import { useFileEditor } from '../hooks/useFileEditor.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import Markdown from '../components/Markdown.jsx'
 import Seg from '../components/Seg.jsx'
 
@@ -31,7 +32,7 @@ export default function Profile({ onChanged }) {
   }
 
   if (loading && !data) return <Loading />
-  if (error) return <ErrorState error={error} />
+  if (error) return <ErrorState error={error} onRetry={reload} />
 
   const editing = draft !== null
   const text = data?.text || ''
@@ -42,7 +43,7 @@ export default function Profile({ onChanged }) {
     })
     if (!res) return
     // Paint the saved text at once; the reload the editor fired confirms it.
-    setData((d) => ({ ...d, text: draft, fingerprint: res.fingerprint || '' }))
+    setData((d) => ({ ...d, text: draft, seeded: false, fingerprint: res.fingerprint || '' }))
     editor.setNotice('Saved.')
     editor.close()
     onChanged?.()
@@ -63,12 +64,20 @@ export default function Profile({ onChanged }) {
             it interviews you and drafts this file with your consent.
           </p>
         </div>
-        <div className="row" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="row">
           <Seg aria-label="Profile mode">
-            <button className={editing ? '' : 'on'} onClick={editor.discard}>
+            <button
+              className={editing ? '' : 'on'}
+              aria-pressed={!editing}
+              onClick={editor.discard}
+            >
               View
             </button>
-            <button className={editing ? 'on' : ''} onClick={() => editing || editor.open(text)}>
+            <button
+              className={editing ? 'on' : ''}
+              aria-pressed={editing}
+              onClick={() => editing || editor.open(text)}
+            >
               Edit
             </button>
           </Seg>
@@ -80,7 +89,11 @@ export default function Profile({ onChanged }) {
         </div>
       </div>
 
-      {notice ? <p className="sub rule-notice">{notice}</p> : null}
+      {notice ? (
+        <p className="sub rule-notice" role="status">
+          {notice}
+        </p>
+      ) : null}
 
       {editing ? (
         <textarea
@@ -92,16 +105,30 @@ export default function Profile({ onChanged }) {
           aria-label="Profile markdown"
         />
       ) : text.trim() ? (
-        <div className="card pad-lg">
-          <Markdown body={text} />
-        </div>
+        <>
+          {/* The seeded stub reads like a profile; say first that nobody has written it. */}
+          {data?.seeded ? (
+            <EmptyState
+              title="This is still the template"
+              action={
+                <button type="button" className="btn ghost" onClick={() => editor.open(text)}>
+                  Edit it here
+                </button>
+              }
+            >
+              Ask the agent to run the <code className="mono">profile</code> skill — it interviews
+              you and drafts this file with your consent.
+            </EmptyState>
+          ) : null}
+          <div className="card pad-lg">
+            <Markdown body={text} />
+          </div>
+        </>
       ) : (
-        <div className="card pad-lg">
-          <p className="sub" style={{ margin: 0 }}>
-            No profile yet — switch to Edit to write one, or ask the agent to run the{' '}
-            <code className="mono">profile</code> skill.
-          </p>
-        </div>
+        <EmptyState title="No profile yet">
+          Switch to Edit to write one, or ask the agent to run the{' '}
+          <code className="mono">profile</code> skill.
+        </EmptyState>
       )}
     </>
   )

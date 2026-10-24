@@ -84,6 +84,24 @@ describe('Dashboard', () => {
     expect(screen.getByText('90')).toBeTruthy()
   })
 
+  // .40 deployed + .15 (1 problem), nothing else: 0.55 * 100 is 55.00000000000001 in floats,
+  // and the ring's text alternative must read the whole number the dial prints.
+  it('labels the germination ring with a whole percentage', async () => {
+    render(
+      <Dashboard
+        overview={{ ...overview, diff: { ...overview.diff, missing: 1 } }}
+        themes={themes}
+        setup={null}
+        runs={runs}
+        onAction={() => {}}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText('55')).toBeTruthy())
+    expect(screen.getByRole('img', { name: /^germination:/ }).getAttribute('aria-label')).toBe(
+      'germination: 55 of 100',
+    )
+  })
+
   // A behind install makes the fleet "warn": the voice line ("all is well") gives way to
   // the plain fact, and the verdict says what the Ledger says.
   it('drops the voice line when the fleet verdict is not good', async () => {
