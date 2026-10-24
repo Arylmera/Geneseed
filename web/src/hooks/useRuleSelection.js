@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { useConfirm } from './useConfirm.jsx'
+import { sortedKey, useStaging } from './useStaging.jsx'
 
 // The Constitution's doctrine selection: which rules the switches have STAGED, against what the
 // deployed install carries, and the one Apply that rebuilds with the whole set. `items` is the
 // catalog's `laws` payload (empty while loading), `packs` the page's doctrine rows grouped by
 // pack. Called before the page's early returns — it holds state, so the number of hooks must
 // not differ between the loading render and the loaded one.
+//
+// The staged rules live in the App-level store (hooks/useStaging.jsx), keyed by the install, so
+// they survive leaving the page and coming back.
 export function useRuleSelection({ items, packs, install, canApply, onAction, gateArmed }) {
   const confirm = useConfirm()
   // ⚠ THE UNIT IS THE RULE, not the pack. The selection below is a list of rule ADDRESSES
@@ -16,15 +20,22 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
     .filter((i) => i.tier === 'doctrine' && i.active !== false)
     .map((i) => i.name)
   const deployedKey = deployedRules.join(',')
-  const [picked, setPicked] = useState([])
-  // Re-sync on the VALUE, never on the payload's identity: `items` is a fresh array on every
-  // refetch, so an identity dependency would discard a half-made selection. Adjusted during
-  // render against the last-synced key (React's "adjust state on prop change").
-  const [syncedKey, setSyncedKey] = useState('')
-  if (syncedKey !== deployedKey) {
-    setSyncedKey(deployedKey)
-    setPicked(deployedKey ? deployedKey.split(',') : [])
-  }
+  const store = useStaging()
+  const key = install ? `${install.host}:${install.scope}:${install.path}` : ''
+  const base = sortedKey(deployedRules)
+  // ⚠ DERIVED ON READ, NEVER RESET DURING RENDER. The staged list counts only while it was
+  // staged against the rules deployed now (compared on the VALUE: `items` is a fresh array on
+  // every refetch). A remount's loading render has no items and simply reads the deployed set;
+  // a reset there would wipe the stored selection before the data came back.
+  // Pruned only once the catalog is in: the loading render's empty base is no evidence.
+  const { prune } = store
+  const loaded = items.length > 0
+  useEffect(() => {
+    if (loaded) prune('rules', (k, e) => k === key && e.base !== base)
+  }, [loaded, key, base, prune])
+  const entry = store.get('rules', key)
+  const picked = entry && entry.base === base ? entry.value : deployedRules
+  const setPicked = (next) => store.put('rules', key, next(picked), base)
   const isOn = (addr) => picked.includes(addr)
 
   // ---- the pack selection: STAGED here, applied once -------------------------------------
@@ -34,12 +45,14 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
   // So the switches edit local state and `Apply` sends the whole selection.
   const toggleRule = (addr) =>
     setPicked((cur) => (cur.includes(addr) ? cur.filter((a) => a !== addr) : [...cur, addr]))
-  // A pack is on when any of its rules is; its switch turns every rule on or every rule off.
+  // A pack is on when any of its rules is. Its switch is tri-state: with every rule on it turns
+  // them all off; with some or none on it turns them all on (a partial pack goes ON first).
   const packOn = (p) => p.rules.some((r) => isOn(r.addr))
   const togglePack = (p) => {
     const addrs = p.rules.map((r) => r.addr)
+    const allOn = p.rules.every((r) => isOn(r.addr))
     setPicked((cur) =>
-      packOn(p) ? cur.filter((a) => !addrs.includes(a)) : [...new Set([...cur, ...addrs])],
+      allOn ? cur.filter((a) => !addrs.includes(a)) : [...new Set([...cur, ...addrs])],
     )
   }
   // ⚠ A STAGED PACK MUST NOT READ AS A DEPLOYED ONE. `p.active` is what the install built;
@@ -80,9 +93,12 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
         `It rebuilds in place, non-destructive.${warn}`,
       { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild' },
     )
-    if (ok) onAction('install', { ...install, doctrines: keptPacks, excludeRules })
+    if (!ok) return
+    // runAction resolves to the job id, or undefined when the server refused it.
+    const job = await onAction('install', { ...install, doctrines: keptPacks, excludeRules })
+    if (job) store.startApply('rules', key)
   }
-  const revert = () => setPicked(deployedKey ? deployedKey.split(',') : [])
+  const revert = () => store.drop('rules', key)
 
   return {
     deployedRules,

@@ -3,6 +3,7 @@ import { go } from '../../lib/router.js'
 import { SECTIONS } from '../../lib/sections.js'
 import { relTime, rulesInForce } from '../../lib/format.js'
 import ConstitutionMap from './ConstitutionMap.jsx'
+import VerdictBadge from './VerdictBadge.jsx'
 
 // THE FIELD JOURNAL — the fourth Status lens, and the one that answers "what is this
 // harness, today" instead of "is it healthy". The health readout is still one click away
@@ -107,7 +108,7 @@ function FreshlyGrown({ recent, buildEpoch }) {
   )
 }
 
-export default function JournalView({ overview, recent, onAction, onDirection, dataRev }) {
+export default function JournalView({ overview, recent, lens, onAction, onDirection, dataRev }) {
   const counts = overview?.counts || {}
   return (
     <>
@@ -115,6 +116,7 @@ export default function JournalView({ overview, recent, onAction, onDirection, d
         <div>
           <div className="eyebrow">Field journal · {today()}</div>
           <h1 className="h">Today in this harness</h1>
+          <VerdictBadge verdict={lens?.verdict} />
         </div>
         <div className="row wrap gap-10">
           <button className="btn primary" onClick={() => onAction?.('update')}>

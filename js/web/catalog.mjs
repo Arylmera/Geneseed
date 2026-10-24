@@ -24,7 +24,8 @@ import { readText, withDiscardableStderr, isDir, isFile } from '../lib/fs.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
-import { loadKits } from '../build/source.mjs';
+import { loadKits, makeCfg } from '../build/source.mjs';
+import { loadTheme } from '../build/render.mjs';
 
 /** A requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
@@ -482,6 +483,17 @@ function kitOwners() {
   return owner;
 }
 
+/**
+ * The constitution's tier nouns in the install's own voice. Pack titles already arrive themed
+ * ("Observance"), so a page that hard-coded "Ethos" beside "Dictates" mixed two voices; the
+ * theme file is the one writer of these words. An unknown theme throws here exactly as it
+ * already throws in `tuiInventory` for the same `state.theme`, so this adds no failure mode.
+ */
+function tierNouns(theme) {
+  const t = loadTheme(makeCfg(), theme);
+  return { ontology: t.ONTOLOGY, law: t.LAW, laws: t.LAWS, doctrines: t.DOCTRINES };
+}
+
 export function apiCatalog(state, section) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
   const inv = state.inventory;
@@ -494,7 +506,7 @@ export function apiCatalog(state, section) {
     items = inv.skills.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
       source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null }));
   } else if (section === 'laws') {
-    items = constitutionItems(inv);
+    return { section, items: constitutionItems(inv), nouns: tierNouns(state.theme) };
   } else if (section === 'memory') {
     items = memoryItems(state);
   } else if (section === 'notebook') {

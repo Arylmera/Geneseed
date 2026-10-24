@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../../api/index.js'
-import { go } from '../../lib/router.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useHarness, HARNESSES, docsHostOf } from '../../hooks/useHarness.js'
 import Loading from '../../components/Loading.jsx'
@@ -95,13 +94,14 @@ export default function Docs({ page, overview, onAction }) {
 
   // Switching harness (or a deep link) can land on a page the active harness
   // hides — the server still renders it, but the menu wouldn't list it. Send
-  // such a page back to the default so the list and the pane stay in sync.
+  // such a page back to the default so the list and the pane stay in sync. Replace, not `go`:
+  // a pushed entry is a Back trap — Back lands on the hidden page, which redirects again.
   useEffect(() => {
     if (!menu || !pageId) return
     const visible = menu.groups.some((g) => g.pages.some((p) => p.id === pageId))
     if (!visible) {
       const def = defaultPageId(menu)
-      if (def && def !== pageId) go(docHref(def))
+      if (def && def !== pageId) window.location.replace(docHref(def))
     }
   }, [menu, pageId])
 
@@ -212,9 +212,11 @@ export default function Docs({ page, overview, onAction }) {
                 onTrack
                   ? (r) =>
                       seen.includes(r.name) && r.name !== pageId ? (
-                        <span className="docs-read-mark">
-                          <span aria-hidden="true">✓</span>
-                          <span className="sr-only">read</span>
+                        // role="img" names the mark ", read" inside the row link's name: an
+                        // absolute .sr-only here escapes the list's overflow and stretches
+                        // the document.
+                        <span className="docs-read-mark" role="img" aria-label=", read">
+                          ✓
                         </span>
                       ) : null
                   : undefined
@@ -250,7 +252,7 @@ export default function Docs({ page, overview, onAction }) {
               />
               {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
             </div>
-            {!pageLoading && <Margin body={pageData?.body} glossaryRows={glossary?.rows} />}
+            {!pageLoading && <Margin page={pageData} glossaryRows={glossary?.rows} />}
           </div>
         </article>
       </div>

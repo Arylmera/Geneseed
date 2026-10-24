@@ -119,10 +119,13 @@ export default function Library({
   const activeName = selected || (isSkills ? skillSplit.rows[0] : items[0])?.name || null
   const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
   const activeType = fromCatalog?.type || SECTIONS[sec].type
-  const { data: item, error: itemErr } = useAsync(
+  const { data: lastItem, error: itemErr } = useAsync(
     () => (activeName ? api.item(activeType, activeName) : Promise.resolve(null)),
     [sec, activeName, activeType, dataRev],
   )
+  // useAsync keeps the last good read beside a failed one; here that is the PREVIOUS
+  // entry, so a failed read shows nothing of it (title, lede, source).
+  const item = itemErr ? null : lastItem
 
   const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
@@ -297,7 +300,9 @@ export default function Library({
                 <p className="reader-lede">{item?.desc || activeItem.desc}</p>
               )}
               <p className="mono dim reader-src">
-                {item?.source || activeItem.source || libSource(sec, activeItem.name)}
+                {item?.source ||
+                  activeItem.source ||
+                  (itemErr ? null : libSource(sec, activeItem.name))}
               </p>
               {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
                 <div className="row gap-8">
@@ -315,7 +320,13 @@ export default function Library({
                 </div>
               )}
               <hr className="hr" />
-              {activeItem?.kind === 'manifest' || item?.manifest !== undefined ? (
+              {/* A failed read (a stale bookmark, a retired skill) ends here, not on "Loading…" forever. */}
+              {itemErr ? (
+                <p className="sub">
+                  No {label.replace(/s$/, '').toLowerCase()} named <em>{activeItem.name}</em> could
+                  be read in this install.
+                </p>
+              ) : activeItem?.kind === 'manifest' || item?.manifest !== undefined ? (
                 item ? (
                   <ManifestDoc manifest={item.manifest} body={item.body} name={activeItem.name} />
                 ) : (

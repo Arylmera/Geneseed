@@ -13,19 +13,17 @@ const texts = (c, sel) => [...c.querySelectorAll(sel)].map((n) => n.textContent)
 describe('Margin', () => {
   it('outlines the headings and cards the terms the body uses, in glossary order', () => {
     const { container } = render(
-      <Margin body={'## Hooks\nA hook runs. Skills too.'} glossaryRows={ROWS} />,
+      <Margin page={{ body: '## Hooks\nA hook runs. Skills too.' }} glossaryRows={ROWS} />,
     )
     expect(texts(container, '.docs-toc a')).toEqual(['Hooks'])
     expect(texts(container, '.docs-gloss-card b')).toEqual(['hook', 'skill'])
   })
 
-  it('links each heading to the id the markdown renderer gives it', () => {
-    const { container } = render(<Margin body={'## Two words\n### Sub part'} glossaryRows={[]} />)
-    const hrefs = [...container.querySelectorAll('.docs-toc a')].map((a) => a.getAttribute('href'))
-    expect(hrefs).toEqual(['#two-words', '#sub-part'])
-  })
+  // That each entry lands on an id the rendered page carries is docsHeadings.test.jsx: it
+  // renders the page beside the margin, which a margin alone cannot show.
 
-  // The outline prints what the reader sees in the heading, not its markdown source.
+  // The outline prints what the reader sees in the heading, not its markdown source — a
+  // wikilink as its resolved link's text.
   it('strips inline markdown from the outline titles', () => {
     const body = [
       '## The `geneseed` CLI',
@@ -33,7 +31,8 @@ describe('Margin', () => {
       '## See [the guide](https://example.com/g)',
       '### A [[skill]] and snake_case',
     ].join('\n')
-    const { container } = render(<Margin body={body} glossaryRows={[]} />)
+    const links = [{ label: 'skill', type: 'skill', name: 'skill' }]
+    const { container } = render(<Margin page={{ body, links }} glossaryRows={[]} />)
     expect(texts(container, '.docs-toc a')).toEqual([
       'The geneseed CLI',
       'Bold and italic',
@@ -64,7 +63,7 @@ describe('Margin', () => {
   })
 
   it('renders nothing for a page with no headings and no terms', () => {
-    const { container } = render(<Margin body="plain" glossaryRows={ROWS} />)
+    const { container } = render(<Margin page={{ body: 'plain' }} glossaryRows={ROWS} />)
     expect(container.innerHTML).toBe('')
   })
 })

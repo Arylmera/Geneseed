@@ -94,9 +94,11 @@ export default function Diff({ onMutated, onAction, dataRev }) {
     )
 
   // A linked path is the user's own link, which no restore or rebuild touches: it is listed
-  // apart, never selectable, and never counted as a local edit.
-  const files = data.files.filter((f) => f.status !== 'linked')
+  // apart, never selectable, and never counted as a local edit. A stale file is unedited and
+  // behind its source, so a rebuild updates it: listed apart too, under "Behind source".
+  const files = data.files.filter((f) => f.status !== 'linked' && f.status !== 'stale')
   const linked = data.files.filter((f) => f.status === 'linked')
+  const stale = data.files.filter((f) => f.status === 'stale')
   const editedCount = files.filter((f) => f.status === 'edited').length
   const addedCount = files.filter((f) => f.status === 'added').length
   const missingCount = files.filter((f) => f.status === 'missing').length
@@ -113,10 +115,17 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       <div className="head-row mb-16">
         <div>
           <h2 className="h">Local edits</h2>
-          <p className="sub">
-            The agent refines its own deployed files in place. Export them as improvements before
-            any rebuild overwrites them.
-          </p>
+          {editedCount > 0 ? (
+            <p className="sub">
+              The agent refines its own deployed files in place. A rebuild keeps an edited file,
+              which then stops receiving source updates — export it, then Restore to take the new
+              source.
+            </p>
+          ) : addedCount + missingCount > 0 ? (
+            <p className="sub">
+              These files differ from the source: added in the install, or missing from it.
+            </p>
+          ) : null}
         </div>
         <div className="row gap-10">
           <button className="btn ghost" disabled={busy || sel.size === 0} onClick={restore}>
@@ -136,7 +145,7 @@ export default function Diff({ onMutated, onAction, dataRev }) {
         </p>
       ) : null}
 
-      {files.length === 0 ? (
+      {files.length === 0 && stale.length === 0 ? (
         <div className="empty">
           <div className="big">In sync</div>
           Deployed harness matches source.
@@ -159,67 +168,104 @@ export default function Diff({ onMutated, onAction, dataRev }) {
                   {missingCount} missing
                 </span>
               )}
+              {stale.length > 0 && (
+                <span className="badge">
+                  <span className="dot" />
+                  {stale.length} behind
+                </span>
+              )}
             </div>
-            <label className="row dim" style={{ gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                style={{ accentColor: 'var(--accent)' }}
-                checked={sel.size === files.length}
-                onChange={toggleAll}
-              />
-              Select all
-            </label>
+            {files.length ? (
+              <label className="row dim" style={{ gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  style={{ accentColor: 'var(--accent)' }}
+                  checked={sel.size === files.length}
+                  onChange={toggleAll}
+                />
+                Select all
+              </label>
+            ) : null}
           </div>
 
-          <div className="stack gap-12">
-            {files.map((f) => {
-              const isOpen = open.has(f.rel)
-              const statusClass =
-                f.status === 'added' ? 'ok' : f.status === 'missing' ? 'bad' : 'warn'
-              return (
-                <div className={`card diff-file${isOpen ? ' open' : ''}`} key={f.rel}>
-                  <div className="diff-head">
-                    <input
-                      type="checkbox"
-                      className="chk"
-                      checked={sel.has(f.rel)}
-                      onChange={() => toggle(f.rel)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select ${f.rel}`}
-                    />
-                    <span className="fname">{f.rel}</span>
-                    <span className={`badge ${statusClass}`}>
-                      <span className="dot" />
-                      {f.status}
-                    </span>
-                    <span className="dim mono" style={{ marginLeft: 'auto', fontSize: 11 }}>
-                      {f.diff.length} lines
-                    </span>
-                    <button
-                      className="iconbtn"
-                      onClick={() => toggleOpenFile(f.rel)}
-                      style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
-                      aria-label={isOpen ? `Collapse ${f.rel}` : `Expand ${f.rel}`}
-                      aria-expanded={isOpen}
-                    >
-                      <Icon name="chevron" />
-                    </button>
-                  </div>
-                  {isOpen && (
-                    <div className="diff-body">
-                      {f.diff.map((ln, i) => (
-                        <div key={i} className={`diff-line ${lineKind(ln)}`}>
-                          {ln}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <div className="stack gap-12">{files.map((f) => fileCard(f, true))}</div>
+
+          {stale.length ? (
+            <div className="stack gap-12" style={{ marginTop: 24 }}>
+              <h3 style={{ margin: 0 }}>Behind source</h3>
+              <div className="row between">
+                <p className="sub" style={{ margin: 0 }}>
+                  This install is built from older source — rebuild to bring these files up to date.
+                </p>
+                <button
+                  className="btn ghost"
+                  disabled={busy}
+                  onClick={() => onAction?.('build-all')}
+                >
+                  Rebuild
+                </button>
+              </div>
+              {stale.map((f) => fileCard(f, false))}
+            </div>
+          ) : null}
         </>
       )}
     </>
   )
+
+  // One file's card. Only a local change is selectable for Restore; a stale file is updated by
+  // the rebuild, so it carries no checkbox and a neutral badge.
+  function fileCard(f, selectable) {
+    const isOpen = open.has(f.rel)
+    const statusClass =
+      f.status === 'stale'
+        ? ''
+        : f.status === 'added'
+          ? 'ok'
+          : f.status === 'missing'
+            ? 'bad'
+            : 'warn'
+    return (
+      <div className={`card diff-file${isOpen ? ' open' : ''}`} key={f.rel}>
+        <div className="diff-head">
+          {selectable ? (
+            <input
+              type="checkbox"
+              className="chk"
+              checked={sel.has(f.rel)}
+              onChange={() => toggle(f.rel)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Select ${f.rel}`}
+            />
+          ) : null}
+          <span className="fname">{f.rel}</span>
+          <span className={`badge ${statusClass}`}>
+            <span className="dot" />
+            {f.status === 'stale' ? 'behind source' : f.status}
+          </span>
+          <span className="dim mono" style={{ marginLeft: 'auto', fontSize: 11 }}>
+            {f.diff.length} lines
+          </span>
+          <button
+            className="iconbtn"
+            onClick={() => toggleOpenFile(f.rel)}
+            style={{ transform: isOpen ? 'rotate(90deg)' : 'none' }}
+            aria-label={isOpen ? `Collapse ${f.rel}` : `Expand ${f.rel}`}
+            aria-expanded={isOpen}
+          >
+            <Icon name="chevron" />
+          </button>
+        </div>
+        {isOpen && (
+          <div className="diff-body">
+            {f.diff.map((ln, i) => (
+              <div key={i} className={`diff-line ${lineKind(ln)}`}>
+                {ln}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 }

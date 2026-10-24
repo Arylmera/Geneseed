@@ -83,8 +83,11 @@ streams the output of background jobs and keeps their history across reloads.
 - **Dashboard** (`#/`) — a live readout of what's deployed. Three lenses: **Status**
   (readiness ring, a KPI band, a genome grid, recent activity), **Lineage** (the
   source → render → deployed timeline and the genome-by-volume strand chart), and
-  **Operator** (a searchable table of every deployed capability). Headlines reflect the
-  active theme's voice.
+  **Operator** (a searchable table of every deployed capability). Every lens hero carries the
+  fleet verdict badge (the Ledger's `fleetVerdict`). The headline speaks the theme's voice only
+  while that verdict is good or still loading; a warn, bad or unreachable fleet reads plain
+  *Deployed*. Recent-run previews read `verb · scope · result · duration`, and the raw command
+  is a tooltip only.
 
   The KPI band reads **Agents · Skills · Dictates · Local edits**. That third tile is
   labelled *Dictates* (the name AGENT.md gives the laws) and not *Constitution* on purpose: its value is the law count
@@ -178,7 +181,8 @@ streams the output of background jobs and keeps their history across reloads.
 - **Activity** (`#/activity`) — the agent sessions on this machine: each one's status,
   the files it touched and its todo progress; open one for its detail.
 - **Changes** (`#/diff`) — the diff between the deployed harness and the source: edited /
-  added / missing files with per-file expansion and coloured unified-diff lines. Select
+  added / missing files, and files only behind the source (unedited; a rebuild updates them)
+  listed apart under **Behind source**, with per-file expansion and coloured unified-diff lines. Select
   files to **export an `improvements.md`** back-port, or **restore** them to source.
   Restore acts only on files the diff lists, and never on your own files (`user-rules.md`,
   `PROFILE.md`, `memory/`, `notebook/`). An added file is moved into
@@ -215,7 +219,10 @@ streams the output of background jobs and keeps their history across reloads.
     add or remove one here, the web mirror of `harness exclude add|remove|list`.
 - **Kits** (`#/installs/kits`) — every install (disabled ones read-only) as a panel with one switch per kit.
   Toggling only stages the set; **Apply** asks first, then rebuilds that install with
-  exactly that set as a console job. Files you edited in a kit that is now off are kept,
+  exactly that set as a console job. Staged switches are held for the whole console: they
+  survive leaving the page, and the Kits page and Installs › Kits share them. A refetch drops a
+  row's staging only when that install's kits changed. A failed rebuild keeps it and says so,
+  and a reload asks first while anything is staged. Files you edited in a kit that is now off are kept,
   and the row lists them.
 - **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
   console: Cultivar, Operator, Matrix or Atlas) with a **Dashboard layout** control (Auto follows each theme's designed Status

@@ -24,7 +24,12 @@ export function markSeen(id) {
   const seen = readSeen()
   if (seen.includes(id)) return seen
   const next = [...seen, id]
-  localStorage.setItem(SEEN_KEY, JSON.stringify(next))
+  // A private window or a full quota refuses the write; the page still opens, unrecorded.
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(next))
+  } catch {
+    // progress is a convenience, never a reason to break the page
+  }
   return next
 }
 

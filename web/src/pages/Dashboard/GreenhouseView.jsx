@@ -1,16 +1,15 @@
 import React, { useLayoutEffect, useRef } from 'react'
 import { animate, svg, utils } from 'animejs'
 import { Icon } from '../../components/Icon.jsx'
-import { editCount } from '../../lib/format.js'
-import { bucketJobsByDay } from '../../lib/jobBuckets.js'
+import { editCount, relTime } from '../../lib/format.js'
+import { bucketJobsByDay, jobSummary, newestJobs } from '../../lib/jobBuckets.js'
 import { headlineFor } from '../../lib/headlines.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
 import { CountUp, motionOK, settle } from '../../lib/motion.js'
+import VerdictBadge from './VerdictBadge.jsx'
 
-// Recent-activity panel: how many jobs to list, and how much of each job's first
-// output line to show as a preview.
+// Recent-activity panel: how many jobs to list.
 const MAX_TIMELINE_JOBS = 12
-const MAX_OUTPUT_PREVIEW = 120
 
 // Greenhouse "category" palette — warm rich tones that survive on both the
 // deep-forest dark and cream-paper light variants. Stable index per section
@@ -28,7 +27,10 @@ const B_CATS = ['#2BB673', '#16A6A6', '#E8A23B', '#E07A5F', '#8E7DBE', '#5BD08A'
 // sweeps again when its numbers do.
 const DONUT_SWEEP_MS = 650
 function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1
+  // `sum` is what the centre says; `total` only guards the divisions. The centre used to
+  // print the `|| 1` guard itself, so a doctor ring with no checks yet read "1 checks".
+  const sum = segments.reduce((s, x) => s + x.value, 0)
+  const total = sum || 1
   const arcs = useRef(null)
   const sig = segments.map((x) => x.value).join(',')
   useLayoutEffect(() => {
@@ -75,10 +77,17 @@ function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) 
           const x2 = cx + r * Math.cos(end)
           const y2 = cy + r * Math.sin(end)
           const large = end - start > Math.PI ? 1 : 0
+          // A whole ring has its start ON its end, and an SVG arc between two equal points
+          // draws nothing — an all-pass doctor ring was blank. Two half-arcs through the
+          // opposite point, kept in ONE path so the sweep above still draws it as one.
+          const d =
+            frac >= 0.9999
+              ? `M ${x1} ${y1} A ${r} ${r} 0 1 1 ${2 * cx - x1} ${2 * cy - y1} A ${r} ${r} 0 1 1 ${x1} ${y1}`
+              : `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`
           return (
             <path
               key={i}
-              d={`M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`}
+              d={d}
               fill="none"
               stroke={seg.color}
               strokeWidth={stroke}
@@ -92,7 +101,7 @@ function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) 
         })}
       </g>
       <text x={cx} y={cy - 4} textAnchor="middle" className="donut-c-num">
-        <CountUp value={total} duration={DONUT_SWEEP_MS} />
+        <CountUp value={sum} duration={DONUT_SWEEP_MS} />
       </text>
       <text x={cx} y={cy + 16} textAnchor="middle" className="donut-c-cap">
         {caption}
@@ -196,13 +205,16 @@ function BTile({ label, value, sub, color, icon }) {
 // capability donut + recent-runs trend, activity timeline. Uses real data:
 // overview counts, doctor groups (for ring + checks), job log (for the trend
 // and timeline). No fabricated series.
-export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction }) {
+export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }) {
   const c = overview.counts || {}
-  const checks = doctor?.groups || []
-  const loaded = checks.length > 0
+  const doctorState = lens?.doctor?.state || 'loading'
+  const checks = lens?.doctor?.data?.groups || []
+  const loaded = doctorState === 'ok'
   const pass = checks.filter((g) => g.problems.length === 0).length
-  const total = checks.length || 1
-  const headline = headlineFor(overview)
+  // The real count: with no checks yet the ring is an empty track, not one amber failure.
+  const total = checks.length
+  const headline = headlineFor(overview, lens?.tone)
+  const shown = newestJobs(jobs, MAX_TIMELINE_JOBS)
   const edits = editCount(overview.diff)
 
   const mix = SECTION_ORDER.filter((k) => (c[k] || 0) > 0).map((k, i) => ({
@@ -220,6 +232,7 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
         <div>
           <div className="eyebrow">your harness</div>
           <h1 className="h b-h">{headline}</h1>
+          <VerdictBadge verdict={lens?.verdict} />
           <p className="sub">
             {sigil || 'A friendly read of every layer growing in your harness.'}
           </p>
@@ -251,8 +264,18 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
           </div>
           <div className="b-hero-side">
             <h3 className="b-hero-title">
-              {loaded ? `${pass} of ${total} checks pass` : 'Running checks…'}
+              {loaded
+                ? `${pass} of ${total} checks pass`
+                : doctorState === 'failed'
+                  ? 'Doctor did not answer'
+                  : 'Checking…'}
             </h3>
+            {doctorState === 'failed' && (
+              <button className="btn ghost b-hero-retry" onClick={() => onAction('doctor')}>
+                <Icon name="doctor" />
+                Run doctor
+              </button>
+            )}
             <p className="sub">
               One source, rendered into <code>{overview.target}</code> and inherited by every repo
               on this machine.
@@ -360,7 +383,8 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
               <CountUp value={runsTotal} />
             </span>
             <span className="b-stat-cap">
-              runs in the last 10 days · {pass}/{total} checks pass now
+              runs in the last 10 days
+              {loaded && total > 0 && ` · ${pass}/${total} checks pass now`}
             </span>
           </div>
           <Trend data={series} accent={B_CATS[0]} height={156} />
@@ -371,22 +395,24 @@ export default function GreenhouseView({ overview, sigil, jobs, doctor, onAction
         <div className="card-head">
           <h3>Recent activity</h3>
           <div className="right">
-            <span className="tick">last {Math.min(jobs?.length || 0, 12)} runs</span>
+            <span className="tick">last {shown.length} runs</span>
           </div>
         </div>
         <div className="b-timeline">
-          {(jobs || []).slice(0, MAX_TIMELINE_JOBS).map((j) => {
+          {shown.map((j) => {
             const ok = j.status === 'done'
             const bad = j.status === 'failed'
             const cls = bad ? 'warn' : ok ? 'ok' : 'acc'
+            const s = jobSummary(j)
             return (
               <div className="b-tl-row" key={j.id}>
                 <span className={`b-tl-node ${cls}`} />
-                <div className="b-tl-body">
-                  <b>{j.action}</b>
-                  {j.output ? `: ${j.output.split('\n')[0].slice(0, MAX_OUTPUT_PREVIEW)}` : ''}
+                {/* The raw `$ …` line is the tooltip, never the text (lib/jobBuckets.js). */}
+                <div className="b-tl-body" title={s.command || undefined}>
+                  <b>{s.verb}</b>
+                  {[s.scope, s.result, s.duration].map((p) => (p ? ` · ${p}` : '')).join('')}
                 </div>
-                <span className="b-tl-when">{j.duration ? `${j.duration}s` : j.status}</span>
+                <span className="b-tl-when">{j.started ? `${relTime(j.started)} ago` : '—'}</span>
               </div>
             )
           })}

@@ -18,7 +18,8 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { DOCS, DOC_FOLDERS, ROOT, THEMES } from '../build/source.mjs';
+import { DOCS, DOC_FOLDERS, ROOT, THEMES, resolveRuleIds } from '../build/source.mjs';
+import { STRUCTURE, substitute } from '../build/render.mjs';
 import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
@@ -222,7 +223,9 @@ const GITHUB_BLOB = 'https://github.com/Arylmera/Geneseed/blob/main/';
  * A target that is a docs page becomes `#/docs/<id>` (its `#anchor` dropped — the console
  * addresses pages, not headings); any other repo file — a maintainer doc, a README under
  * `src/` — opens on GitHub, since the console does not serve it. Absolute URLs, in-page
- * anchors and fenced examples are left alone.
+ * anchors and fenced examples are left alone. So is a target that is no file at all: the
+ * memory convention shows example links (`topics/<topic>.md`) in code spans, and a GitHub URL
+ * to a file that does not exist is a dead link where the relative one is merely inert.
  */
 export function rewriteDocLinks(body, fromRel, idByRel) {
   if (!body.includes('.md')) return body;
@@ -233,7 +236,8 @@ export function rewriteDocLinks(body, fromRel, idByRel) {
     return line.replace(MD_LINK_RE, (m, target, anchor) => {
       const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(fromRel), target));
       const id = idByRel.get(resolved);
-      return id ? `](#/docs/${id})` : `](${GITHUB_BLOB}${resolved}${anchor ?? ''})`;
+      if (id) return `](#/docs/${id})`;
+      return isFile(path.join(ROOT, resolved)) ? `](${GITHUB_BLOB}${resolved}${anchor ?? ''})` : m;
     });
   }).join('\n');
 }
@@ -458,14 +462,28 @@ function readDocSource(rel) {
   return readMaybe(target) ?? '';
 }
 
+/** A theme's words, `{}` for a theme that is missing or malformed — never a throw. */
+function themeWords(theme) {
+  const doc = readJsonMaybe(path.join(THEMES, `${theme}.json`));
+  return doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
+}
+
+/**
+ * A `src/` file as an install would render it: rule citations named, then the deployed theme's
+ * words (neutral underneath, for a key the theme lacks) and the fixed STRUCTURE substituted —
+ * the build's own functions, so the page cannot drift from what lands on disk. Only string
+ * words go in: `substitute` throws on any other value, and a theme's AGENT_COLORS is a dict.
+ */
+function renderSource(text, theme) {
+  const words = Object.entries({ ...themeWords('neutral'), ...themeWords(theme) })
+    .filter(([, v]) => typeof v === 'string');
+  return substitute(resolveRuleIds(text), { ...Object.fromEntries(words), ...STRUCTURE });
+}
+
 /** The deployed theme's words beside the neutral ones, from `docs/reference/glossary.md`. */
 function glossary(state, page) {
-  const load = (theme) => {
-    const doc = readJsonMaybe(path.join(THEMES, `${theme}.json`));
-    return doc && typeof doc === 'object' && !Array.isArray(doc) ? doc : {};
-  };
-  const neutral = load('neutral');
-  const themed = state.theme !== 'neutral' ? load(state.theme) : neutral;
+  const neutral = themeWords('neutral');
+  const themed = state.theme !== 'neutral' ? themeWords(state.theme) : neutral;
   const rows = [];
   for (const { label, key, desc, analogy } of parseGlossaryTable(page.body ?? '')) {
     if (key === null) {
@@ -554,9 +572,11 @@ export function apiDocsPage(state, pageId, harnessName = null) {
  * using it.
  */
 const KIND_ROUTES = {
+  // The body's own H1 goes: MarkdownPage prints the page title as the H1, and a page has one.
   markdown: (state, pageId, page, hn) => {
-    const body = rewriteDocLinks(stripHarnessBlocks(readDocSource(page.source), hn),
-      page.source, idsByRel());
+    const text = renderSource(stripHarnessBlocks(readDocSource(page.source), hn), state.theme)
+      .replace(/^# [^\n]*(?:\r?\n)+/, '');
+    const body = rewriteDocLinks(text, page.source, idsByRel());
     return { id: pageId, title: page.title, kind: 'markdown', body,
       source: page.source, links: resolveLinks(state, body) };
   },

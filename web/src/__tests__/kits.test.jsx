@@ -41,10 +41,11 @@ const setup = async (data, yes = true) => {
   await act(async () => {
     view = render(ui(0))
   })
+  let rev = 0 // each refetch is a new data revision, as each finished job is
   const refetch = (next) =>
     act(async () => {
       api.kits.mockResolvedValue(next)
-      view.rerender(ui(1))
+      view.rerender(ui(++rev))
     })
   return { confirm, onAction, refetch }
 }
@@ -87,12 +88,20 @@ describe('Installs / Kits', () => {
     expect(confirm.mock.calls[0][0]).toContain('with kits: none?')
   })
 
-  it('drops staged edits when a refetch brings the new truth', async () => {
-    const { refetch } = await setup(payload([row({})]))
-    fireEvent.click(screen.getByRole('switch'))
+  it('keeps staged edits across a refetch of the same kits, drops them when the kits changed', async () => {
+    // Any finished job refetches, so a refetch alone is no reason to drop a staged set: only
+    // the install's own kits changing under it is (KT-2). The kits change to a set OTHER than
+    // the staged one, or a kept staged set would look exactly like a dropped one.
+    const kits = [kit('spring-boot'), kit('other')]
+    const checked = () => screen.getAllByRole('switch').map((s) => s.getAttribute('aria-checked'))
+    const { refetch } = await setup(payload([row({})], kits))
+    fireEvent.click(screen.getAllByRole('switch')[0])
     expect(apply().disabled).toBe(false)
-    await refetch(payload([row({})]))
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+    await refetch(payload([row({})], kits))
+    expect(checked()).toEqual(['true', 'false'])
+    expect(apply().disabled).toBe(false)
+    await refetch(payload([row({ kits: ['other'] })], kits))
+    expect(checked()).toEqual(['false', 'true'])
     expect(apply().disabled).toBe(true)
   })
 

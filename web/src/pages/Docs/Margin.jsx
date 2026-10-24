@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { extractToc } from './MarkdownPage.jsx'
+import { renderDoc } from './headings.js'
 
 const MAX_CARDS = 5
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -24,9 +24,11 @@ export function glossaryHits(body, rows) {
 const jump = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
 
 // The Handbook's right margin: the page's own outline, then a card for each glossary term
-// it uses, so no invented word goes unexplained.
-export default function Margin({ body, glossaryRows }) {
-  const toc = useMemo(() => extractToc(body), [body])
+// it uses, so no invented word goes unexplained. The outline is renderDoc's, over the same
+// page the reader pane renders, so each entry lands on an id the page carries.
+export default function Margin({ page, glossaryRows }) {
+  const body = page?.body
+  const toc = useMemo(() => renderDoc(page).toc, [page])
   const cards = useMemo(() => glossaryHits(body, glossaryRows), [body, glossaryRows])
   if (!toc.length && !cards.length) return null
   return (

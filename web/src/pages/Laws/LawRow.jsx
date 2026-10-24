@@ -1,27 +1,11 @@
-import React from 'react'
 import CatalogRow from '../../components/CatalogRow.jsx'
-
-// Tiny inline formatter: render `code` spans and *emphasis* in plain rule text.
-// The full rule bodies are kept lightly marked-up in src/, so a minimal formatter is enough — we
-// don't need the full Markdown renderer here.
-function LawText({ text }) {
-  const parts = String(text).split(/(`[^`]+`|\*[^*]+\*)/g)
-  return (
-    <>
-      {parts.map((p, i) => {
-        if (p.startsWith('`') && p.endsWith('`')) return <code key={i}>{p.slice(1, -1)}</code>
-        if (p.startsWith('*') && p.endsWith('*') && p.length > 2)
-          return <em key={i}>{p.slice(1, -1)}</em>
-        return <React.Fragment key={i}>{p}</React.Fragment>
-      })}
-    </>
-  )
-}
+import Markdown from '../../components/Markdown.jsx'
 
 // One expandable row of the constitution table, shared by all three tiers via CatalogRow
 // (the lazy-load/expand-panel machinery). The address is the catalog's `name`: a Roman
-// numeral, `<pack>.<n>` or `ont:<id>`; `no` is what the No. column prints.
-export default function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
+// numeral, `<pack>.<n>` or `ont:<id>`; `no` is what the No. column prints. `rev` is the
+// page's data revision, so a rebuild does not serve a cached body.
+export default function LawRow({ law, isOpen, onToggle, rev, toggleCol = null }) {
   const head = (
     <>
       <span className="law-no">
@@ -51,12 +35,10 @@ export default function LawRow({ law, isOpen, onToggle, toggleCol = null }) {
       className={`law-row${toggleCol ? ' has-toggle' : ''}${isOpen ? ' on' : ''}${law.off ? ' law-off' : ''}`}
       style={{ '--cc': law.c }}
       head={head}
+      label={`${law.no ? law.no + ' ' : ''}${law.name}, ${law.status}, ${law.enf}`}
+      rev={rev}
       toggleCol={toggleCol}
-      renderBody={(detail) => (
-        <p>
-          <LawText text={detail.body || law.ess} />
-        </p>
-      )}
+      renderBody={(d) => <Markdown body={d.body || law.ess} links={d.links} />}
       srcLine={`$ geneseed law ${law.addr} · ${law.src}`}
     />
   )

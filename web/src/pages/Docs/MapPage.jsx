@@ -1,26 +1,13 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { marked } from 'marked'
-import Markdown, { sanitizeHtml } from '../../components/Markdown.jsx'
+import { sanitizeHtml } from '../../components/Markdown.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
+import { renderDoc } from './headings.js'
+
+export { splitAtMapTable } from './headings.js'
 
 // Enforced and automatic run as code; asked and on-demand rely on the model reading prose.
 const TONE = { enforced: 'ok', automatic: 'ok', asked: 'warn', 'on demand': 'warn' }
-
-// The body split around the map table: its rows are drawn as the list in its place, so the
-// table would say everything twice. Only the table whose header opens on "Piece" goes; any
-// other table in the prose stays. No map table → everything is "before".
-export function splitAtMapTable(body) {
-  const before = []
-  const after = []
-  let state = 'before'
-  for (const ln of (body || '').split('\n')) {
-    if (state === 'before' && /^\|\s*piece\s*\|/i.test(ln)) state = 'map'
-    else if (state === 'map' && !ln.trimStart().startsWith('|')) state = 'after'
-    if (state === 'before') before.push(ln)
-    else if (state === 'after') after.push(ln)
-  }
-  return [before.join('\n'), after.join('\n')]
-}
 
 // A table cell is inline markdown (`AGENT.md`, *lean*), so render it as such.
 const Inline = ({ text }) => (
@@ -33,13 +20,14 @@ const Chip = ({ kind }) => <span className={`tag ${TONE[kind] || ''}`}>{kind}</s
 // failed to parse) falls back to the plain page, which still shows the table.
 export default function MapPage({ page, overview, onAction }) {
   const [sel, setSel] = useState(0)
+  // The prose around the list, with the same heading ids the margin's outline links to.
+  const { before, after } = useMemo(() => renderDoc(page), [page])
   if (!page.rows) return <MarkdownPage page={page} overview={overview} onAction={onAction} />
   const row = page.rows[sel] || page.rows[0]
-  const [before, after] = splitAtMapTable(page.body)
   return (
     <div className="detail-doc">
       <h1 style={{ marginTop: 0 }}>{page.title}</h1>
-      <Markdown body={before} links={page.links} />
+      <div className="markdown" dangerouslySetInnerHTML={{ __html: before }} />
       <div className="docs-map">
         <ul className="map-tree" aria-label="Pieces">
           {page.rows.map((r, i) => (
@@ -83,7 +71,7 @@ export default function MapPage({ page, overview, onAction }) {
           </div>
         )}
       </div>
-      {after.trim() && <Markdown body={after} links={page.links} />}
+      {after.trim() && <div className="markdown" dangerouslySetInnerHTML={{ __html: after }} />}
     </div>
   )
 }

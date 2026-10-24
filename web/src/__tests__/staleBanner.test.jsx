@@ -7,6 +7,9 @@ vi.mock('../hooks/waitForServer.js', () => ({
   restartAndReload: (...a) => restartAndReload(...a),
 }))
 
+// Every lens fetches the fleet verdict; nothing here reads it.
+vi.mock('../api/index.js', () => ({ api: { fleet: () => Promise.resolve(null) } }))
+
 import Dashboard from '../pages/Dashboard/index.jsx'
 
 const overview = {

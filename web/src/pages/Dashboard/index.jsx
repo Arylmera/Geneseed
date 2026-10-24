@@ -9,6 +9,7 @@ import ErrorState from '../../components/ErrorState.jsx'
 import Seg from '../../components/Seg.jsx'
 import StaleBanner from '../../components/StaleBanner.jsx'
 import { useAsync } from '../../hooks/useAsync.js'
+import { useLensData } from '../../hooks/useLensData.js'
 
 // Dashboard ships in the eager shell chunk (it is the landing route), so only
 // the DEFAULT lens rides along. The alternative lenses are behind the layout
@@ -18,7 +19,7 @@ const GreenhouseView = lazy(() => import('./GreenhouseView.jsx'))
 const OperatorHudView = lazy(() => import('./OperatorHudView.jsx'))
 const JournalView = lazy(() => import('./JournalView.jsx'))
 
-// The dashboard shell: loads the supplementary data (doctor, recency) the
+// The dashboard shell: loads the supplementary data (fleet verdict, doctor, recency) the
 // directions share, then renders the chosen direction. The Status lens is a layout
 // chosen independently of the flavour (skin) — Cultivar's hero+kpi+genome,
 // Greenhouse's ring+tiles+donut, Operator HUD's strip+modules, or the Journal's
@@ -43,17 +44,13 @@ export default function Dashboard({
   const [dir, setDir] = useState('status')
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
-  // Doctor is only needed by Greenhouse (ring + check chips) and Operator HUD
-  // (check matrix). Cultivar's Status lens doesn't read it, so the load is lazy:
-  // skipping it on Cultivar saves a round-trip on dashboard mount. A failed load
-  // just leaves the panels without it.
-  const { data: doctor } = useAsync(
-    () =>
-      lens === 'greenhouse' || lens === 'operator'
-        ? api.doctor().catch(() => null)
-        : Promise.resolve(null),
-    [lens, dataRev],
-  )
+  // The fleet verdict every hero shows, and the doctor run — only Greenhouse (ring + check
+  // chips) and Operator HUD (check matrix) read it, so Cultivar skips that round-trip. A
+  // failed doctor is its own state (`lensData.doctor.state`), never a silent "still loading".
+  const lensData = useLensData({
+    dataRev,
+    needDoctor: lens === 'greenhouse' || lens === 'operator',
+  })
   // Recency stats every file-backed entry in the harness server-side, so it is
   // fetched by the one lens that shows it and by nothing else.
   const { data: recent } = useAsync(
@@ -98,6 +95,7 @@ export default function Dashboard({
         <JournalView
           overview={overview}
           recent={recent}
+          lens={lensData}
           onAction={onAction}
           onDirection={setDir}
           dataRev={dataRev}
@@ -135,6 +133,7 @@ export default function Dashboard({
             sigil={sigil}
             setup={setup}
             jobs={jobs}
+            lens={lensData}
             onAction={onAction}
           />
         )}
@@ -144,20 +143,28 @@ export default function Dashboard({
               overview={overview}
               sigil={sigil}
               jobs={jobs}
-              doctor={doctor}
+              lens={lensData}
               onAction={onAction}
             />
           </Suspense>
         )}
         {dir === 'status' && lens === 'operator' && (
           <Suspense fallback={<Loading />}>
-            <OperatorHudView overview={overview} jobs={jobs} doctor={doctor} onAction={onAction} />
+            <OperatorHudView overview={overview} jobs={jobs} lens={lensData} onAction={onAction} />
           </Suspense>
         )}
         {dir === 'lineage' && (
-          <LineageView overview={overview} sigil={sigil} setup={setup} jobs={jobs} />
+          <LineageView
+            overview={overview}
+            sigil={sigil}
+            setup={setup}
+            jobs={jobs}
+            lens={lensData}
+          />
         )}
-        {dir === 'operator' && <OperatorView overview={overview} setup={setup} jobs={jobs} />}
+        {dir === 'operator' && (
+          <OperatorView overview={overview} setup={setup} jobs={jobs} lens={lensData} />
+        )}
       </div>
     </>
   )

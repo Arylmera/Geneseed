@@ -21,6 +21,7 @@ const answered = () => act(async () => {})
 
 import Laws from '../pages/Laws.jsx'
 import { api } from '../api/index.js'
+import { clearAsyncCache } from '../hooks/useAsync.js'
 
 const ONT = ['telos', 'evidence', 'decisions', 'conduct'].map((id) => ({
   name: `ont:${id}`,
@@ -103,14 +104,19 @@ const PAYLOAD = { section: 'laws', items: [...ONT, ...INV, ...DOC] }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // A rule body is memoised by address now (CatalogRow's `law-item` key): one case's body must
+  // not answer the next. setup.js clears it too; this keeps the file's claim local.
+  clearAsyncCache()
   api.catalog.mockResolvedValue(PAYLOAD)
   api.item.mockResolvedValue({ body: 'The canonical text of this entry.' })
 })
 
 describe('Constitution page', () => {
-  it('renders every tier as a band, in constitutional order', async () => {
+  it('renders every tier as a band in reading order, and ranks them by precedence', async () => {
     // Queried by the band HEADINGS: the order is the claim, since this page is read top to
-    // bottom. The doctrine tier is one band per pack, each headed by its (themed) title.
+    // bottom. The doctrine tier is one band per pack, each headed by its (themed) title. The
+    // bands are READING order (the character first, then the rules it serves); the RANK lives
+    // in the tier strip, which follows the Precedence table of src/AGENT.md.tmpl.
     //
     // THE FIRST BAND READS `Ethos`, NOT `Ontology`. The tier is a character rather than a
     // taxonomy, so the noun a reader sees was renamed; the address under it (the route, the
@@ -120,14 +126,25 @@ describe('Constitution page', () => {
     expect([...container.querySelectorAll('.band-head .tier-h')].map((h) => h.textContent)).toEqual(
       ['Ethos', 'Dictates', 'Craft', 'Process', 'Ops'],
     )
-    // The tier strip names the four tiers, the fourth (yours) linking to Personal.
-    expect([...container.querySelectorAll('.tier-name')].map((n) => n.textContent)).toEqual([
-      'Ethos',
-      'Dictates',
-      'Doctrines',
-      'Your rules',
+    // The tier strip ranks the four tiers by the Precedence table: Dictates, then your own
+    // rules, then the Ethos, then the Doctrines. Each cell says how it stands against the rank
+    // above it. Your rules link to Personal. The page once printed "TIER 1 Ethos" and "a higher
+    // tier always wins", which taught the reverse of the real order.
+    const cells = [...container.querySelectorAll('.tier')].map((t) => [
+      t.querySelector('.tier-k').textContent,
+      t.querySelector('.tier-name').textContent,
+      t.querySelector('.tier-rule').textContent,
+    ])
+    expect(cells).toEqual([
+      ['RANK 1', 'Dictates', 'Nothing outranks them.'],
+      ['RANK 2', 'Your rules', 'May tighten a Dictate, never repeal one.'],
+      ['RANK 3', 'Ethos', 'Never against a user rule.'],
+      ['RANK 4', 'Doctrines', 'May tighten, never repeal.'],
     ])
     expect(container.querySelector('a.tier').getAttribute('href')).toBe('#/personal/rules')
+    expect(container.textContent).not.toMatch(/higher tier always wins/i)
+    // Numbers are positional and the retired rules were removed, so this note was false.
+    expect(container.textContent).not.toMatch(/keep their number/)
     // ...and the entries themselves, the address prefix stripped off the display name: the
     // row shows the rule's NAME, not `Doctrine craft 1 — Automate Repetition`.
     expect(screen.getByText('Telos')).toBeTruthy()
@@ -330,11 +347,16 @@ describe('Constitution page — doctrine toggles', () => {
     expect(sw(container, 'Automate Repetition').getAttribute('aria-checked')).toBe('true')
     expect(sw(container, 'Documentation in Step').getAttribute('aria-checked')).toBe('false')
     expect(sw(container, 'Tool Discovery').getAttribute('aria-checked')).toBe('false')
-    // The pack switch is DERIVED from its rules: on while any rule is on, so it can never
-    // contradict the rule switches under it.
-    expect(container.querySelector('[aria-label="Craft pack"]').getAttribute('aria-checked')).toBe(
-      'true',
-    )
+    // The pack switch is DERIVED from its rules, so it can never contradict the rule switches
+    // under it: a tri-state checkbox, `true` with every rule on, `mixed` with some, `false` with
+    // none. Craft has one rule excluded, so it reads mixed (a switch cannot say "partly").
+    const craft = container.querySelector('[aria-label="Craft pack"]')
+    expect(craft.getAttribute('role')).toBe('checkbox')
+    expect(craft.getAttribute('aria-checked')).toBe('mixed')
+    expect(craft.classList.contains('mixed')).toBe(true)
+    expect(
+      container.querySelector('[aria-label="Process pack"]').getAttribute('aria-checked'),
+    ).toBe('true')
     expect(container.querySelector('[aria-label="Ops pack"]').getAttribute('aria-checked')).toBe(
       'false',
     )
@@ -343,19 +365,26 @@ describe('Constitution page — doctrine toggles', () => {
   })
 
   it('a pack switch stages all of its rules at once, still applied once', async () => {
-    // Off turns every rule of the pack off (so the pack drops out of --doctrines); on turns
-    // every rule on (so no exclusion survives inside it). Nothing is sent until Apply.
+    // The usual tri-state rule: a pack with every rule on turns all off (so the pack drops out
+    // of --doctrines); a pack with some or none on turns every rule on (so no exclusion
+    // survives inside it). A partial pack therefore goes ON first, never off. Nothing is sent
+    // until Apply.
     const onAction = vi.fn()
     const { container } = render(withInstall(onAction))
     await settled(container)
-    fireEvent.click(container.querySelector('[aria-label="Craft pack"]'))
-    expect(sw(container, 'Automate Repetition').getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(container.querySelector('[aria-label="Ops pack"]'))
+    const craft = () => container.querySelector('[aria-label="Craft pack"]')
+    fireEvent.click(craft()) // mixed -> all on
+    expect(sw(container, 'Documentation in Step').getAttribute('aria-checked')).toBe('true')
+    expect(sw(container, 'Automate Repetition').getAttribute('aria-checked')).toBe('true')
+    expect(craft().getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(container.querySelector('[aria-label="Process pack"]')) // all on -> all off
+    expect(sw(container, 'Consent Before Push').getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(container.querySelector('[aria-label="Ops pack"]')) // none -> all on
     expect(sw(container, 'Tool Discovery').getAttribute('aria-checked')).toBe('true')
     expect(onAction).not.toHaveBeenCalled()
     fireEvent.click(applyBtn())
     await answered()
-    expect(onAction.mock.calls[0][1].doctrines).toEqual(['process', 'ops'])
+    expect(onAction.mock.calls[0][1].doctrines).toEqual(['craft', 'ops'])
     expect(onAction.mock.calls[0][1].excludeRules).toEqual([])
     vi.restoreAllMocks()
   })
@@ -573,6 +602,22 @@ describe('Constitution page — the deletion gate switch', () => {
     expect(container.querySelector('[aria-label="Deletion gate"]')).toBeNull()
     expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
   })
+
+  it('names the staged doctrine changes the gate rebuild leaves staged, only when there are some', async () => {
+    // The gate rebuild spreads `install`, so it carries the DEPLOYED doctrine rules, not the
+    // staged ones: a reader with switches flipped must not think this click applies them.
+    const STAYS = 'Your staged doctrine changes are not part of this rebuild; they stay staged.'
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: true }))
+    await settled(container)
+    const gate = () => container.querySelector('[aria-label="Deletion gate"]')
+    fireEvent.click(gate())
+    await answered()
+    expect(askConfirm.mock.calls[0][0]).not.toContain(STAYS)
+    fireEvent.click(sw(container, 'Documentation in Step'))
+    fireEvent.click(gate())
+    await answered()
+    expect(askConfirm.mock.calls[1][0]).toContain(STAYS)
+  })
 })
 
 // ---------------------------------------------------------------------------------------------
@@ -643,5 +688,161 @@ describe('Constitution page — the secrets and done gate switches', () => {
     await waitFor(() => expect(lawRow(container, 'I')).toBeTruthy())
     expect(container.querySelector('[role="switch"][aria-label$="gate"]')).toBeNull()
     expect(container.querySelector('.no-gate')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// One rule row, opened: its body, its fetch lifecycle, and what a screen reader hears.
+
+describe('Constitution page — an opened rule', () => {
+  it('renders the body as Markdown: bold and a numbered list, no stray asterisk', async () => {
+    // The old inline formatter knew `code` and *em* only, so Telos's **bold** list rendered
+    // as a stray `*` and inverted emphasis, all in one paragraph.
+    api.item.mockResolvedValue({ body: '**First** rule.\n\n1. one\n2. two\n' })
+    const { container } = render(<Laws selected="ont:telos" />)
+    await waitFor(() => expect(container.querySelector('.law-expand strong')).toBeTruthy())
+    const body = container.querySelector('.law-expand')
+    expect(body.querySelector('strong').textContent).toBe('First')
+    expect(body.querySelectorAll('li').length).toBe(2)
+    expect(body.textContent).not.toContain('*')
+  })
+
+  it('shows a failed fetch with a Retry that fetches again', async () => {
+    // A rejected fetch used to show "Loading…" for ever: the error was never read.
+    api.item.mockRejectedValueOnce(new Error('daemon gone'))
+    render(<Laws selected="II" />)
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('daemon gone'))
+    expect(screen.queryByText(/The canonical text/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    expect(api.item).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('a closed and reopened rule is served from the cache, not fetched again', async () => {
+    // A row click only moves the hash, so the open state is driven by `selected` here.
+    const { rerender } = render(<Laws selected="II" />)
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    rerender(<Laws />)
+    await waitFor(() => expect(screen.queryByText(/The canonical text/)).toBeNull())
+    rerender(<Laws selected="II" />)
+    expect(screen.getByText(/The canonical text/)).toBeTruthy()
+    expect(api.item.mock.calls.filter(([, a]) => a === 'II').length).toBe(1)
+  })
+
+  it('a new data revision fetches an open rule again', async () => {
+    // A rebuild or a theme change bumps `dataRev`: the cached body is the old install's text.
+    const { rerender } = render(<Laws selected="II" dataRev={1} />)
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    rerender(<Laws selected="II" dataRev={2} />)
+    await waitFor(() => expect(api.item.mock.calls.filter(([, a]) => a === 'II').length).toBe(2))
+  })
+
+  it('renders a hostile body inert: no handler, no script, no javascript: link', async () => {
+    // A rule body is Markdown from disk, so it goes through the shared sanitizer.
+    api.item.mockResolvedValue({
+      body: '<img src=x onerror="alert(1)"><script>x</script>\n\n[a](javascript:alert(1))',
+    })
+    const { container } = render(<Laws selected="II" />)
+    await waitFor(() => expect(container.querySelector('.law-expand .markdown')).toBeTruthy())
+    const body = container.querySelector('.law-expand')
+    expect(body.querySelector('[onerror]')).toBeNull()
+    expect(body.querySelector('script')).toBeNull()
+    const hrefs = [...body.querySelectorAll('[href]')].map((a) => a.getAttribute('href'))
+    expect(hrefs.filter((h) => /^\s*javascript:/i.test(h))).toEqual([])
+  })
+
+  it('a row button names the rule, not every column run together', async () => {
+    // The accessible name was "› II One Intent, One Act Active Instruction"; it is now the
+    // number, the name, the status and the enforcement, and it points at the body it opens.
+    const { container } = render(<Laws selected="II" />)
+    await waitFor(() => expect(container.querySelector('.law-expand')).toBeTruthy())
+    const btn = screen.getByRole('button', { name: 'II One Intent, One Act, Active, Instruction' })
+    expect(btn.getAttribute('type')).toBe('button')
+    expect(btn.getAttribute('aria-expanded')).toBe('true')
+    const id = btn.getAttribute('aria-controls')
+    expect(id).toBeTruthy()
+    expect(document.getElementById(id)).toBe(container.querySelector('.law-expand'))
+    // An ethos section has no number: its name opens the label.
+    expect(screen.getByRole('button', { name: 'Telos, Always, Instruction' })).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// The Gate asks card on an install whose deletion gate is OFF: Rule IV's past asks stay in the
+// ledger, but the gate asks nothing now, so its entry must not lead the card as if it did.
+
+describe('Constitution page — the Gate asks card', () => {
+  beforeEach(() => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
+  })
+
+  it('a disarmed gate sorts last, reads off, and its bar loses the warning', async () => {
+    render(
+      <Laws
+        overview={{ install: { ...INSTALL, deletionGate: false } }}
+        setup={{ gates: { asks: { 'law-4': 135, 'process-1': 6 }, total: 141, standing_down: [] } }}
+      />,
+    )
+    await waitFor(() => expect(document.querySelectorAll('.gate-row').length).toBe(2))
+    const [first, second] = document.querySelectorAll('.gate-row')
+    expect(first.textContent).toContain('process.1')
+    expect(first.querySelector('.off')).toBeNull()
+    expect(first.querySelector('.hbar').classList.contains('warn')).toBe(true)
+    expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
+    expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
+    expect(second.querySelector('.off').textContent).toBe('off')
+    expect(second.querySelector('.hbar').classList.contains('warn')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// The tier nouns come from the install's theme (`nouns` on /api/catalog/laws); an older daemon
+// sends none, and the page then keeps the names it always printed.
+
+describe('Constitution page — themed tier nouns', () => {
+  it('names the tiers in the theme voice when the payload carries nouns', async () => {
+    api.catalog.mockResolvedValue({
+      ...PAYLOAD,
+      nouns: { ontology: 'Credo', law: 'Dictate', laws: 'Dictates', doctrines: 'Doctrinae' },
+    })
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(container.querySelector('.band-head')).toBeTruthy())
+    expect([...container.querySelectorAll('.tier-name')].map((n) => n.textContent)).toEqual([
+      'Dictates',
+      'Your rules',
+      'Credo',
+      'Doctrinae',
+    ])
+    expect(container.querySelector('.band-head .tier-h').textContent).toBe('Credo')
+    expect(screen.getByRole('button', { name: /^Doctrinae/ })).toBeTruthy()
+  })
+
+  it('uses the neutral rule noun in the rank line', async () => {
+    api.catalog.mockResolvedValue({
+      ...PAYLOAD,
+      nouns: { ontology: 'Ethos', law: 'Rule', laws: 'Rules', doctrines: 'Doctrines' },
+    })
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(container.querySelector('.band-head')).toBeTruthy())
+    expect([...container.querySelectorAll('.band-head .tier-h')].map((h) => h.textContent)).toEqual(
+      ['Ethos', 'Rules', 'Craft', 'Process', 'Ops'],
+    )
+    expect(container.querySelectorAll('.tier-rule')[1].textContent).toBe(
+      'May tighten a Rule, never repeal one.',
+    )
+    expect(screen.getByRole('button', { name: /^Rules/ })).toBeTruthy()
+  })
+
+  it('falls back to Ethos, Dictates and Doctrines without nouns', async () => {
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(container.querySelector('.band-head')).toBeTruthy())
+    expect([...container.querySelectorAll('.tier-name')].map((n) => n.textContent)).toEqual([
+      'Dictates',
+      'Your rules',
+      'Ethos',
+      'Doctrines',
+    ])
+    expect(screen.getByRole('button', { name: /^Dictates/ })).toBeTruthy()
   })
 })

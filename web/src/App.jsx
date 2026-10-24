@@ -18,7 +18,9 @@ import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
 import Loading from './components/Loading.jsx'
+import PageBoundary from './components/PageBoundary.jsx'
 import { ConfirmProvider } from './hooks/useConfirm.jsx'
+import { StagingProvider } from './hooks/useStaging.jsx'
 // The Overview is the landing route, so it ships in the shell. Every other page is
 // code-split: most sessions only ever open the console to the overview, and the rest
 // (the harness manager, the docs viewer, the old dashboard lenses) would otherwise be
@@ -214,7 +216,16 @@ export default function App() {
           inside `.app`. */}
       <ConfirmProvider>
         <div className="atmos" aria-hidden="true" />
-        <a className="skip-link" href="#main">
+        {/* In a hash router `#main` would resolve as an unknown page (the Overview), so the
+            link moves focus itself and keeps the href for its semantics. */}
+        <a
+          className="skip-link"
+          href="#main"
+          onClick={(e) => {
+            e.preventDefault()
+            document.getElementById('main')?.focus()
+          }}
+        >
           Skip to content
         </a>
         {/* Actions (rebuild, update, doctor) run as background jobs whose only feedback
@@ -270,18 +281,26 @@ export default function App() {
                 ['library', 'kits', 'loops', 'docs'].includes(route.page) ? 'pad pad-wide' : 'pad'
               }
             >
-              <Suspense fallback={<Loading />}>
-                {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from
-                  several routes (the Library from `#/skills`, `#/section/memory` and
-                  `#/item/agent/x`; the Constitution from `#/laws` and `#/item/law/IV`)
-                  must render from ONE position in this tree, or React unmounts and
-                  remounts it whenever the route crosses between them: the page throws
-                  its state away, refetches, flashes the spinner and loses the scroll
-                  position. The resolver (lib/router.js) folds every route onto its page
-                  and every page renders from this one expression, so React reconciles
-                  by component type. Pinned by __tests__/app.routing.test.jsx. */}
-                {pages[route.page]?.()}
-              </Suspense>
+              {/* Staged kit and doctrine switches, held ABOVE the per-page boundary so they
+                  survive a page change (and a page crash); see hooks/useStaging.jsx. */}
+              <StagingProvider activeId={activeId} finish={finish}>
+                {/* Keyed on the page ONLY: a new page clears a crash, while an item change keeps
+                    the one slot below. */}
+                <PageBoundary key={route.page}>
+                  <Suspense fallback={<Loading />}>
+                    {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from
+                      several routes (the Library from `#/skills`, `#/section/memory` and
+                      `#/item/agent/x`; the Constitution from `#/laws` and `#/item/law/IV`)
+                      must render from ONE position in this tree, or React unmounts and
+                      remounts it whenever the route crosses between them: the page throws
+                      its state away, refetches, flashes the spinner and loses the scroll
+                      position. The resolver (lib/router.js) folds every route onto its page
+                      and every page renders from this one expression, so React reconciles
+                      by component type. Pinned by __tests__/app.routing.test.jsx. */}
+                    {pages[route.page]?.()}
+                  </Suspense>
+                </PageBoundary>
+              </StagingProvider>
             </div>
           </main>
           <TabBar route={route} />

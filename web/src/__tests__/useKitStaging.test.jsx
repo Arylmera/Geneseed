@@ -31,12 +31,23 @@ describe('useKitStaging', () => {
     expect(onAction).toHaveBeenCalledWith('install', { host: 'claude', path: '/c', kits: ['b'] })
   })
 
-  it('does not install when the confirm is refused, and drops staging on a new payload', async () => {
-    const { result, rerender, onAction } = setup({ installs: [row] }, false)
+  it('does not install when the confirm is refused', async () => {
+    const { result, onAction } = setup({ installs: [row] }, false)
     act(() => result.current.toggle(row, 'b'))
     await act(() => result.current.apply(row))
     expect(onAction).not.toHaveBeenCalled()
-    rerender({ d: { installs: [row] } })
-    expect(result.current.change(row)).toEqual({ on: [], off: [] })
+  })
+
+  // A refetch is a new payload object every time (any job's finish bumps dataRev), so it says
+  // nothing by itself: staging goes only when THIS install's kits changed under it (KT-2).
+  it('keeps staging on a new payload with the same kits, drops it when the kits changed', () => {
+    const { result, rerender } = setup({ installs: [row] })
+    act(() => result.current.toggle(row, 'b'))
+    const same = { ...row }
+    rerender({ d: { installs: [same] } })
+    expect(result.current.change(same)).toEqual({ on: ['b'], off: [] })
+    const changed = { ...row, kits: ['a', 'c'] }
+    rerender({ d: { installs: [changed] } })
+    expect(result.current.change(changed)).toEqual({ on: [], off: [] })
   })
 })

@@ -8,6 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Drift numbers tell the truth.** A file that differs from the source only because the install is behind (unmodified since its build) is now `stale`, not `edited`; `.geneseed-version` is always a build stamp. The Overview counts only real hand edits and shows stale files as "N files behind"; Local edits lists them apart under **Behind source** with a rebuild banner; `diff --out` and the upgrade export include only real local changes. "Never fired" counts each skill once across the fleet. A failed fleet read says so and keeps the last good table; a zero ceiling prints "no ceiling"; the ceiling marker sits on the root file's own lane.
+- **The four Overview lenses agree with the Ledger.** They show the newest runs first, carry the fleet verdict badge, and read runs as `verb · scope · result · duration`. The Greenhouse ring is full at 100%, the Lineage badge no longer hard-codes "in sync", a failed doctor says so instead of drawing a false "1 checks", the HUD KPIs sit on one row, and the Journal map keeps its height.
+- **Constitution ranks tiers by the real precedence** (Dictates, your rules, Credo, Doctrines) and renders rule bodies as Markdown. Rule texts are cached and a failed read offers Retry; a partly-on pack reads as mixed; a disarmed gate is marked off; tier names follow the voice.
+- **Docs pages render their tokens.** The Memory and Notebook pages no longer show raw `{{…}}` build tokens. Heading ids come from one pass, so every outline link lands; wide tables scroll; Back no longer bounces off a hidden page; blocked storage no longer crashes the page; the Docs page no longer scrolls past the shell.
+- **The console survives a page crash.** A page error or a missing chunk after an upgrade shows the error with Retry (or Restart) while the sidebar, topbar and console stay. A malformed `#/item/…` link no longer blanks the app; Skip to content works; each page change sets the title, scrolls to the top and moves focus to the page.
+- **Unsaved work is kept.** Profile and Rules keep a draft through a 409 conflict and ask before an in-app navigation discards it; a draft whose rule was removed reopens as a new rule. Staged kit and doctrine switches are held for the whole console, survive leaving the page, and are kept after a failed rebuild; a row shows "Rebuilding…" while its job runs.
+- **Slow answers no longer overwrite newer ones** in the console's data hook, and a failed first read shows an error instead of "Loading…" forever (Library entry, Activity session).
+
 ## [4.17.2] — 2026-10-24
 
 Patch: the web console closes its security and data-loss holes from the 2026-10-24 audit.

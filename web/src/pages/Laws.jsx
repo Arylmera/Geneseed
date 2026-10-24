@@ -8,7 +8,13 @@ import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
-import { GATE_COPY, GATE_SWITCH, enforcedBy, parseRuleTitle } from '../lib/constitution.js'
+import {
+  GATE_COPY,
+  GATE_SWITCH,
+  PRECEDENCE,
+  enforcedBy,
+  parseRuleTitle,
+} from '../lib/constitution.js'
 import Seg from '../components/Seg.jsx'
 import FilterInput from '../components/FilterInput.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
@@ -322,6 +328,15 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   if (error) return <ErrorState error={error} />
   if (!data) return <Loading />
 
+  // The tier nouns in the install's theme voice (`nouns` on /api/catalog/laws). An older daemon
+  // sends none, and the page keeps the names it always printed.
+  const nouns = {
+    ontology: data.nouns?.ontology || 'Ethos',
+    law: data.nouns?.law || 'Dictate',
+    laws: data.nouns?.laws || 'Dictates',
+    doctrines: data.nouns?.doctrines || 'Doctrines',
+  }
+
   const ontology = items
     .filter((it) => it.tier === 'ontology')
     .map((it) => ({
@@ -391,10 +406,16 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
     const name = label.toLowerCase()
     const next = !armed(addr)
     const where = `${install.host} · ${install.scope}`
+    // The rebuild carries the DEPLOYED doctrine rules (`install` is spread), so staged switches
+    // are neither applied nor lost by it: say so, or a yes reads as applying them too.
+    const stays = sel.dirty
+      ? ' Your staged doctrine changes are not part of this rebuild; they stay staged.'
+      : ''
     const ok = await confirm(
-      next
+      (next
         ? `Re-arm the ${name} on ${where}? ${GATE_COPY[addr].arm} It rebuilds in place, non-destructive.`
-        : `Switch the ${name} off on ${where}? ${GATE_COPY[addr].off} It rebuilds in place, non-destructive.`,
+        : `Switch the ${name} off on ${where}? ${GATE_COPY[addr].off} It rebuilds in place, non-destructive.`) +
+        stays,
       {
         title: next ? `Re-arm the ${name}?` : `Switch the ${name} off?`,
         confirmLabel: next ? 'Re-arm' : 'Switch off',
@@ -422,17 +443,15 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const activeInv = laws.filter((l) => !l.retired).length
   const activeDoc = deployedRules.length
   const stats = rulesData?.stats
-  const tiers = [
-    {
-      key: 'ethos',
-      name: 'Ethos',
+  const tierOf = {
+    ethos: {
+      name: nouns.ontology,
       n: ontology.length,
       fill: 1,
       sub: `${ontology.length} sections`,
     },
-    {
-      key: 'invariants',
-      name: 'Dictates',
+    invariants: {
+      name: nouns.laws,
       n: activeInv,
       fill: laws.length ? activeInv / laws.length : 0,
       sub:
@@ -440,15 +459,13 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
           ? `${activeInv} active · ${laws.length - activeInv} retired`
           : `${activeInv} active`,
     },
-    {
-      key: 'doctrines',
-      name: 'Doctrines',
+    doctrines: {
+      name: nouns.doctrines,
       n: activeDoc,
       fill: allRules.length ? activeDoc / allRules.length : 0,
       sub: `${activeDoc} rules · ${packs.filter((p) => p.active).length} of ${packs.length} packs`,
     },
-    {
-      key: 'yours',
+    yours: {
       name: 'Your rules',
       n: stats?.rules ?? 0,
       fill: stats ? stats.rules / stats.max_rules : 0,
@@ -457,15 +474,23 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         : 'user-rules.md',
       href: '#/personal/rules',
     },
-  ]
+  }
+  // The strip follows the Precedence table, highest rank first, each cell with its rule
+  // against the rank above (rank 1 has none above it).
+  const rankRule = (against) => {
+    if (against === '—') return 'Nothing outranks them.'
+    const s = against.replace('{{LAW}}', nouns.law)
+    return `${s[0].toUpperCase()}${s.slice(1)}.`
+  }
+  const tiers = PRECEDENCE.map((p) => ({ key: p.key, ...tierOf[p.key], rule: rankRule(p.against) }))
   const byAddr = Object.fromEntries(
     [...laws, ...packs.flatMap((p) => p.rules)].map((r) => [r.addr, r]),
   )
 
   const TABS_ = [
     ['all', 'All', laws.length + allRules.length],
-    ['invariants', 'Dictates', laws.length],
-    ['doctrines', 'Doctrines', allRules.length],
+    ['invariants', nouns.laws, laws.length],
+    ['doctrines', nouns.doctrines, allRules.length],
   ]
   const showInv = tab === 'all' || tab === 'invariants'
   const showDoc = tab === 'all' || tab === 'doctrines'
@@ -486,8 +511,8 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         <div>
           <h1 className="h">Constitution</h1>
           <p className="sub">
-            What the agent follows on every turn. A higher tier always wins. Open any rule to read
-            its canonical text.
+            What the agent follows on every turn. Ranked: a lower rank may tighten a higher one,
+            never repeal it. Open any rule to read its canonical text.
           </p>
         </div>
       </div>
@@ -503,11 +528,12 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
               the tabs and "All" count only what the filter can actually reach. */}
           {ontology.length > 0 && (
             <>
-              {bandHead('Ethos', 'ontology/universal.md')}
+              {bandHead(nouns.ontology, 'ontology/universal.md')}
               {ontology.map((s) => (
                 <LawRow
                   key={s.addr}
                   law={s}
+                  rev={dataRev}
                   isOpen={open === s.addr}
                   onToggle={() => toggle(s.addr)}
                 />
@@ -535,7 +561,6 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
               placeholder="Filter rules"
               label="Filter rules"
             />
-            <span className="dim law-note">Retired rules keep their number.</span>
           </div>
           <div className="law-rowhead">
             <span>No.</span>
@@ -546,11 +571,12 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
           </div>
           {showInv && invRows.length > 0 && (
             <>
-              {bandHead('Dictates', 'laws/universal.md')}
+              {bandHead(nouns.laws, 'laws/universal.md')}
               {invRows.map((l) => (
                 <LawRow
                   key={l.addr}
                   law={l}
+                  rev={dataRev}
                   isOpen={open === l.addr}
                   onToggle={() => toggle(l.addr)}
                   toggleCol={
@@ -608,6 +634,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
                     <LawRow
                       key={r.addr}
                       law={docRow(r)}
+                      rev={dataRev}
                       isOpen={open === r.addr}
                       onToggle={() => toggle(r.addr)}
                       toggleCol={
@@ -643,7 +670,12 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
             install={install}
             gateArmed={gateArmed}
           />
-          <GateAsks gates={setup?.gates} byAddr={byAddr} onJump={jumpToRule} />
+          <GateAsks
+            gates={setup?.gates}
+            byAddr={byAddr}
+            onJump={jumpToRule}
+            disarmed={(addr) => Boolean(GATE_SWITCH[addr]) && !armed(addr)}
+          />
         </aside>
       </div>
     </>

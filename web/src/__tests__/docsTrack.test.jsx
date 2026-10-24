@@ -123,4 +123,16 @@ describe('Track', () => {
     localStorage.setItem(SEEN_KEY, '{oops')
     expect(readSeen()).toEqual([])
   })
+
+  // A private window or a full quota refuses the write; the page still opens, unrecorded.
+  it('survives storage that refuses the write', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    try {
+      expect(markSeen('harness')).toEqual(['harness'])
+    } finally {
+      spy.mockRestore()
+    }
+  })
 })

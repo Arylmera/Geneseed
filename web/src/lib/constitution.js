@@ -87,6 +87,43 @@ export const GATE_COPY = {
   },
 }
 
+// The four tiers by rank, highest first: rows 1-4 of the Precedence table in src/AGENT.md.tmpl,
+// copied verbatim (`source` is the table's Source cell reduced to its token, `against` its
+// "Against the rank above it" cell). `key` is the Constitution page's own name for the tier.
+// Transcribed, not read: the template is not shipped to the browser. __tests__/constitution.test.js
+// parses the real template and fails when the two drift apart.
+export const PRECEDENCE = [
+  { key: 'invariants', source: '{{LAWS}}', against: '—' },
+  { key: 'yours', source: 'user-rules.md', against: 'may tighten a {{LAW}}, never repeal one' },
+  { key: 'ethos', source: '{{ONTOLOGY}}', against: 'never against a user rule' },
+  { key: 'doctrines', source: '{{DOCTRINES}}', against: 'may tighten, never repeal' },
+]
+
+// Template text -> the Precedence table's rows, in the order they appear: `{ source, against }`
+// each. The Source cell drops its article, `active`, backticks and the `(§n)` pointer, which
+// leaves the token PRECEDENCE carries. Pure, so the gate can feed it a perturbed copy.
+export function parsePrecedence(text) {
+  const lines = String(text).split(/\r?\n/)
+  const at = lines.findIndex((l) => l.startsWith('**Precedence.**'))
+  if (at === -1) return []
+  let i = at + 1
+  while (i < lines.length && !lines[i].trim()) i++
+  const rows = []
+  // The table is the run of `|` lines after the heading; the first other line ends it.
+  for (; i < lines.length && lines[i].startsWith('|'); i++) {
+    const line = lines[i]
+    const cells = line.split('|').map((c) => c.trim())
+    if (!/^\d+$/.test(cells[1] || '')) continue // header and separator rows
+    const source = cells[2]
+      .replace(/^The\s+/, '')
+      .replace(/^active\s+/, '')
+      .replace(/`/g, '')
+      .replace(/\s*\(§\d+\)$/, '')
+    rows.push({ source, against: cells[3] })
+  }
+  return rows
+}
+
 // "Enforced by" for one row: a hook gate, or the instruction text alone. A switchable law's gate
 // can be off per install (`gates` is the overview's `install`); its text still binds, so the row
 // reads "Gate off" rather than "Instruction". Anything but an explicit `false` is armed.

@@ -1,5 +1,13 @@
-import { describe, it, expect } from 'vitest'
-import { PAGES, TABS, VIEW_ALIAS, resolveRoute } from '../lib/router.js'
+import { describe, it, expect, afterEach } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import {
+  PAGES,
+  TABS,
+  VIEW_ALIAS,
+  registerNavigationGuard,
+  resolveRoute,
+  useRoute,
+} from '../lib/router.js'
 
 // The resolver is the one place a hash becomes a page. Each row states what the hash must
 // resolve to, written out: a routing change that moves a row has to move it here, with a
@@ -78,6 +86,8 @@ const TABLE = [
   ['#/docs/cli/build', { page: 'docs', item: 'cli/build' }],
   ['#/docs/a%20b', { page: 'docs', item: 'a b' }],
   ['#/activity/s%201', { page: 'activity', item: 's 1' }],
+  // A malformed escape is typed input, not a crash: the raw text is the item.
+  ['#/item/skill/%E0%A4%A', { page: 'library', section: 'skills', item: '%E0%A4%A' }],
 ]
 
 describe('resolveRoute', () => {
@@ -120,5 +130,71 @@ describe('PAGES', () => {
       docs: 'Docs',
       activity: 'Activity',
     })
+  })
+})
+
+// The navigation guard seam: a guard returning false refuses an in-app hash change, and the
+// address bar is put back. The guard set is module-level, so every test unregisters.
+describe('navigation guards', () => {
+  const navigate = (hash) =>
+    act(() => {
+      window.location.hash = hash
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+  let unregister = () => {}
+  afterEach(() => {
+    unregister()
+    unregister = () => {}
+    window.location.hash = '#/'
+  })
+
+  it('with no guard, a hash change moves the route', () => {
+    window.location.hash = '#/laws'
+    const { result } = renderHook(() => useRoute())
+    navigate('#/kits')
+    expect(result.current).toEqual({ page: 'kits' })
+  })
+
+  it('a guard returning false keeps the route and restores the hash', () => {
+    window.location.hash = '#/laws'
+    const seen = []
+    unregister = registerNavigationGuard((nav) => {
+      seen.push(nav)
+      return false
+    })
+    const { result } = renderHook(() => useRoute())
+    navigate('#/kits')
+    expect(result.current).toEqual({ page: 'laws' })
+    expect(window.location.hash).toBe('#/laws')
+    expect(seen).toEqual([{ from: '#/laws', to: '#/kits' }])
+  })
+
+  // `from` stays the last ACCEPTED hash across refusals, and an event whose hash did not
+  // move (an echo, or the restore itself) never reaches the guard.
+  it('a second refusal still sees the accepted hash; an unchanged hash is not asked', () => {
+    window.location.hash = '#/laws'
+    const seen = []
+    unregister = registerNavigationGuard((nav) => {
+      seen.push(nav)
+      return false
+    })
+    renderHook(() => useRoute())
+    navigate('#/kits')
+    navigate('#/docs')
+    act(() => window.dispatchEvent(new HashChangeEvent('hashchange')))
+    expect(seen).toEqual([
+      { from: '#/laws', to: '#/kits' },
+      { from: '#/laws', to: '#/docs' },
+    ])
+  })
+
+  it('after unregister, navigation proceeds', () => {
+    window.location.hash = '#/laws'
+    const off = registerNavigationGuard(() => false)
+    const { result } = renderHook(() => useRoute())
+    off()
+    navigate('#/kits')
+    expect(result.current).toEqual({ page: 'kits' })
+    expect(window.location.hash).toBe('#/kits')
   })
 })

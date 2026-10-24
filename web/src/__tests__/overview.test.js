@@ -6,6 +6,7 @@ import {
   gateRows,
   ledgerNeeds,
   needsAttention,
+  neverFired,
   skillsByStage,
 } from '../lib/overview.js'
 import { applyAccent } from '../lib/accents.js'
@@ -211,6 +212,27 @@ describe('fleetVerdict', () => {
     const v = fleetVerdict({ ...FLEET, doctor: { ok: false, problems: ['x', 'y'] } })
     expect([v.tone, v.facts[1]]).toEqual(['bad', 'doctor found 2 problems'])
   })
+  // `stale` files are unedited ones the install's source has moved past: a rebuild updates
+  // them, so they read as "behind", never as hand edits.
+  it('says behind, not hand-edited, for an install whose only drift is stale', () => {
+    const one = {
+      doctor: { ok: true, problems: [] },
+      installs: [
+        { ...FLEET.installs[0], drift: { edited: 0, added: 0, missing: 0, linked: 0, stale: 4 } },
+      ],
+    }
+    expect(fleetVerdict(one)).toEqual({
+      tone: 'warn',
+      head: 'Harness needs a look.',
+      facts: [
+        '1 active install',
+        'doctor clean',
+        '1 install behind source',
+        'no hand edits',
+        '4 files behind source',
+      ],
+    })
+  })
   it('is healthy for one clean install, and an unreadable marker alone does not warn', () => {
     const one = {
       doctor: { ok: true, problems: [] },
@@ -255,6 +277,30 @@ describe('ledgerNeeds', () => {
     expect(rows.map((r) => r.id)).not.toContain('doctor')
     expect(rows.map((r) => r.id)).not.toContain('drift')
     expect(rows.slice(2).every((r) => r.sugg)).toBe(true)
+  })
+  it('names stale files on the behind row and raises no hand-edit row for them', () => {
+    const fleet = {
+      installs: [
+        { ...FLEET.installs[0], drift: { edited: 0, added: 0, missing: 0, linked: 0, stale: 4 } },
+      ],
+    }
+    const rows = ledgerNeeds({ fleet })
+    expect(rows.map((r) => [r.id, r.title, r.detail])).toEqual([
+      ['behind:oc', 'opencode · global is behind its source', 'built 6d ago · 4 files behind'],
+    ])
+  })
+  // The usage ledger lists never-fired rows per install, so one skill unused on two installs
+  // is two rows and still ONE skill.
+  it('counts a skill never fired on two installs once', () => {
+    const never = [
+      { kind: 'skill', name: 'a', install: 'oc' },
+      { kind: 'skill', name: 'a', install: 'cl' },
+      { kind: 'agent', name: 'c', install: 'oc' },
+      { kind: 'agent', name: 'c', install: 'cl' },
+    ]
+    const [row] = ledgerNeeds({ fleet: null, usage: { days_counted: 30, never } })
+    expect([row.title, row.detail]).toEqual(['1 skill never fired in 30 days', '1 agent too'])
+    expect(neverFired({ never })).toEqual({ skills: 1, agents: 1 })
   })
   it('raises the doctor from the fleet as the first problem', () => {
     const rows = ledgerNeeds({
