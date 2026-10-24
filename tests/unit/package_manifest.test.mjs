@@ -305,9 +305,6 @@ const SHIPS = [
     + 'DESIGN.md and README.md link into them'],
   ['web/dist/', 'TRACKED and load-bearing: js/web/server.mjs serves it, and npmBuild is a '
     + 'first-run-from-a-partial-checkout path no cell reaches'],
-  ['web/src/pages/Laws.jsx', "doctor's lawMetaProblems reads this ONE file out of web/src; "
-    + 'shipping the rest of web/src to satisfy it would be hundreds of kB of React sources '
-    + 'nothing else in the package opens'],
   // THE REFERENCE'S ROWS STOOD HERE — the `rituals/` tree and the seven root modules of the
   // generator facade — and they are gone because the files are. That row had been re-argued
   // three times and was down to its last clause, the full-screen PANEL, which was Python for
@@ -351,8 +348,7 @@ const WITHHELD = [
   ['tests/', 'megabytes of developer gates. npm ships the tool, not its test rig — and the cell '
     + 'harnesses need a git checkout to run at all'],
   ['web/', 'the React sources, the vite config and package-lock. web/dist is TRACKED, so the '
-    + 'console never needs building at install time; web/src/pages/Laws.jsx is carved back in '
-    + 'above'],
+    + 'console never needs building at install time'],
   ['.github/', 'CI configuration for this repository'],
   ['install', 'the clone-only installer: checks Node and git, then runs `setup`. An npm install '
     + 'already has Node, and its own front door is `npx geneseed setup`'],

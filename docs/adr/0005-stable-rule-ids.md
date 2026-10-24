@@ -20,6 +20,6 @@ as the rule's principle name. An id is never renamed; a removed id goes into `RE
 ## Consequences
 
 - Removing or reordering a rule rewires no citation.
-- Some tables are still keyed by number (`LAW_META`, `LAW_CLASS`, `DOCTRINE_META`, exclusions, the
+- Some tables are still keyed by number (`LAW_CLASS`, exclusions, the
   hook ledger keys) and are doctor-pinned; appending in a pack is still the cheap path.
 - Procedure: [`docs/extending.md` §2e](../extending.md).

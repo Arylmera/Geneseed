@@ -1,6 +1,7 @@
 **{{PACK_PROCESS}}** — how a task is run.
 
 ### {{DOCTRINE:persist-insight}} Persist Insight
+<!-- note: summary: Durable decisions are recorded before the session ends — and rule or memory is the user's call. -->
 <!-- LEAN:begin -->
 When a session yields a durable decision, correction, non-obvious discovery, or
 architectural stance, record it before the session ends — through the rule {{SKILL}},
@@ -15,6 +16,7 @@ initiative.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:plan-before-acting}} Plan Before Acting
+<!-- note: summary: Write a short plan and keep a worklog for non-trivial tasks. -->
 <!-- LEAN:begin -->
 For any non-trivial task — more than a couple of steps, or touching several files
 — write a short numbered plan before executing, and keep a running worklog the
@@ -38,6 +40,7 @@ a risky step, lay down a recovery point — stash or branch — never an unconse
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:context-economy}} Context Economy
+<!-- note: summary: Treat the context window as scarce; locate, then read the slice. -->
 <!-- LEAN:begin -->
 Treat the context window as scarce. Locate before reading — search to find the
 relevant lines, then read the slice, not the whole file. Summarise long command
@@ -59,6 +62,7 @@ corrections, reset with a sharper prompt rather than piling on more.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:read-the-docs-first}} Read the Docs First
+<!-- note: summary: Read the project's own docs before changing a part. -->
 <!-- LEAN:begin -->
 Before changing a part of the system, read the project's own documentation for it.
 Most repositories keep this at the root — a `docs/`, `doc/`, `documentation/`, or
@@ -78,6 +82,7 @@ the stale page and fix it in the same change ({{DOCTRINE:documentation-in-step}}
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:consent-before-push}} Consent Before Push
+<!-- note: summary: Every commit and push needs explicit, repeated consent. -->
 <!-- LEAN:begin -->
 Recording and sharing code is consented, never unilateral. **Every** `git commit`
 and `git push` needs the user's **explicit acceptance**, on every branch, every
@@ -110,6 +115,7 @@ legitimate rewrite). The host gates both at the tool boundary.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:bound-the-loop}} Bound the Loop
+<!-- note: summary: Set a loop's exit before entering it; break out of thrashing. -->
 <!-- LEAN:begin -->
 Every autonomous loop needs an exit you set before you enter it. Before iterating —
 retrying, searching, generating-and-checking — fix the bounds: a cap on attempts, a
@@ -136,6 +142,7 @@ stalls, halt with a structured summary of what was tried, learned, and remains (
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:one-writer-per-file}} One Writer Per File
+<!-- note: summary: One writer per file: give each agent a write set, never overwrite a change you did not make. -->
 <!-- LEAN:begin -->
 When several {{AGENTS}} work on the same code — sub-{{AGENTS}}, a pipeline crew, a
 workflow fan-out, another session or tool in this checkout — each file has one writer at

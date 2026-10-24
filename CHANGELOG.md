@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Shared console building blocks.** `PageHeader` (one primary action), `EmptyState`, `DataTable`, `Stat`, `Bar`/`StackBar`, `Ring` and `Popover`, on a 7-step type scale, an 8-step spacing scale and named z-index layers. Pages adopt them in the next release.
+- **`global` is a documented rule scope.** The `rule` skill names `project`, `global` and `user`, and the console's scope select offers `global`. A scope it does not list is still kept as written.
+
+### Changed
+- **Rule summaries live next to their rules.** The one-line summary the Constitution page prints for each law and doctrine rule is now a `<!-- note: summary: … -->` line under the rule's heading in `src/`, served by the catalog; the page's own copy of the 40 summaries is gone. The text moved word for word, and installs are byte-identical. `doctor` checks one summary per rule, none orphaned.
+- **Destructive confirmations look destructive.** Forget, Retire, Restore, Stop server and discarding an unsaved edit use a danger button and put focus on Cancel. An error toast stays until you dismiss it.
+
+### Fixed
+- The danger button's text now meets WCAG AA on dark backgrounds in every flavour.
+- The Overview lenses' readiness ring follows the fleet verdict (capped at 65% when the fleet needs a look, 40% when it is in trouble), and the Constitution map and KPI strip use the voice's own tier names.
+
 ## [4.18.1] — 2026-10-24
 
 Patch: the web console's light mode meets WCAG AA, and console installs default to lean.

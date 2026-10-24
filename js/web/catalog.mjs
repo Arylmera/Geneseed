@@ -24,7 +24,7 @@ import { readText, withDiscardableStderr, isDir, isFile } from '../lib/fs.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
-import { loadKits, makeCfg } from '../build/source.mjs';
+import { SRC, loadKits, makeCfg, ruleCanon, ruleSummaries } from '../build/source.mjs';
 import { loadTheme } from '../build/render.mjs';
 
 /** A requested catalog section or item that does not exist. */
@@ -427,8 +427,7 @@ function configManifest(name, p) {
  *
  * ⚠ `laws` STAYS ONE SECTION FOR ALL THREE TIERS, and that is a decision rather than an
  * oversight. The console has ONE Constitution entry, not three, so a reader keeps the "read it
- * top to bottom" property; the id stays `laws` because `tests/helpers/cli_golden.mjs`
- * hard-requires `web/src/pages/Laws.jsx` and because a route rename buys nothing and costs a
+ * top to bottom" property; the id stays `laws` because a route rename buys nothing and costs a
  * redirect. The tier lives on the ITEM (`tier: 'ontology' | 'invariant' | 'doctrine'`), which
  * is where a consumer can act on it.
  */
@@ -445,17 +444,25 @@ export const SECTIONS = ['agents', 'skills', 'laws', 'memory', 'notebook', 'wiki
  * Names are ADDRESSES and the three shapes cannot collide: `ont:<slug>` carries a colon no
  * numeral has, an invariant is `[IVXLCDM]+`, a doctrine rule is `<pack>.<n>`. `apiItem`
  * resolves all three off the same list.
+ *
+ * `summary` is the rule's one-line Principle, read from this checkout's `src/` and joined by the
+ * address the canon renders now (`ruleSummaries`, `js/build/source.mjs`). `desc` stays empty:
+ * the search index reads `desc`, and the summary is display copy, not a description to match.
  */
 function constitutionItems(inv) {
+  const said = ruleSummaries(SRC);
+  const summary = new Map(ruleCanon(SRC).rules.map((r) => [
+    r.kind === 'LAW' ? r.label : `${r.pack}.${r.n}`, said.get(r.id) ?? '']));
   return [
     ...(inv.ontology ?? []).map((e) => ({ name: `ont:${e.id}`, title: e.title, desc: '',
       tier: 'ontology' })),
     ...inv.laws.map((e) => ({ name: e.num, title: `Rule ${e.num} — ${e.title}`, desc: '',
-      klass: e.klass ?? 'craft', tier: 'invariant' })),
+      summary: summary.get(e.num) ?? '', klass: e.klass ?? 'craft', tier: 'invariant' })),
     ...(inv.doctrines ?? []).flatMap((p) => p.rules.map((r) => ({
       name: `${r.pack}.${r.n}`,
       title: `Doctrine ${r.pack} ${r.n} — ${r.title}`,
       desc: '',
+      summary: summary.get(`${r.pack}.${r.n}`) ?? '',
       klass: r.klass ?? p.pack,
       tier: 'doctrine',
       pack: p.pack,

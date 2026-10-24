@@ -21,7 +21,11 @@ import { useConfirm } from './useConfirm.jsx'
 // `go(to)` on discard).
 // The one discard question: the leave-guard, Profile's View and Rules' Cancel all ask it.
 export const confirmDiscard = (confirm) =>
-  confirm('Discard your unsaved edit?', { title: 'Unsaved edit', confirmLabel: 'Discard' })
+  confirm('Discard your unsaved edit?', {
+    title: 'Unsaved edit',
+    confirmLabel: 'Discard',
+    tone: 'danger',
+  })
 
 const DEFAULT_CONFLICT = 'The file changed on disk — reloaded the fresh copy. Your draft is kept.'
 

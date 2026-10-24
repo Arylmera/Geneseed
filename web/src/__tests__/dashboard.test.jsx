@@ -103,6 +103,10 @@ describe('Dashboard', () => {
     await waitFor(() => expect(screen.getByText('Harness needs a look.')).toBeTruthy())
     expect(screen.getByText('Deployed')).toBeTruthy()
     expect(screen.queryByText('The Codex in force')).toBeNull()
+    // The ring is capped by that verdict: a warn fleet withholds the version and disk
+    // shares, so .40 deployed + .25 doctor = 65%, not the install's own 90%.
+    await waitFor(() => expect(screen.getByText('65')).toBeTruthy())
+    expect(screen.queryByText('90')).toBeNull()
   })
 
   // A fleet that failed is not "not answered yet": nothing vouches for the harness, so the

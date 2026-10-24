@@ -146,6 +146,33 @@ export function ruleCanon(src = SRC) {
 }
 
 /**
+ * RULE SUMMARIES — the one-line Principle the web console prints under each rule's name. It lives
+ * on the line directly under the rule's heading as `<!-- note: summary: <text> -->`, so the copy
+ * sits beside the rule it describes and moves with it; being an author note, `stripAuthorNotes`
+ * removes the whole line before any render, and no emit carries it. Read from the RAW text, apart
+ * from `ruleCanon`, so the render path pays nothing for it. `ruleSummaryProblems`
+ * (`js/inspect/checks-constitution.mjs`) is the gate: one summary per rule, in that place.
+ */
+export const SUMMARY_LINE_RE = /^<!--[ \t]*note:[ \t]*summary:[ \t]*(.*?)[ \t]*-->[ \t]*$/;
+/** Anything that LOOKS like a summary — the gate's net, wider than `SUMMARY_LINE_RE` on purpose. */
+export const SUMMARY_MARK_RE = /<!--[ \t]*note:[ \t]*summary:/;
+export function ruleSummaries(src = SRC) {
+  const out = new Map();
+  for (const [kind, , file] of canonFiles(src)) {
+    let text;
+    try { text = readRawText(file); } catch { continue; }
+    for (const m of text.matchAll(DECL_RE)) {
+      if (m[1] !== kind) continue;
+      const start = m.index + m[0].length + 1;
+      const end = text.indexOf('\n', start);
+      const s = SUMMARY_LINE_RE.exec(text.slice(start, end === -1 ? undefined : end));
+      if (s && !out.has(m[2])) out.set(m[2], s[1]);
+    }
+  }
+  return out;
+}
+
+/**
  * AUTHOR NOTES — `<!-- note: ... -->`, single or multi-line, is maintainer-only prose and must
  * never reach an agent (user decision 2026-10-11). Stripped here because `resolveRuleIds` is the
  * one function every text file threads through before a render sees it: `readSource` in

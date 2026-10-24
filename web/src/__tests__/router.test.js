@@ -117,7 +117,7 @@ describe('resolveRoute', () => {
 
 describe('PAGES', () => {
   // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
-  // its route stays #/laws (doctor reads web/src/pages/Laws.jsx by that name).
+  // its route stays #/laws.
   it('names the nine pages', () => {
     expect(PAGES).toEqual({
       overview: 'Overview',

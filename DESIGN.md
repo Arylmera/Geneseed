@@ -150,9 +150,9 @@ vault or a specific tool's hooks.
    | body | `### {{LAW:<id>}} <Principle>` in `src/laws/universal.md`; citations resolve by id, so no position rewires one | `### {{DOCTRINE:<id>}} <Principle>` in `src/doctrines/<pack>.md`; the number is its position | a new `src/doctrines/<pack>.md` with its `**Name** — lead line` |
    | themed title | `LEX_<ID>` in all 15 theme files | `DOC_<ID>` in all 15 theme files | `PACK_<NAME>` in all 15, plus each rule's `DOC_*` |
    | class | `LAW_CLASS` in `js/inspect/inventory.mjs`, one of the six in `LAW_CLASSES` | **none** — a doctrine rule's class *is* its pack, and there is no second taxonomy over it | — |
-   | console copy | a `LAW_META` row in `web/src/pages/Laws.jsx` (keyed by arabic number) | a `DOCTRINE_META` row in the same file (keyed `<pack>.<n>`) | one `DOCTRINE_META` row per rule |
+   | console copy | a `<!-- note: summary: … -->` line under the rule's heading | the same line under each rule's heading | one summary line per rule |
    | registration | the numeral is the registration | the number is the registration | the pack name in `PACK_ORDER`, `js/build/source.mjs` |
-   | renumber risk | none for citations (by id); `LAW_META`/`LAW_CLASS` are number-keyed and doctor-pinned, so append by preference | none for citations; `DOCTRINE_META`, exclusions and hook ledger keys are `<pack>.<n>` — append by preference | none |
+   | renumber risk | none for citations (by id); `LAW_CLASS` is number-keyed and doctor-pinned, so append by preference | none for citations; exclusions and hook ledger keys are `<pack>.<n>` — append by preference | none |
    | counts | README badge + the `N universal laws` prose, `SHIPPED.md`'s triple, the web onboarding copy | **none** — the console spends the `N_PACKS` / `N_PACKS_ACTIVE` / `N_DOCTRINE_RULES` count tokens, all computed at request time | none, same reason |
    | changelog | `CHANGELOG.md` | `CHANGELOG.md` | `CHANGELOG.md` |
 
@@ -163,9 +163,9 @@ vault or a specific tool's hooks.
    synonym. `--sync-themes` writes the template's placeholder and only *prints* which keys
    to restyle; a shipped placeholder passes every gate.
 
-   Almost all of it is gated, across six named checks in `js/inspect/checks-build.mjs` —
-   `themeParityProblems` (key parity across the voices), `lawMetaProblems` and
-   `doctrineMetaProblems` (the console's Principle column, in both directions),
+   Almost all of it is gated, across five named checks in `js/inspect/checks-build.mjs` —
+   `themeParityProblems` (key parity across the voices), `ruleSummaryProblems`
+   (one console summary per rule, none orphaned),
    `constitutionProblems` (rule ids declared, unique and never retired, `LEX_*` as an *equality*,
    the `DOC_*` vocabulary, the hook-gated addresses, and every `{{LAW:…}}`/`{{DOCTRINE:…}}`
    citation in `src/` — a citation by number is refused), and

@@ -6,11 +6,8 @@
 //
 // SPLIT OUT OF Laws.jsx RATHER THAN IMPORTED FROM IT. The Dashboard ships in the
 // app shell (it is the landing route, App.jsx says why), so a dashboard component
-// importing the Laws page would drag the whole ledger — its LAW_META and
-// DOCTRINE_META tables, its filters, its detail pane — into the chunk that must
-// paint first. And Laws.jsx cannot move: `js/inspect/checks-authoring.mjs` reads
-// that exact path for the LAW_META gate, and `tests/helpers/cli_golden.mjs`
-// hard-requires it. So the shared half moves out and the file stays put.
+// importing the Laws page would drag the whole ledger — its filters, its detail
+// pane — into the chunk that must paint first. So the shared half lives here.
 
 export const CAT_HUES = {
   security: 'oklch(0.74 0.085 45)',

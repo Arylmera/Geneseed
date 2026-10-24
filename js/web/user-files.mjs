@@ -195,7 +195,7 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
  *
  * REFUSED, NEVER REWRITTEN: a body line that `isRuleEdge` reads would truncate this rule and
  * could forge another rule's id, and a `|` in the scope or source would forge a metadata field. An
- * unknown scope (`global`, written by hand) is kept as written — coercing it to `project` made
+ * unknown scope (one written by hand, such as `team`) is kept as written — coercing it to `project` made
  * every Edit or Graduate silently change the user's rule.
  */
 function ruleFields(body) {

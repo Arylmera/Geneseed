@@ -428,7 +428,7 @@ test('the capability tables match the declared host capability', () => {
  * render (a broken `LEAN:end` marker) reddens this row alone, naming the rule and the footprint, with every
  * neighbouring row green. Deleting the same rule from `src/laws/universal.md` reddens NOTHING
  * here — `romans` is parsed from the file the render reads, so a source deletion moves both sides
- * together. This gates the RENDER, never the corpus; `doctor`'s LAW_CLASS and LAW_META arms are
+ * together. This gates the RENDER, never the corpus; `doctor`'s LAW_CLASS and rule-summary arms are
  * what notice a rule leaving the source.
  */
 // The numeral a law renders with is its POSITION in the file — written out here rather than

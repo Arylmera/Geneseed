@@ -109,6 +109,10 @@ export default function ConstitutionMap({ overview, dataRev }) {
   // both — and a rebuild (`dataRev`) refetches the roster instead of keeping the old one.
   const { data } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
   const laws = data?.items ?? null
+  // The tier nouns are the theme's, with the Laws page's own fallbacks.
+  const ontologyName = data?.nouns?.ontology || 'Ethos'
+  const lawsName = data?.nouns?.laws || 'Dictates'
+  const doctrinesName = data?.nouns?.doctrines || 'Doctrines'
 
   const root = useRef(null)
   // The pack discs may arrive before the map has scrolled into view; they then wait for
@@ -201,7 +205,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     y: 95,
     r: fitRadius(
       [
-        { t: 'Ethos', size: 12.5, dy: -7 },
+        { t: ontologyName, size: 12.5, dy: -7 },
         { t: `${counts.ontology ?? 0} sections`, size: 10, dy: 10 },
       ],
       11,
@@ -217,7 +221,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     y: 78,
     r: fitRadius(
       [
-        { t: 'Dictates', size: 12.5, dy: -6 },
+        { t: lawsName, size: 12.5, dy: -6 },
         { t: `${counts.laws ?? 0}`, size: 13, dy: 12 },
       ],
       11,
@@ -228,7 +232,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     y: 252,
     r: fitRadius(
       [
-        { t: 'Doctrines', size: 12.5, dy: -6 },
+        { t: doctrinesName, size: 12.5, dy: -6 },
         { t: `${counts.doctrines?.rules ?? 0}`, size: 13, dy: 12 },
       ],
       11,
@@ -348,10 +352,10 @@ export default function ConstitutionMap({ overview, dataRev }) {
         </text>
       </Node>
 
-      <Node hash="#/laws" part="sat" label={`Ethos: ${counts.ontology ?? 0} sections`}>
+      <Node hash="#/laws" part="sat" label={`${ontologyName}: ${counts.ontology ?? 0} sections`}>
         <circle cx={ontology.x} cy={ontology.y} r={ontology.r} className="cm-sat-disc" />
         <text x={ontology.x} y={ontology.y - 7} textAnchor="middle" className="cm-sat-name">
-          Ethos
+          {ontologyName}
         </text>
         <text x={ontology.x} y={ontology.y + 10} textAnchor="middle" className="cm-sat-num">
           {counts.ontology ?? 0} sections
@@ -361,10 +365,10 @@ export default function ConstitutionMap({ overview, dataRev }) {
         how it thinks, not a rule
       </text>
 
-      <Node hash="#/laws" part="sat" label={`Dictates: ${counts.laws ?? 0}, never broken`}>
+      <Node hash="#/laws" part="sat" label={`${lawsName}: ${counts.laws ?? 0}, never broken`}>
         <circle cx={invariants.x} cy={invariants.y} r={invariants.r} className="cm-sat-disc" />
         <text x={invariants.x} y={invariants.y - 6} textAnchor="middle" className="cm-sat-name">
-          Dictates
+          {lawsName}
         </text>
         <text x={invariants.x} y={invariants.y + 12} textAnchor="middle" className="cm-sat-big">
           {counts.laws ?? 0}
@@ -382,11 +386,11 @@ export default function ConstitutionMap({ overview, dataRev }) {
       <Node
         hash="#/laws"
         part="sat"
-        label={`Doctrines: ${counts.doctrines?.rules ?? 0} rules chosen at build`}
+        label={`${doctrinesName}: ${counts.doctrines?.rules ?? 0} rules chosen at build`}
       >
         <circle cx={doctrines.x} cy={doctrines.y} r={doctrines.r} className="cm-sat-disc" />
         <text x={doctrines.x} y={doctrines.y - 6} textAnchor="middle" className="cm-sat-name">
-          Doctrines
+          {doctrinesName}
         </text>
         <text x={doctrines.x} y={doctrines.y + 12} textAnchor="middle" className="cm-sat-big">
           {counts.doctrines?.rules ?? 0}

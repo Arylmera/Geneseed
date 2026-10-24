@@ -10,9 +10,9 @@ import ActivityFeed from './ActivityFeed.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
 // Direction A · Status — the hero readiness ring, KPIs, genome, and activity.
-export default function StatusView({ overview, sigil, setup, jobs, lens, onAction }) {
+export default function StatusView({ overview, sigil, setup, jobs, lens, dataRev, onAction }) {
   const headline = headlineFor(overview, lens?.tone)
-  const rv = readiness(overview, setup)
+  const rv = readiness(overview, setup, lens?.tone)
 
   return (
     <>
@@ -74,7 +74,7 @@ export default function StatusView({ overview, sigil, setup, jobs, lens, onActio
         </div>
       </div>
 
-      <KpiStrip overview={overview} />
+      <KpiStrip overview={overview} dataRev={dataRev} />
 
       <div className="grid split-status">
         <div className="card pad-lg">

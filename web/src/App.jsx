@@ -321,7 +321,7 @@ export default function App() {
             onCancel={cancelJob}
           />
         </div>
-        {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
+        <Toast toast={toast} onClose={() => setToast(null)} />
         {booting && (
           <BootSplash
             ready={!!overview || !!overviewError}

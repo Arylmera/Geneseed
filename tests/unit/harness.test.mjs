@@ -28,8 +28,7 @@ import {
 } from '../../js/hosts/memory-files.mjs';
 import { discoverContext, resolveContextSets } from '../../js/hosts/hooks-context.mjs';
 import {
-  countTableProblems, proseMirrorProblems, lawMetaProblems, authoringProblems,
-  doctrineMetaProblems,
+  countTableProblems, proseMirrorProblems, authoringProblems, ruleSummaryProblems,
 } from '../../js/inspect/checks-authoring.mjs';
 import { themeParityProblems, renderedProblems, descriptionProblems } from '../../js/inspect/checks-build.mjs';
 import {
@@ -39,8 +38,8 @@ import { memoryFactCount } from '../../js/inspect/status.mjs';
 import { stripSkillBodyLinks, agentDescription } from '../../js/hosts/native.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
-import { LAW_CLASS, LAW_CLASSES } from '../../js/inspect/inventory.mjs';
-import { PLUGIN_SRC, ROOT, SRC } from '../../js/build/source.mjs';
+import { LAW_CLASS } from '../../js/inspect/inventory.mjs';
+import { PLUGIN_SRC, ROOT, SRC, ruleSummaries, stripAuthorNotes } from '../../js/build/source.mjs';
 import { relPosix } from '../../js/lib/text.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
@@ -1371,151 +1370,93 @@ test('the count gate really reads the onboarding pages the prose arms are about'
 });
 
 // ---------------------------------------------------------------------------------------------
-// LAW_META — the web Laws ledger's per-rule Principle, copy that exists nowhere else.
+// Rule summaries — the console's per-rule Principle, one `<!-- note: summary: -->` line under each
+// rule's heading in src/, copy that exists nowhere else.
 
-/** The law ids in declaration order. Derived, never transcribed. */
-const lawIds = () => [...fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8')
-  .matchAll(/^### \{\{LAW:([a-z0-9-]+)\}\} /gm)].map((m) => m[1]);
-/** The numerals those laws render with — their positions, written out. */
-const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-/** The laws as `ruleCanon` hands them to the gate: position, rendered numeral, id. */
-const lawRules = (ids = lawIds()) => ids.map((id, i) => ({ n: i + 1, label: ROMANS[i], id }));
+const LAWS_MD = 'src/laws/universal.md';
+const CRAFT_MD = 'src/doctrines/craft.md';
+const lawsText = () => fs.readFileSync(path.join(SRC, 'laws', 'universal.md'), 'utf8');
+const SEALED = '<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n';
 
-test('every law carries a LAW_META principle', () => {
-  // The live check against the real tree. Laws XXXVI and XXXVII shipped without one and
-  // rendered with a blank description; this is the gate for it.
-  assert.deepEqual(lawMetaProblems(lawRules(), LAW_CLASS, LAW_CLASSES), []);
+/** `text` with `find` replaced, refusing a `find` that is not there exactly once. */
+const plant = (text, find, put) => {
+  assert.equal(text.split(find).length, 2, `'${find.trim()}' is not in the file exactly once — re-site this fault`);
+  return text.replace(find, put);
+};
+
+test('every rule carries one summary, and the reader hands back the shipped text', () => {
+  assert.deepEqual(ruleSummaryProblems(), []);
+  const said = ruleSummaries();
+  // 9 laws and 31 doctrine rules — 31 since comms 5 (mark the ask) was appended on 2026-10-23.
+  assert.equal(said.size, 40, `${said.size} summaries read — expected 40`);
+  assert.equal(said.get('sealed-secrets'), 'Secrets never touch tracked files; only .env or a manager.');
+  // ⚠ THE EMITS MUST NOT CHANGE. The strip takes the whole line, newline included, so the heading
+  // still sits directly on its LEAN block — a leftover blank line would move every install's bytes.
+  const stripped = stripAuthorNotes(lawsText());
+  assert.ok(!stripped.includes('summary:'), 'a summary line survived the author-note strip');
+  assert.ok(stripped.includes('### {{LAW:sealed-secrets}} Sealed Secrets\n<!-- LEAN:begin -->\n'));
 });
 
-test('the LAW_META gate flags a row pinned to a different rule than its number now holds', () => {
-  // THE RENUMBER DEFECT, SEEN FROM THE CONSOLE. Removing Laws IX and XI left row 9 describing
-  // the retired External Gate while rule IX became Echo the Intent — same class chip on both
-  // sides of that swap, so only the pin could tell. Shift the ids by one and every row is wrong.
-  const ids = lawIds();
-  const shifted = [...ids.slice(1), ids[0]];
-  const problems = lawMetaProblems(lawRules(shifted), LAW_CLASS, LAW_CLASSES);
-  assert.ok(problems.some((x) => x.includes("LAW_META[1] is pinned to 'sealed-secrets'")
-    && x.includes(`'${shifted[0]}'`)), JSON.stringify(problems));
+test('the summary gate flags a rule with none', () => {
+  const problems = withFault({ [LAWS_MD]: plant(lawsText(), SEALED, '') },
+    (root) => gate(root, 'm.ruleSummaryProblems()'));
+  assert.ok(problems.some((x) => x.includes("rule I 'sealed-secrets' has no summary")),
+    JSON.stringify(problems));
 });
 
-test('the LAW_META gate reads the real literal, wrapped rows included', () => {
-  // WHY THIS SUBSUMES THE REFERENCE'S SEPARATE PRETTIER TEST, and why it states a precondition
-  // the reference never had to. `test_law_meta_row_survives_prettier_wrapping` fed the row
-  // regex a hand-written reflowed literal, because a row too long for prettier's print width
-  // is broken across lines with a magic trailing comma — and when the regex could not read
-  // that form, `prettier --write` silently dropped a law out of the gate's view and
-  // `format:check` and the gate demanded contradictory formatting of one file.
-  //
-  // MEASURED: the shipped `Laws.jsx` CONTAINS such a row (rule 6, reflowed across four lines).
-  // So the live gate above already exercises the wrapped form — if the regex lost it, rule 6
-  // would report "has no row in LAW_META" and `every law carries a LAW_META principle` would
-  // be red. The separate test is redundant AGAINST THIS TREE, which is a different thing from
-  // redundant: reword rule 6 shorter, prettier unwraps it, and the coverage evaporates with no
-  // test failing. So the precondition is asserted here rather than assumed, and the regex is
-  // never reached for directly — a private constant stays private.
-  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
-  const block = /^const LAW_META = \{$([\s\S]*?)^\}/m.exec(text);
-  assert.ok(block, 'LAW_META literal not found in Laws.jsx');
-  const rows = block[1].split(/\n(?=\s*\d+:)/).filter((s) => s.trim());
-  assert.equal(rows.length, lawIds().length,
-    'LAW_META has a different number of rows than universal.md has laws');
-  assert.ok(rows.some((r) => r.trim().split('\n').length > 1),
-    'no LAW_META row is reflowed across lines any more, so the check above has stopped '
-    + 'covering the prettier-wrapped form. Restore a wrapped row, or gate the row regex '
-    + 'directly against a crafted literal.');
+test('the summary gate flags a rule with two', () => {
+  const problems = withFault({ [LAWS_MD]: plant(lawsText(), SEALED, SEALED + SEALED) },
+    (root) => gate(root, 'm.ruleSummaryProblems()'));
+  assert.ok(problems.some((x) => x.includes("rule I 'sealed-secrets' has 2 summary lines")),
+    JSON.stringify(problems));
 });
 
-test('the LAW_META gate flags a missing row, a stale row and a class disagreement', () => {
-  const klass = { I: 'security', II: 'process', XL: 'craft' };
-  const I = { n: 1, label: 'I', id: lawIds()[0] };
-  // XL has no LAW_META row at all — the exact Law XXXVI/XXXVII failure.
-  assert.ok(lawMetaProblems([I, { n: 40, label: 'XL', id: 'forty' }], klass, LAW_CLASSES)
-    .some((x) => x.includes('XL') && x.includes('LAW_META')));
-  // Rule 2 exists in LAW_META but universal.md no longer carries it.
-  assert.ok(lawMetaProblems([I], klass, LAW_CLASSES)
-    .some((x) => x.includes('lists rule 2')));
-  // LAW_META's class must agree with the server-side LAW_CLASS.
-  assert.ok(lawMetaProblems([I], { I: 'comms' }, LAW_CLASSES)
-    .some((x) => x.includes('LAW_META[1]') && x.includes('comms')));
+test('the summary gate flags a summary that describes no rule', () => {
+  const problems = withFault({ [LAWS_MD]: `<!-- note: summary: Stray. -->\n${lawsText()}` },
+    (root) => gate(root, 'm.ruleSummaryProblems()'));
+  assert.deepEqual(problems, ['[authoring] laws/universal.md: a summary line sits outside any rule '
+    + 'declaration — it describes no rule']);
 });
 
-// ---------------------------------------------------------------------------------------------
-// DOCTRINE_META — the same column, one tier over and 23 rules wide.
-
-/** Each doctrine rule's address — pack plus position — and id. Derived, never transcribed. */
-const doctrineRules = () => ['craft', 'rigor', 'ops', 'process', 'comms'].flatMap((p) =>
-  [...fs.readFileSync(path.join(SRC, 'doctrines', `${p}.md`), 'utf8')
-    .matchAll(/^### \{\{DOCTRINE:([a-z0-9-]+)\}\} /gm)].map((m, i) => ({ addr: `${p}.${i + 1}`, id: m[1] })));
-const doctrineAddrs = () => doctrineRules().map((r) => r.addr);
-
-test('every doctrine rule carries a DOCTRINE_META principle', () => {
-  const addrs = doctrineAddrs();
-  // 24 since 2026-09: Law IX retired in place into rigor 5, so the doctrine roll grew by one.
-  // 25 since one writer per file was appended as process 8 (process 7 since 2026-09-27), later
-  // the same month.
-  // 27 since craft 7 (one writer per value) and ops 7 (serialize against a rationed resource)
-  // were appended on 2026-09-23.
-  // 28 since the comms pack (2026-09-27): process 7 (reference codes) MOVED to comms 1, which
-  // leaves the total alone, and comms 2 (structure beside prose) is new.
-  // 29 since comms 3 (declare the judgment calls) was appended on 2026-10-09.
-  // 30 since comms 4 (Simplified Technical English) was appended on 2026-10-22.
-  // 31 since comms 5 (mark the ask) was appended on 2026-10-23.
-  assert.equal(addrs.length, 31, `${addrs.length} rules parsed — expected 31`);
-  assert.deepEqual(doctrineMetaProblems(addrs, doctrineRules().map((r) => r.id)), []);
+test('the summary gate flags an empty summary', () => {
+  const problems = withFault({ [LAWS_MD]: plant(lawsText(), SEALED, '<!-- note: summary: -->\n') },
+    (root) => gate(root, 'm.ruleSummaryProblems()'));
+  assert.ok(problems.some((x) => x.includes("rule I 'sealed-secrets' has an empty summary")),
+    JSON.stringify(problems));
 });
 
-test('the DOCTRINE_META gate reads the real literal, wrapped rows included', () => {
-  // SAME PRECONDITION AS LAW_META'S, and it bites harder here: 23 rows at printWidth 100 with
-  // a quoted key put SEVERAL over the line, so the wrapped form is not a rare case in this
-  // literal — it is most of the long ones. A row regex that could not span newlines would lose
-  // exactly the rules whose principle is longest, silently.
-  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
-  const block = /^const DOCTRINE_META = \{$([\s\S]*?)^\}/m.exec(text);
-  assert.ok(block, 'DOCTRINE_META literal not found in Laws.jsx');
-  // The split anchor has to be the KEY and not just a quote: a wrapped row's continuation lines
-  // are themselves quoted strings, so `\n(?=\s*['"])` cuts one row into three and this cell
-  // would then fail on a perfectly good literal — which it did, on the first run.
-  const rows = block[1].split(/\n(?=\s*['"][a-z]+\.\d+['"]:)/).filter((s) => s.trim());
-  assert.equal(rows.length, doctrineAddrs().length,
-    'DOCTRINE_META has a different number of rows than the pack files have rules');
-  assert.ok(rows.some((r) => r.trim().split('\n').length > 1),
-    'no DOCTRINE_META row is reflowed across lines any more, so the check above has stopped '
-    + 'covering the prettier-wrapped form. Restore a wrapped row, or gate the row regex '
-    + 'directly against a crafted literal.');
+// ONE DEFINITION: the gate holds a line to the reader's own regex, as written. An indented or a
+// wrapped summary is one `ruleSummaries` cannot read, so the gate calls it malformed — not fine,
+// and not empty.
+for (const [shape, put] of [
+  ['an indented', `  ${SEALED}`],
+  ['a wrapped', '<!-- note: summary: Secrets never touch tracked files;\n  only .env or a manager. -->\n'],
+]) {
+  test(`the summary gate flags ${shape} summary line as malformed`, () => {
+    const problems = withFault({ [LAWS_MD]: plant(lawsText(), SEALED, put) },
+      (root) => gate(root, 'm.ruleSummaryProblems()'));
+    assert.deepEqual(problems, ["[authoring] laws/universal.md: rule I 'sealed-secrets' has a "
+      + "malformed summary line — it must be one unindented line, '<!-- note: summary: <text> -->', "
+      + 'the only shape ruleSummaries reads']);
+  });
+}
+
+test('the summary gate ends a rule at any heading, not only a rule heading', () => {
+  // A summary under a `## ` after the last rule describes no rule; it is not that rule's second.
+  const problems = withFault({ [LAWS_MD]: `${lawsText()}\n## Appendix\n<!-- note: summary: Stray. -->\n` },
+    (root) => gate(root, 'm.ruleSummaryProblems()'));
+  assert.deepEqual(problems, ['[authoring] laws/universal.md: a summary line sits outside any rule '
+    + 'declaration — it describes no rule']);
 });
 
-test('the DOCTRINE_META gate flags a missing row, a stale row and a wrong pack', () => {
-  // A rule with no row at all — the failure that shipped twice on the invariants side, and
-  // has 23 places to happen here.
-  assert.ok(doctrineMetaProblems(['craft.1', 'craft.99'])
-    .some((x) => x.includes('craft.99') && x.includes('DOCTRINE_META')));
-  // A row for a rule no pack file defines: the residue a deleted rule leaves in the console.
-  assert.ok(doctrineMetaProblems(['craft.1'])
-    .some((x) => x.includes('lists craft.2')));
-  // ⚠ THE ARM WITH NO INVARIANT EQUIVALENT. A doctrine rule's class IS its pack, so this is an
-  // equality rather than a vocabulary check — and it is what catches a row pasted from the
-  // pack above it, which would render under the wrong colour and the wrong chip while every
-  // count stayed right.
-  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
-  const swapped = text.replace(/('ops\.1': \[\s*)'ops',/, "$1'craft',");
-  assert.notEqual(swapped, text, 'the ops.1 row has moved — re-site this fault');
-  const problems = withFault({ 'web/src/pages/Laws.jsx': swapped },
-    (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(problems.some((x) => x.includes("DOCTRINE_META['ops.1']") && x.includes("'ops'")),
-    `a doctrine row filed under the wrong pack went unflagged: ${JSON.stringify(problems)}`);
-});
-
-test('the DOCTRINE_META gate flags the literal going missing entirely', () => {
-  // The whole-literal arm, which the invariants' gate has and which is the one a page rewrite
-  // trips: `lawMetaProblems` would still be satisfied by a Laws.jsx that kept LAW_META and
-  // dropped DOCTRINE_META, and the doctrine rows would render with blank principles.
-  const text = fs.readFileSync(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx'), 'utf8');
-  const gone = text.replace('const DOCTRINE_META = {', 'const DOCTRINE_META_RENAMED = {');
-  assert.notEqual(gone, text, 'the DOCTRINE_META literal has moved — re-site this fault');
-  const problems = withFault({ 'web/src/pages/Laws.jsx': gone },
-    (root) => gate(root, 'm.constitutionProblems()'));
-  assert.ok(problems.some((x) => x.includes('DOCTRINE_META literal not found')),
-    `a missing DOCTRINE_META went unflagged: ${JSON.stringify(problems)}`);
+test('the summary gate flags a doctrine summary moved off its heading', () => {
+  // `ruleSummaries` reads only the line under the heading, so one line lower is a blank Principle.
+  const text = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
+  const line = '<!-- note: summary: If it repeats, make it a script or skill; reuse first. -->\n';
+  const moved = plant(text, `${line}<!-- LEAN:begin -->\n`, `<!-- LEAN:begin -->\n${line}`);
+  const problems = withFault({ [CRAFT_MD]: moved }, (root) => gate(root, 'm.ruleSummaryProblems()'));
+  assert.ok(problems.some((x) => x.includes("rule craft 1 'automate-repetition' summary is not "
+    + 'directly under its heading')), JSON.stringify(problems));
 });
 
 // ---------------------------------------------------------------------------------------------

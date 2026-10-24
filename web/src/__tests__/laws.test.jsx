@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The Constitution page had NO component test before this file — its only gate was doctor's
-// LAW_META parity, which reads a literal and knows nothing about what renders. So the claims
+// parity check on its principle table, which knew nothing about what renders. So the claims
 // here are the ones a server-side gate structurally cannot make: that all three tiers reach the
 // DOM, that a pack which is not built in is visible rather than absent, and that each of the
 // three address shapes deep-links to the right row.
@@ -291,6 +291,24 @@ describe('Constitution page', () => {
       expect(container.querySelector('.law-srcline').textContent).toContain(src)
       unmount()
     }
+  })
+
+  it('prints each rule summary the server sends under its name', async () => {
+    // The summary lives in src/ beside each rule and arrives on the item; the page holds no copy
+    // of its own, so a fixture string the page could not have known is the proof.
+    api.catalog.mockResolvedValue({
+      section: 'laws',
+      items: [
+        { ...INV[0], summary: 'Fixture principle I' },
+        INV[1],
+        { ...DOC[0], summary: 'Fixture principle craft 1' },
+      ],
+    })
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(screen.getByText('Fixture principle I')).toBeTruthy())
+    expect(screen.getByText('Fixture principle craft 1')).toBeTruthy()
+    // A rule the server sends no summary for prints none, rather than a blank line.
+    expect(container.querySelector('[data-addr="II"] .law-princ')).toBeNull()
   })
 
   it('reads an older server that sends no tier at all', async () => {

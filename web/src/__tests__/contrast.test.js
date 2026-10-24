@@ -427,6 +427,52 @@ describe('light/dark contrast contract', () => {
     '#main:focus': 'programmatic focus target (tabIndex -1) for the skip link, not a control',
   }
 
+  // The danger button paints its label on the filled --bad. Measured on whatever the rule
+  // says, so the old hard-coded #fff is red here on the dark flavours. Flavour x mode, not
+  // CASES: no accent source writes --bad (accents.js only moves --warn).
+  const dangerRules = rules.filter((r) => r.at === null && r.selectors.includes('.btn.danger'))
+  const dangerColour = dangerRules.flatMap((r) => r.decls.filter(([p]) => p === 'color'))
+
+  it('9: the .btn.danger label holds AA on the filled --bad', () => {
+    expect(dangerColour.length, '.btn.danger color declarations').toBe(1)
+    const fails = []
+    const value = dangerColour[0][1]
+    for (const f of FLAVOURS)
+      for (const m of MODES) {
+        const map = flavourMap(f, m)
+        pair(
+          fails,
+          `${f} ${m}`,
+          `.btn.danger ${value}`,
+          resolveValue(value, map),
+          '--bad',
+          tok(map, '--bad'),
+          AA_TEXT,
+        )
+      }
+    expect(report(fails)).toBe('')
+  })
+
+  it('9b: .btn.danger reads --bad-ink, and no flavour primary-button rule paints over it', () => {
+    expect(dangerColour.map(([, v]) => v)).toEqual(['var(--bad-ink)'])
+    // Each flavour's primary-button rule (glow, atlas gradient) matches .btn.danger too unless
+    // it excludes it: an accent halo would make the danger button read as the primary one.
+    const fails = []
+    // A rule that only resets (`box-shadow: none`, the disabled state) paints nothing.
+    const paints = (r) =>
+      r.decls.some(([p, v]) => (p === 'box-shadow' || p === 'background-image') && v !== 'none')
+    let matched = 0
+    for (const r of rules)
+      for (const s of r.selectors)
+        if (/^\.fl-\w+ \.btn:not\(\.ghost\)/.test(s) && paints(r)) {
+          matched++
+          if (!s.includes(':not(.danger)')) fails.push(s)
+        }
+    // One per flavour at least, so a renamed selector cannot make this pass on an empty set.
+    expect(matched, 'flavour primary-button rules found').toBeGreaterThanOrEqual(FLAVOURS.length)
+    expect(report(fails)).toBe('')
+  })
+
   it('8: no :focus rule removes the outline', () => {
     const fails = []
     for (const r of rules) {

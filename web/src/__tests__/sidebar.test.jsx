@@ -49,7 +49,7 @@ describe('Sidebar', () => {
   })
 
   // Each count is a sum the overview already holds, written out:
-  //   Constitution = 4 ethos + 11 invariants (retired keep their number) + 28 doctrine = 43
+  //   Constitution = 4 ethos + 11 invariants (counts.laws) + 28 doctrine = 43
   //   Library      = 52 skills + 18 agents + 2 memory + 2 notebook + 0 wiki + 2 setup = 76
   //   Loops        = templates only (counts.loops), not bricks = 3
   //   Installs     = active of detected, from the installs list = 1/3

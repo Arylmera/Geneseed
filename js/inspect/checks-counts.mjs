@@ -14,7 +14,6 @@ import { effectiveTheme, renderFile } from '../build/render.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
 import { readText } from '../lib/fs.mjs';
 import { formatRepr } from '../lib/json.mjs';
-import { lawMetaProblems } from './checks-constitution.mjs';
 import { LAW_CLASS, LAW_CLASSES, SKILL_CLASS } from './inventory.mjs';
 import { globSorted, has, isDir, isFile, srcStems } from './scan.mjs';
 import { existsSync, readdirSync } from 'node:fs';
@@ -183,11 +182,10 @@ export function countTableProblems() {
     problems.push(`[authoring] SKILL_CLASS lists '${stale}' but no skills/${stale}.md exists`);
   }
 
-  // The numerals the laws RENDER with — positional, off the canon — because LAW_CLASS and the
-  // console's LAW_META are keyed the way the rendered catalogue numbers them.
+  // The numerals the laws RENDER with — positional, off the canon — because LAW_CLASS is keyed
+  // the way the rendered catalogue numbers them.
   const canonRules = ruleCanon(SRC).rules;
-  const lawRules = canonRules.filter((r) => r.kind === 'LAW');
-  const lawNums = lawRules.map((r) => r.label);
+  const lawNums = canonRules.filter((r) => r.kind === 'LAW').map((r) => r.label);
   for (const num of lawNums) {
     if (!has(LAW_CLASS, num)) {
       problems.push(`[authoring] laws/universal.md rule ${num} has no class in LAW_CLASS`);
@@ -200,7 +198,6 @@ export function countTableProblems() {
         + `class ${formatRepr(LAW_CLASSES)}`);
     }
   }
-  problems.push(...lawMetaProblems(lawRules, LAW_CLASS, LAW_CLASSES));
 
   // WHAT SHIPS, NOT WHAT IS FLAT. A folder skill (`src/skills/<name>/SKILL.md`, vendored with
   // its scripts or references) ships exactly like a flat one, so the badge, the README list and

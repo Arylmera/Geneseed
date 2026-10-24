@@ -17,7 +17,7 @@ export default function ServerControl() {
   const stop = async () => {
     const ok = await confirm(
       'Stop the local Geneseed server? The console goes offline until you start it again.',
-      { title: 'Stop the server?', confirmLabel: 'Stop server' },
+      { title: 'Stop the server?', confirmLabel: 'Stop server', tone: 'danger' },
     )
     if (!ok) return
     setError(null)

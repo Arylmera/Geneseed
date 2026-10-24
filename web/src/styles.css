@@ -65,6 +65,7 @@
   --good: #4ED888;
   --warn: #E8B53D;
   --bad:  #FF5C57;
+  --bad-ink: #1A0605;   /* text on a filled --bad; each .fl-* block sets its own */
 
   --r-xs: 4px;
   --r-sm: 7px;
@@ -85,6 +86,45 @@
   --font-display: 'Hanken Grotesk', system-ui, sans-serif;
   --font-ui: 'Hanken Grotesk', system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  /* Scales for the shared primitives (components/PageHeader, DataTable, Stat…). Pages still
+     carry their own literal sizes; they move onto these one page at a time, not by codemod.
+     Type: seven steps, 11px the UI floor (nothing smaller is legible as UI text). The
+     28px top step is the page title; a larger hero size stays local to the one page that
+     has a hero. */
+  --fs-2xs: 11px;
+  --fs-xs:  12px;
+  --fs-sm:  13px;
+  --fs-md:  14px;
+  --fs-lg:  17px;
+  --fs-xl:  22px;
+  --fs-2xl: 28px;
+  /* Spacing: a 4px grid. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 48px;
+  /* Stacking layers, low to high. One ladder, so a new overlay picks a layer instead of a
+     number. Popovers sit above the mobile drawer and its scrim (the voice popover opened
+     from the drawer must not open under it); the toast sits above the drawer it used to
+     tie with; a modal above everything but the boot splash. A layer orders siblings in ONE
+     stacking context: a popover nested in the sticky topbar (.appearance-pop) is still
+     capped by the topbar's own --z-sticky. */
+  --z-page:      1;
+  --z-sticky:    6;
+  --z-spotlight: 12;
+  --z-console:   20;
+  --z-tabbar:    25;
+  --z-scrim:     39;
+  --z-drawer:    40;
+  --z-pop:       45;
+  --z-toast:     50;
+  --z-modal:     60;
+  --z-splash:    100;
 }
 
 * { box-sizing: border-box; }
@@ -114,7 +154,7 @@ button { font-family: inherit; }
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* Off-screen until focused, then a real button over the top-left corner. */
-.skip-link { position: fixed; top: 8px; left: -999px; z-index: 100;
+.skip-link { position: fixed; top: 8px; left: -999px; z-index: var(--z-splash);
   padding: 10px 16px; border-radius: 10px; border: 1px solid var(--accent);
   background: var(--surface); color: var(--text); text-decoration: none;
   font-size: 13px; }
@@ -135,7 +175,7 @@ button { font-family: inherit; }
 }
 
 /* ============================ APP SHELL ================================= */
-.app { position: relative; z-index: 1; display: grid; color: var(--text); background: var(--bg);
+.app { position: relative; z-index: var(--z-page); display: grid; color: var(--text); background: var(--bg);
   grid-template-columns: var(--rail-w) 1fr; min-height: 100%; }
 
 /* Scrollbars, themed once for every scroller (the page, the library list, the
@@ -154,7 +194,7 @@ button { font-family: inherit; }
 .col { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
 
 /* ---- topbar ---- */
-.topbar { position: sticky; top: 0; z-index: 6; height: var(--topbar-h);
+.topbar { position: sticky; top: 0; z-index: var(--z-sticky); height: var(--topbar-h);
   display: flex; align-items: center; gap: 16px; padding: 0 26px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
@@ -173,7 +213,7 @@ button { font-family: inherit; }
 
 /* ---- spotlight (global search dropdown) ---- */
 .spotlight { position: absolute; top: calc(100% + 6px); right: 0; width: 380px;
-  max-height: 60vh; overflow-y: auto; z-index: 12;
+  max-height: 60vh; overflow-y: auto; z-index: var(--z-spotlight);
   background: var(--surface); color: var(--text);
   border: 1px solid var(--line); border-radius: var(--r-sm);
   box-shadow: 0 14px 40px rgba(0,0,0,.32);
@@ -567,7 +607,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .sw-toggle.on::after { transform: translateX(16px); background: var(--accent); }
 
 /* ============================ CONSOLE DRAWER ========================= */
-.console { position: fixed; left: var(--rail-w); right: 0; bottom: 0; z-index: 20;
+.console { position: fixed; left: var(--rail-w); right: 0; bottom: 0; z-index: var(--z-console);
   background: linear-gradient(180deg, var(--surface), var(--bg-2));
   border-top: 1px solid var(--line-2); box-shadow: 0 -16px 40px -20px rgba(0,0,0,.8);
   display: flex; flex-direction: column;
@@ -615,7 +655,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
    below the viewport.) max-height: 60vh keeps it inside the screen even with
    all 14 voices loaded. */
 .pop {
-  position: fixed; bottom: 72px; left: 14px; width: 204px; z-index: 30;
+  position: fixed; bottom: 72px; left: 14px; width: 204px; z-index: var(--z-pop);
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: 8px; max-height: 60vh; overflow: auto;
 }
@@ -693,13 +733,17 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 
 /* ============================ APP EXTRAS (not in prototype) ============== */
 /* toast */
-.toast { position: fixed; right: 18px; bottom: 56px; z-index: 40; max-width: 380px;
+.toast { position: fixed; right: 18px; bottom: 56px; z-index: var(--z-toast); max-width: 380px;
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: 14px 16px; font-size: 13px; }
 /* enters from just below its resting place; @starting-style needs no JS and no library,
    and the global reduced-motion rule already collapses the transition to nothing */
 .toast { transition: opacity .22s cubic-bezier(.22,1,.36,1), transform .22s cubic-bezier(.22,1,.36,1); }
 @starting-style { .toast { opacity: 0; transform: translateY(10px); } }
+/* The always-mounted live region around it (components/Toast.jsx). Fixed, so as a direct
+   child of the `.app` grid it takes no grid cell; and since fixed makes a stacking context,
+   it carries the toast's layer itself, or the toast would sink under the topbar. */
+.toast-region { position: fixed; z-index: var(--z-toast); }
 .toast.err { border-color: color-mix(in srgb, var(--bad) 45%, var(--line-2)); }
 .toast.info { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); }
 
@@ -985,6 +1029,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: var(--good);
   --warn-text: var(--warn);
   --bad-text:  var(--bad);
+  --bad-ink:   #1A0605;   /* text on a filled --bad (.btn.danger) */
   --r-xs: 4px;
   --r-sm: 8px;
   --r-md: 12px;
@@ -1013,6 +1058,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: #11724D;
   --warn-text: #8B580E;
   --bad-text:  #B1323B;
+  --bad-ink:   #FFFFFF;
 }
 /* Cultivar — the calm default anchor: clinical, quiet, confident. Refined, not loud. */
 /* Display headings: geometric sans with a hair of negative tracking for a clean, set look. */
@@ -1023,7 +1069,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .fl-cultivar .card { background: var(--surface); box-shadow: inset 0 1px 0 var(--accent-soft), var(--shadow-card); }
 /* Primary button: flat accent fill with a faint inset top highlight and a low accent
    underglow — restrained, the quiet "lit" of the default. Ghost/soft excluded. */
-.fl-cultivar .btn:not(.ghost):not(.soft) {
+.fl-cultivar .btn:not(.ghost):not(.soft):not(.danger) {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 6px 16px -10px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 /* Badges adopt the soft pill radius so status chips match the 12px family. */
@@ -1061,6 +1107,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: var(--good);
   --warn-text: var(--warn);
   --bad-text:  #E96A62;
+  --bad-ink:   #160806;
   --r-xs: 0px;
   --r-sm: 0px;
   --r-md: 0px;
@@ -1089,6 +1136,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: #187148;
   --warn-text: #88590F;
   --bad-text:  #AF3A39;
+  --bad-ink:   #FFFFFF;
 }
 /* Amber-phosphor instrument panel: all-mono, zero-radius, no shadow — depth
    comes from hairline rules, not fills. Numbers, not chrome. */
@@ -1100,7 +1148,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 /* Square readout buttons: mono, uppercase, wide track, no rounding. */
 .fl-operator .btn { border-radius: 0; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .1em; }
 /* Primary action reads as a lit amber plate — top-edge phosphor highlight, no glow. */
-.fl-operator .btn:not(.ghost):not(.soft) { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent-ink) 22%, transparent); }
+.fl-operator .btn:not(.ghost):not(.soft):not(.danger) { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent-ink) 22%, transparent); }
 /* Hard-edged status pills to match the panel. */
 .fl-operator .badge { border-radius: 0; text-transform: uppercase; letter-spacing: .06em; }
 /* Atmosphere: tight amber phosphor scanlines, ink-relative so they survive light. */
@@ -1130,6 +1178,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: var(--good);
   --warn-text: var(--warn);
   --bad-text:  #F35666;
+  --bad-ink:   #19040A;
   --r-xs: 2px;
   --r-sm: 2px;
   --r-md: 2px;
@@ -1158,6 +1207,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: #0F6F47;
   --warn-text: #86570E;
   --bad-text:  #AB3837;
+  --bad-ink:   #FFFFFF;
 }
 /* Acid-green order-book terminal: pure near-black page, one flat card lift, a
    single electric-green accent, all Space Mono, near-square 2px corners, and a
@@ -1172,7 +1222,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .fl-matrix .badge { border-radius: 2px; text-transform: uppercase; letter-spacing: .04em; }
 /* Primary action lit from within — base hairline + inset green top edge + faint
    green halo on the dark surface. Ghost/soft/gridline excluded. */
-.fl-matrix .btn:not(.ghost):not(.soft):not(.btn-grid) {
+.fl-matrix .btn:not(.ghost):not(.soft):not(.btn-grid):not(.danger) {
   box-shadow: 0 1px 2px rgba(0,0,0,.4), inset 0 1px 0 color-mix(in srgb, var(--accent) 22%, transparent), 0 2px 10px -3px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 /* Atmosphere — a faint code-grid
@@ -1216,6 +1266,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: var(--good);
   --warn-text: var(--warn);
   --bad-text:  var(--bad);
+  --bad-ink:   #1C0706;
   --r-xs: 8px;
   --r-sm: 12px;
   --r-md: 16px;
@@ -1247,6 +1298,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --good-text: #187044;
   --warn-text: #855A0E;
   --bad-text:  #A93D39;
+  --bad-ink:   #FFFFFF;
 }
 .fl-atlas h1.h, .fl-atlas h2, .fl-atlas h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.015em; }
 .fl-atlas .card-head h3 { font-family: var(--font-display); font-weight: 600; }
@@ -1260,7 +1312,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 }
 /* Pills everywhere: buttons, badges, and the tags in the rail. */
 .fl-atlas .btn { border-radius: 999px; }
-.fl-atlas .btn:not(.ghost):not(.soft) {
+.fl-atlas .btn:not(.ghost):not(.soft):not(.danger) {
   background-image: linear-gradient(rgba(255,255,255,.1), transparent);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 8px 20px -12px color-mix(in srgb, var(--accent) 55%, transparent);
 }
@@ -1849,7 +1901,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 /* Startup overlay — sprout germinates inside the dial, ring fills, then fades.
    Plays once per app load; accent inherits from .app's --accent so the user's
    selected voice/flavour tints every part. */
-.boot-splash { position: fixed; inset: 0; z-index: 100; display: flex;
+.boot-splash { position: fixed; inset: 0; z-index: var(--z-splash); display: flex;
   flex-direction: column; align-items: center; justify-content: center; gap: 20px;
   background: var(--bg); }
 .boot-splash.fading { animation: splashOut .55s ease forwards; }
@@ -2291,7 +2343,7 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
 .tb-search input { width: 320px; height: 38px; padding-left: 34px; }
 .tb-harness { min-width: 0; max-width: 200px; height: 38px; padding: 0 10px; }
 .tb-pop-anchor { position: relative; }
-.appearance-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+.appearance-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-pop);
   width: max-content; max-width: min(92vw, 540px); display: flex; flex-direction: column;
   gap: 14px; padding: 16px; background: var(--surface); border: 1px solid var(--line-2);
   border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
@@ -2327,10 +2379,47 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
 .page-head h1.h, .lib-title h1.h { font-family: var(--font-display); font-size: 28px;
   font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
 .page-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.btn.danger { background: var(--bad); color: #fff; }
+.btn.danger { background: var(--bad); color: var(--bad-ink); }
 .btn.danger-line { color: var(--bad-text); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .btn.danger-line:hover { background: color-mix(in srgb, var(--bad) 10%, transparent);
   border-color: var(--bad); }
+
+/* ---- shared primitives (components/PageHeader, EmptyState, ErrorState, DataTable, Stat,
+   StackBar, Ring, Popover). Sizes come from the scales in :root. A `.tone-*` class sets
+   --tone, the one colour a segment, dot or arc paints with (the `.health` pattern). ---- */
+.page-crumbs ol { display: flex; flex-wrap: wrap; gap: var(--sp-2); list-style: none;
+  margin: 0 0 var(--sp-2); padding: 0; font-size: var(--fs-xs); color: var(--text-3); }
+.page-crumbs li + li::before { content: '/'; margin-right: var(--sp-2); }
+.page-crumbs a { color: var(--text-2); }
+.page-crumbs [aria-current] { color: var(--text); }
+.empty-actions { display: flex; justify-content: center; align-items: center; gap: var(--sp-3);
+  margin-top: var(--sp-4); }
+.empty-actions a { color: var(--accent-text); font-size: var(--fs-sm); }
+.error-state { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.error-state .badge { margin: 0; }
+.tbl-caption { caption-side: top; text-align: left; padding: 0 14px var(--sp-3);
+  font-size: var(--fs-sm); color: var(--text-2); }
+.tbl .tbl-act { text-align: right; white-space: nowrap; }
+.stat { display: flex; flex-direction: column; gap: var(--sp-1); }
+.stat-label { font-size: var(--fs-xs); color: var(--text-2); }
+.stat-value { font-size: var(--fs-2xl); font-weight: 600; color: var(--text); }
+.stat-delta { font-size: var(--fs-xs); color: var(--text-2); }
+.tone-good { --tone: var(--good); }
+.tone-warn { --tone: var(--warn); }
+.tone-bad { --tone: var(--bad); }
+.tone-accent { --tone: var(--accent); }
+.tone-muted { --tone: var(--text-3); }
+.stackbar.sweep { transform-origin: left center; background: var(--surface-3); border-radius: 3px; }
+.stackbar.sweep > span { background: var(--tone, var(--text-3)); }
+.stackbar-legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); list-style: none;
+  margin: var(--sp-2) 0 0; padding: 0; font-size: var(--fs-xs); color: var(--text-2); }
+.stackbar-legend li { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.stackbar-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--tone, var(--text-3)); }
+.ring-track { stroke: var(--surface-3); }
+.ring-arc { stroke: var(--tone, var(--text-3)); }
+.popover { position: absolute; z-index: var(--z-pop); background: var(--surface-2);
+  border: 1px solid var(--line-2); border-radius: var(--r-md); box-shadow: var(--shadow-pop);
+  padding: var(--sp-2); }
 
 /* A panel: the one card shape of the new pages. Flat surface, 1px line, no lift. */
 .panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 18px 20px;
@@ -2831,7 +2920,7 @@ a.kit-name:hover { color: var(--accent-text); }
   .tb-search input { width: 112px; }
   .tb-search .kbd { display: none; }
   .page .seg { flex-wrap: wrap; max-width: 100%; }
-  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 40; width: var(--rail-w);
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: var(--z-drawer); width: var(--rail-w);
     height: 100dvh; padding: 20px 12px 14px; visibility: hidden; transform: translateX(-100%);
     transition: transform .22s ease, visibility .22s; box-shadow: 0 0 60px -10px rgba(0,0,0,.8); }
   .app.nav-open .sidebar { visibility: visible; transform: none; }
@@ -2840,12 +2929,12 @@ a.kit-name:hover { color: var(--accent-text); }
   .sb-brand-text, .sb-vitals { display: flex; }
   .sb-label, .sb-count { position: static; width: auto; height: auto; clip-path: none; }
   a.sb-item { justify-content: flex-start; padding: 9px 10px; }
-  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 39; padding: 0; border: 0;
+  .nav-scrim { display: block; position: fixed; inset: 0; z-index: var(--z-scrim); padding: 0; border: 0;
     background: rgba(0,0,0,.55); cursor: pointer; }
   .page { padding: 18px 16px 150px; }
   /* One column per NAV entry, however many there are: a fixed repeat(N) wraps the N+1th. */
   .tabbar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed;
-    left: 0; right: 0; bottom: 0; z-index: 25; height: 64px; background: var(--bg-2);
+    left: 0; right: 0; bottom: 0; z-index: var(--z-tabbar); height: 64px; background: var(--bg-2);
     border-top: 1px solid var(--line); }
   .tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 3px; min-width: 0; color: var(--text-3); font-size: 11px; font-weight: 600;

@@ -108,20 +108,58 @@ describe('Rules', () => {
     )
   })
 
-  // A hand-written scope outside project/user: the select must show it (not "project") and
-  // a save must send it back unchanged.
-  it('editing a scope: global rule keeps global in the form and the payload', async () => {
+  // `global` is a documented scope: the add form offers it and a save sends it.
+  it('the add form offers scope: global and saves it', async () => {
+    render(<Rules />)
+    await waitFor(() => expect(screen.getByText('Add rule')).toBeTruthy())
+    fireEvent.click(screen.getByText('Add rule'))
+    fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'New rule' } })
+    fireEvent.change(screen.getByLabelText('Rule body'), { target: { value: 'Do the thing.' } })
+    fireEvent.change(screen.getByLabelText('Rule scope'), { target: { value: 'global' } })
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'add', scope: 'global' }),
+      ),
+    )
+  })
+
+  // A global rule opens on the listed option, not on an extra "as written" one.
+  it('editing a scope: global rule shows no extra option for it', async () => {
     const globalRule = { ...PAYLOAD.rules[0], scope: 'global' }
     api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, rules: [globalRule] }))
     render(<Rules />)
     await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
     fireEvent.click(screen.getByText('No emoji in commits'))
     fireEvent.click(screen.getByText('Edit'))
-    expect(screen.getByLabelText('Rule scope').value).toBe('global')
+    const select = screen.getByLabelText('Rule scope')
+    expect(select.value).toBe('global')
+    expect([...select.options].map((o) => o.value)).toEqual(['project', 'user', 'global'])
+    expect(select.textContent).not.toMatch(/as written in the file/)
     fireEvent.click(screen.getByText('Save rule'))
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         expect.objectContaining({ op: 'update', id: 1, scope: 'global' }),
+      ),
+    )
+  })
+
+  // A hand-written scope the skill does not document: the select must show it (not "project")
+  // as an extra option, and a save must send it back unchanged.
+  it('editing a hand-written scope keeps it in the form and the payload', async () => {
+    const teamRule = { ...PAYLOAD.rules[0], scope: 'team' }
+    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, rules: [teamRule] }))
+    render(<Rules />)
+    await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
+    fireEvent.click(screen.getByText('No emoji in commits'))
+    fireEvent.click(screen.getByText('Edit'))
+    const select = screen.getByLabelText('Rule scope')
+    expect(select.value).toBe('team')
+    expect(select.selectedOptions[0].textContent).toBe('scope: team (as written in the file)')
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'update', id: 1, scope: 'team' }),
       ),
     )
   })
@@ -271,6 +309,7 @@ describe('Rules', () => {
       expect(confirm).toHaveBeenCalledWith('Discard your unsaved edit?', {
         title: 'Unsaved edit',
         confirmLabel: 'Discard',
+        tone: 'danger',
       }),
     )
     expect(screen.getByLabelText('Rule title').value).toBe('Half typed')

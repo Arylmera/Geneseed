@@ -153,7 +153,7 @@ export function trackedFiles() {
   for (const needed of ['bin/geneseed-cli.mjs', 'js/inspect/doctor.mjs',
     'js/inspect/scan.mjs', 'js/inspect/checks-build.mjs', 'js/inspect/checks-repo.mjs',
     'js/inspect/checks-authoring.mjs', 'src/AGENT.md.tmpl',
-    'registry.json', 'web/src/pages/Laws.jsx']) {
+    'registry.json', 'src/laws/universal.md']) {
     if (!names.includes(needed)) {
       throw new Error(`the checkout fixture's file list is missing ${needed} — every doctor `
         + 'cell would measure that instead');

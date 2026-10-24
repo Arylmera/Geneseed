@@ -21,6 +21,16 @@ test('the laws catalog carries the neutral nouns', () => {
     { ontology: 'Ethos', law: 'Rule', laws: 'Rules', doctrines: 'Doctrines' });
 });
 
+// Each law and doctrine item carries its one-line summary, read from the `<!-- note: summary: -->`
+// line under its heading in src/. Written out here, not read from src, for the reason above.
+test('the laws catalog carries each rule summary', () => {
+  const items = apiCatalog(webState('neutral'), 'laws').items;
+  assert.equal(items.find((it) => it.name === 'I').summary,
+    'Secrets never touch tracked files; only .env or a manager.');
+  assert.equal(items.find((it) => it.name === 'process.5').summary,
+    'Every commit and push needs explicit, repeated consent.');
+});
+
 // Only the constitution has tier nouns to name: every other section keeps its two keys.
 test('no other section grows a nouns key', () => {
   assert.deepEqual(Object.keys(apiCatalog(webState('neutral'), 'agents')), ['section', 'items']);

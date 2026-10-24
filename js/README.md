@@ -125,7 +125,7 @@ Everything that inspects an already-built or already-deployed harness and report
 | `checks-repo.mjs` | Gates over the repo's own records: `registry.json`, committed secrets, the hook shim, vendored pins and folder skills, skill aliases and side files, this module map, the host tables, the scorecard ratchet |
 | `checks-authoring.mjs` | `authoringProblems`, the aggregate self-consistency gate: spec purpose lines, the learn-prompt literal, `node --check` over the plugins (the doctor's one default spawn), then the groups below |
 | `checks-probe.mjs` | `doctor --probe` (opt-in): runs each live install's own gate command through the host's shell on a must-refuse and a must-pass payload — the doctor's second spawn; the OpenCode guard plugin is imported and called in-process instead, through both plugin APIs |
-| `checks-constitution.mjs` | The constitution: rule declarations and citations, LEAN blocks, `HOOK_PINNED`, theme vocabulary, the console's `LAW_META`/`DOCTRINE_META` |
+| `checks-constitution.mjs` | The constitution: rule declarations and citations, LEAN blocks, `HOOK_PINNED`, theme vocabulary, the per-rule summaries (`ruleSummaryProblems`) |
 | `checks-counts.mjs` | The hand-written counts: AGENT.md tables, README badges and prose, `SHIPPED.md`, held against `src/` |
 | `scan.mjs` | The shared walk/sort/strip/test primitives every `checks-*` uses. Owns no judgement itself |
 | `validate.mjs` | The `validate` verb (the generator's old `--validate-only`): renders a sandbox, scans it for tokens and dead links, own exit contract |

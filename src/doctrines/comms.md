@@ -1,6 +1,7 @@
 **{{PACK_COMMS}}** — how answers are presented.
 
 ### {{DOCTRINE:codes-that-persist}} Codes That Persist
+<!-- note: summary: Give tracked items stable reference codes; never renumber one. -->
 <!-- LEAN:begin -->
 Give every tracked item a short reference code and keep it unchanged for the rest of
 the session — `D` decisions, `O` options, `F` findings, `R` risks, `Q` questions,
@@ -27,6 +28,7 @@ Number from one within each kind and keep counting across turns (after `F3` come
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:structure-beside-prose}} Structure Beside Prose
+<!-- note: summary: Beside the prose, a diagram only where arrows carry meaning, else a table; codes stay. -->
 <!-- LEAN:begin -->
 Prose and structure are distinct: beside the prose, pick **either** a diagram **or** a
 table — whichever the matter needs, rarely both — and let the prose keep the context, the
@@ -53,6 +55,7 @@ may tag an item, never absorb or renumber it.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:declare-the-judgment-calls}} Declare the Judgment Calls
+<!-- note: summary: After non-trivial work, name the calls you made alone, riskiest first; never one to ask about. -->
 <!-- LEAN:begin -->
 After any non-trivial piece of work, declare the judgment calls you made alone: each point
 where a reasonable alternative existed and neither the request nor a rule decided it — the
@@ -72,6 +75,7 @@ never a call it says to ask about.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:simplified-technical-english}} Simplified Technical English
+<!-- note: summary: Write prose in ASD-STE100: short sentences, one meaning per word, imperative steps. -->
 <!-- LEAN:begin -->
 Write every prose reply and report in ASD-STE100 Simplified Technical English, the
 controlled language of aerospace maintenance: a tired reader, or one reading a second
@@ -93,6 +97,7 @@ condition first. Active voice, no -ing forms, no dropped articles, one word per 
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:mark-the-ask}} Mark the Ask
+<!-- note: summary: Mark an ask that waits on the user with an emoji and arrows; routine output stays plain. -->
 <!-- LEAN:begin -->
 When a reply stops and waits on the user — a question, a choice, an approval, a blocker —
 make the ask stand apart from the work around it, so a reader who skims finds it first. Open

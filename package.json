@@ -44,7 +44,6 @@
     "docs/concepts/",
     "docs/reference/",
     "web/dist/",
-    "web/src/pages/Laws.jsx",
     "harness.config.json",
     "registry.json",
     "geneseed",
