@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.18.0] — 2026-10-24
+
+Minor: the web console's numbers tell the truth (stale vs edited drift, lenses, Constitution, Docs) and it keeps your work (error boundary, draft guard, shared staging).
+
 ### Fixed
 - **Drift numbers tell the truth.** A file that differs from the source only because the install is behind (unmodified since its build) is now `stale`, not `edited`; `.geneseed-version` is always a build stamp. The Overview counts only real hand edits and shows stale files as "N files behind"; Local edits lists them apart under **Behind source** with a rebuild banner; `diff --out` and the upgrade export include only real local changes. "Never fired" counts each skill once across the fleet. A failed fleet read says so and keeps the last good table; a zero ceiling prints "no ceiling"; the ceiling marker sits on the root file's own lane.
 - **The four Overview lenses agree with the Ledger.** They show the newest runs first, carry the fleet verdict badge, and read runs as `verb · scope · result · duration`. The Greenhouse ring is full at 100%, the Lineage badge no longer hard-codes "in sync", a failed doctor says so instead of drawing a false "1 checks", the HUD KPIs sit on one row, and the Journal map keeps its height.
