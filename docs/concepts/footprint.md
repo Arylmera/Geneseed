@@ -42,7 +42,7 @@ Footprint is stored in a `.geneseed-footprint` marker in the install and kept ac
   geneseed setup
   ```
 
-- **Web console** — the **Footprint** toggle in Settings flips the current install and rebuilds it; on the Harness page, each install has its own dropdown.
+- **Web console** — the **Footprint** toggle in Settings flips the current install and rebuilds it; on the Harness page, each install has its own dropdown. A new install or deploy from the console starts lean, as from the command line.
 - **Command line** — with the emit target of the install you are changing:
 
   ```bash

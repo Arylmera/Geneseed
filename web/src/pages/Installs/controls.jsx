@@ -23,7 +23,8 @@ export function Sel({ label, value, options, onChange }) {
   )
 }
 
-export const FOOTPRINT_OPTIONS = ['full', 'lean']
+// Lean first: it is the default of a new install, here as in the CLI.
+export const FOOTPRINT_OPTIONS = ['lean', 'full']
 
 // An on/off switch — deactivates a whole install (files moved aside, not deleted) or
 // reactivates it; also drives individual MCP servers. The on-disk stash is the truth.

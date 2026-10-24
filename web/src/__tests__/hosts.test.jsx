@@ -20,6 +20,9 @@ vi.mock('../api/index.js', () => ({
             scope: 'global',
             path: 'C:/.claude',
             state: 'absent',
+            // What `/api/installs` really says for an absent row (`footprintOfDir` with no
+            // marker), which the page must not take as this new install's footprint.
+            footprint: 'full',
           },
         ],
       }),
@@ -164,6 +167,10 @@ describe('Installs / Hosts', () => {
     expect(panel().querySelector('h2').textContent).toBe('Claude Code')
     // The four choices are there, the voice on the deployed one.
     expect(screen.getByLabelText('voice for claude · global').value).toBe('imperial')
+    // A new install is lean, like the CLI's default, and lean is listed first.
+    const fp = screen.getByLabelText('footprint for claude · global')
+    expect(fp.value).toBe('lean')
+    expect([...fp.options].map((o) => o.value)).toEqual(['lean', 'full'])
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     await answered()
     // The table-row install's seven fields, plus the loop trust preset at its default.
@@ -172,7 +179,7 @@ describe('Installs / Hosts', () => {
       scope: 'global',
       path: 'C:/.claude',
       theme: 'imperial',
-      footprint: 'full',
+      footprint: 'lean',
       posture: 'peer',
       mode: 'direct',
       trust: 'balanced',
@@ -287,13 +294,29 @@ describe('Installs / Hosts', () => {
       host: 'claude',
       path: 'C:/proj',
       theme: 'imperial',
-      footprint: 'full',
+      footprint: 'lean',
       posture: 'peer',
       mode: 'direct',
       trust: 'balanced',
     })
     // An accepted job closes the form.
     expect(screen.queryByLabelText('Folder to deploy into')).toBeNull()
+  })
+
+  it('a deploy defaults to lean, and an explicit full is sent as full', async () => {
+    const onAction = vi.fn(async () => 'job-1')
+    render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
+    fireEvent.click(await screen.findByRole('button', { name: /deploy to a repo/i }))
+    const fp = screen.getByLabelText('footprint for the new harness')
+    expect(fp.value).toBe('lean')
+    expect([...fp.options].map((o) => o.value)).toEqual(['lean', 'full'])
+    fireEvent.change(fp, { target: { value: 'full' } })
+    fireEvent.change(screen.getByLabelText('Folder to deploy into'), {
+      target: { value: 'C:/proj' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy' }))
+    await answered()
+    expect(onAction).toHaveBeenCalledWith('deploy', expect.objectContaining({ footprint: 'full' }))
   })
 
   it('Uninstall asks inline, names the layer it deletes, and sends the memory choice', async () => {

@@ -139,11 +139,18 @@ export default function App() {
   useEffect(() => {
     const el = appRef.current
     if (!el) return
-    if (applyHexAccent(el, pickedHex(accentMode), mode)) return
-    const custom = customAccentName(accentMode)
-    if (custom) return applyAccent(el, custom, mode)
-    if (applyCuratedAccent(el, flavour, mode)) return
-    if (overview?.accent) applyAccent(el, overview.accent, mode)
+    if (!applyHexAccent(el, pickedHex(accentMode), mode)) {
+      const custom = customAccentName(accentMode)
+      if (custom) applyAccent(el, custom, mode)
+      else if (!applyCuratedAccent(el, flavour, mode) && overview?.accent) {
+        applyAccent(el, overview.accent, mode)
+      }
+    }
+    // The browser chrome (a phone's address bar) follows the active flavour and mode; it was
+    // fixed at the dark ground, so light mode showed a black bar over a pale page.
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', getComputedStyle(el).getPropertyValue('--bg').trim())
   }, [overview, mode, accentMode, flavour])
 
   const appearance = {

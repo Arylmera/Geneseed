@@ -16,7 +16,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
     path: '',
     host,
     theme,
-    footprint: 'full',
+    footprint: 'lean', // a new install is lean, as `--footprint` is in the CLI
     posture: 'peer',
     mode: 'direct',
     trust: 'balanced',

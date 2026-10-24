@@ -352,15 +352,19 @@ describe('costTotal and gateRows', () => {
 })
 
 describe('applyAccent', () => {
-  // A yellow accent equals the warning colour, so the warning moves to orange under it, and
-  // only under it: switching to another accent drops the override.
+  // A yellow accent sits in the amber band of the warning colour, so the warning moves to the
+  // approved orange under it (dark #FF8A4C; light #B4441F, with its text darkened to #9B3A1B so
+  // it holds 4.5:1 on its own 15% tint), and only under it: another accent drops both overrides.
   it('moves --warn off a yellow accent and back', () => {
     const el = document.createElement('div')
     applyAccent(el, 'yellow', 'dark')
-    expect(el.style.getPropertyValue('--warn')).toBe('#F08A4B')
+    expect(el.style.getPropertyValue('--warn')).toBe('#FF8A4C')
+    expect(el.style.getPropertyValue('--warn-text')).toBe('#FF8A4C')
     applyAccent(el, 'yellow', 'light')
-    expect(el.style.getPropertyValue('--warn')).toBe('#B4521C')
+    expect(el.style.getPropertyValue('--warn')).toBe('#B4441F')
+    expect(el.style.getPropertyValue('--warn-text')).toBe('#9B3A1B')
     applyAccent(el, 'cyan', 'dark')
     expect(el.style.getPropertyValue('--warn')).toBe('')
+    expect(el.style.getPropertyValue('--warn-text')).toBe('')
   })
 })

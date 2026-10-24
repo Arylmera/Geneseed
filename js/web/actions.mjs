@@ -466,7 +466,9 @@ export function buildOverride(state, body) {
  * deliberately carries none of this install's switches or exclusions — and keeps the defaults it
  * always had: footprint, posture
  * and mode off the viewed dir, and ALL packs when unknown — never `harness.config.json`, which
- * would drop the consent gate.
+ * would drop the consent gate. The one exception is the footprint with NOTHING deployed: the
+ * viewed dir then has no footprint of its own (`footprintOfDir`'s no-marker answer is `full`),
+ * so a first install takes the CLI's default, lean — see `apiDeployCmd`.
  */
 export function buildActionCmds(state, body) {
   const [theme, emit] = buildOverride(state, body);
@@ -486,7 +488,8 @@ export function buildActionCmds(state, body) {
       + 'not Build' };
   }
   return actionCommands('build', {
-    theme, emit, footprint: state.footprint, posture: state.posture, mode: state.mode,
+    theme, emit, footprint: deployed(state) ? state.footprint : 'lean',
+    posture: state.posture, mode: state.mode,
     trust: state.trust,
     doctrines: doctrinesForBuild(state.target),
   });
@@ -673,8 +676,11 @@ export function apiInstallCmd(state, body) {
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
   // comment at `installProfile` in `js/build/generate.mjs`.
   // The theme default is THIS install's own, not the viewed one's: the Kits tab acts on any row.
+  // An ABSENT row has no footprint of its own (`footprintOfDir` answers its no-marker `full`),
+  // so a new install takes the CLI's default, lean — see `apiDeployCmd` below.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
-    theme: themeOfDir(root, host) || state.theme, footprint: footprintOfDir(root),
+    theme: themeOfDir(root, host) || state.theme,
+    footprint: installState(root, host, scope) === 'absent' ? 'lean' : footprintOfDir(root),
     posture: postureOfDir(root, host) || 'peer',
     mode: modeOfDir(root, host) || 'direct', trust: trustOfDir(root, host) || DEFAULT_PRESET });
   // Unspecified means "keep what this install already has", exactly as theme, footprint,
@@ -792,9 +798,12 @@ export function apiDeployCmd(state, body) {
     return { error: `${root} predates the comms pack (its carrier names 'process 8') — `
       + 'run `geneseed setup` for it before deploying over it' };
   }
-  // A fresh deploy is full, at the default register, mode and trust.
+  // A fresh deploy is LEAN, at the default register, mode and trust: the same default as the
+  // CLI's `--footprint`, which the user chose (2026-10-24) over the console's old `full` — a
+  // console install and a CLI install of the same folder must not differ in always-on text for
+  // no reason the user picked. An explicit `full` in the body still wins.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
-    theme: state.theme, footprint: 'full', posture: 'peer', mode: 'direct',
+    theme: state.theme, footprint: 'lean', posture: 'peer', mode: 'direct',
     trust: DEFAULT_PRESET });
   // Same resolution as `apiInstallCmd` above, and for the same reason: the console's Deploy
   // form sends host/path/theme/footprint/posture/mode and NO pack selection, and nothing stops
