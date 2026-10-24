@@ -564,6 +564,10 @@ test('the declared surface is the one the dispatcher uses', async () => {
     assert.equal(await hit('POST', '/api/actions/update', 'tok'), 422,
       'POST /api/actions/update is gated on preflight: 404 means it fell through to the table, '
       + 'and 202 means the preflight was SKIPPED and a real git pull just started');
+    // An empty body names no install: `rebuildCmds` refuses it on its shape, before the registry
+    // is read or a job can start. 404 means it fell through to the table.
+    assert.equal(await hit('POST', '/api/actions/rebuild', 'tok'), 409,
+      'POST /api/actions/rebuild must be answered inline and refuse an empty body at 409');
     assert.equal(await hit('POST', '/api/actions/nope', 'tok'), 404,
       'an action the table does not name answers 404');
     assert.equal(await hit('POST', '/api/actions/restore', 'tok', '{"files": []}'), 200,

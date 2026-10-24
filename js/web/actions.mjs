@@ -716,6 +716,45 @@ export function apiInstallCmd(state, body) {
 }
 
 /**
+ * The job steps for the `rebuild` action: the Overview's per-row Rebuild and its "Rebuild all
+ * behind", which name the installs to rebuild rather than every one on the machine.
+ *
+ * Body `{ installs: [{host, path}, ...] }`. Each pair must be an ACTIVE detected install, matched
+ * on the same serialised key as `detectedInstall` against a fresh `installTargets()` — the client
+ * echoes the raw `path` `/api/fleet` gave it, so an exact match is the honest test. The argv is
+ * built from the REGISTRY's host/scope/root, never from body strings, and it is what `rebuildAll`
+ * replays (`installProfile`), so a console rebuild of one row equals the CLI's of all of them.
+ *
+ * ALL OR NOTHING: one unknown, inactive or legacy entry (or a malformed body) is `{ error }` and no
+ * job starts. `detectedInstall`'s `NotFound` would answer 404; a refusal here means the world
+ * changed under the client, so the dispatcher answers 409, as for `install`. The shape is checked
+ * before the registry is read, so a bad body never costs a detect.
+ */
+export function rebuildCmds(body) {
+  const list = bget(body, 'installs');
+  if (!Array.isArray(list) || !list.length || !list.every(isDict)) {
+    return { error: 'installs must be a non-empty list of {host, path}' };
+  }
+  const active = installTargets().filter(([h, s, r]) => installState(r, h, s) === 'active');
+  const keys = [...new Set(list.map((e) => JSON.stringify([strOr(bget(e, 'host')),
+    strOr(bget(e, 'path'))])))];
+  if (keys.length > active.length) return { error: 'more installs named than are active' };
+  const steps = [];
+  for (const key of keys) {
+    const hit = active.findLast(([host, , root]) => JSON.stringify([host, String(root)]) === key);
+    if (hit === undefined) return { error: `not an active install: ${key}` };
+    const [host, scope, root] = hit;
+    // Asked BEFORE `installProfile`, as `rebuildAll` does: a legacy carrier must never be rebuilt.
+    if (legacyProcessCarrierOfDir(root, host)) {
+      return { error: `${host}:${scope} (${root}) predates the comms pack (its carrier names `
+        + "'process 8') — run `geneseed setup` for it before rebuilding from the console" };
+    }
+    steps.push(...actionCommands('build', { buildArgv: installProfile(host, scope, root).argv }));
+  }
+  return { cmds: steps };
+}
+
+/**
  * Deactivate, reactivate, or REMOVE one install.
  *
  * KEYED ON THE (host, path) PAIR, and the pair must be one of the DETECTED installs. A cwd can

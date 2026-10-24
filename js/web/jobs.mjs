@@ -45,7 +45,7 @@
  *
  * ---------------------------------------------------------------------------------------
  * THE ACTION SURFACE — `doctor`, `build`, `build-all`, `export`, `update`, `link` and
- * `unlink` each name a verb `bin/geneseed-cli.mjs` runs, plus the three `INLINE_ACTIONS` the
+ * `unlink` each name a verb `bin/geneseed-cli.mjs` runs, plus the four `INLINE_ACTIONS` the
  * dispatcher answers without the table. `tests/unit/web_jobs.test.mjs` holds the union against
  * a written-out list, so an eighth action cannot appear unchecked.
  *
@@ -413,12 +413,12 @@ const CLI = () => path.join(ROOT, 'bin', 'geneseed-cli.mjs');
 const GEN = () => path.join(ROOT, 'bin', 'build-driver.mjs');
 
 /**
- * The three actions the dispatcher answers INLINE, without consulting the table above:
- * `restore` is synchronous and returns a result rather than a job id, and `install`/`deploy`
- * resolve their argv from the request body first. Declared so the surface check covers every
- * action the dispatcher answers, not only the table's keys.
+ * The four actions the dispatcher answers INLINE, without consulting the table above:
+ * `restore` is synchronous and returns a result rather than a job id, and `install`/`deploy`/
+ * `rebuild` resolve their argv from the request body first. Declared so the surface check
+ * covers every action the dispatcher answers, not only the table's keys.
  */
-export const INLINE_ACTIONS = ['restore', 'install', 'deploy'];
+export const INLINE_ACTIONS = ['restore', 'install', 'deploy', 'rebuild'];
 
 /**
  * ⚠ `doctrines` DEFAULTS TO THE FULL SET, and it is the one axis here whose default is not the

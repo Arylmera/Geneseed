@@ -121,6 +121,7 @@ export default function Overview({
       <Ledger
         overview={overview}
         setup={setup}
+        runs={runs}
         onAction={onAction}
         onRetry={onRetry}
         dataRev={dataRev}
@@ -139,6 +140,8 @@ export default function Overview({
   return (
     <>
       {/* The one header and the one action row: each lens used to carry its own as well. */}
+      {/* Rebuild stays the machine-wide build-all here: the lenses read no fleet, so they have
+          no behind set to narrow it to. */}
       <PageHeader
         title="Overview"
         sub={[

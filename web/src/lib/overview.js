@@ -217,10 +217,20 @@ export const approxTokens = (chars) => `≈${(chars / 4 / 1000).toFixed(1)}k`
 
 const installLabel = (i) => `${i.host} · ${i.scope}`
 
+// The rebuild target the `rebuild` action takes ({host, path}, the path exactly as the fleet
+// gave it), plus the row id and a label the Ledger names in its confirm and its progress bar.
+export const rebuildTarget = (i) => ({
+  id: i.id,
+  host: i.host,
+  path: i.path,
+  label: installLabel(i),
+})
+
 // Needs attention for the Ledger: PROBLEMS first (doctor, behind, hand edits), each naming its
 // install, then the older per-install nudges as SUGGESTIONS (`sugg: true`, muted). Usage's
 // never-fired row is held back until 30 days are counted, so a fresh install is not told every
-// skill is unused. Rows carry `act` (a console action) or `href`, never both.
+// skill is unused. Rows carry `act` (a console action) or `href`, never both; an `act: 'rebuild'`
+// row also names its `installs`.
 export function ledgerNeeds({ fleet, usage, ...rest }) {
   const out = []
   const d = fleet?.doctor
@@ -248,7 +258,8 @@ export function ledgerNeeds({ fleet, usage, ...rest }) {
         detail: stale ? `${built} · ${plural(stale, 'file')} behind` : built,
         where: i.host,
         verb: 'Rebuild',
-        act: 'build-all',
+        act: 'rebuild',
+        installs: [rebuildTarget(i)],
       })
     }
     const n = driftOf(i)

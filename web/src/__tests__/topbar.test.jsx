@@ -22,7 +22,7 @@ const appearance = {
 const mount = (route = { page: 'overview' }) =>
   render(
     <div className="app">
-      <Topbar route={route} overview={overview} appearance={appearance} query="" />
+      <Topbar route={route} overview={overview} appearance={appearance} />
     </div>,
   )
 const trigger = () => screen.getByRole('button', { name: 'Appearance' })

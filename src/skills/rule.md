@@ -72,13 +72,13 @@ re-derived. Then take exactly one branch.
 5. **Destination.** Scope decides the file: a rule that holds across all the user's
    work goes to the *global* install's `user-rules.md`, a rule bound to this
    codebase to the project's. Tag it to match: `scope: project` — this repo, committable,
-   binds the team; `scope: global` — every repository on the machine; `scope: user` —
-   a personal preference, kept in the global file too, never the team's. Read the target first ({{LAW:verify-before-asserting}} — the real current
+   binds the team; `scope: global` — every repository on the machine. `user` is still read
+   as `global`. Read the target first ({{LAW:verify-before-asserting}} — the real current
    rules, not a remembered copy). The build seeds it once and never overwrites it;
    if it is genuinely absent, create it with a `# User rules` header and note that a
    rebuild would have seeded it.
 6. **Draft in the file's own format**: the next free `## R<n> — Title` heading, an
-   optional `(scope: project|global|user | source: …)` metadata line, then the rule in one
+   optional `(scope: project|global | source: …)` metadata line, then the rule in one
    short paragraph, plain and testable. For a rule the user stated, `source:` keeps
    their own words and the day they said them — `source: user 2026-10-16 "never push
    red"` — one sentence at most: it is what later tells a stale rule from a changed

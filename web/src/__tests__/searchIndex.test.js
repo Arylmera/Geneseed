@@ -11,7 +11,7 @@ vi.mock('../api/index.js', () => ({
   },
 }))
 
-import { useSearchIndex } from '../hooks/useSearchIndex.js'
+import { useSearchIndex, PAGE_ENTRIES } from '../hooks/useSearchIndex.js'
 import { api } from '../api/index.js'
 
 describe('useSearchIndex', () => {
@@ -24,15 +24,17 @@ describe('useSearchIndex', () => {
     expect(entries.find((e) => e.kind === 'MCP servers').route).toBe('#/installs/hosts')
   })
 
-  // The search box is also the way to get somewhere by name: every page, and every tab of
-  // the tabbed pages, is an entry of its own.
-  it('indexes every page and tab first', async () => {
+  // The palette is also the way to get somewhere by name: every page, and every tab of the
+  // tabbed pages, is an entry of its own. A constant, not part of the fetched index, so the
+  // Pages group shows before (and without) the fetch.
+  it('lists every page and tab without a fetch', async () => {
     const { result } = renderHook(() => useSearchIndex(0))
     let entries
     await act(async () => {
       entries = await result.current.prime()
     })
-    expect(entries.filter((e) => e.kind === 'Pages').map((e) => [e.title, e.route])).toEqual([
+    expect(entries.filter((e) => e.kind === 'Pages')).toEqual([])
+    expect(PAGE_ENTRIES.map((e) => [e.title, e.route])).toEqual([
       ['Overview', '#/'],
       ['Constitution', '#/laws'],
       ['Library', '#/library'],

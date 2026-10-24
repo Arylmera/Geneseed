@@ -133,6 +133,25 @@ test('the overview says whether the server is running code older than the files 
   assert.equal(apiOverview(st).daemon_stale, false);
 });
 
+// The Server tab's header reads the process answering it: this test process is that process, so
+// its pid is the expected value, and its start lies at or before now. `autostart` reads the real
+// home's login launcher, so only its type is pinned. The daemon record beside the target holds
+// the write token, and a GET must never carry it: the fields are built one by one, and a record
+// spread into them would put `secret-xyz` in the JSON.
+test('the overview names the server process and never the daemon record token', () => {
+  const sb = makeSandbox();
+  try {
+    fs.writeFileSync(path.join(sb.path, '.geneseed-web.json'),
+      JSON.stringify({ pid: 1, port: 4747, token: 'secret-xyz', started: 1, code: 'x' }));
+    const ov = apiOverview(webState('neutral', sb.path));
+    assert.equal(ov.server.pid, process.pid);
+    assert.ok(ov.server.started <= Math.floor(Date.now() / 1000), 'a start in the future');
+    assert.ok(ov.server.started > 1, 'the start came from the daemon record, not the process');
+    assert.ok(ov.server.autostart === null || typeof ov.server.autostart === 'boolean');
+    assert.ok(!JSON.stringify(ov).includes('secret-xyz'), 'the write token reached a GET');
+  } finally { sb.cleanup(); }
+});
+
 test('the overview carries counts, a doctor verdict and an accent', () => {
   const ov = apiOverview(neutral());
 
@@ -1862,6 +1881,10 @@ test('the fleet lists only installed harnesses, each with its own sync verdict',
 
     const fleet = apiFleet(st);
     assert.equal(fleet.source_fp, source);
+    // The release a behind row names ("Behind 4.19.0"): the overview's own label, so the Hosts
+    // table and the topbar never name two releases. `in` first: a missing key reads as undefined.
+    assert.ok('version' in fleet, 'the fleet carries no source release label');
+    assert.equal(fleet.version, apiOverview(st).version);
     const by = Object.fromEntries(fleet.installs.map((r) => [r.host, r]));
     assert.deepEqual(Object.keys(by).sort(), ['bob', 'openclaude', 'opencode'],
       'claude has nothing installed and must not be listed');

@@ -3279,3 +3279,120 @@ html { scrollbar-gutter: stable; }
 @media (max-width: 720px) { .card-row.two { grid-template-columns: 1fr; } }
 .panel-note.warn { color: var(--warn-text); }
 .panel-note.bad { color: var(--bad-text); }
+
+/* ── V6a integration (2026-10-25) ── */
+/* Constitution tier cells that became <button>s (V5b) kept the browser's default button skin:
+   a light-grey fill and centred text, which hid the light tier names in dark mode. */
+button.tier { appearance: none; background: transparent; border: 0; border-right: 1px solid var(--line);
+  font: inherit; text-align: left; cursor: pointer; }
+button.tier:last-child { border-right: 0; }
+button.tier:hover { background: var(--surface-2); }
+button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
+/* RB: the per-row rebuild sweep anchors to its own cell. */
+.ldg-fleet td.ldg-where { position: relative; }
+/* LU: Library usage. */
+.lr-use { position: relative; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.lr-use .ub-trk { width: 48px; border-radius: 3px; background: var(--surface-3); }
+.lib-stats { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin: var(--sp-3) 0; }
+.lib-stats .stat:first-child { flex: 1 1 220px; }
+/* SY: Server settings sheet and Hosts sync column. */
+.sheet { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.sheet-index { flex: 0 0 180px; position: sticky; top: calc(var(--topbar-h) + 16px); display: flex; flex-direction: column; gap: 2px; }
+.sheet-index button { text-align: left; padding: 7px 12px; border: 0; border-left: 2px solid var(--line); background: transparent; color: var(--text-2); font: inherit; cursor: pointer; }
+.sheet-index button:hover { color: var(--text); border-left-color: var(--accent); }
+.sheet-index button.t-bad { color: var(--bad-text); }
+.sheet-body { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.sheet-sec { scroll-margin-top: calc(var(--topbar-h) + 16px); }
+.sheet-row { display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+.sheet-k { font-weight: 600; }
+.sheet-h { display: block; font-size: 12.5px; font-weight: 400; }
+.sheet-c { justify-self: end; }
+.danger-zone { border-color: var(--bad); }
+.danger-zone .card-head h3, .danger-zone .card-head h2 { color: var(--bad-text); }
+@media (max-width: 720px) { .sheet-row { grid-template-columns: 1fr; } .sheet-c { justify-self: start; } .sheet-index { position: static; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap; } }
+.sync-cell { min-width: 200px; }
+.sync-cell .stackbar-box { width: 180px; margin-bottom: 5px; }
+.sync-cell .stackbar-legend { display: none; }
+/* AT: Activity Today. */
+/* AT: Activity "Today" strip + merged feed. Append after the existing .act-* block in
+   web/src/styles.css. Existing tokens only. */
+.act-track { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.act-track > .glyph { color: var(--text-2); }
+.act-track-title { margin: 0; font-size: var(--fs-md); }
+.act-track-p { margin: 2px 0 0; }
+
+.act-today { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.act-stat { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.act-stat-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); }
+.act-lbl { margin: 0; font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: 500;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.act-big { font-size: var(--fs-xl); font-weight: 650; line-height: 1.1; }
+.act-wait { font-size: var(--fs-2xl); }
+.act-stat p { margin: 0; }
+
+.act-runs { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: var(--sp-1); align-items: end; height: 70px; }
+.act-runs i { display: block; border-radius: 3px 3px 0 0; background: var(--accent); transform-origin: bottom; }
+.act-runs i.zero { height: 3px; background: var(--line); }
+.act-runs i.nodata { height: 100%; background: repeating-linear-gradient(135deg, var(--surface-3) 0 4px, transparent 4px 8px); }
+.act-axis { display: flex; justify-content: space-between; font-size: var(--fs-2xs); color: var(--text-3); }
+
+.act-filters { align-items: center; margin-bottom: var(--sp-3); }
+.chip-f { font: inherit; font-size: var(--fs-sm); font-weight: 600; height: 32px; padding: 0 var(--sp-3);
+  border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); cursor: pointer; }
+.chip-f:hover { color: var(--text); border-color: var(--line-3); }
+.chip-f.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip-f:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+
+.act-live { margin-bottom: var(--sp-4); }
+.act-day { overflow: hidden; padding: 0; }
+.act-day-h { margin: 0; padding: 10px var(--sp-4); font-size: var(--fs-sm); font-weight: 650; background: var(--surface-2);
+  border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: var(--sp-3); }
+.act-day-h .mono { font-weight: 500; }
+.act-rows { list-style: none; margin: 0; padding: 0; }
+.act-row { display: grid; grid-template-columns: 56px 22px minmax(0, 1fr) 150px 70px; align-items: center; gap: var(--sp-3);
+  padding: 10px var(--sp-4); border-bottom: 1px solid var(--line); }
+.act-row:last-child { border-bottom: 0; }
+.act-row .badge { justify-self: end; }
+.act-glyph { width: 16px; height: 16px; color: var(--text-2); }
+.act-what { min-width: 0; display: flex; flex-direction: column; }
+.act-row-title { font-weight: 600; overflow-wrap: anywhere; }
+.act-dur { height: 6px; border-radius: 3px; background: var(--surface-3); position: relative; overflow: hidden; }
+.act-dur > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); transform-origin: left; }
+@media (max-width: 560px) {
+  .act-row { grid-template-columns: 48px 18px minmax(0, 1fr) auto; }
+  .act-dur, .act-dur-none { display: none; }
+}
+
+/* CK: the command palette (Search.jsx) — the topbar trigger reads as a field; the dialog is
+   a centred sheet that holds the Spotlight list in-flow (no longer an absolute dropdown). */
+.tb-cmdk { display: inline-flex; align-items: center; gap: 10px; height: 36px; width: 300px; max-width: 100%;
+  padding: 0 10px 0 12px; border-radius: var(--r-sm); border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--text-2); font: inherit; font-size: var(--fs-sm); cursor: text; }
+.tb-cmdk:hover { border-color: var(--line-3); color: var(--text); }
+.tb-cmdk .glyph { width: 15px; height: 15px; }
+.tb-cmdk-label { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-cmdk-key, .palette-key { font: 500 11px var(--font-mono); padding: 2px 6px; border-radius: 5px;
+  border: 1px solid var(--line-2); color: var(--text-2); background: transparent; }
+.palette { width: min(620px, calc(100vw - 32px)); max-height: min(70vh, 640px); padding: 0; margin: 12vh auto auto;
+  border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface); color: var(--text);
+  box-shadow: 0 30px 70px -20px rgba(0,0,0,.6); overflow: hidden; }
+.palette[open] { display: flex; flex-direction: column; }
+.palette::backdrop { background: rgba(8,9,11,.6); }
+.palette-head { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.palette-head .glyph { width: 17px; height: 17px; color: var(--text-2); }
+.palette-head input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text);
+  font: inherit; font-size: var(--fs-md); outline: none; }
+.palette .spotlight { position: static; width: auto; max-height: none; flex: 1; overflow-y: auto;
+  border: 0; border-radius: 0; box-shadow: none; }
+.palette .spot-row { min-height: 40px; display: flex; flex-direction: column; justify-content: center; }
+.palette-foot { display: flex; flex-wrap: wrap; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--line);
+  font: 11px var(--font-mono); color: var(--text-3); }
+@media (max-width: 720px) {
+  .tb-cmdk { width: 40px; padding: 0; justify-content: center; }
+  .tb-cmdk-label, .tb-cmdk-key { display: none; }
+  .palette { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; margin: 0; border-radius: 0; }
+}
+/* AT: the merged feed and gate rows. */
+.act-feed { display: flex; flex-direction: column; gap: var(--sp-4); }
+.act-row.gate .act-glyph { color: var(--warn-text); }
+.sheet-v { min-width: 0; }

@@ -50,7 +50,7 @@ The console asks npm for the latest release once a day. An Overview page that st
 
 The npm route never uses `sudo` and never retries. If npm refuses (no permission on the global folder, a proxy, a private registry), the job log shows npm's own output. Fix the cause, or run the two commands yourself.
 
-When the update is done, the console restarts and the page reloads. If you ran `git pull` yourself, the Overview shows a banner that the console runs old code. Click **Rebuild** on an install that is behind: the console restarts after the rebuild and reloads the page. If no install is behind, click **Restart** in the banner.
+When the update is done, the console restarts and the page reloads. If you ran `git pull` yourself, the Overview shows a banner that the console runs old code. Click **Rebuild** on an install that is behind, or **Rebuild all behind** in the header. The console asks you to confirm, rebuilds only the installs it names, then restarts and reloads the page. If no install is behind, click **Restart** in the banner.
 
 ## What an upgrade keeps
 

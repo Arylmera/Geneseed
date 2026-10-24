@@ -132,7 +132,7 @@ describe('Rules', () => {
     fireEvent.click(screen.getByText('Edit'))
     const select = screen.getByLabelText('Rule scope')
     expect(select.value).toBe('global')
-    expect([...select.options].map((o) => o.value)).toEqual(['project', 'user', 'global'])
+    expect([...select.options].map((o) => o.value)).toEqual(['project', 'global'])
     expect(select.textContent).not.toMatch(/as written in the file/)
     fireEvent.click(screen.getByText('Save rule'))
     await waitFor(() =>
@@ -140,6 +140,41 @@ describe('Rules', () => {
         expect.objectContaining({ op: 'update', id: 1, scope: 'global' }),
       ),
     )
+  })
+
+  // `user` is an alias of `global` (the rule skill): the editor opens it on global, with no
+  // extra option, and a save writes global.
+  it('editing a scope: user rule shows global and saves global', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Prefer tabs'))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit R2' }))
+    const select = screen.getByLabelText('Rule scope')
+    expect(select.value).toBe('global')
+    expect([...select.options].map((o) => o.value)).toEqual(['project', 'global'])
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'update', id: 2, scope: 'global' }),
+      ),
+    )
+  })
+
+  // The alias is applied on save only: opening and cancelling a user rule sends nothing,
+  // and the row still shows the scope as written.
+  it('an untouched scope: user rule is not rewritten', async () => {
+    const confirm = vi.fn(async () => true)
+    render(
+      <ConfirmContext.Provider value={confirm}>
+        <Rules />
+      </ConfirmContext.Provider>,
+    )
+    fireEvent.click(await screen.findByText('Prefer tabs'))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit R2' }))
+    fireEvent.click(screen.getByText('Cancel'))
+    await waitFor(() => expect(screen.queryByLabelText('Rule title')).toBeNull())
+    expect(confirm).not.toHaveBeenCalled()
+    expect(api.rulesMutate).not.toHaveBeenCalled()
+    expect(screen.getByText('user')).toBeTruthy()
   })
 
   // A hand-written scope the skill does not document: the select must show it (not "project")

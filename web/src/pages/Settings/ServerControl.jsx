@@ -5,14 +5,16 @@ import { restartAndReload } from '../../hooks/waitForServer.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 
+// Two controls, not one card: the settings sheet puts Restart on the Server's "Code" row and
+// Stop in the Danger zone, so each owns its own state and error.
+
 // Stops the local server from the page (same /api/shutdown that `geneseed web
 // stop` uses). The connection may drop as the server goes down, so a request that
 // never got an answer is still treated as a successful stop — but a REFUSAL (409
 // while a job runs) is an answer, and is shown instead.
-export default function ServerControl() {
+export function StopServer() {
   const confirm = useConfirm()
   const [stopped, setStopped] = useState(false)
-  const [restarting, setRestarting] = useState(false)
   const [error, setError] = useState(null)
 
   const stop = async () => {
@@ -31,8 +33,32 @@ export default function ServerControl() {
     setStopped(true)
   }
 
-  // Restart comes back on the same port; `restartAndReload` reloads once the NEW
-  // server answers /api/ping, and throws if the server refused to restart.
+  if (stopped) {
+    return (
+      <p className="sub">
+        Server stopped. You can close this tab and reopen any time with <code>geneseed web</code>.
+      </p>
+    )
+  }
+  return (
+    <>
+      {/* No Retry: the button is the retry. */}
+      <ErrorState error={error} />
+      <button className="btn ghost danger-line" onClick={stop}>
+        <Icon name="x" />
+        Stop server
+      </button>
+    </>
+  )
+}
+
+// Restart comes back on the same port; `restartAndReload` reloads once the NEW
+// server answers /api/ping, and throws if the server refused to restart.
+export function RestartServer() {
+  const confirm = useConfirm()
+  const [restarting, setRestarting] = useState(false)
+  const [error, setError] = useState(null)
+
   const restart = async () => {
     const ok = await confirm(
       'Restart the local Geneseed server? The console reconnects in a moment.',
@@ -49,27 +75,13 @@ export default function ServerControl() {
     }
   }
 
-  if (stopped) {
-    return (
-      <p className="sub">
-        Server stopped. You can close this tab and reopen any time with <code>geneseed web</code>.
-      </p>
-    )
-  }
   return (
     <>
-      {/* No Retry: the action buttons below are the retry. */}
       <ErrorState error={error} />
-      <div className="row">
-        <button className="btn ghost" onClick={restart} disabled={restarting}>
-          <Icon name="refresh" />
-          {restarting ? 'Restarting…' : 'Restart server'}
-        </button>
-        <button className="btn ghost danger-line" onClick={stop} disabled={restarting}>
-          <Icon name="x" />
-          Stop server
-        </button>
-      </div>
+      <button className="btn ghost" onClick={restart} disabled={restarting}>
+        <Icon name="refresh" />
+        {restarting ? 'Restarting…' : 'Restart server'}
+      </button>
     </>
   )
 }

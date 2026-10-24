@@ -3,9 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The Overview's actions: exactly ONE filled (primary) button or link per loaded view, and on
-// the Ledger no two controls share an accessible name, so a screen reader hears "Rebuild all
-// installs (claude · global needs it)" rather than six "Rebuild"s. The filled count is every
-// `.btn` (button or anchor) without `.ghost`.
+// the Ledger no two controls share an accessible name, so a screen reader hears "Rebuild
+// claude · global" rather than six "Rebuild"s. The filled count is every `.btn` (button or
+// anchor) without `.ghost`. Every Ledger rebuild names its installs (the `rebuild` action) and
+// asks first; the confirm is a stub through ConfirmContext, so a test reads what it asked.
 
 vi.mock('../api/index.js', () => ({
   api: {
@@ -30,6 +31,11 @@ import Overview from '../pages/Overview/index.jsx'
 import { LAYOUTS } from '../hooks/useLayout.js'
 import { api } from '../api/index.js'
 import { clearAsyncCache } from '../hooks/useAsync.js'
+import { ConfirmContext } from '../hooks/useConfirm.jsx'
+
+const withConfirm = (ui, confirm = vi.fn(async () => true)) => (
+  <ConfirmContext.Provider value={confirm}>{ui}</ConfirmContext.Provider>
+)
 
 const install = (host, verdict) => ({
   id: `${host}:global:/h/.${host}`,
@@ -83,19 +89,16 @@ const filled = () =>
 const nameOf = (el) => (el.getAttribute('aria-label') || el.textContent).trim()
 
 describe('Ledger: one primary action, every control named once', () => {
-  it('with installs behind, the one filled action is "Rebuild all (N behind)"', async () => {
+  it('with installs behind, the one filled action is "Rebuild all behind (N)"', async () => {
     api.update.mockResolvedValue(DUE)
-    const onAction = vi.fn()
-    render(<Ledger overview={null} onAction={onAction} />)
+    render(<Ledger overview={null} onAction={vi.fn()} />)
     await screen.findByText('4.17.0 available')
-    await screen.findByRole('button', { name: 'Rebuild all (2 behind)' })
-    expect(filled().map(nameOf)).toEqual(['Rebuild all (2 behind)'])
+    await screen.findByRole('button', { name: 'Rebuild all behind (2)' })
+    expect(filled().map(nameOf)).toEqual(['Rebuild all behind (2)'])
     // An update that is due yields to the rebuild: still there, but ghost.
     expect(screen.getByRole('button', { name: 'Update' }).className).toBe('btn ghost')
-    const primary = screen.getByRole('button', { name: 'Rebuild all (2 behind)' })
-    expect(primary.title).toBe('Rebuilds every install on this machine')
-    fireEvent.click(primary)
-    expect(onAction).toHaveBeenCalledWith('build-all')
+    const primary = screen.getByRole('button', { name: 'Rebuild all behind (2)' })
+    expect(primary.title).toBe('Rebuilds claude · global, opencode · global')
   })
 
   it('with nothing behind and an update due, Update is the one filled action', async () => {
@@ -118,20 +121,89 @@ describe('Ledger: one primary action, every control named once', () => {
     api.fleet.mockResolvedValue({
       installs: [...BEHIND.installs, install('bob', 'synced'), install('openclaude', 'synced')],
     })
-    const onAction = vi.fn()
-    render(<Ledger overview={null} onAction={onAction} />)
-    await screen.findByRole('button', { name: 'Rebuild all (2 behind)' })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    await screen.findByRole('button', { name: 'Rebuild all behind (2)' })
     const names = [...screen.getAllByRole('button'), ...screen.queryAllByRole('link')].map(nameOf)
     expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([])
-    const row = screen.getByRole('button', {
-      name: 'Rebuild all installs (claude · global needs it)',
-    })
+    const row = screen.getByRole('button', { name: 'Rebuild claude · global' })
     expect(row.className).toBe('btn ghost sm')
-    expect(row.textContent).toBe('Rebuild all')
-    expect(row.title).toBe('Rebuilds every install on this machine')
-    fireEvent.click(row)
-    expect(onAction).toHaveBeenCalledWith('build-all')
+    expect(row.textContent).toBe('Rebuild')
+    expect(row.title).toBe('Rebuilds claude · global only')
     expect(screen.getByRole('button', { name: 'Open bob · global' })).toBeTruthy()
+  })
+})
+
+// Two behind, one in step: every rebuild control must send exactly the installs it names.
+const MIXED = {
+  installs: [install('claude', 'behind'), install('bob', 'synced'), install('opencode', 'behind')],
+}
+const CLAUDE = { host: 'claude', path: '/h/.claude' }
+const OPENCODE = { host: 'opencode', path: '/h/.opencode' }
+
+describe('Ledger: a rebuild names its installs and asks first', () => {
+  beforeEach(() => api.fleet.mockResolvedValue(MIXED))
+
+  it('the header rebuilds only the behind installs, after naming each', async () => {
+    const confirm = vi.fn(async () => true)
+    const onAction = vi.fn(async () => 'j1')
+    render(withConfirm(<Ledger overview={null} onAction={onAction} />, confirm))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild all behind (2)' }))
+    await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
+    expect(confirm).toHaveBeenCalledWith(
+      'Rebuild claude · global, opencode · global? Each is re-rendered from source with its own ' +
+        'settings.',
+      { title: 'Rebuild 2 installs?', confirmLabel: 'Rebuild' },
+    )
+    expect(onAction).toHaveBeenCalledWith('rebuild', { installs: [CLAUDE, OPENCODE] })
+  })
+
+  it('a cancelled confirm sends nothing', async () => {
+    const confirm = vi.fn(async () => false)
+    const onAction = vi.fn()
+    render(withConfirm(<Ledger overview={null} onAction={onAction} />, confirm))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild all behind (2)' }))
+    await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  it('a row rebuilds exactly its own install', async () => {
+    const confirm = vi.fn(async () => true)
+    const onAction = vi.fn(async () => 'j1')
+    render(withConfirm(<Ledger overview={null} onAction={onAction} />, confirm))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild opencode · global' }))
+    await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
+    expect(confirm.mock.calls[0][1]).toEqual({
+      title: 'Rebuild opencode · global?',
+      confirmLabel: 'Rebuild',
+    })
+    expect(onAction).toHaveBeenCalledWith('rebuild', { installs: [OPENCODE] })
+  })
+
+  it('a Needs row rebuilds the one install it names', async () => {
+    const onAction = vi.fn(async () => 'j1')
+    render(withConfirm(<Ledger overview={null} onAction={onAction} />))
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Rebuild: claude · global is behind its source',
+      }),
+    )
+    await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
+    expect(onAction).toHaveBeenCalledWith('rebuild', { installs: [CLAUDE] })
+  })
+
+  it('while the job runs, only the row it targets shows the sweep', async () => {
+    const onAction = vi.fn(async () => 'j7')
+    const ui = (runs) => withConfirm(<Ledger overview={null} runs={runs} onAction={onAction} />)
+    const { rerender } = render(ui([]))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild opencode · global' }))
+    await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
+    rerender(ui([{ id: 'j7', status: 'running' }]))
+    const bar = await screen.findByRole('progressbar')
+    expect(screen.getAllByRole('progressbar')).toHaveLength(1)
+    expect(bar.getAttribute('aria-label')).toBe('Rebuilding opencode · global')
+    expect(bar.closest('tr').textContent).toContain('/h/.opencode')
+    rerender(ui([{ id: 'j7', status: 'done' }]))
+    await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull())
   })
 })
 

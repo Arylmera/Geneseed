@@ -4,6 +4,23 @@ import { SECTIONS, SECTION_ORDER } from '../lib/sections.js'
 import { PAGES, TABS, TAB_LABELS } from '../lib/router.js'
 import { useHarness } from './useHarness.js'
 
+// Every page and tab, for the palette to get somewhere by name. Built at import, not in
+// `prime()`: it needs no fetch, so the Pages group shows while the index loads and after
+// it fails.
+export const PAGE_ENTRIES = Object.entries(PAGES).flatMap(([page, label]) =>
+  (TABS[page] || ['']).map((tab) => {
+    const title = tab ? label + ' / ' + TAB_LABELS[tab] : label
+    return {
+      kind: 'Pages',
+      sortKey: -1,
+      title,
+      desc: '',
+      hay: title.toLowerCase(),
+      route: page === 'overview' ? '#/' : '#/' + page + (tab ? '/' + tab : ''),
+    }
+  }),
+)
+
 // Lazy-loaded global search index for the topbar spotlight. Pulls catalog
 // items from every Library section, MCP servers from each config target, and
 // the Docs menu into one flat list of {kind, title, desc, hay, route}.
@@ -32,20 +49,7 @@ export function useSearchIndex(rev = 0) {
   const prime = useCallback(() => {
     if (index || inflight.current) return inflight.current
     const job = (async () => {
-      // Every page and tab first: the search box is also how you get somewhere by name.
-      const entries = Object.entries(PAGES).flatMap(([page, label]) =>
-        (TABS[page] || ['']).map((tab) => {
-          const title = tab ? label + ' / ' + TAB_LABELS[tab] : label
-          return {
-            kind: 'Pages',
-            sortKey: -1,
-            title,
-            desc: '',
-            hay: title.toLowerCase(),
-            route: page === 'overview' ? '#/' : '#/' + page + (tab ? '/' + tab : ''),
-          }
-        }),
-      )
+      const entries = []
 
       // Content catalogs, in parallel. Laws and Skills live on their own tabs
       // (not in SECTION_ORDER), but the spotlight should still find them — so

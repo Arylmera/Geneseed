@@ -3,7 +3,15 @@
  * `notebook/usage.jsonl` (the writer is js/hosts/usage.mjs, and the OpenCode guard plugin's copy).
  *
  * `{ enabled, since, days_counted, per_day[30], rows[{install, kind, name, n}],
- *    never[{install, kind, name}] }`, the window being the last 30 days including today.
+ *    never[{install, kind, name}], names[{kind, name, n, installs, per_day[30], last}] }`, the
+ * window being the last 30 days including today.
+ *
+ * `names` is the Library's view, fleet-wide: one entry per distinct kind+name, summed over every
+ * install, because a skill fired daily on claude and never on opencode IS used — reading
+ * `never` (per install) for that was the OV-2 bug. `installs` names those with a call in the
+ * window; `last` is the latest day across installs, day-granular and bounded by the 90-day read,
+ * so a name whose only lines are older than the window still appears, with n 0 and its `last`.
+ * Bounded: distinct names × 30.
  *
  * `since` is the oldest day any ledger holds and `days_counted` how many of the 30 it covers:
  * the console keeps the never-fired claim back until a full 30 are counted, so a fresh install
@@ -53,6 +61,7 @@ export function usageSummary({ now = Date.now(), targets = installTargets() } = 
   const first = days[0];
   const perDay = new Array(WINDOW).fill(0);
   const counts = new Map();
+  const names = new Map();
   const never = [];
   let since = null;
   let enabled = !process.env.GENESEED_NO_USAGE;
@@ -63,9 +72,18 @@ export function usageSummary({ now = Date.now(), targets = installTargets() } = 
     const fired = new Set();
     for (const e of entries) {
       if (since === null || e.ts < since) since = e.ts;
+      const nk = `${e.kind}\u0000${e.name}`;
+      let it = names.get(nk);
+      if (!it) names.set(nk, it = { kind: e.kind, name: e.name, n: 0, installs: [], per_day: new Array(WINDOW).fill(0), last: e.ts });
+      if (e.ts > it.last) it.last = e.ts;
       if (e.ts < first) continue;
       const i = days.indexOf(e.ts);
-      if (i >= 0) perDay[i] += 1;
+      if (i >= 0) {
+        perDay[i] += 1;
+        it.per_day[i] += 1;
+        it.n += 1;
+        if (!it.installs.includes(install)) it.installs.push(install);
+      }
       const key = `${install}\u0000${e.kind}\u0000${e.name}`;
       counts.set(key, (counts.get(key) || 0) + 1);
       fired.add(`${e.kind}\u0000${e.name}`);
@@ -86,7 +104,10 @@ export function usageSummary({ now = Date.now(), targets = installTargets() } = 
   }).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   const daysCounted = since === null ? 0
     : Math.min(WINDOW, Math.floor((Date.parse(day(now)) - Date.parse(since)) / DAY_MS) + 1);
-  return { enabled, since, days_counted: daysCounted, per_day: perDay, rows, never };
+  return {
+    enabled, since, days_counted: daysCounted, per_day: perDay, rows, never,
+    names: [...names.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)),
+  };
 }
 
 export const apiUsage = () => usageSummary();

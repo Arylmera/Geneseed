@@ -8,6 +8,19 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Activity "Today".** Runs per day over 14 days, gate asks per rule over 30 days and "Waiting on you", above a feed that mixes runs and gate asks by day, with filters — so the page answers what your agents did even with live tracking off.
+- **Rebuild one install.** Each Overview row rebuilds only its own install, and "Rebuild all behind (N)" rebuilds only the installs that need it; both ask first and show progress on the rows they touch. A per-install rebuild on a console running older code than the disk asks you to restart it first.
+- **Usage in the Library.** Each skill and agent shows its call count across installs, the reader shows where and how often it ran over 30 days, and a "Not used yet" filter lists what has not fired since counting began.
+- **Hosts shows each install's sync with source**, and the Server tab is a settings sheet: server pid and uptime, whether the code matches the disk, the request guards, and a danger zone.
+- **Command palette.** "Search or run…" (Ctrl/⌘ K or `/`) finds pages, items and actions in one place; actions that write still ask first.
+
+### Changed
+- **Rule scope `user` is an alias of `global`.** The rule skill documents `project` and `global`; the editor opens a `user` rule on `global` and writes `global` when you save it. Untouched rules keep what they say.
+
+### Fixed
+- The Constitution page's Dictates and Doctrines cells no longer show a light browser-default button background that hid their names in dark mode.
+
 ## [4.20.0] — 2026-10-24
 
 Minor: every web console page uses the shared building blocks — one header and one primary action per page, named controls, consistent empty and error states.

@@ -101,7 +101,7 @@ streams the output of background jobs and keeps their history across reloads.
 
 - **Rules** (`#/rules`) — your own standing rules, read from and written to the
   `user-rules.md` beside the deployed AGENT.md (the seed-once file no update ever
-  touches). List with scope (project/user/global, or any other scope written by hand, which a
+  touches). List with scope (project/global — a hand-written `user` opens as global — or any other scope written by hand, which a
   save keeps as written) and trial chips, add/edit/retire forms (a body line starting
   `## ` is refused: the file would read it as a new rule heading), a
   **Graduate** action that adopts a trial rule for good, and a budget meter that turns
@@ -195,7 +195,9 @@ streams the output of background jobs and keeps their history across reloads.
 ### 🎨 Setup
 
 - **Harness** (`#/harness`) — this machine's own install first (path, voice, footprint,
-  and when it was built), then the **Voice** reference, then every detected install.
+  and when it was built), then the **Voice** reference, then every detected install. A
+  **Sync with source** column says whether each install is behind the source (and by how many
+  files), in sync or not checked, shows hand edits apart from stale files, and links to Local edits.
   `#/harnesses` and `#/themes` both still resolve here, so old links and bookmarks keep
   working.
   - The **Voice** card is the former Themes tab, kept as a REFERENCE rather than a second
@@ -224,14 +226,13 @@ streams the output of background jobs and keeps their history across reloads.
   row's staging only when that install's kits changed. A failed rebuild keeps it and says so,
   and a reload asks first while anything is staged. Files you edited in a kit that is now off are kept,
   and the row lists them.
-- **Settings** (`#/settings`) — a **Console direction** picker (the visual flavour of the
-  console: Cultivar, Operator, Matrix or Atlas) with a **Dashboard layout** control (Auto follows each theme's designed Status
-  lens; Cultivar / Greenhouse / Operator / Journal force one regardless of skin), the
-  install snapshot (deployed/target/theme/version/memory store), a Maintenance card (PATH
-  link/unlink and Update; each install is uninstalled from its own panel in Hosts), an
-  offline package download, server controls (Stop), and the **About** colophon — project + creator credits and the source link, folded in from the
-  retired `#/about` tab (which still resolves here). Build, update, and MCP wiring live in
-  the Harness tab.
+- **Server** (`#/installs/server`; `#/settings` and `#/about` resolve here) — a settings sheet
+  with a section index. **Appearance**: accent, Overview view, console direction. **Machine**:
+  version + Update, Add to PATH, the viewed install's footprint. **Server**: running · port ·
+  pid · uptime, whether the code matches the disk (with Restart), start-at-login state (read
+  only), and the four request guards. **About**: version, changelog, credits, source, creator.
+  **Danger zone**: Stop server, Remove from PATH, and a pointer to each install's own
+  Uninstall in Hosts.
 
 ## Rebuilding the UI
 

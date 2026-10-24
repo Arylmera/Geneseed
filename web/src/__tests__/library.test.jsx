@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Library: kinds column, list pane, reader. Skills and Agents used to be pages of their
@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // entry from the URL, the lifecycle badges) is pinned here, beside what the Library always
 // did (forget a memory fact, never fetch across kinds).
 vi.mock('../api/index.js', () => ({
-  api: { catalog: vi.fn(), item: vi.fn(), memoryDelete: vi.fn() },
+  api: { catalog: vi.fn(), item: vi.fn(), memoryDelete: vi.fn(), usage: vi.fn() },
 }))
 
 // Every confirm answers yes (hooks/useConfirm.jsx; its own dialog is tested elsewhere).
@@ -41,6 +41,7 @@ beforeEach(() => {
     Promise.resolve({ title: 'A fact', desc: '', body: 'body', links: [] }),
   )
   api.memoryDelete.mockImplementation(() => Promise.resolve({ deleted: 'fact-a' }))
+  api.usage.mockImplementation(() => Promise.resolve(null))
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -415,5 +416,246 @@ describe('ManifestDoc', () => {
     const pre = document.querySelector('.mf-raw-pre')
     expect(pre.id).toBeTruthy()
     expect(t.getAttribute('aria-controls')).toBe(pre.id)
+  })
+})
+
+// How often each skill or agent fires, read off GET /api/usage's fleet-wide `names`: one entry
+// per kind+name, summed over every install. Three installs here, two of them claude global (a
+// second claude root), so the hosts line names "claude global" once. `rule` is in install A's
+// `never` but fired on B: it IS used, since `never` is per install (the OV-2 bug). `plan` has no
+// entry at all (never called since tracking began) and `old` has n 0 in the window but a `last`
+// day, so only `plan` is "Not used yet".
+describe('Library usage', () => {
+  const A = 'opencode:global:C:\\Users\\u\\.config\\opencode'
+  const B = 'claude:global:/home/u/.claude'
+  const B2 = 'claude:global:D:\\other\\.claude'
+  const zeros = Array(30).fill(0)
+  const days = (at) => zeros.map((_, i) => at[i] || 0)
+  const USAGE = {
+    enabled: true,
+    since: '2026-09-01',
+    days_counted: 30,
+    per_day: zeros,
+    rows: [],
+    never: [{ install: A, kind: 'skill', name: 'rule' }],
+    names: [
+      {
+        kind: 'skill',
+        name: 'brainstorm',
+        n: 3,
+        installs: [A, B, B2],
+        per_day: days({ 27: 1, 29: 2 }),
+        last: '2026-10-13',
+      },
+      {
+        kind: 'skill',
+        name: 'rule',
+        n: 1,
+        installs: [B],
+        per_day: days({ 28: 1 }),
+        last: '2026-10-12',
+      },
+      { kind: 'skill', name: 'old', n: 0, installs: [], per_day: zeros, last: '2026-08-14' },
+      {
+        kind: 'agent',
+        name: 'reviewer',
+        n: 2,
+        installs: [A],
+        per_day: days({ 29: 2 }),
+        last: '2026-10-13',
+      },
+      {
+        kind: 'skill',
+        name: 'tester',
+        n: 5,
+        installs: [A],
+        per_day: days({ 29: 5 }),
+        last: '2026-10-13',
+      },
+    ],
+  }
+  const SKILLS = [
+    { name: 'brainstorm', title: 'brainstorm', klass: 'design' },
+    { name: 'rule', title: 'rule', klass: 'design' },
+    { name: 'old', title: 'old', klass: 'design' },
+    { name: 'plan', title: 'plan', klass: 'build' },
+  ]
+  beforeEach(() => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items: section === 'skills' ? SKILLS : SECTION_ITEMS[section] || [],
+      }),
+    )
+    api.usage.mockImplementation(() => Promise.resolve(USAGE))
+  })
+
+  const use = (href) => document.querySelector(`a.lib-row[href="${href}"] .lr-use`)
+  const rowNames = () =>
+    [...document.querySelectorAll('.lib-row')].map((a) => a.getAttribute('data-title'))
+  // The rail's skill classes have an "All" too, so the usage chips are found in their own group.
+  const chip = (re) =>
+    within(screen.getByRole('group', { name: 'Show' })).getByRole('button', { name: re })
+  const stats = () =>
+    [...document.querySelectorAll('.lib-stats .stat')].map((s) => [
+      s.querySelector('.stat-label').textContent,
+      s.querySelector('.stat-value').textContent,
+      s.querySelector('.stat-delta')?.textContent ?? null,
+    ])
+
+  it('puts the fleet-wide count and its bar on each row, 0 for a name with no entry', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    expect(use('#/item/skill/brainstorm').textContent).toBe('3 calls')
+    expect(use('#/item/skill/brainstorm').querySelector('.sr-only').textContent).toBe(' calls')
+    expect(use('#/item/skill/rule').textContent).toBe('1 call')
+    expect(use('#/item/skill/plan').textContent).toBe('0 calls')
+    // The bar is the share of the busiest row of this kind (brainstorm, 3).
+    expect(use('#/item/skill/brainstorm').querySelector('.ub-trk i').style.width).toBe('100%')
+    expect(use('#/item/skill/plan').querySelector('.ub-trk i').style.width).toBe('0%')
+    expect(
+      use('#/item/skill/brainstorm').querySelector('.ub-trk').getAttribute('aria-hidden'),
+    ).toBe('true')
+  })
+
+  // An agent reads the agent entries only: `tester` has 5 skill calls, none as an agent.
+  it('counts an agent by its agent calls only', async () => {
+    render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/agent/reviewer')).toBeTruthy())
+    expect(use('#/item/agent/reviewer').textContent).toBe('2 calls')
+    expect(use('#/item/agent/tester').textContent).toBe('0 calls')
+  })
+
+  it('narrows to what was never called, and to what was, with honest counts', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    const group = screen.getByRole('group', { name: 'Show' })
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'All 4',
+      'Used 3',
+      'Not used yet 1',
+    ])
+    expect(chip(/^Not used yet/).getAttribute('title')).toBe('No call since 2026-09-01')
+    fireEvent.click(chip(/^Not used yet/))
+    expect(chip(/^Not used yet/).getAttribute('aria-pressed')).toBe('true')
+    // Only plan: rule is in A's `never` but fired on B, and old has a `last` day.
+    expect(rowNames()).toEqual(['plan'])
+    fireEvent.click(chip(/^Used/))
+    expect(rowNames()).toEqual(['brainstorm', 'rule', 'old'])
+    fireEvent.click(chip(/^All/))
+    expect(rowNames()).toEqual(['brainstorm', 'rule', 'old', 'plan'])
+  })
+
+  // The chips count what the skill-class category left, and the two filters stack.
+  it('counts and narrows within the picked skill class', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /^Build/ }))
+    const group = screen.getByRole('group', { name: 'Show' })
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'All 1',
+      'Used 0',
+      'Not used yet 1',
+    ])
+    fireEvent.click(chip(/^Used/))
+    expect(rowNames()).toEqual([])
+  })
+
+  it('states the window honestly when nothing has been recorded yet', async () => {
+    api.usage.mockImplementation(() =>
+      Promise.resolve({ ...USAGE, since: null, days_counted: 0, names: [] }),
+    )
+    render(<Library section="skills" selected="plan" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/plan')).toBeTruthy())
+    expect(chip(/^Not used yet/).getAttribute('title')).toBe('No call recorded yet')
+    expect(stats()).toEqual([['Used', '0', 'No call recorded yet']])
+  })
+
+  it('reads out the summed count, the window, the hosts and the last day', async () => {
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
+    expect(stats()).toEqual([
+      ['Used', '3', 'in the last 30 days · on opencode global, claude global'],
+      ['Last used', '2026-10-13', null],
+    ])
+    const cols = [...document.querySelectorAll('.lib-stats .cols30 i')]
+    expect(cols.map((i) => i.style.height)).toEqual(
+      days({ 27: '50%', 29: '100%' }).map((h) => h || '0%'),
+    )
+    expect(cols.map((i) => i.className === 'today')).toEqual(zeros.map((_, i) => i === 29))
+    expect(document.querySelector('.lib-stats .cols30').getAttribute('aria-hidden')).toBe('true')
+  })
+
+  // Under 30 counted days, n covers only the days since tracking began, so it says that.
+  it('says "since" the first day when fewer than 30 days are counted', async () => {
+    api.usage.mockImplementation(() =>
+      Promise.resolve({ ...USAGE, since: '2026-10-02', days_counted: 12 }),
+    )
+    render(<Library section="skills" selected="rule" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
+    expect(stats()).toEqual([
+      ['Used', '1', 'since 2026-10-02 · on claude global'],
+      ['Last used', '2026-10-12', null],
+    ])
+  })
+
+  // `old` fired before the window (14 Aug): 0 in the window, no host to name, but a last day,
+  // so it is used, only not lately.
+  it('reads out an entry used only before the window, and keeps it out of "Not used yet"', async () => {
+    render(<Library section="skills" selected="old" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
+    expect(stats()).toEqual([
+      ['Used', '0', 'in the last 30 days'],
+      ['Last used', '2026-08-14', null],
+    ])
+    fireEvent.click(chip(/^Not used yet/))
+    expect(rowNames()).not.toContain('old')
+  })
+
+  it('says a never-called entry has no call since tracking began, and no last day', async () => {
+    render(<Library section="skills" selected="plan" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
+    expect(stats()).toEqual([['Used', '0', 'No call since 2026-09-01']])
+  })
+
+  const noUsageUi = () => {
+    expect(document.querySelector('.lr-use')).toBeNull()
+    expect(document.querySelector('.lib-stats')).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Show' })).toBeNull()
+  }
+
+  it('shows no usage at all when the read fails', async () => {
+    api.usage.mockImplementation(() => Promise.reject(new Error('down')))
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
+    await waitFor(() => expect(api.usage).toHaveBeenCalled())
+    noUsageUi()
+    expect(document.querySelector('.error-state, [role="alert"]')).toBeNull()
+  })
+
+  it('shows no usage when counting is off', async () => {
+    api.usage.mockImplementation(() => Promise.resolve({ ...USAGE, enabled: false }))
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
+    await waitFor(() => expect(api.usage).toHaveBeenCalled())
+    noUsageUi()
+  })
+
+  it('neither reads nor shows usage under memory', async () => {
+    render(<Library section="memory" selected="fact-a" overview={overview({})} />)
+    await screen.findByText('Forget this fact')
+    noUsageUi()
+    expect(api.usage).not.toHaveBeenCalled()
+  })
+
+  // The usage slot sits inside the row link: the list stays ONE tab stop (brief V5b).
+  it('keeps the rows one tab stop with the count inside them', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    const rows = [...document.querySelectorAll('.lib-row')]
+    expect(rows.filter((r) => r.tabIndex === 0)).toHaveLength(1)
+    expect(document.querySelectorAll('.lr-use a, .lr-use button, .lr-use [tabindex]')).toHaveLength(
+      0,
+    )
   })
 })

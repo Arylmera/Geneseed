@@ -80,7 +80,7 @@ describe('Ledger hand-edits cell', () => {
     expect(await t.findByText('3 files behind')).toBeTruthy()
     expect(t.queryByText(/edited/)).toBeNull()
     expect(t.getByText('none')).toBeTruthy()
-    expect(t.getByText('Rebuild all')).toBeTruthy()
+    expect(t.getByText('Rebuild')).toBeTruthy()
   })
 
   it('says a zero ceiling is no ceiling, not a percentage', async () => {
@@ -139,6 +139,6 @@ describe('Ledger hand-edits cell', () => {
     const t = await cell()
     expect(await t.findByText('1 edited')).toBeTruthy()
     expect(t.queryByText('2 linked')).toBeNull()
-    expect(t.getByText('Rebuild all')).toBeTruthy()
+    expect(t.getByText('Rebuild')).toBeTruthy()
   })
 })

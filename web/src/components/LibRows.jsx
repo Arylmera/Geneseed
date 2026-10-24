@@ -113,7 +113,7 @@ export function LibRow({ item, isOpen, href, children }) {
 
 // The rows, with a small header each time a row's `group` changes (a wiki page's vault, a
 // skill's class, a loop template's category). Rows without groups render no headers.
-// `pills(it)` adds a row's pills; the Library has none.
+// `pills(it)` adds a row's pills; the Library puts its usage count there.
 export function GroupedRows({ rows, activeName, hrefOf, pills }) {
   let lastGroup = null
   const out = []
