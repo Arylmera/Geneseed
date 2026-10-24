@@ -65,7 +65,7 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       const errs = res.errors.length
         ? ` · ${res.errors.length} error(s): ${res.errors.join('; ')}`
         : ''
-      setNote(`Restored ${res.restored.length}, deleted ${res.deleted.length}${errs}`)
+      setNote(`Restored ${res.restored.length}, archived ${res.deleted.length}${errs}`)
       await reload()
       onMutated?.() // refresh the shared overview so the Rail's Changes badge updates
     } catch (e) {

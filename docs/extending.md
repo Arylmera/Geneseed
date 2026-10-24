@@ -125,7 +125,7 @@ Notes that matter:
 
 ### The gates CI does not run
 
-- **The mutation matrix itself.** `tests/mutate.mjs` — 35 rows, each a one-string edit to a
+- **The mutation matrix itself.** `tests/mutate.mjs` — 34 rows, each a one-string edit to a
   product file with a written argument for which gate should catch it. The full run is **in no
   workflow** and should not be: it mutates the product tree 33 times and runs a gate per edit.
   Run `node tests/mutate.mjs --all` (or `--only M7`) by hand when you change something a gate is

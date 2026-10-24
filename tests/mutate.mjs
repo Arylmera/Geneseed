@@ -376,20 +376,9 @@ export const MUTATIONS = [
   // P3 T7, with `tests/unit/web_jobs.test.mjs`. MEASURED WHILE ADDING THESE: the `$ <argv>` echo
   // line in the recorded web corpus normalised the WHOLE argv to `<ARGV>`, not merely its head
   // — so all 114 cells were blind to every argument the job runner resolves, and the reference's
-  // own docstring understated it. Both rows below were therefore invisible to the entire corpus.
-  {
-    id: 'M20',
-    name: 'drop --yes from the uninstall job argv',
-    file: 'js/web/jobs.mjs',
-    find: "    uninstall: [[NODE(), CLI(), 'uninstall', '--yes']],",
-    replace: "    uninstall: [[NODE(), CLI(), 'uninstall']],",
-    gate: UNIT,
-    why: 'A REAL HAZARD AND NOT A COSMETIC ONE: the web Settings runs uninstall as a background '
-      + 'job with no terminal attached, so without `--yes` the verb blocks on a confirmation '
-      + 'prompt nobody can answer and the job hangs until the daemon is killed. Nothing observed '
-      + 'it: the argv is not serialised to a client, and the one place it appears — the `$` echo '
-      + 'line — was normalised whole in every recorded cell.',
-  },
+  // own docstring understated it. The row below was therefore invisible to the entire corpus.
+  // M20 (`--yes` on the uninstall job argv) went with that job row: the web no longer runs an
+  // untargeted `uninstall`, and an id is never reused.
   {
     id: 'M21',
     name: 'make the deploy resolver ignore the requested host',

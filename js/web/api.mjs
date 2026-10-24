@@ -80,13 +80,24 @@ export function apiSetup(state) {
   };
 }
 
+// Short: a user who fixes a problem and clicks Re-run must not be shown the old verdict for long.
+const DOCTOR_COOLDOWN_MS = 3_000;
+
 /**
  * The same engine as the `doctor` verb, grouped per check — served from the state's cached run
  * (a lens visit or a page mount no longer pays ~3.6 s), and re-run only when `fresh` is asked
  * for: the Doctor page's Re-run button, as `GET /api/doctor?fresh=1`.
+ *
+ * A fresh ask within `DOCTOR_COOLDOWN_MS` of the last one THIS PATH ran reuses that run, so a
+ * page looping on `?fresh=1` cannot pin the event loop. `_doctorFreshAt` is written here only: a
+ * verdict planted any other way still re-runs. No single-flight promise — `runDoctor` is
+ * synchronous, so two fresh runs cannot overlap (revisit if it ever goes async).
  */
 export function apiDoctor(state, fresh = false) {
-  if (fresh) state.runDoctor();
+  if (fresh && Date.now() - (state._doctorFreshAt ?? 0) >= DOCTOR_COOLDOWN_MS) {
+    state.runDoctor();
+    state._doctorFreshAt = Date.now();
+  }
   const { ok, problems, checked_at } = state.doctor;
   return { ...state._doctorRun, ok, problems, checked_at };
 }

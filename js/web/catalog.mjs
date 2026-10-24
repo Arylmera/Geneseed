@@ -29,6 +29,9 @@ import { loadKits } from '../build/source.mjs';
 /** A requested catalog section or item that does not exist. */
 export class NotFound extends Error {}
 
+/** A request body the route refuses on its content (a 400, not a 500): the caller can fix it. */
+export class BadRequest extends Error {}
+
 /** `??` would also swallow an explicit `null` the file declared; this does not. */
 export const dget = (obj, key, dflt) => (Object.hasOwn(obj, key) ? obj[key] : dflt);
 
