@@ -5,7 +5,8 @@ import { motionOK } from './lib/motion.js'
 import { useRoute } from './lib/router.js'
 import { applyAccent, applyCuratedAccent, applyHexAccent } from './lib/accents.js'
 import { useColorMode } from './hooks/useColorMode.js'
-import { useFlavour } from './hooks/useFlavour.js'
+import { useFlavour, FLAVOURS } from './hooks/useFlavour.js'
+import { restartAndReload } from './hooks/waitForServer.js'
 import { useAccentMode, customAccentName, pickedHex } from './hooks/useAccentMode.js'
 import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
@@ -41,7 +42,6 @@ const Docs = lazy(() => import('./pages/Docs/index.jsx'))
 // logic lives in hooks/ and all chrome in components/.
 export default function App() {
   const route = useRoute()
-  const [query, setQuery] = useState('')
   const [toast, setToast] = useState(null)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [mode, toggleMode] = useColorMode()
@@ -152,6 +152,53 @@ export default function App() {
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute('content', getComputedStyle(el).getPropertyValue('--bg').trim())
   }, [overview, mode, accentMode, flavour])
+
+  // The command palette's Actions: each calls the handler the page's own control uses. A
+  // `confirm` row is asked by the palette (useConfirm needs the provider this component
+  // renders, so App cannot ask it here). The restart copy is ServerControl's, word for word.
+  const actions = [
+    {
+      title: 'Rebuild all',
+      desc: 'Re-emit every install',
+      run: () => runAction('build-all'),
+      confirm: {
+        msg: 'Rebuild every install from the current sources?',
+        title: 'Rebuild all?',
+        confirmLabel: 'Rebuild all',
+      },
+    },
+    {
+      title: 'Update',
+      desc: 'Pull the latest Geneseed; the server restarts after',
+      run: () => runAction('update'),
+      confirm: {
+        msg: 'Update Geneseed? The server restarts when the update ends.',
+        title: 'Update Geneseed?',
+        confirmLabel: 'Update',
+      },
+    },
+    { title: 'Run doctor', desc: 'Read-only health check', run: () => runAction('doctor') },
+    {
+      title: 'Restart server',
+      desc: 'Restart the local Geneseed server',
+      run: () => restartAndReload().catch(onError),
+      confirm: {
+        msg: 'Restart the local Geneseed server? The console reconnects in a moment.',
+        title: 'Restart the server?',
+        confirmLabel: 'Restart',
+      },
+    },
+    {
+      title: mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode',
+      desc: 'Appearance',
+      run: toggleMode,
+    },
+    ...FLAVOURS.filter((f) => f.id !== flavour).map((f) => ({
+      title: `Flavour: ${f.name}`,
+      desc: f.tagline,
+      run: () => switchFlavour(f.id),
+    })),
+  ].map((a) => ({ kind: 'Actions', hay: `${a.title} ${a.desc}`.toLowerCase(), ...a }))
 
   const appearance = {
     flavour,
@@ -275,8 +322,7 @@ export default function App() {
             onToggleNav={() => setNavOpen((v) => !v)}
             overview={overview}
             installs={installs}
-            query={query}
-            onQuery={setQuery}
+            actions={actions}
             mode={mode}
             onToggleMode={toggleMode}
             appearance={appearance}

@@ -1,5 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { animate, utils } from 'animejs'
 import { Icon } from '../components/Icon.jsx'
+import { motionOK, settle } from './motion.js'
+import { newestJobs } from './jobBuckets.js'
 
 // Shared render vocabulary for the Activity list (cards) and the session-detail page.
 
@@ -151,4 +154,126 @@ export function SessionHeader({ s, heading, id, children }) {
       )}
     </>
   )
+}
+
+// Both states wait on the user: blocked on an approval, or waiting for an answer. One
+// predicate, so the "Waiting on you" count and the "Needs you" filter cannot disagree.
+export const needsYou = (s) => s?.status === 'blocked' || s?.status === 'waiting-input'
+
+const DAY_MS = 86400000
+
+// A UTC calendar day, `YYYY-MM-DD`. UTC because the gate ledger's per_day is UTC: one key
+// lets a run and a gate ask land in the same day group.
+export const dayKey = (ms) => new Date(ms).toISOString().slice(0, 10)
+
+const fromKey = (key, opts) =>
+  new Date(`${key}T00:00:00Z`).toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' })
+export const shortDay = (key) => fromKey(key, { day: 'numeric', month: 'short' })
+
+// "Today · Saturday 24 October", "Yesterday · …", else "Tuesday 20 October".
+export function dayLabel(key, now = Date.now()) {
+  const long = fromKey(key, { weekday: 'long', day: 'numeric', month: 'long' })
+  const rel = key === dayKey(now) ? 'Today' : key === dayKey(now - DAY_MS) ? 'Yesterday' : ''
+  return rel ? `${rel} · ${long}` : long
+}
+
+// Runs per UTC day over the last `days` days, oldest first: `[{ key, n, nodata }]`.
+// Calendar days, not bucketJobsByDay's rolling 24 h, and with a no-data flag: the server keeps
+// only the newest `cap` finished runs, so a zero before the oldest kept run is a zero nobody
+// can prove once the log may have been trimmed. With `cap` unknown, assume it was.
+export function runDays(jobs, { now = Date.now(), days = 14, cap } = {}) {
+  const list = (jobs || []).filter((j) => Number.isFinite(j.started))
+  const count = {}
+  for (const j of list) {
+    const k = dayKey(j.started * 1000)
+    count[k] = (count[k] || 0) + 1
+  }
+  const oldest = list.length ? dayKey(Math.min(...list.map((j) => j.started)) * 1000) : null
+  const finished = list.filter((j) => j.status !== 'running').length
+  const trimmed = typeof cap === 'number' ? finished >= cap : true
+  return Array.from({ length: days }, (_, i) => {
+    const key = dayKey(now - (days - 1 - i) * DAY_MS)
+    return { key, n: count[key] || 0, nodata: trimmed && (oldest === null || key < oldest) }
+  })
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+// The feed: one group per UTC day that has a run or a gate ask, newest day first. `rows` are
+// gateRows() output (per_day aligned with `days`, the ledger's keys). A day's gate asks fold
+// into ONE line, busiest rule first: the ledger keeps counts per day, not each ask.
+export function feedDays(jobs, rows, days, now = Date.now()) {
+  const by = {}
+  const day = (key) => (by[key] ||= { key, runs: [], asks: [] })
+  for (const j of newestJobs(jobs, (jobs || []).length)) {
+    if (Number.isFinite(j.started)) day(dayKey(j.started * 1000)).runs.push(j)
+  }
+  ;(days || []).forEach((key, i) => {
+    for (const r of rows || []) if (r.per_day?.[i] > 0) day(key).asks.push([r.name, r.per_day[i]])
+  })
+  return Object.values(by)
+    .sort((a, b) => (a.key < b.key ? 1 : -1))
+    .map(({ key, runs, asks }) => {
+      asks.sort((a, b) => b[1] - a[1])
+      const n = asks.reduce((s, a) => s + a[1], 0)
+      const title = asks.map(([name, c], i) => `${name}${i ? '' : ' asked'} ${c}×`).join(', ')
+      const sum = [runs.length && plural(runs.length, 'run'), n && plural(n, 'gate ask')]
+      return {
+        key,
+        title: dayLabel(key, now),
+        sum: sum.filter(Boolean).join(' · '),
+        runs,
+        gate: n ? { title, n } : null,
+      }
+    })
+}
+
+const SWEEP_MS = 500
+
+// A 30-day sparkline, moved here from the Ledger so Activity draws the same one. With
+// `sweep`, the line draws itself in once per change of its values (keyed like StackBar's
+// `sig`, so a re-render with the same numbers does not redraw). The markup is final: without
+// motion (reduced motion, a test) the line is simply there.
+export function Spark({ vals, i, sweep = false }) {
+  const line = useRef(null)
+  const sig = vals.join(',')
+  useLayoutEffect(() => {
+    if (!sweep || !line.current || !motionOK()) return
+    // Undrawn before paint (a layout effect), so the full line never flashes first.
+    utils.set(line.current, { strokeDasharray: 1, strokeDashoffset: 1 })
+    return settle(
+      animate(line.current, { strokeDashoffset: [1, 0], duration: SWEEP_MS, ease: 'outExpo' }),
+      SWEEP_MS,
+    )
+  }, [sig, sweep])
+  const w = 96
+  const h = 22
+  const max = Math.max(1, ...vals)
+  const step = w / (vals.length - 1)
+  const pts = vals.map(
+    (v, d) => `${(d * step).toFixed(1)},${(h - 2 - (v / max) * (h - 5)).toFixed(1)}`,
+  )
+  const [lx, ly] = pts[pts.length - 1].split(',')
+  return (
+    <svg className="spark" viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ '--i': i }}>
+      <polyline points={`0,${h - 1} ${w},${h - 1}`} className="spk-base" />
+      <polygon className="spk-area" points={`0,${h - 1} ${pts.join(' ')} ${w},${h - 1}`} />
+      <polyline className="spk-line" pathLength="1" points={pts.join(' ')} ref={line} />
+      <circle className="spk-end" cx={lx} cy={ly} r="2.4" />
+    </svg>
+  )
+}
+
+// Grows every `[data-sweep]` child of the returned ref's box from zero along one axis
+// (`scaleY` for the run columns, `scaleX` for the duration bars), once per change of `sig`.
+// Sizes stay final in the markup, so without motion the bars are simply there.
+export function useSweep(sig, prop) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    const kids = ref.current ? [...ref.current.querySelectorAll('[data-sweep]')] : []
+    if (!kids.length || !motionOK()) return
+    utils.set(kids, { [prop]: 0 })
+    return settle(animate(kids, { [prop]: [0, 1], duration: SWEEP_MS, ease: 'outExpo' }), SWEEP_MS)
+  }, [sig, prop])
+  return ref
 }

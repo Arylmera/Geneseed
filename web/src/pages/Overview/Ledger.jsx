@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
+import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
 import PageHeader from '../../components/PageHeader.jsx'
@@ -14,6 +15,7 @@ import {
   ledgerNeeds,
   needsRebuild,
   neverFired,
+  rebuildTarget,
 } from '../../lib/overview.js'
 
 // The Ledger: the Overview as a control panel over every INSTALLED harness on the machine.
@@ -153,9 +155,14 @@ function CarrierRing({ cost, i }) {
   )
 }
 
-function FleetRow({ i, n, onAction, onOpen }) {
+function FleetRow({ i, n, onRebuild, onOpen, busy }) {
+  const label = `${i.host} · ${i.scope}`
   const where = (
-    <td>
+    <td className="ldg-where">
+      {/* The console's own sweep, while a rebuild job that names this row runs. */}
+      {busy ? (
+        <span className="console-progress" role="progressbar" aria-label={`Rebuilding ${label}`} />
+      ) : null}
       <span className="ldg-host">{i.host}</span> <span className="dim">{i.scope}</span>
       <div className="mono dim ldg-path">{i.path}</div>
     </td>
@@ -177,7 +184,7 @@ function FleetRow({ i, n, onAction, onOpen }) {
           <button
             type="button"
             className="btn ghost sm"
-            aria-label={`Open ${i.host} · ${i.scope}`}
+            aria-label={`Open ${label}`}
             onClick={() => onOpen(i)}
           >
             Open
@@ -251,22 +258,22 @@ function FleetRow({ i, n, onAction, onOpen }) {
       </td>
       <td className="mono dim">{i.built_epoch ? `${relTime(i.built_epoch)} ago` : 'never'}</td>
       <td className="ldg-act">
-        {/* The verb is the machine-wide rebuild, so it says so: it never rebuilds one row. */}
+        {/* Rebuilds this row's install alone (the `rebuild` action), after a confirm. */}
         {needsRebuild(i) ? (
           <button
             type="button"
             className="btn ghost sm"
-            aria-label={`Rebuild all installs (${i.host} · ${i.scope} needs it)`}
-            title="Rebuilds every install on this machine"
-            onClick={() => onAction('build-all')}
+            aria-label={`Rebuild ${label}`}
+            title={`Rebuilds ${label} only`}
+            onClick={() => onRebuild([rebuildTarget(i)])}
           >
-            Rebuild all
+            Rebuild
           </button>
         ) : (
           <button
             type="button"
             className="btn ghost sm"
-            aria-label={`Open ${i.host} · ${i.scope}`}
+            aria-label={`Open ${label}`}
             onClick={() => onOpen(i)}
           >
             Open
@@ -277,7 +284,7 @@ function FleetRow({ i, n, onAction, onOpen }) {
   )
 }
 
-function Needs({ rows, onAction }) {
+function Needs({ rows, onAction, onRebuild }) {
   const problems = rows.filter((r) => !r.sugg).length
   return (
     <section className="panel" aria-labelledby="ldg-needs">
@@ -303,7 +310,7 @@ function Needs({ rows, onAction }) {
                   type="button"
                   className="needs-verb linkish"
                   aria-label={`${n.verb}: ${n.title}`}
-                  onClick={() => onAction(n.act)}
+                  onClick={() => (n.installs ? onRebuild(n.installs) : onAction(n.act))}
                 >
                   {n.verb}
                 </button>
@@ -526,7 +533,19 @@ function GatesChart({ gates, laws }) {
 }
 
 // `view` is the Overview's View control, handed down so both arms carry the same one.
-export default function Ledger({ overview, setup, onAction, onRetry, dataRev, banner, view }) {
+export default function Ledger({
+  overview,
+  setup,
+  runs,
+  onAction,
+  onRetry,
+  dataRev,
+  banner,
+  view,
+}) {
+  const confirm = useConfirm()
+  // job id → the row ids its rebuild names; a row shows the sweep while that run is running.
+  const [rebuilding, setRebuilding] = useState({})
   // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
   // last good answer on a failed reload, so a blip shows the old table under an error line.
   const {
@@ -585,9 +604,30 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
     skills,
     laws,
   })
-  // One primary per page: a rebuild that is due outranks an update that is due. It is the
-  // machine-wide rebuild (every install, not only the N behind), so the label says "all".
-  const behind = installs.filter(needsRebuild).length
+  // One primary per page: a rebuild that is due outranks an update that is due. It rebuilds
+  // only the N installs that need it, each named in the confirm.
+  const behind = installs.filter(needsRebuild).map(rebuildTarget)
+  const rebuild = async (targets) => {
+    const names = targets.map((t) => t.label)
+    const ok = await confirm(
+      `Rebuild ${names.join(', ')}? Each is re-rendered from source with its own settings.`,
+      {
+        title:
+          targets.length === 1 ? `Rebuild ${names[0]}?` : `Rebuild ${targets.length} installs?`,
+        confirmLabel: 'Rebuild',
+      },
+    )
+    if (!ok) return
+    const jid = await onAction('rebuild', {
+      installs: targets.map(({ host, path }) => ({ host, path })),
+    })
+    if (jid) setRebuilding((r) => ({ ...r, [jid]: targets.map((t) => t.id) }))
+  }
+  const running = new Set(
+    Object.entries(rebuilding)
+      .filter(([jid]) => runs?.find((r) => r.id === jid)?.status === 'running')
+      .flatMap(([, ids]) => ids),
+  )
 
   return (
     <>
@@ -599,20 +639,20 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
           </span>
         }
         primary={
-          behind ? (
+          behind.length ? (
             <button
               type="button"
               className="btn"
-              title="Rebuilds every install on this machine"
-              onClick={() => onAction('build-all')}
+              title={`Rebuilds ${behind.map((t) => t.label).join(', ')}`}
+              onClick={() => rebuild(behind)}
             >
-              Rebuild all ({behind} behind)
+              Rebuild all behind ({behind.length})
             </button>
           ) : null
         }
         actions={
           <>
-            <VersionChip update={update} onAction={onAction} canFill={!behind} />
+            <VersionChip update={update} onAction={onAction} canFill={!behind.length} />
             <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
               Run doctor
             </button>
@@ -666,13 +706,20 @@ export default function Ledger({ overview, setup, onAction, onRetry, dataRev, ba
                   </tr>
                 ) : null}
                 {installs.map((i, n) => (
-                  <FleetRow key={i.id} i={i} n={n} onAction={onAction} onOpen={onOpen} />
+                  <FleetRow
+                    key={i.id}
+                    i={i}
+                    n={n}
+                    onRebuild={rebuild}
+                    onOpen={onOpen}
+                    busy={running.has(i.id)}
+                  />
                 ))}
               </tbody>
             </table>
           </div>
         </section>
-        <Needs rows={needs} onAction={onAction} />
+        <Needs rows={needs} onAction={onAction} onRebuild={rebuild} />
         <div className="ov-charts">
           <CostChart installs={installs} />
           <UsageChart usage={usage} />

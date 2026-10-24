@@ -1,14 +1,19 @@
 import React from 'react'
-import { render, screen, within } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 
-// Settings is prop-driven now: ServerControl only touches the api on a click, so an
+// Settings is prop-driven now: the server controls only touch the api on a click, so an
 // empty stub keeps the import side-effect-free.
 vi.mock('../api/index.js', () => ({ api: {} }))
 
 import Settings from '../pages/Settings/index.jsx'
 
+// Sections are h3 under the page's one h2 (which is also "Server", the tab's name).
+const section = (name) => screen.getByRole('heading', { level: 3, name }).closest('section')
+
 describe('Settings', () => {
+  afterEach(() => vi.useRealTimers())
+
   it('renders maintenance, the update button, and server control', () => {
     render(<Settings onAction={() => {}} />)
     // Per-install detail and build moved to the Harnesses tab + Dashboard; Settings keeps
@@ -19,17 +24,40 @@ describe('Settings', () => {
     expect(screen.getByText('Stop server')).toBeTruthy()
   })
 
+  // The sheet's index lists the five sections in page order, and each entry is a button that
+  // scrolls: a bare href="#server" would be read by the hash router as a page.
+  it('indexes its five sections with buttons, not hash links', () => {
+    render(<Settings onAction={() => {}} />)
+    const nav = screen.getByRole('navigation', { name: 'On this page' })
+    expect(
+      within(nav)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Appearance', 'Machine', 'Server', 'About', 'Danger zone'])
+    expect(within(nav).queryAllByRole('link')).toEqual([])
+    for (const name of ['Appearance', 'Machine', 'Server', 'About', 'Danger zone'])
+      expect(section(name)).toBeTruthy()
+    const scrolled = vi.fn()
+    section('Server').scrollIntoView = scrolled
+    fireEvent.click(within(nav).getByRole('button', { name: 'Server' }))
+    expect(scrolled).toHaveBeenCalledTimes(1)
+  })
+
   // The Maintenance card once had an Uninstall that ran `geneseed uninstall --yes` with no
   // target, so it always removed the OpenCode global whatever install was viewed. Uninstall now
-  // lives only on each install's own panel in Hosts, and the card says where.
-  it('offers no uninstall in Maintenance and points to Hosts instead', () => {
+  // lives only on each install's own panel in Hosts; the Danger zone holds what takes something
+  // away here (Stop, Remove from PATH) and says where uninstalling lives.
+  it('holds Stop and Remove from PATH in the Danger zone, and points to Hosts to uninstall', () => {
     render(<Settings onAction={() => {}} />)
-    const card = screen.getByRole('heading', { name: 'Maintenance' }).closest('.card')
-    expect(within(card).queryByRole('button', { name: /uninstall/i })).toBeNull()
-    expect(within(card).getByText(/Each install has its own Uninstall in/)).toBeTruthy()
-    expect(within(card).getByRole('link', { name: 'Hosts' }).getAttribute('href')).toBe(
-      '#/installs',
+    const danger = section('Danger zone')
+    expect(within(danger).getByRole('button', { name: /Stop server/ })).toBeTruthy()
+    expect(within(danger).getByRole('button', { name: 'Remove from PATH' })).toBeTruthy()
+    expect(within(danger).queryByRole('button', { name: /uninstall/i })).toBeNull()
+    expect(within(danger).getByText(/Each install has its own Uninstall in/)).toBeTruthy()
+    expect(within(danger).getByRole('link', { name: 'Hosts' }).getAttribute('href')).toBe(
+      '#/installs/hosts',
     )
+    expect(within(section('Machine')).queryByRole('button', { name: /Stop|Remove/ })).toBeNull()
   })
 
   it('shows the footprint dial for the current install', () => {
@@ -64,11 +92,54 @@ describe('Settings', () => {
     ).toBe(true)
   })
 
-  // The footprint card names the install's tool as the rest of the console does.
+  // The footprint row names the install's tool as the rest of the console does.
   it('names the footprint install by its host label', () => {
     render(<Settings onAction={() => {}} overview={claudeOverview} />)
-    const card = screen.getByRole('heading', { name: 'Harness footprint' }).closest('.card')
-    expect(card.textContent).toContain('Claude Code')
-    expect(card.textContent).not.toMatch(/\bclaude ·/)
+    const row = screen.getByText('Harness footprint').closest('.sheet-row')
+    expect(row.textContent).toContain('Claude Code')
+    expect(row.textContent).not.toMatch(/\bclaude ·/)
+  })
+
+  // The Server header names the process from /api/overview's `server`: its pid and how long it
+  // has run (the clock pinned, so 2 hours before now is "2h"). The Code row reads daemon_stale.
+  it('names the running process and says whether its code matches the disk', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-24T12:00:00Z'))
+    const started = Date.parse('2026-10-24T10:00:00Z') / 1000
+    const server = { pid: 4242, started, autostart: true }
+    const { rerender } = render(
+      <Settings onAction={() => {}} overview={{ server, daemon_stale: false }} />,
+    )
+    const head = section('Server').querySelector('.card-head')
+    expect(head.textContent).toMatch(/running127\.0\.0\.1:\d+ · pid 4242 · up 2h$/)
+    const code = () => within(section('Server')).getByText('Code').closest('.sheet-row')
+    expect(code().querySelector('.pill').textContent).toBe('matches disk')
+    expect(code().querySelector('.pill').className).toContain('good')
+    expect(within(code()).getByRole('button', { name: /Restart server/ })).toBeTruthy()
+    expect(within(section('Server')).getByText('On · login script')).toBeTruthy()
+
+    rerender(
+      <Settings
+        onAction={() => {}}
+        overview={{ server: { ...server, autostart: null }, daemon_stale: true }}
+      />,
+    )
+    expect(code().querySelector('.pill').textContent).toBe('disk has newer code → Restart')
+    expect(code().querySelector('.pill').className).toContain('warn')
+    expect(within(section('Server')).getByText('unknown')).toBeTruthy()
+  })
+
+  // The four guards js/web/handler.mjs enforces, each a good pill.
+  it('lists the four request guards as good pills', () => {
+    render(<Settings onAction={() => {}} />)
+    const row = within(section('Server')).getByText('Guards').closest('.sheet-row')
+    const pills = [...row.querySelectorAll('.pill')]
+    expect(pills.map((p) => p.textContent)).toEqual([
+      'Host check',
+      'token on writes',
+      'framing refused',
+      'cross-site GET refused',
+    ])
+    expect(pills.every((p) => p.classList.contains('good'))).toBe(true)
   })
 })

@@ -8,7 +8,7 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
@@ -19,6 +19,7 @@ import { installProfile } from '../build/generate.mjs';
 import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
+import { autostartPaths } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
   trustOfDir,
@@ -236,7 +237,27 @@ export function apiFleet(state) {
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
     });
   }
-  return { installs, source_fp: sourceFp, doctor: state.doctor };
+  // `version` is the source's release label, the "Behind 4.19.0" a behind row names; the same
+  // reader `/api/overview` uses, so the two never name different releases.
+  return { installs, source_fp: sourceFp, doctor: state.doctor, version: releaseLabel() };
+}
+
+/**
+ * What the Server tab says about the process answering it — built FIELD BY FIELD, never from the
+ * daemon record, which holds the write token: a GET is readable by anything that passes the Host
+ * check, and the token is the only guard on a POST. `started` is the process's own start (the
+ * server is the process), in epoch seconds. `autostart` is whether the hand-written login
+ * launcher the install guide describes (`autostartPaths`) is on disk for THIS platform; null
+ * where that guide names none.
+ */
+function serverFacts() {
+  const [vbs, plist] = autostartPaths();
+  const launcher = { win32: vbs, darwin: plist }[process.platform];
+  return {
+    pid: process.pid,
+    started: Math.floor(Date.now() / 1000 - process.uptime()),
+    autostart: launcher ? existsSync(launcher) : null,
+  };
 }
 
 /** Source files of a kit member: `<dir>/<name>.md`, or every `.md` in a `<dir>/<name>/` folder. */
@@ -357,6 +378,7 @@ export function apiOverview(state) {
     // True when the files on disk changed under this server since it started (an upgrade).
     // `serve` installs the comparison; a state built without a server has none and is false.
     daemon_stale: Boolean(state.daemonStale?.()),
+    server: serverFacts(),
     counts: {
       agents: inv.agents.length,
       skills: inv.skills.length,

@@ -7,7 +7,7 @@ import AppearancePopover from './AppearancePopover.jsx'
 import { PAGES, TAB_LABELS } from '../lib/router.js'
 
 // The top bar: where you are (the install the console reads, then the page and its tab),
-// the search box that doubles as the way to jump anywhere by name, and the two display
+// the command palette's trigger (search, jump anywhere by name, run an action), and the two display
 // controls: the appearance popover (skin and accent source) and light/dark.
 export default function Topbar({
   route,
@@ -15,8 +15,7 @@ export default function Topbar({
   onToggleNav,
   overview,
   installs,
-  query,
-  onQuery,
+  actions,
   mode,
   onToggleMode,
   appearance,
@@ -71,7 +70,7 @@ export default function Topbar({
       </nav>
       <div className="topbar-spacer" />
       <HarnessSelector installs={installs} onSwitch={onSwitch} />
-      <Search value={query} onChange={onQuery} dataRev={dataRev} />
+      <Search actions={actions} dataRev={dataRev} />
       <button
         type="button"
         className="iconbtn"

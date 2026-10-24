@@ -203,3 +203,43 @@ test('tool-gate counts a Skill call silently through the real hook binary', () =
     assert.deepEqual(lines(path.join(sb.path, USAGE_LEDGER)).map((e) => e.name), ['develop']);
   } finally { sb.cleanup(); }
 });
+
+// `names` is the fleet-wide view the Library reads: one entry per kind+name with any kept line,
+// summed over every install, because a skill fired daily on claude and never on opencode IS
+// used. Two installs on 2026-10-13: develop fires on A on 1 Oct and 12 Oct and on B on 13 Oct,
+// so n is 3, both installs are named, the three days sit at indexes 17, 28 and 29 of the window,
+// and `last` (13 Oct) is B's. plan fired only 60 days back (14 Aug), on A: still listed, with
+// n 0, no installs, no calls in the window, and that day as its `last`. explorer is both a skill
+// (twice on 5 Oct, index 21) and an agent (once on 6 Oct, index 22): two entries, kind is in the
+// key. apply (once on B, 10 Oct, index 26) sorts by name before develop but has fewer calls, so
+// the order is n first — develop 3, explorer skill 2, then the 1s by name (apply, explorer
+// agent), then plan 0.
+test('the reader sums each name across installs, and keeps the last day of an old one', () => {
+  const sb = makeSandbox('usage-');
+  try {
+    const ledger = (root, rows) => {
+      fs.mkdirSync(path.join(root, 'notebook'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.geneseed-manifest.json'), '{"owned": []}');
+      fs.writeFileSync(path.join(root, USAGE_LEDGER),
+        `${rows.map(([ts, kind, name]) => JSON.stringify({ ts, kind, name })).join('\n')}\n`);
+    };
+    const rootA = path.join(sb.path, 'a');
+    const rootB = path.join(sb.path, 'b');
+    ledger(rootA, [['2026-08-14', 'skill', 'plan'], ['2026-10-01', 'skill', 'develop'], ['2026-10-12', 'skill', 'develop'],
+      ['2026-10-05', 'skill', 'explorer'], ['2026-10-05', 'skill', 'explorer'], ['2026-10-06', 'agent', 'explorer']]);
+    ledger(rootB, [['2026-10-13', 'skill', 'develop'], ['2026-10-10', 'skill', 'apply']]);
+
+    const got = usageSummary({ now: Date.parse('2026-10-13T12:00:00Z'),
+      targets: [['opencode', 'global', rootA], ['claude', 'global', rootB]] });
+    const perDay = (...at) => Array.from({ length: 30 }, (_, i) => (at.includes(i) ? 1 : 0));
+    assert.deepEqual(got.names, [
+      { kind: 'skill', name: 'develop', n: 3, installs: [`opencode:global:${rootA}`, `claude:global:${rootB}`],
+        per_day: perDay(17, 28, 29), last: '2026-10-13' },
+      { kind: 'skill', name: 'explorer', n: 2, installs: [`opencode:global:${rootA}`],
+        per_day: perDay(21).map((v) => v * 2), last: '2026-10-05' },
+      { kind: 'skill', name: 'apply', n: 1, installs: [`claude:global:${rootB}`], per_day: perDay(26), last: '2026-10-10' },
+      { kind: 'agent', name: 'explorer', n: 1, installs: [`opencode:global:${rootA}`], per_day: perDay(22), last: '2026-10-06' },
+      { kind: 'skill', name: 'plan', n: 0, installs: [], per_day: perDay(), last: '2026-08-14' },
+    ]);
+  } finally { sb.cleanup(); }
+});

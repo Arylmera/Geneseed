@@ -82,9 +82,10 @@ const ARGVS = {
 };
 
 /**
- * The three actions the POST routes answer INLINE, without consulting the table, and the
+ * The four actions the POST routes answer INLINE, without consulting the table, and the
  * recorded cell that PROBES each. `restore` is synchronous and returns a result rather than a
- * job id; `install`/`deploy` resolve their argv from the request body first.
+ * job id; `install`/`deploy`/`rebuild` resolve their argv from the request body first.
+ * `rebuild` came after the recordings were retired, so it names the live test that drives it.
  *
  * NAMING A CELL IS THE STRENGTHENING. The reference cross-checked this declaration against its
  * own `action ==` comparisons read with `ast` — a second reading of the same source. These are
@@ -95,6 +96,7 @@ const INLINE_PROBES = {
   restore: 'restore__the-source-render-wins-and-an-unknown-or-climbing-path-is-an-error.json',
   install: 'actions__install-and-deploy-refuse-every-body-they-cannot-validate.json',
   deploy: 'actions__install-and-deploy-refuse-every-body-they-cannot-validate.json',
+  rebuild: 'tests/unit/web_rebuild.test.mjs',
 };
 
 test('the action table is the seven rows this phase measured', () => {
@@ -110,7 +112,7 @@ test('the action table is the seven rows this phase measured', () => {
 // recordings (see docs/limits.md), so that half is gone and the name no longer claims it. What
 // survives is the declaration gate, which is the half that catches a NEW inline action.
 test('the actions dispatched outside the table are declared too', () => {
-  // The table's keys are blind to these three, so a fourth inline action added to the dispatcher
+  // The table's keys are blind to these four, so a fifth inline action added to the dispatcher
   // and to neither set would fall through to the table and answer `unknown action` on a real
   // endpoint — a plausible response, on a real action, that nothing would fail on.
   assert.deepEqual([...INLINE_ACTIONS].sort(), Object.keys(INLINE_PROBES).sort(),

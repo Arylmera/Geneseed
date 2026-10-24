@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 
@@ -30,8 +30,10 @@ const INDEX = [
     route: '#/docs/x',
   },
 ]
+// No pages and no actions: the counts below are the three items alone.
 vi.mock('../hooks/useSearchIndex.js', () => ({
   useSearchIndex: () => ({ index: INDEX, prime: () => {}, error: null }),
+  PAGE_ENTRIES: [],
 }))
 
 import Search from '../components/Search.jsx'
@@ -46,15 +48,12 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = () => {}
 })
 
-// Search is controlled by the topbar, so the test owns the value the way App does.
-function Harness() {
-  const [q, setQ] = useState('')
-  return <Search value={q} onChange={setQ} />
-}
+// The palette owns its query; the combobox exists only once the trigger has opened it.
+const Harness = () => <Search />
 
 const input = () => screen.getByRole('combobox')
 const openWith = (text) => {
-  fireEvent.focus(input())
+  fireEvent.click(screen.getByRole('button', { name: /Search or run/ }))
   fireEvent.change(input(), { target: { value: text } })
 }
 
@@ -64,13 +63,16 @@ const openWith = (text) => {
 // reader learns which row is current from `aria-activedescendant` ALONE; without it the arrow
 // keys moved a purely visual highlight. Every assertion below fails against that version.
 describe('Spotlight combobox wiring', () => {
-  it('declares itself a combobox and stays collapsed until there is a query', () => {
+  it('renders no combobox until the palette opens, and an expanded one inside it', () => {
     render(<Harness />)
-    expect(input().getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('combobox')).toBeNull()
+    openWith('')
+    // Open with an empty query, it still lists (actions and pages; none here), so the list
+    // is in the document and `aria-controls` names a real id from the first frame.
+    expect(input().getAttribute('aria-expanded')).toBe('true')
     expect(input().getAttribute('aria-autocomplete')).toBe('list')
-    // No list is rendered, so there is nothing to point at — an `aria-controls` naming an
-    // absent id would be its own defect.
-    expect(input().getAttribute('aria-controls')).toBeNull()
+    expect(document.getElementById(input().getAttribute('aria-controls'))).toBeTruthy()
+    // Nothing to list here, so nothing to name.
     expect(input().getAttribute('aria-activedescendant')).toBeNull()
   })
 
@@ -129,10 +131,9 @@ describe('Spotlight combobox wiring', () => {
   })
 })
 
-// VS-21: a ranking can visit one kind twice, and each run is its own group. Keyed on the
-// kind alone, the two skills groups shared a key; on the next keystroke React matched the new
-// skills group to the LAST old one and never removed the first, so "debug" and "deck" (with
-// "de" marked) stayed on screen beside the "del" hits, as the audit saw.
+// VS-21: the ranking once visited one kind twice (skills, docs, skills), and a key on the kind
+// alone left the first run's rows on screen after the next keystroke. Groups are now one run per
+// kind (grouped first, ranked inside), and a narrower query must still leave no stale row.
 describe('Spotlight groups', () => {
   const S = (title) => ({ kind: 'skills', sortKey: 0, title, hay: title, route: `#/s/${title}` })
   const IDX = [
@@ -141,21 +142,31 @@ describe('Spotlight groups', () => {
     S('node deletion'),
     { kind: 'docs', sortKey: 3, title: 'deletion', hay: 'deletion', route: '#/docs/deletion' },
   ]
-  const props = { index: IDX, active: 0, onActive: () => {}, onClose: () => {} }
+  const props = { index: IDX, active: 0, onActive: () => {}, onPick: () => {} }
   const titles = () => [...document.querySelectorAll('.spot-title')].map((n) => n.textContent)
 
-  it('keys each run of a kind apart, so a narrower query leaves no stale row', () => {
+  it('opens one group per kind, so a narrower query leaves no stale row', () => {
     const { rerender } = render(<Spotlight query="de" {...props} />)
-    // "de": the titles starting with it (skills before docs by sortKey), then the one that
-    // only contains it, a second skills run.
+    // "de": the skill that only contains it stays in the skills group (sortKey 0), above the
+    // docs title that starts with it (sortKey 3).
     expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
       'skills',
       'docs',
-      'skills',
     ])
+    expect(titles()).toEqual(['debug', 'deck', 'node deletion', 'deletion'])
     rerender(<Spotlight query="del" {...props} />)
-    // "del": the docs title starts with it, the skill only contains it.
-    expect(titles()).toEqual(['deletion', 'node deletion'])
+    expect(titles()).toEqual(['node deletion', 'deletion'])
     expect(titles()).toEqual(filterAndRank(IDX, 'del').map((e) => e.title))
+  })
+
+  // With nothing typed there is nothing to rank: the rows that need no query (sortKey < 0,
+  // actions then pages) in that order, and no items.
+  it('lists actions then pages, and no items, for an empty query', () => {
+    const page = { kind: 'Pages', sortKey: -1, title: 'Kits', hay: 'kits', route: '#/kits' }
+    const act = { kind: 'Actions', sortKey: -2, title: 'Run doctor', hay: 'run doctor' }
+    expect(filterAndRank([...IDX, page, act], '  ').map((e) => e.title)).toEqual([
+      'Run doctor',
+      'Kits',
+    ])
   })
 })

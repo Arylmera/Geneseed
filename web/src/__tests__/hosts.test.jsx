@@ -27,6 +27,21 @@ vi.mock('../api/index.js', () => ({
         ],
       }),
     ),
+    // In step by default; the Sync tests below hand in their own rows.
+    fleet: vi.fn(() =>
+      Promise.resolve({
+        version: '4.19.0',
+        installs: [
+          {
+            id: 'opencode:global',
+            verdict: 'synced',
+            diffable: true,
+            drift: { edited: 0, added: 0, missing: 0, linked: 0, stale: 0 },
+          },
+        ],
+      }),
+    ),
+    selectView: vi.fn(() => Promise.resolve({ ok: true })),
     installToggle: vi.fn(() => Promise.resolve({ ok: true })),
     mcp: vi.fn(() =>
       Promise.resolve({
@@ -727,5 +742,117 @@ describe('Installs / Hosts', () => {
     expect(input.closest('.deploy-pop').contains(alert)).toBe(true)
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(screen.queryAllByRole('status').filter((s) => /folder/i.test(s.textContent))).toEqual([])
+  })
+
+  // "Sync with source", from /api/fleet joined by id. The verdict gives the headline: behind
+  // names the source release and the stale files (one file is singular), in step is "In sync",
+  // no marker is "Not checked". Hand edits (edited + added) are counted apart and never summed
+  // into the stale count; a row with no drift check says "not checkable"; a row the fleet does not
+  // list (not installed) says "—". A null release label reads "Behind source".
+  describe('Sync with source', () => {
+    const four = [
+      ['oc', 'opencode', 'global', 'C:/oc'],
+      ['cl', 'claude', 'global', 'C:/cl'],
+      ['bo', 'bob', 'global', 'C:/bo'],
+      ['ocl', 'openclaude', 'global', 'C:/ocl'],
+    ].map(([id, host, scope, path]) => ({ id, host, scope, path, state: 'active' }))
+    const drift = (stale, edited = 0, added = 0) => ({
+      edited,
+      added,
+      missing: 0,
+      linked: 0,
+      stale,
+    })
+    // The cell's words, without the bar (its legend repeats the counts for sighted readers).
+    const syncOf = (name) => {
+      const td = screen.getByRole('button', { name }).closest('tr').querySelector('td:nth-child(6)')
+      const copy = td.cloneNode(true)
+      copy.querySelector('.stackbar-box')?.remove()
+      return copy.textContent
+    }
+
+    it('names each verdict in words, with hand edits apart from stale files', async () => {
+      api.installs.mockResolvedValueOnce({
+        installs: [
+          ...four,
+          { id: 'x', host: 'opencode', scope: 'project', path: 'C:/p/Repo', state: 'absent' },
+        ],
+      })
+      api.fleet.mockResolvedValueOnce({
+        version: '4.19.0',
+        installs: [
+          { id: 'oc', verdict: 'behind', diffable: true, drift: drift(3, 1, 1) },
+          { id: 'cl', verdict: 'synced', diffable: true, drift: drift(0) },
+          { id: 'bo', verdict: 'behind', diffable: true, drift: drift(1) },
+          { id: 'ocl', verdict: 'unknown', diffable: false, drift: null },
+        ],
+      })
+      render(<Hosts onAction={() => {}} />)
+      await waitFor(() => expect(syncOf('OpenCode')).toContain('Behind'))
+      expect(syncOf('OpenCode')).toBe('Behind 4.19.0 · 3 files · 2 edited Local edits')
+      expect(syncOf('Claude Code')).toBe('In sync')
+      expect(syncOf('BOB (IBM)')).toBe('Behind 4.19.0 · 1 file')
+      expect(syncOf('OpenClaude')).toBe('Not checked · not checkable')
+      expect(syncOf('Repo')).toBe('—')
+      // The bar reads its two parts, so colour is not the only carrier.
+      expect(
+        screen
+          .getByRole('img', { name: /Sync with source of OpenCode/ })
+          .getAttribute('aria-label'),
+      ).toBe('Sync with source of OpenCode: behind source: 3 of 5, edited by hand: 2 of 5')
+    })
+
+    it('a behind row with no drift figure and no release label still says it is behind', async () => {
+      api.installs.mockResolvedValueOnce({ installs: [four[0]] })
+      api.fleet.mockResolvedValueOnce({
+        version: null,
+        installs: [{ id: 'oc', verdict: 'behind', diffable: false, drift: null }],
+      })
+      render(<Hosts onAction={() => {}} />)
+      await waitFor(() => expect(syncOf('OpenCode')).toBe('Behind source · not checkable'))
+    })
+
+    it('a failed fleet blanks only the Sync cells, never the tables', async () => {
+      api.fleet.mockRejectedValueOnce(new Error('fleet down'))
+      render(<Hosts onAction={() => {}} />)
+      await waitFor(() => expect(syncOf('OpenCode')).toBe('—'))
+      expect(document.querySelectorAll('.hosts-tbl tbody tr')).toHaveLength(2)
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    // Local edits diffs the VIEWED install only: another row's link moves the view, then the
+    // app refreshes, and only then does the hash change. The viewed row skips the move.
+    it('Local edits moves the view before the hash, and only for another install', async () => {
+      const order = []
+      api.selectView.mockClear()
+      api.selectView.mockImplementationOnce(async (host, path) => {
+        order.push(`view ${host} ${path} at ${window.location.hash || '(none)'}`)
+        return { ok: true }
+      })
+      const onMutated = vi.fn(() => order.push('refresh'))
+      api.installs.mockResolvedValueOnce({
+        installs: [{ ...four[0] }, { ...four[1], selected: true }],
+      })
+      api.fleet.mockResolvedValueOnce({
+        version: '4.19.0',
+        installs: [
+          { id: 'oc', verdict: 'synced', diffable: true, drift: drift(0, 2) },
+          { id: 'cl', verdict: 'synced', diffable: true, drift: drift(0, 1) },
+        ],
+      })
+      window.location.hash = '#/installs/hosts'
+      render(<Hosts onAction={() => {}} onMutated={onMutated} />)
+      const links = await screen.findAllByRole('link', { name: 'Local edits' })
+      fireEvent.click(links[0])
+      await waitFor(() => expect(window.location.hash).toBe('#/installs/edits'))
+      expect(order).toEqual(['view opencode C:/oc at #/installs/hosts', 'refresh'])
+      // The click did not also pick the row.
+      expect(panel().querySelector('h2').textContent).toBe('Claude Code')
+
+      window.location.hash = '#/installs/hosts'
+      fireEvent.click(links[1])
+      await waitFor(() => expect(window.location.hash).toBe('#/installs/edits'))
+      expect(api.selectView).toHaveBeenCalledTimes(1)
+    })
   })
 })

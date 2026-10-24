@@ -163,6 +163,7 @@ const FLEET = {
       id: 'oc',
       host: 'opencode',
       scope: 'global',
+      path: '/h/.config/opencode',
       state: 'active',
       verdict: 'behind',
       diffable: true,
@@ -261,7 +262,11 @@ describe('ledgerNeeds', () => {
         detail: 'built 6d ago',
         where: 'opencode',
         verb: 'Rebuild',
-        act: 'build-all',
+        // Per install: the row rebuilds the one it names, never the whole machine.
+        act: 'rebuild',
+        installs: [
+          { id: 'oc', host: 'opencode', path: '/h/.config/opencode', label: 'opencode · global' },
+        ],
       },
       {
         id: 'drift:oc',

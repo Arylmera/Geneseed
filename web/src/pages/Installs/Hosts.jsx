@@ -9,7 +9,9 @@ import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
+import StackBar from '../../components/StackBar.jsx'
 import { hostInfo, installName, removeLayer } from '../../lib/hosts.js'
+import { editCount } from '../../lib/format.js'
 
 // Join key for the MCP-target -> install pairing: an install owns the targets the API tags
 // with its (host, root). Keying on the install identity (not the config's dirname) is what
@@ -23,11 +25,75 @@ const CLAUDE_STYLE = ['claude', 'bob', 'openclaude']
 
 const STATE = { active: ['Active', 'ok'], disabled: ['Disabled', 'warn'] }
 
+// The headline of a fleet row's sync, VERDICT FIRST: a disabled or project install can be behind
+// with no drift figure, so the verdict says where it stands and the drift only adds detail.
+// `stale` files are the ones a rebuild updates; hand edits are counted apart and never summed in.
+function syncLine(row, version) {
+  const stale = row.drift?.stale ?? 0
+  const head = {
+    behind:
+      `Behind ${version || 'source'}` + (stale ? ` · ${stale} file${stale === 1 ? '' : 's'}` : ''),
+    synced: 'In sync',
+    unknown: 'Not checked',
+  }[row.verdict]
+  const edits = row.diffable ? editCount(row.drift) : 0
+  return edits ? `${head} · ${edits} edited` : head
+}
+
+// The "Sync with source" cell. The fleet is its own, slower fetch (it re-renders each global
+// install to diff it), so the table never waits for it: `fleet` undefined is still loading,
+// null failed or this row is not installed — both say nothing rather than a guess.
+function SyncCell({ inst, fleet, version, onEdits }) {
+  if (fleet === undefined) return <span className="dim">…</span>
+  if (!fleet) return <span className="dim">—</span>
+  const stale = fleet.drift?.stale ?? 0
+  const edits = fleet.diffable ? editCount(fleet.drift) : 0
+  return (
+    <div className="sync-cell">
+      {fleet.diffable && stale + edits > 0 ? (
+        <StackBar
+          label={`Sync with source of ${installName(inst)}`}
+          parts={[
+            { key: 'stale', label: 'behind source', n: stale, tone: 'warn' },
+            { key: 'edited', label: 'edited by hand', n: edits, tone: 'bad' },
+          ]}
+        />
+      ) : null}
+      <span className="dim">{syncLine(fleet, version)}</span>
+      {!fleet.diffable ? (
+        <span className="dim" title="Drift is only checked for global installs">
+          {' '}
+          · not checkable
+        </span>
+      ) : null}
+      {edits ? (
+        <>
+          {' '}
+          <a
+            href="#/installs/edits"
+            onClick={(e) => {
+              // Inside a row that picks on click, and the view must move before the hash does.
+              e.preventDefault()
+              e.stopPropagation()
+              onEdits(inst)
+            }}
+          >
+            Local edits
+          </a>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 // One of the two install tables. Global installs are one per host tool and named by it;
 // per-project installs are named by their folder, with the host beside it, because the
 // question each table answers is different ("which tools carry the harness everywhere"
 // vs "which repos carry their own").
-function InstallTable({ rows, project, currentId, onPick, label }) {
+function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits }) {
+  // Joined by id; an absent install is never in the fleet, so it reads as "—".
+  const fleetRow = (inst) =>
+    fleet === undefined ? undefined : fleet?.installs?.find((f) => f.id === inst.id) || null
   return (
     <div className="tbl-scroll">
       <table className="tbl hosts-tbl" aria-label={label}>
@@ -38,6 +104,7 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
             <th scope="col">Voice</th>
             <th scope="col">Footprint</th>
             <th scope="col">State</th>
+            <th scope="col">Sync with source</th>
             <th scope="col">
               <span className="sr-only">Selected</span>
             </th>
@@ -77,6 +144,14 @@ function InstallTable({ rows, project, currentId, onPick, label }) {
                 <td>{quiet ? '' : inst.footprint || ''}</td>
                 <td>
                   <span className={`tag ${tone}`}>{stateLabel}</span>
+                </td>
+                <td>
+                  <SyncCell
+                    inst={inst}
+                    fleet={fleetRow(inst)}
+                    version={fleet?.version}
+                    onEdits={onEdits}
+                  />
                 </td>
                 <td className="pick-mark">{on ? 'Editing ›' : ''}</td>
               </tr>
@@ -153,6 +228,10 @@ export default function Hosts({
     reload: reloadInst,
   } = useAsync(() => api.installs(), [dataRev])
   const { data: mcpData, error: mcpErr, reload: reloadMcp } = useAsync(() => api.mcp(), [dataRev])
+  // Apart from the two above, and outside their error and loading gates: a slow or failed fleet
+  // leaves the Sync cells blank, never the tables.
+  const { data: fleetData, error: fleetErr } = useAsync(() => api.fleet(), [dataRev])
+  const fleet = fleetErr ? null : (fleetData ?? undefined)
   // null | { text, tone }: 'bad' is a failure (an alert), 'ok' a done act, '' a progress
   // note, so "Opening…" is never painted as an error.
   const [note, setNote] = useState(null)
@@ -390,6 +469,19 @@ export default function Hosts({
   const pick = (id) => {
     setPicked(id)
   }
+  // Local edits diffs only the VIEWED install, so another row's link moves the view first (as
+  // the Overview's ledger does), refreshes what reads the view, and only then changes the hash.
+  const openEdits = async (inst) => {
+    if (!inst.selected) {
+      try {
+        await api.selectView(inst.host, inst.path)
+      } catch {
+        /* the edits page then shows the view it has, and says which */
+      }
+      onMutated?.()
+    }
+    window.location.hash = '#/installs/edits'
+  }
 
   return (
     <div className="hosts">
@@ -428,6 +520,8 @@ export default function Hosts({
             currentId={current?.id}
             onPick={pick}
             label="Global installs"
+            fleet={fleet}
+            onEdits={openEdits}
           />
         </section>
         <section className="panel flush" aria-labelledby="inst-project">
@@ -463,6 +557,8 @@ export default function Hosts({
               currentId={current?.id}
               onPick={pick}
               label="Per-project installs"
+              fleet={fleet}
+              onEdits={openEdits}
             />
           ) : (
             <EmptyState>

@@ -14,7 +14,9 @@
 import { resolvePath } from '../hosts/hosts.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
-import { apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths } from './actions.mjs';
+import {
+  apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths, rebuildCmds,
+} from './actions.mjs';
 import { BadRequest, NotFound } from './catalog.mjs';
 import { openUrl, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
@@ -312,6 +314,11 @@ export function makeHandler(state, jm, token, dist, holder = null) {
    * means the world changed under the client) and 400 for deploy (its path came from the body,
    * so a refusal means the body was wrong). Unifying the two would be wrong for one of them.
    *
+   * `rebuild` follows them: the named installs' argv (`rebuildCmds`), 409 on a refusal for the
+   * install reason, and the build-all restart on a stale server. Its job is several steps, and
+   * `_run` stops at the first failed one where `rebuild-all` is best-effort: a click names the
+   * installs it wants, so a failure should stop and be read rather than be stepped past.
+   *
    * `update` COMES NEXT AND IS INLINE: it is gated on a LOCAL-ONLY preflight before a job is
    * ever started, so a dirty tree or a zip-download install gets a friendly 422 the UI renders
    * as an info popup instead of a job that spawns and then fails. Its finish handler is its own
@@ -335,6 +342,18 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       const plan = apiDeployCmd(state, body);
       if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
       return startJob(res, 'deploy', [plan.cmd], ae);
+    }
+    if (action === 'rebuild') {
+      const plan = rebuildCmds(body);
+      if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 409, ae);
+      // A STALE server is refused, not restarted afterwards as build-all is: `rebuildCmds` built
+      // each argv with THIS (old) process's `installProfile`, while the build-driver it spawns is
+      // the new code on disk, so an axis or marker the pull added would be dropped. build-all
+      // spawns the new CLI, which builds every profile with the new code; this path cannot.
+      if (state.daemonStale?.()) {
+        return sendJson(res, { error: 'the console is running older code than the disk — restart it first (Installs › Server › Restart), then rebuild' }, 422, ae);
+      }
+      return startJob(res, 'rebuild', plan.cmds, ae);
     }
     if (action === 'update') {
       // The route follows the install (`updatePlan`); a refusal is the same friendly 422.
