@@ -1,6 +1,6 @@
 // Roman numeral → Arabic integer. Returns NaN for anything that isn't a valid Roman
-// numeral, so callers can fall back to the raw value. Shared by the Laws table (keying
-// LAW_META, padding the displayed numeral) and the Graph (sorting law nodes by numeral).
+// numeral, so callers can fall back to the raw value. Shared by the Laws table (padding
+// the displayed numeral) and the Graph (sorting law nodes by numeral).
 const ROMAN_VALUES = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }
 
 export function romanToInt(raw) {

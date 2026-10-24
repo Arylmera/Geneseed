@@ -1,6 +1,7 @@
 **{{PACK_OPS}}** — how the machine is operated.
 
 ### {{DOCTRINE:tool-discovery}} Tool Discovery
+<!-- note: summary: Discover the host's real tools before deciding one is missing. -->
 <!-- LEAN:begin -->
 The tools available to you are not fixed, and they are not only the obvious ones.
 Before deciding a capability is missing, discover what the host actually exposes — its
@@ -19,6 +20,7 @@ tool or integration is absent without checking ({{LAW:verify-before-asserting}})
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:commands-must-return}} Commands Must Return
+<!-- note: summary: Run commands that return on their own; never block on a prompt or pager. -->
 <!-- LEAN:begin -->
 A command you run must return on its own. Never invoke something that blocks on a
 terminal you cannot answer — an interactive prompt, a pager, a REPL, an editor, a
@@ -42,6 +44,7 @@ to run long is exempt only when deliberately backgrounded through the host's own
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:edit-the-source-not-the-surface}} Edit the Source, Not the Surface
+<!-- note: summary: Edit the authoritative source layer, not the rendered output. -->
 <!-- LEAN:begin -->
 Where a system renders its live state from a source layer — a database the UI
 re-reads, a compose file regenerated from stored config, a network redeclared on
@@ -57,6 +60,7 @@ Before altering any configuration, ask which layer is authoritative and write th
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:complete-the-teardown}} Complete the Teardown
+<!-- note: summary: Finish a delete or rename: reconcile every reference, no danglers. -->
 <!-- LEAN:begin -->
 A delete, a rename, or a move is finished only when every reference to the old
 form is reconciled — not the principal file alone, but the imports, hooks,
@@ -72,6 +76,7 @@ declaring a teardown done, hunt each integration point and sever or rewire it.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:record-the-probe-not-the-snapshot}} Record the Probe, Not the Snapshot
+<!-- note: summary: Record how to derive a volatile fact, not its stale value. -->
 <!-- LEAN:begin -->
 A fact that renews itself — a rotating certificate, a shifting address, a
 recomputed index — is never inscribed as a stored snapshot, for the record falls
@@ -86,6 +91,7 @@ at the hour of need ({{LAW:verify-before-asserting}}).
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:restart-is-not-reload}} Restart Is Not Reload
+<!-- note: summary: A restart may not reload config; force the re-read, confirm it live. -->
 <!-- LEAN:begin -->
 A running process holds the config it read at start; fixing the source does not fix
 the process. After editing any config, ask what act makes it be *read* — often not
@@ -104,6 +110,7 @@ full restart — perform it, then confirm the new value in the *running* system,
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:serialize-against-a-rationed-resource}} Serialize Against a Rationed Resource
+<!-- note: summary: Call a rate-limited resource in sequence; budget the quota before any fan-out. -->
 <!-- LEAN:begin -->
 A shared resource that rations its answers — a rate-limited API, a quota, a single
 gateway — is called in sequence, never fanned out. Parallel requests against it fail

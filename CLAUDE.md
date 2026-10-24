@@ -168,7 +168,7 @@ the SHIPS or WITHHELD partition of `tests/unit/package_manifest.test.mjs`.
 `{{DOCTRINE:<id>}}` — never by number, which the doctor refuses. The render computes the number
 from position and renders a citation as the principle's name, so removing a rule rewires nothing.
 Never rename an id; a removed one goes into `RETIRED_RULE_IDS` (`js/build/source.mjs`) so it is
-never reused. Append anyway where you can: `LAW_META`, `LAW_CLASS`, `DOCTRINE_META`, exclusions
+never reused. Append anyway where you can: `LAW_CLASS`, exclusions
 and the hook ledger keys are still number-keyed (doctor-pinned) — `docs/extending.md` §2e.
 
 **`--footprint` defaults to `lean`.** A law's lean text is the authored `LEAN:else` half of its

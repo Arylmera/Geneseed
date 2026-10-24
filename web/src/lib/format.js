@@ -44,9 +44,20 @@ const READINESS = {
   diskClean: 0.15,
 }
 
+// The ring never reads healthier than the fleet verdict printed beside it. The cap reads the
+// SAME tone the badge prints rather than feeding behind/edited counts into the score: a
+// stale-only fleet is 'warn' too, and a score fed only behind+edited could still read 100%
+// beside "needs a look". Each cap withholds the shares that verdict has not earned — 'warn'
+// the version and disk shares, 'bad' (doctor failing fleet-wide) everything but "deployed".
+// No verdict yet, or a failed fleet fetch, caps nothing: the badge already says it is unknown.
+const READINESS_CAP = {
+  warn: READINESS.deployed + READINESS.doctorClean,
+  bad: READINESS.deployed,
+}
+
 // Health of the deployment as one 0..1 number: deployed 40%, doctor up to 25%,
 // version in sync 20%, nothing missing on disk 15%.
-export function readiness(ov, setup) {
+export function readiness(ov, setup, tone) {
   if (!ov) return 0
   const problems = ov.doctor?.problems?.length ?? 99
   const doctorScore = ov.doctor?.ok
@@ -55,12 +66,12 @@ export function readiness(ov, setup) {
       ? READINESS.doctorMinor
       : READINESS.doctorFail
   const versionSynced = setup && setup.installed_fp && setup.installed_fp === setup.source_fp
-  return (
+  const score =
     (ov.deployed ? READINESS.deployed : 0) +
     doctorScore +
     (versionSynced ? READINESS.versionSynced : 0) +
     (ov.diff && ov.diff.missing === 0 ? READINESS.diskClean : 0)
-  )
+  return Math.min(score, READINESS_CAP[tone] ?? 1)
 }
 
 // Largest section count (floored at 1) — the denominator for proportional bars.

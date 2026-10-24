@@ -56,7 +56,7 @@ export default function Diff({ onMutated, onAction, dataRev }) {
       : ''
     const ok = await confirm(
       `${warning}Discard local edits and restore ${files.length} file(s) from source?`,
-      { title: 'Restore from source?', confirmLabel: 'Restore' },
+      { title: 'Restore from source?', confirmLabel: 'Restore', tone: 'danger' },
     )
     if (!ok) return
     setBusy(true)

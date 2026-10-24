@@ -17,9 +17,9 @@ import { useFileEditor } from '../hooks/useFileEditor.js'
 
 const EMPTY_FORM = { title: '', body: '', scope: 'project', trial_until: '' }
 
-// The scopes the rule skill documents. A hand-written other one (`global`) is offered as
+// The scopes the rule skill documents. A hand-written other one (`team`, say) is offered as
 // its own option: without it the controlled <select> shows "project" over a rule that is not.
-const SCOPES = ['project', 'user']
+const SCOPES = ['project', 'user', 'global']
 
 // The server's rule too (`isRuleEdge`, user-files.mjs): a body line starting `## ` would end
 // this rule's block in user-rules.md and could forge another rule. Checked here so the user
@@ -74,6 +74,7 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy }) {
         <select className="sel" value={f.scope} onChange={set('scope')} aria-label="Rule scope">
           <option value="project">scope: project (this repo, committable)</option>
           <option value="user">scope: user (personal)</option>
+          <option value="global">scope: global (every repository)</option>
           {SCOPES.includes(scope0) ? null : (
             <option value={scope0}>scope: {scope0} (as written in the file)</option>
           )}
@@ -186,6 +187,7 @@ export default function Rules({ onChanged }) {
       {
         title: 'Retire this rule?',
         confirmLabel: 'Retire',
+        tone: 'danger',
       },
     )
     if (!ok) return

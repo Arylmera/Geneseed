@@ -5518,50 +5518,22 @@
     {
       "bin": "cli",
       "checkout": {
-        "web/src/pages/Laws.jsx": "export default function Laws() { return null }\n"
-      },
-      "expect": [
-        "[authoring] DOCTRINE_META literal not found in web/src/pages/Laws.jsx — the console's doctrine rows would have no gate on their Principle column",
-        "[authoring] LAW_META literal not found in web/src/pages/Laws.jsx — the web Laws ledger's Principle column would have no gate"
-      ],
-      "expect_re": [
-        "\\[doctor\\] 2 problem\\(s\\) across 1 theme\\(s\\)"
-      ],
-      "id": "doctor/the-web-laws-ledger-has-no-LAW_META-literal",
-      "steps": [
-        {
-          "argv": [
-            "doctor",
-            "--theme",
-            "neutral",
-            "--no-bundle"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "checkout": {
-        "web/src/pages/Laws.jsx": {
+        "src/laws/universal.md": {
           "edit": [
             [
-              "const LAW_META = {\n  1: ['security', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],\n",
-              "const LAW_META = {\n  1: ['nosuchclass', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],\n"
+              "### {{LAW:sealed-secrets}} Sealed Secrets\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n",
+              "### {{LAW:sealed-secrets}} Sealed Secrets\n"
             ]
           ]
         }
       },
       "expect": [
-        "[authoring] LAW_META[1] class 'nosuchclass' is not a known class ['security', 'process', 'verify', 'craft', 'context', 'comms']"
+        "[authoring] laws/universal.md: rule I 'sealed-secrets' has no summary — the console would render it with a blank Principle; add '<!-- note: summary: <one line> -->' on the line directly under its heading"
       ],
       "expect_re": [
         "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
       ],
-      "id": "doctor/a-law-row-classed-as-something-that-is-not-a-class",
+      "id": "doctor/a-law-with-no-summary-line",
       "steps": [
         {
           "argv": [
@@ -5580,23 +5552,81 @@
     {
       "bin": "cli",
       "checkout": {
-        "web/src/pages/Laws.jsx": {
+        "src/laws/universal.md": {
           "edit": [
             [
-              "  1: ['security', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],\n",
-              "  1: [\n    'security',\n    'Secrets never touch tracked files; only .env or a manager.',\n    'sealed-secrets',\n  ],\n"
+              "### {{LAW:sealed-secrets}} Sealed Secrets\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n",
+              "### {{LAW:sealed-secrets}} Sealed Secrets\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n<!-- note: summary: Secrets never touch tracked files; only .env or a manager. -->\n"
             ]
           ]
         }
       },
       "expect": [
+        "[authoring] laws/universal.md: rule I 'sealed-secrets' has 2 summary lines — the console shows one; keep exactly one"
+      ],
+      "expect_re": [
+        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
+      ],
+      "id": "doctor/a-law-with-two-summary-lines",
+      "steps": [
+        {
+          "argv": [
+            "doctor",
+            "--theme",
+            "neutral",
+            "--no-bundle"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "checkout": {
+        "src/laws/universal.md": {
+          "edit": [
+            [
+              "<!-- LEAN:begin -->\n<!-- note: Each law:",
+              "<!-- note: summary: Stray. -->\n<!-- LEAN:begin -->\n<!-- note: Each law:"
+            ]
+          ]
+        }
+      },
+      "expect": [
+        "[authoring] laws/universal.md: a summary line sits outside any rule declaration — it describes no rule"
+      ],
+      "expect_re": [
+        "\\[doctor\\] 1 problem\\(s\\) across 1 theme\\(s\\)"
+      ],
+      "id": "doctor/a-summary-line-in-the-preamble",
+      "steps": [
+        {
+          "argv": [
+            "doctor",
+            "--theme",
+            "neutral",
+            "--no-bundle"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "checkout": {},
+      "expect": [
         "[doctor] ok — 1 theme(s) clean"
       ],
       "expect_absent": [
-        "LAW_META",
-        "DOCTRINE_META"
+        "summary"
       ],
-      "id": "doctor/a-law-row-a-prettier-has-reflowed-still-counts",
+      "id": "doctor/every-rule-summary-in-place-is-clean",
       "steps": [
         {
           "argv": [

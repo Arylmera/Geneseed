@@ -49,6 +49,32 @@ describe('readiness', () => {
     // .40 deployed + .15 (<=2 problems) + .20 fp match + .15 nothing missing
     expect(readiness(ov, setup)).toBeCloseTo(0.9)
   })
+
+  // The ring never reads healthier than the fleet verdict beside it. 'good', no verdict yet
+  // (undefined) and a failed fleet fetch cap nothing, so the install's own score stands:
+  // 1.0 for a perfect one, 0.9 for the dashboard fixture. 'warn' withholds the two shares a
+  // warn fleet has not earned (version 0.20 + disk 0.15), capping at .40 + .25 = 0.65;
+  // 'bad' leaves only "deployed", 0.40. A score already under the cap is not raised: not
+  // deployed + doctor clean + fp match + nothing missing = .25 + .20 + .15 = 0.60 under 0.65.
+  const sync = { installed_fp: 'a', source_fp: 'a' }
+  const perfect = { deployed: true, doctor: { ok: true }, diff: { missing: 0 } }
+  const fixture = { deployed: true, doctor: { ok: false, problems: ['x'] }, diff: { missing: 0 } }
+  const undeployed = { deployed: false, doctor: { ok: true }, diff: { missing: 0 } }
+  it.each([
+    ['good', perfect, 1],
+    ['good', fixture, 0.9],
+    [undefined, perfect, 1],
+    [undefined, fixture, 0.9],
+    ['failed', perfect, 1],
+    ['failed', fixture, 0.9],
+    ['warn', perfect, 0.65],
+    ['warn', fixture, 0.65],
+    ['bad', perfect, 0.4],
+    ['bad', fixture, 0.4],
+    ['warn', undeployed, 0.6],
+  ])('fleet tone %s caps the score at the verdict (row %#)', (tone, ov, want) => {
+    expect(readiness(ov, sync, tone)).toBeCloseTo(want)
+  })
 })
 
 describe('maxCount / editCount', () => {

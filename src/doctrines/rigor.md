@@ -1,6 +1,7 @@
 **{{PACK_RIGOR}}** — how work is proven.
 
 ### {{DOCTRINE:idempotent-by-default}} Idempotent by Default
+<!-- note: summary: Design actions safe to run twice; guard the ones that are not. -->
 <!-- LEAN:begin -->
 Make actions safe to run twice. Where you can, design each operation so a second run
 lands the same end state as the first — create-if-absent rather than create-blindly,
@@ -19,6 +20,7 @@ confirm ({{LAW:deletion-is-deliberate}}), and never fire blindly on a retry.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:honest-tests}} Honest Tests
+<!-- note: summary: Test observable behaviour, deterministically: no flaky, no wiring. -->
 <!-- LEAN:begin -->
 A test that lies is worse than no test, because it is trusted. Assert on observable
 behaviour — the inputs, outputs, and effects a caller can see — not on private
@@ -39,6 +41,7 @@ deterministic unit layer ({{LAW:verify-before-asserting}}).
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:cover-and-verify}} Cover and Verify
+<!-- note: summary: Cover new or changed behaviour with a test; run the affected tests green. -->
 <!-- LEAN:begin -->
 Code you author is not done until its behaviour is covered by a test you wrote
 and the affected tests run green. New behaviour ships with the test that pins it,
@@ -62,6 +65,7 @@ silently ({{LAW:one-intent-one-act}}, {{LAW:cure-the-cause}}).
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:prove-the-gate}} Prove the Gate
+<!-- note: summary: Perturb what a gate guards and require it to turn red; never re-bless it green. -->
 <!-- LEAN:begin -->
 Prove the gate: perturb what it guards and require it to turn red, because a check
 that has never failed has never been shown to hold anything. When the perturbation
@@ -85,6 +89,7 @@ when checking. A two-direction rule needs a gate that can fail both ways.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:external-gate}} External Gate
+<!-- note: summary: Enforce permission at the boundary, never in the agent's own prompt. -->
 <!-- LEAN:begin -->
 A gate you build stands outside the mind it governs. Wherever a system lets an
 agent — this one or another — act on the world, approval is asked of a party the

@@ -1,7 +1,7 @@
 /**
  * The CONSTITUTION gates — whether the laws and doctrine packs agree with themselves and with
  * everything keyed off them: rule declarations and citations, the LEAN blocks, the hook-pinned
- * addresses, the theme vocabulary, and the web console's per-rule Principle copy.
+ * addresses, the theme vocabulary, and the per-rule summary the web console prints.
  *
  * Split out of `checks-authoring.mjs`, which still aggregates these (and re-exports them for
  * its existing importers). Same contract as every check module here: an array of problem
@@ -9,7 +9,8 @@
  */
 import path from 'node:path';
 import {
-  CONFIG, PACK_ORDER, RETIRED_RULE_IDS, ROOT, RULE_ID_RE, SRC, THEMES, canonFiles, ruleCanon, titleKey,
+  CONFIG, PACK_ORDER, RETIRED_RULE_IDS, RULE_ID_RE, SRC, SUMMARY_LINE_RE, SUMMARY_MARK_RE, THEMES, canonFiles, ruleCanon,
+  titleKey, toRoman,
 } from '../build/source.mjs';
 import { LEAN_BLOCK_RE, splitAtLawHeadings } from '../build/render.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
@@ -18,138 +19,68 @@ import { parseJson, formatRepr } from '../lib/json.mjs';
 import { NOTE, isFile, rglob } from './scan.mjs';
 
 /**
- * The body of `const <name> = { … }` in the web Laws page — the one file out of `web/src` the
- * doctor reads. Answers `[body, null]`, or `[null, problem]` when the page is unreadable or the
- * literal is gone (`missing` is that problem's text).
+ * Every rule carries exactly one one-line summary, on the line directly under its heading —
+ * `<!-- note: summary: <text> -->` — the Principle the web console prints under the rule's name.
+ *
+ * The copy exists nowhere else, and a rule without it renders with a blank description while
+ * every count upstream reads correct: two laws shipped exactly that way when the copy lived in a
+ * table in `web/src/pages/Laws.jsx`. Beside the heading, a removed or reordered rule takes its
+ * summary with it, so no positional key or id pin is left to drift.
+ *
+ * PLACEMENT IS PART OF THE CONTRACT because `ruleSummaries` (`js/build/source.mjs`) reads only
+ * the line under the heading: a summary one line lower is stripped from every render all the
+ * same, and the console would show nothing. A summary above the first rule, or under any heading
+ * that declares no rule, describes no rule at all.
+ *
+ * ONE DEFINITION OF A SUMMARY LINE: `SUMMARY_LINE_RE`, the reader's own, applied to the line as
+ * written. A line `SUMMARY_MARK_RE` catches but that regex refuses — indented, or wrapped over two
+ * lines — is malformed here, because the reader would hand the console nothing for it.
  */
-function lawsPageLiteral(name, missing) {
-  let text;
-  try { text = readText(path.join(ROOT, 'web', 'src', 'pages', 'Laws.jsx')); } catch (e) {
-    return [null, `[authoring] web/src/pages/Laws.jsx unreadable: ${e.message}`];
-  }
-  const block = new RegExp(`^const ${name} = \\{$([\\s\\S]*?)^\\}$`, 'm').exec(text);
-  return block ? [block[1], null] : [null, missing];
-}
-
-/**
- * `_harness_build._LAW_META_ROW` — `<arabic>: ['<class>', '<principle>', '<id>'],` in the web page.
- *
- * The third field PINS the row to a rule id. The key is the number the catalogue renders, and a
- * number is only a position: remove a law and every later row describes its predecessor's
- * neighbour, with every class still plausible. The pin is what makes that a doctor failure.
- *
- * Either quote style, because a principle carrying an apostrophe is double-quoted. Every
- * `\s*` spans newlines and the trailing comma before `]` is optional, so a row a prettier has
- * reflowed across several lines still matches — a gate that only understood the one-line form
- * silently lost it and left the law's Principle unguarded.
- *
- * `(?m)` is the `m` flag; JS has no inline form. The `.` inside the captures must NOT match a
- * newline (Python has no `re.S` here), which is JS's default.
- */
-const LAW_META_ROW =
-  /^[^\S\n]*(\d+):\s*\[\s*(['"])(.*?)\2\s*,\s*(['"])(.*?)\4\s*(?:,\s*(['"])(.*?)\6\s*)?,?\s*\]\s*,?[^\S\n]*$/gm;
-
-/**
- * `_harness_build._law_meta_problems` — the web Laws ledger's per-rule copy stays complete.
- *
- * `LAW_META` holds each law's one-line Principle, copy that exists nowhere else in the tree,
- * and a law with no row falls back to `['craft', '']`: the rule renders with a blank
- * description and the wrong class chip, while everything upstream is fine. That is exactly
- * how two laws shipped description-less.
- */
-export function lawMetaProblems(lawRules, lawClass, lawClasses) {
-  const [block, refusal] = lawsPageLiteral('LAW_META', '[authoring] LAW_META literal not found '
-    + "in web/src/pages/Laws.jsx — the web Laws ledger's Principle column would have no gate");
-  if (refusal) return [refusal];
-  const meta = new Map();
-  for (const m of block.matchAll(LAW_META_ROW)) {
-    meta.set(Number(m[1]), [m[3], m[5], m[7]]);
-  }
+export function ruleSummaryProblems(src = SRC) {
   const problems = [];
-  const seen = new Set();
-  for (const { n, label: roman, id } of lawRules) {
-    seen.add(n);
-    if (!meta.has(n)) {
-      problems.push(`[authoring] laws/universal.md rule ${roman} (${n}) has no row in `
-        + 'LAW_META (web/src/pages/Laws.jsx) — the web Laws ledger would '
-        + 'render it with a blank Principle');
-      continue;
-    }
-    const [klass, principle, pin] = meta.get(n);
-    if (pin !== id) {
-      problems.push(`[authoring] LAW_META[${n}] is pinned to '${pin ?? '(no id)'}' but rule ${roman} is `
-        + `'${id}' — the rows no longer follow the canon's order, so this principle `
-        + 'describes a different law');
-    }
-    if (!principle.trim()) {
-      problems.push(`[authoring] LAW_META[${n}] has an empty principle line — rule `
-        + `${roman} would render with a blank description`);
-    }
-    if (!lawClasses.includes(klass)) {
-      problems.push(`[authoring] LAW_META[${n}] class '${klass}' is not a known class `
-        + `${formatRepr(lawClasses)}`);
-    } else if (lawClass[roman] && klass !== lawClass[roman]) {
-      problems.push(`[authoring] LAW_META[${n}] classes rule ${roman} as '${klass}' but `
-        + `LAW_CLASS says '${lawClass[roman]}'`);
-    }
-  }
-  for (const n of [...meta.keys()].filter((k) => !seen.has(k)).sort((a, b) => a - b)) {
-    problems.push(`[authoring] LAW_META lists rule ${n} but laws/universal.md has no such rule`);
-  }
-  return problems;
-}
-
-/** `LAW_META_ROW`'s twin for a STRING key — `'<pack>.<n>': ['<pack>', '<principle>', '<id>'],`. */
-const DOCTRINE_META_ROW =
-  /^[^\S\n]*(['"])([a-z]+\.\d+)\1:\s*\[\s*(['"])(.*?)\3\s*,\s*(['"])(.*?)\5\s*(?:,\s*(['"])(.*?)\7\s*)?,?\s*\]\s*,?[^\S\n]*$/gm;
-
-/**
- * `lawMetaProblems`' doctrine half — the console's per-rule Principle column stays complete.
- *
- * SAME DEFECT, ONE TIER OVER. `DOCTRINE_META` holds copy that exists nowhere else in the tree,
- * and a rule with no row falls back to an empty principle: it renders with a blank description
- * while every count upstream reads correct. Two invariants shipped exactly that way before
- * `lawMetaProblems` existed, and 23 new rules is a much larger surface to lose one in.
- *
- * ⚠ THE CLASS ARM IS DIFFERENT FROM THE INVARIANTS'. An invariant's class is checked against
- * `LAW_CLASSES`, a vocabulary of six; a doctrine rule has no second taxonomy — its class IS its
- * pack — so the check is an EQUALITY against the pack in its own key. That catches the copy
- * error a six-way vocabulary cannot: a row pasted from the pack above it, keeping the class of
- * the pack it came from, which would colour the row and label its chip with the wrong pack.
- */
-export function doctrineMetaProblems(addrs, ids = null) {
-  const [block, refusal] = lawsPageLiteral('DOCTRINE_META', '[authoring] DOCTRINE_META literal not '
-    + "found in web/src/pages/Laws.jsx — the console's doctrine rows would have no gate on their "
-    + 'Principle column');
-  if (refusal) return [refusal];
-  const meta = new Map();
-  for (const m of block.matchAll(DOCTRINE_META_ROW)) meta.set(m[2], [m[4], m[6], m[8]]);
-  const problems = [];
-  const seen = new Set();
-  for (const [i, addr] of addrs.entries()) {
-    seen.add(addr);
-    if (!meta.has(addr)) {
-      problems.push(`[authoring] doctrine rule ${addr} has no row in DOCTRINE_META `
-        + '(web/src/pages/Laws.jsx) — the console would render it with a blank Principle');
-      continue;
-    }
-    const [klass, principle, pin] = meta.get(addr);
-    if (ids && pin !== ids[i]) {
-      problems.push(`[authoring] DOCTRINE_META['${addr}'] is pinned to '${pin ?? '(no id)'}' but `
-        + `that address is '${ids[i]}' now — the row describes a different rule`);
-    }
-    if (!principle.trim()) {
-      problems.push(`[authoring] DOCTRINE_META['${addr}'] has an empty principle line — that `
-        + 'rule would render with a blank description');
-    }
-    const pack = addr.split('.')[0];
-    if (klass !== pack) {
-      problems.push(`[authoring] DOCTRINE_META['${addr}'] carries pack '${klass}' — a doctrine `
-        + `rule's class IS its pack, so this must read '${pack}'`);
-    }
-  }
-  for (const addr of [...meta.keys()].filter((k) => !seen.has(k)).sort()) {
-    problems.push(`[authoring] DOCTRINE_META lists ${addr} but no pack file defines it`);
+  for (const [kind, pack, file] of canonFiles(src)) {
+    const rel = path.relative(src, file).split(path.sep).join('/');
+    let lines;
+    try { lines = readText(file).replace(/\r\n?/g, '\n').split('\n'); } catch { continue; }  // constitutionProblems names it
+    const rules = [];
+    let current = null;
+    lines.forEach((line, i) => {
+      if (/^#{1,6} /.test(line)) {
+        const m = line.startsWith('### ') ? DECL_LINE_RE.exec(line) : null;
+        const id = m && m[1] === kind ? m[2] : null;
+        current = id ? { id, at: i, found: [] } : null;
+        if (current) rules.push(current);
+        return;
+      }
+      if (!SUMMARY_MARK_RE.test(line)) return;
+      if (current) current.found.push([i, SUMMARY_LINE_RE.exec(line)?.[1] ?? null]);
+      else {
+        problems.push(`[authoring] ${rel}: a summary line sits outside any rule declaration — it `
+          + 'describes no rule');
+      }
+    });
+    rules.forEach(({ id, at, found }, k) => {
+      const where = `[authoring] ${rel}: rule ${kind === 'LAW' ? toRoman(k + 1) : `${pack} ${k + 1}`} '${id}'`;
+      if (!found.length) {
+        problems.push(`${where} has no summary — the console would render it with a blank `
+          + "Principle; add '<!-- note: summary: <one line> -->' on the line directly under its heading");
+        return;
+      }
+      if (found.length > 1) {
+        problems.push(`${where} has ${found.length} summary lines — the console shows one; keep `
+          + 'exactly one');
+      }
+      if (found[0][0] !== at + 1) {
+        problems.push(`${where} summary is not directly under its heading — ruleSummaries reads `
+          + 'only that line, so the console would show none');
+      }
+      if (found[0][1] === null) {
+        problems.push(`${where} has a malformed summary line — it must be one unindented line, `
+          + "'<!-- note: summary: <text> -->', the only shape ruleSummaries reads");
+      } else if (!found[0][1].trim()) {
+        problems.push(`${where} has an empty summary — the console would render a blank Principle`);
+      }
+    });
   }
   return problems;
 }
@@ -242,8 +173,8 @@ export function leanBlockProblems() {
 }
 
 /**
- * The three-tier constitution's own authoring gates — the doctrine twin of the `LAW_CLASS` /
- * `LAW_META` family, plus the two purity rules the tiering rests on.
+ * The three-tier constitution's own authoring gates — the doctrine twin of the `LAW_CLASS`
+ * family, the per-rule summaries, plus the two purity rules the tiering rests on.
  *
  * IT LIVES BESIDE `countTableProblems` RATHER THAN INSIDE IT, and is called from
  * `authoringProblems` beside `registry`/`secret`/`vendorPin`. `countTableProblems` opens by
@@ -328,10 +259,10 @@ export function constitutionProblems() {
     }
   }
 
-  // The console's Principle column, keyed off the rules just parsed — so the gate is driven by
-  // the SOURCE and a rule added to a pack file is caught the same day, not when someone
-  // notices a blank description in the browser.
-  problems.push(...doctrineMetaProblems([...rules.keys()], [...rules.values()].map((r) => r.id)));
+  // The console's Principle column, read off the same files — so a rule added to the canon
+  // without its summary is caught the same day, not when someone notices a blank description
+  // in the browser.
+  problems.push(...ruleSummaryProblems());
 
   // ---- every citation in src/ is by id, and every id resolves.
   //

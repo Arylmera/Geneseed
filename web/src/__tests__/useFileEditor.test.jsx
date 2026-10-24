@@ -60,6 +60,7 @@ describe('useFileEditor', () => {
     expect(confirm).toHaveBeenCalledWith('Discard your unsaved edit?', {
       title: 'Unsaved edit',
       confirmLabel: 'Discard',
+      tone: 'danger',
     })
     expect(window.location.hash).toBe('#/laws')
     await act(async () => {})

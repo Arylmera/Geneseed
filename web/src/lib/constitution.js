@@ -1,6 +1,6 @@
 // Small, pure readers over the constitution catalog (/api/catalog/laws), shared by the
 // Constitution page and the Overview. Laws.jsx itself cannot be imported from the shell
-// (it is lazy, and doctor reads LAW_META out of that exact path), so what both need
+// (it is lazy), so what both need
 // lives here.
 
 // A catalog title -> its parts. Titles arrive as `Rule IV — Deletio Deliberata · Deletion

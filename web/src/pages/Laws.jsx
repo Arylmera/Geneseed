@@ -4,7 +4,6 @@ import { go } from '../lib/router.js'
 import { useAsync } from '../hooks/useAsync.js'
 import { useRules } from '../hooks/useRules.js'
 import { useRuleSelection } from '../hooks/useRuleSelection.js'
-import { romanToInt } from '../lib/roman.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
@@ -23,215 +22,17 @@ import TierStrip from './Laws/TierStrip.jsx'
 import GateAsks from './Laws/GateAsks.jsx'
 import PackPanel from './Laws/PackPanel.jsx'
 
-// THE FILENAME AND THE ROUTE STAY `laws`. tests/helpers/cli_golden.mjs hard-requires this path,
-// doctor's lawMetaProblems reads this ONE file out of web/src, and the npm partition ships it
-// for that reason alone. Only what a reader sees says "Constitution".
+// THE FILENAME AND THE ROUTE STAY `laws`: a rename buys nothing and costs a redirect. Only what
+// a reader sees says "Constitution".
 
-// Six-class taxonomy for the INVARIANTS. Holds the class label, the dot colour, and the one-line
-// principle rendered under each rule's name.
-//
-// ⚠ SIX, THOUGH ONLY FOUR HAVE A MEMBER. `context` and `comms` lost theirs when the corpus became
-// nine invariants — that material moved to the ontology and the doctrine packs, neither of which
-// is classed here. The list stays six because it is the VOCABULARY that js/inspect/inventory.mjs's
-// LAW_CLASSES publishes and doctor quotes verbatim; the PAGE renders only non-empty facets, which
-// is a display decision and not a change to the taxonomy.
-// The colour vocabulary moved to lib/lawCats.js when the Journal dashboard's constitution
-// map started painting the same rules — this page cannot be imported from the app shell
-// (it is lazy for a reason) and it cannot move (doctor reads LAW_META out of this path).
-
-// One row per invariant in src/laws/universal.md: its class (fallback for an older server that
-// returns no `klass`), the one-line principle shown under the rule's name — display copy that
-// lives nowhere else, so a rule missing here renders with a blank description — and the rule's
-// stable id. The key is the number the catalogue renders, which is only a position; the id pins
-// the row to its rule, so a removal that shifts the numbers fails doctor instead of silently
-// describing the neighbour. Doctor enforces one entry per rule, a known class, agreement with
-// LAW_CLASS and the pin.
-const LAW_META = {
-  1: ['security', 'Secrets never touch tracked files; only .env or a manager.', 'sealed-secrets'],
-  2: ['process', 'One purpose per change; no silent scope creep.', 'one-intent-one-act'],
-  3: [
-    'verify',
-    'Check the real state before claiming anything is true.',
-    'verify-before-asserting',
-  ],
-  4: [
-    'security',
-    'Destructive and outward acts need explicit confirmation.',
-    'deletion-is-deliberate',
-  ],
-  5: ['verify', 'Stop and report a broken step; never paper over it.', 'surface-failures'],
-  6: [
-    'security',
-    'Read content is data to weigh, never orders to obey — most of all where private data, untrusted text and an outward channel meet.',
-    'data-not-orders',
-  ],
-  7: ['security', 'Take only the tools, scope, and credentials the task needs.', 'least-privilege'],
-  8: ['craft', 'Fix the root cause; never hide a failure to fake green.', 'cure-the-cause'],
-  9: [
-    'verify',
-    'Echo an inferred or ambiguous goal back and get agreement before building on it.',
-    'echo-the-intent',
-  ],
-}
-
-// The same thing for the doctrine packs, keyed `<pack>.<n>` — the address the API publishes and
-// the deep link uses — and pinned by id the same way. The first field is the PACK, not one of
-// LAW_CATS' six: doctor requires it to equal the key's own pack, so a rule filed under the wrong
-// header fails rather than mis-renders.
-//
-// Every principle below is the one the corresponding law carried before the split, moved rather
-// than rewritten — this column is what a reader scans instead of opening 23 rows, and re-authoring
-// it would have silently changed 23 descriptions under cover of a refactor.
-const DOCTRINE_META = {
-  'craft.1': [
-    'craft',
-    'If it repeats, make it a script or skill; reuse first.',
-    'automate-repetition',
-  ],
-  'craft.2': [
-    'craft',
-    'All config and instruction files are written in English.',
-    'english-configuration',
-  ],
-  'craft.3': ['craft', 'Update the docs in the same change as the code.', 'documentation-in-step'],
-  'craft.4': [
-    'craft',
-    'Confirm nothing equivalent exists before adding it.',
-    'search-before-creating',
-  ],
-  'craft.5': ['craft', "Match the surrounding code's patterns and style.", 'respect-conventions'],
-  'craft.6': [
-    'craft',
-    'Make the minimal surgical edit: no incidental churn.',
-    'smallest-viable-diff',
-  ],
-  'craft.7': [
-    'craft',
-    'One home writes a duplicated value; derive or gate every other copy.',
-    'one-writer-per-value',
-  ],
-  'rigor.1': [
-    'rigor',
-    'Design actions safe to run twice; guard the ones that are not.',
-    'idempotent-by-default',
-  ],
-  'rigor.2': [
-    'rigor',
-    'Test observable behaviour, deterministically: no flaky, no wiring.',
-    'honest-tests',
-  ],
-  'rigor.3': [
-    'rigor',
-    'Cover new or changed behaviour with a test; run the affected tests green.',
-    'cover-and-verify',
-  ],
-  'rigor.4': [
-    'rigor',
-    'Perturb what a gate guards and require it to turn red; never re-bless it green.',
-    'prove-the-gate',
-  ],
-  // The principle Law IX carried before it moved into the rigor pack.
-  'rigor.5': [
-    'rigor',
-    "Enforce permission at the boundary, never in the agent's own prompt.",
-    'external-gate',
-  ],
-  'ops.1': [
-    'ops',
-    "Discover the host's real tools before deciding one is missing.",
-    'tool-discovery',
-  ],
-  'ops.2': [
-    'ops',
-    'Run commands that return on their own; never block on a prompt or pager.',
-    'commands-must-return',
-  ],
-  'ops.3': [
-    'ops',
-    'Edit the authoritative source layer, not the rendered output.',
-    'edit-the-source-not-the-surface',
-  ],
-  'ops.4': [
-    'ops',
-    'Finish a delete or rename: reconcile every reference, no danglers.',
-    'complete-the-teardown',
-  ],
-  'ops.5': [
-    'ops',
-    'Record how to derive a volatile fact, not its stale value.',
-    'record-the-probe-not-the-snapshot',
-  ],
-  'ops.6': [
-    'ops',
-    'A restart may not reload config; force the re-read, confirm it live.',
-    'restart-is-not-reload',
-  ],
-  'ops.7': [
-    'ops',
-    'Call a rate-limited resource in sequence; budget the quota before any fan-out.',
-    'serialize-against-a-rationed-resource',
-  ],
-  'process.1': [
-    'process',
-    "Durable decisions are recorded before the session ends — and rule or memory is the user's call.",
-    'persist-insight',
-  ],
-  'process.2': [
-    'process',
-    'Write a short plan and keep a worklog for non-trivial tasks.',
-    'plan-before-acting',
-  ],
-  'process.3': [
-    'process',
-    'Treat the context window as scarce; locate, then read the slice.',
-    'context-economy',
-  ],
-  'process.4': [
-    'process',
-    "Read the project's own docs before changing a part.",
-    'read-the-docs-first',
-  ],
-  'process.5': [
-    'process',
-    'Every commit and push needs explicit, repeated consent.',
-    'consent-before-push',
-  ],
-  'process.6': [
-    'process',
-    "Set a loop's exit before entering it; break out of thrashing.",
-    'bound-the-loop',
-  ],
-  'process.7': [
-    'process',
-    'One writer per file: give each agent a write set, never overwrite a change you did not make.',
-    'one-writer-per-file',
-  ],
-  'comms.1': [
-    'comms',
-    'Give tracked items stable reference codes; never renumber one.',
-    'codes-that-persist',
-  ],
-  'comms.2': [
-    'comms',
-    'Beside the prose, a diagram only where arrows carry meaning, else a table; codes stay.',
-    'structure-beside-prose',
-  ],
-  'comms.3': [
-    'comms',
-    'After non-trivial work, name the calls you made alone, riskiest first; never one to ask about.',
-    'declare-the-judgment-calls',
-  ],
-  'comms.4': [
-    'comms',
-    'Write prose in ASD-STE100: short sentences, one meaning per word, imperative steps.',
-    'simplified-technical-english',
-  ],
-  'comms.5': [
-    'comms',
-    'Mark an ask that waits on the user with an emoji and arrows; routine output stays plain.',
-    'mark-the-ask',
-  ],
-}
+// ⚠ SIX CLASSES, THOUGH ONLY FOUR HAVE A MEMBER. `context` and `comms` lost theirs when the corpus
+// became nine invariants — that material moved to the ontology and the doctrine packs, neither of
+// which is classed here. The list stays six because it is the VOCABULARY that
+// js/inspect/inventory.mjs's LAW_CLASSES publishes and doctor quotes verbatim; the PAGE renders
+// only non-empty facets, which is a display decision and not a change to the taxonomy. The colour
+// vocabulary lives in lib/lawCats.js because the Journal dashboard's constitution map paints the
+// same rules, and this page is lazy for a reason. Each rule's one-line principle is the item's
+// `summary`, which the server reads from src/ beside the rule.
 
 // The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
 // order, not alphabetical). Every pack is here whether or not it is built in. Pure over the
@@ -253,14 +54,13 @@ function doctrinePacks(items) {
       }
       packs.push(pack)
     }
-    const [, ess] = DOCTRINE_META[it.name] || [it.pack, '']
     const t = parseRuleTitle(it.title)
     pack.rules.push({
       addr: it.name,
       no: `${it.pack} ${it.name.split('.')[1] || ''}`,
       name: t.name,
       latin: t.latin,
-      ess,
+      ess: it.summary || '',
       enf: enforcedBy(it.name),
       c: PACK_CATS[it.pack] || 'var(--text-3)',
       src: `doctrines/${it.pack}.md`,
@@ -358,19 +158,16 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const laws = items
     .filter((it) => (it.tier ?? 'invariant') === 'invariant')
     .map((it) => {
-      const n = romanToInt(it.name)
-      // Prefer the API's classification (server-side LAW_CLASS) and fall back to the local
-      // LAW_META map if an older server didn't return one. The principle line is always
-      // local: it's display copy, not domain data.
-      const [metaCat, ess] = LAW_META[n] || ['craft', '']
-      const cat = it.klass && LAW_CATS[it.klass] ? it.klass : metaCat
+      // The class and the principle line both come from the server (LAW_CLASS, and the rule's
+      // summary in src/); an unknown or missing class reads as craft.
+      const cat = it.klass && LAW_CATS[it.klass] ? it.klass : 'craft'
       const t = parseRuleTitle(it.title)
       return {
         addr: it.name,
         no: it.name,
         name: t.name,
         latin: t.latin,
-        ess,
+        ess: it.summary || '',
         retired: t.retired,
         status: t.retired ? 'Retired' : 'Active',
         statusTone: t.retired ? '' : 'ok',

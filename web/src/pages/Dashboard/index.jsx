@@ -134,6 +134,7 @@ export default function Dashboard({
             setup={setup}
             jobs={jobs}
             lens={lensData}
+            dataRev={dataRev}
             onAction={onAction}
           />
         )}

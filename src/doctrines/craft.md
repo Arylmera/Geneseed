@@ -1,6 +1,7 @@
 **{{PACK_CRAFT}}** — how code is written.
 
 ### {{DOCTRINE:automate-repetition}} Automate Repetition
+<!-- note: summary: If it repeats, make it a script or skill; reuse first. -->
 <!-- LEAN:begin -->
 When an action repeats, automate it — and choose the vessel by the nature of the task,
 not by how many similar steps one session needs. Do not
@@ -28,6 +29,7 @@ a single command, not a grab-bag — and name {{SKILLS}} by domain. Reuse before
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:english-configuration}} English Configuration
+<!-- note: summary: All config and instruction files are written in English. -->
 <!-- LEAN:begin -->
 All configuration and instruction files — this file, {{LAW}} and {{DOCTRINE}} files,
 {{AGENT}} and {{SKILL}} specs — are written in English, so any contributor or tool can
@@ -39,6 +41,7 @@ them.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:documentation-in-step}} Documentation in Step
+<!-- note: summary: Update the docs in the same change as the code. -->
 <!-- LEAN:begin -->
 When a change alters structure, an interface, or behaviour, update the affected
 documentation — README, API docs, usage examples — in the *same* change. Code and
@@ -51,6 +54,7 @@ drifts from the code is a defect, not a deferred task.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:search-before-creating}} Search Before Creating
+<!-- note: summary: Confirm nothing equivalent exists before adding it. -->
 <!-- LEAN:begin -->
 Before adding a file, module, function, or abstraction, confirm an equivalent
 does not already exist; prefer extending what is there. Duplication is a defect.
@@ -62,6 +66,7 @@ already exist; prefer extending what is there. Duplication is a defect.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:respect-conventions}} Respect Conventions
+<!-- note: summary: Match the surrounding code's patterns and style. -->
 <!-- LEAN:begin -->
 Match the surrounding code — its naming, structure, formatting, and patterns.
 Before writing new code, find a concrete example of the same pattern already in the
@@ -82,6 +87,7 @@ the job ({{DOCTRINE:search-before-creating}}), present its cost, and add it only
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:smallest-viable-diff}} Smallest Viable Diff
+<!-- note: summary: Make the minimal surgical edit: no incidental churn. -->
 <!-- LEAN:begin -->
 Change as little as the task requires. Make the minimal, surgical edit that solves
 the problem and stop — do not rewrite a whole file when a few lines suffice,
@@ -104,6 +110,7 @@ change.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:one-writer-per-value}} One Writer Per Value
+<!-- note: summary: One home writes a duplicated value; derive or gate every other copy. -->
 <!-- LEAN:begin -->
 A value that lives in several places — a version, a count, a name, a threshold — drifts
 in whichever place nothing checks. Appoint one home as its sole writer and derive every

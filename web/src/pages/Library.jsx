@@ -162,7 +162,7 @@ export default function Library({
     if (!name) return
     const ok = await confirm(
       `Forget the memory fact "${name}"? It leaves the index and moves to memory/archive/ (geneseed memory rm --archived --purge deletes it for good).`,
-      { title: 'Forget this fact?', confirmLabel: 'Forget' },
+      { title: 'Forget this fact?', confirmLabel: 'Forget', tone: 'danger' },
     )
     if (!ok) return
     setActionErr('')

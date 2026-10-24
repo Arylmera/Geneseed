@@ -1,11 +1,26 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// JournalView's constitution map reads the laws catalogue; nothing here asserts on it.
+// JournalView's constitution map and the KPI strip read the laws catalogue: its `nouns` name
+// the tiers in the active theme. Untouched, it answers with no nouns, so the fallbacks show.
+const catalog = vi.hoisted(() => ({ current: null }))
 vi.mock('../api/index.js', () => ({
-  api: { catalog: () => Promise.resolve({ items: [] }) },
+  api: {
+    catalog: () =>
+      catalog.current instanceof Error
+        ? Promise.reject(catalog.current)
+        : Promise.resolve(catalog.current),
+  },
 }))
+// Both callers share the 'catalog:laws' cache key, so one case's nouns would serve the next.
+beforeEach(() => {
+  catalog.current = { items: [] }
+  clearAsyncCache()
+})
+
+import { clearAsyncCache } from '../hooks/useAsync.js'
+import KpiStrip from '../pages/Dashboard/KpiStrip.jsx'
 
 import { newestJobs, jobSummary } from '../lib/jobBuckets.js'
 import { headlineFor } from '../lib/headlines.js'
@@ -226,6 +241,67 @@ describe('JournalView', () => {
       />,
     )
     await waitFor(() => expect(screen.getByText('Harness needs a look.')).toBeTruthy())
+  })
+
+  const journal = () =>
+    render(
+      <JournalView
+        overview={overview}
+        recent={null}
+        lens={{ verdict: good }}
+        onAction={() => {}}
+        dataRev={0}
+      />,
+    )
+
+  // The tiers carry the theme's own nouns, as the Laws page does — visible text and the
+  // node's accessible name alike.
+  it('names the tiers with the themed nouns from the catalogue', async () => {
+    catalog.current = {
+      items: [],
+      nouns: { ontology: 'Credo', law: 'Dictate', laws: 'Edicts', doctrines: 'Doctrinae' },
+    }
+    journal()
+    await waitFor(() => expect(screen.getByText('Credo')).toBeTruthy())
+    expect(screen.getByText('Edicts')).toBeTruthy()
+    expect(screen.getByText('Doctrinae')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Credo: 0 sections' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Edicts: 9, never broken' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Doctrinae: 0 rules chosen at build' })).toBeTruthy()
+    expect(screen.queryByText('Ethos')).toBeNull()
+    expect(screen.queryByText('Dictates')).toBeNull()
+  })
+
+  // A catalogue without nouns falls back to the Laws page's own defaults.
+  it('falls back to Ethos / Dictates / Doctrines without nouns', async () => {
+    journal()
+    await waitFor(() => expect(screen.getByText('Ethos')).toBeTruthy())
+    expect(screen.getByText('Dictates')).toBeTruthy()
+    expect(screen.getByText('Doctrines')).toBeTruthy()
+  })
+})
+
+describe('KpiStrip', () => {
+  it('labels the invariant tile with the themed noun', async () => {
+    catalog.current = { items: [], nouns: { laws: 'Edicts' } }
+    render(<KpiStrip overview={overview} dataRev={0} />)
+    await waitFor(() => expect(screen.getByText('Edicts')).toBeTruthy())
+    expect(screen.queryByText('Dictates')).toBeNull()
+  })
+  it('falls back to Dictates without nouns', async () => {
+    render(<KpiStrip overview={overview} dataRev={0} />)
+    await waitFor(() => expect(screen.getByText('Dictates')).toBeTruthy())
+  })
+  // A failed fetch must not be cached under the shared key: the map (and the Laws page)
+  // mounting next with the same dataRev fetches again and gets the real nouns.
+  it('does not leave a failed fetch in the shared cache', async () => {
+    catalog.current = new Error('HTTP 500')
+    const { unmount } = render(<KpiStrip overview={overview} dataRev={0} />)
+    await waitFor(() => expect(screen.getByText('Dictates')).toBeTruthy())
+    unmount()
+    catalog.current = { items: [], nouns: { laws: 'Edicts' } }
+    render(<KpiStrip overview={overview} dataRev={0} />)
+    await waitFor(() => expect(screen.getByText('Edicts')).toBeTruthy())
   })
 })
 

@@ -113,7 +113,7 @@ export function authorNoteProblems(src = SRC) {
 // Moved to the two sibling modules; re-exported so callers that import the authoring group as
 // one module keep working.
 export {
-  HOOK_PINNED, constitutionProblems, doctrineMetaProblems, lawMetaProblems, leanBlockProblems,
+  HOOK_PINNED, constitutionProblems, leanBlockProblems, ruleSummaryProblems,
 } from './checks-constitution.mjs';
 export { countTableProblems, kitProblems, proseMirrorProblems } from './checks-counts.mjs';
 

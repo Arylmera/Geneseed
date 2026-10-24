@@ -28,7 +28,7 @@ export default class PageBoundary extends React.Component {
     // StaleBanner is an alert of its own; a second one around it would announce twice.
     return (
       <div role={chunk ? undefined : 'alert'}>
-        <ErrorState error={error.message || String(error)} />
+        <ErrorState error={error.message || String(error)} role={null} />
         {chunk ? (
           <StaleBanner />
         ) : (
