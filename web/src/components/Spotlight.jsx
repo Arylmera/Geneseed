@@ -122,8 +122,15 @@ export default function Spotlight({ query, index, loading, error, active, onActi
           No matches for &ldquo;{query}&rdquo;.
         </div>
       )}
+      {/* Keyed by kind AND first row: one kind can open two runs (skills, docs, skills), and
+          a shared key left the first run's rows on screen after the next keystroke (VS-21). */}
       {groups.map((g) => (
-        <div key={g.kind} className="spot-group" role="group" aria-label={g.kind}>
+        <div
+          key={`${g.kind}-${g.rows[0].index}`}
+          className="spot-group"
+          role="group"
+          aria-label={g.kind}
+        >
           {/* The heading is the group's aria-label already; leaving it exposed would make a
               screen reader read every section name twice. */}
           <div className="spot-group-head" aria-hidden="true">

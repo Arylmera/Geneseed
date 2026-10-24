@@ -9,8 +9,9 @@ import { PickSelects } from './controls.jsx'
 //
 // Mounted while open, so every opening starts from the defaults: `host` is the one the
 // page reckons you already use (so a Claude shop isn't silently pushed toward OpenCode),
-// the voice the deployed one. Failures go to the page's note line (`onNote`), which
-// sits above the table this form opens over.
+// the voice the deployed one. An empty folder is the form's own error, shown next to the
+// field it is about; the folder picker's failures go to the page's note line (`onNote`),
+// and a rejected deploy (400) to the job toast.
 export default function DeployForm({ host, theme, options, onAction, onClose, onNote }) {
   const [deploy, setDeploy] = useState({
     path: '',
@@ -22,6 +23,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
     trust: 'balanced',
   })
   const [browsing, setBrowsing] = useState(false) // native folder picker in flight
+  const [err, setErr] = useState('') // the folder field's own error
   const set = (k, v) => setDeploy((d) => ({ ...d, [k]: v }))
 
   // The native folder chooser lives on the daemon host: a browser can't reveal a disk
@@ -31,8 +33,10 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
     onNote('')
     try {
       const r = await api.pickFolder()
-      if (r.path) set('path', r.path)
-      else if (r.error) onNote(r.error)
+      if (r.path) {
+        set('path', r.path)
+        setErr('')
+      } else if (r.error) onNote(r.error)
     } catch (e) {
       onNote(e.message)
     } finally {
@@ -43,9 +47,10 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
   const submitDeploy = async () => {
     const path = deploy.path.trim()
     if (!path) {
-      onNote('Choose or type a folder to deploy into.')
+      setErr('Choose or type a folder to deploy into.')
       return
     }
+    setErr('')
     onNote('')
     // Close only if the job was accepted (truthy job id). A rejected path (400 —
     // missing/unwritable folder, the editable field's main failure mode) keeps the
@@ -70,14 +75,24 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
           type="text"
           placeholder="/path/to/project, or click Browse…"
           value={deploy.path}
-          onChange={(e) => set('path', e.target.value)}
+          onChange={(e) => {
+            set('path', e.target.value)
+            setErr('')
+          }}
           onKeyDown={(e) => e.key === 'Enter' && submitDeploy()}
           aria-label="Folder to deploy into"
+          aria-invalid={err ? true : undefined}
+          aria-describedby={err ? 'dp-path-err' : undefined}
         />
         <button className="btn ghost sm" disabled={browsing} onClick={browseFolder}>
           {browsing ? 'Choosing…' : 'Browse…'}
         </button>
       </div>
+      {err ? (
+        <p id="dp-path-err" className="tag bad note" role="alert">
+          {err}
+        </p>
+      ) : null}
       <div className="dp-row">
         <label className="dp-field">
           <span>Deploy as</span>
@@ -95,7 +110,8 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
           </select>
         </label>
         <PickSelects value={deploy} options={options} onChange={set} who="the new harness" />
-        <button className="btn sm" onClick={submitDeploy}>
+        {/* Secondary: the panel beside the form keeps the page's one filled action. */}
+        <button className="btn ghost sm" onClick={submitDeploy}>
           Deploy
         </button>
         <button className="btn ghost sm" onClick={onClose}>

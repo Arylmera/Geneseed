@@ -1,17 +1,10 @@
-// The aside's pack panel: each pack's share of its rules switched on, its switch, and the one
-// Apply that rebuilds the install with the staged selection (hooks/useRuleSelection.js).
+import { Bar } from '../../components/StackBar.jsx'
+
+// The aside's pack panel: each pack's share of its rules switched on, its switch, and the
+// Revert for the staged selection (hooks/useRuleSelection.js). The Apply that rebuilds the
+// install is the page's one primary action, so it lives in the page header (Laws.jsx), not here.
 export default function PackPanel({ packs, sel, canApply, install, gateArmed }) {
-  const {
-    isOn,
-    packOn,
-    togglePack,
-    allRules,
-    pickedRules,
-    dirty,
-    losingConsent,
-    applyPacks,
-    revert,
-  } = sel
+  const { isOn, packOn, togglePack, dirty, losingConsent, revert } = sel
   const maxPack = Math.max(1, ...packs.map((p) => p.rules.length))
   return (
     <section className="panel" aria-labelledby="doc-packs">
@@ -30,9 +23,7 @@ export default function PackPanel({ packs, sel, canApply, install, gateArmed }) 
                 <span className="pl-name" title={p.desc}>
                   {p.title}
                 </span>
-                <span className="hbar" aria-hidden="true">
-                  <span style={{ width: `${(on / maxPack) * 100}%` }} />
-                </span>
+                <Bar value={on} max={maxPack} label={`${p.title} rules on`} />
                 <span className="mono pl-n">{on}</span>
                 {/* A tri-state checkbox, not a switch: ARIA's `switch` has no "mixed", and a
                     pack with some of its rules on is neither on nor off. */}
@@ -68,9 +59,6 @@ export default function PackPanel({ packs, sel, canApply, install, gateArmed }) 
             </p>
           )}
           <div className="pack-apply">
-            <button type="button" className="btn" onClick={applyPacks} disabled={!dirty}>
-              Apply{dirty ? ` (${pickedRules.length}/${allRules.length} rules)` : ''}
-            </button>
             <button type="button" className="btn ghost" onClick={revert} disabled={!dirty}>
               Revert
             </button>

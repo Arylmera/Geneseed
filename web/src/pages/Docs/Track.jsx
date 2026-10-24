@@ -1,5 +1,4 @@
 import React from 'react'
-import { go } from '../../lib/router.js'
 
 // Where a docs page sits, and the prev/next bar under it. Every page has a part (the folder:
 // Understand, Guides, Concepts, Reference) and a section inside it (`section:` frontmatter,
@@ -65,7 +64,8 @@ export function pageNav(menu, pageId) {
   return { prev: pages[i - 1] || null, next: pages[i + 1] || null }
 }
 
-const open = (id) => go(`#/docs/${encodeURIComponent(id)}`)
+// A docs page's address: every link to a page is a plain hash link built here.
+export const docHref = (id) => '#/docs/' + encodeURIComponent(id)
 
 // The track's progress line: how many understand pages the reader has opened.
 export function TrackProgress({ pages, seen }) {
@@ -88,19 +88,19 @@ export function PageBar({ menu, pageId }) {
   const { prev, next } = pageNav(menu, pageId)
   if (!prev && !next) return null
   return (
-    <div className="track-bar">
+    <nav className="track-bar" aria-label="Pages">
       {prev ? (
-        <button className="btn ghost sm" onClick={() => open(prev.id)}>
+        <a className="btn ghost sm" href={docHref(prev.id)}>
           ← {prev.title}
-        </button>
+        </a>
       ) : (
         <span />
       )}
       {next && (
-        <button className="btn sm" onClick={() => open(next.id)}>
+        <a className="btn sm" href={docHref(next.id)}>
           Next: {next.title} →
-        </button>
+        </a>
       )}
-    </div>
+    </nav>
   )
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import Loading from '../components/Loading.jsx'
 import Markdown from '../components/Markdown.jsx'
 import KitApply, { KitState } from '../components/KitApply.jsx'
@@ -124,7 +125,12 @@ function KitDetail({ kit, installs, stage, listed }) {
                   <span className="mono">{c.repo}</span>
                   {c.commit ? <span className="mono dim">@ {short(c.commit)}</span> : null}
                   {c.compareUrl ? (
-                    <a href={c.compareUrl} target="_blank" rel="noreferrer">
+                    <a
+                      href={c.compareUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Compare ${c.repo} @ ${short(c.commit)} with HEAD`}
+                    >
                       compare
                     </a>
                   ) : null}
@@ -172,7 +178,8 @@ function KitDetail({ kit, installs, stage, listed }) {
   )
 }
 
-// The Kits page, in the Library's three panes: a rail (enabled or not), the kits, the
+// The Kits page, in the Library's three panes: a rail (its title, plus an enabled-or-not
+// filter once there are enough kits to narrow), the kits, the
 // selected kit. `#/kits` opens on the first kit, `#/kits/<name>` on that one. A kit is
 // switched per install here with the same staged-Apply flow as Installs / Kits.
 export default function Kits({ item, onAction, dataRev }) {
@@ -200,29 +207,30 @@ export default function Kits({ item, onAction, dataRev }) {
     [dataRev],
   )
   const err = error || data?.error
+  // A Status filter earns its place only over a list long enough to need narrowing.
+  const railCats = rows.length >= 8 ? groupsOf(rows) : []
 
   return (
     <>
-      <ErrorState error={err} style={{ margin: '0 0 12px' }} />
+      <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
       <div className="library">
         <aside className="lib-kinds" aria-label="Kits sections">
           <div className="lib-title">
             <h1 className="h">Kits</h1>
             <span className="dim">Optional bundles</span>
           </div>
-          <nav className="kind-list" aria-label="Sections">
-            <a href="#/kits" className="on" aria-current="page">
-              Kits
-              <span className="mono dim">{data ? kits.length : ''}</span>
-            </a>
-            <RailCats
-              label="Status"
-              total={rows.length}
-              cats={groupsOf(rows)}
-              cat={cat}
-              onChange={setCat}
-            />
-          </nav>
+          {/* No self-link: the page has one section, and a link to where you are goes nowhere. */}
+          {railCats.length > 1 ? (
+            <nav className="kind-list" aria-label="Sections">
+              <RailCats
+                label="Status"
+                total={rows.length}
+                cats={railCats}
+                cat={cat}
+                onChange={setCat}
+              />
+            </nav>
+          ) : null}
         </aside>
 
         <LibList
@@ -239,10 +247,7 @@ export default function Kits({ item, onAction, dataRev }) {
             )
           ) : rows.length === 0 ? (
             err ? null : (
-              <div className="empty" style={{ padding: 32 }}>
-                <div className="big">No kits</div>
-                This Geneseed ships no kit.
-              </div>
+              <EmptyState title="No kits">This Geneseed ships no kit.</EmptyState>
             )
           ) : (
             <GroupedRows
@@ -255,10 +260,9 @@ export default function Kits({ item, onAction, dataRev }) {
 
         <article className="lib-reader" aria-label="Entry">
           {missing ? (
-            <div className="empty">
-              <div className="big">No such kit</div>
-              No kit is named “{item}”. <a href="#/kits">Back to all kits</a>
-            </div>
+            <EmptyState title="No such kit" action={<a href="#/kits">Back to all kits</a>}>
+              No kit is named “{item}”.
+            </EmptyState>
           ) : sel ? (
             <KitDetail
               key={sel.name}

@@ -1,107 +1,44 @@
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
-import { STATUS, ELLIPSIS, baseName, compact, Elapsed, TodoStrip } from '../lib/activity.jsx'
+import { baseName, hasCounters, SessionHeader, TodoStrip } from '../lib/activity.jsx'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 import { useFlip } from '../lib/motion.js'
 import { usePoll } from '../hooks/usePoll.js'
 
 function SessionCard({ s }) {
-  const st = STATUS[s.status] || STATUS.idle
-  const files = s.files
+  const id = useId()
   const todos = s.todos
-  const hasFooter = (todos && todos.total > 0) || s.error || s.blocked_on
+  const counters = hasCounters(s)
   // A real <a>, not a div playing one: middle-click, open-in-new-tab and the
-  // screen reader's links list all work, and nothing inside it is interactive.
+  // screen reader's links list all work, and nothing inside it is interactive. Its name
+  // is the title and status alone; the counters describe it rather than name it.
   return (
-    <a className="card pad-md act-card" href={`#/activity/${encodeURIComponent(s.session_id)}`}>
-      <div className="row between wrap gap-12">
-        <div className="row gap-10" style={{ minWidth: 0 }}>
-          <span className={`feed-dot ${st.cls || 'acc'}`} style={{ width: 9, height: 9 }} />
-          <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: 0 }}>{s.title || baseName(s.cwd) || s.session_id}</h3>
-            {s.cwd && (
-              <div className="dim mono" style={{ fontSize: 12, ...ELLIPSIS }} title={s.cwd}>
-                {s.cwd}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="row gap-8" style={{ flexShrink: 0 }}>
-          {s.model && (
-            <span className="badge mono" title="model">
-              {s.model}
-            </span>
-          )}
-          {s.agent && <span className="badge">{s.agent}</span>}
-          <span className={`badge ${st.cls}`}>
-            <span className="dot" />
-            {st.label}
+    <a
+      className="card pad-md act-card"
+      href={`#/activity/${encodeURIComponent(s.session_id)}`}
+      aria-labelledby={`${id}-t ${id}-st`}
+      aria-describedby={counters ? `${id}-c` : undefined}
+    >
+      <SessionHeader s={s} id={id} heading={s.title || baseName(s.cwd) || s.session_id}>
+        {/* affordance: this card opens the session detail (the card itself is the link) */}
+        <Icon name="chevron" className="glyph act-chev" />
+      </SessionHeader>
+
+      {todos && todos.total > 0 && (
+        <div className="act-foot">
+          <span className="row gap-8 dim act-sm">
+            <TodoStrip done={todos.done} total={todos.total} />
+            plan {todos.done}/{todos.total}
           </span>
-          {/* affordance: this card opens the session detail (the card itself is the link) */}
-          <Icon name="chevron" className="glyph act-chev" />
-        </div>
-      </div>
-
-      {s.phase && (
-        <div className="row gap-8" style={{ marginTop: 10, fontSize: 14 }}>
-          <Icon name="activity" />
-          <span style={ELLIPSIS}>{s.phase}</span>
         </div>
       )}
 
-      {(s.tokens > 0 || s.cost > 0 || s.turn_started_at || (files && files.count > 0)) && (
-        <div
-          className="row wrap"
-          style={{ gap: 16, marginTop: 12, fontSize: 13, color: 'var(--text-2)' }}
-        >
-          {s.tokens > 0 && <span>{compact(s.tokens)} tok</span>}
-          {s.cost > 0 && <span>${s.cost.toFixed(2)}</span>}
-          {s.turn_started_at ? (
-            <span>
-              <Elapsed startedAt={s.turn_started_at} />
-            </span>
-          ) : null}
-          {files && files.count > 0 && (
-            <span>
-              {files.count} file{files.count === 1 ? '' : 's'}{' '}
-              <span style={{ color: 'var(--good)' }}>+{files.additions}</span>{' '}
-              <span style={{ color: 'var(--bad)' }}>−{files.deletions}</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {hasFooter && (
-        <div
-          className="row between wrap gap-12"
-          style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--line)' }}
-        >
-          {todos && todos.total > 0 ? (
-            <span className="row gap-8 dim" style={{ fontSize: 13 }}>
-              <TodoStrip done={todos.done} total={todos.total} />
-              plan {todos.done}/{todos.total}
-            </span>
-          ) : (
-            <span />
-          )}
-          {s.error ? (
-            <span className="badge bad" title={s.error} style={{ maxWidth: 300, ...ELLIPSIS }}>
-              {s.error}
-            </span>
-          ) : s.blocked_on ? (
-            <span className="badge bad" title={s.blocked_on} style={{ maxWidth: 300, ...ELLIPSIS }}>
-              {s.blocked_on}
-            </span>
-          ) : null}
-        </div>
-      )}
-
-      <div className="dim mono" style={{ fontSize: 11, marginTop: 8 }}>
-        updated {relTime(s.updated_at)} ago
-      </div>
+      <div className="dim mono act-updated">updated {relTime(s.updated_at)} ago</div>
     </a>
   )
 }
@@ -131,7 +68,13 @@ export default function Activity() {
 
   // Default on when the field is absent (older server / first paint).
   const enabled = data ? data.enabled !== false : true
-  const sessions = data?.activity || []
+  // Sorted by id, ascending: the server buckets by status and recency, which reorders the
+  // cards on every turn; an id never changes, so a card stays where the eye left it.
+  // OpenCode ids descend with time, so ascending puts the newest first; Claude ids are
+  // random, but still stable.
+  const sessions = [...(data?.activity || [])].sort((a, b) =>
+    a.session_id < b.session_id ? -1 : a.session_id > b.session_id ? 1 : 0,
+  )
   const flipRef = useFlip()
 
   const toggle = async () => {
@@ -152,47 +95,44 @@ export default function Activity() {
 
   return (
     <div className="narrow">
-      <div className="head-row mb-16">
-        <div>
-          <h1 className="h">Activity</h1>
-          <p className="sub">
-            Live OpenCode sessions this harness is running: what each one is doing right now.
-            Refreshes every couple of seconds; sessions drop off when their process exits.
-          </p>
+      <PageHeader
+        title="Activity"
+        sub="Live OpenCode sessions this harness is running: what each one is doing right now. Refreshes every couple of seconds; sessions drop off when their process exits."
+        actions={
+          <div className="row gap-10 act-fixed">
+            <span className="dim mono act-xs">{enabled ? 'tracking on' : 'tracking off'}</span>
+            <div
+              className={`sw-toggle${enabled ? ' on' : ''}`}
+              role="switch"
+              aria-checked={enabled}
+              aria-label="Toggle activity tracking"
+              tabIndex={0}
+              onClick={toggle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.key === ' ') e.preventDefault()
+                  toggle()
+                }
+              }}
+            />
+          </div>
+        }
+      />
+      {error && (
+        <div className="act-gap">
+          <ErrorState error={error} />
         </div>
-        <div className="row gap-10" style={{ alignItems: 'center', flexShrink: 0 }}>
-          <span className="dim mono" style={{ fontSize: 12 }}>
-            {enabled ? 'tracking on' : 'tracking off'}
-          </span>
-          <div
-            className={`sw-toggle${enabled ? ' on' : ''}`}
-            role="switch"
-            aria-checked={enabled}
-            aria-label="Toggle activity tracking"
-            tabIndex={0}
-            onClick={toggle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                if (e.key === ' ') e.preventDefault()
-                toggle()
-              }
-            }}
-          />
-        </div>
-      </div>
-      <ErrorState error={error} style={{ marginBottom: 12 }} />
+      )}
       {!data ? (
         <Loading label="Reading live sessions…" />
       ) : !enabled ? (
-        <div className="empty">
-          <div className="big">Activity tracking is off</div>
+        <EmptyState title="Activity tracking is off">
           The plugin isn&apos;t recording sessions. Flip the switch to turn it back on.
-        </div>
+        </EmptyState>
       ) : sessions.length === 0 ? (
-        <div className="empty">
-          <div className="big">No active sessions</div>
+        <EmptyState title="No active sessions">
           Run <code>opencode</code> and the sessions it spins up appear here.
-        </div>
+        </EmptyState>
       ) : (
         // A poll that adds or drops a session slides the list instead of re-dealing it.
         <div className="stack gap-12" ref={flipRef}>

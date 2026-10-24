@@ -1,8 +1,6 @@
 import React from 'react'
-import { render, fireEvent } from '@testing-library/react'
+import { render, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-vi.mock('../lib/router.js', () => ({ go: vi.fn() }))
 
 import {
   PageBar,
@@ -14,7 +12,6 @@ import {
   readSeen,
   SEEN_KEY,
 } from '../pages/Docs/Track.jsx'
-import { go } from '../lib/router.js'
 
 // The Understand track: four pages, then Guides. A step is "done" when read before and
 // "on" when open; prev/next walk the track, and next on the last step leaves it for the
@@ -67,12 +64,13 @@ describe('Track', () => {
     expect(trackNav(MENU, 'install')).toEqual({ prev: null, next: null })
   })
 
-  it('navigates from the bar', () => {
-    const { getByText } = render(<PageBar menu={MENU} pageId="machine" />)
-    fireEvent.click(getByText('Next: A day with the harness →'))
-    expect(go).toHaveBeenCalledWith('#/docs/day')
-    fireEvent.click(getByText('← What a harness is'))
-    expect(go).toHaveBeenCalledWith('#/docs/harness')
+  // Real links in a named navigation: they open in a new tab and say where they go.
+  it('links the bar to the pages, in a navigation named Pages', () => {
+    const { getByRole } = render(<PageBar menu={MENU} pageId="machine" />)
+    const nav = within(getByRole('navigation', { name: 'Pages' }))
+    const href = (name) => nav.getByRole('link', { name }).getAttribute('href')
+    expect(href('Next: A day with the harness →')).toBe('#/docs/day')
+    expect(href('← What a harness is')).toBe('#/docs/harness')
   })
 
   // The track is one course across its sections; every other part's bar stays inside the

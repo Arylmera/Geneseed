@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import ErrorState from '../components/ErrorState.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import Loading from '../components/Loading.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import Markdown from '../components/Markdown.jsx'
@@ -273,23 +274,52 @@ function Problems({ problems }) {
 }
 
 const EMPTY = {
+  templates: {
+    title: 'No templates',
+    body: (
+      <>
+        Add one under <code className="mono">.geneseed/loops/</code> in the repo.
+      </>
+    ),
+  },
+  bricks: {
+    title: 'No bricks',
+    body: (
+      <>
+        Add one under <code className="mono">.geneseed/bricks/</code> in the repo.
+      </>
+    ),
+  },
+  active: {
+    title: 'No loops yet',
+    body: (
+      <>
+        Start one with <code className="mono">geneseed loop init</code> in a worktree, or ask the
+        agent to run a loop. It shows up here while it runs.
+      </>
+    ),
+  },
+}
+
+// One sentence per section saying what it lists, and where to read more: the page names
+// loops, bricks and gates without ever saying what they are.
+const LEDE = {
   templates: (
     <>
-      <div className="big">No templates</div>
-      Add one under <code className="mono">.geneseed/loops/</code> in the repo.
+      A template wires bricks into a loop. <a href="#/docs/loops">How loops work →</a>{' '}
+      <a href="#/docs/loop-which-template">Which template? →</a>
     </>
   ),
   bricks: (
     <>
-      <div className="big">No bricks</div>
-      Add one under <code className="mono">.geneseed/bricks/</code> in the repo.
+      A brick is one step: a skill or agent and its outcomes.{' '}
+      <a href="#/docs/loop-bricks">About bricks →</a>
     </>
   ),
   active: (
     <>
-      <div className="big">No loops yet</div>
-      Start one with <code className="mono">geneseed loop init</code> in a worktree, or ask the
-      agent to run a loop. It shows up here while it runs.
+      Loops registered on this machine, read from their LOOP.md.{' '}
+      <a href="#/docs/loop-running">Running a loop →</a>
     </>
   ),
 }
@@ -341,14 +371,12 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
     bricks: data?.bricks.length,
     active: runs.loops?.length,
   }
-  const total = (counts.templates ?? 0) + (counts.bricks ?? 0) + (counts.active ?? 0)
-  const share = (n) => `${total ? ((n ?? 0) / total) * 100 : 0}%`
   const label = SECTIONS.find(([k]) => k === tab)[1]
   const err = tab === 'active' ? runs.error : error
 
   return (
     <>
-      <ErrorState error={err} style={{ margin: '0 0 12px' }} />
+      <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
       <Problems problems={data?.problems} />
       <div className="library">
         <aside className="lib-kinds" aria-label="Loops sections">
@@ -356,11 +384,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
             <h1 className="h">Loops</h1>
             <span className="dim">What the engine runs</span>
           </div>
-          <div className="stackbar thin" aria-hidden="true">
-            <span className="sb-invariants" style={{ width: share(counts.templates) }} />
-            <span className="sb-doctrines" style={{ width: share(counts.bricks) }} />
-            <span className="sb-rest" style={{ width: share(counts.active) }} />
-          </div>
+          <p className="panel-note lib-lede">{LEDE[tab]}</p>
           <nav className="kind-list" aria-label="Sections">
             {SECTIONS.map(([k, l]) => (
               <React.Fragment key={k}>
@@ -399,9 +423,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
               <Loading />
             )
           ) : rows.length === 0 ? (
-            <div className="empty" style={{ padding: 32 }}>
-              {EMPTY[tab]}
-            </div>
+            <EmptyState title={EMPTY[tab].title}>{EMPTY[tab].body}</EmptyState>
           ) : (
             <GroupedRows
               rows={shown}
@@ -413,7 +435,17 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
         </LibList>
 
         <article className="lib-reader" aria-label="Entry">
-          {!sel ? null : tab === 'active' ? (
+          {!sel ? (
+            // Nothing registered: the reader says what a loop is instead of standing blank.
+            tab === 'active' && all ? (
+              <EmptyState
+                title="What is a loop?"
+                docs={{ href: '#/docs/loops', label: 'How loops work →' }}
+              >
+                A loop runs bricks in a ring until its gate passes.
+              </EmptyState>
+            ) : null
+          ) : tab === 'active' ? (
             <ActiveDetail loop={sel} bricks={bricks} onPreset={runs.onPreset} />
           ) : tab === 'bricks' ? (
             <BrickDetail b={sel} />

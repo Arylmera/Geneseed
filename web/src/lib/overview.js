@@ -206,6 +206,13 @@ export const COST_PARTS = [
   ['context', 'Session files'],
 ]
 export const costTotal = (c) => (c ? c.carrier + c.skills + c.agents + c.context : 0)
+
+// Whether an install's row offers the rebuild: active, and behind its source, hand-edited,
+// missing files or holding stale ones. The Ledger counts the same test for its header.
+export const needsRebuild = (i) =>
+  i.state === 'active' &&
+  (i.verdict === 'behind' || driftTotal(i.drift) > 0 || (i.drift?.stale ?? 0) > 0)
+
 export const approxTokens = (chars) => `≈${(chars / 4 / 1000).toFixed(1)}k`
 
 const installLabel = (i) => `${i.host} · ${i.scope}`

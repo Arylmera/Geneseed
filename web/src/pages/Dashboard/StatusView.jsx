@@ -1,16 +1,37 @@
 import React from 'react'
-import { Icon } from '../../components/Icon.jsx'
 import { SECTION_ORDER } from '../../lib/sections.js'
 import { readiness } from '../../lib/format.js'
 import { headlineFor } from '../../lib/headlines.js'
-import Ring from './Ring.jsx'
+import Ring from '../../components/Ring.jsx'
+import { useCountUp } from '../../lib/motion.js'
 import KpiStrip from './KpiStrip.jsx'
 import Genome from './Genome.jsx'
 import ActivityFeed from './ActivityFeed.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
+// The germination dial: the shared ring at the readiness share. ONE tween drives the arc and
+// the number, so the two can never disagree mid-flight; the ring's own sweep is off
+// (`sweepMs={0}`) for that reason. Whole percents, so the label never reads a float.
+// (Its old bezel ticks are gone: the shared ring has none.)
+function Germination({ value }) {
+  const shown = useCountUp(value, 1100) ?? 0
+  const pct = Math.round(shown * 100)
+  return (
+    <div className="ring-box">
+      <Ring value={pct} max={100} label="germination" size={232} stroke={10} sweepMs={0} />
+      <div className="ring-center">
+        <div className="pct">
+          {pct}
+          <span className="pct-unit">%</span>
+        </div>
+        <div className="lbl">germination</div>
+      </div>
+    </div>
+  )
+}
+
 // Direction A · Status — the hero readiness ring, KPIs, genome, and activity.
-export default function StatusView({ overview, sigil, setup, jobs, lens, dataRev, onAction }) {
+export default function StatusView({ overview, sigil, setup, jobs, lens, dataRev }) {
   const headline = headlineFor(overview, lens?.tone)
   const rv = readiness(overview, setup, lens?.tone)
 
@@ -18,7 +39,7 @@ export default function StatusView({ overview, sigil, setup, jobs, lens, dataRev
     <>
       <div className="card pad-lg rise mb-16">
         <div className="hero">
-          <Ring value={rv} />
+          <Germination value={rv} />
           <div className="hero-facts">
             <div className="ttl">{headline}</div>
             <VerdictBadge verdict={lens?.verdict} />
@@ -35,9 +56,7 @@ export default function StatusView({ overview, sigil, setup, jobs, lens, dataRev
             <div className="hero-chips">
               <span className="chip">
                 <span className="ck">voice</span>
-                <span className="cv" style={{ textTransform: 'capitalize' }}>
-                  {overview.theme}
-                </span>
+                <span className="cv t-cap">{overview.theme}</span>
               </span>
               <span className="chip">
                 <span className="ck">mode</span>
@@ -55,20 +74,6 @@ export default function StatusView({ overview, sigil, setup, jobs, lens, dataRev
                 <span className="ck">fp</span>
                 <span className="cv">{setup?.installed_fp || '—'}</span>
               </span>
-            </div>
-            <div className="row wrap gap-10">
-              <button className="btn" onClick={() => onAction('update')}>
-                <Icon name="refresh" />
-                Update
-              </button>
-              <button className="btn ghost" onClick={() => onAction('build-all')}>
-                <Icon name="build" />
-                Rebuild
-              </button>
-              <button className="btn ghost" onClick={() => onAction('doctor')}>
-                <Icon name="doctor" />
-                Run doctor
-              </button>
             </div>
           </div>
         </div>

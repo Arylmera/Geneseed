@@ -1,5 +1,9 @@
 import React, { useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
+import PageHeader from '../../components/PageHeader.jsx'
+
+// A command's heading id, shared with the margin's outline (Margin.jsx) so each entry lands.
+export const cmdId = (name) => 'cmd-' + String(name).replace(/[^\w-]+/g, '-')
 
 // How long the "Copied" confirmation stays on the copy button.
 const COPY_FEEDBACK_MS = 1200
@@ -56,16 +60,12 @@ function Command({ cmd, prog }) {
   const synopsis = synParts.join(' ')
   return (
     <div className="card pad-md mb-12 cli-card">
-      <div className="row wrap between" style={{ alignItems: 'flex-start' }}>
-        <div className="stack" style={{ gap: 4 }}>
-          <h3 style={{ margin: 0 }}>
+      <div className="row wrap between cli-head">
+        <div className="stack gap-4">
+          <h2 id={cmdId(cmd.name)}>
             <code>{cmd.name}</code>
-          </h3>
-          {cmd.help && (
-            <p className="sub" style={{ margin: 0 }}>
-              {cmd.help}
-            </p>
-          )}
+          </h2>
+          {cmd.help && <p className="sub">{cmd.help}</p>}
         </div>
         <CopyBtn text={`${prog} ${cmd.name}`} />
       </div>
@@ -95,12 +95,16 @@ export default function CliPage({ page }) {
   const commands = page.commands || []
   return (
     <div className="detail-doc">
-      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
-      <p className="sub" style={{ marginTop: 4 }}>
-        Every subcommand of <code>{prog}</code>. Generated from the parser at request time (the same
-        one <code>geneseed</code> actually parses), so this page cannot drift.
-      </p>
-      <div style={{ marginTop: 18 }}>
+      <PageHeader
+        title={page.title}
+        sub={
+          <>
+            Every subcommand of <code>{prog}</code>. Generated from the parser at request time (the
+            same one <code>geneseed</code> actually parses), so this page cannot drift.
+          </>
+        }
+      />
+      <div>
         {commands.map((c) => (
           <Command key={c.name} cmd={c} prog={prog} />
         ))}

@@ -60,12 +60,10 @@ export default function Dashboard({
 
   if (!overview)
     return overviewError ? (
-      <div>
-        <ErrorState error={`Could not load the harness overview: ${overviewError}`} />
-        <button className="btn" onClick={onRetry}>
-          Retry
-        </button>
-      </div>
+      <ErrorState
+        error={`Could not load the harness overview: ${overviewError}`}
+        onRetry={onRetry}
+      />
     ) : (
       <Loading />
     )
@@ -84,7 +82,7 @@ export default function Dashboard({
     )
 
   // The Journal lens is a page, not a panel: it brings its own header (the field
-  // journal's date line and its two actions), so the shared head-row and the
+  // journal's date line and title), so the shared head-row and the
   // direction switcher would be a second, contradictory title above it. Lineage
   // and Operator stay reachable from the rail's Activity/Changes rows and from
   // Settings' layout picker — the switcher returns with any other lens.
@@ -96,7 +94,6 @@ export default function Dashboard({
           overview={overview}
           recent={recent}
           lens={lensData}
-          onAction={onAction}
           onDirection={setDir}
           dataRev={dataRev}
         />
@@ -111,13 +108,15 @@ export default function Dashboard({
           {[
             ['status', 'Status'],
             ['lineage', 'Lineage'],
-            ['operator', 'Operator'],
-          ].map(([k, l]) => (
+            // The Overview's View control has an "Operator" lens too: this one is named apart.
+            ['operator', 'Operator', 'Operator data'],
+          ].map(([k, l, name]) => (
             <button
               key={k}
               className={dir === k ? 'on' : ''}
               onClick={() => setDir(k)}
               aria-pressed={dir === k}
+              aria-label={name}
             >
               {l}
             </button>
@@ -135,7 +134,6 @@ export default function Dashboard({
             jobs={jobs}
             lens={lensData}
             dataRev={dataRev}
-            onAction={onAction}
           />
         )}
         {dir === 'status' && lens === 'greenhouse' && (
@@ -151,7 +149,7 @@ export default function Dashboard({
         )}
         {dir === 'status' && lens === 'operator' && (
           <Suspense fallback={<Loading />}>
-            <OperatorHudView overview={overview} jobs={jobs} lens={lensData} onAction={onAction} />
+            <OperatorHudView overview={overview} jobs={jobs} lens={lensData} />
           </Suspense>
         )}
         {dir === 'lineage' && (

@@ -80,4 +80,22 @@ describe('Ring', () => {
     expect(arcCount(arcs()[0].getAttribute('d'))).toBe(2)
     expect(screen.getByRole('img').getAttribute('aria-label')).toBe('Budget: 4 of 4')
   })
+  // jsdom has no matchMedia, so motionOK() is false: the sweep never starts and every arc is
+  // drawn final on the first render, with nothing the drawable would set (no dash array).
+  it('without motion draws every arc final, untouched by the sweep', () => {
+    render(
+      <Ring
+        segments={[
+          { key: 'a', label: 'pass', n: 3, tone: 'good' },
+          { key: 'b', label: 'fail', n: 1, tone: 'bad' },
+        ]}
+        label="Checks"
+      />,
+    )
+    expect(arcs().length).toBe(2)
+    for (const p of arcs()) {
+      expect(p.getAttribute('stroke-dasharray')).toBeNull()
+      expect(p.style.strokeDasharray).toBe('')
+    }
+  })
 })

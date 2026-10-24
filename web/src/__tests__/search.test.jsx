@@ -35,6 +35,7 @@ vi.mock('../hooks/useSearchIndex.js', () => ({
 }))
 
 import Search from '../components/Search.jsx'
+import Spotlight, { filterAndRank } from '../components/Spotlight.jsx'
 
 // jsdom implements no layout, so `Element.prototype.scrollIntoView` simply does not exist.
 // Spotlight calls it to keep the active row visible, and the resulting TypeError unmounts the
@@ -125,5 +126,36 @@ describe('Spotlight combobox wiring', () => {
     // Narrowing to nothing is the case a sighted user reads off an empty list for free.
     fireEvent.change(input(), { target: { value: 'zzzznomatch' } })
     expect(document.querySelector('[role="status"]').textContent).toMatch(/no matches/)
+  })
+})
+
+// VS-21: a ranking can visit one kind twice, and each run is its own group. Keyed on the
+// kind alone, the two skills groups shared a key; on the next keystroke React matched the new
+// skills group to the LAST old one and never removed the first, so "debug" and "deck" (with
+// "de" marked) stayed on screen beside the "del" hits, as the audit saw.
+describe('Spotlight groups', () => {
+  const S = (title) => ({ kind: 'skills', sortKey: 0, title, hay: title, route: `#/s/${title}` })
+  const IDX = [
+    S('debug'),
+    S('deck'),
+    S('node deletion'),
+    { kind: 'docs', sortKey: 3, title: 'deletion', hay: 'deletion', route: '#/docs/deletion' },
+  ]
+  const props = { index: IDX, active: 0, onActive: () => {}, onClose: () => {} }
+  const titles = () => [...document.querySelectorAll('.spot-title')].map((n) => n.textContent)
+
+  it('keys each run of a kind apart, so a narrower query leaves no stale row', () => {
+    const { rerender } = render(<Spotlight query="de" {...props} />)
+    // "de": the titles starting with it (skills before docs by sortKey), then the one that
+    // only contains it, a second skills run.
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
+      'skills',
+      'docs',
+      'skills',
+    ])
+    rerender(<Spotlight query="del" {...props} />)
+    // "del": the docs title starts with it, the skill only contains it.
+    expect(titles()).toEqual(['deletion', 'node deletion'])
+    expect(titles()).toEqual(filterAndRank(IDX, 'del').map((e) => e.title))
   })
 })

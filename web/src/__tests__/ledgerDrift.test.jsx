@@ -61,7 +61,7 @@ describe('Ledger hand-edits cell', () => {
     const linked = await t.findByText('2 linked')
     expect(linked.className).toContain('dim')
     expect(t.queryByText(/edited/)).toBeNull()
-    expect(t.queryByText('Rebuild')).toBeNull()
+    expect(t.queryByText(/Rebuild/)).toBeNull()
   })
 
   // Stale files are unedited ones a rebuild updates: they join the Sync cell as "behind",
@@ -80,7 +80,7 @@ describe('Ledger hand-edits cell', () => {
     expect(await t.findByText('3 files behind')).toBeTruthy()
     expect(t.queryByText(/edited/)).toBeNull()
     expect(t.getByText('none')).toBeTruthy()
-    expect(t.getByText('Rebuild')).toBeTruthy()
+    expect(t.getByText('Rebuild all')).toBeTruthy()
   })
 
   it('says a zero ceiling is no ceiling, not a percentage', async () => {
@@ -139,6 +139,6 @@ describe('Ledger hand-edits cell', () => {
     const t = await cell()
     expect(await t.findByText('1 edited')).toBeTruthy()
     expect(t.queryByText('2 linked')).toBeNull()
-    expect(t.getByText('Rebuild')).toBeTruthy()
+    expect(t.getByText('Rebuild all')).toBeTruthy()
   })
 })

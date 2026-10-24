@@ -1,4 +1,6 @@
-import React, { useEffect, useRef } from 'react'
+import React from 'react'
+import { createPortal } from 'react-dom'
+import Popover from './Popover.jsx'
 import Seg from './Seg.jsx'
 import { FLAVOURS } from '../hooks/useFlavour.js'
 import AccentPicker from './AccentPicker.jsx'
@@ -8,6 +10,10 @@ import { LAYOUTS } from '../hooks/useLayout.js'
 // from, and which view the Overview opens on. All three are this browser's alone
 // (localStorage) and apply live; nothing here rebuilds anything. Installs / Server keeps
 // the long form with each skin's description.
+//
+// Portalled out of the topbar into `.app`: nested in the sticky topbar, its layer was capped
+// by the topbar's own stacking context, so the phone drawer and its scrim covered it. `.app`,
+// not <body>, because the flavour's CSS variables live on `.app` (see useConfirm.jsx).
 export default function AppearancePopover({
   flavour,
   onFlavour,
@@ -16,23 +22,8 @@ export default function AppearancePopover({
   layout,
   onLayout,
   onClose,
+  anchorRef,
 }) {
-  const ref = useRef(null)
-  useEffect(() => {
-    const down = (e) => {
-      if (ref.current && !ref.current.contains(e.target) && !e.target.closest?.('.tb-pop-anchor'))
-        onClose()
-    }
-    const key = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', down)
-    document.addEventListener('keydown', key)
-    return () => {
-      document.removeEventListener('mousedown', down)
-      document.removeEventListener('keydown', key)
-    }
-  }, [onClose])
   const group = (id, label, items, value, onPick) => (
     <div className="ap-group">
       <span className="ap-label" id={id}>
@@ -54,8 +45,14 @@ export default function AppearancePopover({
       </Seg>
     </div>
   )
-  return (
-    <div className="appearance-pop" ref={ref} role="dialog" aria-label="Appearance">
+  return createPortal(
+    <Popover
+      open
+      onClose={onClose}
+      anchorRef={anchorRef}
+      label="Appearance"
+      className="appearance-pop"
+    >
       {group('ap-skin', 'Skin', FLAVOURS, flavour, onFlavour)}
       <div className="ap-group">
         <span className="ap-label" id="ap-accent">
@@ -64,6 +61,8 @@ export default function AppearancePopover({
         <AccentPicker value={accentMode} onChange={onAccentMode} labelledBy="ap-accent" />
       </div>
       {group('ap-view', 'Overview view', LAYOUTS, layout, onLayout)}
-    </div>
+    </Popover>,
+    // The one `.app` (App's root); looked up, not read off anchorRef: no ref reads in render.
+    document.querySelector('.app') || document.body,
   )
 }

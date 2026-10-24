@@ -41,4 +41,34 @@ describe('Settings', () => {
     )
     expect(screen.getByText('Harness footprint')).toBeTruthy()
   })
+
+  const claudeOverview = { install: { host: 'claude', scope: 'global' }, footprint: 'lean' }
+
+  // The page is the Server tab (router.js TAB_LABELS.server), so its heading says so.
+  it('titles the view by its tab label, Server', () => {
+    render(<Settings onAction={() => {}} overview={claudeOverview} />)
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Server')
+  })
+
+  it('holds exactly one filled button, Update', () => {
+    const { container } = render(<Settings onAction={() => {}} overview={claudeOverview} />)
+    const filled = container.querySelectorAll('.btn:not(.ghost)')
+    expect(filled).toHaveLength(1)
+    expect(filled[0].textContent).toMatch(/Update/)
+  })
+
+  it('marks Stop server with the danger line', () => {
+    render(<Settings onAction={() => {}} />)
+    expect(
+      screen.getByRole('button', { name: /Stop server/ }).classList.contains('danger-line'),
+    ).toBe(true)
+  })
+
+  // The footprint card names the install's tool as the rest of the console does.
+  it('names the footprint install by its host label', () => {
+    render(<Settings onAction={() => {}} overview={claudeOverview} />)
+    const card = screen.getByRole('heading', { name: 'Harness footprint' }).closest('.card')
+    expect(card.textContent).toContain('Claude Code')
+    expect(card.textContent).not.toMatch(/\bclaude ·/)
+  })
 })

@@ -265,7 +265,7 @@ svg.glyph { width: 16px; height: 16px; flex: none; }
 .act-chev { color: var(--text-3); transition: color .14s, transform .14s; }
 .act-card:hover .act-chev { color: var(--text); transform: translateX(2px); }
 .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.card-head h3 { margin: 0; font-family: var(--font-display); font-weight: 600;
+.card-head h3, .card-head h2 { margin: 0; font-family: var(--font-display); font-weight: 600;
   font-size: 16.5px; letter-spacing: -.01em; }
 .card-head .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
@@ -1063,7 +1063,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 /* Cultivar — the calm default anchor: clinical, quiet, confident. Refined, not loud. */
 /* Display headings: geometric sans with a hair of negative tracking for a clean, set look. */
 .fl-cultivar h1.h, .fl-cultivar h2, .fl-cultivar h3 { font-family: var(--font-display); letter-spacing: -.012em; }
-.fl-cultivar .card-head h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; }
+.fl-cultivar .card-head h3, .fl-cultivar .card-head h2 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; }
 /* Signature card: flat surface lifted by ONE soft shadow + a hairline top-edge inner
    highlight, so cards read crisp and elevated without any gradient fill. */
 .fl-cultivar .card { background: var(--surface); box-shadow: inset 0 1px 0 var(--accent-soft), var(--shadow-card); }
@@ -1301,7 +1301,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   --bad-ink:   #FFFFFF;
 }
 .fl-atlas h1.h, .fl-atlas h2, .fl-atlas h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.015em; }
-.fl-atlas .card-head h3 { font-family: var(--font-display); font-weight: 600; }
+.fl-atlas .card-head h3, .fl-atlas .card-head h2 { font-family: var(--font-display); font-weight: 600; }
 /* Cards are flat panes with a sage-lit top edge — a journal page, not a lifted
    object. It only tints the first few percent, so a page of stacked cards stays quiet. */
 .fl-atlas .card {
@@ -1442,7 +1442,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   padding-bottom: 11px;
   margin-bottom: 14px;
 }
-.fl-operator .card-head h3 {
+.fl-operator .card-head h3, .fl-operator .card-head h2 {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 500;
@@ -1452,7 +1452,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   position: relative;
   padding-left: 22px;
 }
-.fl-operator .card-head h3::before {
+.fl-operator .card-head h3::before, .fl-operator .card-head h2::before {
   content: '';
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
   width: 14px; height: 2px; background: var(--accent);
@@ -3145,3 +3145,137 @@ html { scrollbar-gutter: stable; }
 .detail-doc .markdown .table-scroll { overflow-x: auto; max-width: 100%; margin: 0 0 14px; }
 /* The root-file lane under each fleet cost stack: the ceiling marker's own track. */
 .cost-lane { height: 4px; margin-top: 3px; }
+
+/* ── V5b integration (2026-10-24) ── */
+/* V5b-A overview and lenses */
+/* V5b-A PARENT ROWS for web/src/styles.css — new selectors only, declarations copied. */
+
+/* 1. Right after `h2.h { ... }` (line ~245). :where() keeps it at h2.h's specificity, so the
+      later `.fl-* h2` flavour rules still win letter-spacing exactly as they beat `h1.h`. */
+:where(.jr-head) h2.h { font-size: 27px; letter-spacing: -.02em; margin: 10px 0 4px; }
+
+/* 2. Beside `.b-greet h1.b-h` (line ~1563); the h1 rule is dead once this lands. */
+.b-greet h2.b-h { font-size: 31px; letter-spacing: -.025em; margin: 4px 0 0; }
+
+/* 3. Beside `.c-h1` (line ~1718): (0,2,1) so `.fl-cultivar h2` / `.fl-operator h2` (0,1,1)
+      do not restyle the HUD title now that it is an h2. */
+.c-titlebar h2.c-h1 { font-family: var(--font-mono); font-size: 17px; font-weight: 600;
+  letter-spacing: .02em; margin: 0; color: var(--text); }
+
+/* 4. Beside `.ring-center` (line ~372): the box a shared Ring + its HTML centre sit in.
+      NOT .ring-wrap, whose svg rotate(-90deg) would turn components/Ring twice. */
+.ring-box { position: relative; display: inline-flex; }
+.ring-center .pct-unit { font-size: 20px; color: var(--text-3); }
+
+/* 5. Beside `.donut-c-num` / `.donut-c-cap` (line ~1687): the HTML centre (`fill` is SVG-only). */
+.ring-center .donut-c-num { font-family: var(--font-display); font-weight: 600; font-size: 28px;
+  line-height: 1; color: var(--text); }
+.ring-center .donut-c-cap { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-3); margin-top: 6px; }
+
+/* 6. Beside `.tone-muted` (line ~2411): Greenhouse's capability mix (B_CATS, GreenhouseView.jsx). */
+/* .tone-catN must match B_CATS[N] in web/src/pages/Dashboard/GreenhouseView.jsx — change both together. */
+.tone-cat0 { --tone: #2BB673; }
+.tone-cat1 { --tone: #16A6A6; }
+.tone-cat2 { --tone: #E8A23B; }
+.tone-cat3 { --tone: #E07A5F; }
+.tone-cat4 { --tone: #8E7DBE; }
+.tone-cat5 { --tone: #5BD08A; }
+.tone-cat6 { --tone: #79856E; }
+
+/* 7. Beside `.t-warn` (line ~2294): moved static inline styles. */
+.t-cap { text-transform: capitalize; }
+.c-fine { font-size: var(--fs-2xs); }
+
+/* ── V5b-F shell, docs, activity ── */
+.popover.appearance-pop { position: fixed; top: calc(var(--topbar-h) / 2 + 27px); right: 80px;
+  background: var(--surface); padding: 16px; }  /* 80 = 32 topbar pad + 38 mode btn + 10 gap */
+.crumbs ol { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.crumbs li + li::before { content: "/" / ""; margin-right: 8px; }
+.crumbs a { color: inherit; }
+.crumbs a:hover { color: var(--text); }
+.sb-voice-rail { display: none; }
+@media (max-width: 960px) {
+  .sb-voice-rail { display: grid; place-items: center; padding: 10px 0; background: none; border: 0;
+    border-radius: var(--r-sm); color: var(--text-2); cursor: pointer; }
+  .sb-voice-rail:hover { background: var(--surface); color: var(--text); }
+  .sb-voice-rail .glyph { width: 18px; height: 18px; }
+}
+@media (max-width: 720px) {
+  .sb-voice-rail { display: none; }
+  .crumb-root { display: none; }
+  .crumbs li.crumb-root + li::before { content: none; }
+  .popover.appearance-pop { right: var(--sp-4); }
+  .spotlight { position: fixed; top: calc(var(--topbar-h) + 6px); left: var(--sp-4); right: var(--sp-4); width: auto; }
+  .tabbar .tab-more { display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; min-width: 0; padding: 0; background: none; border: 0; font: inherit; color: var(--text-3);
+    font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; cursor: pointer; }
+  .tabbar .tab-more.on { color: var(--accent-text); }
+}
+.detail-doc .doc-link { margin-top: var(--sp-6); }
+.cli-head { align-items: flex-start; }
+.gap-4 { gap: var(--sp-1); }
+.cli-card h2, .map-detail h2 { font-family: inherit; font-size: 1.17em; font-weight: 700; margin: 0; }
+.map-detail h2 { margin-bottom: var(--sp-2); }
+.cli-card .sub { margin: 0; }
+.cap { text-transform: capitalize; }
+.lib-title p.h { font-family: var(--font-display); font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.t-bad { color: var(--bad-text); }
+.act-min { min-width: 0; }
+.act-fixed { flex-shrink: 0; }
+.act-grow { min-width: 0; flex: 1; }
+.act-ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-cwd { display: block; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-xs { font-size: var(--fs-xs); }
+.act-sm { font-size: var(--fs-sm); }
+.act-dot { width: 9px; height: 9px; }
+.act-title { margin: 0; font-size: var(--fs-lg); }
+.act-phase { margin-top: 10px; font-size: var(--fs-md); }
+.act-counters { gap: var(--sp-4); margin-top: var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); }
+.act-foot { margin-top: var(--sp-3); padding-top: 10px; border-top: 1px solid var(--line); }
+.act-err-row { margin-top: 10px; }
+.act-err-row .badge { max-width: 100%; }
+.act-updated { font-size: var(--fs-2xs); margin-top: var(--sp-2); }
+.act-gap { margin-bottom: var(--sp-3); }
+.act-back { margin-bottom: var(--sp-3); gap: 6px; }
+.act-back .glyph { transform: rotate(180deg); }
+.act-line { align-items: baseline; }
+.act-who { flex-shrink: 0; min-width: 52px; justify-content: center; }
+.act-inline-dot { display: inline-block; margin-right: var(--sp-2); vertical-align: middle; }
+.act-panels { margin-top: var(--sp-3); grid-template-columns: 1fr; }
+.act-panels.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.act-list { gap: 6px; margin-top: var(--sp-2); }
+.act-done { text-decoration: line-through; color: var(--text-3); }
+.act-mt { margin-top: var(--sp-3); }
+.act-tl-head { justify-content: space-between; margin-bottom: var(--sp-3); }
+.act-todo { letter-spacing: 2px; }
+.act-todo .on { color: var(--accent-text); }
+
+/* ── V5b-E installs ── */
+.sel-all { font-size: var(--fs-sm); cursor: pointer; }
+.sel-all input { accent-color: var(--accent); }
+.diff-behind { margin-top: var(--sp-6); }
+.diff-behind h3 { margin: 0; }
+.diff-lines { margin-left: auto; font-size: var(--fs-xs); }
+.diff-head .iconbtn { transition: transform .15s; }
+.diff-file.open .diff-head .iconbtn { transform: rotate(90deg); }
+.check-head .feed-dot { width: 9px; height: 9px; }
+.doc-summary .mono { font-size: var(--fs-xs); }
+.badge.cap { text-transform: capitalize; }
+.check-fold > summary { cursor: pointer; padding: var(--sp-3) var(--sp-5); color: var(--text-2); font-size: var(--fs-sm); }
+.check-fold[open] > summary { margin-bottom: var(--sp-3); }
+.dir-thumb-bar.w70 { width: 70%; }
+.dir-thumb-bar.w52 { width: 52%; }
+.panel.flush > .empty { padding: var(--sp-5); font-size: var(--fs-sm); }
+.inst-head { flex-wrap: wrap; }
+
+/* ── V5b-C catalogs ── */
+.lib-rows .empty { padding: var(--sp-7); }
+.lib-kinds .lib-lede { padding: 0 var(--sp-2); }
+.lib-lede a { margin-left: var(--sp-1); }
+
+/* ── V5b-D personal ── */
+.card-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) { .card-row.two { grid-template-columns: 1fr; } }
+.panel-note.warn { color: var(--warn-text); }
+.panel-note.bad { color: var(--bad-text); }

@@ -121,4 +121,87 @@ describe('Diff', () => {
     fireEvent.click(await screen.findByText('Export improvements'))
     expect(onAction).toHaveBeenCalledWith('export')
   })
+
+  // The page says which install it compares, by the payload's `target`, so a drift list is
+  // never read against the wrong folder.
+  it('names the install it compares', async () => {
+    api.diff.mockResolvedValueOnce({
+      deployed: true,
+      diffable: true,
+      target: 'C:/cfg',
+      theme: 'imperial',
+      files: [{ rel: 'AGENT.md', status: 'edited', diff: ['@@ -1 +1 @@', '-a', '+b'] }],
+    })
+    render(<Diff overview={{ version: '9.9.9' }} />)
+    await waitFor(() => expect(screen.getByText(/Comparing/)).toBeTruthy())
+    const code = [...document.querySelectorAll('code')].find((c) => c.textContent === 'C:/cfg')
+    expect(code).toBeTruthy()
+    expect(code.closest('p').textContent).toBe(
+      'Comparing C:/cfg (imperial voice) with source 9.9.9.',
+    )
+  })
+
+  // A small diff opens every file; past 300 lines in all, files start collapsed and the
+  // page offers Expand all and Collapse all instead of a wall of lines.
+  it('collapses a large diff by default and offers Expand all / Collapse all', async () => {
+    api.diff.mockResolvedValueOnce({
+      deployed: true,
+      diffable: true,
+      files: [{ rel: 'AGENT.md', status: 'edited', diff: ['@@ -1 +1 @@', '-a', '+b'] }],
+    })
+    const small = render(<Diff />)
+    await waitFor(() => expect(screen.getByText('AGENT.md')).toBeTruthy())
+    expect(document.querySelectorAll('.diff-body')).toHaveLength(1)
+    small.unmount()
+
+    // 2 files x 160 lines = 320 lines, over the 300 threshold.
+    const lines = Array.from({ length: 160 }, (_, i) => `+line ${i}`)
+    api.diff.mockResolvedValueOnce({
+      deployed: true,
+      diffable: true,
+      files: [
+        { rel: 'a.md', status: 'edited', diff: lines },
+        { rel: 'b.md', status: 'edited', diff: lines },
+      ],
+    })
+    render(<Diff />)
+    await waitFor(() => expect(screen.getByText('a.md')).toBeTruthy())
+    expect(document.querySelectorAll('.diff-body')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Collapse all' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all' }))
+    expect(document.querySelectorAll('.diff-body')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }))
+    expect(document.querySelectorAll('.diff-body')).toHaveLength(0)
+  })
+
+  // Green is for "good"; an added file is a difference, not a success.
+  it('does not badge an added file as ok', async () => {
+    api.diff.mockResolvedValueOnce({
+      deployed: true,
+      diffable: true,
+      files: [{ rel: 'agents/mine.md', status: 'added', diff: ['+x'] }],
+    })
+    render(<Diff />)
+    await waitFor(() => expect(screen.getByText('agents/mine.md')).toBeTruthy())
+    const badge = screen.getByText('agents/mine.md').closest('.diff-file').querySelector('.badge')
+    expect(badge.textContent).toBe('added')
+    expect(badge.classList.contains('ok')).toBe(false)
+  })
+
+  // Restore discards edits, so it wears the danger line; Export is the one filled button.
+  it('marks Restore as danger and Export as the one primary button', async () => {
+    api.diff.mockResolvedValueOnce({
+      deployed: true,
+      diffable: true,
+      files: [{ rel: 'AGENT.md', status: 'edited', diff: ['@@ -1 +1 @@', '-a', '+b'] }],
+    })
+    const { container } = render(<Diff />)
+    await waitFor(() => expect(screen.getByText('AGENT.md')).toBeTruthy())
+    expect(screen.getByRole('button', { name: /^Restore/ }).classList.contains('danger-line')).toBe(
+      true,
+    )
+    const filled = container.querySelectorAll('.btn:not(.ghost)')
+    expect(filled).toHaveLength(1)
+    expect(filled[0].textContent).toMatch(/Export/)
+  })
 })

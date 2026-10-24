@@ -6,6 +6,8 @@ import { useRules } from '../hooks/useRules.js'
 import { useRuleSelection } from '../hooks/useRuleSelection.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
 import {
   GATE_COPY,
@@ -304,16 +306,20 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="h">Constitution</h1>
-          <p className="sub">
-            What the agent follows on every turn. Ranked: a lower rank may tighten a higher one,
-            never repeal it. Open any rule to read its canonical text.
-          </p>
-        </div>
-      </div>
-      <TierStrip tiers={tiers} current={tab} />
+      {/* Apply is the page's one primary action, and it exists only while there is something
+          staged to apply: a disabled filled button on a clean page is a call to do nothing. */}
+      <PageHeader
+        title="Constitution"
+        sub="What the agent follows on every turn. Ranked: a lower rank may tighten a higher one, never repeal it. Open any rule to read its canonical text."
+        primary={
+          canApply && packs.length > 0 && sel.dirty ? (
+            <button type="button" className="btn" onClick={sel.applyPacks}>
+              Apply ({sel.pickedRules.length}/{allRules.length} rules)
+            </button>
+          ) : null
+        }
+      />
+      <TierStrip tiers={tiers} current={tab} onPick={setTab} />
 
       <div className="split">
         <section
@@ -452,10 +458,9 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
               )
             })}
           {shownCount === 0 && (
-            <div className="empty" style={{ padding: 32 }}>
-              <div className="big">{ql ? 'No matching rules' : 'Nothing in this tier'}</div>
+            <EmptyState title={ql ? 'No matching rules' : 'Nothing in this tier'}>
               {ql ? <>Nothing matches “{q.trim()}”.</> : <>This install predates the tier.</>}
-            </div>
+            </EmptyState>
           )}
         </section>
 

@@ -8,6 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **Every console page uses the shared building blocks.** One page header per page with a single primary action ("Rebuild all (N behind)" on the Overview, "Apply and rebuild" only while Constitution changes are staged); repeated buttons carry distinct names for screen readers; empty and error states, tables, rings and bars come from the shared components. The four Overview lenses sit under that header with a working View switcher.
+- **Installs:** uninstall goes through the danger dialog and names the memory and notebook paths when they will be deleted; notes carry a tone; Doctor shows when it last checked, failing groups first and clean ones folded; the diff names the install it compares and opens large diffs collapsed; host labels replace raw ids.
+- **Activity, Docs and the shell:** one heading per page, timestamps on session timelines, Prev/Next as links, an outline on the CLI page; the appearance menu opens above the phone drawer; choosing a voice asks first; the breadcrumb is a list of links; lists move with the arrow keys, Home and End; the phone tab bar uses the sidebar's labels with a More button.
+- **Library, Kits, Loops, Personal:** the reader titles an entry by its heading, empty kinds explain what to do, Loops explains what a loop and a brick are; the rule budget is one panel with one threshold, memory and notebook show real counts, a profile that is still the template says so, and the rule form has visible labels and keeps focus where you were.
+
 ## [4.19.0] — 2026-10-24
 
 Minor: shared console building blocks, rule summaries kept next to their rules, and `global` as a documented rule scope.

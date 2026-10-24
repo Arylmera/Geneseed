@@ -162,4 +162,66 @@ describe('Activity page', () => {
       expect(JSON.parse(post[1].body)).toEqual({ enabled: false })
     })
   })
+
+  // AC-5: the server buckets by status and recency, so its order reshuffles on every turn.
+  // The page sorts by session id, ascending: OpenCode ids descend with time, so the newest
+  // session comes first even when the older one was updated more recently.
+  it('orders cards by session id, ascending (newest first), whatever order the server sends', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          activity: [
+            { session_id: 'ses_f1dfb49f', title: 'older', status: 'busy', updated_at: 200 },
+            { session_id: 'ses_f1df73d7', title: 'newer', status: 'idle', updated_at: 100 },
+          ],
+        }),
+      ),
+    )
+    render(<Activity />)
+    await screen.findByText('older')
+    const hrefs = [...document.querySelectorAll('a.act-card')].map((a) => a.getAttribute('href'))
+    expect(hrefs).toEqual(['#/activity/ses_f1df73d7', '#/activity/ses_f1dfb49f'])
+  })
+
+  // AC-11: the card link is named by its title and status, not by every word inside it.
+  it('names each card link by its title and status', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          activity: [
+            { session_id: 's', title: 'fix it', status: 'busy', updated_at: 0, tokens: 1200 },
+          ],
+        }),
+      ),
+    )
+    render(<Activity />)
+    expect(await screen.findByRole('link', { name: 'fix it working' })).toBeTruthy()
+  })
+
+  // AC-12: one h1 for the page; each card title is a level-2 heading under it.
+  it('has one h1, Activity, and an h2 per card title', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({ activity: [{ session_id: 's', title: 'fix it', status: 'busy', updated_at: 0 }] }),
+      ),
+    )
+    render(<Activity />)
+    await screen.findByText('fix it')
+    const names = (level) => screen.queryAllByRole('heading', { level }).map((h) => h.textContent)
+    expect(names(1)).toEqual(['Activity'])
+    expect(names(2)).toEqual(['fix it'])
+  })
+
+  // Guard (green on BASE, kept so it stays true): the list has no filled action; the
+  // tracking switch is a secondary control in the header.
+  it('has no filled (primary) button', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({ activity: [{ session_id: 's', title: 'fix it', status: 'busy', updated_at: 0 }] }),
+      ),
+    )
+    render(<Activity />)
+    await screen.findByText('fix it')
+    expect(document.querySelectorAll('.btn:not(.ghost)').length).toBe(0)
+  })
 })

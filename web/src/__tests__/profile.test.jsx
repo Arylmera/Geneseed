@@ -83,4 +83,60 @@ describe('Profile', () => {
     render(<Profile />)
     await waitFor(() => expect(screen.getByLabelText('Profile markdown')).toBeTruthy())
   })
+
+  it('marks the pressed mode with aria-pressed, in both modes', async () => {
+    render(<Profile />)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Who I am' })).toBeTruthy())
+    const view = screen.getByRole('button', { name: 'View' })
+    const edit = screen.getByRole('button', { name: 'Edit' })
+    expect([view.getAttribute('aria-pressed'), edit.getAttribute('aria-pressed')]).toEqual([
+      'true',
+      'false',
+    ])
+    fireEvent.click(edit)
+    expect([view.getAttribute('aria-pressed'), edit.getAttribute('aria-pressed')]).toEqual([
+      'false',
+      'true',
+    ])
+  })
+
+  it('a seeded profile says it is still the template, and "Edit it here" opens the editor', async () => {
+    api.profile.mockImplementation(() =>
+      Promise.resolve({ ...FILLED, seeded: true, text: '# Your profile\n\nStub.' }),
+    )
+    render(<Profile />)
+    expect(await screen.findByText('This is still the template')).toBeTruthy()
+    // The rendered stub stays under the panel.
+    expect(screen.getByRole('heading', { name: 'Your profile' })).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Edit it here' })
+    expect(button.className).toBe('btn ghost')
+    fireEvent.click(button)
+    expect(screen.getByLabelText('Profile markdown').value).toBe('# Your profile\n\nStub.')
+    expect(screen.queryByText('This is still the template')).toBeNull()
+  })
+
+  it('saving the template drops the template panel at once', async () => {
+    // The disk read after the save stays pending, so only the painted copy can answer.
+    let calls = 0
+    api.profile.mockImplementation(() =>
+      ++calls === 1
+        ? Promise.resolve({ ...FILLED, seeded: true, text: '# Your profile\n\nStub.' })
+        : new Promise(() => {}),
+    )
+    render(<Profile />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit it here' }))
+    fireEvent.change(screen.getByLabelText('Profile markdown'), {
+      target: { value: '# Mine\n\nWritten.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('heading', { name: 'Mine' })).toBeTruthy()
+    expect(screen.queryByText('This is still the template')).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe('Saved.')
+  })
+
+  it('a written profile shows no template panel', async () => {
+    render(<Profile />)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Who I am' })).toBeTruthy())
+    expect(screen.queryByText('This is still the template')).toBeNull()
+  })
 })

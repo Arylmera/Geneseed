@@ -2,7 +2,14 @@
 // table of AGENT.md): each with its count, a bar for how much of it is in force, a line on what
 // the count means, and the one-line rule on how it stands against the rank above. The tier the
 // table is showing is lit; your own rules live on the Personal page and link there.
-export default function TierStrip({ tiers, current }) {
+//
+// The two tiers the table can narrow to (invariants, doctrines) are buttons: the strip reads as
+// the page's map, so a click on a cell shows that tier (`onPick`, the tab setter), and a click on
+// the lit cell returns to All. They press like the tabs below them, so the two never disagree.
+// Ethos is not a tab (it sits above them), so its cell stays plain.
+const PICKABLE = ['invariants', 'doctrines']
+
+export default function TierStrip({ tiers, current, onPick }) {
   return (
     <div className="tier-strip">
       {tiers.map((t, i) => {
@@ -20,12 +27,27 @@ export default function TierStrip({ tiers, current }) {
             <span className="tier-sub tier-rule">{t.rule}</span>
           </>
         )
-        return t.href ? (
-          <a key={t.key} className="tier" href={t.href}>
-            {body}
-          </a>
-        ) : (
-          <div key={t.key} className={`tier${current === t.key ? ' on' : ''}`}>
+        const cls = `tier${current === t.key ? ' on' : ''}`
+        if (t.href)
+          return (
+            <a key={t.key} className="tier" href={t.href}>
+              {body}
+            </a>
+          )
+        if (onPick && PICKABLE.includes(t.key))
+          return (
+            <button
+              type="button"
+              key={t.key}
+              className={cls}
+              aria-pressed={current === t.key}
+              onClick={() => onPick(current === t.key ? 'all' : t.key)}
+            >
+              {body}
+            </button>
+          )
+        return (
+          <div key={t.key} className={cls}>
             {body}
           </div>
         )

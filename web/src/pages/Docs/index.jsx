@@ -4,6 +4,7 @@ import { useAsync } from '../../hooks/useAsync.js'
 import { useHarness, HARNESSES, docsHostOf } from '../../hooks/useHarness.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
+import EmptyState from '../../components/EmptyState.jsx'
 import { GroupedRows, LibList, filterRows } from '../../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../../components/RailCats.jsx'
 import MarkdownPage from './MarkdownPage.jsx'
@@ -11,12 +12,17 @@ import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
 import MapPage from './MapPage.jsx'
 import Margin from './Margin.jsx'
-import { PageBar, TrackProgress, TRACK_GROUP, markSeen, placeOf, readSeen } from './Track.jsx'
+import {
+  PageBar,
+  TrackProgress,
+  TRACK_GROUP,
+  docHref,
+  markSeen,
+  placeOf,
+  readSeen,
+} from './Track.jsx'
 import About from './About.jsx'
 import Seg from '../../components/Seg.jsx'
-
-const enc = encodeURIComponent
-const docHref = (id) => `#/docs/${enc(id)}`
 
 // Resolve a router page id to a default — empty hash lands on the first page
 // of the first group so the right pane is never blank.
@@ -45,12 +51,7 @@ function PageView({ data, error, overview, onAction }) {
     case 'about':
       return <About page={data} />
     default:
-      return (
-        <div className="empty">
-          <div className="big">Unknown page kind</div>
-          {data.kind}
-        </div>
-      )
+      return <EmptyState title="Unknown page kind">{data.kind}</EmptyState>
   }
 }
 
@@ -149,7 +150,7 @@ export default function Docs({ page, overview, onAction }) {
       <div className="library docs-lib">
         <aside className="lib-kinds" aria-label="Docs parts">
           <div className="lib-title">
-            <h1 className="h">Docs</h1>
+            <p className="h">Docs</p>
             <span className="dim">How it works, and how to use it</span>
           </div>
           {/* Host selector — filters the menu and per-page config to the chosen host (one

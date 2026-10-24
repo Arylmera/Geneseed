@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react'
 import { go } from '../../lib/router.js'
+import PageHeader from '../../components/PageHeader.jsx'
 import { renderDoc, slug } from './headings.js'
 
 // State-aware overlay. The install guide is a section of pages, one per host: the deployed
@@ -87,18 +88,11 @@ export default function MarkdownPage({ page, overview, onAction }) {
 
   return (
     <div className="detail-doc">
-      <h1 style={{ marginTop: 0 }}>{page.title}</h1>
-      {page.source && (
-        <div className="doc-meta">
-          <span className="badge">
-            <span className="dot" />
-            {page.source}
-          </span>
-        </div>
-      )}
-      {tryActions.length > 0 && (
-        <div className="row wrap gap-10" style={{ margin: '10px 0 14px' }}>
-          {tryActions.map((t) =>
+      <PageHeader
+        title={page.title}
+        actions={
+          tryActions.length > 0 &&
+          tryActions.map((t) =>
             t.hash ? (
               <a key={t.label} className="btn ghost sm" href={t.hash}>
                 {t.label}
@@ -112,12 +106,20 @@ export default function MarkdownPage({ page, overview, onAction }) {
                 {t.label}
               </button>
             ),
-          )}
+          )
+        }
+      />
+      {page.source && (
+        <div className="doc-meta">
+          <span className="badge">
+            <span className="dot" />
+            {page.source}
+          </span>
         </div>
       )}
       <div className="markdown" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
       {page.link && (
-        <div style={{ marginTop: 24 }}>
+        <div className="doc-link">
           <a className="btn soft sm" href={page.link.hash}>
             {page.link.label}
           </a>

@@ -40,7 +40,7 @@ describe('MapPage', () => {
     expect(nodes.length).toBe(2)
     fireEvent.click(nodes[1])
     const panel = container.querySelector('.map-detail')
-    expect(panel.querySelector('h3').textContent).toBe('tool-gate hook')
+    expect(panel.querySelector('h2').textContent).toBe('tool-gate hook')
     expect(panel.querySelector('.tag').textContent).toBe('enforced')
     expect([...panel.querySelectorAll('dd')].map((d) => d.textContent)).toEqual([
       'Stops force-push and leaked secrets',

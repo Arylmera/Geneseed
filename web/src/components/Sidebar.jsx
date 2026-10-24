@@ -8,13 +8,11 @@ import { Icon, Sprout } from './Icon.jsx'
 // the shell already holds (the overview and the installs list); a page with no honest
 // single number carries none rather than an invented one.
 const NAV = [
-  { hash: '#/', page: 'overview', label: 'Overview', short: 'Home', icon: 'dashboard' },
+  { hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
   {
     hash: '#/laws',
     page: 'laws',
     label: 'Constitution',
-    // The phone tab bar's cell is ~51px at 360px wide; "Constitution" is not.
-    short: 'Laws',
     icon: 'law',
     // Every entry the page lists: the ethos sections, the invariants (a retired one an older
     // install still lists is counted too), and the doctrine rules.
@@ -157,17 +155,34 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
       {FOOT.map((n) => (
         <NavLink key={n.page} n={n} lit={route.page === n.page} onNavigate={onNavigate} />
       ))}
+      {/* The tablet rail (721-960px) is icons only and hides the vitals, voice included;
+          this icon is the voice switch there. CSS shows it in that tier only. */}
+      {overview ? (
+        <button
+          type="button"
+          className="sb-voice-rail"
+          aria-label={`Switch voice, now ${overview.theme || 'none'}`}
+          title="Switch voice"
+          onClick={onOpenVoice}
+        >
+          <Icon name="spark" />
+        </button>
+      ) : null}
       <Vitals overview={overview} onOpenVoice={onOpenVoice} />
     </nav>
   )
 }
 
-// The phone layout's bottom bar: the same seven pages, always one thumb away. The drawer
-// above still carries Docs, Activity and the vitals.
-export function TabBar({ route }) {
+// The phone tab bar's four pages; every other page is behind More.
+const TABBED = ['overview', 'laws', 'library', 'installs']
+
+// The phone layout's bottom bar: the four pages a visit starts from, at their full names
+// (five cells fit "Constitution" at 360px; eight did not), and More, which opens the drawer
+// holding every page, Docs, Activity and the vitals. More is lit on a page only it reaches.
+export function TabBar({ route, navOpen, onMore }) {
   return (
     <nav className="tabbar" aria-label="Console pages">
-      {NAV.map((n) => (
+      {NAV.filter((n) => TABBED.includes(n.page)).map((n) => (
         <a
           key={n.page}
           href={n.hash}
@@ -175,9 +190,19 @@ export function TabBar({ route }) {
           aria-current={route.page === n.page ? 'page' : undefined}
         >
           <Icon name={n.icon} />
-          {n.short || n.label}
+          {n.label}
         </a>
       ))}
+      <button
+        type="button"
+        className={`tab-more${TABBED.includes(route.page) ? '' : ' on'}`}
+        aria-controls="rail-nav"
+        aria-expanded={!!navOpen}
+        onClick={onMore}
+      >
+        <Icon name="menu" />
+        More
+      </button>
     </nav>
   )
 }

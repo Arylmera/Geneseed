@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Icon } from '../components/Icon.jsx'
 
 // Shared render vocabulary for the Activity list (cards) and the session-detail page.
 
@@ -11,8 +12,6 @@ export const STATUS = {
   blocked: { cls: 'bad', label: 'blocked', accent: 'var(--bad)' },
   idle: { cls: '', label: 'idle', accent: 'var(--line)' },
 }
-
-export const ELLIPSIS = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
 
 // Last path segment of a working dir — the heading when a session has no title yet.
 export function baseName(p) {
@@ -62,9 +61,94 @@ export function TodoStrip({ done, total }) {
   const n = Math.min(total, 10)
   const filled = Math.min(n, Math.round((done / total) * n))
   return (
-    <span style={{ letterSpacing: 2 }}>
-      <span style={{ color: 'var(--accent)' }}>{'●'.repeat(filled)}</span>
-      <span style={{ color: 'var(--text-3)' }}>{'○'.repeat(n - filled)}</span>
+    <span className="act-todo">
+      <span className="on">{'●'.repeat(filled)}</span>
+      <span className="dim">{'○'.repeat(n - filled)}</span>
     </span>
+  )
+}
+
+// Whether SessionHeader draws its counters row: the card's aria-describedby points at that
+// row, so both must ask the same question or the link describes itself by a missing id.
+export const hasCounters = (s) =>
+  !!(s.tokens > 0 || s.cost > 0 || s.turn_started_at || s.files?.count > 0)
+
+// The session's state block, shared by the list card and the detail page so the two
+// cannot drift (the detail once lacked the churn the card showed). `heading` is the card's
+// title: the detail page puts its title in PageHeader instead. `id` prefixes the ids the
+// card link names itself by (`-t` title, `-st` status, `-c` counters); `children` trail
+// the badges (the card's chevron).
+export function SessionHeader({ s, heading, id, children }) {
+  const st = STATUS[s.status] || STATUS.idle
+  const files = s.files
+  const counters = hasCounters(s)
+  const ref = (k) => (id ? `${id}-${k}` : undefined)
+  return (
+    <>
+      <div className="row between wrap gap-12">
+        {heading ? (
+          <div className="row gap-10 act-min">
+            <span className={`feed-dot act-dot ${st.cls || 'acc'}`} />
+            <div className="act-min">
+              <h2 className="act-title" id={ref('t')}>
+                {heading}
+              </h2>
+              {s.cwd && (
+                <div className="dim mono act-cwd" title={s.cwd}>
+                  {s.cwd}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+        <div className="row gap-8 act-fixed">
+          {s.model && (
+            <span className="badge mono" title="model">
+              {s.model}
+            </span>
+          )}
+          {s.agent && <span className="badge">{s.agent}</span>}
+          <span className={`badge ${st.cls}`} id={ref('st')}>
+            <span className="dot" />
+            {st.label}
+          </span>
+          {children}
+        </div>
+      </div>
+
+      {s.phase && (
+        <div className="row gap-8 act-phase">
+          <Icon name="activity" />
+          <span className="act-ell">{s.phase}</span>
+        </div>
+      )}
+
+      {counters && (
+        <div className="row wrap act-counters" id={ref('c')}>
+          {s.tokens > 0 && <span>{compact(s.tokens)} tok</span>}
+          {s.cost > 0 && <span>${s.cost.toFixed(2)}</span>}
+          {s.turn_started_at ? (
+            <span>
+              <Elapsed startedAt={s.turn_started_at} />
+            </span>
+          ) : null}
+          {files && files.count > 0 && (
+            <span>
+              {files.count} file{files.count === 1 ? '' : 's'}{' '}
+              <span className="t-good">+{files.additions}</span>{' '}
+              <span className="t-bad">−{files.deletions}</span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {(s.error || s.blocked_on) && (
+        <div className="act-err-row">
+          <span className="badge bad act-ell" title={s.error || s.blocked_on}>
+            {s.error || s.blocked_on}
+          </span>
+        </div>
+      )}
+    </>
   )
 }

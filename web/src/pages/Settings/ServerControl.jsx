@@ -3,6 +3,7 @@ import { api } from '../../api/index.js'
 import { Icon } from '../../components/Icon.jsx'
 import { restartAndReload } from '../../hooks/waitForServer.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
 
 // Stops the local server from the page (same /api/shutdown that `geneseed web
 // stop` uses). The connection may drop as the server goes down, so a request that
@@ -57,17 +58,14 @@ export default function ServerControl() {
   }
   return (
     <>
-      {error && (
-        <p className="sub" role="alert">
-          {error}
-        </p>
-      )}
+      {/* No Retry: the action buttons below are the retry. */}
+      <ErrorState error={error} />
       <div className="row">
         <button className="btn ghost" onClick={restart} disabled={restarting}>
           <Icon name="refresh" />
           {restarting ? 'Restarting…' : 'Restart server'}
         </button>
-        <button className="btn ghost" onClick={stop} disabled={restarting}>
+        <button className="btn ghost danger-line" onClick={stop} disabled={restarting}>
           <Icon name="x" />
           Stop server
         </button>

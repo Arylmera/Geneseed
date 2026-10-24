@@ -100,6 +100,16 @@ describe('Docs layout', () => {
     ).toEqual(['#/docs/quick', '#/docs/quick'])
   })
 
+  // One h1 per view: the page title. The rail's "Docs" title is not a heading.
+  it('has one level-1 heading, the page title', async () => {
+    render(<Docs page="clone" overview={{}} />)
+    await waitFor(() =>
+      expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([
+        'clone',
+      ]),
+    )
+  })
+
   it('narrows the list with the filter and says when nothing matches', async () => {
     render(<Docs page="quick" overview={{}} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))

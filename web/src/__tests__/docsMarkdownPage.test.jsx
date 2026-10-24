@@ -1,5 +1,5 @@
 import React from 'react'
-import { render } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import MarkdownPage from '../pages/Docs/MarkdownPage.jsx'
 
@@ -75,5 +75,20 @@ describe('MarkdownPage', () => {
     const { container } = render(<MarkdownPage page={{ id: 'p', body }} />)
     const quotes = [...container.querySelectorAll('blockquote')].map((q) => q.className)
     expect(quotes).toEqual(['analogy', ''])
+  })
+
+  // The shared PageHeader carries the title and the try-actions. Docs have no primary
+  // action, so every button in the header is a ghost one (one filled action per view).
+  it('heads the page with PageHeader, the try-actions as ghost buttons', () => {
+    const onAction = vi.fn()
+    const { container } = render(
+      <MarkdownPage page={{ id: 'install', title: 'Install', body: HUB }} onAction={onAction} />,
+    )
+    expect(container.querySelector('.page-head h1.h').textContent).toBe('Install')
+    const btns = [...container.querySelectorAll('.page-actions .btn')]
+    expect(btns.map((b) => b.textContent)).toEqual(['Run doctor', 'Rebuild'])
+    expect(container.querySelectorAll('.page-actions .btn:not(.ghost)').length).toBe(0)
+    fireEvent.click(btns[1])
+    expect(onAction).toHaveBeenCalledWith('build')
   })
 })

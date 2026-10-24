@@ -174,6 +174,7 @@ export default function App() {
         runs={runs}
         onAction={runAction}
         layout={layout}
+        onLayout={setLayout}
         dataRev={dataRev}
       />
     ),
@@ -310,7 +311,7 @@ export default function App() {
               </StagingProvider>
             </div>
           </main>
-          <TabBar route={route} />
+          <TabBar route={route} navOpen={navOpen} onMore={() => setNavOpen(true)} />
           <Console
             runs={runs}
             open={consoleOpen}

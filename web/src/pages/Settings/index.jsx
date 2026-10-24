@@ -8,6 +8,8 @@ import { LAYOUTS } from '../../hooks/useLayout.js'
 import ServerControl from './ServerControl.jsx'
 import Seg from '../../components/Seg.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
+import { TAB_LABELS } from '../../lib/router.js'
+import { hostInfo } from '../../lib/hosts.js'
 
 // The repo the install actually updates from (its git origin). Falls back to the canonical
 // upstream when the About payload can't be fetched. The github-shaped deep links (/issues,
@@ -117,7 +119,7 @@ export default function Settings({
   const setFootprint = async (fp) => {
     if (!install || fp === footprint) return
     const ok = await confirm(
-      `Rebuild ${install.host} · ${install.scope} with the “${fp}” footprint? ` +
+      `Rebuild ${hostInfo(install.host).label} · ${install.scope} with the “${fp}” footprint? ` +
         `It rebuilds in place, non-destructive.`,
       { title: 'Change the footprint?', confirmLabel: 'Rebuild' },
     )
@@ -127,7 +129,7 @@ export default function Settings({
     <div className="narrow-lg">
       <div className="head-row mb-18">
         <div>
-          <h2 className="h">Settings</h2>
+          <h2 className="h">{TAB_LABELS.server}</h2>
           <p className="sub">
             Console appearance, the footprint of the install you are viewing, machine maintenance
             (including the update), server control, and about. Each install is managed on the Hosts
@@ -204,8 +206,8 @@ export default function Settings({
                 <span className="dir-thumb" aria-hidden="true">
                   <span className="dir-thumb-rail" />
                   <span className="dir-thumb-bar" />
-                  <span className="dir-thumb-bar" style={{ width: '70%' }} />
-                  <span className="dir-thumb-bar" style={{ width: '52%' }} />
+                  <span className="dir-thumb-bar w70" />
+                  <span className="dir-thumb-bar w52" />
                   <span className="dir-thumb-dot" />
                 </span>
                 <span className="dir-meta">
@@ -233,7 +235,7 @@ export default function Settings({
             How much of the Rules <code>AGENT.md</code> carries inline each turn, for the current
             install (
             <code>
-              {install.host} · {install.scope}
+              {hostInfo(install.host).label} · {install.scope}
             </code>
             ). A token-cost dial; every Rule stays in force either way. Changing it rebuilds the
             install in place. <a href="#/docs/footprint">Learn more →</a>
@@ -278,7 +280,7 @@ export default function Settings({
           Each install has its own Uninstall in <a href="#/installs">Hosts</a>.
         </p>
         <div className="row wrap gap-10">
-          <button className="btn ghost" onClick={() => onAction('update')}>
+          <button className="btn" onClick={() => onAction('update')}>
             <Icon name="download" />
             Update (git pull + rebuild)
           </button>

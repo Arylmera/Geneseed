@@ -61,8 +61,6 @@ describe('Rules', () => {
     expect(screen.getByText('project')).toBeTruthy()
     expect(screen.getByText('user')).toBeTruthy()
     expect(screen.getByText(/trial · 2026-08-06/)).toBeTruthy()
-    // budget meter shows count and token spend
-    expect(screen.getByText(/2\/15 rules/)).toBeTruthy()
   })
 
   it('expands a row to its body, provenance, and actions', async () => {
@@ -354,11 +352,134 @@ describe('Rules', () => {
     expect(screen.queryByText('Add rule')).toBeNull()
   })
 
-  it('turns the meter over budget with the dilution warning', async () => {
-    api.rules.mockImplementation(() =>
-      Promise.resolve({ ...PAYLOAD, stats: { ...STATS, rules: 16 } }),
-    )
+  // The budget meter moved to Personal's "Rule budget" panel (personal.test.jsx).
+
+  it('labels the form fields with visible text and focuses the title on Add', async () => {
     render(<Rules />)
-    await waitFor(() => expect(screen.getByText(/over budget/)).toBeTruthy())
+    fireEvent.click(await screen.findByText('Add rule'))
+    for (const name of ['Rule title', 'Rule body', 'Rule scope']) {
+      expect(screen.getByText(name).tagName).toBe('SPAN')
+      expect(screen.getByLabelText(name)).toBeTruthy()
+    }
+    expect(document.activeElement).toBe(screen.getByLabelText('Rule title'))
+  })
+
+  it('says why Save is disabled while the title or body is missing', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Add rule'))
+    const save = screen.getByText('Save rule')
+    expect(save.disabled).toBe(true)
+    const hint = screen.getByText('A rule needs a title and a body.')
+    expect(save.getAttribute('aria-describedby')).toBe(hint.id)
+    fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'T' } })
+    fireEvent.change(screen.getByLabelText('Rule body'), { target: { value: 'B' } })
+    expect(screen.queryByText('A rule needs a title and a body.')).toBeNull()
+    expect(save.getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('focuses the title when an edit opens', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('No emoji in commits'))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit R1' }))
+    expect(document.activeElement).toBe(screen.getByLabelText('Rule title'))
+    expect(document.activeElement.value).toBe('No emoji in commits')
+  })
+
+  it('returns focus to Add rule after a new rule is saved', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Add rule'))
+    fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'New rule' } })
+    fireEvent.change(screen.getByLabelText('Rule body'), { target: { value: 'Do the thing.' } })
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add rule' })),
+    )
+  })
+
+  it('returns focus to Add rule after an untouched new rule is cancelled', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Add rule'))
+    fireEvent.click(screen.getByText('Cancel'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add rule' })),
+    )
+  })
+
+  it('returns focus to Add rule after a retire', async () => {
+    render(
+      <ConfirmContext.Provider value={async () => true}>
+        <Rules />
+      </ConfirmContext.Provider>,
+    )
+    fireEvent.click(await screen.findByText('No emoji in commits'))
+    fireEvent.click(screen.getByRole('button', { name: 'Retire R1' }))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'delete', id: 1 }),
+      ),
+    )
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add rule' })),
+    )
+  })
+
+  it('returns focus to Add rule after retiring the last rule', async () => {
+    let calls = 0
+    api.rules.mockImplementation(() =>
+      Promise.resolve(
+        ++calls === 1
+          ? { ...PAYLOAD, rules: [PAYLOAD.rules[0]] }
+          : { ...PAYLOAD, rules: [], stats: { ...STATS, rules: 0 } },
+      ),
+    )
+    render(
+      <ConfirmContext.Provider value={async () => true}>
+        <Rules />
+      </ConfirmContext.Provider>,
+    )
+    fireEvent.click(await screen.findByText('No emoji in commits'))
+    fireEvent.click(screen.getByRole('button', { name: 'Retire R1' }))
+    expect(await screen.findByText('No rules yet')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add rule' }))
+  })
+
+  it('returns focus to the row head after a graduate', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Prefer tabs'))
+    fireEvent.click(screen.getByRole('button', { name: 'Graduate R2' }))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: /Prefer tabs/ })),
+    )
+  })
+
+  it('returns focus to the row head after an edit is saved', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('No emoji in commits'))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit R1' }))
+    fireEvent.change(screen.getByLabelText('Rule body'), { target: { value: 'Changed.' } })
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: /No emoji in commits/ }),
+      ),
+    )
+  })
+
+  it('announces the conflict notice as a status, not an alert', async () => {
+    api.rulesMutate.mockImplementationOnce(() => Promise.reject(conflict()))
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Prefer tabs'))
+    fireEvent.click(screen.getByText('Graduate'))
+    await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/Try again/))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('names each row action after its rule, and Graduate is a secondary button', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Prefer tabs'))
+    const graduate = screen.getByRole('button', { name: 'Graduate R2' })
+    expect(graduate.className).toBe('btn ghost sm')
+    expect(screen.getByRole('button', { name: 'Edit R2' }).textContent).toBe('Edit')
+    expect(screen.getByRole('button', { name: 'Retire R2' }).textContent).toBe('Retire')
   })
 })
