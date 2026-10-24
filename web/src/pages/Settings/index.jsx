@@ -243,7 +243,7 @@ export default function Settings({
               Footprint
             </span>
             <Seg aria-labelledby="footprint-label">
-              {['full', 'lean'].map((fp) => (
+              {['lean', 'full'].map((fp) => (
                 <button
                   key={fp}
                   className={footprint === fp ? 'on' : ''}

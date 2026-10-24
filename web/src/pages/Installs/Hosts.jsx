@@ -180,11 +180,13 @@ export default function Hosts({
 
   // What an install acts on, per choice: the explicit pick, else its own (active), else
   // the default, and for the voice the currently deployed one, so a new install matches.
+  // An absent row's `footprint` is only `footprintOfDir`'s no-marker answer (`full`), not a
+  // choice, so a new install takes the CLI's default, lean.
   const choiceFor = (inst) => {
     const p = picks[inst.id] || {}
     return {
       theme: p.theme || inst.theme || currentTheme || 'neutral',
-      footprint: p.footprint || inst.footprint || 'full',
+      footprint: p.footprint || (inst.state !== 'absent' && inst.footprint) || 'lean',
       posture: p.posture || inst.posture || 'peer',
       mode: p.mode || inst.mode || 'direct',
       trust: p.trust || inst.trust || 'balanced',
@@ -196,7 +198,7 @@ export default function Hosts({
     const c = choiceFor(inst)
     return (
       c.theme === inst.theme &&
-      c.footprint === (inst.footprint || 'full') &&
+      c.footprint === (inst.footprint || 'lean') &&
       c.posture === (inst.posture || 'peer') &&
       c.mode === (inst.mode || 'direct') &&
       c.trust === (inst.trust || 'balanced')

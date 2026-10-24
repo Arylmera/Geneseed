@@ -25,7 +25,8 @@ export const accentHex = (name) => ACCENT_HEX[name] || ACCENT_HEX.cyan
 
 // Accent-coloured TEXT on light surfaces. The fill colour (ACCENT_2 in light mode) sits near
 // 3:1 on the pale page, enough for a bar or a button but not for a link or a label; these
-// darker companions clear 4.5:1 on the light surfaces. Dark mode reads the fill itself.
+// darker companions are the starting text colour, and `accentText` darkens each further only
+// where a flavour's real surface or the soft accent tint needs it. Dark mode starts from the fill.
 export const ACCENT_TEXT_LIGHT = {
   red: '#A92F2B',
   green: '#1E7A47',
@@ -36,12 +37,6 @@ export const ACCENT_TEXT_LIGHT = {
   white: '#465A51',
 }
 
-// Readable text on a filled accent.
-const accentInk = (name) =>
-  name === 'yellow' || name === 'white' || name === 'cyan' || name === 'green'
-    ? '#06100D'
-    : '#FFFFFF'
-
 // Set the live accent on the app root. Light mode reads the deeper companion so
 // small text and strokes stay legible on a pale surface; the 'white' accent is
 // unusable on light and falls back to slate.
@@ -49,37 +44,23 @@ export function applyAccent(el, name, mode) {
   if (!el) return
   const light = mode === 'light'
   let hex = light ? ACCENT_2[name] || ACCENT_2.cyan : accentHex(name)
-  let ink = light ? '#FFFFFF' : accentInk(name)
-  if (light && name === 'white') {
-    hex = '#566B62'
-    ink = '#FFFFFF'
-  }
-  el.style.setProperty('--accent', hex)
-  el.style.setProperty('--accent-2', ACCENT_2[name] || ACCENT_2.cyan)
-  el.style.setProperty('--accent-ink', ink)
-  el.style.setProperty(
-    '--accent-text',
-    light ? ACCENT_TEXT_LIGHT[name] || ACCENT_TEXT_LIGHT.cyan : hex,
-  )
-  // A yellow accent IS the warning colour (#E8B53D on both), so under it every "needs a look"
-  // state read as decoration. The warning moves to orange for that accent alone; any other
-  // accent drops the override and the stylesheet's --warn applies again.
-  if (name === 'yellow') el.style.setProperty('--warn', light ? '#B4521C' : '#F08A4B')
-  else el.style.removeProperty('--warn')
+  if (light && name === 'white') hex = '#566B62'
+  const text = light ? ACCENT_TEXT_LIGHT[name] || ACCENT_TEXT_LIGHT.cyan : hex
+  writeAccent(el, accentSet(hex, ACCENT_2[name] || ACCENT_2.cyan, DARK_INK, text, light), light)
 }
 
 // Each flavour's CURATED signature accent — used when the accent mode is 'curated'
 // instead of the deployed voice's accent. `dark` is the bright on-dark value;
-// `light` is the deeper companion (also the gradient end / --accent-2); `ink` /
-// `inkLight` are the readable text colour on a filled accent in each mode.
+// `light` is the deeper companion (also the gradient end / --accent-2); `ink` is the
+// flavour's own dark ink, used on a filled accent wherever it reads better than white.
 export const CURATED_ACCENT = {
-  cultivar: { dark: '#3AD4C4', light: '#127E73', ink: '#06100D', inkLight: '#FFFFFF' },
-  operator: { dark: '#E8A23B', light: '#8F5E10', ink: '#1A1306', inkLight: '#FFFFFF' },
-  matrix: { dark: '#19E37C', light: '#0B7A47', ink: '#04140C', inkLight: '#FFFFFF' },
+  cultivar: { dark: '#3AD4C4', light: '#127E73', ink: '#06100D' },
+  operator: { dark: '#E8A23B', light: '#8F5E10', ink: '#1A1306' },
+  matrix: { dark: '#19E37C', light: '#0B7A47', ink: '#04140C' },
   // Atlas' sage, and the ink is the prototype's own #14200F rather than the shared
   // near-black: a sage fill wants a dark GREEN on it, not a neutral, or the primary
   // button reads as a sticker laid over the page instead of part of it.
-  atlas: { dark: '#8FD694', light: '#1C8450', ink: '#14200F', inkLight: '#FFFFFF' },
+  atlas: { dark: '#8FD694', light: '#1C8450', ink: '#14200F' },
 }
 
 // Write a flavour's curated accent on the app root (light reads the deeper
@@ -89,11 +70,8 @@ export function applyCuratedAccent(el, flavour, mode) {
   const c = CURATED_ACCENT[flavour]
   if (!el || !c) return false
   const light = mode === 'light'
-  el.style.setProperty('--accent', light ? c.light : c.dark)
-  el.style.setProperty('--accent-2', c.light)
-  el.style.setProperty('--accent-ink', light ? c.inkLight : c.ink)
-  // The curated light values are already the deep companions, dark enough to read as text.
-  el.style.setProperty('--accent-text', light ? c.light : c.dark)
+  const fill = light ? c.light : c.dark
+  writeAccent(el, accentSet(fill, c.light, c.ink, fill, light), light)
   return true
 }
 
@@ -104,8 +82,24 @@ export function applyCuratedAccent(el, flavour, mode) {
 // whichever of near-black or white reads better. A pick too dark for the dark page is
 // lightened, one too light for the pale page is darkened, in small steps toward
 // white or black so the hue is kept.
-const DARK_PAGE = '#101317' // the dark surface cards sit on
-const LIGHT_PAGE = '#F4F6F8' // the light surface cards sit on
+
+// The real surfaces accent text must read on, copied from the .fl-* blocks in styles.css:
+// `worst` is the lowest-contrast plain surface of any flavour in that mode (darkest light,
+// lightest dark), `soft` the set of every flavour's --surface / --surface-2, which selected
+// rows lay the 13% --accent-soft tint over. contrast.test.js derives both from the stylesheet
+// and requires them to equal these exactly, so a copy that drifts from the CSS turns it red.
+export const PAGES = {
+  dark: {
+    worst: '#232A31',
+    soft: ['#14181D', '#1B2026', '#11151A', '#171C22', '#0B1116', '#121A21', '#1C1A12', '#211E15'],
+  },
+  light: {
+    worst: '#EBE6D8',
+    soft: ['#FBFDFC', '#F3F6F6', '#F4F6F8', '#E9F4ED', '#FCFAF4', '#F6F2E7'],
+  },
+}
+const SOFT = 0.13 // --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent)
+const DARK_INK = '#06100D'
 
 const toRgb = (hex) => {
   const h = hex.replace('#', '')
@@ -133,12 +127,73 @@ const mix = (hex, target, t) => {
   const b = toRgb(target)
   return toHex(a.map((v, i) => v + (b[i] - v) * t))
 }
-// Step `hex` toward `target` until it reaches `ratio` against `page` (or gets there).
-const reach = (hex, page, ratio, target) => {
+// Step `hex` toward `target` until it reaches `ratio` against every one of `pages`.
+const reach = (hex, pages, ratio, target) => {
+  const worst = (c) => Math.min(...[].concat(pages).map((p) => contrast(c, p)))
   let out = hex
-  for (let t = 0.05; contrast(out, page) < ratio && t <= 1.0001; t += 0.05)
-    out = mix(hex, target, t)
+  for (let t = 0.05; worst(out) < ratio && t <= 1.0001; t += 0.05) out = mix(hex, target, t)
   return out
+}
+// HSL hue (degrees) and saturation, for the warning shift below.
+const hueSat = (hex) => {
+  const [r, g, b] = toRgb(hex).map((v) => v / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const d = max - min
+  if (d === 0) return { h: 0, s: 0 }
+  const s = d / (1 - Math.abs(max + min - 1))
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return { h: (h * 60 + 360) % 360, s }
+}
+const hueDist = (a, b) => {
+  const d = Math.abs(a - b) % 360
+  return d > 180 ? 360 - d : d
+}
+
+// The one rule every accent source goes through. The ink is the darker candidate or white,
+// whichever reads better on the fill; when neither reaches 4.5:1, the fill itself moves
+// (darker on light, lighter on dark) until one does. The text colour starts from the source's
+// own and darkens (light) or lightens (dark) only as far as the worst real surface and the
+// soft tint require, so a value that already reads is written as it is.
+function accentSet(fill, accent2, darkInk, text, light) {
+  const toward = light ? '#000000' : '#FFFFFF'
+  const inkOn = (f) => (contrast(f, darkInk) >= contrast(f, '#FFFFFF') ? darkInk : '#FFFFFF')
+  const accent =
+    contrast(fill, inkOn(fill)) >= 4.5
+      ? fill
+      : reach(fill, light ? '#FFFFFF' : darkInk, 4.5, toward)
+  const p = light ? PAGES.light : PAGES.dark
+  const bgs = [p.worst, ...p.soft.map((s) => mix(s, accent, SOFT))]
+  return { accent, accent2, ink: inkOn(accent), text: reach(text, bgs, 4.5, toward) }
+}
+
+// VS-7: an accent in the amber band IS the warning colour, so under it every "needs a look"
+// state reads as decoration. The warning then moves to the approved orange (--warn-text the
+// same, darkened on light until it holds 4.5:1 on its own 15% tint); any other accent drops
+// both overrides and the stylesheet's values apply again. Every flavour's --warn sits at hue
+// 35-43, so 29 deg around 39 is "within 25 deg of some flavour's warn". The shift is skipped
+// when the orange would sit no farther from the accent than the amber (a reddish accent).
+const AMBER_HUE = 39
+const ORANGE = { dark: ['#FF8A4C', '#FF8A4C'], light: ['#B4441F', '#9B3A1B'] } // [--warn, --warn-text]
+function shiftWarn(el, accent, light) {
+  const [warn, warnText] = light ? ORANGE.light : ORANGE.dark
+  const { h, s } = hueSat(accent)
+  const near = hueDist(h, AMBER_HUE)
+  if (s >= 0.15 && near <= 29 && hueDist(h, hueSat(warn).h) > near) {
+    el.style.setProperty('--warn', warn)
+    el.style.setProperty('--warn-text', warnText)
+  } else {
+    el.style.removeProperty('--warn')
+    el.style.removeProperty('--warn-text')
+  }
+}
+
+function writeAccent(el, c, light) {
+  el.style.setProperty('--accent', c.accent)
+  el.style.setProperty('--accent-2', c.accent2)
+  el.style.setProperty('--accent-ink', c.ink)
+  el.style.setProperty('--accent-text', c.text)
+  shiftWarn(el, c.accent, light)
 }
 
 export const isHexColour = (v) => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)
@@ -146,20 +201,14 @@ export const isHexColour = (v) => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.t
 // The four values a free pick writes, per mode. Exported for the test that pins the ratios.
 export function hexAccent(hex, mode) {
   const light = mode === 'light'
-  const page = light ? LIGHT_PAGE : DARK_PAGE
+  const p = light ? PAGES.light : PAGES.dark
   const toward = light ? '#000000' : '#FFFFFF'
-  const fill = reach(hex, page, 3, toward)
-  const text = reach(fill, page, 4.5, toward)
-  const ink = contrast(fill, '#06100D') >= contrast(fill, '#FFFFFF') ? '#06100D' : '#FFFFFF'
-  return { accent: fill, accent2: reach(fill, page, 4.5, toward), ink, text }
+  const fill = reach(hex, p.worst, 3, toward)
+  return accentSet(fill, reach(fill, p.worst, 4.5, toward), DARK_INK, fill, light)
 }
 
 export function applyHexAccent(el, hex, mode) {
   if (!el || !isHexColour(hex)) return false
-  const c = hexAccent(hex, mode)
-  el.style.setProperty('--accent', c.accent)
-  el.style.setProperty('--accent-2', c.accent2)
-  el.style.setProperty('--accent-ink', c.ink)
-  el.style.setProperty('--accent-text', c.text)
+  writeAccent(el, hexAccent(hex, mode), mode === 'light')
   return true
 }
