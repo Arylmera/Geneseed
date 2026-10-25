@@ -142,4 +142,37 @@ describe('Settings', () => {
     ])
     expect(pills.every((p) => p.classList.contains('good'))).toBe(true)
   })
+
+  // The skin is a segmented control like the Overview view: one button per FLAVOURS entry, in
+  // order, the active one pressed; the old preview tiles are gone.
+  it('picks the skin from a segmented control, one button per flavour', () => {
+    const onFlavour = vi.fn()
+    const { container } = render(
+      <Settings onAction={() => {}} flavour="cultivar" onFlavour={onFlavour} />,
+    )
+    const buttons = within(screen.getByRole('group', { name: 'Skin' })).getAllByRole('button')
+    expect(buttons.map((b) => b.textContent)).toEqual(['Cultivar', 'Operator', 'Matrix', 'Atlas'])
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ])
+    fireEvent.click(buttons[2])
+    expect(onFlavour).toHaveBeenCalledWith('matrix')
+    expect(container.querySelector('.dir-tile')).toBeNull()
+  })
+
+  // The index shows the server's live state beside its entry: a good dot while the code matches
+  // the disk, a warn dot once daemon_stale. The Server section carries the live accent.
+  it('marks the Server index entry with a dot that follows daemon_stale', () => {
+    const nav = () => screen.getByRole('navigation', { name: 'On this page' })
+    const dot = () =>
+      within(nav()).getByRole('button', { name: 'Server' }).querySelector('.sheet-dot')
+    const { rerender } = render(<Settings onAction={() => {}} overview={{ daemon_stale: false }} />)
+    expect(dot().className).toBe('sheet-dot good')
+    rerender(<Settings onAction={() => {}} overview={{ daemon_stale: true }} />)
+    expect(dot().className).toBe('sheet-dot warn')
+    expect(section('Server').classList.contains('sheet-live')).toBe(true)
+  })
 })

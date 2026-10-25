@@ -60,7 +60,7 @@ function Section({ id, title, head, className = '', children }) {
 
 // The index scrolls instead of linking: a bare href="#server" would be read by the hash router
 // as a page and leave the Installs view.
-function SheetIndex() {
+function SheetIndex({ stale }) {
   const go = (id) =>
     document
       .getElementById(`set-${id}`)
@@ -75,6 +75,9 @@ function SheetIndex() {
           onClick={() => go(id)}
         >
           {label}
+          {id === 'server' && (
+            <span className={`sheet-dot ${stale ? 'warn' : 'good'}`} aria-hidden="true" />
+          )}
         </button>
       ))}
     </nav>
@@ -226,9 +229,32 @@ export default function Settings({
       </div>
 
       <div className="sheet">
-        <SheetIndex />
+        <SheetIndex stale={stale} />
         <div className="sheet-body">
           <Section id="appearance" title="Appearance">
+            {flavour && onFlavour && (
+              <Row
+                k={<span id="dir-skin-label">Skin</span>}
+                help="Colours and fonts of the console"
+              >
+                <Seg aria-labelledby="dir-skin-label">
+                  {FLAVOURS.map((f) => (
+                    <button
+                      key={f.id}
+                      className={flavour === f.id ? 'on' : ''}
+                      onClick={() => onFlavour(f.id)}
+                      aria-pressed={flavour === f.id}
+                      title={f.tagline}
+                    >
+                      {f.short}
+                    </button>
+                  ))}
+                </Seg>
+                <span className="dir-layout-note sub" role="status" aria-live="polite">
+                  {FLAVOURS.find((f) => f.id === flavour)?.tagline ?? ''}
+                </span>
+              </Row>
+            )}
             {accentMode && onAccentMode && (
               <Row k={<span id="dir-accent-label">Accent</span>} help="Live, saved in this browser">
                 <AccentPicker
@@ -262,38 +288,6 @@ export default function Settings({
                 <span className="dir-layout-note sub" role="status" aria-live="polite">
                   {LAYOUTS.find((l) => l.id === layout)?.tagline ?? ''}
                 </span>
-              </Row>
-            )}
-            {flavour && onFlavour && (
-              <Row
-                k="Console direction"
-                help={`${FLAVOURS.length} takes on the same data; applies instantly`}
-              >
-                <div className="dir-grid">
-                  {FLAVOURS.map((f) => (
-                    <button
-                      key={f.id}
-                      className={`dir-tile dir-${f.id} ${flavour === f.id ? 'on' : ''}`}
-                      onClick={() => onFlavour(f.id)}
-                      aria-pressed={flavour === f.id}
-                    >
-                      <span className="dir-thumb" aria-hidden="true">
-                        <span className="dir-thumb-rail" />
-                        <span className="dir-thumb-bar" />
-                        <span className="dir-thumb-bar w70" />
-                        <span className="dir-thumb-bar w52" />
-                        <span className="dir-thumb-dot" />
-                      </span>
-                      <span className="dir-meta">
-                        <span className="dir-name">
-                          {f.short}
-                          {flavour === f.id && <span className="dir-check">● active</span>}
-                        </span>
-                        <span className="dir-tag">{f.tagline}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
               </Row>
             )}
           </Section>
@@ -357,6 +351,7 @@ export default function Settings({
           <Section
             id="server"
             title="Server"
+            className="sheet-live"
             head={
               <>
                 <span className="pill good">running</span>
