@@ -678,6 +678,8 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
       // on UserPromptSubmit a block would erase the user's prompt.
       UserPromptSubmit: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
       SessionEnd: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
+      // The garden's sub-agent branch at launch rides the same verb and tail.
+      SubagentStart: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
     });
     // With Git Bash: today's bytes, no `shell` key, the `|| exit 0` form.
     assert.equal(bash.SessionStart[0].hooks[0].command, `${run} context --root "${cfg}" || exit 0`);
@@ -715,13 +717,15 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
       claims = emit(shell, claims);
       const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
       for (const [event, n] of [['PreToolUse', 3], ['SessionStart', 1], ['Stop', 1],
-        ['SubagentStop', 1], ['PreCompact', 1], ['UserPromptSubmit', 1], ['SessionEnd', 1]]) {
+        ['SubagentStop', 1], ['PreCompact', 1], ['UserPromptSubmit', 1], ['SessionEnd', 1],
+        ['SubagentStart', 1]]) {
         assert.equal(hooks[event].length, n, `${shell}: ${event} ${JSON.stringify(hooks[event])}`);
         for (const g of hooks[event]) assert.equal(g.hooks[0].shell, want, `${shell}: ${event}`);
       }
       // Seven since the usage counter's Skill|Agent|Task group joined PreToolUse (three groups
-      // there); nine since the activity view's UserPromptSubmit and SessionEnd groups joined.
-      assert.equal(claims.length, 9, `${shell}: the claim set is not the nine current groups`);
+      // there); nine since the activity view's UserPromptSubmit and SessionEnd groups joined;
+      // ten since its SubagentStart group joined (the garden's sub-agent branch at launch).
+      assert.equal(claims.length, 10, `${shell}: the claim set is not the ten current groups`);
     }
   });
 });
@@ -754,8 +758,8 @@ test('an install emitted before onFailure existed upgrades to it on re-emit', ()
     for (const g of hooks.PreToolUse) {
       assert.equal(g.hooks[0].onFailure, g.matcher === 'Skill|Agent|Task' ? undefined : 'block', JSON.stringify(g));
     }
-    // Nine: the seven gate/context/learn groups and the activity view's two (no onFailure).
-    assert.equal(claims.length, 9, 'the claim set is not the nine current (upgraded) groups');
+    // Ten: the seven gate/context/learn groups and the activity view's three (no onFailure).
+    assert.equal(claims.length, 10, 'the claim set is not the ten current (upgraded) groups');
   });
 });
 

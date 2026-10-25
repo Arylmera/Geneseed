@@ -127,7 +127,7 @@ test('learn keeps its Stop contract with the done gate armed, on any transcript'
 // activity writer behind it (js/hosts/activity.mjs) writes only under `<root>/activity/`, whatever
 // session id or transcript arrives. Tracking is on (no flag file), so the writer really runs.
 const sid = fc.oneof(fc.string(), fc.constantFrom('../../x', 'a/b\\c', 'C:\\x', '..', '.', ''), fc.jsonValue());
-const event = fc.constantFrom('SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SubagentStop',
+const event = fc.constantFrom('SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SubagentStart', 'SubagentStop',
   'PreCompact', 'SessionEnd', 'Notification');
 const activityPayload = fc.oneof(payload, fc.record({
   hook_event_name: event, session_id: sid, prompt: fc.oneof(fc.string(), fc.jsonValue()),

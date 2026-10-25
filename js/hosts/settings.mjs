@@ -742,7 +742,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // PreToolUse, PostToolUse, Stop — Claude's names, but NOT Claude's protocol. stdout is
     // read as context on SessionStart only; on PreToolUse it is ignored and the one way to
     // refuse a call is EXIT CODE 2. The groups this emit wrote before were Claude's whole
-    // set: `SubagentStop`/`PreCompact` are not Bob events, and the gates answered with a
+    // set: `SubagentStop` is not a Bob event (2.2.3 has `PreCompact`/`PostCompact`, not wired
+    // here; the activity writer counts a compaction on SessionStart `compact`), and the gates answered with a
     // stdout JSON Bob never reads — permissive on every call. `--host bob` makes the gates
     // speak exit codes (js/hosts/hooks.mjs). DELIBERATELY no matcher on PreToolUse
     // (host-compat O1, revisited): bob-docs.md §2's tool list is already stale against the
@@ -858,6 +859,10 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // user's prompt, and the `activity` verb decides nothing.
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: activity }] }],
     SessionEnd: [{ hooks: [{ type: 'command', command: activity }] }],
+    // A sub-agent's branch at launch (the Activity garden): a read-only sub-agent fires no gated
+    // hook, so without this it would never appear. Never on Bob (the early return above): Bob's
+    // hook schema is strict, and one unknown event key drops its whole hooks block.
+    SubagentStart: [{ hooks: [{ type: 'command', command: activity }] }],
   };
   // Claude Code only: OpenClaude always runs Git Bash on Windows (its `findGitBashPath` exits
   // without one), and Bob takes the early return above.

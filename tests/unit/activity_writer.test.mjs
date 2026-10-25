@@ -5,9 +5,12 @@
 // - Claude Code and OpenClaude send `{hook_event_name, session_id, tool_name, tool_input}`;
 //   SessionStart idles, UserPromptSubmit starts a turn, PreToolUse names the phase, Stop waits on
 //   the user and reads the transcript the turn appended, SessionEnd ends;
-// - Bob sends `{event, session_id, tool, input}` and never a transcript, so a Bob session is
-//   only what its matcher-less tool-gate sees, one call at a time;
-// - a shell command, a file's content and an edit's text are never written anywhere.
+// - Bob 2.2.3 sends the same Claude-shaped keys plus `cwd`, and older notes describe
+//   `{event, session_id, tool, input}`: both are read. It never sends a transcript, so a Bob
+//   session is only what its matcher-less tool-gate sees, one call at a time;
+// - a shell command, a file's content and an edit's text are never written anywhere, and a file
+//   path is stored relative to the session's git root — a basename when it falls outside, never
+//   absolute (snapshot v2, the Activity garden).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -35,6 +38,9 @@ test('a Claude session, event by event', () => {
   assert.deepEqual(s.snap, {
     session_id: 'c1', agent: null, title: null, cwd: '/repo', status: 'idle', pid: null,
     writer: 'hook', host: 'claude', updated_at: NOW, model: null, tokens: 0, files: null, todos: null,
+    // v2: `/repo` holds no `.git`, so no root and no repo; nothing has grown yet.
+    root: null, repo: null, agents: [], turns: 0, context: null, compactions: 0,
+    compacted_at: null, context_at_compaction: null,
   });
   assert.deepEqual(s.detail.timeline,
     [{ t: NOW * 1000, kind: 'step', label: 'Session startup', status: 'completed' }]);
@@ -44,6 +50,7 @@ test('a Claude session, event by event', () => {
   assert.equal(s.snap.status, 'busy');
   assert.equal(s.snap.title, 'fix the login bug');           // whitespace runs collapse
   assert.equal(s.snap.turn_started_at, NOW + 1);
+  assert.equal(s.snap.turns, 1);
   assert.deepEqual(s.detail.conversation,
     [{ role: 'user', text: 'fix the login bug', t: (NOW + 1) * 1000 }]);
 
@@ -51,8 +58,9 @@ test('a Claude session, event by event', () => {
     tool_name: 'Edit', tool_use_id: 'tu1',
     tool_input: { file_path: '/repo/src/login.js', old_string: 'a\nb', new_string: 'x\ny\nz' } }, NOW + 2);
   assert.equal(s.snap.phase, 'Edit login.js');
+  // Outside any git root (`/repo` has no `.git`), `path` is null: only the basename is kept, in `file`.
   assert.deepEqual(s.snap.files, { count: 1, additions: 3, deletions: 2,
-    items: [{ file: 'login.js', additions: 3, deletions: 2 }] });
+    items: [{ file: 'login.js', path: null, by: null, additions: 3, deletions: 2 }] });
   assert.deepEqual(s.detail.timeline.at(-1), { t: (NOW + 2) * 1000, kind: 'tool',
     label: 'Edit login.js', tool: 'Edit', status: 'running', id: 'tu1' });
 
@@ -98,7 +106,8 @@ test('a Bob session reads its own payload shape', () => {
   assert.equal(s.snap.host, 'bob');
   assert.equal(s.snap.status, 'busy');
   assert.equal(s.snap.phase, 'write_to_file a.md');
-  assert.deepEqual(s.snap.files.items, [{ file: 'a.md', additions: 2, deletions: 0 }]);
+  // The old shape carries no `cwd`, so there is no root: `path` null, the basename in `file`.
+  assert.deepEqual(s.snap.files.items, [{ file: 'a.md', path: null, by: null, additions: 2, deletions: 0 }]);
   // No event name at all but a tool: a PreToolUse.
   s = applyHookEvent(s.snap, s.detail, { session_id: 'b1', tool: 'read_file', input: { path: 'x.md' } }, NOW + 1);
   assert.equal(s.snap.phase, 'read_file x.md');
@@ -109,6 +118,204 @@ test('a Bob session reads its own payload shape', () => {
   // An event this writer does not know writes nothing.
   assert.equal(applyHookEvent(null, null, { event: 'Notification', session_id: 'b1' }, NOW), null);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Snapshot v2 (the Activity garden). A sandbox with a `.git` directory is a real git root to
+// `gitRootOf`; each expectation below is written out, and the sentence above it says why.
+
+/** A main repo at `<box>/main` and a linked worktree at `<box>/wt`, laid out as git does it. */
+function repos(box) {
+  const main = path.join(box, 'main');
+  const wt = path.join(box, 'wt');
+  const gitdir = path.join(main, '.git', 'worktrees', 'w');
+  fs.mkdirSync(gitdir, { recursive: true });
+  fs.writeFileSync(path.join(gitdir, 'commondir'), '../..\n');
+  fs.mkdirSync(wt);
+  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${gitdir}\n`);
+  return { main, wt };
+}
+const at = (...p) => path.join(...p);
+const edit = (sid, file, extra = {}) => ({ hook_event_name: 'PreToolUse', session_id: sid,
+  tool_name: 'Edit', tool_input: { file_path: file, old_string: 'a', new_string: 'b\nc' }, ...extra });
+const rows = (s) => s.detail.files.items.map((f) => [f.path, f.by, f.file]);
+
+test('v2 Claude: files keyed by (path, by), sub-agents as branches', () => withBox((box) => {
+  const { main, wt } = repos(box);
+  let s = applyHookEvent(null, null, { hook_event_name: 'SessionStart', session_id: 'v', cwd: main }, NOW);
+  // A main worktree is its own repo.
+  assert.deepEqual([s.snap.root, s.snap.repo], [main, main]);
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'UserPromptSubmit', session_id: 'v', prompt: 'a' }, NOW + 1);
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'UserPromptSubmit', session_id: 'v', prompt: 'b' }, NOW + 2);
+  assert.equal(s.snap.turns, 2, 'one turn per UserPromptSubmit');
+  // The session's own edit, then a sub-agent's edit of a file with the SAME basename elsewhere,
+  // then the sub-agent on the session's file: three rows, because the key is (path, by).
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(main, 'src', 'a', 'index.js')), NOW + 3);
+  const sub = { agent_id: 'ag1', agent_type: 'explorer', cwd: wt };
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(main, 'src', 'b', 'index.js'), sub), NOW + 4);
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(main, 'src', 'a', 'index.js'), sub), NOW + 5);
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(main, 'src', 'a', 'index.js')), NOW + 6);
+  // A file outside the root keeps its basename only (`path` null, never absolute), so a stray
+  // README.md outside the repo never collides with the repo's own top-level README.md. Rows
+  // outside the root merge on (file, by).
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(box, 'elsewhere', 'secret.js')), NOW + 7);
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(main, 'README.md')), NOW + 7);
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(box, 'elsewhere', 'README.md')), NOW + 7);
+  s = applyHookEvent(s.snap, s.detail, edit('v', at(box, 'other', 'README.md')), NOW + 7);
+  assert.deepEqual(rows(s), [
+    ['src/a/index.js', null, 'index.js'],
+    ['src/b/index.js', 'ag1', 'index.js'],
+    ['src/a/index.js', 'ag1', 'index.js'],
+    [null, null, 'secret.js'],
+    ['README.md', null, 'README.md'],
+    [null, null, 'README.md'],
+  ]);
+  assert.deepEqual(s.detail.files.items[0], { file: 'index.js', path: 'src/a/index.js', by: null,
+    additions: 4, deletions: 2 }, 'the session edited src/a/index.js twice (2 + 2 added, 1 + 1 removed)');
+  assert.ok(!JSON.stringify(s).includes(path.join(box, 'elsewhere')), 'an absolute path reached the files');
+  // A sub-agent's own cwd (its worktree) never moves the session's.
+  assert.deepEqual([s.snap.cwd, s.snap.root], [main, main]);
+  assert.deepEqual(s.snap.agents, [{ id: 'ag1', type: 'explorer', status: 'running', started: NOW + 4 }]);
+
+  // SubagentStart creates the branch at launch; `agent_type: ''` counts as absent, a later event
+  // fills the type in, and an empty one never wipes it.
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'SubagentStart', session_id: 'v',
+    agent_id: 'ag2', agent_type: '' }, NOW + 8);
+  assert.deepEqual(s.snap.agents.at(-1), { id: 'ag2', type: null, status: 'running', started: NOW + 8 });
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'PreToolUse', session_id: 'v', agent_id: 'ag2',
+    agent_type: 'tester', tool_name: 'Bash', tool_input: { command: 'ls' } }, NOW + 9);
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'SubagentStop', session_id: 'v',
+    agent_id: 'ag2', agent_type: '' }, NOW + 10);
+  // A SubagentStop for an id never seen creates the branch already done.
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'SubagentStop', session_id: 'v', agent_id: 'ag3' }, NOW + 11);
+  // Stop ends the session's turn, not its sub-agents: a background agent outlives the turn.
+  s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'Stop', session_id: 'v' }, NOW + 12);
+  assert.deepEqual(s.snap.agents, [
+    { id: 'ag1', type: 'explorer', status: 'running', started: NOW + 4 },
+    { id: 'ag2', type: 'tester', status: 'done', started: NOW + 8 },
+    { id: 'ag3', type: null, status: 'done', started: NOW + 11 },
+  ]);
+  assert.deepEqual(s.detail.agents, s.snap.agents, 'the detail carries the same agents');
+  assert.equal(s.snap.attribution, undefined, 'attribution:false is Bob-only');
+}));
+
+test('v2: a linked worktree is its own root, grouped under its main repo', () => withBox((box) => {
+  const { main, wt } = repos(box);
+  const s = applyHookEvent(null, null, edit('w', at(wt, 'lib', 'x.mjs'), { cwd: at(wt, 'lib') }), NOW);
+  assert.deepEqual([s.snap.root, s.snap.repo], [wt, main]);
+  assert.deepEqual(rows(s), [['lib/x.mjs', null, 'x.mjs']]);
+}));
+
+test('v2 Bob: both payload shapes, `~/` and a lower-case drive', () => withBox((box) => {
+  const { main } = repos(box);
+  // Bob sends `c:\...` (F23): on Windows the cwd's drive letter is lower-cased here, and the root
+  // follows the cwd; the file paths it resolves keep their own case and still land inside.
+  const cwd = process.platform === 'win32' ? main.replace(/^[A-Z]:/, (d) => d.toLowerCase()) : main;
+  const home = process.platform === 'win32' ? 'USERPROFILE' : 'HOME';
+  const saved = process.env[home];
+  process.env[home] = main;           // `~` expands to the sandbox repo, as Bob expands it
+  try {
+    const bob = (tool, input) => ({ hook_event_name: 'PreToolUse', session_id: 'b2', cwd, tool_name: tool, tool_input: input });
+    let s = applyHookEvent(null, null, bob('write_file', { path: 'src/index.ts', content: 'a\nb', line_count: 2 }), NOW, { host: 'bob' });
+    assert.equal(s.snap.root, cwd);
+    s = applyHookEvent(s.snap, s.detail, bob('apply_diff', { path: at(main, 'src', 'x.ts'), diff: '<<<<<<< SEARCH' }), NOW + 1, { host: 'bob' });
+    s = applyHookEvent(s.snap, s.detail, bob('search_and_replace', { path: '~/src/y.ts', search: 'a', replace: 'b\nc' }), NOW + 2, { host: 'bob' });
+    s = applyHookEvent(s.snap, s.detail, bob('insert_content', { path: 'src/z.ts', line: 1, content: 'q' }), NOW + 3, { host: 'bob' });
+    // A read is no edit, on Bob as on Claude.
+    s = applyHookEvent(s.snap, s.detail, bob('read_file', { path: 'src/index.ts' }), NOW + 4, { host: 'bob' });
+    // Line counts: content and replace are added lines, search is removed lines; apply_diff's
+    // SEARCH/REPLACE body is not parsed, so it counts the file with 0/0.
+    assert.deepEqual(s.detail.files.items.map((f) => [f.path, f.by, f.additions, f.deletions]), [
+      ['src/index.ts', null, 2, 0], ['src/x.ts', null, 0, 0], ['src/y.ts', null, 2, 1], ['src/z.ts', null, 1, 0]]);
+    assert.equal(s.snap.attribution, undefined, 'no sub-agent ran yet');
+
+    // spawn_subagent / start_subtask: a branch with no id (Bob sends none) and attribution off,
+    // since their files reach the parent's hooks unmarked (F17). The next root Stop ends them.
+    s = applyHookEvent(s.snap, s.detail, bob('spawn_subagent', { description: 'd', name: 'reviewer', fork_context: false }), NOW + 5, { host: 'bob' });
+    s = applyHookEvent(s.snap, s.detail, bob('start_subtask', { title: 'Write docs', message: 'm', mode: 'code' }), NOW + 6, { host: 'bob' });
+    assert.deepEqual(s.snap.agents, [
+      { id: null, type: 'reviewer', status: 'running', started: NOW + 5 },
+      { id: null, type: 'Write docs', status: 'running', started: NOW + 6 }]);
+    assert.equal(s.snap.attribution, false);
+    // start_subtask hands its message to Bob's own input path, which fires UserPromptSubmit on
+    // the ROOT session with that message as the prompt (2.2.3 bundle). That is not a user turn;
+    // the next prompt that is not the subtask's message is.
+    const ups = (prompt) => ({ hook_event_name: 'UserPromptSubmit', session_id: 'b2', cwd, prompt });
+    s = applyHookEvent(s.snap, s.detail, ups('m'), NOW + 6, { host: 'bob' });
+    assert.equal(s.snap.turns, 0, 'the subtask message counted as a turn');
+    s = applyHookEvent(s.snap, s.detail, ups('m'), NOW + 6, { host: 'bob' });
+    assert.equal(s.snap.turns, 1, 'one subtask swallowed two prompts');
+    s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'Stop', session_id: 'b2', cwd }, NOW + 7, { host: 'bob' });
+    assert.deepEqual(s.snap.agents.map((a) => a.status), ['done', 'done']);
+    assert.equal(s.snap.context, null, 'Bob hooks carry no token data');
+
+    // Bob's compaction signal is SessionStart `source: "compact"` (2.2.3, after the compaction):
+    // it counts, and — fired mid-turn — it does not idle a busy session. Any other Bob
+    // SessionStart is not recorded (UserPromptSubmit right after records the session anyway).
+    s = applyHookEvent(s.snap, s.detail, bob('read_file', { path: 'a' }), NOW + 8, { host: 'bob' });
+    s = applyHookEvent(s.snap, s.detail, { hook_event_name: 'SessionStart', session_id: 'b2', cwd, source: 'compact' }, NOW + 9, { host: 'bob' });
+    assert.deepEqual([s.snap.status, s.snap.compactions, s.snap.compacted_at, s.snap.context_at_compaction],
+      ['busy', 1, NOW + 9, null]);
+    assert.equal(applyHookEvent(s.snap, s.detail, { hook_event_name: 'SessionStart', session_id: 'b2', source: 'startup' }, NOW, { host: 'bob' }), null);
+  } finally {
+    if (saved === undefined) delete process.env[home]; else process.env[home] = saved;
+  }
+  // The old shape, `{event, tool, input}`, takes the same edit tools and the same spawn rule.
+  let o = applyHookEvent(null, null, { event: 'PreToolUse', session_id: 'b3', tool: 'search_and_replace',
+    input: { path: 'docs/a.md', search: 'x', replace: 'y' } }, NOW, { host: 'bob' });
+  o = applyHookEvent(o.snap, o.detail, { event: 'PreToolUse', session_id: 'b3', tool: 'spawn_subagent',
+    input: { name: '' , description: 'd' } }, NOW + 1, { host: 'bob' });
+  assert.deepEqual(o.detail.files.items, [{ file: 'a.md', path: null, by: null, additions: 1, deletions: 1 }]);
+  assert.deepEqual([o.snap.agents, o.snap.attribution], [[{ id: null, type: null, status: 'running', started: NOW + 1 }], false]);
+}));
+
+test('v2: context from the transcript, compaction on PreCompact', () => withBox((root) => {
+  const tr = path.join(root, 't.jsonl');
+  const msg = (id, usage) => ({ type: 'assistant', message: { id, model: 'm', usage, content: [] } });
+  const read = () => readJson(path.join(root, 'activity', 'k.json'));
+  const send = (ev, now, extra = {}) => recordActivity(root, JSON.stringify({ hook_event_name: ev,
+    session_id: 'k', transcript_path: tr, ...extra }), { now });
+  // used = input + cache_read + cache_creation of the LAST assistant message, output excluded.
+  fs.writeFileSync(tr, jsonl([
+    msg('m0', { input_tokens: 9, output_tokens: 9 }),
+    msg('m1', { input_tokens: 100, cache_read_input_tokens: 50_000, cache_creation_input_tokens: 2000, output_tokens: 10 }),
+    // A sidechain line (an older Claude's sub-agent turn in the parent file) is another context.
+    { ...msg('s1', { input_tokens: 999 }), isSidechain: true }]));
+  send('Stop', NOW);
+  assert.deepEqual(read().context, { used: 52_100, window: 200_000 });
+  // A delta with no assistant usage keeps the previous reading.
+  fs.appendFileSync(tr, jsonl([{ type: 'user', message: { content: 'x' } }]));
+  send('Stop', NOW + 1);
+  assert.deepEqual(read().context, { used: 52_100, window: 200_000 });
+  // Past 200k the window can only be the 1M one (an estimate: the transcript does not carry it).
+  fs.appendFileSync(tr, jsonl([msg('m2', { input_tokens: 5, cache_read_input_tokens: 250_000 })]));
+  send('Stop', NOW + 2);
+  assert.deepEqual(read().context, { used: 250_005, window: 1_000_000 });
+  // PreCompact reads the delta too, so the size it records is the one being compacted away.
+  // Claude Code's `<synthetic>` messages (all-zero usage) and any zero-usage message say nothing
+  // about the context, so they never overwrite the reading: the garden divides by it.
+  const synthetic = { type: 'assistant', message: { id: 'syn', model: '<synthetic>', content: [],
+    usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } };
+  fs.appendFileSync(tr, jsonl([msg('m3', { input_tokens: 1, cache_read_input_tokens: 180_000 }),
+    synthetic, msg('z0', { input_tokens: 0, output_tokens: 3 }),
+    // A `<synthetic>` message is skipped by its model, whatever its usage says.
+    { ...synthetic, message: { ...synthetic.message, id: 'syn2', usage: { input_tokens: 7 } } }]));
+  send('PreCompact', NOW + 3, { trigger: 'auto' });
+  let k = read();
+  assert.deepEqual([k.compactions, k.compacted_at, k.context_at_compaction, k.status],
+    [1, NOW + 3, 180_001, 'waiting-input']);
+  // Once its size is saved, the context is unknown until the next Stop: a manual /compact with
+  // no Stop after it must not read as still full.
+  assert.equal(k.context, null);
+  // Claude's SessionStart `compact` follows PreCompact: it neither counts again nor idles the session.
+  send('UserPromptSubmit', NOW + 4, { prompt: 'go' });
+  send('SessionStart', NOW + 5, { source: 'compact' });
+  k = read();
+  assert.deepEqual([k.compactions, k.status, k.turns, k.context], [1, 'busy', 1, null]);
+  // The next Stop reads the regrown context.
+  fs.appendFileSync(tr, jsonl([msg('m4', { input_tokens: 2, cache_read_input_tokens: 30_000 })]));
+  send('Stop', NOW + 6);
+  assert.deepEqual(read().context, { used: 30_002, window: 200_000 });
+}));
 
 test('a command, a file body and an edit text are never recorded', () => {
   const SECRET = 'hunter2-SECRET';
@@ -370,16 +577,30 @@ test('a gate verb records after its verdict, and its verdict is unchanged', () =
   assert.equal(readJson(path.join(root, 'activity', 'g.json')).phase, 'Bash');
 }));
 
-// `context` never read stdin before the writer, and Bob's SessionStart stdin is unverified, so
-// on Bob the writer does not read it: nothing is recorded there.
-test('a Bob SessionStart is not recorded', () => withBox((root) => {
+// Bob 2.2.3 writes every hook's payload to stdin and closes it, so `context` may read it there.
+// Only a compaction's SessionStart is recorded on Bob: a startup or resume fires right before the
+// UserPromptSubmit that records the session anyway.
+test('a Bob SessionStart is recorded only for a compaction', () => withBox((root) => {
   const r = hook(root, ['context', '--root', root, '--host', 'bob'],
-    { event: 'SessionStart', session_id: 'b' });
+    { hook_event_name: 'SessionStart', session_id: 'b', source: 'startup' });
   assert.equal(r.rc, 0);
-  assert.ok(!fs.existsSync(path.join(root, 'activity')), 'context read stdin on Bob');
-  // Control: the same call on Claude records, so the row above is not vacuous.
+  assert.ok(!fs.existsSync(path.join(root, 'activity', 'b.json')), 'a Bob startup was recorded');
+  // The compaction row: recorded, and counted.
+  hook(root, ['context', '--root', root, '--host', 'bob'],
+    { hook_event_name: 'SessionStart', session_id: 'b', source: 'compact' });
+  assert.equal(readJson(path.join(root, 'activity', 'b.json')).compactions, 1);
+  // Control: a Claude startup records, so the first row is not vacuous.
   hook(root, ['context', '--root', root], { hook_event_name: 'SessionStart', session_id: 'c' });
   assert.ok(fs.existsSync(path.join(root, 'activity', 'c.json')));
+}));
+
+// SubagentStart reaches the `activity` verb (settings.mjs) and is recorded as a branch.
+test('the activity verb records a SubagentStart', () => withBox((root) => {
+  const r = hook(root, ['activity', '--root', root],
+    { hook_event_name: 'SubagentStart', session_id: 'sa', agent_id: 'a1', agent_type: 'explorer' });
+  assert.deepEqual([r.rc, r.out], [0, '']);
+  assert.deepEqual(readJson(path.join(root, 'activity', 'sa.json')).agents.map((a) => [a.id, a.type, a.status]),
+    [['a1', 'explorer', 'running']]);
 }));
 
 test('a model-CLI child of learn records nothing', () => withBox((root) => {

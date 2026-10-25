@@ -95,7 +95,9 @@ names but **not Claude's protocol**, and the global file at the **nested**
   and the one way to refuse a call is **exit code 2**. Claude's `permissionDecision:
   "ask"` on stdout is therefore invisible to Bob — the groups earlier versions wrote were
   permissive on every call.
-- **`SubagentStop` and `PreCompact` are not Bob events**, so they are not written.
+- **`SubagentStop` is not a Bob event**, so it is not written. Bob 2.2.3 does have
+  `PreCompact` and `PostCompact` (its bundle's event list and schema); Geneseed does not wire
+  them yet, so `learn` still runs on `Stop` only.
 
 What the global emit writes into `~/.bob/settings/settings.json`:
 
@@ -109,6 +111,25 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 Every hook also feeds the Activity view after it decides (off with `GENESEED_ACTIVITY=off`).
 Bob sends no transcript, so a Bob session shows only the calls `tool-gate` sees; see
 `docs/reference/plugin-activity.md`.
+
+**The payload Bob actually sends.** Bob 2.2.3's hook runner (read in its shipped bundle,
+`resources/app/extensions/bob-code/dist/extension.js`) writes the payload to stdin and closes
+it, for every event. The keys are Claude's: `hook_event_name`, `session_id` (the root task's
+id), `cwd` (the root workspace, with a lower-case drive letter on Windows), and on tool events
+`tool_name`, `tool_input` (the model's raw arguments) and `tool_use_id`. Older notes describe
+`{event, session_id, tool, input, output}`; the activity writer reads both shapes.
+- The edit tools are `write_file`, `apply_diff`, `insert_content` and `search_and_replace`,
+  each with a `path` that Bob resolves against the workspace and expands a leading `~` in. The
+  writer does the same, then stores the path relative to the git root.
+- `spawn_subagent` and `start_subtask` run their own task, but its tool calls fire the
+  parent's hooks with the parent's `session_id` and no sub-agent id. Activity therefore shows
+  such a sub-agent as a branch with no id, which the next `Stop` closes, and marks the session
+  `attribution: false`: its files cannot be told from the parent's.
+- After a compaction, Bob fires `SessionStart` with `source: "compact"`. The writer counts a
+  compaction there; any other Bob `SessionStart` is not recorded, because the first prompt's
+  `UserPromptSubmit` records the session right after it.
+- Bob has no `SessionEnd`, `SubagentStart` or `SubagentStop`. Its settings schema is strict:
+  one unknown event key drops the whole hooks block, so none of those is ever written.
 
 No matcher on `PreToolUse`, deliberately: Bob's tools page already drifts from its own
 changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an
@@ -128,8 +149,9 @@ carries.
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the
 nested file.
 
-**Unverified live.** There is no Bob install on the authoring machine; this is Bob's
-documented contract, with the payload field names assumed to be Claude's. If a field
+**Partly verified.** The payload field names are Claude's: Bob 2.2.3's bundle shows them,
+and a live Activity check on 2026-10-25 recorded a Bob session from them. The gates' own
+verdicts are still Bob's documented contract. If a field
 name differs the gate defers rather than misfires, and the harness still holds through
 the `rules/geneseed.md` preamble — the same behaviour-contract parity every
 non-OpenCode host gets. `/hooks` in Bob Shell 2.0.2+ lists the hooks it loaded and

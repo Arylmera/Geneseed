@@ -24,8 +24,18 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | `PreCompact` | before auto-compaction | `geneseed-hook learn` | captures memory before the transcript is summarised | needs `GENESEED_LLM` |
 | `UserPromptSubmit` | you send a message | `geneseed-hook activity` | records the turn's start for the web console's Activity view; prints nothing | off with `GENESEED_ACTIVITY=off` |
 | `SessionEnd` | the session closes | `geneseed-hook activity` | marks the session ended and archives it | off with `GENESEED_ACTIVITY=off` |
+| `SubagentStart` | a subagent starts | `geneseed-hook activity` | records the subagent as a branch of its session, even one that only reads | off with `GENESEED_ACTIVITY=off` |
 
 Every hook above also feeds the [Activity view](../reference/plugin-activity.md) after it has decided, unless tracking is off: one file per session under `activity/` beside the install. The gates' verdicts never wait on it.
+
+What that file holds for the Activity garden:
+- **Files.** Each changed file is stored relative to the session's git root, with `/` separators. A file outside the root, or a session outside any repo, gets no path (`path: null`) and keeps only its basename, so it never matches a file of the same name inside the repo. A path is never stored absolute. Each file also records who changed it: the session, or the subagent's `agent_id`.
+- **Where the session runs.** `root` is the worktree's git root and `repo` is the main repository's root, so the linked worktrees of one repo can be grouped together. Only the session's own events set them; a subagent working in another worktree does not move them.
+- **Subagents.** `agents` lists each subagent with its type and `running` or `done`.
+- **Turns and context.** `turns` counts your prompts. `context` is the size of the context now, taken from the transcript's last assistant message. The window size is an estimate: 200k, or 1M once the context is past 200k.
+- **Compactions.** `compactions`, `compacted_at` and `context_at_compaction` record each compaction (on `PreCompact`). After a compaction, `context` is unknown (`null`) until the next `Stop` reads it again. Claude Code's `<synthetic>` messages and messages with no input-side tokens never change it.
+
+On Bob, a subagent's files cannot be told apart from its session's files (its hook payloads carry no subagent id), so the session is marked `attribution: false`. A compaction is counted on Bob's `SessionStart` with `source: "compact"`, and there is no context size.
 
 ## What each one does, and what you see
 

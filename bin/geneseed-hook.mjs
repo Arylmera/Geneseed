@@ -118,10 +118,10 @@ async function trackActivity(verb, args) {
     const root = verb === 'learn' ? (args.memory && !args.file ? path.dirname(args.memory) : null)
       : args.root;
     if (!root || process.env.GENESEED_LEARN_CHILD || isatty(0) || !activityOn(root)) return;
-    // `context` never read stdin before this writer, and whether Bob's SessionStart pipes one
-    // and closes it is unverified: a read there could hold the session's start. A Bob session
-    // is first recorded by its first prompt or tool call instead.
-    if (verb === 'context' && args.host === 'bob') return;
+    // `context` never read stdin before this writer. On Bob that read is safe: Bob 2.2.3's hook
+    // runner writes the payload and closes stdin for every event (`stdin.end(JSON.stringify(...))`
+    // in its bundle), so the read returns at once. The writer keeps only a Bob SessionStart that
+    // reports a compaction (`applyHookEvent`).
     const raw = readStdin();
     if (!raw.includes('session_id')) return;
     const { recordActivity } = await import('../js/hosts/activity.mjs');
