@@ -92,7 +92,9 @@ changed for each plugin:
 | throwaway session + `prompt` to distil | `ctx.generate.text({ prompt, model })`: one stateless call |
 | a hook throws to block a tool | a throw is a **defect that fails the whole step**. The guard renames the call instead (see `geneseed-guard.js`) |
 | `@opencode-ai/plugin` `tool()` helper | `@opencode/plugin`; a plain JSON-schema `input` needs no helper |
-| `todo.updated`, session `summary` diffs | no V2 event. The activity cards show no todos or files on V2 |
+| `todo.updated` | no V2 event. The activity cards show no todos on V2 |
+| user-message `summary.diffs` (files touched) | `session.step.ended` / `step.failed` `files`: paths only, so the activity cards show files with no line counts, and a revert never removes one |
+| `session.compacted` | `session.compaction.ended` |
 | tool part carries its name | `session.tool.called` has no name; it rides on `session.tool.input.started` |
 | tools `bash`, `apply_patch`, `task` | renamed `shell`, `patch`, `subagent` (the old ids are aliases). The guard's substring classes cover both spellings; its usage counter takes `subagent` (type under `agent`) beside `task`, since the hook sees the name before alias resolution |
 

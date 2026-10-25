@@ -19,7 +19,7 @@ Every plugin swallows its own errors — none can block or crash a session. Each
 The same files work on OpenCode 1 (1.3.4 or newer) and OpenCode 2. OpenCode 2 rewrote the plugin API, and each plugin carries both halves. You don't need to configure anything. Two differences show on OpenCode 2:
 
 - **A guard block shows up as a failed tool call.** The call never runs. The model gets an error that starts with `[geneseed-guard] blocked:` and gives the reason.
-- **The Activity view shows no todo list or files-touched count.** OpenCode 2 publishes no event for either.
+- **The Activity view shows no todo list, and files touched have no line counts.** OpenCode 2 publishes no todo event. It names the files each step changed, but not how many lines, and an undo does not remove a file from the list.
 
 If a plugin seems silent on OpenCode 2, check that `~/.config/opencode/plugins/` holds the current files. Copies from before this change fail to load with *"Plugin must export a default definition with an id and an effect or setup function"*. Running `geneseed rebuild-all` replaces them.
 

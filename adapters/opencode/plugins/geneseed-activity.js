@@ -14,9 +14,16 @@
 // the reader from ever seeing a torn file. The reader lists an entry whose `pid` is
 // dead or whose `updated_at` is stale as ended, and never deletes it.
 //
-// FLAT: one entry per top-level session. Sub-agent fan-out (subtask parts,
-// parent→children tree) is deferred — child sessions (those with a parentID) and the
-// learn plugin's throwaway `geneseed-*` distil sessions are skipped entirely.
+// ONE CARD PER ROOT SESSION. A child session (one with a parentID: a `task` / `subagent`
+// sub-agent) gets no card of its own; it becomes a row of its root session's `agents`
+// (running while the child is busy, done when it goes idle), and the files it changes fold
+// into the root's `files` with `by` = the child id. The learn plugin's throwaway `geneseed-*`
+// distil sessions are skipped entirely, and so is a child whose parent this process does not
+// track.
+//
+// Snapshot v2 (the Activity garden) adds `files[].path` and `files[].by`, `root` (OpenCode's
+// own worktree), `repo` (its main checkout), `agents`, `turns`, `context` and the compaction
+// trio — see docs/reference/opencode-plugins.md.
 //
 // v1.1 enriches each entry from events/fields it already receives or one `case` away:
 // the current phase (tool/thinking), model, session token+cost totals, turn-elapsed,
@@ -26,7 +33,7 @@
 // swallowed — it never blocks a session. See docs/specs/2026-06-15-live-activity-surface.md
 // and docs/specs/2026-06-18-activity-v1.1-enriched-cards.md.
 
-import fs from "node:fs"
+import fs, { existsSync, statSync, readFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
@@ -127,29 +134,129 @@ function acctTotals(map, msgId, cost, tokens) {
   return { cost: c, tokens: t }
 }
 
-// FileDiff lists -> the entry's files block. Lists sum per file, so one session-wide list
-// passes through unchanged and several per-turn lists become the session's churn. Only
-// {file, additions, deletions} is kept: a FileDiff also carries `patch`, the full diff
-// text, which never goes to disk. An entry without `file` (optional upstream) is dropped.
+// Where a FileDiff's file is, for the garden: OpenCode's own path (relative to the worktree,
+// `/`-separated) when there is a root, else null — as for anything that would leave the root
+// or is absolute (`../`, `/`, a drive, a UNC path). Never an absolute path on disk, and never
+// a basename in `path`, where it would collide with a same-named file at the top of the repo.
+function relPath(file, root) {
+  const p = String(file).replace(/\\/g, "/")
+  if (!root || p.startsWith("/") || /^[A-Za-z]:/.test(p) || p === ".." || p.startsWith("../")) return null
+  return p
+}
+
+// FileDiff lists -> the entry's files block. Lists sum per (OpenCode's raw path, by), so one
+// session-wide list passes through unchanged and several per-turn lists become the session's
+// churn; two files of one name stay two rows even when `path` is null. Only {file, path,
+// additions, deletions, by} goes to disk: a FileDiff also carries `patch`, the full diff
+// text, which never does. An entry without `file` (optional upstream) is dropped. A count
+// upstream does not give (V2's step files) stays null rather than reading as 0.
 // Pure; exported for tests. slimDiff trims a list as it is stored, so no patch text is
-// held in memory for the life of the session either.
-const slimDiff = (d) => ({ file: d?.file, additions: d?.additions, deletions: d?.deletions })
+// held in memory for the life of the session either (`raw` is the merge key, memory only).
+const slimDiff = (d, by = null, root = null) => {
+  const raw = d?.file ? String(d.file).replace(/\\/g, "/") : null
+  return { raw, file: raw && path.posix.basename(raw), path: raw && relPath(raw, root),
+    additions: d?.additions ?? null, deletions: d?.deletions ?? null, by }
+}
+const addCount = (a, b) => (b == null ? a : (a ?? 0) + b)
 function foldDiffs(lists) {
-  const byFile = new Map()
+  const byKey = new Map()
   for (const list of lists) for (const d of list) {
-    if (!d?.file) continue
-    const f = byFile.get(d.file) ?? { file: d.file, additions: 0, deletions: 0 }
-    f.additions += d.additions || 0; f.deletions += d.deletions || 0
-    byFile.set(d.file, f)
+    if (!d?.raw) continue
+    const key = `${d.raw}\0${d.by ?? ""}`
+    const f = byKey.get(key) ?? { file: d.file, path: d.path, additions: null, deletions: null, by: d.by ?? null }
+    f.additions = addCount(f.additions, d.additions); f.deletions = addCount(f.deletions, d.deletions)
+    byKey.set(key, f)
   }
-  const items = [...byFile.values()]
+  const items = [...byKey.values()]
   return {
     count: items.length,
-    additions: items.reduce((n, f) => n + f.additions, 0),
-    deletions: items.reduce((n, f) => n + f.deletions, 0),
+    additions: items.reduce((n, f) => n + (f.additions || 0), 0),
+    deletions: items.reduce((n, f) => n + (f.deletions || 0), 0),
     items,
   }
 }
+
+// The session's own turn diff is a snapshot of the whole worktree, so the turn a sub-agent
+// was launched in (and every later one: a background child outlives its turn) also holds the
+// files that sub-agent changed. Each of the session's own (`by: null`) rows is dropped from a
+// turn list keyed at or after the launch turn of a sub-agent that reported the same file, or
+// each sub-agent edit would be drawn twice; a parent edit from an earlier turn stays the
+// parent's. `turns` is Map(key -> slim rows), `launchedIn` Map(child sid -> the parent's
+// user-message id at launch, null when none was seen). Turn order is id order: OpenCode ids
+// ascend, and V2's per-step keys are `files:<assistantMessageID>`, which sort after the
+// prompt that started their turn. Pure; returns the lists to fold.
+function ownRowsDeduped(turns, launchedIn) {
+  const since = new Map()   // raw path -> the earliest launch turn of a child that reported it
+  for (const list of turns.values()) for (const d of list) {
+    if (d.by == null || !launchedIn.has(d.by)) continue
+    const at = launchedIn.get(d.by) ?? ""
+    if (!since.has(d.raw) || at < since.get(d.raw)) since.set(d.raw, at)
+  }
+  const order = (key) => String(key).replace(/^files:/, "")
+  return [...turns].map(([key, list]) => list.filter((d) =>
+    d.by != null || !since.has(d.raw) || order(key) < since.get(d.raw)))
+}
+
+// The fs-only readers below are twins of js/hosts/gitref.mjs (gitRootOf, gitDirOf,
+// mainWorktreeOf): a plugin is copied whole into an install and cannot import js/.
+// tests/plugins/activity.test.mjs compares each with its original, quotes, semicolons and
+// layout aside; change one, change both.
+function gitRootOf(cwd) {
+  try {
+    let dir = path.resolve(cwd)
+    for (;;) {
+      if (existsSync(path.join(dir, ".git"))) return dir
+      const up = path.dirname(dir)
+      if (up === dir) return null
+      dir = up
+    }
+  } catch {
+    return null
+  }
+}
+function gitDirOf(root) {
+  const dotgit = path.join(root, ".git")
+  if (statSync(dotgit).isFile()) {
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
+    if (!m) throw new Error(`${dotgit} does not name a gitdir`)
+    return path.resolve(root, m[1])
+  }
+  return dotgit
+}
+function mainWorktreeOf(cwd) {
+  try {
+    const root = gitRootOf(cwd)
+    if (!root || !statSync(path.join(root, ".git")).isFile()) return null
+    const gitdir = gitDirOf(root)
+    const common = path.resolve(gitdir, readFileSync(path.join(gitdir, "commondir"), "utf8").trim())
+    return path.basename(common) === ".git" ? path.dirname(common) : null
+  } catch {
+    return null
+  }
+}
+
+// `root` from OpenCode's own worktree: V1 passes the checkout's top level (a linked worktree
+// is its own root), or "/" for a project outside a repository — as is the drive root a
+// global project resolves to, so a filesystem root is no root. `repo` is the main checkout,
+// the root itself on a main checkout.
+function rootsOf(worktree) {
+  if (typeof worktree !== "string" || !worktree) return { root: null, repo: null }
+  const root = path.resolve(worktree)
+  if (root === path.parse(root).root) return { root: null, repo: null }
+  return { root, repo: mainWorktreeOf(root) ?? root }
+}
+
+// The context-window figure from an assistant message's tokens: input + cache, as OpenCode
+// counts its own context (`input` already excludes the cache). The event carries no window,
+// so it is the estimate every writer shares: 200 000, or 1 000 000 past that. null for an
+// update with no tokens yet (a new message's first update), which must not reset the figure.
+function contextOf(tokens) {
+  const used = (tokens?.input || 0) + (tokens?.cache?.read || 0) + (tokens?.cache?.write || 0)
+  return used > 0 ? { used, window: used > 200000 ? 1000000 : 200000 } : null
+}
+
+// The snapshot v2 keys: set as given (null included) whenever an event carries them.
+const V2_KEYS = ["root", "repo", "agents", "turns", "context", "compactions", "compacted_at", "context_at_compaction"]
 
 // Pure reducer: prev entry (or null) + an extracted event → next entry, or null to
 // delete the file. The hook does the IO + derivation; this just merges. Truthy-set
@@ -173,6 +280,7 @@ function applyEvent(prev, ev) {
   if ("turn_started_at" in ev) next.turn_started_at = ev.turn_started_at
   if ("error" in ev) next.error = ev.error
   if ("blocked_on" in ev) next.blocked_on = ev.blocked_on
+  for (const k of V2_KEYS) if (k in ev) next[k] = ev[k]
   const st = ev.status || nextStatus(ev.type, ev.statusType)
   if (st) next.status = st
   return next
@@ -208,9 +316,13 @@ function removeDetail(sid) { try { fs.unlinkSync(detailPath(sid)) } catch {} }
 
 // --- plugin ------------------------------------------------------------------
 
-export const GeneseedActivity = async () => {
+export const GeneseedActivity = async (input) => {
+  const { root, repo } = rootsOf(input?.worktree)   // once: one OpenCode instance, one worktree
   const owned = new Map()    // sid -> entry (top-level sessions this process tracks)
-  const skipped = new Set()  // sid -> child / geneseed throwaway, ignored from here on
+  const skipped = new Set()  // sid -> geneseed throwaway / orphan child, ignored from here on
+  const childOf = new Map()  // child sid -> the owned root session it is a sub-agent of
+  const agentRows = new Map() // owned sid -> Map(child sid -> {id, type, status, started})
+  const launchedIn = new Map() // child sid -> its root session's user-message id at launch (see ownRowsDeduped)
   const accts = new Map()    // sid -> Map(messageId -> {cost,tokens}) — token/cost accumulation
   const pending = new Map()  // sid -> Set(permissionId) — open permission prompts (→ blocked)
   const timelines = new Map() // sid -> Map(key -> step record) — the v1.2 detail ring (insertion-ordered)
@@ -223,8 +335,13 @@ export const GeneseedActivity = async () => {
   // keyed by message id so a streaming assistant turn updates in place (not per delta).
   const detFor = (sid) => {
     let d = details.get(sid)
-    if (!d) { d = { files: null, todos: null, lastMs: 0, convo: new Map(), turnDiffs: new Map(), wideDiff: null }; details.set(sid, d) }
+    if (!d) { d = { files: null, todos: null, lastMs: 0, convo: new Map(), turnDiffs: new Map(), wideDiff: null, turnIds: new Set(), lastUser: null }; details.set(sid, d) }
     return d
+  }
+  // The session's latest user-message id (ids ascend; an older message can re-fire later).
+  const sawUser = (sid, id) => {
+    const d = detFor(sid)
+    if (id && (!d.lastUser || id > d.lastUser)) d.lastUser = id
   }
   // Files touched + churn. Where each OpenCode version puts them (session/summary.ts):
   // - 1.19.x: only on the USER message, `summary.diffs`, recomputed after every step of
@@ -236,21 +353,41 @@ export const GeneseedActivity = async () => {
   // baseline). A session-wide list (session.diff, or a session summary carrying diffs) is
   // only the fallback while no turn has reported: two sources would make the card flicker,
   // and 1.19's revert sends a session.diff that holds the range about to be undone.
+  // A sub-agent's turns land in its root session's map with `by` = the child id (message ids
+  // are unique across sessions). V2 has no turn diff: each step's files ride a synthetic
+  // per-step list (toV1Events), keyed the same way.
   // shortcut: summarize is forked upstream, so an older recompute can land after a newer
   // one and replace it; fine for a live card, upgrade if a turn's numbers must be exact.
   const setFiles = (sid, ev) => {
     const d = detFor(sid)
-    const files = foldDiffs(d.turnDiffs.size ? d.turnDiffs.values() : [d.wideDiff ?? []])
+    const files = foldDiffs(d.turnDiffs.size ? ownRowsDeduped(d.turnDiffs, launchedIn) : [d.wideDiff ?? []])
     ev.files = { ...files, items: files.items.slice(0, FILE_CAP) }   // card: capped
     d.files = files                                                 // detail: uncapped
   }
   const wideDiff = (sid, list) => {
     if (!Array.isArray(list) || !owned.has(sid)) return false
-    detFor(sid).wideDiff = list.map(slimDiff)
+    detFor(sid).wideDiff = list.map((d) => slimDiff(d, null, root))
     return !detFor(sid).turnDiffs.size   // write only when it is the source in force
+  }
+  // A turn's diff list (user message `id` of session `owner`; `by` the child that ran it).
+  const turnDiff = (owner, id, list, by) => {
+    detFor(owner).turnDiffs.set(id, list.map((d) => slimDiff(d, by, root)))
+  }
+  const agentsOf = (sid) => { let m = agentRows.get(sid); if (!m) { m = new Map(); agentRows.set(sid, m) } return m }
+  // Create or update a sub-agent row of `owner`; writes only on a change.
+  const setAgent = (owner, id, patch) => {
+    const m = agentsOf(owner)
+    const prev = m.get(id)
+    const row = { ...(prev ?? { id, type: null, status: "running", started: Math.floor(Date.now() / 1000) }), ...patch }
+    if (prev && prev.status === row.status && prev.type === row.type) return
+    m.set(id, row)
+    persist(owner, { type: "agent", agents: [...m.values()] })
+    flushDetail(owner, true)
   }
   const forget = (sid) => {
     owned.delete(sid); accts.delete(sid); pending.delete(sid); timelines.delete(sid); details.delete(sid)
+    agentRows.delete(sid)
+    for (const [child, owner] of childOf) if (owner === sid) { childOf.delete(child); launchedIn.delete(child) }
     removeEntry(sid); removeDetail(sid)
   }
 
@@ -278,7 +415,7 @@ export const GeneseedActivity = async () => {
       const now = Date.now()
       if (!force && now - d.lastMs < DETAIL_THROTTLE_MS) return
       d.lastMs = now
-      writeJson(detailPath(sid), { files: d.files, todos: d.todos, conversation: [...d.convo.values()], timeline: [...tlFor(sid).values()] })
+      writeJson(detailPath(sid), { files: d.files, todos: d.todos, agents: [...agentsOf(sid).values()], conversation: [...d.convo.values()], timeline: [...tlFor(sid).values()] })
     } catch (err) { log(`detail ${sid} failed: ${err?.message ?? err}`) }
   }
   // Record a message part into the timeline. Returns true when it should force a flush.
@@ -308,8 +445,44 @@ export const GeneseedActivity = async () => {
     }
   }
 
-  const isThrowaway = (title, parentID) =>
-    !!parentID || (typeof title === "string" && title.startsWith("geneseed-"))
+  const isThrowaway = (title) => typeof title === "string" && title.startsWith("geneseed-")
+
+  // A sub-agent's events, routed to its root session `owner`. Only what the parent's card
+  // shows is read: the child's busy/idle (its branch's status — not the parent's `task` part,
+  // which with background=true completes while the child still runs) and its turn diffs.
+  const onChild = (event, props, sid, owner) => {
+    if (!owned.has(owner)) return
+    switch (event.type) {
+      case "session.status":
+        setAgent(owner, sid, { status: props.status?.type === "idle" ? "done" : "running" })
+        return
+      case "session.idle":
+      case "session.deleted":
+        setAgent(owner, sid, { status: "done" })
+        if (event.type === "session.deleted") childOf.delete(sid)
+        return
+      case "message.updated": {
+        const info = props.info ?? {}
+        if (info.role !== "user" || !info.id || !Array.isArray(info.summary?.diffs)) return
+        turnDiff(owner, info.id, info.summary.diffs, sid)
+        const ev = { type: "child.diff" }
+        setFiles(owner, ev)
+        persist(owner, ev)
+        flushDetail(owner, true)
+        return
+      }
+      case "message.removed": {
+        if (!detFor(owner).turnDiffs.delete(props.messageID)) return
+        const ev = { type: "child.diff" }
+        setFiles(owner, ev)
+        persist(owner, ev)
+        flushDetail(owner, true)
+        return
+      }
+      default:
+        return
+    }
+  }
 
   const persist = (sid, ev) => {
     try {
@@ -336,21 +509,36 @@ export const GeneseedActivity = async () => {
       const props = event.properties ?? event.payload ?? {}
       const sid = sidOf(props)
       if (!sid || skipped.has(sid)) return
+      const owner = childOf.get(sid)
+      if (owner) { onChild(event, props, sid, owner); return }
 
       switch (event.type) {
         case "session.created":
         case "session.updated": {
           const info = props.info ?? {}
-          // A child/subagent session or a geneseed-* distil session is background
-          // machinery — drop it (and any file we already wrote when its title was
-          // still blank). Sub-agent fan-out is the deferred tree.
-          if (isThrowaway(info.title, info.parentID ?? info.parentId)) {
+          // A geneseed-* distil session is background machinery — drop it (and any file we
+          // already wrote when its title was still blank).
+          if (isThrowaway(info.title)) {
             skipped.add(sid)
             if (owned.has(sid)) forget(sid)
             return
           }
+          // A child session is a sub-agent of the root session its parent belongs to; one
+          // whose parent this process does not track has nowhere to go.
+          const parentID = info.parentID ?? info.parentId
+          if (parentID) {
+            const top = childOf.get(parentID) ?? (owned.has(parentID) ? parentID : null)
+            if (!top) { skipped.add(sid); return }
+            childOf.set(sid, top)
+            launchedIn.set(sid, detFor(top).lastUser)
+            setAgent(top, sid, { type: info.agent || null, status: "running",
+              started: Math.floor((info.time?.created || Date.now()) / 1000) })
+            return
+          }
           if (event.type !== "session.created" && !owned.has(sid)) return
           const ev = { type: event.type, title: info.title ?? null, cwd: info.directory }
+          if (!owned.has(sid)) Object.assign(ev, { root, repo, agents: [], turns: 0, context: null,
+            compactions: 0, compacted_at: null, context_at_compaction: null })
           // A session summary is a files source only when it carries diffs (see setFiles):
           // 1.19 sends it zeroed on every step, which must not wipe the card.
           const wide = wideDiff(sid, info.summary?.diffs)
@@ -388,11 +576,12 @@ export const GeneseedActivity = async () => {
           const info = props.info ?? {}
           if (info.role !== "assistant") {   // user msg → bump busy, and fold its turn's diffs
             const ev = { type: event.type }
+            if (info.role === "user") sawUser(sid, info.id)
             const diffs = info.summary?.diffs
             // No diffs array (the message as first created) leaves the turn as it was;
             // an empty one is real: that turn has changed nothing so far.
             if (info.role === "user" && info.id && Array.isArray(diffs)) {
-              detFor(sid).turnDiffs.set(info.id, diffs.map(slimDiff))
+              turnDiff(sid, info.id, diffs, null)
               setFiles(sid, ev)
             }
             persist(sid, ev)
@@ -413,7 +602,20 @@ export const GeneseedActivity = async () => {
           }
           if (info.error) ev.error = errStr(info.error)
           else if (isNewTurn) ev.error = null   // a fresh turn clears a stale error
+          // The compaction summary's input is the conversation it replaces, not the context now.
+          const context = info.summary ? null : contextOf(info.tokens)
+          if (context) ev.context = context
           persist(sid, ev)
+          return
+        }
+        case "session.compacted": {
+          // Counted, stamped, and the context it cut from kept; the context now is unknown until
+          // the next assistant message. No status: a compaction runs inside a busy turn and must
+          // not show the session idle.
+          const prev = owned.get(sid)
+          if (!prev) return
+          persist(sid, { type: event.type, context: null, compactions: (prev.compactions || 0) + 1,
+            compacted_at: Math.floor(Date.now() / 1000), context_at_compaction: prev.context?.used ?? null })
           return
         }
         case "message.removed": {
@@ -485,6 +687,18 @@ export const GeneseedActivity = async () => {
         const sid = input?.sessionID
         if (!sid || skipped.has(sid) || !owned.has(sid)) return
         const parts = output?.parts || []
+        const id = output?.message?.id ?? input.messageID
+        sawUser(sid, id)
+        // `turns`: one per user prompt. chat.message fires once per prompt; the same id seen
+        // twice is one turn, and a prompt without an id still counts. A prompt made only of
+        // synthetic parts is not the user's: a background task hands its result back that way
+        // (v1.19.4 TaskTool.injectBackgroundResult).
+        if (!(parts.length && parts.every((p) => p?.synthetic))) {
+          const ids = detFor(sid).turnIds
+          const n = ids.size
+          ids.add(id ?? Symbol("prompt"))
+          if (ids.size !== n) persist(sid, { type: "chat.message", turns: ids.size })
+        }
         const text = parts.filter((p) => p?.type === "text" && p.text).map((p) => p.text).join(" ").trim()
         if (!text) return
         pushTurn(sid, input.messageID, "user", text)
@@ -508,8 +722,10 @@ Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, fol
 // execution, a message as steps, tool calls as called/success/failed), but every fact the
 // cards show is still in it. Rather than a second reducer, `toV1Events` translates each
 // V2 event into the V1 event(s) the handler above already reduces, so both majors write
-// the same files. Not carried: todos (V2 publishes no todo event) and files-touched (the
-// V1 user message's summary.diffs, see setFiles, has no V2 event).
+// the same files. Files touched come from each step's `files` (RelativePath[], no line
+// counts), carried as a synthetic per-step user-message diff list so they fold like V1's turn
+// diffs, a sub-agent's included. Not carried: todos (V2 publishes no todo event), line counts
+// (null), and a revert (the session.revert.* events are not read, so the list never shrinks).
 
 // A V2 SessionError ({ type, message }) in the V1 error union errStr reads.
 const v1Error = (e) => (e ? { name: e.type, data: { message: e.message || e.type } } : undefined)
@@ -524,10 +740,15 @@ function toV1Events(ev, tools) {
   const t = typeof ev.created === "number" ? ev.created : Date.now()
   const msg = (info) => ({ type: "message.updated", properties: { info: { role: "assistant", sessionID, ...info } } })
   const part = (p) => ({ type: "message.part.updated", properties: { part: { sessionID, ...p } } })
+  const stepFiles = () => (Array.isArray(d.files) ? [{ type: "message.updated", properties: { info: {
+    role: "user", sessionID, id: `files:${d.assistantMessageID}`,
+    summary: { diffs: d.files.map((file) => ({ file, additions: null, deletions: null })) } } } }] : [])
   switch (ev.type) {
     case "session.created":
       return [{ type: "session.created", properties: { info: {
-        id: sessionID, title: d.title, parentID: d.parentID, directory: d.location?.directory } } }]
+        id: sessionID, title: d.title, parentID: d.parentID, agent: d.agent, directory: d.location?.directory } } }]
+    case "session.compaction.ended":
+      return [{ type: "session.compacted", properties: { sessionID } }]
     case "session.renamed":
       return [{ type: "session.updated", properties: { info: { id: sessionID, title: d.title } } }]
     case "session.deleted":
@@ -546,9 +767,9 @@ function toV1Events(ev, tools) {
     case "session.step.started":
       return [msg({ id: d.assistantMessageID, mode: d.agent, modelID: d.model?.id, time: { created: t } })]
     case "session.step.ended":
-      return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, time: { completed: t } })]
+      return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, time: { completed: t } }), ...stepFiles()]
     case "session.step.failed":
-      return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, error: v1Error(d.error), time: { completed: t } })]
+      return [msg({ id: d.assistantMessageID, cost: d.cost, tokens: d.tokens, error: v1Error(d.error), time: { completed: t } }), ...stepFiles()]
     // The name rides only on `input.started`; `called` carries the input but no name.
     case "session.tool.input.started":
       tools.set(d.id, { name: d.name, start: undefined })
@@ -583,7 +804,13 @@ function toV1Events(ev, tools) {
 }
 
 async function setupV2(ctx) {
-  const hooks = await GeneseedActivity()
+  // V2 passes no worktree path (ctx.worktree is the worktree API), so the root is the
+  // checkout's top level above the instance directory, read off disk like V1's input. Step
+  // files are relative to the same tree (core snapshot.ts: git.repo.discover on
+  // location.project.directory, which project.ts resolves from the nearest `.git` above the
+  // directory), but OpenCode takes its realPath: through a symlinked path the two spellings
+  // of the root differ, while the relative file paths do not.
+  const hooks = await GeneseedActivity({ worktree: gitRootOf(ctx?.location?.directory) })
   const tools = new Map()
   // The user's prompt, as V1's chat.message hook received it.
   await ctx.session.hook("prompt", async (event) => {
