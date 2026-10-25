@@ -15,7 +15,7 @@ import path from 'node:path';
 
 import { GLOBAL_MANIFEST, resolvePath } from '../hosts/hosts.mjs';
 import { doctrinesForBuild, excludedRulesOfDir, readMaybe } from '../hosts/installs.mjs';
-import { frontmatter } from '../hosts/memory-files.mjs';
+import { frontmatter, readFacts } from '../hosts/memory-files.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
 } from '../inspect/inventory.mjs';
@@ -164,9 +164,15 @@ function globMd(dir) {
 /** Filename without its extension — single owner, imported by `js/web/activity.mjs` too. */
 export const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
 
+/**
+ * Each fact row carries the `topic` the store files it under, so the console can group the list.
+ * Read through `readFacts`, the store's own reader, so the slug rule (`topic:`, else `type:`,
+ * else `misc`) has one home. MEMORY and README are not facts there, so their rows have none.
+ */
 export function memoryItems(state) {
   const d = memoryDir(state);
   if (!isDir(d)) return [];
+  const facts = readFacts(d);
   return globMd(d).map((n) => {
     const p = path.join(d, n);
     const [fm] = frontmatter(readMaybe(p) ?? '');
@@ -175,6 +181,7 @@ export function memoryItems(state) {
       name: stem,
       title: fm.has('name') ? fm.get('name') : stem,
       desc: fm.has('description') ? fm.get('description') : '',
+      topic: facts.get(stem)?.topic,
       source: resolvePath(p),
     };
   });

@@ -90,7 +90,7 @@ const POSTURE_BLURBS = {
 /** `_harness_setup.MODE_BLURBS`. */
 const MODE_BLURBS = {
   direct: 'the agent works every task itself, turn by turn (default)',
-  foreman: 'triages tasks, spawns pipelines for substantial work',
+  foreman: 'triages tasks, hands blocking work to task workers',
 };
 
 /**

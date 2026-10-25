@@ -417,7 +417,7 @@ test('the wizard job really walks the wizard', () => {
   for (const line of [
     'pirate — high-seas crew   (default)',
     'artisan — peer with toolsmith reflexes — terminal-first   (default)',
-    'foreman — triages tasks, spawns pipelines for substantial work   (default)',
+    'foreman — triages tasks, hands blocking work to task workers   (default)',
     'claude-global — Claude Code global config dir',
     "full — Full — every law's complete text inlined",
     // The packs gate against an install that carries all four: `all` is pre-selected, its option

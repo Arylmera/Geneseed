@@ -177,7 +177,7 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
     'catalog',
   )
   const facts = countOf(memory)
-  // The topics come from the map, not the catalog: a fact entry carries no topic field. Keyed
+  // The topics come from the map, the store's own tally (the rows' `topic` groups the list). Keyed
   // on the fact count, so a promote or a forget in the pane (both rewrite the map) refetches it.
   const { data: map } = useAsync(
     () => (tab === 'memory' ? soft(api.item('memory', 'MEMORY')) : Promise.resolve(null)),

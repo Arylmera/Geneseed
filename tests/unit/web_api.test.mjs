@@ -473,6 +473,31 @@ test('a file-backed item carries the resolved source path', () => {
   } finally { sb.cleanup(); }
 });
 
+// The console groups the memory list by topic, so each fact row carries the topic the store
+// files it under: `topic:`, else `type:` (Claude Code's own shape nests it under `metadata:`),
+// else `misc`, slugged to `[a-z0-9-]`. The store's own MEMORY and README rows are not facts and
+// carry no topic, which keeps them ungrouped.
+test('a memory row carries the topic the store files it under', () => {
+  const sb = makeSandbox();
+  try {
+    const mem = path.join(sb.path, 'memory');
+    fs.mkdirSync(mem);
+    const write = (n, fm) => fs.writeFileSync(path.join(mem, `${n}.md`), `---\n${fm}\n---\nbody\n`);
+    write('a-topic', 'name: A\ntopic: Web UI\ntype: project');
+    write('b-type', 'name: B\nmetadata:\n  type: feedback');
+    write('c-none', 'name: C\ndescription: none');
+    write('d-empty', 'name: D\ntopic: ---');
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'), '# Memory Index\n');
+    fs.writeFileSync(path.join(mem, 'README.md'), '# Readme\n');
+    const st = webState('neutral', sb.path);
+    const topics = Object.fromEntries(apiCatalog(st, 'memory').items.map((i) => [i.name, i.topic]));
+    assert.deepEqual(topics, {
+      'a-topic': 'web-ui', 'b-type': 'feedback', 'c-none': 'misc', 'd-empty': 'misc',
+      MEMORY: undefined, README: undefined,
+    });
+  } finally { sb.cleanup(); }
+});
+
 // GET /api/item NEEDS NO TOKEN, so a separator, a `..`, or a drive colon in the name segment was
 // an arbitrary-file read: `config` joined `state.target / name` raw, and memory/notebook resolved
 // the `..` through the appended `.md`. Every flat-name type must 404 rather than resolve.
