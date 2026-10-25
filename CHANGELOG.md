@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **OpenCode sessions show their changed files on Activity.** OpenCode 1.x never fills the session summary's diffs; the per-turn diffs sit on the user message (`message.updated`), and a zeroed summary on every step wiped the list. Files now fold from each turn (a repeat of the same turn replaces it, a new turn adds), `session.diff` stays the fallback for 1.3, and an `/undo` (`message.removed`) drops the undone turn.
+
 ## [4.25.1] — 2026-10-25
 
 Patch: Activity, session detail and Doctor use the full width.

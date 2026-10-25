@@ -188,10 +188,11 @@ test("event hook: v1.1 enrichment on disk (phase, tokens/cost, files, todos, blo
       state: { status: "running", title: "Editing Activity.jsx", input: {}, time: { start: 1 } } } })
     assert.equal(read().phase, "Editing Activity.jsx")
 
-    // session summary → files touched + churn
+    // a session summary carrying diffs → files touched + churn, counted from the diff list
+    // itself (its own files/additions/deletions counts are not read: one writer per value)
     await fire("session.updated", { info: { id: "s", title: "t", directory: "/repo",
       summary: { files: 2, additions: 30, deletions: 5, diffs: [{ file: "a.js", additions: 20, deletions: 2, before: "", after: "" }] } } })
-    e = read(); assert.equal(e.files.count, 2); assert.equal(e.files.additions, 30); assert.equal(e.files.items[0].file, "a.js")
+    e = read(); assert.equal(e.files.count, 1); assert.equal(e.files.additions, 20); assert.equal(e.files.items[0].file, "a.js")
 
     // todos → done/total
     await fire("todo.updated", { sessionID: "s", todos: [
@@ -215,6 +216,117 @@ test("event hook: v1.1 enrichment on disk (phase, tokens/cost, files, todos, blo
     // idle stops the clock and clears the phase
     await fire("session.idle", { sessionID: "s" })
     e = read(); assert.equal(e.status, "waiting-input"); assert.equal(e.phase, null); assert.equal(e.turn_started_at, null)
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+// Integration: files touched on OpenCode 1.19.x. The session summary there is always
+// {additions:0, deletions:0, files:0} and session.diff always `diff: []`
+// (session/summary.ts at v1.19.4); the real diffs ride the USER message's
+// summary.diffs, recomputed after every step of that turn from its first step-start to
+// its latest step-finish snapshot. So the same user message replaces its diffs (the turn
+// grew), a new one adds per file (a new turn, a new baseline), and the zeroed session
+// events change nothing. Each row states what the card must show after that event.
+test("event hook: files from user-message summary.diffs (OpenCode 1.19 shape)", async () => {
+  const tmp = makeSandbox("gs-act-diffs-").path
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
+  const detail = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8"))
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    const user = (id, summary) => fire("message.updated", { sessionID: "s", info: {
+      id, sessionID: "s", role: "user", time: { created: 1 }, agent: "build",
+      model: { providerID: "p", modelID: "m" }, ...(summary ? { summary } : {}) } })
+    const diff = (file, additions, deletions) => ({ file, additions, deletions, patch: "@@ -1 +1 @@", status: "modified" })
+    const zeroed = async () => {
+      await fire("session.updated", { info: { id: "s", title: "t", directory: "/repo", summary: { additions: 0, deletions: 0, files: 0 } } })
+      await fire("session.diff", { sessionID: "s", diff: [] })
+    }
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+
+    const rows = [
+      // [what happens, the event, files.count, additions, deletions, [file, additions, deletions] per item]
+      ["u1 is created without a summary: nothing to show yet", () => user("u1"), undefined],
+      ["u1 step 1: zeroed session + empty diff list", async () => { await zeroed(); await user("u1", { diffs: [] }) }, 0, 0, 0, []],
+      ["u1 after step 1: one file", async () => { await zeroed(); await user("u1", { diffs: [diff("src/a.js", 3, 1)] }) }, 1, 3, 1, [["src/a.js", 3, 1]]],
+      ["u1 after step 2: the turn grew, so it replaces", async () => { await zeroed(); await user("u1", { diffs: [diff("src/a.js", 5, 1)] }) }, 1, 5, 1, [["src/a.js", 5, 1]]],
+      ["u2 step 1: an empty new turn keeps u1", async () => { await zeroed(); await user("u2", { diffs: [] }) }, 1, 5, 1, [["src/a.js", 5, 1]]],
+      ["u2 after step 1: same file adds, new file joins", async () => { await zeroed(); await user("u2", { diffs: [diff("src/a.js", 2, 2), diff("b.md", 4, 0)] }) }, 2, 11, 3, [["src/a.js", 7, 3], ["b.md", 4, 0]]],
+      ["the zeroed session events alone change nothing", zeroed, 2, 11, 3, [["src/a.js", 7, 3], ["b.md", 4, 0]]],
+      ["a user message without a diffs array keeps its turn", () => user("u2", { title: "x" }), 2, 11, 3, [["src/a.js", 7, 3], ["b.md", 4, 0]]],
+      // /undo: SessionRevert.cleanup removes the reverted messages, so their turns drop out
+      ["/undo removes u2: its diffs drop out", () => fire("message.removed", { sessionID: "s", messageID: "u2" }), 1, 5, 1, [["src/a.js", 5, 1]]],
+      ["/undo removes u1 too: no turn left, nothing touched", () => fire("message.removed", { sessionID: "s", messageID: "u1" }), 0, 0, 0, []],
+    ]
+    for (const [what, act, count, additions, deletions, items] of rows) {
+      await act()
+      const f = read().files
+      if (count === undefined) { assert.equal(f, undefined, what); continue }
+      assert.equal(f.count, count, what)
+      assert.equal(f.additions, additions, what)
+      assert.equal(f.deletions, deletions, what)
+      const want = items.map(([file, a, d]) => ({ file, additions: a, deletions: d }))
+      assert.deepEqual(f.items, want, what)              // exactly {file, additions, deletions}: no patch on disk
+      assert.deepEqual(detail().files.items, want, what)
+    }
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+// Integration: a turn reported with no session-wide list ever seen, then undone. With no
+// turn left and no fallback list, the card shows nothing touched (and the hook must not throw).
+test("event hook: removing the last turn with no session.diff ever seen", async () => {
+  const tmp = makeSandbox("gs-act-rm-").path
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+    await fire("message.updated", { info: { id: "u1", sessionID: "s", role: "user", summary: { diffs: [{ file: "a.js", additions: 1, deletions: 0 }] } } })
+    assert.equal(read().files.count, 1)
+    await fire("message.removed", { sessionID: "s", messageID: "u1" })
+    assert.deepEqual(read().files, { count: 0, additions: 0, deletions: 0, items: [] })
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+// Integration: OpenCode 1.3.x sends the session-wide diff on session.diff. It is the
+// fallback source, used only while no user-message diffs have arrived for the session.
+test("event hook: session.diff is the fallback files source (OpenCode 1.3 shape)", async () => {
+  const tmp = makeSandbox("gs-act-sdiff-").path
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
+  try {
+    const hooks = await GeneseedActivity()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+    await fire("session.diff", { sessionID: "s", diff: [{ file: "a.js", additions: 9, deletions: 1, patch: "x" }] })
+    assert.deepEqual(read().files, { count: 1, additions: 9, deletions: 1, items: [{ file: "a.js", additions: 9, deletions: 1 }] })
+    // an empty session-wide list is the truth (every change undone), not a gap
+    await fire("session.diff", { sessionID: "s", diff: [] })
+    assert.deepEqual(read().files, { count: 0, additions: 0, deletions: 0, items: [] })
+    await fire("session.diff", { sessionID: "s", diff: [{ file: "a.js", additions: 9, deletions: 1, patch: "x" }] })
+    // a session summary without diffs (1.3 counts only, 1.19 zeroed) is no source at all
+    await fire("session.updated", { info: { id: "s", title: "t", directory: "/repo", summary: { additions: 0, deletions: 0, files: 0 } } })
+    assert.equal(read().files.count, 1)
+    // once a user message carries diffs, they win over the session-wide list
+    await fire("message.updated", { info: { id: "u1", sessionID: "s", role: "user", summary: { diffs: [{ file: "b.js", additions: 2, deletions: 0 }] } } })
+    await fire("session.diff", { sessionID: "s", diff: [{ file: "a.js", additions: 9, deletions: 1 }] })
+    assert.deepEqual(read().files, { count: 1, additions: 2, deletions: 0, items: [{ file: "b.js", additions: 2, deletions: 0 }] })
   } finally {
     if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
     else process.env.OPENCODE_CONFIG_DIR = saved
