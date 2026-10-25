@@ -389,3 +389,139 @@ describe('Activity page: Today strip and feed', () => {
     })
   })
 })
+
+// Sessions that are no longer live: dead in the directory, or swept into activity/archive/.
+// The server sends them newest first in `ended`; the page lists them under the live ones.
+describe('Activity page: ended sessions', () => {
+  const now = Date.now() / 1000
+  const body = (ended) => ({
+    enabled: true,
+    activity: [{ session_id: 'live1', title: 'still going', status: 'busy', updated_at: now }],
+    ended,
+  })
+
+  it('lists the ended sessions, newest first, each a link to its detail page', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp(
+          body([
+            {
+              session_id: 'old b',
+              title: 'newer one',
+              status: 'busy',
+              updated_at: now - 60,
+              ended: true,
+            },
+            {
+              session_id: 'old_a',
+              title: 'older one',
+              status: 'idle',
+              updated_at: now - 3600,
+              ended: true,
+            },
+          ]),
+        ),
+      ),
+    )
+    render(<Activity />)
+    const section = (await screen.findByRole('heading', { name: 'Recently ended' })).closest(
+      'section',
+    )
+    const links = within(section).getAllByRole('link')
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '#/activity/old%20b',
+      '#/activity/old_a',
+    ])
+    expect(within(links[0]).getByText('newer one')).toBeTruthy()
+    // An ended session is not "working", whatever status its last snapshot carried.
+    expect(within(links[0]).getByText('ended')).toBeTruthy()
+    expect(within(links[0]).queryByText('working')).toBeNull()
+    // The live card stays outside the ended section.
+    expect(within(section).queryByText('still going')).toBeNull()
+    expect(screen.getByText('still going')).toBeTruthy()
+  })
+
+  it('renders no ended section when `ended` is empty', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body([]))))
+    render(<Activity />)
+    await screen.findByText('still going')
+    expect(screen.queryByRole('heading', { name: 'Recently ended' })).toBeNull()
+  })
+
+  // History must not push the feed off the page: past five rows the list folds behind a button.
+  it('folds a long ended list to five rows behind "Show all"', async () => {
+    const six = [1, 2, 3, 4, 5, 6].map((n) => ({
+      session_id: `e${n}`,
+      title: `gone ${n}`,
+      updated_at: now - n * 60,
+      ended: true,
+    }))
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body(six))))
+    render(<Activity />)
+    const section = (await screen.findByRole('heading', { name: 'Recently ended' })).closest(
+      'section',
+    )
+    expect(within(section).getAllByRole('link')).toHaveLength(5)
+    expect(within(section).queryByText('gone 6')).toBeNull()
+    fireEvent.click(within(section).getByRole('button', { name: 'Show all 6' }))
+    expect(within(section).getAllByRole('link')).toHaveLength(6)
+    expect(within(section).getByRole('button', { name: 'Show fewer' })).toBeTruthy()
+  })
+
+  const one = [
+    { session_id: 'gone1', title: 'finished', host: 'claude', updated_at: now - 60, ended: true },
+  ]
+  const heading = () => screen.queryByRole('heading', { name: 'Recently ended' })
+
+  // Nothing ended waits on you: the "Needs you" chip hides the section.
+  it('hides the ended section under "Needs you"', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body(one))))
+    render(<Activity />)
+    await screen.findByRole('heading', { name: 'Recently ended' })
+    fireEvent.click(screen.getByRole('button', { name: 'Needs you' }))
+    expect(heading()).toBeNull()
+  })
+
+  // Tracking off hides it even if an answer still carries ended sessions.
+  it('hides the ended section when tracking is off', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ ...body(one), enabled: false })))
+    render(<Activity />)
+    await screen.findByText('Live sessions are off')
+    expect(heading()).toBeNull()
+  })
+
+  // The host filter narrows the ended rows like the live ones, and offers their hosts.
+  it('narrows the ended rows by host', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body(one))))
+    render(<Activity />)
+    await screen.findByRole('heading', { name: 'Recently ended' })
+    const host = screen.getByLabelText('Host')
+    expect([...host.options].map((o) => o.value)).toEqual(['', 'claude'])
+    fireEvent.change(host, { target: { value: 'claude' } })
+    expect(screen.getByText('finished')).toBeTruthy()
+  })
+
+  it('drops the ended rows another host owns', async () => {
+    window.history.replaceState(null, '', '#/activity?host=opencode')
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body(one))))
+    render(<Activity />)
+    // The live session carries no host either, so the data has landed once this shows.
+    await screen.findByText('No active sessions')
+    expect(screen.queryByText('finished')).toBeNull()
+    expect(heading()).toBeNull()
+  })
+
+  it('never lists a session twice: the live copy wins', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp(
+          body([{ session_id: 'live1', title: 'still going', updated_at: now - 5, ended: true }]),
+        ),
+      ),
+    )
+    render(<Activity />)
+    await screen.findByText('still going')
+    expect(screen.getAllByText('still going')).toHaveLength(1)
+    expect(screen.queryByRole('heading', { name: 'Recently ended' })).toBeNull()
+  })
+})

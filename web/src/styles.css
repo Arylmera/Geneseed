@@ -3356,6 +3356,7 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .chip-f:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 
 .act-live { margin-bottom: var(--sp-4); }
+.act-ended .act-card { background: transparent; }
 .act-day { overflow: hidden; padding: 0; }
 .act-day-h { margin: 0; padding: 10px var(--sp-4); font-size: var(--fs-sm); font-weight: 650; background: var(--surface-2);
   border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: var(--sp-3); }
