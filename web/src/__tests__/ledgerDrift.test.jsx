@@ -47,7 +47,7 @@ beforeEach(() => {
 })
 
 const cell = async () => {
-  const table = (await screen.findByText('Hand edits')).closest('table')
+  const table = await screen.findByRole('table', { name: 'Installs' })
   return within(table)
 }
 
