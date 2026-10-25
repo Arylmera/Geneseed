@@ -179,7 +179,8 @@ streams the output of background jobs and keeps their history across reloads.
 ### 🩺 Care
 
 - **Activity** (`#/activity`) — the agent sessions on this machine: each one's status,
-  the files it touched and its todo progress; open one for its detail. Every host records it:
+  the files it touched and its todo progress; open one for its detail. Sessions that ended in the last 7 days are listed under
+  **Recently ended**, below the live ones. Every host records it:
   the OpenCode plugin, and `geneseed-hook activity` on Claude Code, OpenClaude and Bob.
 - **Changes** (`#/diff`) — the diff between the deployed harness and the source: edited /
   added / missing files, and files only behind the source (unedited; a rebuild updates them)

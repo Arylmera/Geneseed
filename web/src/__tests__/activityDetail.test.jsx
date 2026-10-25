@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import ActivityDetail from '../pages/ActivityDetail.jsx'
@@ -88,6 +88,21 @@ describe('ActivityDetail page', () => {
     global.fetch = vi.fn(() => Promise.resolve(errResp(404)))
     render(<ActivityDetail sid="s" />)
     expect(await screen.findByText('Session ended')).toBeTruthy()
+  })
+
+  // A session no longer live (dead, or archived) still answers 200, with `ended: true`: its
+  // last snapshot's status ("busy" here) must not read as a session still working.
+  it('reads as ended when the server marks the session ended', async () => {
+    const d = full()
+    d.session.ended = true
+    global.fetch = vi.fn(() => Promise.resolve(okResp(d)))
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    const card = document.querySelector('.card')
+    expect(within(card).getByText('ended')).toBeTruthy()
+    expect(within(card).queryByText('working')).toBeNull()
+    // A turn that will never finish has no clock left to run.
+    expect(card.querySelector('.act-counters').textContent).toBe('1.2k tok$0.051 file +9 −1')
   })
 
   // Any other failure before the first answer names the error, not "Loading session…" forever.

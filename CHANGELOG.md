@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Activity lists recently ended sessions.** Sessions that are no longer live (the newest 50, 7 days) appear under the live list, each opening its detail page; an ended session reads "ended" there instead of its last status, with no running turn clock.
+
 ### Changed
 - **parallel-agents watches its units** the way the pipeline watches a crew: a result without its check, or one still waiting, is acted on at once, never waited on.
 

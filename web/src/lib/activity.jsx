@@ -15,6 +15,9 @@ export const STATUS = {
   blocked: { cls: 'bad', label: 'blocked', accent: 'var(--bad)' },
   idle: { cls: '', label: 'idle', accent: 'var(--line)' },
 }
+// A session no longer live keeps the status of its last snapshot, often "busy": the server's
+// `ended` flag outranks it, or a dead session reads as one still working.
+const ENDED = { cls: '', label: 'ended' }
 
 // Last path segment of a working dir — the heading when a session has no title yet.
 export function baseName(p) {
@@ -73,8 +76,11 @@ export function TodoStrip({ done, total }) {
 
 // Whether SessionHeader draws its counters row: the card's aria-describedby points at that
 // row, so both must ask the same question or the link describes itself by a missing id.
+// An ended session's open turn will never finish, so it gets no ticking clock.
+const turnClock = (s) => (s.ended ? null : s.turn_started_at)
+
 export const hasCounters = (s) =>
-  !!(s.tokens > 0 || s.cost > 0 || s.turn_started_at || s.files?.count > 0)
+  !!(s.tokens > 0 || s.cost > 0 || turnClock(s) || s.files?.count > 0)
 
 // The session's state block, shared by the list card and the detail page so the two
 // cannot drift (the detail once lacked the churn the card showed). `heading` is the card's
@@ -82,7 +88,7 @@ export const hasCounters = (s) =>
 // card link names itself by (`-t` title, `-st` status, `-c` counters); `children` trail
 // the badges (the card's chevron).
 export function SessionHeader({ s, heading, id, children }) {
-  const st = STATUS[s.status] || STATUS.idle
+  const st = s.ended ? ENDED : STATUS[s.status] || STATUS.idle
   const files = s.files
   const counters = hasCounters(s)
   const ref = (k) => (id ? `${id}-${k}` : undefined)
@@ -91,7 +97,8 @@ export function SessionHeader({ s, heading, id, children }) {
       <div className="row between wrap gap-12">
         {heading ? (
           <div className="row gap-10 act-min">
-            <span className={`feed-dot act-dot ${st.cls || 'acc'}`} />
+            {/* An empty class falls back to the accent dot; an ended one stays the dim default. */}
+            <span className={`feed-dot act-dot ${s.ended ? '' : st.cls || 'acc'}`} />
             <div className="act-min">
               <h2 className="act-title" id={ref('t')}>
                 {heading}
@@ -130,7 +137,7 @@ export function SessionHeader({ s, heading, id, children }) {
         <div className="row wrap act-counters" id={ref('c')}>
           {s.tokens > 0 && <span>{compact(s.tokens)} tok</span>}
           {s.cost > 0 && <span>${s.cost.toFixed(2)}</span>}
-          {s.turn_started_at ? (
+          {turnClock(s) ? (
             <span>
               <Elapsed startedAt={s.turn_started_at} />
             </span>

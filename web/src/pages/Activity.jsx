@@ -278,6 +278,9 @@ function GateRow({ gate }) {
   )
 }
 
+// The ended list folds past this many rows: it is history, and must not push the feed far down.
+const ENDED_FOLD = 5
+
 const uniq = (vals, current) => [...new Set([...vals.filter(Boolean), current].filter(Boolean))]
 
 export default function Activity() {
@@ -285,6 +288,7 @@ export default function Activity() {
   const [error, setError] = useState('')
   // Read in the initializer, not an effect: the first paint already shows the right filter.
   const [view, setViewState] = useState(readView)
+  const [allEnded, setAllEnded] = useState(false)
   const setView = (patch) => {
     const next = { ...view, ...patch }
     setViewState(next)
@@ -326,16 +330,20 @@ export default function Activity() {
   )
   const flipRef = useFlip()
   const waiting = enabled && data ? sessions.filter(needsYou).length : null
+  // Already newest first and capped by the server, which also lets the live copy win a
+  // duplicate; the id check is only a second guard, so one session never shows twice.
+  const liveIds = new Set(sessions.map((s) => s.session_id))
+  const endedAll = (data?.ended || []).filter((s) => !liveIds.has(s.session_id))
 
   // Host and project options come only from values the data carries. Runs and gate asks
   // carry neither, so narrowing by one hides them and says so, rather than showing them as
   // if they matched.
   const hosts = uniq(
-    sessions.map((s) => s.host),
+    [...sessions, ...endedAll].map((s) => s.host),
     view.host,
   )
   const projects = uniq(
-    sessions.map((s) => baseName(s.cwd)),
+    [...sessions, ...endedAll].map((s) => baseName(s.cwd)),
     view.project,
   )
   const narrowed =
@@ -350,6 +358,10 @@ export default function Activity() {
     (!view.host || s.host === view.host) && (!view.project || baseName(s.cwd) === view.project)
   const live = sessions.filter((s) => matches(s) && (view.f !== 'needs' || needsYou(s)))
   const showLive = view.f === 'all' || view.f === 'needs'
+  // Nothing ended waits on you, so "Needs you" hides the section. Tracking off: the server
+  // sends none, and `enabled` hides any the last poll left.
+  const ended = view.f === 'all' && enabled ? endedAll.filter(matches) : []
+  const endedShown = allEnded ? ended : ended.slice(0, ENDED_FOLD)
   const showRuns = !narrowed && (view.f === 'all' || view.f === 'runs')
   const showGates = !narrowed && (view.f === 'all' || view.f === 'gates')
 
@@ -377,6 +389,7 @@ export default function Activity() {
         ...(d || {}),
         enabled: res.enabled,
         activity: res.enabled ? d?.activity || [] : [],
+        ended: res.enabled ? d?.ended || [] : [],
       }))
       setError('')
     } catch (e) {
@@ -479,6 +492,31 @@ export default function Activity() {
             ))}
           </div>
         ))}
+
+      {ended.length > 0 && (
+        // Same cards and list structure as the live list; `act-ended` and the dim "ended"
+        // badge make it the quieter of the two.
+        <section className="stack gap-12 act-live act-ended" aria-labelledby="act-ended-h">
+          <h2 id="act-ended-h" className="act-lbl">
+            Recently ended
+          </h2>
+          {endedShown.map((s) => (
+            <div key={s.session_id}>
+              <SessionCard s={s} />
+            </div>
+          ))}
+          {ended.length > ENDED_FOLD && (
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-expanded={allEnded}
+              onClick={() => setAllEnded((v) => !v)}
+            >
+              {allEnded ? 'Show fewer' : `Show all ${ended.length}`}
+            </button>
+          )}
+        </section>
+      )}
 
       {view.f !== 'needs' && (
         <section aria-label="Feed" className="stack gap-16 act-feed" ref={feedRef}>
