@@ -412,11 +412,11 @@ describe('Constitution page — doctrine toggles', () => {
     expect(screen.queryByRole('button', { name: /^Apply/ })).toBeNull()
   })
 
-  // ⚠ ONE FILLED BUTTON PER VIEW. Apply is the page's primary action, so it sits in the page
-  // header's action slot, appears only once something is staged, and is then the only filled
-  // button on the page: every other control is secondary (ghost, soft, danger-line) or not a
-  // `.btn` at all. Its label counts the staged rules: craft.3 switched on makes 5 of the 7.
-  it('shows Apply as the one primary action, in the page header, only once something is staged', async () => {
+  // ⚠ ONE FILLED BUTTON PER VIEW. Apply is the page's primary action, so it sits in the
+  // "Unapplied changes" bar, which appears only once something is staged; it is then the only
+  // filled button on the page: every other control is secondary (ghost, soft, danger-line) or
+  // not a `.btn` at all. Its label counts the staged rules: craft.3 switched on makes 5 of the 7.
+  it('shows Apply as the one primary action, in the unapplied-changes bar, only once something is staged', async () => {
     const { container } = render(withInstall())
     await settled(container)
     expect(screen.queryAllByRole('button', { name: /^Apply/ })).toHaveLength(0)
@@ -424,7 +424,7 @@ describe('Constitution page — doctrine toggles', () => {
     const apply = screen.getAllByRole('button', { name: /^Apply/ })
     expect(apply).toHaveLength(1)
     expect(apply[0].textContent).toBe('Apply (5/7 rules)')
-    expect(apply[0].closest('.page-head .page-actions')).toBeTruthy()
+    expect(apply[0].closest('[role="region"]').getAttribute('aria-label')).toBe('Unapplied changes')
     const filled = container.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)')
     expect([...filled]).toEqual([apply[0]])
   })
@@ -932,5 +932,147 @@ describe('Constitution page — themed tier nouns', () => {
       'Doctrines',
     ])
     expect(screen.getByRole('button', { name: /^Dictates/ })).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// The V6b layout (the "precedence ladder" mockup): the two narrowing toggles beside the tier
+// tabs, folding packs, the asks count on a gated row, the rung state pills, ranks 5 and 6, and
+// the bar that holds every staged change with its Review / Revert / Apply.
+
+describe('Constitution page — the ladder layout', () => {
+  // Gated: a hook enforces the rule now. In the fixture that is laws I and III and process.5;
+  // law II is text-only, no craft rule has a hook, and ops.2's root-scan hook goes with its pack,
+  // which this install does not build in.
+  it('narrows to the hook-gated rules, and back with a second click', async () => {
+    const { container } = render(withInstall())
+    await settled(container)
+    const gated = screen.getByRole('button', { name: 'Gated 3' })
+    fireEvent.click(gated)
+    expect(gated.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('Sealed Secrets')).toBeTruthy()
+    expect(screen.getByText('Consent Before Push')).toBeTruthy()
+    expect(screen.queryByText('One Intent, One Act')).toBeNull()
+    expect(screen.queryByText('Automate Repetition')).toBeNull()
+    expect(screen.queryByText('Commands Must Return')).toBeNull()
+    fireEvent.click(gated)
+    expect(gated.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByText('Automate Repetition')).toBeTruthy()
+  })
+
+  // Changed: a doctrine rule whose staged switch differs from the install. Nothing is staged at
+  // first; switching craft.3 on stages exactly one.
+  it('narrows to the staged changes, which the bar lists and reviews', async () => {
+    const { container } = render(withInstall())
+    await settled(container)
+    expect(screen.getByRole('button', { name: 'Changed 0' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Unapplied changes' })).toBeNull()
+    fireEvent.click(sw(container, 'Documentation in Step'))
+    // Hide the staged row three ways; Review must lift all three.
+    fireEvent.click(screen.getByRole('button', { name: 'Craft' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Dictates/ }))
+    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'Sealed' } })
+    expect(container.querySelector('[data-addr="craft.3"]')).toBeNull()
+    const bar = screen.getByRole('region', { name: 'Unapplied changes' })
+    expect(bar.querySelector('.law-bar-n').textContent).toBe('1 unapplied change')
+    expect([...bar.querySelectorAll('.badge')].map((b) => b.textContent)).toEqual([
+      '+ craft 3 Documentation in Step',
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    expect(screen.getByRole('button', { name: 'Changed 1' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.queryByText('Sealed Secrets')).toBeNull()
+    expect(screen.queryByText('Automate Repetition')).toBeNull()
+    expect(container.querySelector('[data-addr="craft.3"]')).toBeTruthy()
+    expect(screen.getByLabelText('Filter rules').value).toBe('')
+  })
+
+  it('Revert in the bar drops the staged selection and the bar with it', async () => {
+    const { container } = render(withInstall())
+    await settled(container)
+    fireEvent.click(sw(container, 'English Configuration'))
+    expect(sw(container, 'English Configuration').getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Revert' }))
+    expect(sw(container, 'English Configuration').getAttribute('aria-checked')).toBe('true')
+    expect(screen.queryByRole('region', { name: 'Unapplied changes' })).toBeNull()
+  })
+
+  it('folds a pack under its heading, and a gate jump unfolds it', async () => {
+    window.location.hash = '#/laws'
+    const { container } = render(
+      <Laws setup={{ gates: { asks: { 'process-5': 4 }, total: 4, standing_down: [] } }} />,
+    )
+    await waitFor(() => expect(container.querySelector('[data-addr="process.5"]')).toBeTruthy())
+    const fold = screen.getByRole('button', { name: 'Process' })
+    expect(fold.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(fold)
+    expect(fold.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('[data-addr="process.5"]')).toBeNull()
+    expect(screen.getByText('Automate Repetition')).toBeTruthy() // the other packs stay open
+    fireEvent.click(document.querySelector('.gate-row'))
+    expect(window.location.hash).toBe('#/item/law/process.5')
+  })
+
+  // The jump changes the hash; the page reads it back as `selected`. Rendered with the address
+  // selected, a folded pack holding it cannot stay folded, or the jump finds no row.
+  it('never folds the pack that holds the open rule', async () => {
+    window.location.hash = '#/laws'
+    const { container, rerender } = render(<Laws />)
+    await waitFor(() => expect(screen.getByText('Consent Before Push')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Process' }))
+    expect(container.querySelector('[data-addr="process.5"]')).toBeNull()
+    rerender(<Laws selected="process.5" />)
+    expect(container.querySelector('[data-addr="process.5"]')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Process' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    )
+  })
+
+  it('prints a gated rule’s ask count from the gate ledger', async () => {
+    const { container } = render(
+      <Laws
+        setup={{ gates: { asks: { 'process-5': 4, 'law-1': 1 }, total: 5, standing_down: [] } }}
+      />,
+    )
+    await waitFor(() => expect(container.querySelector('[data-addr="process.5"]')).toBeTruthy())
+    expect(container.querySelector('[data-addr="process.5"] .law-asks').textContent).toBe('4 asks')
+    expect(container.querySelector('[data-addr="I"] .law-asks').textContent).toBe('1 ask')
+    expect(container.querySelector('[data-addr="II"] .law-asks')).toBeNull()
+  })
+
+  // Each rung's pill: Dictates and Ethos always bind; Your rules are yours; Doctrines count the
+  // rules the install excludes (craft.3, ops.1, ops.2 in the fixture). A switched-off gate is
+  // the one way the Dictates rung stops reading "always".
+  it('marks each rung with its state, and lists ranks 5 and 6 below', async () => {
+    const { container } = render(withInstall())
+    await settled(container)
+    const pills = [...container.querySelectorAll('.tier-pill')].map((p) => p.textContent)
+    expect(pills).toEqual(['always', 'yours', 'always', '3 excluded'])
+    expect([...container.querySelectorAll('.ladder-low')].map((r) => r.textContent)).toEqual([
+      'RANK 5 Mode — binds how work runs',
+      'RANK 6 Profile, posture, theme — inform only; never bind',
+    ])
+  })
+
+  it('a Dictates rung whose gate is off says so', async () => {
+    const { container } = render(
+      <Laws overview={{ install: { ...INSTALL, secretsGate: false } }} onAction={() => {}} />,
+    )
+    await settled(container)
+    expect(container.querySelector('.tier-pill').textContent).toBe('1 gate off')
+  })
+
+  it('names the install in the eyebrow', async () => {
+    const { container } = render(
+      <Laws
+        overview={{ theme: 'imperial', install: { ...INSTALL, footprint: 'lean' } }}
+        onAction={() => {}}
+      />,
+    )
+    await settled(container)
+    expect(container.querySelector('.page-head .eyebrow').textContent).toBe(
+      'imperial · lean footprint · opencode · global',
+    )
   })
 })

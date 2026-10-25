@@ -13,11 +13,14 @@ import {
   GATE_COPY,
   GATE_SWITCH,
   PRECEDENCE,
+  PRECEDENCE_INFORM,
   enforcedBy,
+  gateAddress,
   parseRuleTitle,
 } from '../lib/constitution.js'
 import Seg from '../components/Seg.jsx'
 import FilterInput from '../components/FilterInput.jsx'
+import { Bar } from '../components/StackBar.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import LawRow from './Laws/LawRow.jsx'
 import TierStrip from './Laws/TierStrip.jsx'
@@ -80,6 +83,12 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   const { data: rulesData } = useRules(dataRev)
   const [tab, setTab] = useState('all')
   const [q, setQ] = useState('')
+  // A second, narrower axis beside the tier tabs: every rule, the hook-gated ones, or the
+  // doctrine rules whose staged switch differs from the install. Two toggles, not three tabs:
+  // "All" is already the tier tabs' name, and two buttons both called "All" read as one.
+  const [view, setView] = useState('all')
+  // Packs the reader folded. Open by default: a folded pack hides its rule switches.
+  const [folded, setFolded] = useState(() => new Set())
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
   // Bring the open rule into view. Any deep link (a gate, the Overview, Spotlight) scrolls
@@ -223,24 +232,48 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
     if (ok) onAction('install', { ...install, [key]: next })
   }
 
+  // Gated: a hook enforces it now (a switched-off gate reads "Gate off", and an excluded
+  // doctrine rule takes its hook with it, so neither is counted).
+  // Changed: a doctrine rule whose staged switch differs from the install; a law never is, its
+  // gate switch rebuilds at once.
+  const isChanged = (r) =>
+    String(r.addr).includes('.') && isOn(r.addr) !== deployedRules.includes(r.addr)
+  const inView = (r, v = view) =>
+    v === 'all' ||
+    (v === 'gated'
+      ? r.enf === 'Hook gate' && (!String(r.addr).includes('.') || deployedRules.includes(r.addr))
+      : isChanged(r))
   // Substring narrowing over address, name, Latin name and principle; display-only, so the
   // staged selection above keeps operating on the full rule set.
   const ql = q.trim().toLowerCase()
-  const match = (r) => !ql || `${r.addr} ${r.name} ${r.latin} ${r.ess}`.toLowerCase().includes(ql)
+  const match = (r) =>
+    inView(r) && (!ql || `${r.addr} ${r.name} ${r.latin} ${r.ess}`.toLowerCase().includes(ql))
   // From the Gate asks card: make the rule's row visible first (a tab or a filter can hide
   // it), then open it; the effect above scrolls there and lights it.
   const jumpToRule = (addr) => {
     const row = byAddr[addr]
     const doctrine = String(addr).includes('.')
     if ((doctrine && tab === 'invariants') || (!doctrine && tab === 'doctrines')) setTab('all')
+    if (row && !inView(row)) setView('all')
     if (row && !match(row)) setQ('')
     jumpTo.current = addr
     setJump((n) => n + 1)
     go(`#/item/law/${encodeURIComponent(addr)}`)
   }
 
+  // How often each gate stopped to ask, by rule address: an all-time count from the gate ledger
+  // (`setup.gates.asks`), the same figure the Gate asks card draws. The ledger keeps no dates.
+  const asksOf = {}
+  for (const [gate, n] of Object.entries(setup?.gates?.asks || {})) asksOf[gateAddress(gate)] = n
+  const withAsks = (r) =>
+    asksOf[r.addr] ? { ...r, asks: `${asksOf[r.addr]} ask${asksOf[r.addr] === 1 ? '' : 's'}` } : r
+
   const activeInv = laws.filter((l) => !l.retired).length
   const activeDoc = deployedRules.length
+  const gatesOff = Object.keys(GATE_SWITCH).filter(
+    (a) => laws.some((l) => l.addr === a) && !armed(a),
+  ).length
+  const excludedDoc = allRules.length - activeDoc
   const stats = rulesData?.stats
   const tierOf = {
     ethos: {
@@ -248,6 +281,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
       n: ontology.length,
       fill: 1,
       sub: `${ontology.length} sections`,
+      pill: ['always', 'ok'],
     },
     invariants: {
       name: nouns.laws,
@@ -257,12 +291,16 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         laws.length > activeInv
           ? `${activeInv} active · ${laws.length - activeInv} retired`
           : `${activeInv} active`,
+      pill: gatesOff
+        ? [`${gatesOff} gate${gatesOff === 1 ? '' : 's'} off`, 'warn']
+        : ['always', 'ok'],
     },
     doctrines: {
       name: nouns.doctrines,
       n: activeDoc,
       fill: allRules.length ? activeDoc / allRules.length : 0,
       sub: `${activeDoc} rules · ${packs.filter((p) => p.active).length} of ${packs.length} packs`,
+      pill: excludedDoc > 0 ? [`${excludedDoc} excluded`, 'warn'] : ['all on', 'ok'],
     },
     yours: {
       name: 'Your rules',
@@ -272,6 +310,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
         ? `${stats.rules} of ${stats.max_rules} · ${stats.tokens}/${stats.max_tokens} tok`
         : 'user-rules.md',
       href: '#/personal/rules',
+      pill: ['yours', ''],
     },
   }
   // The strip follows the Precedence table, highest rank first, each cell with its rule
@@ -293,6 +332,38 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   ]
   const showInv = tab === 'all' || tab === 'invariants'
   const showDoc = tab === 'all' || tab === 'doctrines'
+  // The view toggles count what the tier tabs show, before the text filter, as the tabs do.
+  const tierRows = [...(showInv ? laws : []), ...(showDoc ? packs.flatMap((p) => p.rules) : [])]
+  const VIEWS = [
+    ['gated', 'Gated', tierRows.filter((r) => inView(r, 'gated')).length],
+    ['changed', 'Changed', tierRows.filter((r) => inView(r, 'changed')).length],
+  ]
+  // A pack holding the open rule never reads folded: a deep link or a gate jump must find its
+  // row. So folding that pack also closes the rule.
+  const packOf = (addr) => (String(addr).includes('.') ? String(addr).split('.')[0] : null)
+  // The Changed view unfolds every pack too: it exists to show each staged row.
+  const isShut = (pack) => view !== 'changed' && folded.has(pack) && packOf(open) !== pack
+  const fold = (pack) => {
+    const shut = isShut(pack)
+    setFolded((f) => {
+      const next = new Set(f)
+      if (shut) next.delete(pack)
+      else next.add(pack)
+      return next
+    })
+    if (!shut && packOf(open) === pack) go('#/laws')
+  }
+  // The staged changes, one chip each: `+` switches a rule on, `−` off.
+  const changes = packs.flatMap((p) =>
+    p.rules.filter(isChanged).map((r) => ({ ...r, plus: isOn(r.addr) })),
+  )
+  const showBar = canApply && packs.length > 0 && sel.dirty
+  // Review lifts whatever hides a staged row: the Dictates tab and the text filter.
+  const review = () => {
+    setView('changed')
+    if (tab === 'invariants') setTab('all')
+    setQ('')
+  }
   const bandHead = (title, src) => (
     <div className="band-head" role="presentation">
       <h2 className="tier-h">{title}</h2>
@@ -306,20 +377,46 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
 
   return (
     <>
-      {/* Apply is the page's one primary action, and it exists only while there is something
-          staged to apply: a disabled filled button on a clean page is a call to do nothing. */}
       <PageHeader
+        eyebrow={
+          install
+            ? [
+                overview?.theme,
+                install.footprint && `${install.footprint} footprint`,
+                install.host,
+                install.scope,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : null
+        }
         title="Constitution"
         sub="What the agent follows on every turn. Ranked: a lower rank may tighten a higher one, never repeal it. Open any rule to read its canonical text."
-        primary={
-          canApply && packs.length > 0 && sel.dirty ? (
-            <button type="button" className="btn" onClick={sel.applyPacks}>
-              Apply ({sel.pickedRules.length}/{allRules.length} rules)
-            </button>
-          ) : null
+        actions={
+          <FilterInput
+            className="law-filter"
+            value={q}
+            onChange={setQ}
+            placeholder="Filter rules"
+            label="Filter rules"
+          />
         }
       />
-      <TierStrip tiers={tiers} current={tab} onPick={setTab} />
+      <section className="ladder" aria-labelledby="ladder-h">
+        <h2 id="ladder-h" className="eyebrow">
+          Precedence
+        </h2>
+        <TierStrip tiers={tiers} current={tab} onPick={setTab} />
+        {/* Ranks 5 and 6 bind or inform how work runs, but hold no rules to list here. */}
+        <div className="ladder-tail">
+          {PRECEDENCE_INFORM.map((r, i) => (
+            <span key={r.source} className="ladder-low">
+              <span className="mono tier-k">RANK {PRECEDENCE.length + i + 1}</span> {r.label} —{' '}
+              {r.against}
+            </span>
+          ))}
+        </div>
+      </section>
 
       <div className="split">
         <section
@@ -357,13 +454,19 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
                 </button>
               ))}
             </Seg>
-            <FilterInput
-              className="law-filter"
-              value={q}
-              onChange={setQ}
-              placeholder="Filter rules"
-              label="Filter rules"
-            />
+            <Seg aria-label="Narrow">
+              {VIEWS.map(([k, l, n]) => (
+                <button
+                  type="button"
+                  key={k}
+                  className={view === k ? 'on' : ''}
+                  aria-pressed={view === k}
+                  onClick={() => setView(view === k ? 'all' : k)}
+                >
+                  {l} <span className="mono">{n}</span>
+                </button>
+              ))}
+            </Seg>
           </div>
           <div className="law-rowhead">
             <span>No.</span>
@@ -378,7 +481,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
               {invRows.map((l) => (
                 <LawRow
                   key={l.addr}
-                  law={l}
+                  law={withAsks(l)}
                   rev={dataRev}
                   isOpen={open === l.addr}
                   onToggle={() => toggle(l.addr)}
@@ -407,13 +510,28 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
             packs.map((p) => {
               const rows = p.rules.filter(match)
               if (!rows.length) return null
+              const shut = isShut(p.pack)
+              const on = p.rules.filter((r) => isOn(r.addr)).length
               return (
                 <div className={`pack-wrap${packOn(p) ? '' : ' pack-off'}`} key={p.pack}>
                   <div className="band-head pack-head">
+                    {/* The heading holds the disclosure (a button may not hold a heading). Its
+                        name is the pack's title alone: "<title> pack" is the pack switch's. */}
                     <h2 className="tier-h" style={{ '--cc': PACK_CATS[p.pack] }}>
-                      {p.title}
+                      <button
+                        type="button"
+                        className="pack-fold"
+                        aria-expanded={!shut}
+                        onClick={() => fold(p.pack)}
+                      >
+                        {p.title}
+                      </button>
                     </h2>
+                    <span className="mono dim">{p.pack}</span>
                     <span className="pack-desc dim">{p.desc}</span>
+                    <span className="pack-fill">
+                      <Bar value={on} max={p.rules.length} label={`${p.title} rules switched on`} />
+                    </span>
                     {/* Derived from the rules, never held separately: a pack IS however many
                         of its rules are on. */}
                     <span className="pack-state mono">{packState(p)}</span>
@@ -433,33 +551,40 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
                         ` --exclude-rules ${deployedExcluded.join(',')}`}
                     </div>
                   )}
-                  {rows.map((r) => (
-                    <LawRow
-                      key={r.addr}
-                      law={docRow(r)}
-                      rev={dataRev}
-                      isOpen={open === r.addr}
-                      onToggle={() => toggle(r.addr)}
-                      toggleCol={
-                        canApply ? (
-                          <button
-                            type="button"
-                            className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                            role="switch"
-                            aria-checked={isOn(r.addr)}
-                            aria-label={`${r.name} rule`}
-                            onClick={() => toggleRule(r.addr)}
-                          />
-                        ) : null
-                      }
-                    />
-                  ))}
+                  {!shut &&
+                    rows.map((r) => (
+                      <LawRow
+                        key={r.addr}
+                        law={withAsks(docRow(r))}
+                        rev={dataRev}
+                        isOpen={open === r.addr}
+                        onToggle={() => toggle(r.addr)}
+                        toggleCol={
+                          canApply ? (
+                            <button
+                              type="button"
+                              className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                              role="switch"
+                              aria-checked={isOn(r.addr)}
+                              aria-label={`${r.name} rule`}
+                              onClick={() => toggleRule(r.addr)}
+                            />
+                          ) : null
+                        }
+                      />
+                    ))}
                 </div>
               )
             })}
           {shownCount === 0 && (
-            <EmptyState title={ql ? 'No matching rules' : 'Nothing in this tier'}>
-              {ql ? <>Nothing matches “{q.trim()}”.</> : <>This install predates the tier.</>}
+            <EmptyState title={ql || view !== 'all' ? 'No matching rules' : 'Nothing in this tier'}>
+              {ql ? (
+                <>Nothing matches “{q.trim()}”.</>
+              ) : view !== 'all' ? (
+                <>No {view} rule in this tier.</>
+              ) : (
+                <>This install predates the tier.</>
+              )}
             </EmptyState>
           )}
         </section>
@@ -480,6 +605,38 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
           />
         </aside>
       </div>
+      {/* Apply is the page's one primary action, and the bar exists only while something is
+          staged: a disabled filled button on a clean page is a call to do nothing. */}
+      {showBar && (
+        <div className="law-bar" role="region" aria-label="Unapplied changes">
+          <span className="law-bar-n">
+            {changes.length} unapplied change{changes.length === 1 ? '' : 's'}
+          </span>
+          <span className="law-bar-list">
+            {changes.map((r) => (
+              <span key={r.addr} className={`badge ${r.plus ? 'ok' : 'warn'}`}>
+                {r.plus ? '+' : '−'} {r.no} {r.name}
+              </span>
+            ))}
+          </span>
+          <button type="button" className="btn ghost" onClick={review}>
+            Review changes
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => {
+              setView('all')
+              sel.revert()
+            }}
+          >
+            Revert
+          </button>
+          <button type="button" className="btn" onClick={sel.applyPacks}>
+            Apply ({sel.pickedRules.length}/{allRules.length} rules)
+          </button>
+        </div>
+      )}
     </>
   )
 }

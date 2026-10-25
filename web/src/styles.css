@@ -229,7 +229,10 @@ button { font-family: inherit; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- page wrap ---- */
-.page { flex: 1; overflow: auto; padding: 30px 34px 120px; }
+/* `clip`, not `auto`: an auto box is a scroll container, and every `position: sticky` inside it
+   (the Constitution and Kits apply bars, the settings index) would stick to a box that never
+   scrolls — the document does. Wide content scrolls in its own box. */
+.page { flex: 1; overflow-x: clip; padding: 30px 34px 120px; }
 .page.center { max-width: 1180px; margin: 0 auto; width: 100%; }
 .pad { max-width: 1180px; margin: 0 auto; }
 .pad-wide { max-width: none; }
@@ -2546,10 +2549,10 @@ a.tier .tier-bar > span { background: var(--line-3); }
 
 .law-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 16px; border-bottom: 1px solid var(--line); }
-.law-toolbar .law-filter { flex: 0 1 220px; min-width: 0; margin: 0; padding: 7px 11px;
-  background: var(--bg-2); color: var(--text); border: 1px solid var(--line);
+.law-filter { flex: 0 1 240px; width: 240px; max-width: 100%; min-width: 0; margin: 0;
+  padding: 7px 11px; background: var(--bg-2); color: var(--text); border: 1px solid var(--line);
   border-radius: var(--r-sm); font: inherit; font-size: 13px; }
-.law-toolbar .law-filter:focus { border-color: var(--accent-line); }
+.law-filter:focus { border-color: var(--accent-line); }
 .law-wrap { --law-5: 92px minmax(0, 1.4fr) minmax(0, 1fr) 96px 104px; --law-cols: var(--law-5); }
 .law-wrap.with-toggle { --law-cols: var(--law-5) 44px; }
 .law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: 14px;
@@ -2632,6 +2635,40 @@ a.tier .tier-bar > span { background: var(--line-3); }
 @media (prefers-reduced-motion: reduce) { .law-flash { animation-duration: .01s; } }
 .gate-n { margin-left: auto; }
 .gate-list .hbar { flex: none; width: 100%; }
+/* The precedence ladder (V6b): the four rungs, a state pill on each, ranks 5 and 6 below. */
+.ladder { margin-bottom: 20px; }
+.ladder > h2 { margin: 0 0 8px; }
+.ladder .tier-strip { margin-bottom: 8px; }
+.tier-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tier-pill { font-size: 11px; padding: 1px 8px; }
+.ladder-tail { display: flex; flex-wrap: wrap; gap: 8px; }
+.ladder-low { padding: 6px 12px; font-size: 12.5px; color: var(--text-2); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-sm); }
+.ladder-low .tier-k { margin-right: 6px; }
+/* A pack's heading is its disclosure: the chevron turns when the pack is open. */
+.pack-fold { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0;
+  background: none; color: inherit; font: inherit; letter-spacing: inherit;
+  text-transform: inherit; cursor: pointer; }
+.pack-fold::after { content: '›'; font-size: 13px; color: var(--text-3); transition: transform .14s; }
+.pack-fold[aria-expanded='true']::after { transform: rotate(90deg); }
+.pack-fold:hover { color: var(--accent-text); }
+.pack-fold:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+.pack-fill { flex: 0 0 96px; }
+.law-asks { font-size: 11.5px; font-weight: 500; color: var(--warn-text); }
+/* Every staged change, and the page's one primary action, held at the foot of the view. */
+.law-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center;
+  flex-wrap: wrap; gap: 10px; margin-top: 16px; padding: 10px 14px; background: var(--surface-2);
+  border: 1px solid var(--accent-line); border-radius: var(--r-md);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 60%, transparent); }
+.law-bar-n { font-weight: 600; }
+.law-bar-list { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+.law-bar-list .badge { white-space: normal; }
+@media (max-width: 720px) {
+  .law-filter { width: 100%; flex-basis: 100%; }
+  .pack-fill { display: none; }
+  .law-bar { bottom: 76px; }  /* clears the 64px phone tab bar */
+  .law-bar .btn { flex: 1 1 auto; }
+}
 
 /* ---- Library ---- */
 .pad-wide { max-width: none; }

@@ -17,6 +17,7 @@ export default function LawRow({ law, isOpen, onToggle, rev, toggleCol = null })
       <span className="law-name">
         <span>{law.name}</span>
         {law.ess ? <span className="law-princ">{law.ess}</span> : null}
+        {law.asks ? <span className="law-asks mono">{law.asks}</span> : null}
       </span>
       <span className="law-latin">{law.latin}</span>
       <span className={`law-status ${law.statusTone}`}>{law.status}</span>

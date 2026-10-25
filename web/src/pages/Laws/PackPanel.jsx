@@ -1,10 +1,10 @@
 import { Bar } from '../../components/StackBar.jsx'
 
-// The aside's pack panel: each pack's share of its rules switched on, its switch, and the
-// Revert for the staged selection (hooks/useRuleSelection.js). The Apply that rebuilds the
-// install is the page's one primary action, so it lives in the page header (Laws.jsx), not here.
+// The aside's pack panel: each pack's share of its rules switched on, and its switch (the
+// selection is hooks/useRuleSelection.js). Revert and the Apply that rebuilds the install live
+// in the page's "Unapplied changes" bar (Laws.jsx), which shows only while something is staged.
 export default function PackPanel({ packs, sel, canApply, install, gateArmed }) {
-  const { isOn, packOn, togglePack, dirty, losingConsent, revert } = sel
+  const { isOn, packOn, togglePack, dirty, losingConsent } = sel
   const maxPack = Math.max(1, ...packs.map((p) => p.rules.length))
   return (
     <section className="panel" aria-labelledby="doc-packs">
@@ -58,11 +58,6 @@ export default function PackPanel({ packs, sel, canApply, install, gateArmed }) 
                 : 'Rule IV’s deletion gate is off on this install too.'}
             </p>
           )}
-          <div className="pack-apply">
-            <button type="button" className="btn ghost" onClick={revert} disabled={!dirty}>
-              Revert
-            </button>
-          </div>
           <p className="panel-note" role="status" aria-live="polite">
             {dirty
               ? `Not applied yet. Apply rebuilds ${install.host} · ${install.scope} once, ` +

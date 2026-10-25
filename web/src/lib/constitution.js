@@ -99,6 +99,18 @@ export const PRECEDENCE = [
   { key: 'doctrines', source: '{{DOCTRINES}}', against: 'may tighten, never repeal' },
 ]
 
+// Rows 5 and 6 of the same table: they bind or inform how work runs but hold no rules, so the
+// page prints them as plain lines under the four tiers. `label` is the page's short name for
+// the source. Gated against the template by __tests__/constitution.test.js, like PRECEDENCE.
+export const PRECEDENCE_INFORM = [
+  { source: 'mode', label: 'Mode', against: 'binds how work runs' },
+  {
+    source: 'PROFILE.md, posture, theme',
+    label: 'Profile, posture, theme',
+    against: 'inform only; never bind',
+  },
+]
+
 // Template text -> the Precedence table's rows, in the order they appear: `{ source, against }`
 // each. The Source cell drops its article, `active`, backticks and the `(§n)` pointer, which
 // leaves the token PRECEDENCE carries. Pure, so the gate can feed it a perturbed copy.
