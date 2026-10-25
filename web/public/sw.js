@@ -3,7 +3,10 @@
 // and Windows) and so Vite's content-hashed, immutable assets load instantly
 // from a cache. HTML navigations and /api/* always hit the network, so the
 // per-session CSRF token and live data are never served stale.
-const CACHE = 'geneseed-assets-v1'
+// v2: v1 may hold index.html cached under a chunk URL (see below); the new name makes
+// activate drop it. shortcut: one name for every build, so old hashed assets pile up
+// until the name changes; stamp a build id into dist/sw.js from vite.config.js to prune per build.
+const CACHE = 'geneseed-assets-v2'
 
 self.addEventListener('install', () => self.skipWaiting())
 
@@ -30,7 +33,12 @@ self.addEventListener('fetch', (event) => {
           (hit) =>
             hit ||
             fetch(request).then((res) => {
-              if (res.ok) cache.put(request, res.clone())
+              // A missing file (mid-rebuild, web/dist emptied) comes back as the index.html
+              // fallback at 200: cached under the chunk URL, it broke every later import().
+              // A 206 is not the whole asset either. Only a full, non-HTML answer is kept.
+              const type = res.headers.get('Content-Type') || ''
+              if (res.status === 200 && !type.startsWith('text/html'))
+                cache.put(request, res.clone())
               return res
             }),
         ),

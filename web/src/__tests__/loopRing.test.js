@@ -364,3 +364,28 @@ describe('layoutLoop — a crowded inner circle', () => {
     }
   })
 })
+
+// LP-4: the viewBox starts at (0, 0) and ends at (width, height), so the setup column and the
+// `close` exit count toward the bounds too. Four or more setup steps stack 44px apart upward
+// from the ring's 205° point, and a closer on the ring's right edge pushes `close` past 540.
+describe('layoutLoop — the bounds hold the setup column and the exit', () => {
+  const TEXT_W = (s) => s.length * 6.4
+  const syn = (setup, closer) => ({
+    name: 'syn',
+    nodes: [...setup, 'identify', 'apply', 'test'],
+    edges: [{ from: closer, to: '$close' }],
+    loops: [{ name: 'iterations', nodes: ['identify', 'apply', 'test'], max: 5, iteration: true }],
+  })
+
+  // The topmost setup label is drawn 10px above its step and wears a 9px badge above that.
+  it('keeps six setup steps inside the top edge', () => {
+    const l = layoutLoop(syn(['s1', 's2', 's3', 's4', 's5', 's6'], 'identify'), BRICKS)
+    for (const e of l.entry) expect(e.y - 24, e.name).toBeGreaterThanOrEqual(0)
+    for (const n of l.nodes) expect(n.y + n.r, n.name).toBeLessThanOrEqual(l.height)
+  })
+
+  it('widens the ring to hold a close label leaving from the right edge', () => {
+    const l = layoutLoop(syn([], 'apply'), BRICKS)
+    expect(l.exit.x + 6 + TEXT_W('close')).toBeLessThanOrEqual(l.width)
+  })
+})

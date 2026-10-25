@@ -20,6 +20,8 @@ export const live = (l) => !!l.graph
 export function useActiveLoops() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  // Its own slot: the next successful poll clears `error`, and a refused write must outlive it.
+  const [writeError, setWriteError] = useState(null)
   const [rev, setRev] = useState(0)
   usePoll(
     (alive) =>
@@ -30,12 +32,14 @@ export function useActiveLoops() {
     POLL_MS,
     [rev],
   )
-  const onPreset = (root, preset) =>
-    api.setLoopPreset(root, preset).then(
+  const onPreset = (root, preset) => {
+    setWriteError(null)
+    return api.setLoopPreset(root, preset).then(
       () => setRev((r) => r + 1),
-      (e) => setError(e.message),
+      (e) => setWriteError(e.message),
     )
-  return { loops: data?.loops ?? null, error, onPreset }
+  }
+  return { loops: data?.loops ?? null, error: writeError || error, onPreset }
 }
 
 const num = (key) => ({
@@ -75,6 +79,12 @@ function History({ history }) {
 // place the ⛨ validate gate.
 export function ActiveDetail({ loop, bricks, onPreset }) {
   const it = live(loop) ? (loop.graph.loops || []).find((x) => x.iteration) : null
+  // Locked while a write is out, so a second change cannot race the first.
+  const [saving, setSaving] = useState(false)
+  const pick = (e) => {
+    setSaving(true)
+    Promise.resolve(onPreset(loop.root, e.target.value)).finally(() => setSaving(false))
+  }
   return (
     <>
       <div className="reader-tags">
@@ -108,7 +118,8 @@ export function ActiveDetail({ loop, bricks, onPreset }) {
               className="sel"
               aria-label={`Preset for ${loop.title}`}
               value={loop.preset}
-              onChange={(e) => onPreset(loop.root, e.target.value)}
+              disabled={saving}
+              onChange={pick}
             >
               {PRESETS.map((p) => (
                 <option key={p}>{p}</option>

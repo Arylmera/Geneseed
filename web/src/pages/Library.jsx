@@ -32,6 +32,7 @@ function libSource(sec, name) {
   if (sec === 'notebook') return `notebook/${name}`
   if (sec === 'wiki') return `geneseed-wiki.jsonc`
   if (sec === 'config') return name
+  if (sec === 'skills') return `skills/${name}/SKILL.md`
   return `${sec}/${name}.md`
 }
 
@@ -195,6 +196,7 @@ export default function Library({
   const [seenSection, setSeenSection] = useState(section)
   if (section !== seenSection) {
     setSeenSection(section)
+    setActionErr('')
     const next = resolveSec(section, lock)
     if (next !== sec) {
       setSec(next)
@@ -202,6 +204,12 @@ export default function Library({
       setCat('all')
       setUse('all')
     }
+  }
+  // A failed action names one entry: opening another drops it, the same way.
+  const [seenSelected, setSeenSelected] = useState(selected)
+  if (selected !== seenSelected) {
+    setSeenSelected(selected)
+    setActionErr('')
   }
 
   const {

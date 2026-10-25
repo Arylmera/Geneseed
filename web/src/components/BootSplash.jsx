@@ -18,6 +18,7 @@ import React, { useEffect, useState } from 'react'
 // timer once it has introduced itself.
 const MIN_DISPLAY_MS = 550
 const SEEN_KEY = 'gs-splash-seen'
+const STALL_MS = 8000
 
 function minDisplayMs() {
   try {
@@ -40,6 +41,15 @@ export default function BootSplash({ ready, onDone }) {
     return () => clearTimeout(t)
   }, [])
 
+  // The overview fetch has no timeout: a server that never answers must not leave a blank,
+  // aria-hidden overlay up forever, so after STALL_MS the splash says so and offers Retry.
+  const [stalled, setStalled] = useState(false)
+  useEffect(() => {
+    if (ready) return
+    const t = setTimeout(() => setStalled(true), STALL_MS)
+    return () => clearTimeout(t)
+  }, [ready])
+
   // Latched during render, not in an effect: once fading, `ready` flickering back
   // (an overview retry clearing its error) must not un-fade the splash.
   if (ready && minElapsed && !fading) setFading(true)
@@ -54,6 +64,7 @@ export default function BootSplash({ ready, onDone }) {
     return () => clearTimeout(t)
   }, [fading]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const showStall = stalled && !fading
   const handleAnimEnd = (e) => {
     if (e.animationName === 'splashOut') onDone?.()
   }
@@ -61,10 +72,10 @@ export default function BootSplash({ ready, onDone }) {
   return (
     <div
       className={`boot-splash${fading ? ' fading' : ''}`}
-      aria-hidden="true"
+      aria-hidden={showStall ? undefined : 'true'}
       onAnimationEnd={handleAnimEnd}
     >
-      <div className="boot-dial">
+      <div className="boot-dial" aria-hidden="true">
         <svg className="boot-ring" viewBox="0 0 172 172">
           <circle cx="86" cy="86" r="72" fill="none" stroke="var(--surface-3)" strokeWidth="9" />
           <circle
@@ -111,10 +122,19 @@ export default function BootSplash({ ready, onDone }) {
           <circle cx="12" cy="12.4" r="1.1" fill="var(--bg)" />
         </svg>
       </div>
-      <div className="boot-status">
-        <span>germinating harness</span>
-        <span className="boot-caret" />
-      </div>
+      {showStall ? (
+        <div className="boot-status" role="alert">
+          <span>The server is not answering.</span>{' '}
+          <button type="button" className="btn" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
+      ) : (
+        <div className="boot-status">
+          <span>germinating harness</span>
+          <span className="boot-caret" />
+        </div>
+      )}
     </div>
   )
 }

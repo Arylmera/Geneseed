@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **The service worker no longer caches an HTML fallback as a script**, which broke a page after a rebuild until its cache was cleared; the cache is renamed so the bad copy is dropped everywhere.
+- **Console robustness**: the boot splash gives up after 8 s with Retry; a failed harness switch says so; a preset write error survives the poll; a stale loop link says it is gone; loop rings stay in their box; "Today" counts by calendar day; Constitution survives odd hashes and a zero rule budget; Library clears stale errors and guesses the right skill path; Docs About renders its text and shows the version; one shared Copy button reports a failed copy.
+
 ### Changed
 - **Memory facts are grouped by topic** in the Library and Personal › Memory: each catalog row carries its `topic` (frontmatter `topic`, else `type`, else `misc`, slugged as the memory store does).
 - **The Greenhouse, Operator and Operator HUD dashboards show recent runs as run chips**: adjacent identical runs fold into one chip (×N), with outcome, scope, age and duration bars; the raw command stays a tooltip.

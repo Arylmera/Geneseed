@@ -1,12 +1,17 @@
 import React from 'react'
+import { marked } from 'marked'
 import { Icon } from '../../components/Icon.jsx'
+import { sanitizeHtml } from '../../components/Markdown.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 
 // About: live install snapshot + the static external links. Keeps version
 // info close to the docs so a reader knows which version their docs reflect.
-export default function About({ page }) {
+export default function About({ page, overview }) {
   const v = page.version || {}
   const rows = [
+    // The source's release label from /api/overview; null (unreadable config) shows a dash,
+    // and no overview at all shows no row.
+    ...(overview ? [['Version', overview.version]] : []),
     ['Theme', page.theme],
     ['Install mode', page.emit],
     ['Deployed', page.deployed ? 'yes' : 'no'],
@@ -14,7 +19,18 @@ export default function About({ page }) {
     ['Source root', <code key="r">{page.root}</code>],
     ['Installed build', <code key="i">{v.installed_fp || '(none)'}</code>],
     ['Source build', <code key="s">{v.source_fp || '—'}</code>],
-    ['Match?', v.verdict || '—'],
+    // The verdict is inline Markdown ("run `./geneseed update`"), rendered as MapPage's cells are.
+    [
+      'Match?',
+      v.verdict ? (
+        <span
+          key="m"
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(marked.parseInline(v.verdict)) }}
+        />
+      ) : (
+        '—'
+      ),
+    ],
     ['License', page.license],
   ]
   return (

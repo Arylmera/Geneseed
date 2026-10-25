@@ -613,6 +613,27 @@ describe('Loops › Active', () => {
     expect(text('svg.loop-ring .lr-node.current')).toEqual(['apply'])
   })
 
+  // A deep link to a run that closed, or a template since removed, says so: the first row is
+  // never stood in its place, which would show another run under the routed address.
+  it('says a routed entry is gone instead of showing another', async () => {
+    show([RUN])
+    const { unmount } = render(<Loops tab="active" item="C:/w/closed" />)
+    await waitFor(() => expect(runRow('C:/w/fix-login')).toBeTruthy())
+    expect(reader().querySelector('.empty .big')?.textContent).toBe(
+      'C:/w/closed is not registered any more.',
+    )
+    expect(reader().querySelector('.reader-title')).toBeNull()
+    expect(runRow('C:/w/fix-login').classList.contains('on')).toBe(false)
+    expect(reader().querySelector('.empty a').getAttribute('href')).toBe('#/loops/active')
+    unmount()
+    render(<Loops tab="templates" item="gone" />)
+    await waitFor(() => expect(reader().querySelector('.empty .big')).toBeTruthy())
+    expect(reader().querySelector('.empty .big').textContent).toBe(
+      'gone is not registered any more.',
+    )
+    expect(reader().querySelector('.empty a').getAttribute('href')).toBe('#/loops/templates')
+  })
+
   it('shows a finished run as its identity, with no picker and no ring', async () => {
     show([RUN, DONE])
     render(<Loops tab="active" item="C:/w/old" />)

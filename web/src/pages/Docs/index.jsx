@@ -66,7 +66,7 @@ function PageView({ data, error, overview, onAction, place }) {
     case 'glossary':
       return <Glossary page={data} />
     case 'about':
-      return <About page={data} />
+      return <About page={data} overview={overview} />
     default:
       return <EmptyState title="Unknown page kind">{data.kind}</EmptyState>
   }

@@ -153,17 +153,49 @@ describe('MarkdownPage', () => {
     }
   })
 
+  // Docs keeps one MarkdownPage across pages (no key), so the body is swapped under the
+  // portalled buttons: the new block gets one button, and it copies the new text.
+  it('re-captions a new body in place, one button copying the new block', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { container, rerender } = render(
+        <MarkdownPage page={{ id: 'a', body: '```\nold\n```' }} />,
+      )
+      rerender(<MarkdownPage page={{ id: 'b', body: '```\nnew\n```' }} />)
+      const btns = container.querySelectorAll('figure.docs-code figcaption button')
+      expect(btns.length).toBe(1)
+      await act(async () => fireEvent.click(btns[0]))
+      expect(writeText).toHaveBeenCalledWith('new')
+      expect(err).not.toHaveBeenCalled()
+    } finally {
+      err.mockRestore()
+      if (had) Object.defineProperty(navigator, 'clipboard', had)
+      else delete navigator.clipboard
+    }
+  })
+
   it('copies nothing and throws nothing without a clipboard, or when it refuses', async () => {
     const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     try {
       Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
-      const { container } = render(<MarkdownPage page={{ id: 'p', body: '```\nx\n```' }} />)
-      const btn = container.querySelector('figure.docs-code button')
+      const page = { id: 'p', body: '```\nx\n```' }
+      const first = render(<MarkdownPage page={page} />)
+      let btn = first.container.querySelector('figure.docs-code button')
       await act(async () => fireEvent.click(btn))
+      // The failure is said on the button, not swallowed.
+      expect(btn.textContent).toBe('Copy failed')
+      first.unmount()
+      // A fresh page, so the refusal's "Copy failed" cannot be the first click's still showing.
       const writeText = vi.fn(() => Promise.reject(new Error('denied')))
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      btn = render(<MarkdownPage page={page} />).container.querySelector('figure.docs-code button')
+      expect(btn.textContent).toBe('Copy')
       await act(async () => fireEvent.click(btn))
       expect(writeText).toHaveBeenCalledWith('x')
+      expect(btn.textContent).toBe('Copy failed')
     } finally {
       if (had) Object.defineProperty(navigator, 'clipboard', had)
       else delete navigator.clipboard

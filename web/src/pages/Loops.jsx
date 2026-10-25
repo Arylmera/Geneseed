@@ -3,6 +3,7 @@ import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import CopyButton from '../components/CopyButton.jsx'
 import Loading from '../components/Loading.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import Markdown from '../components/Markdown.jsx'
@@ -172,28 +173,6 @@ export function howItRuns(graph) {
   ].filter(Boolean)
 }
 
-const COPY_FEEDBACK_MS = 1200
-
-// shortcut: a copy of Docs/CliPage.jsx's CopyBtn, which is not exported; share it when a third
-// page needs one.
-function CopyBtn({ text }) {
-  const [done, setDone] = useState(false)
-  const onClick = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setDone(true)
-      setTimeout(() => setDone(false), COPY_FEEDBACK_MS)
-    } catch {
-      // clipboard blocked: the command stays selectable in its box.
-    }
-  }
-  return (
-    <button type="button" className="btn ghost sm" onClick={onClick} aria-label="Copy command">
-      {done ? 'Copied' : 'Copy'}
-    </button>
-  )
-}
-
 function TemplateDetail({ t, bricks, overridden, runs }) {
   const [lit, setLit] = useState(null)
   const byName = new Map(bricks.map((b) => [b.name, b]))
@@ -257,7 +236,7 @@ function TemplateDetail({ t, bricks, overridden, runs }) {
           <h3 id="loop-start-h" className="loop-kicker">
             Start it in your project
           </h3>
-          <CopyBtn text={cmd} />
+          <CopyButton text={cmd} label="Copy command" />
         </div>
         <pre className="mono">{cmd}</pre>
       </section>
@@ -487,11 +466,13 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
   const ql = q.trim()
   const shown = filterRows(pool, ql)
   // The routed entry, or the first row (Active: the first live one) so the list and the
-  // reader always agree.
-  const sel =
-    rows.find((r) => r.name === item) ||
-    (tab === 'active' ? rows.find(live) || rows[0] : rows[0]) ||
-    null
+  // reader always agree. A routed entry no longer listed is said gone, never stood in for.
+  const gone = !!(item && all && !rows.some((r) => r.name === item))
+  const sel = gone
+    ? null
+    : rows.find((r) => r.name === item) ||
+      (tab === 'active' ? rows.find(live) || rows[0] : rows[0]) ||
+      null
   const counts = {
     templates: data?.templates.length,
     bricks: data?.bricks.length,
@@ -561,7 +542,16 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
         </LibList>
 
         <article className="lib-reader" aria-label="Entry">
-          {!sel ? (
+          {gone ? (
+            <EmptyState
+              title={
+                <>
+                  <code className="mono">{item}</code> is not registered any more.
+                </>
+              }
+              docs={{ href: `#/loops/${tab}`, label: `All ${label.toLowerCase()} →` }}
+            />
+          ) : !sel ? (
             // Nothing registered: the reader says what a loop is instead of standing blank.
             tab === 'active' && all ? (
               <EmptyState
