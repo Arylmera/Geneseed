@@ -45,7 +45,10 @@ export default function OperatorView({ overview, setup, jobs, lens }) {
             </div>
             <div>
               <div className="tick">fingerprint</div>
-              <div className="mono" style={{ fontSize: 14, marginTop: 6, color: 'var(--accent)' }}>
+              <div
+                className="mono"
+                style={{ fontSize: 14, marginTop: 6, color: 'var(--accent-text)' }}
+              >
                 {setup?.installed_fp || '—'}
               </div>
             </div>

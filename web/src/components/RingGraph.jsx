@@ -21,11 +21,15 @@ function HumanBadge({ x, y, label }) {
 // or beside its setup label. Every colour is a class in styles.css (`.lr-*`) reading the
 // console's tokens, so light mode and every accent retint it with no code here.
 //
-// A node is a button: `onSelect(name)` is the page scrolling to that brick's card.
+// The svg is a named `group`, not an `img`: an img's children are presentational, so its
+// node buttons would be hidden from assistive tech while Tab still landed on them (LP-1).
+// A node is a button only when `onSelect(name)` is given (the page scrolling to that brick's
+// card); without it (Loops › Active) a node is a labelled image, no dead tab stop (LP-7).
 // `highlight` names the node a live loop stands on (Loops › Active); it is drawn `.current`.
 export default function RingGraph({ graph, bricks, onSelect, highlight }) {
   const l = layoutLoop(graph, bricks)
   const it = (graph.loops || []).find((x) => x.iteration)
+  const brick = (n) => `${n.name} brick${n.human ? `, ${n.human.toLowerCase()}` : ''}`
   const pick = (name) => (e) => {
     if (e.type === 'click' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -36,7 +40,7 @@ export default function RingGraph({ graph, bricks, onSelect, highlight }) {
     <svg
       className="loop-ring"
       viewBox={`0 0 ${l.width} ${l.height}`}
-      role="img"
+      role="group"
       aria-label={`${graph.name} loop: ${graph.nodes.join(', ')}`}
     >
       <defs>
@@ -123,11 +127,18 @@ export default function RingGraph({ graph, bricks, onSelect, highlight }) {
             key={n.name}
             className={`lr-node${n.inner ? ' inner' : ''}${n.effect === 'mutate' ? ' mutate' : ''}${n.name === highlight ? ' current' : ''}`}
             aria-current={n.name === highlight ? 'step' : undefined}
-            role="button"
-            tabIndex={0}
-            aria-label={`${n.name} brick${n.human ? `, ${n.human.toLowerCase()}` : ''}`}
-            onClick={pick(n.name)}
-            onKeyDown={pick(n.name)}
+            {...(onSelect
+              ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  'aria-label': brick(n),
+                  onClick: pick(n.name),
+                  onKeyDown: pick(n.name),
+                }
+              : {
+                  role: 'img',
+                  'aria-label': `${brick(n)}${n.name === highlight ? ', current step' : ''}`,
+                })}
           >
             <circle cx={n.x} cy={n.y} r={n.r} />
             <text x={n.x} y={n.y + 4} textAnchor="middle">

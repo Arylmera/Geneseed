@@ -9,6 +9,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Fixed
+- **Accessibility**: Genome cells are links; loop rings are labelled groups with no dead tab stops; off-pack rule rows keep full contrast and an unclipped focus ring; the command palette shows focus; accent and chart colours use text tokens in every mode; touch targets reach 44 px on coarse pointers; the docs outline moves focus; docs pages, Copy buttons and status hints have real names; a blocked session is announced.
 - **Retire keeps the rule's text**: it moves to `user-rules-retired.md` beside user-rules.md, a file no session loads or lists; retired ids are never reused. A server fault answers a fixed message (the detail goes to the server log); a name with a control character is refused; a missing asset is a 404, not the page shell; the folder picker opens one dialog at a time; Reveal opens folders in Explorer directly, so `%VAR%` in a path is never expanded.
 - **Update and Rebuild all ask first** and name the active installs; a per-project install inside a worktree is flagged; onboarding shows only when no install is active; the Ledger's Open goes to Hosts and reports a refused selection; an update check in flight reads "checking…"; while a job runs every kit Apply waits; kit member chips no longer say "not installed" for a kit that is on elsewhere.
 - **The service worker no longer caches an HTML fallback as a script**, which broke a page after a rebuild until its cache was cleared; the cache is renamed so the bad copy is dropped everywhere.

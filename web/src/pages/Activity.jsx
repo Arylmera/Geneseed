@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
@@ -58,6 +58,24 @@ function SessionCard({ s }) {
       <div className="dim mono act-updated">updated {relTime(s.updated_at)} ago</div>
     </a>
   )
+}
+
+// AC-13: the one change a user who looked away needs to hear is a session starting to wait on
+// them. Each poll compares the waiting sessions (by id AND status, so your move -> blocked
+// speaks too) with the last poll's; the first poll only seeds, or every load would read out
+// the sessions already waiting. Returns the sentence to announce, or ''.
+const WAIT_SAYS = { blocked: 'is blocked', 'waiting-input': 'waits for your answer' }
+function enteredNeedsYou(seen, sessions) {
+  // A reply without a list says nothing about who waits: keep the last poll's view.
+  if (!Array.isArray(sessions)) return ''
+  const now = sessions.filter(needsYou)
+  const before = seen.current
+  seen.current = new Set(now.map((s) => `${s.session_id}:${s.status}`))
+  if (!before) return ''
+  return now
+    .filter((s) => !before.has(`${s.session_id}:${s.status}`))
+    .map((s) => `${s.title || baseName(s.cwd) || s.session_id} ${WAIT_SAYS[s.status]}`)
+    .join('. ')
 }
 
 const FILTERS = [
@@ -289,6 +307,9 @@ export default function Activity() {
   // Read in the initializer, not an effect: the first paint already shows the right filter.
   const [view, setViewState] = useState(readView)
   const [allEnded, setAllEnded] = useState(false)
+  // The live region's text, and the waiting sessions the last poll saw (null before the first).
+  const [announce, setAnnounce] = useState('')
+  const seen = useRef(null)
   const setView = (patch) => {
     const next = { ...view, ...patch }
     setViewState(next)
@@ -304,6 +325,9 @@ export default function Activity() {
           if (alive()) {
             setData(d)
             setError('')
+            const said = enteredNeedsYou(seen, d?.activity)
+            // An identical sentence would leave the text unchanged and unread: vary its tail.
+            if (said) setAnnounce((was) => (was === said ? said + ' ' : said))
           }
         },
         (e) => {
@@ -424,6 +448,10 @@ export default function Activity() {
         title="Activity"
         sub="What your agents ran, what the gates asked, and which sessions are waiting on you."
       />
+      {/* Mounted from the first render: a region that appears with its text is not read. */}
+      <div className="sr-only" aria-live="polite">
+        {announce}
+      </div>
       {error && (
         <div className="act-gap">
           <ErrorState error={error} />

@@ -1,5 +1,5 @@
 import React from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import Activity from '../pages/Activity.jsx'
@@ -145,6 +145,39 @@ describe('Activity page', () => {
     render(<Activity />)
     expect(await screen.findByText('blocked')).toBeTruthy()
     expect(screen.getByText('bash: rm -rf build/')).toBeTruthy()
+  })
+
+  // AC-13: the one change a user who looked away needs to hear. A polite live region, there
+  // from the first render (a region mounted with its text is not announced), speaks a session
+  // only as it ENTERS blocked or your move — never the ones already waiting at load.
+  it('announces a session that becomes blocked, and none already waiting at load', async () => {
+    const sess = (id, status) => ({
+      session_id: id,
+      title: id,
+      cwd: '/r',
+      status,
+      updated_at: Date.now() / 1000,
+    })
+    const polls = [
+      [sess('a', 'busy'), sess('b', 'waiting-input')],
+      [sess('a', 'blocked'), sess('b', 'waiting-input')],
+    ]
+    global.fetch = vi.fn((url) =>
+      Promise.resolve(
+        okResp(
+          String(url).endsWith('/api/activity')
+            ? { enabled: true, activity: polls.length > 1 ? polls.shift() : polls[0] }
+            : {},
+        ),
+      ),
+    )
+    const { container } = render(<Activity />)
+    const live = container.querySelector('[aria-live="polite"]')
+    expect(live).toBeTruthy()
+    await screen.findByText('working')
+    expect(live.textContent).toBe('')
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    await waitFor(() => expect(live.textContent).toBe('a is blocked'))
   })
 
   it('reflects the disabled flag with an off state and an unchecked switch', async () => {

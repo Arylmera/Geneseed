@@ -28,6 +28,7 @@ import GreenhouseView from '../pages/Dashboard/GreenhouseView.jsx'
 import OperatorHudView from '../pages/Dashboard/OperatorHudView.jsx'
 import JournalView from '../pages/Dashboard/JournalView.jsx'
 import LineageView from '../pages/Dashboard/LineageView.jsx'
+import Genome from '../pages/Dashboard/Genome.jsx'
 
 const overview = {
   deployed: true,
@@ -340,5 +341,17 @@ describe('LineageView', () => {
     render(<LineageView overview={overview} sigil="" setup={null} jobs={[]} />)
     expect(screen.queryByText('behind source')).toBeNull()
     expect(screen.queryByText(/in sync/)).toBeNull()
+  })
+})
+
+// LN-4: each genome cell opens its section. A <div onClick> has no role and no tab stop, so
+// keyboard and screen-reader users could not open one; a real link can, and middle-click works.
+describe('Genome', () => {
+  it('makes each cell a link to its section', () => {
+    render(<Genome overview={overview} />)
+    const agents = screen.getByRole('link', { name: /^Agents/ })
+    expect(agents.getAttribute('href')).toBe('#/section/agents')
+    // One per SECTION_ORDER entry: agents, skills, laws, memory, notebook.
+    expect(screen.getAllByRole('link').length).toBe(5)
   })
 })

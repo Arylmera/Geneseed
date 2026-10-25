@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { renderDoc } from './headings.js'
 import { cmdId } from './CliPage.jsx'
 import { useOnScroll } from './scroll.js'
+import { motionOK } from '../../lib/motion.js'
 
 const MAX_CARDS = 5
 const SPY_TOP = 96
@@ -24,7 +25,16 @@ export function glossaryHits(body, rows) {
   return hits
 }
 
-const jump = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+// A jump moves focus too, or the next Tab returns to the outline instead of going on into the
+// section (DC-8); tabindex -1 lets a heading take focus without becoming a tab stop. The
+// scroll asks motionOK(): a JS `behavior` option is beyond the CSS reduced-motion override.
+const jump = (id) => {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.setAttribute('tabindex', '-1')
+  el.scrollIntoView({ behavior: motionOK() ? 'smooth' : 'auto' })
+  el.focus({ preventScroll: true })
+}
 
 // The Handbook's right margin: the page's own outline, then a card for each glossary term
 // it uses, so no invented word goes unexplained. The outline is renderDoc's, over the same

@@ -54,6 +54,14 @@ function captionCode(el) {
 // The block's text without its trailing newline, so a pasted command does not run on paste.
 const codeOf = (cap) =>
   (cap.parentElement?.querySelector('pre')?.textContent || '').replace(/\n+$/, '')
+// A button's name says what it copies: the block's first line, cut short (VS-27). One
+// "Copy command" per block left a screen-reader user unable to tell the buttons apart.
+const COPY_NAME_MAX = 40
+const copyName = (code) => {
+  const line = code.split('\n')[0].trim()
+  if (!line) return 'Copy code'
+  return 'Copy ' + (line.length > COPY_NAME_MAX ? line.slice(0, COPY_NAME_MAX - 1) + '…' : line)
+}
 
 export default function MarkdownPage({ page, overview, onAction, section, description }) {
   const ref = useRef(null)
@@ -155,9 +163,10 @@ export default function MarkdownPage({ page, overview, onAction, section, descri
         </div>
       )}
       <div className="markdown" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
-      {caps.map((cap, i) =>
-        createPortal(<CopyButton text={codeOf(cap)} label="Copy command" />, cap, i),
-      )}
+      {caps.map((cap, i) => {
+        const code = codeOf(cap)
+        return createPortal(<CopyButton text={code} label={copyName(code)} />, cap, i)
+      })}
       {page.link && (
         <div className="doc-link">
           <a className="btn soft sm" href={page.link.hash}>

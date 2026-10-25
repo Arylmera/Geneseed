@@ -28,6 +28,12 @@ describe('CliPage copy', () => {
     expect(btn.querySelector('svg path').getAttribute('d')).toBe('M5 12.5l4.5 4.5L19 7')
   })
 
+  // VS-27: a title is not a name; every button on the page announced as just "Copy".
+  it('names each button by the command it copies', () => {
+    render(<CliPage page={PAGE} />)
+    expect(screen.getByRole('button', { name: 'Copy geneseed setup' })).toBeTruthy()
+  })
+
   it('says Copy failed when the clipboard refuses', async () => {
     clipboard(vi.fn(() => Promise.reject(new Error('denied'))))
     render(<CliPage page={PAGE} />)

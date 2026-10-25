@@ -141,7 +141,8 @@ describe('MarkdownPage', () => {
       expect([btn.type, btn.className, btn.getAttribute('aria-label'), btn.textContent]).toEqual([
         'button',
         'btn ghost sm',
-        'Copy command',
+        // VS-27: named by what it copies (its first line), not one "Copy command" per block.
+        'Copy geneseed setup',
         'Copy',
       ])
       expect(figs[0].querySelector(':scope > pre')).toBeTruthy()

@@ -103,6 +103,19 @@ describe('Library', () => {
     expect(document.querySelector('.lib-rows .badge').textContent).toContain('experimental')
   })
 
+  // LB-14: a `title` reaches neither the keyboard nor a touch screen. The reader has the room,
+  // so it says what the status means in text; the rows stay a bare badge.
+  it('spells out the status hint in the reader, not only in a tooltip', async () => {
+    render(<Library section="skills" selected="rule" overview={overview({})} />)
+    const reader = await waitFor(() => {
+      const r = document.querySelector('.lib-reader')
+      expect(r.textContent).toContain('experimental')
+      return r
+    })
+    expect(within(reader).getByText('Shipped, but not yet confirmed by real use.')).toBeTruthy()
+    expect(document.querySelector('.lib-rows').textContent).not.toContain('Shipped, but')
+  })
+
   it('auto-selects the first entry, and each row links to its own address', async () => {
     render(<Library section="agents" overview={overview({})} />)
     await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(1))

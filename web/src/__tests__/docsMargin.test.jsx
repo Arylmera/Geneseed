@@ -117,6 +117,24 @@ describe('Margin', () => {
     expect(current()).toEqual(['Three'])
   })
 
+  // DC-8: a jump that only scrolls leaves focus in the outline, so the next Tab goes back to
+  // the outline, not on into the section. And the scroll obeys reduced motion: jsdom has no
+  // matchMedia, which motionOK() reads as "reduce", so the jump is instant.
+  it('moves focus to the heading it jumps to, without smooth scroll under reduced motion', () => {
+    const page = { body: '## One\n\na\n\n## Two\n\nb' }
+    render(
+      <>
+        <MarkdownPage page={page} />
+        <Margin page={page} glossaryRows={[]} />
+      </>,
+    )
+    const two = document.getElementById('two')
+    two.scrollIntoView = vi.fn()
+    fireEvent.click(screen.getByRole('link', { name: 'Two' }))
+    expect(two.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' })
+    expect(document.activeElement).toBe(two)
+  })
+
   it('renders nothing for a page with no headings and no terms', () => {
     const { container } = render(<Margin page={{ body: 'plain' }} glossaryRows={ROWS} />)
     expect(container.innerHTML).toBe('')

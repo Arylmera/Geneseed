@@ -45,7 +45,11 @@ function Command({ cmd, prog }) {
           </h2>
           {cmd.help && <p className="sub">{cmd.help}</p>}
         </div>
-        <CopyButton text={`${prog} ${cmd.name}`} title={`Copy ${prog} ${cmd.name}`} />
+        <CopyButton
+          text={`${prog} ${cmd.name}`}
+          label={`Copy ${prog} ${cmd.name}`}
+          title={`Copy ${prog} ${cmd.name}`}
+        />
       </div>
       <pre className="cli-syn">{synopsis}</pre>
       {(cmd.positionals || []).length > 0 && (
