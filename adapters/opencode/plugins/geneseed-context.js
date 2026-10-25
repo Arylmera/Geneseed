@@ -507,7 +507,7 @@ async function discover(root) {
     if (!e.isFile()) continue
     const abs = path.join(root, e.name)
     if (EAGER_ROOT.has(e.name)) add(eager, abs)
-    else if (isDoc(e.name)) add(lazy, abs)   // misc root .md / .adoc
+    else if (isDoc(e.name) && e.name !== "user-rules-retired.md") add(lazy, abs)  // retired rules are never loaded   // misc root .md / .adoc
   }
 
   // 2. Doc trees (recursive) -> lazy.

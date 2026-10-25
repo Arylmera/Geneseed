@@ -386,6 +386,14 @@ test('an item answers with its body and its links', () => {
   assert.ok(Array.isArray(item.links));
 });
 
+// A control character in a name is refused as NotFound before any fs call (SE-8: a NUL threw
+// inside fs and surfaced as a 500).
+test('a name holding a control character raises NotFound', () => {
+  for (const bad of ['a b', 'tab	here', 'del']) {
+    assert.throws(() => apiItem(neutral(), 'memory', bad), NotFound, JSON.stringify(bad));
+  }
+});
+
 test('a missing item raises NotFound', () => {
   assert.throws(() => apiItem(neutral(), 'agent', 'does-not-exist-xyz'), NotFound);
 });
@@ -3237,11 +3245,12 @@ test('a missing rules file reports not-seeded', () => {
   });
 });
 
-// SPLICE FIDELITY: after add → update → delete the file is byte-identical to the seeded stub.
-// A mutation that rewrote the whole document would pass every other assertion here.
-test('add, update and delete round-trip while preserving the prose', () => {
+// SPLICE FIDELITY: after add → update → retire (op `delete`) user-rules.md is the seeded stub
+// again, and the retired rule's text is in user-rules-retired.md. A mutation that rewrote the
+// whole document would pass every other assertion here.
+test('add, update and retire round-trip while preserving the prose', () => {
   withRules((box) => {
-    const before = fs.readFileSync(box.file, 'utf8');
+    const before = readLf(box.file);
 
     const r1 = apiRulesMutate(box.state, {
       op: 'add', fingerprint: apiRules(box.state).fingerprint,
@@ -3264,9 +3273,82 @@ test('add, update and delete round-trip while preserving the prose', () => {
     const r3 = apiRulesMutate(box.state, { op: 'delete', id: 1, fingerprint: r2.fingerprint });
     assert.equal(r3.ok, true, JSON.stringify(r3));
 
-    assert.equal(fs.readFileSync(box.file, 'utf8').replace(/\n+$/, ''),
-      before.replace(/\n+$/, ''),
+    assert.equal(readLf(box.file).replace(/\n+$/, ''), before.replace(/\n+$/, ''),
       'the file did not come back to the seeded stub — a mutation touched prose it does not own');
+    assert.equal(readLf(retiredOf(box)),
+      `${RETIRED_HEADER}\n## R1 — No emoji anywhere\n(scope: user | trial until: 2026-12-31)\nEver.\n`,
+      'the retired text was lost');
+  });
+});
+
+// RETIRE MOVES, IT NEVER DELETES. The client still sends op `delete`; the server cuts the block
+// out of user-rules.md and appends it, verbatim, to user-rules-retired.md beside it — a file no
+// session loads, so a retired rule can never be obeyed by mistake. The first retire creates it
+// under a one-line header; a second appends below the first; a retire of a gone rule is NotFound
+// and writes NEITHER file.
+//
+// `writeText` writes the platform EOL, so on Windows the files hold CRLF. The rows here are
+// written with `\n` and compared against the file read back with its CRLF folded.
+function readLf(file) { return fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n'); }
+const retiredOf = (box) => path.join(path.dirname(box.file), 'user-rules-retired.md');
+
+const RETIRED_HEADER = '# Retired rules — not in force, never loaded into any session.\n';
+const RULES_TWO = '# User rules\n\nProse.\n\n## R1 — One\n(scope: project)\nBody one.\n\n'
+  + '## R2 — Two\n(scope: user)\nBody two.\n';
+
+test('retire moves rules to user-rules-retired.md, in order, and never twice', () => {
+  withRules((box) => {
+    fs.writeFileSync(box.file, RULES_TWO);
+    const fp = () => apiRules(box.state).fingerprint;
+    const r1 = apiRulesMutate(box.state, { op: 'delete', id: 1, fingerprint: fp() });
+    assert.deepEqual([r1.ok, r1.op, r1.id], [true, 'delete', 1]);
+    assert.equal(readLf(box.file), '# User rules\n\nProse.\n\n## R2 — Two\n(scope: user)\nBody two.\n');
+    assert.equal(readLf(retiredOf(box)), `${RETIRED_HEADER}\n## R1 — One\n(scope: project)\nBody one.\n`);
+    apiRulesMutate(box.state, { op: 'delete', id: 2, fingerprint: fp() });
+    const rules = '# User rules\n\nProse.\n';
+    const retired = `${RETIRED_HEADER}\n## R1 — One\n(scope: project)\nBody one.\n\n`
+      + '## R2 — Two\n(scope: user)\nBody two.\n';
+    assert.equal(readLf(box.file), rules);
+    assert.equal(readLf(retiredOf(box)), retired);
+    assert.deepEqual(apiRules(box.state).rules, []);
+    assert.throws(() => apiRulesMutate(box.state, { op: 'delete', id: 1, fingerprint: fp() }),
+      NotFound);
+    assert.equal(readLf(box.file), rules, 'a retire of a gone rule wrote user-rules.md');
+    assert.equal(readLf(retiredOf(box)), retired, 'a retire of a gone rule wrote the retired file');
+  });
+});
+
+// A NEW RULE NEVER REUSES A RETIRED ID: a retired R2 means the next rule is R3, so an id in the
+// user's history always names one rule. Promote goes through add and gets the same guarantee.
+test('add and promote after a retire take an id above every retired one', () => {
+  withRules((box) => {
+    fs.writeFileSync(box.file, RULES_TWO);
+    const fp = () => apiRules(box.state).fingerprint;
+    apiRulesMutate(box.state, { op: 'delete', id: 2, fingerprint: fp() });
+    const add = apiRulesMutate(box.state,
+      { op: 'add', fingerprint: fp(), title: 'Three', body: 'Body three.' });
+    assert.equal(add.id, 3);
+    const mem = path.join(box.cfg, 'memory');
+    fs.mkdirSync(mem, { recursive: true });
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'), '# Memory Index\n- [tabs](tabs.md) — x\n');
+    fs.writeFileSync(path.join(mem, 'tabs.md'), '---\nname: Tabs\n---\nUse tabs.\n');
+    const pro = apiRulesPromote(box.state, { name: 'tabs', fingerprint: fp() });
+    assert.equal(pro.id, 4);
+    assert.deepEqual(apiRules(box.state).rules.map((r) => r.id), [1, 3, 4]);
+  });
+});
+
+// AN UPDATE KEEPS THE SEAM: the blank line after a rule separates it from the next one, so an
+// update of a middle rule replaces the block's own lines and leaves that blank where it was.
+test('update of a middle rule keeps the blank line before the next rule', () => {
+  withRules((box) => {
+    fs.writeFileSync(box.file, RULES_TWO);
+    const up = apiRulesMutate(box.state, { op: 'update', id: 1,
+      fingerprint: apiRules(box.state).fingerprint, title: 'One again', body: 'New body.' });
+    assert.equal(up.ok, true, JSON.stringify(up));
+    assert.equal(readLf(box.file),
+      '# User rules\n\nProse.\n\n## R1 — One again\n(scope: project)\nNew body.\n\n'
+      + '## R2 — Two\n(scope: user)\nBody two.\n');
   });
 });
 

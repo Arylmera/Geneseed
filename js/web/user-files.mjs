@@ -186,8 +186,8 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
 }
 
 /**
- * Validate and normalise a rule's writable fields. Throws (→ the shell's JSON 500 carrying
- * the message) on an unusable rule.
+ * Validate and normalise a rule's writable fields. Throws `BadRequest` (→ the shell's 400,
+ * carrying the message) on an unusable rule.
  *
  * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` above: this is a pure predicate over a
  * string that stays a string, so accepting any Unicode decimal digit costs nothing and
@@ -239,7 +239,19 @@ function ruleId(v) {
 }
 
 /**
- * Add / update / delete on user-rules.md.
+ * Where a retired rule goes: a SEPARATE file beside user-rules.md that nothing ever loads. It is
+ * not a session file, so its text never reaches an agent's context and cannot be obeyed by
+ * mistake; it exists so a retire never loses the text. Like user-rules.md it is the user's: no
+ * install manifest claims it, so no uninstall deletes it.
+ */
+export const RETIRED_RULES_FILE = 'user-rules-retired.md';
+const RETIRED_HEADER = '# Retired rules — not in force, never loaded into any session.\n';
+const isBlank = (line) => !stripWhitespace(line);
+
+/**
+ * Add / update / retire on user-rules.md. Retire is op `delete` on the wire (the client's
+ * name for it), but it never loses the text: the block moves, verbatim, to the end of
+ * `RETIRED_RULES_FILE`, which the first retire creates.
  *
  * EVERY MUTATION REQUIRES THE FINGERPRINT OF THE CONTENT THE CLIENT LAST READ. An agent
  * session may be editing the same file mid-flight, so a stale write returns `ok: false`
@@ -258,11 +270,14 @@ export function apiRulesMutate(state, body) {
       detail: 'user-rules.md changed since you loaded it — reloading' };
   }
   const [rules] = parseRules(text);
+  const retiredPath = path.join(state.target, RETIRED_RULES_FILE);
   let rid;
   let next;
   if (op === 'add') {
     const [title, rtext, scope, source, trial] = ruleFields(body);
-    rid = rules.reduce((mx, r) => (r.id > mx ? r.id : mx), 0) + 1;
+    // A retired id is never handed out again, so an id in the user's history names one rule.
+    const [retired] = parseRules(readMaybe(retiredPath) ?? '');
+    rid = [...rules, ...retired].reduce((mx, r) => (r.id > mx ? r.id : mx), 0) + 1;
     if (!text) text = '# User rules\n';
     next = `${text.replace(/\n+$/, '')}\n\n${ruleBlock(rid, title, scope, source, trial, rtext)}`;
   } else {
@@ -270,17 +285,25 @@ export function apiRulesMutate(state, body) {
     const target = rules.find((r) => r.id === rid);
     if (target === undefined) throw new NotFound(`rule R${rid}`);
     const lines = splitLines(text);
+    // The block's own lines, without the blank separator after it: that separator is the seam
+    // with whatever follows, so it stays where it is.
+    let end = target.end;
+    while (end > target.start + 1 && isBlank(lines[end - 1])) end -= 1;
     if (op === 'update') {
       const [title, rtext, scope, source, trial] = ruleFields(body);
       const block = ruleBlock(rid, title, scope, source, trial, rtext);
-      lines.splice(target.start, target.end - target.start,
-        ...splitLines(block.replace(/\n+$/, '')));
+      lines.splice(target.start, end - target.start, ...splitLines(block.replace(/\n+$/, '')));
     } else {
-      // delete — also swallow ONE preceding blank separator line, or repeated deletes leave
-      // a growing run of blank lines in the user's file.
-      let start = target.start;
-      if (start > 0 && !stripWhitespace(lines[start - 1])) start -= 1;
-      lines.splice(start, target.end - start);
+      const moved = lines.splice(target.start, end - target.start);
+      // Two blanks now meet at the seam; drop one, or repeated retires grow a run of them.
+      if (target.start > 0 && target.start < lines.length
+          && isBlank(lines[target.start - 1]) && isBlank(lines[target.start])) {
+        lines.splice(target.start, 1);
+      }
+      // THE RETIRED FILE FIRST: if the second write fails, the rule is in both files, never in
+      // neither.
+      const kept = (readMaybe(retiredPath) ?? RETIRED_HEADER).replace(/\n+$/, '');
+      writeText(retiredPath, `${kept}\n\n${moved.join('\n')}\n`);
     }
     next = `${lines.join('\n').replace(/\n+$/, '')}\n`;
   }

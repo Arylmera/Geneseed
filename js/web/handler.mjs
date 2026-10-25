@@ -18,7 +18,7 @@ import {
   apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths, rebuildCmds,
 } from './actions.mjs';
 import { BadRequest, NotFound } from './catalog.mjs';
-import { openUrl, requestRestart } from './daemon.mjs';
+import { openFolder, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
 import { POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, readJsonBody } from './routes.mjs';
@@ -165,6 +165,11 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // STRICTLY under `dist`: `fp === dist` itself must also take the fallback below, which
     // is why this checks `fp !== distReal` and not just the prefix.
     if (!(fp.startsWith(distReal + sep) && fp !== distReal) && fp !== index) fp = index;
+    // A missing /assets/* file is a 404, never the HTML shell: served as 200, a rebuild's
+    // momentary gap got cached under a chunk URL and broke the page (SH-27).
+    if (!isFile(fp) && rel.startsWith('assets/')) {
+      return sendJson(res, { error: 'not found' }, 404, acceptEncoding);
+    }
     if (!isFile(fp)) fp = index;
     if (!isFile(fp)) {
       return sendJson(res, { error: 'web/dist missing — run the UI build' }, 500, acceptEncoding);
@@ -256,9 +261,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       // it is the same allowlist — `mcpTargetPaths()`, one function with two callers rather than
       // two copies that drift. An unlisted path is a 404 before anything is opened. Without it
       // this is "ask the desktop to open any path on the machine", behind a CSRF token and
-      // nothing else, and on Windows `openUrl` interpolates into a `cmd` command line with
-      // `windowsVerbatimArguments` — so the exact-match lookup is also what bounds the strings
-      // that can ever reach a shell to the ones the machine's own install registry produced.
+      // nothing else. (No shell sees the path: on Windows `openFolder` hands it to explorer.exe
+      // as one argv element, so a `%VAR%` in a folder name is never expanded.)
       //
       // THE FOLDER, NOT THE FILE. `open`/`start`/`xdg-open` on a `.json` hands it to whatever
       // claims that extension — which on a stock Windows box is a browser, i.e. a read-only view
@@ -270,10 +274,10 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         return sendJson(res, { error: `not found: ${want || '(none)'}` }, 404, ae);
       }
       const dir = dirname(want);
-      // `openUrl` SWALLOWS EVERY FAILURE BY DESIGN (a headless box has no opener), so `ok` here
+      // `openFolder` SWALLOWS EVERY FAILURE BY DESIGN (a headless box has no opener), so `ok` here
       // means "the path was allowed and the request was made", never "a window appeared". The
       // response says which directory, so the UI can print it as the fallback instruction.
-      openUrl(dir);
+      openFolder(dir);
       return sendJson(res, { ok: true, dir }, 200, ae);
     }
     if (path === '/api/pick-folder') {
@@ -452,22 +456,38 @@ export function makeHandler(state, jm, token, dist, holder = null) {
           } catch (e) {
             // `apiSelectView`, `apiMemoryDelete`, `apiRulesMutate` and `apiRulesPromote` all
             // raise `NotFound` for an unknown target, mapped to 404
-            // here; anything else falls to the 500 arm below, carrying its own message.
+            // here; anything else falls to the generic 500 (`SERVER_FAULT`, below).
             if (e instanceof NotFound) {
               return sendJson(res, { error: `not found: ${e.message}` }, 404, ae);
             }
             // A body the route refused on its content (a rule body with a `## ` heading) is
             // the caller's to fix: 400, not the 500 of a server fault.
             if (e instanceof BadRequest) return sendJson(res, { error: e.message }, 400, ae);
-            return sendJson(res, { error: String(e && e.message ? e.message : e) }, 500, ae);
+            logFault(req, path, e);
+            return sendJson(res, SERVER_FAULT, 500, ae);
           }
         });
       }
       return sendJson(res, { error: 'not found' }, 404, ae);
     } catch (e) {
-      return sendJson(res, { error: String(e && e.message ? e.message : e) }, 500, ae);
+      logFault(req, path, e);
+      return sendJson(res, SERVER_FAULT, 500, ae);
     }
   };
+}
+
+/** What every 500 answers: one fixed string, so no fault ever echoes its own message. */
+const SERVER_FAULT = { error: 'internal error — the details are in the server log' };
+
+/**
+ * A server fault: the detail to stderr, a fixed string to the client. A thrown message carries
+ * whatever the route held — `path.join` puts an absolute path in it — and the page that shows
+ * `error` is no place for that. The daemon's stderr IS `.geneseed-web.log` (`spawnDetached`);
+ * a foreground server prints it to its terminal, which is why the message names neither.
+ * Method and path only, never headers or body: the token rides in a header.
+ */
+function logFault(req, path, e) {
+  process.stderr.write(`[geneseed web] 500 ${req.method} ${path}: ${(e && e.stack) || String(e)}\n`);
 }
 
 /**

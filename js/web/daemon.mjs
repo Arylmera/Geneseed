@@ -218,14 +218,8 @@ export function requestRestart(theme) {
  * Every failure here is swallowed — a machine with no browser opener configured must not
  * crash a server that is otherwise working fine.
  */
-export function openUrl(url) {
-  const [file, args, extra] = process.platform === 'win32'
-    // `start` is a cmd BUILTIN, not a program. The empty `""` is its title argument —
-    // without it `start "http://…"` treats the quoted URL as the window title and opens
-    // nothing. Verbatim args because Node would otherwise re-quote the whole string.
-    ? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start "" "${url}"`],
-      { windowsVerbatimArguments: true }]
-    : (process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);
+export function openUrl(url, folder = false) {
+  const [file, args, extra] = openerCommand(url, folder);
   try {
     const child = spawn(file, args, {
       detached: true, stdio: 'ignore', windowsHide: true, ...extra,
@@ -242,6 +236,31 @@ export function openUrl(url) {
     child.on('error', () => { /* no opener on this machine; the daemon is still serving */ });
     child.unref();
   } catch { /* spawn itself can still throw synchronously on some platforms; same rule */ }
+}
+
+/** Reveal: a folder in Explorer / Finder / the file manager. */
+export const openFolder = (dir) => openUrl(dir, true);
+
+/**
+ * `[file, args, spawnOptions]` for `openUrl` — pure, so the argv is testable without putting a
+ * window on screen.
+ *
+ * A WINDOWS FOLDER GOES TO EXPLORER, NEVER THROUGH cmd. A folder is a filesystem string, and
+ * `cmd /c start "" "<dir>"` expands any `%VAR%` inside it even quoted. `explorer.exe <dir>`
+ * takes it as one argv element, quoted by Node. By ABSOLUTE path, since Windows resolves a
+ * bare name against the cwd first.
+ * @returns {[string, string[], { windowsVerbatimArguments?: boolean }]}
+ */
+export function openerCommand(target, folder = false) {
+  if (process.platform === 'win32') {
+    if (folder) return [join(process.env.SystemRoot || 'C:\\Windows', 'explorer.exe'), [target], {}];
+    // `start` is a cmd BUILTIN, not a program. The empty `""` is its title argument —
+    // without it `start "http://…"` treats the quoted URL as the window title and opens
+    // nothing. Verbatim args because Node would otherwise re-quote the whole string.
+    return [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start "" "${target}"`],
+      { windowsVerbatimArguments: true }];
+  }
+  return process.platform === 'darwin' ? ['open', [target], {}] : ['xdg-open', [target], {}];
 }
 
 export async function startDaemon(theme, port, openBrowser = true) {

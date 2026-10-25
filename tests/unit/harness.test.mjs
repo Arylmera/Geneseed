@@ -1665,6 +1665,22 @@ test('the OpenCode plugin discovers AsciiDoc docs like the hook does', () => {
     ['Md', 'Adoc Title', 'Next', 'Section']);
 });
 
+// Retired rules are never loaded (user decision 2026-10-25): discovery lists every other root
+// doc as lazy, but never user-rules-retired.md — and the OpenCode plugin's twin skips it too.
+test('discovery never lists the retired rules file', () => {
+  withDir((d) => {
+    contextFixture(d);
+    fs.writeFileSync(path.join(d, 'user-rules-retired.md'), '# Retired rules\n', 'utf8');
+    fs.writeFileSync(path.join(d, 'EXTRA.md'), '# Extra\n', 'utf8');
+    const [eager, lazy] = resolveContextSets(d);
+    const names = [...eager, ...lazy].map((e) => path.basename(e.path));
+    assert.ok(names.includes('EXTRA.md'), 'discovery no longer lists root docs — the check below is vacuous');
+    assert.ok(!names.includes('user-rules-retired.md'), 'the retired rules file was listed');
+  });
+  const plugin = fs.readFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins', 'geneseed-context.js'), 'utf8');
+  assert.match(plugin, /e\.name !== "user-rules-retired\.md"/, 'the OpenCode plugin lists the retired file');
+});
+
 test('an empty manifest falls back to discovery', () => {
   withDir((d) => {
     contextFixture(d);
