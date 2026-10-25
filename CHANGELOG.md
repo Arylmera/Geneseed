@@ -11,6 +11,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [4.24.1] — 2026-10-25
 
 Patch: pages use the whole window width.
+### Removed
+- Dead stack-bar colour rules (`.sb-invariants`, `.sb-doctrines`, `.sb-rest`) that no component used.
 
 ## [4.24.0] — 2026-10-25
 

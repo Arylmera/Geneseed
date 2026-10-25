@@ -2485,9 +2485,6 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
 .stackbar { display: flex; height: 12px; gap: 3px; }
 .stackbar > span { border-radius: 3px; min-width: 3px; }
 .stackbar.thin { height: 8px; gap: 2px; }
-.sb-invariants { background: var(--accent); }
-.sb-doctrines { background: var(--accent-dim); }
-.sb-rest { background: var(--line-2); }
 .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
   gap: 8px; font-size: 13px; }
 .legend li { display: flex; align-items: center; gap: 8px; }
