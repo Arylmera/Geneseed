@@ -5,21 +5,25 @@ import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
 import PageHeader from '../../components/PageHeader.jsx'
+import Ring from '../../components/Ring.jsx'
+import StackBar, { Bar } from '../../components/StackBar.jsx'
+import { Spark } from '../../lib/activity.jsx'
 import { CountUp, useCountUp } from '../../lib/motion.js'
 import {
   COST_PARTS,
   approxTokens,
   costTotal,
   fleetVerdict,
-  gateRows,
   ledgerNeeds,
   needsRebuild,
   neverFired,
   rebuildTarget,
 } from '../../lib/overview.js'
+import { alwaysOnRange, gateSummary, usageTotal, worstRootFile } from './ledgerKpi.js'
 
 // The Ledger: the Overview as a control panel over every INSTALLED harness on the machine.
-// Verdict, then the fleet, then what needs you, then cost, usage and gates. Hosts with nothing
+// The health card (verdict and actions), four KPIs, the fleet, then what needs you and what
+// fires; each fleet row opens a details row with its cost breakdown. Hosts with nothing
 // installed are not listed; installing lives on the Installs page with its other settings.
 // Every read but the fleet degrades to null (a soft fetch), and a part that has no data says so
 // in words. The fleet is the page's spine, so its failure is said out loud, with a Retry.
@@ -97,33 +101,67 @@ function VersionChip({ update, onAction, canFill = true }) {
   )
 }
 
-function Verdict({ fleet, error }) {
+// The verdict's mark: a check, a triangle or a cross, drawn in the card's tone (CSS `stroke`).
+const HEALTH_ICON = {
+  good: 'M8 12.5l2.7 2.7L16 9.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+  warn: 'M12 3 22 20H2zM12 10v4M12 17v.5',
+  bad: 'M9 9l6 6M15 9l-6 6M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+}
+function HealthIcon({ tone }) {
+  return (
+    <svg className="health-ico" viewBox="0 0 24 24" aria-hidden="true">
+      <path d={HEALTH_ICON[tone] || HEALTH_ICON.warn} />
+    </svg>
+  )
+}
+
+// The health card: the verdict, and the page's actions beside it. `role="status"` sits on the
+// text alone, so a screen reader announces the verdict, never the button labels.
+function Health({ fleet, error, behind, onAction, onRebuild }) {
+  const doctor = (
+    <button type="button" className="btn ghost ldg-doctor" onClick={() => onAction('doctor')}>
+      Run doctor
+    </button>
+  )
   if (!fleet) {
     // A failed read is not a load in progress: no aria-busy, and no claim either way.
     return error ? (
-      <div className="health" role="status">
-        <span className="health-dot" aria-hidden="true" />
-        <p className="verdict-facts">
-          <b>Status unknown</b>
-        </p>
-      </div>
+      <section className="health unknown" aria-labelledby="ldg-health">
+        <HealthIcon tone="warn" />
+        <div className="health-text" role="status">
+          <h2 id="ldg-health">Status unknown</h2>
+        </div>
+        <div className="health-acts">{doctor}</div>
+      </section>
     ) : (
-      <div className="health" aria-busy="true" />
+      <div className="health unknown" aria-busy="true" />
     )
   }
   const v = fleetVerdict(fleet)
+  const facts = [...v.facts, ...(fleet.version ? [`Source is ${fleet.version}`] : [])]
   return (
-    <div className={`health ${v.tone}`} role="status">
-      <span className="health-dot" aria-hidden="true" />
-      <p className="verdict-facts">
-        <b>{v.head}</b>
-        {v.facts.map((f) => (
-          <span key={f} className="muted">
-            {f}
-          </span>
-        ))}
-      </p>
-    </div>
+    <section className={`health ${v.tone}`} aria-labelledby="ldg-health">
+      <HealthIcon tone={v.tone} />
+      <div className="health-text" role="status">
+        <h2 id="ldg-health">{v.head}</h2>
+        <p className="health-facts">{facts.join(' · ')}.</p>
+      </div>
+      <div className="health-acts">
+        {doctor}
+        {/* One primary per page: a rebuild that is due outranks an update that is due. It
+            rebuilds only the N installs that need it, each named in the confirm. */}
+        {behind.length ? (
+          <button
+            type="button"
+            className="btn"
+            title={`Rebuilds ${behind.map((t) => t.label).join(', ')}`}
+            onClick={() => onRebuild(behind)}
+          >
+            Rebuild all behind ({behind.length})
+          </button>
+        ) : null}
+      </div>
+    </section>
   )
 }
 
@@ -134,7 +172,15 @@ function TokCount({ chars }) {
   return <span className="mono">{approxTokens(n ?? chars)} tok</span>
 }
 
-// The carrier against its ceiling, as a ring: the one part of the cost a gate bounds.
+// Characters as the ≈ tokens the console shows (÷ 4), for the bars and rings that print counts.
+const tok = (chars) => Math.round(chars / 4)
+const PART_TONE = { carrier: 'accent', skills: 'skill', agents: 'agent', context: 'context' }
+const costParts = (c) =>
+  COST_PARTS.map(([k, l]) => ({ key: k, label: l, n: tok(c[k]), tone: PART_TONE[k] }))
+const labelOf = (i) => `${i.host} · ${i.scope}`
+
+// The carrier against its ceiling, as a small ring: the phone card's root-file mark (CSS shows
+// it only at phone width). Decorative: the row's own cells carry the figure in words.
 function CarrierRing({ cost, i }) {
   const R = 14
   const circ = 2 * Math.PI * R
@@ -155,31 +201,246 @@ function CarrierRing({ cost, i }) {
   )
 }
 
+// ---- the KPI row ----
+
+function Kpi({ id, title, aside, className = '', children }) {
+  return (
+    <section className={`panel ldg-kpi ${className}`} aria-labelledby={id}>
+      <div className="ldg-kpi-head">
+        <h3 id={id}>{title}</h3>
+        {aside}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function RootKpi({ installs }) {
+  const w = worstRootFile(installs)
+  return (
+    <Kpi id="ldg-k-root" title="Root file vs ceiling" className="ldg-kpi-root">
+      {w ? (
+        <div className="ldg-kpi-ring">
+          <span className="ldg-ringbox">
+            {/* Past its ceiling the ring is full and reads bad, as the row's bar does. */}
+            <Ring
+              value={tok(w.carrier)}
+              max={tok(w.ceiling)}
+              segments={
+                w.pct > 100
+                  ? [{ key: 'v', label: 'root file', n: tok(w.carrier), tone: 'bad' }]
+                  : undefined
+              }
+              size={64}
+              stroke={7}
+              label={`Worst root file: ${w.label}, ${w.pct} percent of its ceiling`}
+            />
+            <span className="mono ldg-ring-pct" aria-hidden="true">
+              {w.pct}%
+            </span>
+          </span>
+          <span className="ldg-kpi-stack">
+            <span className="mono ldg-kpi-fig">{`${approxTokens(w.carrier)} / ${approxTokens(w.ceiling)} tokens`}</span>
+            <span className="dim">{w.label}</span>
+          </span>
+        </div>
+      ) : (
+        <p className="dim">No root file to measure.</p>
+      )}
+    </Kpi>
+  )
+}
+
+function CostKpi({ installs }) {
+  const r = alwaysOnRange(installs)
+  const span =
+    r &&
+    (approxTokens(r.min) === approxTokens(r.max)
+      ? approxTokens(r.max)
+      : `${approxTokens(r.min)} – ${approxTokens(r.max)}`)
+  return (
+    <Kpi id="ldg-k-cost" title="Always-on cost per turn" className="ldg-kpi-cost">
+      {r ? (
+        <>
+          <span className="mono ldg-kpi-fig">{`${span} tokens`}</span>
+          <StackBar
+            parts={costParts(r.top.cost)}
+            label={`Most expensive, ${labelOf(r.top)}`}
+            legend={false}
+          />
+          <span className="dim ldg-kpi-cap">{`Bar: ${labelOf(r.top)}, the most expensive`}</span>
+        </>
+      ) : (
+        <p className="dim">No install has a root file to measure.</p>
+      )}
+    </Kpi>
+  )
+}
+
+function CallsKpi({ usage }) {
+  // `per_day` always spans the last 30 days, so the figure is named "since" only while fewer
+  // than 30 are counted; past that, an older `since` would pass a 30-day sum off as all-time.
+  const since = !usage?.enabled
+    ? null
+    : usage.days_counted < 30 && usage.since
+      ? `since ${usage.since}`
+      : '30 days'
+  return (
+    <Kpi
+      id="ldg-k-calls"
+      title="Skill and agent calls"
+      className="ldg-kpi-calls"
+      aside={since ? <span className="mono dim ldg-kpi-aside">{since}</span> : null}
+    >
+      {!usage ? (
+        <p className="dim">Usage could not be read.</p>
+      ) : !usage.enabled ? (
+        <p className="dim">Usage counting is off on this machine.</p>
+      ) : (
+        <>
+          <span className="mono ldg-kpi-fig">
+            <CountUp value={usageTotal(usage)} />
+          </span>
+          {usage.per_day?.length > 1 ? <Spark vals={usage.per_day} i={0} /> : null}
+        </>
+      )}
+    </Kpi>
+  )
+}
+
+function GatesKpi({ gates, laws }) {
+  const g = gateSummary(gates, laws)
+  return (
+    <Kpi
+      id="ldg-k-gates"
+      title="Gate asks · 30 days"
+      className="ldg-kpi-gates"
+      aside={
+        <a className="ldg-kpi-aside" href="#/laws" aria-label="Open the Constitution">
+          Constitution →
+        </a>
+      }
+    >
+      {!gates ? (
+        <p className="dim">Gate activity could not be read.</p>
+      ) : !g.total ? (
+        <p className="dim">No gate asked in 30 days.</p>
+      ) : (
+        <>
+          <span className="ldg-kpi-line">
+            <span className="mono ldg-kpi-fig">{g.total}</span>{' '}
+            <span className="dim">{`· ${g.top.name} ${g.top.n}`}</span>
+          </span>
+          {g.perDay.length > 1 ? <Spark vals={g.perDay} i={1} /> : null}
+        </>
+      )}
+    </Kpi>
+  )
+}
+
+// ---- the fleet table ----
+
+const COLS = 6
+
+function SyncCell({ i }) {
+  if (!i.diffable) {
+    return (
+      <span className="dim" title="Drift is only checked for global installs">
+        not checkable
+      </span>
+    )
+  }
+  const drift = driftTotal(i.drift)
+  // Unedited files the source has moved past: part of being behind, never a hand edit.
+  const stale = i.drift?.stale ?? 0
+  return (
+    <>
+      <span className="ldg-syncbar">
+        <StackBar
+          parts={[
+            { key: 'stale', label: 'Behind source', n: stale, tone: 'warn' },
+            { key: 'edited', label: 'Edited by hand', n: drift, tone: 'bad' },
+          ]}
+          label={`Sync with source, ${labelOf(i)}`}
+          legend={false}
+        />
+      </span>
+      {drift ? (
+        <span className="mono t-bad">{drift} edited</span>
+      ) : i.drift?.linked ? (
+        // The user's own links: shown, so their absence from the count is explained, but
+        // muted and with no Rebuild, because no rebuild clears them.
+        <span className="mono dim" title="Yours: links Geneseed leaves alone">
+          {i.drift.linked} linked
+        </span>
+      ) : (
+        <span className="mono dim">none</span>
+      )}
+      {stale ? (
+        <div className="mono dim ldg-sub">
+          {stale} file{stale === 1 ? '' : 's'} behind
+        </div>
+      ) : null}
+    </>
+  )
+}
+
+// What differs from the source, in words, for the details row.
+function differs(i) {
+  if (!i.diffable) return 'Not checkable: drift is only checked for global installs.'
+  const d = i.drift || {}
+  const parts = [
+    d.stale ? `${d.stale} behind` : null,
+    d.edited ? `${d.edited} edited` : null,
+    d.added ? `${d.added} added` : null,
+    d.missing ? `${d.missing} missing` : null,
+    d.linked ? `${d.linked} linked (yours)` : null,
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Nothing differs.'
+}
+
 function FleetRow({ i, n, onRebuild, onOpen, busy }) {
-  const label = `${i.host} · ${i.scope}`
+  const [open, setOpen] = useState(false)
+  const label = labelOf(i)
   const where = (
     <td className="ldg-where">
       {/* The console's own sweep, while a rebuild job that names this row runs. */}
       {busy ? (
         <span className="console-progress" role="progressbar" aria-label={`Rebuilding ${label}`} />
       ) : null}
-      <span className="ldg-host">{i.host}</span> <span className="dim">{i.scope}</span>
-      <div className="mono dim ldg-path">{i.path}</div>
+      <div className="ldg-who">
+        {needsRebuild(i) ? (
+          <svg
+            className={`ldg-glyph ${driftTotal(i.drift) ? 'bad' : 'warn'}`}
+            viewBox="0 0 10 10"
+            role="img"
+            aria-label={driftTotal(i.drift) ? 'edited by hand' : 'needs a rebuild'}
+          >
+            <path d="M5 1 9 9H1z" fill="currentColor" />
+          </svg>
+        ) : null}
+        {i.state === 'active' && i.cost ? (
+          <span className="ldg-phone-ring" aria-hidden="true">
+            <CarrierRing cost={i.cost} i={n} />
+          </span>
+        ) : null}
+        <div className="ldg-name">
+          <span className="ldg-host">{i.host}</span> <span className="dim">{i.scope}</span>
+          <div className="mono dim ldg-path">{i.path}</div>
+        </div>
+      </div>
     </td>
   )
   if (i.state !== 'active') {
     return (
       <tr className="ldg-off">
         {where}
-        <td>
-          {i.theme} <span className="dim">· {i.footprint}</span>
-        </td>
-        <td>
+        <td className="ldg-build">
           <span className="pill off">disabled</span>
         </td>
-        <td />
-        <td />
-        <td />
+        <td className="ldg-sync" />
+        <td className="ldg-root" />
+        <td className="ldg-total" />
         <td className="ldg-act">
           <button
             type="button"
@@ -193,9 +454,6 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
       </tr>
     )
   }
-  const drift = driftTotal(i.drift)
-  // Unedited files the source has moved past: part of being behind, never a hand edit.
-  const stale = i.drift?.stale ?? 0
   const sync = {
     synced: <span className="pill good">in step</span>,
     behind: <span className="pill warn">behind source</span>,
@@ -204,83 +462,121 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
   const total = costTotal(i.cost)
   // A zero or absent ceiling has no percentage; dividing by it printed "Infinity%" or "NaN%".
   const ceilPct = i.cost?.ceiling ? Math.round((i.cost.carrier / i.cost.ceiling) * 100) : null
-  const ceilText = ceilPct === null ? 'no ceiling' : `root file ${ceilPct}% of ceiling`
   return (
-    <tr>
-      {where}
-      <td>
-        {i.theme} <span className="dim">· {i.footprint}</span>
-      </td>
-      <td>
-        {sync}
-        {stale ? (
+    <>
+      <tr className={open ? 'ldg-open' : ''}>
+        {where}
+        <td className="ldg-build">
+          {sync}
           <div className="mono dim ldg-sub">
-            {stale} file{stale === 1 ? '' : 's'} behind
+            {i.built_epoch ? `built ${relTime(i.built_epoch)} ago` : 'never built'}
           </div>
-        ) : null}
-      </td>
-      <td>
-        {!i.diffable ? (
-          <span className="dim" title="Drift is only checked for global installs">
-            not checkable
-          </span>
-        ) : drift ? (
-          <span className="mono t-warn">{drift} edited</span>
-        ) : i.drift?.linked ? (
-          // The user's own links: shown, so their absence from the count is explained, but
-          // muted and with no Rebuild, because no rebuild clears them.
-          <span className="mono dim" title="Yours: links Geneseed leaves alone">
-            {i.drift.linked} linked
-          </span>
-        ) : (
-          <span className="mono dim">none</span>
-        )}
-      </td>
-      <td>
-        {i.cost ? (
-          <div
-            className="ldg-cost"
-            title={
-              ceilPct === null
-                ? 'no ceiling'
-                : `root file ${ceilPct}% of the ${i.footprint} ceiling`
-            }
-          >
-            <CarrierRing cost={i.cost} i={n} />
-            <span>
-              <TokCount chars={total} />
-              <span className="dim ldg-sub">{ceilText}</span>
-            </span>
-          </div>
-        ) : (
-          <span className="dim">not measured</span>
-        )}
-      </td>
-      <td className="mono dim">{i.built_epoch ? `${relTime(i.built_epoch)} ago` : 'never'}</td>
-      <td className="ldg-act">
-        {/* Rebuilds this row's install alone (the `rebuild` action), after a confirm. */}
-        {needsRebuild(i) ? (
+        </td>
+        <td className="ldg-sync">
+          <SyncCell i={i} />
+        </td>
+        <td className="ldg-root">
+          {!i.cost ? (
+            <span className="dim">not measured</span>
+          ) : ceilPct === null ? (
+            <span className="dim">no ceiling</span>
+          ) : (
+            <>
+              <span className="ldg-rootbar">
+                <Bar
+                  value={tok(i.cost.carrier)}
+                  max={tok(i.cost.ceiling)}
+                  label={`Root file, ${label}`}
+                  tone={ceilPct > 100 ? 'bad' : 'accent'}
+                />
+              </span>
+              <span className="mono dim ldg-sub">
+                {`${approxTokens(i.cost.carrier)} / ${approxTokens(i.cost.ceiling)} · ${ceilPct}%`}
+              </span>
+            </>
+          )}
+        </td>
+        <td className="ldg-total">{i.cost ? <TokCount chars={total} /> : null}</td>
+        <td className="ldg-act">
+          {/* Rebuilds this row's install alone (the `rebuild` action), after a confirm. */}
+          {needsRebuild(i) ? (
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-label={`Rebuild ${label}`}
+              title={`Rebuilds ${label} only`}
+              onClick={() => onRebuild([rebuildTarget(i)])}
+            >
+              Rebuild
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn ghost sm"
+              aria-label={`Open ${label}`}
+              onClick={() => onOpen(i)}
+            >
+              Open
+            </button>
+          )}
           <button
             type="button"
-            className="btn ghost sm"
-            aria-label={`Rebuild ${label}`}
-            title={`Rebuilds ${label} only`}
-            onClick={() => onRebuild([rebuildTarget(i)])}
+            className="btn ghost sm ldg-toggle"
+            aria-label={`Details for ${label}`}
+            aria-expanded={open}
+            aria-controls={open ? `ldg-detail-${i.id}` : undefined}
+            onClick={() => setOpen((o) => !o)}
           >
-            Rebuild
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d={open ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} />
+            </svg>
           </button>
-        ) : (
-          <button
-            type="button"
-            className="btn ghost sm"
-            aria-label={`Open ${label}`}
-            onClick={() => onOpen(i)}
-          >
-            Open
-          </button>
-        )}
-      </td>
-    </tr>
+        </td>
+      </tr>
+      {/* Rendered only while open (never hidden by CSS), so a collapsed row carries no text. */}
+      {open ? (
+        <tr className="ldg-detail" id={`ldg-detail-${i.id}`}>
+          <td colSpan={COLS}>
+            <div className="ldg-detail-grid">
+              <div className="ldg-detail-col">
+                {i.cost ? (
+                  <>
+                    <span className="ldg-lbl">{`What rides every turn · ${approxTokens(total)} tokens`}</span>
+                    <StackBar parts={costParts(i.cost)} label={label} />
+                  </>
+                ) : (
+                  <span className="dim">Always-on cost not measured.</span>
+                )}
+                <span className="dim">{`Voice ${i.theme} · ${i.footprint} footprint`}</span>
+              </div>
+              <div className="ldg-detail-col">
+                <span className="ldg-lbl">Differs from source</span>
+                <span className="muted">{differs(i)}</span>
+                {i.diffable ? (
+                  <span>
+                    <a
+                      className="btn ghost sm"
+                      href="#/installs/edits"
+                      aria-label={`View diff for ${label}`}
+                    >
+                      View diff
+                    </a>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   )
 }
 
@@ -289,7 +585,7 @@ function Needs({ rows, onAction, onRebuild }) {
   return (
     <section className="panel" aria-labelledby="ldg-needs">
       <div className="panel-head panel-head-rule">
-        <h2 id="ldg-needs">Needs attention</h2>
+        <h2 id="ldg-needs">Needs you</h2>
         <span className="mono dim">
           {problems} problem{problems === 1 ? '' : 's'}, {rows.length - problems} suggestion
           {rows.length - problems === 1 ? '' : 's'}
@@ -329,67 +625,7 @@ function Needs({ rows, onAction, onRebuild }) {
   )
 }
 
-function CostChart({ installs }) {
-  const act = installs.filter((i) => i.state === 'active' && i.cost)
-  const max = Math.max(1, ...act.map((i) => Math.max(costTotal(i.cost), i.cost.ceiling || 0)))
-  return (
-    <section className="panel chart-card" aria-labelledby="ldg-cost">
-      <div className="panel-head">
-        <h2 id="ldg-cost">Always-on cost</h2>
-        <span className="mono dim">≈ tokens per session</span>
-      </div>
-      {act.length ? (
-        act.map((i, n) => (
-          <div className="cost-row" key={i.id}>
-            <div className="cost-lab">
-              <span>
-                {i.host} <span className="dim">{i.scope}</span>
-              </span>
-              <span className="mono">{approxTokens(costTotal(i.cost))}</span>
-            </div>
-            <div className="cost-stack">
-              <span className="cost-segs" style={{ '--i': n }}>
-                {COST_PARTS.map(([k]) => (
-                  <span key={k} className={`cs-${k}`} style={{ width: pct(i.cost[k], max) }} />
-                ))}
-              </span>
-            </div>
-            {/* The ceiling bounds the root file alone, so it is drawn against the root file
-                alone: on the total stack it read as a cap on the whole session cost. */}
-            {i.cost.ceiling ? (
-              <div
-                className="cost-stack cost-lane"
-                title={`root file ${Math.round((i.cost.carrier / i.cost.ceiling) * 100)}% of ceiling`}
-              >
-                <span className="cost-segs" style={{ '--i': n }}>
-                  <span className="cs-carrier" style={{ width: pct(i.cost.carrier, max) }} />
-                </span>
-                <span className="cost-ceil" style={{ left: pct(i.cost.ceiling, max) }} />
-              </div>
-            ) : null}
-          </div>
-        ))
-      ) : (
-        <p className="dim">No install has a root file to measure.</p>
-      )}
-      <div className="cost-key">
-        {COST_PARTS.map(([k, l]) => (
-          <span key={k}>
-            <i className={`cs-${k}`} />
-            {l}
-          </span>
-        ))}
-        <span>
-          <i className="cost-ceil-key" />
-          root file ceiling
-        </span>
-      </div>
-      <p className="dim chart-foot">Estimated as characters ÷ 4 from the emitted files.</p>
-    </section>
-  )
-}
-
-function UsageChart({ usage }) {
+function WhatFires({ usage }) {
   const head = (
     <div className="panel-head">
       <h2 id="ldg-usage">What fires</h2>
@@ -398,7 +634,7 @@ function UsageChart({ usage }) {
   )
   if (!usage) {
     return (
-      <section className="panel chart-card" aria-labelledby="ldg-usage">
+      <section className="panel" aria-labelledby="ldg-usage">
         {head}
         <p className="dim">Usage could not be read.</p>
       </section>
@@ -406,7 +642,7 @@ function UsageChart({ usage }) {
   }
   if (!usage.enabled) {
     return (
-      <section className="panel chart-card" aria-labelledby="ldg-usage">
+      <section className="panel" aria-labelledby="ldg-usage">
         {head}
         <p className="dim">Usage counting is off on this machine.</p>
       </section>
@@ -414,7 +650,7 @@ function UsageChart({ usage }) {
   }
   if (usage.days_counted < 30) {
     return (
-      <section className="panel chart-card" aria-labelledby="ldg-usage">
+      <section className="panel" aria-labelledby="ldg-usage">
         {head}
         <p className="muted">
           {usage.since ? (
@@ -439,32 +675,15 @@ function UsageChart({ usage }) {
   }
   const top = usage.rows.slice(0, 7)
   const max = Math.max(1, ...top.map((r) => r.n))
-  const dmax = Math.max(1, ...usage.per_day)
-  const sum = usage.per_day.reduce((a, b) => a + b, 0)
   return (
-    <section className="panel chart-card" aria-labelledby="ldg-usage">
+    <section className="panel" aria-labelledby="ldg-usage">
       {head}
-      <div className="cols30-wrap">
-        <div className="chart-axis mono dim">
-          <span>calls per day</span>
-          <span>
-            <CountUp value={sum} /> in 30 d
-          </span>
-        </div>
-        <div className="cols30" aria-hidden="true">
-          {usage.per_day.map((v, d) => (
-            <i
-              key={d}
-              className={d === 29 ? 'today' : ''}
-              style={{ height: pct(v, dmax), '--i': d }}
-            />
-          ))}
-        </div>
-      </div>
       <ul className="ubars">
         {top.map((r, j) => (
           <li key={`${r.install}:${r.kind}:${r.name}`} className={r.kind}>
-            <span className="ub-name">{r.name}</span>
+            <span className="ub-name">
+              {r.name} <span className="dim">{r.kind}</span>
+            </span>
             <span className="ub-trk">
               <i style={{ width: pct(r.n, max), '--i': j }} />
             </span>
@@ -482,52 +701,6 @@ function UsageChart({ usage }) {
           </a>
         </div>
       ) : null}
-    </section>
-  )
-}
-
-function Spark({ vals, i }) {
-  const w = 96
-  const h = 22
-  const max = Math.max(1, ...vals)
-  const step = w / (vals.length - 1)
-  const pts = vals.map(
-    (v, d) => `${(d * step).toFixed(1)},${(h - 2 - (v / max) * (h - 5)).toFixed(1)}`,
-  )
-  const [lx, ly] = pts[pts.length - 1].split(',')
-  return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ '--i': i }}>
-      <polyline points={`0,${h - 1} ${w},${h - 1}`} className="spk-base" />
-      <polygon className="spk-area" points={`0,${h - 1} ${pts.join(' ')} ${w},${h - 1}`} />
-      <polyline className="spk-line" pathLength="1" points={pts.join(' ')} />
-      <circle className="spk-end" cx={lx} cy={ly} r="2.4" />
-    </svg>
-  )
-}
-
-function GatesChart({ gates, laws }) {
-  const rows = gateRows(gates, laws)
-  return (
-    <section className="panel chart-card" aria-labelledby="ldg-gates">
-      <div className="panel-head">
-        <h2 id="ldg-gates">Gates</h2>
-        <span className="mono dim">asks per rule, 30 d</span>
-      </div>
-      {rows.length ? (
-        <ul className="gate-rows">
-          {rows.slice(0, 6).map((r, j) => (
-            <li key={r.rule}>
-              <span>{r.name}</span>
-              <Spark vals={r.per_day} i={j} />
-              <span className="mono">{r.n}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="dim">
-          {gates ? 'No gate asked in 30 days.' : 'Gate activity could not be read.'}
-        </p>
-      )}
     </section>
   )
 }
@@ -604,8 +777,6 @@ export default function Ledger({
     skills,
     laws,
   })
-  // One primary per page: a rebuild that is due outranks an update that is due. It rebuilds
-  // only the N installs that need it, each named in the confirm.
   const behind = installs.filter(needsRebuild).map(rebuildTarget)
   const rebuild = async (targets) => {
     const names = targets.map((t) => t.label)
@@ -632,40 +803,40 @@ export default function Ledger({
   return (
     <>
       <PageHeader
+        eyebrow={
+          fleet
+            ? `${installs.length} harness${installs.length === 1 ? '' : 'es'} installed on this machine`
+            : null
+        }
         title="Overview"
-        sub={
-          <span className="mono">
-            {fleet ? `${installs.length} installed · machine-wide` : ' '}
-          </span>
-        }
-        primary={
-          behind.length ? (
-            <button
-              type="button"
-              className="btn"
-              title={`Rebuilds ${behind.map((t) => t.label).join(', ')}`}
-              onClick={() => rebuild(behind)}
-            >
-              Rebuild all behind ({behind.length})
-            </button>
-          ) : null
-        }
         actions={
           <>
             <VersionChip update={update} onAction={onAction} canFill={!behind.length} />
-            <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
-              Run doctor
-            </button>
             {view}
           </>
         }
       />
       {banner}
       <div className="ov-stack ldg">
-        <Verdict fleet={fleet} error={fleetError} />
+        <Health
+          fleet={fleet}
+          error={fleetError}
+          behind={behind}
+          onAction={onAction}
+          onRebuild={rebuild}
+        />
+        <div className="ldg-kpis" role="group" aria-labelledby="ldg-kpis-h">
+          <h2 id="ldg-kpis-h" className="sr-only">
+            Key figures
+          </h2>
+          <RootKpi installs={installs} />
+          <CostKpi installs={installs} />
+          <CallsKpi usage={usage} />
+          <GatesKpi gates={gates} laws={laws} />
+        </div>
         <section className="panel" aria-labelledby="ldg-fleet">
           <div className="panel-head panel-head-rule">
-            <h2 id="ldg-fleet">Installs</h2>
+            <h2 id="ldg-fleet">Installed harnesses</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
           {fleetError && fleet ? (
@@ -682,11 +853,18 @@ export default function Ledger({
               <thead>
                 <tr>
                   <th scope="col">Install</th>
-                  <th scope="col">Voice</th>
-                  <th scope="col">Sync</th>
-                  <th scope="col">Hand edits</th>
-                  <th scope="col">Always-on</th>
-                  <th scope="col">Built</th>
+                  <th scope="col" className="ldg-build">
+                    Build
+                  </th>
+                  <th scope="col" className="ldg-sync">
+                    Sync with source
+                  </th>
+                  <th scope="col" className="ldg-root">
+                    Root file · ceiling
+                  </th>
+                  <th scope="col" className="ldg-total">
+                    Always-on
+                  </th>
                   <th scope="col">
                     <span className="sr-only">Actions</span>
                   </th>
@@ -695,7 +873,7 @@ export default function Ledger({
               <tbody>
                 {fleetError && !fleet ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={COLS}>
                       <span className="dim" role="status">
                         Could not read the installs
                       </span>{' '}
@@ -719,11 +897,9 @@ export default function Ledger({
             </table>
           </div>
         </section>
-        <Needs rows={needs} onAction={onAction} onRebuild={rebuild} />
-        <div className="ov-charts">
-          <CostChart installs={installs} />
-          <UsageChart usage={usage} />
-          <GatesChart gates={gates} laws={laws} />
+        <div className="ldg-bottom">
+          <Needs rows={needs} onAction={onAction} onRebuild={rebuild} />
+          <WhatFires usage={usage} />
         </div>
       </div>
     </>
