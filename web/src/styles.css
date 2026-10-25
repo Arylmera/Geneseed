@@ -2686,6 +2686,33 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .reader-src { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .lib-reader .hr { margin: 6px 0; }
 .lib-reader .detail-doc { padding: 0; max-width: 76ch; }
+/* The Library's own "dossier" look (pages/Library.jsx sets .lib-dossier; Docs, Loops and Kits
+   reuse .library, so nothing here may be scoped to .library alone). List: the "Show" chips
+   under the filter, wrapping on a narrow pane; the open row marked by an accent edge too, not
+   by tint alone; on a kind with usage, one compact line per row (name, bar, count) since the
+   description is in the reader. Specificity beats the LU block further down. */
+.lib-dossier .lib-list-head { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; }
+.lib-dossier .lib-since { font-size: 11px; }
+.lib-dossier .lib-tools { padding: 10px 18px; border-bottom: 1px solid var(--line); }
+.lib-dossier .lib-tools .seg { flex-wrap: wrap; max-width: 100%; }
+.lib-dossier .lib-row.on { box-shadow: inset 3px 0 0 var(--accent); }
+.lib-dossier.uses .lr-desc { display: none; }
+.lib-dossier .lr-use .ub-trk { width: 70px; }
+.lib-dossier .lr-use .mono { min-width: 3ch; text-align: right; }
+/* Reader: tags, the source path with its Copy button, title; then the lede and the "Use when"
+   note on an accent edge, with the usage tiles beside them on a wide reader (.reader-intro). */
+.lib-dossier .reader-tags .reader-src { margin-left: 4px; }
+.lib-dossier .lib-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3); margin: 0; max-width: 76ch; }
+.lib-dossier .lib-stats .stat { border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 12px 14px; min-width: 0; }
+.reader-when { display: flex; flex-direction: column; gap: 4px; max-width: 76ch;
+  padding: 4px 0 4px 14px; border-left: 3px solid var(--accent); }
+.reader-when-h { margin: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.reader-when p { margin: 0; }
+.reader-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--sp-3); }
 
 /* ---- Personal ---- */
 .card-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;

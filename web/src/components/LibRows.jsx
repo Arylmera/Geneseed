@@ -29,8 +29,9 @@ export function filterRows(rows, q) {
 // The rows are ONE tab stop (a roving tabindex, `rove`): Tab enters on the focused row, else
 // the open one, else the first, and the next Tab leaves the list. ArrowDown in the filter
 // enters it. The open row is announced in a live region, since a click or Enter changes the
-// reader beside the list, which a screen reader does not otherwise hear.
-export function LibList({ label, count, extra, q, onQ, matched, inView, children }) {
+// reader beside the list, which a screen reader does not otherwise hear. `tools` sits under
+// the filter (the Library's "Show" chips); the other lists pass none.
+export function LibList({ label, count, extra, tools, q, onQ, matched, inView, children }) {
   const rowsRef = useActiveRowInView(inView)
   // After every render: the caller owns the rows, so any render may add or drop them.
   useLayoutEffect(() => rove(rowsRef.current))
@@ -65,6 +66,7 @@ export function LibList({ label, count, extra, q, onQ, matched, inView, children
         placeholder={`Filter ${label.toLowerCase()}`}
         label={`Filter ${label}`}
       />
+      {tools ? <div className="lib-tools">{tools}</div> : null}
       <div
         className="lib-rows"
         ref={rowsRef}

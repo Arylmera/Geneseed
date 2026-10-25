@@ -99,6 +99,29 @@ function UseStats({ u, usage, noCall }) {
   )
 }
 
+// A skill or agent description is "what it is. Use when: the trigger." The reader prints the
+// two apart, as the lede and a "Use when" note; a description without the marker is all lede.
+export function splitWhen(desc) {
+  // The colon is the marker: "use when you…" or "use whenever" in prose is not one.
+  const m = /\s*\bUse when:\s*/i.exec(desc || '')
+  if (!m) return { lede: desc || '', when: '' }
+  const when = desc.slice(m.index + m[0].length).trim()
+  return {
+    lede: desc.slice(0, m.index).trim(),
+    when: when && when[0].toUpperCase() + when.slice(1),
+  }
+}
+
+// The Docs page that explains each kind, for the reader's "About … in Docs" link.
+const DOC_OF = {
+  skills: 'skills',
+  agents: 'agents',
+  memory: 'memory',
+  notebook: 'notebook',
+  wiki: 'wiki',
+  config: 'project-context',
+}
+
 const resolveSec = (s, lock) => lock || (s && LIBRARY_ORDER.includes(s) ? s : LIBRARY_ORDER[0])
 const enc = encodeURIComponent
 
@@ -143,11 +166,15 @@ export default function Library({
   const [q, setQ] = useState('')
   // The skill class picked under Skills in the rail ('all' or a SKILL_CATS key). Skills only; reset with the kind.
   const [cat, setCat] = useState('all')
-  // The usage filter ('all' | 'used' | 'unused'), skills and agents only; reset with the kind.
+  // The list filter ('all' | 'used' | 'unused' | 'experimental'): the usage half for skills and
+  // agents only, the lifecycle half wherever an entry is experimental; reset with the kind.
   const [use, setUse] = useState('all')
   // A failed memory action (promote, forget), shown in the page's error slot until the
   // next one.
   const [actionErr, setActionErr] = useState('')
+  // The last copy of a source path and how it went ({ src, ok }), so the button says so for
+  // that path; a blocked clipboard (a plain-HTTP address has none) says so too.
+  const [copied, setCopied] = useState(null)
 
   // Follow the route's section, and drop any filter text so it doesn't carry across kinds.
   // Adjusted during render against the last-seen prop, not in an effect.
@@ -242,8 +269,29 @@ export default function Library({
   // category only when one exists.
   const inCat = isSkills ? skillSplit.rows.filter((it) => cat === 'all' || it.cat === cat) : items
   const nUnused = useOn ? inCat.filter(unused).length : 0
-  const useF = useOn ? use : 'all'
-  const pool = useF === 'all' ? inCat : inCat.filter((it) => unused(it) === (useF === 'unused'))
+  const isExp = (it) => it.status === 'experimental'
+  const nExp = inCat.filter(isExp).length
+  // The "Show" chips: what this kind can be narrowed by. A choice that is no longer on offer
+  // (the class picked holds no experimental entry) falls back to All.
+  const shows = [
+    ['all', 'All', inCat.length],
+    ...(useOn
+      ? [
+          ['used', 'Used', inCat.length - nUnused],
+          ['unused', 'Not used yet', nUnused, noCall],
+        ]
+      : []),
+    ...(nExp
+      ? [['experimental', 'Experimental', nExp, 'Shipped, not yet confirmed by real use']]
+      : []),
+  ]
+  const useF = shows.some(([k]) => k === use) ? use : 'all'
+  const pool =
+    useF === 'all'
+      ? inCat
+      : useF === 'experimental'
+        ? inCat.filter(isExp)
+        : inCat.filter((it) => unused(it) === (useF === 'unused'))
   const useMax = useOn ? Math.max(0, ...items.map((it) => callsOf(it.name)?.n || 0)) : 0
 
   // Render-cap the list so a big kind (a wiki vault is the case that bites) doesn't paint
@@ -320,11 +368,26 @@ export default function Library({
   const status = item?.status || activeItem?.status
   const skillCat = sec === 'skills' ? SKILL_CATS[fromCatalog?.klass] : null
   const label = SECTIONS[sec].label
+  const desc = item?.desc || activeItem?.desc || ''
+  const { lede, when } = splitWhen(desc)
+  const src = activeItem
+    ? item?.source || activeItem.source || (itemErr ? null : libSource(sec, activeItem.name))
+    : null
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(src)
+      setCopied({ src, ok: true })
+    } catch {
+      // The path stays on screen to select by hand.
+      setCopied({ src, ok: false })
+    }
+  }
 
   return (
     <>
       <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
-      <div className={`library${lock ? ' locked' : ''}`}>
+      {/* `lib-dossier` scopes the Library's own look: Docs, Loops and Kits reuse `.library`. */}
+      <div className={`library lib-dossier${lock ? ' locked' : ''}${useOn ? ' uses' : ''}`}>
         {lock ? null : (
           <aside className="lib-kinds" aria-label="Library kinds">
             <div className="lib-title">
@@ -367,18 +430,19 @@ export default function Library({
           matched={matches.length}
           inView={[sec, selected]}
           extra={
-            useOn ? (
+            useOn && usage.since ? (
+              <span className="mono dim lib-since">calls since {usage.since}</span>
+            ) : null
+          }
+          tools={
+            shows.length > 1 ? (
               <Seg aria-label="Show">
-                {[
-                  ['all', 'All', inCat.length, undefined],
-                  ['used', 'Used', inCat.length - nUnused, undefined],
-                  ['unused', 'Not used yet', nUnused, noCall],
-                ].map(([k, l, n, t]) => (
+                {shows.map(([k, l, n, t]) => (
                   <button
                     type="button"
                     key={k}
-                    className={use === k ? 'on' : ''}
-                    aria-pressed={use === k}
+                    className={useF === k ? 'on' : ''}
+                    aria-pressed={useF === k}
                     title={t}
                     onClick={() => setUse(k)}
                   >
@@ -403,7 +467,7 @@ export default function Library({
                         <span className="ub-trk" aria-hidden="true">
                           <i style={{ width: pct(n, useMax) }} />
                         </span>
-                        <span className="mono">
+                        <span className={n ? 'mono' : 'mono dim'}>
                           {n}
                           <span className="sr-only">{n === 1 ? ' call' : ' calls'}</span>
                         </span>
@@ -445,24 +509,32 @@ export default function Library({
                   <KitBadge name={item?.kit ?? activeItem.kit} />
                 ) : null}
                 <StatusBadge status={status} />
+                {src ? (
+                  <>
+                    <span className="mono dim reader-src">{src}</span>
+                    <button type="button" className="btn ghost sm" onClick={onCopy}>
+                      {copied?.src !== src ? 'Copy path' : copied.ok ? 'Copied' : 'Copy failed'}
+                    </button>
+                  </>
+                ) : null}
               </div>
               <div className="reader-head">
                 <h2 className="reader-title">{title}</h2>
                 {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
                 {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
               </div>
-              {/* The usage card sits beside the lede where the reader is wide enough, under it
-                  where it is not (a container query on .lib-reader). */}
+              {/* The usage tiles sit beside the lede where the reader is wide enough, under it
+                  where it is not (a container query on .lib-reader). The user asked for this
+                  compact header (2026-10-25), over the mockup's tiles-under-the-lede. */}
               <div className={`reader-intro${useOn ? ' with-stats' : ''}`}>
                 <div className="reader-intro-text">
-                  {(item?.desc || activeItem.desc) && (
-                    <p className="reader-lede">{item?.desc || activeItem.desc}</p>
-                  )}
-                  <p className="mono dim reader-src">
-                    {item?.source ||
-                      activeItem.source ||
-                      (itemErr ? null : libSource(sec, activeItem.name))}
-                  </p>
+                  {lede ? <p className="reader-lede">{lede}</p> : null}
+                  {when ? (
+                    <section className="reader-when">
+                      <h3 className="reader-when-h">Use when</h3>
+                      <p>{when}</p>
+                    </section>
+                  ) : null}
                 </div>
                 {useOn ? (
                   <UseStats u={callsOf(activeItem.name)} usage={usage} noCall={noCall} />
@@ -505,6 +577,13 @@ export default function Library({
               ) : (
                 <EmptyDoc section={sec} source={libSource(sec, activeItem.name)} />
               )}
+              {DOC_OF[sec] ? (
+                <div className="reader-links">
+                  <a className="btn ghost sm" href={`#/docs/${DOC_OF[sec]}`}>
+                    About {label.toLowerCase()} in Docs
+                  </a>
+                </div>
+              ) : null}
             </>
           ) : empty ? null : (
             // An empty kind has nothing to pick; the list pane already says how to fill it.
