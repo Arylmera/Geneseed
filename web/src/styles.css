@@ -3231,6 +3231,26 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .lr-sub.lr-warn { fill: var(--warn-text); }
 .lr-sub.lr-acc { fill: var(--accent-text); }
 .lr-title { font-size: 18px; font-weight: 700; fill: var(--text); }
+/* The ring console (V6b mockup): the ring with "How it runs" beside it — under it once the
+   reader is narrow — then the command that starts the loop. */
+.loop-console { margin: 0; display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.loop-console .loop-graph { flex: 1 1 420px; }
+.loop-how { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 10px;
+  font-size: 13px; }
+.loop-how ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px;
+  color: var(--text-2); overflow-wrap: anywhere; }
+.loop-how b { color: var(--text); }
+.loop-kicker { margin: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+.loop-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--text-2); }
+.loop-legend i { display: inline-block; width: 14px; margin-right: 5px; vertical-align: middle; }
+.loop-legend i.ring { border-top: 3px solid var(--accent); }
+.loop-legend i.inner { border-top: 2.5px solid var(--good); }
+.loop-start { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.loop-start-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.loop-start pre { margin: 0; padding: 12px 14px; font-size: 12.5px; overflow-x: auto; }
+.loop-running { margin: 0; }
 
 /* V2/V3 integration (2026-10-24) */
 /* Focus moves to <main> on every page change (route effects); the page itself needs no ring. */

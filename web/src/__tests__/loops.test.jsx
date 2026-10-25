@@ -1,6 +1,8 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest'
+import bugfix from '../../../src/loops/bugfix.json'
+import feature from '../../../src/loops/feature.json'
 
 // The Loops page in the Library's three panes, over fixture `/api/loops` and
 // `/api/loops/active` payloads: the rail of sections with their counts, each section's list —
@@ -10,7 +12,7 @@ vi.mock('../api/index.js', () => ({
   api: { loops: vi.fn(), activeLoops: vi.fn(), setLoopPreset: vi.fn() },
 }))
 
-import Loops from '../pages/Loops.jsx'
+import Loops, { howItRuns } from '../pages/Loops.jsx'
 import { api } from '../api/index.js'
 import { clearAsyncCache } from '../hooks/useAsync.js'
 
@@ -690,5 +692,98 @@ describe('Loops — what the page explains', () => {
     expect(
       document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length,
     ).toBeLessThanOrEqual(1)
+  })
+})
+
+// V6b ring console: beside the ring, the loop in words; under it, the command that starts it,
+// and how many runs of it are registered now.
+describe('Loops — the ring console', () => {
+  // bugfix as shipped (src/loops/bugfix.json): one setup step, a four-step iteration, two
+  // retries, one exit and one stop — every line the summary can print, in run order.
+  it('says how a template runs, every part in run order', () => {
+    expect(howItRuns(bugfix)).toEqual([
+      ['Setup', 'reproduce, once.'],
+      ['Iteration (max 20)', 'identify → apply → test → review.'],
+      ['Retry', 'apply ⇄ test, max 2; apply → test → review, max 3.'],
+      ['Exit', 'identify says done → close.'],
+      ['Stop', 'reproduce says fail, or any step says error → stop.'],
+    ])
+  })
+
+  // feature (as shipped): done-check is in the iteration, but only `identify says done` leads to
+  // it, so it reads as the way out, not as a fifth step of every turn.
+  it('reads a closing check as the exit, not a step of every turn', () => {
+    expect(howItRuns(feature).slice(1)).toEqual([
+      ['Iteration (max 20)', 'identify → apply → test → review.'],
+      ['Retry', 'apply ⇄ test, max 2; apply → test → review, max 3.'],
+      ['Exit', 'identify says done → done-check; done-check says pass → close.'],
+      ['Stop', 'any step says error → stop.'],
+    ])
+  })
+
+  // No iteration loop: the ring falls back to a flow, and the words to its steps. Two stop
+  // outcomes on one node read as one clause.
+  it('reads a graph with no iteration as its steps', () => {
+    const g = {
+      name: 'f',
+      nodes: ['a', 'b'],
+      edges: [
+        { from: 'a', on: 'stable', to: '$stop' },
+        { from: 'a', on: 'broken', to: '$stop' },
+        { from: 'b', on: 'pass', to: '$close' },
+      ],
+    }
+    expect(howItRuns(g)).toEqual([
+      ['Steps', 'a → b.'],
+      ['Exit', 'b says pass → close.'],
+      ['Stop', 'a says stable or broken, or any step says error → stop.'],
+    ])
+  })
+
+  it('prints the summary beside the ring, inside one figure', async () => {
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+    const fig = reader().querySelector('figure.loop-console')
+    expect(fig.querySelector('svg.loop-ring')).toBeTruthy()
+    expect(text('figcaption li', fig)).toEqual([
+      'Setup: setup, once.',
+      'Iteration (max 7): identify → apply.',
+      'Exit: identify says done → close.',
+      'Stop: any step says error → stop.',
+    ])
+  })
+
+  it('gives the command that starts the template, and copies it', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    const was = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    onTestFinished(() =>
+      was ? Object.defineProperty(navigator, 'clipboard', was) : delete navigator.clipboard,
+    )
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+    const cmd = 'geneseed loop init --graph tiny --title "<title>" --requirement "<requirement>"'
+    const box = screen.getByRole('region', { name: 'Start it in your project' })
+    expect(box.querySelector('pre').textContent).toBe(cmd)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy command' }))
+    expect(writeText).toHaveBeenCalledWith(cmd)
+    expect(await screen.findByText('Copied')).toBeTruthy()
+  })
+
+  // Only live runs started from this template count; a finished one has no graph left.
+  it('counts the live runs of the template on display', async () => {
+    api.activeLoops.mockImplementation(() =>
+      Promise.resolve({ loops: [RUN, { ...WAITING, graph: { ...GRAPH, name: 'adr' } }, DONE] }),
+    )
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText(/^Running now: 1 of this template\./)
+    expect(reader().querySelector('.loop-running a').getAttribute('href')).toBe('#/loops/active')
+  })
+
+  // A run of another template (RUN is a `tiny` run) does not count for this one.
+  it('says none is running when no run uses it', async () => {
+    api.activeLoops.mockImplementation(() => Promise.resolve({ loops: [RUN] }))
+    render(<Loops tab="templates" item="adr" />)
+    expect(await screen.findByText(/^Running now: none\./)).toBeTruthy()
   })
 })

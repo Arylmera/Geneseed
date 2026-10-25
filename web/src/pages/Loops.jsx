@@ -9,7 +9,7 @@ import Markdown from '../components/Markdown.jsx'
 import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
-import { humanGate } from '../lib/loopRing.js'
+import { humanGate, layoutLoop } from '../lib/loopRing.js'
 import { TABS, TAB_LABELS } from '../lib/router.js'
 
 const enc = encodeURIComponent
@@ -120,9 +120,90 @@ function BrickLine({ name, brick, override, on }) {
   )
 }
 
-function TemplateDetail({ t, bricks, overridden }) {
+// The ring in words, beside it: what the drawing says for a reader who does not parse arrows,
+// and for a screen reader, which the svg's one-line label serves poorly. [term, text] pairs in
+// run order; a part the graph does not have prints no line. A graph with no iteration loop is
+// drawn as a flow, so it reads as its steps. Exported for its test.
+export function howItRuns(graph) {
+  const loops = graph.loops || []
+  const it = loops.find((l) => l.iteration)
+  const head = it?.nodes[0]
+  // "x says a or b, y says c" for the edges `pick` keeps, one clause per node in edge order.
+  const says = (pick) => {
+    const by = new Map()
+    for (const e of graph.edges.filter(pick)) by.set(e.from, [...(by.get(e.from) || []), e.on])
+    return [...by].map(([n, ons]) => `${n} says ${ons.join(' or ')}`).join(', ')
+  }
+  // A closing check (feature's done-check): it closes the loop and only the head leads to it,
+  // so it runs once the head says done, not on every turn.
+  const closer = (n) => {
+    const into = graph.edges.filter((e) => e.to === n)
+    return (
+      !!it &&
+      n !== head &&
+      into.length > 0 &&
+      into.every((e) => e.from === head) &&
+      graph.edges.some((e) => e.from === n && e.to === '$close')
+    )
+  }
+  const exit = [...new Set(graph.edges.filter((e) => e.to === '$close').map((e) => e.from))].map(
+    (n) =>
+      closer(n)
+        ? `${says((e) => e.to === n)} → ${n}; ${says((e) => e.from === n && e.to === '$close')} → close`
+        : `${says((e) => e.from === n && e.to === '$close')} → close`,
+  )
+  // The same words as the ring's inner-circle labels (lib/loopRing.js).
+  const retries = loops
+    .filter((l) => !l.iteration)
+    .map((l) => `${l.nodes.join(l.nodes.length === 2 ? ' ⇄ ' : ' → ')}, max ${l.max}`)
+  // Every node outside the iteration is setup, run before it in `nodes` order: true of every
+  // shipped template (the ring draws them the same way, entering from the left).
+  const setup = it ? graph.nodes.filter((n) => !it.nodes.includes(n)) : []
+  const stop = says((e) => e.to === '$stop')
+  return [
+    setup.length && ['Setup', `${setup.join(' → ')}, once.`],
+    it
+      ? [`Iteration (max ${it.max})`, `${it.nodes.filter((n) => !closer(n)).join(' → ')}.`]
+      : ['Steps', `${graph.nodes.join(' → ')}.`],
+    retries.length && ['Retry', `${retries.join('; ')}.`],
+    exit.length && ['Exit', `${exit.join('; ')}.`],
+    // The engine stops on `error` from any step, edge or none (js/loop/state.mjs).
+    ['Stop', `${stop ? `${stop}, or ` : ''}any step says error → stop.`],
+  ].filter(Boolean)
+}
+
+const COPY_FEEDBACK_MS = 1200
+
+// shortcut: a copy of Docs/CliPage.jsx's CopyBtn, which is not exported; share it when a third
+// page needs one.
+function CopyBtn({ text }) {
+  const [done, setDone] = useState(false)
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setDone(true)
+      setTimeout(() => setDone(false), COPY_FEEDBACK_MS)
+    } catch {
+      // clipboard blocked: the command stays selectable in its box.
+    }
+  }
+  return (
+    <button type="button" className="btn ghost sm" onClick={onClick} aria-label="Copy command">
+      {done ? 'Copied' : 'Copy'}
+    </button>
+  )
+}
+
+function TemplateDetail({ t, bricks, overridden, runs }) {
   const [lit, setLit] = useState(null)
   const byName = new Map(bricks.map((b) => [b.name, b]))
+  const how = howItRuns(t.graph)
+  // The legend names the ring's strokes, so only a graph drawn as a ring wears it.
+  const ring = layoutLoop(t.graph, bricks).mode === 'ring'
+  const cmd = `geneseed loop init --graph ${t.name} --title "<title>" --requirement "<requirement>"`
+  // A run carries the graph it was started from, under its template's name. Null while the
+  // first poll is out: the line waits rather than say "none".
+  const running = runs?.filter((l) => live(l) && l.graph.name === t.name).length
   const toRow = (name) => {
     setLit(name)
     document
@@ -142,9 +223,54 @@ function TemplateDetail({ t, bricks, overridden }) {
         loops/{t.name}.json · {t.origin}
       </p>
       <hr className="hr" />
-      <div className="loop-graph">
-        <RingGraph graph={t.graph} bricks={bricks} onSelect={toRow} />
-      </div>
+      <figure className="loop-console">
+        <div className="loop-graph">
+          <RingGraph graph={t.graph} bricks={bricks} onSelect={toRow} />
+        </div>
+        <figcaption className="loop-how">
+          <span className="loop-kicker">How it runs</span>
+          <ol>
+            {how.map(([k, v]) => (
+              <li key={k}>
+                <b>{k}:</b> {v}
+              </li>
+            ))}
+          </ol>
+          {ring ? (
+            <span className="loop-legend">
+              <span>
+                <i className="ring" aria-hidden="true" />
+                iteration
+              </span>
+              {how.some(([k]) => k === 'Retry') ? (
+                <span>
+                  <i className="inner" aria-hidden="true" />
+                  retry
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </figcaption>
+      </figure>
+      <section className="loop-start" aria-labelledby="loop-start-h">
+        <div className="loop-start-bar">
+          <h3 id="loop-start-h" className="loop-kicker">
+            Start it in your project
+          </h3>
+          <CopyBtn text={cmd} />
+        </div>
+        <pre className="mono">{cmd}</pre>
+      </section>
+      {runs ? (
+        <p className="panel-note loop-running">
+          Running now: {running ? `${running} of this template` : 'none'}.{' '}
+          {running ? (
+            <a href="#/loops/active">Open Active →</a>
+          ) : (
+            'A started loop appears under Active with its iteration and preset.'
+          )}
+        </p>
+      ) : null}
       {t.graph.rules?.length ? (
         <>
           <h3 className="loop-h2">Rules</h3>
@@ -450,7 +576,13 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           ) : tab === 'bricks' ? (
             <BrickDetail b={sel} />
           ) : (
-            <TemplateDetail key={sel.name} t={sel} bricks={bricks} overridden={data.overridden} />
+            <TemplateDetail
+              key={sel.name}
+              t={sel}
+              bricks={bricks}
+              overridden={data.overridden}
+              runs={runs.loops}
+            />
           )}
         </article>
       </div>
