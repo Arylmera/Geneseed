@@ -116,7 +116,7 @@ export default function ActivityDetail({ sid }) {
 
   if (gone) {
     return (
-      <div className="narrow">
+      <div className="page-fill">
         {back}
         <EmptyState title="Session ended" action={<a href="#/activity">Back to Activity</a>}>
           It&apos;s no longer live.
@@ -126,7 +126,7 @@ export default function ActivityDetail({ sid }) {
   }
   if (!data) {
     return (
-      <div className="narrow">
+      <div className="page-fill">
         {back}
         {/* A first fetch that failed (daemon down, 500) says so instead of loading forever. */}
         {error ? <ErrorState error={error} /> : <Loading label="Loading session…" />}
@@ -152,7 +152,7 @@ export default function ActivityDetail({ sid }) {
   ].sort((a, b) => (a.t || 0) - (b.t || 0))
 
   return (
-    <div className="narrow">
+    <div className="page-fill">
       {back}
       <PageHeader
         title={s.title || baseName(s.cwd) || s.session_id}
