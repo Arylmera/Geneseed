@@ -1,7 +1,10 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
 import Margin, { glossaryHits } from '../pages/Docs/Margin.jsx'
+import MarkdownPage from '../pages/Docs/MarkdownPage.jsx'
+
+vi.mock('../lib/router.js', () => ({ go: vi.fn() }))
 import CliPage from '../pages/Docs/CliPage.jsx'
 
 // The Handbook margin: the page's H2/H3 outline, then a card per glossary term the page
@@ -76,6 +79,42 @@ describe('Margin', () => {
       'd4',
       'e5',
     ])
+  })
+
+  // Scroll spy: the current entry is the last heading whose top has reached ~96px from the
+  // viewport top; none before the first one does. Heard on any scroll in the page, the app
+  // shell's `main#main` included (a capture listener: scroll does not bubble).
+  it('marks the heading being read as the current outline entry', () => {
+    const page = { body: '## One\n\na\n\n## Two\n\nb\n\n## Three\n\nc' }
+    const { container } = render(
+      <>
+        <MarkdownPage page={page} />
+        <Margin page={page} glossaryRows={[]} />
+      </>,
+    )
+    const tops = { one: 300, two: 500, three: 700 }
+    for (const id of Object.keys(tops)) {
+      document.getElementById(id).getBoundingClientRect = () => ({ top: tops[id] })
+    }
+    const current = () =>
+      [...container.querySelectorAll('.docs-toc a[aria-current="location"]')].map(
+        (a) => a.textContent,
+      )
+    act(() => fireEvent.scroll(document))
+    expect(current()).toEqual([])
+    Object.assign(tops, { one: -200, two: 96, three: 300 })
+    const main = document.createElement('main')
+    main.id = 'main'
+    document.body.appendChild(main)
+    try {
+      act(() => fireEvent.scroll(main))
+      expect(current()).toEqual(['Two'])
+    } finally {
+      main.remove()
+    }
+    Object.assign(tops, { one: -600, two: -400, three: 20 })
+    act(() => fireEvent.scroll(document))
+    expect(current()).toEqual(['Three'])
   })
 
   it('renders nothing for a page with no headings and no terms', () => {

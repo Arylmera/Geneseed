@@ -23,7 +23,45 @@ const INSTALL_BY_EMIT = {
 // a box of its own (the Understand track introduces every term this way).
 const ANALOGY_LEAD = 'you already know this'
 
-export default function MarkdownPage({ page, overview, onAction }) {
+// Reading time at 200 words a minute, rounded up, never under one.
+export const minutesOf = (body) =>
+  Math.max(1, Math.ceil((body || '').split(/\s+/).filter(Boolean).length / 200))
+
+// Each code block in a figure with a caption bar: the fence's language, if it names one, and
+// a Copy button (the click handler below does the copying). A block already wrapped is left
+// alone, so a second run of the effect changes nothing.
+function captionCode(el) {
+  el.querySelectorAll('pre').forEach((pre) => {
+    if (pre.parentElement?.classList.contains('docs-code')) return
+    const fig = document.createElement('figure')
+    fig.className = 'docs-code'
+    const cap = document.createElement('figcaption')
+    const lang = pre.querySelector('code')?.className.match(/(?:^|\s)language-(\S+)/)?.[1]
+    if (lang) {
+      const name = document.createElement('span')
+      name.className = 'mono'
+      name.textContent = lang
+      cap.append(name)
+    }
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'btn ghost sm'
+    btn.setAttribute('aria-label', 'Copy command')
+    btn.textContent = 'Copy'
+    cap.append(btn)
+    pre.replaceWith(fig)
+    fig.append(cap, pre)
+  })
+}
+
+// The block's text without its trailing newline, so a pasted command does not run on paste.
+// No clipboard, or a refusal, changes nothing.
+function copyCode(fig) {
+  const text = (fig.querySelector('pre')?.textContent || '').replace(/\n+$/, '')
+  navigator.clipboard?.writeText?.(text)?.catch?.(() => {})
+}
+
+export default function MarkdownPage({ page, overview, onAction, section, description }) {
   const ref = useRef(null)
   // Heading ids, and the outline the margin prints, come from renderDoc (headings.js).
   const html = useMemo(
@@ -38,6 +76,7 @@ export default function MarkdownPage({ page, overview, onAction }) {
       const lead = (q.querySelector('strong')?.textContent || '').toLowerCase()
       if (lead.startsWith(ANALOGY_LEAD)) q.classList.add('analogy')
     })
+    captionCode(el)
   }, [html])
 
   // Internal-link / try-this handling. The Markdown component already converts
@@ -48,6 +87,8 @@ export default function MarkdownPage({ page, overview, onAction }) {
     const el = ref.current
     if (!el) return
     const onClick = (e) => {
+      const copy = e.target.closest('.docs-code figcaption button')
+      if (copy) return copyCode(copy.closest('.docs-code'))
       const a = e.target.closest('a[href]')
       if (!a) return
       const href = a.getAttribute('href')
@@ -89,7 +130,9 @@ export default function MarkdownPage({ page, overview, onAction }) {
   return (
     <div className="detail-doc">
       <PageHeader
+        eyebrow={section && `${section} · ${minutesOf(page.body)} min read`}
         title={page.title}
+        sub={description}
         actions={
           tryActions.length > 0 &&
           tryActions.map((t) =>

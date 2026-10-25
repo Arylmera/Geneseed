@@ -79,6 +79,19 @@ describe('MapPage', () => {
     expect(container.querySelectorAll('.markdown table tbody tr').length).toBe(2)
   })
 
+  // The map heads like every reading page: section and reading time over the title, the
+  // menu's description under it — with rows and in the fallback alike. BODY is 60 words: 1 min.
+  it.each([
+    ['with rows', ROWS],
+    ['in the fallback', null],
+  ])('heads the page with its section and description %s', (_, rows) => {
+    const { container } = render(
+      <MapPage page={page(rows)} section="Concepts" description="Every file, and its cost." />,
+    )
+    expect(container.querySelector('.eyebrow').textContent).toBe('Concepts · 1 min read')
+    expect(container.querySelector('.sub').textContent).toBe('Every file, and its cost.')
+  })
+
   // Only the table whose header opens on "Piece" goes; another table in the prose stays.
   it('splits only at the map table', () => {
     const body = 'a\n| x | y |\n|---|---|\n| 1 | 2 |\n\n| Piece | b |\n|---|---|\nz'

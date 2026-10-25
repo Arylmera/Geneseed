@@ -89,16 +89,24 @@ export function PageBar({ menu, pageId }) {
   if (!prev && !next) return null
   return (
     <nav className="track-bar" aria-label="Pages">
+      {/* Two cards, not buttons: the label is decoration, the title span is the link's name
+        ("← <title>", "Next: <title> →"). The empty span keeps Next in the right column. */}
       {prev ? (
-        <a className="btn ghost sm" href={docHref(prev.id)}>
-          ← {prev.title}
+        <a className="track-card" href={docHref(prev.id)}>
+          <span className="track-card-lbl" aria-hidden="true">
+            Previous
+          </span>
+          <span className="track-card-title">← {prev.title}</span>
         </a>
       ) : (
         <span />
       )}
       {next && (
-        <a className="btn sm" href={docHref(next.id)}>
-          Next: {next.title} →
+        <a className="track-card next" href={docHref(next.id)}>
+          <span className="track-card-lbl" aria-hidden="true">
+            Next
+          </span>
+          <span className="track-card-title">Next: {next.title} →</span>
         </a>
       )}
     </nav>

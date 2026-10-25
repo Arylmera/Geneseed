@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react'
 import { renderDoc } from './headings.js'
 import { cmdId } from './CliPage.jsx'
+import { useOnScroll } from './scroll.js'
 
 const MAX_CARDS = 5
+const SPY_TOP = 96
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // The glossary rows whose term the body uses: a whole word, any case, a plural "s" allowed
@@ -38,6 +40,16 @@ export default function Margin({ page, glossaryRows }) {
     [page],
   )
   const cards = useMemo(() => glossaryHits(body, glossaryRows), [body, glossaryRows])
+  // Scroll spy: the entry being read is the last heading whose top has reached ~96px from
+  // the viewport top (under the topbar); before the first one, none.
+  const cur = useOnScroll(() => {
+    let at = null
+    for (const t of toc) {
+      const top = document.getElementById(t.id)?.getBoundingClientRect().top
+      if (top != null && top <= SPY_TOP) at = t.id
+    }
+    return at
+  })
   if (!toc.length && !cards.length) return null
   return (
     <aside className="docs-margin">
@@ -49,6 +61,7 @@ export default function Margin({ page, glossaryRows }) {
               <li key={t.id} className={`lvl-${t.level}`}>
                 <a
                   href={`#${t.id}`}
+                  aria-current={cur === t.id ? 'location' : undefined}
                   onClick={(e) => {
                     e.preventDefault()
                     jump(t.id)
