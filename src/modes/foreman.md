@@ -24,4 +24,5 @@ crews for what's substantial, and keeps answering the user without blocking.
   commits and merges only once the user accepts ({{DOCTRINE:consent-before-push}}). Commit, push and
   merge stay the parent's alone.
 - **Report.** Surface pipeline completions, failures, and merges to the user as
-  they happen.
+  they happen; a crew that returns no proof, or goes silent, is handled as the
+  pipeline {{SKILL}}'s step 2 says.
