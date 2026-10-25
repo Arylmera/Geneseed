@@ -571,12 +571,16 @@ describe('Library usage', () => {
     expect(stats()).toEqual([['Used', '0', 'No call recorded yet']])
   })
 
-  it('reads out the summed count, the window, the hosts and the last day', async () => {
+  // One card: the last day joins the window and the hosts on the count's line.
+  it('reads out the summed count, the last day, the window and the hosts', async () => {
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
     await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
     expect(stats()).toEqual([
-      ['Used', '3', 'in the last 30 days · on opencode global, claude global'],
-      ['Last used', '2026-10-13', null],
+      [
+        'Used',
+        '3',
+        'last used 2026-10-13 · in the last 30 days · on opencode global, claude global',
+      ],
     ])
     const cols = [...document.querySelectorAll('.lib-stats .cols30 i')]
     expect(cols.map((i) => i.style.height)).toEqual(
@@ -594,8 +598,7 @@ describe('Library usage', () => {
     render(<Library section="skills" selected="rule" overview={overview({})} />)
     await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
     expect(stats()).toEqual([
-      ['Used', '1', 'since 2026-10-02 · on claude global'],
-      ['Last used', '2026-10-12', null],
+      ['Used', '1', 'last used 2026-10-12 · since 2026-10-02 · on claude global'],
     ])
   })
 
@@ -604,10 +607,7 @@ describe('Library usage', () => {
   it('reads out an entry used only before the window, and keeps it out of "Not used yet"', async () => {
     render(<Library section="skills" selected="old" overview={overview({})} />)
     await waitFor(() => expect(document.querySelector('.lib-stats')).toBeTruthy())
-    expect(stats()).toEqual([
-      ['Used', '0', 'in the last 30 days'],
-      ['Last used', '2026-08-14', null],
-    ])
+    expect(stats()).toEqual([['Used', '0', 'last used 2026-08-14 · in the last 30 days']])
     fireEvent.click(chip(/^Not used yet/))
     expect(rowNames()).not.toContain('old')
   })

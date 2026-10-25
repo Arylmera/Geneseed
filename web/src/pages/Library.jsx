@@ -71,8 +71,10 @@ export function bodyHead(body, desc) {
   return { title: h1[1].trim(), body: rest }
 }
 
-// The reader's usage card for one skill or agent: its fleet-wide count with the window it
-// covers and the hosts that fired it, a 30-day sparkline, and the last day it fired. `n` counts
+// The reader's usage card for one skill or agent: its fleet-wide count, then one line with the
+// last day it fired, the window it covers and the hosts that fired it, then a 30-day sparkline
+// across the card. One card, not two: the user found a separate "Last used" tile too big
+// (2026-10-25). `n` counts
 // only the 30-day window, so "since <first day>" is said only while fewer than 30 are counted.
 function UseStats({ u, usage, noCall }) {
   if (!u || (u.n === 0 && !u.last)) {
@@ -85,16 +87,18 @@ function UseStats({ u, usage, noCall }) {
   const hosts = [...new Set(u.installs.map(hostOf))].join(', ')
   const span = usage.days_counted >= 30 ? 'in the last 30 days' : `since ${usage.since}`
   const dmax = Math.max(1, ...u.per_day)
+  const line = [u.last ? `last used ${u.last}` : null, span, hosts ? `on ${hosts}` : null]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <div className="lib-stats">
-      <Stat label="Used" value={u.n} delta={hosts ? `${span} · on ${hosts}` : span}>
+      <Stat label="Used" value={u.n} delta={line}>
         <div className="cols30" aria-hidden="true">
           {u.per_day.map((v, d) => (
             <i key={d} className={d === 29 ? 'today' : ''} style={{ height: pct(v, dmax) }} />
           ))}
         </div>
       </Stat>
-      {u.last ? <Stat label="Last used" value={u.last} /> : null}
     </div>
   )
 }
