@@ -2414,8 +2414,9 @@ test('no cross-harness dead links', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// The live-activity reader: globs `<target>/activity/*.json`, prunes dead and stale writers
-// (self-cleaning their files), and never raises on a missing directory or a garbage file.
+// The live-activity reader: globs `<target>/activity/*.json`, lists dead, stale and ended
+// sessions apart from the live ones (deleting nothing), and never raises on a missing directory
+// or a garbage file.
 
 function activityBox() {
   const sb = makeSandbox();
@@ -2463,24 +2464,35 @@ test('a live entry is globbed', () => {
   });
 });
 
-// A pid that is virtually never alive. The file is REMOVED, not just filtered: a dead writer
-// that leaves its snapshot behind would haunt the console forever.
-test('a dead pid is pruned and its file self-cleans', () => {
+// A pid that is virtually never alive. The session leaves the live list and is listed as ENDED,
+// and the file is KEPT: a GET never deletes (it used to, which made a page view the one web read
+// that removed files). The sweep (js/hosts/activity.mjs) archives it instead, outside any GET.
+test('a dead pid leaves the live list, is listed ended, and its file stays', () => {
   withActivity((box) => {
     const p = box.write('ses_dead.json', {
       session_id: 'ses_dead', status: 'busy', pid: 2147483647, updated_at: nowSec(),
     });
-    assert.deepEqual(apiActivity(box.state).activity, []);
-    assert.ok(!fs.existsSync(p), 'the stale file was filtered but not removed');
+    const res = apiActivity(box.state);
+    assert.deepEqual(res.activity, []);
+    assert.deepEqual(res.ended.map((e) => [e.session_id, e.ended]), [['ses_dead', true]]);
+    assert.ok(fs.existsSync(p), 'a GET removed a snapshot');
   });
 });
 
-test('a stale entry is pruned even with a live pid', () => {
+test('a stale entry leaves the live list even with a live pid', () => {
   withActivity((box) => {
     box.write('ses_old.json', {
       session_id: 'ses_old', status: 'idle', pid: process.pid, updated_at: nowSec() - 10000,
     });
     assert.deepEqual(apiActivity(box.state).activity, []);
+  });
+});
+
+// A hook writer has no resident process, so it records `pid: null`: staleness alone decides.
+test('a fresh hook snapshot with no pid is live', () => {
+  withActivity((box) => {
+    box.write('h.json', { session_id: 'h', status: 'busy', pid: null, updated_at: nowSec() });
+    assert.deepEqual(apiActivity(box.state).activity.map((a) => a.session_id), ['h']);
   });
 });
 

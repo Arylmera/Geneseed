@@ -420,7 +420,8 @@ const p = (...s) => path.join('<H>', ...s);
 // whose contract has no SubagentStop/PreCompact and takes one PreToolUse group for both gates
 // (`claudeHookGroups`).
 // Claude-family hosts wire 7 hook groups since the usage counter's Skill|Agent|Task matcher
-// joined PreToolUse; Bob keeps 3 (its matcher-less tool-gate already counts).
+// joined PreToolUse; Bob keeps 3 (its matcher-less tool-gate already counts). Then the activity
+// view added UserPromptSubmit everywhere and SessionEnd on the two hosts that have it: 9 and 4.
 test('the end-of-setup summary tells the truth for every host', () => {
   const cases = {
     'opencode-global': [
@@ -437,28 +438,28 @@ test('the end-of-setup summary tells the truth for every host', () => {
     ],
     'claude-global': [
       ['ok', `CLAUDE.md written to ${p('.claude', 'CLAUDE.md')}`],
-      ['ok', `7 hook groups wired in ${p('.claude', 'settings.json')}`],
+      ['ok', `9 hook groups wired in ${p('.claude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     claude: [
       ['ok', `CLAUDE.md written to ${p('proj', 'CLAUDE.md')}`],
-      ['ok', `7 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
+      ['ok', `9 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     'bob-global': [
       ['ok', `geneseed.md written to ${p('.bob', 'rules', 'geneseed.md')}`],
-      ['ok', `3 hook groups wired in ${p('.bob', 'settings', 'settings.json')}`],
+      ['ok', `4 hook groups wired in ${p('.bob', 'settings', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW IBM Bob session to load it"],
       ['info', NEXT],
     ],
     'openclaude-global': [
       ['ok', `CLAUDE.md written to ${p('.openclaude', 'CLAUDE.md')}`],
-      ['ok', `7 hook groups wired in ${p('.openclaude', 'settings.json')}`],
+      ['ok', `9 hook groups wired in ${p('.openclaude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW OpenClaude session to load it"],
       ['info', NEXT],

@@ -104,6 +104,11 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 | `SessionStart` | `context --host bob` | plain stdout, as on Claude |
 | `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV, rigor-5 and ops-2: **exit 2**, reason on stderr — it says no chat confirmation lifts the block, since Bob has no ask tier; process 1/5: a stderr line, exit 0 |
 | `Stop` | `learn` | never a verdict |
+| `UserPromptSubmit` | `activity --host bob` | never a verdict; records the turn for the web console's Activity view |
+
+Every hook also feeds the Activity view after it decides (off with `GENESEED_ACTIVITY=off`).
+Bob sends no transcript, so a Bob session shows only the calls `tool-gate` sees; see
+`docs/reference/plugin-activity.md`.
 
 No matcher on `PreToolUse`, deliberately: Bob's tools page already drifts from its own
 changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an

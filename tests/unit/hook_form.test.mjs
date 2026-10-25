@@ -674,6 +674,10 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
       Stop: [h(learn)],
       SubagentStop: [h(learn)],
       PreCompact: [h(learn)],
+      // The activity view's verb takes the same `; exit 0` tail and, like context, no onFailure:
+      // on UserPromptSubmit a block would erase the user's prompt.
+      UserPromptSubmit: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
+      SessionEnd: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
     });
     // With Git Bash: today's bytes, no `shell` key, the `|| exit 0` form.
     assert.equal(bash.SessionStart[0].hooks[0].command, `${run} context --root "${cfg}" || exit 0`);
@@ -711,12 +715,13 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
       claims = emit(shell, claims);
       const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
       for (const [event, n] of [['PreToolUse', 3], ['SessionStart', 1], ['Stop', 1],
-        ['SubagentStop', 1], ['PreCompact', 1]]) {
+        ['SubagentStop', 1], ['PreCompact', 1], ['UserPromptSubmit', 1], ['SessionEnd', 1]]) {
         assert.equal(hooks[event].length, n, `${shell}: ${event} ${JSON.stringify(hooks[event])}`);
         for (const g of hooks[event]) assert.equal(g.hooks[0].shell, want, `${shell}: ${event}`);
       }
-      // Seven since the usage counter's Skill|Agent|Task group joined PreToolUse (three groups there).
-      assert.equal(claims.length, 7, `${shell}: the claim set is not the seven current groups`);
+      // Seven since the usage counter's Skill|Agent|Task group joined PreToolUse (three groups
+      // there); nine since the activity view's UserPromptSubmit and SessionEnd groups joined.
+      assert.equal(claims.length, 9, `${shell}: the claim set is not the nine current groups`);
     }
   });
 });
@@ -749,7 +754,8 @@ test('an install emitted before onFailure existed upgrades to it on re-emit', ()
     for (const g of hooks.PreToolUse) {
       assert.equal(g.hooks[0].onFailure, g.matcher === 'Skill|Agent|Task' ? undefined : 'block', JSON.stringify(g));
     }
-    assert.equal(claims.length, 7, 'the claim set is not the seven current (upgraded) groups');
+    // Nine: the seven gate/context/learn groups and the activity view's two (no onFailure).
+    assert.equal(claims.length, 9, 'the claim set is not the nine current (upgraded) groups');
   });
 });
 

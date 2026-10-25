@@ -1,27 +1,29 @@
 /**
- * The live-activity surface — the one web endpoint that
- * DELETES.
+ * The live-activity surface. A GET reads; it never deletes or moves a file.
  *
- * It reads the per-session JSON files the `geneseed-activity` OpenCode plugin writes into
- * `<opencode-cfg>/activity/`, prunes the dead and the stale ones (unlinking them, so the
- * directory self-cleans), and returns what is left. Writer and reader share only that
- * directory: no RPC, crash-isolated, and cross-tool by construction.
+ * It reads the per-session JSON files two writers put into `<cfg>/activity/`: the
+ * `geneseed-activity` OpenCode plugin, and the hook-side writer for Claude Code, OpenClaude
+ * and Bob (`js/hosts/activity.mjs`). Writers and reader share only that directory: no RPC,
+ * crash-isolated, and cross-tool by construction. A live session is in `activity`; a stale,
+ * dead or ended one — in the directory still, or already swept into `activity/archive/` — is
+ * in `ended`, marked `ended: true`, and the live copy wins a duplicate.
+ *
+ * WHY THE GET STOPPED PRUNING. It used to unlink every snapshot that failed the liveness test,
+ * which made a page view the one web read that deleted, and left nothing to show of a session
+ * that had just finished. Moving belongs to `sweepActivity`, which the hook writer runs on
+ * SessionStart and SessionEnd and which archives instead of deleting. The OpenCode plugin never
+ * sweeps, so its dead snapshots stay in place: `ended` is therefore capped HERE, in what is
+ * returned, to the archive's own rule (the newest `ARCHIVE_KEEP`, none older than
+ * `ARCHIVE_MAX_AGE_SECONDS`) — without touching a file.
  *
  * `/api/activity` answers a GET through `apiActivity` and a POST through `apiActivityToggle`
  * at the bottom of this file. It is the one POST route whose result is sent at 200 whatever
  * `ok` says, which is why `POST_ROUTES` in `js/web/routes.mjs` carries a 409 COLUMN rather
  * than a rule — and giving this row the 409 treatment is mutation M22.
  *
- * `process.kill(pid, 0)` PROBES LIVENESS WITHOUT A SPAWN — it is a core `process` API, not
- * `child_process`, so it stays clear of the spawn ban. libuv's `uv_kill` opens the process
- * for query and answers `ESRCH` when the pid is free and `EPERM` when it cannot tell —
- * "no such process" vs "err toward alive".
- *
- * `process.kill` alone cannot tell a truly-dead pid from one that EXITED but whose handle is
- * still held: it reports the latter alive too. The staleness backstop (below) is what prunes
- * it, thirty minutes later — reproducing an exit-code read would need a native binding, not
- * worth it for a best-effort probe that already errs toward "alive" on any inconclusive
- * answer.
+ * Liveness (`isLive`) is owned by `js/hosts/activity.mjs`, because the sweep needs the same
+ * answer: a hook snapshot carries `pid: null` and is live by staleness alone; a plugin one is
+ * also probed with `process.kill(pid, 0)`, which is a core `process` API, not `child_process`.
  *
  * `parseJson`, NOT `JSON.parse` — NOT a style choice. These files are written by a third
  * party and carry `cost` as a float. `JSON.parse` collapses `1.0` to the bare integer `1`,
@@ -33,28 +35,22 @@
  * `0.0` instead of collapsing to the fallback `0`. `isTruthy` is what makes a wrapped zero
  * read as falsy, so a `"cost": 0.0` entry correctly comes back `0`.
  */
-import { mkdirSync, readdirSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { readText, writeText, isDir, isFile } from '../lib/fs.mjs';
 import { parseJson, isTruthy } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
+import { stripWhitespace } from '../lib/text.mjs';
+import { ARCHIVE_KEEP, ARCHIVE_MAX_AGE_SECONDS, isLive, safeStem } from '../hosts/activity.mjs';
 import { NotFound, stemOf } from './catalog.mjs';
-
-/**
- * A session whose writer is gone, or that has not been touched in this long, is pruned.
- * pid-liveness is the real signal; the staleness backstop covers a reused pid and a
- * platform where the probe cannot tell. Generous on purpose: streaming bumps `updated_at`
- * constantly, so only a genuinely abandoned (process-still-alive) session ages out.
- */
-const ACTIVITY_STALE_SECONDS = 1800;
 
 const nowSeconds = () => Date.now() / 1000;
 
 /**
- * `<target>/activity`. `state.target` is ALREADY the OpenCode config dir, so this must not
- * append `opencode/` again; that double-join is the classic seam bug.
+ * `<target>/activity`. `state.target` is ALREADY the viewed install's config dir (OpenCode's, or
+ * a Claude-shaped host's), so this must not append `opencode/` again; that double-join is the
+ * classic seam bug.
  */
 const activityDir = (state) => path.join(state.target, 'activity');
 
@@ -74,40 +70,6 @@ function activityEnabled(state) {
     return true;
   }
   return !['off', '0', 'false', 'no'].includes(stripWhitespace(raw).toLowerCase());
-}
-
-/**
- * Coerces a raw pid value to an integer, or `null` for anything unusable.
- *
- * The value came out of `parseJson`, so a JSON number may arrive wrapped in `JsonNumber`,
- * which this module cannot import by name (only `parseJson`/`isTruthy`/etc are exported). It
- * is recognised by the only thing the wrapper promises: a numeric `valueOf`. A plain
- * object's `valueOf` returns itself (rejected by the `typeof n !== 'number'` check below)
- * and an array is excluded outright. Also handles a decimal string, a boolean (`true` → 1),
- * and a float (truncated) — whatever a hand-edited snapshot can produce.
- */
-function toIntOr(raw) {
-  if (raw === true) return 1;
-  if (raw === false) return 0;
-  if (typeof raw === 'string') return parseIntStrict(stripWhitespace(raw));
-  const n = (raw !== null && typeof raw === 'object' && !Array.isArray(raw))
-    ? raw.valueOf() : raw;
-  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
-  return Math.trunc(n);
-}
-
-/** Best-effort liveness for the writer process. See this file's header. */
-function pidAlive(raw) {
-  const pid = toIntOr(raw);
-  if (pid === null || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    // ESRCH → dead. Anything else (`EPERM`, and whatever a locked-down host answers) →
-    // alive, and the staleness backstop decides.
-    return !(e && e.code === 'ESRCH');
-  }
 }
 
 /**
@@ -148,24 +110,12 @@ function readEntry(p) {
   return (entry !== null && typeof entry === 'object' && !Array.isArray(entry)) ? entry : null;
 }
 
-/** The writer's pid is alive AND the snapshot is not stale. */
-function isLive(entry, now) {
-  const updated = isTruthy(Object.hasOwn(entry, 'updated_at') ? entry.updated_at : null)
-    ? entry.updated_at : 0;
-  return (now - Number(updated)) <= ACTIVITY_STALE_SECONDS && pidAlive(
-    Object.hasOwn(entry, 'pid') ? entry.pid : null);
-}
-
 /**
- * Every live session, dead and stale ones pruned AND their files removed. Never throws: a
- * missing dir is `[]`, a garbage file is skipped (and kept — only a snapshot that PARSED and
- * failed the liveness test is unlinked), newest first.
+ * `[name, entry]` for every snapshot that parses in `d`, sorted by name. Never throws: a
+ * missing dir is `[]`, and a garbage file is skipped and left where it is.
  */
-function activityEntries(state) {
-  const d = activityDir(state);
+function snapshots(d) {
   if (!isDir(d)) return [];
-  const now = nowSeconds();
-  const out = [];
   let names;
   try {
     names = readdirSync(d);
@@ -175,48 +125,66 @@ function activityEntries(state) {
   // Case-INSENSITIVE for the `.json` suffix (matches Windows filesystem behaviour); the
   // `.detail.json` check below is case-SENSITIVE on both platforms. Two different rules,
   // deliberately.
-  for (const name of names.filter((n) => normcase(n).endsWith('.json')).sort()) {
-    if (name.endsWith('.detail.json')) continue;
-    const p = path.join(d, name);
-    const entry = readEntry(p);
-    if (entry === null) continue;
-    if (!isLive(entry, now)) {
-      try {
-        unlinkSync(p);                                          // crashed / abandoned writer
-        unlinkSync(path.join(d, `${stemOf(name)}.detail.json`));   // its detail file too
-      } catch { /* both unlinks are best-effort; a lingering file next scan is harmless */ }
-      continue;
-    }
-    out.push(normalizeEntry(entry, stemOf(name)));
+  return names.filter((n) => normcase(n).endsWith('.json') && !n.endsWith('.detail.json')).sort()
+    .map((name) => [name, readEntry(path.join(d, name))]).filter(([, e]) => e !== null);
+}
+
+// STABLE sort matters when `updated_at` ties: a `b - a` comparator over ES2019's
+// guaranteed-stable `Array.sort` preserves the original (directory-listing) order for equal keys.
+const newestFirst = (list) => list.sort((a, b) => Number(b.updated_at) - Number(a.updated_at));
+
+/**
+ * `{activity, ended}`: the live sessions, and the ones that are not — still in the directory
+ * or already archived — each listed once, the live copy and then the directory's winning.
+ */
+function activityEntries(state) {
+  const d = activityDir(state);
+  const now = nowSeconds();
+  const live = [];
+  const ended = [];
+  const seen = new Set();
+  const rest = [];
+  for (const [name, entry] of snapshots(d)) {
+    const e = normalizeEntry(entry, stemOf(name));
+    if (isLive(entry, now)) { live.push(e); seen.add(String(e.session_id)); } else rest.push(e);
   }
-  // STABLE sort matters when `updated_at` ties: a `b - a` comparator over ES2019's
-  // guaranteed-stable `Array.sort` preserves the original (directory-listing) order for
-  // equal keys.
-  out.sort((a, b) => Number(b.updated_at) - Number(a.updated_at));
-  return out;
+  for (const [name, entry] of snapshots(path.join(d, 'archive'))) {
+    rest.push(normalizeEntry(entry, stemOf(name)));
+  }
+  for (const e of rest) {
+    if (seen.has(String(e.session_id))) continue;
+    seen.add(String(e.session_id));
+    if (now - Number(e.updated_at) > ARCHIVE_MAX_AGE_SECONDS) continue;
+    ended.push({ ...e, ended: true });
+  }
+  return { activity: newestFirst(live), ended: newestFirst(ended).slice(0, ARCHIVE_KEEP) };
 }
 
 export function apiActivity(state) {
   const enabled = activityEnabled(state);
-  return { enabled, activity: enabled ? activityEntries(state) : [] };
+  return { enabled, ...(enabled ? activityEntries(state) : { activity: [], ended: [] }) };
 }
 
 /**
- * One session's snapshot plus its step timeline and its UNCAPPED files/todos. 404 if the
- * session is absent or has aged out; a missing or garbage detail file degrades to an empty
- * timeline rather than a 500.
+ * One session's snapshot plus its step timeline and its UNCAPPED files/todos. A session that is
+ * no longer live — still in the directory, or archived — is returned too, with `ended: true`.
+ * 404 only if neither holds it; a missing or garbage detail file degrades to an empty timeline
+ * rather than a 500.
  */
 export function apiActivityDetail(state, sid) {
-  const d = activityDir(state);
-  // Resolve by the writer's safe-name scheme, which is also what keeps the read inside the
-  // directory: every separator, `..` and drive colon becomes `_`, so there is no join to
-  // steer. The `u` flag makes an astral character ONE replacement rather than one per
-  // surrogate half.
-  const stem = sid.replace(/[^A-Za-z0-9_.-]/gu, '_');
-  const snap = path.join(d, `${stem}.json`);
-  const entry = isFile(snap) ? readEntry(snap) : null;
-  if (entry === null || !isLive(entry, nowSeconds())) throw new NotFound(sid);
+  // Resolve by the writer's safe-name scheme (`safeStem`), which is also what keeps the read
+  // inside the directory: every separator, `..` and drive colon becomes `_`, so there is no
+  // join to steer.
+  const stem = safeStem(sid);
+  let d = activityDir(state);
+  let entry = isFile(path.join(d, `${stem}.json`)) ? readEntry(path.join(d, `${stem}.json`)) : null;
+  if (entry === null) {
+    d = path.join(d, 'archive');
+    entry = isFile(path.join(d, `${stem}.json`)) ? readEntry(path.join(d, `${stem}.json`)) : null;
+  }
+  if (entry === null) throw new NotFound(sid);
   const session = normalizeEntry(entry, stem);
+  if (!isLive(entry, nowSeconds())) session.ended = true;
   let timeline = [];
   let full = {};
   const det = readEntry(path.join(d, `${stem}.detail.json`));

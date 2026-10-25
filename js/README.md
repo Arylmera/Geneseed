@@ -93,7 +93,8 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
 | `hooks-done.mjs` | The done gate (#289): on Stop, inside `learn` and before its spawn, blocks a turn that edited files until `.geneseed/done-checks.txt`'s checks passed after the last edit |
 | `hooks-learn.mjs` | The `learn` verb — Stop/SubagentStop/PreCompact distiller; the hook path's ONE spawn (`$GENESEED_LLM`) |
-| `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`) |
+| `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`), plus the activity off switch (`activityOn`) and the do-nothing `activity` verb |
+| `activity.mjs` | The hook-side activity writer and the owner of snapshot liveness: `recordActivity` (one payload into `<root>/activity/`), `readTranscriptDelta`, `sweepActivity` (archive, newest 50, 7 days). Loaded only when tracking is on; never prints |
 | `usage.mjs` | The usage counter `tool-gate` runs: one `{day, kind, name}` line per Skill or subagent call into `notebook/usage.jsonl`. Hook path: builtins only, silent, never throws |
 | `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate. No spawn: the CLI and web console import it |
 | `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `gitCommonDirOf`, `currentBranch`, `protectedBranches`, `stashExists`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate, `loss.mjs` and `js/loop/cli.mjs`'s commit-message writer |

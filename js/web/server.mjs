@@ -37,6 +37,7 @@ import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve as pathResolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sweepActivity } from '../hosts/activity.mjs';
 
 const ROOT = pathResolve(import.meta.dirname, '..', '..');
 
@@ -153,6 +154,11 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   // Read by `/api/update`, whose background `git fetch` must not race a running update's pull.
   state.jobBusy = () => jm.busy;
   const srv = createServer(makeHandler(state, jm, token, dist, holder));
+  // A GET only reads, and the OpenCode plugin never sweeps: ended sessions are archived here,
+  // once at start and every 10 minutes. Best-effort — a sweep failure never stops the console.
+  const sweep = () => { try { sweepActivity(join(state.target, 'activity')); } catch { /* best-effort */ } };
+  sweep();
+  setInterval(sweep, 600_000).unref();
   // A client trickling headers or a body (slowloris) would hold a socket forever otherwise; every
   // real request here is a few KB from the same machine.
   srv.requestTimeout = 30_000;

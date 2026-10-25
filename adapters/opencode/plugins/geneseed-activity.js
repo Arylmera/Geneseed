@@ -11,8 +11,8 @@
 // ONE FILE PER SESSION (`activity/<session_id>.json`), owned exclusively by the
 // process that created the session — so concurrent `opencode` invocations never
 // contend on a shared file and no lock is needed. Atomic write (tmp + rename) keeps
-// the reader from ever seeing a torn file. The reader prunes entries whose `pid` is
-// dead or whose `updated_at` is stale, so a crashed writer's file self-cleans.
+// the reader from ever seeing a torn file. The reader lists an entry whose `pid` is
+// dead or whose `updated_at` is stale as ended, and never deletes it.
 //
 // FLAT: one entry per top-level session. Sub-agent fan-out (subtask parts,
 // parent→children tree) is deferred — child sessions (those with a parentID) and the

@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Claude Code, OpenClaude and Bob feed the Activity view**, like OpenCode: `geneseed-hook activity` runs on UserPromptSubmit (and SessionEnd on Claude and OpenClaude), and Claude's full timeline is read from its transcript at Stop. Recording is on by default on every host and follows the same `.geneseed-activity` switch; with it off, the writer is never loaded. Snapshots are redacted with the Law I secret patterns and git-ignored; ended sessions are archived (newest 50, 7 days) instead of deleted, and viewing the page never deletes anything. Run `geneseed rebuild-all` to wire the new hook. Bob is covered by unit tests only (IBM does not publish Bob Shell on npm).
+
 ### Changed
 - **Pipelines no longer stall on a silent crew.** The parent now watches every crew it dispatches: an envelope without proof, or a crew that goes silent for 15 minutes with no live child process, is resumed or taken over instead of waited on. A crew lead holds every member's result before it ends, so no member reports past it to the parent.
 

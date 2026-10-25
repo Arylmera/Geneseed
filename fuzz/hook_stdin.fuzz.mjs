@@ -121,3 +121,54 @@ test('learn keeps its Stop contract with the done gate armed, on any transcript'
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }), { numRuns: RUNS });
 });
+
+// The `activity` verb runs on UserPromptSubmit, where Claude injects stdout as context and exit 2
+// erases the prompt — so on ANY payload it exits 0 and prints nothing on either stream, and the
+// activity writer behind it (js/hosts/activity.mjs) writes only under `<root>/activity/`, whatever
+// session id or transcript arrives. Tracking is on (no flag file), so the writer really runs.
+const sid = fc.oneof(fc.string(), fc.constantFrom('../../x', 'a/b\\c', 'C:\\x', '..', '.', ''), fc.jsonValue());
+const event = fc.constantFrom('SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SubagentStop',
+  'PreCompact', 'SessionEnd', 'Notification');
+const activityPayload = fc.oneof(payload, fc.record({
+  hook_event_name: event, session_id: sid, prompt: fc.oneof(fc.string(), fc.jsonValue()),
+  tool_name: fc.oneof(fc.constantFrom('Edit', 'Write', 'TodoWrite', 'Bash'), fc.jsonValue()),
+  tool_input: fc.jsonValue(), useTranscript: fc.boolean(), text: transcript,
+}));
+
+test('activity exits 0 silently and writes only under <root>/activity on any stdin', () => {
+  fc.assert(fc.property(activityPayload, (input) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      const root = path.join(dir, 'cfg');
+      fs.mkdirSync(root);
+      let stdin = input;
+      const extra = [];
+      if (input && typeof input === 'object' && !Buffer.isBuffer(input) && !(input instanceof Uint8Array)) {
+        const { useTranscript, text, ...rest } = input;
+        if (useTranscript) {
+          fs.writeFileSync(path.join(dir, 't.jsonl'), text);
+          rest.transcript_path = path.join(dir, 't.jsonl');
+          extra.push('t.jsonl');
+        }
+        stdin = JSON.stringify(rest);
+      }
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, stdin);
+      const env = { ...process.env };
+      delete env.GENESEED_ACTIVITY;
+      delete env.GENESEED_LEARN_CHILD;
+      const fd = fs.openSync(inFile, 'r');
+      let p;
+      try {
+        p = spawnSync(process.execPath, [HOOK, 'activity', '--root', root],
+          { cwd: dir, encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], env });
+      } finally { fs.closeSync(fd); }
+      const show = String(stdin).slice(0, 200);
+      assert.deepEqual([p.status, p.stdout, p.stderr], [0, '', ''], `activity on ${show}`);
+      assert.deepEqual(fs.readdirSync(root).filter((n) => n !== 'activity'), [],
+        `wrote outside activity/ on ${show}`);
+      assert.deepEqual(fs.readdirSync(dir).sort(), ['cfg', 'stdin', ...extra].sort(),
+        `wrote outside the install on ${show}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS });
+});

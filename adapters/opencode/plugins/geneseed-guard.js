@@ -220,7 +220,7 @@ const SECRET_RE = [
 // as-is rather than silently changing guard behaviour for a parity task.
 const SECRET_WARN_RE = [/(^|\/)\.env(\.[\w.-]+)?$/i]
 
-// Twin of js/hosts/hooks.mjs's SECRET_RE (Law I's boundary half) — scans WRITE CONTENT for a
+// Twin of js/hosts/hooks-prims.mjs's SECRET_RE (Law I's boundary half) — scans WRITE CONTENT for a
 // credential-shaped string, not the target path (SECRET_RE above is the path twin, file names
 // only). High-precision vendor prefixes only, same rationale as the Node side: a generic
 // "looks like entropy" scan fires on every hash and lockfile. Kept byte-identical by the parity

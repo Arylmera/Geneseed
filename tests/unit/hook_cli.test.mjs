@@ -92,7 +92,7 @@ const sorted = (s) => [...s].sort();
 
 test('the hook entry carries exactly the verbs the emitter wires', () => {
   const wired = wiredHookVerbs();
-  assert.deepEqual(sorted(wired), ['context', 'git-gate', 'learn', 'rule-gate', 'tool-gate'],
+  assert.deepEqual(sorted(wired), ['activity', 'context', 'git-gate', 'learn', 'rule-gate', 'tool-gate'],
     'js/hosts/settings.mjs wires a different set of hook commands than this gate was written for — '
     + 'read the new one before deciding what it needs');
   assert.deepEqual(sorted(verbsOf(HOOK)), sorted(wired),
@@ -189,7 +189,9 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // reference was gone, so no cell was ever recorded for it. Its absolute gate is tests/unit/hook_gates.test.mjs.
 // `scorecard` is a port of a third-party Python tool, not of a Geneseed subparser; its absolute
 // gate — parity with that tool, written out — is tests/unit/scorecard.test.mjs.
-const NATIVE = ['catalog', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
+// `activity` is the second native hook verb, born for the activity view (UserPromptSubmit and
+// SessionEnd) long after the reference: its absolute gate is tests/unit/activity_writer.test.mjs.
+const NATIVE = ['activity', 'catalog', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

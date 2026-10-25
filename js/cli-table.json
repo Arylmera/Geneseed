@@ -2,6 +2,45 @@
   "prog": "geneseed",
   "commands": [
     {
+      "name": "activity",
+      "help": "UserPromptSubmit/SessionEnd hook: records the session into <root>/activity/ for the web console's live view; decides nothing and prints nothing (off with $GENESEED_ACTIVITY=off or the console toggle)",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--root"
+          ],
+          "dest": "root",
+          "metavar": null,
+          "help": "the install's own dir (set by the emitted hook); the snapshots go to <root>/activity/",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--host"
+          ],
+          "dest": "host",
+          "metavar": null,
+          "help": "the host that sent the payload (set by the emitted hook): 'claude' (default), 'openclaude' or 'bob'; recorded in the snapshot",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "bootstrap",
       "help": "update everything (sync + upgrade) with a progress UI, then run setup",
       "description": "",

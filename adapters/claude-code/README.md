@@ -70,6 +70,10 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   and auto-compaction is the moment that window is about to be summarised away.
   This captures memory *before* the summary; the SessionStart `context` hook (which
   also fires on the `compact` source) re-seeds context *after* it.
+- on **UserPromptSubmit** and **SessionEnd**, runs `geneseed-hook activity`, which decides
+  nothing and prints nothing: it records the session for the web console's Activity view.
+  Every other hook above feeds that view too, after it has decided. `GENESEED_ACTIVITY=off`
+  (or the console's toggle) turns it off; see `docs/reference/plugin-activity.md`.
 
   This step is **opt-in on a model CLI**: set `GENESEED_LLM` (e.g. `claude -p`,
   `llm`, `ollama run …`) for `learn` to actually distil. With it unset the hook is
