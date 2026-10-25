@@ -149,7 +149,9 @@ describe('StagingProvider — kits', () => {
     expect(sw('k1', GLOBAL).getAttribute('aria-checked')).toBe('false')
   })
 
-  it('a running rebuild locks its own row only (KT-3)', async () => {
+  // The running row locks whole; another row keeps its switches live (staging is free), but its
+  // Apply waits too: the server runs one job at a time and would answer it with a 409.
+  it('a running rebuild locks its own row, and holds every other Apply (KT-3)', async () => {
     api.kits.mockResolvedValue(payload([A, B]))
     const { update } = await mountShell(installsPage)
     fireEvent.click(sw('k1', GLOBAL))
@@ -161,7 +163,8 @@ describe('StagingProvider — kits', () => {
     expect(sw('k2', GLOBAL).disabled).toBe(true)
     expect(applyBtn(GLOBAL).disabled).toBe(true)
     expect(sw('k1', PROJECT).disabled).toBe(false)
-    expect(applyBtn(PROJECT).disabled).toBe(false)
+    expect(applyBtn(PROJECT).disabled).toBe(true)
+    expect(applyBtn(PROJECT).title).toBe('A job is running')
   })
 
   it('staging made on the Kits page shows on Installs › Kits (KT-10)', async () => {

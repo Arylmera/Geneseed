@@ -55,6 +55,13 @@ const apply = () => screen.getByRole('button', APPLY)
 describe('Installs / Kits', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  // A kit the backend sends without member lists counts zero of each, as the Kits page does,
+  // rather than throwing the whole tab away.
+  it('counts a kit with no skills or agents as zero of each', async () => {
+    await setup(payload([row()], [{ name: 'bare', description: '' }]))
+    expect(screen.getByText('0 skills · 0 agents')).toBeTruthy()
+  })
+
   it('says so when there is no install', async () => {
     await setup(payload([]))
     expect(screen.getByText('No install yet.')).toBeTruthy()

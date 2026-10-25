@@ -35,6 +35,9 @@ const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
 // back into view. The daemon answers from its own once-a-day check, so this costs no upstream
 // request; it only bounds how long an open page goes without learning what the daemon learnt.
 export const UPDATE_POLL_MS = 60 * 60 * 1000
+// A check the daemon is still running (`checking`, its first answer after a start) is asked again
+// this soon, once per answer, so the chip does not wait the hour to learn it.
+export const UPDATE_RETRY_MS = 5000
 
 // `canFill` false: the page already has its one primary (a rebuild is due), so a due Update
 // stays ghost instead of becoming a second filled button.
@@ -56,7 +59,9 @@ function VersionChip({ update, onAction, canFill = true }) {
         <span className="mono dim ver-chip">{update.current ?? ''} · up to date</span>
       )
     ) : update.latest === null ? (
-      <span className="mono dim ver-chip">{update.current ?? ''} · update check unavailable</span>
+      <span className="mono dim ver-chip">
+        {update.current ?? ''} · {update.checking ? 'checking…' : 'update check unavailable'}
+      </span>
     ) : update.available ? (
       <span className="mono ver-chip">
         {update.current} <span className="ver-new">{update.latest} available</span>
@@ -734,12 +739,15 @@ export default function Ledger({
   const { data: usage } = useAsync(() => soft(api.usage()), [dataRev])
   const { data: gates } = useAsync(() => soft(api.gates()), [dataRev])
   // A failed re-poll (the daemon restarting under it) keeps the last answer rather than hiding
-  // the chip and the button until the next good one.
+  // the chip and the button until the next good one. It is no longer "checking" then: the page
+  // could not learn more, so it stops the early re-ask and says "unavailable" until the next poll.
   const lastUpdate = useRef(null)
   const { data: update, reload: reloadUpdate } = useAsync(
     () =>
       soft(api.update()).then((u) => {
         if (u) lastUpdate.current = u
+        else if (lastUpdate.current?.checking)
+          lastUpdate.current = { ...lastUpdate.current, checking: false }
         return lastUpdate.current
       }),
     [dataRev],
@@ -755,6 +763,12 @@ export default function Ledger({
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [reloadUpdate])
+  const checking = !!update?.checking
+  useEffect(() => {
+    if (!checking) return undefined
+    const timer = setTimeout(reloadUpdate, UPDATE_RETRY_MS)
+    return () => clearTimeout(timer)
+  }, [checking, update, reloadUpdate])
   const { data: rules } = useRules(dataRev)
   const { data: activity } = useAsync(() => soft(api.activity()), [dataRev])
   const { data: profile } = useAsync(() => soft(api.profile()), [dataRev])
@@ -762,14 +776,19 @@ export default function Ledger({
   const { data: laws } = useAsync(() => soft(api.catalog('laws')), [dataRev], 'catalog:laws')
 
   const installs = fleet?.installs || []
+  // Open moves the view first, then the page to the Hosts tab that shows it. A refused move stays
+  // here and says why: going on would land on Installs showing the OLD view.
+  const [openError, setOpenError] = useState('')
   const onOpen = async (i) => {
+    setOpenError('')
     try {
       await api.selectView(i.host, i.path)
-    } catch {
-      /* the selector snaps back on the next refetch */
+    } catch (e) {
+      setOpenError(`Could not open ${labelOf(i)}: ${e?.message || e}`)
+      return
     }
     onRetry?.()
-    window.location.hash = '#/installs'
+    window.location.hash = '#/installs/hosts'
   }
   const needs = ledgerNeeds({
     fleet,
@@ -844,6 +863,11 @@ export default function Ledger({
             <h2 id="ldg-fleet">Installed harnesses</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
+          {openError ? (
+            <p className="tag bad note" role="alert">
+              {openError}
+            </p>
+          ) : null}
           {fleetError && fleet ? (
             <p className="dim" role="status">
               Could not refresh the installs — showing the last read.{' '}

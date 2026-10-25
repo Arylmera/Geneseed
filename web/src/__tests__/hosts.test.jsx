@@ -162,11 +162,49 @@ describe('Installs / Hosts', () => {
     expect([...document.querySelectorAll('.pick-mark')].filter((c) => c.textContent).length).toBe(1)
   })
 
-  it('Rebuild all dispatches the build-all action', async () => {
+  // Rebuild all re-emits every ACTIVE install (rebuild-all), so it asks first and names them;
+  // an absent row is not one of them. A declined confirm sends nothing.
+  it('Rebuild all names the active installs, then dispatches build-all', async () => {
+    askConfirm.mockClear()
     const onAction = vi.fn()
     render(<Hosts onAction={onAction} />)
     fireEvent.click(await screen.findByRole('button', { name: /rebuild all/i }))
+    await answered()
+    expect(askConfirm).toHaveBeenCalledWith(
+      'Rebuild every active install: OpenCode · global? Each is rebuilt in place from source ' +
+        'with its own settings; files you edited are kept.',
+      { title: 'Rebuild all active installs?', confirmLabel: 'Rebuild all' },
+    )
     expect(onAction).toHaveBeenCalledWith('build-all')
+  })
+
+  it('a declined Rebuild all sends nothing', async () => {
+    askConfirm.mockResolvedValueOnce(false)
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} />)
+    fireEvent.click(await screen.findByRole('button', { name: /rebuild all/i }))
+    await answered()
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  // A per-project install under `.claude/worktrees/` is a finished worktree's leftover that still
+  // lists (its folder is on disk); the row says so, and a normal repo row does not.
+  it('flags a project install under .claude/worktrees as a worktree leftover', async () => {
+    const proj = (id, p) => ({ id, host: 'claude', scope: 'project', path: p, state: 'active' })
+    api.installs.mockImplementationOnce(() =>
+      Promise.resolve({
+        installs: [
+          proj('a', String.raw`C:\git\Geneseed\.claude\worktrees\brainstorm-o3\Harness`),
+          proj('b', '/home/u/git/Terra'),
+        ],
+      }),
+    )
+    render(<Hosts onAction={() => {}} />)
+    const t = await screen.findByRole('table', { name: 'Per-project installs' })
+    const tags = [...t.querySelectorAll('tbody tr')].map((tr) =>
+      [...tr.querySelectorAll('.tag')].map((x) => x.textContent),
+    )
+    expect(tags).toEqual([['Active', 'Worktree leftover'], ['Active']])
   })
 
   it('opens the panel on the active install', async () => {

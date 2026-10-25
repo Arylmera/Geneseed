@@ -13,6 +13,9 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 // (the CLI undoing the change), and any stale one would keep beforeunload asking.
 //
 // `applying` is the one entry whose rebuild is in flight (the server runs one job at a time).
+// `busy` is any job this console started still in flight (a doctor, another install's rebuild):
+// every Apply waits for it, since the server would refuse a second job with a 409. A job started
+// elsewhere (the CLI, another tab) is not seen; its 409 still comes back as a toast.
 // The next `finish` event settles it: done marks it applied (KEPT, so the old set does not
 // flash back before the refetch lands), anything else marks it failed and keeps the value.
 const StagingContext = createContext(null)
@@ -89,7 +92,7 @@ function useStore(activeId, finish) {
     })
   }
   const running = (kind, key) => !!activeId && applying?.kind === kind && applying?.key === key
-  return { get, put, drop, prune, startApply, running }
+  return { get, put, drop, prune, startApply, running, busy: !!activeId }
 }
 
 export function StagingProvider({ activeId, finish, children }) {

@@ -17,9 +17,14 @@ const words = (s) => (s || '').split(/\s+/).filter(Boolean).length
 const uniq = (a) => [...new Set(a.filter(Boolean))]
 const short = (c) => (c || '').slice(0, 7)
 
-// A member links to its Library entry only while the catalog lists it: a kit that is off for
-// the selected harness has its members uninstalled, and the Library would 404 them.
-const Links = ({ type, names, listed }) =>
+// A member links to its Library entry only while the catalog lists it: the catalog is the
+// install the topbar views, and the Library would 404 a member it lacks. Unlinked, the chip says
+// "installed when on" only while the kit is on NOWHERE; on for other installs, it says where.
+const offTitle = (onN, of) =>
+  onN
+    ? `Not in the install the topbar views; on in ${onN} of ${plural(of, 'install')}`
+    : 'Installed when this kit is on'
+const Links = ({ type, names, listed, offNote = offTitle(0) }) =>
   names.length ? (
     <ul className="kit-links">
       {names.map((n) => (
@@ -27,7 +32,7 @@ const Links = ({ type, names, listed }) =>
           {listed?.has(n) ? (
             <a href={`#/item/${type}/${enc(n)}`}>{n}</a>
           ) : (
-            <span className="kit-link-off" title="Installed when this kit is on">
+            <span className="kit-link-off" title={offNote}>
               {n}
             </span>
           )}
@@ -40,6 +45,10 @@ const Links = ({ type, names, listed }) =>
 
 function KitDetail({ kit, installs, stage, listed }) {
   const credits = kit.credits || []
+  const offNote = offTitle(
+    installs.filter((r) => kitsOf(r).includes(kit.name)).length,
+    installs.length,
+  )
   return (
     <>
       <div className="reader-tags">
@@ -115,9 +124,9 @@ function KitDetail({ kit, installs, stage, listed }) {
       ) : null}
 
       <h3 className="loop-h2">Skills</h3>
-      <Links type="skill" names={kit.skills || []} listed={listed?.skills} />
+      <Links type="skill" names={kit.skills || []} listed={listed?.skills} offNote={offNote} />
       <h3 className="loop-h2">Agents</h3>
-      <Links type="agent" names={kit.agents || []} listed={listed?.agents} />
+      <Links type="agent" names={kit.agents || []} listed={listed?.agents} offNote={offNote} />
 
       {kit.rules ? (
         <>
@@ -170,6 +179,7 @@ function KitCard({ kit, installs, stage, listed, max }) {
   const cells = installs.map((r) => ({ row: r, ...cellState(stage, r, kit.name) }))
   const onN = cells.filter((c) => kitsOf(c.row).includes(kit.name)).length
   const stagedN = cells.filter((c) => c.staged).length
+  const offNote = offTitle(onN, installs.length)
   const where = `on in ${onN} of ${plural(installs.length, 'install')}${stagedN ? ` · ${stagedN} staged` : ''}`
   return (
     <article className={`kit-card${stagedN ? ' staged' : ''}`} aria-labelledby={`kit-${kit.name}`}>
@@ -197,8 +207,12 @@ function KitCard({ kit, installs, stage, listed, max }) {
         <span className="mono">{agents.length}</span>
       </div>
       {/* No "None." here: the counts above already say 0. */}
-      {skills.length ? <Links type="skill" names={skills} listed={listed?.skills} /> : null}
-      {agents.length ? <Links type="agent" names={agents} listed={listed?.agents} /> : null}
+      {skills.length ? (
+        <Links type="skill" names={skills} listed={listed?.skills} offNote={offNote} />
+      ) : null}
+      {agents.length ? (
+        <Links type="agent" names={agents} listed={listed?.agents} offNote={offNote} />
+      ) : null}
       <footer className="kit-card-foot">
         {credits.length ? (
           <span className="kit-credit">
@@ -351,7 +365,8 @@ function StagedBar({ installs, stage }) {
           type="button"
           className="btn sm"
           aria-label={row ? `Apply and rebuild kits for ${who(row)}` : 'Apply and rebuild kits'}
-          disabled={!row || kitsLocked(row) || !dirtyOf(row) || running}
+          disabled={!row || kitsLocked(row) || !dirtyOf(row) || running || stage.busy}
+          title={stage.busy && !running ? 'A job is running' : undefined}
           onClick={() => stage.apply(row)}
         >
           Apply and rebuild

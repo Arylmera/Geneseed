@@ -8,7 +8,9 @@
 // - `available` is true only when latest is strictly greater: an equal release is "latest",
 //   and a checkout ahead of the last release (current 4.2.0, npm 4.1.0) never shows one;
 // - a failed fetch is `latest: null`, retried after an hour rather than a day;
-// - while a fetch is in flight, another poll does not start a second one.
+// - while a fetch is in flight, another poll does not start a second one, and every poll says
+//   `checking: true` so the chip reads "checking…", not "unavailable" (which a settled failure
+//   or a turned-off check is).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -36,12 +38,12 @@ test('the first poll answers unknown and fetches once; the next poll has the ans
   let calls = 0;
   const fetcher = async () => { calls += 1; return '4.2.0'; };
   assert.deepEqual(updateStatus(st, '4.1.0', { fetcher, now: 0 }),
-    { current: '4.1.0', latest: null, available: null, checked_at: null });
+    { current: '4.1.0', latest: null, available: null, checked_at: null, checking: true });
   updateStatus(st, '4.1.0', { fetcher, now: 1 });
   await settle();
   assert.equal(calls, 1, 'a poll during the fetch must not start a second one');
   assert.deepEqual(updateStatus(st, '4.1.0', { fetcher, now: 2 }),
-    { current: '4.1.0', latest: '4.2.0', available: true, checked_at: 0 });
+    { current: '4.1.0', latest: '4.2.0', available: true, checked_at: 0, checking: false });
   assert.equal(calls, 1, 'a fresh answer is not re-asked');
 });
 
@@ -64,6 +66,21 @@ test('a failed fetch is null, and is retried after an hour', async () => {
   updateStatus(st, '4.1.0', { fetcher, now: HOUR + 1 });
   await settle();
   assert.equal(calls, 2, 'retried once the hour is up');
+});
+
+test('a failed check that has settled is not "checking"; a turned-off check never is', async () => {
+  const st = {};
+  updateStatus(st, '4.1.0', { fetcher: async () => { throw new Error('proxy'); }, now: 0 });
+  await settle();
+  assert.equal(updateStatus(st, '4.1.0', { fetcher: async () => null, now: 1 }).checking, false);
+  const before = process.env.GENESEED_NO_UPDATE_CHECK;
+  process.env.GENESEED_NO_UPDATE_CHECK = '1';
+  try {
+    assert.equal(updateStatus({}, '4.1.0', { fetcher: async () => '4.2.0', now: 0 }).checking, false);
+  } finally {
+    if (before === undefined) delete process.env.GENESEED_NO_UPDATE_CHECK;
+    else process.env.GENESEED_NO_UPDATE_CHECK = before;
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

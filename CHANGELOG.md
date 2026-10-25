@@ -9,6 +9,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Fixed
+- **Update and Rebuild all ask first** and name the active installs; a per-project install inside a worktree is flagged; onboarding shows only when no install is active; the Ledger's Open goes to Hosts and reports a refused selection; an update check in flight reads "checking…"; while a job runs every kit Apply waits; kit member chips no longer say "not installed" for a kit that is on elsewhere.
 - **The service worker no longer caches an HTML fallback as a script**, which broke a page after a rebuild until its cache was cleared; the cache is renamed so the bad copy is dropped everywhere.
 - **Console robustness**: the boot splash gives up after 8 s with Retry; a failed harness switch says so; a preset write error survives the poll; a stale loop link says it is gone; loop rings stay in their box; "Today" counts by calendar day; Constitution survives odd hashes and a zero rule budget; Library clears stale errors and guesses the right skill path; Docs About renders its text and shows the version; one shared Copy button reports a failed copy.
 

@@ -49,9 +49,10 @@ async function npmLatest() {
 }
 
 /**
- * `{ current, latest, available, checked_at }`. `available` is true only when `latest` is
- * semver-greater than `current`, so a checkout ahead of the last release never shows one;
- * null when either side is unknown. `fetcher` and `now` are injectable for the tests, which
+ * `{ current, latest, available, checked_at, checking }`. `available` is true only when
+ * `latest` is semver-greater than `current`, so a checkout ahead of the last release never
+ * shows one; null when either side is unknown. `checking` is true while the ask is in flight:
+ * the chip says "checking…" and re-asks soon, not "unavailable" for up to an hour. `fetcher` and `now` are injectable for the tests, which
  * must never reach the network.
  */
 export function updateStatus(state, current, { fetcher = npmLatest, now = Date.now() } = {}) {
@@ -60,7 +61,8 @@ export function updateStatus(state, current, { fetcher = npmLatest, now = Date.n
   const c = daily(state, '_update', fetcher, now,
     fetcher === npmLatest && process.env.NODE_TEST_CONTEXT);
   const available = current && c.value ? semverGreater(c.value, current) : null;
-  return { current: current ?? null, latest: c.value, available, checked_at: c.checked_at };
+  return { current: current ?? null, latest: c.value, available, checked_at: c.checked_at,
+    checking: c.inflight };
 }
 
 /**

@@ -25,6 +25,12 @@ const CLAUDE_STYLE = ['claude', 'bob', 'openclaude']
 
 const STATE = { active: ['Active', 'ok'], disabled: ['Disabled', 'warn'] }
 
+// A project install inside a `.claude/worktrees/` folder: a finished worktree's leftover, which
+// still lists while its folder is on disk. A missing folder never lists at all (the registry
+// drops a root that is not a directory, js/inspect/registry.mjs).
+const WORKTREE = /[\\/]\.claude[\\/]worktrees[\\/]/
+const isLeftover = (inst) => inst.scope === 'project' && WORKTREE.test(inst.path)
+
 // The headline of a fleet row's sync, VERDICT FIRST: a disabled or project install can be behind
 // with no drift figure, so the verdict says where it stands and the drift only adds detail.
 // `stale` files are the ones a rebuild updates; hand edits are counted apart and never summed in.
@@ -144,6 +150,17 @@ function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits 
                 <td>{quiet ? '' : inst.footprint || ''}</td>
                 <td>
                   <span className={`tag ${tone}`}>{stateLabel}</span>
+                  {isLeftover(inst) ? (
+                    <>
+                      {' '}
+                      <span
+                        className="tag warn"
+                        title="Inside a .claude/worktrees folder: likely a finished worktree. Remove it from its panel."
+                      >
+                        Worktree leftover
+                      </span>
+                    </>
+                  ) : null}
                 </td>
                 <td>
                   <SyncCell
@@ -458,6 +475,19 @@ export default function Hosts({
     }
   }
 
+  // rebuild-all re-emits every ACTIVE install, so the confirm names those and only those.
+  const rebuildAll = async () => {
+    const names = installs
+      .filter((i) => i.state === 'active')
+      .map((i) => `${installName(i)} · ${i.scope}`)
+    const ok = await confirm(
+      `Rebuild every active install: ${names.join(', ') || 'none'}? Each is rebuilt in place ` +
+        'from source with its own settings; files you edited are kept.',
+      { title: 'Rebuild all active installs?', confirmLabel: 'Rebuild all' },
+    )
+    if (ok) onAction('build-all')
+  }
+
   // The deploy form's default host: the one you already use.
   const defaultHost =
     installs.find((i) => i.selected)?.host ||
@@ -493,7 +523,7 @@ export default function Hosts({
           </span>
           {onAction ? (
             <div className="row gap-8">
-              <button type="button" className="btn ghost" onClick={() => onAction('build-all')}>
+              <button type="button" className="btn ghost" onClick={rebuildAll}>
                 <Icon name="refresh" /> Rebuild all
               </button>
             </div>

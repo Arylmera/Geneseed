@@ -1,5 +1,5 @@
 import React from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 
 // Settings is prop-driven now: the server controls only touch the api on a click, so an
@@ -7,12 +7,57 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 vi.mock('../api/index.js', () => ({ api: {} }))
 
 import Settings from '../pages/Settings/index.jsx'
+import { api } from '../api/index.js'
+import { ConfirmContext } from '../hooks/useConfirm.jsx'
 
 // Sections are h3 under the page's one h2 (which is also "Server", the tab's name).
 const section = (name) => screen.getByRole('heading', { level: 3, name }).closest('section')
 
 describe('Settings', () => {
   afterEach(() => vi.useRealTimers())
+
+  // Update pulls and then rebuilds every ACTIVE install (upgrade -> rebuild-all), so it asks first
+  // and names them, read at click time; a declined confirm sends nothing. With the list
+  // unreadable it still asks, in general words.
+  describe('Update asks first', () => {
+    const ui = (confirm, onAction) => (
+      <ConfirmContext.Provider value={confirm}>
+        <Settings onAction={onAction} />
+      </ConfirmContext.Provider>
+    )
+    const MSG = (names) =>
+      `Update Geneseed, then rebuild every active install: ${names}? ` +
+      'Each is rebuilt in place with its own settings; files you edited are kept.'
+    const OPTS = { title: 'Update and rebuild?', confirmLabel: 'Update' }
+
+    it('names the active installs, then runs update', async () => {
+      api.installs = vi.fn(async () => ({
+        installs: [
+          { id: 'a', host: 'claude', scope: 'global', path: '/h/.claude', state: 'active' },
+          { id: 'b', host: 'bob', scope: 'global', path: '/h/.bob', state: 'absent' },
+          { id: 'c', host: 'opencode', scope: 'project', path: '/git/Terra', state: 'active' },
+        ],
+      }))
+      const confirm = vi.fn(async () => true)
+      const onAction = vi.fn()
+      render(ui(confirm, onAction))
+      await act(async () => fireEvent.click(screen.getByText('Update (git pull + rebuild)')))
+      expect(confirm).toHaveBeenCalledWith(MSG('Claude Code · global, Terra · project'), OPTS)
+      expect(onAction).toHaveBeenCalledWith('update')
+    })
+
+    it('a declined confirm sends nothing; an unreadable list still asks', async () => {
+      api.installs = vi.fn(async () => {
+        throw new Error('daemon restarting')
+      })
+      const confirm = vi.fn(async () => false)
+      const onAction = vi.fn()
+      render(ui(confirm, onAction))
+      await act(async () => fireEvent.click(screen.getByText('Update (git pull + rebuild)')))
+      expect(confirm).toHaveBeenCalledWith(MSG('the installs it finds'), OPTS)
+      expect(onAction).not.toHaveBeenCalled()
+    })
+  })
 
   it('renders maintenance, the update button, and server control', () => {
     render(<Settings onAction={() => {}} />)

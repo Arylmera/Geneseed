@@ -9,7 +9,7 @@ import { RestartServer, StopServer } from './ServerControl.jsx'
 import Seg from '../../components/Seg.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { TAB_LABELS } from '../../lib/router.js'
-import { hostInfo } from '../../lib/hosts.js'
+import { hostInfo, installName } from '../../lib/hosts.js'
 import { relTime } from '../../lib/format.js'
 import { motionOK } from '../../lib/motion.js'
 
@@ -209,6 +209,24 @@ export default function Settings({
     )
     if (ok) onAction?.('install', { ...install, footprint: fp })
   }
+  // Update pulls (or npm-installs) and then rebuilds every ACTIVE install, so the confirm names
+  // them, read at click time: this page holds no install list. Unreadable, it still asks.
+  const update = async () => {
+    let names = 'the installs it finds'
+    try {
+      const { installs = [] } = await api.installs()
+      const active = installs.filter((i) => i.state === 'active')
+      names = active.map((i) => `${installName(i)} · ${i.scope}`).join(', ') || 'none'
+    } catch {
+      /* the general wording above */
+    }
+    const ok = await confirm(
+      `Update Geneseed, then rebuild every active install: ${names}? ` +
+        'Each is rebuilt in place with its own settings; files you edited are kept.',
+      { title: 'Update and rebuild?', confirmLabel: 'Update' },
+    )
+    if (ok) onAction('update')
+  }
   const autostart =
     server?.autostart === true
       ? 'On · login script'
@@ -297,7 +315,7 @@ export default function Settings({
               k="Geneseed"
               help="This copy of the source"
               control={
-                <button className="btn" onClick={() => onAction('update')}>
+                <button className="btn" onClick={update}>
                   <Icon name="download" />
                   Update (git pull + rebuild)
                 </button>

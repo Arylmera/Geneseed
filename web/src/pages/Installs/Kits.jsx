@@ -44,7 +44,7 @@ export default function Kits({ onAction, dataRev }) {
                     </a>
                     {k.description ? <span className="kit-desc">{k.description}</span> : null}
                     <span className="mono dim">
-                      {k.skills.length} skills · {k.agents.length} agents
+                      {(k.skills || []).length} skills · {(k.agents || []).length} agents
                     </span>
                   </div>
                   <Switch

@@ -23,6 +23,7 @@ vi.mock('../api/index.js', () => ({
     recent: vi.fn(),
     themes: vi.fn(),
     docs: vi.fn(),
+    installs: vi.fn(),
   },
 }))
 
@@ -75,6 +76,7 @@ beforeEach(() => {
     api[k].mockImplementation(() => Promise.resolve(null))
   }
   api.catalog.mockImplementation(() => Promise.resolve({ items: [] }))
+  api.installs.mockResolvedValue({ installs: [] })
   api.fleet.mockResolvedValue(BEHIND)
   api.update.mockResolvedValue(NONE)
   api.doctor.mockResolvedValue({ groups: [{ label: 'links', problems: [] }] })
@@ -204,6 +206,63 @@ describe('Ledger: a rebuild names its installs and asks first', () => {
     expect(bar.closest('tr').textContent).toContain('/h/.opencode')
     rerender(ui([{ id: 'j7', status: 'done' }]))
     await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull())
+  })
+})
+
+// Open moves the console's view to that install and only then the page, to the Hosts tab that
+// shows it. A refused move must not land on Installs showing the OLD view: it stays and says why.
+describe('Ledger: Open', () => {
+  beforeEach(() => {
+    api.fleet.mockResolvedValue(SYNCED)
+    window.location.hash = '#/'
+  })
+
+  it('selects the install, then goes to the Hosts tab', async () => {
+    api.selectView.mockResolvedValue({ ok: true })
+    const onRetry = vi.fn()
+    render(<Ledger overview={null} onAction={vi.fn()} onRetry={onRetry} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open opencode · global' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/installs/hosts'))
+    expect(api.selectView).toHaveBeenCalledWith('opencode', '/h/.opencode')
+    expect(onRetry).toHaveBeenCalled()
+  })
+
+  it('a refused selection stays on the Overview and says why', async () => {
+    api.selectView.mockRejectedValue(new Error('no install at /h/.opencode'))
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open opencode · global' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe('Could not open opencode · global: no install at /h/.opencode')
+    expect(window.location.hash).toBe('#/')
+  })
+})
+
+// Onboarding is for a machine with NO active install. `overview.deployed` is a fact about the
+// VIEWED install only: a view left on a disabled or removed install must still show the Ledger
+// over a live fleet, never "deploy your harness".
+describe('Overview: onboarding only for an empty fleet', () => {
+  const notHere = { ...overview, deployed: false }
+  const row = (state) => ({
+    id: `claude:global:/h/.claude`,
+    host: 'claude',
+    scope: 'global',
+    path: '/h/.claude',
+    state,
+  })
+
+  it('a view on a disabled install over an active fleet shows the Ledger', async () => {
+    api.installs.mockResolvedValue({ installs: [row('disabled'), { ...row('active'), id: 'o' }] })
+    api.fleet.mockResolvedValue(SYNCED)
+    render(<Overview overview={notHere} themes={[]} onAction={() => {}} />)
+    await screen.findByRole('heading', { name: 'Installed harnesses' })
+    expect(screen.queryByText('Deploy your harness')).toBeNull()
+  })
+
+  it('a fleet with no active install onboards', async () => {
+    api.installs.mockResolvedValue({ installs: [row('disabled')] })
+    api.themes.mockResolvedValue({ themes: [], current: 'neutral' })
+    render(<Overview overview={notHere} themes={[]} onAction={() => {}} />)
+    await screen.findByText('Deploy your harness')
   })
 })
 

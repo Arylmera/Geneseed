@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Overview's version chip and its Update button. A git clone can always pull (main moves
@@ -20,7 +20,7 @@ vi.mock('../api/index.js', () => ({
   },
 }))
 
-import Ledger, { UPDATE_POLL_MS } from '../pages/Overview/Ledger.jsx'
+import Ledger, { UPDATE_POLL_MS, UPDATE_RETRY_MS } from '../pages/Overview/Ledger.jsx'
 import { api } from '../api/index.js'
 
 beforeEach(() => {
@@ -169,5 +169,76 @@ describe('Overview update re-check while the page is open', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(screen.getByText('2 commits to pull')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Update' })).toBeTruthy()
+  })
+})
+
+// A check the daemon has not answered yet (`checking: true`) is not a failed one: the chip says
+// "checking…" and asks once more a few seconds on, instead of "unavailable" for up to the hour.
+// A settled failure (`checking: false`) still reads "unavailable" and is not re-asked early.
+describe('Overview update check still in flight', () => {
+  afterEach(() => vi.useRealTimers())
+  const flush = () => act(async () => {})
+
+  it('reads "checking…", then re-asks once after UPDATE_RETRY_MS', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const pending = { current: '4.15.0', latest: null, available: null, checked_at: null }
+    api.update.mockResolvedValueOnce({ ...pending, checking: true, install: 'npm-global' })
+    api.update.mockResolvedValue({
+      current: '4.15.0',
+      latest: '4.16.0',
+      available: true,
+      checked_at: 1,
+      checking: false,
+      install: 'npm-global',
+    })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    await flush()
+    expect(screen.getByText(/4\.15\.0 · checking…/)).toBeTruthy()
+    expect(screen.queryByText(/unavailable/)).toBeNull()
+    expect(UPDATE_RETRY_MS).toBe(5000)
+    vi.advanceTimersByTime(UPDATE_RETRY_MS)
+    await flush()
+    expect(api.update).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('4.16.0 available')).toBeTruthy()
+  })
+
+  it('a failed re-ask stops the early re-asks and reads "unavailable"', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    api.update.mockResolvedValueOnce({
+      current: '4.15.0',
+      latest: null,
+      available: null,
+      checked_at: null,
+      checking: true,
+      install: 'npm-global',
+    })
+    api.update.mockRejectedValue(new Error('daemon restarting'))
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    await flush()
+    vi.advanceTimersByTime(UPDATE_RETRY_MS)
+    await flush()
+    expect(api.update).toHaveBeenCalledTimes(2)
+    expect(screen.getByText(/update check unavailable/)).toBeTruthy()
+    vi.advanceTimersByTime(UPDATE_RETRY_MS * 3)
+    await flush()
+    expect(api.update).toHaveBeenCalledTimes(2)
+  })
+
+  it('a settled failure stays "unavailable" and is not re-asked early', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    api.update.mockResolvedValue({
+      current: '4.15.0',
+      latest: null,
+      available: null,
+      checked_at: 1,
+      checking: false,
+      install: 'npm-global',
+    })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    await flush()
+    expect(screen.getByText(/update check unavailable/)).toBeTruthy()
+    vi.advanceTimersByTime(UPDATE_RETRY_MS)
+    await flush()
+    expect(api.update).toHaveBeenCalledTimes(1)
   })
 })
