@@ -45,6 +45,10 @@ export function useKitStaging(data, onAction) {
   // Applied but not yet refetched counts as running: Apply would send the same rebuild twice.
   const running = (row) => store.running('kits', row.id) || !!live(row)?.applied
   const failed = (row) => !!live(row)?.failed
+  // Back to the kits the install has. Not while its rebuild runs: the job already has the set.
+  const discard = (row) => {
+    if (!running(row)) store.drop('kits', row.id)
+  }
   const apply = async (row) => {
     const kits = [...setOf(row)]
     const msg =
@@ -55,5 +59,5 @@ export function useKitStaging(data, onAction) {
     const job = await onAction('install', { host: row.host, path: row.path, kits })
     if (job) store.startApply('kits', row.id)
   }
-  return { setOf, toggle, change, apply, running, failed }
+  return { setOf, toggle, change, apply, running, failed, discard }
 }
