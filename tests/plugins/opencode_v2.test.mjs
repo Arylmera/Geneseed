@@ -268,7 +268,20 @@ test("activity: toV1Events maps the V2 vocabulary onto V1 events", async () => {
   const tools = new Map()
   const ev = (type, data, created = 1000) => toV1Events({ type, created, data: { sessionID: "s1", ...data } }, tools)
   assert.deepEqual(ev("session.created", { title: "t", location: { directory: "/w" } }),
-    [{ type: "session.created", properties: { info: { id: "s1", title: "t", parentID: undefined, directory: "/w" } } }])
+    [{ type: "session.created", properties: { info: { id: "s1", title: "t", parentID: undefined, agent: undefined, directory: "/w" } } }])
+  // a `subagent` child carries its parent and its agent, the two facts a branch needs
+  assert.deepEqual(ev("session.created", { parentID: "s0", agent: "explore", location: { directory: "/w" } }),
+    [{ type: "session.created", properties: { info: { id: "s1", title: undefined, parentID: "s0", agent: "explore", directory: "/w" } } }])
+  // a step's changed files (RelativePath[], no line counts) ride a per-step user-message diff
+  // list, so they fold like V1's turn diffs; counts stay null
+  assert.deepEqual(ev("session.step.ended", { assistantMessageID: "m1", files: ["src/a.js"] }, 1000).slice(1),
+    [{ type: "message.updated", properties: { info: { role: "user", sessionID: "s1", id: "files:m1",
+      summary: { diffs: [{ file: "src/a.js", additions: null, deletions: null }] } } } }])
+  assert.equal(ev("session.step.ended", { assistantMessageID: "m2" }).length, 1)     // no files key: no list
+  assert.deepEqual(ev("session.step.failed", { assistantMessageID: "m3", files: [] }).map((e) => e.properties.info.role), ["assistant", "user"])
+  // V2's compaction end is V1's session.compacted
+  assert.deepEqual(ev("session.compaction.ended", { reason: "auto", text: "summary" }),
+    [{ type: "session.compacted", properties: { sessionID: "s1" } }])
   assert.deepEqual(ev("session.execution.succeeded"), [{ type: "session.idle", properties: { sessionID: "s1" } }])
   assert.deepEqual(ev("session.execution.failed", { error: { type: "api", message: "boom" } }).map((e) => e.type),
     ["session.error", "session.idle"])
@@ -309,5 +322,51 @@ test("activity: a V2 session lifecycle writes and removes its card", async () =>
   emit("session.deleted", { sessionID: "s9" })
   await settle()
   assert.ok(!existsSync(card))
+  cleanup()
+})
+
+// V2 has no `worktree` input, so `root` is the repository top level above ctx.location.directory.
+// A `subagent` child is a branch of its parent (running while its execution runs, done when it
+// succeeds), its step files are attributed to it with null counts, and a compaction is counted.
+test("activity: a V2 sub-agent, its step files, and a compaction land on the parent's card", async () => {
+  const repo = path.join(tmp, "repo-v2")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  const { ctx, emit, hooks } = fakeCtx({ directory: path.join(repo) })
+  const cleanup = await (await load("activity")).setup(ctx)
+  const read = () => JSON.parse(readFileSync(path.join(cfgDir, "activity", "p1.json"), "utf8"))
+  const zero = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+  const row = (p, by) => ({ file: path.posix.basename(p), path: p, additions: null, deletions: null, by })
+  emit("session.created", { sessionID: "p1", title: "parent", location: { directory: repo } })
+  // turn msg_1: the parent edits src/a.js itself, before any sub-agent
+  await settle()
+  await hooks.session.prompt({ sessionID: "p1", messageID: "msg_1", prompt: { text: "first" } })
+  emit("session.step.ended", { sessionID: "p1", assistantMessageID: "msg_2", files: ["src/a.js"], tokens: zero })
+  await settle()
+  // turn msg_3 launches k1, which edits src/a.js; the parent's step msg_4 spans that run
+  await hooks.session.prompt({ sessionID: "p1", messageID: "msg_3", prompt: { text: "delegate" } })
+  emit("session.created", { sessionID: "k1", parentID: "p1", agent: "explore", location: { directory: repo } })
+  emit("session.execution.started", { sessionID: "k1" })
+  emit("session.step.ended", { sessionID: "k1", assistantMessageID: "msg_5", files: ["src/a.js"],
+    tokens: { input: 1, output: 1, reasoning: 0, cache: { read: 0, write: 0 } } })
+  emit("session.step.ended", { sessionID: "p1", assistantMessageID: "msg_4", files: ["src/a.js", "src/b.js"], tokens: zero })
+  await settle()
+  let e = read()
+  assert.equal(e.root, repo)
+  assert.equal(e.repo, repo)
+  assert.deepEqual(e.agents.map((a) => [a.id, a.type, a.status]), [["k1", "explore", "running"]])
+  // the msg_1 turn's edit stays the parent's; msg_4's copy of k1's file is dropped
+  assert.deepEqual(e.files.items, [row("src/a.js", null), row("src/a.js", "k1"), row("src/b.js", null)])
+  assert.ok(!existsSync(path.join(cfgDir, "activity", "k1.json")))
+  emit("session.execution.succeeded", { sessionID: "k1" })
+  emit("session.step.ended", { sessionID: "p1", assistantMessageID: "pm1",
+    tokens: { input: 1000, output: 5, reasoning: 0, cache: { read: 2000, write: 0 } } })
+  emit("session.compaction.ended", { sessionID: "p1", reason: "auto", text: "s" })
+  await settle()
+  e = read()
+  assert.equal(e.agents[0].status, "done")
+  assert.equal(e.context, null)          // unknown after the compaction until the next step
+  assert.equal(e.compactions, 1)
+  assert.equal(e.context_at_compaction, 3000)
+  assert.equal(e.turns, 2)
   cleanup()
 })

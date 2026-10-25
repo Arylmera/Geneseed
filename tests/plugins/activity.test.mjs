@@ -237,9 +237,9 @@ test("event hook: files from user-message summary.diffs (OpenCode 1.19 shape)", 
   const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
   const detail = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8"))
   try {
-    const hooks = await GeneseedActivity()
+    const hooks = await GeneseedActivity({ worktree: tmp })
     const fire = (type, properties) => hooks.event({ event: { type, properties } })
-    const user = (id, summary) => fire("message.updated", { sessionID: "s", info: {
+    const user =(id, summary) => fire("message.updated", { sessionID: "s", info: {
       id, sessionID: "s", role: "user", time: { created: 1 }, agent: "build",
       model: { providerID: "p", modelID: "m" }, ...(summary ? { summary } : {}) } })
     const diff = (file, additions, deletions) => ({ file, additions, deletions, patch: "@@ -1 +1 @@", status: "modified" })
@@ -270,8 +270,10 @@ test("event hook: files from user-message summary.diffs (OpenCode 1.19 shape)", 
       assert.equal(f.count, count, what)
       assert.equal(f.additions, additions, what)
       assert.equal(f.deletions, deletions, what)
-      const want = items.map(([file, a, d]) => ({ file, additions: a, deletions: d }))
-      assert.deepEqual(f.items, want, what)              // exactly {file, additions, deletions}: no patch on disk
+      // `path` is OpenCode's own worktree-relative path, `file` its basename, `by` null for the
+      // session itself, and nothing else: no patch text reaches the disk
+      const want = items.map(([p, a, d]) => ({ file: path.posix.basename(p), path: p, additions: a, deletions: d, by: null }))
+      assert.deepEqual(f.items, want, what)
       assert.deepEqual(detail().files.items, want, what)
     }
   } finally {
@@ -311,11 +313,12 @@ test("event hook: session.diff is the fallback files source (OpenCode 1.3 shape)
   process.env.OPENCODE_CONFIG_DIR = tmp
   const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
   try {
-    const hooks = await GeneseedActivity()
+    const hooks = await GeneseedActivity({ worktree: tmp })
     const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    const item = (file, additions, deletions) => ({ file, path: file, additions, deletions, by: null })
     await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
     await fire("session.diff", { sessionID: "s", diff: [{ file: "a.js", additions: 9, deletions: 1, patch: "x" }] })
-    assert.deepEqual(read().files, { count: 1, additions: 9, deletions: 1, items: [{ file: "a.js", additions: 9, deletions: 1 }] })
+    assert.deepEqual(read().files, { count: 1, additions: 9, deletions: 1, items: [item("a.js", 9, 1)] })
     // an empty session-wide list is the truth (every change undone), not a gap
     await fire("session.diff", { sessionID: "s", diff: [] })
     assert.deepEqual(read().files, { count: 0, additions: 0, deletions: 0, items: [] })
@@ -326,7 +329,7 @@ test("event hook: session.diff is the fallback files source (OpenCode 1.3 shape)
     // once a user message carries diffs, they win over the session-wide list
     await fire("message.updated", { info: { id: "u1", sessionID: "s", role: "user", summary: { diffs: [{ file: "b.js", additions: 2, deletions: 0 }] } } })
     await fire("session.diff", { sessionID: "s", diff: [{ file: "a.js", additions: 9, deletions: 1 }] })
-    assert.deepEqual(read().files, { count: 1, additions: 2, deletions: 0, items: [{ file: "b.js", additions: 2, deletions: 0 }] })
+    assert.deepEqual(read().files, { count: 1, additions: 2, deletions: 0, items: [item("b.js", 2, 0)] })
   } finally {
     if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
     else process.env.OPENCODE_CONFIG_DIR = saved
@@ -417,5 +420,260 @@ test("chat.message + text → full conversation transcript in the detail file", 
     if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
     else process.env.OPENCODE_CONFIG_DIR = saved
     fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+// ---- snapshot v2 (the Activity garden) ----------------------------------------------
+// One sandboxed config dir per test, the plugin built with `input` (V1's factory input), and
+// readers for the session's card and detail file.
+async function withPlugin(prefix, input, fn) {
+  const tmp = makeSandbox(prefix).path
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = tmp
+  const file = (sid, ext = "json") => path.join(tmp, "activity", `${sid}.${ext}`)
+  try {
+    const hooks = await GeneseedActivity(input)
+    await fn({
+      hooks,
+      fire: (type, properties) => hooks.event({ event: { type, properties } }),
+      read: (sid = "s") => JSON.parse(fs.readFileSync(file(sid), "utf8")),
+      detail: (sid = "s") => JSON.parse(fs.readFileSync(file(sid, "detail.json"), "utf8")),
+      exists: (sid) => fs.existsSync(file(sid)),
+    })
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+// A sub-agent is a child session (`task` creates it with `parentID` and `agent`, v1.19.4
+// tool/task.ts). It gets no card of its own: it becomes a row of its root session's `agents`,
+// running while the child is busy and done when the child goes idle (not when the parent's
+// `task` part completes: with background=true that part completes at once while the child
+// still runs, and a resumed task_id runs the same child again). The child's own user-message
+// diffs fold into the parent's files with `by` = the child id. The parent's own turn diff is a
+// snapshot of the whole worktree that spans the `task` run, so it repeats the child's files:
+// a path a sub-agent reported leaves the parent's `by: null` rows of the turn the child was
+// launched in and of every later turn (else every sub-agent edit would be drawn twice, and a
+// session would collide with itself). A parent edit from a turn BEFORE the launch stays the
+// parent's. Turn order is the message id order (OpenCode ids ascend).
+test("event hook: a child session is a sub-agent of its parent, with its own files", async () => {
+  await withPlugin("gs-act-child-", { worktree: "/w" }, async ({ fire, read, detail, exists }) => {
+    const user = (sid, id, diffs) => fire("message.updated", { info: { id, sessionID: sid, role: "user", summary: { diffs } } })
+    const diff = (file, additions, deletions) => ({ file, additions, deletions, patch: "@@" })
+    const item = (p, a, d, by) => ({ file: path.posix.basename(p), path: p, additions: a, deletions: d, by })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+    const rows = [
+      // [what happens, the act, agents as [id, type, status], files.items (null: unchanged)]
+      ["the parent alone: no agents yet", async () => {}, [], undefined],
+      ["the parent's turn msg_1 edits src/x.js itself",
+        () => user("s", "msg_1", [diff("src/x.js", 1, 0)]), [], [item("src/x.js", 1, 0, null)]],
+      ["the parent's turn msg_2 starts (no diffs yet)",
+        () => fire("message.updated", { info: { id: "msg_2", sessionID: "s", role: "user" } }), [], null],
+      ["task creates child c1 (agent explore) in turn msg_2: a running branch, no card of its own",
+        () => fire("session.created", { info: { id: "c1", parentID: "s", agent: "explore", title: "look (@explore subagent)", directory: "/w", time: { created: 5000 } } }),
+        [["c1", "explore", "running"]], null],
+      ["c1 busy: still running", () => fire("session.status", { sessionID: "c1", status: { type: "busy" } }), [["c1", "explore", "running"]], null],
+      ["c1's turn diff: its file is attributed to c1",
+        () => user("c1", "msg_3", [diff("src/x.js", 4, 1)]),
+        [["c1", "explore", "running"]], [item("src/x.js", 1, 0, null), item("src/x.js", 4, 1, "c1")]],
+      ["the parent's msg_2 snapshot repeats c1's file: dropped there, the msg_1 edit stays the parent's",
+        () => user("s", "msg_2", [diff("src/x.js", 5, 1), diff("src/y.js", 2, 0)]),
+        [["c1", "explore", "running"]], [item("src/x.js", 1, 0, null), item("src/x.js", 4, 1, "c1"), item("src/y.js", 2, 0, null)]],
+      ["c1 goes idle: done", () => fire("session.idle", { sessionID: "c1" }), [["c1", "explore", "done"]], null],
+      ["c1 resumed (task_id): running again", () => fire("session.status", { sessionID: "c1", status: { type: "busy" } }), [["c1", "explore", "running"]], null],
+      ["a nested child c2 of c1 is a branch of the root session",
+        () => fire("session.created", { info: { id: "c2", parentID: "c1", directory: "/w" } }),
+        [["c1", "explore", "running"], ["c2", null, "running"]], null],
+      ["c2's files are attributed to c2",
+        () => user("c2", "msg_4", [diff("lib/z.md", 1, 0)]),
+        [["c1", "explore", "running"], ["c2", null, "running"]],
+        [item("src/x.js", 1, 0, null), item("src/x.js", 4, 1, "c1"), item("src/y.js", 2, 0, null), item("lib/z.md", 1, 0, "c2")]],
+      ["/undo in c1 drops c1's turn: the parent's msg_2 copy of its file is back on the trunk",
+        () => fire("message.removed", { sessionID: "c1", messageID: "msg_3" }),
+        [["c1", "explore", "running"], ["c2", null, "running"]],
+        [item("src/x.js", 6, 1, null), item("src/y.js", 2, 0, null), item("lib/z.md", 1, 0, "c2")]],
+    ]
+    let files
+    for (const [what, act, agents, items] of rows) {
+      const before = read().status
+      await act()
+      const e = read()
+      assert.deepEqual(e.agents.map((a) => [a.id, a.type, a.status]), agents, what)
+      if (agents.length) assert.deepEqual(detail().agents, e.agents, what)   // the detail file carries the same list
+      if (items !== null) files = items
+      assert.deepEqual(e.files?.items, files, what)
+      // a child's events never move the parent's status (only the parent's own row may)
+      if (!what.startsWith("the parent")) assert.equal(e.status, before, what)
+    }
+    assert.equal(read().agents[0].started, 5)                  // the child's own creation time, in seconds
+    for (const sid of ["c1", "c2"]) assert.equal(exists(sid), false)
+
+    // still skipped: a geneseed-* throwaway (even as a child), and a child of an unknown parent
+    await fire("session.created", { info: { id: "g", parentID: "s", title: "geneseed-learn (auto)", directory: "/w" } })
+    await fire("session.created", { info: { id: "o", parentID: "ghost", directory: "/w" } })
+    await fire("message.updated", { info: { id: "msg_9", sessionID: "o", role: "user", summary: { diffs: [diff("q.js", 1, 1)] } } })
+    assert.deepEqual(read().agents.map((a) => a.id), ["c1", "c2"])
+    for (const sid of ["g", "o", "ghost"]) assert.equal(exists(sid), false)
+  })
+})
+
+// `turns` counts user prompts: chat.message fires once per prompt (v1.19.4
+// session/prompt.ts), while message.updated re-fires for one message and compaction writes
+// synthetic user messages of its own. So the count is the distinct prompt ids of the session.
+// A prompt made only of synthetic parts is not the user's: a background `task` hands its
+// result back that way (TaskTool.injectBackgroundResult).
+test("event hook: turns count the distinct user prompts", async () => {
+  await withPlugin("gs-act-turns-", { worktree: "/w" }, async ({ hooks, fire, read }) => {
+    const prompt = (sid, messageID) => hooks["chat.message"]({ sessionID: sid, messageID }, { parts: [{ type: "text", text: "go" }] })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+    await fire("session.created", { info: { id: "c", parentID: "s", directory: "/w" } })
+    const rows = [
+      ["a new session has had no turn", async () => {}, 0],
+      ["first prompt", () => prompt("s", "u1"), 1],
+      ["the same prompt id again", () => prompt("s", "u1"), 1],
+      ["second prompt", () => prompt("s", "u2"), 2],
+      ["a prompt with no text still counts", () => hooks["chat.message"]({ sessionID: "s", messageID: "u3" }, { parts: [] }), 3],
+      ["a sub-agent's prompt is not the user's", () => prompt("c", "cu1"), 3],
+      ["a background task's result (synthetic parts only) is not a turn",
+        () => hooks["chat.message"]({ sessionID: "s", messageID: "u4" }, { parts: [{ type: "text", text: "result", synthetic: true }] }), 3],
+      ["a real part beside a synthetic one is a turn",
+        () => hooks["chat.message"]({ sessionID: "s", messageID: "u5" }, { parts: [{ type: "agent", name: "x" }, { type: "text", text: "use x", synthetic: true }] }), 4],
+      ["a user message.updated (or a compaction message) is not a prompt", () => fire("message.updated", { info: { id: "u9", sessionID: "s", role: "user" } }), 4],
+    ]
+    for (const [what, act, turns] of rows) { await act(); assert.equal(read().turns, turns, what) }
+  })
+})
+
+// `context` is the last assistant message's input + cache tokens: OpenCode's `input` already
+// excludes the cache (v1.19.4 session.ts getUsage; V2 core session/usage.ts sums the same
+// three for its own context figure). The window is not on the event, so it is the contract's
+// estimate: 200 000, or 1 000 000 once more than 200 000 are used.
+test("event hook: context is the last assistant message's input + cache tokens", async () => {
+  await withPlugin("gs-act-ctx-", { worktree: "/w" }, async ({ fire, read }) => {
+    const reply = (sid, id, input, cacheRead, cacheWrite, extra = {}) => fire("message.updated", { info: {
+      role: "assistant", id, sessionID: sid, mode: "build", ...extra,
+      tokens: { input, output: 999, reasoning: 0, cache: { read: cacheRead, write: cacheWrite } } } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+    await fire("session.created", { info: { id: "c", parentID: "s", directory: "/w" } })
+    const rows = [
+      ["a new session has no context yet", async () => {}, null],
+      ["input + cache.read + cache.write, output left out", () => reply("s", "a1", 1000, 5000, 200), { used: 6200, window: 200000 }],
+      ["a new message's first update carries zero tokens: kept", () => reply("s", "a2", 0, 0, 0), { used: 6200, window: 200000 }],
+      ["the compaction summary's input is the old conversation: skipped", () => reply("s", "a3", 150000, 90000, 0, { summary: true }), { used: 6200, window: 200000 }],
+      ["a sub-agent's context is its own: skipped", () => reply("c", "ca1", 50000, 0, 0), { used: 6200, window: 200000 }],
+      ["past 200 000 the window is the 1M one", () => reply("s", "a4", 10000, 240000, 1000), { used: 251000, window: 1000000 }],
+    ]
+    for (const [what, act, context] of rows) { await act(); assert.deepEqual(read().context, context, what) }
+  })
+})
+
+// session.compacted (v1.19.4 session/compaction.ts, `{ sessionID }`) counts a compaction,
+// stamps its time and keeps the context it cut from. The context now is unknown until the next
+// assistant message, so it is null. It changes no status: a compaction runs inside a busy
+// turn, and must not show the session as idle.
+test("event hook: a compaction is counted and keeps the context it cut", async () => {
+  await withPlugin("gs-act-compact-", { worktree: "/w" }, async ({ fire, read }) => {
+    await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+    let e = read()
+    assert.deepEqual([e.compactions, e.compacted_at, e.context_at_compaction], [0, null, null])
+    await fire("session.status", { sessionID: "s", status: { type: "busy" } })
+    await fire("message.updated", { info: { role: "assistant", id: "a1", sessionID: "s", tokens: { input: 100, output: 1, reasoning: 0, cache: { read: 180000, write: 0 } } } })
+    const before = Math.floor(Date.now() / 1000)
+    await fire("session.compacted", { sessionID: "s" })
+    e = read()
+    assert.equal(e.compactions, 1)
+    assert.ok(e.compacted_at >= before && e.compacted_at <= before + 2)
+    assert.equal(e.context_at_compaction, 180100)
+    assert.equal(e.context, null)
+    assert.equal(e.status, "busy")
+    await fire("message.updated", { info: { role: "assistant", id: "a2", sessionID: "s", tokens: { input: 9000, output: 1, reasoning: 0, cache: { read: 0, write: 0 } } } })
+    await fire("session.compacted", { sessionID: "s" })
+    e = read()
+    assert.equal(e.compactions, 2)
+    assert.equal(e.context_at_compaction, 9000)
+  })
+})
+
+// `root` is OpenCode's own `worktree` input (v1.19.4: the top level of the opened directory's
+// checkout, so a linked worktree is its own root; "/" for a project outside a repository).
+// `repo` is the main checkout, read the way js/hosts/gitref.mjs mainWorktreeOf reads it, and
+// the root itself on a main checkout. Pinned against gitref on a fixture tree: a main repo and
+// a linked worktree whose `.git` FILE names `<main>/.git/worktrees/wt`. On Windows the
+// worktree arrives with forward slashes, so that is the form fed in.
+test("root/repo: OpenCode's worktree, and the main checkout as js/hosts/gitref.mjs finds them", async () => {
+  const { gitRootOf, mainWorktreeOf } = await import("../../js/hosts/gitref.mjs")
+  const box = makeSandbox("gs-act-root-").path
+  try {
+    const main = path.join(box, "main"), wt = path.join(box, "wt"), sub = path.join(wt, "src")
+    fs.mkdirSync(path.join(main, ".git", "worktrees", "wt"), { recursive: true })
+    fs.writeFileSync(path.join(main, ".git", "worktrees", "wt", "commondir"), "../..\n")
+    fs.mkdirSync(sub, { recursive: true })
+    fs.writeFileSync(path.join(wt, ".git"), `gitdir: ${path.join(main, ".git", "worktrees", "wt")}\n`)
+    const slash = (p) => p.replace(/\\/g, "/")
+    assert.equal(mainWorktreeOf(sub), main)    // the fixture is a real linked worktree to gitref
+    const rows = [
+      // [what, worktree input, root, repo]
+      ["a linked worktree", slash(wt), gitRootOf(sub), mainWorktreeOf(sub)],
+      ["the main checkout is its own repo", slash(main), gitRootOf(main), gitRootOf(main)],
+      ["outside a repository OpenCode passes '/'", "/", null, null],
+      ["the drive root is no repo either", path.parse(box).root, null, null],
+      ["no input at all", undefined, null, null],
+    ]
+    for (const [what, worktree, root, repo] of rows) {
+      await withPlugin("gs-act-root-run-", worktree === undefined ? undefined : { worktree }, async ({ fire, read }) => {
+        await fire("session.created", { info: { id: "s", title: "t", directory: worktree } })
+        assert.deepEqual([read().root, read().repo], [root, repo], what)
+      })
+    }
+  } finally { fs.rmSync(box, { recursive: true, force: true }) }
+})
+
+// A file whose path cannot be stored relative to the root has `path: null` and only its
+// basename in `file` (never an absolute path, and never a basename in `path`, where it would
+// collide with a same-named file at the top of the repository). With no root at all every
+// path is null. Such rows still merge on OpenCode's own raw path, so two files of one name
+// stay two rows.
+test("event hook: a path outside the root, or with no root, is null", async () => {
+  for (const [what, input, raws, want] of [
+    // [what, factory input, raw FileDiff files, [file, path] per item]
+    ["inside the root", { worktree: "/w" }, ["src/a.js"], [["a.js", "src/a.js"]]],
+    ["a '../' path", { worktree: "/w" }, ["../other/b.js"], [["b.js", null]]],
+    ["an absolute path", { worktree: "/w" }, ["/etc/c.conf"], [["c.conf", null]]],
+    ["a drive path", { worktree: "/w" }, ["C:\\x\\c.conf"], [["c.conf", null]]],
+    ["a UNC path", { worktree: "/w" }, ["\\\\srv\\share\\c.conf"], [["c.conf", null]]],
+    ["backslashes become '/'", { worktree: "/w" }, ["src\\d.js"], [["d.js", "src/d.js"]]],
+    ["no root", undefined, ["src/e.js"], [["e.js", null]]],
+    ["no root: two files of one name stay two rows", undefined, ["src/a.js", "lib/a.js"], [["a.js", null], ["a.js", null]]],
+  ]) {
+    await withPlugin("gs-act-rel-", input, async ({ fire, read }) => {
+      await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+      await fire("message.updated", { info: { id: "u", sessionID: "s", role: "user", summary: { diffs: raws.map((file) => ({ file, additions: 1, deletions: 0 })) } } })
+      assert.deepEqual(read().files.items.map((f) => [f.file, f.path]), want, what)
+    })
+  }
+})
+
+// The plugin's fs-only readers are twins of js/hosts/gitref.mjs (a plugin cannot import js/).
+// Compared like the guard's twins (tests/plugins/guard.test.mjs): each function cut out by
+// brace matching, with comments, semicolons, quote style and whitespace folded away.
+test("the activity plugin's repository readers match their js/hosts/gitref.mjs originals", () => {
+  const fn = (src, name) => {
+    const b = src.indexOf(`function ${name}(`)
+    assert.ok(b >= 0, `${name} missing`)
+    let i = src.indexOf("{", b), depth = 0
+    for (; i < src.length; i++) {
+      if (src[i] === "{") depth++
+      else if (src[i] === "}" && --depth === 0) break
+    }
+    return src.slice(b, i + 1)
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+      .replace(/'/g, '"').replace(/;/g, "").replace(/\s+/g, "")
+  }
+  const ref = fs.readFileSync(path.join(process.cwd(), "js/hosts/gitref.mjs"), "utf8")
+  const mine = fs.readFileSync(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-activity.js"), "utf8")
+  for (const name of ["gitRootOf", "gitDirOf", "mainWorktreeOf"]) {
+    assert.equal(fn(mine, name), fn(ref, name), `the activity plugin's ${name} drifted from js/hosts/gitref.mjs`)
   }
 })
