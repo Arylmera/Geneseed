@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.22.0] — 2026-10-25
+
+Minor: the Activity view is fed on every host, and pipelines no longer stall on a silent crew.
+
 ### Added
 - **Claude Code, OpenClaude and Bob feed the Activity view**, like OpenCode: `geneseed-hook activity` runs on UserPromptSubmit (and SessionEnd on Claude and OpenClaude), and Claude's full timeline is read from its transcript at Stop. Recording is on by default on every host and follows the same `.geneseed-activity` switch; with it off, the writer is never loaded. Snapshots are redacted with the Law I secret patterns and git-ignored; ended sessions are archived (newest 50, 7 days) instead of deleted, and viewing the page never deletes anything. Run `geneseed rebuild-all` to wire the new hook. Bob is covered by unit tests only (IBM does not publish Bob Shell on npm).
 
