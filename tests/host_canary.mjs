@@ -265,6 +265,14 @@ function canary(host, work) {
   return { version, ...host.check({ exec, home, project, env, work }) };
 }
 
+// An `--only` id that names no host would filter every host out and exit 0 having checked
+// nothing — a gate that fails open. Refuse it before anything is installed.
+const unknown = ONLY.filter((id) => !HOSTS.some((h) => h.id === id));
+if (unknown.length > 0) {
+  console.error(`unknown --only host: ${unknown.join(', ')} (valid: ${HOSTS.map((h) => h.id).join(', ')})`);
+  process.exit(2);
+}
+
 console.log('skip bob: IBM does not publish Bob Shell on npm — nothing to install (see the header)');
 let failed = false;
 for (const host of HOSTS.filter((h) => ONLY.length === 0 || ONLY.includes(h.id))) {
