@@ -1645,25 +1645,28 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   font-size: 34px; font-weight: 600; letter-spacing: -.02em;
 }
 .b-stat-cap { font-size: 12.5px; color: var(--text-2); }
-.b-timeline { display: flex; flex-direction: column; }
-.b-tl-row {
-  display: grid; grid-template-columns: 16px 1fr auto;
-  gap: 14px; align-items: center;
-  padding: 12px 0; border-bottom: 1px solid var(--line);
+/* The shared RunChips base (pages/Dashboard/RunChips.jsx), used by all three lenses. */
+.run-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.run-chip {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(60px, 140px) auto;
+  gap: 12px; align-items: center; padding: 10px 14px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2);
 }
-.b-tl-row:last-child { border-bottom: 0; }
-.b-tl-node {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--text-3); box-shadow: 0 0 0 4px var(--surface);
-}
-.b-tl-node.ok { background: var(--good); }
-.b-tl-node.acc { background: var(--accent); }
-.b-tl-node.warn { background: var(--warn); }
-.b-tl-body { font-size: 13.5px; min-width: 0; word-break: break-word; }
-.b-tl-body b { text-transform: capitalize; }
-.b-tl-when {
-  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
-  white-space: nowrap;
+.run-chip-icon { width: 18px; height: 18px; }
+.run-chip.ok .run-chip-icon { color: var(--good-text); }
+.run-chip.bad .run-chip-icon { color: var(--bad-text); }
+.run-chip.acc .run-chip-icon { color: var(--accent-text); }
+.run-chip-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.run-chip-head b { text-transform: capitalize; }
+.run-chip-times { margin-left: 6px; font-family: var(--font-mono); color: var(--accent-text); }
+.run-chip-sub { font-size: 12.5px; color: var(--text-2); }
+.run-chip-bars { display: flex; gap: 3px; min-width: 0; }
+/* flex: none keeps each bar at its computed share; min-width keeps a 0 s run visible. */
+.run-chip-bars i { flex: none; min-width: 2px; height: 8px; border-radius: 3px; background: var(--accent); }
+.run-chip-dur { font-family: var(--font-mono); font-size: 12px; text-align: right; white-space: nowrap; }
+@media (max-width: 720px) {
+  .run-chip { grid-template-columns: 18px 1fr auto; }
+  .run-chip-bars { display: none; }
 }
 .donut-c-num {
   font-family: var(--font-display); font-weight: 600; font-size: 28px;
@@ -1858,6 +1861,14 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   .c-grid .c-mod[style*="span 3"],
   .c-grid .c-mod[style*="span 2"] { grid-column: span 2 !important; }
 }
+/* RunChips in the HUD: the same chip, squared and dense like the other instrument rows. */
+.c-root .run-chips { gap: 4px; }
+.c-root .run-chip {
+  font-family: var(--font-mono); border-radius: 0; padding: 6px 10px;
+  background: var(--surface);
+}
+.c-root .run-chip-bars i { border-radius: 0; }
+
 @media (max-width: 720px) {
   .c-strip { grid-template-columns: repeat(2, 1fr); }
   .c-kpi-row { grid-template-columns: repeat(2, 1fr); }

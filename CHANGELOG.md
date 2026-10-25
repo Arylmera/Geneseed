@@ -10,6 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **Memory facts are grouped by topic** in the Library and Personal › Memory: each catalog row carries its `topic` (frontmatter `topic`, else `type`, else `misc`, slugged as the memory store does).
+- **The Greenhouse, Operator and Operator HUD dashboards show recent runs as run chips**: adjacent identical runs fold into one chip (×N), with outcome, scope, age and duration bars; the raw command stays a tooltip.
 
 ## [4.23.1] — 2026-10-25
 
