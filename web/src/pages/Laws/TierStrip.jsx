@@ -15,7 +15,10 @@ export default function TierStrip({ tiers, current, onPick }) {
       {tiers.map((t, i) => {
         const body = (
           <>
-            <span className="tier-k mono">RANK {i + 1}</span>
+            <span className="tier-head">
+              <span className="tier-k mono">RANK {i + 1}</span>
+              {t.pill ? <span className={`badge tier-pill ${t.pill[1]}`}>{t.pill[0]}</span> : null}
+            </span>
             <span className="tier-top">
               <span className="tier-name">{t.name}</span>
               <span className="tier-n mono">{t.n}</span>

@@ -107,6 +107,11 @@ describe('PRECEDENCE', () => {
     expect(C.parsePrecedence(tmpl).slice(0, 4)).toEqual(authored())
   })
 
+  it('matches rows 5-6 with PRECEDENCE_INFORM', () => {
+    const tail = C.PRECEDENCE_INFORM.map(({ source, against }) => ({ source, against }))
+    expect(C.parsePrecedence(tmpl).slice(4)).toEqual(tail)
+  })
+
   // The gate must fail both ways: a table whose rows are swapped no longer equals the constant.
   it('no longer matches a table with two rows swapped', () => {
     const swapped = tmpl.replace(
