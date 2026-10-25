@@ -1332,94 +1332,8 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   opacity: .03; mix-blend-mode: overlay;
 }
 
-/* ============================================================================
-   SETTINGS — Console direction picker tiles (one per flavour).
-   Mini schematic + name + tagline; the active tile gets an accent ring.
-   ============================================================================ */
-.dir-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
-  margin-top: 4px;
-}
-.dir-tile {
-  text-align: left; border: 1px solid var(--line);
-  background: var(--surface); border-radius: var(--r-md);
-  padding: 12px; cursor: pointer; font: inherit; color: var(--text);
-  display: flex; flex-direction: column; gap: 11px;
-  transition: border-color .14s, transform .1s, box-shadow .14s;
-}
-.dir-tile:hover { border-color: var(--accent-line); transform: translateY(-2px); }
-.dir-tile.on {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset, 0 12px 28px -22px var(--accent);
-}
-.dir-thumb {
-  position: relative; height: 78px;
-  border-radius: 8px; overflow: hidden;
-  padding: 10px 10px 10px 34px;
-  display: flex; flex-direction: column; justify-content: center; gap: 6px;
-  border: 1px solid rgba(255,255,255,.06);
-}
-.dir-thumb-rail {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 24px; opacity: .9;
-}
-.dir-thumb-bar { height: 6px; border-radius: 3px; opacity: .92; }
-.dir-thumb-dot {
-  position: absolute; right: 10px; top: 10px;
-  width: 9px; height: 9px; border-radius: 50%;
-}
-/* Per-direction thumbnail palettes — distilled from each flavour's dark mode.
-   Always painted in the direction's own colours, not the active flavour's,
-   so the picker reads the same regardless of what's currently selected. */
-.dir-cultivar .dir-thumb { background: #0B0E12; border-radius: 12px; }
-.dir-cultivar .dir-thumb-rail { background: #14181D; border-right: 1px solid #2C333B; }
-.dir-cultivar .dir-thumb-bar { background: #3AD4C4; }
-.dir-cultivar .dir-thumb-bar:nth-child(2) { background: #2C333B; }
-.dir-cultivar .dir-thumb-bar:nth-child(3) { background: #2C333B; }
-.dir-cultivar .dir-thumb-dot { background: #3AD4C4; box-shadow: 0 0 8px #2BA89B; }
-
-.dir-atlas .dir-thumb { background: #15130E; border-radius: 18px; }
-.dir-atlas .dir-thumb-rail { background: #1C1A12; border-right: 1px solid #322D22; }
-.dir-atlas .dir-thumb-bar { background: #8FD694; border-radius: 999px; }
-.dir-atlas .dir-thumb-bar:nth-child(2) { background: #322D22; }
-.dir-atlas .dir-thumb-bar:nth-child(3) { background: #322D22; }
-.dir-atlas .dir-thumb-dot { background: #C9E8A8; box-shadow: 0 0 8px #5C7A50; }
-
-.dir-operator .dir-thumb { background: #0A0C0E; border-radius: 0px; }
-.dir-operator .dir-thumb-rail { background: #11151A; border-right: 1px solid #262D36; }
-.dir-operator .dir-thumb-bar { background: #E8A23B; }
-.dir-operator .dir-thumb-bar:nth-child(2) { background: #262D36; }
-.dir-operator .dir-thumb-bar:nth-child(3) { background: #262D36; }
-.dir-operator .dir-thumb-dot { background: #E8A23B; box-shadow: 0 0 8px #E8A23B; }
-
-.dir-matrix .dir-thumb { background: #04070A; border-radius: 2px; }
-.dir-matrix .dir-thumb-rail { background: #0B1116; border-right: 1px solid #16242B; }
-.dir-matrix .dir-thumb-bar { background: #19E37C; }
-.dir-matrix .dir-thumb-bar:nth-child(2) { background: #18242C; }
-.dir-matrix .dir-thumb-bar:nth-child(3) { background: #18242C; }
-.dir-matrix .dir-thumb-dot { background: #19E37C; box-shadow: 0 0 8px #19E37C; }
-
-.dir-meta { display: flex; flex-direction: column; gap: 4px; }
-.dir-name {
-  font-family: var(--font-display); font-weight: 600; font-size: 14.5px;
-  display: flex; align-items: center; gap: 8px;
-}
-.dir-check {
-  font-family: var(--font-mono); font-size: 10px; color: var(--accent-text);
-  margin-left: auto;
-}
-.dir-tag { font-size: 12px; color: var(--text-2); line-height: 1.45; }
-
-/* Dashboard-layout picker — a labelled segmented control above the skin grid. */
-.dir-layout {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-  margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line);
-}
-.dir-layout .tick { color: var(--text-2); }
+/* ---- Settings: the status line under each Appearance control ---- */
 .dir-layout-note { font-size: 12px; }
-
-@media (max-width: 960px) {
-  .dir-grid { grid-template-columns: 1fr; }
-}
 
 /* ============================================================================
    PER-FLAVOUR LAYOUT TWEAKS — beyond palette/radius, each direction reshapes
@@ -2850,6 +2764,13 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: 12px; color: 
 .kv-grid dt { color: var(--text-3); }
 .kv-grid dd { margin: 0; overflow-wrap: anywhere; }
 
+/* Scoped under .sheet so these beat the equal-specificity .sheet-* rules later in the file. */
+.sheet .sheet-index .sheet-dot { display: inline-block; width: 7px; height: 7px; margin-left: 8px;
+  border-radius: 50%; vertical-align: middle; }
+.sheet .sheet-index .sheet-dot.good { background: var(--good); }
+.sheet .sheet-index .sheet-dot.warn { background: var(--warn); }
+.sheet .sheet-sec.sheet-live { border-color: var(--accent-line); }
+
 /* ---- Kits: Installs / Kits panels and the Kits page share these rows ---- */
 .kits-tab { display: flex; flex-direction: column; gap: 16px; }
 .kit-list { margin: 0; padding: 0; list-style: none; }
@@ -3267,8 +3188,6 @@ html { scrollbar-gutter: stable; }
 .badge.cap { text-transform: capitalize; }
 .check-fold > summary { cursor: pointer; padding: var(--sp-3) var(--sp-5); color: var(--text-2); font-size: var(--fs-sm); }
 .check-fold[open] > summary { margin-bottom: var(--sp-3); }
-.dir-thumb-bar.w70 { width: 70%; }
-.dir-thumb-bar.w52 { width: 52%; }
 .panel.flush > .empty { padding: var(--sp-5); font-size: var(--fs-sm); }
 .inst-head { flex-wrap: wrap; }
 
@@ -3315,7 +3234,9 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .sheet-index button.t-bad { color: var(--bad-text); }
 .sheet-body { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 .sheet-sec { scroll-margin-top: calc(var(--topbar-h) + 16px); }
-.sheet-row { display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+/* The value keeps 12rem: an `auto` control column (a row of buttons) otherwise takes its
+   max-content first and crushes the value to one word per line. */
+.sheet-row { display: grid; grid-template-columns: minmax(120px, 180px) minmax(12rem, 1fr) auto; gap: 18px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
 .sheet-k { font-weight: 600; }
 .sheet-h { display: block; font-size: 12.5px; font-weight: 400; }
 .sheet-c { justify-self: end; }
@@ -3408,4 +3329,6 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 /* AT: the merged feed and gate rows. */
 .act-feed { display: flex; flex-direction: column; gap: var(--sp-4); }
 .act-row.gate .act-glyph { color: var(--warn-text); }
-.sheet-v { min-width: 0; }
+/* A control and its status line stack, and a segmented control wraps rather than overflow. */
+.sheet-v { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.sheet-v .seg { flex-wrap: wrap; max-width: 100%; }
