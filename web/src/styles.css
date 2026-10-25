@@ -2689,8 +2689,11 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .pack-wrap.pack-off .pack-state { color: var(--warn-text); }
 .pack-enable { padding: 9px 20px; border-bottom: 1px solid var(--line); overflow-x: auto;
   white-space: nowrap; font-family: var(--font-mono); font-size: 12px; color: var(--text-3); }
-.pack-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.pack-list li { display: flex; align-items: center; gap: 10px; }
+.pack-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px 12px;
+  grid-template-columns: max-content minmax(0, 1fr) 2ch auto; }
+/* Subgrid: every row shares the list's columns, so names, bars, counts and switches line up. */
+.pack-list li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
+.pack-list .pl-n { text-align: right; }
 .pack-list li.off .pl-name { color: var(--text-3); }
 .pl-name { width: 78px; flex: none; font-weight: 600; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
@@ -3295,6 +3298,15 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .lr-use .ub-trk { width: 48px; border-radius: 3px; background: var(--surface-3); }
 .lib-stats { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin: var(--sp-3) 0; }
 .lib-stats .stat:first-child { flex: 1 1 220px; }
+.reader-intro { display: flex; flex-direction: column; gap: var(--sp-3); }
+.reader-intro-text { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.reader-intro .lib-stats { margin: 0; }
+/* The reader is the container: a query never matches the element that declares it. */
+.lib-reader { container: reader / inline-size; }
+@container reader (min-width: 820px) {
+  .reader-intro.with-stats { display: grid; grid-template-columns: minmax(0, 62ch) minmax(300px, 1fr);
+    column-gap: var(--sp-6); align-items: start; }
+}
 /* SY: Server settings sheet and Hosts sync column. */
 .sheet { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
 .sheet-index { flex: 0 0 180px; position: sticky; top: calc(var(--topbar-h) + 16px); display: flex; flex-direction: column; gap: 2px; }

@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Console bars say each number once.** Gate asks, Doctrine packs and the context budget no longer print a legend under the bar repeating the name and count beside it; pack rows line up in one grid; the Library reader shows usage to the right of the description when wide enough, under it otherwise.
+
 ## [4.22.0] — 2026-10-25
 
 Minor: the Activity view is fed on every host, and pipelines no longer stall on a silent crew.

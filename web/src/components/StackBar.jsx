@@ -9,11 +9,12 @@ const SWEEP_MS = 500
 // told their parts apart by colour alone; here the bar is one image whose label reads every
 // part ("label: n of total"), each segment carries a title, and the legend under it prints
 // each label beside its count. `total` defaults to the sum; pass it when the parts are a
-// share of something larger.
+// share of something larger. `legend={false}` drops the legend where the caller already
+// prints the label and count beside the bar.
 //
 // The bar sweeps in from the left on arrival and when its numbers change. The widths are
 // final in the markup: without motion (reduced motion, a test) the bar is simply there.
-export default function StackBar({ parts, total, label }) {
+export default function StackBar({ parts, total, label, legend = true }) {
   const sum = parts.reduce((s, p) => s + p.n, 0)
   const whole = total ?? sum
   const pct = (n) => (whole > 0 ? `${(n / whole) * 100}%` : '0%')
@@ -48,22 +49,25 @@ export default function StackBar({ parts, total, label }) {
           ) : null,
         )}
       </div>
-      <ul className="stackbar-legend" aria-hidden="true">
-        {parts.map((p) => (
-          <li key={p.key}>
-            <i className={`tone-${p.tone || 'muted'}`} />
-            {p.label} <span className="mono">{p.n}</span>
-          </li>
-        ))}
-      </ul>
+      {legend && (
+        <ul className="stackbar-legend" aria-hidden="true">
+          {parts.map((p) => (
+            <li key={p.key}>
+              <i className={`tone-${p.tone || 'muted'}`} />
+              {p.label} <span className="mono">{p.n}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
 
 // The one-part case: `value` of `max`, the rest left as empty track. Clamped to [0, max]
-// like Ring, so an overshoot never draws a bar wider than its track.
+// like Ring, so an overshoot never draws a bar wider than its track. No legend: a one-part
+// legend only repeats the label and the count every caller already prints beside the bar.
 export function Bar({ value, max, label = 'value', tone = 'accent' }) {
   const cap = max > 0 ? max : 0
   const n = Math.min(Math.max(value || 0, 0), cap)
-  return <StackBar parts={[{ key: 'v', label, n, tone }]} total={cap} />
+  return <StackBar parts={[{ key: 'v', label, n, tone }]} total={cap} legend={false} />
 }

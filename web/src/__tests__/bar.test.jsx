@@ -55,6 +55,12 @@ describe('Bar', () => {
     expect(img.firstChild.style.width).toBe('25%')
   })
 
+  // Every caller prints the label and the count beside the bar; a legend would say it twice.
+  it('prints no legend: its one part is already named beside it', () => {
+    const { container } = render(<Bar label="Budget" value={3} max={12} />)
+    expect(container.querySelector('.stackbar-legend')).toBeNull()
+  })
+
   it('clamps to [0, max] and never reads "undefined" without a label', () => {
     const { rerender } = render(<Bar value={9} max={4} />)
     expect(screen.getByRole('img').getAttribute('aria-label')).toBe('value: 4 of 4')
