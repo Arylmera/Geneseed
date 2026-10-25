@@ -64,3 +64,46 @@ test('openUrl listens for that event, so a box with no opener does not take the 
   assert.ok(body.includes('.unref()'),
     'openUrl no longer unrefs the opener, so the CLI will not exit while a browser is open');
 });
+
+// REVEAL OPENS A FOLDER THROUGH EXPLORER, NEVER THROUGH cmd. A folder name is a filesystem
+// string, and `cmd /c start "" "<dir>"` would expand any `%VAR%` in it. So on win32 a folder goes
+// to explorer.exe by ABSOLUTE path (a bare name resolves against the cwd first), as one argv
+// element, with no verbatim flag and no shell. A URL keeps the `start` form, and macOS / Linux
+// open a folder with the same opener as a URL. Only the pure builder is called here: `openUrl`
+// and `openFolder` would put a window on screen.
+test('openerCommand: a win32 folder goes to explorer.exe as one argument', async () => {
+  const daemon = await import('../../js/web/daemon.mjs');
+  assert.equal(typeof daemon.openerCommand, 'function', 'daemon.mjs exports no openerCommand');
+  const real = process.platform;
+  const dir = 'C:\\a\\%USERPROFILE%\\b';
+  try {
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    const [file, args, extra] = daemon.openerCommand(dir, true);
+    assert.ok(file.endsWith('explorer.exe'), file);
+    assert.ok(path.win32.isAbsolute(file), `${file} is not absolute`);
+    assert.deepEqual(args, [dir]);
+    assert.equal(extra.windowsVerbatimArguments, undefined);
+    assert.equal(extra.shell, undefined);
+    const [ufile, uargs, uextra] = daemon.openerCommand('http://127.0.0.1:4747/', false);
+    assert.ok(/cmd(\.exe)?$/i.test(ufile), ufile);
+    assert.deepEqual(uargs, ['/d', '/s', '/c', 'start "" "http://127.0.0.1:4747/"']);
+    assert.deepEqual(uextra, { windowsVerbatimArguments: true });
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    assert.deepEqual(daemon.openerCommand(dir, true), ['open', [dir], {}]);
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    assert.deepEqual(daemon.openerCommand(dir, true), ['xdg-open', [dir], {}]);
+  } finally {
+    Object.defineProperty(process, 'platform', { value: real, configurable: true });
+  }
+});
+
+// The builder alone is not the fix: Reveal must CALL the folder path. A SOURCE ASSERTION, because
+// driving the route would put a window on screen. Reverting the route to `openUrl(dir)` (back
+// through `cmd start`) turns this red.
+test('Reveal opens its folder through openFolder, not the URL opener', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'web', 'handler.mjs'), 'utf8');
+  const route = src.slice(src.indexOf("if (path === '/api/reveal')"));
+  const body = route.slice(0, route.indexOf("if (path === '/api/pick-folder')"));
+  assert.ok(body.includes('openFolder(dir);'), 'the reveal route no longer calls openFolder(dir)');
+  assert.ok(!/openUrl\(/.test(body), 'the reveal route calls openUrl, which runs cmd start');
+});

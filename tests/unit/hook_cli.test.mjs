@@ -519,12 +519,16 @@ const ALLOWED_SPAWNS = {
     binding: '{ spawn }',
     calls: 0,
     spawnCalls: 2,
+    // AMENDED 2026-10-25: Reveal opens a folder with `explorer.exe <dir>` by absolute path, never
+    // through `cmd start`, which expands a `%VAR%` in the path. Same call site, so the count holds.
     what: '`node bin/geneseed-cli.mjs web --daemon-internal …` (the detached daemon) and the '
-      + "desktop's URL opener",
+      + "desktop's URL / folder opener",
     literals: ["const cmd = [process.execPath, join(ROOT, 'bin', 'geneseed-cli.mjs'), 'web',",
       "detached: true, windowsHide: true, stdio: ['ignore', out, out],",
-      "? [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start \"\" \"${url}\"`],",
-      "(process.platform === 'darwin' ? ['open', [url], {}] : ['xdg-open', [url], {}]);"],
+      "return [process.env.COMSPEC || 'cmd.exe', ['/d', '/s', '/c', `start \"\" \"${target}\"`],",
+      "if (folder) return [join(process.env.SystemRoot || 'C:\\\\Windows', 'explorer.exe'), [target], {}];",
+      'const [file, args, extra] = openerCommand(url, folder);',
+      "return process.platform === 'darwin' ? ['open', [target], {}] : ['xdg-open', [target], {}];"],
   },
   'web/server.mjs': {
     binding: '{ spawnSync }',

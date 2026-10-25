@@ -229,7 +229,7 @@ export function discoverContext(root, host = HOST) {
     const name = path.basename(full);
     if (native.includes(name)) continue;
     if (EAGER_ROOT.includes(name)) eager.set(full, null);
-    else if (isDoc(name)) lazy.set(full, null);
+    else if (isDoc(name) && name !== 'user-rules-retired.md') lazy.set(full, null);  // retired rules are never loaded
   }
   for (const d of LAZY_DIRS) {
     const sub = path.join(root, d);

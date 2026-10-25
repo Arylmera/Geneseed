@@ -17,6 +17,7 @@
  * and this test restores it in a `finally`, whatever the assertion below does.
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import http from 'node:http';
 import test from 'node:test';
 
@@ -52,4 +53,55 @@ test('POST /api/pick-folder dispatches, and a platform with no dialog branch ans
     srv.closeAllConnections();
     srv.close();
   }
+});
+
+// ONE DIALOG AT A TIME. A second click while a dialog is open would stack a second dialog
+// behind the first, so `apiPickFolder` is `singleFlight(...)`: a concurrent call answers busy
+// at once, with an `error` the three clients (which read only `path` / `error`) can show. The
+// latch is cleared inside the wrapped `done`, so it lasts exactly as long as a pick is pending —
+// a fn that answers synchronously (no powershell, no dialog branch) never holds it. The fake fn
+// here never spawns anything.
+test('singleFlight answers busy while one call is pending, and only then', async () => {
+  const actions = await import('../../js/web/actions.mjs');
+  assert.equal(typeof actions.singleFlight, 'function', 'actions.mjs exports no singleFlight');
+  let held = null;
+  let runs = 0;
+  const pick = actions.singleFlight((done) => { runs += 1; held = done; });
+  const answers = [];
+  pick((r) => answers.push(['first', r]));
+  pick((r) => answers.push(['second', r]));
+  assert.deepEqual(answers,
+    [['second', { busy: true, error: 'a folder dialog is already open on this machine' }]]);
+  held({ path: 'C:\\picked' });
+  pick((r) => answers.push(['third', r]));
+  assert.equal(runs, 2, 'the call after the first resolved did not run the picker');
+  held({ cancelled: true });
+  assert.deepEqual(answers, [
+    ['second', { busy: true, error: 'a folder dialog is already open on this machine' }],
+    ['first', { path: 'C:\\picked' }],
+    ['third', { cancelled: true }],
+  ]);
+
+  let syncRuns = 0;
+  const sync = actions.singleFlight((done) => { syncRuns += 1; done({ error: 'none here' }); });
+  const syncAnswers = [];
+  sync((r) => syncAnswers.push(r));
+  sync((r) => syncAnswers.push(r));
+  assert.equal(syncRuns, 2, 'a synchronous answer latched the flag');
+  assert.deepEqual(syncAnswers, [{ error: 'none here' }, { error: 'none here' }]);
+
+  // A throw before any child exists releases the latch too, or one bad call shuts the picker.
+  let throwRuns = 0;
+  const throws = actions.singleFlight(() => { throwRuns += 1; throw new Error('boom'); });
+  assert.throws(() => throws(() => {}), /boom/);
+  assert.throws(() => throws(() => {}), /boom/, 'a throw latched the flag');
+  assert.equal(throwRuns, 2);
+});
+
+// The wrapper only helps if the route uses it. A SOURCE ASSERTION: off a desktop the real picker
+// answers at once, so no call here can tell a wrapped picker from a bare one.
+test('apiPickFolder is the single-flight picker', () => {
+  const src = fs.readFileSync(new URL('../../js/web/actions.mjs', import.meta.url), 'utf8');
+  assert.ok(src.includes('export const apiPickFolder = singleFlight(pickFolderOnce);'),
+    'apiPickFolder is no longer wrapped in singleFlight');
 });

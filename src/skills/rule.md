@@ -87,7 +87,8 @@ re-derived. Then take exactly one branch.
    `source:` to the memory's name and add `trial until:` about a month out — a
    promoted rule starts on probation.
 7. Show the exact text to the user and wait for explicit consent ({{LAW:deletion-is-deliberate}}) before
-   appending it. For a promotion, after the rule lands, archive the source memory into
+   appending it to `user-rules.md` (retired rules live in `user-rules-retired.md`, which is
+   never loaded — never write a rule there). For a promotion, after the rule lands, archive the source memory into
    `archive/` (with the same consent) so the lesson is not loaded twice.
 8. **Keep the set lean.** After writing, if the file holds more than ~15 rules or
    any rule no longer changes behaviour, say so and propose merges or prunes — every

@@ -197,6 +197,14 @@ test('hashed assets are cached forever and index.html never', async () => {
   assert.ok(body.includes(TOKEN), 'index.html was served without this session\'s token');
 });
 
+// A missing hashed asset is a 404, never the HTML shell: served as 200, a rebuild's gap got
+// cached by the service worker under the chunk URL and broke the page (SH-27).
+test('a missing asset answers 404, not the page shell', async () => {
+  const r = await request('GET', '/assets/nosuch-deadbeef.js');
+  assert.equal(r.status, 404);
+  assert.doesNotMatch(r.headers['content-type'] || '', /text\/html/);
+});
+
 test('a path climbing out of dist serves index.html and leaks no file', async () => {
   // TWIN OF `static/a-path-climbing-out-of-dist-falls-back-to-index`, written because that cell
   // dies with the next `web/dist` rebuild — the corpus records `index.html` VERBATIM, including
@@ -663,6 +671,47 @@ test('a rebuild-all on a stale server says it restarts afterwards; on a current 
       'a current server must not ask the console to wait for a restart that never comes');
     assert.deepEqual(started, ['build-all', 'build-all']);
   } finally {
+    srv.close();
+  }
+});
+
+// A 500 IS A SERVER FAULT, AND ITS MESSAGE IS THE SERVER'S, NOT THE CLIENT'S. A TypeError from
+// `path.join` carries whatever the route was holding, an absolute path included, so both 500 arms
+// answer one fixed string and write the detail to stderr, which the daemon sends to
+// `.geneseed-web.log`. `state: {}` makes `/api/rules` throw a genuine TypeError
+// (`path.join(undefined, …)`): the POST throws inside `readBody`'s callback, so only the INNER arm
+// in that callback can answer it; the GET throws in `doGet`, which rethrows anything but
+// `NotFound`, so only the OUTER arm can. The log line names method and path, never the token.
+test('a server fault answers a generic 500 and logs the detail, not the token', async (t) => {
+  const secret = 'v7-secret-token-xyz';
+  const holder = {};
+  const srv = http.createServer(makeHandler({}, new JobManager(), secret, DIST, holder));
+  holder.srv = srv;
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  const write = t.mock.method(process.stderr, 'write', () => true);
+  try {
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    const post = await fetch(`${base}/api/rules`, {
+      method: 'POST',
+      headers: { 'X-Geneseed-Token': secret, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'add', fingerprint: '', title: 't', body: 'b' }),
+    });
+    const get = await fetch(`${base}/api/rules`);
+    const generic = { error: 'internal error — the details are in the server log' };
+    assert.equal(post.status, 500);
+    assert.deepEqual(await post.json(), generic);
+    assert.equal(get.status, 500);
+    assert.deepEqual(await get.json(), generic);
+    const logged = write.mock.calls.map((c) => String(c.arguments[0]));
+    for (const method of ['POST', 'GET']) {
+      const line = logged.find((s) => s.includes(`${method} /api/rules`));
+      assert.ok(line, `no log line for ${method} /api/rules in ${JSON.stringify(logged)}`);
+      assert.match(line, /TypeError/);
+    }
+    assert.ok(!logged.some((s) => s.includes(secret)), 'the token reached the log');
+  } finally {
+    write.mock.restore();
+    srv.closeAllConnections();
     srv.close();
   }
 });

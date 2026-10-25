@@ -234,7 +234,7 @@ export default function Rules({ onChanged }) {
 
   const onDelete = async (r) => {
     const ok = await confirm(
-      `Retire rule R${r.id} — “${r.title}”? It is removed from user-rules.md.`,
+      `Retire rule R${r.id} — “${r.title}”? It moves to user-rules-retired.md, which is never loaded.`,
       {
         title: 'Retire this rule?',
         confirmLabel: 'Retire',

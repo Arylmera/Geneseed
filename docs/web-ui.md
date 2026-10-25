@@ -104,7 +104,7 @@ streams the output of background jobs and keeps their history across reloads.
 - **Rules** (`#/rules`) — your own standing rules, read from and written to the
   `user-rules.md` beside the deployed AGENT.md (the seed-once file no update ever
   touches). List with scope (project/global — a hand-written `user` opens as global — or any other scope written by hand, which a
-  save keeps as written) and trial chips, add/edit/retire forms (a body line starting
+  save keeps as written) and trial chips, add/edit/retire forms (retire moves the rule to `user-rules-retired.md`, which is never loaded; its id is never reused) (a body line starting
   `## ` is refused: the file would read it as a new rule heading), a
   **Graduate** action that adopts a trial rule for good, and a budget meter that turns
   amber as the always-loaded set gets heavy. Every write carries the fingerprint of the

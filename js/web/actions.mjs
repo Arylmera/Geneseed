@@ -278,8 +278,13 @@ function runPicker(cmd, args, done, resultOf) {
  * (no GUI session, or a platform with no branch below), the process still answers — an
  * `{error}` — never a hang, because `runPicker`'s timeout and `error` handlers both fire
  * `done` on their own.
+ *
+ * ONE DIALOG AT A TIME (`singleFlight`, below): a second click while one is open would stack
+ * another dialog behind it, each held up to the picker's timeout.
  */
-export function apiPickFolder(done) {
+export const apiPickFolder = singleFlight(pickFolderOnce);
+
+function pickFolderOnce(done) {
   if (process.platform === 'win32') {
     // `which`, never a bare name: Windows resolves a bare name against the cwd first.
     const powershell = which('powershell');
@@ -299,6 +304,27 @@ export function apiPickFolder(done) {
     });
   }
   return done({ error: 'no native folder dialog on this platform' });
+}
+
+/**
+ * `fn(done)` with at most one call pending. A call made while one is pending answers busy at
+ * once — with an `error`, because the three clients read only `path` and `error`. The latch
+ * is released inside the wrapped `done`, so it lasts exactly as long as the pick: an answer
+ * given synchronously (no powershell, no dialog branch) never holds it, and `runPicker`'s
+ * close, error and timeout paths all end in `done`.
+ */
+export function singleFlight(fn) {
+  let pending = false;
+  return (done) => {
+    if (pending) return done({ busy: true, error: 'a folder dialog is already open on this machine' });
+    pending = true;
+    try {
+      return fn((result) => { pending = false; done(result); });
+    } catch (e) {
+      pending = false; // a throw before any child exists must not latch the picker shut
+      throw e;
+    }
+  };
 }
 
 // ---- memory ------------------------------------------------------------------------------

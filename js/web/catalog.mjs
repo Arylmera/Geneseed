@@ -380,7 +380,8 @@ function apiWikiItem(state, name) {
  */
 function flatName(name) {
   if (!name || name.includes('/') || name.includes('\\') || name.includes('..')
-      || name.includes(':')) {
+      || name.includes(':') || [...name].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)) {
+    // Control characters too: a NUL made the fs layer throw, surfacing as a 500 (SE-8).
     throw new NotFound(name);
   }
 }

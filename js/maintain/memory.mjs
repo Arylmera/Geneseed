@@ -47,6 +47,7 @@ const RESERVED = ['memory', 'readme'];
 /** Whether `name` is a fact this verb may act on — the endpoint's rule, plus the case fold. */
 export function isFactName(name) {
   return Boolean(name) && !name.includes('/') && !name.includes('\\')
+    && ![...name].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)
     && !RESERVED.includes(name.toLowerCase());
 }
 
