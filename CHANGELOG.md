@@ -10,6 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Fixed
 - **OpenCode sessions show their changed files on Activity.** OpenCode 1.x never fills the session summary's diffs; the per-turn diffs sit on the user message (`message.updated`), and a zeroed summary on every step wiped the list. Files now fold from each turn (a repeat of the same turn replaces it, a new turn adds), `session.diff` stays the fallback for 1.3, and an `/undo` (`message.removed`) drops the undone turn.
+- **Activity's host filter lists the hosts again.** The reader dropped each session's `host`, so the filter had no options; an OpenCode plugin snapshot, which carries no host, now reads as `opencode`.
 
 ## [4.25.1] — 2026-10-25
 

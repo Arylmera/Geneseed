@@ -96,6 +96,9 @@ function normalizeEntry(entry, stem) {
     todos: g('todos'),
     blocked_on: g('blocked_on'),
     error: g('error'),
+    // The console's host filter reads this. The hook writer stamps it; the only other writer is
+    // the OpenCode plugin, which does not, so a snapshot without `writer: 'hook'` is OpenCode's.
+    host: or('host', g('writer') === 'hook' ? null : 'opencode'),
   };
 }
 

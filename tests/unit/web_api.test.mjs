@@ -2577,6 +2577,24 @@ test('the v1.1 fields pass through', () => {
   });
 });
 
+// The console's host filter builds its options from `host`, so the reader must pass it through.
+// The hook writer stamps it; the OpenCode plugin (the only other writer) does not, so a snapshot
+// without `writer: 'hook'` reads as OpenCode's, and a hook snapshot without a host stays null.
+test('host passes through, and a plugin snapshot reads as opencode', () => {
+  const rows = [
+    [{ writer: 'hook', host: 'bob' }, 'bob'],
+    [{ writer: 'hook', host: 'claude' }, 'claude'],
+    [{}, 'opencode'],
+    [{ writer: 'hook' }, null],
+  ];
+  for (const [extra, want] of rows) {
+    withActivity((box) => {
+      box.write('s.json', { session_id: 's', status: 'idle', pid: process.pid, updated_at: nowSec(), ...extra });
+      assert.equal(apiActivity(box.state).activity[0].host, want, JSON.stringify(extra));
+    });
+  }
+});
+
 // A pre-v1.1 writer omits the new keys and the reader must fill SAFE defaults — `null` for the
 // structured ones, `0` for the numeric ones, because the console arithmetics them.
 test('a v1 file gets safe defaults', () => {
