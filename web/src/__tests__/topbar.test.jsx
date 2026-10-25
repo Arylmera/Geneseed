@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest'
 // The two neighbours fetch and own their own behaviour; these tests are about the crumbs and
 // the Appearance popover only.
 vi.mock('../components/Search.jsx', () => ({ default: () => null }))
-vi.mock('../components/HarnessSelector.jsx', () => ({ default: () => null }))
+vi.mock('../components/HarnessSelector.jsx', () => ({ default: ({ fallback }) => fallback }))
 
 import Topbar from '../components/Topbar.jsx'
 

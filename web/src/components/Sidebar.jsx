@@ -66,29 +66,32 @@ const FOOT = [
 
 function NavLink({ n, lit, count, onNavigate }) {
   return (
-    <a
-      className={`sb-item${lit ? ' on' : ''}`}
-      href={n.hash}
-      aria-current={lit ? 'page' : undefined}
-      onClick={() => onNavigate?.()}
-    >
-      <Icon name={n.icon} />
-      <span className="sb-label">{n.label}</span>
-      {count != null ? <span className="sb-count">{count}</span> : null}
-    </a>
+    <li>
+      <a
+        className={`sb-item${lit ? ' on' : ''}`}
+        href={n.hash}
+        aria-current={lit ? 'page' : undefined}
+        onClick={() => onNavigate?.()}
+      >
+        <Icon name={n.icon} />
+        <span className="sb-label">{n.label}</span>
+        {count != null ? <span className="sb-count">{count}</span> : null}
+      </a>
+    </li>
   )
 }
 
 // The harness's pulse, on every page: whether the doctor is happy, how far the install
 // has drifted from its source, and when it was built. Three facts that decide whether
 // anything else on screen can be trusted. The voice sits under them as a button, because
-// switching it is the one rebuild the sidebar offers.
+// switching it is the one rebuild the sidebar offers. A named card (a region), so a
+// landmark list reaches it by name.
 function Vitals({ overview, onOpenVoice }) {
   if (!overview) return null
   const d = overview.doctor
   const drift = driftTotal(overview.diff)
   return (
-    <div className="sb-vitals">
+    <section className="sb-vitals" aria-label="Install vitals">
       <div>
         <span>doctor</span>
         <b className={!d ? '' : d.ok ? 'good' : 'bad'}>
@@ -105,14 +108,20 @@ function Vitals({ overview, onOpenVoice }) {
           {overview.build_epoch ? `${relTime(overview.build_epoch)} ago` : 'never'}
         </b>
       </div>
-      <button type="button" className="sb-voice" onClick={onOpenVoice} title="Switch voice">
-        <span>voice</span>
-        <b>
-          {overview.theme || 'none'}
-          <Icon name="chevron" />
-        </b>
+      <button
+        type="button"
+        className="sb-voice"
+        onClick={onOpenVoice}
+        title="Switch voice"
+        aria-haspopup="dialog"
+      >
+        <span className="sb-voice-name">
+          <i className="sb-voice-swatch" aria-hidden="true" />
+          Voice · {overview.theme || 'none'}
+        </span>
+        <Icon name="chevron" />
       </button>
-    </div>
+    </section>
   )
 }
 
@@ -142,19 +151,20 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
           </span>
         </span>
       </button>
-      {NAV.map((n) => (
-        <NavLink
-          key={n.page}
-          n={n}
-          lit={route.page === n.page}
-          count={n.count?.(overview, installs)}
-          onNavigate={onNavigate}
-        />
-      ))}
+      {/* One list of every page, Docs and Activity last: the spacer sits under it, so the
+          vitals card is what the rail's foot holds. */}
+      <ul className="sb-list">
+        {[...NAV, ...FOOT].map((n) => (
+          <NavLink
+            key={n.page}
+            n={n}
+            lit={route.page === n.page}
+            count={n.count?.(overview, installs)}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </ul>
       <div className="sb-spacer" />
-      {FOOT.map((n) => (
-        <NavLink key={n.page} n={n} lit={route.page === n.page} onNavigate={onNavigate} />
-      ))}
       {/* The tablet rail (721-960px) is icons only and hides the vitals, voice included;
           this icon is the voice switch there. CSS shows it in that tier only. */}
       {overview ? (

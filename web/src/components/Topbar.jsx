@@ -6,7 +6,8 @@ import HarnessSelector from './HarnessSelector.jsx'
 import AppearancePopover from './AppearancePopover.jsx'
 import { PAGES, TAB_LABELS } from '../lib/router.js'
 
-// The top bar: where you are (the install the console reads, then the page and its tab),
+// The top bar: where you are (the install the console reads — the harness picker itself when
+// there is another active install to read instead — then the page and its tab),
 // the command palette's trigger (search, jump anywhere by name, run an action), and the two display
 // controls: the appearance popover (skin and accent source) and light/dark.
 export default function Topbar({
@@ -46,9 +47,15 @@ export default function Topbar({
       <nav className="crumbs" aria-label="Breadcrumb">
         <ol>
           <li className="crumb-root mono">
-            <a href="#/installs" title={overview?.target || undefined}>
-              {where}
-            </a>
+            <HarnessSelector
+              installs={installs}
+              onSwitch={onSwitch}
+              fallback={
+                <a href="#/installs" title={overview?.target || undefined}>
+                  {where}
+                </a>
+              }
+            />
           </li>
           <li>
             {tab ? (
@@ -69,7 +76,6 @@ export default function Topbar({
         </ol>
       </nav>
       <div className="topbar-spacer" />
-      <HarnessSelector installs={installs} onSwitch={onSwitch} />
       <Search actions={actions} dataRev={dataRev} />
       <button
         type="button"

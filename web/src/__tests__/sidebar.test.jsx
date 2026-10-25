@@ -85,6 +85,28 @@ describe('Sidebar', () => {
     ).toBeTruthy()
   })
 
+  // One list of nine pages, Docs and Activity included: a screen reader announces "list, 9
+  // items", and the spacer sits under the list, above the vitals card, not inside it.
+  it('is one list of every page', () => {
+    render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
+    const lists = screen.getByRole('navigation', { name: 'Console' }).querySelectorAll('ul')
+    expect(lists).toHaveLength(1)
+    expect(within(lists[0]).getAllByRole('listitem')).toHaveLength(9)
+  })
+
+  // The vitals are a card a landmark list can reach by name; the voice button opens the
+  // voice dialog, which it announces.
+  it('puts the vitals in a named card whose voice button opens a dialog', () => {
+    render(<Sidebar route={{ page: 'overview' }} overview={overview} />)
+    const card = screen.getByRole('region', { name: 'Install vitals' })
+    expect(card.classList.contains('sb-vitals')).toBe(true)
+    expect(
+      within(card)
+        .getByRole('button', { name: /voice · imperial/i })
+        .getAttribute('aria-haspopup'),
+    ).toBe('dialog')
+  })
+
   // At tablet width (721-960px) the rail is icons only and hides the vitals, voice button
   // included: this icon button is the voice switch there. CSS shows it in that tier only.
   it('carries an icon voice button outside the vitals, naming the current voice', () => {
