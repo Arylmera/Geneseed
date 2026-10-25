@@ -151,8 +151,8 @@ export function activityOn(root) {
 }
 
 /**
- * The `activity` verb, wired to the two events no other verb runs on (UserPromptSubmit;
- * SessionEnd on Claude and OpenClaude). It decides nothing and prints nothing: the entry's
+ * The `activity` verb, wired to the events no other verb runs on (UserPromptSubmit; SessionEnd
+ * and SubagentStart on Claude and OpenClaude). It decides nothing and prints nothing: the entry's
  * `trackActivity` records the payload after every verb alike, this one included.
  */
 export const cmdActivity = () => 0;

@@ -34,11 +34,12 @@ The merge is surgical. Every other key and every hook of your own survive, and t
 
 **OpenClaude** is a Claude Code fork: it gets the same hooks and the same prompts, unchanged.
 
-**Bob** has its own contract. It uses Claude's event names but ignores a hook's output before a tool call — the only way to refuse is exit code 2 — and it has no tool matcher, `SubagentStop` or `PreCompact`. So Bob gets three hooks:
+**Bob** has its own contract. It uses Claude's event names but ignores a hook's output before a tool call — the only way to refuse is exit code 2 — and it has no tool matcher or `SubagentStop`. Bob 2.2.3 does have `PreCompact` and `PostCompact`, but Geneseed does not wire them yet. So Bob gets four hooks:
 
 - `SessionStart` → `geneseed-hook context`.
 - `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. It **blocks** (exit 2) only for the checks that admit no judgement call: secrets, destructive git, a recursive scan of a whole filesystem, and a write under a project's own protected-checks list. The commit/push and rule-or-memory checks become a warning line, because a hard block would leave Bob unable to commit at all.
 - `Stop` → `geneseed-hook learn`.
+- `UserPromptSubmit` → `geneseed-hook activity`, which records the turn for the Activity view.
 
 Neither host has been verified live on the authoring machine. If a hook does not fire, the same rules still reach the agent through the instructions file.
 

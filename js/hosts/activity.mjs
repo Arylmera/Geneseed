@@ -5,24 +5,41 @@
  * session into `<cfg>/activity/`; this module writes the same files for the hosts whose hooks are
  * processes rather than a resident plugin — Claude Code, OpenClaude and Bob. The web reader
  * (`js/web/activity.mjs`) cannot tell the two writers apart, and must not need to: the schema is
- * the plugin's, plus `writer: "hook"`, `host`, and the two private cursors below (`normalizeEntry`
- * never returns them).
+ * the plugin's, plus `writer: "hook"`, `host`, and the private fields below — the transcript
+ * cursors `transcript_offset`/`last_message_id`, and Bob's pending `subtask_prompts`
+ * (`normalizeEntry` never returns them).
  *
  * NOT A NEW HOOK ON EVERY TOOL CALL. `bin/geneseed-hook.mjs` calls `recordActivity` after the verb
  * the host ran anyway has decided (the gates, `context`, `learn`), plus the `activity` verb for
- * the two events no other verb is wired to (UserPromptSubmit, SessionEnd). So a Claude session's
- * live phase moves only on the gated tools (`Bash|PowerShell`, `Write|Edit|NotebookEdit`,
+ * the events no other verb is wired to (UserPromptSubmit, SessionEnd, SubagentStart). So a Claude
+ * session's live phase moves only on the gated tools (`Bash|PowerShell`, `Write|Edit|NotebookEdit`,
  * `Skill|Agent|Task`); the rest of the turn's tool calls arrive at Stop, read out of the
  * transcript from a stored byte offset (`readTranscriptDelta`). Bob sends no `transcript_path`,
  * so a Bob session shows only what its matcher-less `tool-gate` sees, call by call.
+ *
+ * SNAPSHOT V2 (the Activity garden: docs/concepts/hooks.md). Each file row is keyed by
+ * `(path, by)`: `by` is the Claude/OpenClaude sub-agent's `agent_id`, or null for the session.
+ * `agents[]` grows a branch on the first event that carries an `agent_id` (SubagentStart, at
+ * launch) and closes it on SubagentStop. Bob's payloads carry no sub-agent id (its
+ * `spawn_subagent`/`start_subtask` calls fire the PARENT's hooks), so a Bob spawn is an id-less
+ * branch that the next root Stop closes, and the session says `attribution: false`. `turns`
+ * counts prompts; `context` is the last assistant message's input-side tokens; `compactions`,
+ * `compacted_at` and `context_at_compaction` come from PreCompact (Bob: SessionStart `compact`).
+ * `root`/`repo` come from the SESSION's cwd only — a worktree sub-agent's own cwd never moves them.
  *
  * THIS MODULE IS NEVER LOADED WHEN TRACKING IS OFF — the entry checks the flag first, then imports
  * this file dynamically. It must never print: a hook's stdout is its verdict, and every write
  * here is best-effort (a hook that fails is a tool call that fails).
  *
- * WHAT IS RECORDED, AND WHAT NEVER IS. A tool's name, a file path's BASENAME, line counts, todo
- * text, a prompt snippet and the last assistant message snippet (240 characters each). Never a
- * shell command, a file's content or an edit's text: those are where secrets live.
+ * WHAT IS RECORDED, AND WHAT NEVER IS. A tool's name, a changed file's path RELATIVE TO THE
+ * SESSION'S GIT ROOT (`/`-separated; a file outside the root, or a session outside any repo, gets
+ * `path: null` and keeps its basename only, in `file` — a path is never stored absolute), the
+ * root and main-repo directories
+ * themselves, line counts, todo text, a prompt snippet and the last assistant message snippet
+ * (240 characters each). Timeline and phase labels stay basename-only. Never a shell command, a
+ * file's content or an edit's text: those are where secrets live. The relative path is the one
+ * thing the garden needs to place a file and to see two sessions touch the same one; it says
+ * no more than the repo's own tree does, and the directory is git-ignored and 0700.
  *
  * Liveness is owned here because two writers need it now. The hooks have no resident process,
  * so they record `pid: null` and are live by staleness alone; a plugin snapshot keeps its pid
@@ -34,8 +51,11 @@ import {
   closeSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readSync,
   renameSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
+// Neither is a new module on the hook path: `hosts.mjs` already imports both.
+import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
 import { SECRET_RE } from './hooks-prims.mjs';
 import { sovereignBypass } from './hosts.mjs';
 
@@ -66,6 +86,13 @@ const SNIPPET_LEN = 160;
 const SID_CAP = 128;
 // Edit tools count as touching a file only when they carry an edit, so a Read never counts.
 const EDIT_FIELDS = ['content', 'new_string', 'new_source', 'diff'];
+// Bob 2.2.3's edit tools, by name: `search_and_replace` carries none of the fields above.
+const BOB_EDITS = new Set(['write_file', 'apply_diff', 'insert_content', 'search_and_replace']);
+// Bob's sub-agent tools. Their calls fire the parent's hooks with no sub-agent id (F17).
+const BOB_SPAWNS = new Set(['spawn_subagent', 'start_subtask']);
+// The context window is not in the transcript: past the 200k one, it can only be the 1M one.
+const WINDOW = 200_000;
+const WINDOW_1M = 1_000_000;
 
 /**
  * The plugin's safe-name scheme, capped: every separator, `..`-forming slash and drive colon
@@ -149,6 +176,26 @@ const lineCount = (s) => (typeof s === 'string' && s ? s.split('\n').length : 0)
 const baseOf = (p) => (typeof p === 'string' && p ? path.basename(p.replace(/\\/g, '/')) : null);
 
 /**
+ * A tool's file path as stored: relative to `root`, `/`-separated, or `null` when there is no
+ * root or the file falls outside it (`..`, or another drive, where `path.relative` answers
+ * absolute) — the row then keeps only its basename in `file`, so a stray `README.md` outside the
+ * repo never reads as the repo's own. A relative path resolves against the session's cwd; Bob's
+ * own resolver also expands a leading `~` (F22), so this does too. `path.relative` compares
+ * case-insensitively on Windows, which is what Bob's lower-case drive letter (`c:\...`) needs.
+ */
+function relPath(p, { cwd, root, host }) {
+  if (!baseOf(p) || !root || !cwd) return null;
+  try {
+    const abs = path.resolve(cwd, host === 'bob' ? p.replace(/^~/, os.homedir()) : p);
+    const rel = path.relative(root, abs);
+    if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return null;
+    return rel.split(path.sep).join('/');
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The bytes of `file` written since `offset`, as parsed JSONL objects, and the offset to resume
  * from. Only COMPLETE lines are consumed, so a line the host is still writing is read next time.
  * A file shorter than the offset was replaced, and is read from the start; a delta longer than
@@ -195,8 +242,13 @@ function toolLabel(name, input) {
   return typeof named === 'string' && named ? `${name} ${snip(named, 60)}` : name;
 }
 
-/** Folds one tool call into the session's state: a timeline row, and its file or todo list. */
-function applyTool(st, name, input, t, id, status) {
+/**
+ * Folds one tool call into the session's state: a timeline row, and its file or todo list.
+ * `where` is `{cwd, root, host, by}`: where a path resolves, and who made the edit (`by`: a
+ * sub-agent id, or null for the session). A file row is keyed by `(path, by)`; a row with no
+ * path (outside the root, or a v1 row) keys as `(file, by)`.
+ */
+function applyTool(st, name, input, t, id, status, where) {
   if (typeof name !== 'string' || !name) return;
   const label = toolLabel(name, input);
   const kind = ['Agent', 'Task'].includes(name) ? 'subtask' : 'tool';
@@ -205,12 +257,17 @@ function applyTool(st, name, input, t, id, status) {
     row.status = status;
   } else {
     st.timeline.push({ t, kind, label, tool: name, status, ...(id ? { id } : {}) });
-    const file = baseOf(input.file_path ?? input.path ?? input.notebook_path);
-    if (file && EDIT_FIELDS.some((k) => typeof input[k] === 'string')) {
-      let f = st.files.find((x) => x.file === file);
-      if (!f) { f = { file, additions: 0, deletions: 0 }; st.files.push(f); }
-      f.additions += lineCount(input.content ?? input.new_string ?? input.new_source);
-      f.deletions += lineCount(input.old_string);
+    const raw = input.file_path ?? input.path ?? input.notebook_path;
+    const file = baseOf(raw);
+    if (file && (EDIT_FIELDS.some((k) => typeof input[k] === 'string') || BOB_EDITS.has(name))) {
+      const rel = relPath(raw, where);
+      const by = where.by;
+      let f = st.files.find((x) => (x.path ?? null) === rel && (rel !== null || x.file === file)
+        && (x.by ?? null) === by);
+      if (!f) { f = { file, path: rel, by, additions: 0, deletions: 0 }; st.files.push(f); }
+      // `replace`/`search`: Bob's search_and_replace. apply_diff's SEARCH/REPLACE body is not parsed.
+      f.additions += lineCount(input.content ?? input.new_string ?? input.new_source ?? input.replace);
+      f.deletions += lineCount(input.old_string ?? input.search);
     }
   }
   if (Array.isArray(input.todos)) {
@@ -220,10 +277,17 @@ function applyTool(st, name, input, t, id, status) {
   return label;
 }
 
-/** Folds a transcript delta (Claude's JSONL) in: model, token totals, tool calls, last reply. */
-function applyTranscript(st, entries, nowMs) {
+/**
+ * Folds a transcript delta (Claude's JSONL) in: model, token totals, tool calls, last reply, and
+ * `context` — the input-side tokens (input + cache read + cache creation) of the LAST assistant
+ * message carrying usage, which is what the model saw on that call. `null` when the delta has
+ * none, so the caller keeps the previous reading. A sidechain line (an older Claude wrote
+ * sub-agent turns into the parent transcript) is a different context and never counts.
+ */
+function applyTranscript(st, entries, nowMs, where) {
   const counted = new Set(st.last_message_id ? [st.last_message_id] : []);
   let reply = null;
+  let context = null;
   for (const e of entries) {
     const m = e.type === 'assistant' && e.message && typeof e.message === 'object' ? e.message : null;
     if (!m) continue;
@@ -233,16 +297,22 @@ function applyTranscript(st, entries, nowMs) {
       st.last_message_id = m.id;
       st.tokens += (Number(m.usage.input_tokens) || 0) + (Number(m.usage.output_tokens) || 0);
     }
+    // Claude Code's `<synthetic>` messages carry all-zero usage: no reading, never an overwrite.
+    if (m.usage && typeof m.usage === 'object' && e.isSidechain !== true && m.model !== '<synthetic>') {
+      const used = ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']
+        .reduce((a, k) => a + (Number(m.usage[k]) || 0), 0);
+      if (used > 0) context = { used, window: used > WINDOW ? WINDOW_1M : WINDOW };
+    }
     const t = Date.parse(e.timestamp) || nowMs;
     for (const b of Array.isArray(m.content) ? m.content : []) {
       if (b && b.type === 'tool_use') {
-        applyTool(st, b.name, b.input && typeof b.input === 'object' ? b.input : {}, t, b.id, 'completed');
+        applyTool(st, b.name, b.input && typeof b.input === 'object' ? b.input : {}, t, b.id, 'completed', where);
       } else if (b && b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
         reply = { text: b.text, t };
       }
     }
   }
-  return reply;
+  return { reply, context };
 }
 
 /** `{count, additions, deletions, items}` over a file list, `items` capped at `cap`. */
@@ -261,15 +331,19 @@ function todosSummary(items, cap) {
 
 const ROLL = { SessionStart: 'idle', UserPromptSubmit: 'busy', PreToolUse: 'busy',
   Stop: 'waiting-input', SessionEnd: 'ended' };
-const KNOWN = new Set([...Object.keys(ROLL), 'SubagentStop', 'PreCompact']);
+const KNOWN = new Set([...Object.keys(ROLL), 'SubagentStart', 'SubagentStop', 'PreCompact']);
+const str = (v) => (typeof v === 'string' && v ? v : null);
 
 /**
  * The previous snapshot and detail (or null), a hook payload, and the clock → the next
  * `{snap, detail}`, or `null` when the event is not one this writer records. NOT pure: the new
  * detail reuses, and updates in place, `prevDetail`'s lists — the caller writes the result and
  * discards the input, so a copy would only cost time on the hook path. `delta` is what
- * `readTranscriptDelta` returned for a Stop, or null. Claude-shaped and Bob-shaped payloads
- * (`{event, tool, input}`) are both read; a tool payload with no event name is a PreToolUse.
+ * `readTranscriptDelta` returned for a Stop or a PreCompact, or null. Claude-shaped payloads
+ * (Bob 2.2.3 sends them too) and the older Bob shape (`{event, tool, input}`) are both read; a
+ * tool payload with no event name is a PreToolUse. A Bob SessionStart is recorded only for a
+ * compaction (`source: "compact"`): its startup and resume fire just before the UserPromptSubmit
+ * that records the session anyway.
  */
 export function applyHookEvent(prev, prevDetail, payload, now, { host = 'claude', delta = null } = {}) {
   const p = payload;
@@ -278,12 +352,43 @@ export function applyHookEvent(prev, prevDetail, payload, now, { host = 'claude'
     : (typeof p.event === 'string' ? p.event : null);
   if (!ev && tool) ev = 'PreToolUse';
   if (!KNOWN.has(ev)) return null;
+  const compact = ev === 'SessionStart' && p.source === 'compact';
+  if (host === 'bob' && ev === 'SessionStart' && !compact) return null;
   const nowMs = Math.round(now * 1000);
   const det = prevDetail || {};
   const snap = prev ? { ...prev } : {
     session_id: p.session_id, agent: null, title: null, cwd: null, status: 'idle', pid: null,
     writer: 'hook', host,
   };
+  // v2 fields, defaulted so a v1 snapshot resumed across the upgrade grows them in place.
+  snap.agents = Array.isArray(snap.agents) ? snap.agents : [];
+  snap.turns = Number(snap.turns) || 0;
+  snap.context ??= null;
+  snap.compactions = Number(snap.compactions) || 0;
+  snap.compacted_at ??= null;
+  snap.context_at_compaction ??= null;
+  const agentId = str(p.agent_id)?.slice(0, SID_CAP) ?? null;
+  // Only the session's own events place it: a worktree sub-agent sends its own cwd.
+  if (!agentId && str(p.cwd) && p.cwd !== snap.cwd) {
+    snap.cwd = p.cwd;
+    snap.root = undefined;
+  }
+  if (snap.root === undefined) {
+    snap.root = snap.cwd ? gitRootOf(snap.cwd) : null;
+    snap.repo = snap.cwd ? (mainWorktreeOf(snap.cwd) ?? snap.root) : null;
+  }
+  const where = { cwd: snap.cwd, root: snap.root, host, by: agentId };
+  if (agentId) {
+    const type = str(p.agent_type) ? snip(p.agent_type, 60) : null;
+    let a = snap.agents.find((x) => x.id === agentId);
+    if (!a) {
+      a = { id: agentId, type, status: 'running', started: now };
+      snap.agents.push(a);
+    } else if (type) {
+      a.type = type;
+    }
+    if (ev === 'SubagentStop') a.status = 'done';
+  }
   const st = {
     timeline: Array.isArray(det.timeline) ? det.timeline : [],
     conversation: Array.isArray(det.conversation) ? det.conversation : [],
@@ -294,14 +399,39 @@ export function applyHookEvent(prev, prevDetail, payload, now, { host = 'claude'
     last_message_id: snap.last_message_id ?? null,
   };
   snap.updated_at = now;
-  if (typeof p.cwd === 'string' && p.cwd) snap.cwd = p.cwd;
   if (typeof p.model === 'string' && p.model) st.model = p.model;
-  if (ROLL[ev]) snap.status = ROLL[ev];
+  // A compaction's SessionStart fires mid-turn: it must not idle a busy session.
+  if (ROLL[ev] && !compact) snap.status = ROLL[ev];
+  // The transcript delta (Stop, PreCompact): its last usage is the context now.
+  const transcript = () => {
+    if (!delta) return null;
+    const r = applyTranscript(st, delta.entries, nowMs, { ...where, by: null });
+    snap.transcript_offset = delta.offset;
+    if (r.context) snap.context = r.context;
+    return r.reply;
+  };
+  const compacted = () => {
+    snap.compactions += 1;
+    snap.compacted_at = now;
+    snap.context_at_compaction = snap.context?.used ?? null;
+    // Unknown until the next Stop reads the regrown size: a /compact with no Stop after it must
+    // not read as still full.
+    snap.context = null;
+  };
   if (ev === 'SessionStart') {
     st.timeline.push({ t: nowMs, kind: 'step', label: `Session ${snip(p.source || 'start', 20)}`, status: 'completed' });
+    // Claude and OpenClaude count a compaction on PreCompact, which comes first; Bob has only this.
+    if (compact && host === 'bob') compacted();
   } else if (ev === 'UserPromptSubmit') {
     snap.turn_started_at = now;
     snap.phase = null;
+    // Bob's start_subtask re-enters Bob's input path with its message as the prompt (2.2.3
+    // bundle: `handleInputMessage` → `runTurn` → UserPromptSubmit on the root): not a user turn.
+    const pending = Array.isArray(snap.subtask_prompts) ? snap.subtask_prompts : [];
+    const mine = typeof p.prompt === 'string' ? pending.indexOf(snip(p.prompt.trim(), CONV_LEN)) : -1;
+    if (mine >= 0) pending.splice(mine, 1);
+    else snap.turns += 1;
+    if (pending.length) snap.subtask_prompts = pending; else delete snap.subtask_prompts;
     if (typeof p.prompt === 'string' && p.prompt.trim()) {
       if (!snap.title) snap.title = snip(p.prompt);
       st.conversation.push({ role: 'user', text: snip(p.prompt, CONV_LEN), t: nowMs });
@@ -309,20 +439,34 @@ export function applyHookEvent(prev, prevDetail, payload, now, { host = 'claude'
   } else if (ev === 'PreToolUse') {
     const input = (p.tool_input && typeof p.tool_input === 'object') ? p.tool_input
       : ((p.input && typeof p.input === 'object') ? p.input : {});
-    const label = applyTool(st, tool, input, nowMs, typeof p.tool_use_id === 'string' ? p.tool_use_id : null, 'running');
+    const label = applyTool(st, tool, input, nowMs, typeof p.tool_use_id === 'string' ? p.tool_use_id : null, 'running', where);
     if (label) snap.phase = label;
+    if (host === 'bob' && BOB_SPAWNS.has(tool)) {
+      const named = str(input.name) ?? str(input.title);
+      snap.agents.push({ id: null, type: named ? snip(named, 60) : null, status: 'running', started: now });
+      snap.attribution = false;
+      // The prompt its turn will fire, redacted and cut like any prompt snippet; the next
+      // matching UserPromptSubmit consumes it. Capped, so a refused subtask cannot pile up.
+      if (tool === 'start_subtask' && str(input.message)) {
+        snap.subtask_prompts = [...(snap.subtask_prompts ?? []), snip(input.message.trim(), CONV_LEN)].slice(-TODO_CAP);
+      }
+    }
   } else if (ev === 'Stop') {
-    const reply = delta ? applyTranscript(st, delta.entries, nowMs) : null;
-    if (delta) snap.transcript_offset = delta.offset;
+    const reply = transcript();
     const last = typeof p.last_assistant_message === 'string' ? p.last_assistant_message : reply?.text;
     if (last && last.trim()) st.conversation.push({ role: 'assistant', text: snip(last, CONV_LEN), t: nowMs });
     for (const r of st.timeline) if (r.status === 'running') r.status = 'completed';
+    // Bob's id-less branches have no stop of their own: the root turn's end closes them.
+    for (const a of snap.agents) if (a.id === null && a.status === 'running') a.status = 'done';
     snap.phase = null;
     snap.turn_started_at = null;
-  } else if (ev === 'SubagentStop') {
+  } else if (ev === 'SubagentStart' || ev === 'SubagentStop') {
     const who = typeof p.agent_type === 'string' && p.agent_type ? ` ${snip(p.agent_type, 60)}` : '';
-    st.timeline.push({ t: nowMs, kind: 'subtask', label: `Subagent${who} done`, status: 'completed' });
+    st.timeline.push({ t: nowMs, kind: 'subtask', label: `Subagent${who} ${ev === 'SubagentStart' ? 'started' : 'done'}`,
+      status: 'completed' });
   } else if (ev === 'PreCompact') {
+    transcript();
+    compacted();
     st.timeline.push({ t: nowMs, kind: 'step', label: 'Compacting', status: 'completed' });
   } else if (ev === 'SessionEnd') {
     snap.phase = null;
@@ -335,6 +479,7 @@ export function applyHookEvent(prev, prevDetail, payload, now, { host = 'claude'
   snap.todos = todosSummary(st.todos, TODO_CAP);
   const detail = {
     files: filesSummary(st.files, Infinity),
+    agents: snap.agents,
     todos: todosSummary(st.todos, Infinity),
     conversation: st.conversation.slice(-CONV_CAP),
     timeline: st.timeline.slice(-LOG_CAP),
@@ -367,7 +512,7 @@ export function recordActivity(root, raw, { host = 'claude', now = Date.now() / 
     if (prev) prevDet = readJson(path.join(dir, 'archive', `${stem}.detail.json`));
   }
   const ev = p.hook_event_name ?? p.event;
-  const delta = ev === 'Stop' && typeof p.transcript_path === 'string'
+  const delta = (ev === 'Stop' || ev === 'PreCompact') && typeof p.transcript_path === 'string'
     ? readTranscriptDelta(p.transcript_path, prev ? Number(prev.transcript_offset) || 0 : 0) : null;
   const next = applyHookEvent(prev, prevDet, p, now, { host, delta });
   if (!next) return false;
