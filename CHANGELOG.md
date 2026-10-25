@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.23.0] — 2026-10-25
+
+Minor: the web console redesign (wave V6b) — every page rebuilt from the approved mockups, the reader at full width, recently ended sessions in Activity, and parallel-agents watching its units.
+
 ### Added
 - **Activity lists recently ended sessions.** Sessions that are no longer live (the newest 50, 7 days) appear under the live list, each opening its detail page; an ended session reads "ended" there instead of its last status, with no running turn clock.
 
