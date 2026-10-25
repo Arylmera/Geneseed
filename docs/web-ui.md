@@ -64,9 +64,11 @@ The left rail mirrors the harness's own shape:
 | **🩺 Care** | Activity · Changes · Doctor |
 | **🎨 Setup** | Harness · Settings |
 
-Above the index sits a **vitals** card — the germination ring, drift, the doctor's verdict
-and how long ago the harness was built — so those four facts are on screen from every page.
-It is hidden where the rail collapses to icons (≤960px) and returns with the phone drawer.
+At the foot of the rail sits a **vitals** card — the doctor's verdict, drift, how long ago the
+harness was built, and a Voice button — so those facts are on screen from every page. It is
+hidden where the rail collapses to icons (≤960px) and returns with the phone drawer. When two
+or more installs are active, the topbar's first breadcrumb is the picker for the install the
+console views.
 
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type

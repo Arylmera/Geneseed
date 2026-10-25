@@ -7,9 +7,11 @@ import { installName } from '../lib/hosts.js'
 // everywhere. Hidden when there's nothing to switch between. `installs` is App's one
 // copy of /api/installs (the sidebar's Installs count reads the same list), refetched on
 // every data revision, so the option set and the selection stay in sync after a toggle.
-export default function HarnessSelector({ installs, onSwitch }) {
+// `fallback` is what stands in its place then: the topbar's breadcrumb root, which must
+// never go missing just because there is nothing to switch to.
+export default function HarnessSelector({ installs, onSwitch, fallback = null }) {
   const active = (installs || []).filter((i) => i.state === 'active')
-  if (active.length < 2) return null
+  if (active.length < 2) return fallback
 
   const current = active.find((i) => i.selected) || active[0]
   const onChange = async (e) => {

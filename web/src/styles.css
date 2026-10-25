@@ -2294,24 +2294,32 @@ a.sb-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px;
 a.sb-item:hover { background: var(--surface); color: var(--text); }
 .sb-item .glyph { width: 18px; height: 18px; }
 .sb-label { flex: 1; min-width: 0; }
-.sb-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-3);
+.sb-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.sb-count { padding: 1px 7px; border-radius: 999px; background: var(--surface-3);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-2);
   font-variant-numeric: tabular-nums; }
-a.sb-item.on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
-a.sb-item.on .sb-count { color: var(--accent-text); }
+/* The lit page: a raised row with an accent edge, its label in plain text colour. */
+a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 650;
+  box-shadow: inset 2px 0 0 var(--accent); }
 .sb-spacer { flex: 1; min-height: 16px; }
-.sb-vitals { display: flex; flex-direction: column; gap: 7px; margin-top: 8px;
-  padding: 14px 10px 4px; border-top: 1px solid var(--line);
+/* The vitals card at the rail's foot. */
+.sb-vitals { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
   font-family: var(--font-mono); font-size: 12px; color: var(--text-3); }
-.sb-vitals > div, .sb-voice { display: flex; justify-content: space-between; gap: 8px; }
+.sb-vitals > div { display: flex; justify-content: space-between; gap: 8px; }
 .sb-vitals b { font-weight: 500; color: var(--text); }
 .sb-vitals b.good { color: var(--good-text); }
 .sb-vitals b.warn { color: var(--warn-text); }
 .sb-vitals b.bad { color: var(--bad-text); }
-.sb-voice { width: 100%; background: none; border: 0; padding: 0; font: inherit;
-  color: inherit; cursor: pointer; text-align: left; }
-.sb-voice b { display: inline-flex; align-items: center; gap: 3px; }
-.sb-voice .glyph { width: 12px; height: 12px; }
-.sb-voice:hover b { color: var(--accent-text); }
+.sb-voice { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; height: 36px; margin-top: 4px; padding: 0 10px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-2); background: transparent; color: var(--text);
+  font: 500 13px var(--font-ui); cursor: pointer; text-align: left; }
+.sb-voice-name { display: flex; align-items: center; gap: 8px; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-voice-swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+.sb-voice .glyph { flex: none; width: 12px; height: 12px; color: var(--text-3); }
+.sb-voice:hover { border-color: var(--line-3); }
 
 /* ---- topbar ---- */
 .topbar { gap: 10px; padding: 0 32px; background: var(--bg-2); backdrop-filter: none; }
@@ -2323,6 +2331,11 @@ a.sb-item.on .sb-count { color: var(--accent-text); }
 .topbar .iconbtn:hover { border-color: var(--line-2); }
 .tb-search input { width: 320px; height: 38px; padding-left: 34px; }
 .tb-harness { min-width: 0; max-width: 200px; height: 38px; padding: 0 10px; }
+/* The picker as the breadcrumb's root, at the crumbs' scale. */
+/* It keeps its width beside the search field, and its focus ring sits inside the crumbs'
+   overflow clip. */
+.crumb-root:has(.tb-harness) { flex: none; }
+.crumb-root .tb-harness { height: 32px; font: 500 13px var(--font-mono); outline-offset: -2px; }
 .tb-pop-anchor { position: relative; }
 .appearance-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-pop);
   width: max-content; max-width: min(92vw, 540px); display: flex; flex-direction: column;
