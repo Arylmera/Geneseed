@@ -558,3 +558,46 @@ describe('Activity page: ended sessions', () => {
     expect(screen.queryByRole('heading', { name: 'Recently ended' })).toBeNull()
   })
 })
+
+describe('Activity garden switch', () => {
+  const live = [
+    {
+      session_id: 'g1',
+      host: 'claude',
+      title: 'grow it',
+      status: 'busy',
+      cwd: '/git/app',
+      updated_at: 0,
+      turns: 12,
+      context: { used: 50000, window: 200000 },
+      agents: [{ id: 'a1', type: 'developer', status: 'running', started: 0 }],
+      files_all: [{ file: 'a.js', path: 'src/a.js', additions: 1, deletions: 0, by: 'a1' }],
+    },
+    { session_id: 'g2', host: 'bob', title: 'other host', status: 'idle', cwd: '/git/app' },
+  ]
+
+  it('switches the live sessions to the garden and keeps it in the hash', async () => {
+    window.history.replaceState(null, '', '#/activity?f=needs')
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
+    render(<Activity />)
+    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Garden' }))
+    // The list's default is omitted from the hash; the garden is written next to the filters.
+    expect(window.location.hash).toBe('#/activity?v=garden')
+    const tree = await screen.findByRole('link', { name: /^grow it, claude, working/ })
+    expect(tree.getAttribute('href')).toBe('#/activity/g1')
+    expect(tree.getAttribute('aria-label')).toMatch(/1 sub-agent running: developer \(1 file\)/)
+    expect(tree.querySelector('svg[shape-rendering="crispEdges"] rect')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'List' }))
+    expect(window.location.hash).toBe('#/activity')
+    expect(await screen.findByText('grow it')).toBeTruthy()
+  })
+
+  it('applies the filters to the garden', async () => {
+    window.history.replaceState(null, '', '#/activity?v=garden&host=bob')
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
+    render(<Activity />)
+    expect(await screen.findByRole('link', { name: /^other host, bob, idle/ })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /^grow it/ })).toBeNull()
+  })
+})

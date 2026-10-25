@@ -20,6 +20,8 @@ import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import PageHeader from '../components/PageHeader.jsx'
+import Seg from '../components/Seg.jsx'
+import Garden from './Activity/Garden.jsx'
 import { useFlip } from '../lib/motion.js'
 import { usePoll } from '../hooks/usePoll.js'
 import { useAsync } from '../hooks/useAsync.js'
@@ -85,9 +87,10 @@ const FILTERS = [
   ['gates', 'Gate asks'],
 ]
 
-// The filter lives in the hash (`#/activity?f=runs&host=x&project=y`, defaults omitted) so a
-// reload or a shared link keeps it. Written with replaceState, which fires no hashchange: the
-// router does not re-resolve and history gains no entry per chip click.
+// The filter lives in the hash (`#/activity?f=runs&host=x&project=y&v=garden`, defaults
+// omitted) so a reload or a shared link keeps it. Written with replaceState, which fires no
+// hashchange: the router does not re-resolve and history gains no entry per chip click.
+// `v` is the live sessions' view: the list (default) or the garden.
 function readView() {
   const q = new URLSearchParams(window.location.hash.split('?')[1] || '')
   const f = q.get('f')
@@ -95,12 +98,14 @@ function readView() {
     f: FILTERS.some(([k]) => k === f) ? f : 'all',
     host: q.get('host') || '',
     project: q.get('project') || '',
+    v: q.get('v') === 'garden' ? 'garden' : 'list',
   }
 }
 
 function writeView(v) {
   const q = new URLSearchParams()
   if (v.f !== 'all') q.set('f', v.f)
+  if (v.v === 'garden') q.set('v', 'garden')
   if (v.host) q.set('host', v.host)
   if (v.project) q.set('project', v.project)
   const s = q.toString()
@@ -494,6 +499,22 @@ export default function Activity() {
         </div>
         {select('host', 'Host', hosts)}
         {select('project', 'Project', projects)}
+        <Seg aria-label="Live sessions view">
+          {[
+            ['list', 'List'],
+            ['garden', 'Garden'],
+          ].map(([k, l]) => (
+            <button
+              key={k}
+              type="button"
+              className={view.v === k ? 'on' : ''}
+              aria-pressed={view.v === k}
+              onClick={() => setView({ v: k })}
+            >
+              {l}
+            </button>
+          ))}
+        </Seg>
       </div>
       {narrowed && view.f !== 'needs' && (
         <p className="dim act-sm">Runs and gate asks carry no {narrowed}; showing sessions only.</p>
@@ -510,6 +531,8 @@ export default function Activity() {
               Run <code>opencode</code> and the sessions it spins up appear here.
             </EmptyState>
           )
+        ) : view.v === 'garden' ? (
+          <Garden sessions={live} collisions={data.collisions} />
         ) : (
           // A poll that adds or drops a session slides the list instead of re-dealing it.
           <div className="stack gap-12 act-live" ref={flipRef}>

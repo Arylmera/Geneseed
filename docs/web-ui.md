@@ -187,6 +187,21 @@ streams the output of background jobs and keeps their history across reloads.
   the files it touched and its todo progress; open one for its detail. Sessions that ended in the last 7 days are listed under
   **Recently ended**, below the live ones. Every host records it:
   the OpenCode plugin, and `geneseed-hook activity` on Claude Code, OpenClaude and Bob.
+  A **List | Garden** switch (kept in the URL with the filters, which apply to both) shows the
+  live sessions as pixel bonsai instead: one shelf per repository (worktrees stand on their
+  repo's shelf, tagged ⎇), one tree per session. The pot's glaze is the host (clay Claude Code,
+  blue Bob, grey OpenCode, violet OpenClaude); the tree grows taller with turns, its crown
+  with context fill, and the tips yellow past 80 %. A compaction cuts the crown flat (it
+  regrows as context refills) and leaves a notch on the rim. A running sub-agent is a thick
+  branch with its own pad, coloured by agent type; a finished one is a pruned stub and a
+  fallen leaf. A cream blossom is a changed file, on the pad of the AI that changed it (Bob
+  cannot tell, so all its blossoms sit on the crown). An amber `!` means the session needs
+  you, a red `x` an error, a grey tree an idle session. Two sessions changing the same file
+  are tied together in red (same worktree) or dashed amber (two worktrees of the repo): tangled
+  roots in the moss when they stand side by side, a thread under the pots when they do not.
+  Hover a tree for its model, turns, context and compactions, or a pad for its author's files;
+  click it to open the session. Past ten trees, quiet shelves (no session working or waiting on
+  you) fold into chips, the largest first; the last standing shelf never folds. **Sakura** repaints the crowns pink, nothing more.
 - **Changes** (`#/diff`) — the diff between the deployed harness and the source: edited /
   added / missing files, and files only behind the source (unedited; a rebuild updates them)
   listed apart under **Behind source**, with per-file expansion and coloured unified-diff lines. Select

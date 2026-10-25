@@ -3641,3 +3641,46 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 /* A control and its status line stack, and a segmented control wraps rather than overflow. */
 .sheet-v { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; } /* off-scale: 6px, 2px from a step */
 .sheet-v .seg { flex-wrap: wrap; max-width: 100%; }
+
+/* ---- Activity garden (pages/Activity/Garden.jsx, lib/garden.js) ----
+   Each tree is a fixed-width cell (56 tree pixels x 4), so a shelf's collision threads are
+   placed by index. The pixel colours live in garden.js; this block only lays out and moves. */
+.gd { margin-bottom: var(--sp-4); }
+.gd-head { align-items: center; margin-bottom: var(--sp-3); }
+.gd-chips { margin-bottom: var(--sp-3); }
+.gd-shelf { position: relative; margin-bottom: var(--sp-4); }
+.gd-shelf-h { margin-bottom: var(--sp-2); }
+.gd-row { position: relative; display: flex; gap: 24px; overflow-x: auto; padding-bottom: 28px; /* off-scale: 24px = GAP in Garden.jsx; 28px holds the far threads */
+  border-bottom: 3px solid var(--line-2); }
+.gd-tree { position: relative; flex: 0 0 224px; width: 224px; /* = W x PX in Garden.jsx */ color: inherit; text-decoration: none; border-radius: var(--r-sm); }
+.gd-tree:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gd-label { height: 44px; overflow: hidden; font-size: var(--fs-sm); } /* off-scale: 44px = the threads' top */
+.gd-sub { flex-wrap: nowrap; overflow: hidden; margin-top: 2px; font-size: var(--fs-xs); } /* off-scale: 2px hairline */
+.gd-svg { display: block; }
+.gd-svg > g { transition: opacity .14s; }
+.gd-dimming > g:not(.gd-hot) { opacity: .3; }
+.gd-threads { position: absolute; left: 0; top: 44px; pointer-events: none; overflow: visible; }
+.gd-thread path { fill: none; stroke-width: 2.5; }
+.gd-thread.red path { stroke: var(--bad); }
+.gd-thread.amber path { stroke: var(--warn); stroke-dasharray: 5 4; }
+/* The hover card overlays the space under the shelf, beneath the hovered tree. It lives outside
+   the row because the row scrolls sideways and would clip it, and it takes no layout room, so
+   a hover never moves the page. It never takes the pointer, so it cannot steal the hover. */
+.gd-info { position: absolute; top: 100%; z-index: 5; margin-top: calc(-1 * var(--sp-3)); pointer-events: none; }
+.gd-card { width: 320px; max-width: calc(100vw - 32px); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm);
+  background: var(--surface); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
+.gd-files { list-style: none; margin: var(--sp-1) 0 0; padding: 0; }
+.gd-files li { display: flex; justify-content: space-between; gap: var(--sp-2); min-width: 0; }
+.gd-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--sp-3); margin: 0 0 var(--sp-1); } /* off-scale: 2px hairline */
+.gd-facts dt { color: var(--text-3); }
+.gd-facts dd { margin: 0; }
+/* A running sub-agent's pad sways one tree pixel in two steps; a tree that needs you glows.
+   Both keyframes end at rest. */
+.gd-sway { animation: gdSway 1.6s steps(1, end) infinite; }
+@keyframes gdSway { 0% { transform: translateX(0); } 50% { transform: translateX(1px); } 100% { transform: translateX(0); } }
+.gd-needs .gd-svg { animation: gdGlow 1.6s steps(1, end) infinite; }
+@keyframes gdGlow { 0% { filter: none; } 50% { filter: drop-shadow(0 0 5px var(--warn)); } 100% { filter: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .gd-sway, .gd-needs .gd-svg { animation: none !important; }
+  .gd-needs .gd-svg { filter: drop-shadow(0 0 4px var(--warn)); }
+}
