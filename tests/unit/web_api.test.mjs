@@ -1853,6 +1853,19 @@ test('the install list marks exactly the current view selected', () => {
   });
 });
 
+// The fleet rows carry the same mark: the Overview's root-file card follows the viewed install.
+test('the fleet marks exactly the current view selected, and follows a switch', () => {
+  withTwoViews(({ st, oc, cl }) => {
+    // The fleet lists ACTIVE installs only: a manifest is what makes each view one.
+    for (const d of [oc, cl]) fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    let selected = apiFleet(st).installs.filter((r) => r.selected);
+    assert.deepEqual(selected.map((r) => r.host), ['opencode']);
+    apiSelectView(st, { host: 'claude', path: cl });
+    selected = apiFleet(st).installs.filter((r) => r.selected);
+    assert.deepEqual(selected.map((r) => r.host), ['claude']);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // GET/POST /api/excludes — the web mirror of `harness exclude add|remove|list`. The endpoint
 // owns NO exclusion logic of its own; it reuses the snapshot/add/remove trio verbatim, so the

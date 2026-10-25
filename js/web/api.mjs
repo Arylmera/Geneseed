@@ -232,6 +232,9 @@ export function apiFleet(state) {
       diffable: drift !== null,
       drift,
       built_epoch: built,
+      // The install the console is viewing (the topbar picker), as `/api/installs` marks it: the
+      // Overview's root-file card follows it rather than the fleet's worst.
+      selected: samePath(dir, state.target),
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),

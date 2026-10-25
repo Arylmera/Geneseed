@@ -24,6 +24,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **parallel-agents watches its units** the way the pipeline watches a crew: a result without its check, or one still waiting, is acted on at once, never waited on.
 
 ### Fixed
+- **The Overview's root-file card follows the install you view** (the topbar picker) instead of always showing the fleet's worst; `/api/fleet` rows carry `selected`.
 - **The Library reader's text takes the full width** of the reader instead of stopping at 76 characters, and usage is one card: the count, then the last day, window and hosts on one line, over a sparkline that spans the card.
 - **Console bars say each number once.** Gate asks, Doctrine packs and the context budget no longer print a legend under the bar repeating the name and count beside it; pack rows line up in one grid; the Library reader shows usage to the right of the description when wide enough, under it otherwise.
 

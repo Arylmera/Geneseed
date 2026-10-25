@@ -19,7 +19,7 @@ import {
   neverFired,
   rebuildTarget,
 } from '../../lib/overview.js'
-import { alwaysOnRange, gateSummary, usageTotal, worstRootFile } from './ledgerKpi.js'
+import { alwaysOnRange, gateSummary, rootFileFigure, usageTotal } from './ledgerKpi.js'
 
 // The Ledger: the Overview as a control panel over every INSTALLED harness on the machine.
 // The health card (verdict and actions), four KPIs, the fleet, then what needs you and what
@@ -216,7 +216,7 @@ function Kpi({ id, title, aside, className = '', children }) {
 }
 
 function RootKpi({ installs }) {
-  const w = worstRootFile(installs)
+  const w = rootFileFigure(installs)
   return (
     <Kpi id="ldg-k-root" title="Root file vs ceiling" className="ldg-kpi-root">
       {w ? (
@@ -233,7 +233,7 @@ function RootKpi({ installs }) {
               }
               size={64}
               stroke={7}
-              label={`Worst root file: ${w.label}, ${w.pct} percent of its ceiling`}
+              label={`${w.selected ? 'Root file' : 'Worst root file'}: ${w.label}, ${w.pct} percent of its ceiling`}
             />
             <span className="mono ldg-ring-pct" aria-hidden="true">
               {w.pct}%

@@ -26,7 +26,7 @@ import {
   alwaysOnRange,
   gateSummary,
   usageTotal,
-  worstRootFile,
+  rootFileFigure,
 } from '../pages/Overview/ledgerKpi.js'
 import { api } from '../api/index.js'
 import { clearAsyncCache } from '../hooks/useAsync.js'
@@ -142,16 +142,18 @@ describe('Ledger fleet details row', () => {
 })
 
 describe('Ledger KPI helpers', () => {
-  it('worstRootFile picks the highest share of the ceiling among measured installs', () => {
-    expect(worstRootFile(FLEET.installs)).toEqual({
+  // With no install selected, the card falls back to the fleet's worst share of its ceiling.
+  it('rootFileFigure picks the highest share of the ceiling when none is selected', () => {
+    expect(rootFileFigure(FLEET.installs)).toEqual({
       label: 'bob · global',
       carrier: 34000,
       ceiling: 40000,
       pct: 85,
+      selected: false,
     })
     // No ceiling, no cost, or disabled: nothing to measure.
     expect(
-      worstRootFile([
+      rootFileFigure([
         OPENCODE,
         install('bob', 'synced', { ...BOB.cost, ceiling: 0 }),
         { ...CLAUDE, state: 'disabled' },
@@ -159,8 +161,19 @@ describe('Ledger KPI helpers', () => {
     ).toBeNull()
     // A carrier that is not a number has no share; it must not win the rank as NaN.
     expect(
-      worstRootFile([install('opencode', 'synced', { ...BOB.cost, carrier: undefined }), BOB]),
+      rootFileFigure([install('opencode', 'synced', { ...BOB.cost, carrier: undefined }), BOB]),
     ).toMatchObject({ label: 'bob · global', pct: 85 })
+  })
+
+  // The card follows the install the console views (the topbar picker), not the worst one;
+  // an unmeasured selection falls back to the worst rather than showing nothing.
+  it('rootFileFigure shows the selected install, worst share or not', () => {
+    const sel = FLEET.installs.map((i) => ({ ...i, selected: i.host === 'claude' }))
+    expect(rootFileFigure(sel)).toMatchObject({ label: 'claude · global', selected: true })
+    const unmeasured = FLEET.installs.map((i) =>
+      i.host === 'claude' ? { ...i, selected: true, cost: null } : i,
+    )
+    expect(rootFileFigure(unmeasured)).toMatchObject({ label: 'bob · global', selected: false })
   })
 
   it('alwaysOnRange spans the measured installs and names the most expensive', () => {
