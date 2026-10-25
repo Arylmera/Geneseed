@@ -63,7 +63,7 @@ import { pathToFileURL } from 'node:url';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/routes.mjs';
-import { recordLoop } from '../../js/loop/registry.mjs';
+import { recordLoop, registryPath } from '../../js/loop/registry.mjs';
 import { initState, renderLoopFile } from '../../js/loop/state.mjs';
 import { PRESETS } from '../../js/loop/score.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -2484,9 +2484,12 @@ function activityBox() {
 // accident and would make the prune test below vacuous rather than red.
 const nowSec = () => Date.now() / 1000;
 
+// The reader joins the loop registry (`activeLoops`), which can REWRITE `loops.json`, so every
+// activity test points `XDG_CONFIG_HOME` into its own sandbox: no test reads or prunes the
+// developer's real registry.
 const withActivity = (fn) => {
   const box = activityBox();
-  try { return fn(box); } finally { box.sb.cleanup(); }
+  try { return withLoopsXdg(box.sb, () => fn(box)); } finally { box.sb.cleanup(); }
 };
 
 test('a missing activity dir reads empty and enabled', () => {
@@ -2612,6 +2615,223 @@ test('a v1 file gets safe defaults', () => {
     // between "read from the file" and "filled in by the reader" is observable.
     assert.equal(e.cost, 0);
     assert.equal(e.tokens, 0);
+  });
+});
+
+// ---- Snapshot v2 (the Activity garden). `plain` unwraps the parser's number wrappers, so a
+// table can state its answers as plain JSON.
+const plain = (v) => JSON.parse(JSON.stringify(v));
+const liveSnap = (sid, extra = {}) => ({
+  session_id: sid, status: 'busy', pid: null, writer: 'hook', host: 'claude',
+  updated_at: nowSec(), ...extra,
+});
+const filesOf = (items) => ({ count: items.length, additions: 0, deletions: 0, items });
+
+// The v2 keys are APPENDED after `host`, never shuffled in: the docblock on `normalizeEntry` says
+// the order is stable. A live session then carries the two derived keys, `files_all` and `loops`.
+const V2_KEYS = [
+  'session_id', 'agent', 'title', 'cwd', 'status', 'updated_at', 'model', 'phase',
+  'turn_started_at', 'cost', 'tokens', 'files', 'todos', 'blocked_on', 'error', 'host',
+  'root', 'repo', 'agents', 'attribution', 'turns', 'context', 'compactions', 'compacted_at',
+  'context_at_compaction', 'repo_key', 'files_all', 'loops',
+];
+
+test('the v2 fields pass through as written, in a stable key order', () => {
+  withActivity((box) => {
+    const v2 = {
+      root: '/w/feature', repo: '/w/main',
+      agents: [{ id: 'ag1', type: 'explorer', status: 'running', started: 100 }],
+      attribution: false, turns: 7, context: { used: 1200, window: 200000 },
+      compactions: 2, compacted_at: 1000, context_at_compaction: 150000,
+      files: filesOf([{ file: 'x.js', path: 'src/x.js', additions: 1, deletions: 0, by: 'ag1' }]),
+    };
+    box.write('s.json', liveSnap('s', v2));
+    const e = apiActivity(box.state).activity[0];
+    assert.deepEqual(Object.keys(e), V2_KEYS);
+    for (const k of Object.keys(v2)) assert.deepEqual(plain(e[k]), v2[k], k);
+  });
+});
+
+// `repo_key` is `normcase(repo ?? root)`: the one key the garden groups shelves by, so Bob's
+// `c:\w\main` and Claude's `C:\w\main` land on one shelf on Windows (on POSIX nothing folds).
+// A snapshot with neither `repo` nor `root` has no shelf key.
+test('repo_key folds the repo spelling, falling back to root', () => {
+  const fold = process.platform === 'win32';
+  const rows = [
+    [{ root: 'C:\\w\\feat', repo: 'C:\\w\\Main' }, fold ? 'c:\\w\\main' : 'C:\\w\\Main'],
+    [{ root: 'c:\\w\\main', repo: 'c:\\w\\main' }, 'c:\\w\\main'],
+    [{ root: '/w/feat' }, fold ? '\\w\\feat' : '/w/feat'],
+    [{}, null],
+  ];
+  for (const [extra, want] of rows) {
+    withActivity((box) => {
+      box.write('s.json', liveSnap('s', extra));
+      assert.equal(apiActivity(box.state).activity[0].repo_key, want, JSON.stringify(extra));
+    });
+  }
+});
+
+// A v1 snapshot has none of the v2 keys. The reader fills them: `null` where the value is a
+// path, a structure or a time that is unknown (`root`, `repo`, `attribution`, `context`,
+// `compacted_at`, `context_at_compaction`), `[]` for the lists (`agents`, `files_all`,
+// `loops`), and `0` for the counts (`turns`, `compactions`), because the garden does arithmetic
+// with them. `attribution` stays `null` (not stated), since only a Bob writer says `false`.
+test('a v1 snapshot gets the v2 defaults', () => {
+  withActivity((box) => {
+    box.write('s.json', { session_id: 's', status: 'idle', pid: process.pid, updated_at: nowSec() });
+    const res = apiActivity(box.state);
+    const e = res.activity[0];
+    assert.deepEqual(Object.keys(e), V2_KEYS);
+    assert.deepEqual(
+      Object.fromEntries(V2_KEYS.slice(16).map((k) => [k, e[k]])),
+      { root: null, repo: null, agents: [], attribution: null, turns: 0, context: null,
+        compactions: 0, compacted_at: null, context_at_compaction: null, repo_key: null,
+        files_all: [], loops: [] });
+    assert.deepEqual(res.collisions, []);
+  });
+});
+
+// B2: the snapshot keeps the first `FILE_CAP` files; the garden needs all of them, so a LIVE
+// session's `files_all` is the detail file's uncapped `files.items`. `files` stays the snapshot's
+// capped summary, because the list card (`SessionHeader`) renders `files` as it is.
+test('files_all is the uncapped list from the detail file; files is unchanged', () => {
+  const rows = [
+    // [snapshot items, detail file (or null), files_all wanted]
+    [[{ file: 'a' }], { files: filesOf([{ file: 'a' }, { file: 'b' }, { file: 'c' }]) },
+      [{ file: 'a' }, { file: 'b' }, { file: 'c' }]],
+    [[{ file: 'a' }], null, [{ file: 'a' }]],
+    [[{ file: 'a' }], { timeline: [] }, [{ file: 'a' }]],
+    [null, null, []],
+  ];
+  for (const [snapItems, detail, want] of rows) {
+    withActivity((box) => {
+      box.write('s.json', liveSnap('s', snapItems ? { files: filesOf(snapItems) } : {}));
+      if (detail) box.write('s.detail.json', detail);
+      const e = apiActivity(box.state).activity[0];
+      assert.deepEqual(plain(e.files_all), want, JSON.stringify(detail));
+      assert.deepEqual(plain(e.files), snapItems ? filesOf(snapItems) : null);
+    });
+  }
+});
+
+// B5 + D11: a collision is two or more distinct writers `(sid, by)` on the same `(repo, path)`
+// among LIVE sessions. `same-worktree` (the red thread) when two of the writers share `root`;
+// `cross-worktree` (amber) when every writer is in a different worktree of one repo. A session
+// and its own sub-agent are two writers. Two `index.js` files in different folders are not one
+// file. A v1 row (no `path`) and an ended session take no part.
+//
+// Roots compare through `normcase`, so Bob's lower-case `c:\` meets Claude's `C:\` on Windows,
+// where the filesystem folds case. On POSIX `normcase` folds nothing and those are two repos.
+const R = 'C:\\w\\main';
+const W = 'C:\\w\\feature';
+const item = (p, by = null) => ({ file: p.split('/').pop(), path: p, additions: 1, deletions: 0, by });
+const COLLISIONS = [
+  ['same worktree', [['s1', R, R, [item('src/a.js')]], ['s2', R, R, [item('src/a.js')]]],
+    [{ repo: R, path: 'src/a.js', kind: 'same-worktree',
+      writers: [{ sid: 's1', by: null, root: R }, { sid: 's2', by: null, root: R }] }]],
+  ['two worktrees of one repo', [['s1', R, R, [item('a.js')]], ['s2', W, R, [item('a.js')]]],
+    [{ repo: R, path: 'a.js', kind: 'cross-worktree',
+      writers: [{ sid: 's1', by: null, root: R }, { sid: 's2', by: null, root: W }] }]],
+  ['a session and its own sub-agent', [['s1', R, R, [item('a.js'), item('a.js', 'ag1')]]],
+    [{ repo: R, path: 'a.js', kind: 'same-worktree',
+      writers: [{ sid: 's1', by: null, root: R }, { sid: 's1', by: 'ag1', root: R }] }]],
+  ['same basename, other folder', [['s1', R, R, [item('src/a/index.js')]],
+    ['s2', R, R, [item('src/b/index.js')]]], []],
+  ['a v1 row has no path', [['s1', R, R, [{ file: 'a.js' }]], ['s2', R, R, [{ file: 'a.js' }]]], []],
+  ['a row with no by key is the session itself', [['s1', R, R, [{ file: 'a.js', path: 'a.js' }]],
+    ['s2', R, R, [item('a.js')]]],
+    [{ repo: R, path: 'a.js', kind: 'same-worktree',
+      writers: [{ sid: 's1', by: null, root: R }, { sid: 's2', by: null, root: R }] }]],
+  ['a file outside the root has path null', [['s1', R, R, [{ file: 'a.js', path: null, by: null }]],
+    ['s2', R, R, [{ file: 'a.js', path: null, by: null }]]], []],
+  ['Bob lower-case drive', [['s1', R, R, [item('a.js')]], ['s2', 'c:\\w\\main', 'c:\\w\\main', [item('a.js')]]],
+    process.platform === 'win32'
+      ? [{ repo: R, path: 'a.js', kind: 'same-worktree',
+        writers: [{ sid: 's1', by: null, root: R }, { sid: 's2', by: null, root: 'c:\\w\\main' }] }]
+      : []],
+];
+
+test('collisions: distinct writers on one (repo, path) among live sessions', () => {
+  for (const [name, sessions, want] of COLLISIONS) {
+    withActivity((box) => {
+      for (const [sid, root, repo, items] of sessions) {
+        box.write(`${sid}.json`, liveSnap(sid, { root, repo, files: filesOf(items) }));
+      }
+      assert.deepEqual(plain(apiActivity(box.state).collisions), want, name);
+    });
+  }
+});
+
+test('collisions read the uncapped detail list and ignore ended sessions', () => {
+  withActivity((box) => {
+    box.write('s1.json', liveSnap('s1', { root: R, repo: R, files: filesOf([item('x.js')]) }));
+    box.write('s1.detail.json', { files: filesOf([item('x.js'), item('deep.js')]) });
+    box.write('s2.json', liveSnap('s2', { root: R, repo: R, files: filesOf([item('deep.js')]) }));
+    box.write('s3.json', liveSnap('s3', { root: R, repo: R, files: filesOf([item('x.js')]),
+      updated_at: nowSec() - 100000 }));
+    assert.deepEqual(plain(apiActivity(box.state).collisions).map((c) => [c.path, c.writers.map((w) => w.sid)]),
+      [['deep.js', ['s1', 's2']]]);
+  });
+});
+
+// B9: `loops` lists the registry rows whose root is the session's `root` (through `normcase`).
+// A finished loop (its LOOP.md is gone) is left out; a session outside a repo has none. The
+// registry stores the realpath, and the reader resolves the session root the same way, so a
+// session whose root is a link to the loop's worktree (`e`: a junction on Windows, which needs no
+// privilege; a directory symlink elsewhere) still joins.
+test('loops join the loop registry on the session root', () => {
+  withActivity((box) => {
+    const wt = fs.realpathSync.native(makeLoopWorktree(box.sb, 'wt'));
+    recordLoop({ root: wt, branch: 'loop/a', title: 'Loop A', now: new Date('2026-10-01T00:00:00Z') });
+    const gone = path.join(box.sb.path, 'gone');
+    fs.mkdirSync(gone);
+    recordLoop({ root: gone, branch: 'loop/b', title: 'Loop B', now: new Date('2026-10-01T00:00:00Z') });
+    const realGone = fs.realpathSync.native(gone);
+    box.write('a.json', liveSnap('a', { root: wt, repo: wt }));
+    box.write('b.json', liveSnap('b', { root: realGone, repo: realGone }));
+    box.write('c.json', liveSnap('c', { root: path.join(box.sb.path, 'other'), repo: null }));
+    box.write('d.json', liveSnap('d'));
+    const link = path.join(box.sb.path, 'wt-link');
+    fs.symlinkSync(wt, link, process.platform === 'win32' ? 'junction' : 'dir');
+    box.write('e.json', liveSnap('e', { root: link, repo: link }));
+    // A registered worktree that has since been removed: `activeLoops` would prune it and save.
+    const vanished = path.join(box.sb.path, 'vanished');
+    fs.mkdirSync(vanished);
+    recordLoop({ root: vanished, branch: 'loop/c', title: 'Loop C', now: new Date('2026-10-01T00:00:00Z') });
+    fs.rmSync(vanished, { recursive: true });
+    const before = fs.readFileSync(registryPath(), 'utf8');
+    const loops = Object.fromEntries(apiActivity(box.state).activity.map((e) => [e.session_id, plain(e.loops)]));
+    const A = [{ title: 'Loop A', iteration: 1, status: 'running' }];
+    assert.deepEqual(loops, { a: A, b: [], c: [], d: [], e: A });
+    // The GET writes nothing: no prune, no `finishedAt` stamp on the finished loop.
+    assert.equal(fs.readFileSync(registryPath(), 'utf8'), before);
+  });
+});
+
+// P3 draws an ended session's tree on its detail page, so the archived snapshot comes back with
+// the same v2 fields, `files_all` from its detail file, and no loops: it is not running, even
+// when a loop still runs in its root.
+test('the detail endpoint returns the v2 fields for an archived session', () => {
+  withActivity((box) => {
+    const wt = fs.realpathSync.native(makeLoopWorktree(box.sb, 'wt'));
+    recordLoop({ root: wt, branch: 'loop/a', title: 'Loop A', now: new Date('2026-10-01T00:00:00Z') });
+    const d = path.join(box.sb.path, 'activity', 'archive');
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, 's.json'), JSON.stringify(liveSnap('s', {
+      updated_at: nowSec() - 100000, root: wt, repo: wt, turns: 3, compactions: 1,
+      agents: [{ id: 'ag1', type: null, status: 'done', started: 5 }],
+      files: filesOf([item('a.js')]),
+    })));
+    fs.writeFileSync(path.join(d, 's.detail.json'),
+      JSON.stringify({ timeline: [], files: filesOf([item('a.js'), item('b.js', 'ag1')]) }));
+    const s = apiActivityDetail(box.state, 's').session;
+    assert.equal(s.ended, true);
+    assert.deepEqual(plain({ root: s.root, repo: s.repo, turns: s.turns, compactions: s.compactions,
+      agents: s.agents, files_all: s.files_all, loops: s.loops }), {
+      root: wt, repo: wt, turns: 3, compactions: 1,
+      agents: [{ id: 'ag1', type: null, status: 'done', started: 5 }],
+      files_all: [item('a.js'), item('b.js', 'ag1')], loops: [],
+    });
   });
 });
 
