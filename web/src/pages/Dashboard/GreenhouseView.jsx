@@ -1,14 +1,15 @@
 import React from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import Ring from '../../components/Ring.jsx'
-import { editCount, relTime } from '../../lib/format.js'
-import { bucketJobsByDay, jobSummary, newestJobs } from '../../lib/jobBuckets.js'
+import { editCount } from '../../lib/format.js'
+import { bucketJobsByDay, newestJobs } from '../../lib/jobBuckets.js'
 import { headlineFor } from '../../lib/headlines.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
 import { CountUp } from '../../lib/motion.js'
+import RunChips from './RunChips.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
-// Recent-activity panel: how many jobs to list.
+// Recent-activity panel: how many jobs the run chips draw from.
 const MAX_TIMELINE_JOBS = 12
 
 // Greenhouse "category" palette — warm rich tones that survive on both the
@@ -332,32 +333,11 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
             <span className="tick">last {shown.length} runs</span>
           </div>
         </div>
-        <div className="b-timeline">
-          {shown.map((j) => {
-            const ok = j.status === 'done'
-            const bad = j.status === 'failed'
-            const cls = bad ? 'warn' : ok ? 'ok' : 'acc'
-            const s = jobSummary(j)
-            return (
-              <div className="b-tl-row" key={j.id}>
-                <span className={`b-tl-node ${cls}`} />
-                {/* The raw `$ …` line is the tooltip, never the text (lib/jobBuckets.js). */}
-                <div className="b-tl-body" title={s.command || undefined}>
-                  <b>{s.verb}</b>
-                  {[s.scope, s.result, s.duration].map((p) => (p ? ` · ${p}` : '')).join('')}
-                </div>
-                <span className="b-tl-when">{j.started ? `${relTime(j.started)} ago` : '—'}</span>
-              </div>
-            )
-          })}
-          {(!jobs || jobs.length === 0) && (
-            <div className="b-tl-row">
-              <span className="b-tl-node" />
-              <div className="b-tl-body sub">No runs yet. Trigger an action to populate this.</div>
-              <span className="b-tl-when">—</span>
-            </div>
-          )}
-        </div>
+        <RunChips
+          jobs={jobs}
+          max={MAX_TIMELINE_JOBS}
+          empty={<p className="sub">No runs yet. Trigger an action to populate this.</p>}
+        />
       </div>
     </>
   )

@@ -1,10 +1,11 @@
 import React from 'react'
-import { editCount, relTime } from '../../lib/format.js'
-import { bucketJobsByDay, jobSummary, newestJobs } from '../../lib/jobBuckets.js'
+import { editCount } from '../../lib/format.js'
+import { bucketJobsByDay } from '../../lib/jobBuckets.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
+import RunChips from './RunChips.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
-// RECENT // RUN LOG table: how many jobs to list.
+// RECENT // RUN LOG chips: how many jobs they draw from.
 const MAX_RECENT_JOBS = 14
 
 // One module panel — header tab + title + body. Operator HUD's basic container.
@@ -270,41 +271,11 @@ export default function OperatorHudView({ overview, jobs, lens }) {
         </CMod>
 
         <CMod title="RECENT // RUN LOG" span={3}>
-          <table className="c-tbl">
-            <tbody>
-              {newestJobs(jobs, MAX_RECENT_JOBS).map((j) => {
-                const ok = j.status === 'done'
-                const bad = j.status === 'failed'
-                const cls = bad ? 'bad' : ok ? 'ok' : 'acc'
-                const s = jobSummary(j)
-                return (
-                  <tr key={j.id}>
-                    <td style={{ width: 96 }}>
-                      <span className={`c-dotmark ${cls}`} />{' '}
-                      <span className="c-dim">{j.action}</span>
-                    </td>
-                    {/* The raw `$ …` line is the tooltip, never the text (lib/jobBuckets.js).
-                        No verb: the first column already names the action. */}
-                    <td
-                      className="c-name"
-                      style={{ fontWeight: 400 }}
-                      title={s.command || undefined}
-                    >
-                      {[s.scope, s.result, s.duration].filter(Boolean).join(' · ')}
-                    </td>
-                    <td className="num c-dim">{j.started ? `${relTime(j.started)} ago` : '—'}</td>
-                  </tr>
-                )
-              })}
-              {(!jobs || jobs.length === 0) && (
-                <tr>
-                  <td colSpan="3" className="c-dim c-fine">
-                    No runs logged.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <RunChips
+            jobs={jobs}
+            max={MAX_RECENT_JOBS}
+            empty={<p className="c-dim mono c-fine">No runs logged.</p>}
+          />
         </CMod>
       </div>
     </div>

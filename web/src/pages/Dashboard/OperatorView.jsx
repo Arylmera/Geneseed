@@ -1,7 +1,7 @@
 import React from 'react'
 import { SECTIONS, SECTION_ORDER } from '../../lib/sections.js'
 import { maxCount, editCount } from '../../lib/format.js'
-import ActivityFeed from './ActivityFeed.jsx'
+import RunChips from './RunChips.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
 // Direction C · Operator — a dense, terminal-flavoured status strip and a
@@ -121,7 +121,18 @@ export default function OperatorView({ overview, setup, jobs, lens }) {
           <div className="card-head">
             <h3>Run log</h3>
           </div>
-          <ActivityFeed jobs={jobs} />
+          <RunChips
+            jobs={jobs}
+            max={8}
+            empty={
+              <div className="feed">
+                <div className="empty">
+                  <div className="big">No activity yet</div>
+                  Actions you run appear here.
+                </div>
+              </div>
+            }
+          />
         </div>
       </div>
     </>

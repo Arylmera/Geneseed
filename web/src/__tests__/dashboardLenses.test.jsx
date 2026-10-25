@@ -207,10 +207,12 @@ describe('OperatorHudView', () => {
         onAction={() => {}}
       />,
     )
-    const rows = screen.getByText('RECENT // RUN LOG').closest('.c-mod').querySelectorAll('tr')
-    expect(rows[0].textContent).toContain('act19')
-    // Column 1 already names the action, so the summary column does not repeat the verb.
-    expect(rows[0].cells[1].textContent).toBe('claude-global · imperial · ✓ · 3s')
+    // The run log is RunChips: the first chip is the newest run, its scope and age on the
+    // second line, its duration as `3 s`. The `$` line stays in the title, never the text.
+    const chip = screen.getByText('RECENT // RUN LOG').closest('.c-mod').querySelector('.run-chip')
+    expect(chip.textContent).toContain('act19')
+    expect(chip.textContent).toContain('claude-global · imperial')
+    expect(chip.textContent).toContain('3 s')
     expect(document.body.textContent).not.toContain('$ C:')
     expect([...document.querySelectorAll('[title]')].some((e) => e.title === CMD)).toBe(true)
     expect(screen.getByText('Harness healthy.')).toBeTruthy()
