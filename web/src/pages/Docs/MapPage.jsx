@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { marked } from 'marked'
 import { sanitizeHtml } from '../../components/Markdown.jsx'
-import MarkdownPage from './MarkdownPage.jsx'
+import MarkdownPage, { minutesOf } from './MarkdownPage.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import { renderDoc } from './headings.js'
 
@@ -19,15 +19,28 @@ const Chip = ({ kind }) => <span className={`tag ${TONE[kind] || ''}`}>{kind}</s
 // "What lands on your machine" as a map: the page's own table, parsed server-side, drawn
 // as a clickable list with a detail panel for the selected piece. No rows (a table that
 // failed to parse) falls back to the plain page, which still shows the table.
-export default function MapPage({ page, overview, onAction }) {
+export default function MapPage({ page, overview, onAction, section, description }) {
   const [sel, setSel] = useState(0)
   // The prose around the list, with the same heading ids the margin's outline links to.
   const { before, after } = useMemo(() => renderDoc(page), [page])
-  if (!page.rows) return <MarkdownPage page={page} overview={overview} onAction={onAction} />
+  if (!page.rows)
+    return (
+      <MarkdownPage
+        page={page}
+        overview={overview}
+        onAction={onAction}
+        section={section}
+        description={description}
+      />
+    )
   const row = page.rows[sel] || page.rows[0]
   return (
     <div className="detail-doc">
-      <PageHeader title={page.title} />
+      <PageHeader
+        eyebrow={section && `${section} · ${minutesOf(page.body)} min read`}
+        title={page.title}
+        sub={description}
+      />
       <div className="markdown" dangerouslySetInnerHTML={{ __html: before }} />
       <div className="docs-map">
         <ul className="map-tree" aria-label="Pieces">

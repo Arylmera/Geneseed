@@ -13,6 +13,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **The Kits page is a gallery and an install matrix.** One card per kit (counts, members, licence, credit, where it is on) over a kits × installs table of switches; one "Apply and rebuild" in a staged-changes bar rebuilds one install at a time, and Discard drops its staging. A kit's rules, banned APIs and upstream stay on its own page.
+- **The Docs page reads like a reader**: one nav column (parts, sections, filter, pages), a full-width reading column with section, reading time and description over the title, Copy on code blocks, an outline that marks the heading being read, a reading-progress bar, and Previous / Next as cards.
 - **Constitution page follows the precedence ladder**: state pills on the four rungs with ranks 5–6 below, Gated / Changed filters, foldable packs, gate ask counts on gated rows, and a sticky "Unapplied changes" bar holding Review changes, Revert and Apply.
 - **The Library reader follows the "Dossier" layout**: source path with a Copy button, the description's "Use when" as its own note, usage tiles beside the lede, a link to the kind's Docs page; the list gains an Experimental filter and compact usage rows.
 - **Installs › Server picks the skin with a segmented control**, and the section index and Server section show whether the server is live and current.

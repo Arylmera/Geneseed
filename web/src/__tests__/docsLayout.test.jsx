@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Docs in the Library's three panes: a rail of parts with their page counts, the open
@@ -108,6 +108,44 @@ describe('Docs layout', () => {
         'clone',
       ]),
     )
+  })
+
+  // The menu places the page, so the menu gives the head its section and its lede: the page
+  // payload carries neither.
+  it("heads the page with the menu's section and description", async () => {
+    render(<Docs page="quick" overview={{}} />)
+    await waitFor(() =>
+      expect(document.querySelector('.page-head .eyebrow')?.textContent).toBe(
+        'Install · 1 min read',
+      ),
+    )
+    expect(document.querySelector('.page-head .sub').textContent).toBe('one command')
+  })
+
+  // A 2px bar at the top of the reader shows how far the scroller has gone: `main#main` when
+  // it overflows (the app shell), else the document. Decoration only, hidden from the tree.
+  it('fills the reading-progress bar as the scroller scrolls', async () => {
+    const main = document.createElement('main')
+    main.id = 'main'
+    document.body.appendChild(main)
+    Object.defineProperty(main, 'scrollHeight', { value: 1400, configurable: true })
+    Object.defineProperty(main, 'clientHeight', { value: 400, configurable: true })
+    try {
+      render(<Docs page="quick" overview={{}} />)
+      await waitFor(() => expect(document.querySelector('.docs-progress')).toBeTruthy())
+      const bar = document.querySelector('.docs-reader > .docs-progress')
+      expect(bar.getAttribute('aria-hidden')).toBe('true')
+      const fill = () => bar.querySelector('i').style.width
+      expect(fill()).toBe('0%')
+      main.scrollTop = 250
+      act(() => fireEvent.scroll(main))
+      expect(fill()).toBe('25%')
+      main.scrollTop = 1000
+      act(() => fireEvent.scroll(main))
+      expect(fill()).toBe('100%')
+    } finally {
+      main.remove()
+    }
   })
 
   it('narrows the list with the filter and says when nothing matches', async () => {

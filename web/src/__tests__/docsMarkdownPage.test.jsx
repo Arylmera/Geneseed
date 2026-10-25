@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, fireEvent } from '@testing-library/react'
+import { render, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import MarkdownPage from '../pages/Docs/MarkdownPage.jsx'
 
@@ -90,5 +90,83 @@ describe('MarkdownPage', () => {
     expect(container.querySelectorAll('.page-actions .btn:not(.ghost)').length).toBe(0)
     fireEvent.click(btns[1])
     expect(onAction).toHaveBeenCalledWith('build')
+  })
+
+  // The head reads like a book's: the section and the reading time (200 words a minute,
+  // rounded up, never under one) as the eyebrow, the menu's description as the lede. A page
+  // the menu does not place gets neither, and the page keeps its one h1.
+  it('heads the page with its section, its reading time and its description', () => {
+    const body = Array(401).fill('word').join(' ')
+    const { container } = render(
+      <MarkdownPage
+        page={{ id: 'p', title: 'Footprint', body }}
+        section="Configuration"
+        description="Lean or full."
+      />,
+    )
+    expect(container.querySelector('.page-head .eyebrow').textContent).toBe(
+      'Configuration · 3 min read',
+    )
+    expect(container.querySelector('.page-head .sub').textContent).toBe('Lean or full.')
+    expect(container.querySelectorAll('h1').length).toBe(1)
+    const bare = render(<MarkdownPage page={{ id: 'q', title: 'Q', body: 'one' }} />)
+    expect(bare.container.querySelector('.eyebrow')).toBeNull()
+    expect(bare.container.querySelector('.sub')).toBeNull()
+    const short = render(<MarkdownPage page={{ id: 'r', title: 'R', body: '' }} section="S" />)
+    expect(short.container.querySelector('.eyebrow').textContent).toBe('S · 1 min read')
+  })
+
+  // Each code block gets a caption bar: its language when the fence names one, and a ghost
+  // Copy button that writes the block's text (no trailing newline, so a paste does not run
+  // it). Wrapped once even when the effect runs twice (StrictMode runs it twice on mount).
+  it('captions each code block with its language and a Copy button', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    try {
+      const body = '```bash\ngeneseed setup\n```\n\n```\nplain\n```'
+      const { container } = render(
+        <React.StrictMode>
+          <MarkdownPage page={{ id: 'p', body }} />
+        </React.StrictMode>,
+      )
+      const figs = [...container.querySelectorAll('figure.docs-code')]
+      expect(figs.length).toBe(2)
+      expect(container.querySelectorAll('figure.docs-code figure').length).toBe(0)
+      expect(figs.map((f) => f.querySelector(':scope > figcaption .mono')?.textContent)).toEqual([
+        'bash',
+        undefined,
+      ])
+      const btn = figs[0].querySelector('figcaption button')
+      expect([btn.type, btn.className, btn.getAttribute('aria-label'), btn.textContent]).toEqual([
+        'button',
+        'btn ghost sm',
+        'Copy command',
+        'Copy',
+      ])
+      expect(figs[0].querySelector(':scope > pre')).toBeTruthy()
+      await act(async () => fireEvent.click(btn))
+      expect(writeText).toHaveBeenCalledWith('geneseed setup')
+    } finally {
+      if (had) Object.defineProperty(navigator, 'clipboard', had)
+      else delete navigator.clipboard
+    }
+  })
+
+  it('copies nothing and throws nothing without a clipboard, or when it refuses', async () => {
+    const had = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    try {
+      Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+      const { container } = render(<MarkdownPage page={{ id: 'p', body: '```\nx\n```' }} />)
+      const btn = container.querySelector('figure.docs-code button')
+      await act(async () => fireEvent.click(btn))
+      const writeText = vi.fn(() => Promise.reject(new Error('denied')))
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      await act(async () => fireEvent.click(btn))
+      expect(writeText).toHaveBeenCalledWith('x')
+    } finally {
+      if (had) Object.defineProperty(navigator, 'clipboard', had)
+      else delete navigator.clipboard
+    }
   })
 })

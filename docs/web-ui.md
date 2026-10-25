@@ -169,11 +169,12 @@ streams the output of background jobs and keeps their history across reloads.
   under it in the rail, each with its count, above a thin bar of their shares; pick one to
   narrow the list.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
-  reference (generated from the harness argument parser), and a glossary, in the Library's
-  three panes: the parts (Understand / Guides / Concepts / Reference) with their page counts,
-  the open part's sections nested under it in the rail (pick one to narrow the list), the
-  part's pages under their sections with a filter, and the page with its breadcrumb,
-  outline and Previous / Next within the section. Filtered for one host (OpenCode, Claude
+  reference (generated from the harness argument parser), and a glossary, in a reader: one
+  nav column holding the parts (Understand / Guides / Concepts / Reference) with their page
+  counts, the open part's sections (pick one to narrow the list) and the part's pages with a
+  filter; then the page, with its breadcrumb, section and reading time, a Copy button on each
+  code block, an outline that marks the heading being read, and Previous / Next within the
+  section. Filtered for one host (OpenCode, Claude
   Code, Bob or OpenClaude; Claude-family pages show to all three Claude-engine hosts, a page
   tagged with a list of hosts only to those); with no
   choice stored it follows the deployed install.

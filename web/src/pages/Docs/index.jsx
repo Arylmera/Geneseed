@@ -22,6 +22,7 @@ import {
   readSeen,
 } from './Track.jsx'
 import About from './About.jsx'
+import { scroller, useOnScroll } from './scroll.js'
 import Seg from '../../components/Seg.jsx'
 
 // Resolve a router page id to a default — empty hash lands on the first page
@@ -35,15 +36,31 @@ function defaultPageId(menu) {
 // keeps each sub-component focused on one shape — the same split the CLI
 // uses to keep its topic submodules small. The page is fetched by the caller,
 // which also feeds its body to the margin.
-function PageView({ data, error, overview, onAction }) {
+function PageView({ data, error, overview, onAction, place }) {
   if (error) return <ErrorState error={error} style={{ margin: 18 }} />
   if (!data) return <Loading label="Loading page…" />
   switch (data.kind) {
     case 'markdown':
     case 'concept':
-      return <MarkdownPage page={data} overview={overview} onAction={onAction} />
+      return (
+        <MarkdownPage
+          page={data}
+          overview={overview}
+          onAction={onAction}
+          section={place.section}
+          description={place.page?.description}
+        />
+      )
     case 'map':
-      return <MapPage page={data} overview={overview} onAction={onAction} />
+      return (
+        <MapPage
+          page={data}
+          overview={overview}
+          onAction={onAction}
+          section={place.section}
+          description={place.page?.description}
+        />
+      )
     case 'cli':
       return <CliPage page={data} />
     case 'glossary':
@@ -53,6 +70,22 @@ function PageView({ data, error, overview, onAction }) {
     default:
       return <EmptyState title="Unknown page kind">{data.kind}</EmptyState>
   }
+}
+
+// The 2px reading-progress bar on top of the reader: how far the scroller has gone, 0-100%.
+// Decoration (the outline already says where the reader is), so hidden from the tree.
+function readProgress() {
+  const s = scroller()
+  const room = s.scrollHeight - s.clientHeight
+  return room > 0 ? Math.min(100, Math.max(0, (s.scrollTop / room) * 100)) : 0
+}
+function ReadProgress() {
+  const pct = useOnScroll(readProgress)
+  return (
+    <div className="docs-progress" aria-hidden="true">
+      <i style={{ width: `${pct}%` }} />
+    </div>
+  )
 }
 
 // A part's pages as list rows: a `● SECTION` heading each time the section changes (the menu
@@ -227,6 +260,7 @@ export default function Docs({ page, overview, onAction }) {
         </LibList>
 
         <article className="lib-reader docs-reader" aria-label="Page">
+          <ReadProgress />
           {place.page && (
             <nav className="docs-crumbs mono" aria-label="Breadcrumb">
               <a href={docHref(place.part.pages[0].id)}>{place.part.label}</a>
@@ -250,6 +284,7 @@ export default function Docs({ page, overview, onAction }) {
                 error={pageError}
                 overview={overview}
                 onAction={onAction}
+                place={place}
               />
               {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
             </div>
