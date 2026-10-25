@@ -5,7 +5,7 @@ title: "Footprint (lean vs full)"
 kind: "concept"
 section: "Configuration"
 description: "Lean or full: how much of the constitution rides inline every turn."
-link: {"hash": "#/settings", "label": "Toggle it in Settings →"}
+link: {"hash": "#/installs/hosts", "label": "Change it on Hosts →"}
 ---
 **Footprint** decides how much of the [constitution](rules.md) the agent carries *inline* in its instructions file on every turn. It has two settings, **lean** (the default) and **full**, chosen per install. It is a token-cost dial, not a rules dial: every rule the install adopted is in force at either setting.
 
@@ -42,7 +42,7 @@ Footprint is stored in a `.geneseed-footprint` marker in the install and kept ac
   geneseed setup
   ```
 
-- **Web console** — the **Footprint** toggle in Settings flips the current install and rebuilds it; on the Harness page, each install has its own dropdown. A new install or deploy from the console starts lean, as from the command line.
+- **Web console** — each install's own panel on the Hosts page changes its footprint and rebuilds it; Settings shows the viewed install's footprint and links there. A new install or deploy from the console starts lean, as from the command line.
 - **Command line** — with the emit target of the install you are changing:
 
   ```bash

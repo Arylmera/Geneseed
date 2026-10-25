@@ -2,8 +2,9 @@ import React from 'react'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, it, expect, vi } from 'vitest'
 
-// Settings is prop-driven now: the server controls only touch the api on a click, so an
-// empty stub keeps the import side-effect-free.
+// Settings is prop-driven now: the server controls only touch the api on a click, and the
+// mount-time reads (api.update, api.docsPage) are optional-chained, so an empty stub keeps
+// the import side-effect-free; a test that needs one sets it.
 vi.mock('../api/index.js', () => ({ api: {} }))
 
 import Settings from '../pages/Settings/index.jsx'
@@ -14,7 +15,10 @@ import { ConfirmContext } from '../hooks/useConfirm.jsx'
 const section = (name) => screen.getByRole('heading', { level: 3, name }).closest('section')
 
 describe('Settings', () => {
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    delete api.update
+  })
 
   // Update pulls and then rebuilds every ACTIVE install (upgrade -> rebuild-all), so it asks first
   // and names them, read at click time; a declined confirm sends nothing. With the list
@@ -31,6 +35,7 @@ describe('Settings', () => {
     const OPTS = { title: 'Update and rebuild?', confirmLabel: 'Update' }
 
     it('names the active installs, then runs update', async () => {
+      api.update = vi.fn(async () => ({ install: 'git' }))
       api.installs = vi.fn(async () => ({
         installs: [
           { id: 'a', host: 'claude', scope: 'global', path: '/h/.claude', state: 'active' },
@@ -41,19 +46,22 @@ describe('Settings', () => {
       const confirm = vi.fn(async () => true)
       const onAction = vi.fn()
       render(ui(confirm, onAction))
-      await act(async () => fireEvent.click(screen.getByText('Update (git pull + rebuild)')))
+      const btn = await screen.findByText('Update (git pull + rebuild)')
+      await act(async () => fireEvent.click(btn))
       expect(confirm).toHaveBeenCalledWith(MSG('Claude Code · global, Terra · project'), OPTS)
       expect(onAction).toHaveBeenCalledWith('update')
     })
 
     it('a declined confirm sends nothing; an unreadable list still asks', async () => {
+      api.update = vi.fn(async () => ({ install: 'git' }))
       api.installs = vi.fn(async () => {
         throw new Error('daemon restarting')
       })
       const confirm = vi.fn(async () => false)
       const onAction = vi.fn()
       render(ui(confirm, onAction))
-      await act(async () => fireEvent.click(screen.getByText('Update (git pull + rebuild)')))
+      const btn = await screen.findByText('Update (git pull + rebuild)')
+      await act(async () => fireEvent.click(btn))
       expect(confirm).toHaveBeenCalledWith(MSG('the installs it finds'), OPTS)
       expect(onAction).not.toHaveBeenCalled()
     })
@@ -62,11 +70,38 @@ describe('Settings', () => {
   it('renders maintenance, the update button, and server control', () => {
     render(<Settings onAction={() => {}} />)
     // Per-install detail and build moved to the Harnesses tab + Dashboard; Settings keeps
-    // machine maintenance (incl. the git-pull Update) and server control.
+    // machine maintenance (incl. Update) and server control.
     expect(screen.getByText('Add to PATH')).toBeTruthy()
     expect(screen.getByText('Remove from PATH')).toBeTruthy()
-    expect(screen.getByText('Update (git pull + rebuild)')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Update' })).toBeTruthy()
     expect(screen.getByText('Stop server')).toBeTruthy()
+  })
+
+  // The Update button names the route /api/update says this copy takes (`install`): a clone
+  // pulls, an npm-global install runs npm install -g, and a copy the console cannot update
+  // (`other`) gets the command to run by hand instead of a button the server refuses. Until
+  // the answer arrives, or without one, it is plain "Update".
+  it('labels Update by how this copy of Geneseed updates', async () => {
+    api.update = vi.fn(async () => ({ install: 'npm-global' }))
+    const npm = render(<Settings onAction={() => {}} />)
+    expect(await screen.findByText('Update (npm install -g + rebuild)')).toBeTruthy()
+    npm.unmount()
+
+    api.update = vi.fn(async () => ({ install: 'git' }))
+    const clone = render(<Settings onAction={() => {}} />)
+    expect(await screen.findByText('Update (git pull + rebuild)')).toBeTruthy()
+    clone.unmount()
+
+    // A daemon older than the `install` field sent only `git`.
+    api.update = vi.fn(async () => ({ git: true }))
+    const old = render(<Settings onAction={() => {}} />)
+    expect(await screen.findByText('Update (git pull + rebuild)')).toBeTruthy()
+    old.unmount()
+
+    api.update = vi.fn(async () => ({ install: 'other', command: 'npm install -g geneseed' }))
+    render(<Settings onAction={() => {}} />)
+    expect(await screen.findByText('npm install -g geneseed')).toBeTruthy()
+    expect(within(section('Machine')).queryByRole('button', { name: /^Update/ })).toBeNull()
   })
 
   // The sheet's index lists the five sections in page order, and each entry is a button that
@@ -105,14 +140,24 @@ describe('Settings', () => {
     expect(within(section('Machine')).queryByRole('button', { name: /Stop|Remove/ })).toBeNull()
   })
 
-  it('shows the footprint dial for the current install', () => {
+  // The footprint is changed in ONE place, the install's own panel on Hosts (beside posture and
+  // mode, one confirm). Settings shows the viewed install's footprint and links there; it used
+  // to carry a second lean/full dial that rebuilt the same install.
+  it('shows the footprint read-only and links to Hosts to change it', () => {
     render(
       <Settings
         onAction={() => {}}
         overview={{ install: { host: 'opencode', scope: 'global' }, footprint: 'full' }}
       />,
     )
-    expect(screen.getByText('Harness footprint')).toBeTruthy()
+    const row = screen.getByText('Harness footprint').closest('.sheet-row')
+    expect(within(row).queryByRole('button')).toBeNull()
+    expect(row.textContent).toContain('full')
+    expect(
+      within(row)
+        .getByRole('link', { name: /Change it on Hosts/ })
+        .getAttribute('href'),
+    ).toBe('#/installs/hosts')
   })
 
   const claudeOverview = { install: { host: 'claude', scope: 'global' }, footprint: 'lean' }

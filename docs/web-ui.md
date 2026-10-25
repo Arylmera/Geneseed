@@ -234,8 +234,9 @@ streams the output of background jobs and keeps their history across reloads.
   and a reload asks first while anything is staged. Files you edited in a kit that is now off are kept,
   and the row lists them.
 - **Server** (`#/installs/server`; `#/settings` and `#/about` resolve here) — a settings sheet
-  with a section index. **Appearance**: skin, accent, Overview view. **Machine**:
-  version + Update, Add to PATH, the viewed install's footprint. **Server**: running · port ·
+  with a section index. **Appearance**: skin, accent (a skin change resets it to the skin's own), Overview view. **Machine**:
+  version + Update (labelled by how this copy updates: git pull, npm install -g, or the command
+  to run by hand), Add to PATH, the viewed install's footprint (read-only, links to Hosts). **Server**: running · port ·
   pid · uptime, whether the code matches the disk (with Restart), start-at-login state (read
   only), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
   **Danger zone**: Stop server, Remove from PATH, and a pointer to each install's own

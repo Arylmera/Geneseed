@@ -178,7 +178,8 @@ function TemplateDetail({ t, bricks, overridden, runs }) {
   const byName = new Map(bricks.map((b) => [b.name, b]))
   const how = howItRuns(t.graph)
   // The legend names the ring's strokes, so only a graph drawn as a ring wears it.
-  const ring = layoutLoop(t.graph, bricks).mode === 'ring'
+  const layout = layoutLoop(t.graph, bricks)
+  const ring = layout.mode === 'ring'
   const cmd = `geneseed loop init --graph ${t.name} --title "<title>" --requirement "<requirement>"`
   // A run carries the graph it was started from, under its template's name. Null while the
   // first poll is out: the line waits rather than say "none".
@@ -203,7 +204,12 @@ function TemplateDetail({ t, bricks, overridden, runs }) {
       </p>
       <hr className="hr" />
       <figure className="loop-console">
-        <div className="loop-graph">
+        {/* A flow is as wide as its steps: drawn at that width and scrolled, not shrunk until
+            its labels cannot be read (a ring keeps scaling to the reader). */}
+        <div
+          className={ring ? 'loop-graph' : 'loop-graph flow'}
+          style={ring ? undefined : { '--loop-w': `${layout.width}px` }}
+        >
           <RingGraph graph={t.graph} bricks={bricks} onSelect={toRow} />
         </div>
         <figcaption className="loop-how">

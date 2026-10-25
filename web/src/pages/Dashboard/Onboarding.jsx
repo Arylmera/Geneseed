@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { api } from '../../api/index.js'
-import { accentHex } from '../../lib/accents.js'
 import { Icon } from '../../components/Icon.jsx'
 import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
@@ -89,16 +88,6 @@ export default function Onboarding({ onAction }) {
               onClick={() => setTheme(t.name)}
               title={t.blurb || t.tagline || t.name}
             >
-              <span
-                className="po"
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  background: accentHex(t.accent),
-                  boxShadow: `0 0 8px ${accentHex(t.accent)}`,
-                }}
-              />
               <span style={{ textTransform: 'capitalize' }}>{t.name}</span>
             </button>
           ))}

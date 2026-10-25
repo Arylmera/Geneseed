@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { act, render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { act, render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // App's routing, observed from the outside: a hash goes in, and the test reads which page
@@ -198,6 +198,35 @@ describe('focus, title and skip link', () => {
     await navigate('#/item/skill/tdd')
     expect(await page()).toBe('Library section=skills selected=tdd')
     expect(document.activeElement).not.toBe(main())
+  })
+})
+
+// A skin is a palette drawn around its own accent, so a skin change hands the accent back to
+// that skin (Curated): a custom pick made under one skin used to paint every other skin too,
+// and the four skins stopped looking like four. The pick is one click away to make again.
+describe('appearance', () => {
+  afterEach(() => {
+    localStorage.removeItem('geneseed-accent')
+    localStorage.removeItem('geneseed-flavour')
+  })
+
+  it('a skin change resets a custom accent to the skin’s own', async () => {
+    localStorage.setItem('geneseed-flavour', 'cultivar')
+    localStorage.setItem('geneseed-accent', 'custom:green')
+    render(<App />)
+    await page()
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    const pop = () => within(screen.getByRole('dialog', { name: 'Appearance' }))
+    const green = () => pop().getByRole('button', { name: 'Green accent' })
+    expect(green().getAttribute('aria-pressed')).toBe('true')
+    const skin = within(pop().getByRole('group', { name: 'Skin' }))
+    // The skin already pressed is no change: the pick stays.
+    await act(async () => fireEvent.click(skin.getByRole('button', { name: 'Cultivar' })))
+    expect(localStorage.getItem('geneseed-accent')).toBe('custom:green')
+    await act(async () => fireEvent.click(skin.getByRole('button', { name: 'Operator' })))
+    expect(localStorage.getItem('geneseed-flavour')).toBe('operator')
+    expect(localStorage.getItem('geneseed-accent')).toBe('curated')
+    expect(green().getAttribute('aria-pressed')).toBe('false')
   })
 })
 

@@ -200,15 +200,23 @@ export default function Settings({
   const server = overview?.server
   const stale = overview?.daemon_stale
 
-  const setFootprint = async (fp) => {
-    if (!install || fp === footprint) return
-    const ok = await confirm(
-      `Rebuild ${hostInfo(install.host).label} · ${install.scope} with the “${fp}” footprint? ` +
-        `It rebuilds in place, non-destructive.`,
-      { title: 'Change the footprint?', confirmLabel: 'Rebuild' },
-    )
-    if (ok) onAction?.('install', { ...install, footprint: fp })
-  }
+  // How this copy updates (/api/update `install`: git, npm-global, other), so the button names
+  // the route the server will take. Wrapped like AboutSection's fetch: suites stub the api
+  // down to the calls they make. Unknown until it answers: then the plain "Update".
+  const [upd, setUpd] = useState(null)
+  useEffect(() => {
+    Promise.resolve(api.update?.())
+      .then((u) => setUpd(u || null))
+      .catch(() => {})
+  }, [])
+  // A daemon older than the `install` field only sent `git` (as Ledger's VersionChip reads it).
+  const kind = upd ? (upd.install ?? (upd.git ? 'git' : 'npm-global')) : null
+  const updateLabel =
+    kind === 'git'
+      ? 'Update (git pull + rebuild)'
+      : kind === 'npm-global'
+        ? 'Update (npm install -g + rebuild)'
+        : 'Update'
   // Update pulls (or npm-installs) and then rebuilds every ACTIVE install, so the confirm names
   // them, read at click time: this page holds no install list. Unreadable, it still asks.
   const update = async () => {
@@ -315,10 +323,20 @@ export default function Settings({
               k="Geneseed"
               help="This copy of the source"
               control={
-                <button className="btn" onClick={update}>
-                  <Icon name="download" />
-                  Update (git pull + rebuild)
-                </button>
+                // A copy the console cannot update gets the command to run, never a button
+                // the server refuses (updatePlan, js/web/jobs.mjs).
+                kind === 'other' ? (
+                  upd.command ? (
+                    <span className="dim">
+                      update with <code className="mono">{upd.command}</code>
+                    </span>
+                  ) : null
+                ) : (
+                  <button className="btn" onClick={update}>
+                    <Icon name="download" />
+                    {updateLabel}
+                  </button>
+                )
               }
             >
               <span className="mono">{overview?.version || 'unknown'}</span>
@@ -333,31 +351,22 @@ export default function Settings({
                 </button>
               }
             />
-            {/* How much of the Rules AGENT.md carries inline for the viewed install: a
-                token-cost dial; flipping it rebuilds the install in place (re-emit). */}
+            {/* How much of the Rules AGENT.md carries inline for the viewed install. Read-only:
+                it is changed on the install's own panel in Hosts, the one footprint control
+                (a second dial here rebuilt the same install through a second confirm). */}
             {install && footprint && (
               <Row
-                k={<span id="footprint-label">Harness footprint</span>}
+                k="Harness footprint"
                 help={
                   <>
                     For {hostInfo(install.host).label} · {install.scope}; every Rule stays in force.{' '}
                     <a href="#/docs/footprint">Learn more →</a>
                   </>
                 }
+                control={<a href="#/installs/hosts">Change it on Hosts →</a>}
               >
-                <Seg aria-labelledby="footprint-label">
-                  {['lean', 'full'].map((fp) => (
-                    <button
-                      key={fp}
-                      className={footprint === fp ? 'on' : ''}
-                      onClick={() => setFootprint(fp)}
-                      aria-pressed={footprint === fp}
-                    >
-                      {fp}
-                    </button>
-                  ))}
-                </Seg>
-                <span className="dir-layout-note sub" role="status" aria-live="polite">
+                <span className="mono">{footprint}</span>
+                <span className="dir-layout-note sub">
                   {footprint === 'lean'
                     ? 'Lean: terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'
                     : 'Full: every Rule’s complete text and rationale inlined (maximum guidance, largest context).'}

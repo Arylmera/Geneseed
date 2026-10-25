@@ -774,6 +774,34 @@ describe('Loops — the ring console', () => {
     ])
   })
 
+  // A flow (the fallback for a graph a ring cannot hold) is as wide as its steps, 60 + 100 per
+  // node: shrunk into the reader it took 11px labels down to ~4px. So its box asks for its own
+  // width (--loop-w) and scrolls sideways; a ring keeps scaling to the reader.
+  it('draws a flow at its own width, and a ring to fit', async () => {
+    const nodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+    const long = tpl('long', 'Nine steps.', 'development', {
+      nodes,
+      start: 'a',
+      edges: nodes.map((n, i) => ({ from: n, on: 'pass', to: nodes[(i + 1) % 9] })),
+      loops: [{ name: 'iterations', nodes, max: 20, iteration: true }],
+    })
+    api.loops.mockImplementation(() =>
+      Promise.resolve({ ...PAYLOAD, templates: [long, ...PAYLOAD.templates] }),
+    )
+    const { unmount } = render(<Loops tab="templates" item="long" />)
+    await screen.findByText('Nine steps.', { selector: '.reader-lede' })
+    const flow = reader().querySelector('.loop-graph')
+    expect(flow.classList.contains('flow')).toBe(true)
+    expect(flow.style.getPropertyValue('--loop-w')).toBe('960px')
+    unmount()
+
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+    const ring = reader().querySelector('.loop-graph')
+    expect(ring.classList.contains('flow')).toBe(false)
+    expect(ring.style.getPropertyValue('--loop-w')).toBe('')
+  })
+
   it('gives the command that starts the template, and copies it', async () => {
     const writeText = vi.fn(() => Promise.resolve())
     const was = Object.getOwnPropertyDescriptor(navigator, 'clipboard')

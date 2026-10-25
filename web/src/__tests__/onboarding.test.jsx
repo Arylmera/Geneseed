@@ -34,6 +34,14 @@ describe('Onboarding', () => {
     expect(onAction).toHaveBeenCalledWith('build', { theme: 'neutral', emit: 'opencode-global' })
   })
 
+  // A voice button carries no dot in the voice's accent: the console's accent comes from the
+  // skin, so the dot promised a colour the console never takes.
+  it('paints no accent dot beside a voice', async () => {
+    const { container } = render(<Onboarding onAction={() => {}} />)
+    await waitFor(() => expect(screen.getByText('imperial')).toBeTruthy())
+    expect(container.querySelector('.po')).toBeNull()
+  })
+
   it('lets you pick a different voice before deploying', async () => {
     const onAction = vi.fn()
     render(<Onboarding onAction={onAction} />)

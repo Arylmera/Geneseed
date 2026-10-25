@@ -441,7 +441,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .tbl th { text-align: left; font-family: var(--font-mono); font-size: 10px;
   letter-spacing: .12em; text-transform: uppercase; color: var(--text-3);
   padding: 0 14px 11px; border-bottom: 1px solid var(--line); font-weight: 500; }
-.tbl td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px;
+.tbl td { padding: var(--sp-3) 14px; border-bottom: 1px solid var(--line); font-size: 13.5px;
   vertical-align: middle; }
 .tbl tr:last-child td { border-bottom: 0; }
 .tbl tbody tr { transition: background .1s; }
@@ -676,7 +676,6 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   font-family: inherit; text-align: left; }
 .pop-item:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
 .pop-item:hover { background: var(--surface-3); }
-.pop-item .po { width: 11px; height: 11px; border-radius: 50%; flex: none; }
 .pop-item .pn { text-transform: capitalize; font-weight: 500; }
 .pop-item.on { background: var(--accent-soft); }
 .pop-item.on .pn { color: var(--accent-text); }
@@ -723,7 +722,6 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 
   --shadow-card: 0 1px 2px rgba(31,42,33,.04), 0 14px 36px -28px rgba(31,42,33,.4);
   --shadow-pop: 0 18px 50px -16px rgba(31,42,33,.28);
-  --shadow-modal: 0 24px 60px -18px rgba(31,42,33,.3);
 }
 .app.light .atmos {
   background:
@@ -961,6 +959,12 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   .docs-margin { position: sticky; order: 0; }
   .docs-gloss { display: grid; }
 }
+/* On a phone the page comes first and the parts and page list follow it: stacked in source
+   order, a cross-link or search hit opened on the nav, with the article below the fold.
+   Visual order then differs from Tab order (nav first), which a reader of a page accepts. */
+@media (max-width: 720px) {
+  .library.docs-lib .lib-reader { order: -1; border-top: 0; border-bottom: 1px solid var(--line); }
+}
 
 /* The Understand track's progress line, and the prev/next bar under every page. */
 .track-prog { height: 3px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
@@ -1055,7 +1059,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .cli-arg-help { color: var(--text-2); font-size: 13px; margin-top: 2px; }
 
 /* Glossary side-by-side table. */
-.glossary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.glossary-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .glossary-table th, .glossary-table td {
   text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line);
   vertical-align: top;
@@ -1985,19 +1989,6 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .rule-src { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); margin-top: 8px; }
 .rule-notice { color: var(--warn-text); margin: 0 0 12px; }
 
-/* budget meter — count/token pressure on the always-loaded rule set */
-.rules-meter { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.rules-meter-bar {
-  flex: 0 0 180px; height: 6px; border-radius: 999px;
-  background: var(--surface-3); border: 1px solid var(--line); overflow: hidden;
-}
-.rules-meter-fill { height: 100%; background: var(--accent); transition: width .2s; }
-.rules-meter.warn .rules-meter-fill { background: var(--warn); }
-.rules-meter.over .rules-meter-fill { background: oklch(0.62 0.19 25); }
-.rules-meter-label { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); }
-.rules-meter.warn .rules-meter-label { color: var(--warn-text); }
-.rules-meter.over .rules-meter-label { color: oklch(0.62 0.19 25); }
-
 /* add/edit form */
 .rule-form { display: flex; flex-direction: column; gap: 10px; }
 .rule-form .lib-filter { width: 100%; }
@@ -2083,6 +2074,12 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 
 /* ---- the constitution map ---- */
 .cmap { display: block; width: 100%; height: auto; min-height: 300px; }
+/* On a phone the 940-wide composition at 0.38× put its notes near 3px. It keeps its own
+   width there and the card scrolls sideways; the drawing's meaning is in the positions. */
+@media (max-width: 720px) {
+  .jr-map { overflow-x: auto; }
+  .cmap { min-width: 940px; }
+}
 .cm-edge { fill: none; stroke: var(--line-3); stroke-width: 1.5; }
 .cm-edge-gov { fill: none; stroke: var(--line-2); stroke-width: 1.2; stroke-dasharray: 4 5; }
 .cm-node { cursor: pointer; }
@@ -2196,6 +2193,11 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
    both the page scrolls, which is the right answer rather than an unreadable sliver. */
 .pad:has(> .jr-head) .cmap { flex: 1; min-height: 240px; height: auto; }
 .pad:has(> .jr-head) .jr-others { flex: none; }
+/* On a phone the map is drawn at its own width (see .cmap above): its height follows that
+   width, or `meet` would shrink the drawing back inside the wide box. */
+@media (max-width: 720px) {
+  .pad:has(> .jr-head) .cmap { flex: none; height: auto; }
+}
 
 /* ============================ MOTION (lib/motion.js) ================== */
 /* One easing for everything that moves in this block: ease-out-quint, a decisive stop. */
@@ -2481,10 +2483,8 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
 .stackbar { display: flex; height: 12px; gap: 3px; }
 .stackbar > span { border-radius: 3px; min-width: 3px; }
 .stackbar.thin { height: 8px; gap: 2px; }
-.sb-ethos { background: var(--text); }
 .sb-invariants { background: var(--accent); }
 .sb-doctrines { background: var(--accent-dim); }
-.sb-yours { border: 1px dashed var(--line-3); }
 .sb-rest { background: var(--line-2); }
 .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
   gap: 8px; font-size: 13px; }
@@ -2567,7 +2567,7 @@ a.ldg-kpi-aside { color: var(--accent-text); }
 .ldg-kpi-gates .spk-line { stroke: var(--warn); }
 /* The fleet table. */
 .ldg-scroll { overflow-x: auto; margin: 0 -20px -18px; }
-.ldg-fleet { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 13px; }
+.ldg-fleet { width: 100%; min-width: 860px; border-collapse: collapse; font-size: var(--fs-sm); }
 .ldg-fleet th { text-align: left; font-family: var(--font-mono); font-weight: 500; font-size: 10px;
   letter-spacing: .13em; text-transform: uppercase; color: var(--text-3); padding: 10px 10px 8px 0; }
 .ldg-fleet th:first-child, .ldg-fleet td:first-child { padding-left: 20px; }
@@ -3090,7 +3090,7 @@ a.kit-name:hover { color: var(--accent-text); }
 
 /* ---- breakpoints (the three-tier contract at the top of this file) ---- */
 @media (max-width: 1180px) {
-  .ov-charts, .card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split { flex-direction: column; align-items: stretch; }
   .aside-stack { width: auto; }
   .hosts { grid-template-columns: minmax(0, 1fr); }
@@ -3148,7 +3148,7 @@ a.kit-name:hover { color: var(--accent-text); }
   .tabbar a.on { color: var(--accent-text); }
   .tabbar .glyph { width: 20px; height: 20px; }
   .console { bottom: 64px; }
-  .ov-charts, .card-row { grid-template-columns: minmax(0, 1fr); }
+  .card-row { grid-template-columns: minmax(0, 1fr); }
   .health { flex-wrap: wrap; }
   .needs { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 10px; }
   .needs .tag { display: none; }
@@ -3266,6 +3266,10 @@ a.kit-name:hover { color: var(--accent-text); }
    retries, --warn the ⛨ validate gate — the mockup's blue / green / yellow, retinted by every
    voice and by light mode. */
 .loop-graph { min-width: 0; }
+/* A flow (Loops.jsx sets --loop-w, the layout's own width) is drawn 1:1 and scrolls: shrunk
+   into the reader, a long one took its 11px labels under 4px, and a one-node one grew 4×. */
+.loop-graph.flow { overflow-x: auto; }
+.loop-graph.flow .loop-ring { width: var(--loop-w); max-width: none; }
 .loop-rules { margin: 0; padding-left: 18px; max-width: 76ch; font-size: 13.5px; color: var(--text-2); }
 .loop-rules li + li { margin-top: 4px; }
 .loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
@@ -3369,8 +3373,6 @@ html { scrollbar-gutter: stable; }
 .tier-rule { font-style: italic; }
 /* Wide markdown tables scroll inside their own box instead of being clipped. */
 .detail-doc .markdown .table-scroll { overflow-x: auto; max-width: 100%; margin: 0 0 14px; }
-/* The root-file lane under each fleet cost stack: the ceiling marker's own track. */
-.cost-lane { height: 4px; margin-top: 3px; }
 
 /* ── V5b integration (2026-10-24) ── */
 /* V5b-A overview and lenses */
@@ -3469,7 +3471,8 @@ html { scrollbar-gutter: stable; }
 .act-who { flex-shrink: 0; min-width: 52px; justify-content: center; }
 .act-inline-dot { display: inline-block; margin-right: var(--sp-2); vertical-align: middle; }
 .act-panels { margin-top: var(--sp-3); grid-template-columns: 1fr; }
-.act-panels.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+/* Two columns while each gets 280px, one below: at phone width both squeezed to ~160px. */
+.act-panels.two { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
 .act-list { gap: 6px; margin-top: var(--sp-2); }
 .act-done { text-decoration: line-through; color: var(--text-3); }
 .act-mt { margin-top: var(--sp-3); }

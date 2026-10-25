@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react'
-import { accentHex } from '../lib/accents.js'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 
 // The voice/theme switcher that drops from the rail foot. Closes on an outside
@@ -51,10 +50,6 @@ export default function VoicePopover({ themes, current, onPick, onClose }) {
               onPick(t.name)
           }}
         >
-          <span
-            className="po"
-            style={{ background: accentHex(t.accent), boxShadow: `0 0 8px ${accentHex(t.accent)}` }}
-          />
           <span className="pn">{t.name}</span>
         </button>
       ))}
