@@ -127,6 +127,30 @@ function acctTotals(map, msgId, cost, tokens) {
   return { cost: c, tokens: t }
 }
 
+// FileDiff lists -> the entry's files block. Lists sum per file, so one session-wide list
+// passes through unchanged and several per-turn lists become the session's churn. Only
+// {file, additions, deletions} is kept: a FileDiff also carries `patch`, the full diff
+// text, which never goes to disk. An entry without `file` (optional upstream) is dropped.
+// Pure; exported for tests. slimDiff trims a list as it is stored, so no patch text is
+// held in memory for the life of the session either.
+const slimDiff = (d) => ({ file: d?.file, additions: d?.additions, deletions: d?.deletions })
+function foldDiffs(lists) {
+  const byFile = new Map()
+  for (const list of lists) for (const d of list) {
+    if (!d?.file) continue
+    const f = byFile.get(d.file) ?? { file: d.file, additions: 0, deletions: 0 }
+    f.additions += d.additions || 0; f.deletions += d.deletions || 0
+    byFile.set(d.file, f)
+  }
+  const items = [...byFile.values()]
+  return {
+    count: items.length,
+    additions: items.reduce((n, f) => n + f.additions, 0),
+    deletions: items.reduce((n, f) => n + f.deletions, 0),
+    items,
+  }
+}
+
 // Pure reducer: prev entry (or null) + an extracted event → next entry, or null to
 // delete the file. The hook does the IO + derivation; this just merges. Truthy-set
 // fields (title/cwd/agent/model) only overwrite when provided; clearable fields
@@ -199,8 +223,31 @@ export const GeneseedActivity = async () => {
   // keyed by message id so a streaming assistant turn updates in place (not per delta).
   const detFor = (sid) => {
     let d = details.get(sid)
-    if (!d) { d = { files: null, todos: null, lastMs: 0, convo: new Map() }; details.set(sid, d) }
+    if (!d) { d = { files: null, todos: null, lastMs: 0, convo: new Map(), turnDiffs: new Map(), wideDiff: null }; details.set(sid, d) }
     return d
+  }
+  // Files touched + churn. Where each OpenCode version puts them (session/summary.ts):
+  // - 1.19.x: only on the USER message, `summary.diffs`, recomputed after every step of
+  //   that turn from its first step-start to its latest step-finish snapshot. The session
+  //   summary is zeroed and session.diff sent empty on every step.
+  // - 1.3.x: the same per-turn diffs, plus a session-wide list on session.diff.
+  // So the per-turn diffs are the one source, keyed by user message id like acctTotals:
+  // the same id replaces (the turn grew), a new id adds per file (a new turn, a new
+  // baseline). A session-wide list (session.diff, or a session summary carrying diffs) is
+  // only the fallback while no turn has reported: two sources would make the card flicker,
+  // and 1.19's revert sends a session.diff that holds the range about to be undone.
+  // shortcut: summarize is forked upstream, so an older recompute can land after a newer
+  // one and replace it; fine for a live card, upgrade if a turn's numbers must be exact.
+  const setFiles = (sid, ev) => {
+    const d = detFor(sid)
+    const files = foldDiffs(d.turnDiffs.size ? d.turnDiffs.values() : [d.wideDiff ?? []])
+    ev.files = { ...files, items: files.items.slice(0, FILE_CAP) }   // card: capped
+    d.files = files                                                 // detail: uncapped
+  }
+  const wideDiff = (sid, list) => {
+    if (!Array.isArray(list) || !owned.has(sid)) return false
+    detFor(sid).wideDiff = list.map(slimDiff)
+    return !detFor(sid).turnDiffs.size   // write only when it is the source in force
   }
   const forget = (sid) => {
     owned.delete(sid); accts.delete(sid); pending.delete(sid); timelines.delete(sid); details.delete(sid)
@@ -304,18 +351,22 @@ export const GeneseedActivity = async () => {
           }
           if (event.type !== "session.created" && !owned.has(sid)) return
           const ev = { type: event.type, title: info.title ?? null, cwd: info.directory }
-          // Files touched + churn ride the session summary (cumulative).
-          const s = info.summary
-          if (s) {
-            const all = (s.diffs || []).map((d) => ({ file: d.file, additions: d.additions, deletions: d.deletions }))
-            const files = { count: s.files || 0, additions: s.additions || 0, deletions: s.deletions || 0 }
-            ev.files = { ...files, items: all.slice(0, FILE_CAP) }          // card: capped
-            detFor(sid).files = { ...files, items: all }                    // detail: uncapped
-          }
+          // A session summary is a files source only when it carries diffs (see setFiles):
+          // 1.19 sends it zeroed on every step, which must not wipe the card.
+          const wide = wideDiff(sid, info.summary?.diffs)
+          if (wide) setFiles(sid, ev)
           persist(sid, ev)
-          if (s) flushDetail(sid, true)
+          if (wide) flushDetail(sid, true)
           return
         }
+        case "session.diff":
+          if (wideDiff(sid, props.diff)) {
+            const ev = { type: event.type }
+            setFiles(sid, ev)
+            persist(sid, ev)
+            flushDetail(sid, true)
+          }
+          return
         case "session.deleted":
           forget(sid)
           return
@@ -335,7 +386,19 @@ export const GeneseedActivity = async () => {
         case "message.updated": {
           if (!owned.has(sid)) return
           const info = props.info ?? {}
-          if (info.role !== "assistant") { persist(sid, { type: event.type }); return }   // user msg → bump busy
+          if (info.role !== "assistant") {   // user msg → bump busy, and fold its turn's diffs
+            const ev = { type: event.type }
+            const diffs = info.summary?.diffs
+            // No diffs array (the message as first created) leaves the turn as it was;
+            // an empty one is real: that turn has changed nothing so far.
+            if (info.role === "user" && info.id && Array.isArray(diffs)) {
+              detFor(sid).turnDiffs.set(info.id, diffs.map(slimDiff))
+              setFiles(sid, ev)
+            }
+            persist(sid, ev)
+            if (ev.files) flushDetail(sid, true)
+            return
+          }
           const m = acctFor(sid)
           const isNewTurn = !m.has(info.id)
           const totals = acctTotals(m, info.id,
@@ -351,6 +414,16 @@ export const GeneseedActivity = async () => {
           if (info.error) ev.error = errStr(info.error)
           else if (isNewTurn) ev.error = null   // a fresh turn clears a stale error
           persist(sid, ev)
+          return
+        }
+        case "message.removed": {
+          // /undo: SessionRevert.cleanup removes each reverted message, so its turn's
+          // diffs must leave the totals with it.
+          if (!owned.has(sid) || !detFor(sid).turnDiffs.delete(props.messageID)) return
+          const ev = { type: event.type }
+          setFiles(sid, ev)
+          persist(sid, ev)
+          flushDetail(sid, true)
           return
         }
         case "message.part.updated": {
@@ -425,7 +498,7 @@ export const GeneseedActivity = async () => {
 
 // ponytail: OpenCode treats every export as a plugin and rejects non-functions; hang
 // the test helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, errStr, snip, safeName, activityDir, enabledFromFlag, toV1Events })
+Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, foldDiffs, errStr, snip, safeName, activityDir, enabledFromFlag, toV1Events })
 
 // --- OpenCode 2 --------------------------------------------------------------
 // `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and
@@ -436,7 +509,7 @@ Object.assign(GeneseedActivity, { sidOf, nextStatus, applyEvent, acctTotals, err
 // cards show is still in it. Rather than a second reducer, `toV1Events` translates each
 // V2 event into the V1 event(s) the handler above already reduces, so both majors write
 // the same files. Not carried: todos (V2 publishes no todo event) and files-touched (the
-// V1 session summary has no V2 event).
+// V1 user message's summary.diffs, see setFiles, has no V2 event).
 
 // A V2 SessionError ({ type, message }) in the V1 error union errStr reads.
 const v1Error = (e) => (e ? { name: e.type, data: { message: e.message || e.type } } : undefined)
