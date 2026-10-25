@@ -128,8 +128,10 @@ streams the output of background jobs and keeps their history across reloads.
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
   twice — landing you on the Rules page.
-- **Kits** (`#/kits`, `#/kits/<kit>`) — the list of shipped kits and, per kit, a detail page
-  with its rules, word budget, banned APIs, upstream credits and one switch per install.
+- **Kits** (`#/kits`, `#/kits/<kit>`) — a card per shipped kit over a kits × installs matrix of
+  switches; a staged-changes bar applies one install at a time (the server runs one job at a
+  time). `#/kits/<kit>` is the kit's page: rules, word budget, banned APIs, upstream credits,
+  members and one switch per install.
   `GET /api/kits` carries `rules`, `rulesWordBudget`, `banned` and `credits` per kit; the
   catalog and item endpoints for skills and agents carry `kit` (the owning kit or `null`),
   which the Library shows as a `kit:` badge.

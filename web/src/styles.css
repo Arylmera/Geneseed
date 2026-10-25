@@ -2868,6 +2868,45 @@ a.kit-name:hover { color: var(--accent-text); }
 .kit-links a:hover { color: var(--accent-text); border-color: var(--accent-line); }
 .library .lr-meta { font-size: 11px; color: var(--text-3); overflow-wrap: anywhere; }
 .loop-h2 .mono { font-size: 12px; font-weight: 400; }
+/* The Kits page: a card per kit, the kits × installs matrix, the staged-changes bar. */
+.kit-page-body { display: flex; flex-direction: column; gap: 18px; }
+.kit-gallery { display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
+.kit-card { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 18px 20px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.kit-card.staged { border-color: var(--accent-line); }
+.kit-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.kit-card-title { margin: 0; font-size: 19px; }
+.kit-card-title .kit-name { font-size: inherit; }
+.kit-card .kit-desc { margin: 0; }
+.kit-counts { display: grid; grid-template-columns: 64px minmax(0, 1fr) 26px; gap: 8px 10px;
+  align-items: center; font-size: 12.5px; color: var(--text-2); }
+.kit-counts .mono { text-align: right; color: var(--text); }
+.kit-card-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 10px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+.kit-credit { font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; }
+.kit-credit a { color: var(--accent-text); }
+.kit-where { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
+.kit-dots { display: inline-flex; gap: 6px; }
+.kit-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2); }
+.kit-dot.on { background: var(--accent); border-color: var(--accent); }
+.kit-dot.staged { background: var(--accent-soft); border-color: var(--accent); }
+.kit-matrix-head { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; }
+.kit-matrix-head h2 { margin: 0; font-size: 16px; }
+.kit-matrix-head .dim { font-size: 12.5px; }
+.kit-cell { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+.kit-note { font-size: 12.5px; color: var(--text-3); }
+.kit-note.staged { color: var(--accent-text); }
+.kit-lock-note { font-size: 12px; color: var(--warn-text); }
+.kit-bar { position: sticky; bottom: 16px; z-index: 2; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 8px 12px; padding: 12px 14px 12px 18px; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid var(--line); }
+.kit-bar.staged { border-color: var(--accent-line); }
+/* The phone tabbar is fixed, 64px tall, at the bottom: the bar sticks above it, not under it. */
+@media (max-width: 720px) { .kit-bar { bottom: calc(64px + 12px); } }
+.kit-bar-acts { display: flex; gap: 8px; margin-left: auto; }
+/* A kit's own page reuses the Library reader's parts outside `.lib-reader`. */
+.kit-page .detail-doc { padding: 0; max-width: 76ch; }
 
 /* ---- phone-only chrome: the bottom bar, the drawer toggle and its scrim ---- */
 .tabbar, .tb-menu, .nav-scrim { display: none; }

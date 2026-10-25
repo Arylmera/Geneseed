@@ -1,11 +1,12 @@
 import React from 'react'
-import { act, render, screen, fireEvent } from '@testing-library/react'
+import { act, cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({ api: { kits: vi.fn(), catalog: vi.fn() } }))
 
 import Kits from '../pages/Kits.jsx'
 import { ConfirmContext } from '../hooks/useConfirm.jsx'
+import { StagingProvider } from '../hooks/useStaging.jsx'
 import { api } from '../api/index.js'
 
 const kit = (name, over = {}) => ({
@@ -42,6 +43,8 @@ const row = (over) => ({
 })
 const PROJECT = { id: 'claude:project:/p', scope: 'project', path: '/p' }
 const APPLY_PROJECT = { name: 'Apply kits for claude · project' }
+// The bar's accessible name starts with its visible text (WCAG 2.5.3, label in name).
+const BAR_APPLY = (who) => ({ name: `Apply and rebuild kits for ${who}` })
 
 const mount = async (
   data,
@@ -70,27 +73,138 @@ const h2 = (name) => screen.getByRole('heading', { level: 2, name })
 describe('Kits page', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('lists a row per kit with counts, where it is on, credit and licence', async () => {
+  // The gallery: a card per kit, in the payload's order, its heading opening the kit's page.
+  it('shows a card per kit with counts, licence, credit and where it is on', async () => {
     await mount({
-      kits: [kit('spring-boot'), kit('other', { credits: [] })],
-      installs: [row({ kits: ['spring-boot'] })],
+      kits: [kit('spring-boot'), kit('other', { credits: [], agents: [] })],
+      installs: [row({ kits: ['spring-boot'] }), row(PROJECT)],
     })
-    const rows = [...document.querySelectorAll('a.lib-row')]
-    expect(rows.map((a) => a.getAttribute('href'))).toEqual(['#/kits/spring-boot', '#/kits/other'])
-    expect(rows[0].textContent).toContain('2 skills · 1 agents')
-    expect(rows[0].textContent).toContain('on in claude · global')
-    expect(rows[0].textContent).toContain('from Acme (MIT)')
-    // Enabled somewhere first, then the rest.
-    expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
-      'Enabled',
-      'Not enabled',
+    expect(screen.getByText('2 kits · 2 installs')).toBeTruthy()
+    const cards = screen.getAllByRole('article')
+    expect(cards.map((c) => c.querySelector('h2 a').getAttribute('href'))).toEqual([
+      '#/kits/spring-boot',
+      '#/kits/other',
     ])
+    const [spring, other] = cards
+    // The bars share one scale: the largest member count across kits (2 skills here).
+    expect(spring.querySelector('[aria-label^="Skills"]').getAttribute('aria-label')).toBe(
+      'Skills: 2 of 2',
+    )
+    expect(spring.querySelector('[aria-label^="Agents"]').getAttribute('aria-label')).toBe(
+      'Agents: 1 of 2',
+    )
+    expect(spring.textContent).toContain('MIT')
+    expect(screen.getByRole('link', { name: 'acme/spring-kit' }).getAttribute('href')).toBe(
+      'https://github.com/acme/spring-kit',
+    )
+    expect(spring.textContent).toContain('on in 1 of 2 installs')
+    expect(spring.querySelector('[role="img"].kit-dots').getAttribute('aria-label')).toBe(
+      'claude · global: on, claude · project: off',
+    )
+    // No credits: no "Adapted from" line.
+    expect(other.textContent).not.toContain('Adapted from')
+    // No agents: the count says 0, no stray "None." under it.
+    expect(other.textContent).not.toContain('None.')
   })
 
-  it('opens on the first kit, and on the routed one', async () => {
-    await mount({ kits: [kit('a'), kit('b')], installs: [] })
-    expect(h2('a')).toBeTruthy()
-    expect(document.querySelector('a.lib-row.on').getAttribute('href')).toBe('#/kits/a')
+  it('opens the routed kit on its own page, with a way back', async () => {
+    await mount({ kits: [kit('a'), kit('b')], installs: [] }, 'b')
+    expect(h2('b')).toBeTruthy()
+    expect(screen.queryByRole('heading', { level: 2, name: 'a' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Kits' }).getAttribute('href')).toBe('#/kits')
+  })
+
+  // The matrix stages; the bar applies ONE install per rebuild (the server runs one job at a time).
+  it('stages a switch in the matrix, shows it everywhere, and applies it from the bar', async () => {
+    const { confirm, onAction } = await mount({
+      kits: [kit('spring-boot'), kit('other')],
+      installs: [row({ kits: ['other'] }), row(PROJECT)],
+    })
+    expect(screen.getAllByRole('switch')).toHaveLength(4)
+    expect(screen.getByText('No staged changes')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Apply and rebuild kits' }).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    expect(screen.getByText('staged on')).toBeTruthy()
+    expect(screen.getByText('+ spring-boot')).toBeTruthy()
+    expect(screen.getByText('1 change on 1 install')).toBeTruthy()
+    expect(screen.getAllByRole('article')[0].textContent).toContain('· 1 staged')
+    const bar = screen.getByRole('region', { name: 'Staged changes' })
+    expect(bar.textContent).toContain('claude · project: turn on spring-boot')
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · project'))),
+    )
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm.mock.calls[0][0]).toContain('with kits: spring-boot?')
+    expect(onAction).toHaveBeenCalledWith('install', {
+      host: 'claude',
+      path: '/p',
+      kits: ['spring-boot'],
+    })
+  })
+
+  it('Discard drops the staged switch', async () => {
+    await mount({ kits: [kit('spring-boot')], installs: [row(), row(PROJECT)] })
+    const sw = screen.getByRole('switch', { name: 'spring-boot for claude · project' })
+    fireEvent.click(sw)
+    expect(sw.checked).toBe(true)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard staged kits for claude · project' }),
+    )
+    expect(sw.checked).toBe(false)
+    expect(screen.getByText('No staged changes')).toBeTruthy()
+    expect(screen.queryByText('staged on')).toBeNull()
+  })
+
+  it('with two installs staged, the bar applies the first and counts the rest', async () => {
+    const { onAction } = await mount({
+      kits: [kit('spring-boot')],
+      installs: [row(), row(PROJECT)],
+    })
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
+    expect(screen.getByText('2 changes on 2 installs')).toBeTruthy()
+    const bar = screen.getByRole('region', { name: 'Staged changes' })
+    expect(bar.textContent).toContain('claude · global: turn on spring-boot — 1 more staged')
+    await act(async () => fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · global'))))
+    expect(onAction).toHaveBeenCalledWith('install', {
+      host: 'claude',
+      path: 'C:/c',
+      kits: ['spring-boot'],
+    })
+  })
+
+  // A failed rebuild keeps its staging, but must not hide the next staged install behind it.
+  it('after a failed rebuild the bar moves on to the next staged install', async () => {
+    api.kits.mockResolvedValue({ kits: [kit('spring-boot')], installs: [row(), row(PROJECT)] })
+    api.catalog.mockResolvedValue({ items: [] })
+    const onAction = vi.fn(async () => 'job-1')
+    const ui = (activeId, finish) => (
+      <ConfirmContext.Provider value={async () => true}>
+        <StagingProvider activeId={activeId} finish={finish}>
+          <Kits onAction={onAction} dataRev={0} />
+        </StagingProvider>
+      </ConfirmContext.Provider>
+    )
+    let view
+    await act(async () => {
+      view = render(ui('job-1', null))
+    })
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · global'))))
+    expect(screen.getByText(/claude · global: Rebuilding…/)).toBeTruthy()
+    await act(async () => view.rerender(ui(null, { status: 'failed' })))
+    expect(screen.getByRole('button', BAR_APPLY('claude · project')).disabled).toBe(false)
+    expect(screen.getByText('2 changes on 2 installs')).toBeTruthy()
+  })
+
+  it('a locked install cannot be switched in the matrix and says why', async () => {
+    await mount({
+      kits: [kit('spring-boot')],
+      installs: [row({ state: 'disabled', editable: false, reason: 'reactivate it first' })],
+    })
+    expect(screen.getByRole('switch').disabled).toBe(true)
+    expect(screen.getByText('reactivate it first')).toBeTruthy()
   })
 
   it('the detail renders rules, links skills and agents to the Library, credits upstream', async () => {
@@ -141,16 +255,17 @@ describe('Kits page', () => {
     expect(screen.getByText('No such kit')).toBeTruthy()
     expect(screen.getByText('Back to all kits').getAttribute('href')).toBe('#/kits')
     expect(screen.queryByRole('switch')).toBeNull()
-    expect(document.querySelector('a.lib-row.on')).toBeNull()
+    expect(document.querySelector('.kit-card')).toBeNull()
   })
 
   it('lists banned APIs, and nothing when there are none', async () => {
-    await mount({ kits: [kit('a', { banned: ['java.util.Date'] })], installs: [] })
+    await mount({ kits: [kit('a', { banned: ['java.util.Date'] })], installs: [] }, 'a')
     expect(screen.getByLabelText('Banned APIs').textContent).toBe('java.util.Date')
   })
 
   it('hides the banned section when empty', async () => {
-    await mount({ kits: [kit('a')], installs: [] })
+    await mount({ kits: [kit('a')], installs: [] }, 'a')
+    expect(screen.getByText('Prefer constructor injection.')).toBeTruthy()
     expect(screen.queryByText('Banned APIs')).toBeNull()
   })
 
@@ -163,10 +278,13 @@ describe('Kits page', () => {
   })
 
   it('copes with a backend that sends no credits or rules', async () => {
-    await mount({
-      kits: [{ name: 'bare', description: 'd', skills: [], agents: [] }],
-      installs: [],
-    })
+    await mount(
+      {
+        kits: [{ name: 'bare', description: 'd', skills: [], agents: [] }],
+        installs: [],
+      },
+      'bare',
+    )
     expect(h2('bare')).toBeTruthy()
     expect(screen.queryByText('Upstream')).toBeNull()
   })
@@ -177,37 +295,22 @@ describe('Kits page', () => {
     expect(screen.getByText(/bad kit manifest/)).toBeTruthy()
   })
 
-  // KT-13: two kits need no Status filter in the rail, and the rail's only link pointed at the
-  // page it sits on.
-  it('a short list gets no rail categories and no self-link', async () => {
-    await mount({
-      kits: [kit('spring-boot'), kit('other', { credits: [] })],
-      installs: [row({ kits: ['spring-boot'] })],
-    })
-    expect(document.querySelector('.rail-cats')).toBeNull()
-    expect(document.querySelector('.lib-kinds a[href="#/kits"]')).toBeNull()
-  })
-
-  // The other side of the threshold: at eight kits in two statuses the filter comes back.
-  it('a list of eight kits gets its Status categories', async () => {
-    const names = ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8']
-    await mount({
-      kits: names.map((n) => kit(n, { credits: [] })),
-      installs: [row({ kits: ['k1'] })],
-    })
-    expect(document.querySelector('.rail-cats')).not.toBeNull()
-  })
-
   // Several kits can credit the same upstream: the link says which commit it compares.
   it('names the compare link by repo and commit', async () => {
-    await mount({ kits: [kit('a')], installs: [] })
+    await mount({ kits: [kit('a')], installs: [] }, 'a')
     expect(screen.getByRole('link', { name: /^Compare acme\/spring-kit @ abcdef1/ })).toBeTruthy()
   })
 
-  it('has at most one filled button', async () => {
+  // Two installs staged is where a per-install filled Apply would show two.
+  it('has at most one filled button, staged or not, on either route', async () => {
+    const filled = () =>
+      document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length
     await mount({ kits: [kit('a')], installs: [row(), row(PROJECT)] })
-    expect(
-      document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length,
-    ).toBeLessThanOrEqual(1)
+    fireEvent.click(screen.getByRole('switch', { name: 'a for claude · global' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'a for claude · project' }))
+    expect(filled()).toBe(1)
+    cleanup()
+    await mount({ kits: [kit('a')], installs: [row(), row(PROJECT)] }, 'a')
+    expect(filled()).toBeLessThanOrEqual(1)
   })
 })
