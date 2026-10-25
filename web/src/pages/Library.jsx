@@ -451,17 +451,23 @@ export default function Library({
                 {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
                 {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
               </div>
-              {(item?.desc || activeItem.desc) && (
-                <p className="reader-lede">{item?.desc || activeItem.desc}</p>
-              )}
-              <p className="mono dim reader-src">
-                {item?.source ||
-                  activeItem.source ||
-                  (itemErr ? null : libSource(sec, activeItem.name))}
-              </p>
-              {useOn ? (
-                <UseStats u={callsOf(activeItem.name)} usage={usage} noCall={noCall} />
-              ) : null}
+              {/* The usage card sits beside the lede where the reader is wide enough, under it
+                  where it is not (a container query on .lib-reader). */}
+              <div className={`reader-intro${useOn ? ' with-stats' : ''}`}>
+                <div className="reader-intro-text">
+                  {(item?.desc || activeItem.desc) && (
+                    <p className="reader-lede">{item?.desc || activeItem.desc}</p>
+                  )}
+                  <p className="mono dim reader-src">
+                    {item?.source ||
+                      activeItem.source ||
+                      (itemErr ? null : libSource(sec, activeItem.name))}
+                  </p>
+                </div>
+                {useOn ? (
+                  <UseStats u={callsOf(activeItem.name)} usage={usage} noCall={noCall} />
+                ) : null}
+              </div>
               {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
                 <div className="row gap-8">
                   <button
