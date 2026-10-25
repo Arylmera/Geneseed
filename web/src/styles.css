@@ -2722,7 +2722,8 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .reader-lede { margin: 0; max-width: 62ch; font-size: 16px; line-height: 1.5; color: var(--text-2); }
 .reader-src { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
 .lib-reader .hr { margin: 6px 0; }
-.lib-reader .detail-doc { padding: 0; max-width: 76ch; }
+/* The body takes the reader's whole width (user, 2026-10-25): no measure cap. */
+.lib-reader .detail-doc { padding: 0; }
 /* The Library's own "dossier" look (pages/Library.jsx sets .lib-dossier; Docs, Loops and Kits
    reuse .library, so nothing here may be scoped to .library alone). List: the "Show" chips
    under the filter, wrapping on a narrow pane; the open row marked by an accent edge too, not
@@ -2744,7 +2745,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
   gap: var(--sp-3); margin: 0; max-width: 76ch; }
 .lib-dossier .lib-stats .stat { border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 12px 14px; min-width: 0; }
-.reader-when { display: flex; flex-direction: column; gap: 4px; max-width: 76ch;
+.reader-when { display: flex; flex-direction: column; gap: 4px;
   padding: 4px 0 4px 14px; border-left: 3px solid var(--accent); }
 .reader-when-h { margin: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 500;
   letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }

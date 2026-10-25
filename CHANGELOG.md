@@ -18,6 +18,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **parallel-agents watches its units** the way the pipeline watches a crew: a result without its check, or one still waiting, is acted on at once, never waited on.
 
 ### Fixed
+- **The Library reader's text takes the full width** of the reader instead of stopping at 76 characters.
 - **Console bars say each number once.** Gate asks, Doctrine packs and the context budget no longer print a legend under the bar repeating the name and count beside it; pack rows line up in one grid; the Library reader shows usage to the right of the description when wide enough, under it otherwise.
 
 ## [4.22.0] — 2026-10-25
