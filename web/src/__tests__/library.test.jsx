@@ -272,6 +272,33 @@ describe('skill classes', () => {
     expect([...document.querySelectorAll('.lib-row')].length).toBe(5)
   })
 
+  // Memory facts sit under their topic, in the map's (sorted) topic order, so one topic's facts
+  // are contiguous and get one header. The store's own MEMORY and README carry no topic: they
+  // lead the list with no header, and the first row is what opens without a selection.
+  it('heads the memory list by topic, the index rows first and ungrouped', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items: [
+          { name: 'a-web', title: 'a-web', topic: 'web' },
+          { name: 'b-misc', title: 'b-misc', topic: 'misc' },
+          { name: 'c-web', title: 'c-web', topic: 'web' },
+          { name: 'MEMORY', title: 'MEMORY' },
+          { name: 'README', title: 'README' },
+        ],
+      }),
+    )
+    render(<Library section="memory" overview={overview({ memory: 5 })} />)
+    await waitFor(() => expect(document.querySelectorAll('.lib-row').length).toBe(5))
+    const seq = [...document.querySelectorAll('.lib-group, .lib-row')].map((el) =>
+      el.classList.contains('lib-group')
+        ? `# ${el.textContent}`
+        : el.getAttribute('href').split('/').pop(),
+    )
+    expect(seq).toEqual(['MEMORY', 'README', '# misc', 'b-misc', '# web', 'a-web', 'c-web'])
+    expect(api.item).toHaveBeenCalledWith('memory', 'MEMORY')
+  })
+
   it('shows no categories under another kind, and resets to All on the way back', async () => {
     api.catalog.mockImplementation((section) =>
       Promise.resolve({

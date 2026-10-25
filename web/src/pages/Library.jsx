@@ -147,6 +147,16 @@ export function splitSkills(items) {
   return { rows, cats }
 }
 
+// Memory facts topic by topic, each row headed by its `topic` (the catalog reads it off the
+// fact's frontmatter, as the store files it), in the map's sorted topic order. The store's own
+// MEMORY and README rows carry none: they lead, unheaded. Exported for the test that pins it.
+export function groupMemory(items) {
+  const facts = items.filter((it) => it.topic).map((it) => ({ ...it, group: it.topic }))
+  // Array.prototype.sort is stable: within a topic the catalog's name order holds.
+  facts.sort((a, b) => (a.group < b.group ? -1 : a.group > b.group ? 1 : 0))
+  return [...items.filter((it) => !it.topic), ...facts]
+}
+
 // The Library: what the agent knows, in three panes. The kinds column picks a section
 // (skills, agents, memory, notebook, wiki, setup files), the list pane lists it, the
 // reader renders the selected entry straight from its source file. Routing:
@@ -247,7 +257,8 @@ export default function Library({
   // Skills are listed class by class (splitSkills), so their first row is not items[0].
   const isSkills = sec === 'skills'
   const skillSplit = isSkills ? splitSkills(items) : null
-  const activeName = selected || (isSkills ? skillSplit.rows[0] : items[0])?.name || null
+  const rows = isSkills ? skillSplit.rows : sec === 'memory' ? groupMemory(items) : items
+  const activeName = selected || rows[0]?.name || null
   const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
   const activeType = fromCatalog?.type || SECTIONS[sec].type
   const { data: lastItem, error: itemErr } = useAsync(
@@ -271,7 +282,7 @@ export default function Library({
   // header, with a category per class under Skills in the rail to narrow to one. A skill the
   // registry does not know is yours (`personal`), outside the taxonomy, so it gets its own
   // category only when one exists.
-  const inCat = isSkills ? skillSplit.rows.filter((it) => cat === 'all' || it.cat === cat) : items
+  const inCat = isSkills ? rows.filter((it) => cat === 'all' || it.cat === cat) : rows
   const nUnused = useOn ? inCat.filter(unused).length : 0
   const isExp = (it) => it.status === 'experimental'
   const nExp = inCat.filter(isExp).length
@@ -312,7 +323,7 @@ export default function Library({
     useF === 'all' &&
     activeName &&
     !matches.some((it) => it.name === activeName)
-      ? [...matches, ...items.filter((it) => it.name === activeName)]
+      ? [...matches, ...rows.filter((it) => it.name === activeName)]
       : matches
 
   const itemHref = (it) =>
