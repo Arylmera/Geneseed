@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.25.1] — 2026-10-25
+
+Patch: Activity, session detail and Doctor use the full width.
+
 ### Fixed
 - **Activity, a session's detail and Doctor use the full width** like the other pages, instead of stopping at 820px.
 
