@@ -233,7 +233,7 @@ button { font-family: inherit; }
    (the Constitution and Kits apply bars, the settings index) would stick to a box that never
    scrolls — the document does. Wide content scrolls in its own box. */
 .page { flex: 1; overflow-x: clip; padding: 30px 34px 120px; }
-.page.center { max-width: 1180px; margin: 0 auto; width: 100%; }
+.page.center { max-width: none; margin: 0 auto; width: 100%; }
 .pad { max-width: 1180px; margin: 0 auto; }
 .pad-wide { max-width: none; }
 
@@ -2387,8 +2387,10 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
 .appearance-pop .seg { flex-wrap: wrap; }
 
 /* ---- page frame ---- */
-.page { padding: 28px 32px 120px; }
-.pad { max-width: 1320px; }
+/* Pages use the window: the side gutter scales with it,
+   with no width cap: these are dashboards (user, 2026-10-25: wide windows showed big empty sides). */
+.page { padding: 28px clamp(16px, 2.2vw, 40px) 120px; }
+.pad { max-width: none; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
   flex-wrap: wrap; margin-bottom: 20px; }
 .page-head h1.h, .lib-title h1.h { font-family: var(--font-display); font-size: 28px;
@@ -2942,7 +2944,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .pm-first li + li { margin-top: 4px; }
 
 /* ---- Installs ---- */
-.hosts { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+.hosts { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 24vw, 460px); gap: 20px; align-items: start; }
 .hosts-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 /* Each install table (global, per-project) heads its own panel. */
 .inst-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;

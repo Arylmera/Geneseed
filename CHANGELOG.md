@@ -13,6 +13,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 Minor: wave V7 — the audit's open findings: server hardening (generic 500s, one folder dialog, safe Reveal, 404 for missing assets), retired rules in a never-loaded file, a service worker that caches real assets only, confirms before Update and Rebuild all, an accessibility pass and a design pass; plus memory topics and run chips.
 
 ### Fixed
+- **Pages use the whole window**: no content width cap and a gutter that scales with the window, so wide screens lose their empty sides and the Installs table no longer scrolls beside its panel.
+
+### Fixed
 - **Accessibility**: Genome cells are links; loop rings are labelled groups with no dead tab stops; off-pack rule rows keep full contrast and an unclipped focus ring; the command palette shows focus; accent and chart colours use text tokens in every mode; touch targets reach 44 px on coarse pointers; the docs outline moves focus; docs pages, Copy buttons and status hints have real names; a blocked session is announced.
 - **Console design pass**: voice accent dots removed (they promised a tint that never applied); a skin change resets a custom accent; Update is labelled by install kind; the Settings footprint is read-only with a link to Hosts; Docs article first, constitution map and loop flows legible on phones; Activity panels fold to one column; dead CSS removed.
 - **Retire keeps the rule's text**: it moves to `user-rules-retired.md` beside user-rules.md, a file no session loads or lists; retired ids are never reused. A server fault answers a fixed message (the detail goes to the server log); a name with a control character is refused; a missing asset is a 404, not the page shell; the folder picker opens one dialog at a time; Reveal opens folders in Explorer directly, so `%VAR%` in a path is never expanded.
