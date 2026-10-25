@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.24.0] — 2026-10-25
+
+Minor: wave V7 — the audit's open findings: server hardening (generic 500s, one folder dialog, safe Reveal, 404 for missing assets), retired rules in a never-loaded file, a service worker that caches real assets only, confirms before Update and Rebuild all, an accessibility pass and a design pass; plus memory topics and run chips.
+
 ### Fixed
 - **Accessibility**: Genome cells are links; loop rings are labelled groups with no dead tab stops; off-pack rule rows keep full contrast and an unclipped focus ring; the command palette shows focus; accent and chart colours use text tokens in every mode; touch targets reach 44 px on coarse pointers; the docs outline moves focus; docs pages, Copy buttons and status hints have real names; a blocked session is announced.
 - **Console design pass**: voice accent dots removed (they promised a tint that never applied); a skin change resets a custom accent; Update is labelled by install kind; the Settings footprint is read-only with a link to Hosts; Docs article first, constitution map and loop flows legible on phones; Activity panels fold to one column; dead CSS removed.
