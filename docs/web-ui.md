@@ -146,7 +146,7 @@ streams the output of background jobs and keeps their history across reloads.
   each inner retry loop hung outside on its head node, the ⛨ *validate* gate the engine adds
   before the first mutate step, setup entering from the left and `done → close` leaving from
   the head; its `rules` follow, then a compact row per brick (effect, agent or skill, outcomes,
-  human gate), and clicking a node scrolls to and lights its row. A graph a ring cannot draw
+  human gate), and clicking a node scrolls to and lights its row. Beside the ring, *How it runs* says the same in words (setup, iteration and its max, retries, exit, stop); under it, the `geneseed loop init` command for that template with a Copy button, and how many live runs of it are registered. A graph a ring cannot draw
   cleanly (more than eight iteration steps, a node in more than three loops) falls back to
   left-to-right boxes. **Bricks** are grouped by origin (project / global / shipped), pilled
   for *mutate*, *human gate*, what they override and *unavailable*; the reader shows the
