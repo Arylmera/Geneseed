@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import ActivityDetail from '../pages/ActivityDetail.jsx'
@@ -180,5 +180,132 @@ describe('ActivityDetail page', () => {
     const n = global.fetch.mock.calls.length
     await vi.advanceTimersByTimeAsync(6000)
     expect(global.fetch.mock.calls.length).toBe(n)
+  })
+})
+
+// D7: a session's detail page shows its bonsai, live or ended, from the same drawing as the
+// Garden (lib/garden.js + Activity/Bonsai.jsx).
+describe('ActivityDetail tree', () => {
+  // A v2 session: one sub-agent running, with one file of its own, and one file by the session.
+  const v2 = (over = {}) => {
+    const body = full()
+    Object.assign(body.session, {
+      host: 'claude',
+      turns: 12,
+      context: { used: 50000, window: 200000 },
+      compactions: 1,
+      context_at_compaction: 180000,
+      agents: [{ id: 'a1', type: 'tester', status: 'running' }],
+      files_all: [
+        { file: 'a.js', path: 'src/a.js', additions: 9, deletions: 1, by: null },
+        { file: 'b.test.js', path: 'tests/b.test.js', additions: 4, deletions: 0, by: 'a1' },
+      ],
+      attribution: null,
+      loops: [],
+      ...over,
+    })
+    return body
+  }
+  const tree = () => document.querySelector('svg.gd-svg')
+
+  it('draws a live session as a labelled image whose running sub-agent sways', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(v2())))
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    const img = screen.getByRole('img')
+    expect(img).toBe(tree())
+    expect(img.getAttribute('aria-label')).toBe(
+      'Bonsai of this session: 12 turns · context 25 % · 1 compaction · sub-agents: 1 running, 0 finished',
+    )
+    expect(img.getAttribute('width')).toBe('280') // 56 tree pixels x 5
+    expect(document.querySelectorAll('.gd-sway').length).toBe(1)
+    expect(document.querySelector('.gd-detail').textContent).not.toContain('ended')
+  })
+
+  it('shows a pad’s files, with their path and author, on hover', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(v2())))
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    fireEvent.mouseEnter(document.querySelector('.gd-sway'))
+    const card = document.querySelector('.gd-card')
+    expect(card.textContent).toContain('tester · 1 file')
+    expect(card.textContent).toContain('tests/b.test.js')
+    expect(card.textContent).toContain('+4')
+  })
+
+  it('calls for you on a live session that waits, with a bubble and the glow', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(v2({ status: 'waiting-input' }))))
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    expect(tree().getAttribute('data-bubble')).toBe('!')
+    expect(document.querySelector('.gd-needs')).toBeTruthy()
+  })
+
+  it('draws an ended session still, without the bubble or the glow, and labels it ended', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(okResp(v2({ status: 'waiting-input', ended: true }))),
+    )
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    expect(tree()).toBeTruthy()
+    expect(document.querySelectorAll('.gd-sway').length).toBe(0)
+    expect(tree().getAttribute('data-bubble')).toBeNull()
+    expect(document.querySelector('.gd-needs')).toBeNull()
+    expect(tree().getAttribute('aria-label')).toMatch(/^Bonsai of this session, ended: /)
+    expect(screen.getByText('ended', { selector: '.gd-detail span' })).toBeTruthy()
+  })
+
+  it('draws an ended session that died on an error without the error bubble', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(okResp(v2({ status: 'busy', error: 'boom', ended: true }))),
+    )
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    expect(tree().getAttribute('data-bubble')).toBeNull()
+    expect(tree().getAttribute('aria-label')).toBe(
+      'Bonsai of this session, ended: 12 turns · context 25 % · 1 compaction · sub-agents: 1 unfinished, 0 finished',
+    )
+  })
+
+  it('draws a minimal tree for a v1 session', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(full())))
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    expect(tree().querySelectorAll('rect').length).toBeGreaterThan(0)
+    expect(tree().getAttribute('aria-label')).toBe(
+      'Bonsai of this session: 0 turns · context unknown · 0 compactions · sub-agents: 0 running, 0 finished',
+    )
+  })
+
+  it('draws a tree, never an error, for garbage v2 fields', async () => {
+    const body = v2({
+      agents: 'x',
+      files_all: [null, 3, { by: 7 }],
+      context: 'abc',
+      turns: 'many',
+      compactions: -2,
+      context_at_compaction: {},
+    })
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body)))
+    render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    expect(tree().querySelectorAll('rect').length).toBeGreaterThan(0)
+  })
+
+  it('honours the Garden’s Sakura preference', async () => {
+    const fills = () => [...tree().querySelectorAll('rect')].map((r) => r.getAttribute('fill'))
+    global.fetch = vi.fn(() => Promise.resolve(okResp(v2())))
+    const plain = render(<ActivityDetail sid="s" />)
+    await screen.findByText('fix parser')
+    const before = fills()
+    plain.unmount()
+    window.localStorage.setItem('geneseed-garden-sakura', '1')
+    try {
+      render(<ActivityDetail sid="s" />)
+      await screen.findByText('fix parser')
+      expect(fills()).not.toEqual(before)
+    } finally {
+      window.localStorage.removeItem('geneseed-garden-sakura')
+    }
   })
 })

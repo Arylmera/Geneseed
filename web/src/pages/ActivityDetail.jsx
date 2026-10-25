@@ -1,8 +1,10 @@
-import React, { useId, useState } from 'react'
+import React, { useCallback, useId, useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
-import { baseName, compact, SessionHeader } from '../lib/activity.jsx'
+import { baseName, compact, needsYou, SessionHeader } from '../lib/activity.jsx'
+import { contextFill, gardenTree, treeKey } from '../lib/garden.js'
+import { PadCard, readSakura, TreeSvg } from './Activity/Bonsai.jsx'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -71,6 +73,54 @@ function Conversation({ turns }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// The session's bonsai, read-only: the garden's drawing a size up, its pads hoverable for the
+// same file card. An ended session's tree stands as it was, without motion or the needs-you
+// call: nobody can answer an ended session.
+const TREE_PX = 5
+export function SessionTree({ s }) {
+  const [sakura] = useState(readSakura)
+  const [pad, setPad] = useState(null)
+  const ended = !!s.ended
+  // The header above still says what the error was; the tree just carries no bubble.
+  const drawn = ended ? { ...s, status: needsYou(s) ? 'busy' : s.status, error: null } : s
+  const key = treeKey(drawn, sakura)
+  // Keyed on what the drawing reads, so the 2 s poll leaves an unchanged tree alone.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const t = useMemo(() => gardenTree(drawn, { sakura }), [key])
+  const onPad = useCallback((p) => setPad(p), [])
+  const fill = contextFill(s)
+  const turns = Number(s.turns) || 0
+  const compactions = Number(s.compactions) || 0
+  const legend = [
+    `${turns} turn${turns === 1 ? '' : 's'}`,
+    `context ${fill == null ? 'unknown' : `${Math.round(fill * 100)} %`}`,
+    `${compactions} compaction${compactions === 1 ? '' : 's'}`,
+    `sub-agents: ${t.pads.filter((p) => p.key != null).length} ${ended ? 'unfinished' : 'running'}, ${t.fallen.length} finished`,
+  ].join(' · ')
+  const hot = pad != null ? t.pads[pad] : null
+  return (
+    <div className={`card pad-md act-mt gd-detail${!ended && needsYou(s) ? ' gd-needs' : ''}`}>
+      <TreeSvg
+        t={t}
+        pad={pad}
+        swaying={!ended && s.status !== 'idle'}
+        onPad={onPad}
+        px={TREE_PX}
+        label={`Bonsai of this session${ended ? ', ended' : ''}: ${legend}`}
+      />
+      <div className="stack gap-8 act-min">
+        {ended && <span className="dim act-xs">ended</span>}
+        <div className="dim act-sm">{legend}</div>
+        {hot ? (
+          <PadCard pad={hot} />
+        ) : (
+          <div className="dim act-xs">Hover a pad for the files it changed.</div>
+        )}
+      </div>
     </div>
   )
 }
@@ -174,6 +224,8 @@ export default function ActivityDetail({ sid }) {
         <SessionHeader s={s} />
         <div className="dim act-updated">updated {relTime(s.updated_at)} ago</div>
       </div>
+
+      <SessionTree s={s} />
 
       {(filesShown || todosShown) && (
         // Both present → even halves; only one → it takes the full width.

@@ -3674,6 +3674,9 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .gd-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--sp-3); margin: 0 0 var(--sp-1); } /* off-scale: 2px hairline */
 .gd-facts dt { color: var(--text-3); }
 .gd-facts dd { margin: 0; }
+/* A session's detail page: its tree beside the legend and the hovered pad's card. */
+.gd-detail { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-4); }
+.gd-detail .gd-svg { flex: 0 0 auto; max-width: 100%; height: auto; }
 /* A running sub-agent's pad sways one tree pixel in two steps; a tree that needs you glows.
    Both keyframes end at rest. */
 .gd-sway { animation: gdSway 1.6s steps(1, end) infinite; }

@@ -11,6 +11,7 @@ import {
   W,
   H,
 } from '../../lib/garden.js'
+import { PadCard, readSakura, SAKURA_KEY, TreeSvg } from './Bonsai.jsx'
 
 // The Garden view of Activity: every live session as a pixel bonsai, one shelf per repo
 // (D11), the trees of a repo side by side as a grove (D13). The drawing is lib/garden.js;
@@ -23,24 +24,11 @@ const CELL = W * PX
 const GAP = 24
 const MOSS_Y = 41 * PX + 1
 const POT_Y = 47 * PX
-const PAD_LIST = 12
-
-export const SAKURA_KEY = 'geneseed-garden-sakura'
-function readSakura() {
-  try {
-    return window.localStorage.getItem(SAKURA_KEY) === '1'
-  } catch {
-    return false
-  }
-}
 
 const pct = (s) => {
   const f = contextFill(s)
   return f == null ? null : Math.round(f * 100)
 }
-// The crown is the only pad without a key; every sub-agent pad has one (Bob's have no id).
-const who = (pad) => (pad.key == null ? 'the session' : pad.type || 'agent')
-const where = (f) => f.path || f.file || '?'
 
 // What the tree says, for a screen reader: the hovers cannot be reached by keyboard.
 function treeLabel(s, t, mine) {
@@ -65,31 +53,6 @@ function treeLabel(s, t, mine) {
   ]
     .filter(Boolean)
     .join('. ')
-}
-
-function PadCard({ pad }) {
-  const shown = pad.files.slice(0, PAD_LIST)
-  return (
-    <div className="card gd-card">
-      <div className="act-lbl">
-        {who(pad)} · {pad.files.length} file{pad.files.length === 1 ? '' : 's'}
-      </div>
-      <ul className="gd-files">
-        {shown.map((f, i) => (
-          <li key={`${where(f)}:${i}`}>
-            <span className="mono act-ell">{where(f)}</span>
-            <span className="mono act-xs">
-              <span className="t-good">+{f.additions ?? 0}</span>{' '}
-              <span className="t-bad">−{f.deletions ?? 0}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
-      {pad.files.length > shown.length && (
-        <div className="dim act-xs">+{pad.files.length - shown.length} more</div>
-      )}
-    </div>
-  )
 }
 
 function TreeCard({ s, t, mine }) {
@@ -134,51 +97,12 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
   // Keyed on what the drawing reads, so the 2 s poll leaves an unchanged tree alone.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const t = useMemo(() => gardenTree(s, { sakura }), [key])
-  const groups = useMemo(() => {
-    const by = new Map()
-    for (const r of t.runs) {
-      if (!by.has(r.p)) by.set(r.p, [])
-      by.get(r.p).push(r)
-    }
-    return [...by.entries()]
-  }, [t])
   const st = STATUS[s.status] || STATUS.idle
   const loop = Array.isArray(s.loops) ? s.loops[0] : null
   const swaying = s.status !== 'idle'
   const sid = s.session_id
-  // The ~400 rects are rebuilt only when the drawing or this tree's hover changes, never
-  // because the poll moved a label or another tree was hovered.
-  const svg = useMemo(
-    () => (
-      <svg
-        className={`gd-svg${pad != null ? ' gd-dimming' : ''}`}
-        viewBox={`0 0 ${W} ${H}`}
-        width={CELL}
-        height={H * PX}
-        shapeRendering="crispEdges"
-        aria-hidden="true"
-      >
-        {groups.map(([p, runs]) => (
-          <g
-            key={p}
-            data-p={p}
-            className={
-              [p === pad && 'gd-hot', swaying && p >= 0 && t.pads[p].key != null && 'gd-sway']
-                .filter(Boolean)
-                .join(' ') || undefined
-            }
-            onMouseEnter={p >= 0 ? () => onHover(sid, p) : undefined}
-            onMouseLeave={p >= 0 ? () => onHover(sid, null) : undefined}
-          >
-            {runs.map((r) => (
-              <rect key={`${r.x},${r.y}`} x={r.x} y={r.y} width={r.w} height={1} fill={r.c} />
-            ))}
-          </g>
-        ))}
-      </svg>
-    ),
-    [groups, pad, swaying, t, onHover, sid],
-  )
+  // Stable, so the tree's ~400 rects are rebuilt only when its drawing or its hover changes.
+  const onPad = useCallback((p) => onHover(sid, p), [onHover, sid])
   return (
     <a
       className={`gd-tree${needsYou(s) ? ' gd-needs' : ''}`}
@@ -212,7 +136,7 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
           {s.phase && <span className="dim act-ell">{s.phase}</span>}
         </div>
       </div>
-      {svg}
+      <TreeSvg t={t} pad={pad} swaying={swaying} onPad={onPad} px={PX} />
     </a>
   )
 }
