@@ -26,7 +26,7 @@ Every word Geneseed uses that you would not find in a general programming glossa
 | Wiki | WIKI | the machine-wide knowledge base | your personal notes, shared with the agent |
 | Pact | PACT | the two-way collaboration contract, stated in Telos, the first Ethos section | a working agreement |
 | Posture | — | the relationship register the agent works in (peer, mentor, expert, assistant, artisan) | pairing style |
-| Mode | — | how work gets executed — direct (the agent works every task itself) or foreman (substantial tasks spawn an isolated pipeline) | solo vs. delegating to a sub-team |
+| Mode | — | how work gets executed — direct (the agent works every task itself) or foreman (tasks that would block the session go to a background task worker) | solo vs. delegating to a sub-team |
 | Footprint | — | how much of the Rules loads inline each turn (full vs lean) | eager vs. lazy loading |
 | Kit | — | an opt-in bundle of skills, agents and rules for one stack, switched on per install with `--kits`; not a doctrine pack | an optional dependency group (`pkg[extra]`) |
 | Loop | — | a requirement worked as small, validated, committed iterations on their own branch, driven by `geneseed loop` | a state machine over a ticket's steps |
