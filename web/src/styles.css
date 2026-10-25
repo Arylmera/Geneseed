@@ -2827,6 +2827,13 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .slots span { height: 26px; border-radius: 4px; border: 1px dashed var(--line-3); }
 .slots span.used { background: var(--accent); border: 0; }
 .hb-n.warn { color: var(--warn-text); }
+.pm-topics { margin-bottom: 20px; }
+/* A topic slug can be long: let it take the row and wrap, not run into its count. */
+.pm-topics .hb-label { width: auto; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* The first-run state centres its title; the bullet list reads left-aligned under it. */
+.pm-first { max-width: 560px; margin: 0 auto; }
+.pm-first ul { display: inline-block; margin: 0; padding-left: 20px; text-align: left; }
+.pm-first li + li { margin-top: 4px; }
 
 /* ---- Installs ---- */
 .hosts { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }

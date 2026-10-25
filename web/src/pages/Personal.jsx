@@ -90,10 +90,63 @@ function RuleCards({ rules, profile, facts, notes }) {
   )
 }
 
+// A topic line of the generated memory map, as js/hosts/memory-files.mjs writeMap writes it
+// (js/hosts/hooks-context.mjs reads the same line). An old flat map has none.
+const MAP_TOPIC_RE = /^- \[([^\]]*)\]\(topics\/[^)]+\.md\) — (\d+) facts?$/
+const topicsOf = (body) =>
+  String(body || '')
+    .split('\n')
+    .map((l) => MAP_TOPIC_RE.exec(l.trim()))
+    .filter(Boolean)
+    .map((m) => ({ topic: m[1], n: Number(m[2]) }))
+
+function Topics({ topics }) {
+  if (!topics.length) return null
+  return (
+    <section className="panel pm-topics" aria-labelledby="pm-topics">
+      <div className="panel-head">
+        <h2 id="pm-topics">Topics</h2>
+        <span className="mono dim">{plural(topics.length, 'topic')}</span>
+      </div>
+      <ul className="hbars">
+        {topics.map((t) => (
+          <li key={t.topic}>
+            <span className="hb-label">{t.topic}</span>
+            <span className="mono hb-n">{plural(t.n, 'fact')}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 const EMPTY = {
   memory: {
     title: 'No facts yet',
-    body: 'The agent writes facts through the rule skill — say “remember that…” in a session.',
+    body: (
+      <div className="pm-first">
+        <p>
+          The agent writes a fact when a session teaches it something durable: a decision, a
+          correction, a trap. Say “remember that…” in any session, and it asks whether that belongs
+          here or in your standing rules.
+        </p>
+        <ul>
+          <li>One fact per file, filed under a topic.</li>
+          <li>Stale facts move to Archived; nothing is deleted without you.</li>
+          <li>The store stays on this machine and out of git.</li>
+        </ul>
+      </div>
+    ),
+    action: (
+      <>
+        <a className="btn ghost" href="#/docs/memory">
+          How memory works
+        </a>
+        <a className="btn ghost" href="#/item/skill/rule">
+          The rule skill
+        </a>
+      </>
+    ),
   },
   notebook: {
     title: 'No notes yet',
@@ -124,6 +177,12 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
     'catalog',
   )
   const facts = countOf(memory)
+  // The topics come from the map, not the catalog: a fact entry carries no topic field. Keyed
+  // on the fact count, so a promote or a forget in the pane (both rewrite the map) refetches it.
+  const { data: map } = useAsync(
+    () => (tab === 'memory' ? soft(api.item('memory', 'MEMORY')) : Promise.resolve(null)),
+    ['memory-map', tab, dataRev, facts],
+  )
   const notes = countOf(notebook)
   const counts = { memory: facts, notebook: notes }
   const badges = {
@@ -148,20 +207,25 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
       )}
       {tab === 'profile' && <Profile onChanged={reloadProfile} />}
       {folder && counts[tab] === 0 && !item ? (
-        <EmptyState title={EMPTY[tab].title}>{EMPTY[tab].body}</EmptyState>
+        <EmptyState title={EMPTY[tab].title} action={EMPTY[tab].action}>
+          {EMPTY[tab].body}
+        </EmptyState>
       ) : folder ? (
-        <Library
-          key={tab}
-          lock={tab}
-          base={`#/personal/${tab}`}
-          selected={item}
-          dataRev={dataRev}
-          // A promote deletes the fact it turns into a rule, so both counts move.
-          onRulesChanged={() => {
-            reloadRules()
-            reloadMemory()
-          }}
-        />
+        <>
+          {tab === 'memory' && <Topics topics={topicsOf(map?.body)} />}
+          <Library
+            key={tab}
+            lock={tab}
+            base={`#/personal/${tab}`}
+            selected={item}
+            dataRev={dataRev}
+            // A promote deletes the fact it turns into a rule, so both counts move.
+            onRulesChanged={() => {
+              reloadRules()
+              reloadMemory()
+            }}
+          />
+        </>
       ) : null}
     </>
   )
