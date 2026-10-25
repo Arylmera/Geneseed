@@ -157,6 +157,35 @@ describe('Library', () => {
     expect(await screen.findByText(/Could not forget "fact-a": store is read-only/)).toBeTruthy()
   })
 
+  // The failure names one fact: opening another, or another kind, drops it.
+  it('drops a failed forget once another entry or kind is opened', async () => {
+    // The clear is synchronous (render-time), so it is asserted at once; only loads wait, with
+    // room for a loaded parallel run.
+    const LOAD = { timeout: 5000 }
+    api.memoryDelete.mockRejectedValue(new Error('store is read-only'))
+    const { rerender } = render(
+      <Library section="memory" selected="fact-a" overview={overview({})} />,
+    )
+    fireEvent.click(await screen.findByText('Forget this fact', {}, LOAD))
+    await screen.findByText(/Could not forget "fact-a"/, {}, LOAD)
+    rerender(<Library section="memory" selected="fact-b" overview={overview({})} />)
+    expect(screen.queryByText(/Could not forget/)).toBeNull()
+    // The kind half keeps `selected` unset on both sides, so only the kind change can clear it.
+    rerender(<Library section="memory" overview={overview({})} />)
+    fireEvent.click(await screen.findByText('Forget this fact', {}, LOAD))
+    await screen.findByText(/Could not forget "fact-a"/, {}, LOAD)
+    rerender(<Library section="agents" overview={overview({})} />)
+    expect(screen.queryByText(/Could not forget/)).toBeNull()
+  })
+
+  // A skill is a folder: with no source on the item, the guessed path is its SKILL.md.
+  it('guesses a skill source as its folder SKILL.md', async () => {
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    await waitFor(() =>
+      expect(document.querySelector('.reader-src')?.textContent).toBe('skills/brainstorm/SKILL.md'),
+    )
+  })
+
   it('shows no forget control outside memory', async () => {
     render(<Library section="agents" selected="reviewer" overview={overview({})} />)
     await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())

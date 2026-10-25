@@ -10,13 +10,16 @@ export function bucketJobsByDay(jobs, days = 10, todayLabel = 'today') {
     t: i === days - 1 ? todayLabel : `${days - 1 - i}d`,
     v: 0,
   }))
-  const now = Date.now()
+  // Local calendar days, not rolling 24 h windows: last night's 23:00 run is not "today".
+  const midnight = (ms) => new Date(ms).setHours(0, 0, 0, 0)
+  const today = midnight(Date.now())
   for (const j of jobs) {
     const ts = j.started || j.finished || j.created || j.ts
     if (!ts) continue
     const ms = typeof ts === 'string' ? Date.parse(ts) : ts * 1000
     if (!Number.isFinite(ms)) continue
-    const ageDays = Math.floor((now - ms) / MS_PER_DAY)
+    // Rounded: a DST day is 23 or 25 hours long.
+    const ageDays = Math.round((today - midnight(ms)) / MS_PER_DAY)
     if (ageDays < 0 || ageDays >= days) continue
     buckets[days - 1 - ageDays].v += 1
   }

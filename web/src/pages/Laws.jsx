@@ -100,7 +100,8 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
   useEffect(() => {
     if (!selected) return undefined
     const raf = requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-addr="${selected}"]`)
+      // `selected` comes from the URL hash: escaped, so a quote in it cannot throw here.
+      const el = document.querySelector(`[data-addr="${CSS.escape(selected)}"]`)
       if (!el) return
       const flash = jumpTo.current === selected
       jumpTo.current = null
@@ -305,7 +306,8 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
     yours: {
       name: 'Your rules',
       n: stats?.rules ?? 0,
-      fill: stats ? stats.rules / stats.max_rules : 0,
+      // A zero budget draws an empty bar, not a NaN% width.
+      fill: stats?.max_rules ? stats.rules / stats.max_rules : 0,
       sub: stats
         ? `${stats.rules} of ${stats.max_rules} · ${stats.tokens}/${stats.max_tokens} tok`
         : 'user-rules.md',

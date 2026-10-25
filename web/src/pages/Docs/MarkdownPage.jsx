@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { go } from '../../lib/router.js'
+import CopyButton from '../../components/CopyButton.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import { renderDoc, slug } from './headings.js'
 
@@ -28,8 +30,8 @@ export const minutesOf = (body) =>
   Math.max(1, Math.ceil((body || '').split(/\s+/).filter(Boolean).length / 200))
 
 // Each code block in a figure with a caption bar: the fence's language, if it names one, and
-// a Copy button (the click handler below does the copying). A block already wrapped is left
-// alone, so a second run of the effect changes nothing.
+// a Copy button (a CopyButton portalled into the caption). A block already wrapped is left
+// alone, so a second run of the effect changes nothing. Returns every caption.
 function captionCode(el) {
   el.querySelectorAll('pre').forEach((pre) => {
     if (pre.parentElement?.classList.contains('docs-code')) return
@@ -43,26 +45,20 @@ function captionCode(el) {
       name.textContent = lang
       cap.append(name)
     }
-    const btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = 'btn ghost sm'
-    btn.setAttribute('aria-label', 'Copy command')
-    btn.textContent = 'Copy'
-    cap.append(btn)
     pre.replaceWith(fig)
     fig.append(cap, pre)
   })
+  return [...el.querySelectorAll('figure.docs-code > figcaption')]
 }
 
 // The block's text without its trailing newline, so a pasted command does not run on paste.
-// No clipboard, or a refusal, changes nothing.
-function copyCode(fig) {
-  const text = (fig.querySelector('pre')?.textContent || '').replace(/\n+$/, '')
-  navigator.clipboard?.writeText?.(text)?.catch?.(() => {})
-}
+const codeOf = (cap) =>
+  (cap.parentElement?.querySelector('pre')?.textContent || '').replace(/\n+$/, '')
 
 export default function MarkdownPage({ page, overview, onAction, section, description }) {
   const ref = useRef(null)
+  // The code captions captionCode made, each given a CopyButton through a portal.
+  const [caps, setCaps] = useState([])
   // Heading ids, and the outline the margin prints, come from renderDoc (headings.js).
   const html = useMemo(
     () => renderDoc({ body: page.body, links: page.links }).html,
@@ -76,7 +72,7 @@ export default function MarkdownPage({ page, overview, onAction, section, descri
       const lead = (q.querySelector('strong')?.textContent || '').toLowerCase()
       if (lead.startsWith(ANALOGY_LEAD)) q.classList.add('analogy')
     })
-    captionCode(el)
+    setCaps(captionCode(el))
   }, [html])
 
   // Internal-link / try-this handling. The Markdown component already converts
@@ -87,8 +83,6 @@ export default function MarkdownPage({ page, overview, onAction, section, descri
     const el = ref.current
     if (!el) return
     const onClick = (e) => {
-      const copy = e.target.closest('.docs-code figcaption button')
-      if (copy) return copyCode(copy.closest('.docs-code'))
       const a = e.target.closest('a[href]')
       if (!a) return
       const href = a.getAttribute('href')
@@ -161,6 +155,9 @@ export default function MarkdownPage({ page, overview, onAction, section, descri
         </div>
       )}
       <div className="markdown" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
+      {caps.map((cap, i) =>
+        createPortal(<CopyButton text={codeOf(cap)} label="Copy command" />, cap, i),
+      )}
       {page.link && (
         <div className="doc-link">
           <a className="btn soft sm" href={page.link.hash}>

@@ -56,7 +56,23 @@ export function humanGate(brick) {
   return brick.gateOn?.length ? `Human gate on ${brick.gateOn.join(', ')}` : 'Human gate'
 }
 
+// Everything a ring draws above y = 0 — a tall setup column, a circle hung on the head — is cut
+// by the viewBox, so a layout that reaches above it is laid out again that much lower.
 export function layoutLoop(graph, bricks = []) {
+  const l = layoutAt(graph, bricks, 0)
+  if (l.mode !== 'ring') return l
+  const top = Math.min(
+    ...l.entry.map((e) => e.y - 30), // its label (10px up) and human badge (9px above that)
+    ...l.nodes.map((n) => n.y - n.r - 12),
+    ...l.inner.map((p) => p.cy - p.r - 12),
+    ...(l.exit ? [l.exit.y - 24] : []), // the `done` label above the exit arrow
+  )
+  return top < 0 ? layoutAt(graph, bricks, Math.ceil(-top)) : l
+}
+
+function layoutAt(graph, bricks, dy) {
+  const c0 = { x: C.x, y: C.y + dy }
+  const at = (a, r = R) => pt(a, r, c0)
   const brickOf = (n) => bricks.find((b) => b.name === n)
   const effectOf = (n) => brickOf(n)?.effect ?? null
   const humanOf = (n) => humanGate(brickOf(n))
@@ -97,7 +113,7 @@ export function layoutLoop(graph, bricks = []) {
   }
   const nodes = slots.map((s) => ({
     name: s.name,
-    ...pt(s.a),
+    ...at(s.a),
     r: s.r,
     effect: s.gate ? null : effectOf(s.name),
     gate: !!s.gate,
@@ -108,7 +124,7 @@ export function layoutLoop(graph, bricks = []) {
     const next = slots[(i + 1) % slots.length]
     const end = (i + 1 === slots.length ? next.a + 360 : next.a) - trim(next.r) - 2
     const start = s.a + trim(s.r)
-    return { d: arc(R, pt(start), pt(end), end - start > 180 ? 1 : 0), kind: 'ring' }
+    return { d: arc(R, at(start), at(end), end - start > 180 ? 1 : 0), kind: 'ring' }
   })
 
   // Inner circles, hung on their head: one loop on the head's own angle at R + 44 (the
@@ -119,10 +135,10 @@ export function layoutLoop(graph, bricks = []) {
   for (const l of inner) byHead.set(l.nodes[0], [...(byHead.get(l.nodes[0]) || []), l])
   for (const [h, ls] of byHead) {
     const hs = slots.find((s) => s.name === h)
-    const hp = pt(hs.a)
+    const hp = at(hs.a)
     const pair = ls.length > 1
     ls.sort((a, b) => a.nodes.length - b.nodes.length).forEach((l, k) => {
-      const c = pt(hs.a + (pair ? (k ? 18 : -18) : 0), R + (pair ? 54 : 44))
+      const c = at(hs.a + (pair ? (k ? 18 : -18) : 0), R + (pair ? 54 : 44))
       const away = Math.atan2(c.y - hp.y, c.x - hp.x) * (180 / Math.PI) // head → centre
       const own = l.nodes.filter((n) => claimed.get(n) === l)
       // Own nodes fan out around the far side of the circle, `step` degrees apart: wide enough
@@ -171,7 +187,7 @@ export function layoutLoop(graph, bricks = []) {
   }
 
   // Setup enters from the left at 205°, the last setup step nearest the ring.
-  const ey = pt(205).y
+  const ey = at(205).y
   const setup = graph.nodes.filter((n) => !it.nodes.includes(n))
   const entry = setup.map((name, i) => ({
     name,
@@ -194,6 +210,7 @@ export function layoutLoop(graph, bricks = []) {
   const right = Math.max(
     540,
     ...nodes.map((n) => n.x + n.r + 8),
+    ...(exit ? [exit.x + 6 + textW('close') + 8] : []), // RingGraph draws `close` at exit.x + 6
     ...placed.map((p) => p.cx + p.r + 8),
     ...placed.map((p) =>
       p.anchor === 'start' ? p.lx + textW(p.label) + 8 : p.lx + textW(p.label) / 2 + 8,
@@ -208,7 +225,7 @@ export function layoutLoop(graph, bricks = []) {
     mode: 'ring',
     width: Math.ceil(right),
     height: Math.ceil(bottom),
-    center: { x: C.x, y: C.y, r: R },
+    center: { x: c0.x, y: c0.y, r: R },
     nodes,
     arcs,
     inner: placed,

@@ -1076,3 +1076,39 @@ describe('Constitution page — the ladder layout', () => {
     )
   })
 })
+
+describe('Constitution page — hostile or empty inputs', () => {
+  // The open rule's address comes from the URL hash, so it can hold a quote; the scroll's
+  // selector escapes it rather than throw inside the animation frame.
+  it('scrolls to a hash holding a quote without throwing', async () => {
+    const frames = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((f) => {
+      frames.push(f)
+      return frames.length
+    })
+    try {
+      render(<Laws selected={'II"]'} />)
+      await waitFor(() => expect(frames.length).toBeGreaterThan(0))
+      expect(() => frames.forEach((f) => f(0))).not.toThrow()
+    } finally {
+      raf.mockRestore()
+    }
+  })
+
+  // A user-rules budget of zero is no budget: the bar stays empty instead of a NaN% width.
+  it('draws an empty Your rules bar when the budget is zero', async () => {
+    api.rules.mockImplementation(() =>
+      Promise.resolve({ stats: { rules: 0, max_rules: 0, tokens: 0, max_tokens: 0 } }),
+    )
+    try {
+      const { container } = render(<Laws />)
+      await waitFor(() => expect(container.textContent).toContain('0 of 0 · 0/0 tok'))
+      const cell = [...container.querySelectorAll('.tier')].find((t) =>
+        t.textContent.includes('Your rules'),
+      )
+      expect(cell.querySelector('.tier-bar span').style.width).toBe('0%')
+    } finally {
+      api.rules.mockImplementation(() => Promise.resolve(null))
+    }
+  })
+})

@@ -1,12 +1,9 @@
-import React, { useState } from 'react'
-import { Icon } from '../../components/Icon.jsx'
+import React from 'react'
+import CopyButton from '../../components/CopyButton.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 
 // A command's heading id, shared with the margin's outline (Margin.jsx) so each entry lands.
 export const cmdId = (name) => 'cmd-' + String(name).replace(/[^\w-]+/g, '-')
-
-// How long the "Copied" confirmation stays on the copy button.
-const COPY_FEEDBACK_MS = 1200
 
 // Render one positional or option argument with its help text. Compact —
 // we render up to ~20 commands and each has a few args, so visual density
@@ -29,25 +26,6 @@ function Arg({ a, kind }) {
   )
 }
 
-function CopyBtn({ text }) {
-  const [done, setDone] = useState(false)
-  const onClick = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setDone(true)
-      setTimeout(() => setDone(false), COPY_FEEDBACK_MS)
-    } catch {
-      // clipboard blocked — quietly ignore (the user can still select+copy).
-    }
-  }
-  return (
-    <button className="btn ghost sm" onClick={onClick} title="Copy command">
-      <Icon name={done ? 'spark' : 'copy'} />
-      {done ? 'Copied' : 'Copy'}
-    </button>
-  )
-}
-
 function Command({ cmd, prog }) {
   // Synopsis: positionals first (uppercased metavars), then a generic [OPTIONS]
   // marker when any flags exist. Faithful enough to the real --help output.
@@ -67,7 +45,7 @@ function Command({ cmd, prog }) {
           </h2>
           {cmd.help && <p className="sub">{cmd.help}</p>}
         </div>
-        <CopyBtn text={`${prog} ${cmd.name}`} />
+        <CopyButton text={`${prog} ${cmd.name}`} title={`Copy ${prog} ${cmd.name}`} />
       </div>
       <pre className="cli-syn">{synopsis}</pre>
       {(cmd.positionals || []).length > 0 && (

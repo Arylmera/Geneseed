@@ -27,6 +27,7 @@ export const ICONS = {
   arrow: 'M5 12h14M13 6l6 6-6 6',
   external: 'M14 5h5v5M19 5l-8 8M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6',
   copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+  check: 'M5 12.5l4.5 4.5L19 7',
   spark: 'M12 3v3m0 12v3m9-9h-3M6 12H3m13.5-6.5-2 2m-7 7-2 2m11 0-2-2m-7-7-2-2',
   activity: 'M3 12h4l2.5-7 5 14 2.5-7H21',
   agent:

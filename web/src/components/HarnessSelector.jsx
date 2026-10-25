@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { installName } from '../lib/hosts.js'
 
@@ -10,6 +10,7 @@ import { installName } from '../lib/hosts.js'
 // `fallback` is what stands in its place then: the topbar's breadcrumb root, which must
 // never go missing just because there is nothing to switch to.
 export default function HarnessSelector({ installs, onSwitch, fallback = null }) {
+  const [error, setError] = useState(null)
   const active = (installs || []).filter((i) => i.state === 'active')
   if (active.length < 2) return fallback
 
@@ -17,29 +18,39 @@ export default function HarnessSelector({ installs, onSwitch, fallback = null })
   const onChange = async (e) => {
     const inst = active.find((i) => i.id === e.target.value)
     if (!inst) return
+    setError(null)
     try {
       await api.selectView(inst.host, inst.path)
       onSwitch?.() // refetch the overview + every panel against the newly-selected install
-    } catch {
-      /* ignore — the select snaps back to the server's current on the next refetch */
+    } catch (err) {
+      // The select snaps back to the server's current on the next refetch; the reason must not.
+      setError(err?.body?.message || err.message)
     }
   }
 
   return (
-    <select
-      className="sel tb-harness"
-      aria-label="Harness to view"
-      title="Harness the console is viewing"
-      value={current.id}
-      onChange={onChange}
-    >
-      {active.map((i) => (
-        <option key={i.id} value={i.id}>
-          {/* A project is named by its folder: two project installs of one host would
+    <>
+      <select
+        className="sel tb-harness"
+        aria-label="Harness to view"
+        title="Harness the console is viewing"
+        value={current.id}
+        onChange={onChange}
+      >
+        {active.map((i) => (
+          <option key={i.id} value={i.id}>
+            {/* A project is named by its folder: two project installs of one host would
               otherwise be two identical "bob · project" options. */}
-          {i.scope === 'global' ? `${i.host} · global` : `${installName(i)} · ${i.host}`}
-        </option>
-      ))}
-    </select>
+            {i.scope === 'global' ? `${i.host} · global` : `${installName(i)} · ${i.host}`}
+          </option>
+        ))}
+      </select>
+      {error && (
+        <span className="t-bad" role="alert">
+          {' '}
+          Switch failed: {error}
+        </span>
+      )}
+    </>
   )
 }
