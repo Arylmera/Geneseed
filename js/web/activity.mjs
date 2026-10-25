@@ -1,5 +1,6 @@
 /**
- * The live-activity surface. A GET reads; it never deletes or moves a file.
+ * The live-activity surface. A GET reads; it never writes, deletes or moves a file — the loop
+ * join included, which reads the registry through the read-only `runningLoops`.
  *
  * It reads the per-session JSON files two writers put into `<cfg>/activity/`: the
  * `geneseed-activity` OpenCode plugin, and the hook-side writer for Claude Code, OpenClaude
@@ -35,7 +36,7 @@
  * `0.0` instead of collapsing to the fallback `0`. `isTruthy` is what makes a wrapped zero
  * read as falsy, so a `"cost": 0.0` entry correctly comes back `0`.
  */
-import { mkdirSync, readdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { readText, writeText, isDir, isFile } from '../lib/fs.mjs';
@@ -43,6 +44,7 @@ import { parseJson, isTruthy } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { ARCHIVE_KEEP, ARCHIVE_MAX_AGE_SECONDS, isLive, safeStem } from '../hosts/activity.mjs';
+import { runningLoops } from '../loop/registry.mjs';
 import { NotFound, stemOf } from './catalog.mjs';
 
 const nowSeconds = () => Date.now() / 1000;
@@ -99,7 +101,96 @@ function normalizeEntry(entry, stem) {
     // The console's host filter reads this. The hook writer stamps it; the only other writer is
     // the OpenCode plugin, which does not, so a snapshot without `writer: 'hook'` is OpenCode's.
     host: or('host', g('writer') === 'hook' ? null : 'opencode'),
+    // Snapshot v2, the Activity garden. `root` is the worktree, `repo` its main worktree;
+    // `attribution` is `false` only on a Bob session that ran a sub-agent, so it is read with
+    // `g`, never `or` (which would turn that `false` into the default).
+    root: g('root'),
+    repo: g('repo'),
+    agents: Array.isArray(g('agents')) ? g('agents') : [],
+    attribution: g('attribution'),
+    turns: or('turns', 0),
+    context: g('context'),
+    compactions: or('compactions', 0),
+    compacted_at: g('compacted_at'),
+    context_at_compaction: g('context_at_compaction'),
+    // The shelf key for the garden: writers store `repo` as the host spelled `cwd` (Bob `c:\`,
+    // Claude `C:\`), and the browser cannot know the platform's case rule, so it is folded here.
+    repo_key: typeof (g('repo') ?? g('root')) === 'string' ? normcase(g('repo') ?? g('root')) : null,
   };
+}
+
+/** The `files.items` array of a files summary, or `[]`. */
+const itemsOf = (files) => (Array.isArray(files?.items) ? files.items : []);
+
+/**
+ * The uncapped file rows of one session (B2): the detail file's `files.items`, else the
+ * snapshot's capped ones. The detail sits beside the snapshot under the same stem.
+ */
+function allFiles(d, stem, session) {
+  const det = readEntry(path.join(d, `${stem}.detail.json`));
+  return isTruthy(det?.files) ? itemsOf(det.files) : itemsOf(session.files);
+}
+
+/**
+ * The join key of a session root against the loop registry. The registry stores each root as its
+ * realpath, so a session root reached through a junction, a symlink or another spelling is
+ * resolved the same way first; a root that no longer exists falls back to itself.
+ */
+const loopKey = (root) => {
+  try { return normcase(realpathSync.native(root)); } catch { return normcase(root); }
+};
+
+/**
+ * Loop rows by `normcase(root)`, running ones only (B9): `runningLoops` leaves out a finished
+ * loop (no LOOP.md) and an unreadable one (no state to show); `awaiting` or `stopped` stay, with
+ * their status. It reads every registered LOOP.md, so it is called once per request, and only
+ * when some live session is in a repo. It never saves `loops.json`: pruning stays with
+ * `activeLoops`, so a 2 s Activity poll cannot race `recordLoop`.
+ */
+function loopsByRoot(sessions) {
+  const byRoot = new Map();
+  if (!sessions.some((s) => typeof s.root === 'string')) return byRoot;
+  for (const l of runningLoops()) {
+    const k = normcase(l.root);
+    if (!byRoot.has(k)) byRoot.set(k, []);
+    byRoot.get(k).push({ title: l.title, iteration: l.iteration, status: l.status });
+  }
+  return byRoot;
+}
+
+/**
+ * B5 + D11: two or more distinct writers `(sid, by)` on one `(repo, path)` among the live
+ * sessions. `same-worktree` (a real collision) when any two of them share `root`, else
+ * `cross-worktree` (a merge-conflict risk). Keys go through `normcase` (Bob writes `c:\`); the
+ * output keeps the first spelling seen. Sessions are walked by id and writers sorted, so the
+ * answer does not depend on `updated_at`. A row whose `path` is not a string takes no
+ * part: a v1 row, or `path: null` for a file outside the root (its `file` keeps the basename).
+ * Neither does a session without a repo.
+ */
+function collisionsOf(sessions) {
+  const byFile = new Map();
+  const ordered = [...sessions].sort((a, b) => (String(a.session_id) < String(b.session_id) ? -1 : 1));
+  for (const s of ordered) {
+    const repo = typeof s.repo === 'string' ? s.repo : s.root;
+    if (typeof repo !== 'string') continue;
+    for (const f of s.files_all) {
+      if (typeof f?.path !== 'string') continue;
+      const key = `${normcase(repo)}\0${normcase(f.path)}`;
+      if (!byFile.has(key)) byFile.set(key, { repo, path: f.path, writers: new Map() });
+      const by = f.by ?? null;
+      byFile.get(key).writers.set(`${s.session_id}\0${by}`, { sid: s.session_id, by, root: s.root });
+    }
+  }
+  const out = [];
+  for (const { repo, path: p, writers } of byFile.values()) {
+    if (writers.size < 2) continue;
+    const list = [...writers.values()].sort((a, b) => (
+      `${a.sid}\0${a.by ?? ''}` < `${b.sid}\0${b.by ?? ''}` ? -1 : 1));
+    const roots = list.map((w) => (typeof w.root === 'string' ? normcase(w.root) : null));
+    const shared = roots.some((r, i) => r !== null && roots.indexOf(r) !== i);
+    out.push({ repo, path: p, writers: list, kind: shared ? 'same-worktree' : 'cross-worktree' });
+  }
+  return out.sort((a, b) => (`${a.repo}\0${a.path}` < `${b.repo}\0${b.path}` ? -1 : 1));
 }
 
 /** `null` on a missing, garbage or non-dict file. Never throws. */
@@ -149,8 +240,14 @@ function activityEntries(state) {
   const rest = [];
   for (const [name, entry] of snapshots(d)) {
     const e = normalizeEntry(entry, stemOf(name));
-    if (isLive(entry, now)) { live.push(e); seen.add(String(e.session_id)); } else rest.push(e);
+    if (isLive(entry, now)) {
+      e.files_all = allFiles(d, stemOf(name), e);
+      live.push(e);
+      seen.add(String(e.session_id));
+    } else rest.push(e);
   }
+  const loops = loopsByRoot(live);
+  for (const e of live) e.loops = typeof e.root === 'string' ? loops.get(loopKey(e.root)) ?? [] : [];
   for (const [name, entry] of snapshots(path.join(d, 'archive'))) {
     rest.push(normalizeEntry(entry, stemOf(name)));
   }
@@ -160,12 +257,19 @@ function activityEntries(state) {
     if (now - Number(e.updated_at) > ARCHIVE_MAX_AGE_SECONDS) continue;
     ended.push({ ...e, ended: true });
   }
-  return { activity: newestFirst(live), ended: newestFirst(ended).slice(0, ARCHIVE_KEEP) };
+  return {
+    activity: newestFirst(live),
+    ended: newestFirst(ended).slice(0, ARCHIVE_KEEP),
+    collisions: collisionsOf(live),
+  };
 }
 
 export function apiActivity(state) {
   const enabled = activityEnabled(state);
-  return { enabled, ...(enabled ? activityEntries(state) : { activity: [], ended: [] }) };
+  return {
+    enabled,
+    ...(enabled ? activityEntries(state) : { activity: [], ended: [], collisions: [] }),
+  };
 }
 
 /**
@@ -200,6 +304,10 @@ export function apiActivityDetail(state, sid) {
   // The detail file carries the uncapped lists; fall back to the snapshot's capped ones.
   session.files = isTruthy(fg('files')) ? fg('files') : session.files;
   session.todos = isTruthy(fg('todos')) ? fg('todos') : session.todos;
+  // The garden's fields, as `apiActivity` gives a live session: `files` is uncapped here already.
+  session.files_all = itemsOf(session.files);
+  session.loops = session.ended || typeof session.root !== 'string'
+    ? [] : loopsByRoot([session]).get(loopKey(session.root)) ?? [];
   // The compact transcript: an ordered list of {role, text, t} turns. Empty falls back to
   // the title as the opening user turn, because OpenCode derives the title from the first
   // prompt.

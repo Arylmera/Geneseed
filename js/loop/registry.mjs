@@ -168,6 +168,23 @@ export function activeLoops({ now = new Date() } = {}) {
 }
 
 /**
+ * The running rows only, READ-ONLY: the same `runningRow` projection as `activeLoops`, for every
+ * registered root whose `LOOP.md` exists and parses, and never a save. The Activity page polls
+ * every 2 s and only needs to know which loops run; letting that poll prune or stamp
+ * `finishedAt` would race `recordLoop` on the one `loops.json.tmp`. Finished, unreadable and
+ * vanished rows are simply absent; `activeLoops` stays their only writer.
+ */
+export function runningLoops() {
+  const rows = [];
+  for (const entry of load()) {
+    const file = path.join(entry.root, LOOP_FILE);
+    if (!isFile(file)) continue;
+    try { rows.push(runningRow(entry, parseLoopFile(readText(file)))); } catch { /* unreadable */ }
+  }
+  return rows;
+}
+
+/**
  * Rewrite `root`'s `LOOP.md` `preset` field and nothing else — the per-loop preset picker on
  * the Active tab. Refuses a `root` the registry does not know about (no arbitrary path
  * writes — `POST /api/loops/preset`'s whole safety argument) and a `preset` outside `PRESETS`,
