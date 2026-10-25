@@ -14,7 +14,7 @@ vi.mock('../api/index.js', () => ({
 const { askConfirm } = vi.hoisted(() => ({ askConfirm: vi.fn(async () => true) }))
 vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
 
-import Library, { splitSkills, bodyHead } from '../pages/Library.jsx'
+import Library, { splitSkills, bodyHead, splitWhen } from '../pages/Library.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import { api } from '../api/index.js'
 
@@ -657,5 +657,99 @@ describe('Library usage', () => {
     expect(document.querySelectorAll('.lr-use a, .lr-use button, .lr-use [tabindex]')).toHaveLength(
       0,
     )
+  })
+
+  it('names the window the counts cover, in the list head', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    expect(document.querySelector('.lib-list-head .lib-since').textContent).toBe(
+      'calls since 2026-09-01',
+    )
+  })
+})
+
+// The dossier reader (mockup "Library · Dossier"): the description's "Use when:" half is its own
+// note, the source path can be copied, and each kind links to the Docs page that explains it.
+describe('Library dossier', () => {
+  it('splitWhen parts a description at its "Use when" marker', () => {
+    expect(splitWhen('Forges the change. Use when: a crew needs code.')).toEqual({
+      lede: 'Forges the change.',
+      when: 'A crew needs code.',
+    })
+    expect(splitWhen('Plain words.')).toEqual({ lede: 'Plain words.', when: '' })
+    expect(splitWhen('')).toEqual({ lede: '', when: '' })
+    // Without the colon it is prose, not the marker.
+    expect(splitWhen('Use whenever you like.')).toEqual({
+      lede: 'Use whenever you like.',
+      when: '',
+    })
+    expect(splitWhen('Use when you must.')).toEqual({ lede: 'Use when you must.', when: '' })
+  })
+
+  it('prints the lede and the "Use when" note apart, each once', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items: [{ name: 'dev', title: 'dev', desc: 'Forges it. Use when: code is due.' }],
+      }),
+    )
+    api.item.mockImplementation(() =>
+      Promise.resolve({ title: 'dev', desc: 'Forges it. Use when: code is due.', body: 'b' }),
+    )
+    render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.reader-when')).toBeTruthy())
+    expect(document.querySelector('.reader-lede').textContent).toBe('Forges it.')
+    const note = document.querySelector('.reader-when')
+    expect(note.querySelector('h3').textContent).toBe('Use when')
+    expect(note.querySelector('p').textContent).toBe('Code is due.')
+    expect(document.querySelector('.lib-reader').textContent.split('ode is due').length - 1).toBe(1)
+  })
+
+  it('copies the source path, and says so', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    api.item.mockImplementation(() =>
+      Promise.resolve({ title: 'x', desc: '', body: 'b', source: '/h/.claude/agents/reviewer.md' }),
+    )
+    render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() =>
+      expect(document.querySelector('.reader-src').textContent).toBe(
+        '/h/.claude/agents/reviewer.md',
+      ),
+    )
+    const copy = screen.getByRole('button', { name: 'Copy path' })
+    fireEvent.click(copy)
+    await waitFor(() => expect(copy.textContent).toBe('Copied'))
+    expect(writeText).toHaveBeenCalledWith('/h/.claude/agents/reviewer.md')
+  })
+
+  it('says so when the clipboard is blocked', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    render(<Library section="agents" overview={overview({})} />)
+    const copy = await screen.findByRole('button', { name: 'Copy path' })
+    fireEvent.click(copy)
+    await waitFor(() => expect(copy.textContent).toBe('Copy failed'))
+  })
+
+  it('links each kind to the Docs page that explains it', async () => {
+    render(<Library section="memory" overview={overview({})} />)
+    const link = await screen.findByRole('link', { name: 'About memory in Docs' })
+    expect(link.getAttribute('href')).toBe('#/docs/memory')
+  })
+
+  // The lifecycle chip needs no usage: it narrows to the experimental entries of the kind.
+  it('narrows to the experimental entries', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    const group = await screen.findByRole('group', { name: 'Show' })
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'All 2',
+      'Experimental 1',
+    ])
+    const exp = within(group).getByRole('button', { name: /^Experimental/ })
+    fireEvent.click(exp)
+    expect(exp.getAttribute('aria-pressed')).toBe('true')
+    expect(
+      [...document.querySelectorAll('.lib-row')].map((a) => a.getAttribute('data-title')),
+    ).toEqual(['rule'])
   })
 })

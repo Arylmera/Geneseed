@@ -12,6 +12,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **Activity lists recently ended sessions.** Sessions that are no longer live (the newest 50, 7 days) appear under the live list, each opening its detail page; an ended session reads "ended" there instead of its last status, with no running turn clock.
 
 ### Changed
+- **The Library reader follows the "Dossier" layout**: source path with a Copy button, the description's "Use when" as its own note, usage tiles beside the lede, a link to the kind's Docs page; the list gains an Experimental filter and compact usage rows.
 - **Installs › Server picks the skin with a segmented control**, and the section index and Server section show whether the server is live and current.
 - **parallel-agents watches its units** the way the pipeline watches a crew: a result without its check, or one still waiting, is acted on at once, never waited on.
 
