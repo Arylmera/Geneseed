@@ -2741,8 +2741,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
 /* Reader: tags, the source path with its Copy button, title; then the lede and the "Use when"
    note on an accent edge, with the usage tiles beside them on a wide reader (.reader-intro). */
 .lib-dossier .reader-tags .reader-src { margin-left: 4px; }
-.lib-dossier .lib-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--sp-3); margin: 0; max-width: 76ch; }
+.lib-dossier .lib-stats { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); margin: 0; }
+/* One usage card filling its column; the sparkline spans the card. */
+.lib-dossier .lib-stats .cols30 { width: 100%; }
 .lib-dossier .lib-stats .stat { border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 12px 14px; min-width: 0; }
 .reader-when { display: flex; flex-direction: column; gap: 4px;
