@@ -531,7 +531,7 @@ export default function Library({
                 {(item?.kit ?? activeItem.kit) ? (
                   <KitBadge name={item?.kit ?? activeItem.kit} />
                 ) : null}
-                <StatusBadge status={status} />
+                <StatusBadge status={status} withHint />
                 {src ? (
                   <>
                     <span className="mono dim reader-src">{src}</span>

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PAGES, applyAccent, applyCuratedAccent, applyHexAccent, contrast } from '../lib/accents.js'
@@ -398,6 +398,43 @@ describe('light/dark contrast contract', () => {
         if (!/var\(\s*--(good|warn|bad)\s*[,)]/.test(v)) continue
         if (r.selectors.every((s) => s in STATUS_ALLOWED)) continue
         fails.push(`${r.sel} { ${p}: ${v} }`)
+      }
+    expect(report(fails)).toBe('')
+  })
+
+  // Rules 7/7b read the stylesheet; an inline `style={{ color: 'var(--accent)' }}` in a
+  // component paints text just the same and the stylesheet never sees it (LN-5). Only the
+  // `color` and `fill` keys: lib/activity.jsx's `accent: 'var(--bad)'` is a border colour.
+  it('7c: no component paints text inline with a raw --accent or status colour', () => {
+    const srcDir = resolve(process.cwd(), 'src')
+    const files = readdirSync(srcDir, { recursive: true }).filter(
+      (f) => /\.jsx?$/.test(f) && !/__tests__/.test(f),
+    )
+    expect(files.length, 'component sources found').toBeGreaterThan(50)
+    const fails = []
+    for (const f of files) {
+      const text = readFileSync(resolve(srcDir, f), 'utf8')
+      for (const m of text.matchAll(
+        /\b(color|fill)\s*:\s*['"`]var\(\s*--(accent|good|warn|bad)\s*[,)]/g,
+      ))
+        fails.push(`${f}: ${m[0]}`)
+    }
+    expect(report(fails)).toBe('')
+  })
+
+  // Greenhouse's category colours (tiles, legend dots, ring arcs) are non-text marks: 3:1 on
+  // every surface, both modes (LN-11). They are mode-wide tokens beside --chart-*: `.app`
+  // for dark, `.app.light` for light, read here on top of each flavour's surfaces.
+  it('10: the --cat-0..6 category colours hold 3:1 on every surface', () => {
+    const root = blockTokens('.app')
+    const light = blockTokens('.app.light')
+    const fails = []
+    for (const f of FLAVOURS)
+      for (const m of MODES) {
+        const map = { ...root, ...flavourMap(f, m), ...(m === 'light' ? light : {}) }
+        for (let i = 0; i < 7; i++)
+          for (const s of SURFACES)
+            pair(fails, `${f} ${m}`, `--cat-${i}`, tok(map, `--cat-${i}`), s, tok(map, s), NON_TEXT)
       }
     expect(report(fails)).toBe('')
   })

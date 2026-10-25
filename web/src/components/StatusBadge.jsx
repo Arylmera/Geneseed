@@ -34,13 +34,23 @@ const STATUS = {
   },
 }
 
-export default function StatusBadge({ status }) {
+// `withHint` (the Library reader) also prints the hint as text: a `title` reaches neither the
+// keyboard nor a touch screen (LB-14). Rows leave it off: a sentence per row is noise, and in
+// LibRows it would join the row link's name.
+export default function StatusBadge({ status, withHint = false }) {
   const s = STATUS[status]
   if (!s) return null
-  return (
-    <span className={`badge ${s.cls}`} title={s.hint}>
+  const badge = (
+    <span className={`badge ${s.cls}`} title={withHint ? undefined : s.hint}>
       <span className="dot" />
       {s.label}
     </span>
+  )
+  if (!withHint) return badge
+  return (
+    <>
+      {badge}
+      <span className="dim">{s.hint}</span>
+    </>
   )
 }

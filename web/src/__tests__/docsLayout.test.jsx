@@ -110,6 +110,12 @@ describe('Docs layout', () => {
     )
   })
 
+  // DC-19: the reader region is named after the page, not "Page" on every page.
+  it('names the reader region after the page title', async () => {
+    render(<Docs page="clone" overview={{}} />)
+    expect(await screen.findByRole('article', { name: 'From a clone' })).toBeTruthy()
+  })
+
   // The menu places the page, so the menu gives the head its section and its lede: the page
   // payload carries neither.
   it("heads the page with the menu's section and description", async () => {

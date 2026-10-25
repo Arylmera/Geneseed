@@ -12,10 +12,10 @@ import VerdictBadge from './VerdictBadge.jsx'
 // Recent-activity panel: how many jobs the run chips draw from.
 const MAX_TIMELINE_JOBS = 12
 
-// Greenhouse "category" palette — warm rich tones that survive on both the
-// deep-forest dark and cream-paper light variants. Stable index per section
-// so a colour assigned to "agents" stays the same regardless of theme voice.
-const B_CATS = ['#2BB673', '#16A6A6', '#E8A23B', '#E07A5F', '#8E7DBE', '#5BD08A', '#79856E']
+// Greenhouse "category" palette — stable index per section so a colour assigned to "agents"
+// stays the same regardless of theme voice. The colours are the --cat-N tokens in styles.css,
+// which carry light-mode twins: one dark hex for both modes fell to ~2:1 on cream paper.
+const B_CATS = Array.from({ length: 7 }, (_, i) => `var(--cat-${i})`)
 
 // Donut chart: the shared ring, with the running total and its caption over the centre. The
 // caption is a prop so the same donut serves both the capability mix and the doctor-checks
@@ -94,21 +94,29 @@ function Trend({ data, height = 156, accent }) {
     >
       <defs>
         <linearGradient id="b-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={accent} stopOpacity=".28" />
-          <stop offset="1" stopColor={accent} stopOpacity="0" />
+          {/* Colours as style, not attributes: `accent` is a var(), which a presentation
+              attribute is not guaranteed to resolve. */}
+          <stop offset="0" style={{ stopColor: accent }} stopOpacity=".28" />
+          <stop offset="1" style={{ stopColor: accent }} stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#b-grad)" />
       <path
         d={linePath}
         fill="none"
-        stroke={accent}
+        style={{ stroke: accent }}
         strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
       />
-      <circle cx={last[0]} cy={last[1]} r="3.5" fill={accent} vectorEffect="non-scaling-stroke" />
+      <circle
+        cx={last[0]}
+        cy={last[1]}
+        r="3.5"
+        style={{ fill: accent }}
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   )
 }

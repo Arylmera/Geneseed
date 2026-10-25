@@ -259,7 +259,8 @@ export default function Docs({ page, overview, onAction }) {
           )}
         </LibList>
 
-        <article className="lib-reader docs-reader" aria-label="Page">
+        {/* Named after the page, so the region does not announce "Page" on every page (DC-19). */}
+        <article className="lib-reader docs-reader" aria-label={place.page?.title || 'Page'}>
           <ReadProgress />
           {place.page && (
             <nav className="docs-crumbs mono" aria-label="Breadcrumb">
