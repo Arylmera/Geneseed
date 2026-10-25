@@ -178,7 +178,10 @@ describe('Ledger KPI helpers', () => {
 
   it('alwaysOnRange spans the measured installs and names the most expensive', () => {
     const r = alwaysOnRange(FLEET.installs)
-    expect([r.min, r.max, r.top.host]).toEqual([48000, 62000, 'claude'])
+    expect([r.min, r.max, r.top.host, r.shown.host]).toEqual([48000, 62000, 'claude', 'claude'])
+    // The card details the install the console views, not the most expensive.
+    const sel = FLEET.installs.map((i) => ({ ...i, selected: i.host === 'bob' }))
+    expect(alwaysOnRange(sel).shown.host).toBe('bob')
     expect(alwaysOnRange([OPENCODE])).toBeNull()
   })
 
@@ -207,8 +210,11 @@ describe('Ledger KPI cards', () => {
         name: 'Worst root file: bob · global, 85 percent of its ceiling: 8500 of 10000',
       }),
     ).toBeTruthy()
-    const cost = within(screen.getByRole('region', { name: 'Always-on cost per turn' }))
-    expect(cost.getByText('≈12.0k – ≈15.5k tokens')).toBeTruthy()
+    // No install selected: the card details the most expensive, the fleet range under it.
+    const cost = within(screen.getByRole('region', { name: 'Loaded every turn' }))
+    expect(cost.getByText('≈15.5k tokens')).toBeTruthy()
+    expect(cost.getByText('claude · global')).toBeTruthy()
+    expect(cost.getByText('All installs: ≈12.0k – ≈15.5k tokens')).toBeTruthy()
     const calls = within(screen.getByRole('region', { name: 'Skill and agent calls' }))
     expect(await calls.findByText('144')).toBeTruthy()
     expect(calls.getByText('since 2026-10-14')).toBeTruthy()

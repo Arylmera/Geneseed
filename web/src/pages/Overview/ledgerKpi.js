@@ -36,7 +36,10 @@ export function alwaysOnRange(installs) {
   if (!act.length) return null
   const top = act.reduce((a, b) => (costTotal(b.cost) > costTotal(a.cost) ? b : a))
   const totals = act.map((i) => costTotal(i.cost))
-  return { min: Math.min(...totals), max: Math.max(...totals), top }
+  // `shown` is the install the card details: the one the console views (the topbar picker),
+  // else the most expensive — the same rule as the root-file card.
+  const shown = act.find((i) => i.selected) || top
+  return { min: Math.min(...totals), max: Math.max(...totals), top, shown }
 }
 
 export const usageTotal = (usage) => (usage?.per_day || []).reduce((a, b) => a + b, 0)

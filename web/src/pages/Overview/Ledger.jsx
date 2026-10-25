@@ -251,6 +251,9 @@ function RootKpi({ installs }) {
   )
 }
 
+// What the viewed install loads into every turn before you type: its total, then the parts
+// (root file, skill list, agent list, session files) with their tokens in the legend. The
+// fleet's range stays as one quiet line, so the card answers one question first.
 function CostKpi({ installs }) {
   const r = alwaysOnRange(installs)
   const span =
@@ -259,16 +262,18 @@ function CostKpi({ installs }) {
       ? approxTokens(r.max)
       : `${approxTokens(r.min)} – ${approxTokens(r.max)}`)
   return (
-    <Kpi id="ldg-k-cost" title="Always-on cost per turn" className="ldg-kpi-cost">
+    <Kpi id="ldg-k-cost" title="Loaded every turn" className="ldg-kpi-cost">
       {r ? (
         <>
-          <span className="mono ldg-kpi-fig">{`${span} tokens`}</span>
+          <span className="ldg-kpi-stack">
+            <span className="mono ldg-kpi-fig">{`${approxTokens(costTotal(r.shown.cost))} tokens`}</span>
+            <span className="dim">{labelOf(r.shown)}</span>
+          </span>
           <StackBar
-            parts={costParts(r.top.cost)}
-            label={`Most expensive, ${labelOf(r.top)}`}
-            legend={false}
+            parts={costParts(r.shown.cost)}
+            label={`Loaded every turn, ${labelOf(r.shown)}`}
           />
-          <span className="dim ldg-kpi-cap">{`Bar: ${labelOf(r.top)}, the most expensive`}</span>
+          <span className="dim ldg-kpi-cap">{`All installs: ${span} tokens`}</span>
         </>
       ) : (
         <p className="dim">No install has a root file to measure.</p>
