@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The console's styles use the size tokens** (`--fs-*`, `--sp-*`) page by page: a value equal to a step uses it, one within 1px snaps to it (half-pixels round up), and the rest are marked off-scale with the reason. Radii and 15px headings stay as they were.
+
 ## [4.24.1] — 2026-10-25
 
 Patch: pages use the whole window width.
