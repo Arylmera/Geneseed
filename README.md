@@ -128,7 +128,7 @@ Both launchers are thin shims over the Node CLI: they need `node` (22.7+) on `PA
 
 ### 🟩 One runtime — Node, and nothing else
 
-Node ≥ 22.7 is the entire dependency list — every command, all five hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter.
+Node ≥ 22.7 is the entire dependency list — every command, all six hook verbs, the web console and both generators run from it, and nothing any bundle ships needs a second interpreter.
 
 ### ✅ After installing
 
@@ -268,7 +268,7 @@ Token cost per host: **[docs/token-footprint.md](docs/token-footprint.md)**.
 Geneseed/
 ├── package.json          the npm package: three commands, zero dependencies
 ├── bin/                  the Node entry points — geneseed-cli.mjs (the CLI), geneseed-hook.mjs
-│                         (the five hook verbs), build-driver.mjs (the generator driver)
+│                         (the six hook verbs), build-driver.mjs (the generator driver)
 ├── js/                   the Node harness — generator, hooks, web server, doctor, installs
 │                         (js/cli-table.json is the CLI as data; the CLI reads it)
 ├── geneseed              launcher (bash): a shim over bin/geneseed-cli.mjs — bare `./geneseed`

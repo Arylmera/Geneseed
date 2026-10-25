@@ -1,6 +1,7 @@
 /**
  * The primitives the hook verbs share — `js/hosts/hooks.mjs` (the gates), `hooks-context.mjs`,
- * `hooks-learn.mjs` and `memory-files.mjs`.
+ * `hooks-learn.mjs` and `memory-files.mjs` — plus the activity writer's off switch and its
+ * do-nothing `activity` verb, which `bin/geneseed-hook.mjs` reaches without loading the writer.
  *
  * Its own module because the verbs no longer share one: each loads only the code its verb runs
  * (`bin/geneseed-hook.mjs` imports per verb), and a gate is paid on every tool call. What lives
@@ -105,14 +106,56 @@ export function splitWords(s) {
   return s.split(/\s+/).filter(Boolean);
 }
 
-/** stdin, decoded as UTF-8 with Python's universal newlines. Absent stdin reads empty. */
+/**
+ * stdin, decoded as UTF-8 with Python's universal newlines. Absent stdin reads empty.
+ *
+ * Read ONCE per process and kept: fd 0 drains on the first read, and the activity writer
+ * (`bin/geneseed-hook.mjs`'s `trackActivity`) needs the payload the verb already consumed.
+ */
+let stdinText = null;
 export function readStdin() {
+  if (stdinText !== null) return stdinText;
   try {
-    return readFileSync(0, 'utf8').replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    stdinText = readFileSync(0, 'utf8').replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   } catch {
-    return '';
+    stdinText = '';
+  }
+  return stdinText;
+}
+
+// Law I's boundary half — rule-gate's credential scan, and the activity writer's redaction of
+// every snippet it puts on disk. Here, not in `./hooks.mjs`, so the writer reads the one copy
+// without loading the gates. High-precision vendor prefixes only — a generic "looks like
+// entropy" scan would fire on every hash and lockfile, and a gate that cries wolf gets
+// allow-listed. `sk-ant-` takes `_`: Anthropic keys are base64url, and a key whose first `_`
+// fell inside the first 20 characters slipped through. GitHub's classic `ghp_` tokens really are
+// alphanumeric only.
+export const SECRET_RE =
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+
+const OFF = ['off', '0', 'false', 'no'];
+
+/**
+ * Whether the activity writer runs for the install at `root`: on unless `$GENESEED_ACTIVITY` or
+ * the web console's `<root>/.geneseed-activity` flag says off — the same words, and the same
+ * absent-means-on default, as the OpenCode plugin and `js/web/activity.mjs`. One file read: this
+ * is paid on every hook call, and it is the only thing paid when tracking is off.
+ */
+export function activityOn(root) {
+  if (OFF.includes(String(process.env.GENESEED_ACTIVITY ?? 'on').trim().toLowerCase())) return false;
+  try {
+    return !OFF.includes(readFileSync(path.join(root, '.geneseed-activity'), 'utf8').trim().toLowerCase());
+  } catch {
+    return true;
   }
 }
+
+/**
+ * The `activity` verb, wired to the two events no other verb runs on (UserPromptSubmit;
+ * SessionEnd on Claude and OpenClaude). It decides nothing and prints nothing: the entry's
+ * `trackActivity` records the payload after every verb alike, this one included.
+ */
+export const cmdActivity = () => 0;
 
 // The two output funnels, with Python's newline translation reproduced, are `printOut`/`printErr`
 // in `js/lib/fs.mjs` — they moved there in P5c, beside `writeText`, which is the same rule for

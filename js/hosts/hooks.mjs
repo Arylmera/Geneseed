@@ -1,5 +1,7 @@
 /**
- * The five HOOK verbs — `context`, `git-gate`, `rule-gate`, `tool-gate`, `learn` — in Node.
+ * Five of the six HOOK verbs — `context`, `git-gate`, `rule-gate`, `tool-gate`, `learn` — in Node.
+ * The sixth, `activity`, decides nothing and lives in `./hooks-prims.mjs`; the activity writer
+ * every verb feeds after it decides is `./activity.mjs`, called from `bin/geneseed-hook.mjs`.
  *
  * These are the commands the emitted `settings.json` actually invokes on a user's machine,
  * every session: a SessionStart injector, two PreToolUse gates (and `tool-gate`, the two
@@ -59,7 +61,7 @@ import {
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
-import { selfAndParents, readStdin } from './hooks-prims.mjs';
+import { selfAndParents, readStdin, SECRET_RE } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 
 // ======================================================================================
@@ -527,13 +529,8 @@ function ruleGateTarget(p, root) {
   }
 }
 
-// Law I's boundary half. High-precision vendor prefixes only — a generic "looks like entropy"
-// scan would fire on every hash and lockfile, and a gate that cries wolf gets allow-listed.
-// `.env*` is exempt because Law I names it as the place a secret may live. `sk-ant-` takes `_`:
-// Anthropic keys are base64url, and a key whose first `_` fell inside the first 20 characters
-// slipped through. GitHub's classic `ghp_` tokens really are alphanumeric only.
-const SECRET_RE =
-  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+// Law I's boundary half is `SECRET_RE` (`./hooks-prims.mjs`, where the activity writer reads it
+// too). `.env*` is exempt because Law I names it as the place a secret may live.
 const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
 export const SENSOR_LIST = '.geneseed/protected-checks.txt';

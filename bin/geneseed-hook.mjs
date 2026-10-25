@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * The hook entry point — a Node twin of `rituals/harness.py` for the verbs the emitted
- * `settings.json` actually invokes (four from the reference, plus `tool-gate` for Bob).
+ * `settings.json` actually invokes (four from the reference, plus `tool-gate` for Bob and
+ * `activity` for the web console's Activity view).
  *
  * WHY IT IS A SECOND BINARY AND NOT A SUBCOMMAND OF `bin/build-driver.mjs`. Three reasons,
  * and each alone would be enough:
@@ -50,6 +51,11 @@ import '../js/lib/node-floor.mjs';
 // Not a new module on the hot path: every verb's module imports `js/lib/fs.mjs` too, so this
 // edge only loads early a file the process would load anyway.
 import { printErr } from '../js/lib/fs.mjs';
+// Also not a new module: every verb's module imports it. It carries the activity switch, so the
+// off path costs one file read and no import of the writer.
+import { activityOn, readStdin } from '../js/hosts/hooks-prims.mjs';
+import { isatty } from 'node:tty';
+import path from 'node:path';
 
 // `--host` selects the verdict dialect (see js/hosts/hooks.mjs's header); the emitter bakes
 // it into the command for every host that is not Claude Code, so the hook never has to guess
@@ -92,7 +98,36 @@ const VERBS = {
     switches: { '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate' },
     positional: 'file',
   },
+  // UserPromptSubmit and SessionEnd: no verb runs there, and the activity view needs both.
+  activity: { load: () => import('../js/hosts/hooks-prims.mjs'), fn: 'cmdActivity', flags: HOSTED },
 };
+
+/**
+ * Records the payload the verb just answered into `<root>/activity/` (js/hosts/activity.mjs),
+ * AFTER the verb has decided and printed, so a verdict never waits on it and never sees it.
+ * Here rather than inside each verb because Claude routes its gated tools through THREE verbs
+ * (git-gate, rule-gate, tool-gate) and the same payload shape reaches all of them; the stdin they
+ * consumed is kept by `readStdin`. Never prints, never changes the exit code. Stands down inside a
+ * model-CLI child `learn` spawned (its own hooks would record a phantom session), on a terminal
+ * (a hand-run `context` must not block on a stdin nobody will send), and when tracking is off —
+ * then the writer module is never imported.
+ */
+async function trackActivity(verb, args) {
+  try {
+    // `learn` names its install by `--memory`, and a `--file` run is a person, not a hook.
+    const root = verb === 'learn' ? (args.memory && !args.file ? path.dirname(args.memory) : null)
+      : args.root;
+    if (!root || process.env.GENESEED_LEARN_CHILD || isatty(0) || !activityOn(root)) return;
+    // `context` never read stdin before this writer, and whether Bob's SessionStart pipes one
+    // and closes it is unverified: a read there could hold the session's start. A Bob session
+    // is first recorded by its first prompt or tool call instead.
+    if (verb === 'context' && args.host === 'bob') return;
+    const raw = readStdin();
+    if (!raw.includes('session_id')) return;
+    const { recordActivity } = await import('../js/hosts/activity.mjs');
+    recordActivity(root, raw, { host: args.host || 'claude' });
+  } catch { /* the activity view is best-effort; a hook that fails is a tool call that fails */ }
+}
 
 function die(code, msg) {
   // CRLF on Windows, for the same reason the hook verbs' funnels translate: argparse
@@ -181,7 +216,11 @@ async function main(argv) {
     // PreToolUse, from the gate deliberately blocking (see I3/B1 above). Print the same message
     // to stderr for a human debugging the shim, but return 0 with no stdout, exactly like a gate
     // that chose not to act.
-    if (GATE_VERBS.has(verb)) { printErr(`geneseed-hook: error: ${parsed.error}\n`); return 0; }
+    // `activity` too: it runs on UserPromptSubmit, where exit 2 erases the user's prompt.
+    if (GATE_VERBS.has(verb) || verb === 'activity') {
+      printErr(`geneseed-hook: error: ${parsed.error}\n`);
+      return 0;
+    }
     // `context` and `learn` are not gate verbs, but their own argv errors are not a decision
     // either, so still 1, not 2 (I3/B1): a `<hook name> hook error` notice, and nothing more.
     // `learn` is the one that matters here — it runs on Stop/SubagentStop, where exit 2 ALSO has
@@ -189,7 +228,9 @@ async function main(argv) {
     // `hooks.md`, "Stop, SubagentStop, TaskCompleted, and TeammateIdle").
     return die(1, parsed.error);
   }
-  return (await spec.load())[spec.fn](parsed.args);
+  const rc = (await spec.load())[spec.fn](parsed.args);
+  await trackActivity(verb, parsed.args);
+  return rc;
 }
 
 main(process.argv.slice(2)).then((code) => { process.exitCode = code; });

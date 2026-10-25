@@ -348,7 +348,7 @@ async function main(argv) {
     // just about to become false — it was already claiming a third place for verbs that do
     // not exist.
     return die(2, `invalid choice: '${verb}'. This entry point carries only `
-      + `${Object.keys(VERBS).join(', ')}; the five hook verbs live in `
+      + `${Object.keys(VERBS).join(', ')}; the six hook verbs live in `
       + 'bin/geneseed-hook.mjs.');
   }
   // `js/cli-table.json`, the CLI as data. A verb this table dispatches and the file does not

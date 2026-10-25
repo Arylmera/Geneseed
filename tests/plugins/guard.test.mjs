@@ -361,13 +361,14 @@ test("apply_patch: a secret in .env ALONE (no other file) is not blocked", async
 test("SECRET_CONTENT_RE stays in parity with the Node hook's SECRET_RE (Law I twin)", async () => {
   const guardSrc = await fs.readFile(
     path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
-  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  // The hook's copy lives in hooks-prims.mjs since the activity writer redacts with it too.
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks-prims.mjs"), "utf8")
   const guardRe = guardSrc.match(/const SECRET_CONTENT_RE =\s*\r?\n\s*(\/.*\/)\s*\r?\n/)
   const hookRe = hookSrc.match(/const SECRET_RE =\s*\r?\n\s*(\/.*\/);/)
   assert.ok(guardRe, "SECRET_CONTENT_RE not found in geneseed-guard.js")
-  assert.ok(hookRe, "SECRET_RE not found in js/hosts/hooks.mjs")
+  assert.ok(hookRe, "SECRET_RE not found in js/hosts/hooks-prims.mjs")
   assert.equal(guardRe[1], hookRe[1],
-    "the guard's content-secret pattern drifted from js/hosts/hooks.mjs's SECRET_RE — keep the two byte-identical")
+    "the guard's content-secret pattern drifted from js/hosts/hooks-prims.mjs's SECRET_RE — keep the two byte-identical")
 })
 
 // ---- permission.ask: not registered (OpenCode verdict I-2) --------------------------

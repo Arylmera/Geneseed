@@ -14,6 +14,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 | Agents · Skills · Memory · Notebook | ✅ | ✅ | ✅ | ✅ |
 | Project context loaded at session start | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook² |
 | Memory written back at session end (learn) | ⚙️ plugin | 🪝 hook | 🪝 hook¹ | 🪝 hook² |
+| Live sessions in the web console's [Activity view](../reference/plugin-activity.md) | ⚙️ plugin | 🪝 hook | 🪝 hook, per tool call only (no transcript)¹ | 🪝 hook² |
 | Real data loss (force-push to `main`, discarding uncommitted work, `rm` of untracked files…) | ⚙️ block³ · 🔒 ask (reflog, gc) | 🪝 ask | 🪝 block¹ | 🪝 ask² |
 | Secrets kept out of files | ⚙️ block⁴ | 🪝 ask | 🪝 block¹ | 🪝 ask² |
 | Consent before every commit and push | 🔒 permission ask | 🪝 ask | 🪝 warning¹ | 🪝 ask² |

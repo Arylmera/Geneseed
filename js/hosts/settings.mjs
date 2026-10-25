@@ -781,6 +781,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // if Bob ever starts sending one, learning on Bob starts working with no emit change —
       // dropping the group would need a second one re-added later for the same reason.
       Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b}${dn} || exit 0` }] }],
+      // The activity view's turn start (js/hosts/activity.mjs). Bob has no SessionEnd, so a Bob
+      // session leaves the live list by staleness alone.
+      UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${run} activity --root "${cfg}"${b} || exit 0` }] }],
     };
   }
   // OpenClaude takes Claude's whole group set and verdicts unchanged. `context` needs the host
@@ -798,6 +801,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
   const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`;
   const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''} || exit 0`;
+  const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
   // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now
   // BLOCKS the tool call instead of sliding through as the non-blocking default. Only safe to
@@ -849,6 +853,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // (its `compact` source) re-seeds context AFTER, this captures memory BEFORE. Same
     // `|| exit 0`: never block.
     PreCompact: [{ hooks: [{ type: 'command', command: learn }] }],
+    // The activity view's turn start and session end (js/hosts/activity.mjs) — the two events no
+    // other verb runs on. Never `onFailure: 'block'`: on UserPromptSubmit a block erases the
+    // user's prompt, and the `activity` verb decides nothing.
+    UserPromptSubmit: [{ hooks: [{ type: 'command', command: activity }] }],
+    SessionEnd: [{ hooks: [{ type: 'command', command: activity }] }],
   };
   // Claude Code only: OpenClaude always runs Git Bash on Windows (its `findGitBashPath` exits
   // without one), and Bob takes the early return above.

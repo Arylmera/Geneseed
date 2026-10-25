@@ -1443,12 +1443,14 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     // — SessionStart (context, plain stdout), PreToolUse (ONE `tool-gate` group, deliberately
     // NO matcher — host-compat O1, revisited: an allow-list from Bob's own tool list would
     // fail open on tool drift, and a deny-list needs an unverified regex dialect — `--host
-    // bob` so a refusal is exit 2), Stop (learn). `SubagentStop`/`PreCompact` are not Bob
+    // bob` so a refusal is exit 2), Stop (learn) — and a fourth since the activity view,
+    // UserPromptSubmit (`activity`, the turn's start). `SubagentStop`/`PreCompact` are not Bob
     // events and must not be written; a flat `settings.json` must not exist either.
     assert.ok(!fs.existsSync(path.join(cfg, 'settings.json')), 'the flat settings.json is the OLD path');
     const settings = readJson(cfg, 'settings', 'settings.json');
     assert.ok(!('claudeMdExcludes' in settings));
-    assert.deepEqual(Object.keys(settings.hooks).sort(), ['PreToolUse', 'SessionStart', 'Stop']);
+    assert.deepEqual(Object.keys(settings.hooks).sort(),
+      ['PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit']);
     assert.equal(settings.hooks.PreToolUse.length, 1);
     assert.ok(!('matcher' in settings.hooks.PreToolUse[0]));
     // `--root` and `--memory` name the INSTALL dir, not the nested file's parent: derived from

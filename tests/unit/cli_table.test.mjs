@@ -60,17 +60,19 @@ test('the table is the document the entry reads, and the page is derived from it
   // test is about. The reference stated it by comparing two paths across implementations; with
   // one implementation left, what says it is that the live reader's answer tracks the FILE.
   const onDisk = JSON.parse(readFileSync(TABLE, 'utf8'));
-  // 32 = the 26 names argparse answered to (25 subparsers plus the `update` alias) plus the
-  // six verbs that never had a subparser: `catalog`, `mcp` and `memory`, each a terminal
+  // 33 = the 26 names argparse answered to (25 subparsers plus the `update` alias) plus the
+  // seven verbs that never had a subparser: `catalog`, `mcp` and `memory`, each a terminal
   // face on a capability that had reached the product only through the web console;
   // `tool-gate`, the hook verb Bob's one-command-per-event settings need; `loop`, the
-  // Task 5 state-machine verb with no Python original at all; and `scorecard`, a port of the
-  // third-party AI Harness Scorecard rather than of any subparser. The split is owned by `NATIVE`
+  // Task 5 state-machine verb with no Python original at all; `scorecard`, a port of the
+  // third-party AI Harness Scorecard rather than of any subparser; and `activity`, the hook verb
+  // the web console's Activity view runs on UserPromptSubmit and SessionEnd, born long after the
+  // reference. The split is owned by `NATIVE`
   // in tests/unit/hook_cli.test.mjs, which names the native population and fails a verb that
   // has neither a recorded cell nor a place there; this line is the count that says the table
   // did not quietly grow past it.
-  assert.equal(onDisk.commands.length, 32,
-    'the table is no longer the 32-row document — 26 recorded names plus six Node-native '
+  assert.equal(onDisk.commands.length, 33,
+    'the table is no longer the 33-row document — 26 recorded names plus seven Node-native '
     + 'verbs. A new row needs a place in NATIVE (tests/unit/hook_cli.test.mjs) before it needs '
     + 'a number here');
   assert.equal(cliReference().commands.length, onDisk.commands.length,

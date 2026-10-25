@@ -203,7 +203,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Generator | `bin/build-driver.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the eleven `--emit` targets |
 | CLI, as data | `js/cli-table.json` | — | the owned document the entry point parses its own argv from |
 | Automation | `bin/geneseed-cli.mjs` (`geneseed`) | — | 25 verbs — `build` / `doctor` / `status` / `prompt` / `diff` / `setup` / `web` / `upgrade` / … |
-| Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the five verbs an emitted hook config invokes: `context` / `git-gate` / `rule-gate` / `tool-gate` / `learn` |
+| Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the six verbs an emitted hook config invokes: `context` / `git-gate` / `rule-gate` / `tool-gate` / `learn` / `activity` |
 | Adapters | `adapters/` | — | optional per-tool glue (hooks, OpenCode plugins) |
 
 ## ⚙️ Generator contract
