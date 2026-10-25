@@ -46,15 +46,22 @@ export default function App() {
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [mode, toggleMode] = useColorMode()
   const [flavour, setFlavour] = useFlavour()
+  const [accentMode, setAccentMode] = useAccentMode()
   // A flavour swap re-skins the whole console at once (fonts, surfaces), so it crossfades
   // as one picture (View Transitions) instead of snapping. flushSync makes the new skin
   // land INSIDE the transition's callback, which is the snapshot it fades to. No API or
   // reduced motion: the plain swap.
+  // A skin is drawn around its own accent, so a skin change hands the accent back to it
+  // (Curated): a custom pick kept across skins painted all four the same colour.
   const switchFlavour = (f) => {
-    if (!document.startViewTransition || !motionOK()) return setFlavour(f)
-    document.startViewTransition(() => flushSync(() => setFlavour(f)))
+    if (f === flavour) return // a click on the pressed skin is no change, and keeps the pick
+    const swap = () => {
+      setFlavour(f)
+      setAccentMode('curated')
+    }
+    if (!document.startViewTransition || !motionOK()) return swap()
+    document.startViewTransition(() => flushSync(swap))
   }
-  const [accentMode, setAccentMode] = useAccentMode()
   const [layout, setLayout] = useLayout()
   // The splash plays on the first load of a browser session only. Storage can throw
   // (blocked site data): then the splash simply plays, rather than the app failing to mount.
@@ -134,24 +141,22 @@ export default function App() {
       : `${lastRun.action} ${lastRun.status}`
 
   // The accent is a picked colour ('hex:#RRGGBB'), a fixed pick ('custom:<name>') or the
-  // flavour's curated signature ('curated', the default), adjusted for light/dark. The
-  // voice's accent is only the fallback for a flavour with no curated entry.
+  // flavour's curated signature ('curated', the default), adjusted for light/dark. Every
+  // flavour has a curated entry, so the deployed voice's accent never tints the console.
   useEffect(() => {
     const el = appRef.current
     if (!el) return
     if (!applyHexAccent(el, pickedHex(accentMode), mode)) {
       const custom = customAccentName(accentMode)
       if (custom) applyAccent(el, custom, mode)
-      else if (!applyCuratedAccent(el, flavour, mode) && overview?.accent) {
-        applyAccent(el, overview.accent, mode)
-      }
+      else applyCuratedAccent(el, flavour, mode)
     }
     // The browser chrome (a phone's address bar) follows the active flavour and mode; it was
     // fixed at the dark ground, so light mode showed a black bar over a pale page.
     document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute('content', getComputedStyle(el).getPropertyValue('--bg').trim())
-  }, [overview, mode, accentMode, flavour])
+  }, [mode, accentMode, flavour])
 
   // The command palette's Actions: each calls the handler the page's own control uses. A
   // `confirm` row is asked by the palette (useConfirm needs the provider this component

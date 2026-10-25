@@ -150,6 +150,13 @@ describe('VoicePopover', () => {
     expect(onPick).toHaveBeenCalledWith('plain')
   })
 
+  // The accent is the skin's own (or the reader's pick), never the voice's: every skin has a
+  // curated colour, so a dot in the voice's colour promised a tint that never arrived.
+  it('paints no accent dot beside a voice', () => {
+    mount(true)
+    expect(screen.getByRole('dialog').querySelector('.po')).toBeNull()
+  })
+
   it('is a labelled dialog of pressed buttons, not a menu', () => {
     mount(true)
     expect(screen.queryByRole('menu')).toBeNull()

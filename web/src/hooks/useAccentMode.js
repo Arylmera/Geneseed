@@ -3,8 +3,9 @@ import { accentHex, isHexColour } from '../lib/accents.js'
 
 const ACCENT_KEY = 'geneseed-accent'
 
-// Where the accent colour comes from, chosen independently of the visual flavour, and
-// saved in this browser (localStorage):
+// Where the accent colour comes from, saved in this browser (localStorage). It is picked
+// within a skin: a skin change sets it back to curated (App.jsx switchFlavour), so a pick
+// made under one skin never paints the others:
 //   curated       — each flavour's own designed signature colour (CURATED_ACCENT); default
 //   custom:<name> — one of five fixed colours from the voice palette (CUSTOM_ACCENTS)
 //   hex:#RRGGBB   — any colour from the picker; its companions are derived (hexAccent)
@@ -29,7 +30,7 @@ export const CUSTOM_ACCENTS = [
   name,
   short,
   hex: accentHex(name),
-  tagline: `Always ${short.toLowerCase()}, whatever the voice or skin.`,
+  tagline: `${short}, whatever the voice, until the skin changes.`,
 }))
 
 const FIXED = [...ACCENT_MODES, ...CUSTOM_ACCENTS]

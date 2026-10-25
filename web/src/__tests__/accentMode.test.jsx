@@ -9,7 +9,8 @@ import {
   pickedHex,
   accentTagline,
 } from '../hooks/useAccentMode.js'
-import { hexAccent, contrast } from '../lib/accents.js'
+import { hexAccent, contrast, CURATED_ACCENT } from '../lib/accents.js'
+import { FLAVOURS } from '../hooks/useFlavour.js'
 import AccentPicker from '../components/AccentPicker.jsx'
 
 // The accent is Curated (the skin's own colour, the default), one of five fixed colours
@@ -27,6 +28,12 @@ describe('accent modes', () => {
     ])
   })
 
+  // Curated has no fallback (the voice accent was one, and never ran): a skin without a
+  // curated entry would silently keep the previous skin's accent.
+  it('gives every skin a curated accent', () => {
+    expect(FLAVOURS.filter((f) => !CURATED_ACCENT[f.id]).map((f) => f.id)).toEqual([])
+  })
+
   // A stored 'auto' (the dropped mode, and the old default most browsers hold) reads as
   // Curated, as does anything unknown or a malformed picker value.
   it('keeps a known stored mode and reads anything else as curated', () => {
@@ -40,7 +47,11 @@ describe('accent modes', () => {
     expect(customAccentName('curated')).toBeNull()
     expect(pickedHex('hex:#1a2b8c')).toBe('#1A2B8C')
     expect(pickedHex('custom:blue')).toBeNull()
-    expect(accentTagline('custom:yellow')).toBe('Always amber, whatever the voice or skin.')
+    // A fixed pick holds across voices, not skins: a skin change hands the accent back to the
+    // skin's own (App.jsx switchFlavour), so the tagline says so.
+    expect(accentTagline('custom:yellow')).toBe(
+      'Amber, whatever the voice, until the skin changes.',
+    )
     expect(accentTagline('hex:#1A2B8C')).toBe('Your own colour, #1A2B8C.')
   })
 })

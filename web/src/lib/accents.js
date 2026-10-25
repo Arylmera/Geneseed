@@ -49,8 +49,8 @@ export function applyAccent(el, name, mode) {
   writeAccent(el, accentSet(hex, ACCENT_2[name] || ACCENT_2.cyan, DARK_INK, text, light), light)
 }
 
-// Each flavour's CURATED signature accent — used when the accent mode is 'curated'
-// instead of the deployed voice's accent. `dark` is the bright on-dark value;
+// Each flavour's CURATED signature accent — used when the accent mode is 'curated'.
+// `dark` is the bright on-dark value;
 // `light` is the deeper companion (also the gradient end / --accent-2); `ink` is the
 // flavour's own dark ink, used on a filled accent wherever it reads better than white.
 export const CURATED_ACCENT = {
@@ -64,8 +64,7 @@ export const CURATED_ACCENT = {
 }
 
 // Write a flavour's curated accent on the app root (light reads the deeper
-// companion). Returns false when the flavour has no curated entry, so the caller
-// can fall back to the voice accent.
+// companion). Returns false when the flavour has no curated entry.
 export function applyCuratedAccent(el, flavour, mode) {
   const c = CURATED_ACCENT[flavour]
   if (!el || !c) return false

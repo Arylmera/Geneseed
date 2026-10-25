@@ -4,7 +4,7 @@ const LAYOUT_KEY = 'geneseed-layout'
 
 // Which view the Overview page shows, chosen independently of the visual flavour (the
 // .fl-<id> skin); every skin reads theme tokens, so any skin renders under any view:
-//   overview   - the default: health banner, three charts, the needs-attention list
+//   overview   - the default: the Ledger (every installed harness, what needs you, cost, usage, gates)
 //   cultivar   - StatusView      (hero + KPI strip + genome grid)
 //   greenhouse - GreenhouseView  (readiness ring + tiles + mix donut)
 //   operator   - OperatorHudView (dense terminal readout, check matrix)

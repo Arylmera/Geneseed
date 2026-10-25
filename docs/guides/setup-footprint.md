@@ -40,7 +40,7 @@ geneseed build --emit opencode-global --trust prudent
 You have three ways to change a choice:
 
 - **Re-run the wizard** with `geneseed setup`. It pre-selects what the install already has, so holding Enter cannot widen a set you narrowed on purpose. The wizard does not ask about single rules, but it keeps any rule exclusions already in place.
-- **Use the web console** (`geneseed web`). **Settings** and the **Harnesses** page change theme, footprint and the rest per install. **Constitution** toggles packs and rules.
+- **Use the web console** (`geneseed web`). the **Hosts** page changes theme, footprint and the rest per install. **Constitution** toggles packs and rules.
 - **Run the build yourself.** Watch out: a flag you leave out takes the *generator's* default, not your install's current value. `geneseed status --json` prints, for every install, the exact `geneseed build` command that rebuilds it as it is. Start from that command and change the one flag you want.
 
 ---
