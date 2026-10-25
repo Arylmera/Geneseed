@@ -7,22 +7,25 @@ import { costTotal, gateRows } from '../../lib/overview.js'
 // Active installs with a measured cost: the only rows either cost figure may claim.
 const measured = (installs) => (installs || []).filter((i) => i.state === 'active' && i.cost)
 
-// The install whose root file sits closest to (or furthest past) its ceiling. Installs with no
-// ceiling have no share to rank, so they are left out rather than ranked at zero.
-export function worstRootFile(installs) {
-  let worst = null
-  for (const i of measured(installs)) {
-    if (!(i.cost.ceiling > 0) || !Number.isFinite(i.cost.carrier)) continue
-    const share = i.cost.carrier / i.cost.ceiling
-    if (!worst || share > worst.share) worst = { i, share }
-  }
-  if (!worst) return null
-  const { carrier, ceiling } = worst.i.cost
+// The root file the card shows: the install the console is viewing (`selected`, the topbar
+// picker), else — none selected, or the selected one unmeasured — the one closest to (or
+// furthest past) its ceiling. Installs with no ceiling have no share, so they are left out
+// rather than ranked at zero. `selected` in the answer says which of the two it is.
+export function rootFileFigure(installs) {
+  const rows = measured(installs).filter(
+    (i) => i.cost.ceiling > 0 && Number.isFinite(i.cost.carrier),
+  )
+  const share = (i) => i.cost.carrier / i.cost.ceiling
+  const pick =
+    rows.find((i) => i.selected) || rows.reduce((w, i) => (!w || share(i) > share(w) ? i : w), null)
+  if (!pick) return null
+  const { carrier, ceiling } = pick.cost
   return {
-    label: `${worst.i.host} · ${worst.i.scope}`,
+    label: `${pick.host} · ${pick.scope}`,
     carrier,
     ceiling,
-    pct: Math.round(worst.share * 100),
+    pct: Math.round(share(pick) * 100),
+    selected: !!pick.selected,
   }
 }
 
