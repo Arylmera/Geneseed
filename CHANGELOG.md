@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.24.1] — 2026-10-25
+
+Patch: pages use the whole window width.
+
 ## [4.24.0] — 2026-10-25
 
 Minor: wave V7 — the audit's open findings: server hardening (generic 500s, one folder dialog, safe Reveal, 404 for missing assets), retired rules in a never-loaded file, a service worker that caches real assets only, confirms before Update and Rebuild all, an accessibility pass and a design pass; plus memory topics and run chips.
