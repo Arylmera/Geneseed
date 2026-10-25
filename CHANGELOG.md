@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Activity, a session's detail and Doctor use the full width** like the other pages, instead of stopping at 820px.
+
 ## [4.25.0] — 2026-10-25
 
 Minor: the console's styles use the size tokens, page by page; pages use the full window width; dead CSS removed.

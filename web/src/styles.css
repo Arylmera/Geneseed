@@ -837,6 +837,8 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
 .gap-16 { gap: var(--sp-4); }
 /* page wrappers that cap reading width (Doctor, Settings) */
 .narrow    { max-width: 820px; }
+/* Activity, its detail and Doctor take the page width like every other page (user, 2026-10-25). */
+.page-fill { width: 100%; }
 .narrow-lg { max-width: 860px; }
 
 /* ============================== DOCS PAGE ============================ */

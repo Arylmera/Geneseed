@@ -69,7 +69,7 @@ export default function Doctor({ dataRev }) {
   const clean = data ? data.groups.filter((g) => !g.problems.length) : []
 
   return (
-    <div className="narrow">
+    <div className="page-fill">
       <div className="head-row mb-16">
         <div>
           <h2 className="h">Doctor</h2>

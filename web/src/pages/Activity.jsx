@@ -443,7 +443,7 @@ export default function Activity() {
   )
 
   return (
-    <div className="narrow">
+    <div className="page-fill">
       <PageHeader
         title="Activity"
         sub="What your agents ran, what the gates asked, and which sessions are waiting on you."
