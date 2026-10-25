@@ -202,6 +202,8 @@ streams the output of background jobs and keeps their history across reloads.
   Hover a tree for its model, turns, context and compactions, or a pad for its author's files;
   click it to open the session. Past ten trees, quiet shelves (no session working or waiting on
   you) fold into chips, the largest first; the last standing shelf never folds. **Sakura** repaints the crowns pink, nothing more.
+  A session's detail page shows its tree too, live or ended, with the same pad hovers and a
+  legend of its turns, context, compactions and sub-agents; an ended session's tree stands still, without the `!`.
 - **Changes** (`#/diff`) — the diff between the deployed harness and the source: edited /
   added / missing files, and files only behind the source (unedited; a rebuild updates them)
   listed apart under **Behind source**, with per-file expansion and coloured unified-diff lines. Select
