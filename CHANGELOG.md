@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **Pipelines no longer stall on a silent crew.** The parent now watches every crew it dispatches: an envelope without proof, or a crew that goes silent for 15 minutes with no live child process, is resumed or taken over instead of waited on. A crew lead holds every member's result before it ends, so no member reports past it to the parent.
+
 ## [4.21.0] — 2026-10-25
 
 Minor: Activity "Today", per-install rebuild, usage in the Library, sync with source in Hosts, a command palette, and `user` as an alias of `global`.
