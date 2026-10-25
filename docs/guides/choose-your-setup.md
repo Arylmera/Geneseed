@@ -43,9 +43,9 @@ Pick **peer** unless you know you want another register. A theme changes the pro
 ## Mode: who does the work
 
 - **direct** *(default)*: the agent works every task itself, turn by turn.
-- **foreman**: the session sorts each incoming task. A trivial task gets a direct answer. A substantial task goes to a small crew of agents (a **pipeline**) running in its own git worktree, while the session keeps answering you.
+- **foreman**: the session sorts each incoming task. A small task gets done inline. A task that would block the session goes to one background **task worker** in its own git worktree, while the session keeps answering you; corrections go back to the same worker. A crew of agents (a **pipeline**) runs only when you ask for one.
 
-A pipeline never commits or merges. It hands back its worktree uncommitted, together with its test and lint output. The session then re-runs those commands itself, shows you the diff and the passing output, and commits and merges only after you accept. Foreman mode costs more per substantial task, because several agents run instead of one. In exchange, the session stays responsive.
+A worker never commits or merges. It hands back its worktree uncommitted, together with its test and lint output. The session then re-runs those commands itself, shows you the diff and the passing output, and commits and merges only after you accept. Foreman mode costs more per delegated task, because a worker and sometimes a reviewer run beside the session. In exchange, the session stays responsive.
 
 ```
 geneseed build --emit opencode-global --mode foreman

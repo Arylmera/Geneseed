@@ -16,7 +16,7 @@ any posture and any mode.
 | Mode | For |
 |------|-----|
 | [direct](direct.md) *(default)* | The agent works the task itself, turn by turn. |
-| [foreman](foreman.md) | The session triages incoming tasks, spawning isolated pipelines for substantial work while staying responsive to the user. |
+| [foreman](foreman.md) | The session triages incoming tasks, handing each one that would block it to a background task worker it can re-brief, while staying responsive to the user. |
 
 Every mode still obeys the ontology and the invariants — a mode changes *how* work
 proceeds, never the principles.
