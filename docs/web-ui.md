@@ -34,7 +34,7 @@ always get the command list.
 - **Installable (PWA).** A manifest + service worker make it installable as a standalone
   app; immutable assets are cached, while HTML and `/api/*` stay on the network so the
   CSRF token never goes stale.
-- **First run with nothing deployed.** The Dashboard shows an **onboarding wizard**
+- **First run with nothing active.** When no install on the machine is active, the Overview shows an **onboarding wizard**
   (pick a voice → install mode → deploy) instead of a dead end.
 
 ## Security model

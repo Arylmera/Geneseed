@@ -59,5 +59,6 @@ export function useKitStaging(data, onAction) {
     const job = await onAction('install', { host: row.host, path: row.path, kits })
     if (job) store.startApply('kits', row.id)
   }
-  return { setOf, toggle, change, apply, running, failed, discard }
+  // Any job in flight: Apply waits (the server runs one at a time), the switches stay live.
+  return { setOf, toggle, change, apply, running, failed, discard, busy: store.busy }
 }

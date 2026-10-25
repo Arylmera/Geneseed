@@ -13,7 +13,8 @@ export function kitHint(row, stage) {
 
 // The staged-changes hint and the Apply action closing one install's kit switches, the same
 // footer on Installs / Kits and on a kit's page. While this row's rebuild runs it says so and
-// Apply waits; after a failed one the staged set is still there, and the hint says why.
+// Apply waits; while any other job runs Apply waits too, titled why; after a failed one the
+// staged set is still there, and the hint says why.
 export default function KitApply({ row, stage }) {
   const { on, off } = stage.change(row)
   const dirty = on.length + off.length > 0
@@ -27,7 +28,8 @@ export default function KitApply({ row, stage }) {
         type="button"
         className="btn soft sm"
         aria-label={`Apply kits for ${row.host} · ${row.scope}`}
-        disabled={kitsLocked(row) || !dirty || running}
+        disabled={kitsLocked(row) || !dirty || running || stage.busy}
+        title={stage.busy && !running ? 'A job is running' : undefined}
         onClick={() => stage.apply(row)}
       >
         Apply

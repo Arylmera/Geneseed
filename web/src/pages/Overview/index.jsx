@@ -102,6 +102,16 @@ export default function Overview({
   onLayout,
   dataRev,
 }) {
+  // The fleet, for the onboarding gate: App's key and deps, so it shares App's cached answer once
+  // either has loaded it. Wrapped, so an api without `installs` reads "unknown", not a throw.
+  const { data: instData, loading: instLoading } = useAsync(
+    () =>
+      Promise.resolve()
+        .then(() => api.installs())
+        .catch(() => null),
+    [dataRev],
+    'installs',
+  )
   if (!overview)
     return overviewError ? (
       <ErrorState
@@ -111,8 +121,14 @@ export default function Overview({
     ) : (
       <Loading />
     )
-  // Nothing deployed yet: onboard into a first deploy instead of an empty readout.
-  if (!overview.deployed) return <Onboarding onAction={onAction} />
+  // Onboard only a machine with NO active install. `deployed` describes the VIEWED install, which
+  // can sit on a disabled or removed one over a live fleet; it decides only while the fleet is
+  // unread or unreadable.
+  if (!overview.deployed) {
+    if (instLoading && !instData) return <Loading />
+    const live = instData?.installs?.some((i) => i.state === 'active')
+    if (!live) return <Onboarding onAction={onAction} />
+  }
 
   const banner = <NewHere harness={docsHostOf(overview.emit)} />
   const view = onLayout ? <ViewSeg layout={layout} onLayout={onLayout} /> : null

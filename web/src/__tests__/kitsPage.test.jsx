@@ -187,15 +187,55 @@ describe('Kits page', () => {
     )
     let view
     await act(async () => {
-      view = render(ui('job-1', null))
+      view = render(ui(null, null))
     })
     fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
     fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
     await act(async () => fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · global'))))
+    await act(async () => view.rerender(ui('job-1', null)))
     expect(screen.getByText(/claude · global: Rebuilding…/)).toBeTruthy()
     await act(async () => view.rerender(ui(null, { status: 'failed' })))
     expect(screen.getByRole('button', BAR_APPLY('claude · project')).disabled).toBe(false)
     expect(screen.getByText('2 changes on 2 installs')).toBeTruthy()
+  })
+
+  // The server runs one job at a time, so while ANY job runs (another install's rebuild, a
+  // doctor) every Apply waits and says why: a click would only meet a 409.
+  it('while another job runs, every Apply is disabled and says why', async () => {
+    api.kits.mockResolvedValue({ kits: [kit('spring-boot')], installs: [row(), row(PROJECT)] })
+    api.catalog.mockResolvedValue({ items: [] })
+    await act(async () => {
+      render(
+        <ConfirmContext.Provider value={async () => true}>
+          <StagingProvider activeId="job-9" finish={null}>
+            <Kits item="spring-boot" onAction={vi.fn()} dataRev={0} />
+          </StagingProvider>
+        </ConfirmContext.Provider>,
+      )
+    })
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    const btn = screen.getByRole('button', APPLY_PROJECT)
+    expect(btn.disabled).toBe(true)
+    expect(btn.title).toBe('A job is running')
+    expect(screen.getByText('turn on spring-boot')).toBeTruthy()
+  })
+
+  it('while another job runs, the staged bar’s Apply is disabled too', async () => {
+    api.kits.mockResolvedValue({ kits: [kit('spring-boot')], installs: [row()] })
+    api.catalog.mockResolvedValue({ items: [] })
+    await act(async () => {
+      render(
+        <ConfirmContext.Provider value={async () => true}>
+          <StagingProvider activeId="job-9" finish={null}>
+            <Kits onAction={vi.fn()} dataRev={0} />
+          </StagingProvider>
+        </ConfirmContext.Provider>,
+      )
+    })
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
+    const btn = screen.getByRole('button', BAR_APPLY('claude · global'))
+    expect(btn.disabled).toBe(true)
+    expect(btn.title).toBe('A job is running')
   })
 
   it('a locked install cannot be switched in the matrix and says why', async () => {
@@ -275,6 +315,17 @@ describe('Kits page', () => {
     const off = screen.getByText('spring-reviewer')
     expect(off.getAttribute('href')).toBeNull()
     expect(off.getAttribute('title')).toBe('Installed when this kit is on')
+  })
+
+  // The Library link follows the install the topbar views, but a kit that IS on for another
+  // install has its members installed there: the chip must not say "installed when on".
+  it('a member of a kit on for another install is not called "installed when on"', async () => {
+    await mount({ kits: [kit('a')], installs: [row({ kits: ['a'] })] }, 'a', true, ['jpa'])
+    const off = screen.getByText('spring-reviewer')
+    expect(off.getAttribute('href')).toBeNull()
+    expect(off.getAttribute('title')).toBe(
+      'Not in the install the topbar views; on in 1 of 1 install',
+    )
   })
 
   it('copes with a backend that sends no credits or rules', async () => {

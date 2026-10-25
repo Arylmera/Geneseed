@@ -325,7 +325,8 @@ describe('skill classes', () => {
         : el.getAttribute('href').split('/').pop(),
     )
     expect(seq).toEqual(['MEMORY', 'README', '# misc', 'b-misc', '# web', 'a-web', 'c-web'])
-    expect(api.item).toHaveBeenCalledWith('memory', 'MEMORY')
+    // The open entry's body is fetched in an effect after the list renders: wait for it.
+    await waitFor(() => expect(api.item).toHaveBeenCalledWith('memory', 'MEMORY'))
   })
 
   it('shows no categories under another kind, and resets to All on the way back', async () => {
