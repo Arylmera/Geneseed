@@ -457,7 +457,9 @@ test('the rendered learn-mode carries every checkpoint rule its shared include h
     'Record each decision the user takes under `## Decisions`.',
     'Write no code until the checkpoint that approves it is answered.',
     'Never trigger a checkpoint by time or tool count.',
-    'Honour "just implement this one", "fewer checkpoints", "skip" at once.',
+    // The mandatory-checkpoint clause was added for ownership, whose interface and
+    // sensitive-zone checkpoints no "skip" removes; learn-mode marks none mandatory.
+    'Honour "just implement this one", "fewer checkpoints", "skip" at once, unless the Skill marks a checkpoint as mandatory.',
     // learn-mode's own rules, kept beside the include.
     'resume any `Pending` checkpoint before anything else.',
     'Write code only after that answer.',
@@ -474,8 +476,8 @@ test('the rendered learn-mode carries every checkpoint rule its shared include h
 });
 
 test('the rendered ownership skill writes its section format out and ships its licence copy', () => {
-  // The ownership Rite's `## Ownership` format is what the coming first-write gate matches and
-  // what its setup writes into a team's AGENTS.md, so the rendered SKILL.md must carry it written
+  // The ownership Rite's `## Ownership` format is what its setup writes into a team's AGENTS.md
+  // (and what a first-write gate, planned, would match), so the rendered SKILL.md must carry it written
   // out, not as a token. It credits vibe-wise (it includes `_checkpoints.md`, adapted from it), so
   // the emit also ships `LICENSE-vibe-wise.txt` beside it — in the flat bundle and on a native
   // host, at both footprints. Whitespace is collapsed because the source wraps lines.

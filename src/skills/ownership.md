@@ -6,9 +6,11 @@
 
 **Trigger:** the developer must stay the owner of production code: they decide each part and
 can answer for every line that lands. Phrases: "ownership", "let me decide each file", "I must
-answer for this code", "set up AGENTS.md for the team". Your harness file also sends you here when
-the root `AGENTS.md` has `## Ownership` with `mode: on`, and before the first write in an
-application repo that has no such section. To learn while building, use the
+answer for this code", "set up AGENTS.md for the team". Your harness file also sends you here in
+an **application repo** — a git root holding a build manifest (`package.json`, `pom.xml`,
+`build.gradle*`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `*.csproj`, `composer.json`,
+`Gemfile`) — when its root `AGENTS.md` has `## Ownership` with `mode: on`, and before the first
+write when it has no such section. To learn while building, use the
 [learn-mode {{SKILL}}](learn-mode.md); it always comes first (see below).
 
 The developer owns the decisions. You propose options, interfaces and placements, and write what
@@ -35,36 +37,46 @@ They never go in `user-rules.md`, which is for agent behaviour only.
 ## Personal state — `.geneseed/ownership.md`
 
 ```markdown
-Granularity: team        # or feature | file | function — a personal override
+Granularity: team        # or a level finer than the team default
 ## Pending
 <the one checkpoint awaiting the developer, or "none">
 ## Decisions
 - <date> <decision the developer took, with their reason>
 ```
 
+A personal override may only be finer than the team default. A coarser one needs the developer's
+explicit yes, logged under `## Decisions`.
+
 <!-- INCLUDE: skills/_checkpoints.md -->
+
+Here, interface and sensitive-zone checkpoints are mandatory. Log under `## Decisions` only forks,
+interfaces, sensitive-zone changes and granularity changes — not routine steps.
 
 ## Setup
 Run it when the repo has no `## Ownership` section, or when the developer asks. A hand-written
 `AGENTS.md` without the section gets one lighter question first: "add the Ownership section?".
-1. **Extract.** Run the `AGENTS.md` step of the [document-project {{SKILL}}](document-project.md):
-   read the code and propose the conventions found — naming, layers, test patterns, build commands.
+1. **Extract.** Use the method of the `AGENTS.md` step of the
+   [document-project {{SKILL}}](document-project.md): read the code and propose the conventions
+   found — naming, layers, test patterns, build commands. Write nothing yet.
 2. **Kit.** If the stack matches a kit (`spring-boot`, `react`), propose it.
 3. **Interview.** About five questions, one at a time, each with a recommended answer: confirm or
    correct the conventions; ownership on for this repo; the default granularity; the sensitive
    zones (for example `payment/`, migrations, security config); free-form project rules.
-4. **Write** `AGENTS.md` (at most ~60 lines, this section included) and `.geneseed/ownership.md`.
-   Show the diff. Commit only on request.
-5. **Check how diffs reach the developer.** Read the host's permission mode. If edits are
-   auto-accepted (bypass, accept-edits), warn that no native diff will stop for them; if they keep
-   it, use the compact diff (see *Each checkpoint*). On OpenCode, propose `permission.edit: "ask"`
-   in the project `opencode.json`.
+4. **Write** — the only write of the setup: `AGENTS.md` (at most ~60 lines, this section
+   included) and `.geneseed/ownership.md`. Show the diff. Commit only on request.
+5. **Check how diffs reach the developer.** Read the permission mode from the host's settings;
+   when the live mode cannot be seen there, ask the developer. If edits are auto-accepted (bypass,
+   accept-edits), warn that no native diff will stop for them; if they keep it, use the compact
+   diff (see *Each checkpoint*). On OpenCode, propose `permission.edit: "ask"` in the project
+   `opencode.json`.
 
 "Proceed without" skips the setup for this session only; propose it again in the next one.
 
 ## Granularity
-- `feature` — the plan, then one approval per file.
-- `file` — the default: one checkpoint per file.
+- `feature` — one checkpoint on the plan; then each file is announced as routine, and its Edit is
+  the approval.
+- `file` — the default: no plan checkpoint; one checkpoint per file, announced or asked (see
+  *Each checkpoint*).
 - `function` — the signature, then the body.
 
 Whatever the level, an **interface is always a checkpoint** — a public signature, an API
@@ -91,15 +103,21 @@ Announce, do not ask, except at a real fork.
 
 The chat carries what / where / why in 5–10 lines: `file:line`, the changed signature or
 interface, the options at a fork — no code. The native Edit carries the diff. When edits are
-auto-accepted, show a compact diff in the chat first (changed hunks only, ±2 lines), and take the
-developer's reply as the answer.
+auto-accepted, show a compact diff in the chat first (changed hunks only, ±2 lines); that is an
+asked step: write `## Pending` and wait for the developer's reply.
 
 Guardrails:
 1. Never ask what the code, `AGENTS.md` or an earlier decision of the session already answers.
 2. Group the decisions of one step into one message.
 3. Always recommend, so "ok" is an answer.
 4. "Carry on" switches the rest of the task to routine. "Skip" and "fewer checkpoints" lower the
-   cadence the same way. Neither removes an interface or sensitive-zone checkpoint.
+   cadence the same way. Neither removes a mandatory checkpoint.
+
+## Delegation
+The parent holds every checkpoint. A background worker — a Foreman developer, a pipeline crew, a
+parallel agent — receives only decisions already approved. It never runs the setup and never
+treats its own diff as approved. On a choice no approved decision covers, it stops and returns
+`blocked: decision needed` with the options.
 
 ## Refactor in a named zone
 When the developer names a zone (a file, a class, a package), stay inside it. With the signals
@@ -114,7 +132,8 @@ and sensitive zones as checkpoints — still apply on top.
 ## Done when
 - The root `AGENTS.md` has `## Ownership` outside the Geneseed block, or the developer chose
   "proceed without" or `mode: off`; every interface and sensitive-zone change got its own
-  checkpoint; no code landed without an answered checkpoint; each decision is recorded in
-  `.geneseed/ownership.md`; and the developer can say, for each change, what changed, where and why.
+  checkpoint; no code landed without an answered checkpoint or an accepted Edit; each fork,
+  interface, sensitive-zone change and granularity change is logged in `.geneseed/ownership.md`;
+  and the developer can say, for each change, what changed, where and why.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

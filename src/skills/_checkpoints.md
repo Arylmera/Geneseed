@@ -10,6 +10,6 @@ These rules hold for every checkpoint this {{SKILL}} raises.
 - **The decision log.** Record each decision the user takes under `## Decisions`.
 - **No code without an answer.** Write no code until the checkpoint that approves it is answered.
 - **Cadence.** Never trigger a checkpoint by time or tool count. Honour "just implement this one",
-  "fewer checkpoints", "skip" at once.
+  "fewer checkpoints", "skip" at once, unless the {{SKILL}} marks a checkpoint as mandatory.
 
 *These rules are adapted from [vibe-wise](https://github.com/nykooi1/vibe-wise) (`skills/learn/behavior.md`) by Noah Kim, MIT licence; modified.*

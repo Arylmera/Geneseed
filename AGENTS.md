@@ -1,7 +1,5 @@
-# Geneseed — agent notes
-
-This repository's working guide is [`CLAUDE.md`](CLAUDE.md): how to prove a change, and what
-bites. Read it before editing.
+Before any work, read [`CLAUDE.md`](CLAUDE.md): this repository's working guide — how to prove a
+change, and what bites.
 
 ## Ownership
 
