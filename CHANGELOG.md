@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **Activity opens on the Garden.** The live sessions show as bonsai by default; the `List | Garden` switch shows the cards, and the list is kept in the link as `v=list`. An older link carrying `v=garden` still opens the Garden.
+
 ## [4.26.0] — 2026-10-26
 
 Minor: Activity's Garden — every live session as a pixel bonsai, fed by richer activity snapshots on every host (where files are, who changed them, sub-agents, turns, context, compactions), plus OpenCode files and the host filter fixed.

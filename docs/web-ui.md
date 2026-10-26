@@ -187,8 +187,9 @@ streams the output of background jobs and keeps their history across reloads.
   the files it touched and its todo progress; open one for its detail. Sessions that ended in the last 7 days are listed under
   **Recently ended**, below the live ones. Every host records it:
   the OpenCode plugin, and `geneseed-hook activity` on Claude Code, OpenClaude and Bob.
-  A **List | Garden** switch (kept in the URL with the filters, which apply to both) shows the
-  live sessions as pixel bonsai instead: one shelf per repository (worktrees stand on their
+  The live sessions open in the **Garden** by default; a **List | Garden** switch (kept in the
+  URL with the filters, which apply to both) shows them as a list of cards instead. The Garden
+  shows them as pixel bonsai: one shelf per repository (worktrees stand on their
   repo's shelf, tagged ⎇), one tree per session. The pot's glaze is the host (clay Claude Code,
   blue Bob, grey OpenCode, violet OpenClaude); the tree grows taller with turns, its crown
   with context fill, and the tips yellow past 80 %. A compaction cuts the crown flat (it
