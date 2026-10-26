@@ -87,10 +87,11 @@ const FILTERS = [
   ['gates', 'Gate asks'],
 ]
 
-// The filter lives in the hash (`#/activity?f=runs&host=x&project=y&v=garden`, defaults
+// The filter lives in the hash (`#/activity?f=runs&v=list&host=x&project=y`, defaults
 // omitted) so a reload or a shared link keeps it. Written with replaceState, which fires no
 // hashchange: the router does not re-resolve and history gains no entry per chip click.
-// `v` is the live sessions' view: the list (default) or the garden.
+// `v` is the live sessions' view: the garden (default) or the list. An old link's `v=garden`
+// still reads as the garden.
 function readView() {
   const q = new URLSearchParams(window.location.hash.split('?')[1] || '')
   const f = q.get('f')
@@ -98,14 +99,14 @@ function readView() {
     f: FILTERS.some(([k]) => k === f) ? f : 'all',
     host: q.get('host') || '',
     project: q.get('project') || '',
-    v: q.get('v') === 'garden' ? 'garden' : 'list',
+    v: q.get('v') === 'list' ? 'list' : 'garden',
   }
 }
 
 function writeView(v) {
   const q = new URLSearchParams()
   if (v.f !== 'all') q.set('f', v.f)
-  if (v.v === 'garden') q.set('v', 'garden')
+  if (v.v === 'list') q.set('v', 'list')
   if (v.host) q.set('host', v.host)
   if (v.project) q.set('project', v.project)
   const s = q.toString()

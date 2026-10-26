@@ -1,6 +1,6 @@
 import React from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 
 import Activity from '../pages/Activity.jsx'
 import { compact } from '../lib/activity.jsx'
@@ -28,6 +28,9 @@ describe('compact()', () => {
 })
 
 describe('Activity page', () => {
+  // These cases read the session cards, so they select the list; the garden is the default.
+  beforeEach(() => window.history.replaceState(null, '', '#/activity?v=list'))
+
   it('shows the empty state when no sessions are live', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ activity: [] })))
     render(<Activity />)
@@ -383,6 +386,7 @@ describe('Activity page: Today strip and feed', () => {
   })
 
   it('disables the Project filter when no session carries a cwd', async () => {
+    window.history.replaceState(null, '', '#/activity?v=list') // reads the card: select the list
     global.fetch = fixture({
       enabled: true,
       activity: [{ session_id: 's', title: 'fix it', status: 'busy', updated_at: 0 }],
@@ -393,6 +397,7 @@ describe('Activity page: Today strip and feed', () => {
   })
 
   it('counts the sessions waiting on you: blocked and waiting-input, not busy', async () => {
+    window.history.replaceState(null, '', '#/activity?v=list') // reads the cards: select the list
     global.fetch = fixture({
       enabled: true,
       activity: [
@@ -432,6 +437,8 @@ describe('Activity page: ended sessions', () => {
     activity: [{ session_id: 'live1', title: 'still going', status: 'busy', updated_at: now }],
     ended,
   })
+  // The live session is read as a card, so these cases select the list (the garden is the default).
+  beforeEach(() => window.history.replaceState(null, '', '#/activity?v=list'))
 
   it('lists the ended sessions, newest first, each a link to its detail page', async () => {
     global.fetch = vi.fn(() =>
@@ -576,21 +583,40 @@ describe('Activity garden switch', () => {
     { session_id: 'g2', host: 'bob', title: 'other host', status: 'idle', cwd: '/git/app' },
   ]
 
-  it('switches the live sessions to the garden and keeps it in the hash', async () => {
-    window.history.replaceState(null, '', '#/activity?f=needs')
+  // The garden is the default view: `#/activity` with no `v` opens it. Choosing the list
+  // writes `v=list`; choosing the garden again omits `v`, since a default is never written.
+  it('opens on the garden, and keeps a switch to the list in the hash', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
     render(<Activity />)
-    fireEvent.click(screen.getByRole('button', { name: 'All' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Garden' }))
-    // The list's default is omitted from the hash; the garden is written next to the filters.
-    expect(window.location.hash).toBe('#/activity?v=garden')
     const tree = await screen.findByRole('link', { name: /^grow it, claude, working/ })
+    expect(screen.getByRole('button', { name: 'Garden' }).getAttribute('aria-pressed')).toBe('true')
     expect(tree.getAttribute('href')).toBe('#/activity/g1')
     expect(tree.getAttribute('aria-label')).toMatch(/1 sub-agent running: developer \(1 file\)/)
     expect(tree.querySelector('svg[shape-rendering="crispEdges"] rect')).toBeTruthy()
+    expect(document.querySelector('a.act-card')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'List' }))
+    expect(window.location.hash).toBe('#/activity?v=list')
+    expect(document.querySelector('a.act-card[href="#/activity/g1"]')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Garden' }))
     expect(window.location.hash).toBe('#/activity')
-    expect(await screen.findByText('grow it')).toBeTruthy()
+  })
+
+  // The list is written next to the filters, in the order f, v, host, project.
+  it('writes v=list next to the filters', async () => {
+    window.history.replaceState(null, '', '#/activity?f=needs')
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
+    render(<Activity />)
+    fireEvent.click(screen.getByRole('button', { name: 'List' }))
+    expect(window.location.hash).toBe('#/activity?f=needs&v=list')
+  })
+
+  // Links written before the garden became the default carry `v=garden`; they still open it.
+  it('still opens the garden from a link that carries v=garden', async () => {
+    window.history.replaceState(null, '', '#/activity?v=garden')
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
+    render(<Activity />)
+    expect(await screen.findByRole('link', { name: /^grow it, claude, working/ })).toBeTruthy()
+    expect(document.querySelector('a.act-card')).toBeNull()
   })
 
   it('applies the filters to the garden', async () => {
