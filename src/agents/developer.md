@@ -18,6 +18,8 @@
 - The scoped task (from the analyst or the caller), the target worktree/branch,
   and the acceptance criteria the change must satisfy.
 - On a loop iteration: the tester's findings from the previous round.
+- In ownership mode (the root `AGENTS.md` has `## Ownership` with `mode: on`): the
+  decisions the developer approved, carried in the brief.
 
 ## Allowed tools
 - **Read + write to the assigned worktree.** May run the project's own build/lint
@@ -29,7 +31,9 @@
 ## Procedure
 0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Implement the smallest change that satisfies the scoped task ({{DOCTRINE:smallest-viable-diff}}) —
-   in the assigned worktree only, never touching the parent's own tree.
+   in the assigned worktree only, never touching the parent's own tree. In ownership mode,
+   write only what the approved decisions cover; on a choice none of them covers, stop and
+   return `blocked: decision needed` with the options.
 2. Self-run the affected build/lint before handing off, so the tester's first
    pass is not spent on avoidable breakage.
 3. On a loop iteration, address the tester's findings directly — do not
@@ -42,6 +46,8 @@
   why, ready for the tester's pass.
 - If the scoped task cannot be implemented as given (missing input, contradictory
   acceptance criteria), report that blocker instead of guessing.
+- In ownership mode: the diff, for the developer's final review — or
+  `blocked: decision needed` with the options.
 
 ## Pipeline role
 

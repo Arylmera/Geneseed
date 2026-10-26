@@ -508,6 +508,23 @@ test('the rendered ownership skill writes its section format out and ships its l
   }
 });
 
+test('the foreman mode body carries the ownership delegation rule, and only foreman does', () => {
+  // In an ownership repo, Foreman's "three files -> delegate" triage waits until the plan is
+  // approved inline with the developer, because a background worker cannot ask the user; the
+  // brief then carries the approved decisions. The rule lives in `src/modes/foreman.md`, which
+  // renders into the carrier through {{MODE_BODY}}, so `--mode foreman` must carry the sentence
+  // and the default mode (direct), which has no worker to brief, must not. Whitespace is
+  // collapsed because the source wraps lines.
+  const RULE = 'In an ownership repo, these rules apply only once the plan is approved inline with '
+    + 'the developer, and the brief carries the approved decisions.';
+  const carrier = (mode) => withDir((d) => {
+    quiet(() => buildInto({ theme: 'neutral', out: d, footprint: 'lean', mode }));
+    return read(d, 'AGENT.md').replace(/\s+/g, ' ');
+  });
+  assert.ok(carrier('foreman').includes(RULE), '--mode foreman lost the ownership delegation rule');
+  assert.ok(!carrier(null).includes(RULE), 'the default mode rendered the foreman ownership rule');
+});
+
 test("a user's own plugin, workflow and theme file survive the emit and the uninstall", () => {
   // `copyPlugins`/`copyWorkflows` (via `copyJsDir`) and `writeTheme`/`writeColorThemes` wrote and
   // pushed into `owned` with NO claim-on-create check — unlike the native layer and the command
