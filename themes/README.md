@@ -72,8 +72,8 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
   build time and falls back to `secondary`, with a warning, rather than ever
   reaching emitted frontmatter.
 
-Folder names, file paths, Rule *numerals*, the four Ontology section names
-(Telos, Evidence, Decisions, Conduct) and the pack *slugs* used in citations
+Folder names, file paths, Rule *numerals*, the five Ontology section names
+(Telos, Evidence, Decisions, Ownership, Conduct) and the pack *slugs* used in citations
 (`craft`, `rigor`, `ops`, `process`) are **never** themed — they live in the
 `STRUCTURE` map in the generator, laid over every render, so tooling never breaks.
 `PACK_*` themes how a pack is *named* in prose, never how it is *addressed*.

@@ -54,7 +54,7 @@ export const STRUCTURE = {
   // `({{ONTOLOGY}}: {{ONT_TELOS}})` — token on both sides, so the heading and every
   // reference to it move together and a rename can never desync them.
   ONT_TELOS: 'Telos', ONT_EVIDENCE: 'Evidence', ONT_DECISIONS: 'Decisions',
-  ONT_CONDUCT: 'Conduct',
+  ONT_OWNERSHIP: 'Ownership', ONT_CONDUCT: 'Conduct',
 };
 
 /**

@@ -240,6 +240,13 @@ const FOOTPRINTS = ['full', 'lean'];
  * waits on the user carries an emoji marker and arrows, so it stands apart from the work).
  * Measured `files` carrier before: full 63_299, lean 39_661 (headroom 0 / 0). After: full
  * 64_413, lean 40_173 — each raised by exactly the overrun (1_114 / 512), not rounded.
+ *
+ * BOTH RAISED 2026-10-26, Credo Ownership (user decision D21: a fifth ontology section, between
+ * Decisions and Conduct — the code belongs to whoever answers for it, and work is handed over
+ * only when the developer can say what changed, where and why). Both halves are the validated
+ * spec text. Measured `files` carrier before, on main at ced43f39: full 64_409, lean 40_169
+ * (headroom 4 / 4 — another mode is the largest). After: full 65_193, lean 40_563. Each
+ * ceiling raised by exactly the overrun (784 / 394), not rounded: full 65_197, lean 40_567.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -517,15 +524,16 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in
   // the full text, once in the hand-written condensation — so the parse counts occurrences
-  // and the set counts sections. Both counts are asserted: 4 distinct names proves neither
-  // variant dropped a section, 8 occurrences proves both variants still carry all four
-  // (a condensation missing one would leave 7, and the distinct count alone would not say so).
+  // and the set counts sections. Both counts are asserted: 5 distinct names (Ownership joined
+  // 2026-10-26) proves neither variant dropped a section, 10 occurrences proves both variants
+  // still carry all five (a condensation missing one would leave 9, and the distinct count alone
+  // would not say so).
   const occurrences = [...readTextPy(path.join(ROOT, 'src', 'ontology', 'universal.md'))
     .matchAll(/^#### \{\{(ONT_[A-Z]+)\}\}\s*$/gm)].map((m) => m[1]);
   const sections = [...new Set(occurrences)];
-  assert.equal(sections.length, 4, `${sections.length} distinct ontology sections parsed — expected 4`);
-  assert.equal(occurrences.length, 8,
-    `${occurrences.length} ontology headings parsed — expected 8 (each section once per LEAN variant)`);
+  assert.equal(sections.length, 5, `${sections.length} distinct ontology sections parsed — expected 5`);
+  assert.equal(occurrences.length, 10,
+    `${occurrences.length} ontology headings parsed — expected 10 (each section once per LEAN variant)`);
 
   for (const footprint of FOOTPRINTS) {
     for (const [mode, spec] of Object.entries(EXPECTED)) {
@@ -560,6 +568,15 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
           `--emit ${mode} --footprint ${footprint}: the carrier is missing ontology section `
           + `'${STRUCTURE[key]}' — its name is theme-INDEPENDENT, so nothing else gates it`);
       }
+      // Ownership's two halves differ: this sentence is in the full half only. The lean carrier
+      // must hold the section without it, the full carrier must hold it — so a footprint that
+      // rendered the wrong half fails in either direction.
+      assert.ok(text.includes('#### Ownership'),
+        `--emit ${mode} --footprint ${footprint}: the carrier is missing '#### Ownership'`);
+      // Whitespace folded: the source wraps the sentence across a line break.
+      assert.equal(text.replace(/\s+/g, ' ').includes('Approval without understanding is not ownership'),
+        footprint === 'full',
+        `--emit ${mode} --footprint ${footprint}: the Ownership section rendered the wrong LEAN half`);
       assert.ok(!/\{\{(DOC_[A-Z0-9_]+|ONT_[A-Z]+|PACK_[A-Z]+)\}\}/.test(text),
         `--emit ${mode} --footprint ${footprint}: the carrier ships an unsubstituted doctrine or `
         + 'ontology token — a theme is missing a key, or a STRUCTURE name was renamed');
@@ -583,14 +600,14 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (31_109 / 19_555) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 53_226 / 30_113 on 2026-10-16) and far above any plausible stub.
+      // the ceiling (32_598 / 20_283) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, 56_204 / 31_592 on 2026-10-26) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
-      // Re-derive both whenever the constant above moves; lean moved on 2026-10-18 and these
+      // Re-derive both whenever the constant above moves; both moved on 2026-10-26 and these
       // figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `

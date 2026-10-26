@@ -520,7 +520,9 @@ test('the inventory carries all three tiers, and the pack ids are contiguous', (
   // 23 would go stale the first time a rule is added, and would then be testing the number
   // rather than the parse.
   const inv = tuiInventory('neutral');
-  assert.deepEqual(inv.ontology.map((s) => s.id), ['telos', 'evidence', 'decisions', 'conduct']);
+  // 5 since Ownership joined the Credo (2026-10-26)
+  assert.deepEqual(inv.ontology.map((s) => s.id),
+    ['telos', 'evidence', 'decisions', 'ownership', 'conduct']);
   assert.ok(inv.ontology.every((s) => s.title && s.body), 'an ontology section has no body');
 
   // ⚠ FIVE PACKS, NOT SIX, AND IN NARRATIVE ORDER. `src/doctrines/README.md` passes the
@@ -574,8 +576,9 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
   const counts = (inv) => [inv.laws.length, inv.ontology.length, inv.doctrines.length,
     inv.doctrines.reduce((n, p) => n + p.rules.length, 0)];
   const base = counts(tuiInventory('neutral'));
-  // 9 laws since IX and XI were removed (2026-09-30); 5 packs, 31 rules since comms 5 (2026-10-23).
-  assert.deepEqual(base, [9, 4, 5, 31]);
+  // 9 laws since IX and XI were removed (2026-09-30); 5 ontology sections since Ownership
+  // (2026-10-26); 5 packs, 31 rules since comms 5 (2026-10-23).
+  assert.deepEqual(base, [9, 5, 5, 31]);
   for (const t of themeNames()) {
     const inv = tuiInventory(t);
     assert.deepEqual(counts(inv), base, `${t} parses to a different constitution`);
@@ -583,7 +586,8 @@ test('every theme parses to the same three tiers, whatever it calls them', () =>
     // come from STRUCTURE and must be identical in every voice. The pack TITLES are themed and
     // deliberately differ; only the ids are pinned.
     assert.deepEqual(inv.ontology.map((s) => s.id),
-      ['telos', 'evidence', 'decisions', 'conduct'], `${t} renamed an ontology address`);
+      ['telos', 'evidence', 'decisions', 'ownership', 'conduct'], // Ownership since 2026-10-26
+      `${t} renamed an ontology address`);
     assert.deepEqual(inv.doctrines.map((p) => p.pack), [...PACK_ORDER],
       `${t} renamed a pack address`);
   }

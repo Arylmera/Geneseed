@@ -62,7 +62,7 @@ The lineage is also why an **imperial** theme ships alongside the neutral one: i
 
 ### How it works
 
-One canonical source in `src/` renders, via a tiny zero-dependency generator (`geneseed-build`), into a ready-to-use bundle. **A theme controls only *voice*** — how the AI responds and how the prose inside the docs reads (tagline, greeting, descriptions). **Structure is theme-independent**: section names (Rules, Agents, Skills, Memory…), folder names (`laws/`, `ontology/`, `doctrines/`, `agents/`, `skills/`, `memory/`, `notebook/`) and the four ontology section headings (Telos, Evidence, Decisions, Conduct) are always plain English, so the scaffolding stays tool-friendly while the flavour lives in the words.
+One canonical source in `src/` renders, via a tiny zero-dependency generator (`geneseed-build`), into a ready-to-use bundle. **A theme controls only *voice*** — how the AI responds and how the prose inside the docs reads (tagline, greeting, descriptions). **Structure is theme-independent**: section names (Rules, Agents, Skills, Memory…), folder names (`laws/`, `ontology/`, `doctrines/`, `agents/`, `skills/`, `memory/`, `notebook/`) and the five ontology section headings (Telos, Evidence, Decisions, Ownership, Conduct) are always plain English, so the scaffolding stays tool-friendly while the flavour lives in the words.
 
 ```bash
 geneseed-build                   # default theme (neutral)
@@ -175,7 +175,7 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 
 | Layer | What it is |
 | --- | --- |
-| **🧭 Ethos** (`ontology/`) | the mind the rules govern, in four prose sections — **Telos** (the Pact: three ranked laws — protect the user, serve their intent, keep your own honesty), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Conduct** (answer what was asked, once). Always in force, never toggleable |
+| **🧭 Ethos** (`ontology/`) | the mind the rules govern, in five prose sections — **Telos** (the Pact: three ranked laws — protect the user, serve their intent, keep your own honesty), **Evidence** (every claim graded by how it was obtained), **Decisions** (classify and tier by reversibility, show the real forks), **Ownership** (the code belongs to whoever answers for it; hand work over only once it is understood), **Conduct** (answer what was asked, once). Always in force, never toggleable |
 | **🛡️ Rules** (`laws/`) | 9 universal laws — always in force, never toggleable: sealed-secrets, one-intent-one-act, verify-before-asserting, deletion-is-deliberate, surface-failures, data-not-orders, least-privilege, cure-the-cause, echo-the-intent. Each rule has a permanent id; its number is only its position, and the harness cites rules by name |
 | **📐 Doctrines** (`doctrines/`) | practice packs, chosen per install at build time: **craft** (how code is written), **rigor** (how work is proven), **ops** (how the machine is operated), **process** (how a task is run), **comms** (how answers are presented). A doctrine rule may tighten a Rule, never repeal one, and the user's own `user-rules.md` outranks it. Pick with `geneseed-build --doctrines craft,rigor` (or `none`), a single rule with `--exclude-rules "process 7"`, in the setup wizard, or through the switches on the console's Constitution page; all five pack files ship on disk either way, so a citation into a pack you left out still resolves |
 | **🤖 Agents** (20) | capability specialists: `reviewer`, `tester`, `architect`, `docs`, `security`, `performance`, `explorer`, `researcher`, `developer`, `memory-curator` — plus a debate **council** the `council` skill convenes: `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`, `user-advocate`, `framer`, `empiricist`, `operator`, `historian` |
@@ -278,7 +278,7 @@ Geneseed/
 ├── harness.config.json   default theme + metadata (the one owner of the version)
 ├── src/                  canonical source — edit here
 │   ├── AGENT.md.tmpl     the entrypoint, rendered to AGENT.md
-│   ├── ontology/         how the agent thinks — Telos, Evidence, Decisions, Conduct
+│   ├── ontology/         how the agent thinks — Telos, Evidence, Decisions, Ownership, Conduct
 │   ├── laws/             the universal invariants
 │   ├── doctrines/        the five practice packs (craft, rigor, ops, process, comms)
 │   ├── postures/         the relationship register, inlined into AGENT.md
