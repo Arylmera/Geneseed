@@ -8,8 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.26.1] — 2026-10-26
+
+Patch: Activity opens on the Garden by default; the pipeline Rite stops adding a cron per dispatch.
+
 ### Changed
 - **Activity opens on the Garden.** The live sessions show as bonsai by default; the `List | Garden` switch shows the cards, and the list is kept in the link as `v=list`. An older link carrying `v=garden` still opens the Garden.
+- **The pipeline Rite watches a crew by its completion notification, not a cron.** Claude Code wakes the parent when a background agent ends, so a timer per dispatch only piled up crons; crews still out are checked at the start of each turn instead (#443).
 
 ## [4.26.0] — 2026-10-26
 
