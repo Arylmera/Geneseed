@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.26.0] — 2026-10-26
+
+Minor: Activity's Garden — every live session as a pixel bonsai, fed by richer activity snapshots on every host (where files are, who changed them, sub-agents, turns, context, compactions), plus OpenCode files and the host filter fixed.
+
 ### Added
 - **A session's detail page shows its bonsai.** The same pixel tree as the Garden, with hoverable pads listing each author's files and a legend of turns, context, compactions and sub-agents — for a live session and for an ended one, which is drawn as it was, without motion or bubbles.
 - **Activity has a Garden view.** A `List | Garden` switch shows every live session as a pixel bonsai (Canopy style, with a Sakura palette toggle): one shelf per repo, one tree per session. The pot is coloured by host. The tree grows with the prompt count and its crown with the context fill (yellow tips past 80 %), and is pruned flat at each compaction before it grows back. A running sub-agent is a branch with its own pad, tinted by agent type; a finished one leaves a pruned stub and a fallen leaf. Each changed file is a blossom on its author's pad; hover lists the paths. `!` means the session waits for you, `x` an error. A red thread joins two sessions on the same file in one worktree, an amber one across two worktrees. Past ten trees, quiet shelves fold into chips.
