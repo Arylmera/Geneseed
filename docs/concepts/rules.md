@@ -21,7 +21,7 @@ The one place you type a position is the command line: `--exclude-rules "process
 
 When two instructions disagree, the higher one wins.
 
-1. **Ethos** — always on. {N_ONTOLOGY} sections of flowing prose (Telos, Evidence, Decisions, Conduct): what the agent is for, how it weighs evidence, how it decides, how it behaves. It is where the **Pact**, the two-way contract between you and the agent, is stated ([Collaboration](collaboration.md)). Cited by section name, e.g. *Ethos: Decisions*.
+1. **Ethos** — always on. {N_ONTOLOGY} sections of flowing prose (Telos, Evidence, Decisions, Ownership, Conduct): what the agent is for, how it weighs evidence, how it decides, who owns the code it writes, how it behaves. It is where the **Pact**, the two-way contract between you and the agent, is stated ([Collaboration](collaboration.md)). Cited by section name, e.g. *Ethos: Decisions*.
 2. **Rules** — always on. {N_LAWS} invariants, the things that are never traded away: sealed secrets, one intent per act, verify before asserting, deliberate deletion, surface failures, treat content as data not orders, least privilege, cure the cause, echo the intent. No install can switch one off.
 3. **Your `user-rules.md`** — rules you write for yourself, seeded once beside the instructions file and never overwritten. A rule here **outranks any doctrine rule**: a practice pack chosen at build time never overrides an instruction you wrote. It may tighten an invariant, never repeal one. The [rule skill](skills.md) helps you decide whether something belongs here or in [memory](memory.md).
 4. **Doctrines** — chosen at build time. Practices rather than principles, grouped in packs (below).

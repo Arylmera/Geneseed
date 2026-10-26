@@ -31,8 +31,8 @@ vault or a specific tool's hooks.
 3. **Theme is voice + vocabulary; the scaffolding is theme-independent.** A single
    neutral source renders to any theme via token substitution, split into two classes:
    - **Structure** (always plain English, every theme, every emit) — the section
-     *layout*, the harness name (`HARNESS`), the law *numbers*, the four ontology section
-     names (`ONT_TELOS`, `ONT_EVIDENCE`, `ONT_DECISIONS`, `ONT_CONDUCT`), a few rare
+     *layout*, the harness name (`HARNESS`), the law *numbers*, the five ontology section
+     names (`ONT_TELOS`, `ONT_EVIDENCE`, `ONT_DECISIONS`, `ONT_OWNERSHIP`, `ONT_CONDUCT`), a few rare
      technical nouns (`Context`, `Scripts`, `Charter`), and the folder names (`laws/`,
      `ontology/`, `doctrines/`, `agents/`, `skills/`, `memory/`, `notebook/` via `DIR_*`).
      These live in the `STRUCTURE` map in `js/build/render.mjs` and are laid on top of every
@@ -92,10 +92,11 @@ vault or a specific tool's hooks.
    the rules that matter. The governance surface is split into three tiers, each answering
    a different question:
 
-   - **Ontology** (`src/ontology/universal.md`) — *who is deciding*. Four sections of
+   - **Ontology** (`src/ontology/universal.md`) — *who is deciding*. Five sections of
      flowing prose: **Telos** (what the agent is for, and the Pact it works under),
      **Evidence** (how a claim is graded by how it was obtained), **Decisions** (classify
-     and tier by reversibility; show the real forks), **Conduct** (answer what was asked,
+     and tier by reversibility; show the real forks), **Ownership** (the code belongs to
+     whoever answers for it; hand work over only once it is understood), **Conduct** (answer what was asked,
      once). It absorbed the Pact, which is now stated *inside* Telos rather than standing
      as a peer of the rules.
    - **Invariants** (`src/laws/universal.md`) — *what is never traded*. Nine Rules, `I`..`IX`,
@@ -187,7 +188,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Component | Source | `Harness/` output | Purpose |
 | --- | --- | --- | --- |
 | Entrypoint | `src/AGENT.md.tmpl` | `AGENT.md` | what the tool reads; inlines the constitution, links the rest |
-| Ontology | `src/ontology/` | `ontology/` | the mind the rules govern — Telos, Evidence, Decisions, Conduct; always on, never toggleable |
+| Ontology | `src/ontology/` | `ontology/` | the mind the rules govern — Telos, Evidence, Decisions, Ownership, Conduct; always on, never toggleable |
 | Governance | `src/laws/` | `laws/` | the nine universal invariants; always on, never toggleable |
 | Doctrines | `src/doctrines/` | `doctrines/` | the four practice packs — the one build-time axis that changes *which rules ship*; the whole catalogue is written to disk either way |
 | Delegation | `src/agents/` | `agents/` | capability specialists with output contracts |

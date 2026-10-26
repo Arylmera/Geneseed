@@ -12,7 +12,7 @@ Every word Geneseed uses that you would not find in a general programming glossa
 |---|---|---|---|
 | Harness | — | everything Geneseed installs around the model: the rules it loads, the gates that run before its actions, the workflows it can call | git hooks + CI + a runbook, for an agent |
 | Hook | — | a command your tool runs before or after an agent action; Geneseed's hooks gate risky actions and load context | a git hook, fired on every tool call |
-| Ethos (Ontology) | ONTOLOGY | the always-on worldview under the rules — telos, evidence, decisions, conduct; it holds the Pact | the team's engineering principles |
+| Ethos (Ontology) | ONTOLOGY | the always-on worldview under the rules — telos, evidence, decisions, ownership, conduct; it holds the Pact | the team's engineering principles |
 | Rule (Law) | LAW | one of the nine always-on invariants: what is never done | a lint rule set to error |
 | Rules (Laws) | LAWS | the body of always-on invariants | the error-level rule set |
 | Doctrine | DOCTRINE | one practice rule, cited `<pack> <n>` — how work is done here | a team convention in CONTRIBUTING.md |

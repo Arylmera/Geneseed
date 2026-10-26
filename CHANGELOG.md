@@ -10,6 +10,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **Activity opens on the Garden.** The live sessions show as bonsai by default; the `List | Garden` switch shows the cards, and the list is kept in the link as `v=list`. An older link carrying `v=garden` still opens the Garden.
+- **The Credo gains an Ownership section, and learn-mode may propose.** A fifth always-on section, between Decisions and Conduct: the code belongs to whoever will answer for it, and work is handed over only when the developer can say what changed, where and why. learn-mode may now propose a solution, but never applies one it has not explained.
 
 ## [4.26.0] — 2026-10-26
 

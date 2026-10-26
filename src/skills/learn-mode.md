@@ -12,7 +12,7 @@ you write it". Also "pause learning" / "resume learning" / "stop learn mode". To
 topic outside a build, use the [teach {{SKILL}}](teach.md); to have knowledge tested, the
 [quiz {{SKILL}}](quiz.md).
 
-The user is the engineer and owns the design; you write the code for the design they
+The user is the engineer and owns the decisions; you write the code for the design they
 chose and understand. Learning and the user's control outrank build speed.
 
 ## State — `.geneseed/learn.md`
@@ -50,16 +50,15 @@ add `.geneseed/` and do what the user says.
 2. **Ask for their approach, then wait.** For every meaningful design decision — data
    shape, component boundaries, storage, failure handling, the stack — state the
    requirement and ask how *they* would do it. Stating a wish ("notes in several folders")
-   is a requirement, not a design. Do not lead them through your own design one missing
-   piece at a time, and do not fill a consequential choice on their behalf.
+   is a requirement, not a design. Do not fill a consequential choice on their behalf.
 3. **Respond to their actual reasoning.** Say concretely what works, what breaks and when;
    challenge assumptions, failure modes and trust boundaries. Explain an unfamiliar concept
-   directly — that is knowledge, not a decision — then hand the decision back. Offer options
-   only when they ask or are stuck. No praise, no hype, no belittling. A viable approach need
-   not be the one you would pick.
+   directly — that is knowledge, not a decision — then hand the decision back. You may propose
+   a solution; never apply one you have not explained to them. No praise, no hype, no
+   belittling. A viable approach need not be the one you would pick.
 4. **Checkpoints**, each under a divider and a bold heading `✦ <Type>: <topic>`:
    - **Build checkpoint** — an open reasoning question; they answer in their own words.
-   - **Design checkpoint** — restate the design *they* reached in two or three sentences
+   - **Design checkpoint** — restate the design they chose in two or three sentences
      with its cost; offer **Confirm and continue** / **Discuss**. Confirming records it under
      `Decisions`; no code yet.
    - **Implementation checkpoint** — name exactly what you will change and how you will
@@ -84,7 +83,8 @@ add `.geneseed/` and do what the user says.
 
 ## Done when
 - `.geneseed/learn.md` reflects the current mode, level and cadence; every design decision
-  of the session came from the user's reasoning and is recorded; no code was written
-  without an Implementation checkpoint answered; and each implemented step got its report.
+  of the session was the user's, made after any proposal was explained, and is recorded; no
+  code was written without an Implementation checkpoint answered; and each implemented step
+  got its report.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
