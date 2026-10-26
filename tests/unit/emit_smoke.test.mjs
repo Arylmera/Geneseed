@@ -247,6 +247,13 @@ const FOOTPRINTS = ['full', 'lean'];
  * spec text. Measured `files` carrier before, on main at ced43f39: full 64_409, lean 40_169
  * (headroom 4 / 4 — another mode is the largest). After: full 65_193, lean 40_563. Each
  * ceiling raised by exactly the overrun (784 / 394), not rounded: full 65_197, lean 40_567.
+ *
+ * BOTH RAISED 2026-10-26, for the ownership skill (user decisions D22 and S4): one row in the
+ * section 4 catalogue and a three-line pointer beside the learn-mode line, which also carries the
+ * read-only `/document-project` nudge because no hook runs on reads. Both sit outside the LEAN
+ * blocks, so both footprints pay the same 424. Measured `files` carrier before, at 68d2e8c1: full
+ * 65_193, lean 40_563 (headroom 4 / 4). After: full 65_617, lean 40_987. Each ceiling raised by
+ * exactly the overrun (420 / 420), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -296,7 +303,7 @@ const EXPECTED = {
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;
-const N_SKILLS = 47;
+const N_SKILLS = 48;
 const N_ALIASES = 14;
 const N_USER_ONLY = 3;
 
@@ -600,8 +607,8 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (32_598 / 20_283) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 56_204 / 31_592 on 2026-10-26) and far above any plausible stub.
+      // the ceiling (32_808 / 20_493) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, 56_452 / 31_840 on 2026-10-26) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —

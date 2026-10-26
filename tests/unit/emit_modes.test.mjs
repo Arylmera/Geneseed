@@ -473,6 +473,39 @@ test('the rendered learn-mode carries every checkpoint rule its shared include h
   }
 });
 
+test('the rendered ownership skill writes its section format out and ships its licence copy', () => {
+  // The ownership Rite's `## Ownership` format is what the coming first-write gate matches and
+  // what its setup writes into a team's AGENTS.md, so the rendered SKILL.md must carry it written
+  // out, not as a token. It credits vibe-wise (it includes `_checkpoints.md`, adapted from it), so
+  // the emit also ships `LICENSE-vibe-wise.txt` beside it — in the flat bundle and on a native
+  // host, at both footprints. Whitespace is collapsed because the source wraps lines.
+  // Each string exists only inside the fenced format block (the prose names `## Ownership` and
+  // `mode: on` too, so the bare keys alone would pass with the block gone).
+  const FORMAT = ['## Ownership mode: on # on | off', 'granularity: file # feature | file | function',
+    'sensitive: # always a checkpoint'];
+  const check = (skill, where) => {
+    assert.ok(!skill.includes('INCLUDE:'), `${where}: ownership rendered an unresolved INCLUDE marker`);
+    for (const s of FORMAT) assert.ok(skill.includes(s), `${where}: ownership lost ${s}`);
+    assert.ok(skill.includes('Write no code until the checkpoint that approves it is answered.'),
+      `${where}: ownership lost the shared checkpoint rules`);
+  };
+  withDir((d) => {
+    buildBundle(d);
+    check(read(d, 'skills', 'ownership.md').replace(/\s+/g, ' '), 'bundle');
+    assert.ok(existsSync(path.join(d, 'skills', 'ownership', 'LICENSE-vibe-wise.txt')),
+      'the flat bundle shipped no LICENSE-vibe-wise.txt beside ownership');
+  });
+  for (const emit of [emitOpencode, emitOpencodeLean]) {
+    withDir((d) => {
+      emit('neutral', path.join(d, 'bundle'), d);
+      const dir = path.join(d, '.opencode', 'skills', 'ownership');
+      check(read(dir, 'SKILL.md').replace(/\s+/g, ' '), 'opencode');
+      assert.ok(existsSync(path.join(dir, 'LICENSE-vibe-wise.txt')),
+        'the opencode layer shipped no LICENSE-vibe-wise.txt beside ownership');
+    });
+  }
+});
+
 test("a user's own plugin, workflow and theme file survive the emit and the uninstall", () => {
   // `copyPlugins`/`copyWorkflows` (via `copyJsDir`) and `writeTheme`/`writeColorThemes` wrote and
   // pushed into `owned` with NO claim-on-create check — unlike the native layer and the command

@@ -95,7 +95,7 @@ export const SKILL_CLASS = {
   'codebase-design': 'design', wayfinder: 'design',
   develop: 'build', refactor: 'build', debug: 'build', dependencies: 'build',
   'frontend-design': 'build', prototype: 'build', deck: 'build',
-  'forge-mcp': 'build', bruno: 'build', worktree: 'build',
+  'forge-mcp': 'build', bruno: 'build', worktree: 'build', ownership: 'build',
   'spring-boot': 'build', 'spring-data-jpa': 'build', 'spring-testing': 'build',
   react: 'build', 'react-testing': 'build',
   'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'security-audit': 'review',

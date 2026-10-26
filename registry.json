@@ -358,6 +358,13 @@
       "added": "2026-10-03",
       "last_verified": ""
     },
+    "skills/ownership": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-26",
+      "last_verified": ""
+    },
     "skills/parallel-agents": {
       "status": "approved",
       "version": "1.0.0",
