@@ -441,7 +441,10 @@ test('a per-repo --footprint lean emit renders lean skill text, not full', () =>
 test('the rendered learn-mode carries every checkpoint rule its shared include holds', () => {
   // learn-mode's generic checkpoint engine lives in `src/skills/_checkpoints.md`, pulled in by an
   // INCLUDE line so the ownership Rite can share it. The include must not lose a rule on the way:
-  // each sentence below was in learn-mode before the extraction and must still be in the
+  // each sentence below is one of the partial's rules and must be in the rendered SKILL.md. All
+  // were in learn-mode before the extraction except three: the `## Decisions` and "no code until
+  // answered" lines are new generic statements of rules learn-mode already applied, and the
+  // Pending rule used to say `Pending` without the heading marks. They must be in the
   // rendered SKILL.md, in both footprints, with no INCLUDE marker left (a bad path renders as
   // `<!-- MISSING INCLUDE: … -->`, a loop as `CIRCULAR INCLUDE`). Whitespace is collapsed
   // because the source wraps lines; `{{SKILL}}` renders as "Skill" in the neutral theme.
