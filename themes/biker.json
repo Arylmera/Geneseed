@@ -67,6 +67,7 @@
   "DESC_TEACH": "Get a rider road-ready — a crash course from never-ridden to rolling, a confusing manual decoded till it clicks, or a day-by-day route to a deadline.",
   "DESC_QUIZ": "Test what they've actually got instead of explaining it — drill a move to reflex, make them talk you through it, or call the bluff on a claimed skill — with a straight readout of the gaps.",
   "DESC_LEARN_MODE": "Learn the build while riding it — they call the line at each checkpoint, you lay down the code they agreed to, and the mode sticks to the project between rides.",
+  "DESC_OWNERSHIP": "Keep the rider in charge of the production build — they call each part at checkpoints, as close as they choose to ride, and the club's rules sit in the root AGENTS.md.",
   "DESC_SECURITY_AUDIT": "Ride the change like someone trying to steal it — where it can be forced, what it leaks, what it drags in from outside — and call it: ship, fix, or park it.",
   "DESC_SKILL_FORGE": "Forge, tune, merge, or scrap a move — reuse what's in the toolbox first, nail the trigger before the steps, test it against the neighbouring moves, register every bolt, doctor green.",
   "DESC_WORKTREE": "Wrench on a task in its own bay — a fresh worktree off a clean base, nothing shared with the bike already on the lift, back through the normal gate, bay cleared when it's merged.",

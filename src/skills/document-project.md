@@ -188,7 +188,8 @@ The short manual an agent reads before touching the repo.
 
 Geneseed may own a block in this file, between `<!-- BEGIN GENESEED -->` and
 `<!-- END GENESEED -->` — never write inside it. Create the file if it is absent; if it holds
-only that block, add the project sections below it.
+only that block, add the project sections below it. The `## Ownership` section is written by the
+[ownership {{SKILL}}](ownership.md); it too sits outside the Geneseed block.
 
 ## AsciiDoc mode
 When step 2 picks AsciiDoc, every doc page this skill writes is AsciiDoc; `AGENTS.md` and

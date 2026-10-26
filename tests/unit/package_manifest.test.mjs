@@ -384,6 +384,9 @@ const WITHHELD = [
     + 'plus a sharper one: this tool EMITS a CLAUDE.md into a user\'s project, and shipping one in '
     + 'the tarball would put a file that talks about editing Geneseed next to the files that are '
     + 'Geneseed. It is not in `files[]`, and this row is what makes that deliberate'],
+  ['AGENTS.md', "this repository's own agent notes: a pointer to CLAUDE.md and the `## Ownership` "
+    + "section with `mode: off`, so the ownership gate stays silent in Geneseed's own sessions. "
+    + "Withheld for the CLAUDE.md reason: this tool writes an AGENTS.md into a user's project"],
   ['eslint.config.js', 'the lint config for js/ bin/ tests/ adapters/ — a developer gate, and '
     + 'the linter it configures is a devDependency nothing installs'],
   ['package-lock.json', 'it pins the devDependencies only. `dependencies` is empty and gated '

@@ -98,6 +98,10 @@ posture: posture is the relationship register, mode is the operating register.
 
 If `.geneseed/learn.md` says `Learning mode: active`, read it first and follow
 [learn-mode]({{DIR_SKILLS}}/learn-mode.md); a restart or compaction never approves a checkpoint.
+In an application repo (a git root with a build manifest, e.g. `package.json`) whose root
+`AGENTS.md` has `## Ownership` with `mode: on`, follow [ownership]({{DIR_SKILLS}}/ownership.md);
+workers get only approved decisions. With no section at all, propose it once before the first
+write, shell writes included; in read-only work, suggest `/document-project` once at most.
 
 ---
 
@@ -242,6 +246,7 @@ the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/cou
 | [teach]({{DIR_SKILLS}}/teach.md) | the user wants to be taught — a crash course, confusing material decoded, or a day-by-day path to a deadline |
 | [quiz]({{DIR_SKILLS}}/quiz.md) | the user wants what they know tested, not explained — a drill, an explain-it-back check, or a mastery claim probed for gaps |
 | [learn-mode]({{DIR_SKILLS}}/learn-mode.md) | the user wants to learn while building — they design, you code what they approve |
+| [ownership]({{DIR_SKILLS}}/ownership.md) | the developer must own production code — they decide each part at a granularity the team sets, from the root AGENTS.md |
 | [commit]({{DIR_SKILLS}}/commit.md) | staging and writing a commit |
 | [geneseed-code-review]({{DIR_SKILLS}}/geneseed-code-review.md) | reviewing a diff or PR |
 | [review-response]({{DIR_SKILLS}}/review-response.md) | acting on review feedback you have received |

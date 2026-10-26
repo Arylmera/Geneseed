@@ -221,6 +221,7 @@ const RETRO_CREDITED = {
   'skills/git-history.md': ['mattpocock-skills-frozen'],
   'skills/handoff.md': [MP],
   'skills/learn-mode.md': ['vibe-wise'],
+  'skills/ownership.md': ['vibe-wise'],
   'skills/parallel-agents.md': [SP, MP],
   'skills/pipeline.md': [SP],
   'skills/plan.md': [SP, MP],
