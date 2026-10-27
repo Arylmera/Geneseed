@@ -1,5 +1,5 @@
 /**
- * The ownership first-write gate (spec docs/specs/2026-10-26-ownership.md, D4/D5/D12/D13/D24-D30).
+ * The ownership first-write gate — the hook half of the ownership skill (`src/skills/ownership.md`).
  *
  * In an APPLICATION repo (a git root holding a build manifest) whose root `AGENTS.md` has no
  * `## Ownership` section outside Geneseed's managed block, the first write of a session is
@@ -41,6 +41,14 @@ const WRITE_NAME_RE = /write|edit|diff|replace|insert/i;
 // session id can never steer the marker join out of its directory.
 const safeStem = (sid) => String(sid).replace(/[^A-Za-z0-9_.-]/gu, '_').slice(0, 128);
 
+// The marker folder is PER USER: on a shared POSIX /tmp, one folder for everyone would let a
+// second user's marker (or a file planted at the folder's name) silently disarm the gate for
+// the first. The uid where there is one; else the user name; Windows' tmpdir is per user anyway.
+function userTag() {
+  if (typeof process.getuid === 'function') return String(process.getuid());
+  try { return safeStem(os.userInfo().username); } catch { return 'user'; }
+}
+
 const TAIL = 'Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per '
   + 'install: rebuild with `--no-ownership-gate`. Offer the full documentation '
   + '(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only '
@@ -54,9 +62,10 @@ const REASON_NO_SECTION = 'Geneseed (Ownership) — this application\'s `AGENTS.
 
 /**
  * The refusal reason for this write, or null to defer. `p` is the write target as the payload
- * names it; `body` is the text the write carries (`ruleDecide` already joined it).
+ * names it; `body` is the text the write carries (`ruleDecide` already joined it); `installRoot`
+ * is the install's own dir (`--root`), whose bookkeeping (memory, notebook) never spends the block.
  */
-export function ownershipBlock(p, payload, body) {
+export function ownershipBlock(p, payload, body, installRoot = null) {
   try {
     const sid = payload && payload.session_id;
     if (typeof sid !== 'string' || !sid) return null;
@@ -69,13 +78,17 @@ export function ownershipBlock(p, payload, body) {
     // Writing the setup itself is never what the gate stops.
     const rel = normcase(path.relative(root, target));
     if (rel === normcase('AGENTS.md') || rel.startsWith(normcase('.geneseed/'))) return null;
+    if (installRoot) {
+      const inInstall = path.relative(path.resolve(installRoot), target);
+      if (!inInstall.startsWith('..') && !path.isAbsolute(inInstall)) return null;
+    }
     let text = null;
     try { text = readFileSync(path.join(root, 'AGENTS.md'), 'utf8'); } catch { /* none: gate */ }
     const own = text === null ? '' : text.replace(MANAGED_BLOCK_RE, '');
     if (SECTION_RE.test(own)) return null;   // on or off, the team has decided
     // shortcut: one small marker file per session, never pruned (the OS temp cleaner owns it);
     // prune here if the folder is ever seen to grow past a few thousand files.
-    const dir = path.join(os.tmpdir(), 'geneseed-ownership');
+    const dir = path.join(os.tmpdir(), `geneseed-ownership-${userTag()}`);
     const marker = path.join(dir, safeStem(sid));
     const key = normcase(root);
     let seen = '';

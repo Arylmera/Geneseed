@@ -1382,6 +1382,12 @@ function ownershipBlock(p, sessionID) {
     if (!root || !readdirSync(root).some(isManifest)) return null
     const rel = nocase(path.relative(root, p).replace(/\\/g, "/"))
     if (rel === nocase("AGENTS.md") || rel.startsWith(nocase(".geneseed/"))) return null
+    // The install's own bookkeeping (memory/, notebook/ beside plugins/, or $GENESEED_HARNESS)
+    // never spends the block — the hook twin's `installRoot`.
+    for (const home of [path.dirname(PLUGIN_DIR), process.env.GENESEED_HARNESS].filter(Boolean)) {
+      const inside = path.relative(path.resolve(home), p)
+      if (!inside.startsWith("..") && !path.isAbsolute(inside)) return null
+    }
     let text = null
     try { text = readFileSync(path.join(root, "AGENTS.md"), "utf8") } catch { /* none: gate */ }
     const own = text === null ? "" : text.replace(MANAGED_BLOCK_RE, "")

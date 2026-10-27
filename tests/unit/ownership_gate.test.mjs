@@ -161,3 +161,48 @@ test('Bob: exit 2 with the one-time tail, never BOB_FINAL; a read defers', () =>
     { verb: 'tool-gate', extra: ['--host', 'bob'] });
   assert.equal(again.rc, 0, 'the same write passes the second time');
 });
+
+test('a sub-agent\'s deferred write does not spend the block: the parent is still refused', () => {
+  // D29 defers a sub-agent BEFORE the marker is written, so the parent's first write in the
+  // same session and repo is still the one the gate stops.
+  const app = repo();
+  const sid = randomUUID();
+  defers(gate(write(path.join(app, 'a.js'), { session_id: sid, agent_id: 'worker-1' })), 'sub-agent');
+  denied(gate(write(path.join(app, 'b.js'), { session_id: sid })), 'the parent, after the sub-agent');
+});
+
+test('an earlier gate\'s ask comes first and does not spend the ownership block', () => {
+  // A secret-bearing write is answered by the secrets gate (an `ask`); the ownership gate runs
+  // only on the path where every earlier gate let the write through, so the session's next
+  // clean write is still refused once.
+  const app = repo();
+  const sid = randomUUID();
+  const secret = JSON.stringify({ session_id: sid, tool_name: 'Write',
+    tool_input: { file_path: path.join(app, 'cfg.js'), content: 'const k = "AKIAIOSFODNN7EXAMPLE";' } });
+  const r = gate(secret);
+  assert.equal(JSON.parse(r.out).hookSpecificOutput.permissionDecision, 'ask', 'the secrets gate asks');
+  denied(gate(write(path.join(app, 'b.js'), { session_id: sid })), 'the next clean write');
+});
+
+test('the install\'s own bookkeeping never spends the block', () => {
+  // A write under `--root` (the install dir: memory, notebook) defers, so harness housekeeping
+  // never uses up the one refusal the developer is meant to see.
+  const app = repo();
+  const install = path.join(app, '.claude');
+  const sid = randomUUID();
+  defers(gate(write(path.join(install, 'notebook', 'ledger.md'), { session_id: sid }), { root: install }),
+    'a write under the install root');
+  denied(gate(write(path.join(app, 'a.js'), { session_id: sid }), { root: install }), 'the first real write');
+});
+
+test('an unwritable marker defers: the gate never blocks without a way to let the retry pass', () => {
+  // If the per-session marker cannot be written (TMP is a FILE here), a refusal could never be
+  // lifted by the retry, so the gate stands down instead.
+  const app = repo();
+  const file = path.join(tmpBox.path, 'not-a-dir');
+  fs.writeFileSync(file, '');
+  const r = spawnHook(['rule-gate'], write(path.join(app, 'a.js')),
+    { env: { ...process.env, TMP: file, TEMP: file, TMPDIR: file } });
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout, '', `expected a defer, got ${JSON.stringify(r.stdout)}`);
+});

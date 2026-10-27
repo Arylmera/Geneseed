@@ -12,7 +12,8 @@
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt; the one `"deny"` (the ownership first-write gate, `./ownership-gate.mjs`) carries
  * its reason to the MODEL instead. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5 and ops-2) exit 2 with the reason on stderr
+ * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5 and ops-2) exit 2 with the reason on stderr,
+ * as does the ownership gate (through `deny`, with a one-time tail in place of `BOB_FINAL`),
  * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
  * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
  * fork); the flag only picks which root file counts as native for `context`'s discovery.
@@ -652,7 +653,7 @@ function ruleDecide(args, payload) {
   if (!target) {
     // The ownership first-write gate (./ownership-gate.mjs), last: every rule above outranks it.
     // `--no-ownership-gate`: the install switched it off (D25).
-    const why = args.noOwnershipGate ? null : ownershipBlock(p, payload, body);
+    const why = args.noOwnershipGate ? null : ownershipBlock(p, payload, body, args.root);
     return why ? deny(args, 'rule-gate', 'ownership', why) : 0;
   }
   return ask(args, 'rule-gate', 'process-1', `Geneseed (Persist Insight) \u2014 writing to `
