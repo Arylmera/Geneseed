@@ -1,6 +1,6 @@
 ---
 group: guides
-order: 14
+order: 21
 title: "Set up ownership"
 kind: "concept"
 section: "Set up"
@@ -45,7 +45,7 @@ The setup writes two files and shows you the diff:
     - src/main/resources/db/migration/**
   ```
 
-  If the file already exists, your own lines stay. Geneseed's managed `<!-- BEGIN GENESEED -->` block (written there on Bob and OpenCode) is left alone, and a section inside it does not count.
+  If the file already exists, your own lines stay. Geneseed's managed `<!-- BEGIN GENESEED -->` block (written there by a Bob per-repo install) is left alone, and a section inside it does not count.
 - `.geneseed/ownership.md`, your personal state: a finer granularity if you want one, the pending checkpoint, and the decisions you took. It is data, never instructions, and it belongs in `.gitignore` — the agent offers to add `.geneseed/` once.
 
 Nothing is committed unless you ask.
@@ -56,7 +56,6 @@ Under ownership, the host's own diff prompt is how you approve a routine step. T
 
 - **Claude Code, OpenClaude.** If edits are auto-accepted (bypass or accept-edits mode), no diff stops for you. Switch back to asking, or keep it: the agent then shows a compact diff in the chat and waits for your reply.
 - **OpenCode.** The agent proposes `permission.edit: "ask"` in the project `opencode.json`.
-- **Bob.** The compact chat diff is the path.
 
 ## 6. Commit `AGENTS.md`
 

@@ -1,6 +1,6 @@
 ---
 group: concepts
-order: 16
+order: 17
 title: "Ownership"
 kind: "concept"
 section: "Working together"
@@ -49,7 +49,7 @@ On every host, a hook stops the first write in an application that has not decid
 - **Where.** An *application repo*: a git root holding a build manifest — `package.json`, `pom.xml`, `build.gradle*`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `*.csproj`, `composer.json` or `Gemfile`. A folder with no git or no manifest is never gated.
 - **When.** Its root `AGENTS.md` has no `## Ownership` heading outside Geneseed's managed block. The heading with `mode: on` or `mode: off` both count: the team has decided.
 - **What.** The first Write, Edit or NotebookEdit of the session in that repo is refused once. The refusal's reason goes to the agent, which then asks you: set ownership up, or proceed without for this session. The next write passes. Writes to `AGENTS.md` and `.geneseed/` themselves always pass.
-- **What it skips.** Sub-agents defer on Claude Code, OpenClaude and OpenCode, which name them in the hook's input: a sub-agent cannot ask you, so it never spends the session's one stop. Shell writes are not seen; the line in the harness file covers them.
+- **What it skips.** Sub-agents defer on Claude Code and OpenClaude, which name them in the hook's input, and on OpenCode, whose guard sees that the session has a parent: a sub-agent cannot ask you, so it never spends the session's one stop. Shell writes are not seen; the line in the harness file covers them.
 
 Per host: Claude Code and OpenClaude deny the call with the reason; Bob refuses it with exit 2, once; OpenCode's guard plugin refuses it. See [Hooks](hooks.md) and [Rule enforcement, by host](enforcement-table.md).
 
@@ -71,7 +71,7 @@ The two draw close — both stop at checkpoints, and learn-mode may now propose 
 
 | | learn-mode | ownership |
 | --- | --- | --- |
-| Who chooses it | The developer, for themself | The team, in `AGENTS.md`; a developer may only go finer |
+| Who chooses it | The developer, for themself | The team, in `AGENTS.md`; a developer may go finer, coarser only with an explicit, logged yes |
 | Explanation | Every solution, before it is applied | Complex parts only; routine steps are announced |
 | Record | `## Understood` in `.geneseed/learn.md`: what the developer has grasped | `## Decisions` in `.geneseed/ownership.md`: forks, interfaces, sensitive zones, granularity changes |
 | Pacing | A level: beginner, intermediate, advanced | A granularity: feature, file, function |
