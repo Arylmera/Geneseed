@@ -24,7 +24,7 @@ case where the seam is only known once the change is made.
 
    In an ownership repo (the root `AGENTS.md` has `## Ownership` with `mode: on`) and with
    `.geneseed/learn.md` not active, run each slice below through the
-   [ownership {{SKILL}}](ownership.md) checkpoints: proposal, then native Edit, then test.
+   [ownership {{SKILL}}](ownership.md) checkpoints: proposal, then a native Edit for the test and one for the code, then the run.
 3. Pick the next **smallest slice** that advances the task ({{DOCTRINE:smallest-viable-diff}}), then
    cover it:
    - *Seam known up front* — test-first. Write ONE failing test that pins the slice,

@@ -33,7 +33,7 @@
 1. Implement the smallest change that satisfies the scoped task ({{DOCTRINE:smallest-viable-diff}}) —
    in the assigned worktree only, never touching the parent's own tree. In ownership mode,
    write only what the approved decisions cover; on a choice none of them covers, stop and
-   return `blocked: decision needed` with the options.
+   return `blocked: decision needed` with the options. Never run the ownership setup.
 2. Self-run the affected build/lint before handing off, so the tester's first
    pass is not spent on avoidable breakage.
 3. On a loop iteration, address the tester's findings directly — do not
