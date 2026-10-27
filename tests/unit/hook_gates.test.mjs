@@ -259,6 +259,17 @@ function ruleAsks(p, { root = null, key = 'file_path' } = {}) {
   // cannot answer: it must name the rule and route to the skill that resolves it.
   assert.ok(dec.permissionDecisionReason.includes('Persist Insight'), dec.permissionDecisionReason);
   assert.ok(dec.permissionDecisionReason.includes('rule skill'), dec.permissionDecisionReason);
+  assertPersistAsk(dec.permissionDecisionReason);
+}
+
+// A weak model (OpenCode, 4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the
+// blocked memory index through `python3`. So the process-1 text names one way forward — ask,
+// then re-issue the same edit — forbids the detour, and names no switch that turns a gate off.
+function assertPersistAsk(why) {
+  assert.doesNotMatch(why, /GENESEED_/, why);
+  assert.match(why, /ask the user/, why);
+  assert.match(why, /re-issue this same edit/, why);
+  assert.match(why, /Do not write it another way \(for example through a shell command\)/, why);
 }
 
 const ruleDefers = (p, root = null) =>
