@@ -1312,8 +1312,8 @@ const RULE_STORE_BUMPED = new Set()
 const nocase = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
 // Word for word js/hosts/hooks.mjs's PERSIST_ASK. A weak model once took a refusal as leave to
 // write the same file through a shell command, so the text names the one way forward.
-const PERSIST_ASK = "Stop and ask the user now (the rule skill), then re-issue this same edit. " +
-  "Do not write it another way (for example through a shell command)."
+const PERSIST_ASK = "Stop and ask the user now (the rule skill). If this edit was refused, re-issue " +
+  "the same edit only after they answer; never write it another way (for example through a shell command)."
 function ruleStoreTarget(p) {
   const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/")
   const base = path.basename(abs).toLowerCase()

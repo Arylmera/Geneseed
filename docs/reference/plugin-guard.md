@@ -21,7 +21,7 @@ There is no DYNAMIC loop/* exemption on OpenCode — it declares a `permission.a
 
 **When it runs.** Before every tool call (`tool.execute.before`).
 
-**What you see.** A refused tool call: `[geneseed-guard] blocked: <reason>`. The reason never names the switches below: the agent reads it, and a switch named there reads as leave to get round the block. The *Persist Insight* reason tells the agent to ask you, then re-issue the same edit, and not to write the file another way (through a shell command, say). Warnings go to stderr.
+**What you see.** A refused tool call: `[geneseed-guard] blocked: <reason>`. The reason never names the switches below: the agent reads it, and a switch named there reads as leave to get round the block. The *Persist Insight* reason tells the agent to ask you and, once you answer, re-issue the same refused edit — never to write the file another way (through a shell command, say). Warnings go to stderr.
 
 **Switches.**
 - `GENESEED_GUARD=warn` — log every block, allow the call.

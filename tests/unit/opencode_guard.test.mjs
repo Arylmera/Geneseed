@@ -86,14 +86,14 @@ test('a reissued write goes through', () => {
 // A weak model (4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the blocked
 // memory index through `python3`. The refusal names one way forward, forbids the detour, names
 // no switch, and closes with the hook's own sentences (js/hosts/hooks.mjs PERSIST_ASK).
-test('the bump tells the model to ask, then re-issue the same edit, and nothing else', async () => {
+test('the bump tells the model to ask, then re-issue the same edit once answered, and nothing else', async () => {
   const { PERSIST_ASK } = await import('../../js/hosts/hooks.mjs');
   assert.equal(messages.length, 3, messages.join('\n'));
   for (const m of messages) {
     assert.doesNotMatch(m, /GENESEED_/, m);
     assert.match(m, /\(Persist Insight\)/, m);
-    assert.match(m, /re-issue this same edit/, m);
-    assert.match(m, /Do not write it another way \(for example through a shell command\)/, m);
+    assert.match(m, /If this edit was refused, re-issue the same edit only after they answer/, m);
+    assert.match(m, /never write it another way \(for example through a shell command\)/, m);
     assert.ok(m.endsWith(PERSIST_ASK), `the twin drifted from the hook's text: ${m}`);
   }
 });

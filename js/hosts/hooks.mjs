@@ -547,8 +547,9 @@ export const cmdGitGate = guardGate(gitGate, 'git-gate');
 // The close of the process-1 text, word for word the OpenCode guard's PERSIST_ASK (tests pin
 // both). A weak model once took a refusal as leave to write the same file through a shell
 // command, so the text names the one way forward and never a switch that turns the gate off.
-export const PERSIST_ASK = 'Stop and ask the user now (the rule skill), then re-issue this same '
-  + 'edit. Do not write it another way (for example through a shell command).';
+export const PERSIST_ASK = 'Stop and ask the user now (the rule skill). If this edit was refused, '
+  + 're-issue the same edit only after they answer; never write it another way (for example '
+  + 'through a shell command).';
 
 function ruleGateTarget(p, root) {
   if (typeof p !== 'string') return null;

@@ -264,12 +264,12 @@ function ruleAsks(p, { root = null, key = 'file_path' } = {}) {
 
 // A weak model (OpenCode, 4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the
 // blocked memory index through `python3`. So the process-1 text names one way forward — ask,
-// then re-issue the same edit — forbids the detour, and names no switch that turns a gate off.
+// then, if refused, re-issue the same edit — forbids the detour, and names no switch that turns a gate off.
 function assertPersistAsk(why) {
   assert.doesNotMatch(why, /GENESEED_/, why);
   assert.match(why, /ask the user/, why);
-  assert.match(why, /re-issue this same edit/, why);
-  assert.match(why, /Do not write it another way \(for example through a shell command\)/, why);
+  assert.match(why, /If this edit was refused, re-issue the same edit only after they answer/, why);
+  assert.match(why, /never write it another way \(for example through a shell command\)/, why);
 }
 
 const ruleDefers = (p, root = null) =>

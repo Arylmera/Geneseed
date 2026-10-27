@@ -107,7 +107,7 @@ test("guard: a denied call is renamed to the reason and emptied; an allowed one 
   // (a weak model took "set GENESEED_GUARD=off to allow" as leave to write through a shell).
   const memo = { tool: "write", input: { path: path.join(tmp, "user-rules.md"), content: "x" } }
   await before(memo)
-  assert.match(memo.tool, /^\[geneseed-guard\] blocked: .*\(Persist Insight\).* re-issue this same edit\. Do not write it another way/)
+  assert.match(memo.tool, /^\[geneseed-guard\] blocked: .*\(Persist Insight\).* re-issue the same edit only after they answer; never write it another way/)
   for (const why of [secret.tool, rm.tool, memo.tool]) assert.doesNotMatch(why, /GENESEED_/, why)
   const ok = { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } }
   await before(ok)
