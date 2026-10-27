@@ -7,7 +7,7 @@ section: "Configuration"
 description: "Three ways to switch things off: one rule, one skill, or every hook in a folder."
 link: {"hash": "#/harness", "label": "Manage in Harness →"}
 ---
-Geneseed has three ways to switch something off, and they work at different scales (plus an on/off switch for the hook gates of Laws I, III and IV, below):
+Geneseed has three ways to switch something off, and they work at different scales (plus an on/off switch for the hook gates of Laws I, III and IV, and for the ownership gate, below):
 
 | | Sovereign repo | Per-rule exclusion | Per-skill exclusion |
 | --- | --- | --- | --- |
@@ -104,3 +104,17 @@ What stops, per host:
 - **`--no-done-gate`**: the done check `learn` runs on Stop (Claude Code, OpenClaude; on Bob, the "turn not judged" log line), and on OpenCode the context plugin's reminder (OpenCode 1) and its one-line notice (OpenCode 2). Learning itself still runs, and `.geneseed/done-checks.txt` stays protected by *External Gate*.
 
 Limits: OpenCode reads both switches from the install's `AGENT.md` when it starts, so restart it after flipping one. A global install beside a project install: `rule-gate` and Bob's `tool-gate` do not stand down for a project install on any host, and neither does the OpenCode guard, so an armed global install still asks about (or blocks) a credential write inside a project whose own install has the secrets gate off. `learn` does stand down on Claude Code and OpenClaude, so there the project's done gate switch decides. And the older-shim limit above is sharper for the done gate: its flag rides on `learn`, so while the shim points at an older checkout an install with the done gate off **loses learning too**, not only the gate. Run `geneseed rebuild-all` before switching either gate off.
+
+### Ownership gate — on or off
+
+The [ownership](ownership.md) first-write gate is not a Rule's gate: it stops the first file write of a session, once, in an application repo whose root `AGENTS.md` has no `## Ownership` section, so the agent proposes the setup first. It is armed by default. Switch it off for one install:
+
+```bash
+geneseed build --emit claude-global --no-ownership-gate
+```
+
+The install records `Ownership gate: off` beside the other gate markers, written only when off; rebuilds, upgrades and `geneseed status` carry it. The console has no switch for it, because it has no Rule row. What stops: the ownership check of `rule-gate` (Claude Code, OpenClaude) and of `tool-gate` (Bob), and on OpenCode the guard plugin's ownership refusal. A repo with `mode: on` still runs the ownership checkpoints, and every other check of those gates stays.
+
+Two narrower ways out need no rebuild: `## Ownership` with `mode: off` in a repo's root `AGENTS.md` silences it for that repo, and answering "proceed without" lets the session write on.
+
+Limits, as for the gates above: OpenCode reads the marker from `AGENT.md` when it starts, so restart it after a rebuild. A global install's `rule-gate` does not stand down for a project install, so an armed global gate still stops the first write inside a project built `--no-ownership-gate`. And while the machine's hook shim points at an older checkout, that checkout refuses the flag and the gate verb lets every call through on a disarmed install — on Claude Code and OpenClaude all of `rule-gate` (the credential scan, *Persist Insight* and *External Gate* too), on Bob all of `tool-gate` (credentials, destructive git, the root scan and the protected checks too). Run `geneseed rebuild-all` first.

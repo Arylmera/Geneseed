@@ -104,7 +104,7 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 | event | verb | how the verdict travels |
 | --- | --- | --- |
 | `SessionStart` | `context --host bob` | plain stdout, as on Claude |
-| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV, rigor-5 and ops-2: **exit 2**, reason on stderr — it says no chat confirmation lifts the block, since Bob has no ask tier; process 1/5: a stderr line, exit 0 |
+| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV, rigor-5 and ops-2: **exit 2**, reason on stderr — it says no chat confirmation lifts the block, since Bob has no ask tier; process 1/5: a stderr line, exit 0; the ownership gate (the session's first write in an application repo with no `## Ownership` section in its root `AGENTS.md`): **exit 2 once**, the same write then passes — off with `--no-ownership-gate` or `mode: off` |
 | `Stop` | `learn` | never a verdict |
 | `UserPromptSubmit` | `activity --host bob` | never a verdict; records the turn for the web console's Activity view |
 

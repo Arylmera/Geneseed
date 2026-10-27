@@ -38,6 +38,18 @@ mechanisms: its own permission prompt (`opencode.json`, static globs) and the gu
 See [ADR 0008](../adr/0008-host-parity-ceiling-of-the-weakest-host.md) for why a gate that only
 one host can run still ships for every host it can.
 
+### Not a rule: the ownership gate
+
+The [ownership](ownership.md) first-write gate enforces the Credo's Ownership section, not a law
+or doctrine rule, so it has no id above. In an application repo whose root `AGENTS.md` has no
+`## Ownership` section, it refuses the session's first write once; the reason goes to the agent,
+and the next write passes. Off per repo with `mode: off`, per install with
+`--no-ownership-gate` ([Exclusions](exclusions.md)).
+
+| Gate | Claude Code | OpenClaude | OpenCode | Bob |
+|---|---|---|---|---|
+| ownership | deny once: rule-gate (`Write`/`Edit`/`NotebookEdit`; sub-agents defer) | same as Claude Code | block once: guard plugin (a child session defers) | block once (exit 2): tool-gate (sub-agent deferral unverified) |
+
 A gate that is registered but broken looks exactly like a working one. `geneseed doctor --probe`
 runs the installed Claude Code, OpenClaude and Bob gates through each host's own shell, and calls
 the OpenCode guard plugin in-process, on one call each must refuse and one it must let through
