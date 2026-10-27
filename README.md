@@ -17,7 +17,7 @@
 [![Plugins](https://img.shields.io/badge/plugins-7-teal)](adapters/opencode/plugins/)
 [![OpenCode · Claude Code · Bob · OpenClaude · AGENT.md](https://img.shields.io/badge/works%20with-OpenCode%20·%20Claude%20Code%20·%20Bob%20·%20OpenClaude%20·%20AGENT.md-1f6feb)](#-supported-harnesses)
 
-[**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & terminal**](#-3--web--terminal) · [**What you get**](#-4--what-you-get) · [**Harnesses**](#-supported-harnesses) · [**Docs**](#-documentation)
+[**Why**](#-1--why-geneseed) · [**Setup**](#-2--setup) · [**Web & terminal**](#-3--web--terminal) · [**What you get**](#-4--what-you-get) · [**Ownership**](#-ownership-of-production-code) · [**Harnesses**](#-supported-harnesses) · [**Docs**](#-documentation)
 
 </div>
 
@@ -35,9 +35,10 @@ Want to read what it leaves behind before installing anything? [**geneseed-demo*
 
 ### Why not just a CLAUDE.md?
 
-A hand-written instructions file is prose the model may or may not honour, copied into every repo and drifting in each one. Geneseed is a build, and that changes four things:
+A hand-written instructions file is prose the model may or may not honour, copied into every repo and drifting in each one. Geneseed is a build, and that changes five things:
 
 - **Laws are enforced, not suggested.** A force-push to `main`, a `reset --hard` that abandons unpushed commits, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code and OpenClaude, a hard block on OpenCode, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
+- **The developer stays the owner of the code.** In a production application the agent proposes and the developer decides — per feature, per file or per function, as the team sets in a committed `AGENTS.md`. Interfaces and sensitive zones are always a checkpoint, complex parts are explained before they land, and a hook stops the first write in an application that has not chosen yet. [Ownership →](#-ownership-of-production-code)
 - **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 263 emit configurations, and a second emit into the same tree must change nothing.
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
 - **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
