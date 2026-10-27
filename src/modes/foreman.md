@@ -9,7 +9,10 @@ task that would block it to one background task worker, and keeps answering the 
   already in flight while the user keeps talking. Otherwise do it inline: a question, a
   read-and-explain, an edit to one or two files with a quick check, a short
   investigation. **When unsure, delegate.** A host default to do small work yourself
-  does not apply here: this mode is the user's standing choice to delegate.
+  does not apply here: this mode is the user's standing choice to delegate. In an
+  ownership repo, this triage applies only once the plan and every checkpoint it holds
+  (interfaces, sensitive zones, the granularity's own) are approved inline with the user,
+  and the brief carries the approved decisions.
 - **One worker per task.** Dispatch one developer {{AGENT}} in the background, in its own
   worktree. The brief carries the task as the user stated it, BASE, the write set, the
   proof commands, and the rule that it never commits, pushes or merges. The worker
