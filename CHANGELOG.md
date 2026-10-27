@@ -8,6 +8,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.27.1] — 2026-10-27
+
+Patch: the guard's refusals no longer name the switch that turns it off.
+
+### Upgrade notes
+- Run `geneseed rebuild-all` once after updating so OpenCode installs get the new guard plugin. Claude Code, OpenClaude and Bob get the new hook text with the update itself.
+
+### Fixed
+- **A refusal no longer reads as leave to get round it.** Every OpenCode guard refusal ended with `— set GENESEED_GUARD=off to allow`. A weak model on OpenCode took that as permission and wrote the blocked memory index through a `python3` shell command instead of re-issuing the edit. The refusals no longer name any switch; `GENESEED_GUARD` stays documented for you in [the guard page](docs/reference/plugin-guard.md). The *Persist Insight* text (the first write to `user-rules.md` or a memory file) now ends, on every host, with: "Stop and ask the user now (the rule skill). If this edit was refused, re-issue the same edit only after they answer; never write it another way (for example through a shell command)." On Bob, where this gate only warns and the write already went through, the condition keeps the model from applying the edit twice. The same calls are blocked as before.
+
 ## [4.27.0] — 2026-10-27
 
 Minor: ownership — the developer decides each part of production code, at a granularity the team sets in the root `AGENTS.md`; a Credo section, the ownership skill, and a first-write gate that is on by default (see the ⚠️ entry). Re-emit every install with `geneseed rebuild-all` to get the new Credo section, the skill, the `develop`/`developer`/Foreman changes and the OpenCode guard.

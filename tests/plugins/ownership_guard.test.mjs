@@ -1,6 +1,6 @@
 // The OpenCode guard's ownership first-write gate, the twin of js/hosts/ownership-gate.mjs. Written
-// out, not recorded. V1 refuses by THROWING `[geneseed-guard] blocked: <reason>` (no
-// GENESEED_GUARD=off tail: the next write passes anyway); V2 cannot throw, so the call is renamed
+// out, not recorded. V1 refuses by THROWING `[geneseed-guard] blocked: <reason>` (no guard
+// switch named: no refusal names one); V2 cannot throw, so the call is renamed
 // to that text. Once per (session, repo); a child session (a subagent, ruling D29) never spends
 // the block; a `## Ownership` section defers. The reason is the hook's, word for word.
 import { test, after } from "node:test"

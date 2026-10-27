@@ -1310,6 +1310,10 @@ async function protectedPrefixes() {
 // project's unrelated memory/ folder is never caught.
 const RULE_STORE_BUMPED = new Set()
 const nocase = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
+// Word for word js/hosts/hooks.mjs's PERSIST_ASK. A weak model once took a refusal as leave to
+// write the same file through a shell command, so the text names the one way forward.
+const PERSIST_ASK = "Stop and ask the user now (the rule skill). If this edit was refused, re-issue " +
+  "the same edit only after they answer; never write it another way (for example through a shell command)."
 function ruleStoreTarget(p) {
   const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/")
   const base = path.basename(abs).toLowerCase()
@@ -1461,13 +1465,13 @@ export const GeneseedGuard = async (ctx) => {
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
       // `law-4`, `process-1`) plus `wiki`, so status counts one vocabulary across hosts.
-      // `tail: false` for the ownership gate: its reason names its own ways out, and the next
-      // write passes anyway, so pointing at GENESEED_GUARD=off would only invite disabling it.
-      const deny = async (why, rule, tail = true) => {
+      // The model reads this text. It never names the GENESEED_GUARD switch: a weak model read
+      // "set GENESEED_GUARD=off to allow" as leave to route the write through a shell (4.27.1).
+      const deny = async (why, rule) => {
         if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
         log(`BLOCKED: ${why}`)
         await ledger(rule)
-        throw new Error(`[geneseed-guard] blocked: ${why}${tail ? " — set GENESEED_GUARD=off to allow" : ""}`)
+        throw new Error(`[geneseed-guard] blocked: ${why}`)
       }
       try {
         // `apply_patch`'s own tool resolves every marker path against `instance.directory`
@@ -1490,9 +1494,9 @@ export const GeneseedGuard = async (ctx) => {
             const store = ruleStoreTarget(p)
             if (store && !RULE_STORE_BUMPED.has(p)) {
               RULE_STORE_BUMPED.add(p)
+              // Twin of js/hosts/hooks.mjs's process-1 text — keep the closing sentences in step.
               await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                   `choice is the user's (Persist Insight). Settle it through the rule skill, ` +
-                   `then re-issue this write`, "process-1")
+                   `choice is the user's (Persist Insight). ${PERSIST_ASK}`, "process-1")
               return
             }
           }
@@ -1513,7 +1517,7 @@ export const GeneseedGuard = async (ctx) => {
           if (!OWNERSHIP_GATE_OFF) {
             for (const p of paths) {
               const why = ownershipBlock(path.resolve(cwd, p), input?.sessionID)
-              if (why && !(await isChildSession(input.sessionID))) { await deny(why, "ownership", false); return }
+              if (why && !(await isChildSession(input.sessionID))) { await deny(why, "ownership"); return }
             }
           }
         }
