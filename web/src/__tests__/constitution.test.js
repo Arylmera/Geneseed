@@ -80,7 +80,8 @@ describe('HOOK_GATED', () => {
   // table of switchable gates: a gate added or renamed there fails here until the
   // Constitution's toggles agree.
   it('matches GATE_SWITCHES in js/build/source.mjs', () => {
-    const rows = GATE_SWITCHES.map((g) => [g.law, g.key])
+    // A row with no law (the ownership gate) has no Constitution row to toggle it from.
+    const rows = GATE_SWITCHES.filter((g) => g.law).map((g) => [g.law, g.key])
     expect(rows.length).toBeGreaterThan(0)
     expect(Object.fromEntries(rows)).toEqual(
       Object.fromEntries(Object.entries(GATE_SWITCH).map(([law, g]) => [law, g.key])),

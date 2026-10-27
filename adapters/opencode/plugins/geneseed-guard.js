@@ -13,10 +13,12 @@
 //     memory file — that choice belongs to the user, via the rule skill.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
+//   - Ownership:  in an application repo whose root AGENTS.md has no `## Ownership` section,
+//     refuse the session's first write once, so the agent proposes the setup first.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
 // (.env edits) are WARNED, not blocked. Every block is recorded in the gate
 // ledger (`<cfg>/notebook/gates.jsonl`) under the hook's rule key (`law-1`, `rigor-5`,
-// `law-4`, `ops-2`, `process-1`, `wiki`); every skill or subagent call, blocked or not, is
+// `law-4`, `ops-2`, `process-1`, `wiki`, `ownership`); every skill or subagent call, blocked or not, is
 // counted in `<cfg>/notebook/usage.jsonl` when that `notebook/` exists and `.usage-off` does not.
 //
 // GENESEED_GUARD=off    disable entirely.
@@ -152,6 +154,8 @@ const CARRIER_TEXT = carrierText()
 const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, "m").test(CARRIER_TEXT)
 const DELETION_GATE_OFF = gateOff("Deletion gate")
 const SECRETS_GATE_OFF = gateOff("Secrets gate")
+// `--no-ownership-gate` (ruling D25): the ownership first-write gate below stands down.
+const OWNERSHIP_GATE_OFF = gateOff("Ownership gate")
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
 // writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
@@ -1347,6 +1351,54 @@ function protectedIn(target) {
   }
 }
 
+// ---- the ownership first-write gate --------------------------------------------
+// Twin of js/hosts/ownership-gate.mjs's `ownershipBlock` — keep in step (same manifests, same
+// managed-block strip, same section match, same reason). In an application repo (a git root
+// holding a build manifest) whose root AGENTS.md has no `## Ownership` section outside the
+// Geneseed block, the first write of a session is refused once, so the agent proposes the setup
+// to the developer; the session and root are recorded BEFORE the refusal, so the next write
+// passes. The marker is this module Set: the plugin lives as long as the OpenCode process.
+const OWNERSHIP_SEEN = new Set()
+const OWNERSHIP_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
+  "composer.json", "Gemfile"])
+const isManifest = (n) => OWNERSHIP_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
+const MANAGED_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g
+const OWNERSHIP_SECTION_RE = /^## Ownership[ \t]*\r?$/m
+const OWNERSHIP_TAIL = "Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per " +
+  "install: rebuild with `--no-ownership-gate`. Offer the full documentation " +
+  "(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only " +
+  "after they answer. This gate fires once per session and repo."
+const OWNERSHIP_REASON_NONE = "Geneseed (Ownership) — this application has no `AGENTS.md` with " +
+  "`## Ownership`. Before writing, propose to the developer: set it up (ownership skill), or " +
+  `proceed without for this session. ${OWNERSHIP_TAIL}`
+const OWNERSHIP_REASON_NO_SECTION = "Geneseed (Ownership) — this application's `AGENTS.md` has no " +
+  "`## Ownership` section. Before writing, ask the developer: add the Ownership section " +
+  `(ownership skill), or proceed without for this session? ${OWNERSHIP_TAIL}`
+// The reason to refuse this write, or null. `p` is absolute. Never throws.
+function ownershipBlock(p, sessionID) {
+  try {
+    if (typeof sessionID !== "string" || !sessionID) return null
+    const root = gitRootOf(path.dirname(p))
+    if (!root || !readdirSync(root).some(isManifest)) return null
+    const rel = nocase(path.relative(root, p).replace(/\\/g, "/"))
+    if (rel === nocase("AGENTS.md") || rel.startsWith(nocase(".geneseed/"))) return null
+    // The install's own bookkeeping (memory/, notebook/ beside plugins/, or $GENESEED_HARNESS)
+    // never spends the block — the hook twin's `installRoot`.
+    for (const home of [path.dirname(PLUGIN_DIR), process.env.GENESEED_HARNESS].filter(Boolean)) {
+      const inside = path.relative(path.resolve(home), p)
+      if (!inside.startsWith("..") && !path.isAbsolute(inside)) return null
+    }
+    let text = null
+    try { text = readFileSync(path.join(root, "AGENTS.md"), "utf8") } catch { /* none: gate */ }
+    const own = text === null ? "" : text.replace(MANAGED_BLOCK_RE, "")
+    if (OWNERSHIP_SECTION_RE.test(own)) return null
+    const key = `${sessionID}|${nocase(root)}`
+    if (OWNERSHIP_SEEN.has(key)) return null
+    OWNERSHIP_SEEN.add(key)
+    return own.trim() ? OWNERSHIP_REASON_NO_SECTION : OWNERSHIP_REASON_NONE
+  } catch { return null }
+}
+
 // Mutation-class tools for the wiki check — wider than WRITE_TOOLS because moving,
 // renaming, or deleting a protected note is as destructive as overwriting it. Same
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
@@ -1386,6 +1438,17 @@ export const GeneseedGuard = async (ctx) => {
   if (ctx?.client) LOG_CLIENT = ctx.client
   // The session's working directory, the same resolution the context plugin uses.
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
+  // Whether a session has a parent (a subagent's child session). V2 hands in `sessionMeta`
+  // (`ctx.session.get`); V1 asks its client. Read only on the rare would-block path; a failed
+  // lookup reads as a top-level session.
+  const isChildSession = async (sid) => {
+    try {
+      const info = ctx?.sessionMeta ? await ctx.sessionMeta(sid)
+        : await ctx?.client?.session?.get?.({ path: { id: sid } })
+      const meta = info?.data ?? info
+      return Boolean(meta?.parentID ?? meta?.parentId)
+    } catch { return false }
+  }
   return {
     "tool.execute.before": async (input, output) => {
       // Bypass before counting, the order Claude's toolGate keeps: an excluded repo is
@@ -1398,11 +1461,13 @@ export const GeneseedGuard = async (ctx) => {
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
       // `law-4`, `process-1`) plus `wiki`, so status counts one vocabulary across hosts.
-      const deny = async (why, rule) => {
+      // `tail: false` for the ownership gate: its reason names its own ways out, and the next
+      // write passes anyway, so pointing at GENESEED_GUARD=off would only invite disabling it.
+      const deny = async (why, rule, tail = true) => {
         if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
         log(`BLOCKED: ${why}`)
         await ledger(rule)
-        throw new Error(`[geneseed-guard] blocked: ${why} — set GENESEED_GUARD=off to allow`)
+        throw new Error(`[geneseed-guard] blocked: ${why}${tail ? " — set GENESEED_GUARD=off to allow" : ""}`)
       }
       try {
         // `apply_patch`'s own tool resolves every marker path against `instance.directory`
@@ -1441,6 +1506,14 @@ export const GeneseedGuard = async (ctx) => {
               await deny(`${cp} would carry a credential-shaped string (Sealed Secrets) — secrets `
                 + "live in .env or a secret manager, never in a tracked file", "law-1")
               return
+            }
+          }
+          // The ownership first-write gate, last, as in js/hosts/hooks.mjs's ruleDecide. A child
+          // session is a subagent (ruling D29): it cannot ask the user, so it never spends a block.
+          if (!OWNERSHIP_GATE_OFF) {
+            for (const p of paths) {
+              const why = ownershipBlock(path.resolve(cwd, p), input?.sessionID)
+              if (why && !(await isChildSession(input.sessionID))) { await deny(why, "ownership", false); return }
             }
           }
         }
@@ -1499,10 +1572,12 @@ export const GeneseedGuard = async (ctx) => {
 async function setupV2(ctx) {
   const hooks = await GeneseedGuard({
     worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory,
+    sessionMeta: (sessionID) => ctx.session.get({ sessionID }),
   })
   await ctx.tool.hook("execute.before", async (event) => {
     try {
-      await hooks["tool.execute.before"]({ tool: event.tool }, { args: event.input })
+      // `sessionID` rides on every V2 execute.before event (@opencode/plugin 2.1.4 `ToolHooks`).
+      await hooks["tool.execute.before"]({ tool: event.tool, sessionID: event.sessionID }, { args: event.input })
     } catch (err) {
       const why = String(err?.message || "")
       if (!why.startsWith("[geneseed-guard]")) return

@@ -336,6 +336,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--no-ownership-gate"
+          ],
+          "dest": "no_ownership_gate",
+          "metavar": null,
+          "help": "switch the ownership first-write gate off for this install: an application repo with no '## Ownership' section in its root AGENTS.md is no longer stopped once per session before its first write (not a law's gate); written to the carrier as 'Ownership gate: off' and replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -1216,7 +1231,7 @@
     },
     {
       "name": "rule-gate",
-      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (Persist Insight backstop)",
+      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (Persist Insight backstop), and stop the first write of a session once in an application repo with no ## Ownership section in its root AGENTS.md (the ownership gate)",
       "description": "",
       "positionals": [],
       "options": [
@@ -1257,6 +1272,21 @@
           "dest": "no_secrets_gate",
           "metavar": null,
           "help": "skip the Sealed Secrets credential scan (set by the emit when the install was built --no-secrets-gate); the protected checks and the persist check still run",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-ownership-gate"
+          ],
+          "dest": "no_ownership_gate",
+          "metavar": null,
+          "help": "skip the ownership first-write gate (set by the emit when the install was built --no-ownership-gate); every other check still runs",
           "choices": null,
           "default": false,
           "required": false,
@@ -1549,6 +1579,21 @@
           "dest": "no_secrets_gate",
           "metavar": null,
           "help": "skip the Sealed Secrets credential scan (set by the emit when the install was built --no-secrets-gate); the deletion, root-scan and protected checks still refuse",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-ownership-gate"
+          ],
+          "dest": "no_ownership_gate",
+          "metavar": null,
+          "help": "skip the ownership first-write gate (set by the emit when the install was built --no-ownership-gate); every other check still runs",
           "choices": null,
           "default": false,
           "required": false,

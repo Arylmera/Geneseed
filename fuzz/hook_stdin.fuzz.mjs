@@ -79,6 +79,55 @@ for (const verb of ['git-gate', 'rule-gate']) {
   });
 }
 
+// The ownership first-write gate (js/hosts/ownership-gate.mjs) rides `rule-gate`, and fires only
+// in an application repo, on a payload with a session and a path — so the cwd here IS one (a
+// `.git` and a `package.json`, no AGENTS.md), and the payloads carry both, with random types.
+// The temp dir is the sandbox too, so the per-session marker lands inside it. The verdict, when
+// there is one, is a deny or an ask document, never anything else.
+const sessionWrite = fc.record({
+  session_id: fc.oneof(fc.string(), fc.constantFrom('../../x', 'a/b\\c', 'C:\\x', '..', ''), fc.jsonValue()),
+  agent_id: fc.oneof(fc.constant(undefined), fc.string()),
+  tool_name: fc.oneof(fc.constantFrom('Write', 'Edit', 'NotebookEdit', 'read_file'), fc.string()),
+  tool_input: fc.oneof(fc.jsonValue(), fc.record({
+    file_path: fc.oneof(fc.constantFrom('a.js', 'AGENTS.md', '.geneseed/x.md', '../out.js', 'C:\\x\\y.js'),
+      fc.string(), fc.jsonValue()),
+    content: fc.oneof(fc.string(), fc.jsonValue()),
+  })),
+  cwd: fc.oneof(fc.constant(undefined), fc.string(), fc.jsonValue()),
+}).map((v) => JSON.stringify(v));
+// Pinned as fast-check's first example, so every run reaches the deny branch at least once:
+// random shapes alone rarely line up a string session, a write tool and a plain path.
+const MUST_DENY = JSON.stringify({ session_id: 'fuzz-anchor', tool_name: 'Write',
+  tool_input: { file_path: 'a.js', content: 'x' } });
+
+test('rule-gate keeps its output contract in an application repo, on session-bearing writes', () => {
+  fc.assert(fc.property(fc.oneof(payload, sessionWrite), (input) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      fs.mkdirSync(path.join(dir, '.git'));
+      fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, input);
+      const fd = fs.openSync(inFile, 'r');
+      let p;
+      try {
+        p = spawnSync(process.execPath, [HOOK, 'rule-gate'], { cwd: dir, encoding: 'utf8', windowsHide: true,
+          stdio: [fd, 'pipe', 'pipe'], env: { ...process.env, TMP: dir, TEMP: dir, TMPDIR: dir } });
+      } finally { fs.closeSync(fd); }
+      const r = { rc: p.status, out: p.stdout, err: p.stderr };
+      assertWellFormed('rule-gate', input, r);
+      if (r.out) {
+        assert.ok(['ask', 'deny'].includes(JSON.parse(r.out).hookSpecificOutput?.permissionDecision),
+          `rule-gate printed a verdict that is neither ask nor deny: ${r.out.slice(0, 200)}`);
+      }
+      if (input === MUST_DENY) {
+        assert.equal(JSON.parse(r.out || '{}').hookSpecificOutput?.permissionDecision, 'deny',
+          'the anchor write in an application repo was not refused');
+      }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS, examples: [[MUST_DENY]] });
+});
+
 // The done gate (#289) rides `learn` on Stop, where stdout is a verdict too: whatever the
 // transcript holds — torn lines, wrong types, random tool calls — `learn` exits 0 and prints
 // nothing or exactly one `{"decision":"block"}`. `$GENESEED_LLM` is unset, so nothing spawns.

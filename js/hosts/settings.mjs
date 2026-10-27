@@ -728,7 +728,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
   gates = {}) {
   // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
-  const { secretsGate = true, doneGate = true, deletionGate = true } = gates ?? {};
+  const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -767,6 +767,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // 2026-10-18): each flag only when that gate is off.
     const sg = secretsGate === false ? ' --no-secrets-gate' : '';
     const dn = doneGate === false ? ' --no-done-gate' : '';
+    // The ownership first-write gate (js/hosts/ownership-gate.mjs), the same contract.
+    const og = ownershipGate === false ? ' --no-ownership-gate' : '';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
@@ -775,7 +777,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `--no-deletion-gate`), and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
       // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
@@ -800,7 +802,10 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
   // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
-  const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`;
+  // `--no-ownership-gate` (the ownership first-write gate) rides rule-gate only, never the
+  // `Skill|Agent|Task` tool-gate below, which judges no write.
+  const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`
+    + (ownershipGate === false ? ' --no-ownership-gate' : '');
   const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''} || exit 0`;
   const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times

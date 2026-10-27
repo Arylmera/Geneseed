@@ -91,6 +91,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), their `family` (`CLAUDE_STYLE`), plus `resolvePath`/`expanduser` |
 | `hooks.mjs` | The gate verbs, run on every tool call: `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), plus `ask`/the gate ledger/`guardGate`. `--host` picks the verdict dialect |
 | `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
+| `ownership-gate.mjs` | The ownership first-write gate, last in `rule-gate`: in an application repo (git root + build manifest) whose root `AGENTS.md` has no `## Ownership` section, denies the session's first write once (a tmpdir marker per session). Builtins + `gitRootOf` only. Twin: the OpenCode guard plugin |
 | `hooks-done.mjs` | The done gate (#289): on Stop, inside `learn` and before its spawn, blocks a turn that edited files until `.geneseed/done-checks.txt`'s checks passed after the last edit |
 | `hooks-learn.mjs` | The `learn` verb — Stop/SubagentStop/PreCompact distiller; the hook path's ONE spawn (`$GENESEED_LLM`) |
 | `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`), plus the activity off switch (`activityOn`) and the do-nothing `activity` verb |

@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+- ⚠️ **Behaviour change on update: the ownership first-write gate.** In an application repo (a
+  git root holding `package.json`, `pom.xml`, `build.gradle*`, `pyproject.toml`, `go.mod`,
+  `Cargo.toml`, `*.csproj`, `composer.json` or `Gemfile`) whose root `AGENTS.md` has no
+  `## Ownership` section, the first Write, Edit or NotebookEdit of each session is now refused
+  once, with a reason that tells the agent to propose the ownership setup to the developer.
+  The next write passes. Claude Code, OpenClaude and Bob get it on `git pull`, with no re-emit
+  (Claude and OpenClaude: `permissionDecision: "deny"`, which shows the reason to the model;
+  Bob: exit 2). OpenCode V1
+  and V2 get it with the guard plugin on the next emit. Shell writes and sub-agent writes are
+  not gated. To opt out: per repo, add `## Ownership` with `mode: off` to the root `AGENTS.md`;
+  per install, rebuild with `--no-ownership-gate`.
+
 ### Changed
 - **Activity opens on the Garden.** The live sessions show as bonsai by default; the `List | Garden` switch shows the cards, and the list is kept in the link as `v=list`. An older link carrying `v=garden` still opens the Garden.
 - **The Credo gains an Ownership section, and learn-mode may propose.** A fifth always-on section, between Decisions and Conduct: the code belongs to whoever will answer for it, and work is handed over only when the developer can say what changed, where and why. learn-mode may now propose a solution, but never applies one it has not explained.

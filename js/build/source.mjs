@@ -524,7 +524,8 @@ export function resolveSkillNames(names, {
 }
 
 /**
- * The laws whose hook gate an install can switch off, in law order: the cfg/profile key, the
+ * The hook gates an install can switch off (the laws', in law order, then the ownership gate,
+ * which has no law: `law: null`): the cfg/profile key, the
  * build flag, the carrier marker (`<marker>: off`, written only when off) and the law. ONE
  * table, so the flag, the marker, the rebuild argv, the read-back and `status` cannot drift
  * apart. Every gate is ARMED by default and the law's text binds either way. The deletion row
@@ -534,6 +535,9 @@ export const GATE_SWITCHES = [
   { key: 'secretsGate', flag: '--no-secrets-gate', arg: 'noSecretsGate', marker: 'Secrets gate', law: 'I' },
   { key: 'doneGate', flag: '--no-done-gate', arg: 'noDoneGate', marker: 'Done gate', law: 'III' },
   { key: 'deletionGate', flag: '--no-deletion-gate', arg: 'noDeletionGate', marker: 'Deletion gate', law: 'IV' },
+  // Not a law's gate (`law: null`): the ownership first-write gate (js/hosts/ownership-gate.mjs,
+  // ruling D25). Its off switch is this flag, never `harness.config.json` (args.mjs says why).
+  { key: 'ownershipGate', flag: '--no-ownership-gate', arg: 'noOwnershipGate', marker: 'Ownership gate', law: null },
 ];
 
 /**

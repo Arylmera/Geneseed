@@ -106,6 +106,8 @@ const BARE_FLAGS = [
   ['--no-secrets-gate', 'noSecretsGate'],
   ['--no-done-gate', 'noDoneGate'],
   ['--no-deletion-gate', 'noDeletionGate'],
+  // Then the ownership gate, which has no law (`law: null`).
+  ['--no-ownership-gate', 'noOwnershipGate'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

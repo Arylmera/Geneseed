@@ -461,7 +461,7 @@ export function statusLines(d, color = false) {
       ...(p.kits?.length ? [`kits: ${p.kits.join(',')}`] : []),
       // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
-        .map((g) => `${g.marker.toLowerCase()}: off (Law ${g.law} text still binds)`)]
+        .map((g) => `${g.marker.toLowerCase()}: off${g.law ? ` (Law ${g.law} text still binds)` : ''}`)]
       .join(` ${DOT} `) + where]);
     // R6: a member its owner edited outlives its kit; name it, so turning the kit off is visible.
     for (const [kit, rels] of Object.entries(p.keptKitFiles ?? {})) {
