@@ -509,7 +509,7 @@ test('a re-run keeps the GATES an install switched off, without asking about the
   assert.deepEqual(gated.results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
-    gates: { secretsGate: true, doneGate: false, deletionGate: false },
+    gates: { secretsGate: true, doneGate: false, deletionGate: false, ownershipGate: true },
     emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over an install with switched-off gates did not carry them back');
   // ...and into the plan line, in law order, Law I still armed.

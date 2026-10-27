@@ -231,6 +231,21 @@ test('askDecision is byte-identical to the compact json.dumps it replaced', asyn
   assert.ok(render('a — b').includes('a \\u2014 b'), 'the em dash must leave as \\u2014');
 });
 
+// The deny twin (the ownership gate) shares the template; only the decision word differs. Claude
+// Code shows a deny's reason to the model, an ask's to the user.
+test('denyDecision is byte-identical to the compact json.dumps of a deny', async () => {
+  const { denyDecision: render } = await import('../../js/hosts/hooks.mjs');
+  const { jsonDumpsCompact } = await import('../../js/lib/json.mjs');
+  for (const reason of ['plain', 'Geneseed (Ownership) — this application has no `AGENTS.md`',
+    'astral \u{1F600} pair', 'quote " slash \\ nl \n', '']) {
+    assert.equal(render(reason), `${jsonDumpsCompact({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason,
+      },
+    })}\n`, JSON.stringify(reason));
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
 // The rule gate: a write to `user-rules.md`, to `MEMORY.md`, or to a markdown file inside THIS
 // install's `memory/`, asks — so the rule-vs-memory choice reaches the user.

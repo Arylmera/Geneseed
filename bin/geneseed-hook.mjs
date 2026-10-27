@@ -82,13 +82,19 @@ const VERBS = {
     switches: { '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate' },
   },
   'rule-gate': {
-    load: gates, fn: 'cmdRuleGate', flags: HOSTED, switches: { '--no-secrets-gate': 'noSecretsGate' },
+    load: gates,
+    fn: 'cmdRuleGate',
+    flags: HOSTED,
+    switches: { '--no-secrets-gate': 'noSecretsGate', '--no-ownership-gate': 'noOwnershipGate' },
   },
   'tool-gate': {
     load: gates,
     fn: 'cmdToolGate',
     flags: HOSTED,
-    switches: { '--no-deletion-gate': 'noDeletionGate', '--no-secrets-gate': 'noSecretsGate' },
+    switches: {
+      '--no-deletion-gate': 'noDeletionGate', '--no-secrets-gate': 'noSecretsGate',
+      '--no-ownership-gate': 'noOwnershipGate',
+    },
   },
   learn: {
     load: () => import('../js/hosts/hooks-learn.mjs'),
@@ -144,7 +150,7 @@ function die(code, msg) {
 function parse(spec, argv) {
   const args = {
     root: null, host: null, memory: null, consolidate: false, noConsent: false,
-    noDeletionGate: false, noSecretsGate: false, noDoneGate: false, file: null,
+    noDeletionGate: false, noSecretsGate: false, noDoneGate: false, noOwnershipGate: false, file: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];

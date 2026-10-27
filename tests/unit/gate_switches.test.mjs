@@ -49,28 +49,31 @@ function withDir(fn) {
 
 const agentLines = (dir) => fs.readFileSync(path.join(dir, 'AGENT.md'), 'utf8').replace(/\r\n/g, '\n')
   .split('\n');
-const ARMED = { secretsGate: true, doneGate: true, deletionGate: true };
+// The ownership row (`law: null`, ruling D25) is a fourth switch under the same contract.
+const ARMED = { secretsGate: true, doneGate: true, deletionGate: true, ownershipGate: true };
 
 test('each marker is written only when off, in law order under Active packs:, and reads back fail-closed', () => {
   withDir((d) => {
     const all = path.join(d, 'all');
-    quiet(() => build(makeCfg({ noSecretsGate: true, noDoneGate: true, noDeletionGate: true }), 'neutral', all));
+    quiet(() => build(makeCfg({ noSecretsGate: true, noDoneGate: true, noDeletionGate: true,
+      noOwnershipGate: true }), 'neutral', all));
     const lines = agentLines(all);
     const at = lines.indexOf('Secrets gate: off');
     assert.ok(at > 0, 'the Secrets gate: off line is missing or misspelled');
     assert.match(lines[at - 1], /^Active packs: /, 'the markers left the Active packs: block');
-    assert.deepEqual(lines.slice(at, at + 3), ['Secrets gate: off', 'Done gate: off', 'Deletion gate: off']);
-    assert.deepEqual(gatesOfDir(all), { secretsGate: false, doneGate: false, deletionGate: false });
+    assert.deepEqual(lines.slice(at, at + 4),
+      ['Secrets gate: off', 'Done gate: off', 'Deletion gate: off', 'Ownership gate: off']);
+    assert.deepEqual(gatesOfDir(all), { secretsGate: false, doneGate: false, deletionGate: false, ownershipGate: false });
 
     // One gate off writes that one line and reads back that one gate.
     const done = path.join(d, 'done');
     quiet(() => build(makeCfg({ noDoneGate: true }), 'neutral', done));
-    assert.deepEqual(agentLines(done).filter((l) => /^(Secrets|Done|Deletion) gate:/.test(l)), ['Done gate: off']);
+    assert.deepEqual(agentLines(done).filter((l) => /^(Secrets|Done|Deletion|Ownership) gate:/.test(l)), ['Done gate: off']);
     assert.deepEqual(gatesOfDir(done), { ...ARMED, doneGate: false });
 
     const on = path.join(d, 'on');
     quiet(() => build(makeCfg(), 'neutral', on));
-    assert.ok(!agentLines(on).some((l) => /^(Secrets|Done|Deletion) gate:/.test(l)), 'a default build grew a marker');
+    assert.ok(!agentLines(on).some((l) => /^(Secrets|Done|Deletion|Ownership) gate:/.test(l)), 'a default build grew a marker');
     assert.deepEqual(gatesOfDir(on), ARMED, 'no line reads as armed');
 
     // Anything but exactly `off` is armed: a gate is the thing a misread must never take away.
@@ -89,7 +92,7 @@ test('a CRLF carrier\'s off line reads as off', () => {
   withDir((d) => {
     fs.writeFileSync(path.join(d, 'AGENT.md'),
       '# x\r\n\r\nActive packs: craft\r\nSecrets gate: off\r\nDeletion gate: off \r\n');
-    assert.deepEqual(gatesOfDir(d), { secretsGate: false, doneGate: true, deletionGate: false });
+    assert.deepEqual(gatesOfDir(d), { secretsGate: false, doneGate: true, deletionGate: false, ownershipGate: true });
   });
 });
 
@@ -157,6 +160,17 @@ test('the hook commands carry --no-secrets-gate / --no-done-gate only when off',
     // Claude's Skill|Agent|Task counter judges no write, so it never needs the switch.
     const counter = cmds('claude', { secretsGate: false }).filter((c) => c.matcher === 'Skill|Agent|Task');
     assert.ok(counter.length && counter.every((c) => !c.command.includes('--no-secrets-gate')));
+    // The ownership switch, the same way: only the write gate (Claude/OpenClaude rule-gate, Bob's
+    // tool-gate) carries `--no-ownership-gate`, and only when the install switched it off.
+    for (const host of ['claude', 'openclaude', 'bob']) {
+      const writeGate = (c) => (host === 'bob' ? / tool-gate /.test(c.command) : / rule-gate /.test(c.command));
+      assert.ok(cmds(host).every((c) => !c.command.includes('--no-ownership-gate')), `${host}: armed grew the flag`);
+      const off = cmds(host, { ownershipGate: false });
+      assert.ok(off.filter(writeGate).length && off.filter(writeGate).every((c) => / --no-ownership-gate$/.test(c.command)),
+        `${host}: ${off.filter(writeGate).map((c) => c.command).join(' | ')}`);
+      assert.ok(off.filter((c) => !writeGate(c)).every((c) => !c.command.includes('--no-ownership-gate')),
+        `${host}: the ownership flag leaked past the write gate`);
+    }
   });
 });
 
@@ -212,6 +226,35 @@ test('the OpenCode guard drops only Sealed Secrets when the carrier says so', as
   }
 });
 
+test('the OpenCode guard drops the ownership gate when the carrier says `Ownership gate: off`', async () => {
+  const sb = makeSandbox('gsownguard-');
+  const err = process.stderr.write;
+  process.stderr.write = () => true;
+  try {
+    const app = path.join(sb.path, 'app');
+    fs.mkdirSync(path.join(app, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(app, 'package.json'), '{}');
+    const first = async (mod) => {
+      const hooks = await mod.default.server({ worktree: app, directory: app });
+      try {
+        await hooks['tool.execute.before']({ tool: 'write', sessionID: 's1' },
+          { args: { filePath: path.join(app, 'a.js'), content: 'x' } });
+        return false;
+      } catch (e) {
+        if (String(e?.message || '').startsWith('[geneseed-guard]')) return true;
+        throw e;
+      }
+    };
+    const armed = await pluginAt(path.join(sb.path, 'armed'), 'geneseed-guard.js', '');
+    const off = await pluginAt(path.join(sb.path, 'off'), 'geneseed-guard.js', '\nOwnership gate: off');
+    assert.equal(await first(armed), true, 'the armed guard let the first write of an application through');
+    assert.equal(await first(off), false, 'the disarmed guard still refused the first write');
+  } finally {
+    process.stderr.write = err;
+    sb.cleanup();
+  }
+});
+
 test('the OpenCode context plugin drops only the done reminder when the carrier says so', async () => {
   const sb = makeSandbox('gsdonectx-');
   const savedWiki = process.env.GENESEED_WIKI;
@@ -260,13 +303,15 @@ test('status names each switch only when off, #319\'s wording unchanged', () => 
       excludeSkills: [],
     };
     const lines = statusLines({ ...statusData(), installs: [
-      { ...base, host: 'claude', secretsGate: false, doneGate: false, deletionGate: false },
+      { ...base, host: 'claude', secretsGate: false, doneGate: false, deletionGate: false, ownershipGate: false },
       { ...base, host: 'bob', ...ARMED },
     ] }, false);
     const row = (host) => lines.find((l) => l.includes(`${host}:global`)) || '';
     assert.match(row('claude'), /secrets gate: off \(Law I text still binds\)/);
     assert.match(row('claude'), /done gate: off \(Law III text still binds\)/);
     assert.match(row('claude'), /deletion gate: off \(Law IV text still binds\)/);
+    // The ownership gate is no law's gate, so it names none.
+    assert.match(row('claude'), /ownership gate: off(?! \()/);
     assert.doesNotMatch(row('bob'), / gate: off/);
   });
 });
