@@ -186,6 +186,10 @@ The harness ships as a small set of layers, and the web console's rail is the sa
 | **🌐 Wiki** (`geneseed-wiki.jsonc`) | your own machine-wide knowledge base — typically an Obsidian vault — declared once per machine: entry notes load eager/lazy, the agent reads and **writes** it under the vault's own conventions, with an inbox fallback and guard-enforced protected folders |
 | **🧭 Context** | the project's own docs — auto-discovered on OpenCode, or via a `context.json` manifest |
 
+### 🧑‍💻 Ownership of production code
+
+In an application built for production, the developer stays the owner of the code. A committed `## Ownership` section in the repo's root `AGENTS.md` sets how closely the team steers — per feature, per file or per function — and names the sensitive zones; the agent then proposes, explains the complex parts and writes only what the developer approved, while interfaces and sensitive zones are always a checkpoint. Before the first write in an application repo with no such section, a hook stops the agent once so it proposes the setup. Opt a repo out with `mode: off`, an install with `--no-ownership-gate`, or a session by answering "proceed without"; learn-mode, when a developer turns it on, always comes first. See [Ownership](docs/concepts/ownership.md) and [Set up ownership](docs/guides/set-up-ownership.md).
+
 ### 🤝 What the harness asks of you
 
 The Pact in the Ethos is mutual. The agent's side is written into every install. Yours is not enforced — it is what keeps the pact honest, and only you can give it:

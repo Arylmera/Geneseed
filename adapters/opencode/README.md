@@ -386,10 +386,13 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   the safety Laws at the tool boundary: **blocks** writes to private-key/credential
   files (Sealed Secrets), catastrophic shell like `rm -rf /` and every command that would really lose data, judged
   against the repository's state (Deletion Is Deliberate), and any mutation under
-  a declared wiki's `protected` folders (AGENT.md §8, from `geneseed-wiki.jsonc`); **warns** on
+  a declared wiki's `protected` folders (AGENT.md §8, from `geneseed-wiki.jsonc`); **refuses
+  once** the session's first write in an application repo whose root `AGENTS.md` has no
+  `## Ownership` section (the ownership gate; a child session defers; off with `mode: off` in
+  that section or an install built `--no-ownership-gate`); **warns** on
   `.env` writes. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings. Every **block** appends one line to the install's
-  `notebook/gates.jsonl` (rule `law-1` / `law-4` / `process-1` / `wiki`, a timestamp,
+  `notebook/gates.jsonl` (rule `law-1` / `law-4` / `process-1` / `wiki` / `ownership`, a timestamp,
   never the path or command) — the same ledger the Claude-family hooks write, so
   `geneseed status` counts what the boundary caught on every host. Warnings are not
   recorded.

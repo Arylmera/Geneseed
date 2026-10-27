@@ -40,7 +40,11 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 - on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
   `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
   file, and asks first on the first write to `user-rules.md` or a memory file (whether
-  something you want kept is a rule or a fact is your call). Ordinary edits pass.
+  something you want kept is a rule or a fact is your call). In an application repo (a git
+  root holding a build manifest) whose root `AGENTS.md` has no `## Ownership` section, it also
+  denies the session's first write once, with a reason addressed to the agent: propose the
+  ownership setup, or proceed without; the next write passes, and sub-agents defer. Off per repo
+  with `mode: off` in that section, per install with `--no-ownership-gate`. Ordinary edits pass.
   (`MultiEdit` is not a Claude Code tool and is not in the matcher; the gate reads
   `edits[].new_string` as a cheap guard regardless.)
 - on **SessionStart**, every source (`startup`, `resume`, `clear`, `compact`, `fork`), runs

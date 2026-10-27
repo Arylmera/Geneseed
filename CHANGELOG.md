@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.27.0] — 2026-10-27
+
+Minor: ownership — the developer decides each part of production code, at a granularity the team sets in the root `AGENTS.md`; a Credo section, the ownership skill, and a first-write gate that is on by default (see the ⚠️ entry). Re-emit every install with `geneseed rebuild-all` to get the new Credo section, the skill, the `develop`/`developer`/Foreman changes and the OpenCode guard.
+
 - ⚠️ **Behaviour change on update: the ownership first-write gate.** In an application repo (a
   git root holding `package.json`, `pom.xml`, `build.gradle*`, `pyproject.toml`, `go.mod`,
   `Cargo.toml`, `*.csproj`, `composer.json` or `Gemfile`) whose root `AGENTS.md` has no
@@ -18,7 +22,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   Bob: exit 2). OpenCode V1
   and V2 get it with the guard plugin on the next emit. Shell writes and sub-agent writes are
   not gated. To opt out: per repo, add `## Ownership` with `mode: off` to the root `AGENTS.md`;
-  per install, rebuild with `--no-ownership-gate`.
+  per install, rebuild with `--no-ownership-gate`; per session, answer "proceed without".
+  See [Ownership](docs/concepts/ownership.md).
 
 ### Changed
 - **Activity opens on the Garden.** The live sessions show as bonsai by default; the `List | Garden` switch shows the cards, and the list is kept in the link as `v=list`. An older link carrying `v=garden` still opens the Garden.
@@ -28,6 +33,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 - **The ownership Rite.** In an application whose root `AGENTS.md` has a `## Ownership` section with `mode: on`, the developer decides each part at the granularity the team sets (`feature`, `file` or `function`); interfaces and sensitive zones are always a checkpoint. Routine steps are announced, not asked, and the native diff is the approval. Its setup extracts the conventions, asks about five questions and writes the section. One line in `AGENT.md` points to it; learn-mode still comes first.
+- **Ownership docs.** A concept page ([Ownership](docs/concepts/ownership.md)): the section format, granularity, the first-write gate, the opt-outs and how it differs from learn-mode; a guide ([Set up ownership](docs/guides/set-up-ownership.md)); and the gate in every page that lists the hook gates.
 
 ## [4.26.0] — 2026-10-26
 
