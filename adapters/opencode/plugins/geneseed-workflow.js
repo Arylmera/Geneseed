@@ -14,9 +14,8 @@
 // written to `.geneseed/workflow-runs/<runId>.log`. Every failure is contained and
 // reported, never thrown into the session.
 //
-// One stderr line at load (the banner below — it is how a restart shows the tool
-// registered, or warns that it could not); everything else is quiet unless
-// GENESEED_DEBUG=1. GENESEED_WORKFLOWS_DIR overrides
+// Quiet unless GENESEED_DEBUG=1 (which adds a load banner on stderr), except a
+// warning that the tool may not register. GENESEED_WORKFLOWS_DIR overrides
 // where saved workflows are loaded from.
 
 import { execFile } from "node:child_process"
@@ -197,11 +196,14 @@ const TOOL_DESCRIPTION =
 const NAME_DESCRIPTION = "saved workflow name; omit to list available"
 const ARGS_DESCRIPTION = "inputs passed to the workflow script as `args` (object, or a JSON object string)"
 
-// One-line load banner (always on) so a restart visibly confirms the plugin loaded and the
-// `workflow` tool is registered. tests/host_canary.mjs reads it as V1's proof of load, so it
-// stays on stderr, not `say`: `opencode debug config` never prints a `client.app.log` line. It
-// runs once, before the TUI draws, so it does not land in the input box as `say`'s lines did.
+// One-line load banner, GENESEED_DEBUG=1 only: OpenCode 1.19 paints it in red over the input
+// box like any other stderr line (it does not run before the TUI draws). tests/host_canary.mjs
+// sets the flag and reads it as V1's proof of load, so it stays on stderr, not `say`:
+// `opencode debug config` never prints a `client.app.log` line. A warning always goes out,
+// through `say`, so a tool that may not register is never silent.
 async function loadBanner(warn = "") {
+  if (warn) say(`tool 'workflow'${warn}`)
+  if (!DEBUG) return
   try {
     const names = await listWorkflows()
     console.error(`[geneseed-workflow] loaded — tool 'workflow' registered, ${names.length} workflow(s) [${names.join(", ") || "none"}] from ${WORKFLOWS_DIR}${warn}`)

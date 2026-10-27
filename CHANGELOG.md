@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- OpenCode 1.x: the workflow plugin no longer paints `[geneseed-workflow] loaded — …` in red over the TUI input box. Observed on 1.19.4: the banner does not print before the TUI draws, as #373 assumed. The banner now prints only with `GENESEED_DEBUG=1`. A warning that the tool may not register still goes out, to OpenCode's log.
+
 ## [4.27.1] — 2026-10-27
 
 Patch: the guard's refusals no longer name the switch that turns it off.

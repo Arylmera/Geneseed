@@ -118,6 +118,7 @@ function checkOpencode(major) {
     fs.mkdirSync(pluginDir, { recursive: true });
     for (const id of IDS) fs.copyFileSync(path.join(PLUGINS, `${id}.js`), path.join(pluginDir, `${id}.js`));
     env.GENESEED_NOTIFY = 'off';
+    env.GENESEED_DEBUG = '1'; // the workflow plugin's load banner, V1's proof of load, is debug-only
 
     let log;
     if (major === 'V2') {
