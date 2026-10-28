@@ -87,4 +87,12 @@ export default [
     files: ['adapters/**/*.js'],
     rules: { 'no-empty': ['error', { allowEmptyCatch: true }] },
   },
+  {
+    // NO `console` ON THE HOOK PATH. The hooks signal through stdout JSON and return 0 on every
+    // path, so a stray printed byte is read as a verdict — a blocking gate turned silently
+    // permissive, with nothing to warn anyone. Output there goes through `printOut`/`printErr`
+    // (`js/lib/fs.mjs`), the one deliberate door.
+    files: ['bin/geneseed-hook.mjs', 'js/hosts/hooks*.mjs'],
+    rules: { 'no-console': 'error' },
+  },
 ];
