@@ -1,7 +1,12 @@
 # Project-scope runtime state the workflow plugin writes (.geneseed/workflow-runs/).
 # Distinct from the USER-scope ~/.geneseed/ that holds the hook shim — same name, two
 # scopes. Running a pipeline inside this checkout would otherwise leave it untracked.
-.geneseed/
+# `/*`, not `/`: git cannot re-include a file inside an ignored DIRECTORY, only inside one whose
+# contents are ignored. `**/` keeps the old any-depth match (a mid-slash anchors to the root).
+# The one exception is the root's protected-checks list, tracked so every clone protects the
+# same judges (External Gate).
+**/.geneseed/*
+!/.geneseed/protected-checks.txt
 *.log
 
 # Generated build output — derivable from src/ via `geneseed build`, never committed.
