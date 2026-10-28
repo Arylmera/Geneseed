@@ -1,0 +1,13 @@
+# The checks this repo is judged by (External Gate). A write tool aimed at any path below asks
+# the user first: a check the agent can edit is one edit away from passing. One repo-relative
+# path per line; a folder covers everything under it. Read by `protectedIn` in js/hosts/hooks.mjs.
+#
+# tests/ is NOT listed on purpose: nearly every change here adds or edits a test, and a prompt on
+# each would be clicked through. CI, which runs the suite on a clean checkout, is the boundary
+# that holds for tests.
+.github/
+eslint.config.js
+tsconfig.json
+commitlint.config.js
+stryker.config.json
+web/eslint.config.js

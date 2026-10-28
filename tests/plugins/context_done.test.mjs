@@ -83,7 +83,10 @@ test("runsUnpiped stays in parity with js/hosts/hooks-done.mjs (twin)", async ()
   const rows = [
     ["npm test", "npm test", true], ["npm test 2>&1", "npm test", true], ["npm test | tail", "npm test", false],
     ["npm test |tail", "npm test", false], ["npm test && echo ok | cat", "npm test", true],
-    ["npm test || exit 1", "npm test", true], ["npm test | tail; npm test", "npm test", true],
+    ["npm test || exit 1", "npm test", false], ["npm test | tail; npm test", "npm test", true],
+    ["npm test || true", "npm test", false], ["npm test; true", "npm test", false],
+    ["npm test; exit 0", "npm test", false], ["npm test && echo ok", "npm test", true],
+    ["npm test; npm run lint", "npm test", true],
     ["cd web &&  npm   test", "npm test", true], ["npm run build", "npm test", false],
     ["a\tnpm test\n| x", "npm test", false], // `a npm test`: an argument of `a`, not a command
     ["npm run lint:fix", "npm run lint", false], ['git commit -m "ran npm test"', "npm test", false],

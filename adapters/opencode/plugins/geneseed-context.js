@@ -947,7 +947,7 @@ function runsUnpiped(command, line) {
       if (two === "&&" || two === "||" || rest[j] === ";" || rest[j] === "\n") break
       if (rest[j] === "|") { piped = true; break }
     }
-    if (!piped) return true
+    if (!piped && !/\|\||[;\n] ?(?:true|:|exit(?: 0)?)(?= ?(?:$|[;&|\n]))/.test(rest)) return true
   }
   return false
 }

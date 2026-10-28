@@ -24,7 +24,8 @@
  *   - an edit is a Write/Edit/NotebookEdit/MultiEdit whose target is under the project root and
  *     whose result is not an error (a denied write changed nothing);
  *   - a pass is a Bash/PowerShell call whose command contains the declared line UNPIPED (a pipe
- *     takes the exit code of its last stage: `npm test | tail` exits 0 on a red suite) and whose
+ *     takes the exit code of its last stage: `npm test | tail` exits 0 on a red suite), not MASKED
+ *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), and whose
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
  *     14 000+ real Claude Code results, 2026-10-17).
  *
@@ -65,9 +66,19 @@ export function readDoneChecks(root) {
  * check must open a segment (the start, or right after one of those separators) and be followed
  * by the end, whitespace or a separator, never by more of a word (`npm run lint:fix` does not
  * prove `npm run lint`); a match inside a quoted string (`-m "ran npm test"`) is text, not a run.
+ * A run whose exit code is MASKED is not a run either: `npm test || true`, `npm test; true`,
+ * `npm test; exit 0` all exit 0 on a red suite, so `is_error` stays false. Masked means a `||`
+ * anywhere after the check (any right-hand side, even an honest `|| exit 1`), or a `;`/newline
+ * followed by `true`, `:`, `exit 0` or a bare `exit` (bash passes `$?` on, but PowerShell's bare
+ * `exit` is 0, so it must count). `&&` masks nothing (a red check stops the
+ * chain), so `npm test && echo ok` still passes.
  * Whitespace is collapsed on both sides. shortcut: the shell is not parsed — a prefix such as
  * `sudo`/`time`/`env X=1`, a subshell, or a `|` inside a quoted argument after the check all read
- * as "not run". Every approximation here refuses a pass, so the gate errs toward a reminder.
+ * as "not run", and so does a `||` inside a quoted argument after the check. Every approximation
+ * above refuses a pass, so the gate errs toward a reminder — with ONE known opening the other way:
+ * `npm test; npm run lint` passes both, though `;` lets a green lint hide a red test (the line's
+ * exit code is the last command's). Kept so a chained proof line still counts; upgrade by
+ * requiring `&&` between checks if that opening is ever seen in a real transcript.
  */
 export function runsUnpiped(command, line) {
   const cmd = String(command).replace(/[ \t]+/g, ' ');
@@ -91,7 +102,7 @@ export function runsUnpiped(command, line) {
       if (two === '&&' || two === '||' || rest[j] === ';' || rest[j] === '\n') break;
       if (rest[j] === '|') { piped = true; break; }
     }
-    if (!piped) return true;
+    if (!piped && !/\|\||[;\n] ?(?:true|:|exit(?: 0)?)(?= ?(?:$|[;&|\n]))/.test(rest)) return true;
   }
   return false;
 }

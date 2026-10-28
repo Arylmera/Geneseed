@@ -55,12 +55,17 @@ jobs:
       # tests/unit/package_manifest.test.mjs is about what an INSTALL pulls down —
       # `dependencies`, `peer`, `optional`, `bundle` — and this adds to none of them.
       - run: npm ci
+      # EVERY STEP AFTER `npm ci` RUNS ON `!cancelled()`, not the default `success()`: a lint
+      # failure used to hide the typecheck, doctor and test verdicts behind it, so one red push
+      # showed one finding and the next push showed the next. The job is still red.
       - name: lint
+        if: ${{ !cancelled() }}
         run: npm run lint
       # TYPES, FROM INFERENCE AND JSDoc. `tsc --noEmit` over js/ and bin/ with `checkJs`
       # (tsconfig.json says why strict is off). A wrong call shape, a missing property, an
       # argument a function does not take — the class of slip a reader cannot check by eye.
       - name: typecheck
+        if: ${{ !cancelled() }}
         run: npm run typecheck
       # ON BOTH OPERATING SYSTEMS, which is stronger than the gate this replaces: the same
       # sweep used to run here from the reference and, bare, from a Linux-only cell job.
@@ -68,6 +73,7 @@ jobs:
       # `npm` is not on PATH, so it is not a gate this job can lean on — a conditional skip is
       # exactly the shape that turns a red gate green without a diff.
       - name: doctor (every theme + parity + authoring gates)
+        if: ${{ !cancelled() }}
         run: node bin/geneseed-cli.mjs doctor --all
       # Auto-discover every tests/**/*.test.mjs — node
       # expands the glob itself, so a new test file is picked up without editing this
@@ -94,6 +100,7 @@ jobs:
       # 9.7 min at 8 against 9.1 min at the default on an unchanged main the same hour —
       # process creation there is CPU-bound, so the extra slots only queue.
       - name: node test suites (every tests/**/*.test.mjs)
+        if: ${{ !cancelled() }}
         shell: bash
         env:
           CONCURRENCY: ${{ runner.os == 'Windows' && '3' || '8' }}
@@ -124,6 +131,7 @@ jobs:
       # ordering, so an `after()` hook can only ever speak for its own file — and the file that
       # causes this is not the file that would notice.
       - name: the suite left the machine-wide hook shim intact
+        if: ${{ !cancelled() }}
         run: node tests/shim_intact.mjs
 
       # FUZZ THE HOOK GATES' STDIN. A gate signals through stdout JSON and must exit 0 on every
@@ -131,6 +139,7 @@ jobs:
       # generated garbage through the real entry point, a process per case — which is why it is
       # outside the unit glob. A failure prints fast-check's seed and the shrunk input.
       - name: fuzz the hook gates (fuzz/*.fuzz.mjs)
+        if: ${{ !cancelled() }}
         run: node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
 
       # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
@@ -143,6 +152,7 @@ jobs:
       # also the one nothing else reported. `--verify` answers only "does every anchor still
       # resolve", writes nothing, runs no gate, and takes about 50 ms.
       - name: the mutation matrix still describes this code
+        if: ${{ !cancelled() }}
         run: node tests/mutate.mjs --verify
 
       # ⚠ THE PACKAGING SUITE AGAIN, UNDER THE npm THE RELEASE ACTUALLY USES. Everything above
@@ -158,7 +168,7 @@ jobs:
       # LAST IN THE JOB, deliberately: it replaces the runner's global npm, so nothing after it
       # would be testing the pinned version any more.
       - name: the packaging suite under npm@11 (the release's npm)
-        if: runner.os == 'Linux' && matrix.node == '22'
+        if: ${{ !cancelled() && runner.os == 'Linux' && matrix.node == '22' }}
         shell: bash
         run: |
           npm install -g npm@11
@@ -446,3 +456,27 @@ jobs:
         with:
           args: --offline --no-progress --exclude-path src --exclude-path node_modules --exclude-path web/node_modules './**/*.md'
           fail: true
+
+  # ONE STABLE REQUIRED-CHECK NAME, AND NO WAY FOR A MISSING VERDICT TO READ AS GREEN. A ruleset
+  # that lists each job by its rendered name breaks on a rename of a job or a matrix leg: the
+  # required check is one nothing reports (the PR sits BLOCKED with every check green), and a job
+  # that never ran is simply absent. Required alone, `ci-ok` avoids both. This job needs every other job in this file and runs `always()`, so it
+  # reports even when they fail, and it fails unless each one SUCCEEDED: `failure`, `cancelled`
+  # and `skipped` are all red. No job here is skipped by design — `pr-title` lives in its own
+  # workflow (`pr-title.yml`), and `needs:` cannot reach across workflows. A job added to this
+  # file must be added to `needs:` below, or this gate says nothing about it.
+  ci-ok:
+    if: always()
+    needs: [validate, node-cells, package-no-python, web, audit, coverage, links]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every needed job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          if [ -z "$RESULTS" ]; then echo "no needed-job results at all"; exit 1; fi
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then echo "a needed job ended '$r', not 'success'"; exit 1; fi
+          done
+          echo "every needed job succeeded"

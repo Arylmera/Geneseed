@@ -357,6 +357,8 @@ const WITHHELD = [
   ['.claude/', "this repository's OWN agent config — a deployed harness, not the product"],
   ['.gitignore', 'repo mechanics; npm strips it from a tarball anyway'],
   ['.gitattributes', 'repo mechanics'],
+  ['.geneseed/protected-checks.txt', 'arms External Gate for THIS repository\'s own CI and lint '
+    + 'config; an install protects its own judges with its own list'],
   ['ARCHITECTURE.md', 'the code map and invariants for someone changing THIS repository — the '
     + 'same reader CLAUDE.md and CONTRIBUTING.md are for; an install runs the code, it does not '
     + 'edit it'],
