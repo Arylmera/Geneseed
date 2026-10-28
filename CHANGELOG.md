@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+
+- **An unclear ask now comes with its reason.** *Mark the Ask* (`comms` pack) said how to mark a command, a question or a choice that waits on the user, but not what it must say. A marked `👉 run git rebase --onto main HEAD~3` stayed opaque. The rule now adds: before a command the user must run or approve, or a question that is not clear by itself, write one or two plain lines on what it does, why now and what it changes or risks. For a question, say what the answer decides. A clear ask stays bare. Both the full and the lean text are amended. Run `geneseed rebuild-all` to get it.
+
 ### Fixed
 
 - OpenCode 1.x: the workflow plugin no longer paints `[geneseed-workflow] loaded — …` in red over the TUI input box. Observed on 1.19.4: the banner does not print before the TUI draws, as #373 assumed. The banner now prints only with `GENESEED_DEBUG=1`. A warning that the tool may not register still goes out, to OpenCode's log.

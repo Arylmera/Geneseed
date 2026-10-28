@@ -256,6 +256,12 @@ const FOOTPRINTS = ['full', 'lean'];
  * a single manifest example. Measured `files` carrier before, at 68d2e8c1: full 65_193, lean
  * 40_563 (headroom 4 / 4). After: full 65_715, lean 41_085. Each ceiling raised by exactly the
  * overrun (518 / 518), not rounded.
+ *
+ * BOTH RAISED 2026-10-28, for comms 5 (mark the ask), amended, not added (user decision: an ask
+ * that is not clear by itself carries one or two plain lines on what it does, why now and what
+ * it changes or risks; a clear ask stays bare). Both halves carry the amendment. Measured `files`
+ * carrier before: full 65_715, lean 41_085. After: full 66_096, lean 41_276. Each ceiling raised
+ * by exactly the overrun (381 / 191), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
