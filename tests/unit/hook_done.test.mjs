@@ -47,7 +47,9 @@ test('doneDecide: which checks are still owed when the turn ends', () => {
       [prompt(), edit(), bash('npm run lint', true), bash('node --test')], ['npm run lint']],
     ['a piped check does not count: a pipe exits with its last stage',
       [prompt(), edit(), bash('npm run lint | tail -5'), bash('node --test')], ['npm run lint']],
-    ['`||` is not a pipe', [prompt(), edit(), bash('npm run lint || true; node --test')], []],
+    // `||` is not a pipe, but it masks the exit code: `|| true` exits 0 on a red lint.
+    ['a check masked by `|| true` does not count',
+      [prompt(), edit(), bash('npm run lint || true; node --test')], ['npm run lint']],
     ['a denied edit changed nothing', [prompt(), edit(undefined, true)], []],
     ['an edit outside the project root is not this project\'s', [prompt(), edit(path.resolve('/elsewhere/x.js'))], []],
     ['a relative edit path resolves against the project', [prompt(), call('Write', { file_path: 'src/b.js' })], CHECKS],
@@ -74,8 +76,23 @@ test('runsUnpiped: the segment rule, written out', () => {
     ['npm test | tail', 'npm test', false],
     ['npm test |tail', 'npm test', false],
     ['npm test && echo ok | cat', 'npm test', true],      // the pipe is in the NEXT segment
-    ['npm test || exit 1', 'npm test', true],
     ['npm test | tail; npm test', 'npm test', true],        // one unpiped run is enough
+    // A masked exit code is not a run: each of these exits 0 on a red suite.
+    ['npm test || true', 'npm test', false],
+    ['npm test || exit 1', 'npm test', false],              // any `||`, even an honest one
+    ['npm test; true', 'npm test', false],
+    ['npm test ;true', 'npm test', false],
+    ['npm test; :', 'npm test', false],
+    ['npm test; exit 0', 'npm test', false],
+    ['npm test; exit', 'npm test', false],
+    ['npm test\ntrue', 'npm test', false],
+    ['npm test && echo ok; true', 'npm test', false],       // the mask ends the whole line
+    // ...but `&&` masks nothing, and a real next command is not a mask.
+    ['npm test && echo ok', 'npm test', true],
+    ['npm test; npm run lint', 'npm test', true],
+    ['npm test; npm run lint', 'npm run lint', true],
+    ['npm test; exit $LASTEXITCODE', 'npm test', true],     // passes the code on
+    ['npm test; truecolor', 'npm test', true],              // a longer word is not `true`
     ['cd web &&  npm   test', 'npm test', true],              // whitespace collapsed
     ['npm run build', 'npm test', false],
     // A whole command only: at a segment start, ended by whitespace, a separator or the end.
