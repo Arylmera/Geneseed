@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.28.0] — 2026-10-28
+
+Minor: an ask that waits on the user and is not clear by itself now says what it does and why; the OpenCode 1.x workflow banner no longer paints over the input box. Run `geneseed rebuild-all` once after updating to get the amended rule and the quiet banner.
+
 ### Changed
 
 - **An unclear ask now comes with its reason.** *Mark the Ask* (`comms` pack) said how to mark a command, a question or a choice that waits on the user, but not what it must say. A marked `👉 run git rebase --onto main HEAD~3` stayed opaque. The rule now adds: before a command the user must run or approve, or a question that is not clear by itself, write one or two plain lines on what it does, why now and what it changes or risks. For a question, say what the answer decides. A clear ask stays bare. Both the full and the lean text are amended. Run `geneseed rebuild-all` to get it.
