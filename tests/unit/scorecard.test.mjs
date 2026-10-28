@@ -138,17 +138,20 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
     assert.ok(parseYamlSubset(readFileSync(wf + path.sep + n, 'utf8').replace(/\r\n?/g, '\n')) instanceof Map,
       `${n} no longer parses`);
   }
-  // The six files sorted by name; host-canary, mutate, scorecard and upstream-drift run on
-  // `schedule:`, ci and publish do not. upstream-drift is one job, `drift` (weekly issue sync).
-  // ci's last four jobs came with #211 (audit, pr-title), #213 (coverage) and the link check, in file order.
+  // The seven files sorted by name; host-canary, mutate, scorecard and upstream-drift run on
+  // `schedule:`, ci, pr-title and publish do not. upstream-drift is one job, `drift` (weekly issue sync).
+  // ci's last three jobs came with #211 (audit), #213 (coverage) and the link check, in file order.
+  // pr-title, also from #211, left ci for its own file in #455 so that editing a PR title re-runs
+  // it (`types: [... edited ...]`) without re-running ci's whole matrix.
   // publish gained `release-check` ahead of `publish` on 2026-10-23, when a version bump on main
   // began to release itself: the cheap "is this version on npm yet?" job gates the expensive one.
   const configs = parseCiConfigs(ROOT);
   assert.deepEqual(configs.map((c) => [c.ciType, c.hasSchedule, c.jobs.map((j) => j.name)]), [
-    ['github', false, ['validate', 'node-cells', 'package-no-python', 'web', 'audit', 'pr-title',
-      'coverage', 'links']],
+    ['github', false, ['validate', 'node-cells', 'package-no-python', 'web', 'audit', 'coverage',
+      'links']],
     ['github', true, ['canary']],
     ['github', true, ['mutate', 'stryker']],
+    ['github', false, ['pr-title']],
     ['github', false, ['release-check', 'publish']],
     ['github', true, ['scorecard']],
     ['github', true, ['drift']],

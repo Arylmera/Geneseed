@@ -1,0 +1,37 @@
+name: pr-title
+
+# CONVENTIONAL COMMITS, on the PR TITLE. Every PR is squash-merged, so its title is the commit
+# subject that lands on main and feeds the CHANGELOG; the branch's own commits never reach main.
+# The title comes in through `env`, never interpolated into the script, so a crafted title
+# cannot run shell. Rules: `commitlint.config.js`.
+#
+# Its own workflow, not a job in ci, for `edited`: a title is fixed by editing it, and ci's
+# `pull_request` runs only on the default types (opened, synchronize, reopened), so the fix
+# started no run and a re-run replayed the old title from the recorded event (#455). Giving ci
+# `edited` would re-run its whole matrix on every title or description edit.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: commitlint
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | npx --no-install commitlint

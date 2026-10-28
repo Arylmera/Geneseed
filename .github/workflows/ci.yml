@@ -409,26 +409,6 @@ jobs:
         working-directory: web
         run: npm audit --audit-level=high
 
-  # CONVENTIONAL COMMITS, on the PR TITLE. Every PR is squash-merged, so its title is the commit
-  # subject that lands on main and feeds the CHANGELOG; the branch's own commits never reach main.
-  # The title comes in through `env`, never interpolated into the script, so a crafted title
-  # cannot run shell. Rules: `commitlint.config.js`.
-  pr-title:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - name: commitlint
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-        run: printf '%s\n' "$TITLE" | npx --no-install commitlint
-
   # COVERAGE, INFORMATIONAL. The whole suite under c8, which also collects from the product
   # processes the suite spawns (the golden and CLI cells run the real binaries). No threshold yet:
   # the first reading (2026-10-08) was 91.7 % lines, 82.9 % branches over js/ and bin/, and a floor
