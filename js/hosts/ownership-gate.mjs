@@ -7,7 +7,9 @@
  * never sees the developer's answer, so "once" is a marker: the root is recorded per session
  * BEFORE the refusal, and every later write in that (session, repo) passes. The `AGENT.md`
  * pointer line carries the rest, shell writes included (this gate sees Write|Edit|NotebookEdit,
- * and Bob's write tools, only).
+ * and Bob's write tools, only). A developer's personal `Setup: declined <date>` line in
+ * `.geneseed/ownership.md` defers it in that repo with no expiry (`DECLINED_RE`), and
+ * `ownershipLine` turns the same line into a SessionStart reminder.
  *
  * ON THE HOOK PATH, so builtins plus `gitRootOf` and `normcase` only — both already loaded by
  * `./hooks.mjs`. `managedBlockWrite`'s delimiters are inlined, not imported: `settings.mjs` is a
@@ -21,7 +23,7 @@ import { appendFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { normcase } from '../lib/paths.mjs';
-import { gitRootOf } from './gitref.mjs';
+import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
 
 // D5: the build manifests that make a git root an "application". Exact names, plus two families.
 const MANIFESTS = new Set(['package.json', 'pom.xml', 'pyproject.toml', 'go.mod', 'Cargo.toml',
@@ -53,12 +55,65 @@ const TAIL = 'Opt out per repo: `## Ownership` with `mode: off` in the root `AGE
   + 'install: rebuild with `--no-ownership-gate`. Offer the full documentation '
   + '(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only '
   + 'after they answer. This gate fires once per session and repo.';
+// D5: three answers. Only the third writes anything — the durable, personal decline below.
+const SKIP = 'skip this session; or skip in this repo until they ask — only on that third answer, '
+  + 'write the line `Setup: declined <YYYY-MM-DD>` (today) into `.geneseed/ownership.md` at the '
+  + 'MAIN worktree\'s root (in a linked git worktree, the main checkout\'s, so it outlives this '
+  + 'worktree), which is personal and never committed (if `.geneseed/.gitignore` is absent there, '
+  + 'create it first, as the ownership skill\'s checkpoint rules say)';
 const REASON_NONE = 'Geneseed (Ownership) — this application has no `AGENTS.md` with '
-  + '`## Ownership`. Before writing, propose to the developer: set it up (ownership skill), or '
-  + `proceed without for this session. ${TAIL}`;
+  + '`## Ownership`. Before writing, propose three answers to the developer: set it up now '
+  + `(ownership skill); ${SKIP}. ${TAIL}`;
 const REASON_NO_SECTION = 'Geneseed (Ownership) — this application\'s `AGENTS.md` has no '
-  + '`## Ownership` section. Before writing, ask the developer: add the Ownership section '
-  + `(ownership skill), or proceed without for this session? ${TAIL}`;
+  + '`## Ownership` section. Before writing, ask the developer: add the Ownership section now '
+  + `(ownership skill); ${SKIP}? ${TAIL}`;
+
+// D2: the developer's durable, personal, per-repo decline, in `.geneseed/ownership.md`. It holds
+// until the line is deleted or the setup runs (which removes it); a `## Ownership` section in
+// `AGENTS.md`, on or off, outranks it. The OpenCode twins (geneseed-guard.js,
+// geneseed-context.js) carry this same pattern, so the gate defers exactly where the reminder
+// prints. A malformed line matches nothing, and the gate behaves as before.
+//
+// The line lives in the MAIN worktree (user ruling 2026-10-29): Claude Desktop opens a fresh
+// linked worktree per session, so a decline kept in one would die with it. Only this lookup
+// moves; the section, the manifest test and the session marker stay on the current git root.
+// `mainWorktreeOf` is null for a main worktree, a bare common dir or a malformed link, and the
+// lookup then falls back to the current root.
+export const DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m;
+
+/** The decline's date, or null (no file, no line, unreadable). Never throws. */
+function declinedSince(root) {
+  try {
+    const home = mainWorktreeOf(root) ?? root;
+    // A leading BOM (some editors write one) would hide a first-line `Setup:` from `^`.
+    const text = readFileSync(path.join(home, '.geneseed', 'ownership.md'), 'utf8').replace(/^\uFEFF/, '');
+    return DECLINED_RE.exec(text)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The root `AGENTS.md` outside Geneseed's managed block; '' when there is none. */
+function ownAgentsText(root) {
+  let text = null;
+  try { text = readFileSync(path.join(root, 'AGENTS.md'), 'utf8'); } catch { /* none */ }
+  return text === null ? '' : text.replace(MANAGED_BLOCK_RE, '');
+}
+
+/**
+ * D4: the one SessionStart line for a declined repo (`./hooks-context.mjs` prints it beside
+ * `doneLine`), or null: not an application, a `## Ownership` section present, or no decline.
+ * Never throws.
+ */
+export function ownershipLine(root) {
+  try {
+    if (!root || !readdirSync(root).some(isManifest) || SECTION_RE.test(ownAgentsText(root))) return null;
+    const since = declinedSince(root);
+    return since ? `Ownership: setup declined since ${since} — not set up; say "set up ownership" to run it` : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The refusal reason for this write, or null to defer. `p` is the write target as the payload
@@ -82,10 +137,9 @@ export function ownershipBlock(p, payload, body, installRoot = null) {
       const inInstall = path.relative(path.resolve(installRoot), target);
       if (!inInstall.startsWith('..') && !path.isAbsolute(inInstall)) return null;
     }
-    let text = null;
-    try { text = readFileSync(path.join(root, 'AGENTS.md'), 'utf8'); } catch { /* none: gate */ }
-    const own = text === null ? '' : text.replace(MANAGED_BLOCK_RE, '');
+    const own = ownAgentsText(root);
     if (SECTION_RE.test(own)) return null;   // on or off, the team has decided
+    if (declinedSince(root)) return null;    // D2: the developer declined it in this repo
     // shortcut: one small marker file per session, never pruned (the OS temp cleaner owns it);
     // prune here if the folder is ever seen to grow past a few thousand files.
     const dir = path.join(os.tmpdir(), `geneseed-ownership-${userTag()}`);

@@ -6,7 +6,8 @@
 //     (session, repo): Claude gets `permissionDecision: "deny"` (the reason reaches the model),
 //     Bob gets exit 2 with the one-time tail and never BOB_FINAL; the next write passes;
 //   * everything else defers: no session, a sub-agent, a read, no git, no manifest at the root,
-//     the setup's own files, a section with `mode: on` or `mode: off` (CRLF too), the off switch.
+//     the setup's own files, a section with `mode: on` or `mode: off` (CRLF too), the off switch,
+//     and the developer's personal `Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md`.
 // Each row gets its own session id and every spawn's temp dir is a sandbox, so the per-session
 // marker (`<tmpdir>/geneseed-ownership/<session>`) never leaks between rows or onto the machine.
 import test from 'node:test';
@@ -18,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { ROOT } from '../../js/build/source.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
+import { ownershipLine } from '../../js/hosts/ownership-gate.mjs';
 
 const tmpBox = makeSandbox('gsown-tmp-');
 test.after(() => tmpBox.cleanup());
@@ -68,7 +70,12 @@ test('an application with no AGENTS.md is refused once per session, then passes'
   const sid = randomUUID();
   const why = denied(gate(write(path.join(app, 'src', 'a.js'), { session_id: sid })), 'first write');
   assert.match(why, /has no `AGENTS.md` with `## Ownership`/);
-  assert.match(why, /proceed without for this session/);
+  // D5: three answers, and the decline is written only on the third.
+  assert.match(why, /set it up now \(ownership skill\); skip this session; or skip in this repo until they ask/);
+  assert.match(why, /only on that third answer, write the line `Setup: declined <YYYY-MM-DD>`/);
+  // The line goes to the MAIN worktree (ruling 2026-10-29), with its `.gitignore` beside it.
+  assert.match(why, /into `\.geneseed\/ownership\.md` at the MAIN worktree's root/, 'the decline outlives a worktree');
+  assert.match(why, /if `\.geneseed\/\.gitignore` is absent there, create it first/, 'the decline stays personal');
   defers(gate(write(path.join(app, 'src', 'b.js'), { session_id: sid })), 'second write, same session');
   denied(gate(write(path.join(app, 'src', 'a.js'))), 'a new session is refused again');
 });
@@ -119,6 +126,43 @@ test('no git, no manifest at the git root, or a manifest only below it: defer', 
   defers(gate(write(path.join(repo({ 'package.json': '{}' }, false), 'x.js'))), 'no git');
   defers(gate(write(path.join(repo({ 'README.md': '' }), 'x.js'))), 'no manifest');
   defers(gate(write(path.join(repo({ 'web/package.json': '{}' }), 'web', 'x.js'))), 'manifest in a subdirectory');
+});
+
+// D2/D3: the developer's durable, personal decline — `Setup: declined <YYYY-MM-DD>` alone on a
+// line of `.geneseed/ownership.md` (CRLF too) — defers every write, in every session, with no
+// expiry. A malformed line (no date, another format, words after it) matches nothing, so the gate
+// behaves as before. A section in AGENTS.md, on or off, outranks the line either way.
+test('a `Setup: declined <date>` line in .geneseed/ownership.md defers; a malformed one does not', () => {
+  for (const [label, text] of [
+    ['LF', 'Setup: declined 2026-10-29\n'],
+    ['CRLF, among other state', 'Granularity: team\r\nSetup: declined 2026-10-29\r\n## Decisions\r\n'],
+  ]) {
+    defers(gate(write(path.join(repo({ 'package.json': '{}', '.geneseed/ownership.md': text }), 'x.js'))), label);
+  }
+  for (const [label, text] of [
+    ['no date', 'Setup: declined\n'],
+    ['another date format', 'Setup: declined 29/10/2026\n'],
+    ['words after it', 'Setup: declined 2026-10-29 for now\n'],
+    ['indented', '  Setup: declined 2026-10-29\n'],
+  ]) {
+    denied(gate(write(path.join(repo({ 'package.json': '{}', '.geneseed/ownership.md': text }), 'x.js'))), label);
+  }
+  defers(gate(write(path.join(repo({ 'package.json': '{}', 'AGENTS.md': '## Ownership\nmode: on\n',
+    '.geneseed/ownership.md': 'Setup: declined 2026-10-29\n' }), 'x.js'))), 'section and line');
+});
+
+test('ownershipLine: the SessionStart reminder, written out', () => {
+  const line = 'Ownership: setup declined since 2026-10-29 — not set up; say "set up ownership" to run it';
+  const declined = { 'package.json': '{}', '.geneseed/ownership.md': 'Setup: declined 2026-10-29\n' };
+  assert.equal(ownershipLine(repo(declined)), line, 'a declined application');
+  assert.equal(ownershipLine(repo()), null, 'no decline line');
+  assert.equal(ownershipLine(repo({ ...declined, 'AGENTS.md': '## Ownership\nmode: off\n' })), null,
+    'a section, even mode: off, outranks the line');
+  assert.equal(ownershipLine(repo({ 'README.md': '', '.geneseed/ownership.md': 'Setup: declined 2026-10-29\n' })),
+    null, 'not an application');
+  assert.equal(ownershipLine(repo({ ...declined, 'AGENTS.md': '<!-- BEGIN GENESEED -->\n## Ownership\n<!-- END GENESEED -->\n' })),
+    line, 'the managed block\'s heading is not the section');
+  assert.equal(ownershipLine(null), null, 'no git root');
 });
 
 test('the setup\'s own files are never what the gate stops', () => {

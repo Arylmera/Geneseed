@@ -498,9 +498,10 @@ test('the rendered ownership skill writes its section format out and ships its l
     for (const s of FORMAT) assert.ok(skill.includes(s), `${where}: ownership lost ${s}`);
     assert.ok(skill.includes('Write no code until the checkpoint that approves it is answered.'),
       `${where}: ownership lost the shared checkpoint rules`);
-    // 2026-10-29: setup writes AGENTS.md only; the personal state file is created lazily, and
+    // 2026-10-29: setup writes AGENTS.md, and in the same pass only removes a personal decline
+    // line (it never creates the state file); the personal state file is created lazily, and
     // its absence has a stated meaning every reader relies on.
-    for (const s of ['Commit `AGENTS.md` only on request. The setup writes no `.geneseed/ownership.md`',
+    for (const s of ['Commit `AGENTS.md` only on request. In the same pass, remove a `Setup: declined` line',
       'No file means the team granularity, nothing pending and no decisions.']) {
       assert.ok(skill.includes(s), `${where}: ownership lost ${s}`);
     }

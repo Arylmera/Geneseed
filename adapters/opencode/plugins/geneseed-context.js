@@ -858,7 +858,9 @@ async function resolveBlock(root, judged = true) {
   const wikis = await wikiSets()
   const commands = await discoverCommands(root)
   const done = (await doneGateOff()) ? null : await doneLine(root, judged).catch(() => null)
-  return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness), done), src }
+  const owned = (await ownershipGateOff()) ? null : await ownershipLine(root).catch(() => null)
+  const heads = [done, owned].filter(Boolean).join("\n") || null
+  return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness), heads), src }
 }
 
 // Per-INSTANCE cache of the rendered block text for the transform path: the caller owns
@@ -1011,6 +1013,40 @@ async function doneLine(dir, judged = true) {
   const how = (verdict) => (judged ? verdict : "not judged on this host")
   if (blocking) return checks.length ? `Done gate: from ${source} — ${names} (${how("reminder")})` : `Done gate: off — ${source} lists no checks`
   return checks.length ? `Done gate: inferred from ${source} — ${names} (${how("advisory")})` : "Done gate: no checks could be inferred"
+}
+
+// ---- The ownership decline reminder: the twin of js/hosts/ownership-gate.mjs `ownershipLine` ----
+// In an application repo (a git root holding a build manifest) whose root AGENTS.md has no
+// `## Ownership` section outside the Geneseed block, the developer's `Setup: declined <date>`
+// line in `.geneseed/ownership.md` gets one context line, so the decline stays visible. Same
+// manifests, strip, section and decline patterns as the hook (and geneseed-guard.js, whose gate
+// defers on that line). `--no-ownership-gate` (`Ownership gate: off` in AGENT.md) prints nothing.
+const OWN_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
+  "composer.json", "Gemfile"])
+const isOwnManifest = (n) => OWN_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
+const OWN_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g
+const OWN_SECTION_RE = /^## Ownership[ \t]*\r?$/m
+const OWN_DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m
+let ownershipGateOffOnce = null
+function ownershipGateOff() {
+  ownershipGateOffOnce ??= (async () => {
+    const dir = await harnessDir()
+    if (!dir) return false
+    const text = await fs.readFile(path.join(dir, "AGENT.md"), "utf8")
+    return /^Ownership gate:[ \t]*off[ \t]*\r?$/m.test(text)
+  })().catch(() => false)
+  return ownershipGateOffOnce
+}
+async function ownershipLine(dir) {
+  const root = await gitRootOf(dir)
+  if (!root || !(await fs.readdir(root)).some(isOwnManifest)) return null
+  const agents = await fs.readFile(path.join(root, "AGENTS.md"), "utf8").catch(() => "")
+  if (OWN_SECTION_RE.test(agents.replace(OWN_BLOCK_RE, ""))) return null
+  // The decline lives in the MAIN worktree (a fresh linked worktree per session must not lose it).
+  const home = (await mainWorktreeOf(root)) ?? root
+  const personal = await fs.readFile(path.join(home, ".geneseed", "ownership.md"), "utf8").catch(() => "")
+  const since = OWN_DECLINED_RE.exec(personal.replace(/^\uFEFF/, ""))?.[1]
+  return since ? `Ownership: setup declined since ${since} — not set up; say "set up ownership" to run it` : null
 }
 
 function runsUnpiped(command, line) {

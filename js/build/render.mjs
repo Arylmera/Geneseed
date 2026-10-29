@@ -510,6 +510,15 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   // their wording is a parsed contract.
   theme.GATE_LINES = GATE_SWITCHES.filter((g) => cfg[g.key] === false)
     .map((g) => `\n${g.marker}: off`).join('');
+  // The carrier's ownership proposal (ruling D6): an install built `--no-ownership-gate` has
+  // chosen silence, so it renders no proposal at all — the hook alone standing down left the
+  // model still proposing the setup from this prose. Outside any LEAN block: both footprints.
+  // Paid on every session, so the three answers are named and the skill carries the how.
+  theme.OWNERSHIP_PROPOSAL = cfg.ownershipGate === false ? '' : ' With no section at all, propose it '
+    + 'once before the first\nwrite, shell writes included: set it up now, skip this session, or '
+    + 'skip in this repo until\nasked (ownership skill). A context line `Ownership: setup declined '
+    + '…` means propose nothing:\nrepeat it once, verbatim, in your first reply, after the '
+    + 'readiness line. In read-only work,\nsuggest `/document-project` once at most.';
   return theme;
 }
 

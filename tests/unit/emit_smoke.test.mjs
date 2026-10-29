@@ -262,6 +262,15 @@ const FOOTPRINTS = ['full', 'lean'];
  * it changes or risks; a clear ask stays bare). Both halves carry the amendment. Measured `files`
  * carrier before: full 65_715, lean 41_085. After: full 66_096, lean 41_276. Each ceiling raised
  * by exactly the overrun (381 / 191), not rounded.
+ *
+ * BOTH RAISED 2026-10-29, for the personal ownership decline (rulings D4/D5): the pointer's
+ * proposal now names its three answers (set it up now, skip this session, skip in this repo
+ * until asked) and tells the agent to repeat the `Ownership: setup declined …` context line once.
+ * The sentence sits outside any LEAN block, so both footprints pay the same 227; the how lives in
+ * the ownership skill, not here. An install built `--no-ownership-gate` drops the whole sentence
+ * (D6), and is 128 chars lighter than before. Measured `files` carrier before: full 66_096,
+ * lean 41_276. After: full 66_323, lean 41_503. Each ceiling raised by exactly the overrun
+ * (227 / 227), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.

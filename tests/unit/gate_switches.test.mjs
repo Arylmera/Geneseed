@@ -316,6 +316,89 @@ test('the context hook drops the done gate line when the carrier says so', () =>
   });
 });
 
+// The ownership decline reminder (ruling D4) under the same contract: a declined application gets
+// the line from an armed install, and none from one built `--no-ownership-gate`. The decline
+// line itself is `Setup: declined <date>` in the repo's personal `.geneseed/ownership.md`.
+const DECLINED_LINE = 'Ownership: setup declined since 2026-10-29 — not set up; say "set up ownership" to run it';
+function declinedApp(d) {
+  const repo = path.join(d, 'repo');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  fs.mkdirSync(path.join(repo, '.geneseed'), { recursive: true });
+  fs.writeFileSync(path.join(repo, 'package.json'), '{}');
+  fs.writeFileSync(path.join(repo, '.geneseed', 'ownership.md'), 'Setup: declined 2026-10-29\n');
+  return repo;
+}
+
+test('the context hook prints the ownership decline line only when the gate is armed', () => {
+  withDir((d) => {
+    const repo = declinedApp(d);
+    const armed = path.join(d, 'armed');
+    const off = path.join(d, 'off');
+    quiet(() => build(makeCfg({}), 'neutral', armed));
+    quiet(() => build(makeCfg({ noOwnershipGate: true }), 'neutral', off));
+    const ctx = (root) => spawnHook(['context', '--root', root], '',
+      { cwd: repo, env: { ...process.env, GENESEED_ROOT: repo } }).stdout.split(/\r?\n/);
+    assert.ok(ctx(armed).includes(DECLINED_LINE), 'the armed install lost the decline line');
+    assert.ok(!ctx(off).some((l) => l.startsWith('Ownership:')), 'the disarmed install still printed it');
+  });
+});
+
+test('the OpenCode context plugin prints the ownership decline line only when the gate is armed', async () => {
+  const sb = makeSandbox('gsownctx-');
+  const savedWiki = process.env.GENESEED_WIKI;
+  const err = process.stderr.write;
+  process.stderr.write = () => true;
+  try {
+    const repo = declinedApp(sb.path);
+    fs.writeFileSync(path.join(sb.path, 'geneseed-wiki.jsonc'), '{ "wikis": [] }');
+    process.env.GENESEED_WIKI = path.join(sb.path, 'geneseed-wiki.jsonc');
+    const client = { session: { get: async () => ({ data: { title: 'user session' } }), messages: async () => [] } };
+    const lines = async (tag, marker) => {
+      const dir = path.join(sb.path, tag);
+      const mod = await pluginAt(dir, 'geneseed-context.js', marker);
+      const saved = process.env.GENESEED_HARNESS;
+      process.env.GENESEED_HARNESS = dir;
+      try {
+        const hooks = await mod.GeneseedContext({ client, directory: repo, worktree: repo });
+        const output = { messages: [{ info: { id: 'u1', role: 'user', sessionID: 's1' }, parts: [{ type: 'text', text: 'go' }] }] };
+        await hooks['experimental.chat.messages.transform']({}, output);
+        return output.messages.flatMap((m) => (m.parts ?? []).flatMap((p) => String(p.text ?? '').split('\n')));
+      } finally {
+        if (saved === undefined) delete process.env.GENESEED_HARNESS; else process.env.GENESEED_HARNESS = saved;
+      }
+    };
+    assert.ok((await lines('armed', '')).includes(DECLINED_LINE), 'the armed plugin lost the decline line');
+    assert.ok(!(await lines('off', '\nOwnership gate: off')).some((l) => l.startsWith('Ownership:')),
+      'the disarmed plugin still printed it');
+  } finally {
+    process.stderr.write = err;
+    if (savedWiki === undefined) delete process.env.GENESEED_WIKI; else process.env.GENESEED_WIKI = savedWiki;
+    sb.cleanup();
+  }
+});
+
+// Ruling D6: the carrier's ownership proposal is prose outside any LEAN block, so the hook
+// standing down alone left the model proposing the setup. A `--no-ownership-gate` install renders
+// none of it, at either footprint; an armed one keeps it, with the three answers.
+test('the carrier drops the ownership proposal when built --no-ownership-gate, at both footprints', () => {
+  withDir((d) => {
+    for (const footprint of ['lean', 'full']) {
+      const armed = path.join(d, `armed-${footprint}`);
+      const off = path.join(d, `off-${footprint}`);
+      quiet(() => build(makeCfg({}), 'neutral', armed, { footprint }));
+      quiet(() => build(makeCfg({ noOwnershipGate: true }), 'neutral', off, { footprint }));
+      const text = (dir) => agentLines(dir).join('\n');
+      assert.match(text(armed), /With no section at all, propose it once before the first\nwrite/, `${footprint}: armed`);
+      assert.match(text(armed), /set it up now, skip this session, or skip in this repo until\nasked/,
+        `${footprint}: armed names the three answers`);
+      assert.match(text(armed), /`Ownership: setup declined …` means propose nothing:\nrepeat it once, verbatim/,
+        `${footprint}: armed names the reminder`);
+      assert.doesNotMatch(text(off), /With no section at all|Setup: declined|\/document-project` once/, `${footprint}: off`);
+      assert.match(text(off), /workers get only approved decisions\.\n/, `${footprint}: off keeps the pointer`);
+    }
+  });
+});
+
 test('status names each switch only when off, #319\'s wording unchanged', () => {
   withDir((d) => {
     const base = {

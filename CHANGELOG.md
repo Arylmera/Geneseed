@@ -12,9 +12,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 - **The done gate needs no file any more.** With no `.geneseed/done-checks.txt`, it infers the project's checks from its manifest: `package.json` scripts `test`, `lint` and `typecheck` (package manager read from the lockfile), Maven, Gradle, pytest (only where pytest shows), `cargo test` and `go test`. Each check accepts its usual spellings (`npm test`, `npm run test`, `pnpm test`, `./mvnw clean verify`), and a form that skips the tests (`-DskipTests`, `-x test`, `--no-run`) does not count. Inferred checks are **advisory** in this release: an unproven one is named to the user (`systemMessage`) and never blocks. A `done-checks.txt` still wins and still blocks; an empty one switches the gate off. Every session now opens with one line naming the checks and their source; on Bob and OpenCode 2, which never judge a turn, it says so. Advisories are kept out of the gate counts in `status` and the web UI.
 - **A project install arms the protected-checks gate.** Every project emit (Claude Code, OpenCode, Bob, OpenClaude) seeds `<git root>/.geneseed/protected-checks.txt` when it is absent, listing only what exists there: CI files, lint/type/test config, and the manifests the done gate infers from (so the agent can no longer lower that bar by editing `package.json` without being asked). Nothing is seeded without a git root, without a candidate, or on a global emit. It is seeded once, then it is yours: an existing list is never touched, and Geneseed never rewrites the seed, records it in a manifest or deletes it on uninstall (so two hosts in one repo, or a committed list, are safe). To opt out, delete the listed paths (the comments may stay) but keep the file; a deleted file is seeded again. Whenever `.geneseed/` exists, the emit also creates its `.gitignore` if absent (or upgrades a bare `*`); uninstall leaves it. A `.geneseed` that is not a directory, or a write that fails, is one warning: the emit still completes. `geneseed validate` and the doctor's sandbox emits never seed. Run `geneseed rebuild-all` to seed existing project installs.
+- **Decline the ownership setup once, for good, in one repo.** The ownership proposal now offers three answers: set it up now, skip this session, or skip in this repo until asked. The third writes `Setup: declined <YYYY-MM-DD>` into the developer's personal, git-ignored `.geneseed/ownership.md` in the main worktree, so a decline made in a linked git worktree outlives it (Claude Desktop opens a fresh one per session). From then on the first-write gate defers in that repo on every host (Claude Code, OpenClaude, Bob, OpenCode), with no expiry: the developer deletes the line, or asks for the setup, which removes it. Every session there opens with one reminder line, `Ownership: setup declined since <date> — not set up; say "set up ownership" to run it`, which the agent repeats once. A `## Ownership` section in `AGENTS.md`, on or off, outranks the line.
 
 ### Changed
-- Ownership setup writes the root `AGENTS.md` only. `.geneseed/ownership.md` is created later,
+- Ownership setup writes the root `AGENTS.md` only (and removes a personal `Setup: declined`
+  line, if there is one). `.geneseed/ownership.md` is created later,
   only when there is personal state to keep (a finer granularity, the first pending checkpoint,
   the first decision); no file means the team granularity, nothing pending, no decisions.
 - `.geneseed/` is personal by default: its first writer creates `.geneseed/.gitignore` when
@@ -25,6 +27,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   exists at the git root.
 
 ### Fixed
+- `--no-ownership-gate` now silences everything: the install's `AGENT.md` no longer carries the
+  "propose it once before the first write" sentence, so the model stops proposing the ownership
+  setup, nor the read-only `/document-project` suggestion beside it; and no decline reminder
+  prints at session start. Before, only the hook stood down.
 - The OpenCode workflow runtime's `.geneseed/.gitignore` was a bare `*`, which hid new team
   bricks and loops (and the check lists) from git; it now writes the same allowlist. An
   existing `.geneseed/.gitignore` that holds only `*` (that old output) is upgraded

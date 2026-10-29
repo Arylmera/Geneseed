@@ -47,8 +47,8 @@ On complex code (business branching, transactions, concurrency, security) the ag
 On every host, a hook stops the first write in an application that has not decided yet:
 
 - **Where.** An *application repo*: a git root holding a build manifest — `package.json`, `pom.xml`, `build.gradle*`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `*.csproj`, `composer.json` or `Gemfile`. A folder with no git or no manifest is never gated.
-- **When.** Its root `AGENTS.md` has no `## Ownership` heading outside Geneseed's managed block. The heading with `mode: on` or `mode: off` both count: the team has decided.
-- **What.** The first Write, Edit or NotebookEdit of the session in that repo is refused once. The refusal's reason goes to the agent, which then asks you: set ownership up, or proceed without for this session. The next write passes. Writes to `AGENTS.md` and `.geneseed/` themselves always pass.
+- **When.** Its root `AGENTS.md` has no `## Ownership` heading outside Geneseed's managed block, and your personal `.geneseed/ownership.md` holds no `Setup: declined <YYYY-MM-DD>` line. The heading with `mode: on` or `mode: off` both count: the team has decided.
+- **What.** The first Write, Edit or NotebookEdit of the session in that repo is refused once. The refusal's reason goes to the agent, which then asks you: set ownership up now, skip this session, or skip in this repo until you ask. The next write passes. Writes to `AGENTS.md` and `.geneseed/` themselves always pass.
 - **What it skips.** Sub-agents defer on Claude Code and OpenClaude, which name them in the hook's input, and on OpenCode, whose guard sees that the session has a parent: a sub-agent cannot ask you, so it never spends the session's one stop. Shell writes are not seen; the line in the harness file covers them.
 
 Per host: Claude Code and OpenClaude deny the call with the reason; Bob refuses it with exit 2, once; OpenCode's guard plugin refuses it. See [Hooks](hooks.md) and [Rule enforcement, by host](enforcement-table.md).
@@ -57,11 +57,12 @@ Per host: Claude Code and OpenClaude deny the call with the reason; Bob refuses 
 
 | Scope | How | Lasts |
 | --- | --- | --- |
-| One session | Answer "proceed without" when the agent asks | This session; it asks again in the next one |
-| One repo | `## Ownership` with `mode: off` in the root `AGENTS.md` | Until the line changes; travels with the repo |
+| One session | Answer "skip this session" when the agent asks | This session; it asks again in the next one |
+| One repo, for you | Answer "skip in this repo until I ask": the agent writes `Setup: declined <YYYY-MM-DD>` into your personal `.geneseed/ownership.md` in the main worktree — from a linked git worktree, the main checkout's, so the decline survives each new worktree (Claude Desktop opens one per session) | No expiry: until you delete the line or ask for the setup; never committed, so it never reaches the team. Each session opens with the reminder `Ownership: setup declined since <date> — not set up; say "set up ownership" to run it` |
+| One repo, for the team | `## Ownership` with `mode: off` in the root `AGENTS.md` | Until the line changes; travels with the repo |
 | One install | Rebuild with `--no-ownership-gate` ([Exclusions](exclusions.md)) | Every rebuild replays it |
 
-The per-install switch stops only the gate. A repo with `mode: on` still runs the ownership checkpoints, and the Credo section still binds.
+The decline is looked up only in the main worktree; the `## Ownership` section and the manifest are read from the git root you work in. A decline left inside a linked worktree is ignored, and a `.git` file that names no gitdir falls back to the current root. If the host refuses the write to the main checkout (outside the session's working directory, a sandbox, a declined permission prompt), the agent tells you the decline was not saved and why; it never writes it inside the linked worktree instead. A `## Ownership` section, on or off, outranks a personal decline: the line is then ignored and no reminder prints. The per-install switch stops the gate, drops the setup proposal from the install's `AGENT.md`, and prints no decline reminder. A repo with `mode: on` still runs the ownership checkpoints, and the Credo section still binds.
 
 ## learn-mode comes first
 

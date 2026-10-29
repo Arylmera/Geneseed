@@ -13,6 +13,7 @@ import { globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass } 
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { doneLine } from './done-checks.mjs';
+import { ownershipLine } from './ownership-gate.mjs';
 
 /**
  * `str(OSError)` — `[Errno N] strerror: 'filename'`, with the filename REPR'd.
@@ -450,17 +451,19 @@ export function cmdContext(args) {
   // `--no-done-gate` carries `Done gate: off` in its AGENT.md and gets no line — the OpenCode
   // context plugin's `doneGateOff` reads the same marker with the same pattern.
   const gitRoot = gitRootOf(root);
-  let gateOff = false;
-  try {
-    gateOff = Boolean(hookRoot)
-      && /^Done gate:[ \t]*off[ \t]*\r?$/m.test(readFileSync(path.join(hookRoot, 'AGENT.md'), 'utf8'));
-  } catch { /* no carrier: armed */ }
+  let carrier = '';
+  try { carrier = hookRoot ? readFileSync(path.join(hookRoot, 'AGENT.md'), 'utf8') : ''; } catch { /* no carrier: armed */ }
+  const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, 'm').test(carrier);
   // Bob's Stop carries no transcript, so the gate never judges a turn there (`hooks-done.mjs`).
-  const done = gitRoot && !gateOff ? doneLine(gitRoot, HOST !== 'bob') : null;
+  const done = gitRoot && !gateOff('Done gate') ? doneLine(gitRoot, HOST !== 'bob') : null;
+  // The ownership decline reminder (`./ownership-gate.mjs`), under the same contract: an install
+  // built `--no-ownership-gate` carries `Ownership gate: off` and gets no line.
+  const owned = gitRoot && !gateOff('Ownership gate') ? ownershipLine(gitRoot) : null;
+  const heads = [done, owned].filter(Boolean);
   if (!session.length && !eager.length && !lazy.length) {
     err(`[context] nothing to load for ${root} `
       + '(no docs discovered, no manifest entries).\n');
-    if (done) out(`${done}\n`);
+    if (heads.length) out(`${heads.join('\n')}\n`);
     return 0;
   }
 
@@ -469,7 +472,7 @@ export function cmdContext(args) {
   // the whole payload, not on the file bodies alone.
   let spent = 0;
   const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
-  if (done) push(done, '');
+  if (heads.length) push(...heads, '');
   if (session.length) {
     push('=== SESSION FILES \u2014 your harness files, injected at session start '
       + '(untouched seeds skipped) ===', '');

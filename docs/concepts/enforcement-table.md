@@ -43,7 +43,8 @@ one host can run still ships for every host it can.
 The [ownership](ownership.md) first-write gate enforces the Credo's Ownership section, not a law
 or doctrine rule, so it has no id above. In an application repo whose root `AGENTS.md` has no
 `## Ownership` section, it refuses the session's first write once; the reason goes to the agent,
-and the next write passes. Off per repo with `mode: off`, per install with
+and the next write passes. Off per repo with `mode: off`, for one developer with a personal
+`Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md`, per install with
 `--no-ownership-gate` ([Exclusions](exclusions.md)).
 
 | Gate | Claude Code | OpenClaude | OpenCode | Bob |

@@ -14,7 +14,8 @@
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
 //   - Ownership:  in an application repo whose root AGENTS.md has no `## Ownership` section,
-//     refuse the session's first write once, so the agent proposes the setup first.
+//     refuse the session's first write once, so the agent proposes the setup first — unless
+//     the developer's personal `.geneseed/ownership.md` holds `Setup: declined <date>`.
 // High-confidence patterns only, so legitimate work is never caught. Borderline cases
 // (.env edits) are WARNED, not blocked. Every block is recorded in the gate
 // ledger (`<cfg>/notebook/gates.jsonl`) under the hook's rule key (`law-1`, `rigor-5`,
@@ -1372,12 +1373,20 @@ const OWNERSHIP_TAIL = "Opt out per repo: `## Ownership` with `mode: off` in the
   "install: rebuild with `--no-ownership-gate`. Offer the full documentation " +
   "(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only " +
   "after they answer. This gate fires once per session and repo."
+const OWNERSHIP_SKIP = "skip this session; or skip in this repo until they ask — only on that third answer, " +
+  "write the line `Setup: declined <YYYY-MM-DD>` (today) into `.geneseed/ownership.md` at the " +
+  "MAIN worktree's root (in a linked git worktree, the main checkout's, so it outlives this " +
+  "worktree), which is personal and never committed (if `.geneseed/.gitignore` is absent there, " +
+  "create it first, as the ownership skill's checkpoint rules say)"
 const OWNERSHIP_REASON_NONE = "Geneseed (Ownership) — this application has no `AGENTS.md` with " +
-  "`## Ownership`. Before writing, propose to the developer: set it up (ownership skill), or " +
-  `proceed without for this session. ${OWNERSHIP_TAIL}`
+  "`## Ownership`. Before writing, propose three answers to the developer: set it up now " +
+  `(ownership skill); ${OWNERSHIP_SKIP}. ${OWNERSHIP_TAIL}`
 const OWNERSHIP_REASON_NO_SECTION = "Geneseed (Ownership) — this application's `AGENTS.md` has no " +
-  "`## Ownership` section. Before writing, ask the developer: add the Ownership section " +
-  `(ownership skill), or proceed without for this session? ${OWNERSHIP_TAIL}`
+  "`## Ownership` section. Before writing, ask the developer: add the Ownership section now " +
+  `(ownership skill); ${OWNERSHIP_SKIP}? ${OWNERSHIP_TAIL}`
+// The developer's durable, personal decline (`DECLINED_RE` in the hook twin; geneseed-context.js
+// carries it too): with no section, this line in `.geneseed/ownership.md` defers the gate.
+const OWNERSHIP_DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m
 // The reason to refuse this write, or null. `p` is absolute. Never throws.
 function ownershipBlock(p, sessionID) {
   try {
@@ -1396,6 +1405,15 @@ function ownershipBlock(p, sessionID) {
     try { text = readFileSync(path.join(root, "AGENTS.md"), "utf8") } catch { /* none: gate */ }
     const own = text === null ? "" : text.replace(MANAGED_BLOCK_RE, "")
     if (OWNERSHIP_SECTION_RE.test(own)) return null
+    let personal = ""
+    // In the MAIN worktree (the hook twin's `mainWorktreeOf(root) ?? root`): the shared `.git`'s
+    // parent, else this root (a main worktree, a submodule, a bare common dir, a bad link).
+    // Sync equivalent of this plugin's async `mainWorktreeOf` and js/hosts/gitref.mjs
+    // `mainWorktreeOf`; the parity table in tests/plugins/ownership_guard.test.mjs pins all three.
+    let home = root
+    try { const c = gitCommonDirOf(root); if (path.basename(c) === ".git") home = path.dirname(c) } catch { /* this root */ }
+    try { personal = readFileSync(path.join(home, ".geneseed", "ownership.md"), "utf8") } catch { /* none: gate */ }
+    if (OWNERSHIP_DECLINED_RE.test(personal.replace(/^\uFEFF/, ""))) return null
     const key = `${sessionID}|${nocase(root)}`
     if (OWNERSHIP_SEEN.has(key)) return null
     OWNERSHIP_SEEN.add(key)
