@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Forge or adapt a loop brick, then submit it to geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — the smallest stroke, the trials written to cover it, the affected suite green, sealed slice by slice.",
   "DESC_TEACH": "Instruct the supplicant toward a result — a crash course from ignorance to function, a confusing text decoded until it clicks, or a day-by-day path to the appointed hour.",
+  "DESC_ADHD": "Shape every report for a supplicant with ADHD — the next deed first, steps numbered, the state restated each turn, digressions held back, the hours named plainly. In force until \"stop adhd mode\".",
   "DESC_QUIZ": "Test what the supplicant knows rather than teach it — a drill to reflex, a recitation caught on every stumble, or a claimed mastery put to the ordeal — with an unsparing readout of the gaps.",
   "DESC_LEARN_MODE": "Make the supplicant the architect of the work — they reason out each design at its checkpoint, you forge only what they sanctioned, and the rite endures per project across sessions.",
   "DESC_OWNERSHIP": "Keep the artisan sovereign over the code they must answer for — they sanction each part at checkpoints of the granularity they decree, and the chapter's edicts stand in the root AGENTS.md.",

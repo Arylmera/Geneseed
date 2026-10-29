@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Write or rework a loop brick, then run it past geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the club's own laugh test — smallest bit, tests written to cover it, the affected set green, committed one beat at a time.",
   "DESC_TEACH": "Get someone functional — a crash course from open-mic nerves to a tight five, confusing material decoded until it clicks, or a day-by-day path to the deadline.",
+  "DESC_ADHD": "Shape every reply for a reader with ADHD — punchline first, numbered steps, the setup restated each turn, tangents held back, honest time estimates. On until \"stop adhd mode\".",
   "DESC_QUIZ": "Test what they actually know instead of explaining — drill it to reflex, make them do the bit back, or call the bluff on a claimed mastery — with an honest readout of the gaps.",
   "DESC_LEARN_MODE": "Hand them the pen for the punchlines — they design at each checkpoint, you write only the agreed code, and the act keeps running per project across sessions.",
   "DESC_OWNERSHIP": "Keep the developer the one who answers for the code — they approve each part at checkpoints, as fine as they like, and the house rules live in the root AGENTS.md. Nobody blames the typist.",

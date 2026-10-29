@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "<one-line description: author or adapt a loop brick at project, global or shipped level, checked by geneseed loop check>",
   "DESC_DEVELOP": "<one-line description: drive a code change through cover-and-verify — smallest change, tests written for it, affected suite green, committed slice by slice>",
   "DESC_TEACH": "<one-line description: teach toward a result — crash course, decode confusing material, or a day-by-day path to a deadline>",
+  "DESC_ADHD": "<one-line description: an opt-in output mode for a reader with ADHD — next action first, numbered steps, state restated, tangents held back; on until \"stop adhd mode\">",
   "DESC_QUIZ": "<one-line description: test what the user knows instead of explaining — drill, explain-it-back check, or mastery claim stress-tested>",
   "DESC_LEARN_MODE": "<one-line description: learn while building — the user designs at checkpoints, the agent writes the agreed code, state kept per project>",
   "DESC_OWNERSHIP": "<one-line description: keep the developer the owner of production code — they decide each part at checkpoints of a granularity they set, team rules in the root AGENTS.md>",

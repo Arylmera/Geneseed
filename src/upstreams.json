@@ -62,5 +62,12 @@
     "author": "Affaan Mustafa",
     "license": "MIT",
     "licenseFile": "licenses/everything-claude-code.txt"
+  },
+  "i-have-adhd": {
+    "repo": "ayghri/i-have-adhd",
+    "commit": "1ecea1993b7fce257ffbd686c070948b5e07eda6",
+    "author": "Ayoub Ghriss",
+    "license": "MIT",
+    "licenseFile": "licenses/i-have-adhd.txt"
   }
 }
