@@ -32,7 +32,9 @@ export const GENESEED_GITIGNORE = '/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/prot
 /**
  * Create-if-absent; a file holding only `*` is Geneseed's former output (it hid team bricks),
  * never a user edit, so it is upgraded. Any other content, or a link, is the user's. Never
- * throws: hygiene must not fail an emit. Mirrors `writeGitignore` in the two OpenCode copies.
+ * throws: hygiene must not fail an emit. Same content rules as `writeGitignore` in the two
+ * OpenCode copies, but NOT the same link handling: those still write through a symlinked
+ * `.gitignore` (a known follow-up); this one refuses to.
  */
 export function writeGeneseedGitignore(file) {
   try { writeFileSync(file, GENESEED_GITIGNORE, { flag: 'wx' }); } catch {
@@ -59,9 +61,10 @@ const CANDIDATES = [
 ];
 
 const SEED_HEADER = '# Seeded once by Geneseed with the checks found in this project; it is yours now.\n'
-  + '# A write tool aimed at a listed path asks you first (External Gate). One repo-relative\n'
-  + '# file or folder per line; `#` starts a comment. A shell command is not seen: CI holds that.\n'
-  + '# To opt out, delete these lines but keep the file: a missing file is seeded again.\n';
+  + '# A write tool aimed at a listed path asks you first (on Bob, it is blocked): External Gate.\n'
+  + '# One repo-relative file or folder per line; `#` starts a comment. A shell command is not\n'
+  + '# seen: CI holds that. To opt out, delete the listed paths (the comments may stay) but keep\n'
+  + '# the file: a missing file is seeded again.\n';
 
 /** The seed for git root `root`, or null when none of the candidates exists there. */
 export function protectedChecksSeed(root) {

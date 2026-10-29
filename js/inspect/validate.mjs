@@ -142,7 +142,8 @@ export function cmdValidate(args) {
         buildInto({ ...opts, out: sandbox });
         scanDirs = [sandbox];
       } else {
-        emitProjectInto(emit, { ...opts, out: sandbox, root });
+        // `seed: false`: a dry run writes nothing, and the seed would land at the git root above.
+        emitProjectInto(emit, { ...opts, out: sandbox, root, seed: false });
         scanDirs = [root];
       }
     } catch (e) {

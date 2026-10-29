@@ -5,9 +5,11 @@
 // uninstall delete another's seed, and a committed manifest rewrite a team's list). Opt-out is an
 // emptied file; a missing one is seeded again. Every write is guarded: the emit never fails on it.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import {
   existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
 } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
@@ -18,7 +20,9 @@ import {
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import { installUninstall } from '../../js/maintain/uninstall.mjs';
-import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
+import { cmdValidate } from '../../js/inspect/validate.mjs';
+import { claudeBobEmitProblems } from '../../js/inspect/doctor.mjs';
+import { cellEnv, makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // The emit's hook-shim writer targets the environment's home; keep it off the real machine.
 sandboxProcessHome();
@@ -73,10 +77,13 @@ const MIX = {
   'eslint.config.js': '', '.eslintrc.json': '{}', 'vitest.config.ts': '', 'Jenkinsfile': '',
   '.github/workflows/ci.yml': '', '.circleci': '', 'README.md': '',
 };
+// It says what the gate does on every host (Bob blocks rather than asks) and what "opt out"
+// removes — the listed paths, not the comments — since a comment-only file is the opt-out.
 const HEADER = '# Seeded once by Geneseed with the checks found in this project; it is yours now.\n'
-  + '# A write tool aimed at a listed path asks you first (External Gate). One repo-relative\n'
-  + '# file or folder per line; `#` starts a comment. A shell command is not seen: CI holds that.\n'
-  + '# To opt out, delete these lines but keep the file: a missing file is seeded again.\n';
+  + '# A write tool aimed at a listed path asks you first (on Bob, it is blocked): External Gate.\n'
+  + '# One repo-relative file or folder per line; `#` starts a comment. A shell command is not\n'
+  + '# seen: CI holds that. To opt out, delete the listed paths (the comments may stay) but keep\n'
+  + '# the file: a missing file is seeded again.\n';
 // Candidate order — CI, then lint/type/test config, then the done gate's manifests — and a
 // pattern's matches in name order. `.circleci` (a file) and the lockfile are absent by design.
 const MIX_SEED = `${HEADER}.github/workflows/\nJenkinsfile\neslint.config.js\n.eslintrc.json\n`
@@ -295,6 +302,67 @@ test('a symlinked seed leaf, even dangling, is never written through', (t) => {
     if (!trySymlink(t, target, seedOf(repo))) return;
     emit('claude', repo);
     assert.ok(!existsSync(target), 'the seed was written through a dangling link');
+  });
+});
+
+// F2 (review 2026-10-29): `validate` (the dry run that writes nothing) and the doctor emit into a
+// temp dir; the seed walks UP to the git root, so a TMP inside a repo would seed THAT repo. Each
+// row points the temp dir inside a fixture repo holding a `package.json` and requires the repo to
+// gain nothing — and the control row requires a real emit there still to seed.
+function withTmpInside(repo, fn) {
+  const tmp = path.join(repo, 'tmp');
+  mkdirSync(tmp, { recursive: true });
+  const saved = Object.fromEntries(['TMP', 'TEMP', 'TMPDIR'].map((k) => [k, process.env[k]]));
+  for (const k of Object.keys(saved)) process.env[k] = tmp;
+  try {
+    assert.equal(os.tmpdir(), tmp, 'the fixture could not redirect the temp dir');
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+}
+
+test('geneseed validate in a temp dir inside a repo writes nothing to that repo', () => {
+  withDir((repo) => {
+    plant(repo, { '.git/': '', 'package.json': '{}' });
+    const [rc] = withTmpInside(repo, () => quietErr(() => cmdValidate({
+      theme: 'neutral', emit: 'claude', out: 'Harness', root: null, footprint: 'full', verbose: false,
+    })));
+    assert.equal(rc, 0);
+    assert.ok(!existsSync(path.join(repo, '.geneseed')), 'validate seeded the repo its temp dir sits in');
+  });
+});
+
+test("the doctor's sandbox emits in a temp dir inside a repo write nothing to that repo", () => {
+  withDir((repo) => {
+    plant(repo, { '.git/': '', 'package.json': '{}' });
+    withTmpInside(repo, () => quietErr(() => claudeBobEmitProblems('neutral')));
+    assert.ok(!existsSync(path.join(repo, '.geneseed')), 'the doctor seeded the repo its temp dir sits in');
+  });
+});
+
+test('a spawned driver with GENESEED_NO_SEED (the golden matrix) seeds nothing', () => {
+  withDir((repo) => {
+    plant(repo, { '.git/': '', 'package.json': '{}' });
+    const home = path.join(repo, 'home');
+    mkdirSync(home);
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'claude',
+      '--theme', 'neutral', '--out', repo, '--root', repo],
+    { cwd: ROOT, env: { ...cellEnv(home), GENESEED_NO_SEED: '1' }, encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!existsSync(path.join(repo, '.geneseed')), 'GENESEED_NO_SEED did not stop the seed');
+  });
+});
+
+test('control: a real project emit inside that same repo still seeds', () => {
+  withDir((repo) => {
+    plant(repo, { '.git/': '', 'package.json': '{}' });
+    const project = path.join(repo, 'tmp', 'app');
+    mkdirSync(project, { recursive: true });
+    emit('claude', project);
+    assert.equal(readFileSync(seedOf(repo), 'utf8'), `${HEADER}package.json\n`);
   });
 });
 

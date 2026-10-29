@@ -165,7 +165,8 @@ export function claudeBobEmitProblems(themeName) {
       label: `${themeName} ${label}`,
       dir: root,
       run: () => emitProjectInto(label, {
-        theme: themeName, out: path.join(root, 'bundle'), root,
+        // `seed: false`: a sandbox emit must not seed the git root its temp dir may sit in.
+        theme: themeName, out: path.join(root, 'bundle'), root, seed: false,
       }),
       vendored: validateIsVendored,
     };

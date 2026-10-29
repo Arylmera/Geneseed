@@ -246,6 +246,15 @@ function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = []) {
 }
 
 /**
+ * Whether this PROJECT emit seeds `<git root>/.geneseed/protected-checks.txt`. A real emit does;
+ * a sandbox emit must not, because the seed walks UP to the git root and a sandbox under a temp
+ * dir that sits inside a repo would write into that repo. In-process sandbox callers
+ * (`validate`, `doctor`) pass `seed: false` through `emitProjectInto`; a spawned one (the golden
+ * matrix) sets `GENESEED_NO_SEED`, the same env channel `GENESEED_STACK_GLOBAL` uses.
+ */
+const seeds = (args) => args.seed !== false && !process.env.GENESEED_NO_SEED;
+
+/**
  * The manifest PRE-read all three emit bodies performed inline: does a manifest already
  * exist at `manifestPath`, and if so, what does it parse to. `existed` is what
  * `emitOpencode` alone needs (as `manifestExisted`, threaded into the render job); every
@@ -324,7 +333,7 @@ function emitOpencode(cfg, args, out) {
     });
   const { owned, stats, cfgName, skillDenies, editRefused } = rendered;
   // Seed once: absent -> created, then the user's (never recorded, rewritten or removed).
-  seedProtectedChecks(root);
+  if (seeds(args)) seedProtectedChecks(root);
 
   phaseLog('PRUNE');
   pruneOwned(oc, oldOwned, owned, oldHashes, editRefused);
@@ -439,7 +448,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   });
   const { owned, stats, memStatus, nbStatus, managed, editRefused } = rendered;
   // `root` is null on a global emit: it has no project to seed.
-  if (root) seedProtectedChecks(root);
+  if (root && seeds(args)) seedProtectedChecks(root);
 
   phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
@@ -671,17 +680,19 @@ function axesCfg({
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, ...gates
+  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, seed = true, ...gates
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
   // that renders `expected` at the DEFAULT pack set reports the whole doctrines section as
   // edited on every narrowed install, and `validate --doctrines craft` that ignored its flag
   // checked an all-packs render nobody asked for.
+  // `seed: false` — a SANDBOX emit (`validate`, `doctor`): the protected-checks seed walks UP to
+  // the git root, which for a temp dir inside a repo is that repo, outside the sandbox.
   return withPlatformNewlines(() => emit(
     axesCfg({
       posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
-    { theme, footprint, root }, out,
+    { theme, footprint, root, seed }, out,
   ));
 }
 
