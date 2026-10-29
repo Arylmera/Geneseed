@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Draft or adapt a loop brick, then clear it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written to cover it, affected suite green, committed slice by slice.",
   "DESC_TEACH": "Train the recruit toward a result — a crash course to operational, a confusing manual decoded until it clicks, or a day-by-day programme to the deadline.",
+  "DESC_ADHD": "Brief every reply for a reader with ADHD — next action first, numbered steps, sitrep each turn, tangents held, concrete time estimates. In effect until \"stop adhd mode\".",
   "DESC_QUIZ": "Test the recruit instead of briefing them — a drill to reflex, an explain-it-back debrief, or a claimed proficiency stress-tested — with a frank readout of the gaps.",
   "DESC_LEARN_MODE": "Put the recruit in command of the plan — they reason out each design at its checkpoint, you execute only the approved code, and the mode holds per project across sessions.",
   "DESC_OWNERSHIP": "Keep the officer in command of production code — they approve each part at checkpoints of the granularity they set, and the unit's standing orders sit in the root AGENTS.md.",

@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Build or re-tune a loop brick, then run it past geneseed loop check.",
   "DESC_DEVELOP": "Push a change through the run — the smallest turn of the wrench, a test written to cover it, the touched trials green, sealed slice by slice.",
   "DESC_TEACH": "Get a rider road-ready — a crash course from never-ridden to rolling, a confusing manual decoded till it clicks, or a day-by-day route to a deadline.",
+  "DESC_ADHD": "Ride every reply for a reader with ADHD — next move first, numbered stops, the route restated each turn, side roads held back, real time estimates. On until \"stop adhd mode\".",
   "DESC_QUIZ": "Test what they've actually got instead of explaining it — drill a move to reflex, make them talk you through it, or call the bluff on a claimed skill — with a straight readout of the gaps.",
   "DESC_LEARN_MODE": "Learn the build while riding it — they call the line at each checkpoint, you lay down the code they agreed to, and the mode sticks to the project between rides.",
   "DESC_OWNERSHIP": "Keep the rider in charge of the production build — they call each part at checkpoints, as close as they choose to ride, and the club's rules sit in the root AGENTS.md.",

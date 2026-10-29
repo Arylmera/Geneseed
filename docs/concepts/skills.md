@@ -36,6 +36,7 @@ A **skill** is a repeatable workflow written as a markdown playbook: when it app
 | open a pull request, or finish and merge a branch | `ship` |
 | decide whether something is a standing rule or a fact to remember | `rule` |
 | be taught a topic, or quizzed on it | `teach`, `quiz` |
+| have every reply lead with the next action and keep the state in view (ADHD mode) | `adhd` |
 
 The full list, with each description, is in the catalog.
 

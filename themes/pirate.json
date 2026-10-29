@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Forge or refit a loop brick, then pass it through geneseed loop check.",
   "DESC_DEVELOP": "Sail a change through the cover-and-verify tack — the smallest move, trials rigged to cover it, the touched trials run clean, sealed one cargo at a time.",
   "DESC_TEACH": "Get a landlubber seaworthy — a crash course from dock to deck, a confusing chart decoded till it clicks, or a day-by-day course to the deadline.",
+  "DESC_ADHD": "Chart every reply for a reader with ADHD — next order first, numbered steps, the heading restated each turn, side voyages held back, true time estimates. On until \"stop adhd mode\".",
   "DESC_QUIZ": "Test what the crew truly knows instead of telling them — drill a knack to reflex, make them recite it back, or call the bluff on a claimed mastery — with a plain readout of the gaps.",
   "DESC_LEARN_MODE": "Let the crew chart the course — they reason out each design at its checkpoint, you build only what they agreed, and the mode holds per project across voyages.",
   "DESC_OWNERSHIP": "Keep the captain master of the production code — they approve each part at checkpoints, as close as they choose to steer, and the ship's articles hang in the root AGENTS.md.",

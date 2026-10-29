@@ -212,6 +212,7 @@ const MP = 'mattpocock-skills';
 const SP = 'superpowers';
 const RETRO_CREDITED = {
   'agents/reviewer.md': [SP],
+  'skills/adhd.md': ['i-have-adhd'],
   'skills/brainstorm.md': [SP, MP],
   'skills/brainstorm/builder-check.md': [SP],
   'skills/codebase-design.md': [MP],
