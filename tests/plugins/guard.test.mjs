@@ -427,6 +427,108 @@ test("protected checks follow links in both directions", async () => {
   assert.equal(await blocked("write", { filePath: path.join(outside, "real-specs", "a.test.js") }), false)
 })
 
+// ---- the gates' own configuration (External Gate) ------------------------------
+// The guard's share of tests/unit/hook_gates.test.mjs. Every host's shared config (opencode.json(c),
+// the hook settings.json files) and this install's own files (AGENT.md, excludes.json, manifest,
+// plugins/geneseed-*.js) and $GENESEED_HOME/bin are NOT the guard's: the emit writes native
+// permission.edit "ask" keys for them (A2 L1, tests/unit/generate.test.mjs), and a deny here would
+// hide that ask. The guard still denies the other hosts' Geneseed-only state (excludes.json,
+// AGENT.md, manifests) and an AGENT.md under $GENESEED_HARNESS.
+const CFG = path.resolve(process.cwd(), "adapters", "opencode")
+async function gateConfigFixture(name) {
+  const repo = path.join(tmp, name)
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  return { repo, home: path.join(tmp, `${name}-home`) }
+}
+async function withHome(home, fn) {
+  const saved = process.env.GENESEED_HOME
+  process.env.GENESEED_HOME = home
+  try { return await fn() } finally {
+    if (saved === undefined) delete process.env.GENESEED_HOME; else process.env.GENESEED_HOME = saved
+  }
+}
+const gateConfigDenied = async (p) => {
+  const why = await denial("write", { filePath: p, content: "{}" })
+  assert.ok(why, `${p}: expected a block`)
+  assert.match(why, /is a gate's own configuration.*never write it another way.*\(External Gate\)/, why)
+  assert.doesNotMatch(why, /GENESEED_|--no-/, why)
+}
+
+test("denies another host's Geneseed-only state; leaves shared config to OpenCode's native ask", async () => {
+  const f = await gateConfigFixture("gatecfg")
+  await withHome(f.home, async () => {
+    for (const p of [path.join(f.repo, ".claude", ".geneseed-manifest.json"), path.join(f.repo, ".claude", "excludes.json"),
+      path.join(f.repo, ".openclaude", "AGENT.md"), path.join(f.repo, ".bob", ".geneseed-emit"),
+      path.join(f.repo, "pkg", ".claude", "excludes.json"),
+      path.join(tmp, "gatecfg-nogit", ".claude", "AGENT.md")]) await gateConfigDenied(p)
+    // Asked by OpenCode itself (permission.edit), so the guard must let it through.
+    for (const p of [path.join(f.repo, ".claude", "settings.json"), path.join(f.repo, ".claude", "settings.local.json"),
+      path.join(f.repo, ".bob", "settings.json"), path.join(f.repo, "pkg", ".bob", "settings", "settings.json"),
+      path.join(f.repo, "AGENT.md"), path.join(path.dirname(CFG), "AGENT.md"),
+      path.join(CFG, "excludes.json"), path.join(CFG, "opencode.json"), path.join(CFG, "opencode.jsonc"),
+      path.join(CFG, "AGENT.md"), path.join(CFG, "plugins", "geneseed-guard.js"), path.join(CFG, ".geneseed-manifest.json"),
+      path.join(f.repo, ".opencode", "excludes.json"), path.join(f.repo, "opencode.json"), path.join(f.repo, "pkg", "opencode.jsonc"),
+      path.join(f.home, "bin", "geneseed-hook.cmd"),
+      // Near misses: no anchor at all.
+      path.join(f.repo, ".claude", "settings.json.bak"), path.join(f.repo, "settings.json"),
+      path.join(f.repo, "config", "settings.json"), path.join(f.repo, "src", "excludes.json"),
+      path.join(f.repo, "pkg", "claude", "settings.json"), path.join(f.repo, ".claude", "agents", "settings.json")]) {
+      assert.equal(await blocked("write", { filePath: p, content: "x" }), false, p)
+    }
+  })
+})
+
+test("gate config matches case and separator variants on Windows", { skip: process.platform !== "win32" }, async () => {
+  const f = await gateConfigFixture("gatecfg-case")
+  await withHome(f.home, async () => {
+    for (const p of [`${f.repo}/.Claude/Excludes.json`, path.join(f.repo, ".BOB", "AGENT.MD").replace(/\\/g, "/")]) {
+      await gateConfigDenied(p)
+    }
+  })
+})
+
+test("a link into a gate-config dir is caught", async () => {
+  const f = await gateConfigFixture("gatecfg-link")
+  await fs.mkdir(path.join(f.repo, ".claude"), { recursive: true })
+  await fs.symlink(path.join(f.repo, ".claude"), path.join(tmp, "gatecfg-into-claude"), "junction")
+  await withHome(f.home, async () => {
+    await gateConfigDenied(path.join(tmp, "gatecfg-into-claude", "excludes.json"))
+    assert.equal(await blocked("write", { filePath: path.join(tmp, "gatecfg-into-claude", "notes.md") }), false)
+  })
+})
+
+// The carrier dirs are read once at load, $GENESEED_HARNESS first: an AGENT.md there is guarded.
+test("the AGENT.md under $GENESEED_HARNESS is gate configuration", async () => {
+  const harness = path.join(tmp, "gatecfg-harness")
+  const prev = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  try {
+    const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?gatecfg-harness")
+    const h = (await fresh.GeneseedGuard())["tool.execute.before"]
+    await assert.rejects(h({ tool: "write", args: { filePath: path.join(harness, "AGENT.md") } }, {}),
+      /is a gate's own configuration/)
+    await h({ tool: "write", args: { filePath: path.join(harness, "README.md") } }, {})
+  } finally {
+    if (prev === undefined) delete process.env.GENESEED_HARNESS; else process.env.GENESEED_HARNESS = prev
+  }
+})
+
+// The guard's lists are hooks.mjs's minus exactly what L1's native ask covers: the hook settings and
+// opencode.json(c) names, and the `.opencode` marker. The reason is the same sentence on every host.
+test("the guard's gate-config lists are js/hosts/hooks.mjs's minus OpenCode's own", async () => {
+  const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const pick = (src, name) => src.match(new RegExp(`const ${name} = (.*?);?\\r?\\n`))?.[1]
+  const list = (src, name) => JSON.parse(pick(src, name).replace(/'/g, '"'))
+  assert.equal(pick(guardSrc, "GATE_CONFIG_ASK"), pick(hookSrc, "GATE_CONFIG_ASK"), "GATE_CONFIG_ASK drifted")
+  assert.deepEqual(list(guardSrc, "GATE_CONFIG_FILES"),
+    list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode/.test(f)))
+  assert.deepEqual(list(guardSrc, "GATE_CONFIG_MARKERS"), list(hookSrc, "GATE_CONFIG_MARKERS").filter((m) => m !== ".opencode"))
+  // The hook's markers are every host's project dir, as js/hosts/hosts.mjs names them.
+  const { HOSTS } = await import("../../js/hosts/hosts.mjs")
+  assert.deepEqual([...list(hookSrc, "GATE_CONFIG_MARKERS")].sort(), HOSTS.map((h) => h.projectMarker).sort())
+})
+
 // The manifest was `wiki.jsonc` before the `geneseed-` prefix; an install not yet re-emitted still
 // has only that name, and its protected folders must stay protected. A fresh module instance (the
 // query string) so the main instance's cached prefixes do not answer; $GENESEED_WIKI unset so the

@@ -108,7 +108,13 @@ test("guard: a denied call is renamed to the reason and emptied; an allowed one 
   const memo = { tool: "write", input: { path: path.join(tmp, "user-rules.md"), content: "x" } }
   await before(memo)
   assert.match(memo.tool, /^\[geneseed-guard\] blocked: .*\(Persist Insight\).* re-issue the same edit only after they answer; never write it another way/)
-  for (const why of [secret.tool, rm.tool, memo.tool]) assert.doesNotMatch(why, /GENESEED_/, why)
+  // The gates' own configuration (External Gate): another host's exclusion list, renamed the same way.
+  // (Hook settings and OpenCode's own files are asked natively through permission.edit, not refused here.)
+  const excl = { tool: "write", input: { path: path.join(tmp, ".claude", "excludes.json"), content: "{}" } }
+  await before(excl)
+  assert.match(excl.tool, /^\[geneseed-guard\] blocked: .* is a gate's own configuration .*\(External Gate\)$/)
+  assert.deepEqual(excl.input, {})
+  for (const why of [secret.tool, rm.tool, memo.tool, excl.tool]) assert.doesNotMatch(why, /GENESEED_/, why)
   const ok = { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } }
   await before(ok)
   assert.deepEqual(ok, { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } })

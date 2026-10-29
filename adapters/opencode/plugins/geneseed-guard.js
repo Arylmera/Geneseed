@@ -140,11 +140,12 @@ const WARN_ONLY = MODE === "warn"
 // restart. Anything unreadable or unexpected reads as ARMED. Each stands down only its own check
 // below (the real-loss check; the Sealed Secrets path block and content scan) — catastrophic
 // commands, root scans and protected checks still block.
+// Every dir the carrier may come from, in read order; the gate-config check protects AGENT.md in each.
+const CARRIER_DIRS = [...(process.env.GENESEED_HARNESS ? [process.env.GENESEED_HARNESS] : []),
+  path.resolve(PLUGIN_DIR, ".."), path.resolve(PLUGIN_DIR, "..", "..")]
 function carrierText() {
   try {
-    const dirs = [path.resolve(PLUGIN_DIR, ".."), path.resolve(PLUGIN_DIR, "..", "..")]
-    if (process.env.GENESEED_HARNESS) dirs.unshift(process.env.GENESEED_HARNESS)
-    for (const d of dirs) {
+    for (const d of CARRIER_DIRS) {
       try { return readFileSync(path.join(d, "AGENT.md"), "utf8") } catch { continue }
     }
   } catch { /* fall through: armed */ }
@@ -1355,6 +1356,37 @@ function protectedIn(target) {
   }
 }
 
+// ---- the gates' own configuration (External Gate) ------------------------------
+// Twin of js/hosts/hooks.mjs's `gateConfig`, MINUS what OpenCode now asks about itself
+// (tests/plugins/guard.test.mjs pins the difference). A file that turns a gate off is a gate the
+// agent can switch off. Every host's shared config — `opencode.json(c)`, the hook `settings.json`
+// files — and this install's own files (its `AGENT.md`, `excludes.json`, manifest,
+// `plugins/geneseed-*.js`) and the hook shim dir get a native `permission.edit` "ask" written into
+// opencode.json by the emit (`opencodeEditAsks`, js/hosts/settings.mjs), so the user can approve
+// the edit: this guard must not deny those, or the ask never shows. What stays a deny here is
+// Geneseed-only state of the OTHER hosts, which no user edits through OpenCode — their
+// `excludes.json`, `AGENT.md` and manifests, found by the parent's folder name — and an `AGENT.md`
+// under `$GENESEED_HARNESS`, a carrier the emit cannot name.
+const GATE_CONFIG_FILES = ['excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit'];
+const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob'];
+const GATE_CONFIG_ASK = 'is a gate\'s own configuration (the hook wiring, the exclusion list, a gate switch or the hook shim). Editing it could switch a check off: fix the code, not the gate, unless the user asks for this edit. Stop and ask the user now; never write it another way (for example through a shell command).';
+function gateConfig(p) {
+  try {
+    const fold = (s) => nocase(path.resolve(s))
+    const cfg = path.dirname(PLUGIN_DIR)
+    const carriers = CARRIER_DIRS.filter((d) => ![fold(cfg), fold(path.dirname(cfg))].includes(fold(d)))
+      .map((d) => fold(path.join(d, "AGENT.md")))
+    for (const target of [path.resolve(p), resolvePath(p)]) {
+      const t = fold(target)
+      if (carriers.includes(t)) return true
+      const dir = path.dirname(target)
+      if (GATE_CONFIG_MARKERS.some((m) => nocase(m) === nocase(path.basename(dir)))
+        && GATE_CONFIG_FILES.some((f) => fold(path.join(dir, f)) === t)) return true
+    }
+  } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
+  return false
+}
+
 // ---- the ownership first-write gate --------------------------------------------
 // Twin of js/hosts/ownership-gate.mjs's `ownershipBlock` — keep in step (same manifests, same
 // managed-block strip, same section match, same reason). In an application repo (a git root
@@ -1491,6 +1523,7 @@ export const GeneseedGuard = async (ctx) => {
             if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
             const sensor = protectedCheck(p)
             if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
+            if (gateConfig(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
             const store = ruleStoreTarget(p)
             if (store && !RULE_STORE_BUMPED.has(p)) {
               RULE_STORE_BUMPED.add(p)

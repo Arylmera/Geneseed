@@ -56,8 +56,9 @@
  */
 import { readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { printOut as out, printErr as err } from '../lib/fs.mjs';
+import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
@@ -65,7 +66,7 @@ import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import { selfAndParents, readStdin, SECRET_RE, DONE_LIST } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
-import { ownershipBlock } from './ownership-gate.mjs';
+import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
 
 // ======================================================================================
 // git-gate — Doctrine process 5's tool-boundary backstop
@@ -610,6 +611,126 @@ function protectedIn(target) {
   }
 }
 
+/**
+ * External Gate's other half: the GATES' OWN configuration. A file the agent can edit that turns
+ * a gate off is a gate the agent can switch off, so a write to one asks like a protected check
+ * (audit 2026-10-28, R4/C5). Three anchors, each matched by exact name, never by folder prefix:
+ *   * the install root (`--root`): the hook wiring (`settings.json`, `settings.local.json`, Bob
+ *     global's `settings/settings.json` — `claudeWire`), `excludes.json` (`sovereignBypass`), the
+ *     `AGENT.md` gate markers (`Done gate: off`, read by `cmdContext`; every marker is read back
+ *     by a rebuild), and `.geneseed-manifest.json` / `.geneseed-emit` (`globalHookStandingDown`);
+ *   * any host project dir the target sits in (`<dir>/.claude/settings.json` and kin, found by
+ *     the parent's — or for `settings/settings.json` the grandparent's — folder name, so a
+ *     monorepo subpackage or a dir with no `.git` is covered): Claude reads project settings
+ *     from the session's own dir (`globalHookStandingDown`), the team file can set
+ *     `disableAllHooks`, which Claude applies live, and a forged project manifest + settings makes
+ *     a global gate stand down; and any `opencode.json(c)`, a name only OpenCode's config wears
+ *     (OpenCode reads it from every dir up to the git root);
+ *   * the machine-wide hook shim dir (`$GENESEED_HOME/bin`, `shimHome` in `./shim.mjs`, inlined
+ *     because that module is not on this path) — every Claude/Bob hook command runs through it.
+ * Read twice like `protectedCheck`, so a link into one of these never loosens the gate. On Bob
+ * the ask is a block, except for a hook-settings file (`bobSettingsChange` below). The OpenCode
+ * guard holds these lists minus the hook settings and OpenCode's own files, which OpenCode asks about natively
+ * (`opencodeEditAsks` in ./settings.mjs; tests/plugins/guard.test.mjs pins the difference). The CLI
+ * (`geneseed exclude`, an emit) writes these with `fs`, never through a write tool, so it is
+ * not gated. shortcut: write tools only, like `protectedCheck` — a shell redirect is not seen.
+ */
+const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
+const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
+export const GATE_CONFIG_ASK = 'is a gate\'s own configuration (the hook wiring, the exclusion list, a gate switch or the hook shim). Editing it could switch a check off: fix the code, not the gate, unless the user asks for this edit. Stop and ask the user now; never write it another way (for example through a shell command).';
+function gateConfig(p, root) {
+  let bin = null;
+  try {
+    bin = normcase(path.join(withDiscardableStderr(() => resolvePath(process.env.GENESEED_HOME || '~/.geneseed')), 'bin'));
+  } catch { /* a `~user` GENESEED_HOME: no shim dir to compare, the other anchors still run */ }
+  try {
+    const roots = root ? [path.resolve(root), resolvePath(root)] : [];
+    for (const target of [path.resolve(p), resolvePath(p)]) {
+      const t = normcase(target);
+      if (bin && t.startsWith(bin + path.sep)) return true;
+      if (/^opencode\.jsonc?$/.test(path.basename(t))) return true;
+      const up = [path.dirname(target), path.dirname(path.dirname(target))];
+      const homes = [...roots, ...up.filter((d) => GATE_CONFIG_MARKERS.some((m) => normcase(m) === normcase(path.basename(d))))];
+      if (homes.some((h) => GATE_CONFIG_FILES.some((f) => normcase(path.join(h, f)) === t))) return true;
+    }
+  } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
+  return false;
+}
+
+/**
+ * Bob's half of External Gate on its own settings (A2 L2). Bob has no ask tier and no native
+ * per-path approval (bob.ibm.com approval settings work per tool group), so an ask there is a
+ * block — and blocking every edit of the user's shared `settings.json` was rejected. So on Bob a
+ * hook-settings file passes unless the write CHANGES Geneseed's own wiring: the after-text is
+ * rebuilt from the tool call, both sides are parsed, and the write is blocked when the set of
+ * `event|matcher|hook` entries whose command names `geneseed-hook` differs, `disableAllHooks`
+ * turns on, or an env value the hook reads changes (`GENESEED_*`, `*_CONFIG_DIR`, `NODE_OPTIONS`).
+ * Fail closed: a tool we cannot replay (a regex, case-folded or line-ranged search, a diff of more
+ * than one block), a search not found exactly once, or an after-text Bob might not parse (JSONC
+ * where the file was strict JSON) returns a reason, never a pass.
+ * @returns {string | null} why the write is refused, or null when Geneseed's wiring is untouched
+ */
+const SETTINGS_RE = /(^|[\\/])(settings\.json|settings\.local\.json)$/i;
+function settingsAfter(before, payload) {
+  const ti = payload.tool_input || {};
+  const tool = payload.tool_name;
+  if (tool === 'write_file' || tool === 'write_to_file' || tool === 'Write') {
+    return typeof ti.content === 'string' ? ti.content : null;
+  }
+  const line = Number(ti.line);   // Roo-lineage tools may send it as a string
+  if (tool === 'insert_content' && typeof ti.content === 'string' && Number.isInteger(line) && line >= 0) {
+    const lines = before.split('\n');
+    lines.splice(line === 0 ? lines.length : line - 1, 0, ...ti.content.split('\n'));
+    return lines.join('\n');
+  }
+  const once = (text, search, replace) => (typeof search === 'string' && search && typeof replace === 'string'
+    && text.split(search).length === 2 ? text.replace(search, () => replace) : null);
+  if (tool === 'search_and_replace') {
+    const ranged = ti.use_regex || ti.ignore_case || ti.start_line != null || ti.end_line != null;
+    return ranged ? null : once(before, ti.search, ti.replace);
+  }
+  if (tool === 'apply_diff' && typeof ti.diff === 'string') {
+    const blocks = [...ti.diff.matchAll(/<<<<<<< SEARCH\r?\n(?::start_line:\s*\d+\r?\n)?(?:-------\r?\n)?([\s\S]*?)\r?\n?=======\r?\n([\s\S]*?)\r?\n?>>>>>>> REPLACE/g)];
+    let text = before;
+    for (const [, search, replace] of blocks) if ((text = once(text, search, replace)) === null) return null;
+    // One block only: with several, Bob may apply some and refuse others (its start-line window).
+    return blocks.length === 1 ? text : null;
+  }
+  return null;
+}
+function geneseedWiring(data) {
+  const keys = [];
+  const hooks = isDict(data.hooks) ? data.hooks : {};
+  for (const [event, groups] of Object.entries(hooks)) {
+    for (const g of Array.isArray(groups) ? groups : []) {
+      for (const h of (g && Array.isArray(g.hooks)) ? g.hooks : []) {
+        if (h && typeof h.command === 'string' && h.command.includes('geneseed-hook')) {
+          keys.push(JSON.stringify([event, g.matcher ?? null, h]));
+        }
+      }
+    }
+  }
+  const env = isDict(data.env) ? data.env : {};
+  for (const [k, v] of Object.entries(env)) {
+    if (/^GENESEED_|_CONFIG_DIR$|^NODE_OPTIONS$/i.test(k)) keys.push(JSON.stringify(['env', k, v]));
+  }
+  return keys.sort().join('\n');
+}
+function bobSettingsChange(p, payload) {
+  let before = '';
+  const file = path.resolve(typeof payload.cwd === 'string' ? payload.cwd : '.', p);
+  try { before = readFileSync(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') return 'it could not be read'; }
+  const after = settingsAfter(before, payload);
+  if (after === null) return 'the edit could not be replayed to check it';
+  const [a] = readJsonc(before.trim() ? before : '{}');
+  const [b] = readJsonc(after.trim() ? after : '{}');
+  if (!isDict(a) || !isDict(b)) return 'a side of the edit is not a JSON object';
+  const strict = (t) => { try { parseJson(t.trim() ? t : '{}'); return true; } catch { return false; } };
+  if (strict(before) && !strict(after)) return 'it turns strict JSON into JSONC, which Bob may refuse to read';
+  if (isTruthy(b.disableAllHooks) && !isTruthy(a.disableAllHooks)) return 'it turns on disableAllHooks';
+  return geneseedWiring(a) === geneseedWiring(b) ? null : 'it changes Geneseed\'s own hook entries';
+}
+
 function ruleGate(args) {
   if (sovereignBypass(args.root)) return 0;
   return ruleDecide(args, readPayload());
@@ -654,6 +775,19 @@ function ruleDecide(args, payload) {
       + `check (${sensor === DONE_LIST ? 'the done gate list itself'
         : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can edit is not a `
       + 'check: fix the code, not the check, unless the user asks for this edit.');
+  }
+  // Bob routes reads here too (`read_file` carries a path): only a write is this gate's business.
+  // Bob never reads `opencode.json(c)`, OpenCode's whole host config: it is not gated from Bob.
+  const bobWrite = HOST !== 'bob' || (WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''))
+    && !/^opencode\.jsonc?$/i.test(path.basename(p)));
+  if (bobWrite && gateConfig(p, args.root)) {
+    // Bob: a hook-settings file is the user's shared host config — refused only when the write
+    // touches Geneseed's wiring (`bobSettingsChange`); a pass falls through to the checks below.
+    const why = HOST === 'bob' && SETTINGS_RE.test(p) ? bobSettingsChange(p, payload) : '';
+    if (why !== null) {
+      return ask(args, 'rule-gate', 'rigor-5', `Geneseed (External Gate) — ${p} ${GATE_CONFIG_ASK}`
+        + (why ? ` On Bob this write is refused because ${why}.` : ''));
+    }
   }
   const target = ruleGateTarget(p, args.root);
   if (!target) {

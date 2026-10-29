@@ -13,7 +13,7 @@ import {
   copyPlugins, copyWorkflows, ensureAgentOverridesStub, writeColorThemes, writeCommandLayer,
   writeAliasCommands, writePonytailCommand, writePrimaryAgent, writeTheme,
 } from '../hosts/opencode.mjs';
-import { mergeOpencodeJson, opencodeSentinelWrite } from '../hosts/settings.mjs';
+import { mergeOpencodeJson, opencodeEditAsks, opencodeSentinelWrite } from '../hosts/settings.mjs';
 import { isFile, readText, writeText } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, build, phaseLog, ensureMemoryStore } from './bundle.mjs';
@@ -53,7 +53,7 @@ import { mkdirSync } from 'node:fs';
  */
 function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const {
-    oldOwned, manifestExisted, agentPath, wireBase, overridesDir, oldDenies = [],
+    oldOwned, manifestExisted, agentPath, wireBase, overridesDir, oldDenies = [], oldEdit = { asks: [], shorthand: null },
     oldHashes = {},
   } = opts;
   ensureAgentOverridesStub(cfg, overridesDir);
@@ -98,7 +98,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const wired = {};
   const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
     agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills, staleSkillNames, wired,
-    cfg.deletionGate));
+    cfg.deletionGate, opencodeEditAsks(dir, wireBase === dir, wireBase === dir ? null : agentPath), oldEdit));
   // The next record: Geneseed's earlier denies still wanted, plus the ones it added now. A merge
   // that wrote nothing (`skillsAdded` unset) keeps the old record whole.
   const skillDenies = wired.skillsAdded
@@ -107,7 +107,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
 
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
-    skillDenies, editRefused: [...claim.editRefused],
+    skillDenies, editRecord: wired.editRecord ?? oldEdit, editRefused: [...claim.editRefused],
   };
 }
 
@@ -131,7 +131,7 @@ export function emitOpencodeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: _theme, out, root, footprint, nativeCatalog, oldOwned, manifestExisted, agentPath,
-    oldDenies, oldHashes = {},
+    oldDenies, oldEdit, oldHashes = {},
   } = job;
   const oc = path.join(root, '.opencode');
 
@@ -146,9 +146,9 @@ export function emitOpencodeRender(cfg, job) {
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRefused,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
-    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldHashes,
+    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes,
   });
 
   return {
@@ -158,6 +158,7 @@ export function emitOpencodeRender(cfg, job) {
     },
     cfgName,
     skillDenies,
+    editRecord,
     editRefused,
   };
 }
@@ -197,7 +198,7 @@ export function emitOpencodeRender(cfg, job) {
 export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
   const {
-    theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath, oldDenies,
+    theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath, oldDenies, oldEdit,
     oldHashes = {},
   } = job;
 
@@ -223,9 +224,9 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
   // the pre-manifest header line is unreachable from this emit on both sides.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRefused,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
-    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldHashes,
+    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes,
   });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
@@ -250,6 +251,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
     nbStatus,
     cfgName,
     skillDenies,
+    editRecord,
     editRefused,
   };
 }
