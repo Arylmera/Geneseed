@@ -60,8 +60,6 @@ import {
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
 import { hashesOf, ownedState, ownedWithin, recordedDenies } from '../hosts/owned.mjs';
-import { SEED_REL, seededHash } from '../hosts/geneseed-dir.mjs';
-import { gitRootOf } from '../hosts/gitref.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
@@ -195,20 +193,6 @@ function unlinkOwned(base, owned, label = '', hashes = {}, force = false) {
     }
   }
   return [removed, failed, kept];
-}
-
-/**
- * The protected-checks list a project emit seeded (`seedProtectedChecks`), reversed like an owned
- * file: deleted when unmodified, kept when edited (unless `force`). The path is never read from
- * the manifest — only its hash — and the git root is re-derived from the project root, so a
- * crafted manifest cannot aim this at another file. Its results merge into the caller's.
- * `.geneseed/.gitignore` stays: personal state other writers keep there outlives the install.
- * @returns {[number, string[], string[]]}
- */
-function unlinkSeed(projectRoot, man, force) {
-  const hash = seededHash(man);
-  const root = hash ? gitRootOf(projectRoot) : null;
-  return root ? unlinkOwned(root, [SEED_REL], '', { [SEED_REL]: hash }, force) : [0, [], []];
 }
 
 /** The two WARNs every reversal prints when an owned file survives. Identical in all three. */
@@ -345,12 +329,7 @@ function ownedOf(man) {
 export function claudeUninstall(cfg, archiveMemory, force = false) {
   const man = claudeReadManifest(cfg);
   const managed = managedOf(man);
-  let [removed, failed, kept] = unlinkOwned(cfg, ownedOf(man), '', hashesOf(man), force);
-  if (man.scope === 'project') {
-    // A project install's dir sits directly in the project root (`.claude/`, `.bob/`, `.openclaude/`).
-    const [r, f, k] = unlinkSeed(path.dirname(cfg), man, force);
-    [removed, failed, kept] = [removed + r, [...failed, ...f], [...kept, ...k]];
-  }
+  const [removed, failed, kept] = unlinkOwned(cfg, ownedOf(man), '', hashesOf(man), force);
   if (failed.length) warnSurvivors(failed);
   if (kept.length) warnKept(kept);
   const hooks = managed.settings_hooks || [];
@@ -459,8 +438,6 @@ function opencodeProjectUninstall(root, force = false) {
   if (isFile(manifestPath)) {
     man = claudeReadManifest(oc);
     [removed, failed, kept] = unlinkOwned(oc, ownedOf(man), '.opencode/', hashesOf(man), force);
-    const [r, f, k] = unlinkSeed(root, man, force);
-    [removed, failed, kept] = [removed + r, [...failed, ...f], [...kept, ...k]];
     if (failed.length) warnSurvivors(failed);
     if (kept.length) warnKept(kept);
     // Survivors gate, mirroring the other two reversals: `_project_qualifies` keys off the

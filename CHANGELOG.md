@@ -11,7 +11,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Added
 
 - **The done gate needs no file any more.** With no `.geneseed/done-checks.txt`, it infers the project's checks from its manifest: `package.json` scripts `test`, `lint` and `typecheck` (package manager read from the lockfile), Maven, Gradle, pytest (only where pytest shows), `cargo test` and `go test`. Each check accepts its usual spellings (`npm test`, `npm run test`, `pnpm test`, `./mvnw clean verify`), and a form that skips the tests (`-DskipTests`, `-x test`, `--no-run`) does not count. Inferred checks are **advisory** in this release: an unproven one is named to the user (`systemMessage`) and never blocks. A `done-checks.txt` still wins and still blocks; an empty one switches the gate off. Every session now opens with one line naming the checks and their source; on Bob and OpenCode 2, which never judge a turn, it says so. Advisories are kept out of the gate counts in `status` and the web UI.
-- **A project install arms the protected-checks gate.** Every project emit (Claude Code, OpenCode, Bob, OpenClaude) seeds `<git root>/.geneseed/protected-checks.txt` when it is absent, listing only what exists there: CI files, lint/type/test config, and the manifests the done gate infers from (so the agent can no longer lower that bar by editing `package.json` without being asked). Nothing is seeded without a git root, without a candidate, or on a global emit. An existing list is never touched; an edited seed is yours (kept on rebuild and uninstall); a deleted seed is not seeded again; an unmodified one follows the files and goes on uninstall. The first seed also creates `.geneseed/.gitignore` (or upgrades a bare `*`), and uninstall leaves it. Run `geneseed rebuild-all` to seed existing project installs.
+- **A project install arms the protected-checks gate.** Every project emit (Claude Code, OpenCode, Bob, OpenClaude) seeds `<git root>/.geneseed/protected-checks.txt` when it is absent, listing only what exists there: CI files, lint/type/test config, and the manifests the done gate infers from (so the agent can no longer lower that bar by editing `package.json` without being asked). Nothing is seeded without a git root, without a candidate, or on a global emit. It is seeded once, then it is yours: an existing list is never touched, and Geneseed never rewrites the seed, records it in a manifest or deletes it on uninstall (so two hosts in one repo, or a committed list, are safe). To opt out, delete its lines but keep the file; a deleted file is seeded again. Whenever `.geneseed/` exists, the emit also creates its `.gitignore` if absent (or upgrades a bare `*`); uninstall leaves it. A `.geneseed` that is not a directory, or a write that fails, is one warning: the emit still completes. Run `geneseed rebuild-all` to seed existing project installs.
 
 ### Changed
 - Ownership setup writes the root `AGENTS.md` only. `.geneseed/ownership.md` is created later,
@@ -21,8 +21,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   absent (never overwriting one) with `/*` plus `!/` exceptions for the team paths —
   `.gitignore`, `bricks/`, `loops/`, `protected-checks.txt`, `done-checks.txt`. The writers are
   the ownership and learn-mode Rites (in place of an offer to edit the root `.gitignore`) and
-  the OpenCode workflow plugin on its first trace, and a project emit when it seeds the
-  protected-checks list.
+  the OpenCode workflow plugin on its first trace, and a project emit whenever `.geneseed/`
+  exists at the git root.
 
 ### Fixed
 - The OpenCode workflow runtime's `.geneseed/.gitignore` was a bare `*`, which hid new team

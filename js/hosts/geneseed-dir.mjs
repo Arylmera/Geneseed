@@ -7,20 +7,19 @@
  * (`protectedIn`, `js/hosts/hooks.mjs`) asks only when the list exists. A fresh install armed
  * nothing. The seed lists only paths that exist at that root, so no line is stale.
  *
- * Ownership: the list sits at the git root, outside the install dir every `owned` rel is rooted
- * at (`ownedWithin`/`safeLeaf` refuse anything outside it — a security boundary, not loosened
- * here). So the manifest records only the seed's HASH (`seeded_checks`); the path is this
- * constant and the root is re-derived with `gitRootOf` on every read. A cloned repo's manifest is
- * untrusted, and a recorded path would let it aim uninstall at any file in the repo.
+ * SEED ONCE, then the file is the user's: created only when absent, never rewritten, never
+ * pruned, never deleted on uninstall, and recorded in no manifest. Owning it broke two ways
+ * (review 2026-10-29): two hosts in one repo, where one uninstall deleted the other's seed, and a
+ * committed seed plus a committed manifest, where every teammate's rebuild rewrote the team's
+ * list. To opt out, the user empties it; an existing file, even comment-only, is never re-seeded.
  *
- * Spawn-free and fs/path only: the CLI closure (uninstall) imports it.
+ * Never throws: a `.geneseed` that is a file, a link or read-only must not cost the emit its
+ * manifest (the next emit would then read the whole install as the user's). Spawn-free.
  */
 import { lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { INFERRED_FROM } from './done-checks.mjs';
 import { gitRootOf } from './gitref.mjs';
-import { claimer } from './native.mjs';
-import { textHash } from './owned.mjs';
 
 /**
  * The `.geneseed/.gitignore` every writer creates: personal by default, the team paths allowed
@@ -45,7 +44,7 @@ export function writeGeneseedGitignore(file) {
   }
 }
 
-/** The seeded list, relative to the git root. Also the `owned` rel the claim machinery uses. */
+/** The seeded list, relative to the git root. */
 export const SEED_REL = '.geneseed/protected-checks.txt';
 
 /**
@@ -59,9 +58,10 @@ const CANDIDATES = [
   ...INFERRED_FROM,
 ];
 
-const SEED_HEADER = '# Seeded by Geneseed with the checks found in this project. Edit or delete it freely.\n'
+const SEED_HEADER = '# Seeded once by Geneseed with the checks found in this project; it is yours now.\n'
   + '# A write tool aimed at a listed path asks you first (External Gate). One repo-relative\n'
-  + '# file or folder per line; `#` starts a comment. A shell command is not seen: CI holds that.\n';
+  + '# file or folder per line; `#` starts a comment. A shell command is not seen: CI holds that.\n'
+  + '# To opt out, delete these lines but keep the file: a missing file is seeded again.\n';
 
 /** The seed for git root `root`, or null when none of the candidates exists there. */
 export function protectedChecksSeed(root) {
@@ -79,50 +79,35 @@ export function protectedChecksSeed(root) {
   return found.length ? `${SEED_HEADER}${found.join('\n')}\n` : null;
 }
 
-/** The manifest's `seeded_checks` hash, read defensively like `hashesOf`: anything else is none. */
-export function seededHash(doc) {
-  const h = doc && typeof doc === 'object' ? doc.seeded_checks : undefined;
-  return typeof h === 'string' && /^[0-9a-f]{64}$/.test(h) ? h : null;
-}
-
 /**
- * Seed `<git root of projectRoot>/.geneseed/protected-checks.txt`, claim-on-create through the
- * same `claimer` every owned file goes through, rooted at the GIT root. Returns null when there is
- * no git root, else the claim state the driver prunes and records:
- * `{ root, oldOwned, oldHashes, owned, editRefused, hash }` — `hash` null when nothing is ours now.
- *
- * - absent, a candidate found: written (LF), `.geneseed/.gitignore` created alongside;
- * - present and never recorded: the user's, skipped SILENTLY (a team list is the common case,
- *   and "kept your existing" on every emit of such a repo would be noise);
- * - recorded and unmodified: rewritten only when the seed changed (idempotent), or left for the
- *   driver's prune when no candidate is left;
- * - recorded and edited: `claimer` keeps it and says so; the record is dropped, it is the user's;
- * - recorded and deleted: left deleted (see the tombstone below).
+ * Seed `<git root of projectRoot>/.geneseed/protected-checks.txt` when it is absent and a
+ * candidate exists; then, whenever `.geneseed/` is a real directory, make sure its `.gitignore`
+ * exists (`writeGeneseedGitignore`). No git root: nothing. Nothing is written through a link: a
+ * `.geneseed` that is a symlink, or a leaf that is one (dangling included — `lstat`, not
+ * `exists`), is left alone. A failure is one stderr warning; the emit goes on.
  */
-export function seedProtectedChecks(projectRoot, doc) {
+export function seedProtectedChecks(projectRoot) {
   const root = gitRootOf(projectRoot);
-  if (!root) return null;
-  const file = path.join(root, SEED_REL);
-  const old = seededHash(doc);
-  const oldOwned = old ? [SEED_REL] : [];
-  const oldHashes = old ? { [SEED_REL]: old } : {};
-  const claim = claimer(oldOwned, root, true, oldHashes);
-  const seed = { root, oldOwned, oldHashes, owned: [], editRefused: claim.editRefused, hash: null };
-  const present = lstatSync(file, { throwIfNoEntry: false });
-  if (!old && present) return seed;
-  // Seeded once, then deleted: the user opted out. The hash stays as the tombstone that keeps a
-  // later emit from seeding it again; nothing is owned, so the prune and uninstall find nothing.
-  if (old && !present) return { ...seed, hash: old };
-  const text = protectedChecksSeed(root);
-  if (text === null || !claim(file)) return seed;
-  let current = null;
-  try { current = readFileSync(file, 'utf8').replaceAll('\r\n', '\n'); } catch { /* absent */ }
-  if (current !== text) {
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, text);
-    writeGeneseedGitignore(path.join(root, '.geneseed', '.gitignore'));
+  if (!root) return;
+  const dir = path.join(root, '.geneseed');
+  const at = (p) => lstatSync(p, { throwIfNoEntry: false });
+  try {
+    const d = at(dir);
+    if (d && !d.isDirectory()) {
+      process.stderr.write(`[geneseed] WARN: ${dir} is not a directory — `
+        + 'the protected-checks list was not seeded\n');
+      return;
+    }
+    if (!at(path.join(dir, 'protected-checks.txt'))) {
+      const text = protectedChecksSeed(root);
+      if (text !== null) {
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(path.join(dir, 'protected-checks.txt'), text, { flag: 'wx' });
+      }
+    }
+    if (at(dir)?.isDirectory()) writeGeneseedGitignore(path.join(dir, '.gitignore'));
+  } catch (e) {
+    process.stderr.write(`[geneseed] WARN: could not seed ${SEED_REL} at ${root}: `
+      + `${e && e.message ? e.message : e}\n`);
   }
-  seed.owned.push(SEED_REL);
-  seed.hash = textHash(text);
-  return seed;
 }

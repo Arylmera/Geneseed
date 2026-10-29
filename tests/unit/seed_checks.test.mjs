@@ -1,10 +1,13 @@
 // A3 (audit 2026-10-28): a PROJECT emit, on every host, seeds `<git root>/.geneseed/protected-checks.txt`
 // with the checks that exist there, so the protected-checks gate is armed from the first session.
-// The list is claim-on-create: a user's list is never touched, an edited seed is the user's, an
-// unmodified seed is owned (rewritten when the candidates change, removed on uninstall). The
-// manifest records only its hash (`seeded_checks`) — the path is a constant, never manifest data.
+// SEED ONCE: created only when absent, then the user's — never rewritten, pruned, deleted on
+// uninstall or recorded in a manifest (review 2026-10-29, F2/F3: owning it let one host's
+// uninstall delete another's seed, and a committed manifest rewrite a team's list). Opt-out is an
+// emptied file; a missing one is seeded again. Every write is guarded: the emit never fails on it.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import test, { after } from 'node:test';
 
@@ -13,7 +16,6 @@ import {
   GENESEED_GITIGNORE, protectedChecksSeed, writeGeneseedGitignore,
 } from '../../js/hosts/geneseed-dir.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
-import { textHash } from '../../js/hosts/owned.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import { installUninstall } from '../../js/maintain/uninstall.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -40,6 +42,20 @@ function withDir(fn) {
   try { return fn(sb.path); } finally { sb.cleanup(); }
 }
 
+/** As `tests/unit/owned.test.mjs`: a Windows account without the privilege skips, never fails. */
+function trySymlink(t, target, link, type = undefined) {
+  try {
+    symlinkSync(target, link, type);
+    return true;
+  } catch (e) {
+    if (process.platform === 'win32' && e.code === 'EPERM') {
+      t.skip('symlinks need privileges here');
+      return false;
+    }
+    throw e;
+  }
+}
+
 /** Write `files` (rel -> text) under `dir`; a rel ending `/` is a directory. */
 function plant(dir, files) {
   for (const [rel, text] of Object.entries(files)) {
@@ -57,19 +73,22 @@ const MIX = {
   'eslint.config.js': '', '.eslintrc.json': '{}', 'vitest.config.ts': '', 'Jenkinsfile': '',
   '.github/workflows/ci.yml': '', '.circleci': '', 'README.md': '',
 };
-const HEADER = '# Seeded by Geneseed with the checks found in this project. Edit or delete it freely.\n'
+const HEADER = '# Seeded once by Geneseed with the checks found in this project; it is yours now.\n'
   + '# A write tool aimed at a listed path asks you first (External Gate). One repo-relative\n'
-  + '# file or folder per line; `#` starts a comment. A shell command is not seen: CI holds that.\n';
+  + '# file or folder per line; `#` starts a comment. A shell command is not seen: CI holds that.\n'
+  + '# To opt out, delete these lines but keep the file: a missing file is seeded again.\n';
 // Candidate order — CI, then lint/type/test config, then the done gate's manifests — and a
 // pattern's matches in name order. `.circleci` (a file) and the lockfile are absent by design.
 const MIX_SEED = `${HEADER}.github/workflows/\nJenkinsfile\neslint.config.js\n.eslintrc.json\n`
   + 'tsconfig.json\nvitest.config.ts\npackage.json\n';
+const OPTED_OUT = '# we opted out\n';
 
 const seedOf = (repo) => path.join(repo, '.geneseed', 'protected-checks.txt');
 const gitignoreOf = (repo) => path.join(repo, '.geneseed', '.gitignore');
-const manifestOf = (repo, layer) => JSON.parse(readFileSync(path.join(repo, layer, GLOBAL_MANIFEST), 'utf8'));
 const LAYER = { claude: '.claude', bob: '.bob', openclaude: '.openclaude', opencode: '.opencode' };
+const manifestText = (repo, host) => readFileSync(path.join(repo, LAYER[host], GLOBAL_MANIFEST), 'utf8');
 const emit = (host, repo) => quietErr(() => emitProjectInto(host, { theme: 'neutral', out: repo, root: repo }))[1];
+const uninstall = (host, repo) => quietErr(() => installUninstall(repo, host, 'project', 'keep'))[0];
 
 test('the seed lists exactly the candidates that exist, in candidate order', () => {
   withDir((d) => {
@@ -118,40 +137,67 @@ test('the Node .gitignore constant is the same string as both OpenCode copies an
   assert.equal(block[1].split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n') + '\n', GENESEED_GITIGNORE);
 });
 
-// Host parity: every host that emits into a project seeds, records the hash, re-emits without
-// rewriting a byte, and takes the unmodified seed back on uninstall — leaving `.gitignore`, which
-// guards personal state other writers keep in `.geneseed/`.
+// Host parity: every host that emits into a project seeds; a re-emit leaves the seed byte-identical
+// and unwritten; uninstall leaves it (and `.gitignore`) in place; no manifest ever mentions it.
 for (const host of ['claude', 'bob', 'openclaude', 'opencode']) {
-  test(`${host}: a project emit seeds, re-emits idempotently, and uninstall takes the seed back`, () => {
+  test(`${host}: a project emit seeds once; re-emit and uninstall leave the seed alone`, () => {
     withDir((repo) => {
       plant(repo, MIX);
       emit(host, repo);
       assert.equal(readFileSync(seedOf(repo), 'utf8'), MIX_SEED);
       assert.equal(readFileSync(gitignoreOf(repo), 'utf8'), GENESEED_GITIGNORE);
-      assert.equal(manifestOf(repo, LAYER[host]).seeded_checks, textHash(MIX_SEED));
-      assert.ok(!manifestOf(repo, LAYER[host]).owned.some((r) => r.includes('protected-checks')),
-        'the seed sits outside the install dir: it must not be an `owned` rel');
+      assert.doesNotMatch(manifestText(repo, host), /protected-checks|seeded/,
+        'seed once: no manifest may record the seed');
 
       const mtime = statSync(seedOf(repo)).mtimeMs;
-      const man = readFileSync(path.join(repo, LAYER[host], GLOBAL_MANIFEST), 'utf8');
+      plant(repo, { 'go.mod': '' });   // a new candidate changes nothing: the file is the user's
       emit(host, repo);
-      assert.equal(statSync(seedOf(repo)).mtimeMs, mtime, 'a re-emit rewrote an unchanged seed');
-      assert.equal(readFileSync(path.join(repo, LAYER[host], GLOBAL_MANIFEST), 'utf8'), man);
+      assert.equal(readFileSync(seedOf(repo), 'utf8'), MIX_SEED);
+      assert.equal(statSync(seedOf(repo)).mtimeMs, mtime, 'a re-emit rewrote the seed');
 
-      const [s] = quietErr(() => installUninstall(repo, host, 'project', 'keep'));
-      assert.equal(s.ok, true);
-      assert.ok(!existsSync(seedOf(repo)), 'uninstall left the unmodified seed');
+      assert.equal(uninstall(host, repo).ok, true);
+      assert.equal(readFileSync(seedOf(repo), 'utf8'), MIX_SEED, 'uninstall touched the seed');
       assert.equal(readFileSync(gitignoreOf(repo), 'utf8'), GENESEED_GITIGNORE, 'uninstall took .gitignore');
     });
   });
 }
 
-test('no git root: nothing seeded, no key in the manifest', () => {
+test('two hosts in one repo: one seed, never deleted by either uninstall, an opt-out never undone', () => {
+  withDir((repo) => {
+    plant(repo, MIX);
+    emit('claude', repo);
+    emit('opencode', repo);
+    assert.equal(readFileSync(seedOf(repo), 'utf8'), MIX_SEED);
+    uninstall('claude', repo);
+    assert.equal(readFileSync(seedOf(repo), 'utf8'), MIX_SEED, 'one host\'s uninstall deleted the shared seed');
+    writeFileSync(seedOf(repo), OPTED_OUT);
+    emit('opencode', repo);
+    emit('claude', repo);
+    uninstall('opencode', repo);
+    uninstall('claude', repo);
+    assert.equal(readFileSync(seedOf(repo), 'utf8'), OPTED_OUT, 'an opt-out came back or was deleted');
+  });
+});
+
+test('opt-out is an emptied file, kept as is; a deleted file is seeded again', () => {
+  withDir((repo) => {
+    plant(repo, { '.git/': '', 'pom.xml': '' });
+    emit('claude', repo);
+    writeFileSync(seedOf(repo), '');
+    emit('claude', repo);
+    assert.equal(readFileSync(seedOf(repo), 'utf8'), '', 'an emptied list was re-seeded');
+    rmSync(seedOf(repo));
+    emit('claude', repo);
+    assert.equal(readFileSync(seedOf(repo), 'utf8'), `${HEADER}pom.xml\n`);
+  });
+});
+
+test('no git root: nothing seeded, the manifest is unchanged in shape', () => {
   withDir((repo) => {
     plant(repo, { 'package.json': '{}', 'tsconfig.json': '{}' });
     emit('claude', repo);
     assert.ok(!existsSync(path.join(repo, '.geneseed')));
-    assert.ok(!('seeded_checks' in manifestOf(repo, '.claude')));
+    assert.doesNotMatch(manifestText(repo, 'claude'), /seeded/);
   });
 });
 
@@ -160,85 +206,95 @@ test('no candidate: nothing seeded, no .geneseed/ created', () => {
     plant(repo, { '.git/': '', 'README.md': '' });
     emit('claude', repo);
     assert.ok(!existsSync(path.join(repo, '.geneseed')));
-    assert.ok(!('seeded_checks' in manifestOf(repo, '.claude')));
   });
 });
 
 test('a global emit seeds nothing, even with its config dir inside a repo', () => {
   withDir((repo) => {
     plant(repo, MIX);
-    const cfgDir = path.join(repo, 'cfg');
-    quietErr(() => emitGlobalInto('claude', { theme: 'neutral', out: repo, cfgDir }));
+    quietErr(() => emitGlobalInto('claude', { theme: 'neutral', out: repo, cfgDir: path.join(repo, 'cfg') }));
     assert.ok(!existsSync(path.join(repo, '.geneseed')));
-    assert.ok(!('seeded_checks' in JSON.parse(readFileSync(path.join(cfgDir, GLOBAL_MANIFEST), 'utf8'))));
   });
 });
 
-test("a user's existing list is never touched, silently, and survives uninstall", () => {
+// F5: `.gitignore` is ensured whenever `.geneseed/` is a real directory — not only on a fresh seed.
+test("a user's existing list is never touched, silently, and .geneseed/ gets its .gitignore", () => {
   withDir((repo) => {
     const mine = '# ours\r\nci/\n';
     plant(repo, { ...MIX, '.geneseed/protected-checks.txt': mine });
     const err = emit('claude', repo);
     assert.equal(readFileSync(seedOf(repo), 'utf8'), mine);
     assert.doesNotMatch(err, /protected-checks/, 'a team list must not cost a warning on every emit');
-    assert.ok(!existsSync(gitignoreOf(repo)), 'Geneseed wrote nothing into .geneseed/, so no .gitignore');
-    assert.ok(!('seeded_checks' in manifestOf(repo, '.claude')));
-    quietErr(() => installUninstall(repo, 'claude', 'project', 'keep'));
+    assert.equal(readFileSync(gitignoreOf(repo), 'utf8'), GENESEED_GITIGNORE);
+    uninstall('claude', repo);
     assert.equal(readFileSync(seedOf(repo), 'utf8'), mine);
   });
 });
 
-test('an edited seed is kept on re-emit, becomes the user\'s, and survives uninstall', () => {
+test('an exact-* .gitignore in .geneseed/ is upgraded by an emit; a custom one is kept', () => {
   withDir((repo) => {
-    plant(repo, MIX);
+    plant(repo, { ...MIX, '.geneseed/.gitignore': '*\n' });
     emit('claude', repo);
-    const edited = `${MIX_SEED}src/fixtures/\n`;
-    writeFileSync(seedOf(repo), edited);
+    assert.equal(readFileSync(gitignoreOf(repo), 'utf8'), GENESEED_GITIGNORE);
+    writeFileSync(gitignoreOf(repo), 'scratch/\n');
+    emit('claude', repo);
+    assert.equal(readFileSync(gitignoreOf(repo), 'utf8'), 'scratch/\n');
+  });
+});
+
+// F1: the seed must never cost the emit its manifest. With `.geneseed` a FILE, the old code threw
+// EEXIST from mkdir before MANIFEST; the next emit then read the whole install as the user's.
+test('.geneseed as a file: the emit completes, writes its manifest, owns what a normal emit owns, and warns', () => {
+  withDir((d) => {
+    const normal = path.join(d, 'normal');
+    plant(normal, MIX);
+    emit('claude', normal);
+    const blocked = path.join(d, 'blocked');
+    plant(blocked, { ...MIX, '.geneseed': 'not a dir' });
+    const err = emit('claude', blocked);
+    assert.match(err, /\.geneseed is not a directory — the protected-checks list was not seeded/);
+    assert.equal(readFileSync(path.join(blocked, '.geneseed'), 'utf8'), 'not a dir');
+    const owned = (repo) => JSON.parse(manifestText(repo, 'claude')).owned;
+    assert.deepEqual(owned(blocked), owned(normal), 'the manifest lost what the emit owns');
+    const again = emit('claude', blocked);
+    assert.doesNotMatch(again, /kept your existing/, 'the re-emit read the install as the user\'s');
+  });
+});
+
+test('a directory where the seed should be: nothing written, nothing thrown', () => {
+  withDir((repo) => {
+    // The existence check sees it, so nothing is written; `.gitignore` still lands because
+    // `.geneseed/` is a real directory.
+    plant(repo, { ...MIX, '.geneseed/protected-checks.txt/': '' });
+    emit('claude', repo);
+    assert.ok(statSync(seedOf(repo)).isDirectory());
+    assert.equal(readFileSync(gitignoreOf(repo), 'utf8'), GENESEED_GITIGNORE);
+  });
+});
+
+// F4: nothing is written through a link — neither a linked `.geneseed/` nor a linked seed leaf.
+test('a symlinked .geneseed/ is never written through', (t) => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const outside = path.join(d, 'outside');
+    plant(repo, MIX);
+    mkdirSync(outside);
+    if (!trySymlink(t, outside, path.join(repo, '.geneseed'), 'junction')) return;
     const err = emit('claude', repo);
-    assert.match(err, /kept your edited \.geneseed\/protected-checks\.txt/);
-    assert.equal(readFileSync(seedOf(repo), 'utf8'), edited);
-    assert.ok(!('seeded_checks' in manifestOf(repo, '.claude')), 'an edited seed is the user\'s now');
-    quietErr(() => installUninstall(repo, 'claude', 'project', 'keep'));
-    assert.equal(readFileSync(seedOf(repo), 'utf8'), edited);
+    assert.ok(!existsSync(path.join(outside, 'protected-checks.txt')), 'seeded through a linked .geneseed');
+    assert.ok(!existsSync(path.join(outside, '.gitignore')), '.gitignore written through a linked .geneseed');
+    assert.match(err, /not a directory/);
   });
 });
 
-test('a seed edited after the last emit is kept by uninstall and reported', () => {
-  withDir((repo) => {
-    plant(repo, MIX);
-    emit('opencode', repo);
-    writeFileSync(seedOf(repo), 'mine\n');
-    const [s] = quietErr(() => installUninstall(repo, 'opencode', 'project', 'keep'));
-    assert.equal(readFileSync(seedOf(repo), 'utf8'), 'mine\n');
-    assert.ok(s.kept.includes('.geneseed/protected-checks.txt'), `kept: ${JSON.stringify(s.kept)}`);
-  });
-});
-
-test('a deleted seed stays deleted on re-emit: the user opted out', () => {
-  withDir((repo) => {
-    plant(repo, MIX);
+test('a symlinked seed leaf, even dangling, is never written through', (t) => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    plant(repo, { ...MIX, '.geneseed/': '' });
+    const target = path.join(d, 'victim.txt');
+    if (!trySymlink(t, target, seedOf(repo))) return;
     emit('claude', repo);
-    rmSync(seedOf(repo));
-    emit('claude', repo);
-    assert.ok(!existsSync(seedOf(repo)), 'a re-emit seeded the list the user deleted');
-    assert.equal(manifestOf(repo, '.claude').seeded_checks, textHash(MIX_SEED), 'the tombstone was lost');
-  });
-});
-
-test('an unmodified seed follows the candidates: rewritten when they change, removed when none is left', () => {
-  withDir((repo) => {
-    plant(repo, { '.git/': '', 'package.json': '{}' });
-    emit('claude', repo);
-    assert.equal(readFileSync(seedOf(repo), 'utf8'), `${HEADER}package.json\n`);
-    plant(repo, { 'go.mod': '' });
-    emit('claude', repo);
-    assert.equal(readFileSync(seedOf(repo), 'utf8'), `${HEADER}package.json\ngo.mod\n`);
-    assert.equal(manifestOf(repo, '.claude').seeded_checks, textHash(`${HEADER}package.json\ngo.mod\n`));
-    rmSync(path.join(repo, 'package.json'));
-    rmSync(path.join(repo, 'go.mod'));
-    emit('claude', repo);
-    assert.ok(!existsSync(seedOf(repo)), 'a seed with no candidate left was kept');
-    assert.ok(!('seeded_checks' in manifestOf(repo, '.claude')));
+    assert.ok(!existsSync(target), 'the seed was written through a dangling link');
   });
 });
 
@@ -249,7 +305,5 @@ test('a project below its git root seeds at the git root', () => {
     mkdirSync(sub);
     emit('claude', sub);
     assert.equal(readFileSync(seedOf(d), 'utf8'), `${HEADER}pom.xml\n`);
-    quietErr(() => installUninstall(sub, 'claude', 'project', 'keep'));
-    assert.ok(!existsSync(seedOf(d)));
   });
 });
