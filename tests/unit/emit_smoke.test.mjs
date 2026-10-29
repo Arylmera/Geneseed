@@ -263,14 +263,19 @@ const FOOTPRINTS = ['full', 'lean'];
  * carrier before: full 65_715, lean 41_085. After: full 66_096, lean 41_276. Each ceiling raised
  * by exactly the overrun (381 / 191), not rounded.
  *
+ * BOTH RAISED 2026-10-29, for the adhd skill (a user-only mode ported from ayghri/i-have-adhd):
+ * one row in the section 4 catalogue, outside the LEAN blocks, so both footprints pay the same
+ * 109. The row was cut to its trigger and three effects before measuring. Measured `files`
+ * carrier before: full 66_096, lean 41_276. After: full 66_205, lean 41_385. Each ceiling raised
+ * by exactly the overrun (109 / 109), not rounded.
  * BOTH RAISED 2026-10-29, for the personal ownership decline (rulings D4/D5): the pointer's
  * proposal now names its three answers (set it up now, skip this session, skip in this repo
  * until asked) and tells the agent to repeat the `Ownership: setup declined …` context line once.
  * The sentence sits outside any LEAN block, so both footprints pay the same 227; the how lives in
  * the ownership skill, not here. An install built `--no-ownership-gate` drops the whole sentence
- * (D6), and is 128 chars lighter than before. Measured `files` carrier before: full 66_096,
- * lean 41_276. After: full 66_323, lean 41_503. Each ceiling raised by exactly the overrun
- * (227 / 227), not rounded.
+ * (D6), and is 128 chars lighter than before. Measured `files` carrier before (after the adhd
+ * raise): full 66_205, lean 41_385. After: full 66_432, lean 41_612. Each ceiling raised by
+ * exactly the overrun (227 / 227), not rounded.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -316,13 +321,13 @@ const EXPECTED = {
 // skills on every host, N_ALIASES alias folders only on Claude and OpenClaude.
 //
 // A genuinely user-only skill (not an alias, `<!-- invocation: user -->` on its own target
-// — 3: learn-mode, quiz, teach) is the same story one level up: Bob gets NO
+// — 4: learn-mode, quiz, teach, adhd) is the same story one level up: Bob gets NO
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;
-const N_SKILLS = 48;
+const N_SKILLS = 49;
 const N_ALIASES = 14;
-const N_USER_ONLY = 3;
+const N_USER_ONLY = 4;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).
@@ -624,14 +629,14 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (32_857 / 20_542) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 56_545 / 31_933 on 2026-10-27) and far above any plausible stub.
+      // the ceiling (33_102 / 20_692) is below the SMALLEST measured carrier (`opencode` and
+      // `opencode-global`, 56_926 / 32_124 on 2026-10-29) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
-      // Re-derive both whenever the constant above moves; both moved on 2026-10-26 and these
+      // Re-derive both whenever the constant above moves; both moved on 2026-10-29 and these
       // figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `

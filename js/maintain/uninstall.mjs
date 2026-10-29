@@ -59,7 +59,7 @@ import {
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
-import { hashesOf, ownedState, ownedWithin, recordedDenies } from '../hosts/owned.mjs';
+import { hashesOf, ownedState, ownedWithin, recordedDenies, recordedEdit } from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
@@ -246,7 +246,7 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
  */
-export function unmergeOpencodeJson(p, entry, denyNames = []) {
+export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
   const target = opencodeTarget(p);
   // Absent, unreadable (the Python's `except OSError: return False`) or not an object: decline.
   const { state, data: cfg, hadComments } = loadJsonObject(target);
@@ -257,18 +257,31 @@ export function unmergeOpencodeJson(p, entry, denyNames = []) {
   // (and kept the denies), so an uninstall after a deactivate finds no entry but still owns them.
   const skill = isDict(cfg.permission) && isDict(cfg.permission.skill) ? cfg.permission.skill : null;
   const denies = skill ? denyNames.filter((n) => skill[n] === 'deny') : [];
-  if (!hasEntry && !denies.length) return false;
+  // `edit` is the manifest's `edit_asks`/`edit_shorthand` record, swept like `denyNames`: a
+  // recorded key goes only while it still reads `"ask"`, and the user's blanket `"allow"` comes
+  // back only when nothing but its `"*"` is left — a key the user added since keeps the object.
+  const editObj = edit && isDict(cfg.permission) && isDict(cfg.permission.edit) ? cfg.permission.edit : null;
+  const asks = editObj ? edit.asks.filter((k) => editObj[k] === 'ask') : [];
+  if (!hasEntry && !denies.length && !asks.length) return false;
   if (path.extname(target) === '.jsonc' && hadComments) {
     printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it.`
       + (hasEntry ? ` Remove this from its "instructions" by hand: ${jsonDumps(entry)}` : '')
       + (denies.length ? ` Remove these from its "permission.skill" by hand: `
         + `${denies.map((n) => jsonDumps(n)).join(', ')}` : '')
+      + (asks.length ? ` Remove these from its "permission.edit" by hand: `
+        + `${asks.map((k) => jsonDumps(k)).join(', ')}` : '')
       + '\n');
     return false;
   }
   if (hasEntry) cfg.instructions = instr.filter((i) => i !== entry);
   for (const name of denies) delete skill[name];
   if (skill && denies.length && !Object.keys(skill).length) delete cfg.permission.skill;
+  for (const k of asks) delete editObj[k];
+  if (asks.length) {
+    const left = Object.keys(editObj);
+    if (!left.length) delete cfg.permission.edit;
+    else if (edit.shorthand && left.length === 1 && editObj['*'] === edit.shorthand) cfg.permission.edit = edit.shorthand;
+  }
   atomicWriteJson(target, cfg);
   return true;
 }
@@ -370,7 +383,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode', force 
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
-    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man));
+    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man), recordedEdit(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
@@ -460,7 +473,7 @@ function opencodeProjectUninstall(root, force = false) {
   const am = path.join(root, 'AGENT.md');
   if (isFile(am)) { unlinkQuiet(am); removed += 1; }
   const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
-    man ? recordedDenies(man) : []);
+    man ? recordedDenies(man) : [], man ? recordedEdit(man) : null);
   const result = { removed, unmerged, archived: null };
   if (failed.length) result.failed = failed;
   if (kept.length) result.kept = kept;

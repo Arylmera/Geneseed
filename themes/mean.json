@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Write or fix a loop brick, then make it pass geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the loop — smallest cut, a test that covers it, the affected suite green, committed slice by slice. Not one giant dump.",
   "DESC_TEACH": "Teach the user toward a result — a crash course from clueless to functional, confusing material decoded until it finally clicks, or a day-by-day path to a deadline they'll probably miss.",
+  "DESC_ADHD": "Shape every reply for a reader with ADHD, no waffle — next action first, numbered steps, state restated each turn, tangents cut, real time estimates. On until \"stop adhd mode\".",
   "DESC_QUIZ": "Test what the user actually knows instead of explaining it again — drill to reflex, make them explain it back, or call the bluff on a claimed mastery — with a blunt readout of the gaps.",
   "DESC_LEARN_MODE": "Make the user actually design what gets built — they reason it out at each checkpoint, you write only the agreed code, and the mode persists per project across sessions.",
   "DESC_OWNERSHIP": "Make the developer actually own the production code — they decide each part at checkpoints of the granularity they set, and the team's rules sit in the root AGENTS.md.",

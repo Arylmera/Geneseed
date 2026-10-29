@@ -1164,6 +1164,200 @@ test('no list in the repo protects nothing, even with one above the repo', () =>
 });
 
 // ---------------------------------------------------------------------------------------------
+// The gates' OWN configuration (External Gate, audit R4/C5): a file whose edit turns a gate off.
+// Three anchors, each by exact name: the install root (`--root`), each host's project dir at the
+// target's git root (plus root `opencode.json(c)`), and the hook shim dir under $GENESEED_HOME.
+// Every row below asks with the gate-config wording; a near miss — a backup copy, the same name
+// in a folder that is no anchor, the install's notebook — defers, and memory keeps its own ask.
+
+function gateConfigFixture(sb) {
+  const root = path.join(sb.path, 'home', '.claude');
+  const repo = path.join(sb.path, 'repo');
+  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  return { root, repo, home: path.join(sb.path, 'gshome') };
+}
+const GATE_CONFIG_ASKS = (f) => [
+  path.join(f.root, 'settings.json'), path.join(f.root, 'settings.local.json'),
+  path.join(f.root, 'settings', 'settings.json'), path.join(f.root, 'excludes.json'),
+  path.join(f.root, 'AGENT.md'), path.join(f.root, '.geneseed-manifest.json'),
+  path.join(f.root, '.geneseed-emit'),
+  path.join(f.repo, '.claude', 'settings.json'), path.join(f.repo, '.claude', 'settings.local.json'),
+  path.join(f.repo, '.openclaude', 'settings.local.json'), path.join(f.repo, '.bob', 'settings.json'),
+  path.join(f.repo, '.claude', '.geneseed-manifest.json'), path.join(f.repo, 'opencode.json'),
+  path.join(f.repo, 'src', '..', '.claude', 'settings.json'),
+  path.join(f.home, 'bin', 'geneseed-hook.cmd'), path.join(f.home, 'bin', 'geneseed-hook'),
+  // Not only at the git root: a monorepo subpackage, a dir with no `.git`, any opencode.json.
+  path.join(f.repo, 'pkg', '.claude', 'settings.json'), path.join(f.repo, 'pkg', '.bob', 'settings', 'settings.json'),
+  path.join(f.root, '..', 'nogit', '.claude', 'settings.local.json'), path.join(f.repo, 'pkg', 'opencode.jsonc'),
+];
+const GATE_CONFIG_DEFERS = (f) => [
+  path.join(f.repo, '.claude', 'settings.json.bak'), path.join(f.repo, 'settings.json'),
+  path.join(f.repo, 'config', 'settings.json'), path.join(f.repo, 'AGENT.md'),
+  path.join(f.root, 'notebook', 'scratch.md'), path.join(f.home, 'binder.txt'),
+  path.join(f.repo, 'src', 'excludes.json'), path.join(f.repo, 'pkg', 'claude', 'settings.json'),
+  path.join(f.repo, '.claude', 'agents', 'settings.json'),
+];
+const gateRun = (f, p, extra = {}) => hookRun('rule-gate', {
+  root: f.root, stdin: writePayload(p), env: { ...process.env, GENESEED_HOME: f.home }, ...extra,
+});
+function gateConfigAsks(r, p) {
+  const dec = askDecision(r, p);
+  assert.ok(dec.permissionDecisionReason.includes('External Gate'), dec.permissionDecisionReason);
+  assert.ok(dec.permissionDecisionReason.includes("is a gate's own configuration"), dec.permissionDecisionReason);
+  assert.ok(dec.permissionDecisionReason.includes('never write it another way'), dec.permissionDecisionReason);
+  assert.doesNotMatch(dec.permissionDecisionReason, /GENESEED_|--no-/, 'the reason never names an off switch');
+}
+
+test("a write to a gate's own configuration asks under External Gate; a near miss defers", () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    for (const p of GATE_CONFIG_ASKS(f)) gateConfigAsks(gateRun(f, p), p);
+    for (const p of GATE_CONFIG_DEFERS(f)) assertDefers(gateRun(f, p), p);
+    // The install's memory keeps its own question (Persist Insight), not this one.
+    ruleAsks(path.join(f.root, 'memory', 'fact.md'), { root: f.root });
+  } finally { sb.cleanup(); }
+});
+
+// Windows folds case and separators (`normcase`), as `protectedIn` does; POSIX names are exact.
+test('gate config matches case and separator variants on Windows', { skip: process.platform !== 'win32' }, () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    for (const p of [path.join(f.root, 'EXCLUDES.JSON'), `${f.repo}/.Claude/Settings.Local.json`,
+      path.join(f.root, 'Settings', 'SETTINGS.json').replace(/\\/g, '/')]) gateConfigAsks(gateRun(f, p), p);
+  } finally { sb.cleanup(); }
+});
+
+// A link from outside into an anchor is caught by the followed reading.
+test('a link into a gate-config dir is caught', () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    fs.mkdirSync(path.join(f.repo, '.claude'));
+    fs.symlinkSync(path.join(f.repo, '.claude'), path.join(sb.path, 'into-claude'), 'junction');
+    fs.symlinkSync(f.root, path.join(sb.path, 'into-root'), 'junction');
+    for (const p of [path.join(sb.path, 'into-claude', 'settings.json'),
+      path.join(sb.path, 'into-root', 'excludes.json')]) gateConfigAsks(gateRun(f, p), p);
+    assertDefers(gateRun(f, path.join(sb.path, 'into-claude', 'notes.md')), 'into-claude/notes.md');
+  } finally { sb.cleanup(); }
+});
+
+// Bob (A2 L2): no ask tier, so an ask is a block — and `settings.json` is the user's shared host
+// config (MCP servers, approvals). So a hook-settings write passes on Bob unless it changes
+// Geneseed's own wiring: an entry whose command names `geneseed-hook` (event, matcher and hook
+// object compared whole), `disableAllHooks` turning on, or a `GENESEED_*` env value. Fail closed:
+// a tool we cannot replay, a search not found exactly once, or an unparseable side is a block.
+// Geneseed-only files (`excludes.json` and kin) stay blocked outright.
+const BOB_SETTINGS = JSON.stringify({
+  mcpServers: { a: { command: 'a-mcp' } },
+  hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: '"/x/geneseed-hook" tool-gate --host bob' }] }],
+    Stop: [{ matcher: '*', hooks: [{ type: 'command', command: 'my-own-stop.sh' }] }] },
+}, null, 2);
+function bobGate(f, tool, input) {
+  return hookRun('tool-gate', {
+    root: f.root, host: 'bob', env: { ...process.env, GENESEED_HOME: f.home }, stdin: bobPayload(tool, input),
+  });
+}
+const withSettings = (s, fn) => (input) => fn({ path: s, ...input });
+const BOB_SETTINGS_ROWS = [
+  // [label, tool, input, exit]
+  ['an MCP server added', 'write_file', { content: BOB_SETTINGS.replace('"a-mcp"', '"a-mcp" }, "b": { "command": "b-mcp"') }, 0],
+  ['the user\'s own hook changed', 'write_file', { content: BOB_SETTINGS.replace('my-own-stop.sh', 'other.sh') }, 0],
+  ['a Geneseed entry removed', 'write_file', { content: JSON.stringify({ mcpServers: {} }) }, 2],
+  ['a Geneseed entry\'s command changed', 'write_file', { content: BOB_SETTINGS.replace('tool-gate', 'context') }, 2],
+  ['a Geneseed group given a matcher', 'write_file', { content: BOB_SETTINGS.replace('[{ "hooks"', '[{ "matcher": "none", "hooks"').replace(/"PreToolUse": \[\s*\{/, '"PreToolUse": [{ "matcher": "none",') }, 2],
+  ['disableAllHooks turned on', 'write_file', { content: BOB_SETTINGS.replace('{', '{ "disableAllHooks": true,') }, 2],
+  ['a GENESEED_ env value added', 'write_file', { content: BOB_SETTINGS.replace('{', '{ "env": { "GENESEED_HOME": "/tmp/x" },') }, 2],
+  ['an unparseable after-text', 'write_file', { content: '{ "hooks": ' }, 2],
+  ['an apply_diff outside the wiring', 'apply_diff', { diff: '<<<<<<< SEARCH\n:start_line:3\n-------\n      "command": "a-mcp"\n=======\n      "command": "a2-mcp"\n>>>>>>> REPLACE' }, 0],
+  ['an apply_diff on the wiring', 'apply_diff', { diff: '<<<<<<< SEARCH\n tool-gate --host bob\n=======\n context --host bob\n>>>>>>> REPLACE' }, 2],
+  ['an apply_diff whose search is not found', 'apply_diff', { diff: '<<<<<<< SEARCH\nnot in the file\n=======\nx\n>>>>>>> REPLACE' }, 2],
+  ['a search_and_replace outside the wiring', 'search_and_replace', { search: 'my-own-stop.sh', replace: 'b.sh' }, 0],
+  ['a regex search_and_replace', 'search_and_replace', { search: 'my-own-stop.sh', replace: 'b.sh', use_regex: true }, 2],
+  ['an insert_content of a new key', 'insert_content', { line: 2, content: '  "theme": "dark",' }, 0],
+  ['an insert_content whose line is a string', 'insert_content', { line: '2', content: '  "theme": "dark",' }, 0],
+  ['a tool we cannot replay', 'edit_file', { old_string: 'a', new_string: 'b' }, 2],
+  // Replays that could diverge from what Bob applies fail closed.
+  ['a case-folded search_and_replace', 'search_and_replace', { search: 'my-own-stop.sh', replace: 'b.sh', ignore_case: true }, 2],
+  ['a line-ranged search_and_replace', 'search_and_replace', { search: 'my-own-stop.sh', replace: 'b.sh', start_line: 1 }, 2],
+  ['an apply_diff of two blocks', 'apply_diff', { diff: '<<<<<<< SEARCH\n"a-mcp"\n=======\n"a2-mcp"\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nmy-own-stop.sh\n=======\nb.sh\n>>>>>>> REPLACE' }, 2],
+  ['strict JSON made JSONC (a trailing comma)', 'write_file', { content: BOB_SETTINGS.replace(/\}\s*$/, ',}') }, 2],
+  ['a lower-case geneseed_ env value added', 'write_file', { content: BOB_SETTINGS.replace('{', '{ "env": { "geneseed_home": "/tmp/x" },') }, 2],
+  ['a NODE_OPTIONS env value added', 'write_file', { content: BOB_SETTINGS.replace('{', '{ "env": { "NODE_OPTIONS": "--require x" },') }, 2],
+];
+
+test('bob: a hook-settings write is blocked only when it changes Geneseed\'s wiring', () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    for (const s of [path.join(f.repo, '.bob', 'settings.json'), path.join(f.root, 'settings', 'settings.json')]) {
+      fs.mkdirSync(path.dirname(s), { recursive: true });
+      fs.writeFileSync(s, BOB_SETTINGS);
+      for (const [label, tool, input, exit] of BOB_SETTINGS_ROWS) {
+        const r = withSettings(s, (i) => bobGate(f, tool, i))(input);
+        assert.equal(r.rc, exit, `${s}: ${label}: expected exit ${exit}, got ${r.rc}, stderr=${r.err}`);
+        if (exit) assert.match(r.err, /External Gate.*is a gate's own configuration.*On Bob this write is refused because/);
+      }
+    }
+    // A new settings file (none on disk yet) holding only an MCP server passes.
+    assert.equal(bobGate(f, 'write_file', { path: path.join(f.repo, 'pkg', '.bob', 'settings.json'),
+      content: '{ "mcpServers": {} }' }).rc, 0);
+  } finally { sb.cleanup(); }
+});
+
+test("bob: a Geneseed-only gate-config file stays blocked outright", () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    for (const p of [path.join(f.root, 'excludes.json'), path.join(f.root, 'AGENT.md'),
+      path.join(f.home, 'bin', 'geneseed-hook')]) {
+      const r = bobGate(f, 'write_file', { path: p, content: '{}' });
+      assert.equal(r.rc, 2, `${p}: expected exit 2, got ${r.rc}, stderr=${r.err}`);
+      assert.match(r.err, /External Gate.*is a gate's own configuration/);
+      assert.doesNotMatch(r.err, /On Bob this write is refused because/);
+    }
+    assert.equal(bobGate(f, 'write_file', { path: path.join(f.repo, 'src', 'a.js'), content: 'x' }).rc, 0);
+  } finally { sb.cleanup(); }
+});
+
+// Bob runs `tool-gate` on every tool, reads included: reading gate config is never refused. And
+// Bob never reads `opencode.json(c)` — OpenCode's whole host config — so a write to it passes.
+test('bob: a read of gate config passes, and so does a write to opencode.json', () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    for (const p of [path.join(f.root, 'settings', 'settings.json'), path.join(f.root, 'excludes.json'),
+      path.join(f.root, 'AGENT.md'), path.join(f.repo, '.bob', 'settings.json')]) {
+      const r = bobGate(f, 'read_file', { path: p });
+      assert.equal(r.rc, 0, `${p}: a read was refused: ${r.err}`);
+    }
+    for (const p of [path.join(f.repo, 'opencode.json'), path.join(f.repo, 'pkg', 'opencode.jsonc')]) {
+      const r = bobGate(f, 'write_file', { path: p, content: '{}' });
+      assert.equal(r.rc, 0, `${p}: ${r.err}`);
+    }
+  } finally { sb.cleanup(); }
+});
+
+// The shim dir the gate inlines is the one `shimHome` resolves, so the copy cannot drift.
+test("the gate's shim dir is shimHome()'s bin", async () => {
+  const { shimHome, hookShimPath } = await import('../../js/hosts/shim.mjs');
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    const saved = process.env.GENESEED_HOME;
+    process.env.GENESEED_HOME = f.home;
+    try {
+      assert.equal(shimHome(), f.home);
+      for (const plat of ['win32', 'linux']) gateConfigAsks(gateRun(f, hookShimPath(plat)), hookShimPath(plat));
+    } finally {
+      if (saved === undefined) delete process.env.GENESEED_HOME; else process.env.GENESEED_HOME = saved;
+    }
+  } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
 // THE ROOT-SCAN CHECK (Commands Must Return, `ops-2`). On 2026-10-10 a subagent ran
 // `find / -iname "write.ts" … | head -5` in Git Bash, where `/` mounts every drive and a network
 // share: 3.5 h at 100 % CPU, and the Bash timeout did not stop the orphaned child. A recursive

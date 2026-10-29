@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Inscribe or adapt a loop brick, then prove it with geneseed loop check.",
   "DESC_DEVELOP": "Drive a working through the cover-and-confirm loop — the smallest casting, its trials written, the touched trials green, sealed rune by rune.",
   "DESC_TEACH": "Tutor the apprentice toward a result — a crash course from novice to working caster, a confusing grimoire decoded until it clicks, or a day-by-day path to the appointed day.",
+  "DESC_ADHD": "Shape every reply for a reader with ADHD — the next step of the spell first, numbered steps, the state recited each turn, tangents held back, true time estimates. On until \"stop adhd mode\".",
   "DESC_QUIZ": "Test the apprentice rather than lecture — a drill to reflex, an explain-it-back examination, or a claimed mastery put to trial — with an unvarnished readout of the gaps.",
   "DESC_LEARN_MODE": "Take on an apprentice at the forge — they reason out each design at its checkpoint, you cast only the agreed code, and the apprenticeship persists per project across sessions.",
   "DESC_OWNERSHIP": "Keep the mage the keeper of their own code — they bless each part at checkpoints of the granularity they set, and the guild's laws are inscribed in the root AGENTS.md.",

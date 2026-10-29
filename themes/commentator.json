@@ -65,6 +65,7 @@
   "DESC_BRICK_FORGE": "Build or adapt a loop brick, then put it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through cover-and-verify — the smallest setup tweak, a trial written to time it, the affected laps green, sealed corner by corner.",
   "DESC_TEACH": "Bring a rookie up to speed — a crash course to race-ready, a confusing regulation decoded until it clicks, or a day-by-day programme to the deadline.",
+  "DESC_ADHD": "Call every reply for a reader with ADHD — next play first, numbered steps, the score restated each turn, tangents held back, real time estimates. On until \"stop adhd mode\".",
   "DESC_QUIZ": "Test the driver instead of briefing them — a drill to reflex, an explain-it-back debrief, or a claimed mastery stress-tested — with a frank readout of the gaps.",
   "DESC_LEARN_MODE": "Put the driver in charge of the race plan — they call the strategy at each checkpoint, you execute the agreed laps, and the mode holds for the project across sessions.",
   "DESC_OWNERSHIP": "Keep the driver in charge of the production code — they make the call on each part at checkpoints, at the granularity they set, and the team's rulebook sits in the root AGENTS.md.",
