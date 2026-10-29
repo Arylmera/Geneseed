@@ -223,7 +223,10 @@ test("learn: an execution end distils the transcript into memory/", async () => 
   })
   const cleanup = await (await load("learn")).setup(ctx)
   emit("session.execution.succeeded", { sessionID: "s1" })
-  await until(() => existsSync(path.join(memDir, "MEMORY.md")))
+  // Wait for the index CONTENT, not the file: `writeFile` creates MEMORY.md before it fills it,
+  // and a read in between saw '' (flaked on CI node 24, 2026-10-29).
+  const index = path.join(memDir, "MEMORY.md")
+  await until(() => existsSync(index) && /— 1 fact/.test(readFileSync(index, "utf8")))
   const gen = calls.find(([m]) => m === "generate.text")
   assert.ok(gen, "generate.text was called")
   assert.deepEqual(gen[1].model, { providerID: "p", id: "m" })

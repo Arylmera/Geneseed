@@ -327,7 +327,10 @@ export function cmdLearn(args) {
   // distillation below.
   // One reader for this Stop: an allowed turn's distillation reuses the windows the gate read.
   const read = tailReader();
-  if (hookEvent === 'Stop' && !args.file && !args.noDoneGate && doneGate(meta, args, install, read)) return 0;
+  // An advisory verdict already holds stdout: nothing below may print there after it.
+  const verdict = hookEvent === 'Stop' && !args.file && !args.noDoneGate
+    ? doneGate(meta, args, install, read) : null;
+  if (verdict === 'block') return 0;
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call
@@ -394,9 +397,13 @@ export function cmdLearn(args) {
     if (!created.length && !updated.length && !archived.length) {
       err('[learn] nothing new to store (all duplicates).\n');
     }
+  } else if (verdict === 'advisory') {
+    err(output);
   } else {
     out(output);
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
-  return proc.returncode;
+  // After an advisory, the model CLI's code is not this hook's: exit 2 on Stop would turn the
+  // advisory into a block, and any non-zero drops the JSON already on stdout.
+  return verdict === 'advisory' ? 0 : proc.returncode;
 }

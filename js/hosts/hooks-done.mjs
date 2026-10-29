@@ -2,9 +2,17 @@
  * The done gate — Verify Before Asserting's boundary half, at the moment a turn ends (#289).
  *
  * Every other gate sits before an act. This one sits at Stop: a turn that edited files under a
- * project which lists its proof in `.geneseed/done-checks.txt` may not end until every listed
- * check has run AND passed after the last edit. The gate never runs a check itself — the hook
- * path starts no process of its own (ADR 0002) — it reads the turn's own tool calls in the transcript.
+ * project's git root is judged against that project's proof — the checks that must have run AND
+ * passed after the last edit. The gate never runs a check itself — the hook path starts no
+ * process of its own (ADR 0002) — it reads the turn's own tool calls in the transcript.
+ *
+ * WHERE THE CHECKS COME FROM (`doneChecksOf`, user decision 2026-10-29: the harness maintains
+ * them, not the user). `.geneseed/done-checks.txt` at the git root, when present, is the override:
+ * one command per line, and it BLOCKS (a present file that lists nothing switches the gate off for
+ * that project). Absent, the checks are INFERRED from the root manifests (`inferDoneChecks`), and
+ * an inferred check is ADVISORY: an unproven turn still ends, with a `systemMessage` to the user,
+ * a ledger line and a stderr line — never `decision: block`. An inferred check is a GROUP of
+ * accepted command forms (`npm test` | `npm run test` | `npm t`), satisfied by any one.
  *
  * WHY IT RIDES `learn` AND NOT A VERB OR A FLAG OF ITS OWN (ADR 0010). The machine-wide shim is
  * last-writer-wins: an older `geneseed-hook` would refuse a new verb or flag, and the Stop
@@ -17,13 +25,18 @@
  *
  * WHY STDOUT JSON AND NOT EXIT 2. The emitted Stop command ends in `|| exit 0`, which swallows
  * a 2. `{"decision":"block"}` on exit 0 is the one signal that survives the existing wiring.
- * Allowing prints NOTHING — on Stop a stray stdout byte is read as a verdict.
+ * Allowing prints NOTHING — on Stop a stray stdout byte is read as a verdict. The advisory prints
+ * `{"systemMessage":…}` alone: Claude Code shows it to the user as a warning and the stop goes
+ * ahead (code.claude.com/docs/en/hooks.md, "JSON output"; not seen live — no gate here runs a
+ * model turn). `hookSpecificOutput.additionalContext` would reach the model, but it continues the
+ * turn under the same loop guard as a block — a block in all but name — so the model learns of
+ * inferred checks from `doneLine`, in the SessionStart context, instead.
  *
  * WHAT COUNTS (shortcut: write tools only; a shell `sed -i` or redirect is not an edit here —
  * seeing those would need `git status`, a spawn. Same limit as `protected-checks.txt`):
  *   - an edit is a Write/Edit/NotebookEdit/MultiEdit whose target is under the project root and
  *     whose result is not an error (a denied write changed nothing);
- *   - a pass is a Bash/PowerShell call whose command contains the declared line UNPIPED (a pipe
+ *   - a pass is a Bash/PowerShell call whose command contains one of the check's forms UNPIPED (a pipe
  *     takes the exit code of its last stage: `npm test | tail` exits 0 on a red suite), not MASKED
  *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), and whose
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
@@ -37,28 +50,17 @@
  * At most one block per turn: `stop_hook_active` is true when this Stop follows a block, and the
  * gate then lets the turn end and leaves a ledger line, so a gate that cries wolf gets found.
  */
-import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
+import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
 import { gitRootOf } from './gitref.mjs';
-import { DONE_LIST, recordGate } from './hooks.mjs';
-import { splitLines, tailReader } from './hooks-prims.mjs';
+import { recordGate } from './hooks.mjs';
+import { ADVISORY_VERB } from './hosts.mjs';
+import { DONE_LIST, splitLines, tailReader } from './hooks-prims.mjs';
+import { doneChecksOf } from './done-checks.mjs';
 
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'MultiEdit']);
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
-
-/** The declared checks, one per line, `#` comments; null when the project has no list. */
-export function readDoneChecks(root) {
-  const file = path.join(root, DONE_LIST);
-  if (!existsSync(file)) return null;
-  try {
-    return splitLines(readText(file)).map((l) => l.trim().replace(/\s+/g, ' '))
-      .filter((l) => l && !l.startsWith('#'));
-  } catch {
-    return null;
-  }
-}
 
 /**
  * True when `command` runs `line` as a whole command with no pipe after it in the same segment.
@@ -107,6 +109,21 @@ export function runsUnpiped(command, line) {
   return false;
 }
 
+/**
+ * True when `command` proves the check group `g`: one of its forms runs unpiped and unmasked
+ * (`runsUnpiped`), and — when the group names `refuse`, the flags that skip the tests
+ * (`mvn install -DskipTests`, `gradle build -x test`, `cargo test --no-run`) — some unpiped
+ * segment opening with a form carries none of them. shortcut: segments split on `&&`, `||`, `;`
+ * and newlines without reading quotes; a quoted separator only makes a refusal more likely.
+ */
+export function groupPasses(command, g) {
+  if (!g.forms.some((f) => runsUnpiped(command, f))) return false;
+  if (!g.refuse) return true;
+  return String(command).replace(/[ \t]+/g, ' ').split(/&&|\|\||;|\n/).map((s) => s.trim())
+    .some((s) => !s.includes('|') && !g.refuse.test(s)
+      && g.forms.some((f) => s === f || s.startsWith(`${f} `)));
+}
+
 /** A user line that opens a turn: the user typed it, it is not a tool result or a meta note. */
 function isPrompt(obj) {
   if (obj.type !== 'user' || obj.isMeta || obj.isSidechain) return false;
@@ -121,8 +138,10 @@ function isPrompt(obj) {
  * unit tier — a transcript is text no CLI cell can vary cheaply. `whole` false means the text
  * is only the file's tail: with no prompt in it the turn may start earlier, so the answer is
  * null ("read more") — a turn judged from its middle could miss its edit and wrongly pass.
+ * A check is a line (one form) or a `{ label, forms }` group; the answer lists labels.
  */
 export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
+  const groups = checks.map((c) => (typeof c === 'string' ? { label: c, forms: [c] } : c));
   const entries = [];
   for (const line of splitLines(transcript)) {
     if (!line.trim()) continue;
@@ -160,14 +179,16 @@ export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
     const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
     // A call with no result yet (the host has not flushed it) is not a pass.
     if (typeof command !== 'string' || results.get(c.id) !== false) return;
-    for (const check of checks) if (runsUnpiped(command, check)) passed.add(check);
+    for (const g of groups) if (groupPasses(command, g)) passed.add(g.label);
   });
-  return checks.filter((c) => !passed.has(c));
+  return groups.map((g) => g.label).filter((l) => !passed.has(l));
 }
 
 /**
- * The Stop-side wrapper `cmdLearn` calls first. Returns true when it printed a block (the turn
- * goes on, so `learn` must not distil yet); false in every other case, with nothing on stdout.
+ * The Stop-side wrapper `cmdLearn` calls first. Returns 'block' when it printed a block (the
+ * turn goes on, so `learn` must not distil yet); 'advisory' when it printed the advisory
+ * `systemMessage` (the turn ends and learning runs, but `learn` must print nothing more on
+ * stdout, or the JSON stops parsing); null in every other case, with nothing on stdout.
  * `install` is the root `cmdLearn` already derived from `--memory` (null without one), so the
  * ledger lands in the same root its sovereignty check read. `read` is `cmdLearn`'s per-Stop
  * transcript reader, so the distillation after an allow reuses the windows read here.
@@ -176,12 +197,14 @@ export function doneGate(meta, args, install, read = tailReader()) {
   try {
     const cwd = typeof meta.cwd === 'string' && meta.cwd ? meta.cwd : process.cwd();
     const root = gitRootOf(cwd);
-    const checks = root ? readDoneChecks(root) : null;
-    if (!checks || !checks.length) return false;
-    // Bob's Stop payload carries no transcript (learn's I2): nothing to judge, and it says so.
+    if (!root) return null;
+    const { source, blocking, checks } = doneChecksOf(root);
+    if (!checks.length) return null;
+    // Bob's Stop payload carries no transcript (learn's I2): nothing to judge, and a listed gate
+    // says so. Inferred checks stay quiet there: every repo with a manifest would log it.
     if (args.host === 'bob' || typeof meta.transcript_path !== 'string') {
-      err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
-      return false;
+      if (blocking) err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
+      return null;
     }
     let missing;
     try {
@@ -190,13 +213,23 @@ export function doneGate(meta, args, install, read = tailReader()) {
     } catch {
       // No ask tier on Stop: blocking on an unreadable transcript would trap the user.
       err('[done-gate] transcript unreadable — turn not judged.\n');
-      return false;
+      return null;
     }
-    if (!missing.length) return false;
+    if (!missing.length) return null;
+    if (!blocking) {
+      recordGate(install, ADVISORY_VERB, 'law-3');
+      err(`[done-gate] advisory — unproven since the last edit: ${missing.join('; ')}\n`);
+      out(`${JSON.stringify({
+        systemMessage: 'Geneseed done gate (advisory) — this turn edited files, and these checks '
+          + `inferred from ${source} have not passed since the last edit: ${missing.join('; ')}. `
+          + `List your own in ${DONE_LIST} to make the gate block.`,
+      })}\n`);
+      return 'advisory';
+    }
     if (meta.stop_hook_active === true) {
       recordGate(install, 'done-gate-cap', 'law-3');
       err(`[done-gate] cap reached — turn ends with unproven checks: ${missing.join('; ')}\n`);
-      return false;
+      return null;
     }
     recordGate(install, 'done-gate', 'law-3');
     out(`${JSON.stringify({
@@ -205,9 +238,9 @@ export function doneGate(meta, args, install, read = tailReader()) {
         + `checks from ${DONE_LIST} have not passed since the last edit: ${missing.join('; ')}. `
         + 'Run them unpiped, or say plainly that they were not run and why.',
     })}\n`);
-    return true;
+    return 'block';
   } catch (e) {
     err(`[done-gate] skipped: ${e && e.message}\n`);
-    return false;
+    return null;
   }
 }

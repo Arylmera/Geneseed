@@ -11,6 +11,8 @@ import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
+import { gitRootOf } from './gitref.mjs';
+import { doneLine } from './done-checks.mjs';
 
 /**
  * `str(OSError)` — `[Errno N] strerror: 'filename'`, with the filename REPR'd.
@@ -443,9 +445,22 @@ export function cmdContext(args) {
   let [eager, lazy, source] = resolveContextSets(root, hookRoot);
   eager = eager.filter(fresh);
   lazy = lazy.filter(fresh);
+  // The done gate's checks for this repo, and where they come from (`./hooks-done.mjs`). No git
+  // root, no gate, no line. Printed even when there is nothing else to load. An install built
+  // `--no-done-gate` carries `Done gate: off` in its AGENT.md and gets no line — the OpenCode
+  // context plugin's `doneGateOff` reads the same marker with the same pattern.
+  const gitRoot = gitRootOf(root);
+  let gateOff = false;
+  try {
+    gateOff = Boolean(hookRoot)
+      && /^Done gate:[ \t]*off[ \t]*\r?$/m.test(readFileSync(path.join(hookRoot, 'AGENT.md'), 'utf8'));
+  } catch { /* no carrier: armed */ }
+  // Bob's Stop carries no transcript, so the gate never judges a turn there (`hooks-done.mjs`).
+  const done = gitRoot && !gateOff ? doneLine(gitRoot, HOST !== 'bob') : null;
   if (!session.length && !eager.length && !lazy.length) {
     err(`[context] nothing to load for ${root} `
       + '(no docs discovered, no manifest entries).\n');
+    if (done) out(`${done}\n`);
     return 0;
   }
 
@@ -454,6 +469,7 @@ export function cmdContext(args) {
   // the whole payload, not on the file bodies alone.
   let spent = 0;
   const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
+  if (done) push(done, '');
   if (session.length) {
     push('=== SESSION FILES \u2014 your harness files, injected at session start '
       + '(untouched seeds skipped) ===', '');

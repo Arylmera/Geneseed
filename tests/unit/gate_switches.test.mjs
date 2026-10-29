@@ -31,6 +31,7 @@ import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import { statusData, statusLines } from '../../js/inspect/status.mjs';
 import { BAD_COMMAND, DISARMED_BAD_COMMAND, badCommandFor } from '../../js/inspect/checks-probe.mjs';
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
+import { spawnHook } from '../helpers/hook_run.mjs';
 
 // The global emit writes the machine hook shim into the environment's home.
 sandboxProcessHome();
@@ -263,6 +264,7 @@ test('the OpenCode context plugin drops only the done reminder when the carrier 
   try {
     const repo = path.join(sb.path, 'repo');
     fs.mkdirSync(path.join(repo, '.geneseed'), { recursive: true });
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });   // the gate needs a git root
     fs.writeFileSync(path.join(repo, '.geneseed', 'done-checks.txt'), 'npm run lint\n');
     fs.writeFileSync(path.join(sb.path, 'geneseed-wiki.jsonc'), '{ "wikis": [] }');
     process.env.GENESEED_WIKI = path.join(sb.path, 'geneseed-wiki.jsonc');
@@ -293,6 +295,25 @@ test('the OpenCode context plugin drops only the done reminder when the carrier 
     if (savedWiki === undefined) delete process.env.GENESEED_WIKI; else process.env.GENESEED_WIKI = savedWiki;
     sb.cleanup();
   }
+});
+
+// The Claude/Bob/OpenClaude twin of the row above: the `context` hook reads the same carrier
+// line with the same pattern, and a disarmed install's session starts without the done line.
+test('the context hook drops the done gate line when the carrier says so', () => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ scripts: { lint: 'eslint .' } }));
+    const armed = path.join(d, 'armed');
+    const off = path.join(d, 'off');
+    quiet(() => build(makeCfg({}), 'neutral', armed));
+    quiet(() => build(makeCfg({ noDoneGate: true }), 'neutral', off));
+    const ctx = (root) => spawnHook(['context', '--root', root], '',
+      { cwd: repo, env: { ...process.env, GENESEED_ROOT: repo } }).stdout;
+    assert.match(ctx(armed), /^Done gate: inferred from package\.json — npm run lint \(advisory\)\r?$/m,
+      'the armed install lost the done line');
+    assert.doesNotMatch(ctx(off), /Done gate:/, 'the disarmed install still printed the done line');
+  });
 });
 
 test('status names each switch only when off, #319\'s wording unchanged', () => {

@@ -29,6 +29,12 @@ export const EXCLUDES_FILE = 'excludes.json';
 
 /** The gate ledger inside an install: the hooks append to it, `status` counts it. */
 export const GATE_LEDGER = path.join('notebook', 'gates.jsonl');
+/**
+ * The ledger verb of the done gate's ADVISORY (inferred checks, `hooks-done.mjs`): recorded so
+ * it can be found, but it asked nothing of anyone, so the ask counts (`status`, `/api/gates`)
+ * skip it — an advisory fires on almost every editing turn and would drown the real asks.
+ */
+export const ADVISORY_VERB = 'done-gate-advisory';
 
 /**
  * `sovereign_bypass` — the user's own excludes.json, read on EVERY hook call so an edit
