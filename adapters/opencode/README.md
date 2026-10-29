@@ -392,7 +392,8 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   a declared wiki's `protected` folders (AGENT.md §8, from `geneseed-wiki.jsonc`); **refuses
   once** the session's first write in an application repo whose root `AGENTS.md` has no
   `## Ownership` section (the ownership gate; a child session defers; off with `mode: off` in
-  that section or an install built `--no-ownership-gate`); **warns** on
+  that section, a personal `Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md`, or
+  an install built `--no-ownership-gate`); **warns** on
   `.env` writes. `GENESEED_GUARD=off` disables it, `=warn` downgrades
   blocks to warnings. Every **block** appends one line to the install's
   `notebook/gates.jsonl` (rule `law-1` / `law-4` / `process-1` / `wiki` / `ownership`, a timestamp,

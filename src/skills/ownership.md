@@ -45,8 +45,20 @@ Granularity: team        # or a level finer than the team default
 ```
 
 Create it only when there is personal state to store: a granularity finer than the team
-default, the first `## Pending` checkpoint, or the first `## Decisions` entry. No file means the
-team granularity, nothing pending and no decisions. `AGENTS.md` stays the only configuration.
+default, the first `## Pending` checkpoint, the first `## Decisions` entry, or the developer's
+decline. No file means the team granularity, nothing pending and no decisions. `AGENTS.md` stays
+the only team configuration.
+
+The decline is the line `Setup: declined <YYYY-MM-DD>`, alone on its line. Write it only when the
+developer answers "skip in this repo until I ask" to the setup proposal. Write it in the **main
+worktree's** `.geneseed/ownership.md`: in a linked git worktree, that is the main checkout's (the
+parent of the shared `.git`), so the decline outlives the worktree. The gate reads it only there.
+If that write is refused (outside the session's working directory, a sandbox, a declined
+permission prompt), tell the developer the decline was not saved, and why. Never write it inside
+the linked worktree instead: the gate does not read it there. It is personal: it
+silences the proposal and the first-write gate for this developer in this repo, with no expiry,
+until they delete the line or ask for the setup. A `## Ownership` section in `AGENTS.md`, on or
+off, outranks it.
 
 A personal override may only be finer than the team default. A coarser one needs the developer's
 explicit yes, logged under `## Decisions`.
@@ -66,17 +78,21 @@ Run it when the repo has no `## Ownership` section, or when the developer asks. 
 3. **Interview.** About five questions, one at a time, each with a recommended answer: confirm or
    correct the conventions; ownership on for this repo; the default granularity; the sensitive
    zones (for example `payment/`, migrations, security config); free-form project rules.
-4. **Write** — the only write of the setup: `AGENTS.md` (at most ~60 lines, this section
-   included). Show the diff. Commit `AGENTS.md` only on request. The setup writes no
-   `.geneseed/ownership.md`: it is personal state, created later only when needed, and never
-   committed.
+4. **Write** — `AGENTS.md` (at most ~60 lines, this section included). Show the diff. Commit
+   `AGENTS.md` only on request. In the same pass, remove a `Setup: declined` line from the main
+   worktree's `.geneseed/ownership.md` if there is one; write nothing else there. That file is personal
+   state, created later only when needed, and never committed.
 5. **Check how diffs reach the developer.** Read the permission mode from the host's settings;
    when the live mode cannot be seen there, ask the developer. If edits are auto-accepted (bypass,
    accept-edits), warn that no native diff will stop for them; if they keep it, use the compact
    diff (see *Each checkpoint*). On OpenCode, propose `permission.edit: "ask"` in the project
    `opencode.json`.
 
-"Proceed without" skips the setup for this session only; propose it again in the next one.
+The proposal offers three answers: set it up now; skip this session; or skip in this repo until
+asked. "Skip this session" writes nothing; propose it again in the next session. "Skip in this
+repo" writes the decline line (see *Personal state*), and creates `.geneseed/.gitignore` by the
+rule above if it is absent. A context line `Ownership: setup declined since <date>` means that
+decline is in force: propose nothing, and repeat the line once, verbatim, in your first reply.
 
 ## Granularity
 - `feature` — one checkpoint on the plan; then each file is announced as routine, and its Edit is
@@ -137,7 +153,7 @@ and sensitive zones as checkpoints — still apply on top.
 
 ## Done when
 - The root `AGENTS.md` has `## Ownership` outside the Geneseed block, or the developer chose
-  "proceed without" or `mode: off`; every interface and sensitive-zone change got its own
+  to skip (this session, or in this repo until asked) or `mode: off`; every interface and sensitive-zone change got its own
   checkpoint; no code landed without an answered checkpoint or an accepted Edit; each fork,
   interface, sensitive-zone change and granularity change is logged in `.geneseed/ownership.md`;
   and the developer can say, for each change, what changed, where and why.

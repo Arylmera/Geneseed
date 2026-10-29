@@ -43,8 +43,10 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   something you want kept is a rule or a fact is your call). In an application repo (a git
   root holding a build manifest) whose root `AGENTS.md` has no `## Ownership` section, it also
   denies the session's first write once, with a reason addressed to the agent: propose the
-  ownership setup, or proceed without; the next write passes, and sub-agents defer. Off per repo
-  with `mode: off` in that section, per install with `--no-ownership-gate`. Ordinary edits pass.
+  ownership setup now, skip this session, or skip in this repo until asked; the next write
+  passes, and sub-agents defer. Off per repo with `mode: off` in that section, for one developer
+  in one repo with `Setup: declined <YYYY-MM-DD>` in their personal `.geneseed/ownership.md`,
+  per install with `--no-ownership-gate`. Ordinary edits pass.
   (`MultiEdit` is not a Claude Code tool and is not in the matcher; the gate reads
   `edits[].new_string` as a cheap guard regardless.)
 - on **SessionStart**, every source (`startup`, `resume`, `clear`, `compact`, `fork`), runs

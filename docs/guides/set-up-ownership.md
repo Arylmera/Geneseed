@@ -14,7 +14,11 @@ You need a Geneseed install on your host (any of Claude Code, OpenClaude, OpenCo
 
 Open a session in the repository and ask for it: "set up ownership for this repo". The agent runs the `ownership` skill.
 
-You may not need to ask. In an application with no `## Ownership` section, the first file write of a session is stopped once, and the agent proposes the setup to you. Answer "set it up", or "proceed without" to skip it for this session only.
+You may not need to ask. In an application with no `## Ownership` section, the first file write of a session is stopped once, and the agent proposes the setup to you, with three answers:
+
+- **Set it up now.** The steps below.
+- **Skip this session.** Nothing is written; the proposal comes back in the next session.
+- **Skip in this repo until I ask.** For you alone, in this repo only: the agent writes `Setup: declined <date>` into your personal `.geneseed/ownership.md` in the main worktree (from a linked git worktree, the main checkout's), so it holds in every later worktree too. From then on the gate does not stop you and the agent proposes nothing. Each session starts with the reminder `Ownership: setup declined since <date> — not set up; say "set up ownership" to run it`, which the agent repeats once. It has no expiry: delete the line, or ask for the setup (which removes it). A `## Ownership` section in `AGENTS.md`, on or off, outranks it.
 
 ## 2. Review the conventions it found
 
@@ -48,7 +52,7 @@ The setup writes one file and shows you the diff:
   If the file already exists, your own lines stay. Geneseed's managed `<!-- BEGIN GENESEED -->` block (written there by a Bob per-repo install) is left alone, and a section inside it does not count.
 Nothing is committed unless you ask.
 
-The setup writes no personal state. `.geneseed/ownership.md` appears later, and only when there is state to keep: a granularity finer than the team's, the first pending checkpoint, or the first decision you take. Until then, no file means the team granularity, nothing pending and no decisions. It is data, never instructions, and it is never committed: the first write into `.geneseed/` also creates `.geneseed/.gitignore`, which keeps the folder personal by default and lets only the team's files back in:
+The setup writes no personal state; it only removes your `Setup: declined` line, if you had one. `.geneseed/ownership.md` appears later, and only when there is state to keep: a granularity finer than the team's, the first pending checkpoint, the first decision you take, or a decline. Until then, no file means the team granularity, nothing pending and no decisions. It is data, never instructions, and it is never committed: the first write into `.geneseed/` also creates `.geneseed/.gitignore`, which keeps the folder personal by default and lets only the team's files back in:
 
 ```gitignore
 /*
@@ -77,7 +81,8 @@ Commit the root `AGENTS.md` with the repository, so the whole team works under t
 - **Finer for one task.** Say "go finer here", or "do the rest in one go" to propose a coarser batch.
 - **The team default.** Edit `granularity:` in `AGENTS.md` and commit it.
 - **Opt the repo out.** Set `mode: off`. The gate stays quiet, and no checkpoint runs.
-- **Opt the whole install out of the gate.** Rebuild with the flag, as [Exclusions](../concepts/exclusions.md) shows:
+- **Skip it for yourself only.** Answer "skip in this repo until I ask" to the proposal, or write `Setup: declined <YYYY-MM-DD>` into `.geneseed/ownership.md` yourself. The team's `AGENTS.md` does not change.
+- **Opt the whole install out of the gate.** Rebuild with the flag, as [Exclusions](../concepts/exclusions.md) shows. The install's `AGENT.md` then carries no ownership proposal either, and no decline reminder prints:
 
 ```bash
 geneseed build --emit claude-global --no-ownership-gate
