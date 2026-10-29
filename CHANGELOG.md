@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.29.0] — 2026-10-29
+
+Minor: the done gate works with no file (inferred checks, advisory in this release) and no longer passes a masked check; a project install arms the protected-checks gate; the gates protect their own configuration; ownership can be declined per repo; two new skills (`adhd`, `diagram-design`). Run `geneseed rebuild-all` once after updating to seed `protected-checks.txt` in existing project installs and to pick up the new gate configuration.
+
 ### Added
 
 - **An `adhd` mode skill.** `/adhd` shapes every reply for a reader with ADHD until "stop adhd mode" or "normal mode": the next action first, numbered steps, the state restated each turn, tangents held back, concrete time estimates, and a pre-send check. It is user-only (the agent never starts it) and adapted from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) (MIT). The rules, `user-rules.md` and the comms doctrines outrank it: the readiness sigil stays first, the five-item cap never renumbers a reference code, the closing action uses the Mark-the-Ask markers, and verification output is never cut as a recap.
@@ -31,6 +35,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
   exists at the git root.
 
 ### Fixed
+- **The done gate no longer passes a masked check.** `npm test || true`, `npm test; true` and `npm test; exit 0` exit 0 on a red suite, so the gate read them as a passing run. Any `||` after a check, or a `;` or newline followed by `true`, `:`, `exit 0` or a bare `exit`, now reads as "not run"; `&&` still passes. OpenCode gets the same rule. One opening stays: `npm test; npm run lint` passes both checks.
 - `--no-ownership-gate` now silences everything: the install's `AGENT.md` no longer carries the
   "propose it once before the first write" sentence, so the model stops proposing the ownership
   setup, nor the read-only `/document-project` suggestion beside it; and no decline reminder
