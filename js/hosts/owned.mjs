@@ -186,6 +186,25 @@ export function recordedDenies(doc) {
 }
 
 /**
+ * An OpenCode manifest's `permission.edit` record — `edit_asks`, the gate-config ask keys
+ * Geneseed itself added, and `edit_shorthand`, the user's blanket `"allow"` it widened to an
+ * object — as `{ asks, shorthand }`. Absent or malformed reads as nothing owned, like
+ * `recordedDenies`, and for the same reason: rebuild and uninstall must agree on what is ours.
+ */
+export function recordedEdit(doc) {
+  const a = doc && doc.edit_asks;
+  return {
+    asks: Array.isArray(a) ? a.filter((k) => typeof k === 'string') : [],
+    shorthand: doc && doc.edit_shorthand === 'allow' ? 'allow' : null,
+  };
+}
+
+/** The manifest keys for an edit record; none when Geneseed owns nothing there. */
+export function editRecordKeys(rec) {
+  return rec.asks.length ? { edit_asks: rec.asks, ...(rec.shorthand ? { edit_shorthand: rec.shorthand } : {}) } : {};
+}
+
+/**
  * Where one owned file stands against its recorded hash — the table rebuild, prune and
  * uninstall branch on so none of them clobbers a user's edit to a Geneseed-owned file.
  * `'unknown'` is deliberately distinct from `'unmodified'`: a manifest written before hashes

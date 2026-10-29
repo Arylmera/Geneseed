@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -30,7 +31,8 @@ import { DENY_SKIP, deny } from '../helpers/deny.mjs';
 import {
   writePrimaryAgent, writeCommandLayer, ensureAgentOverridesStub, sourceReleaseVersion,
 } from '../../js/hosts/opencode.mjs';
-import { mergeOpencodeJson, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
+import { mergeOpencodeJson, opencodeEditAsks, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
+import { unmergeOpencodeJson } from '../../js/maintain/uninstall.mjs';
 import {
   doctrinesOfDir, excludedRulesOfDir, resetLegacyProcessCarrierWarning, themeFiles,
 } from '../../js/hosts/installs.mjs';
@@ -1655,6 +1657,166 @@ test('a fully opaque permission block names the unwired skill denies too', () =>
       `a permission block that is not an object at all skipped the skill reconcile silently, `
       + `and the opaque WARN did not name the unwired skill deny either:\n${err}`);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// A2 L1 — OpenCode asks, natively, before a write to a gate's own configuration.
+//
+// The emit writes `permission.edit` "ask" keys (`opencodeEditAsks`) and records the ones it added
+// (`edit_asks`) plus a blanket "allow" it widened (`edit_shorthand`), so uninstall takes back
+// exactly its own. `ocDecide` is OpenCode's own decision, ported from its source (v1.19.0
+// `core/src/util/wildcard.ts` `match` + `permission/index.ts` `evaluate`; v2.2.1 is the same):
+// `\` folds to `/`, `*` is `.*` and crosses `/`, case-insensitive on win32 only, the LAST
+// matching key wins, no match falls to the agent default (here "allow", the build agent's).
+
+function ocMatch(input, pattern) {
+  const esc = pattern.replaceAll('\\', '/').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  return new RegExp(`^${esc}$`, process.platform === 'win32' ? 'si' : 's').test(input.replaceAll('\\', '/'));
+}
+const ocDecide = (edit, rel) => Object.entries(edit).findLast(([k]) => ocMatch(rel, k))?.[1] ?? 'allow';
+
+function withShimHome(home, fn) {
+  const saved = process.env.GENESEED_HOME;
+  process.env.GENESEED_HOME = home;
+  try { return fn(); } finally {
+    if (saved === undefined) delete process.env.GENESEED_HOME; else process.env.GENESEED_HOME = saved;
+  }
+}
+
+test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows agentPath', () => {
+  withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
+    const tails = ['opencode.json', 'opencode.jsonc', '.opencode/excludes.json',
+      '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/geneseed-*.js',
+      '.claude/settings.json', '.claude/settings.local.json', '.openclaude/settings.json',
+      '.openclaude/settings.local.json', '.bob/settings.json', '.bob/settings.local.json',
+      '.bob/settings/settings.json', '.geneseed/bin/*'];
+    // A project AGENT.md never gets `*/AGENT.md`, which would ask about every AGENT.md in the repo:
+    // install-root-relative, git-root-relative (1.x, a subpackage install) and `*../` (2.x subdir session).
+    withDir((d) => {
+      fs.mkdirSync(path.join(d, '.git'));
+      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'AGENT.md'),
+        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md']);
+      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-3),
+        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md']);
+      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-3),
+        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md']);
+    });
+    const global = opencodeEditAsks(path.join('home', '.config', 'opencode'), true);
+    for (const k of ['opencode/config.json', '*/opencode/config.json', '*/opencode/AGENT.md', '*/opencode/excludes.json']) {
+      assert.ok(global.includes(k), `${k} missing: ${global.join()}`);
+    }
+  });
+  // Any other shim home is named absolutely: `*/tools/bin/*` would ask about every repo's tools/bin.
+  withShimHome(path.join(os.tmpdir(), 'tools'), () => {
+    const keys = opencodeEditAsks(path.join('repo', '.opencode'), false);
+    assert.ok(!keys.includes('tools/bin/*') && !keys.includes('*/tools/bin/*'), keys.join());
+    assert.ok(keys.includes(`${path.join(os.tmpdir(), 'tools').split(path.sep).join('/')}/bin/*`), keys.join());
+  });
+});
+
+test('OpenCode asks for gate config and nothing else, at the root, below it and outside it', () => {
+  withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
+    const edit = { '*': 'allow', ...Object.fromEntries(opencodeEditAsks('/r/.opencode', false, 'AGENT.md').map((k) => [k, 'ask'])) };
+    // 1.x: relative to the worktree; 2.x: relative to the session dir, absolute outside it.
+    for (const rel of ['opencode.json', 'pkg/opencode.jsonc', '../opencode.json', '.opencode/excludes.json',
+      'AGENT.md', '../AGENT.md', '../../AGENT.md', '.opencode/plugins/geneseed-guard.js', '../.opencode/.geneseed-manifest.json',
+      '.claude/settings.json', 'pkg/.bob/settings.json', 'C:/Users/u/.bob/settings/settings.json',
+      '../../.geneseed/bin/geneseed-hook.cmd', 'C:/Users/u/.geneseed/bin/geneseed-hook',
+      'C:\\r\\.opencode\\excludes.json']) assert.equal(ocDecide(edit, rel), 'ask', rel);
+    for (const rel of ['src/app.js', 'docs/AGENT.md', '.opencode/plugins/my-plugin.js', '.claude/agents/x.md',
+      '.opencode/agents/x.md', 'opencode.json.bak', 'excludes.json', 'config/settings.json']) {
+      assert.equal(ocDecide(edit, rel), 'allow', rel);
+    }
+    if (process.platform === 'win32') assert.equal(ocDecide(edit, '.OpenCode/EXCLUDES.JSON'), 'ask');
+  });
+});
+
+test('a re-emit sweeps a recorded ask the key list no longer holds, unless the user re-scoped it', () => {
+  withShimHome(path.join(os.tmpdir(), '.geneseed'), () => withDir((d) => {
+    const keys = opencodeEditAsks(path.join(d, '.opencode'), false);
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: {}, edit: { old: 'ask', mine: 'allow' } } }));
+    const res = {};
+    mergeOpencodeJson(p, 'AGENT.md', null, [], [], [], res, true, keys, { asks: ['old', 'mine'], shorthand: null });
+    const edit = JSON.parse(fs.readFileSync(p, 'utf8')).permission.edit;
+    assert.ok(!('old' in edit), 'a stale recorded ask survived the re-emit');
+    assert.equal(edit.mine, 'allow', "a user's re-scoped value was taken");
+    assert.ok(!res.editRecord.asks.includes('old') && !res.editRecord.asks.includes('mine'), res.editRecord.asks.join());
+  }));
+});
+
+test('the edit asks merge: absent, "allow", "ask"/"deny", and an object with a user key', () => {
+  withShimHome(path.join(os.tmpdir(), '.geneseed'), () => withDir((d) => {
+    const keys = opencodeEditAsks(path.join(d, '.opencode'), false);
+    const run = (permission, oldEdit = null) => {
+      const p = path.join(d, 'opencode.json');
+      fs.writeFileSync(p, JSON.stringify({ permission: { bash: {}, ...permission } }));
+      const res = {};
+      const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], [], [], res, true, keys, oldEdit));
+      return { edit: JSON.parse(fs.readFileSync(p, 'utf8')).permission.edit, rec: res.editRecord, err };
+    };
+    // Absent: ours only, no "*" — the agent's own default still decides every other path.
+    let r = run({});
+    assert.deepEqual(r.edit, Object.fromEntries(keys.map((k) => [k, 'ask'])));
+    assert.deepEqual(r.rec, { asks: [...keys].sort(), shorthand: null });
+    // A blanket "allow" becomes { "*": "allow", …ours }, "*" first so ours win; the shorthand is recorded.
+    r = run({ edit: 'allow' });
+    assert.deepEqual(Object.entries(r.edit)[0], ['*', 'allow']);
+    assert.equal(r.edit['opencode.json'], 'ask');
+    assert.equal(r.rec.shorthand, 'allow');
+    // A blanket "ask" or "deny" already covers our files: left exactly as written, nothing recorded.
+    for (const v of ['ask', 'deny']) {
+      r = run({ edit: v });
+      assert.equal(r.edit, v);
+      assert.deepEqual(r.rec, { asks: [], shorthand: null });
+    }
+    // The user's own value on one of our keys is kept, never claimed, and named on stderr.
+    r = run({ edit: { '*': 'allow', 'opencode.json': 'allow' } });
+    assert.equal(r.edit['opencode.json'], 'allow');
+    assert.ok(!r.rec.asks.includes('opencode.json'));
+    assert.match(r.err, /WARN: "permission"."edit" in opencode\.json keeps your own "opencode\.json"/);
+    // A re-emit over our own keys changes nothing and keeps the old record whole.
+    const prev = { asks: [...keys].sort(), shorthand: 'allow' };
+    r = run({ edit: { '*': 'allow', ...Object.fromEntries(keys.map((k) => [k, 'ask'])) } }, prev);
+    assert.deepEqual(r.rec, prev);
+  }));
+});
+
+test('the edit asks round-trip through uninstall, and a later user key keeps the object', () => {
+  withShimHome(path.join(os.tmpdir(), '.geneseed'), () => withDir((d) => {
+    const keys = opencodeEditAsks(path.join(d, '.opencode'), false);
+    const p = path.join(d, 'opencode.json');
+    const install = (permission) => {
+      fs.writeFileSync(p, JSON.stringify({ permission: { bash: {}, ...permission } }));
+      const res = {};
+      captured(() => mergeOpencodeJson(p, 'AGENT.md', null, [], [], [], res, true, keys));
+      return res.editRecord;
+    };
+    const editOf = () => JSON.parse(fs.readFileSync(p, 'utf8')).permission.edit;
+    // absent -> ours -> uninstall -> absent
+    let rec = install({});
+    assert.equal(unmergeOpencodeJson(p, 'AGENT.md', [], rec), true);
+    assert.equal(editOf(), undefined);
+    // "allow" -> object -> uninstall -> "allow"
+    rec = install({ edit: 'allow' });
+    unmergeOpencodeJson(p, 'AGENT.md', [], rec);
+    assert.equal(editOf(), 'allow');
+    // A key the user added after install stays, so the object is not collapsed back.
+    rec = install({ edit: 'allow' });
+    const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+    data.permission.edit['secrets/*'] = 'deny';
+    fs.writeFileSync(p, JSON.stringify(data));
+    unmergeOpencodeJson(p, 'AGENT.md', [], rec);
+    assert.deepEqual(editOf(), { '*': 'allow', 'secrets/*': 'deny' });
+    // A recorded key the user re-scoped by hand is theirs now: kept.
+    rec = install({});
+    const again = JSON.parse(fs.readFileSync(p, 'utf8'));
+    again.permission.edit['opencode.json'] = 'allow';
+    fs.writeFileSync(p, JSON.stringify(again));
+    unmergeOpencodeJson(p, 'AGENT.md', [], rec);
+    assert.deepEqual(editOf(), { 'opencode.json': 'allow' });
+  }));
 });
 
 test('a merge preserves an mcp block it does not own', () => {

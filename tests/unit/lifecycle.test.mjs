@@ -518,6 +518,29 @@ test('an uninstall that takes back every deny drops the emptied permission.skill
   });
 });
 
+// A2 L1, end to end: the emit records the gate-config ask keys it wrote (`edit_asks`) and the
+// user's blanket "allow" it widened (`edit_shorthand`); a re-emit keeps the record; uninstall
+// puts the user's "allow" back exactly.
+test('the gate-config edit asks are recorded, survive a re-emit, and uninstall restores "allow"', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    const target = path.join(cfg, 'opencode.json');
+    fs.writeFileSync(target, JSON.stringify({ permission: { bash: {}, edit: 'allow' } }));
+    globalReemit(d, cfg);
+    const edit = () => JSON.parse(fs.readFileSync(target, 'utf8')).permission.edit;
+    const man = () => JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    const ask = `${path.basename(cfg)}/excludes.json`;
+    assert.equal(edit()[ask], 'ask', JSON.stringify(edit()));
+    assert.equal(edit()['*'], 'allow');
+    assert.ok(man().edit_asks.includes(ask) && man().edit_shorthand === 'allow', JSON.stringify(man()));
+    globalReemit(d, cfg);
+    assert.ok(man().edit_asks.includes(ask) && man().edit_shorthand === 'allow', 'a re-emit lost the record');
+    uninstallGlobal(cfg, false);
+    assert.equal(edit(), 'allow', 'uninstall did not restore the user\'s blanket "allow"');
+  });
+});
+
 test('a manifest with no skill_denies record sweeps nothing on re-emit', () => {
   // The safe reading of an older manifest: no record of what Geneseed wrote means no licence
   // to take anything away.

@@ -375,3 +375,73 @@ function compactImpl(v, sortKeys, bareInts) {
   throw new TypeError(`jsonDumpsCompact has no rendering for ${typeof v}`);
 }
 
+/**
+ * `_build_settings._read_jsonc` — an EXPORTED PRIMITIVE, deliberately.
+ *
+ * Four runtime call sites use it as a plain JSONC parser rather than as wiring, all four
+ * in `rituals/_harness_mcp.py` (P1b counted the call sites and named them callers; they
+ * are one module). Folding it inside a wire entry point would leave those four with
+ * nothing to call.
+ *
+ * Returns `[data, hadComments]`, with `data === null` for UNPARSEABLE input — distinct
+ * from a legitimately empty `{}`, because writers must refuse to rewrite a file they could
+ * not parse.
+ */
+export function readJsonc(text) {
+  const out = [];
+  let hadComments = false;
+  let i = 0;
+  let inStr = false;
+  const n = text.length;
+  while (i < n) {
+    const ch = text[i];
+    if (inStr) {
+      out.push(ch);
+      if (ch === '\\' && i + 1 < n) {
+        out.push(text[i + 1]);
+        i += 2;
+        continue;
+      }
+      if (ch === '"') inStr = false;
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      out.push(ch);
+      i += 1;
+      continue;
+    }
+    if (ch === '/' && i + 1 < n && text[i + 1] === '/') {
+      hadComments = true;
+      i += 2;
+      while (i < n && text[i] !== '\n' && text[i] !== '\r') i += 1;
+      continue;
+    }
+    if (ch === '/' && i + 1 < n && text[i + 1] === '*') {
+      hadComments = true;
+      i += 2;
+      while (i + 1 < n && !(text[i] === '*' && text[i + 1] === '/')) i += 1;
+      i += 2;
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      while (out.length && ' \t\r\n'.includes(out[out.length - 1])) out.pop();
+      if (out.length && out[out.length - 1] === ',') out.pop();
+      out.push(ch);
+      i += 1;
+      continue;
+    }
+    out.push(ch);
+    i += 1;
+  }
+  const stripped = out.join('');
+  try {
+    // `parseJson`, not `JSON.parse`: this file gets written back out, and a user's
+    // `"temperature": 1.0` would come back as `1` from a bare parse. The int/float
+    // distinction has to survive a round trip through somebody's real settings.json.
+    return [parseJson(stripped), hadComments];
+  } catch {
+    return [null, hadComments];
+  }
+}

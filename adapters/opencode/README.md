@@ -418,6 +418,18 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   `"git commit*"` / `"git push*"` to `"allow"` in your own `permission.bash` map. (Note:
   OpenCode lets a user pick "always allow" for the session, which makes the gate
   session-sticky — the Claude Code adapter's PreToolUse hook re-asks every time instead.)
+- **Gate-config asks** (*External Gate*). The emit also writes `permission.edit` "ask" keys
+  for the files that can switch a gate off: every `opencode.json(c)`, the global
+  `config.json`, the install's `AGENT.md`, the install dir's `excludes.json`, manifest,
+  `.geneseed-emit` and `plugins/geneseed-*.js`, the `.claude/`, `.openclaude/` and `.bob/`
+  hook settings, and the hook shim dir — each as a bare and a `*/` pattern (a root `AGENT.md`
+  bare only). A missing `edit` gets only these keys; a blanket `"edit": "allow"` becomes
+  `{"*": "allow", …}` with the asks after it; a blanket `"ask"`/`"deny"` is left alone; a key
+  you already set is kept and named in a warning. The manifest records what Geneseed added
+  (`edit_asks`, `edit_shorthand`); a rebuild drops a recorded key it no longer wants, and
+  uninstall removes those still set to `"ask"` and restores your `"allow"`. The guard plugin no
+  longer refuses these files — it would hide the prompt — but still refuses the other hosts'
+  Geneseed-only files (`excludes.json`, `AGENT.md`, manifest).
 - **Primary agent** (`GENESEED_PRIMARY=1`). Emits a `mode: primary` orchestrator that
   works by the Rules and delegates to the capability subagents. Off by default (it can
   change which agent is your default, so it stays opt-in).

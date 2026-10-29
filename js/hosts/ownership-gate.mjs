@@ -35,7 +35,7 @@ const MANAGED_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g
 const SECTION_RE = /^## Ownership[ \t]*\r?$/m;
 
 // Write-shaped tool names (Bob's `tool-gate` also routes reads here: `read_file` carries a path).
-const WRITE_NAME_RE = /write|edit|diff|replace|insert/i;
+export const WRITE_NAME_RE = /write|edit|diff|replace|insert/i;
 
 // js/hosts/activity.mjs `safeStem`, copied (that module is not on the gate path): a hostile
 // session id can never steer the marker join out of its directory.

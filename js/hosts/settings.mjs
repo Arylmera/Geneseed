@@ -39,9 +39,14 @@ import path from 'node:path';
 import { readText, writeText, isOsError } from '../lib/fs.mjs';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
-  indexOfDeepEqual, get, has, isDict,
+  indexOfDeepEqual, get, has, isDict, readJsonc,
 } from '../lib/json.mjs';
-import { SHIM_MARK, claudeHookShell, hookPrefix } from './shim.mjs';
+import { SHIM_MARK, claudeHookShell, hookPrefix, shimHome } from './shim.mjs';
+import { GLOBAL_MANIFEST } from './hosts.mjs';
+import { gitRootOf } from './gitref.mjs';
+
+// `readJsonc` moved to ../lib/json.mjs so the hook path can parse a settings file (A2 L2).
+export { readJsonc };
 import { stripWhitespace, stripWhitespaceEnd } from '../lib/text.mjs';
 
 const OPENCODE_SCHEMA = 'https://opencode.ai/config.json';
@@ -375,82 +380,97 @@ function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = 
   return [changed, null];
 }
 
+/**
+ * External Gate on OpenCode (A2 L1): the `permission.edit` keys that make OpenCode itself ASK
+ * before a write tool touches a file that can switch a gate off — every `opencode.json(c)`
+ * (OpenCode reads one from every dir up to the git root, `config/paths.ts`), the global
+ * `config.json` it also reads (`config.ts` `globalConfigFile`), the install's `AGENT.md` (its gate
+ * markers; a project install writes it at `agentRel`, the global one in `cfgDir`), the install
+ * dir's `excludes.json`, manifest, emit marker and `plugins/geneseed-*.js`, the other hosts' hook
+ * settings (`.claude/`, `.openclaude/`, `.bob/`), and the hook shim dir. An ask, never a deny: the
+ * user rejected a guard that refuses a host's shared config.
+ *
+ * Each tail is emitted bare and `*\/`-prefixed. Verified against OpenCode's source (v1.3.4,
+ * v1.19.0, v2.2.1) and live (`debug agent`, 1.19.5 and 2.2.1): the edit, write and apply_patch
+ * tools ask with the path relative to the worktree (1.x) or the session dir (2.x, absolute when
+ * outside), `\` folded to `/`; `*` is `.*` and crosses `/`, case-insensitive on Windows; the LAST
+ * matching rule wins and user config rules come after the built-in agent defaults. So the bare
+ * form catches a path at the root, the prefixed one a path below it, a `../` path or an absolute
+ * one. A project `AGENT.md` gets narrow keys only — `*\/AGENT.md` would ask about every one in the
+ * repo: relative to the install root (`agentRel`), to the git root (1.x matches from there, so a
+ * monorepo subpackage install needs it), and `*../` for a 2.x session started in a subdir (a path
+ * inside the project is relative to the session dir there, `file-access.ts` `resolve`). Never the
+ * absolute path: a project opencode.json is often committed, and teammates do not share it.
+ */
+export function opencodeEditAsks(cfgDir, global, agentRel = null) {
+  const cfg = path.basename(cfgDir);
+  const tails = ['opencode.json', 'opencode.jsonc', ...['excludes.json', GLOBAL_MANIFEST, '.geneseed-emit',
+    'plugins/geneseed-*.js', ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
+  ...['.claude', '.openclaude', '.bob'].flatMap((m) => [`${m}/settings.json`, `${m}/settings.local.json`]),
+  '.bob/settings/settings.json'];
+  const keys = [];
+  if (agentRel) {
+    const abs = path.resolve(path.dirname(cfgDir), agentRel);
+    const git = gitRootOf(path.dirname(abs));
+    const gitRel = git ? path.relative(git, abs).split(path.sep).join('/') : agentRel;
+    keys.push(...new Set([agentRel, gitRel, `*../${agentRel}`,
+      ...(agentRel.includes('/') ? [`*/${agentRel}`] : [])]));
+  }
+  try {
+    const home = shimHome();
+    // The default `~/.geneseed` is a name no project folder wears; any other home is matched
+    // only absolutely (2.x), since `*/tools/bin/*` would ask about every repo's `tools/bin`.
+    if (path.basename(home) === '.geneseed') tails.push('.geneseed/bin/*');
+    else keys.push(`${path.resolve(home).split(path.sep).join('/')}/bin/*`);
+  } catch { /* a `~user` GENESEED_HOME has no shim dir to name; the rest still ask */ }
+  return [...tails.flatMap((t) => [t, `*/${t}`]), ...keys];
+}
+
+/**
+ * Wire `keys` into `perm.edit` as `"ask"`, and record what was Geneseed's doing — the `edit` twin
+ * of `reconcileOpencodeSkillPermission`. `record` is the previous manifest's `{ asks, shorthand }`
+ * and is updated in place: `asks` gains each key this call added (a key already there, any value,
+ * is the user's and is never claimed), `shorthand` keeps the user's blanket `"allow"` that this
+ * call widened into `{ "*": "allow", …ours }` so uninstall can put it back. A blanket `"ask"` or
+ * `"deny"` already covers our files, so it is left alone. Anything else is reported opaque.
+ * A recorded key this build no longer wants (the key list changed) is swept while it still reads
+ * `"ask"`, as `reconcileOpencodeSkillPermission` sweeps a stale deny.
+ * @returns {[boolean, string | null]}
+ */
+function reconcileOpencodeEditPermission(perm, keys, record) {
+  if (!keys.length) return [false, null];
+  let edit = get(perm, 'edit');
+  let swept = false;
+  if (isDict(edit)) {
+    for (const k of record.asks.filter((r) => !keys.includes(r))) {
+      if (edit[k] === 'ask') { delete edit[k]; swept = true; }
+    }
+  }
+  record.asks = record.asks.filter((r) => keys.includes(r));
+  if (edit === 'ask' || edit === 'deny') return [false, null];
+  let changed = swept;
+  if (edit === 'allow') {
+    record.shorthand = 'allow';
+    edit = perm.edit = { '*': 'allow' };
+    changed = true;
+  } else if (!has(perm, 'edit')) {
+    edit = perm.edit = {};
+  } else if (!isDict(edit)) {
+    return [false, 'has an "edit" that is neither an action nor an object'];
+  }
+  const kept = [];
+  for (const k of keys) {
+    if (!has(edit, k)) { edit[k] = 'ask'; changed = true; record.asks.push(k); } else if (edit[k] !== 'ask') kept.push(k);
+  }
+  record.asks = [...new Set(record.asks)].sort();
+  return [changed, kept.length ? `keeps your own ${kept.map((k) => jsonDumps(k)).join(', ')}` : null];
+}
+
 /** `_build_settings._opencode_target`. Only caller of a `.json` -> `.jsonc` suffix swap. */
 export function opencodeTarget(jsonPath) {
   const ext = path.extname(jsonPath);
   const jsonc = (ext ? jsonPath.slice(0, jsonPath.length - ext.length) : jsonPath) + '.jsonc';
   return existsSync(jsonc) ? jsonc : jsonPath;
-}
-
-/**
- * `_build_settings._read_jsonc` — an EXPORTED PRIMITIVE, deliberately.
- *
- * Four runtime call sites use it as a plain JSONC parser rather than as wiring, all four
- * in `rituals/_harness_mcp.py` (P1b counted the call sites and named them callers; they
- * are one module). Folding it inside a wire entry point would leave those four with
- * nothing to call.
- *
- * Returns `[data, hadComments]`, with `data === null` for UNPARSEABLE input — distinct
- * from a legitimately empty `{}`, because writers must refuse to rewrite a file they could
- * not parse.
- */
-export function readJsonc(text) {
-  const out = [];
-  let hadComments = false;
-  let i = 0;
-  let inStr = false;
-  const n = text.length;
-  while (i < n) {
-    const ch = text[i];
-    if (inStr) {
-      out.push(ch);
-      if (ch === '\\' && i + 1 < n) {
-        out.push(text[i + 1]);
-        i += 2;
-        continue;
-      }
-      if (ch === '"') inStr = false;
-      i += 1;
-      continue;
-    }
-    if (ch === '"') {
-      inStr = true;
-      out.push(ch);
-      i += 1;
-      continue;
-    }
-    if (ch === '/' && i + 1 < n && text[i + 1] === '/') {
-      hadComments = true;
-      i += 2;
-      while (i < n && text[i] !== '\n' && text[i] !== '\r') i += 1;
-      continue;
-    }
-    if (ch === '/' && i + 1 < n && text[i + 1] === '*') {
-      hadComments = true;
-      i += 2;
-      while (i + 1 < n && !(text[i] === '*' && text[i + 1] === '/')) i += 1;
-      i += 2;
-      continue;
-    }
-    if (ch === '}' || ch === ']') {
-      while (out.length && ' \t\r\n'.includes(out[out.length - 1])) out.pop();
-      if (out.length && out[out.length - 1] === ',') out.pop();
-      out.push(ch);
-      i += 1;
-      continue;
-    }
-    out.push(ch);
-    i += 1;
-  }
-  const stripped = out.join('');
-  try {
-    // `parseJson`, not `JSON.parse`: this file gets written back out, and a user's
-    // `"temperature": 1.0` would come back as `1` from a bare parse. The int/float
-    // distinction has to survive a round trip through somebody's real settings.json.
-    return [parseJson(stripped), hadComments];
-  } catch {
-    return [null, hadComments];
-  }
 }
 
 /**
@@ -505,7 +525,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  */
 function warnCommentedJsonc(target, agentPath, permission,
   includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = [],
-  deletionGate = true) {
+  deletionGate = true, editAsks = []) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -521,6 +541,13 @@ function warnCommentedJsonc(target, agentPath, permission,
       process.stdout.write(`[${prefix}] and, to hide its user-only skills from the model, a `
         + '"permission"."skill" key:\n');
       for (const line of jsonDumpsIndent(defaultSkillPermission(skillNames)).split('\n')) {
+        process.stdout.write(`[${prefix}]     ${line}\n`);
+      }
+    }
+    if (editAsks.length) {
+      process.stdout.write(`[${prefix}] and, so a write to a gate's own configuration asks first, `
+        + 'these keys in "permission"."edit" (after any "*" key):\n');
+      for (const line of jsonDumpsIndent(Object.fromEntries(editAsks.map((k) => [k, 'ask']))).split('\n')) {
         process.stdout.write(`[${prefix}]     ${line}\n`);
       }
     }
@@ -565,7 +592,7 @@ export function atomicWriteJson(p, config) {
  * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
  * failure — so the caller keeps its previous record rather than claiming denies never written. */
 export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = [],
-  staleSkillNames = [], result = {}, deletionGate = true) {
+  staleSkillNames = [], result = {}, deletionGate = true, editAsks = [], oldEdit = null) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -599,12 +626,16 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   let skillOpaque = null;
   let permIsObject = true;
   const added = [];
+  // The edit record is a copy, filled in place, and handed back only on the paths that wrote.
+  const edit = { asks: [...((oldEdit && oldEdit.asks) || [])], shorthand: (oldEdit && oldEdit.shorthand) || null };
+  let editNote = null;
   if (addPerm) {
     config.permission = defaultPermission(doctrines, excluded, deletionGate);
     if (skillNames.length) {
       config.permission.skill = defaultSkillPermission(skillNames);
       added.push(...skillNames);
     }
+    reconcileOpencodeEditPermission(config.permission, editAsks, edit);
   } else {
     const perm = get(config, 'permission');
     permIsObject = isDict(perm);
@@ -617,6 +648,9 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
       [skillChanged, skillOpaque] = reconcileOpencodeSkillPermission(perm, skillNames, staleSkillNames,
         added);
       permChanged = permChanged || skillChanged;
+      let editChanged;
+      [editChanged, editNote] = reconcileOpencodeEditPermission(perm, editAsks, edit);
+      permChanged = permChanged || editChanged;
     }
   }
   // The shape said no. This is the direction the residue warning above is NOT — a rule stated
@@ -653,10 +687,16 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
       + 'Geneseed cannot tell its own entry from one you wrote, so it removes neither. Delete '
       + 'them by hand if you want them gone.\n');
   }
+  if (editNote) {
+    process.stderr.write(`[geneseed] WARN: "permission"."edit" in ${path.basename(target)} `
+      + `${editNote}, so a write to a gate's own configuration there may not ask. Your policy is `
+      + 'left exactly as written.\n');
+  }
   const addLsp = !has(config, 'lsp');
   if (addLsp) config.lsp = true;
   if (!addInstr && !permChanged && !addLsp) {
     result.skillsAdded = added;
+    result.editRecord = edit;
     return target;
   }
   if (path.extname(target) === '.jsonc' && hadComments) {
@@ -672,12 +712,13 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate);
+      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate, editAsks);
     return target;
   }
   try {
     atomicWriteJson(target, config);
     result.skillsAdded = added;
+    result.editRecord = edit;
   } catch (e) {
     if (!isOsError(e)) throw e;
     process.stderr.write(`[geneseed] WARN: could not write ${target} (${e.message}) — `
