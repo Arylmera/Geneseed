@@ -57,6 +57,11 @@ const MANIFEST_CHECKS = [
   ['Cargo.toml', { label: 'cargo test', forms: ['cargo test'], refuse: /(?:^|\s)--no-run(?=\s|$)/ }],
   ['go.mod', { label: 'go test', forms: ['go test'] }],
 ];
+/**
+ * Every root manifest the checks are inferred from — what an emit seeds into the protected list.
+ * @type {string[]}
+ */
+export const INFERRED_FROM = ['package.json', ...MANIFEST_CHECKS.map(([f]) => /** @type {string} */ (f))];
 
 /**
  * The checks the root's manifests imply, and which manifests implied them. npm's default `test`

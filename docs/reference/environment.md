@@ -31,6 +31,7 @@ Where Geneseed writes an install, and what an upgrade re-renders.
 | `GENESEED_ROOT` | `geneseed upgrade` | Project root for that bundle (default: the bundle's parent). |
 | `GENESEED_PRIMARY` | `geneseed build` | `1` also emits the primary orchestrator agent (OpenCode). |
 | `GENESEED_COMMANDS` | `geneseed build` | `1` also emits the `/slash` command layer (OpenCode). |
+| `GENESEED_NO_SEED` | `geneseed build` | `1` skips seeding `<git root>/.geneseed/protected-checks.txt` on a project emit. For sandbox emits (the golden test matrix); `validate` and `doctor` never seed. |
 
 ## OpenCode plugin variables
 

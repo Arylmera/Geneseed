@@ -399,7 +399,9 @@ export function runCell(gen, cell, { repeat = 1 } = {}) {
     const home = path.join(sb.path, 'home');
     const out = path.join(sb.path, 'out');
     fs.mkdirSync(home);
-    const env = cellEnv(home);
+    // GENESEED_NO_SEED: the protected-checks seed walks UP to the git root, and a temp dir inside
+    // a repo would put it there, outside the sandbox this matrix snapshots (`seeds`, driver.mjs).
+    const env = { ...cellEnv(home), GENESEED_NO_SEED: '1' };
     const steps = (cell.before ? [cell.before] : []).concat(Array(repeat).fill(cell));
     let seeded = null;
     let proc = null;
