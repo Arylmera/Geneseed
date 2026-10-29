@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { GATE_LEDGER } from '../hosts/hosts.mjs';
+import { ADVISORY_VERB, GATE_LEDGER } from '../hosts/hosts.mjs';
 import { installTargets } from '../hosts/installs.mjs';
 import { activeInstalls, lastDays } from './api.mjs';
 
@@ -28,7 +28,7 @@ export function gateDays({ now = Date.now(), targets = installTargets() } = {}) 
       let e;
       try { e = JSON.parse(line); } catch { continue; }
       const i = typeof e?.ts === 'string' ? index.get(e.ts.slice(0, 10)) : undefined;
-      if (i === undefined || typeof e.rule !== 'string') continue;
+      if (i === undefined || typeof e.rule !== 'string' || e.verb === ADVISORY_VERB) continue;
       const row = by.get(e.rule) || { rule: e.rule, n: 0, per_day: new Array(WINDOW).fill(0) };
       row.n += 1;
       row.per_day[i] += 1;

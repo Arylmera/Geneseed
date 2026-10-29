@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { doneDecide, runsUnpiped } from '../../js/hosts/hooks-done.mjs';
+import { doneDecide, groupPasses, runsUnpiped } from '../../js/hosts/hooks-done.mjs';
+import { doneLine, inferDoneChecks } from '../../js/hosts/done-checks.mjs';
 import { tailReader } from '../../js/hosts/hooks-prims.mjs';
 import { readTail } from '../../js/lib/fs.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
@@ -116,10 +117,12 @@ test('runsUnpiped: the segment rule, written out', () => {
 /** A git project with a done list, an install root, and a Stop payload runner. */
 function project({
   checks = 'npm run lint\n', transcriptRows = [], host = null, active = false, extra = [],
+  files = {}, llm = null, llmExit = 0,
 } = {}) {
   const sb = makeSandbox();
   const proj = path.join(sb.path, 'proj');
   fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
+  for (const [rel, text] of Object.entries(files)) fs.writeFileSync(path.join(proj, rel), text);
   if (checks !== null) {
     fs.mkdirSync(path.join(proj, '.geneseed'), { recursive: true });
     fs.writeFileSync(path.join(proj, '.geneseed', 'done-checks.txt'), checks);
@@ -134,6 +137,13 @@ function project({
   const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) };
   delete env.GENESEED_LLM;
   delete env.GENESEED_LEARN_CHILD;
+  if (llm) {
+    // A model CLI that answers NOTHING — the learn path that used to print its answer on stdout.
+    const stub = path.join(sb.path, 'llm.mjs');
+    fs.writeFileSync(stub, `process.stdout.write(${JSON.stringify(llm)}); process.exitCode = ${llmExit};\n`);
+    // `node` from PATH: `$GENESEED_LLM` is split on whitespace, and execPath may hold a space.
+    env.GENESEED_LLM = `node ${stub}`;
+  }
   try {
     const argv = ['learn', '--memory', path.join(install, 'memory'), ...(host ? ['--host', host] : []),
       ...extra];
@@ -313,5 +323,206 @@ test('tailReader: one reader reads each window once, so two callers share it', (
     fs.appendFileSync(f, `${jsonl(prompt('appended after the gate read'))}\n`);
     assert.equal(read(f, (text) => text), seenByGate, 'the second caller re-read the file');
     assert.match(tailReader(4096)(f, (text) => text), /appended/, 'a new reader must see the append');
+  } finally { sb.cleanup(); }
+});
+
+// ---- inferred checks (user decision 2026-10-29: the harness maintains the proof) ----------
+// With no `.geneseed/done-checks.txt`, the root manifests imply the checks, each a GROUP of
+// accepted forms. An inferred check never blocks: it is advisory (a `systemMessage`).
+
+/** `inferDoneChecks` / `doneLine` over a throwaway root holding `files`. */
+function inferIn(files) {
+  const sb = makeSandbox();
+  try {
+    for (const [rel, text] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(sb.path, rel)), { recursive: true });
+      fs.writeFileSync(path.join(sb.path, rel), text);
+    }
+    const { sources, checks } = inferDoneChecks(sb.path);
+    return { sources, labels: checks.map((c) => c.label), checks, line: doneLine(sb.path) };
+  } finally { sb.cleanup(); }
+}
+const pkg = (scripts) => JSON.stringify({ scripts });
+
+test('inferDoneChecks: which checks each root manifest implies', () => {
+  // Each row: the root's files, then the sources and the check labels expected, in order.
+  const rows = [
+    ['no manifest implies nothing', { 'README.md': '# x\n' }, [], []],
+    ['package.json: test, lint and typecheck, in that order, npm without a lockfile',
+      { 'package.json': pkg({ typecheck: 'tsc', lint: 'eslint .', test: 'node --test', build: 'vite' }) },
+      ['package.json'], ['npm test', 'npm run lint', 'npm run typecheck']],
+    ['npm\'s default test script fails by design: it is no check',
+      { 'package.json': pkg({ test: 'echo "Error: no test specified" && exit 1', lint: 'eslint .' }) },
+      ['package.json'], ['npm run lint']],
+    ['a package.json with no usable script implies nothing', { 'package.json': pkg({ build: 'vite' }) }, [], []],
+    ['an unparseable package.json implies nothing', { 'package.json': '{oops' }, [], []],
+    ['pnpm-lock.yaml names pnpm', { 'package.json': pkg({ test: 'vitest' }), 'pnpm-lock.yaml': '' },
+      ['package.json'], ['pnpm test']],
+    ['yarn.lock names yarn', { 'package.json': pkg({ lint: 'eslint' }), 'yarn.lock': '' },
+      ['package.json'], ['yarn lint']],
+    ['bun.lockb names bun, and only `bun run` runs the script', { 'package.json': pkg({ test: 'x' }), 'bun.lockb': '' },
+      ['package.json'], ['bun run test']],
+    ['pom.xml', { 'pom.xml': '<project/>' }, ['pom.xml'], ['mvn test']],
+    ['build.gradle', { 'build.gradle': '' }, ['build.gradle'], ['gradle test']],
+    ['build.gradle.kts', { 'build.gradle.kts': '' }, ['build.gradle.kts'], ['gradle test']],
+    // pytest only where it shows: a unittest-only or test-less repo could never clear it.
+    ['a bare pyproject.toml implies nothing', { 'pyproject.toml': '[project]\nname = "x"\n' }, [], []],
+    ['pyproject.toml with [tool.pytest.ini_options]',
+      { 'pyproject.toml': '[tool.pytest.ini_options]\naddopts = "-q"\n' }, ['pyproject.toml'], ['pytest']],
+    ['pyproject.toml beside pytest.ini', { 'pyproject.toml': '', 'pytest.ini': '' }, ['pyproject.toml'], ['pytest']],
+    ['pyproject.toml beside conftest.py', { 'pyproject.toml': '', 'conftest.py': '' }, ['pyproject.toml'], ['pytest']],
+    ['pyproject.toml beside a tests/ dir', { 'pyproject.toml': '', 'tests/test_a.py': '' }, ['pyproject.toml'], ['pytest']],
+    ['Cargo.toml', { 'Cargo.toml': '' }, ['Cargo.toml'], ['cargo test']],
+    ['go.mod', { 'go.mod': '' }, ['go.mod'], ['go test']],
+    ['several manifests: each one infers', { 'package.json': pkg({ lint: 'eslint' }), 'go.mod': '' },
+      ['package.json', 'go.mod'], ['npm run lint', 'go test']],
+  ];
+  for (const [what, files, sources, labels] of rows) {
+    const got = inferIn(files);
+    assert.deepEqual(got.sources, sources, `${what}: sources`);
+    assert.deepEqual(got.labels, labels, `${what}: labels`);
+  }
+});
+
+test('doneLine: the SessionStart line, for each source', () => {
+  const rows = [
+    [{ 'package.json': pkg({ test: 'x', lint: 'y' }) },
+      'Done gate: inferred from package.json — npm test, npm run lint (advisory)'],
+    [{ 'README.md': '' }, 'Done gate: no checks could be inferred'],
+  ];
+  for (const [files, line] of rows) assert.equal(inferIn(files).line, line);
+  const sb = makeSandbox();
+  try {
+    fs.writeFileSync(path.join(sb.path, 'package.json'), pkg({ test: 'x' }));
+    fs.mkdirSync(path.join(sb.path, '.geneseed'));
+    fs.writeFileSync(path.join(sb.path, '.geneseed', 'done-checks.txt'), 'make check\n');
+    // The file wins over the manifest, and blocks.
+    assert.equal(doneLine(sb.path), 'Done gate: from .geneseed/done-checks.txt — make check (blocking)');
+    fs.writeFileSync(path.join(sb.path, '.geneseed', 'done-checks.txt'), '# opted out\n');
+    assert.equal(doneLine(sb.path), 'Done gate: off — .geneseed/done-checks.txt lists no checks');
+  } finally { sb.cleanup(); }
+});
+
+test('doneDecide: a group passes on any one of its forms, and owes its label', () => {
+  const { checks } = inferIn({ 'package.json': pkg({ test: 'x', lint: 'y' }), 'pom.xml': '' });
+  // Each row: the proof run after the edit, then the labels still owed.
+  const rows = [
+    ['nothing run', [], ['npm test', 'npm run lint', 'mvn test']],
+    ['`npm run test` proves `npm test`', [bash('npm run test')], ['npm run lint', 'mvn test']],
+    ['`npm t` proves `npm test`', [bash('npm t')], ['npm run lint', 'mvn test']],
+    ['extra arguments still count', [bash('npm test -- --watch=false')], ['npm run lint', 'mvn test']],
+    ['`./mvnw clean verify` proves `mvn test`', [bash('./mvnw clean verify')], ['npm test', 'npm run lint']],
+    ['PowerShell spelling `.\\mvnw test`', [call('PowerShell', { command: '.\\mvnw test' })], ['npm test', 'npm run lint']],
+    ['a piped form still proves nothing', [bash('npm run test | tail')], ['npm test', 'npm run lint', 'mvn test']],
+    ['`npm run lint:fix` is not `npm run lint`', [bash('npm run lint:fix')], ['npm test', 'npm run lint', 'mvn test']],
+    ['`mvn package` is not one of the accepted tasks', [bash('mvn package')], ['npm test', 'npm run lint', 'mvn test']],
+  ];
+  for (const [what, proof, owed] of rows) {
+    assert.deepEqual(doneDecide(jsonl(prompt(), edit(), ...proof), checks, R), owed, what);
+  }
+});
+
+test('groupPasses: a flag that skips the tests refuses the pass', () => {
+  const { checks } = inferIn({ 'pom.xml': '', 'build.gradle': '', 'Cargo.toml': '' });
+  const [mvn, gradle, cargo] = checks;
+  // Each row: the group, the command, then whether it proves the group.
+  const rows = [
+    [mvn, 'mvn clean install', true],
+    [mvn, 'mvn clean install -DskipTests', false],
+    [mvn, './mvnw verify -Dmaven.test.skip=true', false],
+    [mvn, 'mvn test -DskipTests=false', false],          // shortcut: any skipTests spelling refuses
+    [mvn, 'mvn install -DskipTests; mvn test', true],      // the second segment is a clean run
+    [mvn, 'mvn install -DskipTests && mvn test | tail', false],
+    [mvn, 'cd core && mvn verify', true],
+    [gradle, './gradlew build', true],
+    [gradle, './gradlew build -x test', false],
+    [gradle, 'gradle check -x=test', false],
+    [gradle, 'gradle build --exclude-task :app:test', false],
+    [gradle, 'gradle build -x javadoc', true],
+    [cargo, 'cargo test', true],
+    [cargo, 'cargo test --no-run', false],
+    [cargo, 'cargo test --release', true],
+  ];
+  for (const [g, command, want] of rows) assert.equal(groupPasses(command, g), want, command);
+});
+
+test('learn on Stop: inferred checks are advisory — a systemMessage, never a block', () => {
+  const files = { 'package.json': pkg({ test: 'node --test' }) };
+  const r = project({ checks: null, files, transcriptRows: [prompt(), editIn] });
+  assert.equal(r.rc, 0, r.err);
+  const verdict = JSON.parse(r.out);
+  assert.deepEqual(Object.keys(verdict), ['systemMessage'], 'an advisory must carry no decision');
+  assert.match(verdict.systemMessage, /inferred from package\.json.*npm test/);
+  assert.match(r.ledger, /"verb":"done-gate-advisory","rule":"law-3"/);
+  assert.match(r.err, /\[done-gate\] advisory/);
+  // With a model CLI set, learning runs after the advisory, and its answer stays off stdout:
+  // a second write there would turn the JSON into text the host cannot parse.
+  const learned = project({ checks: null, files, transcriptRows: [prompt(), editIn], llm: 'NOTHING' });
+  assert.equal(learned.rc, 0, learned.err);
+  assert.deepEqual(Object.keys(JSON.parse(learned.out)), ['systemMessage']);
+  // A model CLI that fails after the advisory: its code is not the hook's. Exit 2 on Stop would
+  // turn the advisory into a block, and any non-zero code drops the JSON.
+  const failed = project({ checks: null, files, transcriptRows: [prompt(), editIn], llm: 'NOTHING', llmExit: 2 });
+  assert.equal(failed.rc, 0, failed.err);
+  assert.deepEqual(Object.keys(JSON.parse(failed.out)), ['systemMessage']);
+  // The stop hook re-entry flag changes nothing for an advisory: it never blocked.
+  const again = project({ checks: null, files, transcriptRows: [prompt(), editIn], active: true });
+  assert.equal(JSON.parse(again.out).decision, undefined);
+});
+
+test('learn on Stop: inferred checks print nothing when proven, opted out, or not judged', () => {
+  const files = { 'package.json': pkg({ test: 'node --test' }) };
+  const rows = [
+    ['the inferred check passed after the edit', { checks: null, files, transcriptRows: [prompt(), editIn, bash('npm run test')] }],
+    ['the default npm test script is no check', { checks: null, files: { 'package.json': pkg({ test: 'echo "Error: no test specified" && exit 1' }) }, transcriptRows: [prompt(), editIn] }],
+    ['an empty done list opts the project out of inference', { checks: '# none\n', files, transcriptRows: [prompt(), editIn] }],
+    ['--no-done-gate skips inference too', { checks: null, files, transcriptRows: [prompt(), editIn], extra: ['--no-done-gate'] }],
+  ];
+  for (const [what, opts] of rows) {
+    const r = project(opts);
+    assert.equal(r.rc, 0, `${what}: ${r.err}`);
+    assert.equal(r.out, '', `${what}: stdout must stay empty, got ${JSON.stringify(r.out)}`);
+    assert.equal(r.ledger, '', `${what}: records nothing`);
+  }
+  // Bob never judges, and an inferred gate does not say so: every repo with a manifest would.
+  const bob = project({ host: 'bob', checks: null, files });
+  assert.equal(bob.out, '');
+  assert.equal(bob.err.includes('[done-gate]'), false, bob.err);
+});
+
+test('learn on Stop: the listed file wins over the manifest, and blocks', () => {
+  const r = project({ checks: 'make check\n', files: { 'package.json': pkg({ test: 'x' }) },
+    transcriptRows: [prompt(), editIn, bash('npm test')] });
+  const verdict = JSON.parse(r.out);
+  assert.equal(verdict.decision, 'block');
+  assert.match(verdict.reason, /make check/);
+  assert.doesNotMatch(verdict.reason, /npm test/);
+});
+
+test('context: the done gate line reaches SessionStart, even with nothing else to load', () => {
+  const sb = makeSandbox();
+  try {
+    const proj = path.join(sb.path, 'proj');
+    fs.mkdirSync(path.join(proj, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(proj, 'package.json'), pkg({ lint: 'eslint .' }));
+    const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), GENESEED_ROOT: proj };
+    const bare = spawnHook(['context'], '', { cwd: proj, env });
+    assert.equal(bare.status, 0, bare.stderr);
+    assert.equal(bare.stdout.trim(), 'Done gate: inferred from package.json — npm run lint (advisory)');
+    assert.match(bare.stderr, /nothing to load/);
+    fs.writeFileSync(path.join(proj, 'README.md'), '# P\n\nThe readme.\n');
+    const full = spawnHook(['context'], '', { cwd: proj, env });
+    assert.match(full.stdout, /^Done gate: inferred from package\.json — npm run lint \(advisory\)\r?\n/);
+    assert.match(full.stdout, /The readme\./);
+    // The verdict word follows the host: OpenClaude judges like Claude Code; Bob's Stop carries
+    // no transcript, so the line names the checks and claims no verdict.
+    const first = (host) => spawnHook(['context', '--host', host], '', { cwd: proj, env })
+      .stdout.split(/\r?\n/)[0];
+    assert.equal(first('openclaude'), 'Done gate: inferred from package.json — npm run lint (advisory)');
+    assert.equal(first('bob'), 'Done gate: inferred from package.json — npm run lint (not judged on this host)');
+    fs.mkdirSync(path.join(proj, '.geneseed'));
+    fs.writeFileSync(path.join(proj, '.geneseed', 'done-checks.txt'), 'make check\n');
+    assert.equal(first('openclaude'), 'Done gate: from .geneseed/done-checks.txt — make check (blocking)');
+    assert.equal(first('bob'), 'Done gate: from .geneseed/done-checks.txt — make check (not judged on this host)');
   } finally { sb.cleanup(); }
 });

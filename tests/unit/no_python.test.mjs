@@ -160,6 +160,14 @@ const PERMITTED = [
   ['js/inspect/scorecard-checks.mjs', 'PY_LITERAL', "'.py'", 1,
     'A FILE EXTENSION upstream contract_tests accepts for a contract/golden/fixture file in the '
     + 'scored repo — one of six it lists. A substring test on a path, not a file to execute.'],
+  // The done gate's inference (2026-10-29): a pyproject.toml implies `pytest` only where pytest
+  // shows, and a root conftest.py is one of the signs. Both copies (hook and OpenCode twin).
+  ['js/hosts/done-checks.mjs', 'PY_LITERAL', "'conftest.py'", 1,
+    'A PYTEST MARKER in the user\'s repo: the done gate infers `pytest` only when one exists, so '
+    + 'a unittest-only repo is not owed a check it can never clear. Tested for existence, never '
+    + 'opened or run.'],
+  ['adapters/opencode/plugins/geneseed-context.js', 'PY_LITERAL', '"conftest.py"', 1,
+    'The OpenCode twin of the done-checks.mjs row: the same pytest marker, tested for existence.'],
 ];
 
 const permitKey = (rel, rule, text) => `${rel} ${rule} ${text}`;

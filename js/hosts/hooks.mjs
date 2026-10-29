@@ -63,7 +63,7 @@ import {
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
-import { selfAndParents, readStdin, SECRET_RE } from './hooks-prims.mjs';
+import { selfAndParents, readStdin, SECRET_RE, DONE_LIST } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { ownershipBlock } from './ownership-gate.mjs';
 
@@ -576,9 +576,8 @@ function ruleGateTarget(p, root) {
 const DOTENV_RE = /(^|[\\/])\.env(\.[^\\/]*)?$/;
 
 export const SENSOR_LIST = '.geneseed/protected-checks.txt';
-// The done gate's list (`./hooks-done.mjs`, #289) protects itself too, with or without a
-// protected-checks list: emptying it would disarm the gate it feeds.
-export const DONE_LIST = '.geneseed/done-checks.txt';
+// The done gate's list (`DONE_LIST`, `./hooks-prims.mjs`; #289) protects itself too, with or
+// without a protected-checks list: emptying it would disarm the gate it feeds.
 /**
  * External Gate's boundary half: the checks an agent is judged by must sit outside what it can
  * edit, or a failing check is one edit away from a passing one. A project opts in by listing

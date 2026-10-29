@@ -795,7 +795,7 @@ async function renderSet(out, { eager, lazy }, state, { fold = false } = {}) {
   state.lazy += lazyLines.length
 }
 
-async function buildBlock(sets, wikis = [], commands = [], session = []) {
+async function buildBlock(sets, wikis = [], commands = [], session = [], done = null) {
   const state = { spent: 0, injected: 0, lazy: 0, headingsRead: 0 }
 
   // A session file discovery also found (user-rules.md at the root of a project install,
@@ -816,7 +816,8 @@ async function buildBlock(sets, wikis = [], commands = [], session = []) {
     state.injected++
   }
 
-  const proj = []
+  // The done gate's line opens the project section, and keeps it (and the block) alive alone.
+  const proj = done ? [done, ""] : []
   await renderSet(proj, sets, state, { fold: true })
 
   if (commands.length) {
@@ -846,8 +847,9 @@ async function buildBlock(sets, wikis = [], commands = [], session = []) {
 
 // Resolve the eager/lazy sets (manifest or auto-discovery) plus the machine wikis,
 // and render the injection block — shared by the session.created injection and the
-// compaction hook (the transform path reuses it via cachedBlockText).
-async function resolveBlock(root) {
+// compaction hook (the transform path reuses it via cachedBlockText). `judged` false is
+// OpenCode 2, which never judges a turn: its done line claims no verdict.
+async function resolveBlock(root, judged = true) {
   const harness = await harnessDir()
   const src = await resolveSource(root, harness)
   const sets = src.mode === "manifest"
@@ -855,7 +857,8 @@ async function resolveBlock(root) {
     : await discover(root)
   const wikis = await wikiSets()
   const commands = await discoverCommands(root)
-  return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness)), src }
+  const done = (await doneGateOff()) ? null : await doneLine(root, judged).catch(() => null)
+  return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness), done), src }
 }
 
 // Per-INSTANCE cache of the rendered block text for the transform path: the caller owns
@@ -868,7 +871,7 @@ async function cachedBlockText(root, cache) {
   const now = Date.now()
   if (cache.text !== null && now - cache.at < BLOCK_TTL_MS) return cache.text
   let text = ""
-  try { const { block } = await resolveBlock(root); text = block?.text || "" } catch {}
+  try { const { block } = await resolveBlock(root, cache.judged ?? true); text = block?.text || "" } catch {}
   cache.text = text
   cache.at = now
   return text
@@ -916,13 +919,98 @@ function doneGateOff() {
   return doneGateOffOnce
 }
 
+// null when the project has no list (or it is unreadable): then the checks are inferred.
 async function readDoneChecks(root) {
   try {
     const text = await fs.readFile(path.join(root, DONE_LIST), "utf8")
     return text.split(/\r?\n/).map((l) => l.trim().replace(/\s+/g, " ")).filter((l) => l && !l.startsWith("#"))
   } catch {
-    return []
+    return null
   }
+}
+
+// The inference twin of js/hosts/done-checks.mjs (user decision 2026-10-29): with no list, the
+// root manifests imply the checks, each a GROUP of accepted forms. Here they only shape the
+// reminder's wording ("advisory"); OpenCode never blocks either way.
+// tests/plugins/context_done.test.mjs runs both copies over the same fixtures.
+const PM_LOCKS = [["bun.lockb", "bun"], ["bun.lock", "bun"], ["pnpm-lock.yaml", "pnpm"], ["yarn.lock", "yarn"]]
+const PM_SCRIPTS = ["test", "lint", "typecheck"]
+function scriptCheck(pm, s) {
+  const npm = s === "test" ? ["npm test", "npm run test", "npm t"] : [`npm run ${s}`]
+  const own = pm === "npm" ? [] : pm === "bun" ? [`bun run ${s}`] : [`${pm} ${s}`, `${pm} run ${s}`]
+  return { label: own[0] ?? npm[0], forms: [...own, ...npm] }
+}
+const wrapped = (label, bins, tasks, refuse) => ({
+  label, refuse, forms: bins.flatMap((b) => tasks.flatMap((t) => [`${b} ${t}`, `${b} clean ${t}`])),
+})
+const MAVEN = wrapped("mvn test", ["mvn", "./mvnw", ".\\mvnw", "mvnw", "mvnw.cmd"], ["test", "verify", "install"],
+  /(?:^|\s)-D(?:skipTests|maven\.test\.skip)(?=[=\s]|$)/)
+const GRADLE = wrapped("gradle test", ["gradle", "./gradlew", ".\\gradlew", "gradlew", "gradlew.bat"], ["test", "build", "check"],
+  /(?:^|\s)(?:-x|--exclude-task)[ =](?:\S*:)?test(?=\s|$)/)
+const PYTEST = { label: "pytest", forms: ["pytest", "python -m pytest", "python3 -m pytest", "py -m pytest", "poetry run pytest"] }
+const MANIFEST_CHECKS = [
+  ["pom.xml", MAVEN],
+  ["build.gradle", GRADLE],
+  ["build.gradle.kts", GRADLE],
+  ["pyproject.toml", PYTEST],
+  ["Cargo.toml", { label: "cargo test", forms: ["cargo test"], refuse: /(?:^|\s)--no-run(?=\s|$)/ }],
+  ["go.mod", { label: "go test", forms: ["go test"] }],
+]
+const exists = (p) => fs.access(p).then(() => true, () => false)
+// The Node hook's `gitRootOf`: the nearest ancestor holding `.git` (a dir, or a worktree's file).
+async function gitRootOf(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    if (await exists(path.join(d, ".git"))) return d
+    if (path.dirname(d) === d) return null
+  }
+}
+async function inferDoneChecks(root) {
+  const has = (f) => exists(path.join(root, f))
+  const sources = [], checks = []
+  const add = (source, list) => {
+    if (!list.length) return
+    sources.push(source)
+    for (const c of list) if (!checks.some((k) => k.label === c.label)) checks.push(c)
+  }
+  if (await has("package.json")) {
+    let scripts = null
+    try { scripts = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf8")).scripts } catch {}
+    if (!scripts || typeof scripts !== "object") scripts = {}
+    let pm = "npm"
+    for (const [f, name] of PM_LOCKS) if (await has(f)) { pm = name; break }
+    add("package.json", PM_SCRIPTS.filter((s) => typeof scripts[s] === "string"
+      && !(s === "test" && /no test specified/.test(scripts[s]))).map((s) => scriptCheck(pm, s)))
+  }
+  // pytest only where it shows (the Node side's rule): a unittest-only repo could never clear it.
+  const pytestShows = async () => {
+    const toml = await fs.readFile(path.join(root, "pyproject.toml"), "utf8").catch(() => "")
+    if (toml.includes("[tool.pytest")) return true
+    for (const f of ["pytest.ini", "conftest.py", "tests"]) if (await has(f)) return true
+    return false
+  }
+  for (const [file, check] of MANIFEST_CHECKS) {
+    if (await has(file) && (check !== PYTEST || await pytestShows())) add(file, [check])
+  }
+  return { sources, checks }
+}
+// The checks of the git root above `dir`; `root` null outside a repo: no gate, as on the Node side.
+async function doneChecksOf(dir) {
+  const root = await gitRootOf(dir)
+  if (!root) return { root, source: "", blocking: false, checks: [] }
+  const listed = await readDoneChecks(root)
+  if (listed) return { root, source: DONE_LIST, blocking: true, checks: listed.map((l) => ({ label: l, forms: [l] })) }
+  const { sources, checks } = await inferDoneChecks(root)
+  return { root, source: sources.join(", "), blocking: false, checks }
+}
+// The context block's one line on the done gate. "reminder", not "blocking": nothing blocks here.
+// `judged` false (OpenCode 2, whose turns are never judged) claims no verdict at all.
+async function doneLine(dir, judged = true) {
+  const { root, source, blocking, checks } = await doneChecksOf(dir)
+  if (!root) return null
+  const names = checks.map((c) => c.label).join(", ")
+  const how = (verdict) => (judged ? verdict : "not judged on this host")
+  if (blocking) return checks.length ? `Done gate: from ${source} — ${names} (${how("reminder")})` : `Done gate: off — ${source} lists no checks`
+  return checks.length ? `Done gate: inferred from ${source} — ${names} (${how("advisory")})` : "Done gate: no checks could be inferred"
 }
 
 function runsUnpiped(command, line) {
@@ -950,6 +1038,16 @@ function runsUnpiped(command, line) {
     if (!piped && !/\|\||[;\n] ?(?:true|:|exit(?: 0)?)(?= ?(?:$|[;&|\n]))/.test(rest)) return true
   }
   return false
+}
+
+// The twin of hooks-done.mjs's `groupPasses`: a form runs unpiped, and no flag in `refuse`
+// skips the tests in the segment that ran it. Held equal by tests/plugins/context_done.test.mjs.
+function groupPasses(command, g) {
+  if (!g.forms.some((f) => runsUnpiped(command, f))) return false
+  if (!g.refuse) return true
+  return String(command).replace(/[ \t]+/g, " ").split(/&&|\|\||;|\n/).map((s) => s.trim())
+    .some((s) => !s.includes("|") && !g.refuse.test(s)
+      && g.forms.some((f) => s === f || s.startsWith(`${f} `)))
 }
 
 // An `apply_patch` call names its targets only in `patchText` markers. Copied from
@@ -982,6 +1080,7 @@ function patchSections(patchText) {
 // The checks still owed, judged over the previous turn and the current one: a reminder lasts
 // one turn, not the whole session. Our own injected messages (`geneseed-*` ids) open no turn.
 function doneOwed(messages, checks, root) {
+  const groups = checks.map((c) => (typeof c === "string" ? { label: c, forms: [c] } : c))
   const prompts = []
   messages.forEach((m, i) => {
     if (m?.info?.role === "user" && !String(m.info.id ?? "").startsWith("geneseed-")) prompts.push(i)
@@ -1015,9 +1114,9 @@ function doneOwed(messages, checks, root) {
     if (typeof command !== "string" || p.state.status !== "completed") continue
     const exit = p.state.metadata?.exit
     if (typeof exit === "number" && exit !== 0) continue
-    for (const check of checks) if (runsUnpiped(command, check)) passed.add(check)
+    for (const g of groups) if (groupPasses(command, g)) passed.add(g.label)
   }
-  return checks.filter((c) => !passed.has(c))
+  return groups.map((g) => g.label).filter((l) => !passed.has(l))
 }
 
 // The session-scope rule, once for both majors and both deliveries: a child/subagent session
@@ -1162,16 +1261,16 @@ export const GeneseedContext = async (ctx) => {
       // Its own function, so its early returns end the reminder, never the context injection.
       await (async () => {
         if (await doneGateOff()) return
-        const checks = await readDoneChecks(root)
+        const { root: gitRoot, source, blocking, checks } = await doneChecksOf(root)
         if (!checks.length) return
-        const owed = doneOwed(output.messages, checks, root)
+        const owed = doneOwed(output.messages, checks, gitRoot)
         if (!owed.length) return
         const stamp = Date.now()
         output.messages.unshift({
           info: { id: `geneseed-done-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
           parts: [{ id: `geneseed-done-part-${stamp}`, type: "text", text:
-            "Geneseed (Verify Before Asserting) — files were edited, and these checks from "
-            + `${DONE_LIST} have not passed since the last edit: ${owed.join("; ")}. Run them unpiped `
+            `Geneseed (Verify Before Asserting) — files were edited, and these checks ${blocking ? "from" : "(advisory) inferred from"} `
+            + `${source} have not passed since the last edit: ${owed.join("; ")}. Run them unpiped `
             + "before reporting the work done, or say plainly that they were not run and why." }],
         })
         log("transform: done-gate reminder injected")
@@ -1224,7 +1323,8 @@ const v2Model = (ref) => (ref?.providerID && ref?.id ? `${ref.providerID}/${ref.
 
 async function setupV2(ctx) {
   const root = repoRoot({ worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory })
-  const blockCache = { text: null, at: 0 }
+  // `judged: false`: OpenCode 2 never judges a turn, so the done line claims no verdict.
+  const blockCache = { text: null, at: 0, judged: false }
   // Same scope rule as V1's skipSession. V2's info names the parent `parentID` only, so only
   // that and the title are passed on.
   const skipSession = sessionSkipper(async (sid) => {
@@ -1233,7 +1333,8 @@ async function setupV2(ctx) {
   })
 
   // The done gate is not judged on OpenCode 2 (see `doneOwed`): said once, where its log goes.
-  if (!(await doneGateOff()) && (await readDoneChecks(root).catch(() => [])).length) {
+  // The listed gate only: an inferred one would log in every repo with a manifest.
+  if (!(await doneGateOff()) && await doneChecksOf(root).then((d) => d.blocking && d.checks.length, () => false)) {
     console.error(`[geneseed-context] done gate: ${DONE_LIST} found, but OpenCode 2 turns are not judged.`)
   }
 
@@ -1262,7 +1363,7 @@ async function setupV2(ctx) {
     try {
       if (await sovereignBypass(root)) return
       if (!Array.isArray(event?.messages) || await skipSession(event.sessionID)) return
-      const { block } = await resolveBlock(root)
+      const { block } = await resolveBlock(root, false)
       if (block) event.messages.unshift(v2UserMessage(event.messages, block.text))
     } catch (err) {
       log(`compaction error: ${err?.message ?? err}`)
@@ -1276,7 +1377,7 @@ async function setupV2(ctx) {
       try {
         if (isSkippedSession({ parentID: d.parentID, title: d.title })) continue
         if (await sovereignBypass(root)) continue
-        const { block } = await resolveBlock(root)
+        const { block } = await resolveBlock(root, false)
         if (!block) continue
         await ctx.session.synthetic({
           sessionID: d.sessionID, text: withModel(block.text, v2Model(d.model) || envModelStr()),

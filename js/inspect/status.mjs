@@ -63,7 +63,7 @@ import { tuiInventory } from './inventory.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
-  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER, HOSTS,
+  isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER, ADVISORY_VERB, HOSTS,
 } from '../hosts/hosts.mjs';
 // P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
 // deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
@@ -203,6 +203,7 @@ export function gateSummary(cfgDirs, platform = process.platform) {
       if (!line.trim()) continue;
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
+      if (entry && entry.verb === ADVISORY_VERB) continue;
       const rule = entry && typeof entry.rule === 'string' ? entry.rule : 'unknown';
       asks[rule] = (asks[rule] || 0) + 1;
       total += 1;

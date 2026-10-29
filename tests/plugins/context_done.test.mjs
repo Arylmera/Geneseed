@@ -8,8 +8,10 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { makeSandbox } from "../helpers/sandbox.mjs"
-import { runsUnpiped as nodeRunsUnpiped } from "../../js/hosts/hooks-done.mjs"
-import { GeneseedContext } from "../../adapters/opencode/plugins/geneseed-context.js"
+import { groupPasses as nodeGroupPasses, runsUnpiped as nodeRunsUnpiped } from "../../js/hosts/hooks-done.mjs"
+import { doneLine as nodeDoneLine, inferDoneChecks as nodeInfer } from "../../js/hosts/done-checks.mjs"
+import { gitRootOf as nodeGitRootOf } from "../../js/hosts/gitref.mjs"
+import contextPlugin, { GeneseedContext } from "../../adapters/opencode/plugins/geneseed-context.js"
 
 let tmp, repo
 const MARK = "Geneseed (Verify Before Asserting)"
@@ -18,6 +20,8 @@ before(async () => {
   tmp = makeSandbox("gsdone-").path
   repo = path.join(tmp, "repo")
   await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  // A git root: the gate judges the repo `gitRootOf` finds, on both hosts.
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
   await fs.writeFile(path.join(repo, ".geneseed", "done-checks.txt"), "# proof\nnpm run lint\n")
   await fs.writeFile(path.join(tmp, "geneseed-wiki.jsonc"), `{ "wikis": [] }`)
   process.env.GENESEED_WIKI = path.join(tmp, "geneseed-wiki.jsonc")
@@ -97,4 +101,120 @@ test("runsUnpiped stays in parity with js/hosts/hooks-done.mjs (twin)", async ()
     assert.equal(nodeRunsUnpiped(cmd, line), want, `node: ${cmd}`)
     assert.equal(twin(cmd, line), want, `twin: ${cmd}`)
   }
+})
+
+// Inference (user decision 2026-10-29): with no done list, the root manifests imply the checks.
+// The plugin carries its own copy of js/hosts/done-checks.mjs, so both copies run over the same
+// fixtures, each against the line written out here. Explicit lists differ on one word only:
+// the Node hook BLOCKS, the plugin can only remind.
+async function gitRepo(name, files) {
+  const dir = path.join(tmp, name)
+  await fs.mkdir(path.join(dir, ".git"), { recursive: true })
+  for (const [rel, text] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true })
+    await fs.writeFile(path.join(dir, rel), text)
+  }
+  return dir
+}
+async function injected(dir, messages = [user("u1")]) {
+  const hooks = await GeneseedContext({ client, directory: dir, worktree: dir })
+  const output = { messages: [...messages] }
+  await hooks["experimental.chat.messages.transform"]({}, output)
+  return output.messages.flatMap((m) => (m.parts ?? []).map((p) => String(p.text ?? ""))).join("\n")
+}
+const scripts = (s) => JSON.stringify({ scripts: s })
+
+test("the done gate line: both copies of the inference agree, row by row", async () => {
+  const rows = [
+    ["npm", { "package.json": scripts({ test: "node --test", lint: "eslint ." }) },
+      "Done gate: inferred from package.json — npm test, npm run lint (advisory)"],
+    ["npm-default", { "package.json": scripts({ test: 'echo "Error: no test specified" && exit 1' }) },
+      "Done gate: no checks could be inferred"],
+    ["pnpm", { "package.json": scripts({ typecheck: "tsc" }), "pnpm-lock.yaml": "" },
+      "Done gate: inferred from package.json — pnpm typecheck (advisory)"],
+    ["bun", { "package.json": scripts({ test: "x" }), "bun.lockb": "" },
+      "Done gate: inferred from package.json — bun run test (advisory)"],
+    ["jvm", { "pom.xml": "", "build.gradle.kts": "" },
+      "Done gate: inferred from pom.xml, build.gradle.kts — mvn test, gradle test (advisory)"],
+    // A bare pyproject.toml implies no pytest: a unittest-only repo could never clear it.
+    ["poly", { "pyproject.toml": "", "Cargo.toml": "", "go.mod": "" },
+      "Done gate: inferred from Cargo.toml, go.mod — cargo test, go test (advisory)"],
+    ["pytest-section", { "pyproject.toml": "[tool.pytest.ini_options]\n" },
+      "Done gate: inferred from pyproject.toml — pytest (advisory)"],
+    ["pytest-conftest", { "pyproject.toml": "", "conftest.py": "" },
+      "Done gate: inferred from pyproject.toml — pytest (advisory)"],
+    ["pytest-tests-dir", { "pyproject.toml": "", "tests/test_a.py": "" },
+      "Done gate: inferred from pyproject.toml — pytest (advisory)"],
+    ["none", { "README.md": "# x\n" }, "Done gate: no checks could be inferred"],
+  ]
+  for (const [name, files, line] of rows) {
+    const dir = await gitRepo(`infer-${name}`, files)
+    assert.equal(nodeDoneLine(dir), line, `node: ${name}`)
+    assert.ok((await injected(dir)).split("\n").includes(line), `plugin: ${name}`)
+  }
+  // OpenCode started in a SUBDIRECTORY: both sides judge the git root above it (the Node
+  // `context` hook calls `gitRootOf` before `doneLine`).
+  const mono = await gitRepo("infer-sub", { "package.json": scripts({ lint: "eslint" }), "packages/a/index.js": "" })
+  const sub = path.join(mono, "packages", "a")
+  const subLine = "Done gate: inferred from package.json — npm run lint (advisory)"
+  assert.equal(nodeDoneLine(nodeGitRootOf(sub)), subLine, "node: subdirectory")
+  assert.ok((await injected(sub)).split("\n").includes(subLine), "plugin: subdirectory")
+  const listed = await gitRepo("infer-listed", { "package.json": scripts({ test: "x" }), ".geneseed/done-checks.txt": "make check\n" })
+  assert.equal(nodeDoneLine(listed), "Done gate: from .geneseed/done-checks.txt — make check (blocking)")
+  assert.ok((await injected(listed)).includes("Done gate: from .geneseed/done-checks.txt — make check (reminder)"))
+})
+
+// OpenCode 2 never judges a turn (no reminder there), so its done line claims no verdict.
+test("the done gate line on OpenCode 2: named, and not judged", async () => {
+  const v2Line = async (dir) => {
+    const hooks = {}
+    const ctx = {
+      location: { directory: dir, project: { directory: dir } },
+      session: { hook: async (name, cb) => { hooks[name] = cb }, get: async () => ({ title: "work" }) },
+    }
+    const err = console.error
+    console.error = () => {}                 // the listed gate's one-time "not judged" notice
+    try { await contextPlugin.setup(ctx) } finally { console.error = err }
+    const ev = { sessionID: "s1", system: [], messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] }
+    await hooks.context(ev)
+    return ev.messages[0].content[0].text.split("\n").find((l) => l.startsWith("Done gate:"))
+  }
+  const inferred = await gitRepo("v2-inferred", { "package.json": scripts({ test: "x" }) })
+  assert.equal(await v2Line(inferred), "Done gate: inferred from package.json — npm test (not judged on this host)")
+  const listed = await gitRepo("v2-listed", { ".geneseed/done-checks.txt": "make check\n" })
+  assert.equal(await v2Line(listed), "Done gate: from .geneseed/done-checks.txt — make check (not judged on this host)")
+})
+
+test("inferred checks: the V1 reminder says advisory, and any accepted form clears it", async () => {
+  const dir = await gitRepo("infer-remind", { "package.json": scripts({ test: "node --test" }) })
+  const edit = tool("edit", { filePath: path.join(dir, "a.js") })
+  const owed = await injected(dir, [user("u1"), edit, user("u2")])
+  assert.match(owed, /Geneseed \(Verify Before Asserting\) — files were edited, and these checks \(advisory\) inferred from package\.json have not passed since the last edit: npm test\./)
+  for (const command of ["npm test", "npm run test", "npm t -- --watch=false"]) {
+    const ran = await injected(dir, [user("u1"), edit, tool("bash", { command }, "completed", { exit: 0 }), user("u2")])
+    assert.equal(ran.includes(MARK), false, command)
+  }
+})
+
+test("groupPasses stays in parity with js/hosts/hooks-done.mjs (twin), refusals included", async () => {
+  const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-context.js"), "utf8")
+  const fn = (name) => src.match(new RegExp(`function ${name}\\(command, (?:line|g)\\) \\{[\\s\\S]*?\\n\\}\\n`))?.[0]
+  assert.ok(fn("runsUnpiped") && fn("groupPasses"), "runsUnpiped or groupPasses not found in geneseed-context.js")
+  const twin = new Function(`${fn("runsUnpiped")}${fn("groupPasses")}; return groupPasses`)()
+  const dir = await gitRepo("infer-refuse", { "pom.xml": "", "build.gradle": "", "Cargo.toml": "" })
+  const [mvn, gradle, cargo] = nodeInfer(dir).checks
+  const rows = [
+    [mvn, "mvn clean install", true], [mvn, "mvn clean install -DskipTests", false],
+    [mvn, "./mvnw verify -Dmaven.test.skip=true", false], [mvn, "mvn install -DskipTests; mvn test", true],
+    [gradle, "./gradlew build", true], [gradle, "./gradlew build -x test", false], [gradle, "gradle check -x=test", false],
+    [cargo, "cargo test", true], [cargo, "cargo test --no-run", false],
+  ]
+  for (const [g, command, want] of rows) {
+    assert.equal(nodeGroupPasses(command, g), want, `node: ${command}`)
+    assert.equal(twin(command, g), want, `twin: ${command}`)
+  }
+  // And through the real transform: a skipped-tests run leaves the reminder standing.
+  const edit = tool("edit", { filePath: path.join(dir, "a.java") })
+  const skipped = await injected(dir, [user("u1"), edit, tool("bash", { command: "mvn install -DskipTests" }, "completed", { exit: 0 }), user("u2")])
+  assert.match(skipped, /have not passed since the last edit: mvn test; gradle test; cargo test\./)
 })

@@ -26,7 +26,7 @@ silently guarding the wrong rule after a renumber. See [ADR 0005](../adr/0005-st
 | `persist-insight` | process | ask: rule-gate (a write to `user-rules.md` or the memory store) | same as Claude Code | ask once: guard plugin (refuses the *first* write to that path; a re-issued write goes through) | log only (warning, call goes through) |
 | `consent-before-push` | process | ask: git-gate (every `git commit`/`git push`). Togglable: build without the process pack, or drop this rule alone with `--exclude-rules` (see [Exclusions](exclusions.md)). Only this question drops; the `deletion-is-deliberate` gate stays. | same as Claude Code | ask: permission prompt (`git commit*`/`git push*`), wired only when the process pack is on; a `loop/*` push is statically allowed | log only |
 | `external-gate` | rigor | ask: rule-gate (a write under a project's `.geneseed/protected-checks.txt` list) | same as Claude Code | block: guard plugin (same list) | block (exit 2) |
-| `verify-before-asserting` | law | block at Stop, once per turn: the done gate in `learn` (a turn that edited files, while a check in the project's `.geneseed/done-checks.txt` has not passed since the last edit). Opt-in per project; switchable per install with `--no-done-gate` (see [Exclusions](exclusions.md)) | same as Claude Code (**unverified live**: a frozen fork, and no check runs a model turn) | remind: context plugin, on the next request (OpenCode 1 only; OpenCode 2 is not judged, and logs so) | not judged: Stop carries no transcript (log line) |
+| `verify-before-asserting` | law | block at Stop, once per turn: the done gate in `learn` (a turn that edited files, while a check in the project's `.geneseed/done-checks.txt` has not passed since the last edit). Without that file, the checks are inferred from the git root's manifests and only warn (a `systemMessage` at Stop, never a block); switchable per install with `--no-done-gate` (see [Exclusions](exclusions.md)) | same as Claude Code (**unverified live**: a frozen fork, and no check runs a model turn) | remind: context plugin, on the next request (OpenCode 1 only; OpenCode 2 is not judged, and logs so) | not judged: Stop carries no transcript (log line) |
 | `commands-must-return` | ops | ask: git-gate (a recursive scan rooted at a filesystem root: `find /`, `du`, `grep -r`, `rg`, `Get-ChildItem -Recurse` at `/`, `/c`, `C:\`) | same as Claude Code | block: guard plugin (same root-scan pattern) | block (exit 2) |
 
 Bob has no "ask" tier (see [ADR 0007](../adr/0007-gates-fail-closed-per-host-ceiling.md)), so a
@@ -60,7 +60,7 @@ the OpenCode guard plugin in-process, on one call each must refuse and one it mu
 Every other rule carries no gate on any host. A human reads them because the model was told to
 follow them, not because a tool call was ever inspected.
 
-**Laws** — `one-intent-one-act` · `verify-before-asserting` (in a project without a done list) · `surface-failures` ·
+**Laws** — `one-intent-one-act` · `verify-before-asserting` (in a project without a done list, where inferred checks only warn) · `surface-failures` ·
 `data-not-orders` · `least-privilege` · `cure-the-cause` · `echo-the-intent`.
 
 **Doctrine: process** — `plan-before-acting` · `context-economy` · `read-the-docs-first` ·

@@ -598,8 +598,8 @@ export const MUTATIONS = [
     id: 'M35',
     name: 'the done gate never blocks',
     file: 'js/hosts/hooks-done.mjs',
-    find: '    if (!missing.length) return false;\n',
-    replace: '    return false;\n',
+    find: '    if (!missing.length) return null;\n',
+    replace: '    return null;\n',
     gate: UNIT_HOOK_DONE,
     why: 'A gate that never fires satisfies every "allows" row, and on Stop an allow is silence: '
       + 'nothing anywhere would show the turn was let through unproven. `hook_done.test.mjs` runs '

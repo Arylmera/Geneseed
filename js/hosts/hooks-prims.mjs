@@ -123,6 +123,10 @@ export function readStdin() {
   return stdinText;
 }
 
+// The done gate's own list (#289): `./done-checks.mjs` reads it, `./hooks.mjs`'s rule-gate
+// protects it. Here because both need it and only this module is in both closures.
+export const DONE_LIST = '.geneseed/done-checks.txt';
+
 // Law I's boundary half — rule-gate's credential scan, and the activity writer's redaction of
 // every snippet it puts on disk. Here, not in `./hooks.mjs`, so the writer reads the one copy
 // without loading the gates. High-precision vendor prefixes only — a generic "looks like
