@@ -456,7 +456,9 @@ export function runCell(cli, cell) {
       seed(sb.path, step.seed, repl);
       const cwd = path.join(sb.path, step.cwd || '.');
       proc = spawnSync(argv0[0], [...argv0.slice(1), ...subst(step.argv, repl)], {
-        cwd, env, encoding: 'buffer', windowsHide: true,
+        // `prompt` prints the whole rendered tree (~1.4 MB with diagram-design); Node's 1 MB
+        // default would fail it as ENOBUFS, a limit of the harness, not of the CLI.
+        cwd, env, encoding: 'buffer', windowsHide: true, maxBuffer: 16 * 1024 * 1024,
         input: Buffer.from(subst(step.stdin || '', repl), 'utf8'),
       });
       if (proc.error) return `spawn failed: ${proc.error.message}`;

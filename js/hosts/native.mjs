@@ -45,7 +45,7 @@ import { lstripNewlines } from './settings.mjs';
 const SKILL_DIR_PLACEHOLDER = '<this-skill-directory>';
 
 /** Mirrors `_build_core.VENDORED_SKILL_DIRS`. */
-export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report', 'explain-changes']);
+export const VENDORED_SKILL_DIRS = new Set(['react-view-transitions', 'daydream', 'token-report', 'explain-changes', 'diagram-design']);
 
 /**
  * `PurePath(rel).parts` — split on EITHER separator, empties dropped.

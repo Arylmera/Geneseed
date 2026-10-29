@@ -1044,6 +1044,20 @@ test('the gate flags a §N pointing past the anatomy, and says what it cannot ca
     (root) => gate(root, 'm.constitutionProblems()'));
   assert.ok(past.some((p) => p.includes('skills/wiki.md') && p.includes('§99')),
     `a pointer past the anatomy went unflagged: ${JSON.stringify(past)}`);
+  // A vendored folder numbers its own sections (diagram-design cites its §11 and §12), so the
+  // same pointer there is not an AGENT.md citation and must stay silent.
+  const dd = fs.readFileSync(path.join(SRC, 'skills', 'diagram-design', 'SKILL.md'), 'utf8');
+  assert.deepEqual(withFault({ 'src/skills/diagram-design/SKILL.md': `${dd}\nsee §99\n` },
+    (root) => gate(root, 'm.constitutionProblems()')), [],
+  'a vendored folder\'s own §N was read as an AGENT.md citation');
+  // ...but a pointer we wrote into a vendored folder, naming AGENT.md, is still held to the
+  // template: daydream's real `(AGENT.md §8)`, moved past the end, must still be flagged.
+  const day = fs.readFileSync(path.join(SRC, 'skills', 'daydream', 'SKILL.md'), 'utf8');
+  assert.ok(day.includes('AGENT.md §8'), 'daydream lost its AGENT.md §8 pointer, so this row plants nothing');
+  const dayPast = withFault({ 'src/skills/daydream/SKILL.md': day.replace('AGENT.md §8', 'AGENT.md §99') },
+    (root) => gate(root, 'm.constitutionProblems()'));
+  assert.ok(dayPast.some((p) => p.includes('skills/daydream/SKILL.md') && p.includes('§99')),
+    `an AGENT.md pointer inside a vendored folder went unflagged: ${JSON.stringify(dayPast)}`);
   // The stated limit, asserted so it stays a limit rather than becoming a surprise: a pointer
   // moved to a DIFFERENT existing section is silent here, and only the manual sweep in
   // docs/extending.md catches it.

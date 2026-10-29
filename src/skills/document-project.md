@@ -84,7 +84,10 @@ write; with none, step 5 proposes them.
    - **Stand alone, fully offline** — a single file, content pre-rendered to semantic HTML,
      all styling in one inline `<style>`, at most minimal vanilla JS (light/dark toggle, TOC
      scroll). No CDN, no external assets, no web fonts (use a system-font stack). Render any
-     diagram as hand-authored inline SVG or CSS — never a CDN library.
+     diagram as inline SVG or CSS — never a CDN library. When the `diagram-design` {{SKILL}} is
+     installed, draw each diagram (C4 views, flows, data models) through it and paste its SVG
+     inline: skip its first-run style-guide gate and keep this page's project-facing palette.
+     Without it, hand-author the SVG.
    - **Stay project-facing** — clean and professional styling, never the harness voice; and
      footer it with `mirrors commit <sha> · generated <date>` so the sync is auditable.
 

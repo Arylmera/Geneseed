@@ -205,6 +205,9 @@ const VENDOR_LINES = {
   'skills/react-view-transitions/VENDOR.md': '*Adapted from [vercel-labs/agent-skills]'
     + '(https://github.com/vercel-labs/agent-skills) (`skills/react-view-transitions`) '
     + 'by Vercel Engineering — MIT, modified.*',
+  'skills/diagram-design/VENDOR.md': '*Adapted from [cathrynlavery/diagram-design]'
+    + '(https://github.com/cathrynlavery/diagram-design) (`skills/diagram-design`) '
+    + 'by Cathryn Lavery — MIT, modified.*',
 };
 
 /** Property 6: the files the retro-credit list gives a token, by key. */
