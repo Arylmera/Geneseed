@@ -30,7 +30,7 @@ sensitive:               # always a checkpoint, whatever the granularity
   - src/main/resources/db/migration/**
 ```
 
-The rest of `AGENTS.md` holds the project's coding rules: conventions, build and test commands, project rules. Each developer's own state — a finer granularity, the pending checkpoint, the log of decisions — lives in the git-ignored `.geneseed/ownership.md`. [Set up ownership](../guides/set-up-ownership.md) walks through writing both.
+The rest of `AGENTS.md` holds the project's coding rules: conventions, build and test commands, project rules. Each developer's own state — a finer granularity, the pending checkpoint, the log of decisions — lives in `.geneseed/ownership.md`. That file is created only when there is such state to keep, and no file means the team granularity, nothing pending and no decisions. It is never committed: from its first write, `.geneseed/` gets a `.gitignore` that ignores everything in it except the team's files — the `.gitignore` itself, `bricks/`, `loops/`, `protected-checks.txt` and `done-checks.txt`. [Set up ownership](../guides/set-up-ownership.md) walks through the setup, which writes `AGENTS.md` only.
 
 ## Granularity
 

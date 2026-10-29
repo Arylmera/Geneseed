@@ -193,8 +193,19 @@ async function runChildSession(client, { prompt, agent, model, title, directory 
 //
 // Worktrees live under <root>/.geneseed/worktrees/ beside the run traces, NOT in the OS
 // temp dir: a kept worktree is unmerged work, and temp cleaners delete it. The state dir
-// gets a `*` .gitignore of its own (never overwriting one already there), so neither the
-// worktrees nor the traces show up as untracked files in the project.
+// gets a .gitignore of its own (never overwriting one already there): personal by default,
+// so neither the worktrees nor the traces show up as untracked files, with the team paths
+// (bricks, loops, check lists) allowed back. Anchored `/*`, because a bare `*` matches at
+// every depth and would hide `bricks/x.md` even under `!bricks/`. Same string as
+// GENESEED_GITIGNORE in plugins/geneseed-workflow.js; both are pinned by tests.
+const GENESEED_GITIGNORE = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"
+// Create-if-absent; a file holding only `*` is Geneseed's former output (it hid team bricks),
+// never a user edit, so it is upgraded. Any other content is the user's. Never throws.
+async function writeGitignore(file) {
+  try { await fs.writeFile(file, GENESEED_GITIGNORE, { flag: "wx" }) } catch {
+    try { if (/^\*(\r?\n)?$/.test(await fs.readFile(file, "utf8"))) await fs.writeFile(file, GENESEED_GITIGNORE) } catch { /* contained */ }
+  }
+}
 const fullSlug = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 const slug = (t) => fullSlug(t).slice(0, 32) || "agent"
 
@@ -205,7 +216,7 @@ export async function isolate(git, root, name) {
   const branch = `geneseed-wf/${name}`
   const state = path.join(root, ".geneseed")
   await fs.mkdir(path.join(state, "worktrees"), { recursive: true })
-  await fs.writeFile(path.join(state, ".gitignore"), "*\n", { flag: "wx" }).catch(() => {})
+  await writeGitignore(path.join(state, ".gitignore"))
   const dir = path.join(state, "worktrees", name)
   await git(["worktree", "add", "-b", branch, dir, base], root)
   return { dir, branch, base }

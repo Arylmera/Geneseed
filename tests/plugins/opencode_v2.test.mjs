@@ -270,6 +270,67 @@ test("workflow: the tool registers via transform and a child runs through the V2
   assert.deepEqual(calls[3][1], { sessionID: "ses_child", text: "say hi" })
 })
 
+// `<repo>/.geneseed/` is personal by default, so the first trace write gives it a `.gitignore`
+// that ignores the folder's top level and lets the team paths back in — the same string
+// `_runtime.js` writes (tests/workflow_runtime.test.mjs asks git what it hides). Create-if-absent: a file
+// the user wrote stays byte-identical. And a `.gitignore` that cannot be created (here a
+// directory squats the path) never costs the trace or the run's result.
+async function runDemoIn(directory) {
+  const { ctx, transforms } = fakeCtx({
+    directory,
+    session: {
+      create: async () => ({ id: "ses_child" }),
+      context: async () => [{ type: "assistant", tokens: { output: 1 }, content: [{ type: "text", text: "hi" }] }],
+    },
+  })
+  await (await load("workflow")).setup(ctx)
+  const tools = []
+  for (const cb of transforms) cb({ add: (t) => tools.push(t) })
+  return (await tools[0].execute({ name: "demo" })).content
+}
+test("workflow: the first trace write creates .geneseed/.gitignore, personal by default", async () => {
+  const dir = path.join(tmp, "gi-absent")
+  await fs.mkdir(dir, { recursive: true })
+  const res = await runDemoIn(dir)
+  assert.match(res, /workflow "demo" complete/)
+  assert.equal(readFileSync(path.join(dir, ".geneseed", ".gitignore"), "utf8"),
+    "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n")
+})
+test("workflow: an existing .geneseed/.gitignore is left byte-identical", async () => {
+  const dir = path.join(tmp, "gi-present")
+  await fs.mkdir(path.join(dir, ".geneseed"), { recursive: true })
+  const mine = "# mine\n!keep.txt\r\n"
+  await fs.writeFile(path.join(dir, ".geneseed", ".gitignore"), mine)
+  await runDemoIn(dir)
+  assert.equal(readFileSync(path.join(dir, ".geneseed", ".gitignore"), "utf8"), mine)
+})
+// A file holding only `*` (any line ending, or none) is what Geneseed itself wrote before
+// the allowlist, and it hid team bricks — so it is upgraded. `*` plus anything else is a
+// user's edit and stays byte-identical.
+for (const [label, before, after] of [
+  ["'*\\n' is upgraded", "*\n", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"],
+  ["'*\\r\\n' is upgraded", "*\r\n", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"],
+  ["'*' with no newline is upgraded", "*", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"],
+  ["'*' plus a user line is left byte-identical", "*\n# mine\n", "*\n# mine\n"],
+]) {
+  test(`workflow: an old .geneseed/.gitignore — ${label}`, async () => {
+    const dir = path.join(tmp, `gi-old-${JSON.stringify(before).replace(/\W/g, "")}`)
+    await fs.mkdir(path.join(dir, ".geneseed"), { recursive: true })
+    await fs.writeFile(path.join(dir, ".geneseed", ".gitignore"), before)
+    assert.match(await runDemoIn(dir), /workflow "demo" complete/)
+    assert.equal(readFileSync(path.join(dir, ".geneseed", ".gitignore"), "utf8"), after)
+  })
+}
+test("workflow: a .gitignore that cannot be created never costs the trace", async () => {
+  const dir = path.join(tmp, "gi-blocked")
+  await fs.mkdir(path.join(dir, ".geneseed", ".gitignore"), { recursive: true })
+  const res = await runDemoIn(dir)
+  assert.match(res, /workflow "demo" complete/)
+  const trace = res.match(/Trace: (.+)$/m)[1].trim()
+  assert.ok(trace.startsWith(path.join(dir, ".geneseed", "workflow-runs")), trace)
+  assert.ok(existsSync(trace), "the trace file was not written")
+})
+
 // ---- activity -------------------------------------------------------------------
 // V2 events are translated into the V1 events the one reducer already handles.
 test("activity: toV1Events maps the V2 vocabulary onto V1 events", async () => {

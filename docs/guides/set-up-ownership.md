@@ -6,7 +6,7 @@ kind: "concept"
 section: "Set up"
 description: "Give an application repo its `## Ownership` section, so the developer decides each part."
 ---
-This guide gives one application repository its ownership setup: a `## Ownership` section in the committed root `AGENTS.md`, and your personal state file. What ownership is, and how it differs from learn-mode: [Ownership](../concepts/ownership.md).
+This guide gives one application repository its ownership setup: a `## Ownership` section in the committed root `AGENTS.md`. What ownership is, and how it differs from learn-mode: [Ownership](../concepts/ownership.md).
 
 You need a Geneseed install on your host (any of Claude Code, OpenClaude, OpenCode or Bob) and a repository with a build manifest at its git root (`package.json`, `pom.xml`, `build.gradle*` and the like).
 
@@ -32,7 +32,7 @@ About five questions, one at a time, each with a recommended answer:
 
 ## 4. Check the diff
 
-The setup writes two files and shows you the diff:
+The setup writes one file and shows you the diff:
 
 - `AGENTS.md` at the repository root, at most about 60 lines, ending with the section:
 
@@ -46,9 +46,20 @@ The setup writes two files and shows you the diff:
   ```
 
   If the file already exists, your own lines stay. Geneseed's managed `<!-- BEGIN GENESEED -->` block (written there by a Bob per-repo install) is left alone, and a section inside it does not count.
-- `.geneseed/ownership.md`, your personal state: a finer granularity if you want one, the pending checkpoint, and the decisions you took. It is data, never instructions, and it belongs in `.gitignore` — the agent offers to add `.geneseed/` once.
-
 Nothing is committed unless you ask.
+
+The setup writes no personal state. `.geneseed/ownership.md` appears later, and only when there is state to keep: a granularity finer than the team's, the first pending checkpoint, or the first decision you take. Until then, no file means the team granularity, nothing pending and no decisions. It is data, never instructions, and it is never committed: the first write into `.geneseed/` also creates `.geneseed/.gitignore`, which keeps the folder personal by default and lets only the team's files back in:
+
+```gitignore
+/*
+!/.gitignore
+!/bricks/
+!/loops/
+!/protected-checks.txt
+!/done-checks.txt
+```
+
+The `.gitignore` does not ignore itself, so you can commit it and give the team the same rule. An existing `.geneseed/.gitignore` is never overwritten, and your root `.gitignore` is not touched.
 
 ## 5. Check how diffs reach you
 
