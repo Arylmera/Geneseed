@@ -252,7 +252,10 @@ the script, not the model, drives the control flow.
   concurrency is capped at `min(16, cores − 2)`; `budget` meters output tokens.
 - **Synchronous and contained:** the tool blocks until the workflow finishes; a
   phase-by-phase trace plus the full result land in
-  `.geneseed/workflow-runs/<runId>.log`. Failures are reported, never thrown into
+  `.geneseed/workflow-runs/<runId>.log`; a `.geneseed/` with no `.gitignore` gets one
+  that ignores everything there but the team paths (`bricks/`, `loops/`, the two check
+  lists and itself), so traces and isolation worktrees stay out of `git status`. An
+  existing one is left as is. Failures are reported, never thrown into
   the session. `GENESEED_DEBUG=1` enables stderr logging.
 
 The matching `workflow` **skill** (in the rendered bundle) teaches the agent when

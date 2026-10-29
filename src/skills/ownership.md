@@ -44,6 +44,10 @@ Granularity: team        # or a level finer than the team default
 - <date> <decision the developer took, with their reason>
 ```
 
+Create it only when there is personal state to store: a granularity finer than the team
+default, the first `## Pending` checkpoint, or the first `## Decisions` entry. No file means the
+team granularity, nothing pending and no decisions. `AGENTS.md` stays the only configuration.
+
 A personal override may only be finer than the team default. A coarser one needs the developer's
 explicit yes, logged under `## Decisions`.
 
@@ -63,7 +67,9 @@ Run it when the repo has no `## Ownership` section, or when the developer asks. 
    correct the conventions; ownership on for this repo; the default granularity; the sensitive
    zones (for example `payment/`, migrations, security config); free-form project rules.
 4. **Write** — the only write of the setup: `AGENTS.md` (at most ~60 lines, this section
-   included) and `.geneseed/ownership.md`. Show the diff. Commit only on request.
+   included). Show the diff. Commit `AGENTS.md` only on request. The setup writes no
+   `.geneseed/ownership.md`: it is personal state, created later only when needed, and never
+   committed.
 5. **Check how diffs reach the developer.** Read the permission mode from the host's settings;
    when the live mode cannot be seen there, ask the developer. If edits are auto-accepted (bypass,
    accept-edits), warn that no native diff will stop for them; if they keep it, use the compact

@@ -21,7 +21,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import {
-  createRuntime, createLimiter, validateSchema, extractJson, overlaps,
+  createRuntime, createLimiter, validateSchema, extractJson, overlaps, isolate,
 } from "../adapters/opencode/workflows/_runtime.js"
 import { makeSandbox } from "./helpers/sandbox.mjs"
 
@@ -212,7 +212,8 @@ test("isolated agents run in their own worktrees, and a file two of them changed
   assert.equal(client.ran.length, 3)
   assert.ok(client.ran.every((r) => r.dir && path.resolve(r.dir) !== path.resolve(repo)))
   assert.equal(fs.readFileSync(path.join(repo, "shared.txt"), "utf8"), "base\n")
-  assert.equal(gitSync(["status", "--porcelain"], repo), "")
+  // Only the state dir's own .gitignore shows (a team commits it); the worktrees stay hidden.
+  assert.equal(gitSync(["status", "--porcelain", "-uall"], repo), "?? .geneseed/.gitignore\n")
 
   // a and b changed files, so both are kept with what they touched; c changed nothing.
   const kept = rt.worktrees().sort((x, y) => (x.label < y.label ? -1 : 1))
@@ -250,10 +251,50 @@ test("a second same-day run gets its own branch, and worktrees live under .genes
   for (const w of kept) {
     assert.equal(path.relative(path.join(repo, ".geneseed", "worktrees"), w.dir), `${w.branch.slice(12)}`)
   }
-  assert.equal(fs.readFileSync(path.join(repo, ".geneseed", ".gitignore"), "utf8"), "*\n")
-  assert.equal(gitSync(["status", "--porcelain"], repo), "")
+  assert.equal(fs.readFileSync(path.join(repo, ".geneseed", ".gitignore"), "utf8"),
+    "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n")
+  // The worktrees stay hidden; only the .gitignore itself shows, since a team commits it.
+  assert.equal(gitSync(["status", "--porcelain", "-uall"], repo), "?? .geneseed/.gitignore\n")
   for (const w of kept) gitSync(["worktree", "remove", "--force", w.dir], repo)
   cleanup()
+})
+
+// The .gitignore the runtime writes keeps `.geneseed/` personal by default and lets the team
+// paths back in, at every depth below an allowed folder. Anchored on purpose: with a bare `*`
+// the pattern matches at every level, so `!/bricks/` would re-include the folder while
+// `bricks/x.md` stayed ignored. Asked of git itself (`check-ignore`), not of the string.
+test("the .geneseed/.gitignore the runtime writes hides personal state and keeps team paths", async () => {
+  const { dir: repo, cleanup } = tempRepo()
+  const w = await isolate(git, repo, "probe")
+  const ignored = (p) => {
+    try { execFileSync("git", ["check-ignore", "-q", "--no-index", p], { cwd: repo }); return true }
+    catch (e) { if (e.status === 1) return false; throw e }
+  }
+  for (const p of [".geneseed/ownership.md", ".geneseed/learn.md", ".geneseed/workflow-runs/x.json",
+    ".geneseed/worktrees/a/b"]) assert.equal(ignored(p), true, `${p} must be ignored`)
+  for (const p of [".geneseed/.gitignore", ".geneseed/bricks/x.md", ".geneseed/bricks/sub/y.md",
+    ".geneseed/loops/z.json", ".geneseed/protected-checks.txt", ".geneseed/done-checks.txt"]) {
+    assert.equal(ignored(p), false, `${p} must not be ignored`)
+  }
+  gitSync(["worktree", "remove", "--force", w.dir], repo)
+  cleanup()
+})
+
+// A `.geneseed/.gitignore` holding only `*` (any line ending, or none) is the runtime's own
+// former output, which hid team bricks — isolation upgrades it. `*` plus anything else, or any
+// other content, is a user's edit and stays byte-identical.
+test("isolation upgrades a former '*' .gitignore and leaves a user's byte-identical", async () => {
+  const ALLOW = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"
+  for (const [before, after] of [["*\n", ALLOW], ["*\r\n", ALLOW], ["*", ALLOW],
+    ["*\n# mine\n", "*\n# mine\n"], ["# mine\n!keep\r\n", "# mine\n!keep\r\n"]]) {
+    const { dir: repo, cleanup } = tempRepo()
+    fs.mkdirSync(path.join(repo, ".geneseed"))
+    fs.writeFileSync(path.join(repo, ".geneseed", ".gitignore"), before)
+    const w = await isolate(git, repo, "probe")
+    assert.equal(fs.readFileSync(path.join(repo, ".geneseed", ".gitignore"), "utf8"), after, JSON.stringify(before))
+    gitSync(["worktree", "remove", "--force", w.dir], repo)
+    cleanup()
+  }
 })
 
 test("isolation without a git executor fails the agent and never runs it in the shared tree", async () => {

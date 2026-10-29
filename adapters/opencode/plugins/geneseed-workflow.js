@@ -11,7 +11,8 @@
 //
 // Saved workflows ONLY — no model-authored/eval'd scripts (v1). Synchronous: the tool
 // blocks until the workflow finishes; a phase-by-phase trace and the full result are
-// written to `.geneseed/workflow-runs/<runId>.log`. Every failure is contained and
+// written to `.geneseed/workflow-runs/<runId>.log`, and `.geneseed/` gets a
+// personal-by-default `.gitignore` if it has none. Every failure is contained and
 // reported, never thrown into the session.
 //
 // Quiet unless GENESEED_DEBUG=1 (which adds a load banner on stderr), except a
@@ -118,11 +119,27 @@ function isolationReport(stats) {
   return lines.join("\n")
 }
 
+// `<repo>/.geneseed/` is personal by default, so its first writer makes it ignore itself, with
+// the team paths (bricks, loops, check lists) allowed back. Anchored `/*`: a bare `*` matches at
+// every depth and would hide `bricks/x.md` even under `!bricks/`. Create-if-absent (`wx`): a
+// user's own edit survives; its failure never costs the trace. The same string lives in
+// `workflows/_runtime.js` (a plugin cannot share a file — V2 loads every .js here as a
+// plugin — and the runtime is imported lazily, from a configurable dir); tests pin both.
+const GENESEED_GITIGNORE = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"
+// Create-if-absent; a file holding only `*` is Geneseed's former output (it hid team bricks),
+// never a user edit, so it is upgraded. Any other content is the user's. Never throws.
+async function writeGitignore(file) {
+  try { await fs.writeFile(file, GENESEED_GITIGNORE, { flag: "wx" }) } catch {
+    try { if (/^\*(\r?\n)?$/.test(await fs.readFile(file, "utf8"))) await fs.writeFile(file, GENESEED_GITIGNORE) } catch { /* contained */ }
+  }
+}
+
 async function writeTrace(rootDir, runId, lines) {
   if (!rootDir) return "(no trace file — unknown working dir)"
   try {
     const dir = path.join(rootDir, ".geneseed", "workflow-runs")
     await fs.mkdir(dir, { recursive: true })
+    await writeGitignore(path.join(rootDir, ".geneseed", ".gitignore"))
     const file = path.join(dir, `${runId}.log`)
     await fs.writeFile(file, lines.join("\n") + "\n", "utf8")
     return file

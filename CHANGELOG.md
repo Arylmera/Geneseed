@@ -12,6 +12,26 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 - **The done gate needs no file any more.** With no `.geneseed/done-checks.txt`, it infers the project's checks from its manifest: `package.json` scripts `test`, `lint` and `typecheck` (package manager read from the lockfile), Maven, Gradle, pytest (only where pytest shows), `cargo test` and `go test`. Each check accepts its usual spellings (`npm test`, `npm run test`, `pnpm test`, `./mvnw clean verify`), and a form that skips the tests (`-DskipTests`, `-x test`, `--no-run`) does not count. Inferred checks are **advisory** in this release: an unproven one is named to the user (`systemMessage`) and never blocks. A `done-checks.txt` still wins and still blocks; an empty one switches the gate off. Every session now opens with one line naming the checks and their source; on Bob and OpenCode 2, which never judge a turn, it says so. Advisories are kept out of the gate counts in `status` and the web UI.
 
+### Changed
+- Ownership setup writes the root `AGENTS.md` only. `.geneseed/ownership.md` is created later,
+  only when there is personal state to keep (a finer granularity, the first pending checkpoint,
+  the first decision); no file means the team granularity, nothing pending, no decisions.
+- `.geneseed/` is personal by default: its first writer creates `.geneseed/.gitignore` when
+  absent (never overwriting one) with `/*` plus `!/` exceptions for the team paths —
+  `.gitignore`, `bricks/`, `loops/`, `protected-checks.txt`, `done-checks.txt`. The writers are
+  the ownership and learn-mode Rites (in place of an offer to edit the root `.gitignore`) and
+  the OpenCode workflow plugin on its first trace.
+
+### Fixed
+- The OpenCode workflow runtime's `.geneseed/.gitignore` was a bare `*`, which hid new team
+  bricks and loops (and the check lists) from git; it now writes the same allowlist. An
+  existing `.geneseed/.gitignore` that holds only `*` (that old output) is upgraded
+  automatically on the next workflow run (and by the ownership and learn-mode Rites when they
+  next write there); any other content is left as is.
+- If your project's ROOT `.gitignore` lists `.geneseed/` (added by the old Rite offer), remove
+  that line by hand: git cannot re-include files under an ignored directory, so the team paths
+  stay hidden until you do.
+
 ## [4.28.0] — 2026-10-28
 
 Minor: an ask that waits on the user and is not clear by itself now says what it does and why; the OpenCode 1.x workflow banner no longer paints over the input box. Run `geneseed rebuild-all` once after updating to get the amended rule and the quiet banner.
