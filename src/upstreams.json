@@ -13,6 +13,13 @@
     "license": "MIT",
     "licenseFile": null
   },
+  "diagram-design": {
+    "repo": "cathrynlavery/diagram-design",
+    "commit": "0cf73c3fcc56667ad91a9a04c439ac6ccfabc9d1",
+    "author": "Cathryn Lavery",
+    "license": "MIT",
+    "licenseFile": "skills/diagram-design/LICENSE"
+  },
   "mattpocock-skills": {
     "repo": "mattpocock/skills",
     "commit": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",

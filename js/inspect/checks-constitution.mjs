@@ -14,6 +14,7 @@ import {
 } from '../build/source.mjs';
 import { LEAN_BLOCK_RE, splitAtLawHeadings } from '../build/render.mjs';
 import { themeFiles } from '../hosts/installs.mjs';
+import { isVendoredPath } from '../hosts/native.mjs';
 import { readText } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
 import { NOTE, isFile, rglob } from './scan.mjs';
@@ -386,7 +387,10 @@ export function constitutionProblems() {
       let text;
       try { text = readText(p); } catch { continue; }
       const rel = path.relative(SRC, p).split(path.sep).join('/');
-      for (const [, n] of text.matchAll(/§(\d+)/g)) {
+      // A vendored folder's bare `§N` cites its own upstream sections, so there only an explicit
+      // `AGENT.md §N` (a pointer we added, as daydream's) is held to the template.
+      const cite = isVendoredPath(rel) ? /AGENT\.md\s*§(\d+)/g : /§(\d+)/g;
+      for (const [, n] of text.matchAll(cite)) {
         if (declared.has(Number(n))) continue;
         problems.push(`[authoring] ${rel} cites AGENT.md §${n}, and the template declares no `
           + `such section ${formatRepr([...declared].sort((a, b) => a - b).map(String))} — a `

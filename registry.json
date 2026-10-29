@@ -281,6 +281,13 @@
       "added": "2026-07-01",
       "last_verified": "2026-09-06"
     },
+    "skills/diagram-design": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-10-29",
+      "last_verified": ""
+    },
     "skills/document-project": {
       "status": "approved",
       "version": "1.0.0",
