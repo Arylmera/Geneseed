@@ -53,6 +53,7 @@ import {
 import {
   hashesOf, ownedHashes, ownedState, ownedWithin, recordedDenies,
 } from '../hosts/owned.mjs';
+import { seedProtectedChecks } from '../hosts/geneseed-dir.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
@@ -245,6 +246,17 @@ function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = []) {
 }
 
 /**
+ * The protected-checks seed every PROJECT emit runs, whatever the host (`seedProtectedChecks`,
+ * `js/hosts/geneseed-dir.mjs`): RENDER seeds, PRUNE removes a seed no candidate supports any
+ * more, MANIFEST records its hash under `seeded_checks` — only when there is one, so a manifest
+ * with no seed stays byte-identical to before. `null` (no git root) touches nothing.
+ */
+function pruneSeed(seed) {
+  if (seed) pruneOwned(seed.root, seed.oldOwned, seed.owned, seed.oldHashes, [...seed.editRefused]);
+}
+const seedKey = (seed) => (seed?.hash ? { seeded_checks: seed.hash } : {});
+
+/**
  * The manifest PRE-read all three emit bodies performed inline: does a manifest already
  * exist at `manifestPath`, and if so, what does it parse to. `existed` is what
  * `emitOpencode` alone needs (as `manifestExisted`, threaded into the render job); every
@@ -322,9 +334,11 @@ function emitOpencode(cfg, args, out) {
       oldDenies, oldHashes,
     });
   const { owned, stats, cfgName, skillDenies, editRefused } = rendered;
+  const seed = seedProtectedChecks(root, doc);
 
   phaseLog('PRUNE');
   pruneOwned(oc, oldOwned, owned, oldHashes, editRefused);
+  pruneSeed(seed);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -335,6 +349,7 @@ function emitOpencode(cfg, args, out) {
     hashes: ownedHashes(oc, owned),
     scope: 'project',
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
+    ...seedKey(seed),
   });
 
   const extra = extrasTail(stats);
@@ -414,7 +429,7 @@ function emitOpencodeGlobal(cfg, args, out) {
  * built to throw — where `null` would raise an unrelated TypeError and `{}` would bake the
  * literal string `"undefined"` into the shim and silently kill every hook in the install.
  */
-function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts }) {
+function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpts, root }) {
   const manifestPath = path.join(cfgDir, GLOBAL_MANIFEST);
   const { doc } = readManifest(manifestPath);
   const oldOwned = (doc && doc.owned) || [];
@@ -435,9 +450,12 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     hookOpts, oldHashes,
   });
   const { owned, stats, memStatus, nbStatus, managed, editRefused } = rendered;
+  // `root` is null on a global emit: it has no project to seed.
+  const seed = root ? seedProtectedChecks(root, doc) : null;
 
   phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
+  pruneSeed(seed);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -450,6 +468,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     hashes: ownedHashes(cfgDir, owned),
     managed,
     scope,
+    ...seedKey(seed),
   });
 
   // VERIFY — re-read the settings file just written and match it against the claims just
@@ -560,7 +579,7 @@ const claudeShaped = (name) => (cfg, args, out) => {
   const hookOpts = hookRunnerEntry();
   before?.();
   const r = withWriteRecord(() => emitClaudeCore(cfg, args, {
-    cfgDir, claudeMd, scope: configDir ? 'global' : 'project', host, out, hookOpts,
+    cfgDir, claudeMd, scope: configDir ? 'global' : 'project', host, out, hookOpts, root,
   }));
   process.stdout.write(summary(root ?? cfgDir, r));
   return configDir ? cfgDir : undefined;
