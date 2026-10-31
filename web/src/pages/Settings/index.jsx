@@ -10,6 +10,8 @@ import Seg from '../../components/Seg.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { TAB_LABELS } from '../../lib/router.js'
 import { hostInfo, installName } from '../../lib/hosts.js'
+import InstallPicker from '../../components/InstallPicker.jsx'
+import { useInstallPick, useInstalls } from '../../hooks/useInstalls.js'
 import { relTime } from '../../lib/format.js'
 import { motionOK } from '../../lib/motion.js'
 
@@ -181,7 +183,7 @@ function AboutSection({ version }) {
 }
 
 // The Server tab as a settings sheet: a section index beside rows of label | value | control.
-// Appearance is client-only and live; Machine acts on this copy and the viewed install; Server
+// Appearance is client-only and live; Machine acts on this copy and the install picked in the head; Server
 // describes the process answering the page; Danger zone holds what takes something away.
 // Per-install detail and building live on the Hosts tab and the Overview.
 export default function Settings({
@@ -193,10 +195,13 @@ export default function Settings({
   onAccentMode,
   layout,
   onLayout,
+  dataRev,
 }) {
   const confirm = useConfirm()
-  const install = overview?.install
-  const footprint = overview?.footprint
+  // The install the footprint row describes: this tab's own pick, remembered (no console-wide one).
+  const active = useInstalls(dataRev)
+  const [install, pickInstall] = useInstallPick('server', active)
+  const footprint = install?.footprint
   const server = overview?.server
   const stale = overview?.daemon_stale
 
@@ -252,6 +257,12 @@ export default function Settings({
             managed on the Hosts tab.
           </p>
         </div>
+        <InstallPicker
+          installs={active}
+          value={install}
+          onChange={pickInstall}
+          label="Footprint of:"
+        />
       </div>
 
       <div className="sheet">
@@ -351,7 +362,7 @@ export default function Settings({
                 </button>
               }
             />
-            {/* How much of the Rules AGENT.md carries inline for the viewed install. Read-only:
+            {/* How much of the Rules AGENT.md carries inline for the picked install. Read-only:
                 it is changed on the install's own panel in Hosts, the one footprint control
                 (a second dial here rebuilt the same install through a second confirm). */}
             {install && footprint && (

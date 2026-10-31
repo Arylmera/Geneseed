@@ -59,3 +59,19 @@ export const folderName = (path) =>
     .pop() || path
 export const installName = (inst) =>
   inst.scope === 'global' ? hostInfo(inst.host).label : folderName(inst.path)
+
+// The short tag an entry or a picker names its install by: `claude · global`, or a project's
+// folder then its host (`my-repo · bob`), so two projects of one host never read the same.
+export const installTag = (inst) =>
+  inst.scope === 'global' ? `${inst.host} · global` : `${folderName(inst.path)} · ${inst.host}`
+
+// The ACTIVE rows of /api/installs, the server's `default` row first (the install a request
+// naming none reads, so it is where every picker starts), the rest in the server's order. The
+// order rule lives on the server alone (`defaultView`, js/web/state.mjs).
+export const activeInstalls = (installs) => {
+  const active = (installs || []).filter((i) => i.state === 'active')
+  return [...active.filter((i) => i.default), ...active.filter((i) => !i.default)]
+}
+
+// `{ host, path }`, the pair an api call names its install by; undefined for none.
+export const pairOf = (inst) => (inst ? { host: inst.host, path: inst.path } : undefined)

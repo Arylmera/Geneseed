@@ -69,10 +69,10 @@ describe('Doctor', () => {
     render(<Doctor />)
     await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
     expect(api.doctor).toHaveBeenCalledTimes(1)
-    expect(api.doctor).toHaveBeenLastCalledWith(false)
+    expect(api.doctor).toHaveBeenLastCalledWith(false, undefined)
     fireEvent.click(screen.getByText(/Re-run checks/))
     await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(2))
-    expect(api.doctor).toHaveBeenLastCalledWith(true)
+    expect(api.doctor).toHaveBeenLastCalledWith(true, undefined)
   })
 
   it('shows loading state while data is null, with correct button label', async () => {
@@ -135,7 +135,7 @@ describe('Doctor', () => {
     api.doctor.mockClear()
     rerender(<Doctor dataRev={2} />)
     await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(1))
-    expect(api.doctor).toHaveBeenLastCalledWith(false)
+    expect(api.doctor).toHaveBeenLastCalledWith(false, undefined)
   })
 
   // Re-run spends the fresh flag: the next dataRev read after it is the cached one again.
@@ -144,11 +144,72 @@ describe('Doctor', () => {
     await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
     api.doctor.mockClear()
     fireEvent.click(screen.getByText(/Re-run checks/))
-    await waitFor(() => expect(api.doctor).toHaveBeenLastCalledWith(true))
+    await waitFor(() => expect(api.doctor).toHaveBeenLastCalledWith(true, undefined))
     await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
     rerender(<Doctor dataRev={2} />)
     await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(2))
-    expect(api.doctor).toHaveBeenLastCalledWith(false)
+    expect(api.doctor).toHaveBeenLastCalledWith(false, undefined)
+  })
+
+  // The tab checks ONE install, picked beside it (no console-wide one): the server's default row
+  // first, then whatever the user picks, which is remembered for this tab alone. With two active
+  // installs the picker shows; the inactive row is never offered.
+  it('checks the default install, then the picked one, and remembers the pick', async () => {
+    localStorage.clear()
+    const oc = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
+    const cl = {
+      id: 'cl',
+      host: 'claude',
+      scope: 'global',
+      path: '/cl',
+      state: 'active',
+      default: true,
+    }
+    const off = { id: 'bob', host: 'bob', scope: 'global', path: '/bob', state: 'disabled' }
+    api.installs = vi.fn(async () => ({ installs: [oc, cl, off] }))
+    try {
+      api.doctor.mockClear()
+      render(<Doctor />)
+      const pick = await screen.findByRole('combobox', { name: 'Doctor for:' })
+      expect([...pick.options].map((o) => o.textContent)).toEqual([
+        'claude · global',
+        'opencode · global',
+      ])
+      await waitFor(() =>
+        expect(api.doctor).toHaveBeenLastCalledWith(false, { host: 'claude', path: '/cl' }),
+      )
+      fireEvent.change(pick, { target: { value: 'oc' } })
+      await waitFor(() =>
+        expect(api.doctor).toHaveBeenLastCalledWith(false, { host: 'opencode', path: '/oc' }),
+      )
+      expect(localStorage.getItem('geneseed-install-doctor')).toBe('oc')
+    } finally {
+      delete api.installs
+      localStorage.clear()
+    }
+  })
+
+  // One active install: nothing to pick, so no picker, and the page reads that install.
+  it('shows no picker with one active install', async () => {
+    const cl = {
+      id: 'cl',
+      host: 'claude',
+      scope: 'global',
+      path: '/cl',
+      state: 'active',
+      default: true,
+    }
+    api.installs = vi.fn(async () => ({ installs: [cl] }))
+    try {
+      api.doctor.mockClear()
+      render(<Doctor />)
+      await waitFor(() =>
+        expect(api.doctor).toHaveBeenLastCalledWith(false, { host: 'claude', path: '/cl' }),
+      )
+      expect(screen.queryByRole('combobox')).toBeNull()
+    } finally {
+      delete api.installs
+    }
   })
 
   it('holds exactly one filled button, Re-run checks, once loaded', async () => {

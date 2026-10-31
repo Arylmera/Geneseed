@@ -350,6 +350,11 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   min-width: 180px; cursor: pointer; }
 .sel:focus { border-color: var(--accent-line); }
 .sel option { background: var(--surface-2); }
+/* The per-entry install picker (InstallPicker.jsx): its label, then the select, on one line. */
+.install-pick { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+.install-pick .sel { min-width: 0; max-width: 240px; }
+/* A page's own pick (Doctor, Local edits, Server), on its own line above the page head. */
+.install-pick.page-pick { display: flex; margin-bottom: var(--sp-4); }
 
 /* ============================ GRID HELPERS ============================ */
 .grid { display: grid; gap: var(--sp-4); }

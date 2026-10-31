@@ -52,7 +52,9 @@ export default function Installs({
         <Diff onMutated={onMutated} onAction={onAction} dataRev={dataRev} overview={overview} />
       )}
       {tab === 'doctor' && <Doctor dataRev={dataRev} />}
-      {tab === 'server' && <Settings overview={overview} onAction={onAction} {...appearance} />}
+      {tab === 'server' && (
+        <Settings overview={overview} onAction={onAction} dataRev={dataRev} {...appearance} />
+      )}
     </>
   )
 }
