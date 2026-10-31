@@ -26,6 +26,9 @@ import LawRow from './Laws/LawRow.jsx'
 import TierStrip from './Laws/TierStrip.jsx'
 import GateAsks from './Laws/GateAsks.jsx'
 import PackPanel from './Laws/PackPanel.jsx'
+import InstallPicker from '../components/InstallPicker.jsx'
+import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
+import { pairOf } from '../lib/hosts.js'
 
 // THE FILENAME AND THE ROUTE STAY `laws`: a rename buys nothing and costs a redirect. Only what
 // a reader sees says "Constitution".
@@ -77,9 +80,45 @@ function doctrinePacks(items) {
 // `selected` is the address from a #/item/law/<address> deep link (Spotlight, the
 // Overview's gate row). The open row is driven straight off the URL so those links
 // pre-open the rule and any opened rule is itself shareable.
-export default function Laws({ selected, overview, setup, onAction, dataRev }) {
+// The install this page reads and rebuilds (its gate switches, its doctrine Apply): its own pick,
+// remembered, labelled beside the page. The default install's overview is App's; another
+// install's is read with its pair. Keyed on the pick, so a switch never shows one install's
+// staged selection over another's rules.
+export default function Laws(props) {
+  const active = useInstalls(props.dataRev)
+  const [install, pick] = useInstallPick('laws', active)
+  const isDefault = !install || install.id === active?.[0]?.id
+  const { data: own } = useAsync(
+    () => (isDefault ? Promise.resolve(null) : api.overview(pairOf(install)).catch(() => null)),
+    [install?.id ?? '', props.dataRev],
+  )
+  return (
+    <>
+      <InstallPicker
+        className="page-pick"
+        installs={active}
+        value={install}
+        onChange={pick}
+        label="Constitution of:"
+      />
+      <LawsOf
+        key={isDefault ? 'default' : install.id}
+        {...props}
+        overview={isDefault ? props.overview : own}
+        pair={isDefault ? undefined : pairOf(install)}
+      />
+    </>
+  )
+}
+
+function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const confirm = useConfirm()
-  const { data, error } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
+  // The default install's catalog shares the Overview's cached read; another install's is its own.
+  const { data, error } = useAsync(
+    () => api.catalog('laws', pair),
+    pair ? [dataRev, pair.host, pair.path] : [dataRev],
+    'catalog:laws',
+  )
   const { data: rulesData } = useRules(dataRev)
   const [tab, setTab] = useState('all')
   const [q, setQ] = useState('')

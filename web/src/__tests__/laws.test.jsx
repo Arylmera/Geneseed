@@ -1,6 +1,6 @@
 import React from 'react'
 import { act, render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Constitution page had NO component test before this file — its only gate was doctor's
 // parity check on its principle table, which knew nothing about what renders. So the claims
@@ -1111,5 +1111,55 @@ describe('Constitution page — hostile or empty inputs', () => {
     } finally {
       api.rules.mockImplementation(() => Promise.resolve(null))
     }
+  })
+})
+
+// The page reads and rebuilds ONE install, picked beside it ("Constitution of:"), starting on the
+// default (App's overview). Another pick reads that install's own overview and catalog, and a
+// gate switch then rebuilds THAT install.
+describe('Constitution page — its own install picker', () => {
+  const CL = { host: 'claude', scope: 'global', path: '/cl' }
+  beforeEach(() => {
+    localStorage.clear()
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
+    api.installs = vi.fn(async () => ({
+      installs: [
+        {
+          id: 'oc',
+          host: 'opencode',
+          scope: 'global',
+          path: '/oc',
+          state: 'active',
+          default: true,
+        },
+        { id: 'cl', ...CL, state: 'active' },
+      ],
+    }))
+    api.overview = vi.fn(async () => ({ install: { ...CL, deletionGate: true } }))
+  })
+  afterEach(() => {
+    delete api.installs
+    delete api.overview
+    localStorage.clear()
+  })
+
+  it('a picked install reads its own constitution, and its gate switch rebuilds it', async () => {
+    const onAction = vi.fn()
+    const { container } = render(
+      <Laws overview={{ install: { ...INSTALL, deletionGate: true } }} onAction={onAction} />,
+    )
+    const pick = await screen.findByRole('combobox', { name: 'Constitution of:' })
+    expect(pick.value).toBe('oc')
+    fireEvent.change(pick, { target: { value: 'cl' } })
+    await waitFor(() => expect(api.overview).toHaveBeenCalledWith({ host: 'claude', path: '/cl' }))
+    await waitFor(() =>
+      expect(api.catalog).toHaveBeenLastCalledWith('laws', { host: 'claude', path: '/cl' }),
+    )
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+    )
+    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    await answered()
+    expect(onAction.mock.calls).toEqual([['install', { ...CL, deletionGate: false }]])
   })
 })
