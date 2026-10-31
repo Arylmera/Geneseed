@@ -37,17 +37,14 @@ They never go in `user-rules.md`, which is for agent behaviour only.
 ## Personal state — `.geneseed/ownership.md`
 
 ```markdown
-Granularity: team        # or a level finer than the team default
-## Pending
-<the one checkpoint awaiting the developer, or "none">
-## Decisions
-- <date> <decision the developer took, with their reason>
+Granularity: team        # or a finer level (coarser only on the developer's yes)
+## Preferences
+- <how the developer steers, as a rule: "explain each SQL query", "function level in payment/">
 ```
 
-Create it only when there is personal state to store: a granularity finer than the team
-default, the first `## Pending` checkpoint, the first `## Decisions` entry, or the developer's
-decline. No file means the team granularity, nothing pending and no decisions. `AGENTS.md` stays
-the only team configuration.
+Create it only when there is personal state to store: a granularity other than the team
+default, the first preference, or the developer's decline. No file means the team granularity
+and no preferences. `AGENTS.md` stays the only team configuration.
 
 The decline is the line `Setup: declined <YYYY-MM-DD>`, alone on its line. Write it only when the
 developer answers "skip in this repo until I ask" to the setup proposal. Write it in the **main
@@ -61,12 +58,15 @@ until they delete the line or ask for the setup. A `## Ownership` section in `AG
 off, outranks it.
 
 A personal override may only be finer than the team default. A coarser one needs the developer's
-explicit yes, logged under `## Decisions`.
+explicit yes; the `Granularity:` line itself then records it.
 
 <!-- INCLUDE: skills/_checkpoints.md -->
 
-Here, interface and sensitive-zone checkpoints are mandatory. Log under `## Decisions` only forks,
-interfaces, sensitive-zone changes and granularity changes — not routine steps.
+Here, interface and sensitive-zone checkpoints are mandatory. A preference about the code —
+naming, layers, patterns, libraries — never goes in this file: on the same signal as a
+preference, propose it as a one-line edit to the conventions in `AGENTS.md`, merged within its
+~60-line cap; show the diff, commit only on request. Condensing an old file routes its code
+conventions there too. `## Preferences` holds only how the developer steers.
 
 ## Setup
 Run it when the repo has no `## Ownership` section, or when the developer asks. A hand-written
@@ -118,7 +118,7 @@ other modules, a performance trap, deep nesting, long methods, duplication.
 Announce, do not ask, except at a real fork.
 - **Routine** (follows the plan and the conventions, no choice) — announce it in 1–3 lines. The
   native Edit is the approval: accepting it answers the checkpoint, refusing it returns to it.
-  The Edit prompt is the wait, so write `## Pending` only for a step you ask about.
+  The Edit prompt is the wait.
 - **Real fork** (two or more credible options, an interface, a sensitive zone) — ask, with the
   recommended option first.
 - **Complex** (the signals above) — announce it, plus a 3–6 line explanation.
@@ -126,10 +126,11 @@ Announce, do not ask, except at a real fork.
 The chat carries what / where / why in 5–10 lines: `file:line`, the changed signature or
 interface, the options at a fork — no code. The native Edit carries the diff. When edits are
 auto-accepted, show a compact diff in the chat first (changed hunks only, ±2 lines); that is an
-asked step: write `## Pending` and wait for the developer's reply.
+asked step: wait for the developer's reply.
 
 Guardrails:
-1. Never ask what the code, `AGENTS.md` or an earlier decision of the session already answers.
+1. Never ask what the code, `AGENTS.md`, `## Preferences` or an earlier decision of the session
+   already answers.
 2. Group the decisions of one step into one message.
 3. Always recommend, so "ok" is an answer.
 4. "Carry on" switches the rest of the task to routine. "Skip" and "fewer checkpoints" lower the
@@ -154,8 +155,8 @@ and sensitive zones as checkpoints — still apply on top.
 ## Done when
 - The root `AGENTS.md` has `## Ownership` outside the Geneseed block, or the developer chose
   to skip (this session, or in this repo until asked) or `mode: off`; every interface and sensitive-zone change got its own
-  checkpoint; no code landed without an answered checkpoint or an accepted Edit; each fork,
-  interface, sensitive-zone change and granularity change is logged in `.geneseed/ownership.md`;
-  and the developer can say, for each change, what changed, where and why.
+  checkpoint; no code landed without an answered checkpoint or an accepted Edit; no preference
+  reached `.geneseed/ownership.md` or `AGENTS.md` without the developer's yes; and the developer
+  can say, for each change, what changed, where and why.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

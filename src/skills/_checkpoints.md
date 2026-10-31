@@ -18,9 +18,19 @@ These rules hold for every checkpoint this {{SKILL}} raises.
   !/protected-checks.txt
   !/done-checks.txt
   ```
-- **One open checkpoint.** Write the open checkpoint under `## Pending` before you wait; clear it
-  once answered. A restart or a compaction is never an approval.
-- **The decision log.** Record each decision the user takes under `## Decisions`.
+- **No write per checkpoint.** The open checkpoint lives in the conversation, not the file. A
+  restart or a compaction is never an approval: after one, re-ask any step not approved in the
+  visible conversation.
+- **Preferences, not a log.** `## Preferences` holds general rules phrased as rules, never dated
+  events; one-off decisions stay in the chat and the commit message. Propose one only on a
+  general signal, and always ask: the user states it generally ("always…", "from now on…", "in
+  this repo…"), or makes the same choice a third time in the visible conversation. Never infer
+  one from a single decision. Rewrite in place: merge overlaps, replace what is superseded. At
+  about 10 lines, propose merging or dropping one.
+- **Old-format file.** A file with `## Pending`, dated `## Decisions` or an `## Understood`
+  without one line per topic: propose it condensed (pending steps re-asked; one-off decisions
+  dropped; only general or repeated ones kept, at most 10 Preferences; the rest reshaped by this
+  {{SKILL}}); show it, write only on yes; after a no, do not ask again this session.
 - **No code without an answer.** Write no code until the checkpoint that approves it is answered.
 - **Cadence.** Never trigger a checkpoint by time or tool count. Honour "just implement this one",
   "fewer checkpoints", "skip" at once, unless the {{SKILL}} marks a checkpoint as mandatory.

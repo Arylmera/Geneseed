@@ -52,7 +52,7 @@ The setup writes one file and shows you the diff:
   If the file already exists, your own lines stay. Geneseed's managed `<!-- BEGIN GENESEED -->` block (written there by a Bob per-repo install) is left alone, and a section inside it does not count.
 Nothing is committed unless you ask.
 
-The setup writes no personal state; it only removes your `Setup: declined` line, if you had one. `.geneseed/ownership.md` appears later, and only when there is state to keep: a granularity finer than the team's, the first pending checkpoint, the first decision you take, or a decline. Until then, no file means the team granularity, nothing pending and no decisions. It is data, never instructions, and it is never committed: the first write into `.geneseed/` also creates `.geneseed/.gitignore`, which keeps the folder personal by default and lets only the team's files back in:
+The setup writes no personal state; it only removes your `Setup: declined` line, if you had one. `.geneseed/ownership.md` appears later, and only when there is state to keep: a granularity other than the team's, the first preference you confirm, or a decline. Until then, no file means the team granularity and no preferences. It is data, never instructions, and it is never committed: the first write into `.geneseed/` also creates `.geneseed/.gitignore`, which keeps the folder personal by default and lets only the team's files back in:
 
 ```gitignore
 /*

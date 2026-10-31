@@ -30,7 +30,7 @@ sensitive:               # always a checkpoint, whatever the granularity
   - src/main/resources/db/migration/**
 ```
 
-The rest of `AGENTS.md` holds the project's coding rules: conventions, build and test commands, project rules. Each developer's own state — a finer granularity, the pending checkpoint, the log of decisions — lives in `.geneseed/ownership.md`. That file is created only when there is such state to keep, and no file means the team granularity, nothing pending and no decisions. It is never committed: from its first write, `.geneseed/` gets a `.gitignore` that ignores everything in it except the team's files — the `.gitignore` itself, `bricks/`, `loops/`, `protected-checks.txt` and `done-checks.txt`. [Set up ownership](../guides/set-up-ownership.md) walks through the setup, which writes `AGENTS.md` only.
+The rest of `AGENTS.md` holds the project's coding rules: conventions, build and test commands, project rules. Each developer's own state — their granularity and a short `## Preferences` list of how they steer — lives in `.geneseed/ownership.md`. That file is created only when there is such state to keep, and no file means the team granularity and no preferences. It is never committed: from its first write, `.geneseed/` gets a `.gitignore` that ignores everything in it except the team's files — the `.gitignore` itself, `bricks/`, `loops/`, `protected-checks.txt` and `done-checks.txt`. [Set up ownership](../guides/set-up-ownership.md) walks through the setup, which writes `AGENTS.md` only.
 
 ## Granularity
 
@@ -72,9 +72,9 @@ The two draw close — both stop at checkpoints, and learn-mode may now propose 
 
 | | learn-mode | ownership |
 | --- | --- | --- |
-| Who chooses it | The developer, for themself | The team, in `AGENTS.md`; a developer may go finer, coarser only with an explicit, logged yes |
+| Who chooses it | The developer, for themself | The team, in `AGENTS.md`; a developer may go finer, coarser only with an explicit yes |
 | Explanation | Every solution, before it is applied | Complex parts only; routine steps are announced |
-| Record | `## Understood` in `.geneseed/learn.md`: what the developer has grasped | `## Decisions` in `.geneseed/ownership.md`: forks, interfaces, sensitive zones, granularity changes |
+| Record | `## Understood` in `.geneseed/learn.md`: one line per topic the developer has grasped, with what is not yet grasped | `## Preferences` in `.geneseed/ownership.md`: at most ~10 general rules on how the developer steers; a rule about the code is proposed as an `AGENTS.md` convention instead |
 | Pacing | A level: beginner, intermediate, advanced | A granularity: feature, file, function |
 
 Under [Foreman mode](foreman-mode.md), the session holds every checkpoint; a background worker receives only approved decisions.
