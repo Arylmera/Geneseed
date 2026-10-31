@@ -858,7 +858,6 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
             <h2 id="ldg-fleet">Installed harnesses</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
-
           {fleetError && fleet ? (
             <p className="dim" role="status">
               Could not refresh the installs — showing the last read.{' '}

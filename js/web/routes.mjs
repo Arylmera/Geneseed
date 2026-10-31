@@ -143,12 +143,14 @@ export function readJsonBody(buf) {
 }
 
 /**
- * Every ACTIVE install as `{install, state}`, the Library's skills and agents source: `install`
+ * Every ACTIVE install as `{install, state}`, the Library's fleet lists' source (skills, agents,
+ * memory, notebook: `FLEET_SECTIONS`): `install`
  * is the usage ledger's `host:scope:root` key, `state` the install's cached view off the daemon
  * state `base` (`targetView`), so each install keeps its own inventory cache. ONE
  * `installTargets()` scan: the targets it yields are the allowlist, so no view re-checks its
  * pair the way a request-named one must (`installView`). In the console's install order
- * (`fleetSort`), not as `installTargets` yields, which puts the cwd's projects first. No active install leaves `base` alone, keyless, as one install answered.
+ * (`fleetSort`), not as `installTargets` yields, which puts the cwd's projects first. No active
+ * install leaves `base` alone, keyless, as one install answered.
  */
 function fleetOf(base) {
   const views = fleetSort([...activeInstalls(installTargets())], (t) => [t[0], t[1]])
@@ -166,14 +168,15 @@ function fleetOf(base) {
  */
 /** @type {Array<[string, (state: any, path: string, base: any) => any]>} */
 export const PREFIX_ROUTES = [
-  // Skills and agents list every install (`MACHINE_GETS`); the other sections the named one.
+  // The `FLEET_SECTIONS` list every install (`MACHINE_GETS`); the other sections the named one.
   ['/api/catalog/', (state, p, base) => {
     const sec = p.split('/').pop();
     return apiCatalog(state, sec, FLEET_SECTIONS.includes(sec) ? fleetOf(base) : undefined);
   }],
   // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki
   // page's relpath survives. A missing name is a 404 here rather than a 500 two frames down.
-  // Install-scoped: a skill or agent is the named install's copy, else the fleet's first.
+  // Install-scoped: a skill, agent, memory or notebook entry is the named install's copy, else
+  // the fleet's first.
   ['/api/item/', (state, p, base) => {
     const m = /^\/api\/item\/([^/]+)\/(.+)$/.exec(p);
     if (!m) throw new NotFound(p);

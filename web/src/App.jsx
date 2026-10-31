@@ -341,7 +341,6 @@ export default function App() {
             navOpen={navOpen}
             onToggleNav={() => setNavOpen((v) => !v)}
             actions={actions}
-
             mode={mode}
             onToggleMode={toggleMode}
             appearance={appearance}

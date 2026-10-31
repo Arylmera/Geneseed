@@ -201,7 +201,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   }
 
   function doGet(req, res, path, ae) {
-    // The install the request names (`?host=&path=`), else the daemon's view; an unknown pair
+    // The install the request names (`?host=&path=`), else the daemon's state (the default
+    // install, `defaultView`); an unknown pair
     // throws `NotFound` here, before any route reads a dir. Not for ping, jobs, static files or
     // the machine-wide reads (`MACHINE_GETS`), which ignore the pair.
     const st = (path.startsWith('/api/') && path !== '/api/ping' && !path.startsWith('/api/jobs')

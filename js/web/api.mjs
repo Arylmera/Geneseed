@@ -44,8 +44,6 @@ import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-ch
  */
 export { NotFound, deployed, resolveLinks } from './catalog.mjs';
 
-/** Two resolved paths, compared case-folded on Windows. */
-
 // ---- the eight endpoints -------------------------------------------------------------
 
 /** `buildOverride` in `actions.mjs` is a third reader of this. */
