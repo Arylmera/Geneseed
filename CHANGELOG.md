@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.30.1] — 2026-10-31
+
+Patch: Bob can read a protected check again (a regression in 4.29.0 and 4.30.0). Run `geneseed rebuild-all` once after updating.
+
+### Changed
+- **The web console: each request may name its install.** Reads take `?host=&path=` and install-scoped writes take `{host, path}`, so a page that picks its own install no longer re-points every other page through one shared viewed install. A request without the pair still uses the viewed install, and an unknown pair is refused (404). No page names its install yet, so nothing changes on screen.
+
 ### Fixed
 - **Bob can read a protected check again.** Bob runs the gate on every tool, reads included, and since 4.29.0 a project emit seeds `.geneseed/protected-checks.txt` with the manifests, CI files and lint/test config. The gate refused every Bob read of those files, `package.json` included; now only a Bob write to a protected check, the list or `.geneseed/done-checks.txt` is blocked. A write is told by its tool name (`write`, `edit`, `diff`, `replace`, `insert`), the same rule the gate-configuration check already used.
 
