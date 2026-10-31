@@ -37,8 +37,8 @@ beforeEach(() => {
   api.catalog.mockImplementation((section) =>
     Promise.resolve({ section, items: SECTION_ITEMS[section] || [] }),
   )
-  api.item.mockImplementation(() =>
-    Promise.resolve({ title: 'A fact', desc: '', body: 'body', links: [] }),
+  api.item.mockImplementation((type, name) =>
+    Promise.resolve({ name, title: 'A fact', desc: '', body: 'body', links: [] }),
   )
   api.memoryDelete.mockImplementation(() => Promise.resolve({ deleted: 'fact-a' }))
   api.usage.mockImplementation(() => Promise.resolve(null))
@@ -151,6 +151,7 @@ describe('Library', () => {
     )
     api.item.mockImplementation(() =>
       Promise.resolve({
+        name: 'fact-a',
         title: 'A fact',
         body: 'body',
         links: [],
@@ -173,10 +174,67 @@ describe('Library', () => {
     ])
   })
 
+  // While another entry loads, the reader still holds the previous one: no Forget may act on it.
+  // The buttons come back only once the new entry's own copy has landed, and then name it.
+  it('never forgets the previous fact while the next one loads', async () => {
+    const OC = 'opencode:global:/oc'
+    const CL = 'claude:global:/cl'
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items:
+          section === 'memory'
+            ? [
+                { name: 'fact-a', installs: [OC] },
+                { name: 'fact-b', installs: [CL] },
+              ]
+            : [],
+      }),
+    )
+    let landB
+    api.item.mockImplementation((type, name) =>
+      name === 'fact-a'
+        ? Promise.resolve({ name, body: 'a', links: [], install: OC, installs: [OC] })
+        : new Promise((r) => {
+            landB = () => r({ name, body: 'b', links: [], install: CL, installs: [CL] })
+          }),
+    )
+    const { rerender } = render(
+      <Library lock="memory" base="#/personal/memory" selected="fact-a" overview={overview({})} />,
+    )
+    await screen.findByText('Forget this fact')
+    rerender(
+      <Library lock="memory" base="#/personal/memory" selected="fact-b" overview={overview({})} />,
+    )
+    await waitFor(() => expect(landB).toBeTypeOf('function'))
+    expect(screen.queryByText('Forget this fact')).toBeNull()
+    landB()
+    fireEvent.click(await screen.findByText('Forget this fact'))
+    await waitFor(() =>
+      expect(api.memoryDelete).toHaveBeenCalledWith('fact-b', {
+        host: 'claude',
+        scope: 'global',
+        path: '/cl',
+      }),
+    )
+    expect(api.memoryDelete).toHaveBeenCalledTimes(1)
+    // The list spans two installs, so the confirm said which one.
+    expect(askConfirm.mock.calls.at(-1)[0]).toMatch(
+      /^Forget the memory fact "fact-b" in claude · global\?/,
+    )
+  })
+
   it('promotes a fact into the rules of its own install', async () => {
     const CL = 'claude:global:/cl'
     api.item.mockImplementation(() =>
-      Promise.resolve({ title: 'A fact', body: 'body', links: [], install: CL, installs: [CL] }),
+      Promise.resolve({
+        name: 'fact-a',
+        title: 'A fact',
+        body: 'body',
+        links: [],
+        install: CL,
+        installs: [CL],
+      }),
     )
     api.rules = vi.fn(async () => ({ fingerprint: 'cl-fp' }))
     api.rulesPromote = vi.fn(async () => ({ ok: true }))

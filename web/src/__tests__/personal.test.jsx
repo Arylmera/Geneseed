@@ -58,7 +58,9 @@ beforeEach(() => {
       items: section === 'memory' ? memoryItems : [{ name: 'NOTEBOOK' }, { name: 'plan' }],
     }),
   )
-  api.item.mockImplementation(() => Promise.resolve({ title: '', desc: '', body: '', links: [] }))
+  api.item.mockImplementation((type, name) =>
+    Promise.resolve({ name, title: '', desc: '', body: '', links: [] }),
+  )
 })
 
 // `setup.facts` disagrees with the catalog on purpose: the counts must come from the catalog.
@@ -204,7 +206,7 @@ describe('Personal', () => {
       Promise.resolve(
         section === 'memory' && name === 'MEMORY'
           ? { title: 'MEMORY', desc: '', body, links: [] }
-          : { title: '', desc: '', body: '', links: [] },
+          : { name, title: '', desc: '', body: '', links: [] },
       ),
     )
 
@@ -233,7 +235,7 @@ describe('Personal', () => {
       Promise.resolve(
         name === 'MEMORY'
           ? { body: `- [release](topics/release.md) — ${n} facts`, links: [] }
-          : { title: '', desc: '', body: '', links: [] },
+          : { name, title: '', desc: '', body: '', links: [] },
       ),
     )
     api.memoryDelete.mockImplementation(() => {

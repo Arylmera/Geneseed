@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
-import { folderName } from '../lib/hosts.js'
+import { installTag } from '../lib/hosts.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
@@ -31,11 +31,8 @@ export const installOfKey = (key) => {
   const [host, scope, ...rest] = key.split(':')
   return { host, scope, path: rest.join(':') }
 }
-// An install as the harness switcher names it: a global by its tool, a project by its folder.
-export const installLabel = (key) => {
-  const i = installOfKey(key)
-  return i.scope === 'global' ? `${i.host} · global` : `${folderName(i.path)} · ${i.host}`
-}
+// An install key's tag, the console's one install name (lib/hosts.js installTag).
+export const installLabel = (key) => installTag(installOfKey(key))
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
@@ -311,6 +308,11 @@ export default function Library({
   // useAsync keeps the last good read beside a failed one; here that is the PREVIOUS
   // entry, so a failed read shows nothing of it (title, lede, source).
   const item = itemErr ? null : lastItem
+  // The copy a Forget or a Promote acts on: the read that answers THIS entry and THIS pick. While
+  // another entry or copy loads, `item` is still the previous one, which must never be written.
+  const copy = item && item.name === activeName && (!pick || item.install === pick) ? item : null
+  // Which install the copy is, named in a confirm once the list spans two installs or more.
+  const ofCopy = (c) => (fleetWide && c?.install ? ` in ${installLabel(c.install)}` : '')
 
   const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
@@ -380,17 +382,18 @@ export default function Library({
     base ? `${base}/${enc(it.name)}` : `#/item/${it.type || SECTIONS[sec].type}/${enc(it.name)}`
 
   const onForget = async () => {
-    const name = activeItem?.name
-    if (!name) return
+    const c = copy
+    if (!c) return
+    const name = c.name
     const ok = await confirm(
-      `Forget the memory fact "${name}"? It leaves the index and moves to memory/archive/ (geneseed memory rm --archived --purge deletes it for good).`,
+      `Forget the memory fact "${name}"${ofCopy(c)}? It leaves the index and moves to memory/archive/ (geneseed memory rm --archived --purge deletes it for good).`,
       { title: 'Forget this fact?', confirmLabel: 'Forget', tone: 'danger' },
     )
     if (!ok) return
     setActionErr('')
     try {
       // The copy on screen is the one forgotten: its own install, never the default.
-      await api.memoryDelete(name, item?.install ? installOfKey(item.install) : undefined)
+      await api.memoryDelete(name, c.install ? installOfKey(c.install) : undefined)
     } catch (e) {
       // Stay on the fact that failed to go, and say why.
       setActionErr(`Could not forget "${name}": ${e.message}`)
@@ -405,17 +408,18 @@ export default function Library({
   // would load the lesson twice), which is why the confirm spells that out. Lands on the
   // Rules tab so the new trial rule is immediately visible and editable.
   const onPromote = async () => {
-    const name = activeItem?.name
-    if (!name) return
+    const c = copy
+    if (!c) return
+    const name = c.name
     const ok = await confirm(
-      `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact moves to memory/archive/ so the lesson isn't loaded twice.`,
+      `Promote "${name}"${ofCopy(c)} into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact moves to memory/archive/ so the lesson isn't loaded twice.`,
       { title: 'Promote to a rule?', confirmLabel: 'Promote' },
     )
     if (!ok) return
     setActionErr('')
     try {
       // The fact becomes a rule in ITS install's user-rules.md, with that file's fingerprint.
-      const inst = item?.install ? installOfKey(item.install) : undefined
+      const inst = c.install ? installOfKey(c.install) : undefined
       const cur = await api.rules(inst)
       await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true }, inst)
       // The Rules tab must show the promoted rule: a mounted Personal (its own Memory tab)
@@ -625,7 +629,7 @@ export default function Library({
               </div>
               {/* Only once the copy is read: its `install` is the one a forget or a promote acts on. */}
               {sec === 'memory' &&
-                item &&
+                copy &&
                 activeItem.name !== 'MEMORY' &&
                 activeItem.name !== 'README' && (
                   <div className="row gap-8">
