@@ -8,7 +8,8 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { CLAUDE_STYLE, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
+import { normcase } from '../lib/paths.mjs';
 import {
   EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, installedDefaults, modeOfDir,
   postureOfDir, themeOfDir, trustOfDir,
@@ -17,7 +18,7 @@ import { doctorCollect } from '../inspect/doctor.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { readText, isFile } from '../lib/fs.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
-import { deployed, inventoryFor } from './catalog.mjs';
+import { inventoryFor } from './catalog.mjs';
 
 /**
  * The data dir an install's inventory/memory/diff is read from. Host-driven, so a new
@@ -29,6 +30,9 @@ export function viewCfg(host, scope, root) {
   }
   return root;
 }
+
+/** Two paths name the same folder: resolved, and case-folded where the filesystem folds case. */
+export const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b));
 
 /**
  * The console's ONE install order, for every fleet-wide answer (the Library's lists, the Activity
@@ -46,21 +50,23 @@ export function fleetSort(list, of) {
 }
 
 /**
- * `[target, root]` for the install the console should show when nothing picked one, or null
- * when the current target is already deployed or nothing is.
+ * `[target, root]` of THE DEFAULT INSTALL — the one a request that names no install reads — or
+ * null when no install is active.
  *
- * The console used to open on the OpenCode global dir unconditionally. On a machine with only
- * IBM Bob (reported 2026-10) nothing is deployed there, so Overview showed the onboarding form
- * over a perfectly good `~/.bob`, and the selector that could re-point it hides itself below two
- * installs. So when `current` holds no manifest, the first ACTIVE install `installTargets`
- * finds is shown instead — a global before a project, in its host order.
+ * It is the first ACTIVE install in the console's one install order (`fleetSort`): host order
+ * (opencode, claude, bob, openclaude), then global before project, then the order
+ * `installTargets` found them.
+ * There is no viewed install to pick any more (the topbar selector and `POST /api/view` are
+ * gone): a page that wants another install names it on the request. The console once opened
+ * on the OpenCode global dir unconditionally, and on a Bob-only machine (reported 2026-10) it
+ * showed the onboarding form over a working `~/.bob`; this order cannot. The console's own
+ * pickers take their default from the row `/api/installs` marks `default`, which is this one.
  */
-export function fallbackView(current, targets = installTargets()) {
-  if (deployed({ target: current })) return null;
+export function defaultView(targets = installTargets()) {
   const active = targets.filter(([host, scope, root]) => {
     try { return installState(root, host, scope) === 'active'; } catch { return false; }
   });
-  const pick = active.find(([, scope]) => scope === 'global') || active[0];
+  const pick = fleetSort(active, ([host, scope]) => [host, scope])[0];
   return pick ? [viewCfg(...pick), pick[2]] : null;
 }
 
@@ -210,12 +216,12 @@ export function webState(theme = null, target = null) {
   };
   /** This state alone. `refresh` below is what callers use: it also reaches every view. */
   st.refreshOwn = ({ doctor = true } = {}) => {
-    // A job may have deployed the first install while the view still points at an empty
-    // default (the onboarding Build), or removed the one in view: follow it to one that exists.
+    // A job may have deployed the first install, or switched off or removed the default, so
+    // the daemon's own state moves to whatever the default install is now (`defaultView`).
     // Only on a full refresh: `{ doctor: false }` marks a mutation that cannot change installs.
     // Never for a pinned view: it answers for the install its request named, or is refused.
-    const fallback = doctor && !st.pinned ? fallbackView(st.target) : null;
-    if (fallback) { st.selectView(...fallback); return; }
+    const def = doctor && !st.pinned ? defaultView() : null;
+    if (def && !samePath(def[0], st.target)) { st.selectView(...def); return; }
     st._inv = null;
     if (doctor) st._doctor = null;
     st.emit = st.detectEmit() || st.emit;

@@ -26,7 +26,7 @@ import {
   viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
-import { fallbackView, warmDoctor, webState } from '../../js/web/state.mjs';
+import { defaultView, warmDoctor, webState } from '../../js/web/state.mjs';
 import { buildActionCmds, installView } from '../../js/web/actions.mjs';
 import { apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
@@ -1875,29 +1875,31 @@ test('selecting an unknown pair raises NotFound', () => {
   });
 });
 
-test('the install list marks exactly the current view selected', () => {
-  withTwoViews(({ st, cl }) => {
-    let selected = apiInstalls(st).installs.filter((r) => r.selected);
-    assert.equal(selected.length, 1, 'more than one row claimed to be the current view');
-    assert.equal(selected[0].host, 'opencode', 'the state starts pointed at the opencode view');
-
-    apiSelectView(st, { host: 'claude', path: cl });
-    selected = apiInstalls(st).installs.filter((r) => r.selected);
-    assert.equal(selected.length, 1);
-    assert.equal(selected[0].host, 'claude');
+// The install list marks the DEFAULT install (`defaultView`), which the console's pickers start
+// on: the first active one, opencode before claude. Only an active install can be it, so with
+// both manifests gone no row is marked.
+test('the install list marks exactly the default install', () => {
+  withTwoViews(({ oc, cl }) => {
+    const marked = () => apiInstalls().installs.filter((r) => r.default).map((r) => r.host);
+    assert.deepEqual(marked(), [], 'an install that is not active was marked the default');
+    for (const d of [oc, cl]) fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    assert.deepEqual(marked(), ['opencode']);
+    fs.rmSync(path.join(oc, GLOBAL_MANIFEST));
+    assert.deepEqual(marked(), ['claude'], 'the default did not move when opencode stopped being active');
   });
 });
 
-// The fleet rows carry the same mark: the Overview's root-file card follows the viewed install.
-test('the fleet marks exactly the current view selected, and follows a switch', () => {
+// The fleet rows carry each install's own posture and mode: the Overview shows them per row.
+test('the fleet rows carry each install its own posture and mode', () => {
   withTwoViews(({ st, oc, cl }) => {
     // The fleet lists ACTIVE installs only: a manifest is what makes each view one.
     for (const d of [oc, cl]) fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
-    let selected = apiFleet(st).installs.filter((r) => r.selected);
-    assert.deepEqual(selected.map((r) => r.host), ['opencode']);
-    apiSelectView(st, { host: 'claude', path: cl });
-    selected = apiFleet(st).installs.filter((r) => r.selected);
-    assert.deepEqual(selected.map((r) => r.host), ['claude']);
+    // Posture and mode are read off the carrier's prose; opencode's has none, so it answers null.
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '**Artisan** — a posture.\n\n**Foreman** — a mode.\n');
+    const rows = apiFleet(st).installs;
+    assert.equal(rows.some((r) => 'selected' in r), false, 'a fleet row still claims a viewed install');
+    assert.deepEqual(rows.map((r) => [r.host, r.posture, r.mode]),
+      [['opencode', null, null], ['claude', 'artisan', 'foreman']]);
   });
 });
 
@@ -2135,8 +2137,8 @@ test('the machine-wide reads ignore a named install', async () => {
       assert.equal((await get(r, { host: 'nope', path: '/no/such' })).status, 200, r);
       assert.equal((await get(r, clPair)).status, 200, r);
     }
-    const sel = (await (await get('/api/installs', clPair)).json()).installs.filter((x) => x.selected);
-    assert.deepEqual(sel.map((x) => x.host), ['opencode'], 'a machine-wide read used the pair');
+    assert.deepEqual(await (await get('/api/installs', clPair)).json(),
+      await (await get('/api/installs')).json(), 'a machine-wide read used the pair');
     assert.equal(st._views.size, 0, 'a machine-wide read made a per-install view');
   });
 });
@@ -3684,10 +3686,10 @@ test('the registry round-trips a recorded root and prunes it with its marker', (
 });
 
 // Two project installs of ONE host must be two rows the console can tell apart: the row id is
-// what the topbar selector and the Installs table key selection on, and a `host:scope` id made
+// what the install pickers and the Installs table key selection on, and a `host:scope` id made
 // both of a user's Bob repos `bob:project` — both rows read as selected, and every pick landed
-// on the first. So the ids differ, and selecting the second marks exactly the second — for
-// every host, since the id is built in one place for all of them.
+// on the first. So the ids differ, and each one names its own install — for every host, since
+// the id is built in one place for all of them.
 for (const { host, projectMarker } of HOST_SPECS) {
   test(`two ${host} project installs get distinct ids and select independently`, () => {
     withXdg((tmp) => {
@@ -3700,16 +3702,14 @@ for (const { host, projectMarker } of HOST_SPECS) {
       const st = neutral();
       // Narrowed to the two repos: the daemon's cwd (this checkout carries a `.claude/`) is
       // a project row of its own.
-      const mine = () => apiInstalls(st).installs
+      const rows = apiInstalls().installs
         .filter((r) => r.host === host && [a, b].some((root) => samePath(r.path, root)));
-      const rows = mine();
       assert.equal(rows.length, 2, JSON.stringify(rows.map((r) => r.path)));
       assert.notEqual(rows[0].id, rows[1].id, 'two installs share one id');
 
-      apiSelectView(st, { host, path: b });
-      const selected = mine().filter((r) => r.selected);
-      assert.equal(selected.length, 1, 'more than one row claimed to be the current view');
-      assert.ok(samePath(selected[0].path, b), 'the selection did not move to the second repo');
+      // The second row's pair names the second repo, not the first.
+      const v = installView(st, { host, path: rows.find((r) => samePath(r.path, b)).path });
+      assert.ok(samePath(v.root, b), 'the second repo pair resolved to another install');
     });
   });
 }
@@ -4638,13 +4638,14 @@ test('the warm-up fills the doctor cache after the current turn', async () => {
   assert.ok(Array.isArray(st._doctorRun.groups) && st._doctorRun.groups.length > 0);
 });
 
-// THE VIEW ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The console opened on
-// the OpenCode global dir, found nothing deployed there and showed the onboarding form over a
-// working ~/.bob. So when the current target holds no manifest, the first ACTIVE install is
-// shown: a global before a project (even when the project comes first), a project's view being
-// its data dir (`<root>/.bob`) with the root beside it; nothing when the current target is
-// deployed, or when no install is.
-test('the console falls back to the first active install when its target is empty', () => {
+// THE DEFAULT INSTALL, e.g. ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The
+// console opened on the OpenCode global dir, found nothing deployed there and showed the
+// onboarding form over a working ~/.bob. The default is the first ACTIVE install in the console's
+// one install order (`fleetSort`): host order first (opencode before bob, even a project before
+// a later host's global), then global before project of one host (even when the project comes
+// first); a project's view is its data dir (`<root>/.bob`) with the root beside it; nothing when
+// no install is active.
+test('the default install is the first active one in the fixed order', () => {
   const sb = makeSandbox();
   const d = sb.path;
   try {
@@ -4658,13 +4659,21 @@ test('the console falls back to the first active install when its target is empt
     const proj = path.join(d, 'repo');
     manifest(path.join(proj, '.bob'));
     const projRow = ['bob', 'project', proj];
-    assert.deepEqual(fallbackView(empty, [['opencode', 'global', empty], projRow]),
+    assert.deepEqual(defaultView([['opencode', 'global', empty], projRow]),
       [path.join(proj, '.bob'), proj]);
     manifest(bobGlobal);
-    assert.deepEqual(fallbackView(empty, [projRow, ['bob', 'global', bobGlobal]]),
+    assert.deepEqual(defaultView([projRow, ['bob', 'global', bobGlobal]]),
       [bobGlobal, bobGlobal]);
-    assert.equal(fallbackView(bobGlobal, [projRow]), null);
-    assert.equal(fallbackView(empty, [['opencode', 'global', empty]]), null);
+    const ocGlobal = path.join(d, 'dot-opencode');
+    manifest(ocGlobal);
+    assert.deepEqual(defaultView([projRow, ['bob', 'global', bobGlobal], ['opencode', 'global', ocGlobal]]),
+      [ocGlobal, ocGlobal]);
+    // Host order outranks scope: a claude PROJECT comes before a bob GLOBAL.
+    const clProj = path.join(d, 'repo-cl');
+    manifest(path.join(clProj, '.claude'));
+    assert.deepEqual(defaultView([['bob', 'global', bobGlobal], ['claude', 'project', clProj]]),
+      [path.join(clProj, '.claude'), clProj]);
+    assert.equal(defaultView([['opencode', 'global', empty]]), null);
   } finally { sb.cleanup(); }
 });
 
