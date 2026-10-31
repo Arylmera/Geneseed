@@ -84,14 +84,24 @@ function doctrinePacks(items) {
 // remembered, labelled beside the page. The default install's overview is App's; another
 // install's is read with its pair. Keyed on the pick, so a switch never shows one install's
 // staged selection over another's rules.
+//
+// ⚠ EVERY WRITE NAMES THE PICKED INSTALL, AND ONLY ONCE ITS OWN READ HAS LANDED. The picked
+// install's overview is always read with its pair (never App's unnamed one, which answers for the
+// daemon's state and can lag the default marker), and it counts only when it describes the pick:
+// the read survives a re-pick for a moment, and an overview of B under a pick of C would let a
+// switch rebuild B. Until then, and until the install list is read, the page offers no write.
 export default function Laws(props) {
   const active = useInstalls(props.dataRev)
   const [install, pick] = useInstallPick('laws', active)
-  const isDefault = !install || install.id === active?.[0]?.id
   const { data: own } = useAsync(
-    () => (isDefault ? Promise.resolve(null) : api.overview(pairOf(install)).catch(() => null)),
+    () => (install ? api.overview(pairOf(install)).catch(() => null) : Promise.resolve(null)),
     [install?.id ?? '', props.dataRev],
   )
+  const mine =
+    install && own?.install?.host === install.host && own.install.path === install.path ? own : null
+  // No install to pick (none active, or the list unreadable): the default's overview, as before.
+  const overview = install ? mine : props.overview
+  const ready = active !== null && (!install || mine !== null)
   return (
     <>
       <InstallPicker
@@ -102,10 +112,11 @@ export default function Laws(props) {
         label="Constitution of:"
       />
       <LawsOf
-        key={isDefault ? 'default' : install.id}
+        key={install?.id ?? 'none'}
         {...props}
-        overview={isDefault ? props.overview : own}
-        pair={isDefault ? undefined : pairOf(install)}
+        overview={overview}
+        pair={pairOf(install)}
+        onAction={ready ? props.onAction : undefined}
       />
     </>
   )
@@ -119,7 +130,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     pair ? [dataRev, pair.host, pair.path] : [dataRev],
     'catalog:laws',
   )
-  const { data: rulesData } = useRules(dataRev)
+  const { data: rulesData } = useRules(dataRev, pair)
   const [tab, setTab] = useState('all')
   const [q, setQ] = useState('')
   // A second, narrower axis beside the tier tabs: every rule, the hook-gated ones, or the

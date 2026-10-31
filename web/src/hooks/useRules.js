@@ -8,8 +8,14 @@ import { useAsync, dropAsyncKey } from './useAsync.js'
 // Stale-while-revalidate: agent sessions write the file often (the rule skill), so each
 // mount paints the cached copy and refetches once; a write on the page reloads it once.
 // The Rules editor keeps its own uncached read — it needs the live fingerprint.
-export const useRules = (dataRev) =>
-  useAsync(() => api.rules().catch(() => null), [dataRev], 'rules', { revalidate: true })
+// `install` ({host, path}) reads that install's file under its own deps; none, the default's.
+export const useRules = (dataRev, install) =>
+  useAsync(
+    () => api.rules(install).catch(() => null),
+    install ? [dataRev, install.host, install.path] : [dataRev],
+    'rules',
+    { revalidate: true },
+  )
 
 // For a rules write made where no useRules is mounted.
 export const dropRules = () => dropAsyncKey('rules')

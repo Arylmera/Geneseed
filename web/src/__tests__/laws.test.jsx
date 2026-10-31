@@ -1143,6 +1143,36 @@ describe('Constitution page — its own install picker', () => {
     localStorage.clear()
   })
 
+  // A re-pick must never write through the previous install's read: until the new pick's own
+  // overview lands, no switch is offered, and the write then names the new install.
+  it('offers no write between a re-pick and its own overview', async () => {
+    const OC = { host: 'opencode', scope: 'global', path: '/oc' }
+    let landCl
+    api.overview = vi.fn((p) =>
+      p.host === 'opencode'
+        ? Promise.resolve({ install: { ...OC, deletionGate: true } })
+        : new Promise((r) => {
+            landCl = () => r({ install: { ...CL, deletionGate: true } })
+          }),
+    )
+    const onAction = vi.fn()
+    const { container } = render(
+      <Laws overview={{ install: { ...INSTALL } }} onAction={onAction} />,
+    )
+    const gate = () => container.querySelector('[aria-label="Deletion gate"]')
+    await waitFor(() => expect(gate()).toBeTruthy())
+    fireEvent.change(screen.getByRole('combobox', { name: 'Constitution of:' }), {
+      target: { value: 'cl' },
+    })
+    await waitFor(() => expect(landCl).toBeTypeOf('function'))
+    expect(gate()).toBeNull()
+    await act(async () => landCl())
+    await waitFor(() => expect(gate()).toBeTruthy())
+    fireEvent.click(gate())
+    await answered()
+    expect(onAction.mock.calls).toEqual([['install', { ...CL, deletionGate: false }]])
+  })
+
   it('a picked install reads its own constitution, and its gate switch rebuilds it', async () => {
     const onAction = vi.fn()
     const { container } = render(
