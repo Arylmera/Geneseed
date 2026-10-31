@@ -36,9 +36,24 @@ export class BadRequest extends Error {}
 /** `??` would also swallow an explicit `null` the file declared; this does not. */
 export const dget = (obj, key, dflt) => (Object.hasOwn(obj, key) ? obj[key] : dflt);
 
-export function deployed(state) {
-  return existsSync(path.join(state.target, GLOBAL_MANIFEST));
+/**
+ * The dir holding the viewed install's manifest — its host layer — or null when none is deployed.
+ *
+ * `state.target` itself for a global install and a Claude-style project one (whose target IS
+ * `<repo>/.claude|.bob|.openclaude`). An OpenCode PROJECT install is viewed at the repo root,
+ * where its memory, rules and markers live, but writes its manifest and the layer the host loads
+ * (`skills/<name>/SKILL.md`, `agents/`) under `<repo>/.opencode/`; the root `skills/` is the
+ * plain bundle's flat `<name>.md`. Checking the target alone read every such install as "not
+ * deployed" and listed the source render instead of what it has.
+ */
+export function deployedLayer(state) {
+  for (const dir of [state.target, path.join(state.target, '.opencode')]) {
+    if (existsSync(path.join(dir, GLOBAL_MANIFEST))) return dir;
+  }
+  return null;
 }
+
+export const deployed = (state) => deployedLayer(state) !== null;
 
 /**
  * A deployed spec's one-line purpose.
@@ -94,7 +109,8 @@ function specEntries(root, nested) {
 }
 
 /**
- * The agents and skills actually installed at `state.target`, not a fresh render of `src/`.
+ * The agents and skills actually installed in the install's host layer (`deployedLayer`), not
+ * a fresh render of `src/`.
  *
  * All three constitutional tiers still come from the render: once deployed they live inside
  * AGENT.md rather than as separate files, so the deployed arm replaces the two ENTITY rosters
@@ -114,13 +130,14 @@ function deployedInventory(state) {
   const render = tuiInventory(state.theme, doctrinesForBuild(state.target),
     excludedRulesOfDir(state.target));
   const registry = loadRegistry();
-  const skills = specEntries(path.join(state.target, 'skills'), true);
+  const layer = deployedLayer(state);
+  const skills = specEntries(path.join(layer, 'skills'), true);
   for (const e of skills) {
     e.status = entityStatus(registry, `skills/${e.name}`);
     e.klass = e.status === 'personal' ? 'personal'
       : (Object.hasOwn(SKILL_CLASS, e.name) ? SKILL_CLASS[e.name] : 'build');
   }
-  const agents = specEntries(path.join(state.target, 'agents'), false);
+  const agents = specEntries(path.join(layer, 'agents'), false);
   for (const e of agents) e.status = entityStatus(registry, `agents/${e.name}`);
   return { agents,
     skills,

@@ -22,18 +22,18 @@
  * port's NOT_PORTED / DECLINED partition emptied for good and was retired — the declared
  * surface now lives in `js/web/routes.mjs` and `tests/unit/web_server.test.mjs`.
  */
-import { GLOBAL_MANIFEST, resolvePath } from '../hosts/hosts.mjs';
+import { resolvePath } from '../hosts/hosts.mjs';
 import { isFile, printOut } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { promptLine } from '../lib/prompt.mjs';
+import { deployed } from './catalog.mjs';
 import { fallbackView, warmDoctor, webState } from './state.mjs';
 import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { makeHandler } from './handler.mjs';
 import { JobManager } from './jobs.mjs';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join, resolve as pathResolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -139,7 +139,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   const home = state.target;
   const fallback = fallbackView(home);
   if (fallback) state.selectView(...fallback);
-  if (!existsSync(join(state.target, GLOBAL_MANIFEST))) {
+  if (!deployed(state)) {
     printOut(`[web] no deployed harness at ${state.target}.\n`);
     printOut('      Run `geneseed setup` first — serving anyway (read-only UI).\n');
   }
