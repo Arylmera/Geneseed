@@ -134,7 +134,66 @@ describe('Library', () => {
   it('forgets a memory fact via the delete control', async () => {
     render(<Library section="memory" selected="fact-a" overview={overview({})} />)
     fireEvent.click(await screen.findByText('Forget this fact'))
-    await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a'))
+    await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a', undefined))
+  })
+
+  // Memory across installs (Q3): each row is tagged with the installs that hold it, and a forget
+  // or a promote acts on the install of the copy on screen, never the default one.
+  it('tags memory rows by install and forgets from the copy on screen', async () => {
+    const OC = 'opencode:global:/oc'
+    const CL = 'claude:global:/cl'
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items:
+          section === 'memory' ? [{ name: 'fact-a', title: 'fact-a', installs: [OC, CL] }] : [],
+      }),
+    )
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        title: 'A fact',
+        body: 'body',
+        links: [],
+        install: CL,
+        installs: [OC, CL],
+      }),
+    )
+    render(<Library lock="memory" base="#/personal/memory" overview={overview({})} />)
+    fireEvent.click(await screen.findByText('Forget this fact'))
+    await waitFor(() =>
+      expect(api.memoryDelete).toHaveBeenCalledWith('fact-a', {
+        host: 'claude',
+        scope: 'global',
+        path: '/cl',
+      }),
+    )
+    expect([...document.querySelectorAll('.lr-install')].map((t) => t.textContent)).toEqual([
+      'opencode · global',
+      'claude · global',
+    ])
+  })
+
+  it('promotes a fact into the rules of its own install', async () => {
+    const CL = 'claude:global:/cl'
+    api.item.mockImplementation(() =>
+      Promise.resolve({ title: 'A fact', body: 'body', links: [], install: CL, installs: [CL] }),
+    )
+    api.rules = vi.fn(async () => ({ fingerprint: 'cl-fp' }))
+    api.rulesPromote = vi.fn(async () => ({ ok: true }))
+    try {
+      render(<Library lock="memory" base="#/personal/memory" overview={overview({})} />)
+      fireEvent.click(await screen.findByText('Promote to rule'))
+      await waitFor(() =>
+        expect(api.rulesPromote).toHaveBeenCalledWith(
+          { name: 'fact-a', fingerprint: 'cl-fp', delete_memory: true },
+          { host: 'claude', scope: 'global', path: '/cl' },
+        ),
+      )
+      expect(api.rules).toHaveBeenCalledWith({ host: 'claude', scope: 'global', path: '/cl' })
+    } finally {
+      delete api.rules
+      delete api.rulesPromote
+    }
   })
 
   // A deep link to an entry that is gone (an old bookmark, a retired skill): the reader

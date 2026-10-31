@@ -238,8 +238,9 @@ export default function Library({
   // How often each skill or agent fires, fleet-wide (GET /api/usage `names`). A soft read: a
   // failed, missing or older-shaped answer hides the usage UI and never breaks the page.
   const useKind = lock ? null : USE_KIND[sec] || null
-  // Skills and agents are listed across every install; each row names the installs that have it.
-  const fleetOn = useKind !== null
+  // Skills, agents, memory and notebook are listed across every install; each row names the
+  // installs that have it.
+  const fleetOn = useKind !== null || sec === 'memory' || sec === 'notebook'
   // The rail counts skills and agents off the same fleet-wide lists the page shows, not off
   // `overview.counts`, which counts one install.
   const { data: fleetLists } = useAsync(
@@ -388,7 +389,8 @@ export default function Library({
     if (!ok) return
     setActionErr('')
     try {
-      await api.memoryDelete(name)
+      // The copy on screen is the one forgotten: its own install, never the default.
+      await api.memoryDelete(name, item?.install ? installOfKey(item.install) : undefined)
     } catch (e) {
       // Stay on the fact that failed to go, and say why.
       setActionErr(`Could not forget "${name}": ${e.message}`)
@@ -412,8 +414,10 @@ export default function Library({
     if (!ok) return
     setActionErr('')
     try {
-      const cur = await api.rules()
-      await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
+      // The fact becomes a rule in ITS install's user-rules.md, with that file's fingerprint.
+      const inst = item?.install ? installOfKey(item.install) : undefined
+      const cur = await api.rules(inst)
+      await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true }, inst)
       // The Rules tab must show the promoted rule: a mounted Personal (its own Memory tab)
       // reloads its read; a Personal mounted next must not be served the cached old copy.
       dropRules()
@@ -619,21 +623,25 @@ export default function Library({
                   <UseStats u={callsOf(activeItem.name)} usage={usage} noCall={noCall} />
                 ) : null}
               </div>
-              {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
-                <div className="row gap-8">
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    onClick={onPromote}
-                    title="Turn this lesson into a standing trial rule in user-rules.md"
-                  >
-                    Promote to rule
-                  </button>
-                  <button type="button" className="btn ghost sm" onClick={onForget}>
-                    Forget this fact
-                  </button>
-                </div>
-              )}
+              {/* Only once the copy is read: its `install` is the one a forget or a promote acts on. */}
+              {sec === 'memory' &&
+                item &&
+                activeItem.name !== 'MEMORY' &&
+                activeItem.name !== 'README' && (
+                  <div className="row gap-8">
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={onPromote}
+                      title="Turn this lesson into a standing trial rule in user-rules.md"
+                    >
+                      Promote to rule
+                    </button>
+                    <button type="button" className="btn ghost sm" onClick={onForget}>
+                      Forget this fact
+                    </button>
+                  </div>
+                )}
               {item?.installs?.length > 1 && item.installs.includes(item.install) ? (
                 <label className="row gap-8 lib-copy">
                   <span className="dim">Viewing copy from:</span>

@@ -1985,8 +1985,8 @@ test('an unknown or half (host, path) pair is refused with 404', async () => {
       { host: 'nope', path: clPair.path }, { host: 'claude' }, { path: clPair.path },
       { host: '', path: '' }]) {
       assert.equal((await get('/api/setup', p)).status, 404, `GET ${JSON.stringify(p)} was answered`);
-      // A per-install section; the skills and agents lists are machine-wide and ignore the pair.
-      assert.equal((await get('/api/catalog/memory', p)).status, 404, `catalog ${JSON.stringify(p)}`);
+      // A per-install section; skills, agents, memory and notebook are machine-wide and ignore it.
+      assert.equal((await get('/api/catalog/wiki', p)).status, 404, `catalog ${JSON.stringify(p)}`);
     }
     const res = await post('/api/profile', { host: 'claude', path: '/no/such/root',
       fingerprint: '', text: 'x' });
@@ -2114,6 +2114,28 @@ test('a write through a view refreshes the daemon state, and the reverse', async
   });
 });
 
+// Memory and notebook are listed across every active install (Q3): one row per name with the
+// installs that hold it, in fleet order, and an entry is read from the named install's copy, so a
+// forget or a promote can name the install the fact came from.
+test('memory lists every active install, and an entry reads its named copy', async () => {
+  await withTwoViewsServed(async ({ oc, cl, ocPair, clPair, get }) => {
+    fs.writeFileSync(path.join(cl, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    seedFact(oc);
+    seedFact(cl);
+    fs.writeFileSync(path.join(cl, 'memory', 'only-claude.md'), '---\nname: Only\n---\nClaude only.\n');
+    const key = (p, host, scope) => `${host}:${scope}:${p.path}`;
+    const ocKey = key(ocPair, 'opencode', 'global');
+    const clKey = key(clPair, 'claude', 'global');
+    const rows = (await (await get('/api/catalog/memory')).json()).items;
+    const by = Object.fromEntries(rows.map((r) => [r.name, r.installs]));
+    assert.deepEqual(by.fact, [ocKey, clKey]);
+    assert.deepEqual(by['only-claude'], [clKey]);
+    const first = await (await get('/api/item/memory/only-claude')).json();
+    assert.equal(first.install, clKey, 'an entry one install holds was not read from it');
+    const named = await (await get('/api/item/memory/fact', clPair)).json();
+    assert.deepEqual([named.install, named.installs], [clKey, [ocKey, clKey]]);
+  });
+});
 test('an install no longer detected is refused even when its view is cached', async () => {
   await withTwoViewsServed(async ({ st, ocPair, get }) => {
     assert.equal((await get('/api/setup', ocPair)).status, 200);

@@ -8,7 +8,9 @@ import EmptyState from '../components/EmptyState.jsx'
 import { Bar } from '../components/StackBar.jsx'
 import Rules from './Rules.jsx'
 import Profile from './Profile.jsx'
-import Library from './Library.jsx'
+import Library, { installLabel } from './Library.jsx'
+import { useInstalls } from '../hooks/useInstalls.js'
+import { installTag } from '../lib/hosts.js'
 
 const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`
 
@@ -20,8 +22,9 @@ const countOf = (catalog) =>
     : null
 
 // The two panels over the rules editor: the one budget the rule file spends every turn, and
-// how much the agent has been told about you across your files.
-function RuleCards({ rules, profile, facts, notes }) {
+// how much the agent has been told about you across your files. The rule file and the profile are
+// ONE install's (the default, `tag`), so both cards name it; memory and notebook count every install.
+function RuleCards({ rules, profile, facts, notes, tag }) {
   const st = rules?.exists ? rules.stats : null
   if (!st) return null
   // One threshold for the whole strip: whichever budget is closer to spent, count or tokens.
@@ -54,6 +57,7 @@ function RuleCards({ rules, profile, facts, notes }) {
           <h2 id="pc-budget">Rule budget</h2>
           <span className="mono dim">
             {st.rules} of {st.max_rules}
+            {tag ? ` · ${tag}` : ''}
           </span>
         </div>
         <div
@@ -85,6 +89,11 @@ function RuleCards({ rules, profile, facts, notes }) {
             </li>
           ))}
         </ul>
+        {tag ? (
+          <p className="panel-note">
+            Profile and rules of {tag}; memory and notebook across every install.
+          </p>
+        ) : null}
       </section>
     </div>
   )
@@ -100,12 +109,14 @@ const topicsOf = (body) =>
     .filter(Boolean)
     .map((m) => ({ topic: m[1], n: Number(m[2]) }))
 
-function Topics({ topics }) {
+// The map is one install's (the first that has it, `install`), so the panel names it.
+function Topics({ topics, install }) {
   if (!topics.length) return null
   return (
     <section className="panel pm-topics" aria-labelledby="pm-topics">
       <div className="panel-head">
         <h2 id="pm-topics">Topics</h2>
+        {install ? <span className="mono dim">{installLabel(install)}</span> : null}
         <span className="mono dim">{plural(topics.length, 'topic')}</span>
       </div>
       <ul className="hbars">
@@ -162,6 +173,9 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
   // Each editor reloads only its own file after a write, so the cards above it follow. Not
   // the app-wide `dataRev`: neither file feeds the overview, the fleet or an install.
   const { data: rules, reload: reloadRules } = useRules(dataRev)
+  // The install the unnamed reads above answer for (the default), named once two are active.
+  const active = useInstalls(dataRev)
+  const tag = active?.length > 1 ? installTag(active[0]) : null
   const { data: profile, reload: reloadProfile } = useAsync(() => soft(api.profile()), [dataRev])
   // The same key and deps as Library's own read of each folder, so the count here and the
   // pane share one fetch, and a delete in the pane moves the count. No `soft`: a cached null
@@ -201,7 +215,7 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
       <Tabs page="personal" current={tab} badges={badges} label="Personal files" />
       {tab === 'rules' && (
         <>
-          <RuleCards rules={rules} profile={profile} facts={facts} notes={notes} />
+          <RuleCards rules={rules} profile={profile} facts={facts} notes={notes} tag={tag} />
           <Rules onChanged={reloadRules} dataRev={dataRev} />
         </>
       )}
@@ -212,7 +226,7 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
         </EmptyState>
       ) : folder ? (
         <>
-          {tab === 'memory' && <Topics topics={topicsOf(map?.body)} />}
+          {tab === 'memory' && <Topics topics={topicsOf(map?.body)} install={map?.install} />}
           <Library
             key={tab}
             lock={tab}

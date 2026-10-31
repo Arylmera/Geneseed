@@ -68,12 +68,15 @@ Every `/api/*` read takes and checks the pair, with these exceptions:
 - `/api/ping` and `/api/jobs` ignore it.
 - The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`,
   `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active`,
-  `/api/activity`, and the Library's skill and agent lists, `/api/catalog/skills` and
-  `/api/catalog/agents`. Such a read does not check the pair, and its answer does not change
+  `/api/activity`, and the Library's skill, agent, memory and notebook lists,
+  `/api/catalog/skills`, `/api/catalog/agents`, `/api/catalog/memory` and
+  `/api/catalog/notebook`. Such a read does not check the pair, and its answer does not change
   with the pair. The Activity detail (`/api/activity/<id>`) and the Activity toggle still take
   the pair.
 
-The skill and agent lists read every active install. Each row is one id (kind and name), and
+The skill, agent, memory and notebook lists read every active install (memory and notebook
+entries are your own files, so a fact's Forget and Promote act on the install of the copy on
+screen, and Promote writes to that install's `user-rules.md`). Each row is one id (kind and name), and
 its `installs` field names the installs that have it, as `host:scope:root` keys (the same keys
 as `/api/usage`). An id that only some installs have lists only those installs, so an exclusion
 stays visible. The other catalog sections stay install-scoped. `/api/item/skill/<name>` and
