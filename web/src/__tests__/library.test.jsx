@@ -53,8 +53,8 @@ const kinds = () =>
   ])
 
 describe('Library', () => {
-  // Skills and agents count their fleet-wide lists (2 each here), not the one install that
-  // `overview.counts` describes (52, 18); the other kinds keep the overview's counts.
+  // Skills, agents, memory and notebook count their fleet-wide lists (2, 2, 1, 0 here), not the
+  // one install that `overview.counts` describes (52, 18, 2, 2); the other kinds keep its counts.
   it('lists every kind with its count, the routed one current', async () => {
     render(
       <Library
@@ -67,11 +67,28 @@ describe('Library', () => {
     expect(kinds()).toEqual([
       ['Skills', '2', null],
       ['Agents', '2', 'page'],
-      ['Memory', '2', null],
-      ['Notebook', '2', null],
+      // Memory and notebook are fleet lists too: one fact in the fixture, no notebook entry.
+      ['Memory', '1', null],
+      ['Notebook', '0', null],
       ['Wiki', '0', null],
       ['Setup files', '2', null],
     ])
+  })
+
+  // Wiki and setup files are one install's (the default): once two are active, the list says whose.
+  it('names the install a one-install kind is read from', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+        { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+      ],
+    }))
+    try {
+      render(<Library section="config" overview={overview({})} />)
+      expect(await screen.findByText('of claude · global')).toBeTruthy()
+    } finally {
+      delete api.installs
+    }
   })
 
   it('opens on skills when #/library carries no kind, and lists them', async () => {

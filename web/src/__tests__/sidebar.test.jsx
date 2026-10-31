@@ -107,6 +107,22 @@ describe('Sidebar', () => {
     ).toBe('dialog')
   })
 
+  // The vitals are the default install's: with two installs active, the card, its voice button
+  // and the brand line name it.
+  it('names the install its vitals describe once two are active', () => {
+    const two = [
+      { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active' },
+      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+    ]
+    const ov = { ...overview, install: { host: 'claude', scope: 'global', path: '/cl' } }
+    render(<Sidebar route={{ page: 'overview' }} overview={ov} installs={two} />)
+    const card = screen.getByRole('region', { name: 'Install vitals, claude · global' })
+    expect(
+      within(card).getByRole('button', { name: /voice · imperial · claude · global/i }),
+    ).toBeTruthy()
+    expect(document.querySelector('.sb-ver').textContent).toMatch(/imperial · claude · global$/)
+  })
+
   // At tablet width (721-960px) the rail is icons only and hides the vitals, voice button
   // included: this icon button is the voice switch there. CSS shows it in that tier only.
   it('carries an icon voice button outside the vitals, naming the current voice', () => {

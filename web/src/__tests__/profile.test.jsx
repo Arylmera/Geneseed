@@ -190,6 +190,11 @@ describe('Profile across installs', () => {
     render(<Profile />)
     await screen.findByRole('heading', { name: 'OpenCode me' })
     expect(screen.getByRole('heading', { name: 'Claude me' })).toBeTruthy()
+    // Each card is a region named after its install.
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Profile of claude · global',
+      'Profile of opencode · global',
+    ])
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))
     expect(groups).toEqual(['Profile mode, claude · global', 'Profile mode, opencode · global'])
     const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })

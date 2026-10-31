@@ -2,6 +2,7 @@ import React from 'react'
 import { go } from '../lib/router.js'
 import { driftTotal, relTime } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
+import { activeInstalls, installTag } from '../lib/hosts.js'
 
 // The seven pages, in the order a visit reads them: how the harness is doing, what it
 // obeys, what it knows, how it iterates, what is yours, and where it is installed. Each count reads data
@@ -85,13 +86,20 @@ function NavLink({ n, lit, count, onNavigate }) {
 // has drifted from its source, and when it was built. Three facts that decide whether
 // anything else on screen can be trusted. The voice sits under them as a button, because
 // switching it is the one rebuild the sidebar offers. A named card (a region), so a
-// landmark list reaches it by name.
-function Vitals({ overview, onOpenVoice }) {
+// landmark list reaches it by name. Its facts are ONE install's (the default's overview): once
+// two installs are active, `tag` names it, on the card and in its name.
+function Vitals({ overview, onOpenVoice, tag }) {
   if (!overview) return null
   const d = overview.doctor
   const drift = driftTotal(overview.diff)
   return (
-    <section className="sb-vitals" aria-label="Install vitals">
+    <section className="sb-vitals" aria-label={tag ? `Install vitals, ${tag}` : 'Install vitals'}>
+      {tag ? (
+        <div>
+          <span>install</span>
+          <b className="mono">{tag}</b>
+        </div>
+      ) : null}
       <div>
         <span>doctor</span>
         <b className={!d ? '' : d.ok ? 'good' : 'bad'}>
@@ -118,6 +126,7 @@ function Vitals({ overview, onOpenVoice }) {
         <span className="sb-voice-name">
           <i className="sb-voice-swatch" aria-hidden="true" />
           Voice · {overview.theme || 'none'}
+          {tag ? ` · ${tag}` : ''}
         </span>
         <Icon name="chevron" />
       </button>
@@ -126,6 +135,8 @@ function Vitals({ overview, onOpenVoice }) {
 }
 
 export default function Sidebar({ route, overview, installs, onOpenVoice, onNavigate }) {
+  const tag =
+    activeInstalls(installs).length > 1 && overview?.install ? installTag(overview.install) : null
   return (
     // A <nav> landmark: this IS the app's primary navigation, and tabIndex -1 lets the
     // phone drawer's focus management in App.jsx move focus here.
@@ -145,7 +156,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
         <span className="sb-brand-text">
           <span className="sb-name">Geneseed</span>
           <span className="sb-ver">
-            {[overview?.version && `v${overview.version}`, overview?.theme]
+            {[overview?.version && `v${overview.version}`, overview?.theme, tag]
               .filter(Boolean)
               .join(' · ')}
           </span>
@@ -178,7 +189,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
           <Icon name="spark" />
         </button>
       ) : null}
-      <Vitals overview={overview} onOpenVoice={onOpenVoice} />
+      <Vitals overview={overview} onOpenVoice={onOpenVoice} tag={tag} />
     </nav>
   )
 }

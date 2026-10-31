@@ -91,7 +91,7 @@ function ProfileOf({ install, tag, onChanged }) {
   }
 
   return (
-    <>
+    <section aria-label={tag ? `Profile of ${tag}` : undefined}>
       <div className="head-row mb-16">
         <div>{tag ? <span className="rule-chip mono">{tag}</span> : null}</div>
         <div className="row">
@@ -160,6 +160,6 @@ function ProfileOf({ install, tag, onChanged }) {
           <code className="mono">profile</code> skill.
         </EmptyState>
       )}
-    </>
+    </section>
   )
 }

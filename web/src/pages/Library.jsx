@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { installTag } from '../lib/hosts.js'
+import { useInstalls } from '../hooks/useInstalls.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
@@ -21,6 +22,13 @@ import Stat from '../components/Stat.jsx'
 
 // The usage ledger's kind for a Library section; only these two are counted.
 const USE_KIND = { skills: 'skill', agents: 'agent' }
+// The kinds listed across every install (the server's FLEET_SECTIONS): the rail counts them off
+// those lists, not off `overview.counts`, which counts one install. A folder's index and README
+// are furniture, not entries, and are not counted.
+const FLEET_KINDS = ['skills', 'agents', 'memory', 'notebook']
+const FURNITURE = new Set(['MEMORY', 'NOTEBOOK', 'README'])
+const entryCount = (list) =>
+  list.filter((it) => !FURNITURE.has(String(it.name).toUpperCase())).length
 const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
@@ -244,7 +252,7 @@ export default function Library({
     () =>
       lock
         ? Promise.resolve(null)
-        : Promise.all(Object.keys(USE_KIND).map((k) => api.catalog(k))).catch(() => null),
+        : Promise.all(FLEET_KINDS.map((k) => api.catalog(k))).catch(() => null),
     [lock, dataRev],
   )
   const want = useKind !== null
@@ -323,10 +331,15 @@ export default function Library({
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
   const railCount = (k) => {
-    if (!USE_KIND[k]) return counts[k] ?? ''
-    if (k === sec && catalog?.section === sec) return items.length
-    return fleetLists?.find((c) => c?.section === k)?.items?.length ?? ''
+    if (!FLEET_KINDS.includes(k)) return counts[k] ?? ''
+    if (k === sec && catalog?.section === sec) return entryCount(items)
+    const list = fleetLists?.find((c) => c?.section === k)?.items
+    return list ? entryCount(list) : ''
   }
+  // The install a one-install kind (wiki, config) is read from: the default, named once two
+  // installs are active.
+  const activeInsts = useInstalls(dataRev)
+  const oneOf = activeInsts?.length > 1 ? `of ${installTag(activeInsts[0])}` : null
   // Install badges only say something when the list spans two installs or more.
   const fleetWide = fleetOn && new Set(items.flatMap((it) => it.installs || [])).size > 1
 
@@ -504,6 +517,9 @@ export default function Library({
           extra={
             useOn && usage.since ? (
               <span className="mono dim lib-since">calls since {usage.since}</span>
+            ) : !FLEET_KINDS.includes(sec) && sec !== 'laws' && oneOf ? (
+              // A one-install kind (wiki, config): whose files these are, once two are active.
+              <span className="mono dim lib-since">{oneOf}</span>
             ) : null
           }
           tools={
