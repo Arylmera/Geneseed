@@ -84,8 +84,9 @@ it. The order is the host order (OpenCode, Claude Code, Bob, OpenClaude), then g
 project. The item's `install` field names the copy, and its `installs` field names every
 install that has the id.
 
-A request that names no install reads the **default install**: the first active one, every global
-before any project, then the host order (opencode, claude, bob, openclaude). `/api/installs` marks
+A request that names no install reads the **default install**: the first active one in the console's one
+install order (`fleetSort`): host order (opencode, claude, bob, openclaude), then global before
+project. `/api/installs` marks
 that row `default: true`. There is no console-wide install and no `POST /api/view`: a page that
 acts on one install names it on each request, through a picker placed beside the entry or form it
 applies to (see below).
