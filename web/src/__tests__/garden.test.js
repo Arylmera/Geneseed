@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   agentFamily,
+  cardKey,
   collapseShelves,
+  detailHref,
+  detailTarget,
+  installNames,
   contextFill,
   gardenTree,
   groupShelves,
@@ -376,5 +380,106 @@ describe('growth details', () => {
       }),
     )
     expect(t.pads.at(-1).bbox.y).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// D2: the merged garden holds one session id from two installs as two cards, so collisions
+// match a writer to a tree by install + id (`cardKey`), never by id alone.
+describe('cards across installs', () => {
+  const col = {
+    repo: '/app',
+    path: 'x.js',
+    kind: 'cross-worktree',
+    writers: [
+      { sid: 's1', by: null, root: '/app', install: 'claude:global:/h/cl' },
+      { sid: 's1', by: null, root: '/app/.wt/b', install: 'opencode:global:/h/oc' },
+    ],
+  }
+  const trees = [
+    { s: { session_id: 's1', install: 'claude:global:/h/cl' } },
+    { s: { session_id: 's1', install: 'opencode:global:/h/oc' } },
+  ]
+
+  it('threads the same id from two installs as two trees', () => {
+    expect(shelfPairs(trees, [col])).toEqual([{ a: 0, b: 1, kind: 'cross-worktree' }])
+    expect(sharedFiles(cardKey(trees[0].s), [col])).toEqual([
+      { path: 'x.js', kind: 'cross-worktree' },
+    ])
+    expect(cardKey(trees[0].s)).not.toBe(cardKey(trees[1].s))
+    expect(cardKey({ session_id: 's1' })).toBe('s1') // a card with no install keys by id
+  })
+
+  it('names an install by host, adding the scope, then the folder, only when needed', () => {
+    const row = (host, scope, path) => ({ install: `${host}:${scope}:${path}`, host, scope, path })
+    const names = installNames([
+      row('opencode', 'global', '/h/oc'),
+      row('claude', 'global', '/h/cl'),
+      row('claude', 'project', '/w/app'),
+      row('bob', 'project', '/w/one'),
+      row('bob', 'project', '/w/two'),
+    ])
+    expect([...names.values()]).toEqual([
+      'opencode',
+      'claude · global',
+      'claude · project',
+      'bob · one',
+      'bob · two',
+    ])
+  })
+
+  // The server's `key` (id + checkout) never names an install: a merged card whose shown copy
+  // moves to the other install keeps its key, so its React key, hover and threads hold still.
+  it('keeps the card key when only the install a card is shown from changes', () => {
+    const k = 's1\0/w/main'
+    const before = { key: k, session_id: 's1', install: 'claude:global:/h/cl' }
+    const after = { ...before, install: 'claude:project:/w/main' }
+    expect(cardKey(after)).toBe(cardKey(before))
+    const col = {
+      repo: '/w',
+      path: 'x.js',
+      kind: 'cross-worktree',
+      writers: [
+        { sid: 's1', by: null, root: '/w/main', install: 'claude:global:/h/cl', key: k },
+        { sid: 's2', by: null, root: '/w/b', install: 'bob:global:/h/bob', key: 's2\0/w/b' },
+      ],
+    }
+    const trees = [{ s: after }, { s: { key: 's2\0/w/b', session_id: 's2' } }]
+    expect(shelfPairs(trees, [col])).toEqual([{ a: 0, b: 1, kind: 'cross-worktree' }])
+  })
+
+  it('parts two projects in same-named folders by a longer path tail, then the whole path', () => {
+    const row = (path) => ({ install: `bob:project:${path}`, host: 'bob', scope: 'project', path })
+    const names = installNames([
+      row('/w/a/app'),
+      row('/w/b/app'),
+      row('/w/c/x/app'),
+      row('/v/c/x/app'),
+      row('/one'),
+      row('/z/one'),
+    ])
+    expect([...names.values()]).toEqual([
+      'bob · a/app',
+      'bob · b/app',
+      'bob · w/c/x/app',
+      'bob · v/c/x/app',
+      'bob · /one',
+      'bob · z/one',
+    ])
+  })
+
+  it('writes the install into the detail link, and reads it back', () => {
+    const href = detailHref('ses a', { host: 'claude', path: 'C:\\w\\a&b' })
+    expect(href).toBe('#/activity/ses%20a?host=claude&path=C%3A%5Cw%5Ca%26b')
+    // The router hands the page its item decoded, query included; the install comes from the
+    // raw hash, where the query is still encoded.
+    expect(detailTarget('ses a?host=claude&path=C:\\w\\a&b', href)).toEqual({
+      sid: 'ses a',
+      install: { host: 'claude', path: 'C:\\w\\a&b' },
+    })
+    expect(detailTarget('ses a', '#/activity/ses%20a')).toEqual({
+      sid: 'ses a',
+      install: undefined,
+    })
+    expect(detailHref('s', undefined)).toBe('#/activity/s')
   })
 })

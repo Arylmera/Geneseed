@@ -22,7 +22,8 @@ import {
   applyHookEvent, readTranscriptDelta, recordActivity, safeStem, sweepActivity,
   ARCHIVE_KEEP,
 } from '../../js/hosts/activity.mjs';
-import { apiActivity, apiActivityDetail } from '../../js/web/activity.mjs';
+import { activitySummary, apiActivityDetail } from '../../js/web/activity.mjs';
+import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { ROOT } from '../helpers/web_fixture.mjs';
 
@@ -616,7 +617,14 @@ test('the activity verb exits 0 on an argv error, never 2', () => withBox((root)
 }));
 
 // ---------------------------------------------------------------------------------------------
-// The reader: a GET lists the ended beside the live and touches nothing.
+// The reader: a GET lists the ended beside the live and touches nothing. `read` makes `root` an
+// active opencode install (a manifest) and reads it as the GET's only install, so the machine's
+// own installs never leak in.
+
+const read = (root) => {
+  fs.writeFileSync(path.join(root, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+  return activitySummary({ targets: [['opencode', 'global', root]] });
+};
 
 test('a GET lists ended sessions and moves or deletes nothing', () => withBox((root) => {
   const d = path.join(root, 'activity');
@@ -631,7 +639,7 @@ test('a GET lists ended sessions and moves or deletes nothing', () => withBox((r
   const listing = () => [d, path.join(d, 'archive')].flatMap((x) => fs.readdirSync(x)
     .map((n) => `${n}@${fs.statSync(path.join(x, n)).mtimeMs}`)).sort();
   const before = listing();
-  const res = apiActivity({ target: root });
+  const res = read(root);
   assert.deepEqual(res.activity.map((e) => e.session_id), ['hook']);
   assert.deepEqual(res.ended.map((e) => [e.session_id, e.ended]),
     [['over', true], ['dead', true], ['old', true]]);
@@ -653,7 +661,7 @@ test('the ended list is capped to the newest 50 within seven days', () => withBo
   }
   fs.writeFileSync(path.join(d, 'ancient.json'), JSON.stringify({ session_id: 'ancient',
     status: 'ended', updated_at: now - 8 * 86400 }));
-  const ended = apiActivity({ target: root }).ended.map((e) => e.session_id);
+  const ended = read(root).ended.map((e) => e.session_id);
   assert.equal(ended.length, ARCHIVE_KEEP);
   assert.equal(ended[0], 's0');
   assert.equal(ended.at(-1), 's49');
@@ -661,6 +669,6 @@ test('the ended list is capped to the newest 50 within seven days', () => withBo
   assert.equal(fs.readdirSync(d).length, 61, 'the cap deleted files');
   // The age cut alone, with room under the count cap: still no eight-day-old session.
   for (let i = 5; i < 60; i += 1) fs.unlinkSync(path.join(d, `s${i}.json`));
-  assert.deepEqual(apiActivity({ target: root }).ended.map((e) => e.session_id),
+  assert.deepEqual(read(root).ended.map((e) => e.session_id),
     ['s0', 's1', 's2', 's3', 's4']);
 }));

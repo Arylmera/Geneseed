@@ -77,11 +77,13 @@ export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/
  * pair (it is neither checked nor used) and always read the daemon's state. Ignored rather
  * than refused, so a client may send its install on every read. On the daemon's state, not a
  * view, because `/api/update` keeps its daily check and the `.git`-lock guard
- * (`_behind.inflight`) there, and the update job checks only that one. Every other `/api/*`
- * GET, ping and jobs aside, takes the pair and refuses an unknown one.
+ * (`_behind.inflight`) there, and the update job checks only that one. `/api/activity` merges
+ * every active install's sessions; its detail (`/api/activity/<sid>`, a prefix route) and its
+ * toggle (a `VIEW_POSTS` write) still take the pair. Every other `/api/*` GET, ping and jobs
+ * aside, takes the pair and refuses an unknown one.
  */
 export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/kits',
-  '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active']);
+  '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/activity']);
 
 /**
  * The 409 column, exported so a test can assert it directly. Giving `/api/activity` the 409

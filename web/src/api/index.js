@@ -63,7 +63,9 @@ const update = () => get('/api/update')
 // the overview: it stats every candidate file, which the overview (fetched on every mutation)
 // has no business paying for.
 const recent = (install) => getIn('/api/recent', install)
-const activity = (install) => getIn('/api/activity', install)
+// Machine-wide: every active install's sessions in one list, each card naming its `install`.
+// The detail and the toggle stay per install.
+const activity = () => get('/api/activity')
 const activityDetail = (sid, install) => getIn('/api/activity/' + encodeURIComponent(sid), install)
 const activityToggle = (enabled, install) => postIn('/api/activity', { enabled }, install)
 const setup = (install) => getIn('/api/setup', install)

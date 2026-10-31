@@ -104,6 +104,14 @@ const TABLE = [
   ['#/docs/cli/build', 'Docs page=cli/build', 'Docs', 'Docs'],
   ['#/activity', 'Activity', 'Activity', 'Activity'],
   ['#/activity/s%201', 'ActivityDetail sid=s 1', 'Activity', 'Activity'],
+  // A garden card's link names its install: the item arrives decoded, query included, and the
+  // detail page splits it (`detailTarget`).
+  [
+    '#/activity/s1?host=claude&path=%2Fh%2Fcl',
+    'ActivityDetail sid=s1?host=claude&path=/h/cl',
+    'Activity',
+    'Activity',
+  ],
 ]
 
 describe('App routing', () => {

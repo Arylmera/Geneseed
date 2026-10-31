@@ -1,7 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { baseName, needsYou, STATUS } from '../../lib/activity.jsx'
 import {
+  cardKey,
   collapseShelves,
+  detailHref,
   contextFill,
   gardenTree,
   groupShelves,
@@ -39,7 +41,7 @@ function treeLabel(s, t, mine) {
     t.fallen.reduce((n, f) => n + f.files.length, 0)
   const c = pct(s)
   return [
-    `${s.title || baseName(s.cwd) || s.session_id}, ${s.host || 'unknown host'}, ${st.label}${s.phase ? `, ${s.phase}` : ''}`,
+    `${s.title || baseName(s.cwd) || s.session_id}, ${s.chip || s.host || 'unknown host'}, ${st.label}${s.phase ? `, ${s.phase}` : ''}`,
     `${s.turns || 0} turns${c == null ? '' : `, context ${c} %`}${s.compactions ? `, ${s.compactions} compactions` : ''}`,
     running.length
       ? `${running.length} sub-agent${running.length === 1 ? '' : 's'} running: ${running.map((p) => `${p.type || 'agent'} (${p.files.length} file${p.files.length === 1 ? '' : 's'})`).join(', ')}`
@@ -100,13 +102,13 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
   const st = STATUS[s.status] || STATUS.idle
   const loop = Array.isArray(s.loops) ? s.loops[0] : null
   const swaying = s.status !== 'idle'
-  const sid = s.session_id
+  const sid = cardKey(s)
   // Stable, so the tree's ~400 rects are rebuilt only when its drawing or its hover changes.
   const onPad = useCallback((p) => onHover(sid, p), [onHover, sid])
   return (
     <a
       className={`gd-tree${needsYou(s) ? ' gd-needs' : ''}`}
-      href={`#/activity/${encodeURIComponent(s.session_id)}`}
+      href={s.href || detailHref(s.session_id)}
       aria-label={treeLabel(s, t, mine)}
       data-sid={s.session_id}
       onMouseEnter={(e) => onHover(sid, null, xOf(e.currentTarget))}
@@ -116,7 +118,9 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
     >
       <div className="gd-label">
         <div className="act-ell">
-          <span className="mono dim">{s.host || '?'}</span> ·{' '}
+          <span className="badge mono" title="The install this session runs in">
+            {s.chip || s.host || '?'}
+          </span>{' '}
           {s.title || baseName(s.cwd) || s.session_id}
         </div>
         <div className="row gap-8 gd-sub">
@@ -247,7 +251,7 @@ function Shelf({ sh, sakura, cols, mineOf }) {
     (sid, pad, x) => setHover((h) => ({ sid, pad, x: x ?? (h.sid === sid ? h.x : 0) })),
     [],
   )
-  const cur = sh.trees.find((x) => x.s.session_id === hover.sid)?.s
+  const cur = sh.trees.find((x) => cardKey(x.s) === hover.sid)?.s
   // The hovered tree only: one more draw per hover, never per poll.
   const t = cur ? gardenTree(cur, { sakura }) : null
   const hot = t && hover.pad != null ? t.pads[hover.pad] : null
@@ -259,12 +263,12 @@ function Shelf({ sh, sakura, cols, mineOf }) {
       <div className="gd-row">
         {sh.trees.map(({ s, worktree }) => (
           <Tree
-            key={s.session_id}
+            key={cardKey(s)}
             s={s}
             worktree={worktree}
             sakura={sakura}
-            mine={mineOf(s.session_id)}
-            pad={s.session_id === hover.sid ? hover.pad : null}
+            mine={mineOf(cardKey(s))}
+            pad={cardKey(s) === hover.sid ? hover.pad : null}
             onHover={onHover}
           />
         ))}
@@ -274,7 +278,7 @@ function Shelf({ sh, sakura, cols, mineOf }) {
           no room in the layout, so a hover never moves the page. */}
       {cur && (
         <div className="gd-info" aria-hidden="true" style={{ left: Math.max(0, hover.x) }}>
-          {hot ? <PadCard pad={hot} /> : <TreeCard s={cur} t={t} mine={mineOf(cur.session_id)} />}
+          {hot ? <PadCard pad={hot} /> : <TreeCard s={cur} t={t} mine={mineOf(cardKey(cur))} />}
         </div>
       )}
     </section>
