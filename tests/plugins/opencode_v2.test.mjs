@@ -401,7 +401,8 @@ test("activity: a V2 session lifecycle writes and removes its card", async () =>
   cleanup()
 })
 
-// V2 has no `worktree` input, so `root` is the repository top level above ctx.location.directory.
+// `root` is the repository top level above the session's own `location.directory` (here the same
+// directory as the ctx's; a ctx in another checkout gives the same root, see activity.test.mjs).
 // A `subagent` child is a branch of its parent (running while its execution runs, done when it
 // succeeds), its step files are attributed to it with null counts, and a compaction is counted.
 test("activity: a V2 sub-agent, its step files, and a compaction land on the parent's card", async () => {

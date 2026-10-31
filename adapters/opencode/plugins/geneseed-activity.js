@@ -21,8 +21,8 @@
 // distil sessions are skipped entirely, and so is a child whose parent this process does not
 // track.
 //
-// Snapshot v2 (the Activity garden) adds `files[].path` and `files[].by`, `root` (OpenCode's
-// own worktree), `repo` (its main checkout), `agents`, `turns`, `context` and the compaction
+// Snapshot v2 (the Activity garden) adds `files[].path` and `files[].by`, `root` (the git root
+// of the session's own directory), `repo` (its main checkout), `agents`, `turns`, `context` and the compaction
 // trio — see docs/reference/opencode-plugins.md.
 //
 // v1.1 enriches each entry from events/fields it already receives or one `case` away:
@@ -134,8 +134,8 @@ function acctTotals(map, msgId, cost, tokens) {
   return { cost: c, tokens: t }
 }
 
-// Where a FileDiff's file is, for the garden: OpenCode's own path (relative to the worktree,
-// `/`-separated) when there is a root, else null — as for anything that would leave the root
+// Where a FileDiff's file is, for the garden: OpenCode's own path (relative to the session's
+// checkout, `/`-separated) when the session has a root, else null — as for anything that would leave the root
 // or is absolute (`../`, `/`, a drive, a UNC path). Never an absolute path on disk, and never
 // a basename in `path`, where it would collide with a same-named file at the top of the repo.
 function relPath(file, root) {
@@ -235,13 +235,14 @@ function mainWorktreeOf(cwd) {
   }
 }
 
-// `root` from OpenCode's own worktree: V1 passes the checkout's top level (a linked worktree
-// is its own root), or "/" for a project outside a repository — as is the drive root a
-// global project resolves to, so a filesystem root is no root. `repo` is the main checkout,
-// the root itself on a main checkout.
-function rootsOf(worktree) {
-  if (typeof worktree !== "string" || !worktree) return { root: null, repo: null }
-  const root = path.resolve(worktree)
+// `top` is the git root above the SESSION's own directory (gitRootOf), or null outside any
+// repository — never the plugin instance's worktree: one `opencode serve` hosts an instance per
+// opened project, every instance hears every session, and each would otherwise stamp its own
+// root on all of them. `root` is that top level (a linked worktree is its own root); a
+// filesystem root is no root. `repo` is the main checkout, the root itself on a main checkout.
+function rootsOf(top) {
+  if (typeof top !== "string" || !top) return { root: null, repo: null }
+  const root = path.resolve(top)
   if (root === path.parse(root).root) return { root: null, repo: null }
   return { root, repo: mainWorktreeOf(root) ?? root }
 }
@@ -316,8 +317,8 @@ function removeDetail(sid) { try { fs.unlinkSync(detailPath(sid)) } catch {} }
 
 // --- plugin ------------------------------------------------------------------
 
-export const GeneseedActivity = async (input) => {
-  const { root, repo } = rootsOf(input?.worktree)   // once: one OpenCode instance, one worktree
+// `input` (V1's worktree) is not read: root/repo are per session (see rootsOf).
+export const GeneseedActivity = async (_input) => {
   const owned = new Map()    // sid -> entry (top-level sessions this process tracks)
   const skipped = new Set()  // sid -> geneseed throwaway / orphan child, ignored from here on
   const childOf = new Map()  // child sid -> the owned root session it is a sub-agent of
@@ -366,12 +367,13 @@ export const GeneseedActivity = async (input) => {
   }
   const wideDiff = (sid, list) => {
     if (!Array.isArray(list) || !owned.has(sid)) return false
-    detFor(sid).wideDiff = list.map((d) => slimDiff(d, null, root))
+    detFor(sid).wideDiff = list.map((d) => slimDiff(d, null, owned.get(sid).root))
     return !detFor(sid).turnDiffs.size   // write only when it is the source in force
   }
   // A turn's diff list (user message `id` of session `owner`; `by` the child that ran it).
+  // Paths are relative to the owner's root: a sub-agent works in its parent's checkout.
   const turnDiff = (owner, id, list, by) => {
-    detFor(owner).turnDiffs.set(id, list.map((d) => slimDiff(d, by, root)))
+    detFor(owner).turnDiffs.set(id, list.map((d) => slimDiff(d, by, owned.get(owner)?.root ?? null)))
   }
   const agentsOf = (sid) => { let m = agentRows.get(sid); if (!m) { m = new Map(); agentRows.set(sid, m) } return m }
   // Create or update a sub-agent row of `owner`; writes only on a change.
@@ -537,7 +539,7 @@ export const GeneseedActivity = async (input) => {
           }
           if (event.type !== "session.created" && !owned.has(sid)) return
           const ev = { type: event.type, title: info.title ?? null, cwd: info.directory }
-          if (!owned.has(sid)) Object.assign(ev, { root, repo, agents: [], turns: 0, context: null,
+          if (!owned.has(sid)) Object.assign(ev, { ...rootsOf(info.directory && gitRootOf(info.directory)), agents: [], turns: 0, context: null,
             compactions: 0, compacted_at: null, context_at_compaction: null })
           // A session summary is a files source only when it carries diffs (see setFiles):
           // 1.19 sends it zeroed on every step, which must not wipe the card.
@@ -804,13 +806,13 @@ function toV1Events(ev, tools) {
 }
 
 async function setupV2(ctx) {
-  // V2 passes no worktree path (ctx.worktree is the worktree API), so the root is the
-  // checkout's top level above the instance directory, read off disk like V1's input. Step
-  // files are relative to the same tree (core snapshot.ts: git.repo.discover on
+  // As on V1, each session's root is the checkout's top level above its own directory
+  // (session.created's `location.directory`, carried by toV1Events), never this instance's.
+  // Step files are relative to the same tree (core snapshot.ts: git.repo.discover on
   // location.project.directory, which project.ts resolves from the nearest `.git` above the
   // directory), but OpenCode takes its realPath: through a symlinked path the two spellings
   // of the root differ, while the relative file paths do not.
-  const hooks = await GeneseedActivity({ worktree: gitRootOf(ctx?.location?.directory) })
+  const hooks = await GeneseedActivity()
   const tools = new Map()
   // The user's prompt, as V1's chat.message hook received it.
   await ctx.session.hook("prompt", async (event) => {
