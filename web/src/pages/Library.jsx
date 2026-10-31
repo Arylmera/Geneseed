@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
+import { folderName } from '../lib/hosts.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
@@ -24,6 +25,17 @@ const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
 const hostOf = (key) => key.split(':').slice(0, 2).join(' ')
+// The same key as the `{host, path}` pair the API takes: the path is everything after the second
+// colon, byte for byte, or the server refuses it as an unknown install.
+export const installOfKey = (key) => {
+  const [host, scope, ...rest] = key.split(':')
+  return { host, scope, path: rest.join(':') }
+}
+// An install as the harness switcher names it: a global by its tool, a project by its folder.
+export const installLabel = (key) => {
+  const i = installOfKey(key)
+  return i.scope === 'global' ? `${i.host} · global` : `${folderName(i.path)} · ${i.host}`
+}
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
@@ -190,6 +202,11 @@ export default function Library({
   // The last copy of a source path and how it went ({ src, ok }), so the button says so for
   // that path; a blocked clipboard (a plain-HTTP address has none) says so too.
   const [copied, setCopied] = useState(null)
+  // The one install pick, as { sec, name, key }: it applies only to the entry (sec, name) it was
+  // made on. Every other entry reads the server's default copy (the first install that has it).
+  // Opening another entry does not clear it, so the picked entry shows that copy again on return,
+  // until a pick on another entry replaces it.
+  const [copyFrom, setCopyFrom] = useState(null)
 
   // Follow the route's section, and drop any filter text so it doesn't carry across kinds.
   // Adjusted during render against the last-seen prop, not in an effect.
@@ -221,6 +238,17 @@ export default function Library({
   // How often each skill or agent fires, fleet-wide (GET /api/usage `names`). A soft read: a
   // failed, missing or older-shaped answer hides the usage UI and never breaks the page.
   const useKind = lock ? null : USE_KIND[sec] || null
+  // Skills and agents are listed across every install; each row names the installs that have it.
+  const fleetOn = useKind !== null
+  // The rail counts skills and agents off the same fleet-wide lists the page shows, not off
+  // `overview.counts`, which counts one install.
+  const { data: fleetLists } = useAsync(
+    () =>
+      lock
+        ? Promise.resolve(null)
+        : Promise.all(Object.keys(USE_KIND).map((k) => api.catalog(k))).catch(() => null),
+    [lock, dataRev],
+  )
   const want = useKind !== null
   const { data: usage } = useAsync(
     () =>
@@ -269,9 +297,15 @@ export default function Library({
   const activeName = selected || rows[0]?.name || null
   const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
   const activeType = fromCatalog?.type || SECTIONS[sec].type
+  const pick = copyFrom?.sec === sec && copyFrom?.name === activeName ? copyFrom.key : null
   const { data: lastItem, error: itemErr } = useAsync(
-    () => (activeName ? api.item(activeType, activeName) : Promise.resolve(null)),
-    [sec, activeName, activeType, dataRev],
+    () =>
+      !activeName
+        ? Promise.resolve(null)
+        : pick
+          ? api.item(activeType, activeName, installOfKey(pick))
+          : api.item(activeType, activeName),
+    [sec, activeName, activeType, pick, dataRev],
   )
   // useAsync keeps the last good read beside a failed one; here that is the PREVIOUS
   // entry, so a failed read shows nothing of it (title, lede, source).
@@ -285,6 +319,13 @@ export default function Library({
     : null
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
+  const railCount = (k) => {
+    if (!USE_KIND[k]) return counts[k] ?? ''
+    if (k === sec && catalog?.section === sec) return items.length
+    return fleetLists?.find((c) => c?.section === k)?.items?.length ?? ''
+  }
+  // Install badges only say something when the list spans two installs or more.
+  const fleetWide = fleetOn && new Set(items.flatMap((it) => it.installs || [])).size > 1
 
   // Skills are divided by class, as the old Skills page did: listed class by class under a
   // header, with a category per class under Skills in the rail to narrow to one. A skill the
@@ -426,7 +467,7 @@ export default function Library({
                     aria-current={sec === k ? 'page' : undefined}
                   >
                     {SECTIONS[k].label}
-                    <span className="mono dim">{counts[k] ?? ''}</span>
+                    <span className="mono dim">{railCount(k)}</span>
                   </a>
                   {/* The skill classes, nested under Skills while it is the selected kind:
                     they cut this kind's list only, so they sit with it, not across the card. */}
@@ -482,19 +523,34 @@ export default function Library({
             hrefOf={itemHref}
             // Inside the row link, so nothing here may take focus: the list is one tab stop.
             pills={
-              useOn
+              useOn || fleetWide
                 ? (it) => {
                     const n = callsOf(it.name)?.n || 0
+                    const badges = fleetWide
+                      ? (it.installs || []).map((k) => (
+                          <span
+                            key={k}
+                            className="tag mono lr-install"
+                            title={installOfKey(k).path}
+                          >
+                            {installLabel(k)}
+                          </span>
+                        ))
+                      : null
+                    if (!useOn) return badges
                     return (
-                      <span className="lr-use">
-                        <span className="ub-trk" aria-hidden="true">
-                          <i style={{ width: pct(n, useMax) }} />
+                      <>
+                        {badges}
+                        <span className="lr-use">
+                          <span className="ub-trk" aria-hidden="true">
+                            <i style={{ width: pct(n, useMax) }} />
+                          </span>
+                          <span className={n ? 'mono' : 'mono dim'}>
+                            {n}
+                            <span className="sr-only">{n === 1 ? ' call' : ' calls'}</span>
+                          </span>
                         </span>
-                        <span className={n ? 'mono' : 'mono dim'}>
-                          {n}
-                          <span className="sr-only">{n === 1 ? ' call' : ' calls'}</span>
-                        </span>
-                      </span>
+                      </>
                     )
                   }
                 : undefined
@@ -578,6 +634,23 @@ export default function Library({
                   </button>
                 </div>
               )}
+              {item?.installs?.length > 1 && item.installs.includes(item.install) ? (
+                <label className="row gap-8 lib-copy">
+                  <span className="dim">Viewing copy from:</span>
+                  <select
+                    className="sel"
+                    value={pick || item.install}
+                    onChange={(e) => setCopyFrom({ sec, name: activeName, key: e.target.value })}
+                  >
+                    {item.installs.map((k) => (
+                      <option key={k} value={k} title={installOfKey(k).path}>
+                        {installLabel(k)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="dim">this entry only</span>
+                </label>
+              ) : null}
               <hr className="hr" />
               {/* A failed read (a stale bookmark, a retired skill) ends here, not on "Loading…" forever. */}
               {itemErr ? (

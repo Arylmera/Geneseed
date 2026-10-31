@@ -54,12 +54,11 @@ import { readText, writeText, isDir, isFile } from '../lib/fs.mjs';
 import { parseJson, isTruthy } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
-import { HOSTS } from '../hosts/hosts.mjs';
 import { ARCHIVE_KEEP, ARCHIVE_MAX_AGE_SECONDS, isLive, safeStem, sweepActivity } from '../hosts/activity.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
 import { runningLoops } from '../loop/registry.mjs';
 import { NotFound, stemOf } from './catalog.mjs';
-import { viewCfg } from './state.mjs';
+import { fleetSort, viewCfg } from './state.mjs';
 
 const nowSeconds = () => Date.now() / 1000;
 
@@ -92,10 +91,9 @@ function installRows(targets) {
         dir: viewCfg(host, scope, root) });
     }
   }
-  // The fleet's FIXED order: host order (`HOSTS`), global before project, then target order (a
-  // stable sort keeps it). A merged card's primary install is the first of its installs in it.
-  const rank = (r) => HOSTS.findIndex((h) => h.host === r.host) * 2 + (r.scope === 'global' ? 0 : 1);
-  return rows.sort((a, b) => rank(a) - rank(b));
+  // The fleet's FIXED order (`fleetSort`). A merged card's primary install is the first of its
+  // installs in it.
+  return fleetSort(rows, (r) => [r.host, r.scope]);
 }
 
 /**

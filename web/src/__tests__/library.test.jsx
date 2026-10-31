@@ -53,6 +53,8 @@ const kinds = () =>
   ])
 
 describe('Library', () => {
+  // Skills and agents count their fleet-wide lists (2 each here), not the one install that
+  // `overview.counts` describes (52, 18); the other kinds keep the overview's counts.
   it('lists every kind with its count, the routed one current', async () => {
     render(
       <Library
@@ -61,9 +63,10 @@ describe('Library', () => {
       />,
     )
     await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(0))
+    await waitFor(() => expect(kinds()[0][1]).toBe('2'))
     expect(kinds()).toEqual([
-      ['Skills', '52', null],
-      ['Agents', '18', 'page'],
+      ['Skills', '2', null],
+      ['Agents', '2', 'page'],
       ['Memory', '2', null],
       ['Notebook', '2', null],
       ['Wiki', '0', null],
@@ -821,5 +824,133 @@ describe('Library dossier', () => {
     expect(
       [...document.querySelectorAll('.lib-row')].map((a) => a.getAttribute('data-title')),
     ).toEqual(['rule'])
+  })
+})
+
+// D3: skills and agents are listed across every install. A row names the installs that have it
+// (a global by its tool, a project by its folder, as the harness switcher names them), and the
+// reader shows one install's copy, with a picker for another install's copy of that entry only.
+describe('Library across installs', () => {
+  const OC = 'opencode:global:C:\\Users\\u\\.config\\opencode'
+  const CL = 'claude:global:/home/u/.claude'
+  const PROJ = 'bob:project:D:\\work\\shop'
+  beforeEach(() => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items:
+          section === 'skills'
+            ? [
+                { name: 'brainstorm', title: 'brainstorm', klass: 'design', installs: [OC, CL] },
+                { name: 'rule', title: 'rule', klass: 'design', installs: [PROJ] },
+              ]
+            : SECTION_ITEMS[section] || [],
+      }),
+    )
+    api.item.mockImplementation((type, name, install) =>
+      Promise.resolve({
+        title: name,
+        desc: '',
+        body: install?.host === 'claude' ? 'claude text' : 'opencode text',
+        links: [],
+        install: install?.host === 'claude' ? CL : name === 'brainstorm' ? OC : PROJ,
+        installs: name === 'brainstorm' ? [OC, CL] : [PROJ],
+      }),
+    )
+  })
+
+  const badges = (name) =>
+    [...document.querySelectorAll(`a.lib-row[href="#/item/skill/${name}"] .lr-install`)].map(
+      (b) => b.textContent,
+    )
+
+  it('badges each row with the installs that have it, and only those', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() =>
+      expect(badges('brainstorm')).toEqual(['opencode · global', 'claude · global']),
+    )
+    expect(badges('rule')).toEqual(['shop · bob'])
+  })
+
+  it("reads the first install's copy, and another install's on request", async () => {
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    const picker = await screen.findByRole('combobox', { name: /Viewing copy from/ })
+    expect(screen.getByText('opencode text')).toBeTruthy()
+    expect(api.item).toHaveBeenLastCalledWith('skill', 'brainstorm')
+    expect([...picker.options].map((o) => o.textContent)).toEqual([
+      'opencode · global',
+      'claude · global',
+    ])
+    fireEvent.change(picker, { target: { value: CL } })
+    await waitFor(() => expect(screen.getByText('claude text')).toBeTruthy())
+    expect(api.item).toHaveBeenLastCalledWith('skill', 'brainstorm', {
+      host: 'claude',
+      scope: 'global',
+      path: '/home/u/.claude',
+    })
+    expect(picker.value).toBe(CL)
+  })
+
+  it('offers no picker for an entry only one install has', async () => {
+    render(<Library section="skills" selected="rule" overview={overview({})} />)
+    await waitFor(() => expect(screen.getByText('opencode text')).toBeTruthy())
+    expect(screen.queryByRole('combobox', { name: /Viewing copy from/ })).toBeNull()
+  })
+
+  // A copy from an install the list does not name (an older server, a stale answer) has no
+  // option to stand for it, so the picker is left out rather than showing a wrong selection.
+  it('offers no picker when the copy is from an install the item does not list', async () => {
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        title: 'x',
+        desc: '',
+        body: 'stray',
+        links: [],
+        install: PROJ,
+        installs: [OC, CL],
+      }),
+    )
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    await waitFor(() => expect(screen.getByText('stray')).toBeTruthy())
+    expect(screen.queryByRole('combobox', { name: /Viewing copy from/ })).toBeNull()
+  })
+
+  it('shows no install badge when the whole list is on one install', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items: [
+          { name: 'brainstorm', title: 'brainstorm', klass: 'design', installs: [OC] },
+          { name: 'rule', title: 'rule', klass: 'design', installs: [OC] },
+        ],
+      }),
+    )
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelectorAll('a.lib-row')).toHaveLength(2))
+    expect(document.querySelectorAll('.lr-install')).toHaveLength(0)
+  })
+
+  // Two projects of one host in same-named folders read alike; the full path tells them apart.
+  it('titles each badge and picker option with the install path', async () => {
+    render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
+    const picker = await screen.findByRole('combobox', { name: /Viewing copy from/ })
+    expect([...picker.options].map((o) => o.title)).toEqual([
+      'C:\\Users\\u\\.config\\opencode',
+      '/home/u/.claude',
+    ])
+    expect(
+      [...document.querySelectorAll('a.lib-row[href="#/item/skill/rule"] .lr-install')].map(
+        (b) => b.title,
+      ),
+    ).toEqual(['D:\\work\\shop'])
+  })
+
+  it('counts skills and agents in the rail off the fleet-wide lists', async () => {
+    render(<Library section="skills" overview={overview({ skills: 52, agents: 18 })} />)
+    await waitFor(() => expect(kinds()[1][1]).toBe('2'))
+    expect(kinds().slice(0, 2)).toEqual([
+      ['Skills', '2', 'page'],
+      ['Agents', '2', null],
+    ])
   })
 })

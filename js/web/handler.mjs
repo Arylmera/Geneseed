@@ -214,7 +214,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       return sendJson(res, { ok: true, theme: state.theme, pid: process.pid }, 200, ae);
     }
     for (const [prefix, handler] of PREFIX_ROUTES) {
-      if (path.startsWith(prefix)) return sendJson(res, handler(st, path), 200, ae);
+      if (path.startsWith(prefix)) return sendJson(res, handler(st, path, state), 200, ae);
     }
     if (path === '/api/docs') {
       return sendJson(res, apiDocs(st, harnessParam(req.url)), 200, ae);

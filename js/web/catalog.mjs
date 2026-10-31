@@ -2,7 +2,9 @@
  * The Library's READ MODEL — what the console lists and opens: the agent/skill inventory (read
  * off the deployed install, else rendered from source), the constitution's three tiers, and the
  * hand-written stores beside the install (memory, notebook, wiki, the two setup manifests).
- * `apiCatalog` and `apiItem` are its two endpoints; `routes.mjs` binds them to paths.
+ * `apiCatalog` and `apiItem` are its two endpoints; `routes.mjs` binds them to paths. Skills and
+ * agents are read across every active install (`FLEET_SECTIONS`, the fleet `routes.mjs` builds);
+ * the other sections, one install's.
  *
  * `NotFound` lives here because this is where it is raised most, and because `state.mjs` imports
  * this file (for the inventory it caches) and nothing here imports `state.mjs` back.
@@ -526,19 +528,48 @@ function tierNouns(theme) {
   return { ontology: t.ONTOLOGY, law: t.LAW, laws: t.LAWS, doctrines: t.DOCTRINES };
 }
 
-export function apiCatalog(state, section) {
+/**
+ * The sections listed across every install (`fleet`), not off one: skills and agents. The other
+ * sections are one install's own files (its memory, its wiki manifest) or its own constitution.
+ */
+export const FLEET_SECTIONS = ['agents', 'skills'];
+
+/**
+ * One row per name over `fleet` — `[{install, state}]`, `install` the usage ledger's
+ * `host:scope:root` key (`usage-api.mjs`), or `null` for a lone state that is no detected
+ * install — with the keys of the installs that have it, in fleet order. A name only some
+ * installs have lists only those, so an exclusion stays visible. The row's own fields
+ * (description, source) are the FIRST install's: each install renders in its own theme, and
+ * `apiItem` serves the other copies.
+ */
+function fleetEntries(fleet, section) {
+  const rows = new Map();
+  for (const { install, state } of fleet) {
+    for (const e of state.inventory[section]) {
+      let r = rows.get(e.name);
+      if (r === undefined) rows.set(e.name, r = { e, installs: [] });
+      if (install !== null) r.installs.push(install);
+    }
+  }
+  return [...rows.values()].sort((a, b) => (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0));
+}
+
+/**
+ * `fleet` defaults to `state` alone, which answers as one install did before the console
+ * listed the fleet; the `/api/catalog/` route passes every active install for `FLEET_SECTIONS`.
+ */
+export function apiCatalog(state, section, fleet = [{ install: null, state }]) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
-  const inv = state.inventory;
   let items;
   const owner = kitOwners();
   if (section === 'agents') {
-    items = inv.agents.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
-      source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null }));
+    items = fleetEntries(fleet, 'agents').map(({ e, installs }) => ({ name: e.name, title: e.name, desc: e.desc,
+      source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null, installs }));
   } else if (section === 'skills') {
-    items = inv.skills.map((e) => ({ name: e.name, title: e.name, desc: e.desc,
-      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null }));
+    items = fleetEntries(fleet, 'skills').map(({ e, installs }) => ({ name: e.name, title: e.name, desc: e.desc,
+      source: e.source ?? null, klass: e.klass ?? 'build', status: e.status ?? 'unknown', kit: owner.get(`skill:${e.name}`) ?? null, installs }));
   } else if (section === 'laws') {
-    return { section, items: constitutionItems(inv), nouns: tierNouns(state.theme) };
+    return { section, items: constitutionItems(state.inventory), nouns: tierNouns(state.theme) };
   } else if (section === 'memory') {
     items = memoryItems(state);
   } else if (section === 'notebook') {
@@ -551,18 +582,32 @@ export function apiCatalog(state, section) {
   return { section, items };
 }
 
-export function apiItem(state, type, name) {
-  const inv = state.inventory;
+/**
+ * One entry. A skill or agent is served from ONE install's copy, since each install renders in
+ * its own theme and footprint: the install the request named (`state` is then its view, found
+ * in `fleet` by identity, and an id that install lacks is a 404 even when another has it), else
+ * the first install in `fleet` order that has the id. `install` says whose copy this is and
+ * `installs` every install that has the id, so the reader can offer the others. `fleet` defaults
+ * to `state` alone, which answers as one install did before.
+ */
+export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
   if (type === 'agent' || type === 'skill') {
-    const e = (type === 'agent' ? inv.agents : inv.skills).find((x) => x.name === name);
+    const sec = type === 'agent' ? 'agents' : 'skills';
+    const has = fleet.filter((v) => v.state.inventory[sec].some((x) => x.name === name));
+    // A named install that is not active is not in the fleet: it answers for itself.
+    const from = fleet.find((v) => v.state === state) ?? (state.pinned ? { install: null, state } : has[0]);
+    const e = from?.state.inventory[sec].find((x) => x.name === name);
     if (!e) throw new NotFound(name);
     const out = { type, name, title: name, desc: e.desc, body: e.body,
-      links: resolveLinks(state, e.body), source: e.source ?? null };
+      links: resolveLinks(from.state, e.body), source: e.source ?? null };
     if (type === 'skill') out.klass = e.klass ?? 'build';
     out.status = e.status ?? 'unknown';
     out.kit = kitOwners().get(`${type}:${name}`) ?? null;
+    out.install = from.install;
+    out.installs = has.map((v) => v.install).filter((k) => k !== null);
     return out;
   }
+  const inv = state.inventory;
   if (type === 'law') {
     // ONE ARM FOR THREE TIERS, resolved off the same list the catalogue publishes — so a name
     // that appears in `/api/catalog/laws` always opens, and one that does not always 404s.

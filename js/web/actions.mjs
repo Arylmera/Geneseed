@@ -207,7 +207,15 @@ function detectedInstall(body) {
  */
 export function installView(base, sel) {
   if (bget(sel, 'host') == null && bget(sel, 'path') == null) return base;
-  const [host, scope, root] = detectedInstall(sel);
+  return targetView(base, detectedInstall(sel));
+}
+
+/**
+ * The cached view of one `[host, scope, root]` that `installTargets()` yielded — the allowlist
+ * already passed, so a caller holding a whole scan (the Library's fleet, `routes.mjs`) makes no
+ * second scan per install. Never call it with a pair a request supplied: that is `installView`.
+ */
+export function targetView(base, [host, scope, root]) {
   const key = JSON.stringify([host, String(root)]);
   let v = base._views.get(key);
   if (v === undefined) {
