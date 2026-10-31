@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.31.0] — 2026-10-31
+
+Minor: the web console becomes one hub over every install. The top install switch is gone; Activity, Library, Rules, Profile, Memory and Notebook cover every install, and a page or control that acts on one install has its own picker next to it. Run `geneseed web restart` after updating, so the console serves the new UI.
+
 ### Changed
 - **The web console's Activity view covers every install.** It reads the `activity/` folder of every active install (OpenCode, Claude Code, Bob, OpenClaude; global and project) and shows one garden: each card carries a host chip, shelves stay grouped by repo, and collisions and loops are found across hosts. A session that two installs record in one checkout (a global and a project install of one host) is one card. The tracking switch is one row per install, and the daemon sweeps every install's old cards. An OpenCode project install has no row of its own: its sessions appear under, and follow the switch of, the OpenCode global install.
 - **The web console's Library covers every install.** Skills and agents are listed once each across every active install, with a badge for each install that has it, so a skill one install leaves out stays visible. The reader shows the first install's copy (host order, global before project) and, when several installs have the entry, a "Viewing copy from" picker for that entry only. The rail counts match the combined list.
