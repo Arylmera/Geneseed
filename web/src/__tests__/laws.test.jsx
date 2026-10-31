@@ -1,6 +1,6 @@
 import React from 'react'
 import { act, render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Constitution page had NO component test before this file — its only gate was doctor's
 // parity check on its principle table, which knew nothing about what renders. So the claims
@@ -873,7 +873,8 @@ describe('Constitution page — the Gate asks card', () => {
     expect(bar(first).querySelector('.tone-warn')).toBeTruthy()
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
     expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
-    expect(second.querySelector('.off').textContent).toBe('off')
+    // The switch is one install's, inside a card of every install's asks: the badge names it.
+    expect(second.querySelector('.off').textContent).toBe('off · opencode global')
     expect(bar(second).querySelector('.tone-warn')).toBeNull()
     expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
     // Each bar is named by its gate, so a reader can tell them apart; the count is against the
@@ -1110,5 +1111,85 @@ describe('Constitution page — hostile or empty inputs', () => {
     } finally {
       api.rules.mockImplementation(() => Promise.resolve(null))
     }
+  })
+})
+
+// The page reads and rebuilds ONE install, picked beside it ("Constitution of:"), starting on the
+// default (App's overview). Another pick reads that install's own overview and catalog, and a
+// gate switch then rebuilds THAT install.
+describe('Constitution page — its own install picker', () => {
+  const CL = { host: 'claude', scope: 'global', path: '/cl' }
+  beforeEach(() => {
+    localStorage.clear()
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
+    api.installs = vi.fn(async () => ({
+      installs: [
+        {
+          id: 'oc',
+          host: 'opencode',
+          scope: 'global',
+          path: '/oc',
+          state: 'active',
+          default: true,
+        },
+        { id: 'cl', ...CL, state: 'active' },
+      ],
+    }))
+    api.overview = vi.fn(async () => ({ install: { ...CL, deletionGate: true } }))
+  })
+  afterEach(() => {
+    delete api.installs
+    delete api.overview
+    localStorage.clear()
+  })
+
+  // A re-pick must never write through the previous install's read: until the new pick's own
+  // overview lands, no switch is offered, and the write then names the new install.
+  it('offers no write between a re-pick and its own overview', async () => {
+    const OC = { host: 'opencode', scope: 'global', path: '/oc' }
+    let landCl
+    api.overview = vi.fn((p) =>
+      p.host === 'opencode'
+        ? Promise.resolve({ install: { ...OC, deletionGate: true } })
+        : new Promise((r) => {
+            landCl = () => r({ install: { ...CL, deletionGate: true } })
+          }),
+    )
+    const onAction = vi.fn()
+    const { container } = render(
+      <Laws overview={{ install: { ...INSTALL } }} onAction={onAction} />,
+    )
+    const gate = () => container.querySelector('[aria-label="Deletion gate"]')
+    await waitFor(() => expect(gate()).toBeTruthy())
+    fireEvent.change(screen.getByRole('combobox', { name: 'Constitution of:' }), {
+      target: { value: 'cl' },
+    })
+    await waitFor(() => expect(landCl).toBeTypeOf('function'))
+    expect(gate()).toBeNull()
+    await act(async () => landCl())
+    await waitFor(() => expect(gate()).toBeTruthy())
+    fireEvent.click(gate())
+    await answered()
+    expect(onAction.mock.calls).toEqual([['install', { ...CL, deletionGate: false }]])
+  })
+
+  it('a picked install reads its own constitution, and its gate switch rebuilds it', async () => {
+    const onAction = vi.fn()
+    const { container } = render(
+      <Laws overview={{ install: { ...INSTALL, deletionGate: true } }} onAction={onAction} />,
+    )
+    const pick = await screen.findByRole('combobox', { name: 'Constitution of:' })
+    expect(pick.value).toBe('oc')
+    fireEvent.change(pick, { target: { value: 'cl' } })
+    await waitFor(() => expect(api.overview).toHaveBeenCalledWith({ host: 'claude', path: '/cl' }))
+    await waitFor(() =>
+      expect(api.catalog).toHaveBeenLastCalledWith('laws', { host: 'claude', path: '/cl' }),
+    )
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+    )
+    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    await answered()
+    expect(onAction.mock.calls).toEqual([['install', { ...CL, deletionGate: false }]])
   })
 })

@@ -7,6 +7,8 @@ import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Markdown from '../components/Markdown.jsx'
 import Seg from '../components/Seg.jsx'
+import { useInstalls } from '../hooks/useInstalls.js'
+import { installTag, pairOf } from '../lib/hosts.js'
 
 // Profile — the user's identity (PROFILE.md beside the deployed AGENT.md). Sibling
 // to Rules: Rules are what the agent must do, the Profile is who you are — role,
@@ -20,8 +22,44 @@ const CONFLICT =
   'PROFILE.md changed on disk since you opened it — reloaded the fresh copy. ' +
   'Your draft is kept — Save again.'
 
-export default function Profile({ onChanged }) {
-  const { data, error, loading, reload, setData } = useAsync(() => api.profile(), [])
+// EVERY ACTIVE INSTALL'S PROFILE, one card each (D1): each install keeps its own PROFILE.md, so
+// each card reads and saves its own, tagged with its install once there are two or more. With no
+// active install read, the one card reads the default install, as a request naming none does.
+export default function Profile({ onChanged, dataRev }) {
+  const active = useInstalls(dataRev)
+  if (active === null) return <Loading />
+  const targets = active.length ? active : [null]
+  const many = targets.length > 1
+  return (
+    <>
+      <div className="mb-16">
+        <div className="eyebrow">identity · yours</div>
+        <h2 className="h">Profile</h2>
+        <p className="sub">
+          Who you are and how you like to work, from <code className="mono">PROFILE.md</code> beside
+          the deployed AGENT.md{many ? ' of each install' : ''}. Unlike{' '}
+          <code className="mono">user-rules.md</code>, it is identity, not rules — it colours how
+          the agent works but never binds (precedence is Laws, then rules, then this). Seeded once,
+          never overwritten by an update. Prefer not to write it by hand? Ask the agent to run the{' '}
+          <code className="mono">profile</code> skill — it interviews you and drafts this file with
+          your consent.
+        </p>
+      </div>
+      {targets.map((inst) => (
+        <ProfileOf
+          key={inst?.id ?? ''}
+          install={inst}
+          tag={many ? installTag(inst) : null}
+          onChanged={onChanged}
+        />
+      ))}
+    </>
+  )
+}
+
+// One install's PROFILE.md: its own read, draft, fingerprint and save.
+function ProfileOf({ install, tag, onChanged }) {
+  const { data, error, loading, reload, setData } = useAsync(() => api.profile(pairOf(install)), [])
   const editor = useFileEditor({ data, reload })
   const { draft, dirty, busy, notice } = editor
   // An empty profile opens straight in the editor — once, on the first load.
@@ -38,9 +76,12 @@ export default function Profile({ onChanged }) {
   const text = data?.text || ''
 
   const save = async () => {
-    const res = await editor.save((fp) => api.profileSave({ text: draft, fingerprint: fp }), {
-      conflict: CONFLICT,
-    })
+    const res = await editor.save(
+      (fp) => api.profileSave({ text: draft, fingerprint: fp }, pairOf(install)),
+      {
+        conflict: CONFLICT,
+      },
+    )
     if (!res) return
     // Paint the saved text at once; the reload the editor fired confirms it.
     setData((d) => ({ ...d, text: draft, seeded: false, fingerprint: res.fingerprint || '' }))
@@ -50,22 +91,11 @@ export default function Profile({ onChanged }) {
   }
 
   return (
-    <>
+    <section aria-label={tag ? `Profile of ${tag}` : undefined}>
       <div className="head-row mb-16">
-        <div>
-          <div className="eyebrow">identity · yours</div>
-          <h2 className="h">Profile</h2>
-          <p className="sub">
-            Who you are and how you like to work, from <code className="mono">PROFILE.md</code>{' '}
-            beside the deployed AGENT.md. Unlike <code className="mono">user-rules.md</code>, it is
-            identity, not rules — it colours how the agent works but never binds (precedence is
-            Laws, then rules, then this). Seeded once, never overwritten by an update. Prefer not to
-            write it by hand? Ask the agent to run the <code className="mono">profile</code> skill —
-            it interviews you and drafts this file with your consent.
-          </p>
-        </div>
+        <div>{tag ? <span className="rule-chip mono">{tag}</span> : null}</div>
         <div className="row">
-          <Seg aria-label="Profile mode">
+          <Seg aria-label={tag ? `Profile mode, ${tag}` : 'Profile mode'}>
             <button
               className={editing ? '' : 'on'}
               aria-pressed={!editing}
@@ -130,6 +160,6 @@ export default function Profile({ onChanged }) {
           <code className="mono">profile</code> skill.
         </EmptyState>
       )}
-    </>
+    </section>
   )
 }

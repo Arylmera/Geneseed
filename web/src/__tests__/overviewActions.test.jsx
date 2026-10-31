@@ -18,7 +18,6 @@ vi.mock('../api/index.js', () => ({
     activity: vi.fn(),
     profile: vi.fn(),
     catalog: vi.fn(),
-    selectView: vi.fn(),
     doctor: vi.fn(),
     recent: vi.fn(),
     themes: vi.fn(),
@@ -76,7 +75,8 @@ beforeEach(() => {
     api[k].mockImplementation(() => Promise.resolve(null))
   }
   api.catalog.mockImplementation(() => Promise.resolve({ items: [] }))
-  api.installs.mockResolvedValue({ installs: [] })
+  // A live fleet: with no active install the Overview is the onboarding form, not the Ledger.
+  api.installs.mockResolvedValue(SYNCED)
   api.fleet.mockResolvedValue(BEHIND)
   api.update.mockResolvedValue(NONE)
   api.doctor.mockResolvedValue({ groups: [{ label: 'links', problems: [] }] })
@@ -209,37 +209,41 @@ describe('Ledger: a rebuild names its installs and asks first', () => {
   })
 })
 
-// Open moves the console's view to that install and only then the page, to the Hosts tab that
-// shows it. A refused move must not land on Installs showing the OLD view: it stays and says why.
+// Open sets the Hosts tab's own pick to that install and goes there: there is no console-wide
+// view to move, so nothing can refuse and nothing else changes.
 describe('Ledger: Open', () => {
   beforeEach(() => {
     api.fleet.mockResolvedValue(SYNCED)
     window.location.hash = '#/'
+    localStorage.clear()
   })
 
-  it('selects the install, then goes to the Hosts tab', async () => {
-    api.selectView.mockResolvedValue({ ok: true })
-    const onRetry = vi.fn()
-    render(<Ledger overview={null} onAction={vi.fn()} onRetry={onRetry} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Open opencode · global' }))
-    await waitFor(() => expect(window.location.hash).toBe('#/installs/hosts'))
-    expect(api.selectView).toHaveBeenCalledWith('opencode', '/h/.opencode')
-    expect(onRetry).toHaveBeenCalled()
-  })
-
-  it('a refused selection stays on the Overview and says why', async () => {
-    api.selectView.mockRejectedValue(new Error('no install at /h/.opencode'))
+  it('picks the install on the Hosts tab, then goes there', async () => {
     render(<Ledger overview={null} onAction={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Open opencode · global' }))
-    const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toBe('Could not open opencode · global: no install at /h/.opencode')
-    expect(window.location.hash).toBe('#/')
+    await waitFor(() => expect(window.location.hash).toBe('#/installs/hosts'))
+    const row = SYNCED.installs.find((i) => i.host === 'opencode')
+    expect(localStorage.getItem('geneseed-install-hosts')).toBe(row.id)
+  })
+
+  // The row carries its own install's settings (no viewed install to read them off), and its
+  // View diff opens Local edits on that row's install.
+  it('a row details its own voice, footprint, posture and mode, and diffs its own install', async () => {
+    const cl = { ...install('claude', 'synced'), posture: 'artisan', mode: 'foreman' }
+    api.fleet.mockResolvedValue({ installs: [cl] })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Details for claude · global' }))
+    expect(
+      screen.getByText('Voice neutral · lean footprint · artisan posture · foreman mode'),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: 'View diff for claude · global' }))
+    expect(localStorage.getItem('geneseed-install-edits')).toBe(cl.id)
   })
 })
 
-// Onboarding is for a machine with NO active install. `overview.deployed` is a fact about the
-// VIEWED install only: a view left on a disabled or removed install must still show the Ledger
-// over a live fleet, never "deploy your harness".
+// Onboarding is for a machine with NO active install, read off the fleet. `overview.deployed` is
+// a fact about the default install only: the Ledger shows over any live fleet, never "deploy your
+// harness".
 describe('Overview: onboarding only for an empty fleet', () => {
   const notHere = { ...overview, deployed: false }
   const row = (state) => ({
@@ -262,6 +266,15 @@ describe('Overview: onboarding only for an empty fleet', () => {
     api.installs.mockResolvedValue({ installs: [row('disabled')] })
     api.themes.mockResolvedValue({ themes: [], current: 'neutral' })
     render(<Overview overview={notHere} themes={[]} onAction={() => {}} />)
+    await screen.findByText('Deploy your harness')
+  })
+
+  // The fleet decides, not the default install's manifest: a disabled install still carries
+  // one, and with nothing active the form shows even though `deployed` says true.
+  it('a deployed but inactive install with no active one onboards', async () => {
+    api.installs.mockResolvedValue({ installs: [row('disabled')] })
+    api.themes.mockResolvedValue({ themes: [], current: 'neutral' })
+    render(<Overview overview={{ ...overview, deployed: true }} themes={[]} onAction={() => {}} />)
     await screen.findByText('Deploy your harness')
   })
 })
@@ -290,6 +303,25 @@ describe('Overview lenses: one h1, one primary action', () => {
         expect(container.querySelector('.jr-head').parentElement).toBe(container)
     })
   }
+})
+
+// An older lens reads ONE install (the default's overview), so its header line names it first.
+describe('Overview lenses name their install', () => {
+  it('the header line starts with the install it reads', async () => {
+    api.fleet.mockResolvedValue(SYNCED)
+    render(
+      <Overview
+        overview={{ ...overview, install: { host: 'claude', scope: 'global' } }}
+        themes={[]}
+        layout="greenhouse"
+        onAction={() => {}}
+      />,
+    )
+    await screen.findByText(lensMarker.greenhouse)
+    expect(
+      screen.getByText('claude · global · imperial voice · lean footprint · /home/u/.claude'),
+    ).toBeTruthy()
+  })
 })
 
 describe('Overview View control', () => {

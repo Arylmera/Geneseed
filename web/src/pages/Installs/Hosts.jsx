@@ -6,6 +6,7 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import EmptyState from '../../components/EmptyState.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
+import { storeInstallPick, takeInstallPick } from '../../hooks/useInstalls.js'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
@@ -262,7 +263,8 @@ export default function Hosts({
   // "delete" must never follow it there.
   const [memPick, setMemPick] = useState({ id: '', value: 'keep' })
   const memoryFor = (inst) => (memPick.id === inst?.id ? memPick.value : 'keep')
-  const [picked, setPicked] = useState('') // the install shown in the panel
+  // The install shown in the panel, starting on the one the Overview's Open handed over, if any.
+  const [picked, setPicked] = useState(() => takeInstallPick('hosts'))
 
   const mcpByInstall = useMemo(() => {
     const m = {}
@@ -294,7 +296,7 @@ export default function Hosts({
   )
   const current =
     installs.find((i) => i.id === picked) ||
-    installs.find((i) => i.selected) ||
+    installs.find((i) => i.default) ||
     installs.find((i) => i.state === 'active') ||
     installs[0]
 
@@ -490,7 +492,7 @@ export default function Hosts({
 
   // The deploy form's default host: the one you already use.
   const defaultHost =
-    installs.find((i) => i.selected)?.host ||
+    installs.find((i) => i.default)?.host ||
     installs.find((i) => i.state === 'active')?.host ||
     installs[0]?.host ||
     'opencode'
@@ -499,17 +501,9 @@ export default function Hosts({
   const pick = (id) => {
     setPicked(id)
   }
-  // Local edits diffs only the VIEWED install, so another row's link moves the view first (as
-  // the Overview's ledger does), refreshes what reads the view, and only then changes the hash.
-  const openEdits = async (inst) => {
-    if (!inst.selected) {
-      try {
-        await api.selectView(inst.host, inst.path)
-      } catch {
-        /* the edits page then shows the view it has, and says which */
-      }
-      onMutated?.()
-    }
+  // Local edits compares the install its own picker names, so a row's link sets that pick first.
+  const openEdits = (inst) => {
+    storeInstallPick('edits', inst.id)
     window.location.hash = '#/installs/edits'
   }
 

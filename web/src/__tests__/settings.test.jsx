@@ -141,16 +141,17 @@ describe('Settings', () => {
   })
 
   // The footprint is changed in ONE place, the install's own panel on Hosts (beside posture and
-  // mode, one confirm). Settings shows the viewed install's footprint and links there; it used
-  // to carry a second lean/full dial that rebuilt the same install.
-  it('shows the footprint read-only and links to Hosts to change it', () => {
-    render(
-      <Settings
-        onAction={() => {}}
-        overview={{ install: { host: 'opencode', scope: 'global' }, footprint: 'full' }}
-      />,
-    )
-    const row = screen.getByText('Harness footprint').closest('.sheet-row')
+  // mode, one confirm). Settings shows the PICKED install's footprint (its /api/installs row) and
+  // links there; it used to carry a second lean/full dial that rebuilt the same install.
+  const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
+  const CL = { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active' }
+  const withInstalls = (rows) => {
+    api.installs = vi.fn(async () => ({ installs: rows }))
+  }
+  it('shows the footprint read-only and links to Hosts to change it', async () => {
+    withInstalls([{ ...OC, default: true, footprint: 'full' }])
+    render(<Settings onAction={() => {}} />)
+    const row = (await screen.findByText('Harness footprint')).closest('.sheet-row')
     expect(within(row).queryByRole('button')).toBeNull()
     expect(row.textContent).toContain('full')
     expect(
@@ -183,11 +184,32 @@ describe('Settings', () => {
   })
 
   // The footprint row names the install's tool as the rest of the console does.
-  it('names the footprint install by its host label', () => {
+  it('names the footprint install by its host label', async () => {
+    withInstalls([{ ...CL, default: true, footprint: 'lean' }])
     render(<Settings onAction={() => {}} overview={claudeOverview} />)
-    const row = screen.getByText('Harness footprint').closest('.sheet-row')
+    const row = (await screen.findByText('Harness footprint')).closest('.sheet-row')
     expect(row.textContent).toContain('Claude Code')
     expect(row.textContent).not.toMatch(/\bclaude ·/)
+  })
+
+  // Two active installs: the head carries this tab's own picker, starting on the default, and
+  // the footprint row follows the pick (each row's own footprint), remembered for the tab.
+  it('picks the install the footprint row describes', async () => {
+    localStorage.clear()
+    withInstalls([
+      { ...OC, footprint: 'full' },
+      { ...CL, default: true, footprint: 'lean' },
+    ])
+    render(<Settings onAction={() => {}} />)
+    const pick = await screen.findByRole('combobox', { name: 'Footprint of:' })
+    const row = () => screen.getByText('Harness footprint').closest('.sheet-row')
+    expect(pick.value).toBe('cl')
+    expect(row().textContent).toContain('lean')
+    fireEvent.change(pick, { target: { value: 'oc' } })
+    expect(row().textContent).toContain('full')
+    expect(row().textContent).toContain('OpenCode')
+    expect(localStorage.getItem('geneseed-install-server')).toBe('oc')
+    localStorage.clear()
   })
 
   // The Server header names the process from /api/overview's `server`: its pid and how long it

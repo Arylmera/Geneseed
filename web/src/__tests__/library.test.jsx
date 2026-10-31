@@ -37,8 +37,8 @@ beforeEach(() => {
   api.catalog.mockImplementation((section) =>
     Promise.resolve({ section, items: SECTION_ITEMS[section] || [] }),
   )
-  api.item.mockImplementation(() =>
-    Promise.resolve({ title: 'A fact', desc: '', body: 'body', links: [] }),
+  api.item.mockImplementation((type, name) =>
+    Promise.resolve({ name, title: 'A fact', desc: '', body: 'body', links: [] }),
   )
   api.memoryDelete.mockImplementation(() => Promise.resolve({ deleted: 'fact-a' }))
   api.usage.mockImplementation(() => Promise.resolve(null))
@@ -53,8 +53,8 @@ const kinds = () =>
   ])
 
 describe('Library', () => {
-  // Skills and agents count their fleet-wide lists (2 each here), not the one install that
-  // `overview.counts` describes (52, 18); the other kinds keep the overview's counts.
+  // Skills, agents, memory and notebook count their fleet-wide lists (2, 2, 1, 0 here), not the
+  // one install that `overview.counts` describes (52, 18, 2, 2); the other kinds keep its counts.
   it('lists every kind with its count, the routed one current', async () => {
     render(
       <Library
@@ -67,11 +67,28 @@ describe('Library', () => {
     expect(kinds()).toEqual([
       ['Skills', '2', null],
       ['Agents', '2', 'page'],
-      ['Memory', '2', null],
-      ['Notebook', '2', null],
+      // Memory and notebook are fleet lists too: one fact in the fixture, no notebook entry.
+      ['Memory', '1', null],
+      ['Notebook', '0', null],
       ['Wiki', '0', null],
       ['Setup files', '2', null],
     ])
+  })
+
+  // Wiki and setup files are one install's (the default): once two are active, the list says whose.
+  it('names the install a one-install kind is read from', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+        { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+      ],
+    }))
+    try {
+      render(<Library section="config" overview={overview({})} />)
+      expect(await screen.findByText('of claude · global')).toBeTruthy()
+    } finally {
+      delete api.installs
+    }
   })
 
   it('opens on skills when #/library carries no kind, and lists them', async () => {
@@ -134,7 +151,124 @@ describe('Library', () => {
   it('forgets a memory fact via the delete control', async () => {
     render(<Library section="memory" selected="fact-a" overview={overview({})} />)
     fireEvent.click(await screen.findByText('Forget this fact'))
-    await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a'))
+    await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a', undefined))
+  })
+
+  // Memory across installs (Q3): each row is tagged with the installs that hold it, and a forget
+  // or a promote acts on the install of the copy on screen, never the default one.
+  it('tags memory rows by install and forgets from the copy on screen', async () => {
+    const OC = 'opencode:global:/oc'
+    const CL = 'claude:global:/cl'
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items:
+          section === 'memory' ? [{ name: 'fact-a', title: 'fact-a', installs: [OC, CL] }] : [],
+      }),
+    )
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        name: 'fact-a',
+        title: 'A fact',
+        body: 'body',
+        links: [],
+        install: CL,
+        installs: [OC, CL],
+      }),
+    )
+    render(<Library lock="memory" base="#/personal/memory" overview={overview({})} />)
+    fireEvent.click(await screen.findByText('Forget this fact'))
+    await waitFor(() =>
+      expect(api.memoryDelete).toHaveBeenCalledWith('fact-a', {
+        host: 'claude',
+        scope: 'global',
+        path: '/cl',
+      }),
+    )
+    expect([...document.querySelectorAll('.lr-install')].map((t) => t.textContent)).toEqual([
+      'opencode · global',
+      'claude · global',
+    ])
+  })
+
+  // While another entry loads, the reader still holds the previous one: no Forget may act on it.
+  // The buttons come back only once the new entry's own copy has landed, and then name it.
+  it('never forgets the previous fact while the next one loads', async () => {
+    const OC = 'opencode:global:/oc'
+    const CL = 'claude:global:/cl'
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({
+        section,
+        items:
+          section === 'memory'
+            ? [
+                { name: 'fact-a', installs: [OC] },
+                { name: 'fact-b', installs: [CL] },
+              ]
+            : [],
+      }),
+    )
+    let landB
+    api.item.mockImplementation((type, name) =>
+      name === 'fact-a'
+        ? Promise.resolve({ name, body: 'a', links: [], install: OC, installs: [OC] })
+        : new Promise((r) => {
+            landB = () => r({ name, body: 'b', links: [], install: CL, installs: [CL] })
+          }),
+    )
+    const { rerender } = render(
+      <Library lock="memory" base="#/personal/memory" selected="fact-a" overview={overview({})} />,
+    )
+    await screen.findByText('Forget this fact')
+    rerender(
+      <Library lock="memory" base="#/personal/memory" selected="fact-b" overview={overview({})} />,
+    )
+    await waitFor(() => expect(landB).toBeTypeOf('function'))
+    expect(screen.queryByText('Forget this fact')).toBeNull()
+    landB()
+    fireEvent.click(await screen.findByText('Forget this fact'))
+    await waitFor(() =>
+      expect(api.memoryDelete).toHaveBeenCalledWith('fact-b', {
+        host: 'claude',
+        scope: 'global',
+        path: '/cl',
+      }),
+    )
+    expect(api.memoryDelete).toHaveBeenCalledTimes(1)
+    // The list spans two installs, so the confirm said which one.
+    expect(askConfirm.mock.calls.at(-1)[0]).toMatch(
+      /^Forget the memory fact "fact-b" in claude · global\?/,
+    )
+  })
+
+  it('promotes a fact into the rules of its own install', async () => {
+    const CL = 'claude:global:/cl'
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        name: 'fact-a',
+        title: 'A fact',
+        body: 'body',
+        links: [],
+        install: CL,
+        installs: [CL],
+      }),
+    )
+    api.rules = vi.fn(async () => ({ fingerprint: 'cl-fp' }))
+    api.rulesPromote = vi.fn(async () => ({ ok: true }))
+    try {
+      render(<Library lock="memory" base="#/personal/memory" overview={overview({})} />)
+      fireEvent.click(await screen.findByText('Promote to rule'))
+      await waitFor(() =>
+        expect(api.rulesPromote).toHaveBeenCalledWith(
+          { name: 'fact-a', fingerprint: 'cl-fp', delete_memory: true },
+          { host: 'claude', scope: 'global', path: '/cl' },
+        ),
+      )
+      expect(api.rules).toHaveBeenCalledWith({ host: 'claude', scope: 'global', path: '/cl' })
+    } finally {
+      delete api.rules
+      delete api.rulesPromote
+    }
   })
 
   // A deep link to an entry that is gone (an old bookmark, a retired skill): the reader

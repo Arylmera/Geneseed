@@ -26,6 +26,9 @@ import LawRow from './Laws/LawRow.jsx'
 import TierStrip from './Laws/TierStrip.jsx'
 import GateAsks from './Laws/GateAsks.jsx'
 import PackPanel from './Laws/PackPanel.jsx'
+import InstallPicker from '../components/InstallPicker.jsx'
+import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
+import { pairOf } from '../lib/hosts.js'
 
 // THE FILENAME AND THE ROUTE STAY `laws`: a rename buys nothing and costs a redirect. Only what
 // a reader sees says "Constitution".
@@ -77,10 +80,57 @@ function doctrinePacks(items) {
 // `selected` is the address from a #/item/law/<address> deep link (Spotlight, the
 // Overview's gate row). The open row is driven straight off the URL so those links
 // pre-open the rule and any opened rule is itself shareable.
-export default function Laws({ selected, overview, setup, onAction, dataRev }) {
+// The install this page reads and rebuilds (its gate switches, its doctrine Apply): its own pick,
+// remembered, labelled beside the page. The default install's overview is App's; another
+// install's is read with its pair. Keyed on the pick, so a switch never shows one install's
+// staged selection over another's rules.
+//
+// ⚠ EVERY WRITE NAMES THE PICKED INSTALL, AND ONLY ONCE ITS OWN READ HAS LANDED. The picked
+// install's overview is always read with its pair (never App's unnamed one, which answers for the
+// daemon's state and can lag the default marker), and it counts only when it describes the pick:
+// the read survives a re-pick for a moment, and an overview of B under a pick of C would let a
+// switch rebuild B. Until then, and until the install list is read, the page offers no write.
+export default function Laws(props) {
+  const active = useInstalls(props.dataRev)
+  const [install, pick] = useInstallPick('laws', active)
+  const { data: own } = useAsync(
+    () => (install ? api.overview(pairOf(install)).catch(() => null) : Promise.resolve(null)),
+    [install?.id ?? '', props.dataRev],
+  )
+  const mine =
+    install && own?.install?.host === install.host && own.install.path === install.path ? own : null
+  // No install to pick (none active, or the list unreadable): the default's overview, as before.
+  const overview = install ? mine : props.overview
+  const ready = active !== null && (!install || mine !== null)
+  return (
+    <>
+      <InstallPicker
+        className="page-pick"
+        installs={active}
+        value={install}
+        onChange={pick}
+        label="Constitution of:"
+      />
+      <LawsOf
+        key={install?.id ?? 'none'}
+        {...props}
+        overview={overview}
+        pair={pairOf(install)}
+        onAction={ready ? props.onAction : undefined}
+      />
+    </>
+  )
+}
+
+function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const confirm = useConfirm()
-  const { data, error } = useAsync(() => api.catalog('laws'), [dataRev], 'catalog:laws')
-  const { data: rulesData } = useRules(dataRev)
+  // The default install's catalog shares the Overview's cached read; another install's is its own.
+  const { data, error } = useAsync(
+    () => api.catalog('laws', pair),
+    pair ? [dataRev, pair.host, pair.path] : [dataRev],
+    'catalog:laws',
+  )
+  const { data: rulesData } = useRules(dataRev, pair)
   const [tab, setTab] = useState('all')
   const [q, setQ] = useState('')
   // A second, narrower axis beside the tier tabs: every rule, the hook-gated ones, or the
@@ -604,6 +654,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
             byAddr={byAddr}
             onJump={jumpToRule}
             disarmed={(addr) => Boolean(GATE_SWITCH[addr]) && !armed(addr)}
+            install={overview?.install}
           />
         </aside>
       </div>

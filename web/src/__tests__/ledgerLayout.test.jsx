@@ -17,7 +17,6 @@ vi.mock('../api/index.js', () => ({
     activity: vi.fn(),
     profile: vi.fn(),
     catalog: vi.fn(),
-    selectView: vi.fn(),
   },
 }))
 
@@ -142,14 +141,13 @@ describe('Ledger fleet details row', () => {
 })
 
 describe('Ledger KPI helpers', () => {
-  // With no install selected, the card falls back to the fleet's worst share of its ceiling.
-  it('rootFileFigure picks the highest share of the ceiling when none is selected', () => {
+  // The console views no single install, so the card shows the fleet's worst share of its ceiling.
+  it('rootFileFigure picks the highest share of the ceiling', () => {
     expect(rootFileFigure(FLEET.installs)).toEqual({
       label: 'bob · global',
       carrier: 34000,
       ceiling: 40000,
       pct: 85,
-      selected: false,
     })
     // No ceiling, no cost, or disabled: nothing to measure.
     expect(
@@ -165,23 +163,10 @@ describe('Ledger KPI helpers', () => {
     ).toMatchObject({ label: 'bob · global', pct: 85 })
   })
 
-  // The card follows the install the console views (the topbar picker), not the worst one;
-  // an unmeasured selection falls back to the worst rather than showing nothing.
-  it('rootFileFigure shows the selected install, worst share or not', () => {
-    const sel = FLEET.installs.map((i) => ({ ...i, selected: i.host === 'claude' }))
-    expect(rootFileFigure(sel)).toMatchObject({ label: 'claude · global', selected: true })
-    const unmeasured = FLEET.installs.map((i) =>
-      i.host === 'claude' ? { ...i, selected: true, cost: null } : i,
-    )
-    expect(rootFileFigure(unmeasured)).toMatchObject({ label: 'bob · global', selected: false })
-  })
-
   it('alwaysOnRange spans the measured installs and names the most expensive', () => {
     const r = alwaysOnRange(FLEET.installs)
-    expect([r.min, r.max, r.top.host, r.shown.host]).toEqual([48000, 62000, 'claude', 'claude'])
-    // The card details the install the console views, not the most expensive.
-    const sel = FLEET.installs.map((i) => ({ ...i, selected: i.host === 'bob' }))
-    expect(alwaysOnRange(sel).shown.host).toBe('bob')
+    expect([r.min, r.max, r.top.host]).toEqual([48000, 62000, 'claude'])
+
     expect(alwaysOnRange([OPENCODE])).toBeNull()
   })
 
@@ -210,7 +195,7 @@ describe('Ledger KPI cards', () => {
         name: 'Worst root file: bob · global, 85 percent of its ceiling: 8500 of 10000',
       }),
     ).toBeTruthy()
-    // No install selected: the card details the most expensive, the fleet range under it.
+    // The card details the most expensive install, the fleet range under it.
     const cost = within(screen.getByRole('region', { name: 'Loaded every turn' }))
     expect(cost.getByText('≈15.5k tokens')).toBeTruthy()
     expect(cost.getByText('claude · global')).toBeTruthy()

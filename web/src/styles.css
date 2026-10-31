@@ -350,6 +350,11 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
   min-width: 180px; cursor: pointer; }
 .sel:focus { border-color: var(--accent-line); }
 .sel option { background: var(--surface-2); }
+/* The per-entry install picker (InstallPicker.jsx): its label, then the select, on one line. */
+.install-pick { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+.install-pick .sel { min-width: 0; max-width: 240px; }
+/* A page's own pick (Doctor, Local edits, Server), on its own line above the page head. */
+.install-pick.page-pick { display: flex; margin-bottom: var(--sp-4); }
 
 /* ============================ GRID HELPERS ============================ */
 .grid { display: grid; gap: var(--sp-4); }
@@ -2348,17 +2353,10 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
 .topbar { gap: 10px; padding: 0 var(--sp-7); background: var(--bg-2); backdrop-filter: none; } /* off-scale: between steps */
 .crumbs { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; color: var(--text-3);
   white-space: nowrap; overflow: hidden; }
-.crumb-root { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; }
 .crumb-here { color: var(--text); font-weight: 600; }
 .topbar .iconbtn { width: 38px; height: 38px; border-color: var(--line); background: var(--surface); }
 .topbar .iconbtn:hover { border-color: var(--line-2); }
 .tb-search input { width: 320px; height: 38px; padding-left: 34px; } /* off-scale: clears the search icon */
-.tb-harness { min-width: 0; max-width: 200px; height: 38px; padding: 0 10px; } /* off-scale: between steps */
-/* The picker as the breadcrumb's root, at the crumbs' scale. */
-/* It keeps its width beside the search field, and its focus ring sits inside the crumbs'
-   overflow clip. */
-.crumb-root:has(.tb-harness) { flex: none; }
-.crumb-root .tb-harness { height: 32px; font: 500 13px var(--font-mono); outline-offset: -2px; }
 .tb-pop-anchor { position: relative; }
 .appearance-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-pop);
   width: max-content; max-width: min(92vw, 540px); display: flex; flex-direction: column;
@@ -3122,8 +3120,7 @@ a.kit-name:hover { color: var(--accent-text); }
   .app { grid-template-columns: minmax(0, 1fr); }
   .tb-menu { display: inline-grid; place-items: center; flex: none; }
   .topbar { padding: 0 16px; }
-  .crumb-root, .crumbs > [aria-hidden] { display: none; }
-  .tb-harness { display: none; }
+  .crumbs > [aria-hidden] { display: none; }
   .tb-search input { width: 112px; }
   .tb-search .kbd { display: none; }
   .page .seg { flex-wrap: wrap; max-width: 100%; }
@@ -3432,8 +3429,6 @@ html { scrollbar-gutter: stable; }
 }
 @media (max-width: 720px) {
   .sb-voice-rail { display: none; }
-  .crumb-root { display: none; }
-  .crumbs li.crumb-root + li::before { content: none; }
   .popover.appearance-pop { right: var(--sp-4); }
   .spotlight { position: fixed; top: calc(var(--topbar-h) + 6px); left: var(--sp-4); right: var(--sp-4); width: auto; }
   .tabbar .tab-more { display: flex; flex-direction: column; align-items: center; justify-content: center;

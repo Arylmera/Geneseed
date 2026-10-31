@@ -12,8 +12,11 @@ import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
 import { useAsync } from './hooks/useAsync.js'
+import { useInstallPick } from './hooks/useInstalls.js'
+import { activeInstalls, pairOf } from './lib/hosts.js'
 import Sidebar, { TabBar } from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
+import { InstallListStatus } from './components/InstallPicker.jsx'
 import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
@@ -126,11 +129,18 @@ export default function App() {
   })
 
   // The install snapshot (fingerprints, gate asks, facts) and the installs list: ONE
-  // fetch each for the whole shell, refetched on `dataRev`. The sidebar, the topbar's
-  // harness selector and the pages all read these copies.
+  // fetch each for the whole shell, refetched on `dataRev`. The sidebar and the pages (their
+  // install pickers, hooks/useInstalls.js) all read these copies.
   const { data: setup } = useAsync(() => api.setup().catch(() => null), [dataRev], 'setup')
-  const { data: instData } = useAsync(() => api.installs().catch(() => null), [dataRev], 'installs')
+  const { data: instData, loading: instLoading } = useAsync(
+    () => api.installs().catch(() => null),
+    [dataRev],
+    'installs',
+  )
   const installs = instData?.installs || null
+  // The install the rail's Voice popover rebuilds: its own pick, remembered (no console-wide one).
+  const activeList = activeInstalls(installs)
+  const [voiceInstall, pickVoiceInstall] = useInstallPick('voice', activeList)
 
   // One sentence describing what the job runner is doing, for the live region.
   const lastRun = runs[runs.length - 1]
@@ -312,10 +322,16 @@ export default function App() {
         {voiceOpen && (
           <VoicePopover
             themes={themes}
-            current={overview?.theme}
+            // The picked install's own voice; the default's (the overview) before the list lands.
+            current={voiceInstall ? voiceInstall.theme : overview?.theme}
+            installs={activeList}
+            install={voiceInstall}
+            ready={!instLoading || !!instData}
+            onInstall={pickVoiceInstall}
             onPick={(name) => {
               setVoiceOpen(false)
-              runAction('build', { theme: name, emit: overview?.emit })
+              // The install's own emit is read server-side; only the theme changes.
+              runAction('build', { theme: name }, pairOf(voiceInstall))
             }}
             onClose={() => setVoiceOpen(false)}
           />
@@ -325,14 +341,11 @@ export default function App() {
             route={route}
             navOpen={navOpen}
             onToggleNav={() => setNavOpen((v) => !v)}
-            overview={overview}
-            installs={installs}
             actions={actions}
             mode={mode}
             onToggleMode={toggleMode}
             appearance={appearance}
             dataRev={dataRev}
-            onSwitch={refresh}
           />
           <main className="page" id="main" tabIndex={-1}>
             <div
@@ -342,6 +355,7 @@ export default function App() {
             >
               {/* Staged kit and doctrine switches, held ABOVE the per-page boundary so they
                   survive a page change (and a page crash); see hooks/useStaging.jsx. */}
+              <InstallListStatus unreadable={!instLoading && !instData} />
               <StagingProvider activeId={activeId} finish={finish}>
                 {/* Keyed on the page ONLY: a new page clears a crash, while an item change keeps
                     the one slot below. */}

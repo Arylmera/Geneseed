@@ -7,17 +7,15 @@ import { costTotal, gateRows } from '../../lib/overview.js'
 // Active installs with a measured cost: the only rows either cost figure may claim.
 const measured = (installs) => (installs || []).filter((i) => i.state === 'active' && i.cost)
 
-// The root file the card shows: the install the console is viewing (`selected`, the topbar
-// picker), else — none selected, or the selected one unmeasured — the one closest to (or
-// furthest past) its ceiling. Installs with no ceiling have no share, so they are left out
-// rather than ranked at zero. `selected` in the answer says which of the two it is.
+// The root file the card shows: the one closest to (or furthest past) its ceiling, across the
+// fleet — the console views no single install. Installs with no ceiling have no share, so they
+// are left out rather than ranked at zero.
 export function rootFileFigure(installs) {
   const rows = measured(installs).filter(
     (i) => i.cost.ceiling > 0 && Number.isFinite(i.cost.carrier),
   )
   const share = (i) => i.cost.carrier / i.cost.ceiling
-  const pick =
-    rows.find((i) => i.selected) || rows.reduce((w, i) => (!w || share(i) > share(w) ? i : w), null)
+  const pick = rows.reduce((w, i) => (!w || share(i) > share(w) ? i : w), null)
   if (!pick) return null
   const { carrier, ceiling } = pick.cost
   return {
@@ -25,7 +23,6 @@ export function rootFileFigure(installs) {
     carrier,
     ceiling,
     pct: Math.round(share(pick) * 100),
-    selected: !!pick.selected,
   }
 }
 
@@ -36,10 +33,7 @@ export function alwaysOnRange(installs) {
   if (!act.length) return null
   const top = act.reduce((a, b) => (costTotal(b.cost) > costTotal(a.cost) ? b : a))
   const totals = act.map((i) => costTotal(i.cost))
-  // `shown` is the install the card details: the one the console views (the topbar picker),
-  // else the most expensive — the same rule as the root-file card.
-  const shown = act.find((i) => i.selected) || top
-  return { min: Math.min(...totals), max: Math.max(...totals), top, shown }
+  return { min: Math.min(...totals), max: Math.max(...totals), top }
 }
 
 export const usageTotal = (usage) => (usage?.per_day || []).reduce((a, b) => a + b, 0)

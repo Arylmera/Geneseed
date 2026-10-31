@@ -4,6 +4,9 @@ import { Icon } from '../components/Icon.jsx'
 import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
+import InstallPicker from '../components/InstallPicker.jsx'
+import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
+import { pairOf } from '../lib/hosts.js'
 
 // `i` staggers the cards in as the result lands, and each status dot pops as its card
 // arrives: the checks read as having been run one after another, which is what happened.
@@ -45,14 +48,37 @@ function CheckCard({ group, i }) {
   )
 }
 
+// The install this tab checks: its own pick, remembered, beside the page. Keyed on it, so a
+// switch drops the other install's verdict at once.
 export default function Doctor({ dataRev }) {
+  const active = useInstalls(dataRev)
+  const [install, pick] = useInstallPick('doctor', active)
+  return (
+    <>
+      <InstallPicker
+        className="page-pick"
+        installs={active}
+        value={install}
+        onChange={pick}
+        label="Doctor for:"
+      />
+      {active === null ? (
+        <Loading />
+      ) : (
+        <DoctorOf key={install?.id || ''} install={install} dataRev={dataRev} />
+      )}
+    </>
+  )
+}
+
+function DoctorOf({ install, dataRev }) {
   // Mount and every `dataRev` bump (a finished job) read the daemon's cached verdict; only
   // Re-run asks for a fresh one. The loader spends the flag, so the next read is cached again.
   const fresh = useRef(false)
   const { data, error, reload, setData } = useAsync(() => {
     const f = fresh.current
     fresh.current = false
-    return api.doctor(f)
+    return api.doctor(f, pairOf(install))
   }, [dataRev])
   // Re-running clears the result first so the button reads "Running…" and the
   // sandbox-build loading copy shows while every theme is re-validated.

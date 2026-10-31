@@ -529,10 +529,29 @@ function tierNouns(theme) {
 }
 
 /**
- * The sections listed across every install (`fleet`), not off one: skills and agents. The other
- * sections are one install's own files (its memory, its wiki manifest) or its own constitution.
+ * The sections listed across every install (`fleet`), not off one: skills, agents, and the
+ * personal memory and notebook (each entry tagged with the installs that hold it, so a forget or
+ * a promote names its own). The other sections are one install's own wiki manifest, config or
+ * constitution.
  */
-export const FLEET_SECTIONS = ['agents', 'skills'];
+export const FLEET_SECTIONS = ['agents', 'skills', 'memory', 'notebook'];
+
+/**
+ * A per-install item list (`read(state)`) over `fleet`, one row per name with the `installs` that
+ * hold it, in fleet order; the row's own fields are the FIRST holder's (`apiItem` serves the
+ * others). A name a later install adds lands after the first install's rows.
+ */
+function fleetItems(fleet, read) {
+  const rows = new Map();
+  for (const { install, state } of fleet) {
+    for (const it of read(state)) {
+      let r = rows.get(it.name);
+      if (r === undefined) rows.set(it.name, r = { ...it, installs: [] });
+      if (install !== null) r.installs.push(install);
+    }
+  }
+  return [...rows.values()];
+}
 
 /**
  * One row per name over `fleet` — `[{install, state}]`, `install` the usage ledger's
@@ -571,9 +590,9 @@ export function apiCatalog(state, section, fleet = [{ install: null, state }]) {
   } else if (section === 'laws') {
     return { section, items: constitutionItems(state.inventory), nouns: tierNouns(state.theme) };
   } else if (section === 'memory') {
-    items = memoryItems(state);
+    items = fleetItems(fleet, memoryItems);
   } else if (section === 'notebook') {
-    items = notebookItems(state);
+    items = fleetItems(fleet, notebookItems);
   } else if (section === 'wiki') {
     items = wikiItems(state);
   } else {
@@ -627,12 +646,16 @@ export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
   }
   if (type === 'memory' || type === 'notebook') {
     flatName(name);
-    const d = type === 'notebook' ? notebookDir(state) : memoryDir(state);
-    const p = path.join(d, `${name}.md`);
-    if (!isFile(p)) throw new NotFound(name);
+    const fileOf = (st) => path.join(type === 'notebook' ? notebookDir(st) : memoryDir(st), `${name}.md`);
+    // As a skill: the named install's copy, else the first holder in fleet order.
+    const has = fleet.filter((v) => isFile(fileOf(v.state)));
+    const from = fleet.find((v) => v.state === state) ?? (state.pinned ? { install: null, state } : has[0]);
+    const p = from ? fileOf(from.state) : null;
+    if (!p || !isFile(p)) throw new NotFound(name);
     const body = readMaybe(p) ?? '';
     return { type, name, title: name, desc: '', body,
-      links: resolveLinks(state, body), source: resolvePath(p) };
+      links: resolveLinks(from.state, body), source: resolvePath(p),
+      install: from.install, installs: has.map((v) => v.install).filter((k) => k !== null) };
   }
   if (type === 'wiki') return apiWikiItem(state, name);
   if (type === 'config') {

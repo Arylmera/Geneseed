@@ -103,10 +103,13 @@ export function useJobs({ onFinish, onError } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
-  const runAction = async (name, opts) => {
+  // `install` ({host, path}) names the install a `build` or `restore` acts on; none, the default.
+  const runAction = async (name, opts, install) => {
     try {
-      const { job_id, restarts } = await api.action(name, opts)
-      const label = name === 'build' && opts?.theme ? `build (${opts.theme} · ${opts.emit})` : name
+      const { job_id, restarts } = await api.action(name, opts, install)
+      const on = opts?.emit || install?.host
+      const label =
+        name === 'build' && opts?.theme ? `build (${opts.theme}${on ? ` · ${on}` : ''})` : name
       setRuns((rs) => [
         ...rs,
         {

@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
   api: {
@@ -39,10 +39,13 @@ describe('Profile', () => {
     fireEvent.change(box, { target: { value: '# Who I am\n\nA builder, revised.' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() =>
-      expect(api.profileSave).toHaveBeenCalledWith({
-        text: '# Who I am\n\nA builder, revised.',
-        fingerprint: 'f1',
-      }),
+      expect(api.profileSave).toHaveBeenCalledWith(
+        {
+          text: '# Who I am\n\nA builder, revised.',
+          fingerprint: 'f1',
+        },
+        undefined,
+      ),
     )
     // successful save lands back on the rendered view
     await waitFor(() => expect(screen.queryByLabelText('Profile markdown')).toBeNull())
@@ -72,7 +75,10 @@ describe('Profile', () => {
     // …and the next save carries the NEW fingerprint.
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() =>
-      expect(api.profileSave).toHaveBeenLastCalledWith({ text: 'my draft', fingerprint: 'f9' }),
+      expect(api.profileSave).toHaveBeenLastCalledWith(
+        { text: 'my draft', fingerprint: 'f9' },
+        undefined,
+      ),
     )
   })
 
@@ -138,5 +144,68 @@ describe('Profile', () => {
     render(<Profile />)
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Who I am' })).toBeTruthy())
     expect(screen.queryByText('This is still the template')).toBeNull()
+  })
+})
+
+// EVERY ACTIVE INSTALL'S PROFILE (D1): one card each, tagged with its install, and a save writes
+// back to the card's own install with its own fingerprint.
+describe('Profile across installs', () => {
+  const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
+  const CL = {
+    id: 'cl',
+    host: 'claude',
+    scope: 'global',
+    path: '/cl',
+    state: 'active',
+    default: true,
+  }
+  beforeEach(() => {
+    api.installs = vi.fn(async () => ({ installs: [OC, CL] }))
+    api.profile.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'opencode'
+          ? { ...FILLED, fingerprint: 'oc-fp', text: '# OpenCode me' }
+          : { ...FILLED, fingerprint: 'cl-fp', text: '# Claude me' },
+      ),
+    )
+  })
+  afterEach(() => {
+    delete api.installs
+  })
+
+  // A finished job bumps `dataRev`, which refetches the install list: the cards must stay
+  // mounted through it, or an unsaved draft would vanish without the discard question.
+  it('keeps an open draft across a dataRev refetch', async () => {
+    const { rerender } = render(<Profile dataRev={1} />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
+    rerender(<Profile dataRev={2} />)
+    await waitFor(() => expect(api.installs).toHaveBeenCalledTimes(2))
+    expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
+  })
+
+  it('shows one card per install, default first, and saves to the card own install', async () => {
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    expect(screen.getByRole('heading', { name: 'Claude me' })).toBeTruthy()
+    // Each card is a region named after its install.
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Profile of claude · global',
+      'Profile of opencode · global',
+    ])
+    const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))
+    expect(groups).toEqual(['Profile mode, claude · global', 'Profile mode, opencode · global'])
+    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'mine' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.profileSave).toHaveBeenCalledWith(
+        { text: 'mine', fingerprint: 'oc-fp' },
+        { host: 'opencode', path: '/oc' },
+      ),
+    )
   })
 })

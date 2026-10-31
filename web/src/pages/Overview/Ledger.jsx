@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
+import { storeInstallPick, useInstalls } from '../../hooks/useInstalls.js'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
 import PageHeader from '../../components/PageHeader.jsx'
@@ -238,7 +239,7 @@ function RootKpi({ installs }) {
               }
               size={64}
               stroke={7}
-              label={`${w.selected ? 'Root file' : 'Worst root file'}: ${w.label}, ${w.pct} percent of its ceiling`}
+              label={`Worst root file: ${w.label}, ${w.pct} percent of its ceiling`}
             />
             <span className="mono ldg-ring-pct" aria-hidden="true">
               {w.pct}%
@@ -256,7 +257,7 @@ function RootKpi({ installs }) {
   )
 }
 
-// What the viewed install loads into every turn before you type: its total, then the parts
+// What the costliest install loads into every turn before you type: its total, then the parts
 // (root file, skill list, agent list, session files) with their tokens in the legend. The
 // fleet's range stays as one quiet line, so the card answers one question first.
 function CostKpi({ installs }) {
@@ -271,13 +272,10 @@ function CostKpi({ installs }) {
       {r ? (
         <>
           <span className="ldg-kpi-stack">
-            <span className="mono ldg-kpi-fig">{`${approxTokens(costTotal(r.shown.cost))} tokens`}</span>
-            <span className="dim">{labelOf(r.shown)}</span>
+            <span className="mono ldg-kpi-fig">{`${approxTokens(costTotal(r.top.cost))} tokens`}</span>
+            <span className="dim">{labelOf(r.top)}</span>
           </span>
-          <StackBar
-            parts={costParts(r.shown.cost)}
-            label={`Loaded every turn, ${labelOf(r.shown)}`}
-          />
+          <StackBar parts={costParts(r.top.cost)} label={`Loaded every turn, ${labelOf(r.top)}`} />
           <span className="dim ldg-kpi-cap">{`All installs: ${span} tokens`}</span>
         </>
       ) : (
@@ -565,7 +563,17 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
                 ) : (
                   <span className="dim">Always-on cost not measured.</span>
                 )}
-                <span className="dim">{`Voice ${i.theme} · ${i.footprint} footprint`}</span>
+                <span className="dim">
+                  {[
+                    `Voice ${i.theme}`,
+                    `${i.footprint} footprint`,
+                    i.posture && `${i.posture} posture`,
+                    i.mode && `${i.mode} mode`,
+                    i.facts != null && `${i.facts} memory fact${i.facts === 1 ? '' : 's'}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
               </div>
               <div className="ldg-detail-col">
                 <span className="ldg-lbl">Differs from source</span>
@@ -576,6 +584,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
                       className="btn ghost sm"
                       href="#/installs/edits"
                       aria-label={`View diff for ${label}`}
+                      onClick={() => storeInstallPick('edits', i.id)}
                     >
                       View diff
                     </a>
@@ -716,16 +725,7 @@ function WhatFires({ usage }) {
 }
 
 // `view` is the Overview's View control, handed down so both arms carry the same one.
-export default function Ledger({
-  overview,
-  setup,
-  runs,
-  onAction,
-  onRetry,
-  dataRev,
-  banner,
-  view,
-}) {
+export default function Ledger({ overview, setup, runs, onAction, dataRev, banner, view }) {
   const confirm = useConfirm()
   // job id → the row ids its rebuild names; a row shows the sweep while that run is running.
   const [rebuilding, setRebuilding] = useState({})
@@ -776,21 +776,16 @@ export default function Ledger({
   const { data: laws } = useAsync(() => soft(api.catalog('laws')), [dataRev], 'catalog:laws')
 
   const installs = fleet?.installs || []
-  // Open moves the view first, then the page to the Hosts tab that shows it. A refused move stays
-  // here and says why: going on would land on Installs showing the OLD view.
-  const [openError, setOpenError] = useState('')
-  const onOpen = async (i) => {
-    setOpenError('')
-    try {
-      await api.selectView(i.host, i.path)
-    } catch (e) {
-      setOpenError(`Could not open ${labelOf(i)}: ${e?.message || e}`)
-      return
-    }
-    onRetry?.()
+  // Open hands this row to the Hosts panel, then goes there: there is no viewed install to move.
+  const onOpen = (i) => {
+    storeInstallPick('hosts', i.id)
     window.location.hash = '#/installs/hosts'
   }
+  // The install the unnamed reads (profile, rules) answer for, named once two are active.
+  const active = useInstalls(dataRev)
+  const defaultLabel = active?.length > 1 ? labelOf(active[0]) : null
   const needs = ledgerNeeds({
+    defaultLabel,
     fleet,
     usage,
     overview,
@@ -863,11 +858,6 @@ export default function Ledger({
             <h2 id="ldg-fleet">Installed harnesses</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
-          {openError ? (
-            <p className="tag bad note" role="alert">
-              {openError}
-            </p>
-          ) : null}
           {fleetError && fleet ? (
             <p className="dim" role="status">
               Could not refresh the installs — showing the last read.{' '}

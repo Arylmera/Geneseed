@@ -36,7 +36,6 @@ vi.mock('../api/index.js', () => ({
     gates: vi.fn(),
     update: vi.fn(),
     activity: vi.fn(),
-    selectView: vi.fn(),
   },
 }))
 
@@ -106,8 +105,9 @@ beforeEach(() => {
       items: section === 'memory' ? [{ name: 'fact-a', title: 'fact-a', desc: '' }] : [],
     }),
   )
-  api.item.mockImplementation(() =>
-    Promise.resolve({ title: 'fact-a', desc: '', body: 'body', links: [] }),
+  // The read names its entry: Forget and Promote act only on the copy that answers it.
+  api.item.mockImplementation((type, name) =>
+    Promise.resolve({ name, title: 'fact-a', desc: '', body: 'body', links: [] }),
   )
   for (const k of ['overview', 'fleet', 'usage', 'gates', 'update', 'activity']) {
     api[k].mockImplementation(() => Promise.resolve(null))

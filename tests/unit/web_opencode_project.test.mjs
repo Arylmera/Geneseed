@@ -13,7 +13,7 @@
 // - diff stays what it is for every project install: no drift check (`diffable: false`), and
 //   restore refuses every file and touches none;
 // - Build rebuilds the install in place: emit `opencode`, `--out` the repo, its exclusion kept;
-// - a refresh does not jump the view to another install (`fallbackView` answers null);
+// - alone, it is the default install a request naming none reads (`defaultView`);
 // - the usage "never fired" list reads the same OpenCode layer: a deployed, unused skill is in
 //   it, the excluded skill is not, and neither are the root bundle's `_template`-style files.
 import test, { after, before } from 'node:test';
@@ -25,7 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { deployed, inventoryFor } from '../../js/web/catalog.mjs';
 import { apiDiff, apiOverview } from '../../js/web/api.mjs';
 import { apiRestore, buildActionCmds } from '../../js/web/actions.mjs';
-import { fallbackView, webState } from '../../js/web/state.mjs';
+import { defaultView, webState } from '../../js/web/state.mjs';
 import { usageSummary } from '../../js/web/usage-api.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 import { ROOT } from '../../js/build/source.mjs';
@@ -116,14 +116,10 @@ test('Build rebuilds it in place, its exclusion kept', () => {
   assert.equal(arg('--exclude-skills'), EXCLUDED);
 });
 
-test('a refresh keeps viewing it rather than falling back to another install', () => {
-  // A second, ACTIVE install for it to fall back to — with none, null would prove nothing.
-  const elsewhere = path.join(home, 'elsewhere');
-  fs.mkdirSync(elsewhere, { recursive: true });
-  fs.writeFileSync(path.join(elsewhere, '.geneseed-manifest.json'), JSON.stringify({ owned: [] }));
-  const targets = [['opencode', 'global', elsewhere]];
-  assert.notEqual(fallbackView(path.join(home, 'nothing-here'), targets), null);
-  assert.equal(fallbackView(repo, targets), null);
+test('alone, it is the default install, viewed at the repo root', () => {
+  // Its manifest sits in .opencode/, not at the root: the default must still count it active.
+  const targets = [['opencode', 'project', repo], ['opencode', 'global', path.join(home, 'nothing-here')]];
+  assert.deepEqual(defaultView(targets), [repo, repo]);
 });
 
 test('the never-fired list reads the OpenCode layer, not the root bundle', () => {

@@ -230,8 +230,10 @@ export const rebuildTarget = (i) => ({
 // install, then the older per-install nudges as SUGGESTIONS (`sugg: true`, muted). Usage's
 // never-fired row is held back until 30 days are counted, so a fresh install is not told every
 // skill is unused. Rows carry `act` (a console action) or `href`, never both; an `act: 'rebuild'`
-// row also names its `installs`.
-export function ledgerNeeds({ fleet, usage, ...rest }) {
+// row also names its `installs`. `defaultLabel` names the install the unnamed reads come from
+// (profile, rules): with it, those suggestions say whose they are. A fleet's memory nudge is per
+// install, off each row's `facts`.
+export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
   const out = []
   const d = fleet?.doctor
   if (d && !d.ok) {
@@ -290,12 +292,33 @@ export function ledgerNeeds({ fleet, usage, ...rest }) {
       href: '#/skills',
     })
   }
-  // The single-install nudges, minus what the fleet rows above now say per install.
+  const rows = (fleet?.installs || []).filter((x) => x.state === 'active')
+  for (const i of rows.filter((x) => x.facts === 0)) {
+    out.push({
+      id: `memory:${i.id}`,
+      tag: 'Memory',
+      tone: '',
+      sugg: true,
+      title: `${installLabel(i)}: memory holds no facts`,
+      detail: 'no durable lesson recorded yet',
+      where: 'personal/memory',
+      verb: 'Open',
+      href: '#/personal/memory',
+    })
+  }
+  // The single-install nudges, minus what the fleet rows above now say per install (doctor,
+  // drift, and memory once the fleet carries `facts`).
   const older = needsAttention({
     ...rest,
     overview: rest.overview && { ...rest.overview, doctor: null, diff: null },
+    setup:
+      rows.some((x) => x.facts != null) && rest.setup ? { ...rest.setup, facts: null } : rest.setup,
   })
-  for (const r of older) out.push({ ...r, sugg: true })
+  const OWN = new Set(['profile', 'rules'])
+  for (const r of older) {
+    const named = defaultLabel && OWN.has(r.id) ? { title: `${defaultLabel}: ${r.title}` } : {}
+    out.push({ ...r, ...named, sugg: true })
+  }
   return out
 }
 

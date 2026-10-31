@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
-import { folderName } from '../lib/hosts.js'
+import { installTag } from '../lib/hosts.js'
+import { useInstalls } from '../hooks/useInstalls.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
@@ -21,6 +22,13 @@ import Stat from '../components/Stat.jsx'
 
 // The usage ledger's kind for a Library section; only these two are counted.
 const USE_KIND = { skills: 'skill', agents: 'agent' }
+// The kinds listed across every install (the server's FLEET_SECTIONS): the rail counts them off
+// those lists, not off `overview.counts`, which counts one install. A folder's index and README
+// are furniture, not entries, and are not counted.
+const FLEET_KINDS = ['skills', 'agents', 'memory', 'notebook']
+const FURNITURE = new Set(['MEMORY', 'NOTEBOOK', 'README'])
+const entryCount = (list) =>
+  list.filter((it) => !FURNITURE.has(String(it.name).toUpperCase())).length
 const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
@@ -31,11 +39,8 @@ export const installOfKey = (key) => {
   const [host, scope, ...rest] = key.split(':')
   return { host, scope, path: rest.join(':') }
 }
-// An install as the harness switcher names it: a global by its tool, a project by its folder.
-export const installLabel = (key) => {
-  const i = installOfKey(key)
-  return i.scope === 'global' ? `${i.host} · global` : `${folderName(i.path)} · ${i.host}`
-}
+// An install key's tag, the console's one install name (lib/hosts.js installTag).
+export const installLabel = (key) => installTag(installOfKey(key))
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
@@ -238,15 +243,16 @@ export default function Library({
   // How often each skill or agent fires, fleet-wide (GET /api/usage `names`). A soft read: a
   // failed, missing or older-shaped answer hides the usage UI and never breaks the page.
   const useKind = lock ? null : USE_KIND[sec] || null
-  // Skills and agents are listed across every install; each row names the installs that have it.
-  const fleetOn = useKind !== null
+  // Skills, agents, memory and notebook are listed across every install; each row names the
+  // installs that have it.
+  const fleetOn = useKind !== null || sec === 'memory' || sec === 'notebook'
   // The rail counts skills and agents off the same fleet-wide lists the page shows, not off
   // `overview.counts`, which counts one install.
   const { data: fleetLists } = useAsync(
     () =>
       lock
         ? Promise.resolve(null)
-        : Promise.all(Object.keys(USE_KIND).map((k) => api.catalog(k))).catch(() => null),
+        : Promise.all(FLEET_KINDS.map((k) => api.catalog(k))).catch(() => null),
     [lock, dataRev],
   )
   const want = useKind !== null
@@ -310,6 +316,11 @@ export default function Library({
   // useAsync keeps the last good read beside a failed one; here that is the PREVIOUS
   // entry, so a failed read shows nothing of it (title, lede, source).
   const item = itemErr ? null : lastItem
+  // The copy a Forget or a Promote acts on: the read that answers THIS entry and THIS pick. While
+  // another entry or copy loads, `item` is still the previous one, which must never be written.
+  const copy = item && item.name === activeName && (!pick || item.install === pick) ? item : null
+  // Which install the copy is, named in a confirm once the list spans two installs or more.
+  const ofCopy = (c) => (fleetWide && c?.install ? ` in ${installLabel(c.install)}` : '')
 
   const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
@@ -320,10 +331,15 @@ export default function Library({
   const activeItem = fromCatalog || synthetic
   const counts = overview?.counts || {}
   const railCount = (k) => {
-    if (!USE_KIND[k]) return counts[k] ?? ''
-    if (k === sec && catalog?.section === sec) return items.length
-    return fleetLists?.find((c) => c?.section === k)?.items?.length ?? ''
+    if (!FLEET_KINDS.includes(k)) return counts[k] ?? ''
+    if (k === sec && catalog?.section === sec) return entryCount(items)
+    const list = fleetLists?.find((c) => c?.section === k)?.items
+    return list ? entryCount(list) : ''
   }
+  // The install a one-install kind (wiki, config) is read from: the default, named once two
+  // installs are active.
+  const activeInsts = useInstalls(dataRev)
+  const oneOf = activeInsts?.length > 1 ? `of ${installTag(activeInsts[0])}` : null
   // Install badges only say something when the list spans two installs or more.
   const fleetWide = fleetOn && new Set(items.flatMap((it) => it.installs || [])).size > 1
 
@@ -379,16 +395,18 @@ export default function Library({
     base ? `${base}/${enc(it.name)}` : `#/item/${it.type || SECTIONS[sec].type}/${enc(it.name)}`
 
   const onForget = async () => {
-    const name = activeItem?.name
-    if (!name) return
+    const c = copy
+    if (!c) return
+    const name = c.name
     const ok = await confirm(
-      `Forget the memory fact "${name}"? It leaves the index and moves to memory/archive/ (geneseed memory rm --archived --purge deletes it for good).`,
+      `Forget the memory fact "${name}"${ofCopy(c)}? It leaves the index and moves to memory/archive/ (geneseed memory rm --archived --purge deletes it for good).`,
       { title: 'Forget this fact?', confirmLabel: 'Forget', tone: 'danger' },
     )
     if (!ok) return
     setActionErr('')
     try {
-      await api.memoryDelete(name)
+      // The copy on screen is the one forgotten: its own install, never the default.
+      await api.memoryDelete(name, c.install ? installOfKey(c.install) : undefined)
     } catch (e) {
       // Stay on the fact that failed to go, and say why.
       setActionErr(`Could not forget "${name}": ${e.message}`)
@@ -403,17 +421,20 @@ export default function Library({
   // would load the lesson twice), which is why the confirm spells that out. Lands on the
   // Rules tab so the new trial rule is immediately visible and editable.
   const onPromote = async () => {
-    const name = activeItem?.name
-    if (!name) return
+    const c = copy
+    if (!c) return
+    const name = c.name
     const ok = await confirm(
-      `Promote "${name}" into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact moves to memory/archive/ so the lesson isn't loaded twice.`,
+      `Promote "${name}"${ofCopy(c)} into a standing rule? It is appended to user-rules.md as a trial rule (a month of probation), and the memory fact moves to memory/archive/ so the lesson isn't loaded twice.`,
       { title: 'Promote to a rule?', confirmLabel: 'Promote' },
     )
     if (!ok) return
     setActionErr('')
     try {
-      const cur = await api.rules()
-      await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true })
+      // The fact becomes a rule in ITS install's user-rules.md, with that file's fingerprint.
+      const inst = c.install ? installOfKey(c.install) : undefined
+      const cur = await api.rules(inst)
+      await api.rulesPromote({ name, fingerprint: cur.fingerprint, delete_memory: true }, inst)
       // The Rules tab must show the promoted rule: a mounted Personal (its own Memory tab)
       // reloads its read; a Personal mounted next must not be served the cached old copy.
       dropRules()
@@ -496,6 +517,9 @@ export default function Library({
           extra={
             useOn && usage.since ? (
               <span className="mono dim lib-since">calls since {usage.since}</span>
+            ) : !FLEET_KINDS.includes(sec) && sec !== 'laws' && oneOf ? (
+              // A one-install kind (wiki, config): whose files these are, once two are active.
+              <span className="mono dim lib-since">{oneOf}</span>
             ) : null
           }
           tools={
@@ -619,21 +643,25 @@ export default function Library({
                   <UseStats u={callsOf(activeItem.name)} usage={usage} noCall={noCall} />
                 ) : null}
               </div>
-              {sec === 'memory' && activeItem.name !== 'MEMORY' && activeItem.name !== 'README' && (
-                <div className="row gap-8">
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    onClick={onPromote}
-                    title="Turn this lesson into a standing trial rule in user-rules.md"
-                  >
-                    Promote to rule
-                  </button>
-                  <button type="button" className="btn ghost sm" onClick={onForget}>
-                    Forget this fact
-                  </button>
-                </div>
-              )}
+              {/* Only once the copy is read: its `install` is the one a forget or a promote acts on. */}
+              {sec === 'memory' &&
+                copy &&
+                activeItem.name !== 'MEMORY' &&
+                activeItem.name !== 'README' && (
+                  <div className="row gap-8">
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={onPromote}
+                      title="Turn this lesson into a standing trial rule in user-rules.md"
+                    >
+                      Promote to rule
+                    </button>
+                    <button type="button" className="btn ghost sm" onClick={onForget}>
+                      Forget this fact
+                    </button>
+                  </div>
+                )}
               {item?.installs?.length > 1 && item.installs.includes(item.install) ? (
                 <label className="row gap-8 lib-copy">
                   <span className="dim">Viewing copy from:</span>

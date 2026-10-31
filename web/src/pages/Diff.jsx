@@ -6,6 +6,9 @@ import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
+import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
+import { pairOf } from '../lib/hosts.js'
+import InstallPicker from '../components/InstallPicker.jsx'
 
 // Map a unified-diff line to its display class. Headers (+++/---) and hunk
 // markers read as hunks; the synthetic added/missing banners read as context.
@@ -19,9 +22,33 @@ function lineKind(ln) {
 // Past this many diff lines in all, files load collapsed: a wall of lines buries the file list.
 const OPEN_BUDGET = 300
 
-export default function Diff({ onMutated, onAction, dataRev, overview }) {
+// The install this tab compares: its own pick, remembered, beside the page (no console-wide one).
+// Keyed on it, so a switch starts the inner page fresh instead of showing one install's
+// selection over another's files.
+export default function Diff(props) {
+  const active = useInstalls(props.dataRev)
+  const [install, pick] = useInstallPick('edits', active)
+  return (
+    <>
+      <InstallPicker
+        className="page-pick"
+        installs={active}
+        value={install}
+        onChange={pick}
+        label="Local edits of:"
+      />
+      {active === null ? (
+        <Loading />
+      ) : (
+        <DiffOf key={install?.id || ''} install={install} {...props} />
+      )}
+    </>
+  )
+}
+
+function DiffOf({ install, onMutated, onAction, dataRev, overview }) {
   const confirm = useConfirm()
-  const { data, error, reload } = useAsync(() => api.diff(), [dataRev])
+  const { data, error, reload } = useAsync(() => api.diff(pairOf(install)), [dataRev])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const [sel, setSel] = useState(() => new Set())
@@ -67,7 +94,7 @@ export default function Diff({ onMutated, onAction, dataRev, overview }) {
     if (!ok) return
     setBusy(true)
     try {
-      const res = await api.restore(files)
+      const res = await api.restore(files, pairOf(install))
       const errs = res.errors.length
         ? ` · ${res.errors.length} error(s): ${res.errors.join('; ')}`
         : ''
@@ -90,9 +117,9 @@ export default function Diff({ onMutated, onAction, dataRev, overview }) {
     return (
       <EmptyState
         title="No drift check for this install"
-        docs={{ href: '#/installs/hosts', label: 'Pick a global install in Hosts' }}
+        docs={{ href: '#/installs/hosts', label: 'See every install in Hosts' }}
       >
-        The drift check covers global installs only.
+        The drift check covers global installs only. Pick a global install above.
       </EmptyState>
     )
 

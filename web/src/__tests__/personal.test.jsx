@@ -58,7 +58,9 @@ beforeEach(() => {
       items: section === 'memory' ? memoryItems : [{ name: 'NOTEBOOK' }, { name: 'plan' }],
     }),
   )
-  api.item.mockImplementation(() => Promise.resolve({ title: '', desc: '', body: '', links: [] }))
+  api.item.mockImplementation((type, name) =>
+    Promise.resolve({ name, title: '', desc: '', body: '', links: [] }),
+  )
 })
 
 // `setup.facts` disagrees with the catalog on purpose: the counts must come from the catalog.
@@ -80,6 +82,28 @@ describe('Personal', () => {
     expect(container.querySelector('.rules-meter')).toBeNull()
   })
 
+  // The budget and the profile are the DEFAULT install's (the unnamed reads): with two active
+  // installs both cards name it, and the memory/notebook counts say they span every install.
+  it('names the install the rule budget and the profile come from', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+        { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+      ],
+    }))
+    try {
+      render(<Personal tab="rules" dataRev={0} />)
+      const panel = await budget()
+      await waitFor(() => expect(within(panel).getByText('2 of 15 · claude · global')).toBeTruthy())
+      expect(
+        screen.getByText(
+          'Profile and rules of claude · global; memory and notebook across every install.',
+        ),
+      ).toBeTruthy()
+    } finally {
+      delete api.installs
+    }
+  })
   // Tokens alone reach 70 % (1050/1500) while the count is at 13 %: the strip reads the max.
   it('warns at 70 % of either budget', async () => {
     api.rules.mockImplementation(() => Promise.resolve(rulesWith({ tokens: 1050 })))
@@ -182,7 +206,7 @@ describe('Personal', () => {
       Promise.resolve(
         section === 'memory' && name === 'MEMORY'
           ? { title: 'MEMORY', desc: '', body, links: [] }
-          : { title: '', desc: '', body: '', links: [] },
+          : { name, title: '', desc: '', body: '', links: [] },
       ),
     )
 
@@ -211,7 +235,7 @@ describe('Personal', () => {
       Promise.resolve(
         name === 'MEMORY'
           ? { body: `- [release](topics/release.md) — ${n} facts`, links: [] }
-          : { title: '', desc: '', body: '', links: [] },
+          : { name, title: '', desc: '', body: '', links: [] },
       ),
     )
     api.memoryDelete.mockImplementation(() => {

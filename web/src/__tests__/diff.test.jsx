@@ -141,6 +141,36 @@ describe('Diff', () => {
     )
   })
 
+  // The tab compares ONE install, picked beside it: the default row first, then the pick. Even
+  // a not-diffable install keeps the picker, so a project pick is never a dead end.
+  it('compares the default install, then the picked one', async () => {
+    const oc = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
+    const bob = {
+      id: 'b',
+      host: 'bob',
+      scope: 'project',
+      path: '/r',
+      state: 'active',
+      default: true,
+    }
+    api.installs = vi.fn(async () => ({ installs: [oc, bob] }))
+    try {
+      api.diff.mockReset()
+      api.diff.mockResolvedValue({ deployed: true, diffable: false, files: [] })
+      render(<Diff />)
+      const pick = await screen.findByRole('combobox', { name: 'Local edits of:' })
+      await waitFor(() => expect(api.diff).toHaveBeenLastCalledWith({ host: 'bob', path: '/r' }))
+      await screen.findByText('No drift check for this install')
+      fireEvent.change(pick, { target: { value: 'oc' } })
+      await waitFor(() =>
+        expect(api.diff).toHaveBeenLastCalledWith({ host: 'opencode', path: '/oc' }),
+      )
+    } finally {
+      delete api.installs
+      localStorage.clear()
+    }
+  })
+
   // A small diff opens every file; past 300 lines in all, files start collapsed and the
   // page offers Expand all and Collapse all instead of a wall of lines.
   it('collapses a large diff by default and offers Expand all / Collapse all', async () => {

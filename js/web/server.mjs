@@ -28,7 +28,7 @@ import { which } from '../lib/paths.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { promptLine } from '../lib/prompt.mjs';
 import { deployed } from './catalog.mjs';
-import { fallbackView, warmDoctor, webState } from './state.mjs';
+import { defaultView, warmDoctor, webState } from './state.mjs';
 import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { makeHandler } from './handler.mjs';
 import { JobManager } from './jobs.mjs';
@@ -133,12 +133,12 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
     }
   }
   const state = webState(theme);
-  // The daemon record and the job file stay at the DEFAULT target, captured before the view
-  // moves: `geneseed web stop`/`status` find them through `webState(theme).target`, which never
-  // moves, and a view that followed a Bob-only install into ~/.bob would hide the record.
+  // The daemon record and the job file stay at the FIRST target, captured before the state
+  // moves to the default install: `geneseed web stop`/`status` find them through
+  // `webState(theme).target`, which never moves, and a state on a Bob-only ~/.bob would hide it.
   const home = state.target;
-  const fallback = fallbackView(home);
-  if (fallback) state.selectView(...fallback);
+  const def = defaultView();
+  if (def) state.selectView(...def);
   if (!deployed(state)) {
     printOut(`[web] no deployed harness at ${state.target}.\n`);
     printOut('      Run `geneseed setup` first — serving anyway (read-only UI).\n');

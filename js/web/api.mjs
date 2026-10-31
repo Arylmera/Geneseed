@@ -18,7 +18,7 @@ import { alwaysOnCost } from '../inspect/cost.mjs';
 import { installProfile } from '../build/generate.mjs';
 import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { VERSION_MARKER, resolvePath } from '../hosts/hosts.mjs';
+import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { autostartPaths } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
@@ -31,11 +31,11 @@ import { activeLoops } from '../loop/registry.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
 import { isFile } from '../lib/fs.mjs';
-import { comparePaths, normcase } from '../lib/paths.mjs';
+import { comparePaths } from '../lib/paths.mjs';
 import {
   configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
 } from './catalog.mjs';
-import { stampMinute, viewCfg } from './state.mjs';
+import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
 
 /**
@@ -43,9 +43,6 @@ import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-ch
  * they are re-exported rather than moved out from under it. New code imports `catalog.mjs`.
  */
 export { NotFound, deployed, resolveLinks } from './catalog.mjs';
-
-/** Two resolved paths, compared case-folded on Windows. */
-const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b));
 
 // ---- the eight endpoints -------------------------------------------------------------
 
@@ -157,6 +154,19 @@ const driftCounts = (files) => ({
 });
 
 /**
+ * How many memory facts an install's data dir holds: the `.md` files of `<dir>/memory` (where
+ * `memoryItems` reads them), minus its index and README (the console's furniture), any case.
+ * No folder is no facts (0); a folder that cannot be listed is null, so a row says "not read"
+ * rather than "no facts".
+ */
+export function memoryFactCount(dir) {
+  try {
+    return readdirSync(path.join(dir, 'memory'))
+      .filter((f) => /\.md$/i.test(f) && !/^(memory|readme)\.md$/i.test(f)).length;
+  } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
+}
+
+/**
  * The fields every install row opens with, in this order. Theme is narrowed to this row's own
  * host (host-compat B1): a shared repo otherwise answers every row with whichever host's
  * carrier the host-agnostic scan favours.
@@ -176,13 +186,19 @@ const installRowBase = (host, scope, root, state) => ({
  */
 export function apiInstalls(state) {
   const out = [];
-  for (const [host, scope, root] of installTargets()) {
+  const targets = installTargets();
+  const def = defaultView(targets);
+  // The row marked `default` must be the install an unnamed request reads, so the daemon state
+  // follows the marker here, where the console reads it, rather than only on a full refresh.
+  if (def && state?.selectView && !state.pinned && !samePath(def[0], state.target)) state.selectView(...def);
+  for (const [host, scope, root] of targets) {
     out.push({
       ...installRowBase(host, scope, root, installState(root, host, scope)),
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
       trust: trustOfDir(root, host),
-      selected: samePath(viewCfg(host, scope, root), state.target),
+      // The install a request naming none reads (`defaultView`): the console's pickers start on it.
+      default: !!def && samePath(viewCfg(host, scope, root), def[0]),
     });
   }
   return { installs: out, postures: discoverNames('postures', 'peer'),
@@ -232,9 +248,11 @@ export function apiFleet(state) {
       diffable: drift !== null,
       drift,
       built_epoch: built,
-      // The install the console is viewing (the topbar picker), as `/api/installs` marks it: the
-      // Overview's root-file card follows it rather than the fleet's worst.
-      selected: samePath(dir, state.target),
+      // Each install's own settings, on its row: the Overview has no viewed install to read them off.
+      posture: postureOfDir(root, host),
+      mode: modeOfDir(root, host),
+      // Its memory facts: one directory listing (`memoryFactCount`), no file read.
+      facts: memoryFactCount(dir),
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),

@@ -251,6 +251,28 @@ describe('fleetVerdict', () => {
 describe('ledgerNeeds', () => {
   beforeEach(() => vi.useFakeTimers({ now: NOW }))
   afterEach(() => vi.useRealTimers())
+  // Every suggestion names its install (D6): a fleet carrying `facts` gives one memory nudge per
+  // install with none (not the old one-install `setup.facts`), and the profile and rules nudges,
+  // read off the default install, are prefixed with it.
+  it('names the install of each memory, profile and rules suggestion', () => {
+    const fleet = {
+      ...FLEET,
+      installs: FLEET.installs.map((i, n) => ({ ...i, facts: n === 0 ? 0 : 4 })),
+    }
+    const rows = ledgerNeeds({
+      fleet,
+      usage: null,
+      ...ALL,
+      overview: { ...ALL.overview },
+      defaultLabel: 'claude · global',
+    })
+    const sugg = rows.filter((r) => r.sugg).map((r) => [r.id, r.title])
+    expect(sugg.filter(([id]) => /^(memory|profile|rules)/.test(id))).toEqual([
+      ['memory:oc', 'opencode · global: memory holds no facts'],
+      ['profile', 'claude · global: Profile is still the seeded template'],
+      ['rules', 'claude · global: No standing rules yet'],
+    ])
+  })
   it('lists per-install problems first, then the older nudges as suggestions', () => {
     const rows = ledgerNeeds({ fleet: FLEET, usage: null, ...ALL, overview: { ...ALL.overview } })
     expect(rows.slice(0, 2)).toEqual([

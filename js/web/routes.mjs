@@ -19,7 +19,7 @@
 import { installTargets } from '../hosts/installs.mjs';
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
 import { percentDecode } from '../lib/text.mjs';
-import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, apiSelectView, targetView } from './actions.mjs';
+import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, targetView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
   apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview,
@@ -49,7 +49,6 @@ import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote }
 export const POST_ROUTES = new Map([
   ['/api/install', [apiInstallToggle, true]],
   ['/api/excludes', [apiExcludesMutate, true]],
-  ['/api/view', [apiSelectView, true]],
   ['/api/activity', [apiActivityToggle, false]],
   // The dispatch wrapper resolves `name` from the body itself; `apiMemoryDelete` takes a bare
   // slug string, not the body object, unlike the other routes here.
@@ -66,10 +65,10 @@ export const POST_ROUTES = new Map([
 
 /**
  * The POSTs whose body `{host, path}` names the install they act on (`installView`), opt-in
- * rather than every POST: in `/api/view`, `/api/install` and `/api/actions/install` the pair is
+ * rather than every POST: in `/api/install` and `/api/actions/install` the pair is
  * the target the route resolves itself, and in `/api/actions/deploy`, `/api/excludes` and
  * `/api/reveal` a `path` is a folder or a config file, not an install. The two `actions/` rows
- * are the only actions that read the viewed install.
+ * are the only actions that read the request's install.
  */
 export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/rules',
   '/api/rules/promote', '/api/profile', '/api/actions/restore', '/api/actions/build']);
@@ -84,13 +83,13 @@ export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/
  * toggle (a `VIEW_POSTS` write) still take the pair. Every other `/api/*` GET, ping and jobs
  * aside, takes the pair and refuses an unknown one.
  *
- * The Library's two fleet lists (`/api/catalog/skills|agents`) are here because they read every
- * active install (`fleetOf`), which caches one view per install on the daemon state; the other
- * catalog sections, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
+ * The Library's fleet lists (`/api/catalog/skills|agents|memory|notebook`) are here because they
+ * read every active install (`fleetOf`), which caches one view per install on the daemon state;
+ * the other catalog sections, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
  */
 export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/kits',
   '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/activity',
-  '/api/catalog/skills', '/api/catalog/agents']);
+  '/api/catalog/skills', '/api/catalog/agents', '/api/catalog/memory', '/api/catalog/notebook']);
 
 /**
  * The 409 column, exported so a test can assert it directly. Giving `/api/activity` the 409
@@ -144,12 +143,14 @@ export function readJsonBody(buf) {
 }
 
 /**
- * Every ACTIVE install as `{install, state}`, the Library's skills and agents source: `install`
+ * Every ACTIVE install as `{install, state}`, the Library's fleet lists' source (skills, agents,
+ * memory, notebook: `FLEET_SECTIONS`): `install`
  * is the usage ledger's `host:scope:root` key, `state` the install's cached view off the daemon
  * state `base` (`targetView`), so each install keeps its own inventory cache. ONE
  * `installTargets()` scan: the targets it yields are the allowlist, so no view re-checks its
  * pair the way a request-named one must (`installView`). In the console's install order
- * (`fleetSort`), not as `installTargets` yields, which puts the cwd's projects first. No active install leaves `base` alone, keyless, as one install answered.
+ * (`fleetSort`), not as `installTargets` yields, which puts the cwd's projects first. No active
+ * install leaves `base` alone, keyless, as one install answered.
  */
 function fleetOf(base) {
   const views = fleetSort([...activeInstalls(installTargets())], (t) => [t[0], t[1]])
@@ -167,18 +168,19 @@ function fleetOf(base) {
  */
 /** @type {Array<[string, (state: any, path: string, base: any) => any]>} */
 export const PREFIX_ROUTES = [
-  // Skills and agents list every install (`MACHINE_GETS`); the other sections the named one.
+  // The `FLEET_SECTIONS` list every install (`MACHINE_GETS`); the other sections the named one.
   ['/api/catalog/', (state, p, base) => {
     const sec = p.split('/').pop();
     return apiCatalog(state, sec, FLEET_SECTIONS.includes(sec) ? fleetOf(base) : undefined);
   }],
   // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki
   // page's relpath survives. A missing name is a 404 here rather than a 500 two frames down.
-  // Install-scoped: a skill or agent is the named install's copy, else the fleet's first.
+  // Install-scoped: a skill, agent, memory or notebook entry is the named install's copy, else
+  // the fleet's first.
   ['/api/item/', (state, p, base) => {
     const m = /^\/api\/item\/([^/]+)\/(.+)$/.exec(p);
     if (!m) throw new NotFound(p);
-    const fleet = m[1] === 'skill' || m[1] === 'agent' ? fleetOf(base) : undefined;
+    const fleet = ['skill', 'agent', 'memory', 'notebook'].includes(m[1]) ? fleetOf(base) : undefined;
     return apiItem(state, m[1], percentDecode(m[2]), fleet);
   }],
   // The sid is passed through unquoted — `apiActivityDetail`'s safe-name scheme is what
