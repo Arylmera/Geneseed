@@ -186,10 +186,13 @@ const installRowBase = (host, scope, root, state) => ({
  * pick resolved to whichever came first. `installTargets()` de-duplicates on (host, root), so
  * this is unique by construction.
  */
-export function apiInstalls() {
+export function apiInstalls(state) {
   const out = [];
   const targets = installTargets();
   const def = defaultView(targets);
+  // The row marked `default` must be the install an unnamed request reads, so the daemon state
+  // follows the marker here, where the console reads it, rather than only on a full refresh.
+  if (def && state?.selectView && !state.pinned && !samePath(def[0], state.target)) state.selectView(...def);
   for (const [host, scope, root] of targets) {
     out.push({
       ...installRowBase(host, scope, root, installState(root, host, scope)),

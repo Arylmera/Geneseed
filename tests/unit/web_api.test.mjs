@@ -2117,6 +2117,18 @@ test('a write through a view refreshes the daemon state, and the reverse', async
   });
 });
 
+// The marker and the unnamed reads never disagree: reading /api/installs, where the console learns
+// which row is `default`, moves the daemon state to it, with no full refresh in between.
+test('reading the install list moves unnamed requests to the marked default', async () => {
+  await withTwoViewsServed(async ({ oc, cl, get }) => {
+    fs.rmSync(path.join(oc, GLOBAL_MANIFEST));
+    fs.writeFileSync(path.join(cl, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    const rows = (await (await get('/api/installs')).json()).installs;
+    assert.deepEqual(rows.filter((r) => r.default).map((r) => r.host), ['claude']);
+    assert.equal((await (await get('/api/themes')).json()).current.theme, 'imperial');
+  });
+});
+
 // Memory and notebook are listed across every active install (Q3): one row per name with the
 // installs that hold it, in fleet order, and an entry is read from the named install's copy, so a
 // forget or a promote can name the install the fact came from.
