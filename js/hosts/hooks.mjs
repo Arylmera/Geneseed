@@ -769,17 +769,19 @@ function ruleDecide(args, payload) {
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
       + 'tracked file.');
   }
-  const sensor = protectedCheck(p);
+  // Bob routes reads here too (`read_file` carries a path): only a write is External Gate's business.
+  // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
+  // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
+  const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
+  const sensor = !bobRead && protectedCheck(p);
   if (sensor) {
     return ask(args, 'rule-gate', 'rigor-5', `Geneseed (External Gate) — ${p} is a protected `
       + `check (${sensor === DONE_LIST ? 'the done gate list itself'
         : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can edit is not a `
       + 'check: fix the code, not the check, unless the user asks for this edit.');
   }
-  // Bob routes reads here too (`read_file` carries a path): only a write is this gate's business.
   // Bob never reads `opencode.json(c)`, OpenCode's whole host config: it is not gated from Bob.
-  const bobWrite = HOST !== 'bob' || (WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''))
-    && !/^opencode\.jsonc?$/i.test(path.basename(p)));
+  const bobWrite = !bobRead && !(HOST === 'bob' && /^opencode\.jsonc?$/i.test(path.basename(p)));
   if (bobWrite && gateConfig(p, args.root)) {
     // Bob: a hook-settings file is the user's shared host config — refused only when the write
     // touches Geneseed's wiring (`bobSettingsChange`); a pass falls through to the checks below.

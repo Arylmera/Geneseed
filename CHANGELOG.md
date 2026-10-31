@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **Bob can read a protected check again.** Bob runs the gate on every tool, reads included, and since 4.29.0 a project emit seeds `.geneseed/protected-checks.txt` with the manifests, CI files and lint/test config. The gate refused every Bob read of those files, `package.json` included; now only a Bob write to a protected check, the list or `.geneseed/done-checks.txt` is blocked. A write is told by its tool name (`write`, `edit`, `diff`, `replace`, `insert`), the same rule the gate-configuration check already used.
+
 ## [4.30.0] — 2026-10-31
 
 Minor: the ownership and learn-mode state files stay short (general preferences, no per-checkpoint writes), and OpenCode activity cards land on their own repo shelf. Run `geneseed rebuild-all` once after updating to get the new Rite text.
