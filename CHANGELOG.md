@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The web console's Activity view covers every install.** It reads the `activity/` folder of every active install (OpenCode, Claude Code, Bob, OpenClaude; global and project) and shows one garden: each card carries a host chip, shelves stay grouped by repo, and collisions and loops are found across hosts. A session that two installs record in one checkout (a global and a project install of one host) is one card. The tracking switch is one row per install, and the daemon sweeps every install's old cards. An OpenCode project install has no row of its own: its sessions appear under, and follow the switch of, the OpenCode global install.
+
 ### Fixed
 - **The web console sees an OpenCode project install.** That install keeps its manifest and the skills and agents OpenCode loads under `<repo>/.opencode/`, and the console looked for the manifest only at the repo root. So it called the install "not deployed", listed the full source catalogue instead of what the install has (skills it left out included), refused Build, could jump to another install on refresh, and built its "never used" list from the root bundle. It now reads the manifest at either place, reads skills and agents from `.opencode/`, and Build rebuilds such an install in place with the same command `rebuild-all` uses. Diff and Restore are unchanged: as for every project install, no drift check exists.
 

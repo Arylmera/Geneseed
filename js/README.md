@@ -251,7 +251,7 @@ the deployed harness as JSON.
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |
 | `jobs.mjs` | `JobManager` and the action→argv table. The only module here that spawns job children |
 | `docs.mjs` | The Docs tab: the `docs/<folder>/` page registry, `?harness=` filtering, link rewriting, the six page kinds |
-| `activity.mjs` | The `activity/` session files: pid-liveness prune, list, detail, and the on/off flag |
+| `activity.mjs` | The `activity/` session files of every active install: one merged list (`activitySummary`), the per-install detail and on/off flag, and the daemon's sweep over all installs (`sweepInstalls`) |
 
 **Before editing:** `makeHandler(state, jm, token, dist, holder)`'s arity is load-bearing — three
 test call sites construct one directly and drive it without a socket. `routes.mjs`'s tables

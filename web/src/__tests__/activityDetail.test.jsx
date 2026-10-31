@@ -84,6 +84,19 @@ describe('ActivityDetail page', () => {
     expect(document.body.textContent).toContain('140 tok') // step tokens
   })
 
+  // A garden card links `#/activity/<sid>?host=&path=`: the detail reads THAT install's files.
+  it('reads the session from the install its link names', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp(full())))
+    window.history.replaceState(null, '', '#/activity/s?host=claude&path=%2Fh%2Fcl')
+    try {
+      render(<ActivityDetail sid="s?host=claude&path=/h/cl" />)
+      expect(await screen.findByText('fix parser')).toBeTruthy()
+      expect(global.fetch.mock.calls[0][0]).toBe('/api/activity/s?host=claude&path=%2Fh%2Fcl')
+    } finally {
+      window.history.replaceState(null, '', '#/')
+    }
+  })
+
   it('shows "Session ended" on a 404', async () => {
     global.fetch = vi.fn(() => Promise.resolve(errResp(404)))
     render(<ActivityDetail sid="s" />)

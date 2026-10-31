@@ -3,7 +3,7 @@ import { api } from '../api/index.js'
 import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
 import { baseName, compact, needsYou, SessionHeader } from '../lib/activity.jsx'
-import { contextFill, gardenTree, treeKey } from '../lib/garden.js'
+import { contextFill, detailTarget, gardenTree, treeKey } from '../lib/garden.js'
 import { PadCard, readSakura, TreeSvg } from './Activity/Bonsai.jsx'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -125,7 +125,10 @@ export function SessionTree({ s }) {
   )
 }
 
-export default function ActivityDetail({ sid }) {
+export default function ActivityDetail({ sid: item }) {
+  // The card's link names its install (`#/activity/<sid>?host=&path=`); an old link without one
+  // reads the daemon's own install.
+  const { sid, install } = detailTarget(item, window.location.hash)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [gone, setGone] = useState(false)
@@ -140,7 +143,7 @@ export default function ActivityDetail({ sid }) {
     (alive) =>
       gone
         ? undefined
-        : api.activityDetail(sid).then(
+        : api.activityDetail(sid, install).then(
             (d) => {
               if (alive()) {
                 setData(d)

@@ -22,6 +22,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import Seg from '../components/Seg.jsx'
 import Garden from './Activity/Garden.jsx'
+import { cardKey, detailHref, installNames, placeCards } from '../lib/garden.js'
 import { useFlip } from '../lib/motion.js'
 import { usePoll } from '../hooks/usePoll.js'
 import { useAsync } from '../hooks/useAsync.js'
@@ -39,11 +40,16 @@ function SessionCard({ s }) {
   return (
     <a
       className="card pad-md act-card"
-      href={`#/activity/${encodeURIComponent(s.session_id)}`}
+      href={s.href || detailHref(s.session_id)}
       aria-labelledby={`${id}-t ${id}-st`}
       aria-describedby={counters ? `${id}-c` : undefined}
     >
       <SessionHeader s={s} id={id} heading={s.title || baseName(s.cwd) || s.session_id}>
+        {s.chip && (
+          <span className="badge mono" title="The install this session runs in">
+            {s.chip}
+          </span>
+        )}
         {/* affordance: this card opens the session detail (the card itself is the link) */}
         <Icon name="chevron" className="glyph act-chev" />
       </SessionHeader>
@@ -72,10 +78,10 @@ function enteredNeedsYou(seen, sessions) {
   if (!Array.isArray(sessions)) return ''
   const now = sessions.filter(needsYou)
   const before = seen.current
-  seen.current = new Set(now.map((s) => `${s.session_id}:${s.status}`))
+  seen.current = new Set(now.map((s) => `${cardKey(s)}:${s.status}`))
   if (!before) return ''
   return now
-    .filter((s) => !before.has(`${s.session_id}:${s.status}`))
+    .filter((s) => !before.has(`${cardKey(s)}:${s.status}`))
     .map((s) => `${s.title || baseName(s.cwd) || s.session_id} ${WAIT_SAYS[s.status]}`)
     .join('. ')
 }
@@ -113,7 +119,10 @@ function writeView(v) {
   window.history.replaceState(null, '', `#/activity${s ? `?${s}` : ''}`)
 }
 
-function TrackingCard({ enabled, onToggle }) {
+// Tracking is per install (D1): one switch per active install, each named after the install it
+// flips and nothing else. The heading says on while any install tracks.
+function TrackingCard({ enabled, installs, onToggle }) {
+  const names = installNames(installs)
   return (
     <section className="card pad-md act-track" aria-labelledby="act-track-h">
       <Icon name="activity" className="glyph act-fixed" />
@@ -128,23 +137,30 @@ function TrackingCard({ enabled, onToggle }) {
           </p>
         )}
       </div>
-      <div className="row gap-10 act-fixed act-sm">
-        <span id="act-track-l">Track live sessions</span>
-        <div
-          className={`sw-toggle${enabled ? ' on' : ''}`}
-          role="switch"
-          aria-checked={enabled}
-          aria-labelledby="act-track-l"
-          tabIndex={0}
-          onClick={onToggle}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              if (e.key === ' ') e.preventDefault()
-              onToggle()
-            }
-          }}
-        />
-      </div>
+      <ul className="stack gap-8 act-fixed act-sm" aria-label="Tracking per install">
+        {installs.length === 0 && <li className="dim">No active install to track.</li>}
+        {installs.map((i, n) => (
+          <li key={i.install} className="row gap-10">
+            <span id={`act-track-l${n}`} title={i.path}>
+              Track live sessions in <span className="mono">{names.get(i.install)}</span>
+            </span>
+            <div
+              className={`sw-toggle${i.enabled ? ' on' : ''}`}
+              role="switch"
+              aria-checked={i.enabled}
+              aria-labelledby={`act-track-l${n}`}
+              tabIndex={0}
+              onClick={() => onToggle(i)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  if (e.key === ' ') e.preventDefault()
+                  onToggle(i)
+                }
+              }}
+            />
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }
@@ -351,19 +367,22 @@ export default function Activity() {
 
   // Default on when the field is absent (older server / first paint).
   const enabled = data ? data.enabled !== false : true
+  const installs = Array.isArray(data?.installs) ? data.installs : []
   // Sorted by id, ascending: the server buckets by status and recency, which reorders the
   // cards on every turn; an id never changes, so a card stays where the eye left it.
   // OpenCode ids descend with time, so ascending puts the newest first; Claude ids are
-  // random, but still stable.
-  const sessions = [...(data?.activity || [])].sort((a, b) =>
+  // random, but still stable. The cards come from every install, each placed on its own
+  // (`placeCards`: host chip, detail link), and keyed by session + checkout (`cardKey`), never
+  // by install.
+  const sessions = placeCards(data?.activity, installs).sort((a, b) =>
     a.session_id < b.session_id ? -1 : a.session_id > b.session_id ? 1 : 0,
   )
   const flipRef = useFlip()
   const waiting = enabled && data ? sessions.filter(needsYou).length : null
   // Already newest first and capped by the server, which also lets the live copy win a
-  // duplicate; the id check is only a second guard, so one session never shows twice.
-  const liveIds = new Set(sessions.map((s) => s.session_id))
-  const endedAll = (data?.ended || []).filter((s) => !liveIds.has(s.session_id))
+  // duplicate; the key check is only a second guard, so one session never shows twice.
+  const liveIds = new Set(sessions.map(cardKey))
+  const endedAll = placeCards(data?.ended, installs).filter((s) => !liveIds.has(cardKey(s)))
 
   // Host and project options come only from values the data carries. Runs and gate asks
   // carry neither, so narrowing by one hides them and says so, rather than showing them as
@@ -406,21 +425,36 @@ export default function Activity() {
     'scaleX',
   )
 
-  const toggle = async () => {
-    const next = !enabled
+  // Flips ONE install's tracking: the write names that install, and no other install moves.
+  const toggle = async (row) => {
+    const next = !row.enabled
     try {
-      const res = await api.activityToggle(next)
+      const res = await api.activityToggle(next, { host: row.host, path: row.path })
       if (res.ok === false) {
         setError(res.error || 'Could not change tracking')
         return
       }
-      // Optimistic: reflect the flip now; the next poll reconciles from disk.
-      setData((d) => ({
-        ...(d || {}),
-        enabled: res.enabled,
-        activity: res.enabled ? d?.activity || [] : [],
-        ended: res.enabled ? d?.ended || [] : [],
-      }))
+      // Optimistic: reflect the flip on that install now; the next poll reconciles from disk.
+      // A card another install also saw stays, shown from that install's copy.
+      const keep = (list) =>
+        res.enabled
+          ? list || []
+          : (list || []).flatMap((s) => {
+              const left = (s.installs || [s.install]).filter((k) => k !== row.install)
+              return left.length ? [{ ...s, install: left[0], installs: left }] : []
+            })
+      setData((d) => {
+        const rows = (d?.installs || []).map((i) =>
+          i.install === row.install ? { ...i, enabled: res.enabled } : i,
+        )
+        return {
+          ...(d || {}),
+          installs: rows,
+          enabled: rows.length === 0 || rows.some((i) => i.enabled),
+          activity: keep(d?.activity),
+          ended: keep(d?.ended),
+        }
+      })
       setError('')
     } catch (e) {
       setError(e.message)
@@ -463,7 +497,7 @@ export default function Activity() {
           <ErrorState error={error} />
         </div>
       )}
-      {data && <TrackingCard enabled={enabled} onToggle={toggle} />}
+      {data && <TrackingCard enabled={enabled} installs={installs} onToggle={toggle} />}
 
       <div className="act-today">
         <RunsCard jobs={jobsQ.data} loading={jobsQ.loading} />
@@ -538,7 +572,7 @@ export default function Activity() {
           // A poll that adds or drops a session slides the list instead of re-dealing it.
           <div className="stack gap-12 act-live" ref={flipRef}>
             {live.map((s) => (
-              <div key={s.session_id} data-flip={s.session_id}>
+              <div key={cardKey(s)} data-flip={cardKey(s)}>
                 <SessionCard s={s} />
               </div>
             ))}
@@ -553,7 +587,7 @@ export default function Activity() {
             Recently ended
           </h2>
           {endedShown.map((s) => (
-            <div key={s.session_id}>
+            <div key={cardKey(s)}>
               <SessionCard s={s} />
             </div>
           ))}

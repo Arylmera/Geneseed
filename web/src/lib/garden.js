@@ -467,22 +467,106 @@ export function groupShelves(sessions) {
 
 // ---- collisions --------------------------------------------------------------------------
 
+// A card's key across installs: the server's `key` (session id + checkout), which never names an
+// install, so React keys, hovers and the collision match hold still when the install a merged
+// card is shown from changes. An older card without `key` keys by install + id, else id alone.
+export const cardKey = (s) =>
+  s.key ?? (s.install ? `${s.install}\0${s.session_id}` : String(s.session_id))
+const writerKey = (w) => cardKey({ key: w.key ?? undefined, install: w.install, session_id: w.sid })
+
+// ---- installs ----------------------------------------------------------------------------
+
+// The name of each install of /api/activity's `installs[]`, by its `install` key: the host
+// alone, the scope too when the host has two installs, the project folder too when that is
+// still ambiguous (two project installs of one host). Two projects in same-named folders take
+// more of their path, one folder at a time, and the whole path when even that cannot part them.
+const tail = (p, n) =>
+  String(p)
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .slice(-n)
+    .join('/')
+export function installNames(installs) {
+  const list = installs || []
+  const count = (f) => (i) => list.filter((j) => f(j) === f(i)).length
+  const byHost = count((i) => i.host)
+  const byScope = count((i) => `${i.host} ${i.scope}`)
+  const out = new Map(
+    list.map((i) => [
+      i.install,
+      byHost(i) < 2
+        ? i.host
+        : byScope(i) < 2 || i.scope === 'global'
+          ? `${i.host} · ${i.scope}`
+          : `${i.host} · ${lastSeg(i.path)}`,
+    ]),
+  )
+  const clashing = () =>
+    list.filter((i) => list.some((j) => j !== i && out.get(j.install) === out.get(i.install)))
+  for (let n = 2, dup = clashing(); dup.length; n++, dup = clashing()) {
+    for (const i of dup) {
+      const segs = String(i.path)
+        .split(/[\\/]+/)
+        .filter(Boolean).length
+      out.set(i.install, `${i.host} · ${n > segs ? i.path : tail(i.path, n)}`)
+    }
+    if (n > 64) break // two installs never share a whole path; a guard, not a rule
+  }
+  return out
+}
+
+// A session's detail link. With its install known, the link names it (`?host=&path=`), so the
+// detail reads that install's files; the router hands the page the item decoded, query and all.
+export const detailHref = (sid, install) =>
+  `#/activity/${encodeURIComponent(sid)}` +
+  (install ? `?${new URLSearchParams({ host: install.host, path: install.path })}` : '')
+
+// The reverse, for the detail page: the session id out of the router's item, and the install
+// out of the raw hash (where the query is still encoded).
+export function detailTarget(item, hash) {
+  const cut = String(item).indexOf('?')
+  const q = new URLSearchParams(String(hash || '').split('?')[1] || '')
+  const host = q.get('host')
+  const path = q.get('path')
+  return {
+    sid: cut < 0 ? item : String(item).slice(0, cut),
+    install: host && path ? { host, path } : undefined,
+  }
+}
+
+// The merged cards placed on their install: `host` is the install's (the snapshot's own is the
+// fallback), `chip` its name, `href` its detail link.
+export function placeCards(sessions, installs) {
+  const rows = new Map((installs || []).map((i) => [i.install, i]))
+  const names = installNames(installs)
+  return (sessions || []).map((s) => {
+    const i = rows.get(s.install)
+    return {
+      ...s,
+      host: i?.host ?? s.host,
+      chip: names.get(s.install) ?? s.host ?? null,
+      href: detailHref(s.session_id, i),
+    }
+  })
+}
+
 // Red or amber is decided per PAIR of sessions, from their own roots in `writers`. The API's
 // `kind` says whether ANY two writers share a root, and a session and its own sub-agent
-// always do, so it would paint red a pair that only meets across two worktrees.
+// always do, so it would paint red a pair that only meets across two worktrees. A "sid" below is
+// a `cardKey`.
 const rootsOf = (c, sid) =>
-  new Set((c.writers || []).filter((w) => w.sid === sid).map((w) => norm(w.root)))
+  new Set((c.writers || []).filter((w) => writerKey(w) === sid).map((w) => norm(w.root)))
 function pairKind(c, a, b) {
   const ra = rootsOf(c, a)
   for (const r of rootsOf(c, b)) if (ra.has(r)) return 'same-worktree'
   return 'cross-worktree'
 }
-const sidsOf = (c) => [...new Set((c.writers || []).map((w) => w.sid))]
+const sidsOf = (c) => [...new Set((c.writers || []).map(writerKey))]
 
 // The threads of one shelf: one per pair of trees `{a, b, kind}` (indexes into `trees`),
 // red outranking amber when the pair shares several files.
 export function shelfPairs(trees, collisions) {
-  const at = new Map(trees.map((t, i) => [t.s.session_id, i]))
+  const at = new Map(trees.map((t, i) => [cardKey(t.s), i]))
   const pairs = new Map()
   for (const c of collisions || []) {
     const sids = sidsOf(c).filter((sid) => at.has(sid))
@@ -499,7 +583,7 @@ export function shelfPairs(trees, collisions) {
 }
 
 // The files one session shares with another live session: `[{path, kind}]`, kind red when
-// it shares the file with any other session in its own worktree.
+// it shares the file with any other session in its own worktree. `sid` is the card's `cardKey`.
 export function sharedFiles(sid, collisions) {
   const out = []
   for (const c of collisions || []) {

@@ -7,6 +7,15 @@ import { compact } from '../lib/activity.jsx'
 
 const okResp = (body) => ({ ok: true, json: () => Promise.resolve(body) })
 
+// One opencode global install as /api/activity lists it: each tracking switch belongs to one.
+const OC = {
+  install: 'opencode:global:/h/oc',
+  host: 'opencode',
+  scope: 'global',
+  path: '/h/oc',
+  enabled: true,
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   // The filter persists in the hash: reset it, or one test's chip leaks into the next.
@@ -184,7 +193,11 @@ describe('Activity page', () => {
   })
 
   it('reflects the disabled flag with an off state and an unchecked switch', async () => {
-    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: false, activity: [] })))
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({ enabled: false, installs: [{ ...OC, enabled: false }], activity: [] }),
+      ),
+    )
     render(<Activity />)
     // The off state is a card above the strip now, not the whole page: runs and gate asks
     // still show with tracking off.
@@ -193,7 +206,9 @@ describe('Activity page', () => {
   })
 
   it('posts the new state when the switch is clicked', async () => {
-    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: [] })))
+    global.fetch = vi.fn(() =>
+      Promise.resolve(okResp({ enabled: true, installs: [OC], activity: [] })),
+    )
     render(<Activity />)
     await screen.findByText('No active sessions') // enabled + empty
     document.querySelector('.sw-toggle').click()
@@ -201,7 +216,8 @@ describe('Activity page', () => {
       const post = global.fetch.mock.calls.find((c) => c[1]?.method === 'POST')
       expect(post).toBeTruthy()
       expect(post[0]).toBe('/api/activity')
-      expect(JSON.parse(post[1].body)).toEqual({ enabled: false })
+      // The write names the install the switch belongs to.
+      expect(JSON.parse(post[1].body)).toEqual({ enabled: false, host: 'opencode', path: '/h/oc' })
     })
   })
 
@@ -415,15 +431,15 @@ describe('Activity page: Today strip and feed', () => {
   })
 
   it('off: shows "Live sessions are off", keeps the feed, and the switch still posts', async () => {
-    global.fetch = fixture({ enabled: false, activity: [] })
+    global.fetch = fixture({ enabled: false, installs: [{ ...OC, enabled: false }], activity: [] })
     render(<Activity />)
     expect(await screen.findByText('Live sessions are off')).toBeTruthy()
     await screen.findAllByRole('img', { name: /^Took / })
-    screen.getByRole('switch', { name: 'Track live sessions' }).click()
+    screen.getByRole('switch', { name: 'Track live sessions in opencode' }).click()
     await vi.waitFor(() => {
       const post = global.fetch.mock.calls.find((c) => c[1]?.method === 'POST')
       expect(post).toBeTruthy()
-      expect(JSON.parse(post[1].body)).toEqual({ enabled: true })
+      expect(JSON.parse(post[1].body)).toEqual({ enabled: true, host: 'opencode', path: '/h/oc' })
     })
   })
 })
@@ -625,5 +641,126 @@ describe('Activity garden switch', () => {
     render(<Activity />)
     expect(await screen.findByRole('link', { name: /^other host, bob, idle/ })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /^grow it/ })).toBeNull()
+  })
+})
+
+// D2: one garden over every active install. Each card carries the `install` it was read from;
+// `installs[]` names them. The chip shows the host (and the scope when a host has two installs),
+// the link names the install, and each install has its own tracking switch.
+describe('Activity across installs', () => {
+  const CL = {
+    install: 'claude:global:/h/cl',
+    host: 'claude',
+    scope: 'global',
+    path: '/h/cl',
+    enabled: true,
+  }
+  const card = (install, sid, title) => ({
+    session_id: sid,
+    install,
+    title,
+    status: 'busy',
+    cwd: '/git/app',
+    updated_at: 0,
+  })
+  beforeEach(() => window.history.replaceState(null, '', '#/activity?v=list'))
+
+  it('puts a host chip on each card, and links each to its own install', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          enabled: true,
+          installs: [OC, CL],
+          activity: [
+            card(OC.install, 's1', 'from opencode'),
+            card(CL.install, 's1', 'from claude'),
+          ],
+        }),
+      ),
+    )
+    render(<Activity />)
+    const oc = (await screen.findByText('from opencode')).closest('a')
+    const cl = screen.getByText('from claude').closest('a')
+    expect(within(oc).getByTitle('The install this session runs in').textContent).toBe('opencode')
+    expect(within(cl).getByTitle('The install this session runs in').textContent).toBe('claude')
+    // One id in two installs: two cards, each linking to the install that holds it.
+    expect(oc.getAttribute('href')).toBe('#/activity/s1?host=opencode&path=%2Fh%2Foc')
+    expect(cl.getAttribute('href')).toBe('#/activity/s1?host=claude&path=%2Fh%2Fcl')
+  })
+
+  it('names the scope in the chip when a host has two installs', async () => {
+    const proj = { ...CL, install: 'claude:project:/w/app', scope: 'project', path: '/w/app' }
+    global.fetch = vi.fn(() =>
+      Promise.resolve(
+        okResp({
+          enabled: true,
+          installs: [CL, proj],
+          activity: [card(CL.install, 'a', 'global one'), card(proj.install, 'b', 'project one')],
+        }),
+      ),
+    )
+    render(<Activity />)
+    const chip = (t) =>
+      within(screen.getByText(t).closest('a')).getByTitle('The install this session runs in')
+        .textContent
+    await screen.findByText('global one')
+    expect(chip('global one')).toBe('claude · global')
+    expect(chip('project one')).toBe('claude · project')
+  })
+
+  // One session both installs recorded is one card (`installs` lists both): turning one install
+  // off keeps the card, now shown from the other install.
+  it('keeps a card the other install also saw when one install is turned off', async () => {
+    const both = {
+      ...card(CL.install, 's', 'seen twice'),
+      installs: [CL.install, OC.install],
+    }
+    global.fetch = vi.fn((url, opts) =>
+      Promise.resolve(
+        okResp(
+          opts?.method === 'POST'
+            ? { ok: true, enabled: false }
+            : { enabled: true, installs: [OC, CL], activity: [both] },
+        ),
+      ),
+    )
+    render(<Activity />)
+    await screen.findByText('seen twice')
+    screen.getByRole('switch', { name: 'Track live sessions in claude' }).click()
+    await vi.waitFor(() =>
+      expect(screen.getByText('seen twice').closest('a').getAttribute('href')).toBe(
+        '#/activity/s?host=opencode&path=%2Fh%2Foc',
+      ),
+    )
+  })
+
+  it('has one switch per install, and flipping one leaves the other on', async () => {
+    global.fetch = vi.fn((url, opts) =>
+      Promise.resolve(
+        okResp(
+          opts?.method === 'POST'
+            ? { ok: true, enabled: false }
+            : {
+                enabled: true,
+                installs: [OC, CL],
+                activity: [card(OC.install, 'o', 'oc work'), card(CL.install, 'c', 'cl work')],
+              },
+        ),
+      ),
+    )
+    render(<Activity />)
+    await screen.findByText('cl work')
+    const ocSw = screen.getByRole('switch', { name: 'Track live sessions in opencode' })
+    const clSw = screen.getByRole('switch', { name: 'Track live sessions in claude' })
+    expect([ocSw, clSw].map((s) => s.getAttribute('aria-checked'))).toEqual(['true', 'true'])
+    clSw.click()
+    await vi.waitFor(() => {
+      const post = global.fetch.mock.calls.find((c) => c[1]?.method === 'POST')
+      expect(JSON.parse(post[1].body)).toEqual({ enabled: false, host: 'claude', path: '/h/cl' })
+      expect(clSw.getAttribute('aria-checked')).toBe('false')
+    })
+    expect(ocSw.getAttribute('aria-checked')).toBe('true')
+    expect(screen.queryByText('cl work')).toBeNull()
+    expect(screen.getByText('oc work')).toBeTruthy()
   })
 })

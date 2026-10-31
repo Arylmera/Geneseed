@@ -67,8 +67,9 @@ and the `restore` and `build` actions. In `/api/view`, `/api/install`, the `inst
 Every `/api/*` read takes and checks the pair, with these exceptions:
 - `/api/ping` and `/api/jobs` ignore it.
 - The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`,
-  `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp` and `/api/loops/active`.
-  Such a read does not check the pair, and its answer does not change with the pair.
+  `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active` and
+  `/api/activity`. Such a read does not check the pair, and its answer does not change with the pair.
+  The Activity detail (`/api/activity/<id>`) and the Activity toggle still take the pair.
 
 A request that names no install reads the install the topbar picker selected (`POST /api/view`).
 Each named install keeps its own cached doctor run and inventory, and a mutation refreshes all
@@ -205,8 +206,16 @@ streams the output of background jobs and keeps their history across reloads.
 
 ### 🩺 Care
 
-- **Activity** (`#/activity`) — the agent sessions on this machine: each one's status,
-  the files it touched and its todo progress; open one for its detail. Sessions that ended in the last 7 days are listed under
+- **Activity** (`#/activity`) — the agent sessions on this machine, from every active install
+  in one view: each one's status, the files it touched and its todo progress; open one for its
+  detail. Each card has a chip that names its install: the host, then the scope when a host has
+  two installs, then the project folder when a host has two project installs, and more of the
+  folder's path (up to the whole path) when two folders have the same name. A session that two
+  installs of one host both recorded is one card. Its chip and link name the first of those
+  installs in a fixed order (host order, then global before project), so they do not change
+  between polls. Tracking is on or off per install: the tracking
+  card has one switch per install, and each switch changes only that install. OpenCode project
+  installs have no switch: their sessions appear under, and follow, the OpenCode global switch. Sessions that ended in the last 7 days are listed under
   **Recently ended**, below the live ones. Every host records it:
   the OpenCode plugin, and `geneseed-hook activity` on Claude Code, OpenClaude and Bob.
   The live sessions open in the **Garden** by default; a **List | Garden** switch (kept in the
