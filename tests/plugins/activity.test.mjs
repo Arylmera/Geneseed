@@ -237,7 +237,8 @@ test("event hook: files from user-message summary.diffs (OpenCode 1.19 shape)", 
   const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
   const detail = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.detail.json"), "utf8"))
   try {
-    const hooks = await GeneseedActivity({ worktree: tmp })
+    fs.mkdirSync(path.join(tmp, ".git"))   // the session's directory is a checkout: paths stay relative
+    const hooks = await GeneseedActivity()
     const fire = (type, properties) => hooks.event({ event: { type, properties } })
     const user =(id, summary) => fire("message.updated", { sessionID: "s", info: {
       id, sessionID: "s", role: "user", time: { created: 1 }, agent: "build",
@@ -247,7 +248,7 @@ test("event hook: files from user-message summary.diffs (OpenCode 1.19 shape)", 
       await fire("session.updated", { info: { id: "s", title: "t", directory: "/repo", summary: { additions: 0, deletions: 0, files: 0 } } })
       await fire("session.diff", { sessionID: "s", diff: [] })
     }
-    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: tmp } })
 
     const rows = [
       // [what happens, the event, files.count, additions, deletions, [file, additions, deletions] per item]
@@ -313,10 +314,11 @@ test("event hook: session.diff is the fallback files source (OpenCode 1.3 shape)
   process.env.OPENCODE_CONFIG_DIR = tmp
   const read = () => JSON.parse(fs.readFileSync(path.join(tmp, "activity", "s.json"), "utf8"))
   try {
-    const hooks = await GeneseedActivity({ worktree: tmp })
+    fs.mkdirSync(path.join(tmp, ".git"))   // the session's directory is a checkout: paths stay relative
+    const hooks = await GeneseedActivity()
     const fire = (type, properties) => hooks.event({ event: { type, properties } })
     const item = (file, additions, deletions) => ({ file, path: file, additions, deletions, by: null })
-    await fire("session.created", { info: { id: "s", title: "t", directory: "/repo" } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: tmp } })
     await fire("session.diff", { sessionID: "s", diff: [{ file: "a.js", additions: 9, deletions: 1, patch: "x" }] })
     assert.deepEqual(read().files, { count: 1, additions: 9, deletions: 1, items: [item("a.js", 9, 1)] })
     // an empty session-wide list is the truth (every change undone), not a gap
@@ -424,17 +426,20 @@ test("chat.message + text → full conversation transcript in the detail file", 
 })
 
 // ---- snapshot v2 (the Activity garden) ----------------------------------------------
-// One sandboxed config dir per test, the plugin built with `input` (V1's factory input), and
+// One sandboxed config dir per test, the plugin built with no factory input (root/repo come
+// from each session's directory, never from it), a checkout `repo` (a directory holding `.git`) for sessions whose files must stay relative, and
 // readers for the session's card and detail file.
-async function withPlugin(prefix, input, fn) {
+async function withPlugin(prefix, fn) {
   const tmp = makeSandbox(prefix).path
   const saved = process.env.OPENCODE_CONFIG_DIR
   process.env.OPENCODE_CONFIG_DIR = tmp
   const file = (sid, ext = "json") => path.join(tmp, "activity", `${sid}.${ext}`)
+  const repo = path.join(tmp, "repo")
+  fs.mkdirSync(path.join(repo, ".git"), { recursive: true })
   try {
-    const hooks = await GeneseedActivity(input)
+    const hooks = await GeneseedActivity()
     await fn({
-      hooks,
+      hooks, repo,
       fire: (type, properties) => hooks.event({ event: { type, properties } }),
       read: (sid = "s") => JSON.parse(fs.readFileSync(file(sid), "utf8")),
       detail: (sid = "s") => JSON.parse(fs.readFileSync(file(sid, "detail.json"), "utf8")),
@@ -459,11 +464,11 @@ async function withPlugin(prefix, input, fn) {
 // session would collide with itself). A parent edit from a turn BEFORE the launch stays the
 // parent's. Turn order is the message id order (OpenCode ids ascend).
 test("event hook: a child session is a sub-agent of its parent, with its own files", async () => {
-  await withPlugin("gs-act-child-", { worktree: "/w" }, async ({ fire, read, detail, exists }) => {
+  await withPlugin("gs-act-child-",async ({ repo, fire, read, detail, exists }) => {
     const user = (sid, id, diffs) => fire("message.updated", { info: { id, sessionID: sid, role: "user", summary: { diffs } } })
     const diff = (file, additions, deletions) => ({ file, additions, deletions, patch: "@@" })
     const item = (p, a, d, by) => ({ file: path.posix.basename(p), path: p, additions: a, deletions: d, by })
-    await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+    await fire("session.created", { info: { id: "s", title: "t", directory: repo } })
     const rows = [
       // [what happens, the act, agents as [id, type, status], files.items (null: unchanged)]
       ["the parent alone: no agents yet", async () => {}, [], undefined],
@@ -525,7 +530,7 @@ test("event hook: a child session is a sub-agent of its parent, with its own fil
 // A prompt made only of synthetic parts is not the user's: a background `task` hands its
 // result back that way (TaskTool.injectBackgroundResult).
 test("event hook: turns count the distinct user prompts", async () => {
-  await withPlugin("gs-act-turns-", { worktree: "/w" }, async ({ hooks, fire, read }) => {
+  await withPlugin("gs-act-turns-",async ({ hooks, fire, read }) => {
     const prompt = (sid, messageID) => hooks["chat.message"]({ sessionID: sid, messageID }, { parts: [{ type: "text", text: "go" }] })
     await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
     await fire("session.created", { info: { id: "c", parentID: "s", directory: "/w" } })
@@ -551,7 +556,7 @@ test("event hook: turns count the distinct user prompts", async () => {
 // three for its own context figure). The window is not on the event, so it is the contract's
 // estimate: 200 000, or 1 000 000 once more than 200 000 are used.
 test("event hook: context is the last assistant message's input + cache tokens", async () => {
-  await withPlugin("gs-act-ctx-", { worktree: "/w" }, async ({ fire, read }) => {
+  await withPlugin("gs-act-ctx-",async ({ fire, read }) => {
     const reply = (sid, id, input, cacheRead, cacheWrite, extra = {}) => fire("message.updated", { info: {
       role: "assistant", id, sessionID: sid, mode: "build", ...extra,
       tokens: { input, output: 999, reasoning: 0, cache: { read: cacheRead, write: cacheWrite } } } })
@@ -574,7 +579,7 @@ test("event hook: context is the last assistant message's input + cache tokens",
 // assistant message, so it is null. It changes no status: a compaction runs inside a busy
 // turn, and must not show the session as idle.
 test("event hook: a compaction is counted and keeps the context it cut", async () => {
-  await withPlugin("gs-act-compact-", { worktree: "/w" }, async ({ fire, read }) => {
+  await withPlugin("gs-act-compact-",async ({ fire, read }) => {
     await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
     let e = read()
     assert.deepEqual([e.compactions, e.compacted_at, e.context_at_compaction], [0, null, null])
@@ -596,13 +601,14 @@ test("event hook: a compaction is counted and keeps the context it cut", async (
   })
 })
 
-// `root` is OpenCode's own `worktree` input (v1.19.4: the top level of the opened directory's
-// checkout, so a linked worktree is its own root; "/" for a project outside a repository).
-// `repo` is the main checkout, read the way js/hosts/gitref.mjs mainWorktreeOf reads it, and
-// the root itself on a main checkout. Pinned against gitref on a fixture tree: a main repo and
-// a linked worktree whose `.git` FILE names `<main>/.git/worktrees/wt`. On Windows the
-// worktree arrives with forward slashes, so that is the form fed in.
-test("root/repo: OpenCode's worktree, and the main checkout as js/hosts/gitref.mjs finds them", async () => {
+// `root` is the top level of the checkout holding the session's own `directory` (a linked
+// worktree is its own root; none for a directory outside a repository, "/" included). The
+// plugin's factory input is not read for it. `repo` is the main checkout, read the way
+// js/hosts/gitref.mjs mainWorktreeOf reads it, and the root itself on a main checkout. Pinned
+// against gitref on a fixture tree: a main repo and a linked worktree whose `.git` FILE names
+// `<main>/.git/worktrees/wt`. On Windows the directory may arrive with forward slashes, so that
+// is the form fed in.
+test("root/repo: the session directory's checkout, and the main checkout as js/hosts/gitref.mjs finds them", async () => {
   const { gitRootOf, mainWorktreeOf } = await import("../../js/hosts/gitref.mjs")
   const box = makeSandbox("gs-act-root-").path
   try {
@@ -614,41 +620,121 @@ test("root/repo: OpenCode's worktree, and the main checkout as js/hosts/gitref.m
     const slash = (p) => p.replace(/\\/g, "/")
     assert.equal(mainWorktreeOf(sub), main)    // the fixture is a real linked worktree to gitref
     const rows = [
-      // [what, worktree input, root, repo]
-      ["a linked worktree", slash(wt), gitRootOf(sub), mainWorktreeOf(sub)],
+      // [what, session directory, root, repo]
+      ["a subdirectory of a linked worktree", slash(sub), gitRootOf(sub), mainWorktreeOf(sub)],
       ["the main checkout is its own repo", slash(main), gitRootOf(main), gitRootOf(main)],
-      ["outside a repository OpenCode passes '/'", "/", null, null],
+      ["the filesystem root is no repo", "/", null, null],
       ["the drive root is no repo either", path.parse(box).root, null, null],
-      ["no input at all", undefined, null, null],
+      ["no directory at all", undefined, null, null],
     ]
-    for (const [what, worktree, root, repo] of rows) {
-      await withPlugin("gs-act-root-run-", worktree === undefined ? undefined : { worktree }, async ({ fire, read }) => {
-        await fire("session.created", { info: { id: "s", title: "t", directory: worktree } })
+    for (const [what, directory, root, repo] of rows) {
+      await withPlugin("gs-act-root-run-",async ({ fire, read }) => {
+        await fire("session.created", { info: { id: "s", title: "t", directory } })
         assert.deepEqual([read().root, read().repo], [root, repo], what)
       })
     }
   } finally { fs.rmSync(box, { recursive: true, force: true }) }
 })
 
+// One `opencode serve` process hosts a plugin instance per opened project, and every instance
+// hears every session's events and writes the same card. So `root`/`repo` (and the files'
+// `path`) come from the session's own directory, never from the instance that happens to write:
+// a live macOS install showed a ~/dev-home session on the "Geneseed" shelf, and a card flapping
+// between two roots as instances took turns writing it. Fixture: two repositories, A and B,
+// and dev-home outside any repository; one V1 instance opened on each repository. Every card is
+// read after EACH instance has written it. A session in a subdirectory of B is B's from both;
+// one in dev-home has no root, so its file's `path` is null; two sessions of B editing one
+// file carry the same `{repo, path}` (the key /api/activity groups collisions on). The same
+// holds for OpenCode 2 (`setup`), whose instance directory is A or B.
+test("root/repo: each session's own checkout, whichever instance of a shared service writes it", async () => {
+  const { gitRootOf } = await import("../../js/hosts/gitref.mjs")
+  const box = makeSandbox("gs-act-svc-").path
+  const saved = process.env.OPENCODE_CONFIG_DIR
+  process.env.OPENCODE_CONFIG_DIR = path.join(box, "config")
+  const card = (sid) => JSON.parse(fs.readFileSync(path.join(box, "config", "activity", `${sid}.json`), "utf8"))
+  try {
+    const a = path.join(box, "zmal-ap50"), b = path.join(box, "dbal-ap75"), home = path.join(box, "dev-home")
+    for (const r of [a, b]) fs.mkdirSync(path.join(r, ".git"), { recursive: true })
+    fs.mkdirSync(path.join(b, "src"), { recursive: true })
+    fs.mkdirSync(home, { recursive: true })
+    assert.equal(gitRootOf(home), null, "fixture: dev-home must sit outside any repository")
+    const slash = (p) => p.replace(/\\/g, "/")
+    const instances = [await GeneseedActivity({ worktree: slash(a) }), await GeneseedActivity({ worktree: slash(b) })]
+    // [root, repo, files' paths] of the card after each instance has handled the event
+    const each = async (sid, type, properties) => {
+      const seen = []
+      for (const h of instances) {
+        await h.event({ event: { type, properties } })
+        const e = card(sid)
+        seen.push([e.root, e.repo, e.files ? e.files.items.map((f) => f.path) : null])
+      }
+      return seen
+    }
+    const edit = (sid, id, file) => each(sid, "message.updated", { info: { id, sessionID: sid, role: "user",
+      summary: { diffs: [{ file, additions: 1, deletions: 0 }] } } })
+    const rows = [
+      // [what, act, [root, repo, paths] after instance A wrote, then after instance B wrote]
+      ["a session in B's subdirectory is B's",
+        () => each("sb", "session.created", { info: { id: "sb", title: "t", directory: path.join(b, "src") } }),
+        [[b, b, null], [b, b, null]]],
+      ["its file stays relative to B", () => edit("sb", "u1", "src/x.js"), [[b, b, ["src/x.js"]], [b, b, ["src/x.js"]]]],
+      ["a session update does not move it", () => each("sb", "session.updated", { info: { id: "sb", title: "t2", directory: path.join(b, "src") } }),
+        [[b, b, ["src/x.js"]], [b, b, ["src/x.js"]]]],
+      ["a session in dev-home has no root",
+        () => each("sh", "session.created", { info: { id: "sh", title: "t", directory: home } }), [[null, null, null], [null, null, null]]],
+      ["so its file has no repo-relative path", () => edit("sh", "u2", "notes.md"), [[null, null, [null]], [null, null, [null]]]],
+      ["a second session of B", () => each("sb2", "session.created", { info: { id: "sb2", title: "t", directory: b } }),
+        [[b, b, null], [b, b, null]]],
+      ["editing B's file: the same {repo, path} as the first, so the two collide",
+        () => edit("sb2", "u3", "src/x.js"), [[b, b, ["src/x.js"]], [b, b, ["src/x.js"]]]],
+    ]
+    for (const [what, act, want] of rows) assert.deepEqual(await act(), want, what)
+
+    // OpenCode 2: one instance per directory, every one hearing the same stream
+    const v2 = (await import("../../adapters/opencode/plugins/geneseed-activity.js")).default
+    const stream = [
+      { type: "session.created", created: 1, data: { sessionID: "vb", title: "t", location: { directory: path.join(b, "src") } } },
+      { type: "session.created", created: 1, data: { sessionID: "vh", title: "t", location: { directory: home } } },
+    ]
+    const ctx = (directory) => ({ location: { directory, project: { directory } },
+      session: { hook: async () => ({ dispose: async () => {} }) },
+      event: { subscribe: () => (async function* () { yield* stream })() } })
+    const at = path.join(box, "config", "activity")
+    for (const dir of [a, b]) {
+      for (const s of ["vb", "vh"]) fs.rmSync(path.join(at, `${s}.json`), { force: true })   // each instance's own write
+      await v2.setup(ctx(dir))
+      for (const end = Date.now() + 5000; !["vb", "vh"].every((s) => fs.existsSync(path.join(at, `${s}.json`))) && Date.now() < end;)
+        await new Promise((r) => setTimeout(r, 30))
+      await new Promise((r) => setTimeout(r, 30))
+      assert.deepEqual([card("vb").root, card("vb").repo], [b, b], `V2 instance in ${path.basename(dir)}: a session of B`)
+      assert.deepEqual([card("vh").root, card("vh").repo], [null, null], `V2 instance in ${path.basename(dir)}: a dev-home session`)
+    }
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR
+    else process.env.OPENCODE_CONFIG_DIR = saved
+    fs.rmSync(box, { recursive: true, force: true })
+  }
+})
+
 // A file whose path cannot be stored relative to the root has `path: null` and only its
 // basename in `file` (never an absolute path, and never a basename in `path`, where it would
-// collide with a same-named file at the top of the repository). With no root at all every
-// path is null. Such rows still merge on OpenCode's own raw path, so two files of one name
-// stay two rows.
+// collide with a same-named file at the top of the repository). With no root at all (a session
+// directory outside any repository) every path is null. Such rows still merge on OpenCode's own
+// raw path, so two files of one name stay two rows.
 test("event hook: a path outside the root, or with no root, is null", async () => {
-  for (const [what, input, raws, want] of [
-    // [what, factory input, raw FileDiff files, [file, path] per item]
-    ["inside the root", { worktree: "/w" }, ["src/a.js"], [["a.js", "src/a.js"]]],
-    ["a '../' path", { worktree: "/w" }, ["../other/b.js"], [["b.js", null]]],
-    ["an absolute path", { worktree: "/w" }, ["/etc/c.conf"], [["c.conf", null]]],
-    ["a drive path", { worktree: "/w" }, ["C:\\x\\c.conf"], [["c.conf", null]]],
-    ["a UNC path", { worktree: "/w" }, ["\\\\srv\\share\\c.conf"], [["c.conf", null]]],
-    ["backslashes become '/'", { worktree: "/w" }, ["src\\d.js"], [["d.js", "src/d.js"]]],
-    ["no root", undefined, ["src/e.js"], [["e.js", null]]],
-    ["no root: two files of one name stay two rows", undefined, ["src/a.js", "lib/a.js"], [["a.js", null], ["a.js", null]]],
+  for (const [what, inRepo, raws, want] of [
+    // [what, session directory in a checkout, raw FileDiff files, [file, path] per item]
+    ["inside the root", true, ["src/a.js"], [["a.js", "src/a.js"]]],
+    ["a '../' path", true, ["../other/b.js"], [["b.js", null]]],
+    ["an absolute path", true, ["/etc/c.conf"], [["c.conf", null]]],
+    ["a drive path", true, ["C:\\x\\c.conf"], [["c.conf", null]]],
+    ["a UNC path", true, ["\\\\srv\\share\\c.conf"], [["c.conf", null]]],
+    ["backslashes become '/'", true, ["src\\d.js"], [["d.js", "src/d.js"]]],
+    ["no root", false, ["src/e.js"], [["e.js", null]]],
+    ["no root: two files of one name stay two rows", false, ["src/a.js", "lib/a.js"], [["a.js", null], ["a.js", null]]],
   ]) {
-    await withPlugin("gs-act-rel-", input, async ({ fire, read }) => {
-      await fire("session.created", { info: { id: "s", title: "t", directory: "/w" } })
+    await withPlugin("gs-act-rel-",async ({ repo, fire, read }) => {
+      await fire("session.created", { info: { id: "s", title: "t", directory: inRepo ? repo : "/" } })
       await fire("message.updated", { info: { id: "u", sessionID: "s", role: "user", summary: { diffs: raws.map((file) => ({ file, additions: 1, deletions: 0 })) } } })
       assert.deepEqual(read().files.items.map((f) => [f.file, f.path]), want, what)
     })

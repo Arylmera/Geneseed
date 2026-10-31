@@ -30,7 +30,7 @@ Every hook above also feeds the [Activity view](../reference/plugin-activity.md)
 
 What that file holds for the Activity garden:
 - **Files.** Each changed file is stored relative to the session's git root, with `/` separators. A file outside the root, or a session outside any repo, gets no path (`path: null`) and keeps only its basename, so it never matches a file of the same name inside the repo. A path is never stored absolute. Each file also records who changed it: the session, or the subagent's `agent_id`.
-- **Where the session runs.** `root` is the worktree's git root and `repo` is the main repository's root, so the linked worktrees of one repo can be grouped together. Only the session's own events set them; a subagent working in another worktree does not move them.
+- **Where the session runs.** `root` is the git root of the checkout holding the session's own directory and `repo` is that checkout's main repository root, so the linked worktrees of one repo can be grouped together. Only the session's own events set them; a subagent working in another worktree does not move them.
 - **Subagents.** `agents` lists each subagent with its type and `running` or `done`.
 - **Turns and context.** `turns` counts your prompts. `context` is the size of the context now, taken from the transcript's last assistant message. The window size is an estimate: 200k, or 1M once the context is past 200k.
 - **Compactions.** `compactions`, `compacted_at` and `context_at_compaction` record each compaction (on `PreCompact`). After a compaction, `context` is unknown (`null`) until the next `Stop` reads it again. Claude Code's `<synthetic>` messages and messages with no input-side tokens never change it.

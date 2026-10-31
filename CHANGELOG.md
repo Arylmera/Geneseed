@@ -12,6 +12,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 - **The learn-mode and ownership state files stay short.** `.geneseed/ownership.md` and `.geneseed/learn.md` lose `## Pending`: the open checkpoint lives in the conversation, nothing is written per checkpoint, and after a restart or compaction the agent re-asks any step the visible conversation did not approve. The dated `## Decisions` log becomes `## Preferences`: general rules ("show the test first"), rewritten in place, about 10 lines at most, proposed only when the user states a rule generally or makes the same choice a third time in a session, and always asked. In ownership, a rule about the code is proposed as a one-line `AGENTS.md` convention instead. learn-mode's `## Understood` becomes one line per topic with a `not yet:` part, about 15 lines at most. An old-format file is condensed only on the user's yes.
 
+### Fixed
+- **OpenCode activity cards land on their own repo shelf.** The activity plugin took `root`
+  and `repo` from its plugin instance's worktree. One `opencode serve` hosts an instance per
+  opened project, and every instance hears every session, so each stamped its own root on
+  all of them: a session in `~/dev-home` showed under another project, a card flipped between
+  roots, and files lost their repo-relative paths and dropped out of collision grouping. Both
+  OpenCode 1 and 2 now read the root from the session's own directory (`null` outside any
+  repository).
+
 ## [4.29.0] — 2026-10-29
 
 Minor: the done gate works with no file (inferred checks, advisory in this release) and no longer passes a masked check; a project install arms the protected-checks gate; the gates protect their own configuration; ownership can be declined per repo; two new skills (`adhd`, `diagram-design`). Run `geneseed rebuild-all` once after updating to seed `protected-checks.txt` in existing project installs and to pick up the new gate configuration.
