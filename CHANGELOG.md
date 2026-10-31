@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.30.0] — 2026-10-31
+
+Minor: the ownership and learn-mode state files stay short (general preferences, no per-checkpoint writes), and OpenCode activity cards land on their own repo shelf. Run `geneseed rebuild-all` once after updating to get the new Rite text.
+
 ### Changed
 
 - **The learn-mode and ownership state files stay short.** `.geneseed/ownership.md` and `.geneseed/learn.md` lose `## Pending`: the open checkpoint lives in the conversation, nothing is written per checkpoint, and after a restart or compaction the agent re-asks any step the visible conversation did not approve. The dated `## Decisions` log becomes `## Preferences`: general rules ("show the test first"), rewritten in place, about 10 lines at most, proposed only when the user states a rule generally or makes the same choice a third time in a session, and always asked. In ownership, a rule about the code is proposed as a one-line `AGENTS.md` convention instead. learn-mode's `## Understood` becomes one line per topic with a `not yet:` part, about 15 lines at most. An old-format file is condensed only on the user's yes.
