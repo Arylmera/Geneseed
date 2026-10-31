@@ -31,6 +31,21 @@ export function viewCfg(host, scope, root) {
 }
 
 /**
+ * The console's ONE install order, for every fleet-wide answer (the Library's lists, the Activity
+ * garden): host order (`HOSTS`), then global before project, then the input's own order — the
+ * sort is stable. `of(item)` gives `[host, scope]`. Sorts `list` in place and returns it. Here
+ * beside `viewCfg`, the other per-install rule both callers use, because `activity.mjs` and
+ * `routes.mjs` both import this module and it imports neither.
+ */
+export function fleetSort(list, of) {
+  const rank = (it) => {
+    const [host, scope] = of(it);
+    return HOSTS.findIndex((h) => h.host === host) * 2 + (scope === 'global' ? 0 : 1);
+  };
+  return list.sort((a, b) => rank(a) - rank(b));
+}
+
+/**
  * `[target, root]` for the install the console should show when nothing picked one, or null
  * when the current target is already deployed or nothing is.
  *

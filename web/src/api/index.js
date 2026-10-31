@@ -76,7 +76,9 @@ const themes = (install) => getIn('/api/themes', install)
 
 // ── Catalog ─────────────────────────────────────────────────────────────────
 // Library browsing: list a section's items, read one rendered item, or delete a
-// memory fact (which also drops it from the MEMORY.md index server-side).
+// memory fact (which also drops it from the MEMORY.md index server-side). The skills and
+// agents lists cover every install and ignore `install`; an item is the named install's
+// copy, else the first install's.
 
 const catalog = (section, install) => getIn(`/api/catalog/${section}`, install)
 const item = (type, name, install) =>

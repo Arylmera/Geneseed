@@ -63,7 +63,7 @@ import { pathToFileURL } from 'node:url';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import {
-  MACHINE_GETS, POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES, VIEW_POSTS,
+  MACHINE_GETS, POST_ROUTES, POST_ROUTES_CONVENTION, PREFIX_ROUTES, STATE_ROUTES, VIEW_POSTS,
 } from '../../js/web/routes.mjs';
 import { recordLoop, registryPath } from '../../js/loop/registry.mjs';
 import { initState, renderLoopFile } from '../../js/loop/state.mjs';
@@ -1983,7 +1983,8 @@ test('an unknown or half (host, path) pair is refused with 404', async () => {
       { host: 'nope', path: clPair.path }, { host: 'claude' }, { path: clPair.path },
       { host: '', path: '' }]) {
       assert.equal((await get('/api/setup', p)).status, 404, `GET ${JSON.stringify(p)} was answered`);
-      assert.equal((await get('/api/catalog/skills', p)).status, 404, `catalog ${JSON.stringify(p)}`);
+      // A per-install section; the skills and agents lists are machine-wide and ignore the pair.
+      assert.equal((await get('/api/catalog/memory', p)).status, 404, `catalog ${JSON.stringify(p)}`);
     }
     const res = await post('/api/profile', { host: 'claude', path: '/no/such/root',
       fingerprint: '', text: 'x' });
@@ -2115,10 +2116,15 @@ test('an install no longer detected is refused even when its view is cached', as
   });
 });
 
-// The machine-wide reads IGNORE a pair: neither checked nor used, and no view is made, so
-// `/api/update`'s check and its `.git`-lock guard stay on the daemon state alone.
+// The machine-wide reads IGNORE a pair: neither checked nor used, so `/api/update`'s check and its
+// `.git`-lock guard stay on the daemon state alone. The routes probed below make no view; the
+// Library's `/api/catalog/skills|agents` do (one per active install, on the daemon state, never
+// from the pair), so they are not probed here — `web_library_fleet.test.mjs` covers them. Each
+// is a GET route: a table route, or a prefix route's path.
 test('the machine-wide reads ignore a named install', async () => {
-  for (const r of MACHINE_GETS) assert.ok(r in STATE_ROUTES, `${r} is not a GET route`);
+  for (const r of MACHINE_GETS) {
+    assert.ok(r in STATE_ROUTES || PREFIX_ROUTES.some(([p]) => r.startsWith(p)), `${r} is not a GET route`);
+  }
   for (const r of VIEW_POSTS) {
     const key = r.startsWith('/api/actions/') ? null : r;
     if (key) assert.ok(POST_ROUTES.has(key), `${r} is not a POST route`);

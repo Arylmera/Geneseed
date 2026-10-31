@@ -67,9 +67,22 @@ and the `restore` and `build` actions. In `/api/view`, `/api/install`, the `inst
 Every `/api/*` read takes and checks the pair, with these exceptions:
 - `/api/ping` and `/api/jobs` ignore it.
 - The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`,
-  `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active` and
-  `/api/activity`. Such a read does not check the pair, and its answer does not change with the pair.
-  The Activity detail (`/api/activity/<id>`) and the Activity toggle still take the pair.
+  `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active`,
+  `/api/activity`, and the Library's skill and agent lists, `/api/catalog/skills` and
+  `/api/catalog/agents`. Such a read does not check the pair, and its answer does not change
+  with the pair. The Activity detail (`/api/activity/<id>`) and the Activity toggle still take
+  the pair.
+
+The skill and agent lists read every active install. Each row is one id (kind and name), and
+its `installs` field names the installs that have it, as `host:scope:root` keys (the same keys
+as `/api/usage`). An id that only some installs have lists only those installs, so an exclusion
+stays visible. The other catalog sections stay install-scoped. `/api/item/skill/<name>` and
+`/api/item/agent/<name>` stay install-scoped too, because each install renders its own copy in
+its own theme and footprint. With a pair, the item is that install's copy, and an id that
+install lacks gets a 404. Without a pair, the item is the copy of the first install that has
+it. The order is the host order (OpenCode, Claude Code, Bob, OpenClaude), then global before
+project. The item's `install` field names the copy, and its `installs` field names every
+install that has the id.
 
 A request that names no install reads the install the topbar picker selected (`POST /api/view`).
 Each named install keeps its own cached doctor run and inventory, and a mutation refreshes all
@@ -189,8 +202,12 @@ streams the output of background jobs and keeps their history across reloads.
   how you like to work. Opens rendered; **Edit** is a whole-file editor. The save carries
   the fingerprint it loaded — if an agent session changed the file first, your edit stays
   on screen and a second Save replaces the newer version.
-- **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue, each entry
-  with its purpose line and full spec. While Skills is selected, its skill types sit nested
+- **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue of every
+  installed harness, each entry with its purpose line and full spec. Each row is one skill or
+  agent; when more than one install is active, it carries a badge for each install that has it
+  (`opencode · global`; a project install by its folder). The reader shows the first install's copy. When more installs have the entry,
+  a **Viewing copy from** picker beside the copy opens another install's version, for that
+  entry only. While Skills is selected, its skill types sit nested
   under it in the rail, each with its count, above a thin bar of their shares; pick one to
   narrow the list.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
