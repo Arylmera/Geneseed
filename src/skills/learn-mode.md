@@ -27,21 +27,19 @@ Level: beginner | intermediate | advanced
 Checkpoints: light | normal | frequent
 Focus: <optional, e.g. backend architecture>
 
-## Pending
-<the one checkpoint awaiting the user's answer, or "none">
-
-## Decisions
-- <date> <design the user confirmed, in their terms, with their reason>
+## Preferences
+- <how the user wants to learn, as a rule: "a diagram before the code">
 
 ## Understood
-- <concepts the user has shown, by reasoning, not by having heard them>
+- <topic> — <what they showed by reasoning>; not yet: <what they have not>
 ```
 
 <!-- INCLUDE: skills/_checkpoints.md -->
 
 ## Procedure
 1. **Activate or resume.** If `.geneseed/learn.md` exists, read it whole; set `Learning
-   mode: active` if it was paused, and resume any `Pending` checkpoint before anything else.
+   mode: active` if it was paused, and re-ask any step not approved in the visible conversation
+   before anything else.
    If it does not exist, ask — one question at a time, multiple-choice where the host has a
    structured-question tool — the level and the checkpoint cadence ("use defaults" =
    intermediate, normal), then write the file. In an existing repo, read the code first and
@@ -58,8 +56,8 @@ Focus: <optional, e.g. backend architecture>
 4. **Checkpoints**, each under a divider and a bold heading `✦ <Type>: <topic>`:
    - **Build checkpoint** — an open reasoning question; they answer in their own words.
    - **Design checkpoint** — restate the design they chose in two or three sentences
-     with its cost; offer **Confirm and continue** / **Discuss**. Confirming records it under
-     `Decisions`; no code yet.
+     with its cost; offer **Confirm and continue** / **Discuss**. A confirmed design stays in
+     the conversation; no code yet.
    - **Implementation checkpoint** — name exactly what you will change and how you will
      check it; offer **Implement this step** / **Discuss**. Write code only after that
      answer. It may confirm the design too, skipping a separate Design checkpoint.
@@ -69,7 +67,9 @@ Focus: <optional, e.g. backend architecture>
 5. **Implementation report.** After coding: what changed and where, how the key piece
    works, why it fits their decision, which tests you added and which checks you actually
    ran with their result. Say when a check was not run. Then update `Understood` with what
-   they demonstrated by reasoning, not with what you explained.
+   they demonstrated by reasoning, not with what you explained: one line per topic, rewritten
+   and merged, never appended (`SQL — joins, indexes, N+1; not yet: transactions`). Keep it to
+   about 15 lines; at the cap, fold narrow topics into broad ones.
 6. **Pace to the level.** Beginner — explain unfamiliar pieces, small diagrams, smaller
    questions. Intermediate — less introduction, more interactions and trade-offs.
    Advanced — hard constraints, failure modes, design assumptions. Cadence: light = major
@@ -79,7 +79,7 @@ Focus: <optional, e.g. backend architecture>
 
 ## Done when
 - `.geneseed/learn.md` reflects the current mode, level and cadence; every design decision
-  of the session was the user's, made after any proposal was explained, and is recorded; no
+  of the session was the user's, made after any proposal was explained; no
   code was written without an Implementation checkpoint answered; and each implemented step
   got its report.
 
