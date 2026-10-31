@@ -74,6 +74,10 @@ export function stampMinute(ms) {
  * the hook shim, the hook shell, the OpenCode config dirs, the deployed install): a memory
  * delete passes `{ doctor: false }` and keeps the ~3.6 s verdict. Rule and profile writes do not
  * call `refresh()` at all. Every other caller keeps the default, so a new one is slow, never stale.
+ *
+ * A request may name another install (`installView` in actions.mjs): that one gets its OWN
+ * state, made by this factory, cached in `_views` and `pinned`, so the caching above holds per
+ * install. `refresh()` on the daemon's state reaches every view.
  */
 export function webState(theme = null, target = null) {
   const st = {
@@ -96,6 +100,12 @@ export function webState(theme = null, target = null) {
     // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
     // it re-renders on its own key change, so `refresh()` leaves it alone.
     renderMemo: null,
+    // True for a per-install view (`installView` in actions.mjs): `refresh` must never re-point
+    // it at another install, since the request named THIS one.
+    pinned: false,
+    // The per-install views made off this daemon's state, keyed `[host, root]` — see
+    // `installView`. Kept here, not at module level, so each handler (each test's) has its own.
+    _views: new Map(),
   };
   // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob/openclaude
   // PROJECT install keeps its data under <repo>/.claude|.bob|.openclaude while the markers
@@ -183,11 +193,13 @@ export function webState(theme = null, target = null) {
     st._inv = null;
     st._doctor = null;
   };
-  st.refresh = ({ doctor = true } = {}) => {
+  /** This state alone. `refresh` below is what callers use: it also reaches every view. */
+  st.refreshOwn = ({ doctor = true } = {}) => {
     // A job may have deployed the first install while the view still points at an empty
     // default (the onboarding Build), or removed the one in view: follow it to one that exists.
     // Only on a full refresh: `{ doctor: false }` marks a mutation that cannot change installs.
-    const fallback = doctor ? fallbackView(st.target) : null;
+    // Never for a pinned view: it answers for the install its request named, or is refused.
+    const fallback = doctor && !st.pinned ? fallbackView(st.target) : null;
     if (fallback) { st.selectView(...fallback); return; }
     st._inv = null;
     if (doctor) st._doctor = null;
@@ -195,6 +207,14 @@ export function webState(theme = null, target = null) {
     const host = hostOf();
     st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || st.theme;
     readMarkers(host);
+  };
+  /**
+   * After a mutation, this state AND every per-install view made off it: a job or a write
+   * through one view can change what any other one reads (the same install, seen twice).
+   */
+  st.refresh = (opts = {}) => {
+    st.refreshOwn(opts);
+    for (const v of st._views.values()) v.refreshOwn(opts);
   };
   return st;
 }

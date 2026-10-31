@@ -6,12 +6,51 @@
 // sections instead of files.
 import { get, post } from './http.js'
 
+// ── The install a call reads ────────────────────────────────────────────────
+// Every install-scoped call takes an optional trailing `install` ({ host, path }, a row of
+// /api/installs or /api/fleet). Reads send it as `?host=&path=` (two params: a Windows path
+// holds a colon), writes as `host`/`path` in the body. Omitted, the server answers for the
+// install the topbar selector picked. An unknown pair is a 404, never another install's data.
+
+// True for a whole pair, false for none (null/undefined). A HALF or malformed pair throws, as
+// the server refuses it: dropped silently, a write would land on the topbar's install.
+const named = (install) => {
+  if (install == null) return false
+  if (typeof install.host === 'string' && typeof install.path === 'string') return true
+  throw new Error('an install needs both host and path')
+}
+// `url` plus the install's params, merged into any query the url already carries.
+const withInstall = (url, install) => {
+  if (!named(install)) return url
+  const q = new URLSearchParams({ host: install.host, path: install.path })
+  return `${url}${url.includes('?') ? '&' : '?'}${q}`
+}
+// `body` plus the install's `host`/`path`. A body that already carries either key keeps it
+// meaning something else, so naming an install there is a caller bug, not a silent overwrite.
+const bodyFor = (body, install) => {
+  const b = body ?? {}
+  if (!named(install)) return b
+  if ('host' in b || 'path' in b) throw new Error('this body already has host or path')
+  return { ...b, host: install.host, path: install.path }
+}
+// The two the endpoints call. A bad install REJECTS, like any failed request, never throws
+// synchronously: a caller's `.catch` or `await` sees it the same way.
+const settle = (fn) => {
+  try {
+    return fn()
+  } catch (e) {
+    return Promise.reject(e)
+  }
+}
+const getIn = (url, install) => settle(() => get(withInstall(url, install)))
+const postIn = (url, body, install) => settle(() => post(url, bodyFor(body, install)))
+
 // ── Status ──────────────────────────────────────────────────────────────────
 // Read-only status surface: the dashboards' overview, the install snapshot,
 // doctor results, and the theme/voice catalogue. (Plus the one live-activity
 // mutation — flipping its on/off toggle.)
 
-const overview = () => get('/api/overview')
+const overview = (install) => getIn('/api/overview', install)
 // The Ledger Overview's four reads: every installed harness (sync, drift, always-on cost), skill
 // and agent calls over 30 days, gate asks per rule per day, and whether a newer release exists.
 const fleet = () => get('/api/fleet')
@@ -23,30 +62,32 @@ const update = () => get('/api/update')
 // The newest file-backed entries across the harness. Its own endpoint rather than a field on
 // the overview: it stats every candidate file, which the overview (fetched on every mutation)
 // has no business paying for.
-const recent = () => get('/api/recent')
-const activity = () => get('/api/activity')
-const activityDetail = (sid) => get('/api/activity/' + encodeURIComponent(sid))
-const activityToggle = (enabled) => post('/api/activity', { enabled })
-const setup = () => get('/api/setup')
+const recent = (install) => getIn('/api/recent', install)
+const activity = (install) => getIn('/api/activity', install)
+const activityDetail = (sid, install) => getIn('/api/activity/' + encodeURIComponent(sid), install)
+const activityToggle = (enabled, install) => postIn('/api/activity', { enabled }, install)
+const setup = (install) => getIn('/api/setup', install)
 // Served from the daemon's cached run; `fresh` (the Doctor page's Re-run) runs every check again.
-const doctor = (fresh = false) => get(fresh ? '/api/doctor?fresh=1' : '/api/doctor')
-const themes = () => get('/api/themes')
+const doctor = (fresh = false, install) =>
+  getIn(fresh ? '/api/doctor?fresh=1' : '/api/doctor', install)
+const themes = (install) => getIn('/api/themes', install)
 
 // ── Catalog ─────────────────────────────────────────────────────────────────
 // Library browsing: list a section's items, read one rendered item, or delete a
 // memory fact (which also drops it from the MEMORY.md index server-side).
 
-const catalog = (section) => get(`/api/catalog/${section}`)
-const item = (type, name) => get(`/api/item/${type}/${encodeURIComponent(name)}`)
-const memoryDelete = (name) => post('/api/memory/delete', { name })
+const catalog = (section, install) => getIn(`/api/catalog/${section}`, install)
+const item = (type, name, install) =>
+  getIn(`/api/item/${type}/${encodeURIComponent(name)}`, install)
+const memoryDelete = (name, install) => postIn('/api/memory/delete', { name }, install)
 
 // ── Diff ────────────────────────────────────────────────────────────────────
 // Drift from source: read the deployed-vs-source diff, and restore (discard
 // local edits for) selected files. Restore is synchronous — it returns
 // { restored, deleted, errors }, not a job id.
 
-const diff = () => get('/api/diff')
-const restore = (files) => post('/api/actions/restore', { files })
+const diff = (install) => getIn('/api/diff', install)
+const restore = (files, install) => postIn('/api/actions/restore', { files }, install)
 
 // ── Jobs ────────────────────────────────────────────────────────────────────
 // Long-running actions and their job lifecycle. `action` kicks off a named
@@ -59,9 +100,16 @@ const job = (id) => get(`/api/jobs/${id}`)
 const jobs = () => get('/api/jobs')
 const cancelJob = (id) => post(`/api/jobs/${id}/cancel`)
 
-async function action(name, opts) {
+// `install` is merged for `build` and `restore` only, the two actions the server reads it on.
+// The others ignore it, and `install`/`deploy` read `host`/`path` as their own target, so it is
+// never added to their body.
+const ACTIONS_WITH_INSTALL = new Set(['build', 'restore'])
+
+async function action(name, opts, install) {
+  const body = opts || {}
+  const url = `/api/actions/${name}`
   try {
-    return await post(`/api/actions/${name}`, opts || {})
+    return await (ACTIONS_WITH_INSTALL.has(name) ? postIn(url, body, install) : post(url, body))
   } catch (e) {
     // Only startJob's `busy` is the single-flight case; install refusals are 409 too and keep their text.
     if (e.status === HTTP_CONFLICT && e.body?.error === 'busy')
@@ -74,7 +122,7 @@ async function action(name, opts) {
 // The loop catalogue, read-only: templates (each with its graph), bricks (with their
 // source body), and which project or global brick overrides a shipped one.
 
-const loops = () => get('/api/loops')
+const loops = (install) => getIn('/api/loops', install)
 // The Active tab: every loop `geneseed loop init` registered, its LOOP.md re-read per call;
 // and the one write the page makes, a loop's preset (404 on an unknown root or preset).
 const activeLoops = () => get('/api/loops/active')
@@ -130,8 +178,9 @@ const restart = () => post('/api/restart')
 // uses the installed default.
 const hq = (harness) => (harness ? `?harness=${encodeURIComponent(harness)}` : '')
 
-const docs = (harness) => get(`/api/docs${hq(harness)}`)
-const docsPage = (id, harness) => get(`/api/docs/page/${encodeURIComponent(id)}${hq(harness)}`)
+const docs = (harness, install) => getIn(`/api/docs${hq(harness)}`, install)
+const docsPage = (id, harness, install) =>
+  getIn(`/api/docs/page/${encodeURIComponent(id)}${hq(harness)}`, install)
 
 // ── Rules ───────────────────────────────────────────────────────────────────
 // User rules (user-rules.md) — the Rules page. Reads return the parsed rules,
@@ -139,9 +188,9 @@ const docsPage = (id, harness) => get(`/api/docs/page/${encodeURIComponent(id)}$
 // fingerprint back and gets a 409 when the file changed under it (an agent
 // session editing the same file), so the UI reloads instead of clobbering.
 
-const rules = () => get('/api/rules')
-const rulesMutate = (body) => post('/api/rules', body)
-const rulesPromote = (body) => post('/api/rules/promote', body)
+const rules = (install) => getIn('/api/rules', install)
+const rulesMutate = (body, install) => postIn('/api/rules', body, install)
+const rulesPromote = (body, install) => postIn('/api/rules/promote', body, install)
 
 // ── Profile ─────────────────────────────────────────────────────────────────
 // User profile (PROFILE.md) — the Profile page. The read returns the raw markdown
@@ -149,8 +198,8 @@ const rulesPromote = (body) => post('/api/rules/promote', body)
 // when the file changed under it (an agent session editing the same file), so the UI
 // reloads instead of clobbering.
 
-const profile = () => get('/api/profile')
-const profileSave = (body) => post('/api/profile', body)
+const profile = (install) => getIn('/api/profile', install)
+const profileSave = (body, install) => postIn('/api/profile', body, install)
 
 // ── Excludes ────────────────────────────────────────────────────────────────
 // Sovereign-repo exclusions: folders where every global harness install goes

@@ -27,7 +27,7 @@ import {
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
 import { fallbackView, warmDoctor, webState } from '../../js/web/state.mjs';
-import { buildActionCmds } from '../../js/web/actions.mjs';
+import { buildActionCmds, installView } from '../../js/web/actions.mjs';
 import { apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 
@@ -62,7 +62,9 @@ import { JobManager, actionCommands } from '../../js/web/jobs.mjs';
 import { pathToFileURL } from 'node:url';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
-import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/routes.mjs';
+import {
+  MACHINE_GETS, POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES, VIEW_POSTS,
+} from '../../js/web/routes.mjs';
 import { recordLoop, registryPath } from '../../js/loop/registry.mjs';
 import { initState, renderLoopFile } from '../../js/loop/state.mjs';
 import { PRESETS } from '../../js/loop/score.mjs';
@@ -1896,6 +1898,240 @@ test('the fleet marks exactly the current view selected, and follows a switch', 
     apiSelectView(st, { host: 'claude', path: cl });
     selected = apiFleet(st).installs.filter((r) => r.selected);
     assert.deepEqual(selected.map((r) => r.host), ['claude']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Per-request install (D5): every request may name its install — `?host=&path=` on a read,
+// `{host, path}` in a write body — and is answered for THAT install, on the same daemon, without
+// any `/api/view`. The pair goes through the same allowlist as the selector; an unknown or half
+// pair is a 404, never another dir. Naming none answers for the daemon's own view, as before.
+//
+// The fixture is `withTwoViews`, awaited: an opencode global (theme neutral, the daemon's view,
+// the only one with a manifest) and a claude global whose markers say claude-global / imperial.
+
+async function withTwoViewsServed(fn, { jm = new JobManager() } = {}) {
+  const sb = makeSandbox();
+  const savedOc = process.env.OPENCODE_CONFIG_DIR;
+  const cl = path.join(os.homedir(), '.claude');
+  try {
+    const oc = path.join(sb.path, 'oc');
+    fs.mkdirSync(oc, { recursive: true });
+    fs.writeFileSync(path.join(oc, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    process.env.OPENCODE_CONFIG_DIR = oc;
+    fs.mkdirSync(cl, { recursive: true });
+    fs.writeFileSync(path.join(cl, '.geneseed-emit'), 'claude-global');
+    fs.writeFileSync(path.join(cl, '.geneseed-theme'), 'imperial');
+    const st = webState('neutral', oc);
+    // The (host, path) pairs exactly as `/api/installs` hands them to the client.
+    const pair = (host, dir) => {
+      const row = apiInstalls(st).installs.find((r) => r.host === host && samePath(r.path, dir));
+      assert.ok(row, `no ${host} install row for ${dir}`);
+      return { host, path: row.path };
+    };
+    const srv = http.createServer(makeHandler(st, jm, 'tok', path.join(ROOT, 'web', 'dist')));
+    await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    const q = (p) => (p ? `?${new URLSearchParams(p)}` : '');
+    const get = (url, p) => fetch(`${base}${url}${q(p)}`);
+    const post = (url, body) => fetch(`${base}${url}`, { method: 'POST',
+      headers: { 'x-geneseed-token': 'tok', 'content-type': 'application/json' },
+      body: JSON.stringify(body) });
+    try {
+      return await fn({ st, oc, cl, ocPair: pair('opencode', oc), clPair: pair('claude', cl), get, post });
+    } finally {
+      await new Promise((r) => { srv.close(r); });
+    }
+  } finally {
+    fs.rmSync(cl, { recursive: true, force: true });
+    if (savedOc === undefined) delete process.env.OPENCODE_CONFIG_DIR;
+    else process.env.OPENCODE_CONFIG_DIR = savedOc;
+    sb.cleanup();
+  }
+}
+
+test('two installs answer with their own data on one daemon, with no /api/view call', async () => {
+  await withTwoViewsServed(async ({ st, oc, cl, ocPair, clPair, get, post }) => {
+    // `/api/themes` carries the viewed install's theme and emit, `/api/setup` its target.
+    const claude = (await (await get('/api/themes', clPair)).json()).current;
+    assert.equal(claude.theme, 'imperial', 'the claude request was not answered from ~/.claude');
+    assert.equal(claude.emit, 'claude-global');
+    assert.ok(samePath((await (await get('/api/setup', clPair)).json()).target, cl));
+    const opencode = (await (await get('/api/themes', ocPair)).json()).current;
+    assert.equal(opencode.theme, 'neutral');
+    assert.equal(opencode.emit, 'opencode-global');
+    assert.ok(samePath((await (await get('/api/setup', ocPair)).json()).target, oc));
+
+    // A write lands in the install its body names, and only there.
+    const res = await post('/api/profile', { ...clPair, fingerprint: '', text: 'claude only' });
+    assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+    // `readLf`: the write uses the platform's line ending.
+    assert.equal(readLf(path.join(cl, 'PROFILE.md')), 'claude only\n');
+    assert.equal(fs.existsSync(path.join(oc, 'PROFILE.md')), false, 'the write leaked into opencode');
+    assert.equal((await (await get('/api/profile', clPair)).json()).text, 'claude only\n');
+    assert.equal((await (await get('/api/profile', ocPair)).json()).exists, false);
+
+    // Nothing of that moved the daemon's own view.
+    assert.ok(samePath(st.target, oc), 'a per-request install re-pointed the global view');
+    assert.equal(st.theme, 'neutral');
+  });
+});
+
+test('an unknown or half (host, path) pair is refused with 404', async () => {
+  await withTwoViewsServed(async ({ oc, clPair, get, post }) => {
+    for (const p of [{ host: 'claude', path: oc }, { host: 'claude', path: '/no/such/root' },
+      { host: 'nope', path: clPair.path }, { host: 'claude' }, { path: clPair.path },
+      { host: '', path: '' }]) {
+      assert.equal((await get('/api/setup', p)).status, 404, `GET ${JSON.stringify(p)} was answered`);
+      assert.equal((await get('/api/catalog/skills', p)).status, 404, `catalog ${JSON.stringify(p)}`);
+    }
+    const res = await post('/api/profile', { host: 'claude', path: '/no/such/root',
+      fingerprint: '', text: 'x' });
+    assert.equal(res.status, 404);
+    assert.equal(fs.existsSync(path.join(oc, 'PROFILE.md')), false, 'a refused write fell through');
+  });
+});
+
+test('a request naming no install answers for the daemon view, as before', async () => {
+  await withTwoViewsServed(async ({ st, oc, cl, clPair, get, post }) => {
+    assert.equal((await (await get('/api/themes')).json()).current.theme, 'neutral');
+    assert.ok(samePath((await (await get('/api/setup')).json()).target, oc));
+    // The selector still works, and an unnamed request then follows it.
+    assert.equal((await post('/api/view', clPair)).status, 200);
+    assert.equal((await (await get('/api/themes')).json()).current.theme, 'imperial');
+    assert.ok(samePath((await (await get('/api/setup')).json()).target, cl));
+    assert.ok(samePath(st.target, cl));
+  });
+});
+
+// `refresh` follows a view to an active install when its own has none (`fallbackView`). The
+// claude install here has no manifest, so an unpinned state would jump to opencode.
+test('a per-install view is pinned: refresh never re-points it at another install', async () => {
+  await withTwoViewsServed(async ({ st, cl, clPair }) => {
+    const v = installView(st, clPair);
+    assert.equal(installView(st, clPair), v, 'the per-install state is not cached');
+    st.refresh();
+    assert.ok(samePath(v.target, cl), 'refresh re-pointed a pinned view');
+    assert.equal(v.theme, 'imperial');
+    assert.equal(installView(st, {}), st, 'naming nothing is not the daemon state');
+  });
+});
+
+// One memory fact, `fact`, with its index line, in an install's memory store.
+function seedFact(dir) {
+  fs.mkdirSync(path.join(dir, 'memory'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'memory', 'MEMORY.md'), '# Memory\n\n- [Fact](fact.md) — a fact\n');
+  fs.writeFileSync(path.join(dir, 'memory', 'fact.md'),
+    '---\nname: Fact\ndescription: a fact\n---\nThe fact body.\n');
+}
+
+// Every write route that reads an install (`VIEW_POSTS`), named at the claude install: the effect
+// lands under ~/.claude and the opencode install (the daemon's view) is untouched. `build` is not
+// run: a stub job manager records the argv it would have started.
+test('each install-reading write acts on the install its body names', async () => {
+  const started = [];
+  const jm = { busy: false, recent: () => [], get: () => null, cancel: () => false,
+    start: (action, cmds) => { started.push(JSON.stringify(cmds)); return 'j1'; } };
+  await withTwoViewsServed(async ({ oc, cl, clPair, get, post }) => {
+    seedFact(cl);
+    seedFact(oc);
+    const ok = async (res) => {
+      assert.equal(res.status, 200, JSON.stringify(await res.clone().json()));
+      return res.json();
+    };
+
+    await ok(await post('/api/activity', { ...clPair, enabled: false }));
+    assert.equal(fs.readFileSync(path.join(cl, '.geneseed-activity'), 'utf8'), 'off');
+    assert.equal(fs.existsSync(path.join(oc, '.geneseed-activity')), false, 'activity: wrong install');
+
+    const fp = (await (await get('/api/rules', clPair)).json()).fingerprint;
+    await ok(await post('/api/rules', { ...clPair, op: 'add', fingerprint: fp, title: 'Claude rule',
+      body: 'Only here.' }));
+    assert.match(readLf(path.join(cl, RULES_FILE)), /Claude rule/);
+    assert.equal(fs.existsSync(path.join(oc, RULES_FILE)), false, 'rules: wrong install');
+
+    const fp2 = (await (await get('/api/rules', clPair)).json()).fingerprint;
+    await ok(await post('/api/rules/promote', { ...clPair, name: 'fact', fingerprint: fp2 }));
+    assert.match(readLf(path.join(cl, RULES_FILE)), /The fact body\./);
+    assert.equal(fs.existsSync(path.join(oc, RULES_FILE)), false, 'promote: wrong install');
+
+    await ok(await post('/api/memory/delete', { ...clPair, name: 'fact' }));
+    assert.equal(fs.existsSync(path.join(cl, 'memory', 'fact.md')), false);
+    assert.equal(fs.existsSync(path.join(oc, 'memory', 'fact.md')), true, 'memory: wrong install');
+
+    // Restore refuses an install with no manifest: claude has none, the daemon's opencode has one.
+    const restored = await ok(await post('/api/actions/restore', { ...clPair, files: [] }));
+    assert.deepEqual(restored.errors, ['no deployed harness'], 'restore ran on the daemon install');
+
+    assert.equal((await post('/api/actions/build', { ...clPair })).status, 202);
+    assert.equal((await post('/api/actions/build', {})).status, 202);
+    assert.equal(started.length, 2);
+    assert.ok(started[0].includes('claude-global') && started[0].includes('imperial'),
+      `the claude build is not the claude install's: ${started[0]}`);
+    assert.ok(!started[1].includes('claude-global'), 'the unnamed build left the daemon install');
+  }, { jm });
+});
+
+// `doAction` dispatches on the LAST path segment, so the install lookup must too: otherwise
+// `/api/actions/x/restore` restores the daemon's install while the body names another.
+test('a multi-segment action path still acts on the install its body names', async () => {
+  await withTwoViewsServed(async ({ clPair, post }) => {
+    const res = await post('/api/actions/x/restore', { ...clPair, files: [] });
+    assert.equal(res.status, 200);
+    assert.deepEqual((await res.json()).errors, ['no deployed harness'],
+      'the restore ran on the daemon install, not the one the body names');
+    assert.equal((await post('/api/actions/x/restore', { host: 'claude', path: '/no/such',
+      files: [] })).status, 404);
+  });
+});
+
+// A write through one state refreshes the other: they may show the same files.
+test('a write through a view refreshes the daemon state, and the reverse', async () => {
+  await withTwoViewsServed(async ({ st, oc, cl, clPair, post }) => {
+    seedFact(cl);
+    seedFact(oc);
+    const v = installView(st, clPair);
+    st._inv = { stale: true };
+    v._inv = { stale: true };
+    assert.equal((await post('/api/memory/delete', { ...clPair, name: 'fact' })).status, 200);
+    assert.equal(st._inv, null, 'a write through the view left the daemon inventory stale');
+    assert.equal(v._inv, null);
+
+    st._inv = { stale: true };
+    v._inv = { stale: true };
+    assert.equal((await post('/api/memory/delete', { name: 'fact' })).status, 200);
+    assert.equal(v._inv, null, 'a write through the daemon state left the view stale');
+    assert.equal(st._inv, null);
+  });
+});
+
+test('an install no longer detected is refused even when its view is cached', async () => {
+  await withTwoViewsServed(async ({ st, ocPair, get }) => {
+    assert.equal((await get('/api/setup', ocPair)).status, 200);
+    assert.equal(st._views.size, 1, 'the view was not cached');
+    // The opencode global now resolves elsewhere: the old pair is no longer an install.
+    process.env.OPENCODE_CONFIG_DIR = path.join(path.dirname(ocPair.path), 'moved');
+    assert.equal((await get('/api/setup', ocPair)).status, 404);
+  });
+});
+
+// The machine-wide reads IGNORE a pair: neither checked nor used, and no view is made, so
+// `/api/update`'s check and its `.git`-lock guard stay on the daemon state alone.
+test('the machine-wide reads ignore a named install', async () => {
+  for (const r of MACHINE_GETS) assert.ok(r in STATE_ROUTES, `${r} is not a GET route`);
+  for (const r of VIEW_POSTS) {
+    const key = r.startsWith('/api/actions/') ? null : r;
+    if (key) assert.ok(POST_ROUTES.has(key), `${r} is not a POST route`);
+  }
+  await withTwoViewsServed(async ({ st, clPair, get }) => {
+    // `/api/update` makes no network ask under `node --test` (`NODE_TEST_CONTEXT`).
+    for (const r of ['/api/update', '/api/installs', '/api/fleet', '/api/mcp', '/api/excludes']) {
+      assert.equal((await get(r, { host: 'nope', path: '/no/such' })).status, 200, r);
+      assert.equal((await get(r, clPair)).status, 200, r);
+    }
+    const sel = (await (await get('/api/installs', clPair)).json()).installs.filter((x) => x.selected);
+    assert.deepEqual(sel.map((x) => x.host), ['opencode'], 'a machine-wide read used the pair');
+    assert.equal(st._views.size, 0, 'a machine-wide read made a per-install view');
   });
 });
 
