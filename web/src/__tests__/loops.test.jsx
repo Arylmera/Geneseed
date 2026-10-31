@@ -836,3 +836,39 @@ describe('Loops — the ring console', () => {
     expect(await screen.findByText(/^Running now: none\./)).toBeTruthy()
   })
 })
+
+// Templates and bricks are one install's: the page's own picker (hidden on Active, the machine's
+// runs) starts on the default install and reads the picked one's /api/loops.
+describe('Loops — its own install picker', () => {
+  afterEach(() => {
+    delete api.installs
+    localStorage.clear()
+  })
+  it('reads the default install, then the picked one; Active shows no picker', async () => {
+    localStorage.clear()
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+        {
+          id: 'r',
+          host: 'claude',
+          scope: 'project',
+          path: '/repo',
+          state: 'active',
+          default: true,
+        },
+      ],
+    }))
+    const { rerender } = render(<Loops tab="templates" />)
+    const pick = await screen.findByRole('combobox', { name: 'Templates and bricks of:' })
+    await waitFor(() =>
+      expect(api.loops).toHaveBeenLastCalledWith({ host: 'claude', path: '/repo' }),
+    )
+    fireEvent.change(pick, { target: { value: 'oc' } })
+    await waitFor(() =>
+      expect(api.loops).toHaveBeenLastCalledWith({ host: 'opencode', path: '/oc' }),
+    )
+    rerender(<Loops tab="active" />)
+    expect(screen.queryByRole('combobox', { name: 'Templates and bricks of:' })).toBeNull()
+  })
+})

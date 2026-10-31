@@ -12,6 +12,9 @@ import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
 import { humanGate, layoutLoop } from '../lib/loopRing.js'
 import { TABS, TAB_LABELS } from '../lib/router.js'
+import InstallPicker from '../components/InstallPicker.jsx'
+import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
+import { pairOf } from '../lib/hosts.js'
 
 const enc = encodeURIComponent
 
@@ -442,7 +445,15 @@ const LEDE = {
 // not wait on the catalogue, which it only borrows bricks from for the ring's gate. Routing:
 // `#/loops`, `#/loops/<section>`, `#/loops/<section>/<item>` (a run's item is its root).
 export default function Loops({ tab = 'templates', item, dataRev }) {
-  const { data, error } = useAsync(() => api.loops(), [dataRev], 'loops')
+  // Templates and bricks are one install's (its config dir, its repo's .geneseed/): this page's own
+  // pick, remembered, beside the list. Active runs are the machine's, so that tab shows no picker.
+  const active = useInstalls(dataRev)
+  const [install, pickInstall] = useInstallPick('loops', active)
+  const { data, error } = useAsync(
+    () => api.loops(pairOf(install)),
+    [dataRev, install?.id ?? ''],
+    'loops',
+  )
   const runs = useActiveLoops()
   const [q, setQ] = useState('')
   // The group picked under the section in the rail ('all' or a group heading).
@@ -489,6 +500,15 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
 
   return (
     <>
+      {tab === 'active' ? null : (
+        <InstallPicker
+          className="page-pick"
+          installs={active}
+          value={install}
+          onChange={pickInstall}
+          label="Templates and bricks of:"
+        />
+      )}
       <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
       <Problems problems={data?.problems} />
       <div className="library">

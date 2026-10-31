@@ -1,12 +1,24 @@
 import React, { useEffect, useRef } from 'react'
 import { useConfirm } from '../hooks/useConfirm.jsx'
+import InstallPicker from './InstallPicker.jsx'
+import { installTag } from '../lib/hosts.js'
 
 // The voice/theme switcher that drops from the rail foot. Closes on an outside
 // click or Esc; picking a theme rebuilds the deployed harness in that voice, so the pick is
 // confirmed first (no danger tone: the rebuild is in place and destroys nothing). Each
 // voice is a real toggle button in a dialog, not a menu: it has no menu keyboard model.
 // Not the shared Popover: `.popover` is position:absolute, and this one is fixed (`.pop`).
-export default function VoicePopover({ themes, current, onPick, onClose }) {
+// It rebuilds ONE install: the `install` its own "Rebuild:" picker names (hidden with one
+// install), and the confirm names it too.
+export default function VoicePopover({
+  themes,
+  current,
+  onPick,
+  onClose,
+  installs,
+  install,
+  onInstall,
+}) {
   const confirm = useConfirm()
   const ref = useRef(null)
   useEffect(() => {
@@ -33,6 +45,7 @@ export default function VoicePopover({ themes, current, onPick, onClose }) {
       <div className="tick" style={{ padding: '4px 10px 8px' }}>
         Switch voice
       </div>
+      <InstallPicker installs={installs} value={install} onChange={onInstall} label="Rebuild:" />
       {themes.map((t) => (
         <button
           type="button"
@@ -43,7 +56,7 @@ export default function VoicePopover({ themes, current, onPick, onClose }) {
             onClose()
             if (
               await confirm(
-                `Rebuild the deployed harness in the “${t.name}” voice? It rebuilds in place, non-destructive.`,
+                `Rebuild ${install ? installTag(install) : 'the deployed harness'} in the “${t.name}” voice? It rebuilds in place, non-destructive.`,
                 { title: 'Switch voice?', confirmLabel: 'Rebuild' },
               )
             )

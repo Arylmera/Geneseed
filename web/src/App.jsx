@@ -12,6 +12,8 @@ import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
 import { useAsync } from './hooks/useAsync.js'
+import { useInstallPick } from './hooks/useInstalls.js'
+import { activeInstalls, pairOf } from './lib/hosts.js'
 import Sidebar, { TabBar } from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import VoicePopover from './components/VoicePopover.jsx'
@@ -131,6 +133,9 @@ export default function App() {
   const { data: setup } = useAsync(() => api.setup().catch(() => null), [dataRev], 'setup')
   const { data: instData } = useAsync(() => api.installs().catch(() => null), [dataRev], 'installs')
   const installs = instData?.installs || null
+  // The install the rail's Voice popover rebuilds: its own pick, remembered (no console-wide one).
+  const activeList = activeInstalls(installs)
+  const [voiceInstall, pickVoiceInstall] = useInstallPick('voice', activeList)
 
   // One sentence describing what the job runner is doing, for the live region.
   const lastRun = runs[runs.length - 1]
@@ -312,10 +317,15 @@ export default function App() {
         {voiceOpen && (
           <VoicePopover
             themes={themes}
-            current={overview?.theme}
+            // The picked install's own voice; the default's (the overview) before the list lands.
+            current={voiceInstall ? voiceInstall.theme : overview?.theme}
+            installs={activeList}
+            install={voiceInstall}
+            onInstall={pickVoiceInstall}
             onPick={(name) => {
               setVoiceOpen(false)
-              runAction('build', { theme: name, emit: overview?.emit })
+              // The install's own emit is read server-side; only the theme changes.
+              runAction('build', { theme: name }, pairOf(voiceInstall))
             }}
             onClose={() => setVoiceOpen(false)}
           />

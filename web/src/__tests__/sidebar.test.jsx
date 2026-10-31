@@ -150,6 +150,38 @@ describe('VoicePopover', () => {
     expect(onPick).toHaveBeenCalledWith('plain')
   })
 
+  // The switch rebuilds ONE install: with two active, the popover's own "Rebuild:" picker names
+  // it, a change of pick goes to the caller, and the confirm names the install it rebuilds.
+  it('names and picks the install it rebuilds', async () => {
+    const ask = vi.fn(async () => true)
+    const onInstall = vi.fn()
+    const two = [
+      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+      { id: 'r', host: 'bob', scope: 'project', path: '/x/repo', state: 'active' },
+    ]
+    render(
+      <ConfirmContext.Provider value={ask}>
+        <VoicePopover
+          themes={themes}
+          current="imperial"
+          onPick={() => {}}
+          onClose={() => {}}
+          installs={two}
+          install={two[1]}
+          onInstall={onInstall}
+        />
+      </ConfirmContext.Provider>,
+    )
+    const pick = screen.getByRole('combobox', { name: 'Rebuild:' })
+    expect(pick.value).toBe('r')
+    fireEvent.change(pick, { target: { value: 'oc' } })
+    expect(onInstall).toHaveBeenCalledWith(two[0])
+    await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
+    expect(ask.mock.calls[0][0]).toBe(
+      'Rebuild repo · bob in the “plain” voice? It rebuilds in place, non-destructive.',
+    )
+  })
+
   // The accent is the skin's own (or the reader's pick), never the voice's: every skin has a
   // curated colour, so a dot in the voice's colour promised a tint that never arrived.
   it('paints no accent dot beside a voice', () => {
