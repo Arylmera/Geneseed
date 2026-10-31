@@ -189,6 +189,20 @@ describe('Doctor', () => {
     }
   })
 
+  // App's loader caches a failed install read as null under the shared key: the page must
+  // then read the default install, never wait on a list that is not coming.
+  it('reads the default install when the install list is unreadable', async () => {
+    api.installs = vi.fn(async () => null)
+    try {
+      api.doctor.mockClear()
+      render(<Doctor />)
+      await waitFor(() => expect(api.doctor).toHaveBeenLastCalledWith(false, undefined))
+      expect(await screen.findByText(/Re-run checks/)).toBeTruthy()
+    } finally {
+      delete api.installs
+    }
+  })
+
   // One active install: nothing to pick, so no picker, and the page reads that install.
   it('shows no picker with one active install', async () => {
     const cl = {

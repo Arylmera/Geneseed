@@ -202,7 +202,7 @@ streams the output of background jobs and keeps their history across reloads.
   for *mutate*, *human gate*, what they override and *unavailable*; the reader shows the
   frontmatter facts (outcomes as pills, availability with its reason), then the body rendered as
   markdown, with a **View source** toggle for the file as parsed, frontmatter and all. Templates and
-  Bricks read `GET /api/loops`, resolved from the selected install's root, so a project
+  Bricks read `GET /api/loops`, resolved from the default install's root, so a project
   install shows its `.geneseed/` bricks and templates. **Active** is every loop
   `geneseed loop init` registered on this machine (`GET /api/loops/active`, polled every
   5 s), grouped awaiting, running, done/stopped, finished/unreadable; the reader shows its

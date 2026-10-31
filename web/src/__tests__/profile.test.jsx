@@ -173,6 +173,19 @@ describe('Profile across installs', () => {
     delete api.installs
   })
 
+  // A finished job bumps `dataRev`, which refetches the install list: the cards must stay
+  // mounted through it, or an unsaved draft would vanish without the discard question.
+  it('keeps an open draft across a dataRev refetch', async () => {
+    const { rerender } = render(<Profile dataRev={1} />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
+    rerender(<Profile dataRev={2} />)
+    await waitFor(() => expect(api.installs).toHaveBeenCalledTimes(2))
+    expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
+  })
+
   it('shows one card per install, default first, and saves to the card own install', async () => {
     render(<Profile />)
     await screen.findByRole('heading', { name: 'OpenCode me' })

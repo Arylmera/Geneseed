@@ -4,11 +4,13 @@ import { useAsync } from './useAsync.js'
 import { useLocalStorage } from './useLocalStorage.js'
 
 // The active installs, default first (lib/hosts.js activeInstalls). App's key and deps for
-// /api/installs, so every page shares App's one fetch. Null while loading, so a page can wait
-// rather than read the default and then the pick; empty when unreadable (an api without
-// `installs`, as a page's test stubs it, included), and a page then reads the default.
+// /api/installs, so every page shares App's one fetch. Null only on the FIRST load, so a page can
+// wait rather than read the default and then the pick; a refetch keeps the last list (useAsync
+// holds its data), so a page never unmounts what it shows on a `dataRev` bump. Empty when
+// unreadable — App's own loader caches a failed read as null, and an api without `installs` (a
+// page's test stub) fails too — and a page then reads the default.
 export function useInstalls(dataRev) {
-  const { data } = useAsync(
+  const { data, loading } = useAsync(
     () =>
       Promise.resolve()
         .then(() => api.installs())
@@ -16,7 +18,7 @@ export function useInstalls(dataRev) {
     [dataRev],
     'installs',
   )
-  return data ? activeInstalls(data.installs) : null
+  return loading && !data ? null : activeInstalls(data?.installs)
 }
 
 // Where a page keeps its install pick: one key per page, `page` a tab id (`doctor`, `edits`).
