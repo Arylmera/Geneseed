@@ -15,13 +15,16 @@ import { resolvePath } from '../hosts/hosts.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { parseIntStrict, percentDecode } from '../lib/text.mjs';
 import {
-  apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, mcpTargetPaths, rebuildCmds,
+  apiDeployCmd, apiInstallCmd, apiPickFolder, apiRestore, buildActionCmds, installView, mcpTargetPaths,
+  rebuildCmds,
 } from './actions.mjs';
 import { BadRequest, NotFound } from './catalog.mjs';
 import { openFolder, requestRestart } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
-import { POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, readJsonBody } from './routes.mjs';
+import {
+  MACHINE_GETS, POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, VIEW_POSTS, readJsonBody,
+} from './routes.mjs';
 import { installKind } from './update-check.mjs';
 import { isFile } from '../lib/fs.mjs';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -198,22 +201,27 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   }
 
   function doGet(req, res, path, ae) {
+    // The install the request names (`?host=&path=`), else the daemon's view; an unknown pair
+    // throws `NotFound` here, before any route reads a dir. Not for ping, jobs, static files or
+    // the machine-wide reads (`MACHINE_GETS`), which ignore the pair.
+    const st = (path.startsWith('/api/') && path !== '/api/ping' && !path.startsWith('/api/jobs')
+      && !MACHINE_GETS.has(path)) ? installView(state, installParams(req.url)) : state;
     const route = STATE_ROUTES[path];
-    if (route !== undefined) return sendJson(res, route(state, req.url), 200, ae);
+    if (route !== undefined) return sendJson(res, route(st, req.url), 200, ae);
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
     if (path === '/api/ping') {
       return sendJson(res, { ok: true, theme: state.theme, pid: process.pid }, 200, ae);
     }
     for (const [prefix, handler] of PREFIX_ROUTES) {
-      if (path.startsWith(prefix)) return sendJson(res, handler(state, path), 200, ae);
+      if (path.startsWith(prefix)) return sendJson(res, handler(st, path), 200, ae);
     }
     if (path === '/api/docs') {
-      return sendJson(res, apiDocs(state, harnessParam(req.url)), 200, ae);
+      return sendJson(res, apiDocs(st, harnessParam(req.url)), 200, ae);
     }
     if (path.startsWith('/api/docs/page/')) {
       const pid = percentDecode(path.slice('/api/docs/page/'.length));
-      return sendJson(res, apiDocsPage(state, pid, harnessParam(req.url)), 200, ae);
+      return sendJson(res, apiDocsPage(st, pid, harnessParam(req.url)), 200, ae);
     }
     if (path === '/api/jobs') return sendJson(res, { jobs: jm.recent() }, 200, ae);
     if (path.startsWith('/api/jobs/')) {
@@ -290,10 +298,16 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       apiPickFolder((result) => sendJson(res, result, 200, ae));
       return;
     }
+    // The install a body `{host, path}` names, on the routes that read one (`VIEW_POSTS`).
+    // An action is looked up on the SAME segment `doAction` dispatches on (the last), so
+    // `/api/actions/x/restore` cannot run a restore on the daemon's install instead.
+    const key = path.startsWith('/api/actions/')
+      ? `/api/actions/${path.slice(path.lastIndexOf('/') + 1)}` : path;
+    const st = VIEW_POSTS.has(key) ? installView(state, readJsonBody(body)) : state;
     const route = POST_ROUTES.get(path);
     if (route !== undefined) {
       const [fn, okIs409] = route;
-      const obj = fn(state, readJsonBody(body));
+      const obj = fn(st, readJsonBody(body));
       return sendJson(res, obj, (okIs409 && !isTruthy(obj.ok)) ? 409 : 200, ae);
     }
     if (path.startsWith('/api/jobs/') && path.endsWith('/cancel')) {
@@ -304,7 +318,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
         : sendJson(res, { error: 'no running job by that id' }, 404, ae);
     }
     if (path.startsWith('/api/actions/')) {
-      return doAction(res, path.slice(path.lastIndexOf('/') + 1), readJsonBody(body), ae);
+      return doAction(res, path.slice(path.lastIndexOf('/') + 1), readJsonBody(body), ae, st);
     }
     return sendJson(res, { error: 'not found' }, 404, ae);
   }
@@ -333,9 +347,9 @@ export function makeHandler(state, jm, token, dist, holder = null) {
    *
    * THEN the table, which answers a 404 for any action it does not name.
    */
-  function doAction(res, action, body, ae) {
+  function doAction(res, action, body, ae, st = state) {
     if (action === 'restore') {
-      return sendJson(res, apiRestore(state, isTruthy(body.files) ? body.files : []), 200, ae);
+      return sendJson(res, apiRestore(st, isTruthy(body.files) ? body.files : []), 200, ae);
     }
     if (action === 'install') {
       const plan = apiInstallCmd(state, body);
@@ -396,7 +410,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     }
     // Build resolves its argv off the install (`buildActionCmds`); the other actions take no
     // axes and self-resolve the deployed theme downstream.
-    const cmds = action === 'build' ? buildActionCmds(state, body) : actionCommands(action);
+    const cmds = action === 'build' ? buildActionCmds(st, body) : actionCommands(action);
     if (cmds && Object.hasOwn(cmds, 'error')) return sendJson(res, cmds, 400, ae);
     if (!isTruthy(cmds)) {
       return sendJson(res, { error: `unknown action ${action}` }, 404, ae);
@@ -519,6 +533,16 @@ function logFault(req, path, e) {
  */
 function harnessParam(url) {
   return new URL(url || '', 'http://x').searchParams.get('harness') || null;
+}
+
+/**
+ * `{host, path}` off the query, each `null` when absent — two params, not one string, because a
+ * Windows path holds a colon. A BLANK value is kept as `''`, unlike `harnessParam`: `?host=` names
+ * an install, a bad one, and `installView` must refuse it rather than read it as "none named".
+ */
+function installParams(url) {
+  const q = new URL(url || '', 'http://x').searchParams;
+  return { host: q.get('host'), path: q.get('path') };
 }
 
 function readBody(req, length, done) {

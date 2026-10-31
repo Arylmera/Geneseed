@@ -239,15 +239,15 @@ the deployed harness as JSON.
 |---|---|
 | `server.mjs` | `serve()`/`cmdWeb`: UI-build precheck, socket bind, token mint, daemon record wiring |
 | `routes.mjs` | The route tables — `STATE_ROUTES`, `PREFIX_ROUTES`, `POST_ROUTES` (+ its 409 column) — and the inline lists |
-| `handler.mjs` | One function per request: dispatch, gzip, `requestGuard` (Host+port, Origin/Sec-Fetch-Site on `/api`, constant-time CSRF token) and body cap (before the body is read), `securityHeaders` (CSP nonce, framing), static SPA fallback |
-| `state.mjs` | `webState` — the resolved install view every endpoint reads, with its cached inventory and doctor |
+| `handler.mjs` | One function per request: per-request install (`?host=&path=` on every read but `MACHINE_GETS`, or the body on `VIEW_POSTS`), dispatch, gzip, `requestGuard` (Host+port, Origin/Sec-Fetch-Site on `/api`, constant-time CSRF token) and body cap (before the body is read), `securityHeaders` (CSP nonce, framing), static SPA fallback |
+| `state.mjs` | `webState` — the resolved install view every endpoint reads, with its cached inventory and doctor; per-install views (`installView` in `actions.mjs`) hang off it, pinned, refreshed with it |
 | `catalog.mjs` | The Library read model: inventory, constitution tiers, memory/notebook/wiki/config items, `apiCatalog`/`apiItem`, `NotFound` |
 | `api.mjs` | The dashboard and settings reads: overview, recent, themes, setup, doctor, diff, installs, excludes, loops |
 | `update-check.mjs` | Is a newer release on npm? Answers from memory, refreshes in the background (a day when it got an answer, an hour when it did not), `null` on any failure, never asked under `node --test` |
 | `gates-api.mjs` | `GET /api/gates`: gate asks per rule per day over 30 days, read off every installed harness's `notebook/gates.jsonl` (the Overview's sparklines) |
 | `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, a fleet-wide `names` list (per-name 30-day counts, installs, daily series, last day seen), and skips lines older than 90 days in each `notebook/usage.jsonl` |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
-| `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv |
+| `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv, and `installView`, the per-request install behind the one (host, path) allowlist |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |
 | `jobs.mjs` | `JobManager` and the action→argv table. The only module here that spawns job children |
 | `docs.mjs` | The Docs tab: the `docs/<folder>/` page registry, `?harness=` filtering, link rewriting, the six page kinds |

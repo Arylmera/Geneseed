@@ -1,12 +1,12 @@
 /**
  * WHAT THE WEB API ANSWERS — as a declaration, separate from the dispatcher that honours it.
  *
- * Four tables and two inline lists. The two GET tables (`STATE_ROUTES`, `PREFIX_ROUTES`) used
- * to live in `api.mjs`, which made it import every route module that also imported it. None of
- * this is documentation: `tests/unit/web_server.test.mjs` holds their union against a surface
- * list written out in the test, and probes the real handler, because a declaration is not a
- * dispatcher — a route can be declared here and missing from the dispatch, and nothing but a
- * probe notices.
+ * Four tables, two inline lists, and the two install-scope sets (`VIEW_POSTS`, `MACHINE_GETS`).
+ * The two GET tables (`STATE_ROUTES`, `PREFIX_ROUTES`) used to live in `api.mjs`, which made it
+ * import every route module that also imported it. None of this is documentation:
+ * `tests/unit/web_server.test.mjs` holds their union against a surface list written out in the
+ * test, and probes the real handler, because a declaration is not a dispatcher — a route can be
+ * declared here and missing from the dispatch, and nothing but a probe notices.
  *
  * This file used to also carry the Python→Node port's NOT_PORTED / DECLINED partition — five
  * sets, all empty once the port finished. They were deleted when the port bookkeeping retired
@@ -61,6 +61,27 @@ export const POST_ROUTES = new Map([
   // ever consulted — the same shape as `/api/memory/delete` and `/api/activity` above.
   ['/api/loops/preset', [apiLoopsPresetMutate, false]],
 ]);
+
+/**
+ * The POSTs whose body `{host, path}` names the install they act on (`installView`), opt-in
+ * rather than every POST: in `/api/view`, `/api/install` and `/api/actions/install` the pair is
+ * the target the route resolves itself, and in `/api/actions/deploy`, `/api/excludes` and
+ * `/api/reveal` a `path` is a folder or a config file, not an install. The two `actions/` rows
+ * are the only actions that read the viewed install.
+ */
+export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/rules',
+  '/api/rules/promote', '/api/profile', '/api/actions/restore', '/api/actions/build']);
+
+/**
+ * The GETs that answer for the whole machine, not one install: they IGNORE a `?host=&path=`
+ * pair (it is neither checked nor used) and always read the daemon's state. Ignored rather
+ * than refused, so a client may send its install on every read. On the daemon's state, not a
+ * view, because `/api/update` keeps its daily check and the `.git`-lock guard
+ * (`_behind.inflight`) there, and the update job checks only that one. Every other `/api/*`
+ * GET, ping and jobs aside, takes the pair and refuses an unknown one.
+ */
+export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/kits',
+  '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active']);
 
 /**
  * The 409 column, exported so a test can assert it directly. Giving `/api/activity` the 409

@@ -53,6 +53,27 @@ strict CSP (`frame-ancestors 'none'`, same-origin only, the one inline token scr
 a per-response nonce). `?fresh=1` on the doctor re-runs at most once per 3 s, and the server
 drops a request whose headers take over 10 s or whose whole request takes over 30 s.
 
+## Which install a request reads
+
+A request can name the install it reads or writes. A read takes two query parameters,
+`?host=<host>&path=<install root>` (two, because a Windows path holds a colon). A write takes
+`host` and `path` in its JSON body. The pair is a row of `/api/installs`, and the server checks
+it against the same detected-install allowlist as the install toggle. An unknown or half pair
+gets a 404 and never falls through to another install's folder. The writes that take the pair
+are `/api/activity`, `/api/memory/delete`, `/api/rules`, `/api/rules/promote`, `/api/profile`,
+and the `restore` and `build` actions. In `/api/view`, `/api/install`, the `install` and
+`deploy` actions, `/api/excludes` and `/api/reveal`, `host`/`path` keep their own meaning.
+
+Every `/api/*` read takes and checks the pair, with these exceptions:
+- `/api/ping` and `/api/jobs` ignore it.
+- The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`,
+  `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp` and `/api/loops/active`.
+  Such a read does not check the pair, and its answer does not change with the pair.
+
+A request that names no install reads the install the topbar picker selected (`POST /api/view`).
+Each named install keeps its own cached doctor run and inventory, and a mutation refreshes all
+of them.
+
 ## The rail
 
 The left rail mirrors the harness's own shape:

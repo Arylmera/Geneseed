@@ -65,6 +65,7 @@ import { memoryDelete } from '../maintain/memory.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { emitChoices, themeChoices, viewCfg } from './api.mjs';
 import { actionCommands } from './jobs.mjs';
+import { webState } from './state.mjs';
 import { NotFound, deployed, memoryDir } from './catalog.mjs';
 
 /** One body field, `dflt` when the body is not an object or does not carry the key. */
@@ -190,6 +191,36 @@ function detectedInstall(body) {
     .findLast(([host, , root]) => JSON.stringify([host, String(root)]) === want);
   if (hit === undefined) throw new NotFound('unknown install (host, path)');
   return hit;
+}
+
+/**
+ * The state a request reads: the install its `{host, path}` names, or `base` (the daemon's
+ * own, the topbar selector's view) when it names neither — so a client that sends no install
+ * keeps today's answers.
+ *
+ * NAMING ONE IS AN ALLOWLIST LOOKUP, EVERY TIME: `detectedInstall` runs on a cache hit too, so
+ * a half pair, an unknown pair or an install removed since is a `NotFound` (404), never a fall
+ * through to another dir. The state is cached per install on `base._views` because its doctor
+ * and inventory caching is behaviour (see `webState`); it is PINNED, so `refresh` never
+ * re-points it, and its `refresh` is `base.refresh`, which reaches every view. The daemon's
+ * own hooks (`daemonStale`, `jobBusy`) are read through to `base`, where `serve()` sets them.
+ */
+export function installView(base, sel) {
+  if (bget(sel, 'host') == null && bget(sel, 'path') == null) return base;
+  const [host, scope, root] = detectedInstall(sel);
+  const key = JSON.stringify([host, String(root)]);
+  let v = base._views.get(key);
+  if (v === undefined) {
+    const target = viewCfg(host, scope, root);
+    v = webState(null, target);
+    v.selectView(target, root);
+    v.pinned = true;
+    v.refresh = base.refresh;
+    v.daemonStale = () => base.daemonStale?.();
+    v.jobBusy = () => base.jobBusy?.();
+    base._views.set(key, v);
+  }
+  return v;
 }
 
 // ---- OS-native folder picker ---------------------------------------------------------------

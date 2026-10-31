@@ -93,6 +93,77 @@ describe('http get/post', () => {
   })
 })
 
+// A call may name its install: a read as two query params (a Windows path holds a colon),
+// merged into any query it already has; a write as `host`/`path` in the body. Omitted, the
+// URL and body are exactly what they were before the parameter existed.
+describe('the install a call names', () => {
+  const win = { host: 'claude', path: 'C:\\Users\\me\\.claude' }
+  const winQ = 'host=claude&path=C%3A%5CUsers%5Cme%5C.claude'
+
+  it('rides a read as ?host=&path=, after any query already there', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({})))
+    await api.overview(win)
+    expect(global.fetch).toHaveBeenLastCalledWith(`/api/overview?${winQ}`)
+    await api.doctor(true, win)
+    expect(global.fetch).toHaveBeenLastCalledWith(`/api/doctor?fresh=1&${winQ}`)
+    await api.docs('claude', win)
+    expect(global.fetch).toHaveBeenLastCalledWith(`/api/docs?harness=claude&${winQ}`)
+    await api.overview()
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/overview')
+  })
+
+  it('rides a write in the body', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ ok: true })))
+    await api.profileSave({ text: 'x', fingerprint: 'f' }, win)
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({
+      text: 'x',
+      fingerprint: 'f',
+      host: 'claude',
+      path: 'C:\\Users\\me\\.claude',
+    })
+  })
+
+  // Dropped, a half pair would send the write to the topbar's install; the server refuses one.
+  // A rejection, never a synchronous throw: a caller's `.catch` must see it like a failed request.
+  it('rejects a half pair rather than dropping it, and sends nothing', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ ok: true })))
+    const write = api.memoryDelete('fact', { host: 'claude' })
+    const read = api.overview({ path: 'C:\\x' })
+    await expect(write).rejects.toThrow(/both host and path/)
+    await expect(read).rejects.toThrow(/both host and path/)
+    await expect(api.profileSave({ path: 'x' }, win)).rejects.toThrow(/already has/)
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  // A write with no body still carries the install.
+  it('names an install on a missing body', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ ok: true })))
+    await api.rulesMutate(undefined, win)
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({
+      host: 'claude',
+      path: 'C:\\Users\\me\\.claude',
+    })
+  })
+
+  // `install` and `deploy` read host/path as their own target: the install never reaches them.
+  it('adds the install to build and restore only, and never overwrites a body key', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ job_id: 'j' })))
+    await api.action('build', { theme: 'neutral' }, win)
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({
+      theme: 'neutral',
+      host: 'claude',
+      path: 'C:\\Users\\me\\.claude',
+    })
+    await api.action('deploy', { host: 'bob', path: 'D:\\repo' }, win)
+    expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({
+      host: 'bob',
+      path: 'D:\\repo',
+    })
+    await expect(api.action('build', { path: 'D:\\other' }, win)).rejects.toThrow(/already has/)
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('action', () => {
   it('maps a 409 conflict to a friendly "already running" error', async () => {
     global.fetch = vi.fn(() => Promise.resolve(errResp(409, { error: 'busy' })))
