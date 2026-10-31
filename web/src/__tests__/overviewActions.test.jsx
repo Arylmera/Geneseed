@@ -305,6 +305,25 @@ describe('Overview lenses: one h1, one primary action', () => {
   }
 })
 
+// An older lens reads ONE install (the default's overview), so its header line names it first.
+describe('Overview lenses name their install', () => {
+  it('the header line starts with the install it reads', async () => {
+    api.fleet.mockResolvedValue(SYNCED)
+    render(
+      <Overview
+        overview={{ ...overview, install: { host: 'claude', scope: 'global' } }}
+        themes={[]}
+        layout="greenhouse"
+        onAction={() => {}}
+      />,
+    )
+    await screen.findByText(lensMarker.greenhouse)
+    expect(
+      screen.getByText('claude · global · imperial voice · lean footprint · /home/u/.claude'),
+    ).toBeTruthy()
+  })
+})
+
 describe('Overview View control', () => {
   for (const layout of ['overview', 'greenhouse']) {
     it(`lists the five views on the ${layout} arm and switches on click`, async () => {

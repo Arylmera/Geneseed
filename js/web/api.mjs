@@ -156,6 +156,19 @@ const driftCounts = (files) => ({
 });
 
 /**
+ * How many memory facts an install's data dir holds: the `.md` files of `<dir>/memory` (where
+ * `memoryItems` reads them), minus its index and README (the console's furniture), any case.
+ * No folder is no facts (0); a folder that cannot be listed is null, so a row says "not read"
+ * rather than "no facts".
+ */
+export function memoryFactCount(dir) {
+  try {
+    return readdirSync(path.join(dir, 'memory'))
+      .filter((f) => /\.md$/i.test(f) && !/^(memory|readme)\.md$/i.test(f)).length;
+  } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
+}
+
+/**
  * The fields every install row opens with, in this order. Theme is narrowed to this row's own
  * host (host-compat B1): a shared repo otherwise answers every row with whichever host's
  * carrier the host-agnostic scan favours.
@@ -237,6 +250,8 @@ export function apiFleet(state) {
       // Each install's own settings, on its row: the Overview has no viewed install to read them off.
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
+      // Its memory facts: one directory listing (`memoryFactCount`), no file read.
+      facts: memoryFactCount(dir),
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),

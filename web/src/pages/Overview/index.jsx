@@ -157,7 +157,9 @@ export default function Overview({
           no behind set to narrow it to. */}
       <PageHeader
         title="Overview"
+        // A lens reads ONE install (the default's overview): the line names it first.
         sub={[
+          overview.install && `${overview.install.host} · ${overview.install.scope}`,
           overview.theme && `${overview.theme} voice`,
           overview.footprint && `${overview.footprint} footprint`,
           overview.target,

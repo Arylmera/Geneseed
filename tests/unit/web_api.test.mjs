@@ -1890,7 +1890,7 @@ test('the install list marks exactly the default install', () => {
 });
 
 // The fleet rows carry each install's own posture and mode: the Overview shows them per row.
-test('the fleet rows carry each install its own posture and mode', () => {
+test('the fleet rows carry each install its own posture, mode and fact count', () => {
   withTwoViews(({ st, oc, cl }) => {
     // The fleet lists ACTIVE installs only: a manifest is what makes each view one.
     for (const d of [oc, cl]) fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
@@ -1900,6 +1900,9 @@ test('the fleet rows carry each install its own posture and mode', () => {
     assert.equal(rows.some((r) => 'selected' in r), false, 'a fleet row still claims a viewed install');
     assert.deepEqual(rows.map((r) => [r.host, r.posture, r.mode]),
       [['opencode', null, null], ['claude', 'artisan', 'foreman']]);
+    // Its memory facts too: MEMORY.md is the index, not a fact; no memory folder is none.
+    seedFact(cl);
+    assert.deepEqual(apiFleet(st).installs.map((r) => [r.host, r.facts]), [['opencode', 0], ['claude', 1]]);
   });
 });
 

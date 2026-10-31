@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
-import { storeInstallPick } from '../../hooks/useInstalls.js'
+import { storeInstallPick, useInstalls } from '../../hooks/useInstalls.js'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
 import PageHeader from '../../components/PageHeader.jsx'
@@ -569,6 +569,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
                     `${i.footprint} footprint`,
                     i.posture && `${i.posture} posture`,
                     i.mode && `${i.mode} mode`,
+                    i.facts != null && `${i.facts} memory fact${i.facts === 1 ? '' : 's'}`,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -780,7 +781,11 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
     storeInstallPick('hosts', i.id)
     window.location.hash = '#/installs/hosts'
   }
+  // The install the unnamed reads (profile, rules) answer for, named once two are active.
+  const active = useInstalls(dataRev)
+  const defaultLabel = active?.length > 1 ? labelOf(active[0]) : null
   const needs = ledgerNeeds({
+    defaultLabel,
     fleet,
     usage,
     overview,

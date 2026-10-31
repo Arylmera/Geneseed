@@ -2,6 +2,8 @@ import React from 'react'
 import Tabs from '../../components/Tabs.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import { driftTotal } from '../../lib/format.js'
+import { installTag } from '../../lib/hosts.js'
+import { useInstalls } from '../../hooks/useInstalls.js'
 import Hosts from './Hosts.jsx'
 import Kits from './Kits.jsx'
 import Diff from '../Diff.jsx'
@@ -24,9 +26,14 @@ export default function Installs({
 }) {
   const d = overview?.doctor
   const diff = overview?.diff
+  // Both figures are the DEFAULT install's (the overview); with two or more installs the badge
+  // names it, since each tab reads its own pick.
+  const active = useInstalls(dataRev)
+  const of = active?.length > 1 ? installTag(active[0]) : null
+  const tagged = (v) => (v == null || !of ? v : { v, of })
   const badges = {
-    edits: diff ? driftTotal(diff) : null,
-    doctor: !d ? null : d.ok ? 'clean' : d.problems.length,
+    edits: tagged(diff ? driftTotal(diff) : null),
+    doctor: tagged(!d ? null : d.ok ? 'clean' : d.problems.length),
   }
   return (
     <>

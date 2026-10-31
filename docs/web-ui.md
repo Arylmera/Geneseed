@@ -116,8 +116,13 @@ breadcrumb starts at the page: it names no install.
 `InstallPicker` sits beside what it applies to, labelled for it (*Write to:*, *Doctor for:*), and
 starts on the default install; with one active install it is not shown. Rules and Profile list
 every active install's entries together, each tagged with its install, and write back to the
-install an entry came from. Doctor, Local edits and Server each keep their own pick (in the
-browser's localStorage). The Overview is fleet-wide: each install's own facts sit on its row.
+install an entry came from; so do Memory and Notebook, whose Forget and Promote act on the
+install of the copy on screen. Doctor, Local edits, Server, the Constitution (*Constitution of:*,
+for its gate switches and doctrine Apply), Loops (*Templates and bricks of:*) and the rail's Voice
+popover (*Rebuild:*) each keep their own pick (in the browser's localStorage). The Overview is
+fleet-wide: each install's own facts (voice, footprint, posture, mode, memory facts, drift) sit on
+its row, and a figure still read off the default install (a suggestion, a tab badge, an older
+Overview view, Personal's Rule budget) names that install once two or more are active.
 
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type
