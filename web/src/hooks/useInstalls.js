@@ -7,14 +7,15 @@ import { useLocalStorage } from './useLocalStorage.js'
 // /api/installs, so every page shares App's one fetch. Null only on the FIRST load, so a page can
 // wait rather than read the default and then the pick; a refetch keeps the last list (useAsync
 // holds its data), so a page never unmounts what it shows on a `dataRev` bump. Empty when
-// unreadable — App's own loader caches a failed read as null, and an api without `installs` (a
-// page's test stub) fails too — and a page then reads the default.
+// unreadable — an api without `installs` (a page's test stub) fails too — and a page then reads
+// the default. A failure caches null, as App's own loader does: both share the `installs` key,
+// and a different fallback landing last would hide App's "install list unreadable" notice.
 export function useInstalls(dataRev) {
   const { data, loading } = useAsync(
     () =>
       Promise.resolve()
         .then(() => api.installs())
-        .catch(() => ({ installs: [] })),
+        .catch(() => null),
     [dataRev],
     'installs',
   )

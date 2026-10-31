@@ -9,7 +9,8 @@ import { installTag } from '../lib/hosts.js'
 // voice is a real toggle button in a dialog, not a menu: it has no menu keyboard model.
 // Not the shared Popover: `.popover` is position:absolute, and this one is fixed (`.pop`).
 // It rebuilds ONE install: the `install` its own "Rebuild:" picker names (hidden with one
-// install), and the confirm names it too.
+// install), and the confirm names it too. `ready` false (the install list not read yet) disables
+// every voice: a pick then would rebuild the default install, ignoring the remembered pick.
 export default function VoicePopover({
   themes,
   current,
@@ -18,6 +19,7 @@ export default function VoicePopover({
   installs,
   install,
   onInstall,
+  ready = true,
 }) {
   const confirm = useConfirm()
   const ref = useRef(null)
@@ -51,6 +53,7 @@ export default function VoicePopover({
           type="button"
           aria-pressed={t.name === current}
           key={t.name}
+          disabled={!ready}
           className={`pop-item ${t.name === current ? 'on' : ''}`}
           onClick={async () => {
             onClose()

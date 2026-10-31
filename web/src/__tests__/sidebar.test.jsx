@@ -166,6 +166,29 @@ describe('VoicePopover', () => {
     expect(onPick).toHaveBeenCalledWith('plain')
   })
 
+  // Before the install list is read, a pick would rebuild the default install whatever the
+  // remembered "Rebuild:" pick says: every voice is disabled until the list lands.
+  it('offers no voice before the install list is read', async () => {
+    const ask = vi.fn(async () => true)
+    const onPick = vi.fn()
+    render(
+      <ConfirmContext.Provider value={ask}>
+        <VoicePopover
+          themes={themes}
+          current="imperial"
+          onPick={onPick}
+          onClose={() => {}}
+          ready={false}
+        />
+      </ConfirmContext.Provider>,
+    )
+    const plain = screen.getByText('plain').closest('button')
+    expect(plain.disabled).toBe(true)
+    await act(async () => fireEvent.click(plain))
+    expect(ask).not.toHaveBeenCalled()
+    expect(onPick).not.toHaveBeenCalled()
+  })
+
   // The switch rebuilds ONE install: with two active, the popover's own "Rebuild:" picker names
   // it, a change of pick goes to the caller, and the confirm names the install it rebuilds.
   it('names and picks the install it rebuilds', async () => {

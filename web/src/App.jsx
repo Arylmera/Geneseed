@@ -326,6 +326,7 @@ export default function App() {
             current={voiceInstall ? voiceInstall.theme : overview?.theme}
             installs={activeList}
             install={voiceInstall}
+            ready={!instLoading || !!instData}
             onInstall={pickVoiceInstall}
             onPick={(name) => {
               setVoiceOpen(false)
