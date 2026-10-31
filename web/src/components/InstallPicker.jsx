@@ -24,3 +24,14 @@ export default function InstallPicker({ installs, value, onChange, label, classN
     </label>
   )
 }
+
+// The one line the console shows when /api/installs could not be read: every page then reads
+// the default install and offers no picker, so say so rather than look like a one-install machine.
+export function InstallListStatus({ unreadable }) {
+  if (!unreadable) return null
+  return (
+    <p className="sub rule-notice" role="status">
+      Install list unreadable — showing the default install.
+    </p>
+  )
+}

@@ -16,6 +16,7 @@ import { useInstallPick } from './hooks/useInstalls.js'
 import { activeInstalls, pairOf } from './lib/hosts.js'
 import Sidebar, { TabBar } from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
+import { InstallListStatus } from './components/InstallPicker.jsx'
 import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
@@ -131,7 +132,11 @@ export default function App() {
   // fetch each for the whole shell, refetched on `dataRev`. The sidebar and the pages (their
   // install pickers, hooks/useInstalls.js) all read these copies.
   const { data: setup } = useAsync(() => api.setup().catch(() => null), [dataRev], 'setup')
-  const { data: instData } = useAsync(() => api.installs().catch(() => null), [dataRev], 'installs')
+  const { data: instData, loading: instLoading } = useAsync(
+    () => api.installs().catch(() => null),
+    [dataRev],
+    'installs',
+  )
   const installs = instData?.installs || null
   // The install the rail's Voice popover rebuilds: its own pick, remembered (no console-wide one).
   const activeList = activeInstalls(installs)
@@ -350,6 +355,7 @@ export default function App() {
             >
               {/* Staged kit and doctrine switches, held ABOVE the per-page boundary so they
                   survive a page change (and a page crash); see hooks/useStaging.jsx. */}
+              <InstallListStatus unreadable={!instLoading && !instData} />
               <StagingProvider activeId={activeId} finish={finish}>
                 {/* Keyed on the page ONLY: a new page clears a crash, while an item change keeps
                     the one slot below. */}

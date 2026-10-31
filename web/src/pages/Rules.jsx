@@ -195,15 +195,24 @@ export default function Rules({ onChanged, dataRev }) {
   const active = useInstalls(dataRev)
   const targets = active === null ? null : active.length ? active : [null]
   const ids = targets ? targets.map((i) => i?.id ?? '').join('|') : null
-  const { data: sets, error } = useAsync(
+  // One install's unreadable file must not blank the others: each read settles on its own, a
+  // failed one is named apart (`failed`), and only all of them failing is the page's error.
+  const { data: read, error } = useAsync(
     () =>
       targets
-        ? Promise.all(
-            targets.map((inst) => api.rules(pairOf(inst)).then((data) => ({ inst, data }))),
-          )
+        ? Promise.allSettled(targets.map((inst) => api.rules(pairOf(inst)))).then((rs) => {
+            if (rs.every((r) => r.status === 'rejected')) throw rs[0].reason
+            return {
+              sets: rs.flatMap((r, i) =>
+                r.status === 'fulfilled' ? [{ inst: targets[i], data: r.value }] : [],
+              ),
+              failed: rs.flatMap((r, i) => (r.status === 'rejected' ? [targets[i]] : [])),
+            }
+          })
         : Promise.resolve(null),
     [rev, ids],
   )
+  const sets = read?.sets
   const [open, setOpen] = useState(null)
   const reload = () => setRev((v) => v + 1)
   // draft: { target: 'new' | rule key, title0: the rule's title when opened, form, to: the new
@@ -236,7 +245,7 @@ export default function Rules({ onChanged, dataRev }) {
   if (error) return <ErrorState error={error} onRetry={reload} />
   if (!sets) return <Loading />
 
-  const many = sets.length > 1
+  const many = targets.length > 1
   const idOf = (inst) => inst?.id ?? ''
   // A rule's key is its install and its number: two installs each have an R1.
   const rules = sets.flatMap(({ inst, data }) =>
@@ -255,7 +264,28 @@ export default function Rules({ onChanged, dataRev }) {
     !rules.some((r) => r.key === target && r.title === draft.title0)
   const newCard = target === 'new' || gone
   // The install a new (or gone) draft writes to: the form's own pick, else the first writable.
-  const writeTo = writable.find((i) => idOf(i) === draft?.to) ?? writable[0] ?? null
+  // A draft that names an install keeps it, or is refused: it never falls to another install.
+  const lost = draft?.to !== undefined && !writable.some((i) => idOf(i) === draft.to)
+  const writeTo = lost ? null : (writable.find((i) => idOf(i) === draft?.to) ?? writable[0] ?? null)
+  // Where a new rule goes, said beside its form: a picker over two writable installs or more;
+  // with one, its tag, once the page lists two installs; and a refusal when the draft's is gone.
+  const writeToLine = lost ? (
+    <p className="sub rule-notice" role="alert">
+      The install this draft was for has no user-rules.md now, so it is not saved anywhere else.
+      Cancel it, or copy the text into a new rule.
+    </p>
+  ) : writable.length > 1 ? (
+    <InstallPicker
+      installs={writable}
+      value={writeTo}
+      onChange={(i) => editor.setDraft({ ...draft, to: i.id })}
+      label="Write to:"
+    />
+  ) : many && writeTo ? (
+    <p className="install-pick">
+      <span className="dim">Write to:</span> <span className="mono">{installTag(writeTo)}</span>
+    </p>
+  ) : null
 
   const mutate = async (body, inst, fromDraft) => {
     const fp = sets.find((s) => idOf(s.inst) === idOf(inst))?.data.fingerprint || ''
@@ -340,6 +370,12 @@ export default function Rules({ onChanged, dataRev }) {
           {notice}
         </p>
       ) : null}
+      {read.failed.length ? (
+        <p className="sub rule-notice" role="status">
+          Could not read user-rules.md of{' '}
+          {read.failed.map((i) => (i ? installTag(i) : 'the default install')).join(', ')}.
+        </p>
+      ) : null}
       {warnings.map((w) => (
         <p key={w} className="sub rule-notice">
           format warning: {w}
@@ -361,16 +397,11 @@ export default function Rules({ onChanged, dataRev }) {
             value={draft.form}
             onChange={setForm}
             busy={busy}
-            writeTo={
-              <InstallPicker
-                installs={writable}
-                value={writeTo}
-                onChange={(i) => editor.setDraft({ ...draft, to: i.id })}
-                label="Write to:"
-              />
-            }
+            writeTo={writeToLine}
             onCancel={() => cancelThen('add')}
-            onSave={(f) => saveThen({ op: 'add', ...f }, writeTo, 'add')}
+            onSave={(f) =>
+              !lost && writable.length && saveThen({ op: 'add', ...f }, writeTo, 'add')
+            }
           />
         </div>
       )}

@@ -557,6 +557,31 @@ describe('Rules across installs', () => {
     delete api.installs
   })
 
+  // Two installs listed but one writable: no picker to hide behind, the form names its target.
+  it('names the one writable target beside the form', async () => {
+    api.rules.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'opencode' ? { ...ocRules, exists: false, rules: [] } : clRules,
+      ),
+    )
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Add rule'))
+    expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
+    expect(document.querySelector('.rule-form .install-pick').textContent).toBe(
+      'Write to: claude · global',
+    )
+  })
+
+  // One unreadable file leaves the others listed and is named, never a whole-page error.
+  it('lists the readable installs and names the one that failed', async () => {
+    api.rules.mockImplementation((inst) =>
+      inst?.host === 'opencode' ? Promise.reject(new Error('EACCES')) : Promise.resolve(clRules),
+    )
+    render(<Rules />)
+    await screen.findByText('Claude only')
+    expect(screen.getByText('Could not read user-rules.md of opencode · global.')).toBeTruthy()
+  })
+
   it('lists both installs, each row tagged with its own', async () => {
     render(<Rules />)
     await screen.findByText('Claude only')
