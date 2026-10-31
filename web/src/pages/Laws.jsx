@@ -604,6 +604,7 @@ export default function Laws({ selected, overview, setup, onAction, dataRev }) {
             byAddr={byAddr}
             onJump={jumpToRule}
             disarmed={(addr) => Boolean(GATE_SWITCH[addr]) && !armed(addr)}
+            install={overview?.install}
           />
         </aside>
       </div>

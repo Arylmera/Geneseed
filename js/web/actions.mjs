@@ -177,7 +177,8 @@ function bodyAxes(body, dflt) {
 
 /**
  * The DETECTED install a body's (host, path) pair names — `[host, scope, root]` — or a
- * `NotFound`. THE ALLOWLIST three endpoints share (view select, rebuild, deactivate/remove), and
+ * `NotFound`. THE ALLOWLIST every install-naming endpoint shares (a per-request install, rebuild,
+ * deactivate/remove), and
  * one copy of it: two copies of a security check drift, and the copy that drifts is the one
  * nobody re-read.
  *
@@ -195,8 +196,7 @@ function detectedInstall(body) {
 
 /**
  * The state a request reads: the install its `{host, path}` names, or `base` (the daemon's
- * own, the topbar selector's view) when it names neither — so a client that sends no install
- * keeps today's answers.
+ * own, on the default install, `defaultView`) when it names neither.
  *
  * NAMING ONE IS AN ALLOWLIST LOOKUP, EVERY TIME: `detectedInstall` runs on a cache hit too, so
  * a half pair, an unknown pair or an install removed since is a `NotFound` (404), never a fall
@@ -480,24 +480,6 @@ export function mcpTargetPaths() {
   return known;
 }
 
-// ---- the harness selector ------------------------------------------------------------------
-
-/**
- * Re-point the whole console at a detected install.
- *
- * The (host, path) PAIR must be one of the detected targets, and the ROOT is threaded through
- * beside the data dir: markers and sigils live at the install root, not in the data dir, and
- * without it a claude/bob PROJECT view mis-detects as opencode/neutral.
- *
- * The pair is SERIALISED into the key rather than concatenated with a separator: the path
- * comes straight out of a request body, and any separator it could contain would let one
- * pair impersonate another in a lookup whose whole job is to be an allowlist.
- */
-export function apiSelectView(state, body) {
-  const [host, scope, root] = detectedInstall(body);
-  state.selectView(viewCfg(host, scope, root), root);
-  return { ok: true, target: state.target, theme: state.theme, emit: state.emit };
-}
 
 // ---- restore, and the two build-command resolvers ---------------------------------------
 
@@ -714,7 +696,7 @@ const EMIT_FOR = new Map([
  * already-active one (an in-place re-emit, the same command either way).
  *
  * The (host, path) pair MUST be one of the detected targets — the same allowlist
- * `apiSelectView` uses, and the reason the target is never built from raw body input — and
+ * `installView` uses, and the reason the target is never built from raw body input — and
  * it must not be `disabled` (reactivate first). Every other field follows the same rule: a
  * VALID picked value wins, else the install's own, so a re-theme never silently flips the
  * footprint, the register or the mode, and a bogus body value cannot reach the argv.

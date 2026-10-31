@@ -36,7 +36,6 @@ vi.mock('../api/index.js', () => ({
     gates: vi.fn(),
     update: vi.fn(),
     activity: vi.fn(),
-    selectView: vi.fn(),
   },
 }))
 

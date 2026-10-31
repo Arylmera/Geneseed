@@ -240,7 +240,7 @@ the deployed harness as JSON.
 | `server.mjs` | `serve()`/`cmdWeb`: UI-build precheck, socket bind, token mint, daemon record wiring |
 | `routes.mjs` | The route tables — `STATE_ROUTES`, `PREFIX_ROUTES`, `POST_ROUTES` (+ its 409 column) — and the inline lists |
 | `handler.mjs` | One function per request: per-request install (`?host=&path=` on every read but `MACHINE_GETS`, or the body on `VIEW_POSTS`), dispatch, gzip, `requestGuard` (Host+port, Origin/Sec-Fetch-Site on `/api`, constant-time CSRF token) and body cap (before the body is read), `securityHeaders` (CSP nonce, framing), static SPA fallback |
-| `state.mjs` | `webState` — the resolved install view every endpoint reads, with its cached inventory and doctor; per-install views (`installView` in `actions.mjs`) hang off it, pinned, refreshed with it |
+| `state.mjs` | `webState` — the resolved install view every endpoint reads, with its cached inventory and doctor, `defaultView` (the install a request naming none reads) and `fleetSort` (the one install order); per-install views (`installView` in `actions.mjs`) hang off it, pinned, refreshed with it |
 | `catalog.mjs` | The Library read model: inventory, constitution tiers, memory/notebook/wiki/config items, `apiCatalog`/`apiItem`, `NotFound`. Skills and agents are listed across every active install (`FLEET_SECTIONS`; `routes.mjs` builds the fleet), each item served from one install's copy |
 | `api.mjs` | The dashboard and settings reads: overview, recent, themes, setup, doctor, diff, installs, excludes, loops |
 | `update-check.mjs` | Is a newer release on npm? Answers from memory, refreshes in the background (a day when it got an answer, an hour when it did not), `null` on any failure, never asked under `node --test` |

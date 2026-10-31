@@ -41,7 +41,6 @@ vi.mock('../api/index.js', () => ({
         ],
       }),
     ),
-    selectView: vi.fn(() => Promise.resolve({ ok: true })),
     installToggle: vi.fn(() => Promise.resolve({ ok: true })),
     mcp: vi.fn(() =>
       Promise.resolve({
@@ -858,18 +857,13 @@ describe('Installs / Hosts', () => {
       expect(screen.queryByRole('alert')).toBeNull()
     })
 
-    // Local edits diffs the VIEWED install only: another row's link moves the view, then the
-    // app refreshes, and only then does the hash change. The viewed row skips the move.
-    it('Local edits moves the view before the hash, and only for another install', async () => {
-      const order = []
-      api.selectView.mockClear()
-      api.selectView.mockImplementationOnce(async (host, path) => {
-        order.push(`view ${host} ${path} at ${window.location.hash || '(none)'}`)
-        return { ok: true }
-      })
-      const onMutated = vi.fn(() => order.push('refresh'))
+    // Local edits compares the install its own picker names: a row's link sets that pick to the
+    // row, then changes the hash. Nothing console-wide moves, and nothing refreshes.
+    it('Local edits sets the edits pick to its row, then the hash', async () => {
+      localStorage.clear()
+      const onMutated = vi.fn()
       api.installs.mockResolvedValueOnce({
-        installs: [{ ...four[0] }, { ...four[1], selected: true }],
+        installs: [{ ...four[0] }, { ...four[1], default: true }],
       })
       api.fleet.mockResolvedValueOnce({
         version: '4.19.0',
@@ -883,14 +877,16 @@ describe('Installs / Hosts', () => {
       const links = await screen.findAllByRole('link', { name: 'Local edits' })
       fireEvent.click(links[0])
       await waitFor(() => expect(window.location.hash).toBe('#/installs/edits'))
-      expect(order).toEqual(['view opencode C:/oc at #/installs/hosts', 'refresh'])
-      // The click did not also pick the row.
+      expect(localStorage.getItem('geneseed-install-edits')).toBe(four[0].id)
+      expect(onMutated).not.toHaveBeenCalled()
+      // The click did not also pick the row: the panel stays on the default install.
       expect(panel().querySelector('h2').textContent).toBe('Claude Code')
 
       window.location.hash = '#/installs/hosts'
       fireEvent.click(links[1])
       await waitFor(() => expect(window.location.hash).toBe('#/installs/edits'))
-      expect(api.selectView).toHaveBeenCalledTimes(1)
+      expect(localStorage.getItem('geneseed-install-edits')).toBe(four[1].id)
+      localStorage.clear()
     })
   })
 })

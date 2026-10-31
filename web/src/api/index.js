@@ -10,10 +10,10 @@ import { get, post } from './http.js'
 // Every install-scoped call takes an optional trailing `install` ({ host, path }, a row of
 // /api/installs or /api/fleet). Reads send it as `?host=&path=` (two params: a Windows path
 // holds a colon), writes as `host`/`path` in the body. Omitted, the server answers for the
-// install the topbar selector picked. An unknown pair is a 404, never another install's data.
+// default install (the first active one). An unknown pair is a 404, never another install's data.
 
 // True for a whole pair, false for none (null/undefined). A HALF or malformed pair throws, as
-// the server refuses it: dropped silently, a write would land on the topbar's install.
+// the server refuses it: dropped silently, a write would land on the default install.
 const named = (install) => {
   if (install == null) return false
   if (typeof install.host === 'string' && typeof install.path === 'string') return true
@@ -157,8 +157,6 @@ const installToggle = (host, path, action) => post('/api/install', { host, path,
 // governs the memory/notebook stores. Same (host, path) allowlist as installToggle.
 const installRemove = (host, path, memory) =>
   post('/api/install', { host, path, action: 'remove', memory })
-// Re-point the whole console at a detected install (the harness selector).
-const selectView = (host, path) => post('/api/view', { host, path })
 // Open the OS-native folder chooser on the daemon host and return the picked absolute
 // path: { path } | { cancelled: true } | { error }. The browser can't reveal a disk path
 // itself, so the local daemon pops a real Finder/dialog on the user's own screen.
@@ -244,7 +242,6 @@ export const api = {
   installs,
   installToggle,
   installRemove,
-  selectView,
   pickFolder,
   ping,
   shutdown,

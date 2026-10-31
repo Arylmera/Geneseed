@@ -7,8 +7,16 @@ import { Bar } from '../../components/StackBar.jsx'
 //
 // `disarmed(addr)` is true for a gate this install switched off (Laws.jsx, GATE_SWITCH only).
 // Its past asks stay in the ledger, but it asks nothing now: it sorts after every armed gate,
-// reads "off", and its bar drops the warning colour.
-export default function GateAsks({ gates, byAddr, onJump, disarmed = () => false }) {
+// reads "off", and its bar drops the warning colour. The ledger counts every install's asks but the
+// switch is ONE install's (`install`, {host, scope}), so the badge names it: "off · claude global".
+export default function GateAsks({
+  gates,
+  byAddr,
+  onJump,
+  disarmed = () => false,
+  install = null,
+}) {
+  const offText = install ? `off · ${install.host} ${install.scope}` : 'off'
   const asks = Object.entries(gates?.asks || {})
     .map(([gate, n]) => [gate, n, disarmed(gateAddress(gate))])
     .sort((a, b) => a[2] - b[2] || b[1] - a[1])
@@ -33,7 +41,7 @@ export default function GateAsks({ gates, byAddr, onJump, disarmed = () => false
                   <span className="gate-top">
                     <span className={`gate-name${off ? ' dim' : ''}`}>{name}</span>
                     <span className="mono dim">{addr}</span>
-                    {off && <span className="mono off">off</span>}
+                    {off && <span className="mono off">{offText}</span>}
                     <span className="mono gate-n">{n}</span>
                   </span>
                 </button>

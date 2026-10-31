@@ -1,32 +1,25 @@
 import React, { useRef, useState } from 'react'
-import { promptPath } from '../lib/format.js'
 import { Icon } from './Icon.jsx'
 import Search from './Search.jsx'
-import HarnessSelector from './HarnessSelector.jsx'
 import AppearancePopover from './AppearancePopover.jsx'
 import { PAGES, TAB_LABELS } from '../lib/router.js'
 
-// The top bar: where you are (the install the console reads — the harness picker itself when
-// there is another active install to read instead — then the page and its tab),
+// The top bar: where you are (the page and its tab — no install: there is no console-wide one,
+// each page that acts on one install picks it beside what it applies to),
 // the command palette's trigger (search, jump anywhere by name, run an action), and the two display
 // controls: the appearance popover (skin and accent source) and light/dark.
 export default function Topbar({
   route,
   navOpen,
   onToggleNav,
-  overview,
-  installs,
   actions,
   mode,
   onToggleMode,
   appearance,
   dataRev,
-  onSwitch,
 }) {
   const [appearanceOpen, setAppearanceOpen] = useState(false)
   const apRef = useRef(null)
-  const inst = overview?.install
-  const where = inst ? `${inst.host}:${inst.scope}` : promptPath(overview?.target)
   const tab = route.tab && TAB_LABELS[route.tab]
   return (
     <header className="topbar">
@@ -46,17 +39,6 @@ export default function Topbar({
           back to it. The separators are CSS (`li + li::before`), not text. */}
       <nav className="crumbs" aria-label="Breadcrumb">
         <ol>
-          <li className="crumb-root mono">
-            <HarnessSelector
-              installs={installs}
-              onSwitch={onSwitch}
-              fallback={
-                <a href="#/installs" title={overview?.target || undefined}>
-                  {where}
-                </a>
-              }
-            />
-          </li>
           <li>
             {tab ? (
               <a href={route.page === 'overview' ? '#/' : `#/${route.page}`}>{PAGES[route.page]}</a>

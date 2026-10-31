@@ -42,7 +42,7 @@ import {
 import { HOSTS } from '../../web/src/lib/hosts.js';
 import {
   apiRestore, apiMcp, buildOverride, apiInstallToggle,
-  apiInstallCmd, apiSelectView, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
+  apiInstallCmd, apiExcludesMutate, apiDeployCmd, globalEmitHostFor,
   apiLoopsPresetMutate, apiMemoryDelete,
 } from '../../js/web/actions.mjs';
 import { installState, themeOfDir, installTargets } from '../../js/hosts/installs.mjs';
@@ -1824,8 +1824,8 @@ test('the overview reports the viewed install\'s secrets and done gates', () => 
 });
 
 // ---------------------------------------------------------------------------------------------
-// The harness selector: `apiSelectView` re-points the whole console at a detected install
-// (target, theme, emit) and `apiInstalls` marks the current one selected.
+// A named install (`installView`) reads that install's own target, theme and emit; there is no
+// console-wide selection to move (the topbar selector and `POST /api/view` are gone).
 
 function withTwoViews(fn) {
   const sb = makeSandbox();
@@ -1851,13 +1851,13 @@ function withTwoViews(fn) {
   }
 }
 
-test('selecting a view re-points target, theme and emit', () => {
+test('a named install reads its own target, theme and emit', () => {
   withTwoViews(({ st, cl }) => {
-    const res = apiSelectView(st, { host: 'claude', path: cl });
-    assert.equal(res.ok, true, JSON.stringify(res));
-    assert.ok(samePath(st.target, cl));
-    assert.equal(st.theme, 'imperial', "the theme was not read from the selected install");
-    assert.equal(st.emit, 'claude-global', 'the emit was not read from the selected install');
+    const v = installView(st, { host: 'claude', path: cl });
+    assert.ok(samePath(v.target, cl));
+    assert.equal(v.theme, 'imperial', "the theme was not read from the named install");
+    assert.equal(v.emit, 'claude-global', 'the emit was not read from the named install');
+    assert.equal(st.theme, 'neutral', 'naming an install moved the daemon state');
   });
 });
 
@@ -1869,9 +1869,9 @@ test('a kits change for the non-viewed install keeps THAT install theme, not the
   });
 });
 
-test('selecting an unknown pair raises NotFound', () => {
+test('naming an unknown pair raises NotFound', () => {
   withTwoViews(({ st }) => {
-    assert.throws(() => apiSelectView(st, { host: 'claude', path: '/no/such/root' }), NotFound);
+    assert.throws(() => installView(st, { host: 'claude', path: '/no/such/root' }), NotFound);
   });
 });
 
@@ -1906,8 +1906,8 @@ test('the fleet rows carry each install its own posture and mode', () => {
 // ---------------------------------------------------------------------------------------------
 // Per-request install (D5): every request may name its install — `?host=&path=` on a read,
 // `{host, path}` in a write body — and is answered for THAT install, on the same daemon, without
-// any `/api/view`. The pair goes through the same allowlist as the selector; an unknown or half
-// pair is a 404, never another dir. Naming none answers for the daemon's own view, as before.
+// any console-wide selection. The pair goes through the detected-install allowlist; an unknown or
+// half pair is a 404, never another dir. Naming none answers for the default install.
 //
 // The fixture is `withTwoViews`, awaited: an opencode global (theme neutral, the daemon's view,
 // the only one with a manifest) and a claude global whose markers say claude-global / imperial.
@@ -1952,7 +1952,7 @@ async function withTwoViewsServed(fn, { jm = new JobManager() } = {}) {
   }
 }
 
-test('two installs answer with their own data on one daemon, with no /api/view call', async () => {
+test('two installs answer with their own data on one daemon', async () => {
   await withTwoViewsServed(async ({ st, oc, cl, ocPair, clPair, get, post }) => {
     // `/api/themes` carries the viewed install's theme and emit, `/api/setup` its target.
     const claude = (await (await get('/api/themes', clPair)).json()).current;
@@ -1995,19 +1995,25 @@ test('an unknown or half (host, path) pair is refused with 404', async () => {
   });
 });
 
-test('a request naming no install answers for the daemon view, as before', async () => {
+// A request naming no install reads the DEFAULT install (`defaultView`): opencode while it is the
+// first active one. There is no selector to move it (`POST /api/view` is gone: 404); it moves
+// when the installs do — opencode switched off, claude active — on the next full refresh.
+test('a request naming no install answers for the default install', async () => {
   await withTwoViewsServed(async ({ st, oc, cl, clPair, get, post }) => {
     assert.equal((await (await get('/api/themes')).json()).current.theme, 'neutral');
     assert.ok(samePath((await (await get('/api/setup')).json()).target, oc));
-    // The selector still works, and an unnamed request then follows it.
-    assert.equal((await post('/api/view', clPair)).status, 200);
+    assert.equal((await post('/api/view', clPair)).status, 404, 'the view selector still answers');
+    assert.ok(samePath(st.target, oc));
+
+    fs.rmSync(path.join(oc, GLOBAL_MANIFEST));
+    fs.writeFileSync(path.join(cl, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    st.refresh();
     assert.equal((await (await get('/api/themes')).json()).current.theme, 'imperial');
     assert.ok(samePath((await (await get('/api/setup')).json()).target, cl));
-    assert.ok(samePath(st.target, cl));
   });
 });
 
-// `refresh` follows a view to an active install when its own has none (`fallbackView`). The
+// `refresh` moves the daemon state to the default install (`defaultView`) when it is elsewhere. The
 // claude install here has no manifest, so an unpinned state would jump to opencode.
 test('a per-install view is pinned: refresh never re-points it at another install', async () => {
   await withTwoViewsServed(async ({ st, cl, clPair }) => {

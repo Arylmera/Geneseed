@@ -16,7 +16,6 @@ vi.mock('../api/index.js', () => ({
     activity: vi.fn(),
     profile: vi.fn(),
     catalog: vi.fn(),
-    selectView: vi.fn(),
   },
 }))
 

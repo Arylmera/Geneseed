@@ -873,7 +873,8 @@ describe('Constitution page — the Gate asks card', () => {
     expect(bar(first).querySelector('.tone-warn')).toBeTruthy()
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
     expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
-    expect(second.querySelector('.off').textContent).toBe('off')
+    // The switch is one install's, inside a card of every install's asks: the badge names it.
+    expect(second.querySelector('.off').textContent).toBe('off · opencode global')
     expect(bar(second).querySelector('.tone-warn')).toBeNull()
     expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
     // Each bar is named by its gate, so a reader can tell them apart; the count is against the

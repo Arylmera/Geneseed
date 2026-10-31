@@ -19,7 +19,7 @@
 import { installTargets } from '../hosts/installs.mjs';
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
 import { percentDecode } from '../lib/text.mjs';
-import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, apiSelectView, targetView } from './actions.mjs';
+import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, targetView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
   apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview,
@@ -49,7 +49,6 @@ import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote }
 export const POST_ROUTES = new Map([
   ['/api/install', [apiInstallToggle, true]],
   ['/api/excludes', [apiExcludesMutate, true]],
-  ['/api/view', [apiSelectView, true]],
   ['/api/activity', [apiActivityToggle, false]],
   // The dispatch wrapper resolves `name` from the body itself; `apiMemoryDelete` takes a bare
   // slug string, not the body object, unlike the other routes here.
@@ -66,10 +65,10 @@ export const POST_ROUTES = new Map([
 
 /**
  * The POSTs whose body `{host, path}` names the install they act on (`installView`), opt-in
- * rather than every POST: in `/api/view`, `/api/install` and `/api/actions/install` the pair is
+ * rather than every POST: in `/api/install` and `/api/actions/install` the pair is
  * the target the route resolves itself, and in `/api/actions/deploy`, `/api/excludes` and
  * `/api/reveal` a `path` is a folder or a config file, not an install. The two `actions/` rows
- * are the only actions that read the viewed install.
+ * are the only actions that read the request's install.
  */
 export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/rules',
   '/api/rules/promote', '/api/profile', '/api/actions/restore', '/api/actions/build']);

@@ -468,7 +468,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
           try {
             return doPost(req, res, path, ae, buf);
           } catch (e) {
-            // `apiSelectView`, `apiMemoryDelete`, `apiRulesMutate` and `apiRulesPromote` all
+            // `installView`, `apiMemoryDelete`, `apiRulesMutate` and `apiRulesPromote` all
             // raise `NotFound` for an unknown target, mapped to 404
             // here; anything else falls to the generic 500 (`SERVER_FAULT`, below).
             if (e instanceof NotFound) {

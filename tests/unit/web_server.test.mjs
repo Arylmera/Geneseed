@@ -60,11 +60,12 @@ const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/d
   '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 15. `/api/mcp` left it when MCP became read-only. */
+/** Every POST path the daemon answers — 14. `/api/mcp` left it when MCP became read-only, and
+ * `/api/view` when the console's install selector was retired (each page names its install). */
 const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/install',
   '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote',
-  '/api/shutdown', '/api/view'];
+  '/api/shutdown'];
 
 /**
  * The POST paths whose send carries a `200 if … else 409` conditional.
@@ -75,7 +76,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/i
  * raise — so the column has to be checked as a column, below.
  */
 const EXPECT_409 = ['/api/excludes', '/api/install', '/api/profile', '/api/rules',
-  '/api/rules/promote', '/api/view'];
+  '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */
 const EXPECT_KINDS = ['about', 'cli', 'concept', 'glossary', 'map', 'markdown'];

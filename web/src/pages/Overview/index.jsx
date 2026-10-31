@@ -121,14 +121,11 @@ export default function Overview({
     ) : (
       <Loading />
     )
-  // Onboard only a machine with NO active install. `deployed` describes the VIEWED install, which
-  // can sit on a disabled or removed one over a live fleet; it decides only while the fleet is
-  // unread or unreadable.
-  if (!overview.deployed) {
-    if (instLoading && !instData) return <Loading />
-    const live = instData?.installs?.some((i) => i.state === 'active')
-    if (!live) return <Onboarding onAction={onAction} />
-  }
+  // Onboard only a machine with NO active install, read off the fleet. `deployed` (the default
+  // install's manifest) decides only when the fleet is unreadable.
+  if (instLoading && !instData) return <Loading />
+  const live = instData ? instData.installs?.some((i) => i.state === 'active') : overview.deployed
+  if (!live) return <Onboarding onAction={onAction} />
 
   const banner = <NewHere harness={docsHostOf(overview.emit)} />
   const view = onLayout ? <ViewSeg layout={layout} onLayout={onLayout} /> : null

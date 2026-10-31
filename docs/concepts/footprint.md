@@ -42,7 +42,7 @@ Footprint is stored in a `.geneseed-footprint` marker in the install and kept ac
   geneseed setup
   ```
 
-- **Web console** — each install's own panel on the Hosts page changes its footprint and rebuilds it; Settings shows the viewed install's footprint and links there. A new install or deploy from the console starts lean, as from the command line.
+- **Web console** — each install's own panel on the Hosts page changes its footprint and rebuilds it; Settings shows the footprint of the install its own picker names and links there. A new install or deploy from the console starts lean, as from the command line.
 - **Command line** — with the emit target of the install you are changing:
 
   ```bash

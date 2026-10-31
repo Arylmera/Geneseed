@@ -5,11 +5,9 @@ import { describe, it, expect, vi } from 'vitest'
 // The two neighbours fetch and own their own behaviour; these tests are about the crumbs and
 // the Appearance popover only.
 vi.mock('../components/Search.jsx', () => ({ default: () => null }))
-vi.mock('../components/HarnessSelector.jsx', () => ({ default: ({ fallback }) => fallback }))
 
 import Topbar from '../components/Topbar.jsx'
 
-const overview = { install: { host: 'claude', scope: 'global' }, target: '/home/u/.claude' }
 const appearance = {
   flavour: 'cultivar',
   onFlavour: () => {},
@@ -22,7 +20,7 @@ const appearance = {
 const mount = (route = { page: 'overview' }) =>
   render(
     <div className="app">
-      <Topbar route={route} overview={overview} appearance={appearance} />
+      <Topbar route={route} appearance={appearance} />
     </div>,
   )
 const trigger = () => screen.getByRole('button', { name: 'Appearance' })
@@ -56,7 +54,8 @@ describe('Appearance popover', () => {
 })
 
 // A breadcrumb is an ordered list (the WAI pattern, and PageHeader's); every level above the
-// current one is a link back to it, and the current one is aria-current="page".
+// current one is a link back to it, and the current one is aria-current="page". It starts at the
+// page: no install root, since the console has no install-wide view (each page picks its own).
 describe('Breadcrumb', () => {
   it('is an ordered list whose parent levels link back, the tab current', () => {
     mount({ page: 'installs', tab: 'kits' })
@@ -66,21 +65,16 @@ describe('Breadcrumb', () => {
       within(nav)
         .getAllByRole('link')
         .map((a) => [a.textContent, a.getAttribute('href')]),
-    ).toEqual([
-      ['claude:global', '#/installs'],
-      ['Installs', '#/installs'],
-    ])
+    ).toEqual([['Installs', '#/installs']])
     expect(nav.querySelector('[aria-current="page"]').textContent).toBe('Kits')
   })
 
   it('a page without a tab is itself the current level, not a link', () => {
     mount({ page: 'overview' })
     const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
-    expect(
-      within(nav)
-        .getAllByRole('link')
-        .map((a) => a.textContent),
-    ).toEqual(['claude:global'])
+    expect(within(nav).queryAllByRole('link')).toEqual([])
+    expect(nav.querySelectorAll('li')).toHaveLength(1)
+
     expect(nav.querySelector('[aria-current="page"]').textContent).toBe('Overview')
   })
 })
