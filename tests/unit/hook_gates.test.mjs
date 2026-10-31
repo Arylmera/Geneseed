@@ -1132,6 +1132,24 @@ test('the list itself is protected, and Bob blocks rather than asks', () => {
   } finally { sb.cleanup(); }
 });
 
+// Bob runs `tool-gate` on every tool, reads included, and an emit seeds the list (it can name
+// `package.json`): reading a protected check, the list or the done gate list is never refused,
+// while a Bob write to any of them still blocks.
+test('bob: a read of a protected check passes, a write to it blocks', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'tests/\npackage.json\n');
+    for (const p of [path.join(repo, 'tests', 'a.js'), path.join(repo, 'package.json'),
+      path.join(repo, '.geneseed', 'protected-checks.txt'), path.join(repo, '.geneseed', 'done-checks.txt')]) {
+      const read = hookRun('tool-gate', { host: 'bob', stdin: bobPayload('read_file', { path: p }) });
+      assert.equal(read.rc, 0, `${p}: a read was refused: ${read.err}`);
+      const write = hookRun('tool-gate', { host: 'bob', stdin: bobPayload('write_file', { path: p, content: 'x' }) });
+      assert.equal(write.rc, 2, `${p}: expected exit 2, got ${write.rc}, stderr=${write.err}`);
+      assert.match(write.err, /External Gate.*is a protected check/);
+    }
+  } finally { sb.cleanup(); }
+});
+
 // The target is read twice, as written and with links followed, and a hit on either asks: a
 // link from outside into a protected folder (only the followed reading is in the repo) and a
 // protected folder that links out of the repo (only the written reading is) both ask. The
