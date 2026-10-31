@@ -202,10 +202,10 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
       {tab === 'rules' && (
         <>
           <RuleCards rules={rules} profile={profile} facts={facts} notes={notes} />
-          <Rules onChanged={reloadRules} />
+          <Rules onChanged={reloadRules} dataRev={dataRev} />
         </>
       )}
-      {tab === 'profile' && <Profile onChanged={reloadProfile} />}
+      {tab === 'profile' && <Profile onChanged={reloadProfile} dataRev={dataRev} />}
       {folder && counts[tab] === 0 && !item ? (
         <EmptyState title={EMPTY[tab].title} action={EMPTY[tab].action}>
           {EMPTY[tab].body}

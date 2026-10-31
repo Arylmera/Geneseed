@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
   api: {
@@ -83,6 +83,7 @@ describe('Rules', () => {
     await waitFor(() => expect(api.rulesMutate).toHaveBeenCalled())
     expect(api.rulesMutate).toHaveBeenCalledWith(
       expect.objectContaining({ op: 'update', id: 2, trial_until: '', fingerprint: 'f1' }),
+      undefined,
     )
   })
 
@@ -102,6 +103,7 @@ describe('Rules', () => {
           scope: 'project',
           fingerprint: 'f1',
         }),
+        undefined,
       ),
     )
   })
@@ -118,6 +120,7 @@ describe('Rules', () => {
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         expect.objectContaining({ op: 'add', scope: 'global' }),
+        undefined,
       ),
     )
   })
@@ -138,6 +141,7 @@ describe('Rules', () => {
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         expect.objectContaining({ op: 'update', id: 1, scope: 'global' }),
+        undefined,
       ),
     )
   })
@@ -155,6 +159,7 @@ describe('Rules', () => {
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         expect.objectContaining({ op: 'update', id: 2, scope: 'global' }),
+        undefined,
       ),
     )
   })
@@ -193,6 +198,7 @@ describe('Rules', () => {
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         expect.objectContaining({ op: 'update', id: 1, scope: 'team' }),
+        undefined,
       ),
     )
   })
@@ -251,6 +257,7 @@ describe('Rules', () => {
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenLastCalledWith(
         expect.objectContaining({ op: 'update', id: 1, body: 'Draft body', fingerprint: 'f9' }),
+        undefined,
       ),
     )
   })
@@ -451,6 +458,7 @@ describe('Rules', () => {
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         expect.objectContaining({ op: 'delete', id: 1 }),
+        undefined,
       ),
     )
     await waitFor(() =>
@@ -516,5 +524,80 @@ describe('Rules', () => {
     expect(graduate.className).toBe('btn ghost sm')
     expect(screen.getByRole('button', { name: 'Edit R2' }).textContent).toBe('Edit')
     expect(screen.getByRole('button', { name: 'Retire R2' }).textContent).toBe('Retire')
+  })
+})
+
+// EVERY ACTIVE INSTALL'S RULES IN ONE LIST (D1). Two installs, each with its own user-rules.md
+// and fingerprint: the rows of both are listed, each tagged with its install; a write on a row
+// goes back to THAT install with THAT file's fingerprint; a new rule goes where its form's own
+// "Write to:" picker says, starting on the server's default row.
+describe('Rules across installs', () => {
+  const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
+  const CL = {
+    id: 'cl',
+    host: 'claude',
+    scope: 'global',
+    path: '/cl',
+    state: 'active',
+    default: true,
+  }
+  const ocRules = { ...PAYLOAD, fingerprint: 'oc-fp', rules: [PAYLOAD.rules[0]] }
+  const clRules = {
+    ...PAYLOAD,
+    fingerprint: 'cl-fp',
+    rules: [{ ...PAYLOAD.rules[0], title: 'Claude only' }],
+  }
+  beforeEach(() => {
+    api.installs = vi.fn(async () => ({ installs: [OC, CL] }))
+    api.rules.mockImplementation((inst) =>
+      Promise.resolve(inst?.host === 'opencode' ? ocRules : clRules),
+    )
+  })
+  afterEach(() => {
+    delete api.installs
+  })
+
+  it('lists both installs, each row tagged with its own', async () => {
+    render(<Rules />)
+    await screen.findByText('Claude only')
+    expect(screen.getByText('No emoji in commits')).toBeTruthy()
+    const tags = [...document.querySelectorAll('.rule-head')].map(
+      (h) => h.querySelector('.rule-chip').textContent,
+    )
+    // The default install's rules first, then the others in the server's order.
+    expect(tags).toEqual(['claude · global', 'opencode · global'])
+  })
+
+  it('retires a rule from the install it came from, with that file fingerprint', async () => {
+    render(
+      <ConfirmContext.Provider value={async () => true}>
+        <Rules />
+      </ConfirmContext.Provider>,
+    )
+    fireEvent.click(await screen.findByText('No emoji in commits'))
+    fireEvent.click(screen.getByRole('button', { name: 'Retire R1 · opencode · global' }))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        { op: 'delete', id: 1, fingerprint: 'oc-fp' },
+        { host: 'opencode', path: '/oc' },
+      ),
+    )
+  })
+
+  it('adds a new rule to the install its form picks, default first', async () => {
+    render(<Rules />)
+    fireEvent.click(await screen.findByText('Add rule'))
+    const to = screen.getByRole('combobox', { name: 'Write to:' })
+    expect(to.value).toBe('cl')
+    fireEvent.change(to, { target: { value: 'oc' } })
+    fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'New rule' } })
+    fireEvent.change(screen.getByLabelText('Rule body'), { target: { value: 'Do the thing.' } })
+    fireEvent.click(screen.getByText('Save rule'))
+    await waitFor(() =>
+      expect(api.rulesMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'add', title: 'New rule', fingerprint: 'oc-fp' }),
+        { host: 'opencode', path: '/oc' },
+      ),
+    )
   })
 })

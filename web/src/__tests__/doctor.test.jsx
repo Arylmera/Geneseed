@@ -79,8 +79,8 @@ describe('Doctor', () => {
     // Never-resolving promise — loading state persists even after microtask flush
     api.doctor.mockImplementationOnce(() => new Promise(() => {}))
     render(<Doctor />)
-    // button disabled while loading, label "Running…"
-    const btn = screen.getByRole('button')
+    // button disabled while loading, label "Running…" (once the install list has answered)
+    const btn = await screen.findByRole('button')
     expect(btn.disabled).toBe(true)
     expect(btn.textContent).toMatch(/Running/)
     expect(screen.getByText(/Running every check/)).toBeTruthy()

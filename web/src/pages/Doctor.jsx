@@ -62,7 +62,11 @@ export default function Doctor({ dataRev }) {
         onChange={pick}
         label="Doctor for:"
       />
-      <DoctorOf key={install?.id || ''} install={install} dataRev={dataRev} />
+      {active === null ? (
+        <Loading />
+      ) : (
+        <DoctorOf key={install?.id || ''} install={install} dataRev={dataRev} />
+      )}
     </>
   )
 }

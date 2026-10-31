@@ -37,7 +37,11 @@ export default function Diff(props) {
         onChange={pick}
         label="Local edits of:"
       />
-      <DiffOf key={install?.id || ''} install={install} {...props} />
+      {active === null ? (
+        <Loading />
+      ) : (
+        <DiffOf key={install?.id || ''} install={install} {...props} />
+      )}
     </>
   )
 }
