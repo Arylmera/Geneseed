@@ -8,7 +8,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { CLAUDE_STYLE, GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
+import { CLAUDE_STYLE, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, footprintOfDir, installState, installTargets, installedDefaults, modeOfDir,
   postureOfDir, themeOfDir, trustOfDir,
@@ -17,7 +17,7 @@ import { doctorCollect } from '../inspect/doctor.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { readText, isFile } from '../lib/fs.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
-import { inventoryFor } from './catalog.mjs';
+import { deployed, inventoryFor } from './catalog.mjs';
 
 /**
  * The data dir an install's inventory/memory/diff is read from. Host-driven, so a new
@@ -41,7 +41,7 @@ export function viewCfg(host, scope, root) {
  * finds is shown instead — a global before a project, in its host order.
  */
 export function fallbackView(current, targets = installTargets()) {
-  if (existsSync(path.join(current, GLOBAL_MANIFEST))) return null;
+  if (deployed({ target: current })) return null;
   const active = targets.filter(([host, scope, root]) => {
     try { return installState(root, host, scope) === 'active'; } catch { return false; }
   });

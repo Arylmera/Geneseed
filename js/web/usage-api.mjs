@@ -28,6 +28,7 @@ import path from 'node:path';
 import { USAGE_LEDGER, USAGE_OFF } from '../hosts/usage.mjs';
 import { installTargets } from '../hosts/installs.mjs';
 import { activeInstalls, lastDays } from './api.mjs';
+import { deployedLayer } from './catalog.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WINDOW = 30;
@@ -88,12 +89,15 @@ export function usageSummary({ now = Date.now(), targets = installTargets() } = 
       counts.set(key, (counts.get(key) || 0) + 1);
       fired.add(`${e.kind}\u0000${e.name}`);
     }
-    for (const name of listOr(path.join(dir, 'skills'))) {
-      if (existsSync(path.join(dir, 'skills', name, 'SKILL.md')) && !fired.has(`skill\u0000${name}`)) {
+    // The specs the host loads: for an OpenCode project install that is `<repo>/.opencode`, not
+    // the root's flat bundle (the ledger above stays in the root's notebook/).
+    const layer = deployedLayer({ target: dir }) ?? dir;
+    for (const name of listOr(path.join(layer, 'skills'))) {
+      if (existsSync(path.join(layer, 'skills', name, 'SKILL.md')) && !fired.has(`skill\u0000${name}`)) {
         never.push({ install, kind: 'skill', name });
       }
     }
-    for (const f of listOr(path.join(dir, 'agents'))) {
+    for (const f of listOr(path.join(layer, 'agents'))) {
       const name = f.endsWith('.md') ? f.slice(0, -3) : null;
       if (name && !fired.has(`agent\u0000${name}`)) never.push({ install, kind: 'agent', name });
     }

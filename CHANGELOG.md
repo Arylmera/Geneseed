@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **The web console sees an OpenCode project install.** That install keeps its manifest and the skills and agents OpenCode loads under `<repo>/.opencode/`, and the console looked for the manifest only at the repo root. So it called the install "not deployed", listed the full source catalogue instead of what the install has (skills it left out included), refused Build, could jump to another install on refresh, and built its "never used" list from the root bundle. It now reads the manifest at either place, reads skills and agents from `.opencode/`, and Build rebuilds such an install in place with the same command `rebuild-all` uses. Diff and Restore are unchanged: as for every project install, no drift check exists.
+
 ## [4.30.1] — 2026-10-31
 
 Patch: Bob can read a protected check again (a regression in 4.29.0 and 4.30.0). Run `geneseed rebuild-all` once after updating.
