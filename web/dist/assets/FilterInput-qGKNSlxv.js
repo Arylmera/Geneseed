@@ -1,0 +1,1 @@
+import"./rolldown-runtime-XKyaHtl9.js";import{i as e,t}from"./react-C1iE8mnY.js";e();var n=t();function r({value:e,onChange:t,label:r,placeholder:i,className:a}){return(0,n.jsx)(`input`,{className:a||`lib-filter`,type:`text`,value:e,onChange:e=>t(e.target.value),placeholder:i,"aria-label":r||i})}export{r as t};
