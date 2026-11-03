@@ -36,7 +36,13 @@ request or merge the branch.
    it is wrong — consumers, layout, data), and any follow-up. Link the
    issue it closes; keep the title an imperative one-line summary.
 6. If the project merges locally instead, merge into the base branch only after
-   review/approval, then delete the merged branch.
+   review/approval.
+7. Once the branch is merged — locally or through the PR — delete it, local and remote
+   (`git branch -d <branch>`, `git push origin --delete <branch>`), with consent: it is a
+   deletion ({{LAW:deletion-is-deliberate}}). A PR usually merges after your turn ends,
+   with nobody left to delete its branch, so the first time you ship in a repo, check
+   whether the forge deletes merged branches by itself (GitHub: *Automatically delete
+   head branches*) and recommend turning it on if not.
    If shipping triggers a production deploy, confirm a tested rollback or
    fix-forward path and a retained previous artifact *before* deploying — there must
    be a way back ({{LAW:deletion-is-deliberate}}); dispatch the
@@ -46,5 +52,7 @@ request or merge the branch.
 ## Done when
 - The diff passed review with no `blocking` finding, and the PR is open (or the branch is merged) with a Summary / Evidence / Merge danger
   body, and nothing unrelated rides along.
+- A branch merged while you are still working is deleted, local and remote, or the user
+  declined.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

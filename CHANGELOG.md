@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The ship skill deletes a branch once it is merged, local and remote, including after a PR merge.** Before, it deleted a branch only after a local merge, so on a PR-based repo every merged branch stayed on the remote (this repo reached 156). It asks first, as for any deletion, and the first time it ships in a repo it checks whether the forge deletes merged branches by itself (GitHub: *Automatically delete head branches*), since a PR usually merges after the agent's turn has ended. Run `geneseed rebuild-all` to pick it up.
+
 ## [4.31.0] — 2026-10-31
 
 Minor: the web console becomes one hub over every install. The top install switch is gone; Activity, Library, Rules, Profile, Memory and Notebook cover every install, and a page or control that acts on one install has its own picker next to it. Run `geneseed web restart` after updating, so the console serves the new UI.
