@@ -1388,6 +1388,122 @@ function gateConfig(p) {
   return false
 }
 
+// The files `gateConfig` leaves to OpenCode's native `permission.edit` ask (`opencodeEditAsks` in
+// js/hosts/settings.mjs). That ask covers edit tools only: a shell command never reaches it, and
+// this tool hook has no ask tier, so for a SHELL write these are refused. The agent can still
+// make the edit through an edit tool, where the user gets the prompt.
+function nativeAskFile(p) {
+  try {
+    const fold = (s) => nocase(path.resolve(s))
+    const cfg = path.dirname(PLUGIN_DIR)
+    const bin = fold(path.join(resolvePath(process.env.GENESEED_HOME || "~/.geneseed"), "bin"))
+    const own = [...["excludes.json", ".geneseed-manifest.json", ".geneseed-emit", "AGENT.md", "config.json"]
+      .map((f) => path.join(cfg, f)), path.join(path.dirname(cfg), "AGENT.md")].map(fold)
+    for (const target of [path.resolve(p), resolvePath(p)]) {
+      const t = fold(target)
+      const dir = path.dirname(target)
+      const name = path.basename(target)
+      if (/^opencode\.jsonc?$/i.test(name) || t.startsWith(bin + path.sep) || own.includes(t)) return true
+      if (fold(dir) === fold(PLUGIN_DIR) && /^geneseed-.*\.js$/i.test(name)) return true
+      const up = [dir, path.dirname(dir)].map((d) => path.basename(d))
+      if (/^settings(?:\.local)?\.json$/i.test(name) && GATE_CONFIG_MARKERS.includes(up[0])) return true
+      if (/^settings\.json$/i.test(name) && up[0] === "settings" && up[1] === ".bob") return true
+    }
+  } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
+  return false
+}
+
+// ---- shell-write twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything down
+// to the END marker verbatim, with `export ` dropped (tests/plugins/guard.test.mjs diffs the two).
+
+// The cheap prefilter, a superset of what the parse acts on: a `>`, or one of the programs as a word.
+const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
+// One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
+// fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
+// too, so that their words never read as operands.
+const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
+const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+
+/** `t` as an absolute path from `dir`, `~/…` as it stands, or null for what the shell rewrites. */
+function writePath(dir, t) {
+  if (/[$`*?{}\0]/.test(t) || /^~[^\\/]/.test(t) || /^(?:\/dev\/|nul$)/i.test(t)) return null;
+  if (t[0] === '~') return t;
+  // A Git Bash `/c/…` path, as `resolveIn` reads it.
+  const q = process.platform === 'win32' ? t.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:') : t;
+  if (path.isAbsolute(q)) return path.resolve(q);
+  return dir ? path.resolve(dir, q) : null;
+}
+
+/** The files `sed` edits in place: none without `-i`; else its operands, past the script if inline. */
+function sedFiles(args) {
+  const ops = [];
+  let inPlace = false; let script = false; let flags = true;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (flags && a === '--') flags = false;
+    else if (flags && /^--in-place(?:=|$)/.test(a)) inPlace = true;
+    else if (flags && (a === '--expression' || a === '--file')) { script = true; i += 1; }
+    else if (flags && /^--(?:expression|file)=/.test(a)) script = true;
+    else if (flags && /^-[a-zA-Z]*i/.test(a)) inPlace = true;
+    else if (flags && /^-[a-zA-Z]*[ef]$/.test(a)) { script = true; i += 1; }
+    else if (!flags || !a.startsWith('-') || a === '-') { if (a) ops.push(a); }
+  }
+  return inPlace ? ops.slice(script ? 0 : 1) : [];
+}
+
+/**
+ * The files `command` would write, as absolute paths: redirect targets (`>`, `>>`, `&>`), `tee`
+ * and `rm` operands, `sed -i` files, the destination of `cp` and `mv`, and the sources of `mv`, which
+ * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. Read like
+ * `rootScan`: quotes, comments and heredoc bodies are data. A `cd` is followed; one it cannot read
+ * leaves later relative paths unseen. What it cannot read, it leaves out: this reader fails OPEN.
+ *
+ * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
+ * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
+ * variable, glob or brace in it, a wrapper with flags (`sudo -u x`), `cp -t`, any other writer
+ * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
+ * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
+ * boundary that holds against those.
+ */
+function shellWriteTargets(command, cwd) {
+  if (!SHELL_WRITE_RE.test(command)) return [];
+  const found = new Set();
+  let dir = cwd;
+  const add = (t) => { const p = writePath(dir, t); if (p) found.add(p); };
+  const bare = (t) => t.replace(/["']/g, '');
+  for (const seg of scanSegments(command)) {
+    const outs = [];
+    const body = seg.replace(REDIRECT_RE, (m, op, dup, target) => {
+      if (op === undefined) return m;
+      if (op[0] === '>' && !dup && target) outs.push(bare(target));
+      return ' ';
+    });
+    let toks = stripStructure(body.match(SCAN_TOKEN_RE) || []);
+    while (toks.length && (/^\w+=/.test(toks[0]) || SCAN_WRAPPERS.has(bare(toks[0])))) toks = toks.slice(1);
+    const prog = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '') : '';
+    const args = toks.slice(1).map(bare);
+    const dashes = args.indexOf('--');
+    const ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    if (SHELL_CD.has(prog)) {
+      const to = ops.find((a) => !/^\/d$/i.test(a));
+      dir = to && to !== '-' ? writePath(dir, to) : null;
+    } else if (prog === 'rm' || prog === 'tee') ops.forEach(add);
+    else if (prog === 'sed') sedFiles(args).forEach(add);
+    else if ((prog === 'cp' || prog === 'mv') && ops.length > 1) {
+      const dest = ops[ops.length - 1];
+      const sources = ops.slice(0, -1);
+      add(dest);
+      for (const s of sources) {
+        add(`${dest.replace(/[\\/]+$/, '')}/${s.split(/[\\/]/).pop()}`);
+        if (prog === 'mv') add(s);
+      }
+    }
+    outs.forEach(add);
+  }
+  return [...found];
+}
+// ---- shell-write twin: END
+
 // ---- the ownership first-write gate --------------------------------------------
 // Twin of js/hosts/ownership-gate.mjs's `ownershipBlock` — keep in step (same manifests, same
 // managed-block strip, same section match, same reason). In an application repo (a git root
@@ -1592,11 +1708,18 @@ export const GeneseedGuard = async (ctx) => {
               "search a specific directory instead: the project, node_modules, ~/.npm, %APPDATA%", "ops-2")
             return
           }
+          // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
+          const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
           if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
-            // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
-            const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
             const loss = lossReason(cut(c), wd, { always: false, split: cut })
             if (loss) { await deny(`${loss} (Deletion Is Deliberate) — confirm with the user first`, "law-4"); return }
+          }
+          // External Gate over a shell write: the same paths as a write tool, no content scan. A
+          // throw fails open through the catch below, as the twin's `shellWriteReason` does.
+          for (const p of c ? shellWriteTargets(c, wd) : []) {
+            const sensor = protectedCheck(p)
+            if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
+            if (gateConfig(p) || nativeAskFile(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
           }
         }
       } catch (err) {

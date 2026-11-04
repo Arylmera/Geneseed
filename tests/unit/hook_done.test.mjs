@@ -10,9 +10,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { doneDecide, groupPasses, runsUnpiped } from '../../js/hosts/hooks-done.mjs';
+import { doneDecide, groupPasses, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
 import { doneLine, inferDoneChecks } from '../../js/hosts/done-checks.mjs';
-import { tailReader } from '../../js/hosts/hooks-prims.mjs';
+import { isTestPath, tailReader, weakenedBy } from '../../js/hosts/hooks-prims.mjs';
 import { readTail } from '../../js/lib/fs.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
@@ -525,4 +525,118 @@ test('context: the done gate line reaches SessionStart, even with nothing else t
     assert.equal(first('openclaude'), 'Done gate: from .geneseed/done-checks.txt — make check (blocking)');
     assert.equal(first('bob'), 'Done gate: from .geneseed/done-checks.txt — make check (not judged on this host)');
   } finally { sb.cleanup(); }
+});
+
+// ---- C3: a weakened test (Cure the Cause), ADVISORY ------------------------------------
+
+test('isTestPath: test folders and test names, and nothing near them', () => {
+  const rows = [
+    ['tests/a.js', true], ['test/a.js', true], ['src/__tests__/a.js', true], ['spec/a.rb', true],
+    ['src\\tests\\a.js', true], ['a.test.js', true], ['src/a.spec.ts', true], ['pkg/a_test.go', true],
+    ['test_a.py', true], ['pkg/test_a.py', true],
+    ['src/a.js', false], ['testsuite/a.js', false], ['src/latest.js', false], ['contest_a.py', false],
+    ['spec.md', false], ['src/spectacle/a.js', false], ['docs/testing.md', false],
+  ];
+  for (const [p, want] of rows) assert.equal(isTestPath(p), want, p);
+});
+
+test('weakenedBy: what an old and a new text do to a test', () => {
+  // Each row: old text, new text, the labels. A marker counts when the new text has MORE of it. An
+  // assertion counts when a line is gone and no new assertion line came in.
+  const rows = [
+    ["it('a', f)", "it.skip('a', f)", ['.skip added']],
+    ["it('a', f)", "xit('a', f)", ['xit added']],
+    ['def t(): pass', '@pytest.mark.xfail\ndef t(): pass', ['xfail added']],
+    ['void t() {}', '@Disabled\nvoid t() {}', ['@Disabled added']],
+    ['void t() {}', '@Ignore\nvoid t() {}', ['@Ignore added']],
+    ['def t(): pass', '@pytest.mark.skip(reason="x")\ndef t(): pass', ['pytest.mark.skip added']],
+    ['func T(t *testing.T) {', 'func T(t *testing.T) {\n  t.Skip("x")', ['t.Skip added']],
+    // Not added: already there, moved, or a word that merely holds the letters.
+    ["it.skip('a', f)", "it.skip('b', f)", []],
+    ['a()', 'process.exit(1)', []],
+    ['a', 'stream.Skip(1)', []],
+    // Assertions, in each spelling.
+    ['a()\nexpect(a).toBe(1)\n', 'a()\n', ['assertion removed']],
+    ['assert.equal(a, 1)', '', ['assertion removed']],
+    ['assertEquals(a, 1);', '', ['assertion removed']],
+    ['self.assertTrue(a)', '', ['assertion removed']],
+    ['    assert a == 1', '', ['assertion removed']],
+    ['assert_eq!(a, 1);', '', ['assertion removed']],
+    ['expect(a).toBe(1)', '// expect(a).toBe(1)', ['assertion removed']],
+    ['expect(a).toBe(1)\nexpect(b).toBe(2)', 'expect(a).toBe(1)', ['assertion removed']],
+    // Replaced, or never one.
+    ['expect(a).toBe(1)', 'expect(a).toBe(2)', []],
+    ['assert a == 1', 'assert a == 2', []],
+    ['expect(a).toBe(1)\nb()', 'expect(a).toBe(1)\nc()', []],
+    ['// expect(a).toBe(1)', '', []],
+    ['a()', 'b()', []],
+  ];
+  for (const [was, now, want] of rows) assert.deepEqual(weakenedBy([[was, now]]), want, `${was} -> ${now}`);
+});
+
+test('weakenedIn: which files of the turn were weakened', () => {
+  const T = path.join(R, 'tests', 'a.test.js');
+  const skip = (p, err = false) => call('Edit', { file_path: p, old_string: "it('a'", new_string: "it.skip('a'" }, err);
+  // A Write's old text is on the result line, as the host records it (null on a create).
+  const write = (p, content, originalFile) => {
+    const [use, res] = call('Write', { file_path: p, content });
+    return [use, { ...res, toolUseResult: { type: 'update', filePath: p, content, originalFile } }];
+  };
+  const rows = [
+    ['a skip added to a test file', [prompt(), skip(T)], ['tests/a.test.js (.skip added)']],
+    ['the same edit outside a test path', [prompt(), skip(path.join(R, 'src', 'a.js'))], []],
+    ['a test file outside the project', [prompt(), skip(path.resolve('/elsewhere/tests/a.js'))], []],
+    ['a denied edit changed nothing', [prompt(), skip(T, true)], []],
+    ['the previous turn is not this turn', [prompt('one'), skip(T), prompt('two'), bash('ls')], []],
+    ['a removed assertion', [prompt(), call('Edit', { file_path: T, old_string: 'expect(a).toBe(1)\n', new_string: '' })],
+      ['tests/a.test.js (assertion removed)']],
+    ['a replaced assertion', [prompt(), call('Edit', { file_path: T, old_string: 'expect(a).toBe(1)', new_string: 'expect(a).toBe(2)' })], []],
+    ['two labels on one file, said once', [prompt(), skip(T), call('Edit', { file_path: T, old_string: 'assert.ok(a)', new_string: '' })],
+      ['tests/a.test.js (.skip added, assertion removed)']],
+    ['a Write over an old marker adds none', [prompt(), write(T, "it.skip('a')\nit('b')", "it.skip('a')")], []],
+    ['a Write dropping an assertion', [prompt(), write(T, 'a()', 'a()\nexpect(a).toBe(1)')], ['tests/a.test.js (assertion removed)']],
+    ['a Write creating a skipped test', [prompt(), write(T, "it.skip('a')", null)], ['tests/a.test.js (.skip added)']],
+  ];
+  for (const [what, turn, want] of rows) assert.deepEqual(weakenedIn(jsonl(...turn), R), want, what);
+});
+
+const weakenIn = (proj) => call('Edit', { file_path: path.join(proj, 'tests', 'a.test.js'), old_string: "it('a'", new_string: "it.skip('a'" });
+const LINE = '[done-gate] advisory — test weakened this turn: tests/a.test.js (.skip added)';
+
+test('learn on Stop: a weakened test is one advisory line, with or without checks', () => {
+  // No done list and no manifest: no checks at all, the case the gate used to leave at once.
+  const r = project({ checks: null, transcriptRows: [prompt(), weakenIn] });
+  assert.equal(r.rc, 0, r.err);
+  const doc = JSON.parse(r.out);
+  assert.deepEqual(Object.keys(doc), ['systemMessage']);
+  assert.ok(doc.systemMessage.startsWith(LINE), doc.systemMessage);
+  assert.match(doc.systemMessage, /Cure the Cause/);
+  assert.ok(r.err.includes(LINE), r.err);
+  assert.match(r.ledger, /"verb":"done-gate-advisory","rule":"cure-the-cause"/);
+  // A present list that lists nothing switches the checks off, not this line.
+  assert.ok(JSON.parse(project({ checks: '# none\n', transcriptRows: [prompt(), weakenIn] }).out).systemMessage.startsWith(LINE));
+});
+
+test('learn on Stop: the weakened-test line shares the one JSON document with what else is said', () => {
+  // Inferred checks unproven: both advisories in one systemMessage, one line of stdout.
+  const inferred = project({ checks: null, files: { 'package.json': '{"scripts":{"test":"x"}}' }, transcriptRows: [prompt(), weakenIn] });
+  const doc = JSON.parse(inferred.out);
+  assert.match(doc.systemMessage, /inferred from package\.json/);
+  assert.ok(doc.systemMessage.includes(LINE), doc.systemMessage);
+  // A block: the turn goes on, so only the block is printed, and the next Stop says the line.
+  const blocked = JSON.parse(project({ transcriptRows: [prompt(), weakenIn] }).out);
+  assert.equal(blocked.decision, 'block');
+  assert.equal(blocked.systemMessage, undefined);
+  // The cap: the turn really ends here, so the line is said and nothing blocks.
+  const capped = project({ active: true, transcriptRows: [prompt(), weakenIn] });
+  const last = JSON.parse(capped.out);
+  assert.equal(last.decision, undefined);
+  assert.ok(last.systemMessage.startsWith(LINE), last.systemMessage);
+  assert.match(capped.err, /cap reached/);
+});
+
+test('learn on Stop: no weakened test prints nothing; --no-done-gate and Bob say nothing either', () => {
+  assert.equal(project({ checks: null, transcriptRows: [prompt(), editIn] }).out, '', 'an ordinary edit');
+  assert.equal(project({ checks: null, extra: ['--no-done-gate'], transcriptRows: [prompt(), weakenIn] }).out, '');
+  assert.equal(project({ checks: null, host: 'bob', transcriptRows: [prompt(), weakenIn] }).out, '', 'Bob has no transcript');
 });

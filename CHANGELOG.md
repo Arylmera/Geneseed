@@ -8,7 +8,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **The rule gate reads shell writes.** The targets of `>`, `>>`, `tee`, `sed -i`, `cp`, `mv` and `rm` now get the protected-checks and gate-configuration checks, by path only: a prompt on Claude Code and OpenClaude, a refusal on OpenCode and Bob. Scripts, interpreter one-liners, `npm run`, variables, globs and subshell tricks stay unseen, so keep running the checks in CI. Run `geneseed rebuild-all` to pick up the OpenCode plugins.
+- **A weakened test is reported, as an advisory.** An edit of a test file that adds a skip marker or removes an assertion leaves the agent a note and adds a `[done-gate] advisory` line when the turn ends, citing *Cure the Cause*. It never asks or blocks. Bob gets a log line, OpenCode a reminder on the next request.
+
 ### Changed
+- **Inferred done checks stay advisory, with no date.** The 4.29.0 note that called them "advisory in this release" promised a change that is not coming: only a list the project wrote in `.geneseed/done-checks.txt` can block.
 - **The ship skill deletes a branch once it is merged, local and remote, including after a PR merge.** Before, it deleted a branch only after a local merge, so on a PR-based repo every merged branch stayed on the remote (this repo reached 156). It asks first, as for any deletion, and the first time it ships in a repo it checks whether the forge deletes merged branches by itself (GitHub: *Automatically delete head branches*), since a PR usually merges after the agent's turn has ended. Run `geneseed rebuild-all` to pick it up.
 
 ## [4.31.0] — 2026-10-31

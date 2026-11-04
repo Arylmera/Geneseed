@@ -748,3 +748,49 @@ test("with a V1 client, guard messages go to client.app.log, not stderr", async 
   assert.equal(logged[0].level, "warn")
   assert.match(logged[0].message, /^BLOCKED: catastrophic command/)
 })
+
+// C2 on OpenCode. The reader is a byte twin of the hook's, and hook_gates.test.mjs holds its table;
+// here the guard refuses a shell write through the real tool hook, and leaves a read alone.
+test("the shell-write twin block is byte-identical to js/hosts/hooks.mjs", async () => {
+  const cut = (s) => {
+    const b = s.indexOf("// ---- shell-write twin: BEGIN"), e = s.indexOf("// ---- shell-write twin: END")
+    assert.ok(b >= 0 && e > b, "twin markers missing")
+    return s.slice(b, e).replace(/^export /gm, "")
+  }
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
+  const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  assert.equal(cut(guardSrc), cut(hookSrc), "the guard's shell-write block drifted from js/hosts/hooks.mjs")
+})
+
+test("a shell write to a protected check is refused; a read of it passes", async () => {
+  const repo = path.join(tmp, "shellw")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "ci/verify.sh\n")
+  const run = (command) => denial("bash", { command, workdir: repo })
+  for (const c of ["echo x > ci/verify.sh", "echo x | tee ci/verify.sh", "sed -i s/a/b/ ci/verify.sh",
+    "cp evil ci/verify.sh", "mv ci/verify.sh /elsewhere/x", "echo x >> .geneseed/done-checks.txt"]) {
+    assert.match(await run(c) ?? "", /protected check.*\(External Gate\)/, c)
+  }
+  for (const c of ["cat ci/verify.sh > /tmp/y", "cat ci/verify.sh", "npm test 2>&1", "echo 'x > ci/verify.sh'", "node x > /dev/null"]) {
+    assert.equal(await run(c), null, c)
+  }
+})
+
+test("a shell write reaches what permission.edit asks about, since no ask covers the shell", async () => {
+  const f = await gateConfigFixture("shellcfg")
+  await withHome(f.home, async () => {
+    const run = (p) => denial("bash", { command: `echo x > "${p}"`, workdir: f.repo })
+    for (const p of [path.join(f.repo, "opencode.json"), path.join(f.repo, "pkg", "opencode.jsonc"),
+      path.join(f.repo, ".claude", "settings.json"), path.join(f.repo, ".claude", "settings.local.json"),
+      path.join(f.repo, ".bob", "settings", "settings.json"), path.join(f.repo, ".claude", "excludes.json"),
+      path.join(f.home, "bin", "geneseed-hook"), path.join(CFG, "plugins", "geneseed-guard.js"), path.join(CFG, "excludes.json")]) {
+      assert.match(await run(p) ?? "", /is a gate's own configuration.*\(External Gate\)/, p)
+    }
+    // The same files through an edit tool stay OpenCode's native ask, and a near miss is no hit.
+    assert.equal(await denial("write", { filePath: path.join(f.repo, "opencode.json"), content: "{}" }), null)
+    for (const p of [path.join(f.repo, "settings.json"), path.join(f.repo, "config", "settings.json"), path.join(f.repo, "src", "a.js")]) {
+      assert.equal(await run(p), null, p)
+    }
+  })
+})

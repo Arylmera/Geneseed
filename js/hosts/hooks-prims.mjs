@@ -137,6 +137,66 @@ export const DONE_LIST = '.geneseed/done-checks.txt';
 export const SECRET_RE =
   /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/;
 
+// ---- test-weakening twin: BEGIN — adapters/opencode/plugins/geneseed-context.js carries everything
+// down to the END marker verbatim, with `export ` dropped (tests/plugins/context_done.test.mjs diffs the two).
+
+/**
+ * A test file: a path segment `test`, `tests`, `__tests__` or `spec`, or a name `*.test.*`,
+ * `*.spec.*`, `*_test.*` or `test_*`. Give it a path relative to the repo, or an ancestor
+ * folder named `test` makes every file a test.
+ */
+const TEST_PATH_RE = /(?:^|[\\/])(?:tests?|__tests__|spec)[\\/]|(?:^|[\\/])test_[^\\/]*$|\.(?:test|spec)\.[^\\/]*$|_test\.[^\\/]*$/;
+export const isTestPath = (p) => TEST_PATH_RE.test(p);
+// `\bxit`, or `process.exit(` reads as one; `(?<!mark)`, or `pytest.mark.skip(` counts twice.
+const SKIP_MARKERS = [['.skip', /(?<!mark)\.skip\(/g], ['xit', /\bxit\(/g], ['xfail', /\bxfail\b/g],
+  ['@Disabled', /@Disabled\b/g], ['@Ignore', /@Ignore\b/g], ['pytest.mark.skip', /\bpytest\.mark\.skip/g],
+  ['t.Skip', /\bt\.Skip\(/g]];
+const ASSERT_LINE_RE = /\bassert\w*!?\s*[.(]|\bexpect\s*\(|^assert\s/;
+const COMMENT_LINE_RE = /^(?:\/\/|\/\*|\*|#)/;
+const assertLines = (text) => new Set(text.split(/\r?\n/).map((l) => l.trim())
+  .filter((l) => ASSERT_LINE_RE.test(l) && !COMMENT_LINE_RE.test(l)));
+
+/**
+ * What `pairs` of `[old, new]` text do to a test, as labels: a skip marker the new text has more
+ * of (`.skip added`), or an assertion line gone with none new in its place (`assertion removed`).
+ * A comment is no assertion, so commenting one out removes it. Cure the Cause's advisory half.
+ */
+export function weakenedBy(pairs) {
+  const found = new Set();
+  for (const [before, after] of pairs) {
+    for (const [label, re] of SKIP_MARKERS) {
+      if ((after.match(re) || []).length > (before.match(re) || []).length) found.add(`${label} added`);
+    }
+    const was = assertLines(before);
+    const now = assertLines(after);
+    if ([...was].some((l) => !now.has(l)) && [...now].every((l) => was.has(l))) found.add('assertion removed');
+  }
+  return [...found];
+}
+// ---- test-weakening twin: END
+
+// One Roo-style `apply_diff` block: its SEARCH half, then its REPLACE half.
+export const DIFF_BLOCK_RE = /<<<<<<< SEARCH\r?\n(?::start_line:\s*\d+\r?\n)?(?:-------\r?\n)?([\s\S]*?)\r?\n?=======\r?\n([\s\S]*?)\r?\n?>>>>>>> REPLACE/g;
+
+/**
+ * A write tool's input as `[old, new]` pairs for `weakenedBy`. `whole` is the file before a
+ * whole-file write, which the input does not carry. NotebookEdit's input names no old text either,
+ * so a cell that already held a marker reads as adding it.
+ */
+export function editPairs(ti, whole = '') {
+  const text = (v) => (typeof v === 'string' ? v : '');
+  const pairs = [];
+  if (typeof ti.content === 'string') pairs.push([whole, ti.content]);
+  if (typeof ti.new_string === 'string') pairs.push([text(ti.old_string), ti.new_string]);
+  if (typeof ti.new_source === 'string') pairs.push(['', ti.new_source]);
+  if (typeof ti.replace === 'string') pairs.push([text(ti.search), ti.replace]);
+  for (const e of Array.isArray(ti.edits) ? ti.edits : []) {
+    if (e && typeof e.new_string === 'string') pairs.push([text(e.old_string), e.new_string]);
+  }
+  if (typeof ti.diff === 'string') for (const m of ti.diff.matchAll(DIFF_BLOCK_RE)) pairs.push([m[1], m[2]]);
+  return pairs;
+}
+
 const OFF = ['off', '0', 'false', 'no'];
 
 /**
