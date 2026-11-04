@@ -141,10 +141,15 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const [folded, setFolded] = useState(() => new Set())
   const open = selected || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
+  // Nothing to rebuild means nothing to toggle: a source render with no deployed install
+  // still READS, it just cannot be changed from here.
+  const install = overview?.install
+  const canApply = Boolean(install && onAction)
   // Bring the open rule into view. Any deep link (a gate, the Overview, Spotlight) scrolls
   // to its row when it is off screen; a row clicked in place is already on screen and stays
   // put. A jump from the Gate asks card always scrolls and briefly lights the row, so the eye
-  // lands on it. `jump` re-runs this when the same rule is asked for twice.
+  // lands on it. `jump` re-runs this when the same rule is asked for twice; `canApply` when the
+  // ownership gate's row, which needs the install, arrives after the catalog.
   const [jump, setJump] = useState(0)
   const jumpTo = useRef(null)
   useEffect(() => {
@@ -167,7 +172,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       }
     })
     return () => cancelAnimationFrame(raf)
-  }, [selected, jump, data])
+  }, [selected, jump, data, canApply])
 
   // ⚠ EVERY HOOK BEFORE THE EARLY RETURNS BELOW. The staged pack selection is derived from
   // `data`, which is null on the first render; a `useState` placed after `if (!data)` makes
@@ -175,15 +180,12 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   // and throw, taking the whole page down rather than just the control.
   const items = data?.items || []
   const packs = doctrinePacks(items)
-  // The gate switches (Laws I, III, IV), as the deployed install reports them
-  // (`overview.install.secretsGate` / `doneGate` / `deletionGate`). Anything but an explicit
-  // `false` — an older daemon, no install — reads as armed.
+  // The gate switches (Laws I, III, IV and the ownership gate's own row), as the deployed
+  // install reports them (`overview.install.secretsGate` / `doneGate` / `deletionGate` /
+  // `ownershipGate`). Anything but an explicit `false` — an older daemon, no install — reads as
+  // armed.
   const armed = (addr) => overview?.install?.[GATE_SWITCH[addr].key] !== false
   const gateArmed = armed('IV')
-  // Nothing to rebuild means nothing to toggle: a source render with no deployed install
-  // still READS, it just cannot be changed from here.
-  const install = overview?.install
-  const canApply = Boolean(install && onAction)
   const sel = useRuleSelection({ items, packs, install, canApply, onAction, gateArmed })
   const { deployedRules, isOn, toggleRule, packOn, packState, allRules } = sel
 
@@ -240,6 +242,26 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
         src: 'laws/universal.md',
       }
     })
+
+  // The ownership gate's row: a switch, not a rule. It exists only here (no catalog item, no law
+  // number, nothing to expand), so it joins the band and the Gated view but no rule count, and
+  // only where a switch can act. `gateAddress` sends the ledger's `ownership` key to it.
+  const gateRows = canApply
+    ? [
+        {
+          addr: 'ownership',
+          no: '',
+          name: GATE_SWITCH.ownership.label,
+          latin: '',
+          ess: '',
+          status: armed('ownership') ? 'Active' : 'Off',
+          statusTone: armed('ownership') ? 'ok' : '',
+          enf: enforcedBy('ownership', install),
+          c: 'var(--text-3)',
+          plain: true,
+        },
+      ]
+    : []
 
   // A doctrine row's status is the STAGED switch against what is deployed: a rule the
   // install carries reads Active, one it excludes reads Off, and a rule whose switch was
@@ -322,7 +344,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const activeInv = laws.filter((l) => !l.retired).length
   const activeDoc = deployedRules.length
   const gatesOff = Object.keys(GATE_SWITCH).filter(
-    (a) => laws.some((l) => l.addr === a) && !armed(a),
+    (a) => [...laws, ...gateRows].some((l) => l.addr === a) && !armed(a),
   ).length
   const excludedDoc = allRules.length - activeDoc
   const stats = rulesData?.stats
@@ -374,7 +396,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   }
   const tiers = PRECEDENCE.map((p) => ({ key: p.key, ...tierOf[p.key], rule: rankRule(p.against) }))
   const byAddr = Object.fromEntries(
-    [...laws, ...packs.flatMap((p) => p.rules)].map((r) => [r.addr, r]),
+    [...laws, ...gateRows, ...packs.flatMap((p) => p.rules)].map((r) => [r.addr, r]),
   )
 
   const TABS_ = [
@@ -385,7 +407,10 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const showInv = tab === 'all' || tab === 'invariants'
   const showDoc = tab === 'all' || tab === 'doctrines'
   // The view toggles count what the tier tabs show, before the text filter, as the tabs do.
-  const tierRows = [...(showInv ? laws : []), ...(showDoc ? packs.flatMap((p) => p.rules) : [])]
+  const tierRows = [
+    ...(showInv ? [...laws, ...gateRows] : []),
+    ...(showDoc ? packs.flatMap((p) => p.rules) : []),
+  ]
   const VIEWS = [
     ['gated', 'Gated', tierRows.filter((r) => inView(r, 'gated')).length],
     ['changed', 'Changed', tierRows.filter((r) => inView(r, 'changed')).length],
@@ -422,7 +447,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       <span className="mono dim">{src}</span>
     </div>
   )
-  const invRows = laws.filter(match)
+  const invRows = [...laws, ...gateRows].filter(match)
   const shownCount =
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)

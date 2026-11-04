@@ -1,4 +1,4 @@
-import { gateAddress } from '../../lib/constitution.js'
+import { GATE_SWITCH, gateAddress } from '../../lib/constitution.js'
 import { Bar } from '../../components/StackBar.jsx'
 
 // How often each hook gate stopped to ask, from the gate ledger (`setup.gates`). The ledger
@@ -31,7 +31,7 @@ export default function GateAsks({
         <ul className="gate-list">
           {asks.map(([gate, n, off]) => {
             const addr = gateAddress(gate)
-            const name = byAddr[addr]?.name || addr
+            const name = byAddr[addr]?.name || GATE_SWITCH[addr]?.label || addr
             return (
               <li key={gate}>
                 {/* The entry's text is the control: it takes you to the rule in the table. The

@@ -2736,6 +2736,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-row .toggle-col { display: flex; align-items: center; justify-content: center; }
 .law-row .no-gate { font-size: var(--fs-2xs); color: var(--text-3); white-space: nowrap; }
 .law-row:hover { background: var(--surface-2); }
+/* A row that opens nothing: only its switch is a control. */
+.law-row-plain, .law-row-plain .law-disclosure { cursor: default; }
+.law-row-plain:hover { background: transparent; }
 .law-row.on { background: var(--accent-soft); }
 .law-no { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap;
   font-family: var(--font-mono); color: var(--accent-text); font-variant-numeric: tabular-nums; }
