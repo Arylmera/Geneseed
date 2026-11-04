@@ -244,8 +244,9 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     })
 
   // The ownership gate's row: a switch, not a rule. It exists only here (no catalog item, no law
-  // number, nothing to expand), so it joins the band and the Gated view but no rule count, and
-  // only where a switch can act. `gateAddress` sends the ledger's `ownership` key to it.
+  // number, nothing to expand), so it joins the Ethos band, after the Ownership section, and the
+  // Gated view but no count of sections or rules, and only where a switch can act. `gateAddress`
+  // sends the ledger's `ownership` key to it.
   const gateRows = canApply
     ? [
         {
@@ -304,6 +305,16 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     )
     if (ok) onAction('install', { ...install, [key]: next })
   }
+  const gateSwitch = (addr) => (
+    <button
+      type="button"
+      className={`sw-toggle${armed(addr) ? ' on' : ''}`}
+      role="switch"
+      aria-checked={armed(addr)}
+      aria-label={GATE_SWITCH[addr].label}
+      onClick={() => toggleGate(addr)}
+    />
+  )
 
   // Gated: a hook enforces it now (a switched-off gate reads "Gate off", and an excluded
   // doctrine rule takes its hook with it, so neither is counted).
@@ -322,11 +333,13 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const match = (r) =>
     inView(r) && (!ql || `${r.addr} ${r.name} ${r.latin} ${r.ess}`.toLowerCase().includes(ql))
   // From the Gate asks card: make the rule's row visible first (a tab or a filter can hide
-  // it), then open it; the effect above scrolls there and lights it.
+  // it), then open it; the effect above scrolls there and lights it. The ownership gate's row
+  // sits above the tabs, so every tab shows it and none needs lifting.
   const jumpToRule = (addr) => {
     const row = byAddr[addr]
     const doctrine = String(addr).includes('.')
-    if ((doctrine && tab === 'invariants') || (!doctrine && tab === 'doctrines')) setTab('all')
+    const hiddenByTab = doctrine ? tab === 'invariants' : !row?.plain && tab === 'doctrines'
+    if (hiddenByTab) setTab('all')
     if (row && !inView(row)) setView('all')
     if (row && !match(row)) setQ('')
     jumpTo.current = addr
@@ -343,9 +356,11 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
 
   const activeInv = laws.filter((l) => !l.retired).length
   const activeDoc = deployedRules.length
-  const gatesOff = Object.keys(GATE_SWITCH).filter(
-    (a) => [...laws, ...gateRows].some((l) => l.addr === a) && !armed(a),
-  ).length
+  // Each tier's pill warns for the switches in its own band.
+  const gatePill = (rows) => {
+    const off = rows.filter((r) => GATE_SWITCH[r.addr] && !armed(r.addr)).length
+    return off ? [`${off} gate${off === 1 ? '' : 's'} off`, 'warn'] : ['always', 'ok']
+  }
   const excludedDoc = allRules.length - activeDoc
   const stats = rulesData?.stats
   const tierOf = {
@@ -354,7 +369,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       n: ontology.length,
       fill: 1,
       sub: `${ontology.length} sections`,
-      pill: ['always', 'ok'],
+      pill: gatePill(gateRows),
     },
     invariants: {
       name: nouns.laws,
@@ -364,9 +379,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
         laws.length > activeInv
           ? `${activeInv} active · ${laws.length - activeInv} retired`
           : `${activeInv} active`,
-      pill: gatesOff
-        ? [`${gatesOff} gate${gatesOff === 1 ? '' : 's'} off`, 'warn']
-        : ['always', 'ok'],
+      pill: gatePill(laws),
     },
     doctrines: {
       name: nouns.doctrines,
@@ -406,9 +419,11 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   ]
   const showInv = tab === 'all' || tab === 'invariants'
   const showDoc = tab === 'all' || tab === 'doctrines'
-  // The view toggles count what the tier tabs show, before the text filter, as the tabs do.
+  // The view toggles count what the tier tabs show, before the text filter, as the tabs do. The
+  // ownership gate's row shows under every tab.
   const tierRows = [
-    ...(showInv ? [...laws, ...gateRows] : []),
+    ...gateRows,
+    ...(showInv ? laws : []),
     ...(showDoc ? packs.flatMap((p) => p.rules) : []),
   ]
   const VIEWS = [
@@ -447,8 +462,19 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       <span className="mono dim">{src}</span>
     </div>
   )
-  const invRows = [...laws, ...gateRows].filter(match)
+  // The Ethos sections ignore the view and the filter; the gate's row, a switch among them, obeys
+  // both, as it would in any band. A missing section (an older install) leaves it at the end.
+  const gateAt = ontology.findIndex((s) => s.addr === 'ont:ownership') + 1 || ontology.length
+  const ethosRows = [
+    ...ontology.slice(0, gateAt),
+    ...gateRows.filter(match),
+    ...ontology.slice(gateAt),
+  ]
+  const invRows = laws.filter(match)
+  // What the tabs and the filter reach, so not the Ethos band above them. The gate's row counts
+  // only as a match: "Nothing matches" must not sit under it, but it fills no empty tier.
   const shownCount =
+    (ql || view !== 'all' ? gateRows.filter(match).length : 0) +
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
 
@@ -500,19 +526,20 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
           className={`panel flush law-wrap${canApply ? ' with-toggle' : ''}`}
           aria-label="Rules"
         >
-          {/* Ethos sits ABOVE the tabs and the filter, and neither touches it: its four
-              sections are the character the rules below serve, not rules to narrow down, so
-              the tabs and "All" count only what the filter can actually reach. */}
-          {ontology.length > 0 && (
+          {/* Ethos sits ABOVE the tabs and the filter, and neither touches its sections: they
+              are the character the rules below serve, not rules to narrow down, so the tabs
+              and "All" count only what the filter can actually reach. */}
+          {ethosRows.length > 0 && (
             <>
               {bandHead(nouns.ontology, 'ontology/universal.md')}
-              {ontology.map((s) => (
+              {ethosRows.map((s) => (
                 <LawRow
                   key={s.addr}
-                  law={s}
+                  law={withAsks(s)}
                   rev={dataRev}
                   isOpen={open === s.addr}
                   onToggle={() => toggle(s.addr)}
+                  toggleCol={s.plain ? gateSwitch(s.addr) : null}
                 />
               ))}
             </>
@@ -564,14 +591,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
                   onToggle={() => toggle(l.addr)}
                   toggleCol={
                     !canApply || l.retired ? null : GATE_SWITCH[l.addr] ? (
-                      <button
-                        type="button"
-                        className={`sw-toggle${armed(l.addr) ? ' on' : ''}`}
-                        role="switch"
-                        aria-checked={armed(l.addr)}
-                        aria-label={GATE_SWITCH[l.addr].label}
-                        onClick={() => toggleGate(l.addr)}
-                      />
+                      gateSwitch(l.addr)
                     ) : (
                       // A text-only law: nothing at the tool boundary to switch off.
                       <span className="no-gate" title="Enforced by its text alone: no hook gate">

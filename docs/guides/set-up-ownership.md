@@ -82,7 +82,7 @@ Commit the root `AGENTS.md` with the repository, so the whole team works under t
 - **The team default.** Edit `granularity:` in `AGENTS.md` and commit it.
 - **Opt the repo out.** Set `mode: off`. The gate stays quiet, and no checkpoint runs.
 - **Skip it for yourself only.** Answer "skip in this repo until I ask" to the proposal, or write `Setup: declined <YYYY-MM-DD>` into `.geneseed/ownership.md` yourself. The team's `AGENTS.md` does not change.
-- **Opt the whole install out of the gate.** Flip the switch on the *Ownership gate* row of the web console's Constitution page, or rebuild with the flag, as [Exclusions](../concepts/exclusions.md) shows. The install's `AGENT.md` then carries no ownership proposal either, and no decline reminder prints:
+- **Opt the whole install out of the gate.** Flip the switch on the *Ownership gate* row, in the Credo band of the web console's Constitution page, or rebuild with the flag, as [Exclusions](../concepts/exclusions.md) shows. The install's `AGENT.md` then carries no ownership proposal either, and no decline reminder prints:
 
 ```bash
 geneseed build --emit claude-global --no-ownership-gate
