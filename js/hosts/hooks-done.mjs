@@ -11,8 +11,17 @@
  * one command per line, and it BLOCKS (a present file that lists nothing switches the gate off for
  * that project). Absent, the checks are INFERRED from the root manifests (`inferDoneChecks`), and
  * an inferred check is ADVISORY: an unproven turn still ends, with a `systemMessage` to the user,
- * a ledger line and a stderr line — never `decision: block`. An inferred check is a GROUP of
- * accepted command forms (`npm test` | `npm run test` | `npm t`), satisfied by any one.
+ * a ledger line and a stderr line — never `decision: block`. It stays advisory, with no date: an
+ * inferred check is a guess at a project's proof, and only a list the project wrote may block
+ * (user decision 2026-11). An inferred check is a GROUP of accepted command forms (`npm test` |
+ * `npm run test` | `npm t`), satisfied by any one.
+ *
+ * THE OTHER ADVISORY: A WEAKENED TEST (Cure the Cause). A turn whose write tools added a skip marker
+ * to a test file, or dropped an assertion (`weakenedBy`), gets a `[done-gate] advisory` line in the
+ * same `systemMessage`. It needs no checks and never blocks, and `--no-done-gate` silences it as
+ * it silences the inferred advisory: `cmdLearn` does not call this module at all then. On a Write
+ * the old text comes from the transcript line's `toolUseResult.originalFile` (a string on an
+ * update, null on a create, seen in real transcripts 2026-11); without it the text reads as new.
  *
  * WHY IT RIDES `learn` AND NOT A VERB OR A FLAG OF ITS OWN (ADR 0010). The machine-wide shim is
  * last-writer-wins: an older `geneseed-hook` would refuse a new verb or flag, and the Stop
@@ -33,7 +42,8 @@
  * inferred checks from `doneLine`, in the SessionStart context, instead.
  *
  * WHAT COUNTS (shortcut: write tools only; a shell `sed -i` or redirect is not an edit here —
- * seeing those would need `git status`, a spawn. Same limit as `protected-checks.txt`):
+ * seeing every one would need `git status`, a spawn; the rule gate reads the common forms for
+ * `protected-checks.txt`, but a turn is judged on what it wrote, which a command line cannot prove):
  *   - an edit is a Write/Edit/NotebookEdit/MultiEdit whose target is under the project root and
  *     whose result is not an error (a denied write changed nothing);
  *   - a pass is a Bash/PowerShell call whose command contains one of the check's forms UNPIPED (a pipe
@@ -56,7 +66,7 @@ import { within } from '../lib/paths.mjs';
 import { gitRootOf } from './gitref.mjs';
 import { recordGate } from './hooks.mjs';
 import { ADVISORY_VERB } from './hosts.mjs';
-import { DONE_LIST, splitLines, tailReader } from './hooks-prims.mjs';
+import { DONE_LIST, editPairs, isTestPath, splitLines, tailReader, weakenedBy } from './hooks-prims.mjs';
 import { doneChecksOf } from './done-checks.mjs';
 
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit', 'MultiEdit']);
@@ -133,15 +143,12 @@ function isPrompt(obj) {
 }
 
 /**
- * The decision, over transcript TEXT: the checks that have not passed since the turn's last
- * edit, or [] when the turn may end (no edit, or every check passed after it). Exported for the
- * unit tier — a transcript is text no CLI cell can vary cheaply. `whole` false means the text
- * is only the file's tail: with no prompt in it the turn may start earlier, so the answer is
- * null ("read more") — a turn judged from its middle could miss its edit and wrongly pass.
- * A check is a line (one form) or a `{ label, forms }` group; the answer lists labels.
+ * The current turn in transcript TEXT: its tool calls in order, each result's `is_error`, and the
+ * old text the host recorded for a write. `whole` false means the text is only the file's tail:
+ * with no prompt in it the turn may start earlier, so the answer is null ("read more") — a turn
+ * judged from its middle could miss its edit and wrongly pass.
  */
-export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
-  const groups = checks.map((c) => (typeof c === 'string' ? { label: c, forms: [c] } : c));
+function turnOf(transcript, whole) {
   const entries = [];
   for (const line of splitLines(transcript)) {
     if (!line.trim()) continue;
@@ -157,6 +164,7 @@ export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
   }
   const calls = [];                      // tool_use blocks, in order
   const results = new Map();             // tool_use_id -> is_error
+  const originals = new Map();           // tool_use_id -> the file before a Write
   for (const obj of entries.slice(start)) {
     if (obj.isSidechain) continue;
     const content = obj.message && obj.message.content;
@@ -164,15 +172,58 @@ export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
     for (const b of content) {
       if (!b || typeof b !== 'object') continue;
       if (b.type === 'tool_use') calls.push(b);
-      else if (b.type === 'tool_result') results.set(b.tool_use_id, b.is_error === true);
+      else if (b.type === 'tool_result') {
+        results.set(b.tool_use_id, b.is_error === true);
+        const before = obj.toolUseResult && obj.toolUseResult.originalFile;
+        if (typeof before === 'string') originals.set(b.tool_use_id, before);
+      }
     }
   }
+  return { calls, results, originals };
+}
+
+/** The target of a landed write under `root`, absolute, or null. A denied write changed nothing. */
+function editTarget(c, results, root, cwd) {
+  if (!EDIT_TOOLS.has(c.name) || results.get(c.id) === true) return null;
+  const p = c.input && (c.input.file_path || c.input.notebook_path || c.input.path);
+  if (typeof p !== 'string' || !p) return null;
+  const abs = path.resolve(cwd, p);
+  return within(abs, root) ? abs : null;
+}
+
+/** The turn's weakened tests, one `path (labels)` entry per file, the path relative to `root`. */
+function weakenedTests({ calls, results, originals }, root, cwd) {
+  const byFile = new Map();
+  for (const c of calls) {
+    const abs = editTarget(c, results, root, cwd);
+    if (!abs) continue;
+    const rel = path.relative(root, abs).split(path.sep).join('/');
+    if (!isTestPath(rel)) continue;
+    const hits = weakenedBy(editPairs(c.input, originals.get(c.id)));
+    if (hits.length) byFile.set(rel, new Set([...(byFile.get(rel) || []), ...hits]));
+  }
+  return [...byFile].map(([rel, hits]) => `${rel} (${[...hits].join(', ')})`);
+}
+
+/**
+ * The decision, over transcript TEXT: the checks that have not passed since the turn's last
+ * edit, or [] when the turn may end (no edit, or every check passed after it); null when `whole`
+ * is false and the tail holds no prompt (`turnOf`). Exported for the unit tier — a transcript is
+ * text no CLI cell can vary cheaply. A check is a line (one form) or a `{ label, forms }` group;
+ * the answer lists labels.
+ */
+export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
+  const turn = turnOf(transcript, whole);
+  return turn && missingChecks(turn, checks, root, cwd);
+}
+
+/** `weakenedTests` over transcript TEXT, for the unit tier: `doneDecide`'s other question. */
+export const weakenedIn = (transcript, root, cwd = root) => weakenedTests(turnOf(transcript, true), root, cwd);
+
+function missingChecks({ calls, results }, checks, root, cwd) {
+  const groups = checks.map((c) => (typeof c === 'string' ? { label: c, forms: [c] } : c));
   let lastEdit = -1;
-  calls.forEach((c, i) => {
-    if (!EDIT_TOOLS.has(c.name) || results.get(c.id) === true) return;
-    const p = c.input && (c.input.file_path || c.input.notebook_path || c.input.path);
-    if (typeof p === 'string' && p && within(path.resolve(cwd, p), root)) lastEdit = i;
-  });
+  calls.forEach((c, i) => { if (editTarget(c, results, root, cwd)) lastEdit = i; });
   if (lastEdit === -1) return [];
   const passed = new Set();
   calls.slice(lastEdit + 1).forEach((c) => {
@@ -199,38 +250,53 @@ export function doneGate(meta, args, install, read = tailReader()) {
     const root = gitRootOf(cwd);
     if (!root) return null;
     const { source, blocking, checks } = doneChecksOf(root);
-    if (!checks.length) return null;
     // Bob's Stop payload carries no transcript (learn's I2): nothing to judge, and a listed gate
     // says so. Inferred checks stay quiet there: every repo with a manifest would log it.
     if (args.host === 'bob' || typeof meta.transcript_path !== 'string') {
-      if (blocking) err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
+      if (blocking && checks.length) err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
       return null;
     }
-    let missing;
+    let verdict;
     try {
-      missing = read(meta.transcript_path,
-        (text, whole) => doneDecide(text, checks, root, cwd, whole));
+      verdict = read(meta.transcript_path, (text, whole) => {
+        const turn = turnOf(text, whole);
+        return turn && {
+          missing: missingChecks(turn, checks, root, cwd), weakened: weakenedTests(turn, root, cwd),
+        };
+      });
     } catch {
       // No ask tier on Stop: blocking on an unreadable transcript would trap the user.
-      err('[done-gate] transcript unreadable — turn not judged.\n');
+      if (checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
       return null;
     }
+    const { missing, weakened } = verdict;
+    // One JSON document on stdout, whatever the advisories: Stop reads no second one.
+    const advise = (...said) => {
+      if (weakened.length) {
+        // A stable id, not a law number: an advisory is no hook-pinned rule (`HOOK_PINNED`).
+        recordGate(install, ADVISORY_VERB, 'cure-the-cause');
+        const line = `[done-gate] advisory — test weakened this turn: ${weakened.join('; ')}`;
+        err(`${line}\n`);
+        said.push(`${line}. Cure the Cause: fix the code, not the test.`);
+      }
+      out(`${JSON.stringify({ systemMessage: said.join(' ') })}\n`);
+      return 'advisory';
+    };
+    if (!missing.length && weakened.length) return advise();
     if (!missing.length) return null;
     if (!blocking) {
       recordGate(install, ADVISORY_VERB, 'law-3');
       err(`[done-gate] advisory — unproven since the last edit: ${missing.join('; ')}\n`);
-      out(`${JSON.stringify({
-        systemMessage: 'Geneseed done gate (advisory) — this turn edited files, and these checks '
-          + `inferred from ${source} have not passed since the last edit: ${missing.join('; ')}. `
-          + `List your own in ${DONE_LIST} to make the gate block.`,
-      })}\n`);
-      return 'advisory';
+      return advise('Geneseed done gate (advisory) — this turn edited files, and these checks '
+        + `inferred from ${source} have not passed since the last edit: ${missing.join('; ')}. `
+        + `List your own in ${DONE_LIST} to make the gate block.`);
     }
     if (meta.stop_hook_active === true) {
       recordGate(install, 'done-gate-cap', 'law-3');
       err(`[done-gate] cap reached — turn ends with unproven checks: ${missing.join('; ')}\n`);
-      return null;
+      return weakened.length ? advise() : null;
     }
+    // The turn goes on, so a weakened test is said at the Stop that really ends it.
     recordGate(install, 'done-gate', 'law-3');
     out(`${JSON.stringify({
       decision: 'block',

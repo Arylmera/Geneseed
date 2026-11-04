@@ -218,3 +218,72 @@ test("groupPasses stays in parity with js/hosts/hooks-done.mjs (twin), refusals 
   const skipped = await injected(dir, [user("u1"), edit, tool("bash", { command: "mvn install -DskipTests" }, "completed", { exit: 0 }), user("u2")])
   assert.match(skipped, /have not passed since the last edit: mvn test; gradle test; cargo test\./)
 })
+
+// C3 on OpenCode: no turn end to report at, so a write is read before it runs and the next request
+// carries one reminder. Rules and labels are the hook's: the block is a byte twin.
+test("the test-weakening twin block is byte-identical to js/hosts/hooks-prims.mjs", async () => {
+  const cut = (s) => {
+    const b = s.indexOf("// ---- test-weakening twin: BEGIN"), e = s.indexOf("// ---- test-weakening twin: END")
+    assert.ok(b >= 0 && e > b, "twin markers missing")
+    return s.slice(b, e).replace(/^export /gm, "")
+  }
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks-prims.mjs"), "utf8")
+  const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-context.js"), "utf8")
+  assert.equal(cut(src), cut(hookSrc), "the plugin's test-weakening block drifted from js/hosts/hooks-prims.mjs")
+})
+
+const WEAK = "Geneseed (Cure the Cause)"
+const said = (messages) => messages.filter((m) => (m.parts ?? m.content ?? []).some((p) => String(p.text ?? "").includes(WEAK)))
+  .map((m) => (m.parts ?? m.content)[0].text)
+
+test("OpenCode 1: a weakened test is one reminder on the next request, in a repo with no checks", async () => {
+  const dir = await gitRepo("weak-v1", { "tests/old.test.js": "it.skip('a')\n" })
+  const hooks = await GeneseedContext({ client, directory: dir, worktree: dir })
+  const next = async () => {
+    const output = { messages: [user("u1")] }
+    await hooks["experimental.chat.messages.transform"]({}, output)
+    return said(output.messages)
+  }
+  const call = (tool, args) => hooks["tool.execute.before"]({ tool, sessionID: "s1" }, { args })
+  // Each row: the tool call, then the file and labels the reminder names ("" when it stays silent).
+  const rows = [
+    ["edit", { filePath: path.join(dir, "tests", "a.test.js"), oldString: "it('a'", newString: "it.skip('a'" }, "tests/a.test.js (.skip added)"],
+    ["edit", { filePath: path.join(dir, "src", "a.js"), oldString: "it('a'", newString: "it.skip('a'" }, ""],
+    ["edit", { filePath: "tests/a.test.js", oldString: "expect(a).toBe(1)\n", newString: "" }, "tests/a.test.js (assertion removed)"],
+    ["edit", { filePath: "tests/a.test.js", oldString: "expect(a).toBe(1)", newString: "expect(a).toBe(2)" }, ""],
+    ["write", { filePath: path.join(dir, "tests", "old.test.js"), content: "it.skip('a')\nit('b')\n" }, ""],
+    ["write", { filePath: path.join(dir, "tests", "old.test.js"), content: "it.skip('a')\nit.skip('b')\n" }, "tests/old.test.js (.skip added)"],
+    ["apply_patch", { patchText: "*** Begin Patch\n*** Update File: tests/p.test.js\n-it('a')\n+xit('a')\n*** End Patch" }, "tests/p.test.js (xit added)"],
+    ["apply_patch", { patchText: "*** Begin Patch\n*** Update File: src/p.js\n-it('a')\n+xit('a')\n*** End Patch" }, ""],
+  ]
+  for (const [tool, args, want] of rows) {
+    await call(tool, args)
+    const got = await next()
+    assert.equal(got.length, want ? 1 : 0, `${tool} ${JSON.stringify(args)}`)
+    if (want) assert.ok(got[0].includes(want), got[0])
+    assert.deepEqual(await next(), [], "said once")
+  }
+})
+
+test("OpenCode 2: the same reminder through tool.hook and session.hook", async () => {
+  const dir = await gitRepo("weak-v2", {})
+  const hooks = { session: {}, tool: {} }
+  const ctx = {
+    location: { directory: dir, project: { directory: dir } },
+    session: { hook: async (name, cb) => { hooks.session[name] = cb }, get: async () => ({ title: "work" }) },
+    tool: { hook: async (name, cb) => { hooks.tool[name] = cb } },
+  }
+  await contextPlugin.setup(ctx)
+  await hooks.tool["execute.before"]({ tool: "edit", sessionID: "s1", input: { filePath: "tests/a.test.js", oldString: "it(", newString: "it.skip(" } })
+  const ev = () => ({ sessionID: "s1", system: [], messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] })
+  const first = ev()
+  await hooks.session.context(first)
+  assert.equal(said(first.messages).length, 1)
+  assert.ok(said(first.messages)[0].includes("tests/a.test.js (.skip added)"))
+  const second = ev()
+  await hooks.session.context(second)
+  assert.deepEqual(said(second.messages), [], "said once")
+  // A V2 callback that throws fails the agent step: a mangled event must pass in silence.
+  await hooks.tool["execute.before"]({ tool: "write", sessionID: "s1", input: { filePath: 7, content: 7 } })
+  await hooks.tool["execute.before"](null)
+})
