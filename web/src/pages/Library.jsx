@@ -41,6 +41,10 @@ export const installOfKey = (key) => {
 }
 // An install key's tag, the console's one install name (lib/hosts.js installTag).
 export const installLabel = (key) => installTag(installOfKey(key))
+// One colour per install, named once in the list head's legend: a tag per install on every row
+// pushed the rows past the pane. shortcut: seven --cat hues, so an eighth install repeats a colour;
+// the dot's slot and its title still tell them apart. Every second hue: neighbours look alike at 8px.
+const dotColour = (i) => ({ '--cc': `var(--cat-${(i * 2) % 7})` })
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
@@ -342,6 +346,13 @@ export default function Library({
   const oneOf = activeInsts?.length > 1 ? `of ${installTag(activeInsts[0])}` : null
   // Install badges only say something when the list spans two installs or more.
   const fleetWide = fleetOn && new Set(items.flatMap((it) => it.installs || [])).size > 1
+  // Every install's dot slot, in the install list's order, so a colour holds across the kinds.
+  const fleetKeys = [
+    ...new Set([
+      ...(activeInsts || []).map((i) => i.id),
+      ...items.flatMap((it) => it.installs || []),
+    ]),
+  ]
 
   // Skills are divided by class, as the old Skills page did: listed class by class under a
   // header, with a category per class under Skills in the rail to narrow to one. A skill the
@@ -515,12 +526,24 @@ export default function Library({
           matched={matches.length}
           inView={[sec, selected]}
           extra={
-            useOn && usage.since ? (
-              <span className="mono dim lib-since">calls since {usage.since}</span>
-            ) : !FLEET_KINDS.includes(sec) && sec !== 'laws' && oneOf ? (
-              // A one-install kind (wiki, config): whose files these are, once two are active.
-              <span className="mono dim lib-since">{oneOf}</span>
-            ) : null
+            <>
+              {useOn && usage.since ? (
+                <span className="mono dim lib-since">calls since {usage.since}</span>
+              ) : !FLEET_KINDS.includes(sec) && sec !== 'laws' && oneOf ? (
+                // A one-install kind (wiki, config): whose files these are, once two are active.
+                <span className="mono dim lib-since">{oneOf}</span>
+              ) : null}
+              {fleetWide ? (
+                <span className="lib-legend mono">
+                  {fleetKeys.map((k, i) => (
+                    <span key={k} title={installOfKey(k).path}>
+                      <i className="lr-dot" style={dotColour(i)} aria-hidden="true" />
+                      {installLabel(k)}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            </>
           }
           tools={
             shows.length > 1 ? (
@@ -550,17 +573,25 @@ export default function Library({
               useOn || fleetWide
                 ? (it) => {
                     const n = callsOf(it.name)?.n || 0
-                    const badges = fleetWide
-                      ? (it.installs || []).map((k) => (
-                          <span
-                            key={k}
-                            className="tag mono lr-install"
-                            title={installOfKey(k).path}
-                          >
-                            {installLabel(k)}
-                          </span>
-                        ))
-                      : null
+                    // A hollow dot holds the slot of an install without this entry.
+                    const badges = fleetWide ? (
+                      <span className="lr-dots">
+                        {fleetKeys.map((k, i) =>
+                          it.installs?.includes(k) ? (
+                            <span
+                              key={k}
+                              className="lr-dot lr-install"
+                              style={dotColour(i)}
+                              title={`${installLabel(k)} — ${installOfKey(k).path}`}
+                            >
+                              <span className="sr-only">{installLabel(k)}</span>
+                            </span>
+                          ) : (
+                            <span key={k} className="lr-dot off" aria-hidden="true" />
+                          ),
+                        )}
+                      </span>
+                    ) : null
                     if (!useOn) return badges
                     return (
                       <>
