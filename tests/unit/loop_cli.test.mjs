@@ -390,3 +390,27 @@ test('check from a subdirectory sees the git root\'s project bricks and template
     assert.ok(run(sub, ['check']).out.templates.includes('mine'));
   } finally { sb.cleanup(); }
 });
+
+// The check list reaches the engine through --note-file, so that is the path proved here: a pass
+// over a SKIPPED entry exits 1 and leaves LOOP.md byte for byte, and the same list under fail goes.
+test('record refuses test pass over a SKIPPED entry in --note-file; fail with the same list is accepted', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    pastSetup(sb.path);
+    run(sb.path, ['record', '--outcome', 'more', '--card', '{"intent":"x","writeSet":["src/a.js"],"actions":["logic"]}'], '');
+    run(sb.path, ['score', '--declared']);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], ' M src/a.js\n').out, { node: 'test' });
+    const noteFile = path.join(sb.path, 'checks.txt');
+    writeFileSync(noteFile, 'Build: FAIL\r\nFull suite: SKIPPED (gate failed)\r\n');
+    const before = readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8');
+    const refused = run(sb.path, ['record', '--outcome', 'pass', '--note-file', noteFile], ' M src/a.js\n');
+    assert.deepEqual(refused, {
+      code: 1, err: '',
+      out: { error: 'test cannot report pass with a skipped check (Full suite: SKIPPED (gate failed)): run it, or report fail or error' },
+    });
+    assert.equal(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'), before);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail', '--note-file', noteFile], ' M src/a.js\n'),
+      { code: 0, out: { node: 'apply' }, err: '' });
+  } finally { sb.cleanup(); }
+});

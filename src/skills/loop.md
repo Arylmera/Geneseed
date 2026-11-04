@@ -87,6 +87,7 @@ What `score --diff`, `decide` and `record` print back:
   brick, `score --diff` before `record`). Do the step, never edit the state block to get past it.
   An `{error}` from `record` that mentions JSON means the shell mangled the card's quotes: retry
   with the card on a single line and no single quotes inside it.
+  A `test` `pass` with a `SKIPPED` entry is refused: run the check, or report `fail` or `error`.
 
 ## The end
 

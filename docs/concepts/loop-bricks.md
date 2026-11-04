@@ -34,7 +34,7 @@ the repository.
 
 ## Java notes for the newer bricks
 
-- **`mutation-check`** (`legacy-tests`) prefers PIT on a Maven build: `mvn test-compile
+- **`mutation-check`** (`legacy-tests`, `bugfix`) prefers PIT on a Maven build: `mvn test-compile
   org.pitest:pitest-maven:mutationCoverage -DtargetClasses=<fq.Class*>
   -DreportsDirectory=<OS temp dir> -DtimestampedReports=false`, and needs `pitest-junit5-plugin`
   on the classpath under JUnit 5; on Gradle, the `info.solidsoft.pitest` plugin's `pitest` task.

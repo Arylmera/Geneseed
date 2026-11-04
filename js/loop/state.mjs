@@ -352,6 +352,12 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   if (brick.effect === 'mutate' && !state.validated) {
     throw new Error(`${from} modifies code: run \`geneseed loop score --declared\` before it, then record`);
   }
+  // `pass` is mechanical: a check that did not run is not a check that passed, whatever the model
+  // concluded. Only `test` writes this list, as `<check>: <status>`, so the word counts only where
+  // the status sits: right after a colon, markdown marks allowed, and not as a runner's count
+  // (`skipped: 0`, `: skipped 0`).
+  const skipped = from === 'test' && outcome === 'pass' ? note.split('\n').find((l) => /:[\s*`_]*skipped\b(?!\s*\d)/i.test(l)) : null;
+  if (skipped) throw new Error(`test cannot report pass with a skipped check (${skipped.trim()}): run it, or report fail or error`);
   const filteredPorcelain = porcelain === null ? null : filterPorcelain(porcelain);
   if (brick.effect === 'read' && filteredPorcelain !== null && filteredPorcelain !== state.snapshot) {
     return stop(state, `read-brick-wrote: ${from} changed the working tree`);
@@ -359,15 +365,19 @@ export function recordOutcome(state, bricks, outcome, { card = null, porcelain =
   if (filteredPorcelain !== null) state.snapshot = filteredPorcelain;
   if (card) state.card = card;
   if (from === 'test') state.tests = outcome;
-  // A finding a brick needs to survive the unit (the ordered plan `plan` produced, `review`'s
-  // `fail` findings) — pushed before the transition below, so it lands in `notes` even when
-  // this call closes the unit, re-splits, or stops the loop. `notes` is never reset mid-run
-  // (only `exhaust`'s own push and `decideAwaiting` add to it otherwise), so it survives
+  // A finding a brick needs to survive the unit (the ordered plan `plan` produced) — pushed before
+  // the transition below, so it lands in `notes` even when this call closes the unit, re-splits,
+  // or stops the loop. `notes` is never reset with the unit (only the two filters below trim it,
+  // and only `exhaust`'s own push and `decideAwaiting` add to it otherwise), so it survives
   // `resetUnit`/`finishUnit` — which a card does not: `resetUnit` clears it.
   // A fresh verdict: `test`'s latest report supersedes its earlier ones, so a repair never reads
   // findings about code that has since changed (stale traces broke 34 of 135 correct attempts
-  // in arXiv 2607.24604, fresh ones 4). Every other brick's notes are a record and are kept.
+  // in arXiv 2607.24604, fresh ones 4). `review`'s and `mutation-check`'s findings go once `apply`
+  // has acted on them: it reads them through `next`, so they leave when it records, never when it
+  // is entered.
+  // Every other brick's notes are a record and are kept.
   if (from === 'test') state.notes = state.notes.filter((n) => !/^iteration \d+ \(test\): /.test(n));
+  if (from === 'apply') state.notes = state.notes.filter((n) => !/^iteration \d+ \((review|mutation-check)\): /.test(n));
   if (note) state.notes.push(`iteration ${state.iteration} (${from}): ${note}`);
   state.visited.push(from);
 

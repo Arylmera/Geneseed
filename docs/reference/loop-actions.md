@@ -14,7 +14,7 @@ The actions of `geneseed loop`, the state machine behind [Loops](../concepts/loo
 | `init` | writes a fresh `LOOP.md` from a template or graph file, under a title, requirement and trust preset |
 | `next` | the only driver of the cycle — returns the next thing to do: run a node, score a card, answer an `awaiting`, or a terminal |
 | `score` | scores a declared card (`--declared`) before a mutate node runs, or the real diff (`--diff`, numstat piped on stdin) before a commit |
-| `record` | records a brick's reported outcome and advances the graph; `--note` or `--note-file <path>` carries a finding (a read brick's plan or review findings) into `LOOP.md`'s notes so it survives the unit |
+| `record` | records a brick's reported outcome and advances the graph; `--note` or `--note-file <path>` carries a finding into `LOOP.md`'s notes for the bricks after it: a plan survives the unit, and `review` and `mutation-check` findings last until `apply` reports. `test` cannot report `pass` when that note lists a check as `SKIPPED`: the record is refused and `LOOP.md` does not change |
 | `decide` | answers an `awaiting` validation with a verdict and a note |
 
 Run `geneseed loop --help` for the full flag list.

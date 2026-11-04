@@ -1,8 +1,11 @@
 {
   "name": "bugfix",
-  "description": "Reproduce the bug with a failing test, then iterate: apply the fix, test, and review, until the requirement is met and the reproduction passes.",
+  "description": "Reproduce the bug with a failing test, then iterate: apply the fix, test, prove the tests bite by mutation, and review, until the requirement is met and the reproduction passes.",
   "category": "development",
-  "nodes": ["reproduce", "identify", "apply", "test", "review"],
+  "rules": [
+    "Each card's writeSet names the reproduction test, so a mutation-check repair can strengthen it."
+  ],
+  "nodes": ["reproduce", "identify", "apply", "test", "mutation-check", "review"],
   "start": "reproduce",
   "edges": [
     { "from": "reproduce", "on": "pass", "to": "identify" },
@@ -11,13 +14,16 @@
     { "from": "identify", "on": "done", "to": "$close" },
     { "from": "apply", "on": "pass", "to": "test" },
     { "from": "test", "on": "fail", "to": "apply" },
-    { "from": "test", "on": "pass", "to": "review" },
+    { "from": "test", "on": "pass", "to": "mutation-check" },
+    { "from": "mutation-check", "on": "pass", "to": "review" },
+    { "from": "mutation-check", "on": "fail", "to": "apply" },
+    { "from": "mutation-check", "on": "unavailable", "to": "review" },
     { "from": "review", "on": "pass", "to": "identify" },
     { "from": "review", "on": "fail", "to": "apply" }
   ],
   "loops": [
-    { "name": "iterations", "nodes": ["identify", "apply", "test", "review"], "max": 20, "iteration": true },
+    { "name": "iterations", "nodes": ["identify", "apply", "test", "mutation-check", "review"], "max": 20, "iteration": true },
     { "name": "apply-test", "nodes": ["apply", "test"], "max": 2 },
-    { "name": "review-fix", "nodes": ["apply", "test", "review"], "max": 3 }
+    { "name": "review-fix", "nodes": ["apply", "test", "mutation-check", "review"], "max": 3 }
   ]
 }

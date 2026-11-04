@@ -10,6 +10,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **The ship skill deletes a branch once it is merged, local and remote, including after a PR merge.** Before, it deleted a branch only after a local merge, so on a PR-based repo every merged branch stayed on the remote (this repo reached 156). It asks first, as for any deletion, and the first time it ships in a repo it checks whether the forge deletes merged branches by itself (GitHub: *Automatically delete head branches*), since a PR usually merges after the agent's turn has ended. Run `geneseed rebuild-all` to pick it up.
+- **`geneseed loop record` refuses a `test` `pass` whose check list has a skipped check.** The `test` brick now writes its list to a temp file and reports the path with every outcome, so the list reaches the engine. The record fails with the entry named and `LOOP.md` does not change. `fail` and `error` with skipped checks are still accepted.
+- **The `feature` loop writes a failing test first, and the `bugfix` loop proves its tests bite.** `feature` runs `red-test` before `apply`. `bugfix` runs `mutation-check` between `test` and `review`; with no mutation tool it reports `unavailable` and the loop carries on. Each `bugfix` card's write set must name the reproduction test, so a repair can strengthen it.
+- **`review` and `mutation-check` notes leave `LOOP.md` when `apply` reports.** A later repair no longer reads findings about code that has changed.
 
 ## [4.31.0] — 2026-10-31
 

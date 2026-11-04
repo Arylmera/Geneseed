@@ -846,7 +846,7 @@ test('error with no declared edge stops the loop, and is never repaired', () => 
 
 // A fresh verdict: each `test` report supersedes every earlier `test` note, so the next repair
 // reads only the findings for the code as it now stands. Stale traces broke 34 of 135 correct
-// attempts in the paper, fresh ones 4. Other bricks' notes (plan, review findings) are kept.
+// attempts in the paper, fresh ones 4. Other bricks' notes (a plan, say) are kept.
 test("a test report drops every earlier test note; other bricks' notes stay", () => {
   const s = start(); s.node = 'identify'; s.iteration = 1;
   recordOutcome(s, BRICKS, 'more', { card, note: 'plan step 1' }); scoreDeclared(s);
@@ -856,4 +856,130 @@ test("a test report drops every earlier test note; other bricks' notes stay", ()
   assert.deepEqual(s.notes, ['iteration 1 (identify): plan step 1', 'iteration 1 (test): old finding']);
   recordOutcome(s, BRICKS, 'fail', { note: 'new finding' });
   assert.deepEqual(s.notes, ['iteration 1 (identify): plan step 1', 'iteration 1 (test): new finding']);
+});
+
+// Findings about code that has since changed are stale, so a review note lives until the repair it
+// asked for is done: `apply` still receives it through `next`, and it goes when `apply` records. The
+// next review's note then stands alone; the plan's note is a record and stays throughout.
+test('review notes reach apply, leave when apply records, and only the new finding remains', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card, note: 'plan step 1' }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');       // apply, test
+  recordOutcome(s, BRICKS, 'fail', { note: 'old finding' });                // review -> apply
+  assert.deepEqual(nextStep(s, BRICKS).notes, ['iteration 1 (identify): plan step 1', 'iteration 1 (review): old finding']);
+  recordOutcome(s, BRICKS, 'pass');                                         // apply -> test
+  assert.deepEqual(s.notes, ['iteration 1 (identify): plan step 1']);
+  recordOutcome(s, BRICKS, 'pass');                                         // test -> review
+  recordOutcome(s, BRICKS, 'fail', { note: 'new finding' });
+  assert.deepEqual(s.notes, ['iteration 1 (identify): plan step 1', 'iteration 1 (review): new finding']);
+});
+
+// `pass` is mechanical: the `test` brick lists every check, and a list holding a SKIPPED entry
+// cannot be a pass, so the engine refuses it and nothing moves. The word is matched where the status
+// sits, right after a colon, in any case: the word elsewhere on a line, or a runner's own count,
+// is not an entry. Any other outcome, and any other brick's note, says what it likes.
+const SKIPPED_LIST = 'Gate: PASS\nLint: PASS\nFull suite: SKIPPED (an earlier check failed)';
+const atTest = () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1;
+  recordOutcome(s, BRICKS, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass');
+  return s;
+};
+test('test cannot report pass over a SKIPPED entry, and the refusal moves nothing', () => {
+  const s = atTest();
+  const before = JSON.stringify(s);
+  assert.throws(() => recordOutcome(s, BRICKS, 'pass', { note: SKIPPED_LIST, porcelain: ' M src/a.js' }), {
+    message: 'test cannot report pass with a skipped check (Full suite: SKIPPED (an earlier check failed)): run it, or report fail or error',
+  });
+  assert.equal(JSON.stringify(s), before);
+});
+for (const line of ['Full suite: skipped', 'Lint: Skipped', '- Lint: SKIPPED (no config)', 'npm run test:unit: SKIPPED', 'Full suite: **SKIPPED**', 'Full suite: `SKIPPED`', '**Full suite:** SKIPPED']) {
+  test(`test cannot report pass over the entry ${line}`, () => {
+    assert.throws(() => recordOutcome(atTest(), BRICKS, 'pass', { note: `Gate: PASS\n${line}` }), {
+      message: `test cannot report pass with a skipped check (${line}): run it, or report fail or error`,
+    });
+  });
+}
+for (const [label, outcome, note, to] of [
+  ['pass with every check passed', 'pass', 'Gate: PASS\nFull suite: PASS', 'review'],
+  ['pass with a runner summary in lowercase', 'pass', 'Full suite: PASS\n# tests 5, skipped 0', 'review'],
+  ['pass with the word in a status remark', 'pass', 'Full suite: PASS (0 SKIPPED)', 'review'],
+  ['pass with the word in a check description', 'pass', 'Unit: PASS - covers the SKIPPED guard', 'review'],
+  ['pass with a runner count after a colon', 'pass', 'Full suite: PASS\nTests: skipped 0', 'review'],
+  ['pass with no note', 'pass', '', 'review'],
+  ['fail with a SKIPPED entry', 'fail', SKIPPED_LIST, 'apply'],
+]) {
+  test(`test accepts ${label}`, () => {
+    assert.deepEqual(recordOutcome(atTest(), BRICKS, outcome, { note }), { node: to });
+  });
+}
+test('another brick may pass with SKIPPED in its note: only test writes a check list', () => {
+  const s = atTest();
+  recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(recordOutcome(s, BRICKS, 'pass', { note: 'the SKIPPED enum value is right' }), { verify: true });
+});
+
+// feature writes each card's failing test first, wired as tdd: only `red` needs `apply`, a test
+// that already passes goes straight to `test`, and no seam for a test stops for a human.
+for (const [outcome, result] of [
+  ['red', { node: 'apply' }],
+  ['green', { node: 'test' }],
+  ['untestable', { stopped: 'red-test reported untestable' }],
+]) {
+  test(`feature: red-test reporting ${outcome} routes to ${JSON.stringify(result)}`, () => {
+    const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+    const s = initState({ title: 't', requirement: 'r', graph: templates.get('feature') });
+    recordOutcome(s, bricks, 'pass');                                       // plan
+    assert.deepEqual(recordOutcome(s, bricks, 'more', { card }), { node: 'red-test' });
+    scoreDeclared(s);
+    assert.deepEqual(recordOutcome(s, bricks, outcome), result);
+  });
+}
+
+// bugfix proves its tests bite before review. No mutation tool is a recorded gap, not a stop, so
+// `unavailable` carries on to review; a surviving mutant is a repair, charged to review-fix.
+for (const [outcome, to, charged] of [
+  ['pass', 'review', undefined],
+  ['unavailable', 'review', undefined],
+  ['fail', 'apply', 1],
+]) {
+  test(`bugfix: mutation-check reporting ${outcome} routes to ${to}`, () => {
+    const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+    const s = initState({ title: 't', requirement: 'r', graph: templates.get('bugfix') });
+    scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/r.test.js'] });
+    recordOutcome(s, bricks, 'pass');                                       // reproduce
+    scoreDiff(s, [file('test/r.test.js')]);
+    recordOutcome(s, bricks, 'more', { card }); scoreDeclared(s);
+    recordOutcome(s, bricks, 'pass');                                       // apply
+    assert.deepEqual(recordOutcome(s, bricks, 'pass'), { node: 'mutation-check' });
+    assert.deepEqual(recordOutcome(s, bricks, outcome), { node: to });
+    assert.equal(s.counters['ring:review-fix'], charged);
+  });
+}
+
+// A surviving mutant is fixed by strengthening the reproduction test, committed in iteration 0, so
+// every card must name it: bugfix's rule reaches `identify`, and through `next` every other brick.
+// The report is stale once `apply` acts on it, as a review's is; the next verdict stands alone.
+test('bugfix: the card rule reaches every brick, and a mutation-check note leaves when apply records', () => {
+  const { bricks, templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const s = initState({ title: 't', requirement: 'r', graph: templates.get('bugfix') });
+  assert.deepEqual(nextStep(s, bricks).rules,
+    ["Each card's writeSet names the reproduction test, so a mutation-check repair can strengthen it."]);
+  scoreDeclared(s, { actions: ['new-file'], writeSet: ['test/r.test.js'] });
+  recordOutcome(s, bricks, 'pass');                                         // reproduce
+  scoreDiff(s, [file('test/r.test.js')]);
+  recordOutcome(s, bricks, 'more', { card }); scoreDeclared(s);
+  recordOutcome(s, bricks, 'pass'); recordOutcome(s, bricks, 'pass');       // apply, test
+  recordOutcome(s, bricks, 'fail', { note: 'survivor: src/pay.js:12 boundary' });         // mutation-check -> apply
+  assert.deepEqual(nextStep(s, bricks).notes, ['iteration 1 (mutation-check): survivor: src/pay.js:12 boundary']);
+  recordOutcome(s, bricks, 'pass');                                         // apply -> test
+  assert.deepEqual(s.notes, []);
+});
+
+// review-fix keeps max 3 on purpose (docs/concepts/loops.md says why): a change here is a decision
+// about that exception, never a tidy-up towards the two-repair rule.
+test('every shipped review-fix ring stays at max 3', () => {
+  const { templates } = loadCatalog({ projectRoot: null, globalLevel: false });
+  const maxes = [...templates.values()].flatMap((g) => g.loops.filter((l) => l.name === 'review-fix').map((l) => l.max));
+  assert.deepEqual(maxes, Array(11).fill(3));
 });
