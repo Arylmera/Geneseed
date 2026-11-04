@@ -78,10 +78,13 @@ export const GATE_COPY = {
       'real data loss and commit/push consent stay gated.',
   },
   III: {
-    arm: 'A turn that edited files cannot end before the project’s declared checks pass.',
+    arm:
+      'A turn that edited files cannot end before the checks in a non-empty ' +
+      '.geneseed/done-checks.txt pass. With no such file, inferred checks only warn.',
     off:
-      'A turn that edited files may end without the checks in .geneseed/done-checks.txt ' +
-      'passing. Rule III’s text still binds the agent; every other gate stays.',
+      'A turn that edited files may end without its checks passing, listed or inferred, ' +
+      'and the session’s done-gate line goes. Rule III’s text still binds the agent; every ' +
+      'other gate stays.',
   },
   IV: {
     arm: 'Commands that would lose data nothing else holds ask again.',

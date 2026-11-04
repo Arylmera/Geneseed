@@ -64,7 +64,9 @@ import {
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
-import { selfAndParents, readStdin, SECRET_RE, DONE_LIST } from './hooks-prims.mjs';
+import {
+  selfAndParents, readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
+} from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
 
@@ -190,10 +192,20 @@ export function askDecision(reason) { return decisionDoc('ask', reason); }
 export function denyDecision(reason) { return decisionDoc('deny', reason); }
 
 function decisionDoc(decision, reason) {
-  const value = JSON.stringify(reason)
-    .replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
   return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "${decision}", `
-    + `"permissionDecisionReason": ${value}}}\n`;
+    + `"permissionDecisionReason": ${asciiJson(reason)}}}\n`;
+}
+
+const asciiJson = (s) => JSON.stringify(s)
+  .replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+/**
+ * A note to the MODEL that decides nothing: PreToolUse `additionalContext` with no
+ * `permissionDecision` defers, and the host puts the text next to the tool result (hooks.md,
+ * `additionalContext`; not seen live, no gate here runs a model turn).
+ */
+export function contextNote(text) {
+  return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": ${asciiJson(text)}}}\n`;
 }
 
 /**
@@ -488,6 +500,119 @@ const lossSegments = (s) => scanSegments(s).map((seg) => seg.match(SCAN_TOKEN_RE
 // (`rg "/mnt/c" README.md`) — never a root target; only an unquoted root is one.
 const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 
+// ---- shell-write twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything down
+// to the END marker verbatim, with `export ` dropped (tests/plugins/guard.test.mjs diffs the two).
+
+// The cheap prefilter, a superset of what the parse acts on: a `>`, or one of the programs as a word.
+const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
+// One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
+// fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
+// too, so that their words never read as operands. A backslash is no escape here, as in
+// `SCAN_SPLIT_RE`: `echo "say \"hi > f\""` closes its quote early, reads a target, and asks (on Bob, blocks).
+const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
+const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+
+/** `t` as an absolute path from `dir`, `~/…` as it stands, or null for what the shell rewrites. */
+function writePath(dir, t) {
+  if (/[$`*?{}\0]/.test(t) || /^~[^\\/]/.test(t) || /^(?:\/dev\/|nul$)/i.test(t)) return null;
+  if (t[0] === '~') return t;
+  // A Git Bash `/c/…` path, as `resolveIn` reads it.
+  const q = process.platform === 'win32' ? t.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:') : t;
+  if (path.isAbsolute(q)) return path.resolve(q);
+  return dir ? path.resolve(dir, q) : null;
+}
+
+/** The files `sed` edits in place: none without `-i`; else its operands, past the script if inline. */
+function sedFiles(args) {
+  const ops = [];
+  let inPlace = false; let script = false; let flags = true;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (flags && a === '--') flags = false;
+    else if (flags && /^--in-place(?:=|$)/.test(a)) inPlace = true;
+    else if (flags && (a === '--expression' || a === '--file')) { script = true; i += 1; }
+    else if (flags && /^--(?:expression|file)=/.test(a)) script = true;
+    else if (flags && /^-[a-zA-Z]*i/.test(a)) inPlace = true;
+    else if (flags && /^-[a-zA-Z]*[ef]$/.test(a)) { script = true; i += 1; }
+    else if (!flags || !a.startsWith('-') || a === '-') { if (a) ops.push(a); }
+  }
+  return inPlace ? ops.slice(script ? 0 : 1) : [];
+}
+
+/**
+ * The files `command` would write, as absolute paths: redirect targets (`>`, `>>`, `&>`), `tee`
+ * and `rm` operands, `sed -i` files, the destination of `cp` and `mv`, and the sources of `mv`, which
+ * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. Read like
+ * `rootScan`: quotes, comments and heredoc bodies are data. A `cd` is followed; one it cannot read
+ * leaves later relative paths unseen. What it cannot read, it leaves out: this reader fails OPEN.
+ *
+ * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
+ * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
+ * variable, glob or brace in it, a wrapper with flags (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`,
+ * `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >& file` (read as a dup), a `popd` (not followed, so
+ * relative paths after a `pushd`/`popd` pair resolve from the wrong folder), `cp -t`, any other writer
+ * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
+ * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
+ * boundary that holds against those.
+ */
+export function shellWriteTargets(command, cwd) {
+  if (!SHELL_WRITE_RE.test(command)) return [];
+  const found = new Set();
+  let dir = cwd;
+  const add = (t) => { const p = writePath(dir, t); if (p) found.add(p); };
+  const bare = (t) => t.replace(/["']/g, '');
+  for (const seg of scanSegments(command)) {
+    const outs = [];
+    const body = seg.replace(REDIRECT_RE, (m, op, dup, target) => {
+      if (op === undefined) return m;
+      if (op[0] === '>' && !dup && target) outs.push(bare(target));
+      return ' ';
+    });
+    let toks = stripStructure(body.match(SCAN_TOKEN_RE) || []);
+    while (toks.length && (/^\w+=/.test(toks[0]) || SCAN_WRAPPERS.has(bare(toks[0])))) toks = toks.slice(1);
+    const prog = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '') : '';
+    const args = toks.slice(1).map(bare);
+    const dashes = args.indexOf('--');
+    const ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    if (SHELL_CD.has(prog)) {
+      const to = ops.find((a) => !/^\/d$/i.test(a));
+      dir = to && to !== '-' ? writePath(dir, to) : null;
+    } else if (prog === 'rm' || prog === 'tee') ops.forEach(add);
+    else if (prog === 'sed') sedFiles(args).forEach(add);
+    else if ((prog === 'cp' || prog === 'mv') && ops.length > 1) {
+      const dest = ops[ops.length - 1];
+      const sources = ops.slice(0, -1);
+      add(dest);
+      for (const s of sources) {
+        add(`${dest.replace(/[\\/]+$/, '')}/${s.split(/[\\/]/).pop()}`);
+        if (prog === 'mv') add(s);
+      }
+    }
+    outs.forEach(add);
+  }
+  return [...found];
+}
+// ---- shell-write twin: END
+
+/**
+ * External Gate over a shell command: the first write target that `externalGate` refuses, as the
+ * reason to ask, or null. Path check only, no secret scan of the command. Any throw is a pass, not
+ * `guardGate`'s `gate-error` ask: this reader fails open, and a hand-mangled path is not a gate failure.
+ */
+function shellWriteReason(args, command, payload) {
+  try {
+    const base = (payload && typeof payload.cwd === 'string' && payload.cwd) || process.cwd();
+    // A Roo-lineage shell tool may name its own directory, as OpenCode's `workdir` does.
+    const own = payload && payload.tool_input && payload.tool_input.cwd;
+    const cwd = typeof own === 'string' && own ? path.resolve(base, own) : base;
+    for (const t of shellWriteTargets(command, cwd)) {
+      const why = externalGate(args, t, payload);
+      if (why) return why;
+    }
+  } catch { /* see above */ }
+  return null;
+}
+
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
@@ -521,6 +646,10 @@ function gitDecide(args, payload) {
       + 'share, for hours; | head stops nothing). Search a specific directory instead: the '
       + 'project, node_modules, ~/.npm, %APPDATA%.');
   }
+  // Also before `--no-consent`: rigor-5 is no part of the process pack. On Bob a hook-settings
+  // target cannot be replayed from a command (`bobSettingsChange`), so it blocks.
+  const shellWrite = shellWriteReason(args, command, payload);
+  if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite);
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before
   // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
@@ -585,8 +714,8 @@ export const SENSOR_LIST = '.geneseed/protected-checks.txt';
  * them, one repo-relative path per line (`#` comments), in `.geneseed/protected-checks.txt` at
  * its git root — found by walking up from the WRITE TARGET, not the cwd, so a session in one repo
  * writing into another reads that other repo's list. The list protects itself. Returns the entry
- * the path falls under, or null. shortcut: a write tool only — a shell `sed -i` or redirect is
- * not seen here; CI running the checks is the boundary that holds against that.
+ * the path falls under, or null. A write tool's path reaches this through `ruleDecide`, a shell
+ * command's write targets through `shellWriteTargets`, whose docblock names what stays unseen.
  */
 function protectedCheck(p) {
   return protectedIn(path.resolve(p)) ?? protectedIn(resolvePath(p));
@@ -633,7 +762,7 @@ function protectedIn(target) {
  * guard holds these lists minus the hook settings and OpenCode's own files, which OpenCode asks about natively
  * (`opencodeEditAsks` in ./settings.mjs; tests/plugins/guard.test.mjs pins the difference). The CLI
  * (`geneseed exclude`, an emit) writes these with `fs`, never through a write tool, so it is
- * not gated. shortcut: write tools only, like `protectedCheck` — a shell redirect is not seen.
+ * not gated. Reached from a shell command too, with the same limit as `protectedCheck`.
  */
 const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
 const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
@@ -690,7 +819,7 @@ function settingsAfter(before, payload) {
     return ranged ? null : once(before, ti.search, ti.replace);
   }
   if (tool === 'apply_diff' && typeof ti.diff === 'string') {
-    const blocks = [...ti.diff.matchAll(/<<<<<<< SEARCH\r?\n(?::start_line:\s*\d+\r?\n)?(?:-------\r?\n)?([\s\S]*?)\r?\n?=======\r?\n([\s\S]*?)\r?\n?>>>>>>> REPLACE/g)];
+    const blocks = [...ti.diff.matchAll(DIFF_BLOCK_RE)];
     let text = before;
     for (const [, search, replace] of blocks) if ((text = once(text, search, replace)) === null) return null;
     // One block only: with several, Bob may apply some and refuse others (its start-line window).
@@ -729,6 +858,51 @@ function bobSettingsChange(p, payload) {
   if (strict(before) && !strict(after)) return 'it turns strict JSON into JSONC, which Bob may refuse to read';
   if (isTruthy(b.disableAllHooks) && !isTruthy(a.disableAllHooks)) return 'it turns on disableAllHooks';
   return geneseedWiring(a) === geneseedWiring(b) ? null : 'it changes Geneseed\'s own hook entries';
+}
+
+/**
+ * External Gate on one write target, by tool or by shell: why it must be asked about, or null.
+ * On Bob a hook-settings file is the user's shared host config, refused only when the write
+ * touches Geneseed's wiring (`bobSettingsChange`), and it never reads `opencode.json(c)`.
+ */
+function externalGate(args, p, payload) {
+  const sensor = protectedCheck(p);
+  if (sensor) {
+    return `Geneseed (External Gate) — ${p} is a protected check (${sensor === DONE_LIST
+      ? 'the done gate list itself' : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can `
+      + 'edit is not a check: fix the code, not the check, unless the user asks for this edit.';
+  }
+  if (HOST === 'bob' && /^opencode\.jsonc?$/i.test(path.basename(p))) return null;
+  if (!gateConfig(p, args.root)) return null;
+  const why = HOST === 'bob' && SETTINGS_RE.test(p) ? bobSettingsChange(p, payload) : '';
+  if (why === null) return null;
+  return `Geneseed (External Gate) — ${p} ${GATE_CONFIG_ASK}`
+    + (why ? ` On Bob this write is refused because ${why}.` : '');
+}
+
+/**
+ * Cure the Cause's edit-time half, ADVISORY: tells the agent that this write weakens a test (a skip
+ * marker added, an assertion dropped). The turn-end line is `doneGate`'s, read from the transcript.
+ * It only speaks, and it must not fail a write, so every error is silence. On Bob stdout is not
+ * read on PreToolUse, so the note is a stderr line, which also serves as its log line.
+ */
+function testWeakenedNote(p, payload) {
+  try {
+    if (!isTestPath(p)) return;
+    const abs = path.resolve(typeof payload.cwd === 'string' ? payload.cwd : '.', p);
+    const root = gitRootOf(path.dirname(abs));
+    if (root && !isTestPath(path.relative(root, abs))) return;
+    let whole = '';
+    if (/write/i.test(String(payload.tool_name))) {
+      try { whole = readFileSync(abs, 'utf8'); } catch { /* a new file: nothing to weaken */ }
+    }
+    const hits = weakenedBy(editPairs(payload.tool_input, whole));
+    if (!hits.length) return;
+    const note = `Geneseed (Cure the Cause) — this edit weakens a test: ${p} (${hits.join(', ')}). `
+      + 'Fix the code, not the test. State this in your closing summary, with the reason.';
+    if (HOST === 'bob') err(`[geneseed] ${note}\n`);
+    else out(contextNote(note));
+  } catch { /* see above */ }
 }
 
 function ruleGate(args) {
@@ -773,30 +947,17 @@ function ruleDecide(args, payload) {
   // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
   // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
   const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
-  const sensor = !bobRead && protectedCheck(p);
-  if (sensor) {
-    return ask(args, 'rule-gate', 'rigor-5', `Geneseed (External Gate) — ${p} is a protected `
-      + `check (${sensor === DONE_LIST ? 'the done gate list itself'
-        : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can edit is not a `
-      + 'check: fix the code, not the check, unless the user asks for this edit.');
-  }
-  // Bob never reads `opencode.json(c)`, OpenCode's whole host config: it is not gated from Bob.
-  const bobWrite = !bobRead && !(HOST === 'bob' && /^opencode\.jsonc?$/i.test(path.basename(p)));
-  if (bobWrite && gateConfig(p, args.root)) {
-    // Bob: a hook-settings file is the user's shared host config — refused only when the write
-    // touches Geneseed's wiring (`bobSettingsChange`); a pass falls through to the checks below.
-    const why = HOST === 'bob' && SETTINGS_RE.test(p) ? bobSettingsChange(p, payload) : '';
-    if (why !== null) {
-      return ask(args, 'rule-gate', 'rigor-5', `Geneseed (External Gate) — ${p} ${GATE_CONFIG_ASK}`
-        + (why ? ` On Bob this write is refused because ${why}.` : ''));
-    }
-  }
+  const external = !bobRead && externalGate(args, p, payload);
+  if (external) return ask(args, 'rule-gate', 'rigor-5', external);
   const target = ruleGateTarget(p, args.root);
   if (!target) {
     // The ownership first-write gate (./ownership-gate.mjs), last: every rule above outranks it.
     // `--no-ownership-gate`: the install switched it off (D25).
     const why = args.noOwnershipGate ? null : ownershipBlock(p, payload, body, args.root);
-    return why ? deny(args, 'rule-gate', 'ownership', why) : 0;
+    if (why) return deny(args, 'rule-gate', 'ownership', why);
+    // Only here: stdout carries one document, and an ask or a deny above already holds it.
+    if (!bobRead) testWeakenedNote(p, payload);
+    return 0;
   }
   return ask(args, 'rule-gate', 'process-1', `Geneseed (Persist Insight) \u2014 writing to `
     + `${target}: a standing rule, or a fact to remember? That choice is the user's. ${PERSIST_ASK}`);

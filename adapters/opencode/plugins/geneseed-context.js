@@ -894,6 +894,95 @@ async function alreadyInjected(client, sid) {
   return false
 }
 
+// ---- test-weakening twin: BEGIN — adapters/opencode/plugins/geneseed-context.js carries everything
+// down to the END marker verbatim, with `export ` dropped (tests/plugins/context_done.test.mjs diffs the two).
+
+/**
+ * A test file: a path segment `test`, `tests`, `__tests__` or `spec`, or a name `*.test.*`,
+ * `*.spec.*`, `*_test.*` or `test_*`. Give it a path relative to the repo, or an ancestor
+ * folder named `test` makes every file a test.
+ */
+const TEST_PATH_RE = /(?:^|[\\/])(?:tests?|__tests__|spec)[\\/]|(?:^|[\\/])test_[^\\/]*$|\.(?:test|spec)\.[^\\/]*$|_test\.[^\\/]*$/;
+const isTestPath = (p) => TEST_PATH_RE.test(p);
+// `\bxit`, or `process.exit(` reads as one; `(?<!mark)`, or `pytest.mark.skip(` counts twice.
+const SKIP_MARKERS = [['.skip', /(?<!mark)\.skip\(/g], ['xit', /\bxit\(/g], ['xfail', /\bxfail\b/g],
+  ['@Disabled', /@Disabled\b/g], ['@Ignore', /@Ignore\b/g], ['pytest.mark.skip', /\bpytest\.mark\.skip/g],
+  ['t.Skip', /\bt\.Skip\(/g]];
+const ASSERT_LINE_RE = /\bassert\w*!?\s*[.(]|\bexpect\s*\(|^assert\s/;
+const COMMENT_LINE_RE = /^(?:\/\/|\/\*|\*|#)/;
+// shortcut: only whole comment lines are dropped, so a marker in a string or a trailing comment, and
+// any other `.skip(` (`stream().skip(1)`), still count. Upgrade by parsing the language; it is an advisory.
+const code = (text) => text.split(/\r?\n/).filter((l) => !COMMENT_LINE_RE.test(l.trim())).join('\n');
+// shortcut: a Set hides the loss of one of two identical lines, and `require.Equal`, `t.Errorf` and
+// `.should` are not read as assertions. Upgrade by counting lines and widening `ASSERT_LINE_RE`.
+const assertLines = (text) => new Set(text.split(/\r?\n/).map((l) => l.trim())
+  .filter((l) => ASSERT_LINE_RE.test(l) && !COMMENT_LINE_RE.test(l)));
+
+/**
+ * What `pairs` of `[old, new]` text do to a test, as labels: a skip marker the new text has more
+ * of (`.skip added`), or an assertion line gone with none new in its place (`assertion removed`).
+ * A comment is no assertion, so commenting one out removes it. Cure the Cause's advisory half.
+ */
+function weakenedBy(pairs) {
+  const found = new Set();
+  for (const [before, after] of pairs) {
+    for (const [label, re] of SKIP_MARKERS) {
+      if ((code(after).match(re) || []).length > (code(before).match(re) || []).length) found.add(`${label} added`);
+    }
+    const was = assertLines(before);
+    const now = assertLines(after);
+    if ([...was].some((l) => !now.has(l)) && [...now].every((l) => was.has(l))) found.add('assertion removed');
+  }
+  return [...found];
+}
+// ---- test-weakening twin: END
+
+// A weakened test (Cure the Cause), ADVISORY. OpenCode has no turn end to report at, so a write is
+// read before it runs and the next request carries one reminder, on OpenCode 1 and 2 alike: both
+// expose the tool's input before it runs, unlike the tool parts the done gate reads on V1 alone.
+// shortcut: a call the guard then refuses still counts; move to an after-hook if that ever misleads.
+const WEAKENED = new Map()   // sessionID -> Map(path -> labels)
+function testEditPairs(tool, args, before) {
+  const t = String(tool).toLowerCase()
+  if (t === "write" && typeof args.content === "string") return [[null, before, args.content]]
+  if (t === "edit" && typeof args.newString === "string") return [[null, String(args.oldString ?? ""), args.newString]]
+  if ((t !== "patch" && t !== "apply_patch") || typeof args.patchText !== "string") return []
+  // `*** Add|Update File: <path>` sections: `-` lines leave the file, `+` lines land in it.
+  const out = []
+  for (const line of args.patchText.split(/\r?\n/)) {
+    const m = /^\*\*\* (?:Add|Update) File:\s*(.+)$/.exec(line)
+    if (m) out.push([m[1].trim(), "", ""])
+    else if (out.length && /^[-+]/.test(line)) out[out.length - 1][line[0] === "-" ? 1 : 2] += `${line.slice(1)}\n`
+  }
+  return out
+}
+async function noteWeakened(root, sid, tool, args) {
+  try {
+    if (!sid || !args) return
+    const file = typeof args.filePath === "string" ? path.resolve(root, args.filePath) : null
+    let before = ""
+    if (file && String(tool).toLowerCase() === "write" && isTestPath(path.relative(root, file))) {
+      before = await fs.readFile(file, "utf8").catch(() => "")
+    }
+    for (const [p, was, now] of testEditPairs(tool, args, before)) {
+      const rel = path.relative(root, p === null ? file ?? "" : path.resolve(root, p)).replace(/\\/g, "/")
+      const hits = isTestPath(rel) ? weakenedBy([[was, now]]) : []
+      if (!hits.length) continue
+      if (!WEAKENED.has(sid)) WEAKENED.set(sid, new Map())
+      WEAKENED.get(sid).set(rel, [...new Set([...(WEAKENED.get(sid).get(rel) ?? []), ...hits])])
+    }
+  } catch (err) { log(`test-weakening error: ${err?.message ?? err}`) }
+}
+// The reminder owed to this session, once; null when there is none.
+function takeWeakened(sid) {
+  const files = WEAKENED.get(sid)
+  if (!files) return null
+  WEAKENED.delete(sid)
+  const list = [...files].map(([rel, hits]) => `${rel} (${hits.join(", ")})`).join("; ")
+  return `Geneseed (Cure the Cause) — advisory: test weakened this turn: ${list}. Fix the code, not the `
+    + "test. State this in your closing summary, with the reason."
+}
+
 // ---- The done gate (#289): the OpenCode twin of js/hosts/hooks-done.mjs ----------------
 // OpenCode has no turn-end event a plugin can block on, so its ceiling is a reminder: on the
 // request AFTER a turn that edited files without the project's declared checks passing
@@ -1237,6 +1326,10 @@ export const GeneseedContext = async (ctx) => {
   })
 
   return {
+    "tool.execute.before": async (input, output) => {
+      await noteWeakened(root, input?.sessionID, input?.tool, output?.args)
+    },
+
     event: async ({ event }) => {
       if (!event || INJECT_OFF) return
       if (await sovereignBypass(root)) return
@@ -1311,6 +1404,16 @@ export const GeneseedContext = async (ctx) => {
         })
         log("transform: done-gate reminder injected")
       })().catch((err) => log(`done-gate error: ${err?.message ?? err}`))
+      // The weakened-test reminder, on the same switch: it needs no checks, so not inside the above.
+      const weakened = !(await doneGateOff()) && takeWeakened(sid)
+      if (weakened) {
+        const stamp = Date.now()
+        output.messages.unshift({
+          info: { id: `geneseed-weakened-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
+          parts: [{ id: `geneseed-weakened-part-${stamp}`, type: "text", text: weakened }],
+        })
+        log("transform: test-weakening reminder injected")
+      }
       if (INJECT_OFF || !TRANSFORM || fallbackVisible) return
       try {
         // Already present this request? (idempotent across plugin copies / retries.)
@@ -1374,8 +1477,27 @@ async function setupV2(ctx) {
     console.error(`[geneseed-context] done gate: ${DONE_LIST} found, but OpenCode 2 turns are not judged.`)
   }
 
+  // The weakened-test reminder, which INJECT_OFF and visible delivery leave on, as on V1. A V2
+  // callback that throws fails the agent step, so both swallow their errors.
+  await ctx.tool?.hook?.("execute.before", async (event) => {
+    await noteWeakened(root, event?.sessionID, event?.tool, event?.input)
+  })
+  const remindWeakened = async (event) => {
+    try {
+      if (!Array.isArray(event?.messages) || await sovereignBypass(root) || await doneGateOff()) return
+      if (await skipSession(event.sessionID)) return
+      const weakened = takeWeakened(event.sessionID)
+      if (weakened) event.messages.unshift(v2UserMessage(event.messages, weakened))
+    } catch (err) {
+      log(`test-weakening error: ${err?.message ?? err}`)
+    }
+  }
+
+  // One `context` hook either way: only `remindWeakened` in visible delivery.
+  if (VISIBLE) await ctx.session.hook("context", remindWeakened)
   if (!VISIBLE) {
     await ctx.session.hook("context", async (event) => {
+      await remindWeakened(event)
       if (INJECT_OFF) return
       try {
         if (await sovereignBypass(root)) return

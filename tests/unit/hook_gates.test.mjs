@@ -1635,3 +1635,190 @@ test('a root scan is ledgered as ops-2, and Bob blocks it (exit 2) on either pay
     assert.match(r.err, /BLOCKED: Geneseed \(Commands Must Return\)/);
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// C2: shell writes reach External Gate. The reader names what a command WRITES: redirect targets,
+// tee and rm operands, sed -i files, the cp/mv destination (also as a folder) and the mv source.
+// What it reads, and every form it cannot read, names nothing: it fails open.
+
+const SHELL_WRITE_ROWS = [
+  // [command, the targets relative to the cwd, in the reader's order]
+  ['echo hi > a.txt', ['a.txt']],
+  ['echo hi>a.txt', ['a.txt']],
+  ['echo hi >> a.txt', ['a.txt']],
+  ['echo hi &> a.txt', ['a.txt']],
+  ['echo hi 2> a.log', ['a.log']],
+  ['cat x > "q r"', ['q r']],
+  ['cat x | tee b c', ['b', 'c']],
+  ['tee -a d', ['d']],
+  ['sed -i s/a/b/ f g', ['f', 'g']],
+  ["sed -i '' s/a/b/ f", ['f']],
+  ['sed -i.bak -e s/a/b/ f', ['f']],
+  ["sed -e 's/a/b/' -i f", ['f']],
+  ['sed -Ei s/a/b/ f', ['f']],
+  ['sed --in-place s/a/b/ f', ['f']],
+  ['cp a b', ['b', 'b/a']],
+  ['cp -r src/a dir/', ['dir', 'dir/a']],
+  ['mv a b', ['b', 'b/a', 'a']],
+  ['mv a b 2>/dev/null', ['b', 'b/a', 'a']],
+  ['rm -rf a b', ['a', 'b']],
+  ['rm -- -x', ['-x']],
+  ['rm "my file"', ['my file']],
+  ['sudo rm z', ['z']],
+  ['FOO=1 rm z', ['z']],
+  ['(rm z)', ['z']],
+  ['cd sub && rm x', ['sub/x']],
+  ['cat <<EOF > out\nrm body\nEOF', ['out']],
+  // Reading is no write: only the redirect target of a read counts.
+  ['cat x > y', ['y']],
+  ['cat x', []],
+  ['sed -n p f', []],
+  ['sed s/a/b/ f', []],
+  ['grep -r x tests', []],
+  ['cp a', []],
+  // A dup, the null device and a quoted operator write no file.
+  ['npm test 2>&1', []],
+  ['echo x >&2', []],
+  ['cat a > /dev/null', []],
+  ['cat a 2>/dev/null', []],
+  ['echo "a > b"', []],
+  ["echo 'rm x; cp a b'", []],
+  ['git commit -m "rm x > y"', []],
+  ['ls # > nope', []],
+  // Another program's own subcommand is no removal.
+  ['npm rm x', []],
+  ['git rm x', []],
+  ['git mv a b', []],
+  // What the shell rewrites is left out, and a cd it cannot follow hides later relative paths.
+  ['rm $x', []],
+  ['rm tests/*.js', []],
+  ['echo a > "$OUT"', []],
+  ['rm ~user/x', []],
+  ['cd $X && rm y', []],
+];
+
+test('shellWriteTargets: what each command form writes, and what it does not', async () => {
+  const { shellWriteTargets } = await import('../../js/hosts/hooks.mjs');
+  const cwd = path.resolve('/proj');
+  for (const [command, want] of SHELL_WRITE_ROWS) {
+    const got = shellWriteTargets(command, cwd).map((p) => path.relative(cwd, p).replace(/\\/g, '/'));
+    assert.deepEqual(got, want, command);
+  }
+  assert.deepEqual(shellWriteTargets('rm ~/x', cwd), ['~/x'], 'a home path stays for the two readings');
+  if (process.platform === 'win32') {
+    assert.deepEqual(shellWriteTargets('rm /c/x/y', cwd), [path.resolve('c:/x/y')], 'a Git Bash path maps');
+  }
+});
+
+const shellPayload = (command, cwd) => JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd });
+
+test('a shell write to a protected check asks like a write tool; reads and near misses defer', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'tests/\nci/verify.sh\n');
+    fs.mkdirSync(path.join(repo, 'tests'));
+    for (const command of ['echo x > tests/a.test.js', 'echo x >> ci/verify.sh', 'echo x | tee tests/a.js',
+      'sed -i s/a/b/ ci/verify.sh', 'cp evil.js tests/a.test.js', 'cp evil.js tests/', 'mv tests/a.js /elsewhere/a.js',
+      'mv evil.js ci/verify.sh', 'rm tests/a.js', 'rm -f ci/verify.sh', 'cd tests && rm a.js',
+      'echo x > .geneseed/protected-checks.txt', 'echo x > .geneseed/done-checks.txt']) {
+      const r = hookRun('git-gate', { stdin: shellPayload(command, repo), extra: ['--no-deletion-gate'] });
+      const dec = askDecision(r, command);
+      assert.match(dec.permissionDecisionReason, /External Gate/, command);
+    }
+    for (const command of ['cat tests/a.js > /tmp/y', 'cat tests/a.js', 'cp tests/a.js /tmp/y', 'npm test 2>&1',
+      'node x.js > /dev/null', 'echo "x > tests/a.js"', 'sed -n p ci/verify.sh', 'echo x > src/a.js',
+      'rm $X', 'node -e "write(1)"']) {
+      assertDefers(hookRun('git-gate', { stdin: shellPayload(command, repo), extra: ['--no-deletion-gate'] }), command);
+    }
+  } finally { sb.cleanup(); }
+});
+
+test('--no-consent never silences a shell write: rigor-5 is no part of the process pack', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'tests/\n');
+    const r = hookRun('git-gate', { stdin: shellPayload('echo x > tests/a.js', repo), extra: ['--no-consent'] });
+    assert.match(askDecision(r, 'no-consent').permissionDecisionReason, /External Gate/);
+  } finally { sb.cleanup(); }
+});
+
+test('a shell write to a gate\'s own configuration asks; Bob blocks it, opencode.json aside', () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    const env = { ...process.env, GENESEED_HOME: f.home };
+    for (const p of [path.join(f.root, 'excludes.json'), path.join(f.repo, '.claude', 'settings.json'),
+      path.join(f.repo, 'opencode.json'), path.join(f.home, 'bin', 'geneseed-hook')]) {
+      const stdin = shellPayload(`echo '{}' > "${p}"`, f.repo);
+      gateConfigAsks(hookRun('git-gate', { root: f.root, stdin, env }), p);
+    }
+    const bob = (p) => hookRun('tool-gate', {
+      root: f.root, host: 'bob', env, stdin: bobPayload('execute_command', { command: `echo x > "${p}"`, cwd: f.repo }),
+    });
+    const blocked = bob(path.join(f.root, 'excludes.json'));
+    assert.equal(blocked.rc, 2, blocked.err);
+    assert.match(blocked.err, /BLOCKED: Geneseed \(External Gate\)/);
+    // A hook-settings file cannot be replayed from a command line, so Bob fails closed on it.
+    const settings = bob(path.join(f.repo, '.bob', 'settings.json'));
+    assert.equal(settings.rc, 2, settings.err);
+    assert.match(settings.err, /could not be replayed/);
+    assertDefers(bob(path.join(f.repo, 'opencode.json')), 'Bob never reads opencode.json');
+    // A relative target resolves from the tool's own `cwd`.
+    const relative = bob('.claude/excludes.json');
+    assert.equal(relative.rc, 2, relative.err);
+  } finally { sb.cleanup(); }
+});
+
+test('a shell command the reader chokes on defers, never a gate-error ask', () => {
+  for (const command of ['> ', '>', '>>> <<<', 'cp', 'rm', 'rm \0', '"> ', 'tee "', "sed -i '"]) {
+    assertDefers(hookRun('git-gate', { stdin: shellPayload(command, process.cwd()), extra: ['--no-deletion-gate'] }), command);
+  }
+});
+
+// C3, the edit-time half: a write that weakens a test leaves the agent a note and decides nothing.
+// An ask or a deny on the same call holds stdout alone.
+
+const editPayload = (file_path, old_string, new_string, cwd) =>
+  JSON.stringify({ tool_name: 'Edit', tool_input: { file_path, old_string, new_string }, cwd });
+
+test('rule-gate: a weakened test gets an additionalContext note; the same edit elsewhere gets none', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(repo, 'tests'));
+    const test1 = path.join(repo, 'tests', 'a.test.js');
+    const flags = ['--no-ownership-gate'];
+    const r = hookRun('rule-gate', { stdin: editPayload(test1, "it('x', f)", "it.skip('x', f)", repo), extra: flags });
+    assert.equal(r.rc, 0, r.err);
+    const out = JSON.parse(r.out).hookSpecificOutput;
+    assert.equal(out.hookEventName, 'PreToolUse');
+    assert.equal(out.permissionDecision, undefined, 'a note decides nothing');
+    assert.match(out.additionalContext, /Cure the Cause/);
+    assert.match(out.additionalContext, /\.skip added/);
+    assert.match(out.additionalContext, /State this in your closing summary, with the reason/);
+    assertDefers(hookRun('rule-gate', { stdin: editPayload(path.join(repo, 'src', 'a.js'), 'x', "it.skip('x', f)", repo), extra: flags }), 'not a test path');
+    assertDefers(hookRun('rule-gate', { stdin: editPayload(test1, 'expect(a).toBe(1)', 'expect(a).toBe(2)', repo), extra: flags }), 'a replaced assertion');
+    // A Write has no old text in its input: the gate reads the file, so a marker already there is no addition.
+    fs.writeFileSync(test1, "it.skip('x', f)\n");
+    const write = (content) => JSON.stringify({ tool_name: 'Write', tool_input: { file_path: test1, content }, cwd: repo });
+    assertDefers(hookRun('rule-gate', { stdin: write("it.skip('x', f)\nit('y', g)\n"), extra: flags }), 'an old marker');
+    const again = hookRun('rule-gate', { stdin: write("it.skip('x', f)\nit.skip('y', g)\n"), extra: flags });
+    assert.match(JSON.parse(again.out).hookSpecificOutput.additionalContext, /\.skip added/);
+    // Bob reads no stdout on PreToolUse, so the note is its stderr line, and the call goes through.
+    const bob = hookRun('tool-gate', { host: 'bob', extra: flags,
+      stdin: bobPayload('apply_diff', { path: test1, diff: roodiff("it('x', f)", "it.skip('x', f)") }) });
+    assert.equal(bob.rc, 0, bob.err);
+    assert.equal(bob.out, '');
+    assert.match(bob.err, /Cure the Cause.*\.skip added/);
+  } finally { sb.cleanup(); }
+});
+
+test('rule-gate: an ask on the same write keeps stdout to one document', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'tests/\n');
+    const r = hookRun('rule-gate', { stdin: editPayload(path.join(repo, 'tests', 'a.test.js'), 'it(', 'it.skip(', repo) });
+    assert.match(askDecision(r, 'protected').permissionDecisionReason, /External Gate/);
+  } finally { sb.cleanup(); }
+});
