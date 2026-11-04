@@ -10,8 +10,8 @@ The loop templates Geneseed ships. Each is a graph of [bricks](loop-bricks.md) w
 
 | template | purpose | when to use |
 |---|---|---|
-| `bugfix` | reproduce, fix, test, review a defect | a reported bug with a reproduction step |
-| `feature` | plan, then build and review in small iterations | new behaviour with no existing test pinning it |
+| `bugfix` | reproduce, fix, test, mutation-check, review a defect | a reported bug with a reproduction step |
+| `feature` | plan, then build test-first and review in small iterations | new behaviour with no existing test pinning it |
 | `refactor` | restructure behind the existing tests, no behaviour change | the tests already cover the code you're moving |
 | `tdd` | plan, then write each failing test before the code that passes it | you want the test written first, every iteration |
 | `legacy-tests` | pin undocumented behaviour with characterization tests, mutation-checked, production code untouched | code with no tests and no spec, before anyone risks changing it |
@@ -30,12 +30,15 @@ The loop templates Geneseed ships. Each is a graph of [bricks](loop-bricks.md) w
 maps every acceptance criterion to a passing test (or a stated manual check) and reports `fail`
 with what's missing rather than trusting the iterations that already ran.
 
+`feature` writes each card's failing test first, through `red-test`, as `tdd` does: the card's write
+set must name a test file, and `untestable` stops the loop.
+
 `legacy-tests` and `legacy-refactor` both open on `baseline-green` — the suite must already be
 green before either template pins anything, and `baseline-green` reporting `fail` stops the loop
 rather than characterizing a change no one can tell from existing breakage.
 
-`mutation-check`, inside `legacy-tests`, needs a mutation tool on the stack (Stryker, PIT, mutmut,
-cargo-mutants) to prove the new characterization tests actually bite. With none configured it
+`mutation-check`, inside `legacy-tests` and `bugfix`, needs a mutation tool on the stack (Stryker, PIT,
+mutmut, cargo-mutants) to prove the new tests actually bite. With none configured it
 reports `unavailable` rather than a silent `pass` — and still writes a note saying what it checked,
 so the gap is visible in `LOOP.md` rather than just absent from it.
 

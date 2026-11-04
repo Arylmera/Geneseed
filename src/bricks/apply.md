@@ -12,6 +12,9 @@ replaced.
 When this is a repair after `test`, act on the latest `test` note only — it is the verdict on
 the code as it stands. Fix every finding it lists in this one pass: repairs are capped at two.
 
+When this is a repair after `mutation-check`, act on its latest note: add each assertion that
+kills a survivor to a test in the `writeSet`. Production code stays as it is.
+
 Make no unrelated edits: no drive-by rename, no incidental cleanup, no touching a file the card
 did not declare. If the change genuinely needs a file outside the write set, stop and report that
 rather than widening scope unasked — the diff is scored against the declared set, not your
