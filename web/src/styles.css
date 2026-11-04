@@ -3532,6 +3532,10 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .lib-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin-top: var(--sp-2);
   font-size: var(--fs-2xs); color: var(--text-3); }
 .lib-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.lib-legend:empty { display: none; }
+/* A status as its icon alone (StatusBadge `compact`): the `.badge` tone without the pill. */
+.badge.status-icon { flex: none; padding: 0; border: 0; background: none; }
+.badge.status-icon .glyph { width: 13px; height: 13px; }
 .lr-use .ub-trk { width: 48px; border-radius: 3px; background: var(--surface-3); }
 .lib-stats { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin: var(--sp-3) 0; }
 .lib-stats .stat:first-child { flex: 1 1 220px; }

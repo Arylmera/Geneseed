@@ -10,7 +10,7 @@ import { useAsync } from '../hooks/useAsync.js'
 import { dropRules } from '../hooks/useRules.js'
 import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
-import StatusBadge from '../components/StatusBadge.jsx'
+import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
 import { GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -533,16 +533,17 @@ export default function Library({
                 // A one-install kind (wiki, config): whose files these are, once two are active.
                 <span className="mono dim lib-since">{oneOf}</span>
               ) : null}
-              {fleetWide ? (
-                <span className="lib-legend mono">
-                  {fleetKeys.map((k, i) => (
-                    <span key={k} title={installOfKey(k).path}>
-                      <i className="lr-dot" style={dotColour(i)} aria-hidden="true" />
-                      {installLabel(k)}
-                    </span>
-                  ))}
-                </span>
-              ) : null}
+              <span className="lib-legend mono">
+                {fleetWide
+                  ? fleetKeys.map((k, i) => (
+                      <span key={k} className="lk-install" title={installOfKey(k).path}>
+                        <i className="lr-dot" style={dotColour(i)} aria-hidden="true" />
+                        {installLabel(k)}
+                      </span>
+                    ))
+                  : null}
+                <StatusLegend items={items} />
+              </span>
             </>
           }
           tools={

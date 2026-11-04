@@ -123,6 +123,18 @@ describe('Library', () => {
     expect(document.querySelector('.lib-rows .badge').textContent).toContain('experimental')
   })
 
+  // A row's status is an icon alone, so the legend is where its name is written: once, and only
+  // for a status the list holds.
+  it('shows a status as an icon in the row and names it in the legend', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-rows .status-icon')).toBeTruthy())
+    const icon = document.querySelector('a.lib-row[href="#/item/skill/rule"] .status-icon')
+    expect(icon.querySelector('svg')).toBeTruthy()
+    expect(icon.title).toBe('experimental: Shipped, but not yet confirmed by real use.')
+    const keys = [...document.querySelectorAll('.lib-legend > span:not(.lk-install)')]
+    expect(keys.map((k) => k.textContent)).toEqual(['experimental'])
+  })
+
   // LB-14: a `title` reaches neither the keyboard nor a touch screen. The reader has the room,
   // so it says what the status means in text; the rows stay a bare badge.
   it('spells out the status hint in the reader, not only in a tooltip', async () => {
@@ -1084,7 +1096,9 @@ describe('Library across installs', () => {
   it('names every install once in the legend and holds a slot for a missing one', async () => {
     render(<Library section="skills" overview={overview({})} />)
     await waitFor(() => expect(badges('brainstorm').length).toBeGreaterThan(0))
-    const legend = [...document.querySelectorAll('.lib-legend > span')].map((s) => s.textContent)
+    const legend = [...document.querySelectorAll('.lib-legend .lk-install')].map(
+      (s) => s.textContent,
+    )
     expect(new Set(legend).size).toBe(legend.length)
     expect(legend).toEqual(expect.arrayContaining(badges('brainstorm')))
     const row = document.querySelector('a.lib-row[href="#/item/skill/rule"]')
