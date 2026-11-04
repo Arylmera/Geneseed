@@ -35,7 +35,8 @@ const toRoman = (n) => {
 }
 
 // A gate-ledger key (setup.gates.asks) -> the catalog address of the rule behind it:
-// `law-4` is invariant `IV`, `process-5` is doctrine `process.5`.
+// `law-4` is invariant `IV`, `process-5` is doctrine `process.5`. `ownership`, the one gate with
+// no rule behind it, stays as it is: that key is the address of its console-only row.
 export function gateAddress(key) {
   const m = /^([a-z]+)-(\d+)$/.exec(String(key))
   if (!m) return String(key)
@@ -51,14 +52,18 @@ export function gateAddress(key) {
 // the pin and fails when the two drift apart.
 export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', 'rigor.5', 'ops.2'])
 
-// The laws whose hook gate an install can switch off, by catalog address: the key the
-// overview's `install` reports it under, and the switch's name. Transcribed from the server's
-// GATE_SWITCHES (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`).
+// The hook gates an install can switch off, by catalog address: the key the overview's `install`
+// reports it under, and the switch's name. Transcribed from the server's GATE_SWITCHES
+// (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`,
+// `--no-ownership-gate`). The ownership gate has no law, so its address is its ledger key, and
+// Laws.jsx gives it a row of its own that exists only in the console: the catalog has no such
+// item, and the Credo's Ownership section stays text only.
 // __tests__/constitution.test.js imports that table and fails when the two drift apart.
 export const GATE_SWITCH = {
   I: { key: 'secretsGate', label: 'Secrets gate' },
   III: { key: 'doneGate', label: 'Done gate' },
   IV: { key: 'deletionGate', label: 'Deletion gate' },
+  ownership: { key: 'ownershipGate', label: 'Ownership gate' },
 }
 
 // What each switch's confirm says it does, by the same address: `arm` when it re-arms, `off`
@@ -84,6 +89,13 @@ export const GATE_COPY = {
       'Commands that would really lose data — discarding uncommitted work, deleting an ' +
       'unpushed branch, removing untracked files — stop asking. Rule IV’s text still binds ' +
       'the agent; secrets, root-wide scans and commit/push consent stay gated.',
+  },
+  ownership: {
+    arm: 'The first write in an undecided application stops once again.',
+    off:
+      'The first write in an undecided application is no longer stopped, the setup proposal ' +
+      'leaves the install’s AGENT.md, and no decline reminder prints. A repo with mode: on ' +
+      'still runs its checkpoints, and the Credo section still binds.',
   },
 }
 
@@ -136,10 +148,11 @@ export function parsePrecedence(text) {
   return rows
 }
 
-// "Enforced by" for one row: a hook gate, or the instruction text alone. A switchable law's gate
-// can be off per install (`gates` is the overview's `install`); its text still binds, so the row
-// reads "Gate off" rather than "Instruction". Anything but an explicit `false` is armed.
+// "Enforced by" for one row: a hook gate, or the instruction text alone. A switchable gate can be
+// off per install (`gates` is the overview's `install`); its text still binds, so the row reads
+// "Gate off" rather than "Instruction". Anything but an explicit `false` is armed. A switch means
+// a hook, HOOK_GATED or not: that set is the doctor's pin of rules, and the ownership gate is none.
 export const enforcedBy = (addr, gates = {}) => {
-  if (GATE_SWITCH[addr] && gates?.[GATE_SWITCH[addr].key] === false) return 'Gate off'
+  if (GATE_SWITCH[addr]) return gates?.[GATE_SWITCH[addr].key] === false ? 'Gate off' : 'Hook gate'
   return HOOK_GATED.has(addr) ? 'Hook gate' : 'Instruction'
 }

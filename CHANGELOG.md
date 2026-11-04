@@ -9,6 +9,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Changed
+- **The web console can switch the ownership gate.** The Constitution page has a console-only *Ownership gate* row in the rules band: a click asks, then rebuilds the install with or without `--no-ownership-gate`. The row reads *Hook gate* or *Gate off*, and the RANK 1 pill counts it while it is off. The Credo's Ownership section stays text only. The Gate asks card now names the gate, reads it off, and lands on its row; before, its link led nowhere.
 - **The ship skill deletes a branch once it is merged, local and remote, including after a PR merge.** Before, it deleted a branch only after a local merge, so on a PR-based repo every merged branch stayed on the remote (this repo reached 156). It asks first, as for any deletion, and the first time it ships in a repo it checks whether the forge deletes merged branches by itself (GitHub: *Automatically delete head branches*), since a PR usually merges after the agent's turn has ended. Run `geneseed rebuild-all` to pick it up.
 
 ## [4.31.0] — 2026-10-31

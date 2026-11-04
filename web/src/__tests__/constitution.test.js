@@ -46,6 +46,8 @@ describe('gateAddress', () => {
     ['law-11', 'XI'],
     ['process-5', 'process.5'],
     ['rigor-2', 'rigor.2'],
+    // The one gate with no rule: its ledger key IS the address of its console-only row.
+    ['ownership', 'ownership'],
     ['odd', 'odd'],
   ])('%s -> %s', (key, addr) => expect(gateAddress(key)).toBe(addr))
 })
@@ -66,6 +68,12 @@ describe('HOOK_GATED', () => {
     expect(enforcedBy('II')).toBe('Instruction')
   })
 
+  // The ownership gate is a hook with no rule, so it is outside the set and still reads as one.
+  it('reads the ownership gate by its switch, not by the set', () => {
+    expect(enforcedBy('ownership')).toBe('Hook gate')
+    expect(enforcedBy('ownership', { ownershipGate: false })).toBe('Gate off')
+  })
+
   // The set is transcribed from the doctor's HOOK_PINNED, the one list of every hook-gated
   // rule — the tool-boundary `ask()` gates in js/hosts/hooks.mjs and the done gate in
   // js/hosts/hooks-done.mjs alike. Its labels (`process 5`) become addresses (`process.5`): a
@@ -80,14 +88,24 @@ describe('HOOK_GATED', () => {
   // table of switchable gates: a gate added or renamed there fails here until the
   // Constitution's toggles agree.
   it('matches GATE_SWITCHES in js/build/source.mjs', () => {
-    // A row with no law (the ownership gate) has no Constitution row to toggle it from.
-    const rows = GATE_SWITCHES.filter((g) => g.law).map((g) => [g.law, g.key])
-    expect(rows.length).toBeGreaterThan(0)
-    expect(Object.fromEntries(rows)).toEqual(
-      Object.fromEntries(Object.entries(GATE_SWITCH).map(([law, g]) => [law, g.key])),
-    )
+    // Every row, the law-less one included: a law's gate sits on its law, the gate with no law
+    // on its own row, addressed by its ledger key.
+    expect(GATE_SWITCHES.length).toBeGreaterThan(0)
+    expect(
+      Object.values(GATE_SWITCH)
+        .map((g) => g.key)
+        .sort(),
+    ).toEqual(GATE_SWITCHES.map((g) => g.key).sort())
+    for (const g of GATE_SWITCHES.filter((row) => row.law)) {
+      expect(GATE_SWITCH[g.law].key).toBe(g.key)
+    }
+    expect(GATE_SWITCH[gateAddress('ownership')].key).toBe('ownershipGate')
     // A switch on a law no hook gates would toggle nothing.
-    for (const law of Object.keys(GATE_SWITCH)) expect(HOOK_GATED.has(law)).toBe(true)
+    for (const g of GATE_SWITCHES.filter((row) => row.law)) {
+      expect(HOOK_GATED.has(g.law)).toBe(true)
+    }
+    // A switch with no confirm copy would throw on the click.
+    expect(Object.keys(C.GATE_COPY)).toEqual(Object.keys(GATE_SWITCH))
   })
 })
 
