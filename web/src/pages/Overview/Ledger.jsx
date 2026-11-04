@@ -237,8 +237,8 @@ function RootKpi({ installs }) {
                   ? [{ key: 'v', label: 'root file', n: tok(w.carrier), tone: 'bad' }]
                   : undefined
               }
-              size={64}
-              stroke={7}
+              size={104}
+              stroke={10}
               label={`Worst root file: ${w.label}, ${w.pct} percent of its ceiling`}
             />
             <span className="mono ldg-ring-pct" aria-hidden="true">
@@ -246,7 +246,8 @@ function RootKpi({ installs }) {
             </span>
           </span>
           <span className="ldg-kpi-stack">
-            <span className="mono ldg-kpi-fig">{`${approxTokens(w.carrier)} / ${approxTokens(w.ceiling)} tokens`}</span>
+            <span className="mono ldg-kpi-fig">{`${approxTokens(w.carrier)} tokens`}</span>
+            <span className="dim">{`of ${approxTokens(w.ceiling)} ceiling`}</span>
             <span className="dim">{w.label}</span>
           </span>
         </div>
@@ -309,7 +310,7 @@ function CallsKpi({ usage }) {
           <span className="mono ldg-kpi-fig">
             <CountUp value={usageTotal(usage)} />
           </span>
-          {usage.per_day?.length > 1 ? <Spark vals={usage.per_day} i={0} /> : null}
+          {usage.per_day?.length > 1 ? <Spark vals={usage.per_day} i={0} fill /> : null}
         </>
       )}
     </Kpi>
@@ -339,7 +340,7 @@ function GatesKpi({ gates, laws }) {
             <span className="mono ldg-kpi-fig">{g.total}</span>{' '}
             <span className="dim">{`· ${g.top.name} ${g.top.n}`}</span>
           </span>
-          {g.perDay.length > 1 ? <Spark vals={g.perDay} i={1} /> : null}
+          {g.perDay.length > 1 ? <Spark vals={g.perDay} i={1} fill /> : null}
         </>
       )}
     </Kpi>

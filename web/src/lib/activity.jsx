@@ -240,8 +240,10 @@ const SWEEP_MS = 500
 // A 30-day sparkline, moved here from the Ledger so Activity draws the same one. With
 // `sweep`, the line draws itself in once per change of its values (keyed like StackBar's
 // `sig`, so a re-render with the same numbers does not redraw). The markup is final: without
-// motion (reduced motion, a test) the line is simply there.
-export function Spark({ vals, i, sweep = false }) {
+// motion (reduced motion, a test) the line is simply there. With `fill` it stretches to its box
+// (a KPI card), not to its own 96:22 ratio; a stretched circle would be an ellipse, so the end
+// dot is then an element over the svg, at the last point's height.
+export function Spark({ vals, i, sweep = false, fill = false }) {
   const line = useRef(null)
   const sig = vals.join(',')
   useLayoutEffect(() => {
@@ -261,13 +263,26 @@ export function Spark({ vals, i, sweep = false }) {
     (v, d) => `${(d * step).toFixed(1)},${(h - 2 - (v / max) * (h - 5)).toFixed(1)}`,
   )
   const [lx, ly] = pts[pts.length - 1].split(',')
-  return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} aria-hidden="true" style={{ '--i': i }}>
+  const chart = (
+    <svg
+      className="spark"
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio={fill ? 'none' : undefined}
+      aria-hidden="true"
+      style={{ '--i': i }}
+    >
       <polyline points={`0,${h - 1} ${w},${h - 1}`} className="spk-base" />
       <polygon className="spk-area" points={`0,${h - 1} ${pts.join(' ')} ${w},${h - 1}`} />
       <polyline className="spk-line" pathLength="1" points={pts.join(' ')} ref={line} />
-      <circle className="spk-end" cx={lx} cy={ly} r="2.4" />
+      {fill ? null : <circle className="spk-end" cx={lx} cy={ly} r="2.4" />}
     </svg>
+  )
+  if (!fill) return chart
+  return (
+    <span className="spark-fill" style={{ '--i': i }}>
+      {chart}
+      <i className="spk-end" aria-hidden="true" style={{ top: `${(ly / h) * 100}%` }} />
+    </span>
   )
 }
 
