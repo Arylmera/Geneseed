@@ -145,6 +145,16 @@ describe('needsAttention', () => {
     )
   })
 
+  // The ownership gate has no catalog item: its switch's label names it, and the link stays.
+  it('names the ownership gate by its switch', () => {
+    const row = needsAttention({
+      ...ALL,
+      setup: { gates: { asks: { ownership: 3 }, total: 3 } },
+    }).find((r) => r.tag === 'Gates')
+    expect(row.title).toBe('Ownership gate asked 3 times')
+    expect(row.href).toBe('#/item/law/ownership')
+  })
+
   it('reads a missing user-rules.md as no rules row (the Rules tab says it is missing)', () => {
     expect(needsAttention({ rules: { exists: false, stats: {} } })).toEqual([])
   })
@@ -371,11 +381,12 @@ describe('costTotal and gateRows', () => {
         rules: [
           { rule: 'process-1', n: 2, per_day: [] },
           { rule: 'wiki', n: 1, per_day: [] },
+          { rule: 'ownership', n: 1, per_day: [] },
         ],
       },
       LAWS,
     )
-    expect(rows.map((r) => r.name)).toEqual(['Persist Insight', 'Wiki guard'])
+    expect(rows.map((r) => r.name)).toEqual(['Persist Insight', 'Wiki guard', 'Ownership gate'])
   })
 })
 

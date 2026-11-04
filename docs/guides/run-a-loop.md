@@ -18,7 +18,7 @@ This page is the how-to. For how the engine works (rings, scoring, trailers), se
 | A git repository with a remote named `origin` | Every iteration ends with `git push -u origin HEAD:loop/<slug>`. With no remote, the agent reports and stops. |
 | A test command the agent can run | The `test` brick runs the project's suite, and most templates retry `apply` until it passes. |
 | For `ci-repair`: CI that runs on `loop/*` branches, and the `gh` CLI | `ci-triage` reads the checks of the HEAD commit with `gh run list --commit`. |
-| For `legacy-tests`: a mutation tool (PIT, Stryker, mutmut, cargo-mutants) | Optional. Without one, `mutation-check` reports `unavailable` and the loop carries on, with a note saying so. |
+| For `legacy-tests` and `bugfix`: a mutation tool (PIT, Stryker, mutmut, cargo-mutants) | Optional. Without one, `mutation-check` reports `unavailable` and the loop carries on, with a note saying so. |
 
 Check the catalogue the CLI sees from your repo:
 

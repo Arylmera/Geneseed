@@ -4,7 +4,7 @@
 // is only layout.
 import { driftTotal, relTime } from './format.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
-import { gateAddress, parseRuleTitle } from './constitution.js'
+import { GATE_SWITCH, gateAddress, parseRuleTitle } from './constitution.js'
 
 // Skills per class, split by lifecycle stage. `experimental` is the one stage the chart
 // calls out; every other status (approved, a personal skill with none) counts as settled.
@@ -92,7 +92,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
     const [gate, n] = asks[0]
     const addr = gateAddress(gate)
     const hit = (laws?.items || []).find((i) => i.name === addr)
-    const name = hit ? parseRuleTitle(hit.title).name : addr
+    const name = hit ? parseRuleTitle(hit.title).name : GATE_SWITCH[addr]?.label || addr
     out.push({
       id: 'gates',
       tag: 'Gates',
@@ -329,7 +329,11 @@ export function gateRows(gates, laws) {
     const hit = (laws?.items || []).find((i) => i.name === addr)
     return {
       ...r,
-      name: hit ? parseRuleTitle(hit.title).name : r.rule === 'wiki' ? 'Wiki guard' : addr,
+      name: hit
+        ? parseRuleTitle(hit.title).name
+        : r.rule === 'wiki'
+          ? 'Wiki guard'
+          : GATE_SWITCH[addr]?.label || addr,
     }
   })
 }

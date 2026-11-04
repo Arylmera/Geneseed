@@ -54,6 +54,9 @@ rings (`apply-test`, `fix-test`, `write-run`, `stabilise`) are `max: 2`: two rep
 attempt is discarded for one fresh try, then the loop stops for you. Most of the gain is in the
 first revision — 0.82 correct after one, 0.673 after two (arXiv 2607.24604) — but a second still
 lands fixes the first missed, so it is kept as the last chance, and nothing past it.
+`review-fix` stays at `max: 3`, a deliberate exception to the two-repair rule of Bound the Loop: a
+review round is a verdict from a separate reviewer, not a blind repair of one's own red test. In
+`bugfix` the same budget also pays for `mutation-check` repairs, each one a mutation tool's verdict.
 
 **`error` always stops.** A brick may declare the outcome `error` without an edge for it; the
 engine sends it to `$stop`. The shipped `test` brick reports it when a check crashed or its

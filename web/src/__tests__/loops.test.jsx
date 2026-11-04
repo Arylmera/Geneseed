@@ -719,13 +719,13 @@ describe('Loops — what the page explains', () => {
 // V6b ring console: beside the ring, the loop in words; under it, the command that starts it,
 // and how many runs of it are registered now.
 describe('Loops — the ring console', () => {
-  // bugfix as shipped (src/loops/bugfix.json): one setup step, a four-step iteration, two
+  // bugfix as shipped (src/loops/bugfix.json): one setup step, a five-step iteration, two
   // retries, one exit and one stop — every line the summary can print, in run order.
   it('says how a template runs, every part in run order', () => {
     expect(howItRuns(bugfix)).toEqual([
       ['Setup', 'reproduce, once.'],
-      ['Iteration (max 20)', 'identify → apply → test → review.'],
-      ['Retry', 'apply ⇄ test, max 2; apply → test → review, max 3.'],
+      ['Iteration (max 20)', 'identify → apply → test → mutation-check → review.'],
+      ['Retry', 'apply ⇄ test, max 2; apply → test → mutation-check → review, max 3.'],
       ['Exit', 'identify says done → close.'],
       ['Stop', 'reproduce says fail, or any step says error → stop.'],
     ])
@@ -735,10 +735,10 @@ describe('Loops — the ring console', () => {
   // it, so it reads as the way out, not as a fifth step of every turn.
   it('reads a closing check as the exit, not a step of every turn', () => {
     expect(howItRuns(feature).slice(1)).toEqual([
-      ['Iteration (max 20)', 'identify → apply → test → review.'],
+      ['Iteration (max 20)', 'identify → red-test → apply → test → review.'],
       ['Retry', 'apply ⇄ test, max 2; apply → test → review, max 3.'],
       ['Exit', 'identify says done → done-check; done-check says pass → close.'],
-      ['Stop', 'any step says error → stop.'],
+      ['Stop', 'red-test says untestable, or any step says error → stop.'],
     ])
   })
 

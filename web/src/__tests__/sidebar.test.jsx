@@ -107,8 +107,8 @@ describe('Sidebar', () => {
     ).toBe('dialog')
   })
 
-  // The vitals are the default install's: with two installs active, the card, its voice button
-  // and the brand line name it.
+  // The vitals are the default install's: with two installs active, the card names it, once. Its
+  // voice button and the brand line stay short, because a third copy only ran out of width there.
   it('names the install its vitals describe once two are active', () => {
     const two = [
       { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active' },
@@ -117,10 +117,9 @@ describe('Sidebar', () => {
     const ov = { ...overview, install: { host: 'claude', scope: 'global', path: '/cl' } }
     render(<Sidebar route={{ page: 'overview' }} overview={ov} installs={two} />)
     const card = screen.getByRole('region', { name: 'Install vitals, claude · global' })
-    expect(
-      within(card).getByRole('button', { name: /voice · imperial · claude · global/i }),
-    ).toBeTruthy()
-    expect(document.querySelector('.sb-ver').textContent).toMatch(/imperial · claude · global$/)
+    expect(within(card).getByText('claude · global')).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'Voice · imperial' })).toBeTruthy()
+    expect(document.querySelector('.sb-ver').textContent).toMatch(/imperial$/)
   })
 
   // At tablet width (721-960px) the rail is icons only and hides the vitals, voice button

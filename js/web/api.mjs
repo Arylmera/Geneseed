@@ -373,8 +373,8 @@ export function apiOverview(state) {
   for (const [host, scope, root] of installTargets()) {
     try {
       if (samePath(viewCfg(host, scope, root), state.target)) {
-        // `deletionGate`/`secretsGate`/`doneGate`: the gate switches, for the Constitution
-        // page's toggles on rows IV, I and III.
+        // `deletionGate`/`secretsGate`/`doneGate`/`ownershipGate`: the gate switches, for the
+        // Constitution page's toggles on rows IV, I, III and the console-only Ownership gate row.
         install = { host, scope, path: root, footprint: footprintOfDir(root),
           ...gatesOfDir(root, host) };
         break;

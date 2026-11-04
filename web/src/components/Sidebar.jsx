@@ -126,7 +126,6 @@ function Vitals({ overview, onOpenVoice, tag }) {
         <span className="sb-voice-name">
           <i className="sb-voice-swatch" aria-hidden="true" />
           Voice · {overview.theme || 'none'}
-          {tag ? ` · ${tag}` : ''}
         </span>
         <Icon name="chevron" />
       </button>
@@ -156,7 +155,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
         <span className="sb-brand-text">
           <span className="sb-name">Geneseed</span>
           <span className="sb-ver">
-            {[overview?.version && `v${overview.version}`, overview?.theme, tag]
+            {[overview?.version && `v${overview.version}`, overview?.theme]
               .filter(Boolean)
               .join(' · ')}
           </span>

@@ -672,10 +672,15 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
    below the viewport.) max-height: 60vh keeps it inside the screen even with
    all 14 voices loaded. */
 .pop {
-  position: fixed; bottom: 72px; left: 14px; width: 204px; z-index: var(--z-pop);
+  position: fixed; bottom: 72px; left: 14px; width: 232px; z-index: var(--z-pop);
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: var(--sp-2); max-height: 60vh; overflow: auto;
 }
+/* Label over select: side by side they outgrow the box and the whole list scrolls sideways.
+   The box's width is what fits "opencode · global" beside the list's scrollbar. */
+.pop .install-pick { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-1);
+  padding: 0 10px var(--sp-2); }
+.pop .install-pick .sel { max-width: none; }
 .pop-item { display: flex; align-items: center; gap: 10px; padding: var(--sp-2) 10px; border-radius: var(--r-sm); /* off-scale: 10px, 2px from a step */
   cursor: pointer; font-size: var(--fs-sm); width: 100%; border: 0; background: none; color: inherit;
   font-family: inherit; text-align: left; }
@@ -2736,6 +2741,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-row .toggle-col { display: flex; align-items: center; justify-content: center; }
 .law-row .no-gate { font-size: var(--fs-2xs); color: var(--text-3); white-space: nowrap; }
 .law-row:hover { background: var(--surface-2); }
+/* A row that opens nothing: only its switch is a control. */
+.law-row-plain, .law-row-plain .law-disclosure { cursor: default; }
+.law-row-plain:hover { background: transparent; }
 .law-row.on { background: var(--accent-soft); }
 .law-no { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap;
   font-family: var(--font-mono); color: var(--accent-text); font-variant-numeric: tabular-nums; }
@@ -3515,6 +3523,15 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .ldg-fleet td.ldg-where { position: relative; }
 /* LU: Library usage. */
 .lr-use { position: relative; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+/* An entry's installs, one coloured dot each (the list head's legend names the colours). */
+.lr-dots { display: inline-flex; flex: none; align-items: center; gap: var(--sp-1); margin-left: auto; }
+.lr-dots + .lr-use { margin-left: 0; }
+.lr-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--cc, var(--text-3)); }
+.lr-dot.off { background: none; box-shadow: inset 0 0 0 1px var(--line-3); }
+.lib-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin-top: var(--sp-2);
+  font-size: var(--fs-2xs); color: var(--text-3); }
+.lib-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .lr-use .ub-trk { width: 48px; border-radius: 3px; background: var(--surface-3); }
 .lib-stats { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin: var(--sp-3) 0; }
 .lib-stats .stat:first-child { flex: 1 1 220px; }

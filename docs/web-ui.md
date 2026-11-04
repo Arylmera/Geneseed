@@ -174,11 +174,18 @@ streams the output of background jobs and keeps their history across reloads.
   secrets gate, the done gate and the deletion gate (`--no-secrets-gate`, `--no-done-gate`,
   `--no-deletion-gate`; *Enforced by* reads *Gate off* while one is off) — flipping one asks,
   then rebuilds the install once; the other Rules read *no gate*. The ownership gate belongs
-  to no Rule, so it has no switch here: rebuild with `--no-ownership-gate` instead. A precedence ladder heads the page (a state pill per rung; ranks 5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes collect in a sticky *Unapplied changes* bar that holds Revert and the page's one Apply. Every row expands to its full body, lazily fetched. The rail entry is
-  labelled *Constitution* while the route, the id and the badge key stay `laws`; deep links
-  are `#/item/law/ont:telos`, `#/item/law/IV` and `#/item/law/process.5` — three address
-  shapes that cannot collide, because a slug carries a colon no numeral has and a doctrine
-  address carries a dot.
+  to no Rule, so its switch (`--no-ownership-gate`) has its own *Ownership gate* row in the
+  rules band and works the same way. That row exists only in the console: it has no number
+  and does not expand, it counts in *Gated* but not as a Rule, it shows only where an install
+  can be rebuilt, and the RANK 1 pill counts it while it is off. The Ethos band's Ownership
+  section stays text only. A precedence ladder heads the page (a state pill per rank; ranks
+  5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes
+  collect in a sticky *Unapplied changes* bar that holds Revert and the page's one Apply.
+  Every row but the *Ownership gate* row expands to its full body, lazily fetched. The rail
+  entry is labelled *Constitution* while the route, the id and the badge key stay `laws`; deep links
+  are `#/item/law/ont:telos`, `#/item/law/IV`, `#/item/law/process.5` and `#/item/law/ownership` — address
+  shapes that cannot collide, because a slug carries a colon no numeral has, a doctrine
+  address carries a dot, and `ownership`, the gate's console-only row, is a word no rule uses.
 - **Library** (`#/library`) — browse the content that has no tab of its own: **Memory ·
   Notebook · Knowledge** (the wiki chip, which also carries the two setup manifests).
   Constitution, Skills and Agents each have their own rail entry instead. Drill into a section, then an item, to read its

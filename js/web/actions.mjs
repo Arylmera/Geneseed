@@ -145,10 +145,10 @@ function bodyKits(body) {
 }
 
 /**
- * The gate switches across the trust boundary (`deletionGate`, `secretsGate`, `doneGate`), each
- * on its own: only a real JSON boolean counts. Anything else — a string `"false"`, a number,
- * absence — falls back to the install's own answer for THAT gate, so a malformed or partial body
- * can never disarm (or re-arm) a gate it did not name.
+ * The gate switches across the trust boundary (`deletionGate`, `secretsGate`, `doneGate`,
+ * `ownershipGate`), each on its own: only a real JSON boolean counts. Anything else — a string
+ * `"false"`, a number, absence — falls back to the install's own answer for THAT gate, so a
+ * malformed or partial body can never disarm (or re-arm) a gate it did not name.
  */
 function bodyGates(body, root, host) {
   const own = gatesOfDir(root, host);

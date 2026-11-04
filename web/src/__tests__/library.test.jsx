@@ -1076,7 +1076,20 @@ describe('Library across installs', () => {
       [...document.querySelectorAll('a.lib-row[href="#/item/skill/rule"] .lr-install')].map(
         (b) => b.title,
       ),
-    ).toEqual(['D:\\work\\shop'])
+    ).toEqual(['shop · bob — D:\\work\\shop'])
+  })
+
+  // A row's dots mean nothing without the names: the legend gives one per install, and a row
+  // keeps a hollow slot for each install it is missing from, so the columns line up down the list.
+  it('names every install once in the legend and holds a slot for a missing one', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(badges('brainstorm').length).toBeGreaterThan(0))
+    const legend = [...document.querySelectorAll('.lib-legend > span')].map((s) => s.textContent)
+    expect(new Set(legend).size).toBe(legend.length)
+    expect(legend).toEqual(expect.arrayContaining(badges('brainstorm')))
+    const row = document.querySelector('a.lib-row[href="#/item/skill/rule"]')
+    expect(row.querySelectorAll('.lr-dot')).toHaveLength(legend.length)
+    expect(row.querySelectorAll('.lr-dot.off')).toHaveLength(legend.length - 1)
   })
 
   it('counts skills and agents in the rail off the fleet-wide lists', async () => {
