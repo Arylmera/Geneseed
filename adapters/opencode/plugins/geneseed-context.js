@@ -910,6 +910,11 @@ const SKIP_MARKERS = [['.skip', /(?<!mark)\.skip\(/g], ['xit', /\bxit\(/g], ['xf
   ['t.Skip', /\bt\.Skip\(/g]];
 const ASSERT_LINE_RE = /\bassert\w*!?\s*[.(]|\bexpect\s*\(|^assert\s/;
 const COMMENT_LINE_RE = /^(?:\/\/|\/\*|\*|#)/;
+// shortcut: only whole comment lines are dropped, so a marker in a string or a trailing comment, and
+// any other `.skip(` (`stream().skip(1)`), still count. Upgrade by parsing the language; it is an advisory.
+const code = (text) => text.split(/\r?\n/).filter((l) => !COMMENT_LINE_RE.test(l.trim())).join('\n');
+// shortcut: a Set hides the loss of one of two identical lines, and `require.Equal`, `t.Errorf` and
+// `.should` are not read as assertions. Upgrade by counting lines and widening `ASSERT_LINE_RE`.
 const assertLines = (text) => new Set(text.split(/\r?\n/).map((l) => l.trim())
   .filter((l) => ASSERT_LINE_RE.test(l) && !COMMENT_LINE_RE.test(l)));
 
@@ -922,7 +927,7 @@ function weakenedBy(pairs) {
   const found = new Set();
   for (const [before, after] of pairs) {
     for (const [label, re] of SKIP_MARKERS) {
-      if ((after.match(re) || []).length > (before.match(re) || []).length) found.add(`${label} added`);
+      if ((code(after).match(re) || []).length > (code(before).match(re) || []).length) found.add(`${label} added`);
     }
     const was = assertLines(before);
     const now = assertLines(after);

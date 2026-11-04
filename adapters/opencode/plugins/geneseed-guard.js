@@ -1391,23 +1391,40 @@ function gateConfig(p) {
 // The files `gateConfig` leaves to OpenCode's native `permission.edit` ask (`opencodeEditAsks` in
 // js/hosts/settings.mjs). That ask covers edit tools only: a shell command never reaches it, and
 // this tool hook has no ask tier, so for a SHELL write these are refused. The agent can still
-// make the edit through an edit tool, where the user gets the prompt.
+// make the edit through an edit tool, where the user gets the prompt. The key shapes are the emit's,
+// matched as a path tail; tests/plugins/guard.test.mjs walks `opencodeEditAsks`'s own output.
+// A project `AGENT.md` in a subfolder has no fixed name, so its keys are read back from the
+// opencode.json the emit wrote beside the install, only when a shell write names a target at all.
+function agentAskTails(cfg) {
+  const tails = []
+  for (const f of ["opencode.json", "opencode.jsonc"]) {
+    try {
+      const edit = JSON.parse(stripJsonc(readFileSync(path.join(path.dirname(cfg), f), "utf8")))?.permission?.edit
+      for (const k of Object.keys(edit ?? {})) {
+        const tail = k.replace(/^\*(?:\.\.)?\/?/, "")
+        if (/\/AGENT\.md$/i.test(tail)) tails.push(tail)
+      }
+    } catch { /* none, or unreadable: the fixed names below still hold */ }
+  }
+  return tails
+}
 function nativeAskFile(p) {
   try {
-    const fold = (s) => nocase(path.resolve(s))
     const cfg = path.dirname(PLUGIN_DIR)
-    const bin = fold(path.join(resolvePath(process.env.GENESEED_HOME || "~/.geneseed"), "bin"))
-    const own = [...["excludes.json", ".geneseed-manifest.json", ".geneseed-emit", "AGENT.md", "config.json"]
-      .map((f) => path.join(cfg, f)), path.join(path.dirname(cfg), "AGENT.md")].map(fold)
+    const name = path.basename(cfg)
+    const tails = ["opencode.json", "opencode.jsonc", ...[".claude", ".openclaude", ".bob"].flatMap((m) =>
+      [`${m}/settings.json`, `${m}/settings.local.json`]), ".bob/settings/settings.json", ".geneseed/bin/*",
+    ...["excludes.json", ".geneseed-manifest.json", ".geneseed-emit", "plugins/geneseed-*.js", "AGENT.md", "config.json"]
+      .map((f) => `${name}/${f}`), ...agentAskTails(cfg)]
+    const fold = (s) => nocase(s.replace(/\\/g, "/"))
+    const asked = tails.map((t) => new RegExp(`(?:^|/)${fold(t).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")}$`))
+    // Its own try: a home that cannot be read costs the shim dir, never the entries above.
+    let bin = null
+    try { bin = fold(path.join(resolvePath(process.env.GENESEED_HOME || "~/.geneseed"), "bin")) } catch { /* no shim dir */ }
+    const agents = [cfg, path.dirname(cfg)].map((d) => fold(path.join(d, "AGENT.md")))
     for (const target of [path.resolve(p), resolvePath(p)]) {
       const t = fold(target)
-      const dir = path.dirname(target)
-      const name = path.basename(target)
-      if (/^opencode\.jsonc?$/i.test(name) || t.startsWith(bin + path.sep) || own.includes(t)) return true
-      if (fold(dir) === fold(PLUGIN_DIR) && /^geneseed-.*\.js$/i.test(name)) return true
-      const up = [dir, path.dirname(dir)].map((d) => path.basename(d))
-      if (/^settings(?:\.local)?\.json$/i.test(name) && GATE_CONFIG_MARKERS.includes(up[0])) return true
-      if (/^settings\.json$/i.test(name) && up[0] === "settings" && up[1] === ".bob") return true
+      if (asked.some((re) => re.test(t)) || agents.includes(t) || (bin && t.startsWith(`${bin}/`))) return true
     }
   } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
   return false
@@ -1420,7 +1437,8 @@ function nativeAskFile(p) {
 const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
 // One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
 // fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
-// too, so that their words never read as operands.
+// too, so that their words never read as operands. A backslash is no escape here, as in
+// `SCAN_SPLIT_RE`: `echo "say \"hi > f\""` closes its quote early, reads a target, and asks (on Bob, blocks).
 const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
 const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
 
@@ -1460,7 +1478,9 @@ function sedFiles(args) {
  *
  * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
  * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
- * variable, glob or brace in it, a wrapper with flags (`sudo -u x`), `cp -t`, any other writer
+ * variable, glob or brace in it, a wrapper with flags (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`,
+ * `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >& file` (read as a dup), a `popd` (not followed, so
+ * relative paths after a `pushd`/`popd` pair resolve from the wrong folder), `cp -t`, any other writer
  * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
  * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
  * boundary that holds against those.

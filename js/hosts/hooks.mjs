@@ -507,7 +507,8 @@ const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
 // One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
 // fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
-// too, so that their words never read as operands.
+// too, so that their words never read as operands. A backslash is no escape here, as in
+// `SCAN_SPLIT_RE`: `echo "say \"hi > f\""` closes its quote early, reads a target, and asks (on Bob, blocks).
 const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
 const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
 
@@ -547,7 +548,9 @@ function sedFiles(args) {
  *
  * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
  * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
- * variable, glob or brace in it, a wrapper with flags (`sudo -u x`), `cp -t`, any other writer
+ * variable, glob or brace in it, a wrapper with flags (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`,
+ * `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >& file` (read as a dup), a `popd` (not followed, so
+ * relative paths after a `pushd`/`popd` pair resolve from the wrong folder), `cp -t`, any other writer
  * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
  * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
  * boundary that holds against those.

@@ -7,6 +7,8 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
+import { pathToFileURL } from "node:url"
+import { opencodeEditAsks } from "../../js/hosts/settings.mjs"
 import { makeSandbox } from "../helpers/sandbox.mjs";
 import { LOSS_ROWS, makeLossWorkspace, rowCommand } from "../helpers/loss_repos.mjs"
 
@@ -792,5 +794,55 @@ test("a shell write reaches what permission.edit asks about, since no ask covers
     for (const p of [path.join(f.repo, "settings.json"), path.join(f.repo, "config", "settings.json"), path.join(f.repo, "src", "a.js")]) {
       assert.equal(await run(p), null, p)
     }
+  })
+})
+
+// Every key the emit wires as a native ask is a file the shell must not reach either. Walked from
+// `opencodeEditAsks`'s own output through a real install shape (the plugin copied beside its
+// config, the keys in its opencode.json), so a key added to the emit fails here until the guard has it.
+// A key becomes a path: `*../x` is x at the root, `*/x` is x one folder down, any other `*` a name.
+async function installAt(cfgDir, keys, wireDir) {
+  await fs.mkdir(path.join(cfgDir, "plugins"), { recursive: true })
+  await fs.mkdir(wireDir, { recursive: true })
+  const copy = path.join(cfgDir, "plugins", "geneseed-guard.js")
+  await fs.copyFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), copy)
+  await fs.writeFile(path.join(wireDir, "opencode.json"), JSON.stringify({ permission: { edit: Object.fromEntries(keys.map((k) => [k, "ask"])) } }))
+  const { GeneseedGuard: Guard } = await import(pathToFileURL(copy).href)
+  const before = (await Guard())["tool.execute.before"]
+  return async (p, workdir) => {
+    try { await before({ tool: "bash" }, { args: { command: `echo x > "${p}"`, workdir } }); return null } catch (err) {
+      if (String(err?.message || "").startsWith("[geneseed-guard]")) return String(err.message)
+      throw err
+    }
+  }
+}
+const keyPath = (root, k) => path.resolve(root, k.replace(/^\*\.\.\//, "").replace(/^\*\//, "deep/").replace(/\*/g, "x"))
+
+test("a shell write reaches every key opencodeEditAsks wires, project and global", async () => {
+  const f = await gateConfigFixture("walk")
+  // Two homes: a custom one is keyed absolutely, the default name by its `.geneseed/bin/*` tail.
+  for (const home of [f.home, path.join(tmp, "walk-default", ".geneseed")]) await withHome(home, async () => {
+    for (const agentRel of ["sub/AGENT.md", "AGENT.md"]) {
+      const proj = path.join(tmp, "walk-" + agentRel.length)
+      const cfg = path.join(proj, ".opencode")
+      const keys = opencodeEditAsks(cfg, false, agentRel)
+      assert.ok(keys.length > 20, "the walk has keys to walk")
+      const refused = await installAt(cfg, keys, proj)
+      for (const k of keys) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(External Gate\)/, k)
+      for (const p of [path.join(proj, "src", "AGENT.md"), path.join(proj, "settings.json"), path.join(proj, "src", "a.js")]) {
+        assert.equal(await refused(p, proj), null, p)
+      }
+    }
+    const cfg = path.join(tmp, "walk-home", ".config", "opencode")
+    const keys = opencodeEditAsks(cfg, true)
+    const refused = await installAt(cfg, keys, cfg)
+    for (const k of keys) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(External Gate\)/, k)
+  })
+})
+
+test("a home the guard cannot place costs the shim dir, never the other native-ask files", async () => {
+  const f = await gateConfigFixture("tildehome")
+  await withHome("~nobody/x", async () => {
+    assert.match(await denial("bash", { command: `echo x > "${path.join(f.repo, "opencode.json")}"`, workdir: f.repo }) ?? "", /\(External Gate\)/)
   })
 })

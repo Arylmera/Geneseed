@@ -555,6 +555,14 @@ test('weakenedBy: what an old and a new text do to a test', () => {
     ["it.skip('a', f)", "it.skip('b', f)", []],
     ['a()', 'process.exit(1)', []],
     ['a', 'stream.Skip(1)', []],
+    // A whole comment line is no marker: not added, and not lost when it is uncommented.
+    ["it('a', f)", "// it.skip('a', f)\nit('a', f)", []],
+    ['def t(): pass', '# @pytest.mark.skip\ndef t(): pass', []],
+    [' * @Disabled', ' * @Disabled\n * xit(', []],
+    ["// it.skip('a', f)", "it.skip('a', f)", ['.skip added']],
+    // Known limit, the shortcut in hooks-prims.mjs: a string and any other `.skip(` still count.
+    ['a', "log('it.skip(')", ['.skip added']],
+    ['a', 'list.stream().skip(1)', ['.skip added']],
     // Assertions, in each spelling.
     ['a()\nexpect(a).toBe(1)\n', 'a()\n', ['assertion removed']],
     ['assert.equal(a, 1)', '', ['assertion removed']],
