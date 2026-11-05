@@ -47,6 +47,9 @@
 1. Step-by-step method this {{AGENT}} follows.
 
 ## Output contract
+- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR`:
+  `OK` the contract is met; `BLOCKED` an input or a decision is missing;
+  `OUT_OF_SCOPE` this {{AGENT}} does not own the task; `ERROR` a step failed.
 - The exact shape of what this {{AGENT}} returns to the caller (e.g. a list of
   findings with file:line, a verdict, a summary of changes made).
 - Include an honest-failure line: what this {{AGENT}} returns when the contract

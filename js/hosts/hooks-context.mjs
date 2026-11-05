@@ -171,6 +171,27 @@ export function memoryNudge(map) {
   return '';
 }
 
+// The one context line for a project that names no runtime; the OpenCode context plugin carries
+// the same text (tests/plugins/context_done.test.mjs holds the two equal).
+const FLOOR_LINE = 'Runtime floor: package.json declares no engines — name the supported runtime before you '
+  + 'add a dependency or a language feature.';
+
+/**
+ * `FLOOR_LINE` when the git root's package.json is a JSON object with no `engines` field, else
+ * null: no file, invalid JSON, or `engines` present (even empty). It reads the file itself:
+ * `inferDoneChecks` skips that read for a project with a done list, and an install with the done
+ * gate off never reaches it, so sharing it would tie this line to the done gate.
+ *
+ * shortcut: package.json only — pom.xml (`maven.compiler.release`), pyproject.toml
+ * (`requires-python`) and go.mod (`go`) are not read. Add one when a session in such a repo adds
+ * something its runtime cannot run.
+ */
+function runtimeFloorLine(root) {
+  let pkg;
+  try { pkg = JSON.parse(readText(path.join(root, 'package.json'))); } catch { return null; }
+  return pkg && typeof pkg === 'object' && !Array.isArray(pkg) && pkg.engines === undefined ? FLOOR_LINE : null;
+}
+
 /**
  * The session files present under `hookRoot` and changed from their seed, as `{ rel, abs, text }`
  * (text CRLF-folded, trailing newlines trimmed). `$GENESEED_WIKI` overrides the wiki declaration,
@@ -459,7 +480,7 @@ export function cmdContext(args) {
   // The ownership decline reminder (`./ownership-gate.mjs`), under the same contract: an install
   // built `--no-ownership-gate` carries `Ownership gate: off` and gets no line.
   const owned = gitRoot && !gateOff('Ownership gate') ? ownershipLine(gitRoot) : null;
-  const heads = [done, owned].filter(Boolean);
+  const heads = [done, owned, gitRoot && runtimeFloorLine(gitRoot)].filter(Boolean);
   if (!session.length && !eager.length && !lazy.length) {
     err(`[context] nothing to load for ${root} `
       + '(no docs discovered, no manifest entries).\n');

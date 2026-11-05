@@ -11,6 +11,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Added
 - **The rule gate reads shell writes.** The targets of `>`, `>>`, `tee`, `sed -i`, `cp`, `mv` and `rm` now get the protected-checks and gate-configuration checks, by path only: a prompt on Claude Code and OpenClaude, a refusal on OpenCode and Bob. Scripts, interpreter one-liners, `npm run`, variables, globs and subshell tricks stay unseen, so keep running the checks in CI. Run `geneseed rebuild-all` to pick up the OpenCode plugins.
 - **A weakened test is reported, as an advisory.** An edit of a test file that adds a skip marker or removes an assertion leaves the agent a note and adds a `[done-gate] advisory` line when the turn ends, citing *Cure the Cause*. It never asks or blocks. Bob gets a log line, OpenCode a reminder on the next request.
+- **A `Runtime floor:` line at session start.** A git root whose `package.json` has no `engines` field gets one context line that asks the agent to name the supported runtime before it adds a dependency or a language feature. Run `geneseed rebuild-all` to pick up the OpenCode plugin.
+- **A `STATUS:` first line in agent reports.** The developer and tester output contracts, and the agent template, start with `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR`. In ownership mode, `blocked: decision needed` follows `STATUS: BLOCKED`.
 
 ### Changed
 - **Inferred done checks stay advisory, with no date.** The 4.29.0 note that called them "advisory in this release" promised a change that is not coming: only a list the project wrote in `.geneseed/done-checks.txt` can block.

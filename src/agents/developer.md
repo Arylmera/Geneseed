@@ -42,12 +42,15 @@
    actually close — report the blocker instead ({{ONTOLOGY}}: {{ONT_EVIDENCE}}).
 
 ## Output contract
+- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR`: `OK` the contract is met;
+  `BLOCKED` an input or a decision is missing; `OUT_OF_SCOPE` not this task; `ERROR` a step failed,
+  red tests included.
 - The files changed in the worktree and a one-line summary of what changed and
   why, ready for the tester's pass.
 - If the scoped task cannot be implemented as given (missing input, contradictory
-  acceptance criteria), report that blocker instead of guessing.
+  acceptance criteria), report that blocker instead of guessing (`STATUS: BLOCKED`).
 - In ownership mode: the diff, for the developer's final review — or
-  `blocked: decision needed` with the options.
+  `blocked: decision needed` with the options, on the line after `STATUS: BLOCKED`.
 
 ## Pipeline role
 
