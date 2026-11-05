@@ -8,6 +8,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [4.32.0] — 2026-11-05
+
+Minor: shell writes reach the rule gate, a weakened test is reported at the end of the turn, a loop `pass` cannot hide a skipped check, and the `feature` and `bugfix` loops prove their tests. Run `geneseed rebuild-all` once after updating to get the new hooks, agents and loops.
+
 ### Added
 - **The rule gate reads shell writes.** The targets of `>`, `>>`, `tee`, `sed -i`, `cp`, `mv` and `rm` now get the protected-checks and gate-configuration checks, by path only: a prompt on Claude Code and OpenClaude, a refusal on OpenCode and Bob. Scripts, interpreter one-liners, `npm run`, variables, globs and subshell tricks stay unseen, so keep running the checks in CI. Run `geneseed rebuild-all` to pick up the OpenCode plugins.
 - **A weakened test is reported, as an advisory.** An edit of a test file that adds a skip marker or removes an assertion leaves the agent a note and adds a `[done-gate] advisory` line when the turn ends, citing *Cure the Cause*. It never asks or blocks. Bob gets a log line, OpenCode a reminder on the next request.
@@ -21,6 +25,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`geneseed loop record` refuses a `test` `pass` whose check list has a skipped check.** The `test` brick now writes its list to a temp file and reports the path with every outcome, so the list reaches the engine. The record fails with the entry named and `LOOP.md` does not change. `fail` and `error` with skipped checks are still accepted.
 - **The `feature` loop writes a failing test first, and the `bugfix` loop proves its tests bite.** `feature` runs `red-test` before `apply`. `bugfix` runs `mutation-check` between `test` and `review`; with no mutation tool it reports `unavailable` and the loop carries on. Each `bugfix` card's write set must name the reproduction test, so a repair can strengthen it.
 - **`review` and `mutation-check` notes leave `LOOP.md` when `apply` reports.** A later repair no longer reads findings about code that has changed.
+- **The Library shows compact status icons, and the Overview graphs fill their cards.**
+
+### Fixed
+- **Long install names no longer overflow** the voice menu, the Library rows and the sidebar.
 
 ## [4.31.0] — 2026-10-31
 
