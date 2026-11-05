@@ -2562,13 +2562,22 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
 a.ldg-kpi-aside { color: var(--accent-text); }
 .ldg-kpi-fig { font-size: 20px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; } /* off-scale: 20px between steps */
 .ldg-kpi-cap, .ldg-kpi-stack .dim { font-size: var(--fs-sm); }
-.ldg-kpi-ring { display: flex; align-items: center; gap: 14px; } /* off-scale: between steps */
+.ldg-kpi-ring { display: flex; flex: 1; align-items: center; gap: var(--sp-5); }
 .ldg-ringbox { position: relative; display: inline-grid; place-items: center; flex: none; }
-.ldg-ring-pct { position: absolute; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.ldg-ring-pct { position: absolute; font-size: 20px; font-weight: 650; color: var(--text); } /* off-scale: matches .ldg-kpi-fig */
 .ldg-kpi-stack { display: grid; gap: 3px; min-width: 0; } /* off-scale: 3px line gap */
-.ldg-kpi .spark { width: 100%; height: 40px; }
-.ldg-kpi-calls .spk-line { stroke: var(--accent); }
-.ldg-kpi-gates .spk-line { stroke: var(--warn); }
+/* A KPI's sparkline takes all the card leaves it. Stretched, so its strokes opt out of the
+   scaling; that also breaks the pathLength dash the draw-on uses, hence a wipe instead. */
+.spark-fill { position: relative; display: block; flex: 1; min-height: 72px; }
+.spark-fill .spark { position: absolute; inset: 0; width: 100%; height: 100%; }
+.spark-fill polyline { vector-effect: non-scaling-stroke; }
+.spark-fill .spk-line { stroke-width: 2; }
+.spark-fill i.spk-end { position: absolute; right: -4px; width: 8px; height: 8px; margin-top: -4px;
+  border-radius: 50%; background: var(--spk, var(--accent)); }
+.ldg-kpi-calls { --spk: var(--accent); }
+.ldg-kpi-gates { --spk: var(--warn); }
+.ldg-kpi .spk-line { stroke: var(--spk); }
+.ldg-kpi .spk-area { fill: color-mix(in srgb, var(--spk) 16%, transparent); }
 /* The fleet table. */
 .ldg-scroll { overflow-x: auto; margin: 0 -20px -18px; } /* off-scale: negative margins mirror .panel padding */
 .ldg-fleet { width: 100%; min-width: 860px; border-collapse: collapse; font-size: var(--fs-sm); }
@@ -2664,6 +2673,10 @@ a.ldg-kpi-aside { color: var(--accent-text); }
 .ldg .spk-area { animation: ldg-fade .6s ease-out both; animation-delay: calc(var(--i, 0) * 150ms + 900ms); }
 .ldg .spk-end { transform-box: fill-box; transform-origin: center;
   animation: ldg-pop .35s cubic-bezier(.22,1,.36,1) both; animation-delay: calc(var(--i, 0) * 150ms + 1.35s); }
+.ldg .spark-fill .spk-line { stroke-dasharray: none; animation: none; }
+.ldg .spark-fill .spark { animation: ldg-wipe 1.2s cubic-bezier(.65,0,.35,1) both;
+  animation-delay: calc(var(--i, 0) * 150ms + 250ms); }
+@keyframes ldg-wipe { from { clip-path: inset(-4px 100% -4px 0); } to { clip-path: inset(-4px 0 -4px 0); } }
 @keyframes ldg-ring { from { stroke-dashoffset: var(--circ); } }
 @keyframes ldg-grow-x { from { transform: scaleX(0); } }
 @keyframes ldg-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
@@ -3532,6 +3545,10 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .lib-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin-top: var(--sp-2);
   font-size: var(--fs-2xs); color: var(--text-3); }
 .lib-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.lib-legend:empty { display: none; }
+/* A status as its icon alone (StatusBadge `compact`): the `.badge` tone without the pill. */
+.badge.status-icon { flex: none; padding: 0; border: 0; background: none; }
+.badge.status-icon .glyph { width: 13px; height: 13px; }
 .lr-use .ub-trk { width: 48px; border-radius: 3px; background: var(--surface-3); }
 .lib-stats { display: flex; flex-wrap: wrap; gap: var(--sp-5); margin: var(--sp-3) 0; }
 .lib-stats .stat:first-child { flex: 1 1 220px; }
