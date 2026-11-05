@@ -21,11 +21,11 @@ import { expanduser, resolvePath } from '../hosts/hosts.mjs';
 import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 import { toPlatformPath, within } from '../lib/paths.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
 
 /** `_install_registry._path()` — `$XDG_CONFIG_HOME/geneseed/installs.json`. */
 function registryPath() {
-  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(base, 'geneseed', 'installs.json');
+  return path.join(machineDir(), 'installs.json');
 }
 
 /**

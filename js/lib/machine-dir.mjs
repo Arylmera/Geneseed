@@ -1,0 +1,35 @@
+/**
+ * The machine-wide Geneseed directory: `$XDG_CONFIG_HOME/geneseed`, default `~/.config/geneseed`.
+ *
+ * ONE WRITER PER VALUE. The install registry, the user loop bricks and the shared tier all live
+ * under this directory; each used to spell the XDG computation itself, and a spelling that drifts
+ * in one place sends that file to a different directory than its neighbours. This module is the
+ * only home of the computation and of the names beneath it.
+ *
+ * Builtins only and no spawn: the hook and the build driver may import it, and both are under a
+ * `child_process` ban. `process.env` is read at CALL time, so a sandbox that sets
+ * `XDG_CONFIG_HOME` after import is honoured.
+ */
+import os from 'node:os';
+import path from 'node:path';
+
+export function machineDir() {
+  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(base, 'geneseed');
+}
+
+/** Every file or directory the machine tier names, resolved under `machineDir()`. */
+export function sharedPaths() {
+  const root = machineDir();
+  return {
+    root,
+    memory: path.join(root, 'memory'),
+    rules: path.join(root, 'user-rules.md'),
+    profile: path.join(root, 'PROFILE.md'),
+    wiki: path.join(root, 'geneseed-wiki.jsonc'),
+    excludes: path.join(root, 'excludes.json'),
+    notes: path.join(root, 'notes'),
+    draft: path.join(root, 'user-rules.draft.md'),
+    foldState: path.join(root, '.fold-state.json'),
+  };
+}

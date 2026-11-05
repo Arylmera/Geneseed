@@ -164,6 +164,7 @@ into files users have committed, so change the test that states it in the same c
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
+| `machine-dir.mjs` | `machineDir()` and `sharedPaths()`: the one home of `$XDG_CONFIG_HOME/geneseed` and the names beneath it. Spawn-free, so the hook and driver may import it |
 | `node-floor.mjs` | The first import of all three binaries: below Node 22.7, one sentence on stderr and exit 1 (0 in the hook) instead of a stack trace |
 
 **Before editing:** parse with `parseJson`, never `JSON.parse` — the latter collapses int `1` and
