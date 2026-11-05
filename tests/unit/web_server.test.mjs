@@ -642,13 +642,13 @@ test('the setup snapshot\'s missing interpreter field is gated where the snapsho
   // version under a key named for that one would be a lie the About page prints — so the field
   // was first answered `null` and is now GONE, which is the only fully honest shape.
   //
-  // The claim is owned by `tests/unit/web_api.test.mjs`, inside the full snapshot test, which is
+  // The claim is owned by `tests/unit/web_api_jobs_actions.test.mjs`, inside the full snapshot test, which is
   // the stronger site because it runs against a real snapshot rather than against source text.
   // Re-asserting it here would be a second owner of one claim; pointing at it is only worth
   // anything if the pointer is CHECKED, which is all this row does.
-  const owner = readFileSync(path.join(ROOT, 'tests', 'unit', 'web_api.test.mjs'), 'utf8');
+  const owner = readFileSync(path.join(ROOT, 'tests', 'unit', 'web_api_jobs_actions.test.mjs'), 'utf8');
   assert.ok(owner.includes('assert.ok(!(\'python\' in s),'),
-    'tests/unit/web_api.test.mjs no longer asserts the setup snapshot has NO interpreter-version '
+    'tests/unit/web_api_jobs_actions.test.mjs no longer asserts the setup snapshot has NO interpreter-version '
     + 'key — a field with nothing honest to put in it would now be free to grow back by silence');
 });
 

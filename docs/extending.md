@@ -219,9 +219,9 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
   `{N_PACKS}` / `{N_PACKS_ACTIVE}` / `{N_DOCTRINE_RULES}`, all computed at request time.
 - **No citation to rewire.** But there *are* written-out rule totals to bump — expected values are
   written out, never recorded — in `tests/unit/emit_smoke.test.mjs`, `harness.test.mjs`,
-  `setup.test.mjs` and `web_api.test.mjs`. Each fails loudly with the new count; change the
+  `setup.test.mjs` and the `web_api*.test.mjs` files. Each fails loudly with the new count; change the
   number *and* the comment that explains it. A rule in **craft** moves more: `setup` and
-  `web_api` also pin the craft-only narrowed counts, `generate.test.mjs` excludes every craft
+  `web_api*` also pin the craft-only narrowed counts, `generate.test.mjs` excludes every craft
   rule by address to empty the pack. Grep `tests/` for the previous
   rule's address before trusting this list. A rule long enough to matter can also breach the
   `full` carrier ceiling in `emit_smoke` — raise it with a dated note there, as every earlier
@@ -303,7 +303,7 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    step 2 already makes a new pack default-on. `constitutionProblems` refuses a `doctrines`
    array naming a pack this checkout does not ship.
 6. The written-out **pack lists** in `tests/` — not only the rule totals of §2a. The full set is
-   spelled out, in `PACK_ORDER`, in `emit_smoke`, `generate`, `harness`, `setup`, `web_api`,
+   spelled out, in `PACK_ORDER`, in `emit_smoke`, `generate`, `harness`, `setup`, `web_api*`,
    `web_jobs` and `wizard`, and the wizard cells also feed one y/n answer per pack on stdin.
    Grep `tests/` for `'process']` and `ops,process` before trusting this list.
 7. **Existing installs.** An install's pack set is read back off its carrier's `Active packs:`
@@ -551,7 +551,7 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
 4. `docs/concepts/host-matrix.md` — check the capability matrix still tells the truth.
 5. `README.md` — **three** sites: the badge, the `N plugins` prose, and the 🔌 Plugins row.
 6. `SHIPPED.md` — the bare name inside `plugins (…)`; that list must equal the directory exactly,
-   in both directions (`tests/unit/web_api.test.mjs:1655`).
+   in both directions (`tests/unit/web_api_docs.test.mjs:329`).
 7. `adapters/opencode/README.md` and `docs/opencode-plugin-setup.md` — spelled-out counts, in
    **word form** ("seven" → "eight"), the second file twice.
 8. `tests/plugins/<name>.test.mjs`. Auto-discovered; no workflow edit.
