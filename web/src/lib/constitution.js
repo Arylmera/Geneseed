@@ -36,7 +36,7 @@ const toRoman = (n) => {
 
 // A gate-ledger key (setup.gates.asks) -> the catalog address of the rule behind it:
 // `law-4` is invariant `IV`, `process-5` is doctrine `process.5`. `ownership`, the one gate with
-// no rule behind it, stays as it is: that key is the address of its console-only row.
+// no rule behind it, stays as it is: Laws.jsx opens the Credo's Ownership row for that address.
 export function gateAddress(key) {
   const m = /^([a-z]+)-(\d+)$/.exec(String(key))
   if (!m) return String(key)
@@ -56,8 +56,8 @@ export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', '
 // reports it under, and the switch's name. Transcribed from the server's GATE_SWITCHES
 // (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`,
 // `--no-ownership-gate`). The ownership gate has no law, so its address is its ledger key, and
-// Laws.jsx gives it a row of its own that exists only in the console: the catalog has no such
-// item, and the Credo's Ownership section stays text only.
+// its switch sits inside the Credo's Ownership row, on a line that exists only in the console:
+// the catalog has no such item.
 // __tests__/constitution.test.js imports that table and fails when the two drift apart.
 export const GATE_SWITCH = {
   I: { key: 'secretsGate', label: 'Secrets gate' },
@@ -67,8 +67,9 @@ export const GATE_SWITCH = {
 }
 
 // What each switch's confirm says it does, by the same address: `arm` when it re-arms, `off`
-// when it switches off. Display copy for the Constitution's gate toggles; a module constant so
-// it is not rebuilt on every render.
+// when it switches off. `desc` is the standing line beside a switch with no rule text to explain
+// it. Display copy for the Constitution's gate toggles; a module constant so it is not rebuilt on
+// every render.
 export const GATE_COPY = {
   I: {
     arm: 'Writes that would carry a credential-shaped string are refused again.',
@@ -94,6 +95,7 @@ export const GATE_COPY = {
       'the agent; secrets, root-wide scans and commit/push consent stay gated.',
   },
   ownership: {
+    desc: 'Stops the first write in an undecided application, once per session.',
     arm: 'The first write in an undecided application stops once again.',
     off:
       'The first write in an undecided application is no longer stopped, the setup proposal ' +

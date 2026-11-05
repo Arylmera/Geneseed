@@ -2754,9 +2754,6 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-row .toggle-col { display: flex; align-items: center; justify-content: center; }
 .law-row .no-gate { font-size: var(--fs-2xs); color: var(--text-3); white-space: nowrap; }
 .law-row:hover { background: var(--surface-2); }
-/* A row that opens nothing: only its switch is a control. */
-.law-row-plain, .law-row-plain .law-disclosure { cursor: default; }
-.law-row-plain:hover { background: transparent; }
 .law-row.on { background: var(--accent-soft); }
 .law-no { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap;
   font-family: var(--font-mono); color: var(--accent-text); font-variant-numeric: tabular-nums; }
@@ -2779,6 +2776,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
   line-height: 1.66; }
 .law-expand em { color: var(--text); }
 .law-srcline { margin-top: var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3); }
+/* A gate's switch inside an open row, below the text it does not change. */
+.law-gate { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
 .band-head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
   padding: var(--sp-3) var(--sp-5) var(--sp-2); background: var(--bg-2); border-bottom: 1px solid var(--line); }
 .band-head .mono { font-size: var(--fs-2xs); }
