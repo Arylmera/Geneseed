@@ -77,6 +77,7 @@ import { isDoctorNote } from './scan.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
+import { renamedFilesIn } from '../build/stubs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
 // ---- version ---------------------------------------------------------------------------
@@ -312,6 +313,8 @@ export function statusData() {
   }
   const leftover = anamnesisLeftovers([...(cfgDir ? [cfgDir] : []), ...otherCfg,
     path.join(process.cwd(), 'Harness'), sharedPaths().root]);
+  const renamed = renamedFilesIn([...(cfgDir ? [cfgDir] : []), ...otherCfg,
+    path.join(process.cwd(), 'Harness'), sharedPaths().root]);
   const agentMd = (inst.emit === 'opencode-global' && cfgDir)
     ? path.join(cfgDir, 'AGENT.md') : null;
   return {
@@ -333,6 +336,7 @@ export function statusData() {
     memory_dir: mdir ? String(mdir) : null,
     facts: mdir ? memoryFactCount(mdir) : 0,
     ...(leftover.length ? { anamnesis_leftover: leftover } : {}),
+    ...(renamed.length ? { renamed_files: renamed } : {}),
     source_fp: sourceFp,
     installed_fp: installedFp,
     version_target: verTarget ? String(verTarget) : null,
@@ -414,6 +418,7 @@ export function statusLines(d, color = false) {
     ['components', `${d.agents} agents ${DOT} ${d.skills} skills ${DOT} ${d.laws} laws`],
     ['memory', `${d.memory_dir || '(not found)'}  `
       + `(${d.facts} fact${d.facts === 1 ? '' : 's'})`],
+    ...(d.renamed_files ? d.renamed_files.map((r) => ['renamed', `${r.file}  ${DOT}  old name still read: it is ${r.now} now; a rebuild renames it`]) : []),
     ...(d.anamnesis_leftover ? [['leftover', `${d.anamnesis_leftover.join(', ')}  ${DOT}  no longer read: copy its facts into memory/`]] : []),
     ['version', `${d.installed_fp || '(none)'}  ${DOT}  source ${d.source_fp}`],
   ];

@@ -44,34 +44,7 @@
       "name": "bootstrap",
       "help": "update everything (sync + upgrade) with a progress UI, then run setup",
       "description": "",
-      "positionals": [
-        {
-          "names": [],
-          "dest": "ref",
-          "metavar": null,
-          "help": "accepted for back-compat; ignored (git follows the current branch)",
-          "choices": null,
-          "default": null,
-          "required": false,
-          "nargs": "?",
-          "is_flag": false,
-          "type": null,
-          "hidden": false
-        },
-        {
-          "names": [],
-          "dest": "extra",
-          "metavar": null,
-          "help": "",
-          "choices": null,
-          "default": null,
-          "required": false,
-          "nargs": "*",
-          "is_flag": false,
-          "type": null,
-          "hidden": true
-        }
-      ],
+      "positionals": [],
       "options": [
         {
           "names": [
@@ -1397,28 +1370,6 @@
       "mutex": []
     },
     {
-      "name": "sync-self",
-      "help": "refresh the orchestration layer — launchers + update scripts (cross-platform; an alias of upgrade)",
-      "description": "",
-      "positionals": [
-        {
-          "names": [],
-          "dest": "ref",
-          "metavar": null,
-          "help": "",
-          "choices": null,
-          "default": null,
-          "required": false,
-          "nargs": "?",
-          "is_flag": false,
-          "type": null,
-          "hidden": true
-        }
-      ],
-      "options": [],
-      "mutex": []
-    },
-    {
       "name": "theme",
       "help": "create a user OpenCode colour theme (solid + transparent) in the live themes dir; survives rebuilds",
       "description": "",
@@ -1728,19 +1679,6 @@
       "positionals": [
         {
           "names": [],
-          "dest": "ref",
-          "metavar": null,
-          "help": "",
-          "choices": null,
-          "default": null,
-          "required": false,
-          "nargs": "?",
-          "is_flag": false,
-          "type": null,
-          "hidden": true
-        },
-        {
-          "names": [],
           "dest": "theme",
           "metavar": null,
           "help": "optional: force a theme (neutral|imperial|…)",
@@ -1761,19 +1699,6 @@
       "help": "self-update: git pull the install's origin (ff-only), validate, then rebuild the bundle + every install",
       "description": "",
       "positionals": [
-        {
-          "names": [],
-          "dest": "ref",
-          "metavar": null,
-          "help": "",
-          "choices": null,
-          "default": null,
-          "required": false,
-          "nargs": "?",
-          "is_flag": false,
-          "type": null,
-          "hidden": true
-        },
         {
           "names": [],
           "dest": "theme",

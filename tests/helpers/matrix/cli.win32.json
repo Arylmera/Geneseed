@@ -7292,20 +7292,19 @@
       "bin": "cli",
       "checkout": {},
       "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "This Geneseed install isn't a git checkout",
-        "ref 'v1.2.3' is IGNORED"
+        "unrecognized arguments"
       ],
       "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle"
+        "preflight: checking the local checkout",
+        "is IGNORED"
       ],
-      "id": "upgrade/a-ref-argument-that-names-no-theme-is-announced-and-ignored",
+      "id": "upgrade/a-second-positional-is-refused-before-anything-runs",
       "steps": [
         {
           "argv": [
             "upgrade",
-            "v1.2.3"
+            "main",
+            "imperial"
           ],
           "cwd": "repo"
         }
@@ -7560,7 +7559,7 @@
       "expect": [
         "rescued context.json from ",
         "rescued memory/ from ",
-        "removing stray in-folder bundle "
+        "set aside in "
       ],
       "expect_files": [
         "bundle/context.json",
@@ -7746,93 +7745,6 @@
         "GENESEED_OUT": "{sb}/bundle"
       },
       "expect": [
-        "[geneseed] already up to date.",
-        "[geneseed] rebuilding bundle -> ",
-        "(theme: neutral, emit: files)",
-        "[geneseed] ✓ upgrade complete."
-      ],
-      "expect_files": [
-        "bundle/AGENT.md",
-        "bundle/.geneseed-theme",
-        "bundle/.geneseed-version"
-      ],
-      "git": "uptodate",
-      "id": "sync-self/is-an-alias-of-upgrade-and-rebuilds-the-bundle-in-place",
-      "steps": [
-        {
-          "argv": [
-            "sync-self"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "env": {
-        "GENESEED_OUT": "{sb}/bundle"
-      },
-      "expect": [
-        "(theme: neutral, emit: files)"
-      ],
-      "expect_absent": [
-        "theme: cyberpunk",
-        "built theme 'cyberpunk'",
-        "is IGNORED"
-      ],
-      "expect_files": [
-        "bundle/AGENT.md",
-        "bundle/.geneseed-theme",
-        "bundle/.geneseed-version"
-      ],
-      "git": "uptodate",
-      "id": "sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme",
-      "steps": [
-        {
-          "argv": [
-            "sync-self",
-            "cyberpunk"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "You have local changes in the Geneseed folder"
-      ],
-      "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle"
-      ],
-      "git": "dirty",
-      "id": "sync-self/a-dirty-checkout-is-refused-through-the-alias-too",
-      "steps": [
-        {
-          "argv": [
-            "sync-self"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "env": {
-        "GENESEED_OUT": "{sb}/bundle"
-      },
-      "expect": [
         "[geneseed] step 1/1: Update & rebuild ...",
         "[geneseed] already up to date.",
         "[geneseed] rebuilding bundle -> ",
@@ -7865,32 +7777,19 @@
     },
     {
       "bin": "cli",
-      "env": {
-        "GENESEED_OUT": "{sb}/bundle"
-      },
       "expect": [
-        "[geneseed] step 1/1: Update & rebuild ...",
-        "[geneseed] already up to date.",
-        "[geneseed] ✓ update complete."
+        "unrecognized arguments"
       ],
       "expect_absent": [
-        "unrecognized arguments",
-        "✗ step"
+        "step 1/1",
+        "is IGNORED"
       ],
-      "expect_files": [
-        "bundle/AGENT.md",
-        "bundle/.geneseed-theme",
-        "bundle/.geneseed-version",
-        "home/.geneseed-install.log"
-      ],
-      "git": "uptodate",
-      "id": "bootstrap/a-legacy-theme-argument-after-the-ref-is-tolerated-not-refused",
+      "id": "bootstrap/takes-no-positional-since-the-ref-went",
       "steps": [
         {
           "argv": [
             "bootstrap",
             "main",
-            "imperial",
             "--no-setup"
           ],
           "cwd": "repo"
@@ -8043,18 +7942,19 @@
       "bin": "cli",
       "checkout": {},
       "expect": [
-        "ref 'v1.2.3' is IGNORED",
-        "This Geneseed install isn't a git checkout"
+        "unrecognized arguments"
       ],
       "expect_absent": [
-        "rebuilding bundle"
+        "preflight: checking the local checkout",
+        "is IGNORED"
       ],
-      "id": "update/binds-upgrades-hidden-ref-positional-and-announces-it",
+      "id": "update/refuses-a-second-positional-like-upgrade",
       "steps": [
         {
           "argv": [
             "update",
-            "v1.2.3"
+            "main",
+            "imperial"
           ],
           "cwd": "repo"
         }

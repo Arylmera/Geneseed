@@ -45,6 +45,8 @@ import {
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
+import { renamedFilesIn } from './stubs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { printOut, printErr, readText, writeText, isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatRepr } from '../lib/json.mjs';
 
@@ -298,6 +300,12 @@ export function rebuildCommand(argv) {
  * built for it.
  */
 export async function cmdRebuildAll() {
+  // Lazy: `update.mjs` spawns git, and this module is on the static graph of the no-spawn CLI.
+  const refusal = (await import('../maintain/update.mjs')).gateRefusal();
+  if (refusal) {
+    printErr(`[rebuild-all] not started: ${refusal}\n`);
+    return 1;
+  }
   const rc = rebuildAll();
   // A console started before an upgrade keeps serving the old `index.html`; restart it — only
   // when stale, see `bounceDaemonIfRunning`. Lazy: no other verb in this module needs js/web/.
@@ -335,6 +343,11 @@ export function rebuildAll() {
       failures.push(label);
       printErr(`[rebuild-all] FAILED ${label} (exit ${rc})\n`);
     }
+  }
+  // M3: an old-name wiki manifest that survived the rebuilds (a rename failed, or the file sits
+  // where no emit looks) is named once, here, whatever else the summary says.
+  for (const { file, now } of renamedFilesIn([...targets.map(([, , r]) => r), sharedPaths().root])) {
+    printOut(`[rebuild-all] WARN ${file} is still read under its old name; rename it to ${now}.\n`);
   }
   if (failures.length) {
     printErr(`[rebuild-all] ${failures.length}/${targets.length} install(s) failed: `

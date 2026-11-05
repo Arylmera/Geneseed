@@ -471,7 +471,7 @@ const camel = (dest) => dest.replace(/_([a-z])/g, (_m, c) => c.toUpperCase());
  * EVERY ROW OF THIS MAPPING WAS A HAND-WRITTEN COMMENT IN THAT FILE'S `VERBS` TABLE, and each
  * one names a failure it prevents:
  *
- *   * a positional with `nargs="?"` is OPTIONAL — `link [dir]`, `upgrade [ref] [theme]`;
+ *   * a positional with `nargs="?"` is OPTIONAL — `link [dir]`, `upgrade [theme]`;
  *   * a positional with `nargs="*"` is the trailing SINK (`bootstrap extra`), and `parse`
  *     keeps it from absorbing options, which is what stops `bootstrap --no-setpu` from
  *     running a full update-and-wizard while the user believes they asked for neither;

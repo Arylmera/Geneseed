@@ -36,7 +36,7 @@
  * written.
  *
  * The verb set is deliberately SMALL and refuses the rest by name. `harness.py` has 24
- * subparsers (25 invocable names — `update` is an alias of `upgrade`); a hook entry that
+ * subparsers (25 invocable names — `update` is an alias of `upgrade`; `sync-self`, one of them, was removed in 5.0.0); a hook entry that
  * silently accepted `doctor` and did nothing would be the worst available failure, because
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
  * are the same observation. That refusal exits **1**, never 2: on Claude Code and Bob, exit 2

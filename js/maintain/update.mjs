@@ -31,7 +31,7 @@
  * run and varied in none. The phase filter is gated over a recorded transcript in
  * `tests/unit/update_git.test.mjs`; the heartbeat and the hard deadline are gated by nothing.
  *
- * ALSO HERE, SINCE P8b: `syncSelf`/`cmdSyncSelf` and the bootstrap step runner
+ * ALSO HERE, SINCE P8b: the bootstrap step runner
  * (`cmdBootstrap`, `bootstrapPlain`) at the bottom of this file. Still NOT here: `main`, the
  * launchers' self-heal entry. Every web action row crosses — see `js/web/jobs.mjs`.
  * `parseOrigin` is ported in full here even though only `upgrade`
@@ -39,7 +39,7 @@
  * pure function across two phases is how a second classifier gets written.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -503,6 +503,12 @@ export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
 /**
  * Where the unchecked state lives: under `.git`, so it dirties nothing. One record per branch, so
  * a rollback can only ever move the branch the pull landed on. Null when git cannot say.
+ *
+ * KNOWN GAP, STATED RATHER THAN CLOSED: a record belongs to a branch NAME, so a branch the user
+ * creates (and sets to track) at a commit that an unfinished doctor never judged starts with no
+ * record, and nothing holds its rebuild back. Closing it means keying the record by commit, and a
+ * pull would then need a record per ancestor; the doctor gate is a guard for the pull `update`
+ * itself made, not an audit of every tree a user checks out.
  */
 function pendingGateFile() {
   const [rc0, branch] = gitRun(['rev-parse', '--abbrev-ref', 'HEAD']);
@@ -557,6 +563,19 @@ export function pendingGate() {
     return null;
   }
   return { verified };
+}
+
+/**
+ * Why a direct `setup` or `rebuild-all` must not run now, or null. Both render this source, and an
+ * unfinished doctor (a record under `.git`) means nothing has judged it: `upgrade` and `bootstrap`
+ * hold back for the record, and a direct call used to walk around it. An npm install has no record.
+ */
+export function gateRefusal() {
+  if (!isGitCheckout()) return null;
+  const g = pendingGate();
+  if (!g) return null;
+  return g.blocked ?? 'the source has no doctor verdict yet. Run `geneseed update` (it runs the '
+    + 'doctor first), then retry.';
 }
 
 /**
@@ -666,15 +685,21 @@ export function configTheme(here) {
 }
 
 /**
- * `_migrate_stray_bundle` — move host state (context.json, memory/) from an OLD in-folder
- * bundle to the canonical sibling `out` BEFORE rebuilding, then drop the stray.
+ * `_migrate_stray_bundle` — copy host state (context.json, memory/) from an OLD in-folder
+ * bundle to the canonical sibling `out` BEFORE rebuilding, then set the stray ASIDE.
+ *
+ * THE STRAY IS RENAMED, NEVER DELETED (B9). The rescue covers context.json and memory/ only, and
+ * memory/ only when `out` has none; the old `rmSync` took everything else with it (user-rules.md,
+ * PROFILE.md, notebook/, a wiki manifest) from a folder `.gitignore` hides, so git could not
+ * bring it back. It now moves whole to `archived-Harness/<stamp>` beside it, also git-ignored.
+ * With the stray gone the next run returns at the stat, which is what makes this idempotent.
  *
  * "IS `out` THE STRAY ITSELF?" IS A PATH COMPARISON, NOT A STRING ONE. `GENESEED_OUT` is typed
  * by a user, so on Windows `c:\x\Geneseed\harness` is the same directory as the stray and was a
  * different string: the rescue was skipped as "nothing to move into", and the `rmSync` at the
  * bottom then deleted the LIVE bundle — memory/ and context.json with it.
  */
-export function migrateStrayBundle(here, out, log) {
+export function migrateStrayBundle(here, out, log, now = new Date()) {
   const stray = path.join(String(here), 'Harness');
   const outStr = String(out);
   if (comparePaths(path.resolve(outStr), path.resolve(stray)) === 0) return;
@@ -695,8 +720,13 @@ export function migrateStrayBundle(here, out, log) {
       log(`[geneseed] rescued ${mem}/ from ${stray} -> ${outStr}`);
     }
   }
-  log(`[geneseed] removing stray in-folder bundle ${stray} (canonical: ${outStr})`);
-  rmSync(stray, { recursive: true, force: true });
+  const archive = path.join(String(here), 'archived-Harness');
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  let dest = path.join(archive, stamp);
+  for (let n = 2; existsSync(dest); n += 1) dest = path.join(archive, `${stamp}-${n}`);
+  mkdirSync(archive, { recursive: true });
+  renameSync(stray, dest);
+  log(`[geneseed] stray in-folder bundle ${stray} set aside in ${dest} (canonical: ${outStr}); delete it when you are done with it`);
 }
 
 /**
@@ -792,18 +822,13 @@ async function rebuildInstalls(here, log) {
 }
 
 /**
- * `upgrade(ref, theme_arg, zip_arg)` — update from the install's own git origin
+ * `upgrade(themeArg)` — update from the install's own git origin
  * (fast-forward only), doctor-gate, and rebuild the bundle plus every registered install.
- * `ref`/`zip_arg` are accepted for back-compat but IGNORED. Returns a process exit code:
- * 0 ok/up-to-date, 3 info precondition, 1 error.
+ * Returns a process exit code: 0 ok/up-to-date, 3 info precondition, 1 error.
  */
-export async function upgrade(ref = null, themeArg = null) {
+export async function upgrade(themeArg = null) {
   const logger = new Log();
   const log = (m) => logger.call(m);
-  if (ref) {
-    log(`[geneseed] ⚠️  ref '${ref}' is IGNORED — updates follow the checkout's `
-      + 'current branch (tag/branch pinning was removed with the zip path).');
-  }
   const here = String(ROOT);
   // `Path(os.environ.get(...) or ...)`, and `toPlatformPath` is the `Path(str)` half of it: the
   // reference stringifies with the PLATFORM separator, so a `GENESEED_OUT` spelled
@@ -939,43 +964,7 @@ export async function cmdUpgrade(args) {
     printErr(`[upgrade] ⚠️  could not export local edits (${e && e.message ? e.message : e}) — `
       + 'run `geneseed diff --out FILE` before upgrading to keep them.\n');
   }
-  let { ref } = args;
-  let theme = args.theme;
-  // Back-compat: the legacy hidden `ref` positional eats the FIRST argument, so
-  // `geneseed upgrade imperial` lands in `ref` (which `upgrade` ignores) and the theme
-  // silently drops. `ref` is dead — reinterpret it as the theme when it names one.
-  if (theme === null && ref && existsSync(path.join(String(ROOT), 'themes', `${ref}.json`))) {
-    theme = ref;
-    ref = null;
-  }
-  return upgrade(ref, theme);
-}
-
-/**
- * `_update.sync_self` — an ALIAS of `upgrade`, and the argument it drops is the behaviour.
- *
- * One `git pull` refreshes the launchers AND the factory, so the two verbs became one
- * operation; the separate subcommand is kept for the stable contract. `ref` is bound by the
- * parser for back-compat and then dropped HERE — this calls `upgrade()` with no arguments
- * rather than forwarding anything.
- *
- * "IGNORED" IS NOT SILENT, which is what makes the dropping observable and is a correction the
- * mutations made to this docblock. `upgrade(ref)` does not quietly disregard a ref — it opens by
- * LOGGING `⚠️ ref '<x>' is IGNORED — updates follow the checkout's current branch`. So
- * `syncSelf` forwarding its argument would make `sync-self v1.2.3` print a warning the reference
- * never prints (mutation M22), and wiring the verb table's row straight at `cmdUpgrade` would
- * additionally make `sync-self cyberpunk` rebuild in cyberpunk, because `cmdUpgrade` re-reads
- * the dead positional as a THEME when `themes/<ref>.json` exists (M21). Two different defects
- * behind one plausible-looking shortcut, and
- * `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` is the cell for both.
- */
-export function syncSelf(_ref = null) {
-  return upgrade();
-}
-
-/** `_harness_lifecycle.cmd_sync_self`. */
-export function cmdSyncSelf(args) {
-  return syncSelf(args.ref);
+  return upgrade(args.theme);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1076,7 +1065,7 @@ async function bootstrapPlain() {
   // which was written for `_flush_export_notes` and found this instead.
   /** @type {Array<[string, string[], () => Promise<number>]>} */
   const steps = [['Update & rebuild', updateStepCmd('upgrade'),
-    () => cmdUpgrade({ ref: null, theme: null })]];
+    () => cmdUpgrade({ theme: null })]];
   let failed = false;
   for (let i = 0; i < steps.length; i += 1) {
     const [title, cmd, step] = steps[i];

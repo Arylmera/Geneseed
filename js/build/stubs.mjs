@@ -244,18 +244,46 @@ export const WIKI_FILE = WIKI_NAMES[0];
 const LEGACY_WIKI_FILES = WIKI_NAMES.slice(1);
 
 /**
+ * `{new: [old…]}` — every file a build renamed, with the names it used to have. The fallback that
+ * still reads an old name has no end date, so `status` and `rebuild-all` warn while one is on disk
+ * (M3): removal waits for a release after users have been told. One table, so the next rename is
+ * one row and not a second warning.
+ */
+export const RENAMED_FILES = { [WIKI_FILE]: LEGACY_WIKI_FILES };
+
+/** The old-name files present in `dirs`, as `{file, now}`: the path found and the name it takes. */
+export function renamedFilesIn(dirs) {
+  const found = [];
+  for (const dir of dirs) {
+    for (const [now, olds] of Object.entries(RENAMED_FILES)) {
+      for (const old of olds) {
+        const file = path.join(dir, old);
+        if (existsSync(file)) found.push({ file, now });
+      }
+    }
+  }
+  return found;
+}
+
+/**
  * `_build_render.ensure_wiki_stub`, plus the rename. A legacy manifest is the user's file: it is
  * RENAMED to `WIKI_FILE` (bytes preserved by construction), never copied and never seeded beside.
  * A rename that fails (the file held open on Windows) leaves it where it is and seeds nothing —
- * a seed beside it would fork the user's declarations; the readers' fallback still finds it.
+ * a seed beside it would fork the user's declarations; the readers' fallback still finds it. The
+ * failure is WARNED (B6): it used to be swallowed, and the old name then stayed in use unseen.
  * The sibling `.gitignore` follows the rename, or the private paths become committable.
  */
-export function ensureWikiStub(out) {
+export function ensureWikiStub(out, { rename = renameSync,
+  warn = (m) => process.stderr.write(m) } = {}) {
   const dest = path.join(out, WIKI_FILE);
   if (existsSync(dest)) return;
   const legacy = LEGACY_WIKI_FILES.find((n) => existsSync(path.join(out, n)));
   if (!legacy) return seed(dest, WIKI_STUB);
-  try { renameSync(path.join(out, legacy), dest); } catch { return; }
+  try { rename(path.join(out, legacy), dest); } catch (e) {
+    warn(`[geneseed] WARN could not rename ${path.join(out, legacy)} to ${WIKI_FILE}: ${e.message}; `
+      + 'it is still read under its old name, and the next build tries again\n');
+    return;
+  }
   ignoreRenamedWiki(path.join(out, '.gitignore'), legacy);
 }
 

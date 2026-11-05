@@ -2889,6 +2889,33 @@ test('the fingerprint moves with a same-size edit, and stays put without one', (
   });
 });
 
+test('a source file deleted between the walk and the hash is left out of the fingerprint', () => {
+  // The walk lists the files and the hash reads them later; the stamp already skips one that has
+  // gone (render.mjs), and the hash threw ENOENT out of every emit and `status` on it. The result
+  // must equal the fingerprint of the tree without that file. fs is patched because a real
+  // deletion between two statements of one synchronous call cannot be timed.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, 'keep.md'), 'kept\n');
+    fs.writeFileSync(path.join(src, 'gone.md'), 'gone\n');
+    settle(src);
+    const real = fs.readFileSync;
+    fs.readFileSync = (p, ...rest) => {
+      if (String(p).endsWith('gone.md')) throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
+      return real(p, ...rest);
+    };
+    syncBuiltinESMExports();
+    let racing;
+    try { racing = sourceFingerprint(treeCfg(src)); } finally {
+      fs.readFileSync = real;
+      syncBuiltinESMExports();
+    }
+    fs.rmSync(path.join(src, 'gone.md'));
+    assert.equal(racing, sourceFingerprint(treeCfg(src)), 'the vanished file still moved the hash');
+  });
+});
+
 
 // ---------------------------------------------------------------------------------------------
 // `--config-dir`: WHERE A GLOBAL EMIT WRITES. A global emit's target is the host's resolved

@@ -582,7 +582,12 @@ export function setupLines() {
  * only part of this file the acceptance matrix compares. `process.stdin.isTTY` is `undefined`
  * off a terminal rather than `false`, which is why it is negated rather than compared.
  */
-export function cmdSetup() {
+export async function cmdSetup() {
+  const refusal = (await import('./update.mjs')).gateRefusal();
+  if (refusal) {
+    printErr(`[setup] not started: ${refusal}\n`);
+    return 1;
+  }
   if (!process.stdin.isTTY) {
     printErr('[setup] needs an interactive terminal. Non-interactive? e.g.:\n'
       + '  geneseed build --emit opencode-global --theme neutral\n');

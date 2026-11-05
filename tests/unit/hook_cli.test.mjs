@@ -1234,9 +1234,10 @@ test('the install log names this runtime\'s own command', () => {
   }
 });
 
-test('a mistyped flag is refused by the variadic sink', () => {
-  // `bootstrap` is the one verb here with a variadic positional, and a sink that absorbed an
-  // unknown OPTION would be the most dangerous parse bug in this entry point: `bootstrap
+test('a mistyped flag on bootstrap is refused', () => {
+  // `bootstrap` used to take a variadic positional (removed in 5.0.0, with `upgrade`'s `ref`), and
+  // a sink that absorbed an unknown OPTION was the most dangerous parse bug in this entry point.
+  // The sink is gone but the refusal still matters: `bootstrap
   // --no-setpu` would run an update AND a setup wizard while the user believes they asked for
   // neither.
   //
@@ -1253,7 +1254,7 @@ test('a mistyped flag is refused by the variadic sink', () => {
       GIT_TERMINAL_PROMPT: '0',
     };
     const argv = repoint([process.execPath, path.join(ROOT, ...CLI.split('/'))], ck);
-    const r = spawnSync(argv[0], [...argv.slice(1), 'bootstrap', 'main', '--no-setpu'],
+    const r = spawnSync(argv[0], [...argv.slice(1), 'bootstrap', '--no-setpu'],
       { cwd: ck, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     assert.equal(r.status, 2,
       `a mistyped flag was not refused (exit ${r.status})\n${r.stdout.slice(-500)}`);

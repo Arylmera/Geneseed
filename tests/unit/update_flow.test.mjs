@@ -120,7 +120,7 @@ test('a failed precondition returns 3 and writes no bundle at all', async () => 
   try {
     assert.notEqual(git(CO, 'status', '--porcelain', '--untracked-files=no'), '',
       'the fixture is not actually dirty, so this arm is testing the wrong precondition');
-    const rc = await U.upgrade(null, null);
+    const rc = await U.upgrade(null);
     assert.equal(rc, 3, 'a dirty checkout must be an info exit, not an error');
     assert.ok(isEmpty(out),
       `the precondition failed and the bundle was rebuilt anyway: ${fs.readdirSync(out)}`);
@@ -142,7 +142,7 @@ test('a checkout behind its origin pulls, then rebuilds, and returns 0', async (
   const out = freshOut('ready');
   const before = git(CO, 'rev-parse', 'HEAD');
 
-  const rc = await U.upgrade(null, null);
+  const rc = await U.upgrade(null);
   assert.equal(rc, 0, 'a clean fast-forward onto a valid tree did not succeed');
   assert.notEqual(git(CO, 'rev-parse', 'HEAD'), before, 'the pull never happened');
   assert.ok(fs.existsSync(path.join(CO, 'an-upstream-change.txt')), 'the pulled file never arrived');
@@ -162,7 +162,7 @@ test('an up-to-date checkout still rebuilds, and still returns 0', async () => {
   assert.equal(git(CO, 'rev-parse', 'HEAD'), git(CO, 'rev-parse', 'origin/main'),
     'the fixture is not up to date, so this arm is testing the wrong branch');
 
-  const rc = await U.upgrade(null, null);
+  const rc = await U.upgrade(null);
   assert.equal(rc, 0);
   assert.ok(!isEmpty(out), 'an up-to-date upgrade skipped the rebuild');
 });
@@ -187,7 +187,7 @@ test('an upgrade re-emits an opencode-global install on its OWN footprint and ex
       'fixture: the install carries no excluded rule, so this arm is about nothing');
     freshOut('axes');
 
-    const rc = await U.upgrade(null, null);
+    const rc = await U.upgrade(null);
     assert.equal(rc, 0);
     assert.equal(footprint(), 'full', 'the upgrade reset a full install to the default footprint');
     assert.match(carrier(), /^Excluded rules: process 5$/m,
@@ -237,12 +237,12 @@ test('after an unfinished gate the next update runs the gate, and only then rebu
 
   const out = freshOut('regate-pass');
   const runs = doctorRuns();
-  assert.equal(await U.upgrade(null, null), 0);
+  assert.equal(await U.upgrade(null), 0);
   assert.equal(doctorRuns(), runs + 1, 'the update rebuilt with no verdict on the pulled source');
   assert.ok(!isEmpty(out), 'a passed gate did not rebuild');
 
   freshOut('regate-done');
-  assert.equal(await U.upgrade(null, null), 0);
+  assert.equal(await U.upgrade(null), 0);
   assert.equal(doctorRuns(), runs + 1, 'a verdict given once was asked for again');
 });
 
@@ -266,7 +266,7 @@ test('a failed verdict after an unfinished gate rolls back to the last verified 
   assert.ok(verified, 'fixture: no gate is pending');
   fs.writeFileSync(VERDICT, '1');
   const out = freshOut('regate-fail');
-  assert.equal(await U.upgrade(null, null), 1);
+  assert.equal(await U.upgrade(null), 1);
   assert.equal(git(CO, 'rev-parse', 'HEAD'), verified, 'the rollback missed the verified commit');
   assert.ok(isEmpty(out), `a failed gate rebuilt: ${fs.readdirSync(out)}`);
 });
@@ -278,7 +278,7 @@ test('a new pull over an unfinished gate rolls back past both unchecked commits'
   pushed('over-the-unfinished.txt');
   fs.writeFileSync(VERDICT, '1');
   freshOut('regate-pull');
-  assert.equal(await U.upgrade(null, null), 1);
+  assert.equal(await U.upgrade(null), 1);
   assert.equal(git(CO, 'rev-parse', 'HEAD'), verified, 'the rollback stopped on an unchecked commit');
 });
 
@@ -290,7 +290,7 @@ const recordFile = (branch = 'main') => path.resolve(CO,
 async function settled() {
   fs.writeFileSync(VERDICT, '0');
   freshOut('settled');
-  assert.equal(await U.upgrade(null, null), 0, 'fixture: the tree did not settle');
+  assert.equal(await U.upgrade(null), 0, 'fixture: the tree did not settle');
   assert.equal(U.pendingGate(), null, 'fixture: a record survived a pass');
 }
 
@@ -314,7 +314,7 @@ test('a record nobody can read refuses the rebuild and is kept', async () => {
   for (const text of ['', 'not-a-commit\n']) {
     fs.writeFileSync(recordFile(), text);
     const out = freshOut('record-bad');
-    assert.equal(await U.upgrade(null, null), 1, `a record of ${JSON.stringify(text)} passed`);
+    assert.equal(await U.upgrade(null), 1, `a record of ${JSON.stringify(text)} passed`);
     assert.ok(isEmpty(out), `a bad record rebuilt: ${fs.readdirSync(out)}`);
     assert.ok(fs.existsSync(recordFile()), 'the record was dropped on a failure to read it');
   }
@@ -373,7 +373,7 @@ test('a rollback never rewinds a branch the record is not about', async () => {
   try {
     fs.writeFileSync(VERDICT, '1');
     freshOut('side');
-    await U.upgrade(null, null);
+    await U.upgrade(null);
     assert.equal(git(CO, 'rev-parse', 'HEAD'), tip, 'the rollback rewound another branch');
   } finally {
     git(CO, 'checkout', '-q', 'main');
@@ -399,7 +399,7 @@ test('a pulled source that fails the doctor returns 1 and leaves no bundle', asy
   const out = freshOut('doctorfail');
   const before = git(CO, 'rev-parse', 'HEAD');
 
-  const rc = await U.upgrade(null, null);
+  const rc = await U.upgrade(null);
   assert.equal(rc, 1, 'a source tree that fails validation must be an error exit, not info');
   assert.equal(git(CO, 'rev-parse', 'HEAD'), before,
     'the rollback did not land back on the previous commit');

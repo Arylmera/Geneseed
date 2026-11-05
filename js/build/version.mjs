@@ -48,8 +48,11 @@ function hashSource(cfg) {
   const keyed = files.map((p) => [relPosix(cfg.root, p), p]);
   keyed.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   for (const [rel, p] of keyed) {
+    // A file deleted since the walk listed it is not in the tree any more (as in `sourceStamp`).
+    let bytes;
+    try { bytes = readFileSync(p); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
     h.update(Buffer.from(`${rel}\0`, 'utf8'));
-    h.update(readFileSync(p));
+    h.update(bytes);
     h.update(Buffer.from([0]));
   }
   return h.digest('hex').slice(0, 12);

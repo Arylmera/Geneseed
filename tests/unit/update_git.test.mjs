@@ -512,24 +512,18 @@ test('a real fetch over https is refused by transport, not by luck', async () =>
 });
 
 // ---------------------------------------------------------------------------------------------
-// `AliasTests` — `update`, `sync-self` and the unknown verb.
+// `AliasTests` — `update`, the removed `sync-self` and the unknown verb.
 //
-// THE REFERENCE MOCKS `upgrade` AND COUNTS CALLS; there is nothing here to mock, and there does
-// not need to be. `syncSelf` is literally `return upgrade()`, so "it delegates" is structural
-// rather than observable — but what the delegation DROPS is observable, and that is the property
-// worth having. `upgrade(ref)` opens by LOGGING that a ref is ignored, so `sync-self v1.2.3` and
-// `update v1.2.3` differ in their very first line: one warns, one has nothing to warn about
-// because the ref never reached `upgrade` at all. Both then reach the same preflight, which is
-// the delegation itself, observed rather than counted.
+// 5.0.0 REMOVED `sync-self` and the dead `ref` positional of `upgrade` (nothing machine-written
+// called them), so the tests that pinned their quirks — the warning that a ref is ignored, the
+// ref dropped before `upgrade` sees it — went with them. What stays is
+// what a user can still observe: `update` reaches the same preflight as `upgrade`, the theme is
+// the one positional, a second positional is a parse error, and `sync-self` is an unknown verb.
 //
-// DRIVEN THROUGH THE PUBLIC ENTRY, out of the copied checkout, so the CLI table's wiring is gated
-// too — `sync-self` pointing at `cmdUpgrade` instead of `cmdSyncSelf` is mutation M21 and would
-// additionally re-read the ref as a THEME. The recorded cell
-// `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` owns the theme half;
-// this owns the warning half, from a fixture where the ref is not a theme name.
+// DRIVEN THROUGH THE PUBLIC ENTRY, out of the copied checkout, so the CLI table's wiring is gated.
 //
 // THE TREE IS MADE DIRTY ON PURPOSE. `preflight` reports dirty before anything spawns or fetches,
-// so both runs stop at exit 3 having printed the lines under test — no network, no pull, no
+// so the run stops at exit 3 having printed the lines under test — no network, no pull, no
 // rebuild. A clean fixture would run a real upgrade for an assertion about its first line.
 
 /** The public entry, out of the COPY, so its `ROOT` is the copy's. */
@@ -539,34 +533,49 @@ function cli(co, ...argv) {
   return { rc: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
 }
 
-test('update warns that its ref is ignored; sync-self drops the ref before upgrade sees it', () => {
+test('update and upgrade reach the same preflight; a second positional is refused', () => {
   const f = path.join(CO2, 'README.md');
   const before = fs.readFileSync(f);
   fs.writeFileSync(f, 'a local edit, so preflight stops both runs before anything is fetched\n');
   try {
-    const up = cli(CO2, 'update', 'v1.2.3');
-    assert.equal(up.rc, 3, `update did not stop at the dirty precondition: ${up.out}`);
-    assert.match(up.out, /ref 'v1\.2\.3' is IGNORED/,
-      'update accepted a ref without saying it would be disregarded');
-
-    const ss = cli(CO2, 'sync-self', 'v1.2.3');
-    assert.equal(ss.rc, 3, `sync-self did not stop at the dirty precondition: ${ss.out}`);
-    assert.doesNotMatch(ss.out, /IGNORED/,
-      'sync-self forwarded its ref to upgrade, which then warned about a ref the reference '
-      + 'never lets it see');
-
-    // Both reached `upgrade` — without this the test above is equally satisfied by a `sync-self`
-    // that does nothing at all, which is the whole thing the reference's call count was for.
-    for (const [name, r] of [['update', up], ['sync-self', ss]]) {
-      assert.match(r.out, /update source:/, `${name} never reached upgrade`);
-      assert.match(r.out, /preflight: checking the local checkout/, `${name} never reached preflight`);
-      // WHICH precondition, because every arm of `PRE_MSG` is kind `info` and therefore exits 3.
-      // Without this, a copy that was not a git checkout at all — or had no upstream — would
-      // produce the same 3 and the same first line, and the fixture would be silently vacuous.
+    for (const verb of ['update', 'upgrade']) {
+      const r = cli(CO2, verb, 'imperial');
+      assert.equal(r.rc, 3, `${verb} did not stop at the dirty precondition: ${r.out}`);
+      assert.match(r.out, /update source:/, `${verb} never reached upgrade`);
+      assert.match(r.out, /preflight: checking the local checkout/, `${verb} never reached preflight`);
+      // WHICH precondition, because every arm of PRE_MSG is kind info and therefore exits 3.
       assert.match(r.out, /You have local changes in the Geneseed folder/,
-        `${name} exited 3 for some precondition other than the dirty tree this test planted`);
+        `${verb} exited 3 for some precondition other than the dirty tree this test planted`);
+      assert.doesNotMatch(r.out, /IGNORED/, `${verb} still has a ref to ignore`);
     }
+    // The old ref slot is gone: 'main imperial' is two positionals and the parser refuses it
+    // before anything runs (exit 2), where it used to warn and carry on.
+    const two = cli(CO2, 'upgrade', 'main', 'imperial');
+    assert.equal(two.rc, 2, `upgrade main imperial exited ${two.rc}: ${two.out}`);
+    assert.doesNotMatch(two.out, /update source:/, 'the update started before the parser refused');
   } finally { fs.writeFileSync(f, before); }
+});
+
+test('sync-self is an unknown verb since 5.0.0', () => {
+  const r = cli(CO2, 'sync-self');
+  assert.equal(r.rc, 2, `sync-self exited ${r.rc}`);
+  assert.match(r.out, /invalid choice: 'sync-self'/);
+});
+
+test('an unfinished doctor holds a direct rebuild-all and setup, as it holds upgrade', () => {
+  // The record lives under .git and `upgrade`/`bootstrap` already honour it; a direct call used to
+  // walk around it and render a source nothing had judged. A record git cannot place is the
+  // simplest one to plant, and it blocks by the same rule: nobody can say the source is checked.
+  const branch = git(CO2, 'rev-parse', '--abbrev-ref', 'HEAD');
+  const rec = path.resolve(CO2, git(CO2, 'rev-parse', '--git-path', `geneseed-doctor-pending-${branch}`));
+  fs.writeFileSync(rec, 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n');
+  try {
+    for (const verb of ['rebuild-all', 'setup']) {
+      const r = cli(CO2, verb);
+      assert.equal(r.rc, 1, `${verb} ran past an unfinished doctor: ${r.out}`);
+      assert.match(r.out, /not started: .*doctor/s, `${verb} did not say why: ${r.out}`);
+    }
+  } finally { fs.rmSync(rec, { force: true }); }
 });
 
 test('an unknown verb is rejected by the parser with exit code 2', () => {

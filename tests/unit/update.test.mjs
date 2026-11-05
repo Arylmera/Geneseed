@@ -134,9 +134,9 @@ test('configTheme is the fallback behind both markers', () => {
 //
 // An old layout put the bundle INSIDE the checkout. The migration moves the two things that are
 // the user's — context.json and the memory store — to the canonical sibling before rebuilding,
-// then drops the stray. Both halves are destructive, and the second test is the guard.
+// then sets the stray aside (B9: archived, never deleted). The clobber test is the guard.
 
-test('a stray bundle is rescued of its host state and then dropped', () => {
+test('a stray bundle is rescued of its host state and then set aside', () => {
   withCfgOut((cfg, out, root) => {
     const here = path.join(root, 'Geneseed');
     const target = path.join(root, 'Harness');
@@ -150,6 +150,66 @@ test('a stray bundle is rescued of its host state and then dropped', () => {
     assert.ok(fs.statSync(path.join(target, 'memory', 'MEMORY.md')).isFile());
     assert.ok(!fs.existsSync(stray), 'the stray bundle survived the migration');
   });
+});
+
+// B9 (5.0.0). The rescue above copies context.json and memory/ and the old code then `rmSync`ed
+// the rest — user-rules.md, PROFILE.md, notebook/, a wiki manifest — from a folder `.gitignore`
+// hides, so git could not bring it back. The stray is now RENAMED into `archived-Harness/<stamp>`
+// beside it, whole: nothing is deleted, and the user clears the archive when they choose.
+test('B9: a stray bundle loses nothing — the files outside the rescue are archived whole', () => {
+  withCfgOut((cfg, out, root) => {
+    const here = path.join(root, 'Geneseed');
+    const target = path.join(root, 'Harness');
+    const stray = path.join(here, 'Harness');
+    fs.mkdirSync(path.join(stray, 'notebook'), { recursive: true });
+    fs.writeFileSync(path.join(stray, 'user-rules.md'), 'my rules');
+    fs.writeFileSync(path.join(stray, 'notebook', 'scratch.md'), 'my notes');
+    fs.writeFileSync(path.join(stray, 'context.json'), '{}');
+
+    migrateStrayBundle(here, target, () => {}, new Date('2026-11-05T10:20:30Z'));
+    const archive = path.join(here, 'archived-Harness');
+    const [stamp, ...more] = fs.readdirSync(archive);
+    assert.equal(more.length, 0);
+    assert.equal(fs.readFileSync(path.join(archive, stamp, 'user-rules.md'), 'utf8'), 'my rules');
+    assert.equal(fs.readFileSync(path.join(archive, stamp, 'notebook', 'scratch.md'), 'utf8'), 'my notes');
+    assert.ok(fs.existsSync(path.join(target, 'context.json')), 'the rescue stays');
+    assert.ok(!fs.existsSync(stray), 'the stray is still in place');
+  });
+});
+
+test('B9: a memory/ the canonical bundle already has does not cost the stray its own', () => {
+  withCfgOut((cfg, out, root) => {
+    const here = path.join(root, 'Geneseed');
+    const target = path.join(root, 'Harness');
+    const stray = path.join(here, 'Harness');
+    fs.mkdirSync(path.join(stray, 'memory'), { recursive: true });
+    fs.mkdirSync(path.join(target, 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(stray, 'memory', 'old-fact.md'), 'only here');
+    fs.writeFileSync(path.join(target, 'memory', 'MEMORY.md'), '# live');
+
+    migrateStrayBundle(here, target, () => {});
+    const archive = path.join(here, 'archived-Harness');
+    const [stamp] = fs.readdirSync(archive);
+    assert.equal(fs.readFileSync(path.join(archive, stamp, 'memory', 'old-fact.md'), 'utf8'), 'only here');
+    assert.ok(!fs.existsSync(path.join(target, 'memory', 'old-fact.md')), 'the live memory was merged into');
+  });
+});
+
+test('B9: a second run is a no-op, and the archive name is git-ignored', () => {
+  withCfgOut((cfg, out, root) => {
+    const here = path.join(root, 'Geneseed');
+    const target = path.join(root, 'Harness');
+    fs.mkdirSync(path.join(here, 'Harness'), { recursive: true });
+    fs.writeFileSync(path.join(here, 'Harness', 'user-rules.md'), 'mine');
+
+    migrateStrayBundle(here, target, () => {});
+    const logs = [];
+    migrateStrayBundle(here, target, (m) => logs.push(m));
+    assert.deepEqual(logs, [], 'the second run said or did something');
+    assert.equal(fs.readdirSync(path.join(here, 'archived-Harness')).length, 1);
+  });
+  const ignore = fs.readFileSync(new URL('../../.gitignore', import.meta.url), 'utf8').split(/\r?\n/);
+  assert.ok(ignore.includes('archived-Harness/'), 'archived-Harness/ is not in the repo .gitignore');
 });
 
 test('the migration never clobbers state the canonical bundle already has', () => {

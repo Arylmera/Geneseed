@@ -107,19 +107,11 @@ const VERBS = {
   // as an `aliases` field on the row above — because a field would be a DECLARATION and the
   // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
   // learned). As a key it is a real verb: `tests/unit/hook_cli.test.mjs`'s 'every entry verb
-  // is a command the driver table dispatches' finds it in `js/cli-table.json`, and 'the matrix
-  // covers every verb each entry claims' demands the `update/` cell group that proves
-  // it reaches `cmdUpgrade` — including the theme re-read, which is what separates it from
-  // `sync-self`.
+  // is a command the driver table dispatches' finds it in `js/cli-table.json`.
   //
   // It is NOT what the web console's `update` ACTION needs: that row's argv names `upgrade`,
   // the subparser, and always did. The two were coupled only in a handoff's note.
   update: () => import('../js/maintain/update.mjs').then((m) => m.cmdUpgrade),
-  // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
-  // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
-  // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
-  // and `sync-self v1.2.3` differently. See `js/maintain/update.mjs`'s `syncSelf` for both halves.
-  'sync-self': () => import('../js/maintain/update.mjs').then((m) => m.cmdSyncSelf),
   bootstrap: () => import('../js/maintain/update.mjs').then((m) => m.cmdBootstrap),
   // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
   // `menu`'s on-TTY arm falls back rather than opening a panel — `js/ui/menu.mjs`'s header
