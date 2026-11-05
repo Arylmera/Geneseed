@@ -12,7 +12,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **The shared tier goes live.** A global emit in a host's own config directory creates `~/.config/geneseed/` and seeds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, `memory/` and `notes/`. Global installs name these locations as absolute paths, and state the rule order: project over host over shared. Project installs and default builds keep their bytes. No emit grants a directory permission. `geneseed doctor` adds a note when a rendered path differs from the run-time one. `geneseed diff` also lists the notes in the tier.
 - **The web console meets the shared tier.** On a global install the console reads and edits the tier's rules, profile, memory and wiki manifest, and the Rules page shows how many drafted rules wait for approval. `geneseed uninstall` prints where the tier lives and never touches it, whatever `--archive-memory` says.
 
+- **The fold moves existing stores into the shared tier.** Each global emit in a host's own config directory copies facts, agent lessons, self-improvement notes and exclude paths into the tier, and moves a profile or wiki manifest there when the tier holds only a seed. It prints one line per host and nothing on a second run. A differing profile or wiki stays in force, with a pointer in `user-rules.draft.md`. Nothing is deleted: after every copy is read back, the old store moves to `archived-memory/<stamp>/`, and a failed copy keeps it readable until the next emit retries. A host installed after an `exclude add` now gets the repo-side wiring on its emit. A downgrade is not automatic: restore the archived store by hand.
+
+### Removed
+- **`migrate` no longer classifies the wiring shape.** The stamp alone was always the trigger, so its value was only printed.
+- **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.
+
 ### Fixed
+- **`geneseed migrate --dry-run` reports on a migrated machine.** It stopped at the stamp and printed nothing about what the next emit would do. It now prints the fold report for each global install.
 - **The web console finds a `wiki.json` manifest.** It stopped at `wiki.jsonc`, while the plugin and the guard also read the older name.
 - **Concurrent installs no longer lose a registry row.** Two processes could each load `installs.json` and the later write dropped the other's root. A record now takes a bounded lock.
 - **A `learn` hook payload with a transcript and no event name reaches the shared store.**

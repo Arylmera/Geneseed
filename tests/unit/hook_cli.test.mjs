@@ -632,6 +632,15 @@ test('the generator driver still reaches no child-process module', () => {
   }
 });
 
+test('the fold reaches neither js/maintain nor js/web', () => {
+  // C20. The driver ban above sees these two only while the module reached also spawns, and the
+  // fold runs inside every global emit, so the boundary is asserted by path.
+  const closure = [...importClosure(path.join(ROOT, 'js', 'build', 'fold.mjs'))]
+    .map((f) => path.relative(ROOT, f).split(path.sep).join('/'));
+  assert.ok(closure.length > 1, 'the import walk found no modules, so it proves nothing');
+  assert.deepEqual(closure.filter((f) => /^js\/(maintain|web)\//.test(f)), []);
+});
+
 test('the only spawn in the hook entry is the model CLI', () => {
   // STATIC, and narrower than the driver's ban because it has to be: `learn` genuinely spawns —
   // `$GENESEED_LLM` is the whole verb — so "imports no child-process module" is not the property.

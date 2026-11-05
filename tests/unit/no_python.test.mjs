@@ -120,31 +120,16 @@ const RULES = [
 // ---------------------------------------------------------------------------------------------
 // The permitted hits, BY NAME AND BY COUNT — never by a path exclusion.
 //
-// A blanket "`js/hosts/settings.mjs` is exempt" would permit the next Python filename to enter that
+// A blanket "`js/inspect/scorecard.mjs` is exempt" would permit the next Python filename to enter that
 // module in silence, and this file's whole subject is a thing entering in silence. So a row is
 // a file, the rule, the exact matched text, HOW MANY TIMES it occurs, and why it is allowed to.
-// The count is not decoration: the two live sites (`js/hosts/settings.mjs`, `js/hosts/shim.mjs`)
-// match the same six characters, so a row without one would cover a second site in either
-// file nobody argued for. That is
+// The count is not decoration: a row without one would cover a second site in the same file
+// nobody argued for. That is
 // the retired corpus gate's rule — "a new SITE for an already-declared spelling adds no
 // row and would otherwise arrive in silence" — applied to source instead of to a recording.
 // ---------------------------------------------------------------------------------------------
 
 const PERMITTED = [
-  ['js/hosts/settings.mjs', 'PY_LITERAL', "'harness.py'", 1,
-    'LEGACY-INSTALL DETECTION, and it must keep working precisely BECAUSE the file is gone. '
-    + '`GENESEED_HOOK_SNIFF` answers "is this hook Geneseed\'s?" and carries the pre-shim '
-    + 'direct form (an interpreter plus a checkout path) alongside the shim mark; `doctor` uses '
-    + 'it to find stranded hooks, and dropping the legacy entry makes every not-yet-migrated '
-    + 'install invisible to the orphan scan. It runs no Python and points at no file: it '
-    + 'RECOGNISES a string a previous version of this tool wrote into a config on a user\'s '
-    + 'machine, and that string does not stop existing when this repository stops shipping the '
-    + 'file it names.'],
-  ['js/hosts/shim.mjs', 'PY_LITERAL', "'harness.py'", 1,
-    'LEGACY-INSTALL DETECTION, the other question: `migrateShape` asks "is this Geneseed\'s OLD '
-    + 'hook?" and reads the same substring to classify a config as `legacy`. Recognition of a '
-    + 'string already on a user\'s machine, not an invocation — the settings.mjs row\'s reason, '
-    + 'split with the function when the shim cluster moved out in 2026-10.'],
   // The scorecard port's four. Each is a file name the AI Harness Scorecard LOOKS FOR in the repo
   // it scores (a Python project is graded like any other), copied from upstream so the port's
   // checks match the same files. None is invoked, read from this checkout, or shipped as a path.

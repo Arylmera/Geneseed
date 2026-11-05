@@ -22,9 +22,8 @@
  *
  * HOOKS ARE APPEND-ONLY AND FAIL-CLOSED. Nothing here rewrites a hook group in place:
  * `mergeClaudeSettings` appends what is missing and removes only groups the manifest
- * recorded, and cleanup goes through `GENESEED_HOOK_SNIFF`, which has to keep recognising
- * BOTH the legacy interpreter+checkout form and the shim form. Dropping either spelling
- * strands live hooks in every config emitted before the change.
+ * recorded, and cleanup goes through `GENESEED_HOOK_SNIFF`, which recognises the shim form. A
+ * 1.x install, wired before the shim, must rebuild first.
  *
  * ONE KNOWN DIVERGENCE, recorded rather than reproduced. JS objects order integer-like
  * keys first, so a settings.json carrying a `"1"` or `"2"` at any level comes back from
@@ -1138,13 +1137,10 @@ export function unwireClaudeExcludes(p, excludes) {
 }
 
 // ---- Settings integrity check -----------------------------------------------------
-// Substrings that mark a hook command as Geneseed's. An ARRAY, not one string, because two
-// shapes are in the wild and both must stay recognisable: the legacy direct form
-// (interpreter + checkout harness.py) written by every install emitted before the shim, and
-// the shim form. Dropping the legacy entry makes every not-yet-migrated install invisible
-// to the orphan scan — the one place a stranded hook can still surface — so cleanup would
-// silently leave live hooks behind in every config emitted before the shim landed.
-export const GENESEED_HOOK_SNIFF = ['harness.py', SHIM_MARK];
+// Substrings that mark a hook command as Geneseed's. Every install since the shim names it; the
+// floor is stated, not guessed at: a 1.x install, wired to an interpreter and a checkout, must
+// rebuild first, or its hooks read as the user's own.
+export const GENESEED_HOOK_SNIFF = [SHIM_MARK];
 
 /** `_build_settings._settings_hook_groups` — flatten `hooks` to [event, group] pairs. */
 function settingsHookGroups(loaded) {

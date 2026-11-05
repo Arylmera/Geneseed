@@ -16,6 +16,7 @@ import {
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
+import { foldOnEmit } from './fold.mjs';
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
@@ -153,6 +154,8 @@ export function emitClaudeRender(cfg, job) {
   ensureRulesStub(cfgDir);
   ensureProfileStub(cfgDir);
   ensureExcludesStub(cfgDir);
+  // After the seeds, so what the fold sets aside is all it re-seeds. A project emit has no root.
+  if (sharedRoot !== null) foldOnEmit(host, cfgDir);
 
   // Project hygiene, claim-on-create: an existing (possibly user-authored) .gitignore is
   // never rewritten, but one we created stays owned across re-emits. The hook file is

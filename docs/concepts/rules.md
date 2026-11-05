@@ -36,6 +36,15 @@ Your rules now come in layers, and the later layer wins: **project over host ove
 
 A global install's text names these locations as absolute paths. A project install keeps its relative paths and its own `memory/`. Geneseed grants no directory permission for the tier, so an agent write there follows your host's permission mode, as a write to `~/.claude/memory/` does. If the tier cannot be created, that emit renders relative paths and the host files serve as before. `geneseed doctor` adds a note when a carrier names another tier than the one in force, for example after `$XDG_CONFIG_HOME` moves. `geneseed rebuild-all` clears it.
 
+**The fold.** Each global emit, in the host's own config directory, moves that host's stores into the tier and prints one line, such as `[shared] claude: 12 facts folded, 1 collision, old store moved aside`. A host with nothing to move prints nothing, and a second emit writes nothing. `geneseed migrate --dry-run` previews the fold for each host.
+
+- **Facts** copy byte for byte. A fact with the same name and other text lands as `<name>-<host>.md`, then `-2`, `-3`. The memory-curator Adept can merge them later. Agent lessons append to the tier's file for that agent.
+- **Notes** in `notebook/skill-notes/` and `notebook/agent-notes/` copy the same way. The rest of the notebook stays per host.
+- **`PROFILE.md` and the wiki manifest** move when the tier holds only a seed. If the tier holds different text, the host file stays in force and `user-rules.draft.md` gets a pointer that asks which one becomes the shared file.
+- **Exclude paths** join the shared list, and a shared path the host never saw gets its wiring.
+
+Nothing is deleted. After every copy is read back, the old `memory/` moves to `archived-memory/<stamp>/` beside it, and the notes and whole files move to the same kind of folder. The host store returns to its seed and keeps its `README.md`. Hand-written index text and `archive/` stay in that folder. If a copy fails, the old store stays readable, the emit reports it on stderr and goes on, and the next emit retries. There is no automatic way back: to downgrade, restore the archived folder by hand.
+
 ### Doctrine packs
 
 {N_PACKS} packs ship, one file each under `src/doctrines/`:

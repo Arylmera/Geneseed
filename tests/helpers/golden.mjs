@@ -180,7 +180,7 @@ const ROTS = [
 //
 // ⚠ IT LIVES HERE, NOT IN A REPLAYER, because it is needed by two of them — the emit harness and
 // the cli harness both carry this file in their cells, and the first fix put it in only one and
-// left the cli corpus red on `migrate/a-node-baked-shim-reads-as-current`. A second copy is a
+// left the cli corpus red on `migrate/a-node-baked-shim-still-migrates`. A second copy is a
 // second place to forget.
 //
 // The coverage is paid back, and made stronger, in tests/unit/agent_overrides.test.mjs: it asserts

@@ -64,6 +64,7 @@ as a per-host install at project or global scope.
 | `emit-claude.mjs` | The Claude/Bob/OpenClaude emit — the render half plus the settings + CLAUDE.md managed-block wire |
 | `emit-opencode.mjs` | The OpenCode emits — a project's `.opencode/` and the global config dir. Deliberate twin of the above |
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
+| `fold.mjs` | The fold: moves a global install's stores into the shared tier, in the emit. Moves aside, never deletes; a second run writes nothing |
 | `stubs.mjs` | Write-once seed files: context, wiki, rules, excludes, profile, `.gitignore`, memory/notebook indexes |
 | `version.mjs` | The release marker: fingerprint the sources, read/compare/write an install's version, warn on downgrade |
 | `driver.mjs` | The generator driver: the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |

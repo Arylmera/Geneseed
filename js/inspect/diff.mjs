@@ -57,7 +57,7 @@ import {
 import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
-import { sharedPaths } from '../lib/machine-dir.mjs';
+import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 
@@ -350,9 +350,6 @@ export const drifted = (files) => files.filter((f) => f.status !== 'linked');
  * `update` fire read this set, not `drifted`.
  */
 export const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
-
-/** Where the self-improvement loops write, relative to a notes root (`notesRoots`). */
-export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
 
 /** An install's notebook; a global install's loops write to the tier's `notes/` too (D6). */
 function notesRoots(dir) {

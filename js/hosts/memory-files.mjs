@@ -393,6 +393,37 @@ function dropLines(p, needle) {
 }
 
 /**
+ * `_harness_mcp._archive_store` — move a runtime store aside to a sibling
+ * `archived-<name>/<timestamp>/`.
+ *
+ * NEVER a delete. Memory is the one thing in this system a user cannot rebuild, so the
+ * destructive verb's most destructive option is still a move; `_archive_memory` is the same
+ * function with `memory` hardcoded and is not ported separately because the only caller that
+ * reaches it (`_uninstall_global(archive_memory=True)`) is called with `False` by
+ * `_install_uninstall`, which is the CLI's only path in.
+ *
+ * `renameSync` rather than a copy-then-delete: the destination is a SIBLING of the source, so
+ * it is the same device by construction and `shutil.move`'s cross-device fallback has nothing
+ * to do. ponytail: rename, and the day a store can live on another volume this needs the
+ * copy path back.
+ */
+export function archiveStore(store) {
+  // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
+  // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
+  // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
+  // "YYYY-MM-DD HH:MM:SS"; stripping the punctuation and reinserting one dash reproduces
+  // the exact `YYYYMMDD-HHMMSS` shape the padStart version built by hand.
+  const stamp = new Date().toLocaleString('sv-SE').replace(/\D/g, '').replace(/^(\d{8})/, '$1-');
+  const parent = path.join(path.dirname(store), `archived-${path.basename(store)}`);
+  // A taken name gets `-2`, …: two moves in one second must not fail the second.
+  let dest = path.join(parent, stamp);
+  for (let n = 2; existsSync(dest); n += 1) dest = path.join(parent, `${stamp}-${n}`);
+  mkdirSync(parent, { recursive: true });
+  renameSync(store, dest);
+  return dest;
+}
+
+/**
  * `consolidate_memory` — rebuild both index levels from the fact files actually on disk:
  * index orphans, prune dead lines, refresh each line from its fact's description, report
  * duplicate descriptions. It REPORTS them and never merges: merging is a judgement, made by

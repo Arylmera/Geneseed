@@ -580,8 +580,8 @@ test('the pre-shim fallback command is still recognisable as geneseed', () => {
   // THE COINCIDENCE P5b MADE LOAD-BEARING. `hookPrefix` falls back to `"<runner>" "<entry>"` when
   // the shim cannot be written, and `GENESEED_HOOK_SNIFF` is how `unlink`, `uninstall` and the
   // orphan scan tell a Geneseed hook from a user's. The reference driver's entry ended in
-  // `harness.py` and matched the first marker. This driver's ends in `bin/geneseed-hook.mjs`,
-  // which matches the SECOND marker only because the file was named after the shim: `SHIM_MARK`
+  // `harness.py`, a marker no longer kept. This driver's ends in `bin/geneseed-hook.mjs`,
+  // which matches the marker only because the file was named after the shim: `SHIM_MARK`
   // is `geneseed-hook` and the marker lives in the FILENAME. Nothing asserted that, and the cost
   // of it silently ceasing to hold is a hook no cleanup path can find.
   //
@@ -646,7 +646,7 @@ test('VERIFY reports an orphaned geneseed hook, and says nothing without one', (
     data.hooks ??= {};
     (data.hooks.Stop ??= []).push({
       matcher: '*',
-      hooks: [{ type: 'command', command: '"python" "/elsewhere/harness.py" learn' }],
+      hooks: [{ type: 'command', command: '"/elsewhere/geneseed-hook" learn' }],
     });
     writeFileSync(sf, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
 

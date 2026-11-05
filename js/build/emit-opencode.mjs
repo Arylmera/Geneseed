@@ -20,6 +20,7 @@ import { assertSourceComplete, build, phaseLog, ensureMemoryStore } from './bund
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
+import { foldOnEmit } from './fold.mjs';
 import { renderAll } from './render.mjs';
 import {
   ensureExcludesStub, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
@@ -240,6 +241,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
   ensureRulesStub(cfgDir);
   ensureProfileStub(cfgDir);
   ensureExcludesStub(cfgDir);
+  // As in `emitClaudeRender`: after the seeds.
+  if (sharedRoot !== null) foldOnEmit('opencode', cfgDir);
 
   if (writeVersion(cfg, cfgDir) !== null) owned.push(VERSION_MARKER);
 

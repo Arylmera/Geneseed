@@ -8,7 +8,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readText, printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { readJsonc } from '../lib/json.mjs';
-import { WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
+import { LEGACY_WIKI_SEED, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import {
@@ -175,7 +175,7 @@ const SEED_SHA256 = new Set([
   '29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816', // PROFILE.md
   '3a82c78ccc5d745033c16c354f5eda9d79350c704e9da8d605d380fb1e108d7a', // geneseed-wiki.jsonc
   // The wiki seed before the rename: the build renames an untouched one byte for byte.
-  'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8', // wiki.jsonc (legacy)
+  LEGACY_WIKI_SEED, // wiki.jsonc (legacy)
   '99c786049c260f6baf7aec68a5c0f59907861afe9b867da009440613bdddb907', // MEMORY.md
   '9acb5c9d9cb5dac572104480f05b48cc144e676869bd60e86d8a15b1f6308184', // NOTEBOOK.md
 ]);

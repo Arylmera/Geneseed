@@ -14,7 +14,7 @@ import path from 'node:path';
 import { writeText } from '../lib/fs.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
-import { WIKI_NAMES, renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
+import { NOTES_DIRS, WIKI_NAMES, renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { MEMORY_SEED } from '../hosts/memory-files.mjs';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -293,8 +293,7 @@ export function ensureSharedTier() {
   try {
     const tier = sharedPaths();
     mkdirSync(tier.memory, { recursive: true });
-    mkdirSync(path.join(tier.notes, 'skill-notes'), { recursive: true });
-    mkdirSync(path.join(tier.notes, 'agent-notes'), { recursive: true });
+    for (const sub of NOTES_DIRS) mkdirSync(path.join(tier.notes, sub), { recursive: true });
     ensureMemoryIndex(tier.memory);
     ensureRulesStub(tier.root);
     ensureProfileStub(tier.root);

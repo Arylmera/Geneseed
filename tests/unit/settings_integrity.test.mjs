@@ -96,7 +96,7 @@ test('a Geneseed-shaped entry the manifest never claimed is flagged', () => {
     const settings = readJson(settingsPath);
     settings.hooks.PostToolUse = [{
       matcher: 'Bash',
-      hooks: [{ type: 'command', command: '"python" "somewhere/rituals/harness.py" learn' }],
+      hooks: [{ type: 'command', command: '"somewhere/bin/geneseed-hook" learn' }],
     }];
     writeJson(settingsPath, settings);
     const warnings = settingsIntegrityCheck(settingsPath, managed, 'present');
@@ -133,7 +133,7 @@ test('an orphan survives the unwire and is flagged afterwards, never removed', (
     const { cfg, managed, settingsPath } = claudeInstall(d);
     const settings = readJson(settingsPath);
     settings.hooks.PostToolUse = [{
-      hooks: [{ type: 'command', command: '"python" "x/rituals/harness.py" learn' }],
+      hooks: [{ type: 'command', command: '"x/bin/geneseed-hook" learn' }],
     }];
     writeJson(settingsPath, settings);
 

@@ -31,9 +31,10 @@ import { versionVerdict, statusData, statusLines, gateSummary } from '../../js/i
 import { openclaudeDualHarnessNotes } from '../../js/inspect/doctor.mjs';
 import { NOTE, isDoctorNote } from '../../js/inspect/scan.mjs';
 import {
-  uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
+  uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall,
   projectQualifies, installDeactivate, installReactivate, installUninstall,
 } from '../../js/maintain/uninstall.mjs';
+import { archiveStore } from '../../js/hosts/memory-files.mjs';
 import {
   emitHostScopeOf, installState, installTargets, openclaudeDualHarnessRoot,
 } from '../../js/hosts/installs.mjs';

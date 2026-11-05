@@ -69,6 +69,7 @@ import {
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
+import { archiveStore } from '../hosts/memory-files.mjs';
 import { comparePaths, isAbsolutePath } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
@@ -285,34 +286,6 @@ export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
   }
   atomicWriteJson(target, cfg);
   return true;
-}
-
-/**
- * `_harness_mcp._archive_store` — move a runtime store aside to a sibling
- * `archived-<name>/<timestamp>/`.
- *
- * NEVER a delete. Memory is the one thing in this system a user cannot rebuild, so the
- * destructive verb's most destructive option is still a move; `_archive_memory` is the same
- * function with `memory` hardcoded and is not ported separately because the only caller that
- * reaches it (`_uninstall_global(archive_memory=True)`) is called with `False` by
- * `_install_uninstall`, which is the CLI's only path in.
- *
- * `renameSync` rather than a copy-then-delete: the destination is a SIBLING of the source, so
- * it is the same device by construction and `shutil.move`'s cross-device fallback has nothing
- * to do. ponytail: rename, and the day a store can live on another volume this needs the
- * copy path back.
- */
-export function archiveStore(store) {
-  // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
-  // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
-  // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
-  // "YYYY-MM-DD HH:MM:SS"; stripping the punctuation and reinserting one dash reproduces
-  // the exact `YYYYMMDD-HHMMSS` shape the padStart version built by hand.
-  const stamp = new Date().toLocaleString('sv-SE').replace(/\D/g, '').replace(/^(\d{8})/, '$1-');
-  const dest = path.join(path.dirname(store), `archived-${path.basename(store)}`, stamp);
-  mkdirSync(path.dirname(dest), { recursive: true });
-  renameSync(store, dest);
-  return dest;
 }
 
 /** `_harness_mcp._claude_md_path` — where the manifest says the managed block lives. */

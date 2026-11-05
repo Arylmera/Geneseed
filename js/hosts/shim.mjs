@@ -1,6 +1,6 @@
 /**
  * The machine-wide HOOK SHIM — where it lives, what it says, whether it still resolves — and
- * the two shim-shaped readers `migrate` needs (`migrateShape`, the autostart scan).
+ * the shim-shaped reader `migrate` needs (the autostart scan).
  *
  * SPLIT OUT OF `js/hosts/settings.mjs` (2026-10) for its cheapest caller. Every CLI run asks
  * `shimDead()` (the dead-shim warning in `bin/geneseed-cli.mjs`), and that used to load the
@@ -359,37 +359,6 @@ export function claudeGitBashPath(env = process.env) {
  */
 export function hookRunnerEntry() {
   return { runner: process.execPath, entry: path.join(ROOT, 'bin', 'geneseed-hook.mjs') };
-}
-
-// P10d. `GENESEED_HOOK_SNIFF` answers "is this hook Geneseed's?". A MIGRATION needs the other
-// question — "is this Geneseed's OLD one?" — and the two are not the same sniff.
-//
-// THREE SHAPES ARE IN THE WILD, AND TWO OF THEM ARE IDENTICAL IN THE SETTINGS FILE:
-//   1. legacy-direct  the command itself names `harness.py` (pre-shim, P0 and earlier)
-//   2. shim-python    the command names the shim; the shim BODY runs python + harness.py
-//   3. shim-node      the command names the shim; the shim BODY runs node + the .mjs entry
-//
-// 2 and 3 differ ONLY inside the shim body. A classifier reading the host config alone would
-// call a fully-unmigrated machine "already migrated" — silently — and `migrate` would no-op on
-// exactly the installs it exists for. The shim body is a REQUIRED input, not a refinement.
-const SHIM_ENTRY_MARK = 'geneseed-hook.mjs';
-
-/**
- * `_build_settings._migrate_shape` — 'legacy' | 'current' | 'none'.
- *
- * PURE — and currently reached only END TO END, by the `migrate/a-node-baked-shim-reads-as-current`
- * cell. No unit corpus drives it directly, which is worth knowing before trusting it.
- * 'none' is not a fault: a user's own settings.json may carry three hand-written hooks
- * and no Geneseed entry. That must read as
- * "nothing to migrate" rather than "unrecognised", or `migrate` refuses on the commonest
- * config on any machine.
- */
-export function migrateShape(commands, shimBody) {
-  if (commands.some((c) => c.includes('harness.py'))) return 'legacy';
-  if (commands.some((c) => c.includes(SHIM_MARK))) {
-    return shimBody.includes(SHIM_ENTRY_MARK) ? 'current' : 'legacy';
-  }
-  return 'none';
 }
 
 /**

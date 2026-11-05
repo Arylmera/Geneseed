@@ -20,6 +20,15 @@ import path from 'node:path';
  */
 export const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json'];
 
+/**
+ * SHA-256 of the wiki seed before the `geneseed-` rename, CRLF folded. No stub produces it any
+ * more, and the build renames an untouched one byte for byte, so it is still a seed on disk.
+ */
+export const LEGACY_WIKI_SEED = 'cccc917c34e6b990e821620bdb4739090151885ab71b6e85046f30a3b71fa5e8';
+
+/** Where the self-improvement loops write, relative to a notes root. */
+export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
+
 export function machineDir() {
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(base, 'geneseed');

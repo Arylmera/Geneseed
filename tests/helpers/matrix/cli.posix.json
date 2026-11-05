@@ -8270,7 +8270,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: legacy",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] re-emitting claude:global (",
         "theme=neutral emit=claude-global",
         "[migrate] migrated 1 install(s)."
@@ -8304,7 +8304,7 @@
     {
       "bin": "cli",
       "expect": [
-        "wiring shape: legacy",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] re-emitting bob:global (",
         "[migrate] migrated 1 install(s)."
       ],
@@ -8333,7 +8333,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: none",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] re-emitting opencode:global (",
         "[migrate] migrated 1 install(s)."
       ],
@@ -8399,6 +8399,7 @@
         "would report the autostart entry at",
         "geneseed-web.vbs",
         "dev.geneseed.web.plist",
+        "[migrate] claude: nothing to fold",
         "[migrate] --dry-run: nothing was written."
       ],
       "expect_absent": [
@@ -8408,7 +8409,8 @@
       "expect_absent_files": [
         "home/.geneseed/.migrated",
         "home/.geneseed/.migrate-backup",
-        "home/.claude/CLAUDE.md"
+        "home/.claude/CLAUDE.md",
+        "home/.config/geneseed"
       ],
       "id": "migrate/dry-run-writes-nothing",
       "steps": [
@@ -8470,7 +8472,7 @@
       "expect_absent": [
         "re-emitting",
         "migrated 1 install(s)",
-        "wiring shape"
+        "install(s) to migrate"
       ],
       "expect_files": [
         "home/.geneseed/.migrated"
@@ -8505,7 +8507,7 @@
       "expect": [
         "[migrate] FAILED claude:global",
         "rolling back",
-        "the install is unchanged."
+        "the wiring is as it was."
       ],
       "expect_absent": [
         "migrated 1 install(s)."
@@ -8540,13 +8542,13 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: legacy",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] migrated 1 install(s)."
       ],
       "expect_files": [
         "home/.geneseed/.migrated"
       ],
-      "id": "migrate/a-hand-edited-jsonc-config-still-classifies-as-legacy",
+      "id": "migrate/a-hand-edited-jsonc-config-still-migrates",
       "steps": [
         {
           "argv": [
@@ -8568,16 +8570,13 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: current",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] migrated 1 install(s)."
-      ],
-      "expect_absent": [
-        "wiring shape: legacy"
       ],
       "expect_files": [
         "home/.geneseed/.migrated"
       ],
-      "id": "migrate/a-node-baked-shim-reads-as-current",
+      "id": "migrate/a-node-baked-shim-still-migrates",
       "steps": [
         {
           "argv": [
