@@ -12,7 +12,8 @@ import ErrorState from './ErrorState.jsx'
 //
 // `label` is the button's accessible name: without it a screen reader hears every column run
 // together. The expand wrapper carries the id the button's `aria-controls` names; it exists only
-// while open, so a closed row's `aria-controls` points at nothing, which ARIA allows.
+// while open, so a closed row's `aria-controls` points at nothing, which ARIA allows. `after` ends
+// the panel whatever the fetch did: a control there must not wait for the body, or fail with it.
 export default function CatalogRow({
   addr,
   isOpen,
@@ -25,6 +26,7 @@ export default function CatalogRow({
   toggleCol = null,
   renderBody,
   srcLine,
+  after = null,
 }) {
   const id = useId()
   const {
@@ -46,6 +48,7 @@ export default function CatalogRow({
         <p className="dim">Loading…</p>
       )}
       <div className="law-srcline">{srcLine}</div>
+      {after}
     </div>
   )
   const disclosure = {

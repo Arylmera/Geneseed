@@ -42,6 +42,11 @@ import { pairOf } from '../lib/hosts.js'
 // same rules, and this page is lazy for a reason. Each rule's one-line principle is the item's
 // `summary`, which the server reads from src/ beside the rule.
 
+// The Credo's Ownership section: the row that holds the ownership gate. The ledger and the deep
+// links keep the switch's own address, `ownership`, so a link to the gate opens this row.
+const OWNERSHIP_ROW = 'ont:ownership'
+const rowOf = (addr) => (addr === 'ownership' ? OWNERSHIP_ROW : addr)
+
 // The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
 // order, not alphabetical). Every pack is here whether or not it is built in. Pure over the
 // catalog items, so the page can build it before its early returns and hand it to the selection.
@@ -139,7 +144,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const [view, setView] = useState('all')
   // Packs the reader folded. Open by default: a folded pack hides its rule switches.
   const [folded, setFolded] = useState(() => new Set())
-  const open = selected || null
+  const open = rowOf(selected) || null
   const toggle = (addr) => go(open === addr ? '#/laws' : `#/item/law/${encodeURIComponent(addr)}`)
   // Nothing to rebuild means nothing to toggle: a source render with no deployed install
   // still READS, it just cannot be changed from here.
@@ -148,17 +153,16 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   // Bring the open rule into view. Any deep link (a gate, the Overview, Spotlight) scrolls
   // to its row when it is off screen; a row clicked in place is already on screen and stays
   // put. A jump from the Gate asks card always scrolls and briefly lights the row, so the eye
-  // lands on it. `jump` re-runs this when the same rule is asked for twice; `canApply` when the
-  // ownership gate's row, which needs the install, arrives after the catalog.
+  // lands on it. `jump` re-runs this when the same rule is asked for twice.
   const [jump, setJump] = useState(0)
   const jumpTo = useRef(null)
   useEffect(() => {
-    if (!selected) return undefined
+    if (!open) return undefined
     const raf = requestAnimationFrame(() => {
-      // `selected` comes from the URL hash: escaped, so a quote in it cannot throw here.
-      const el = document.querySelector(`[data-addr="${CSS.escape(selected)}"]`)
+      // `open` comes from the URL hash: escaped, so a quote in it cannot throw here.
+      const el = document.querySelector(`[data-addr="${CSS.escape(open)}"]`)
       if (!el) return
-      const flash = jumpTo.current === selected
+      const flash = jumpTo.current === open
       jumpTo.current = null
       const r = el.getBoundingClientRect()
       if (flash || r.top < 80 || r.bottom > window.innerHeight) {
@@ -172,7 +176,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       }
     })
     return () => cancelAnimationFrame(raf)
-  }, [selected, jump, data, canApply])
+  }, [open, jump, data])
 
   // ⚠ EVERY HOOK BEFORE THE EARLY RETURNS BELOW. The staged pack selection is derived from
   // `data`, which is null on the first render; a `useState` placed after `if (!data)` makes
@@ -180,7 +184,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   // and throw, taking the whole page down rather than just the control.
   const items = data?.items || []
   const packs = doctrinePacks(items)
-  // The gate switches (Laws I, III, IV and the ownership gate's own row), as the deployed
+  // The gate switches (Laws I, III, IV and the one in the Ownership row), as the deployed
   // install reports them (`overview.install.secretsGate` / `doneGate` / `deletionGate` /
   // `ownershipGate`). Anything but an explicit `false` — an older daemon, no install — reads as
   // armed.
@@ -211,7 +215,8 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       ess: '',
       status: 'Always',
       statusTone: 'ok',
-      enf: 'Instruction',
+      // With no install there is no gate to read, so only the text is known to bind.
+      enf: it.name === OWNERSHIP_ROW && install ? enforcedBy('ownership', install) : 'Instruction',
       c: 'var(--text-3)',
       src: 'ontology/universal.md',
     }))
@@ -243,23 +248,18 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       }
     })
 
-  // The ownership gate's row: a switch, not a rule. It exists only here (no catalog item, no law
-  // number, nothing to expand), so it joins the Ethos band, after the Ownership section, and the
-  // Gated view but no count of sections or rules, and only where a switch can act. `gateAddress`
-  // sends the ledger's `ownership` key to it.
+  // The ownership gate: a switch, not a rule, with no catalog item or law number. It draws no row
+  // of its own: the Ownership row holds its switch. This entry is what the counts read, so it
+  // joins the Ethos pill, the Gated view and the text filter but no count of sections or rules,
+  // and only where a switch can act.
   const gateRows = canApply
     ? [
         {
           addr: 'ownership',
-          no: '',
           name: GATE_SWITCH.ownership.label,
           latin: '',
           ess: '',
-          status: armed('ownership') ? 'Active' : 'Off',
-          statusTone: armed('ownership') ? 'ok' : '',
           enf: enforcedBy('ownership', install),
-          c: 'var(--text-3)',
-          plain: true,
         },
       ]
     : []
@@ -333,16 +333,16 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const match = (r) =>
     inView(r) && (!ql || `${r.addr} ${r.name} ${r.latin} ${r.ess}`.toLowerCase().includes(ql))
   // From the Gate asks card: make the rule's row visible first (a tab or a filter can hide
-  // it), then open it; the effect above scrolls there and lights it. The ownership gate's row
-  // sits above the tabs, so every tab shows it and none needs lifting.
+  // it), then open it; the effect above scrolls there and lights it. The ownership gate is not in
+  // `byAddr`: its row sits in the Ethos band, which no tab, view or filter hides.
   const jumpToRule = (addr) => {
     const row = byAddr[addr]
     const doctrine = String(addr).includes('.')
-    const hiddenByTab = doctrine ? tab === 'invariants' : !row?.plain && tab === 'doctrines'
+    const hiddenByTab = doctrine ? tab === 'invariants' : row && tab === 'doctrines'
     if (hiddenByTab) setTab('all')
     if (row && !inView(row)) setView('all')
     if (row && !match(row)) setQ('')
-    jumpTo.current = addr
+    jumpTo.current = rowOf(addr)
     setJump((n) => n + 1)
     go(`#/item/law/${encodeURIComponent(addr)}`)
   }
@@ -409,7 +409,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   }
   const tiers = PRECEDENCE.map((p) => ({ key: p.key, ...tierOf[p.key], rule: rankRule(p.against) }))
   const byAddr = Object.fromEntries(
-    [...laws, ...gateRows, ...packs.flatMap((p) => p.rules)].map((r) => [r.addr, r]),
+    [...laws, ...packs.flatMap((p) => p.rules)].map((r) => [r.addr, r]),
   )
 
   const TABS_ = [
@@ -420,7 +420,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const showInv = tab === 'all' || tab === 'invariants'
   const showDoc = tab === 'all' || tab === 'doctrines'
   // The view toggles count what the tier tabs show, before the text filter, as the tabs do. The
-  // ownership gate's row shows under every tab.
+  // ownership gate counts under every tab, because its row does not depend on one.
   const tierRows = [
     ...gateRows,
     ...(showInv ? laws : []),
@@ -462,21 +462,26 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       <span className="mono dim">{src}</span>
     </div>
   )
-  // The Ethos sections ignore the view and the filter; the gate's row, a switch among them, obeys
-  // both, as it would in any band. A missing section (an older install) leaves it at the end.
-  const gateAt = ontology.findIndex((s) => s.addr === 'ont:ownership') + 1 || ontology.length
-  const ethosRows = [
-    ...ontology.slice(0, gateAt),
-    ...gateRows.filter(match),
-    ...ontology.slice(gateAt),
-  ]
   const invRows = laws.filter(match)
-  // What the tabs and the filter reach, so not the Ethos band above them. The gate's row counts
-  // only as a match: "Nothing matches" must not sit under it, but it fills no empty tier.
+  // What the tabs and the filter reach, so not the Ethos band above them. The gate counts only as
+  // a match: "Nothing matches" must not sit under its row, but it fills no empty tier.
   const shownCount =
     (ql || view !== 'all' ? gateRows.filter(match).length : 0) +
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
+  // The switch inside the open Ownership row, where a switch can act. It sits outside the row's
+  // disclosure button, so a click on it never folds the row.
+  const gateAsks = withAsks(gateRows[0] || {}).asks
+  const gateLine = gateRows.length > 0 && (
+    <div className="law-gate">
+      <span className="law-name">
+        <span>{GATE_SWITCH.ownership.label}</span>
+        {gateAsks ? <span className="law-asks mono">{gateAsks}</span> : null}
+        <span className="law-princ">{GATE_COPY.ownership.desc}</span>
+      </span>
+      {gateSwitch('ownership')}
+    </div>
+  )
 
   return (
     <>
@@ -529,17 +534,17 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
           {/* Ethos sits ABOVE the tabs and the filter, and neither touches its sections: they
               are the character the rules below serve, not rules to narrow down, so the tabs
               and "All" count only what the filter can actually reach. */}
-          {ethosRows.length > 0 && (
+          {ontology.length > 0 && (
             <>
               {bandHead(nouns.ontology, 'ontology/universal.md')}
-              {ethosRows.map((s) => (
+              {ontology.map((s) => (
                 <LawRow
                   key={s.addr}
-                  law={withAsks(s)}
+                  law={s}
                   rev={dataRev}
                   isOpen={open === s.addr}
                   onToggle={() => toggle(s.addr)}
-                  toggleCol={s.plain ? gateSwitch(s.addr) : null}
+                  after={s.addr === OWNERSHIP_ROW ? gateLine : null}
                 />
               ))}
             </>
