@@ -9,11 +9,15 @@
  * closure (the generator now imports this file too, and its spawn ban greps for that literal)
  * and made the hook module a row in `tests/unit/hook_cli.test.mjs`'s spawn allow-list for a
  * spawn the CLI never makes. Everything here is fs-only; `hooks-learn.mjs` is the one spawner.
+ *
+ * `user-rules.md`'s parser lives here too: the web console edits through it and the fold merges
+ * through it, and the build may not import `js/web` (spec C20).
  */
 import { existsSync, mkdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
 
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
@@ -406,8 +410,10 @@ function dropLines(p, needle) {
  * it is the same device by construction and `shutil.move`'s cross-device fallback has nothing
  * to do. ponytail: rename, and the day a store can live on another volume this needs the
  * copy path back.
+ *
+ * `move` is `copyFileSync` for a file that must stay readable until its replacement lands.
  */
-export function archiveStore(store) {
+export function archiveStore(store, move = renameSync) {
   // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
   // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
   // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
@@ -419,7 +425,7 @@ export function archiveStore(store) {
   let dest = path.join(parent, stamp);
   for (let n = 2; existsSync(dest); n += 1) dest = path.join(parent, `${stamp}-${n}`);
   mkdirSync(parent, { recursive: true });
-  renameSync(store, dest);
+  move(store, dest);
   return dest;
 }
 
@@ -441,4 +447,90 @@ export function consolidateMemory(memDir) {
   const added = [...facts.keys()].filter((s) => !old.has(s)).sort();
   const pruned = [...old.keys()].filter((s) => !facts.has(s)).sort();
   return { added, pruned, duplicates: dups };
+}
+
+/**
+ * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
+ * indented format example never parse as rules.
+ *
+ * The whitespace classes are `WHITESPACE`, not `\s`: this pattern runs over a HAND-EDITED
+ * file, which is where a non-breaking space actually turns up. `\S` is its complement for
+ * the same reason.
+ *
+ * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight, unlike
+ * `ruleFields` (`js/web/user-files.mjs`), which uses `\p{Nd}`. No theme seeds a non-ASCII rule id, no build
+ * writes one, and the web editor cannot produce one either — it writes `R<n>` itself from
+ * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
+ * parses the captured digits back into a number.
+ */
+const RULE_HEAD_RE = new RegExp(
+  `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
+  + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
+);
+
+/**
+ * A line `parseRules` reads as the edge of a rule: `## ` ends the current block, and a
+ * `RULE_HEAD_RE` line opens one (a non-breaking space after `##` does the second, not the first).
+ * ONE predicate for both the parser and `ruleFields`, so a body the writer accepts can never
+ * split or forge a rule when read back.
+ */
+export const isRuleEdge = (line) => line.startsWith('## ') || RULE_HEAD_RE.test(line);
+
+const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
+
+/** `{}` when the line is body rather than metadata. */
+function parseRuleMeta(line) {
+  const m = META_RE.exec(stripWhitespace(line));
+  if (!m) return {};
+  const meta = {};
+  for (const part of m[1].split('|')) {
+    const at = part.indexOf(':');
+    if (at < 0) continue;               // `partition` with no separator — not a pair
+    const key = stripWhitespace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
+    if (['scope', 'source', 'trial_until'].includes(key)) {
+      meta[key] = stripWhitespace(part.slice(at + 1));
+    }
+  }
+  return meta;
+}
+
+/**
+ * `user-rules.md` parsed to `[rules, warnings]`.
+ *
+ * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
+ * splice exactly one block and leave every other byte of the user's file — prose,
+ * formatting, hand-written sections — untouched.
+ * @returns {[Array<{id: number, start: number, end: number} & Record<string, any>>, string[]]}
+ */
+export function parseRules(text) {
+  const lines = splitLines(text);
+  const rules = [];
+  const warnings = [];
+  const seen = new Set();
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const m = RULE_HEAD_RE.exec(lines[idx]);
+    if (!m) continue;
+    let end = lines.length;
+    for (let j = idx + 1; j < lines.length; j += 1) {
+      if (isRuleEdge(lines[j])) { end = j; break; }
+    }
+    const rid = Number(m[1]);
+    if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
+    seen.add(rid);
+    let k = idx + 1;
+    while (k < end && !stripWhitespace(lines[k])) k += 1;
+    const meta = k < end ? parseRuleMeta(lines[k]) : {};
+    if (Object.keys(meta).length) k += 1;
+    rules.push({
+      id: rid,
+      title: m[2],
+      scope: Object.hasOwn(meta, 'scope') ? meta.scope : 'project',
+      source: Object.hasOwn(meta, 'source') ? meta.source : '',
+      trial_until: Object.hasOwn(meta, 'trial_until') ? meta.trial_until : '',
+      body: stripWhitespace(lines.slice(k, end).join('\n')),
+      start: idx,
+      end,
+    });
+  }
+  return [rules, warnings];
 }

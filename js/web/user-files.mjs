@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { PROFILE_STUB } from '../build/stubs.mjs';
 import { readMaybe } from '../hosts/installs.mjs';
-import { frontmatter } from '../hosts/memory-files.mjs';
+import { frontmatter, isRuleEdge, parseRules } from '../hosts/memory-files.mjs';
 import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isTruthy } from '../lib/json.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
@@ -78,94 +78,8 @@ function pendingCount(state) {
   } catch { return 0; }
 }
 
-/**
- * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
- * indented format example never parse as rules.
- *
- * The whitespace classes are `WHITESPACE`, not `\s`: this pattern runs over a HAND-EDITED
- * file, which is where a non-breaking space actually turns up. `\S` is its complement for
- * the same reason.
- *
- * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight, unlike
- * `ruleFields` below which uses `\p{Nd}`. No theme seeds a non-ASCII rule id, no build
- * writes one, and the web editor cannot produce one either — it writes `R<n>` itself from
- * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
- * parses the captured digits back into a number.
- */
-const RULE_HEAD_RE = new RegExp(
-  `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
-  + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
-);
-
-/**
- * A line `parseRules` reads as the edge of a rule: `## ` ends the current block, and a
- * `RULE_HEAD_RE` line opens one (a non-breaking space after `##` does the second, not the first).
- * ONE predicate for both the parser and `ruleFields`, so a body the writer accepts can never
- * split or forge a rule when read back.
- */
-const isRuleEdge = (line) => line.startsWith('## ') || RULE_HEAD_RE.test(line);
-
 /** Advisory only; nothing blocks past it. */
 const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
-
-const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
-
-/** `{}` when the line is body rather than metadata. */
-function parseRuleMeta(line) {
-  const m = META_RE.exec(stripWhitespace(line));
-  if (!m) return {};
-  const meta = {};
-  for (const part of m[1].split('|')) {
-    const at = part.indexOf(':');
-    if (at < 0) continue;               // `partition` with no separator — not a pair
-    const key = stripWhitespace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
-    if (['scope', 'source', 'trial_until'].includes(key)) {
-      meta[key] = stripWhitespace(part.slice(at + 1));
-    }
-  }
-  return meta;
-}
-
-/**
- * `user-rules.md` parsed to `[rules, warnings]`.
- *
- * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
- * splice exactly one block and leave every other byte of the user's file — prose,
- * formatting, hand-written sections — untouched.
- * @returns {[Array<{id: number, start: number, end: number} & Record<string, any>>, string[]]}
- */
-export function parseRules(text) {
-  const lines = splitLines(text);
-  const rules = [];
-  const warnings = [];
-  const seen = new Set();
-  for (let idx = 0; idx < lines.length; idx += 1) {
-    const m = RULE_HEAD_RE.exec(lines[idx]);
-    if (!m) continue;
-    let end = lines.length;
-    for (let j = idx + 1; j < lines.length; j += 1) {
-      if (isRuleEdge(lines[j])) { end = j; break; }
-    }
-    const rid = Number(m[1]);
-    if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
-    seen.add(rid);
-    let k = idx + 1;
-    while (k < end && !stripWhitespace(lines[k])) k += 1;
-    const meta = k < end ? parseRuleMeta(lines[k]) : {};
-    if (Object.keys(meta).length) k += 1;
-    rules.push({
-      id: rid,
-      title: m[2],
-      scope: Object.hasOwn(meta, 'scope') ? meta.scope : 'project',
-      source: Object.hasOwn(meta, 'source') ? meta.source : '',
-      trial_until: Object.hasOwn(meta, 'trial_until') ? meta.trial_until : '',
-      body: stripWhitespace(lines.slice(k, end).join('\n')),
-      start: idx,
-      end,
-    });
-  }
-  return [rules, warnings];
-}
 
 export function apiRules(state) {
   const p = rulesPath(state);

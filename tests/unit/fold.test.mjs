@@ -96,9 +96,9 @@ function snapshot(dir) {
   return out;
 }
 
-const counts = ({ facts, lessons, notes, excludes, wired, collisions, pending, moved }) => (
-  { facts, lessons, notes, excludes, wired, collisions, pending, moved });
-const ZERO = { facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions: 0, pending: 0, moved: [] };
+const counts = ({ facts, lessons, notes, excludes, wired, collisions, pending, rules, moved }) => (
+  { facts, lessons, notes, excludes, wired, collisions, pending, rules, moved });
+const ZERO = { facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions: 0, pending: 0, rules: 0, moved: [] };
 
 // ---- Memory -------------------------------------------------------------------------------------
 
@@ -519,16 +519,269 @@ test('a dry run reports the real run\'s numbers and writes nothing', () => world
     + '1 to approve, old store moved aside');
 }));
 
-test('the fold leaves user-rules.md and a hand-made host draft alone (step 5 is the next slice, C18)', () => world(({ cfg, shared, fold }) => {
-  fs.writeFileSync(path.join(cfg, 'user-rules.md'), '# User rules\n\n## R1 — Mine\nBe terse.\n');
-  fs.writeFileSync(path.join(cfg, 'user-rules.draft.md'), 'my own draft\n');
+// ---- Fold step 5: rules ---------------------------------------------------------------------------
+
+const SEED = SESSION_SEEDS['user-rules.md'];
+const lf = (s) => s.replaceAll('\r\n', '\n');
+const rulesOf = (cfg) => read(cfg, 'user-rules.md');
+const hostRules = (cfg, text) => fs.writeFileSync(path.join(cfg, 'user-rules.md'), text);
+const ruleKey = (host, title, body) => createHash('sha256').update(`rule\0${host}\0`).update(`${title}\n${body}`).digest('hex');
+/** What the rule Rite writes on a decision: the ledger row, and the block gone. */
+function decide(shared, key, state) {
+  const ledger = JSON.parse(read(shared.foldState));
+  ledger.items[key].state = state;
+  fs.writeFileSync(shared.foldState, JSON.stringify(ledger));
+  fs.writeFileSync(shared.draft, read(shared.draft).split(/^(?=## )/m).filter((p) => !p.includes(key)).join(''));
+}
+
+test('duplicate: a rule the shared file holds leaves the host silently, whatever its number and metadata', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '# User rules\n\n## R7 — Mine\n(scope: global)\nBe terse.\n');
+  hostRules(cfg, `${SEED}\n## R1 — Mine\n(scope: project | source: me)\nBe terse.\n\n## R2 — Other\nBe kind.\n`);
+  const r = fold();
+  assert.deepEqual(counts(r), { ...ZERO, rules: 1 });
+  assert.equal(foldSummary(r), '1 rule to approve', 'a merge reports nothing');
+  assert.equal(rulesOf(cfg), `${SEED}\n## R2 — Other\nBe kind.\n`);
+  assert.doesNotMatch(read(shared.draft), /Mine/);
+  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-user-rules.md'));
+  assert.match(read(cfg, 'archived-user-rules.md', stamp), /source: me/, 'the replaced file is kept (D10)');
+}));
+
+test('a same title with another body is no duplicate, and neither is a same body under another title', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n\n## R2 — Other\nBe kind.\n');
+  const text = '## R1 — Mine\nBe brief.\n\n## R2 — Another\nBe kind.\n';
+  hostRules(cfg, text);
+  assert.deepEqual(counts(fold()), { ...ZERO, rules: 2 });
+  assert.equal(rulesOf(cfg), text);
+}));
+
+test('conflict stays in force: the rule is drafted with its host and old number, and the host file keeps every byte', () => world(({ cfg, shared, fold }) => {
+  const text = '# User rules\n\n## R2 — Mine\n(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.\n';
+  hostRules(cfg, text);
+  assert.deepEqual(counts(fold()), { ...ZERO, rules: 1 });
+  assert.equal(rulesOf(cfg), text);
+  assert.ok(!exists(cfg, 'archived-user-rules.md'), 'nothing was replaced');
+  assert.equal(lf(read(shared.rules)), SEED, 'a drafted rule is not active in the shared file');
+  const key = ruleKey('claude', 'Mine', 'Be terse.\nAlways.');
+  assert.deepEqual(JSON.parse(read(shared.foldState)),
+    { version: 1, items: { [key]: { kind: 'rule', host: 'claude', state: 'pending' } } });
+  assert.equal(lf(read(shared.draft)), '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n\n'
+    + '## Rule from claude: Mine\n'
+    + `(source: ${path.join(cfg, 'user-rules.md')} | old: R2 | sha256: ${key})\n`
+    + '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.\n');
+}));
+
+test('approve: the next fold finds the rule in the shared file and only then takes it from the host', () => world(({ cfg, shared, fold }) => {
+  hostRules(cfg, `${SEED}\n## R2 — Mine\nBe terse.\n`);
+  fold();
+  const key = ruleKey('claude', 'Mine', 'Be terse.');
+  decide(shared, key, 'approved');
+  assert.deepEqual(counts(fold()), ZERO, 'approved but not yet in the shared file');
+  assert.match(rulesOf(cfg), /Be terse/, 'it must bind from the host until the shared file holds it');
+  fs.appendFileSync(shared.rules, '\n## R9 — Mine\nBe terse.\n');
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(rulesOf(cfg), SEED);
+  assert.equal(JSON.parse(read(shared.foldState)).items[key].state, 'approved');
+}));
+
+test('reject: the rule stays on the host, is never drafted again, and holds even if the shared file gains it', () => world(({ cfg, shared, fold }) => {
+  const text = `${SEED}\n## R2 — Mine\nBe terse.\n`;
+  hostRules(cfg, text);
+  fold();
+  const key = ruleKey('claude', 'Mine', 'Be terse.');
+  decide(shared, key, 'rejected');
+  const draft = read(shared.draft);
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(read(shared.draft), draft, 'a rejected rule was drafted again');
+  fs.appendFileSync(shared.rules, '\n## R9 — Mine\nBe terse.\n');
+  fold();
+  assert.equal(rulesOf(cfg), text);
+  assert.equal(JSON.parse(read(shared.foldState)).items[key].state, 'rejected');
+}));
+
+test('empty host file: with no rules left it returns to its seed, and a seeded file folds to nothing', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n');
+  hostRules(cfg, `${SEED}\n## R3 — Mine\nBe terse.\n`);
+  fold();
+  assert.equal(rulesOf(cfg), SEED);
+  const before = snapshot(cfg);
+  fold();
+  assert.deepEqual(snapshot(cfg), before);
+}));
+
+test('hand-written text is no seed: it may be a rule in all but form, so the host file keeps it', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n');
+  hostRules(cfg, '# User rules\n\nNever push on a Friday.\n\n## R1 — Mine\nBe terse.\n\n## Team\nAsk Ana first.\n');
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(rulesOf(cfg), '# User rules\n\nNever push on a Friday.\n\n## Team\nAsk Ana first.\n');
+}));
+
+test('a host file of prose alone is not a rule file: it is neither drafted nor touched', () => world(({ cfg, shared, fold }) => {
+  hostRules(cfg, '# User rules\n\n- Never push on a Friday.\n');
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(rulesOf(cfg), '# User rules\n\n- Never push on a Friday.\n');
+  assert.ok(!exists(shared.draft));
+}));
+
+test('CRLF: a host file in CRLF merges with an LF shared rule, keeps its own endings, and hashes as LF', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\nAlways.\n');
+  hostRules(cfg, '# User rules\r\n\r\n## R1 — Mine\r\nBe terse.\r\nAlways.\r\n\r\n## R2 — Other\r\nBe kind.\r\n');
+  fold();
+  assert.equal(rulesOf(cfg), '# User rules\r\n\r\n## R2 — Other\r\nBe kind.\r\n');
+  assert.deepEqual(Object.keys(JSON.parse(read(shared.foldState)).items), [ruleKey('claude', 'Other', 'Be kind.')]);
+}));
+
+test('a line break the parser counts, other than a newline, keeps the splice on the right lines', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n');
+  hostRules(cfg, 'one\ftwo\n## R1 — Mine\nBe terse.\n## R2 — Other\nBe kind.\n');
+  fold();
+  assert.equal(rulesOf(cfg), 'one\ftwo\n## R2 — Other\nBe kind.\n');
+}));
+
+test('second run writes nothing with rules pending: no byte, no mtime, and nothing reported twice', () => world(({ home, cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Same\nBe terse.\n');
+  hostRules(cfg, `${SEED}\n## R1 — Same\nBe terse.\n\n## R2 — Mine\nBe kind.\n`);
+  fold();
+  const before = snapshot(home);
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.deepEqual(snapshot(home), before);
+}));
+
+test('a dry run counts rules as the real run does, a rule written twice once, and writes nothing', () => world(({ home, cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Same\nBe terse.\n');
+  hostRules(cfg, `${SEED}\n## R1 — Same\nBe terse.\n\n## R2 — Mine\nBe kind.\n\n## R3 — Mine\nBe kind.\n`);
+  const before = snapshot(home);
+  const dry = fold({ dryRun: true });
+  assert.deepEqual(snapshot(home), before, 'the dry run wrote');
+  assert.deepEqual(counts(dry), { ...ZERO, rules: 1 });
+  assert.deepEqual(counts(fold()), counts(dry));
+  assert.equal(read(shared.draft).split('## Rule from').length, 2, 'one block for the two copies');
+}));
+
+test('two hosts: each gets its own decision, and approving one clears the other without a second ask', () => world(({ home, cfg, shared, fold }) => {
+  const bob = seedHost(path.join(home, '.bob'));
+  const foldBob = () => foldHost({ host: 'bob', cfgDir: bob, shared });
+  const text = `${SEED}\n## R4 — Mine\nBe terse.\n`;
+  hostRules(cfg, text);
+  hostRules(bob, text);
+  fold();
+  foldBob();
+  assert.equal(Object.keys(JSON.parse(read(shared.foldState)).items).length, 2);
+  decide(shared, ruleKey('claude', 'Mine', 'Be terse.'), 'approved');
+  fs.appendFileSync(shared.rules, '\n## R1 — Mine\nBe terse.\n');
+  foldBob();
+  assert.equal(rulesOf(bob), SEED);
+  assert.deepEqual(JSON.parse(read(shared.foldState)).items,
+    { [ruleKey('claude', 'Mine', 'Be terse.')]: { kind: 'rule', host: 'claude', state: 'approved' } });
+  assert.doesNotMatch(read(shared.draft), /Rule from/);
+}));
+
+test('a pending rule the user took out of the host file leaves the draft, and another host\'s item stays', () => world(({ home, cfg, shared, fold }) => {
+  const bob = seedHost(path.join(home, '.bob'));
+  hostRules(cfg, `${SEED}\n## R1 — Gone\nBe terse.\n\n## R2 — Kept\nBe kind.\n`);
+  hostRules(bob, `${SEED}\n## R1 — Theirs\nBe brief.\n`);
+  fold();
+  foldHost({ host: 'bob', cfgDir: bob, shared });
+  hostRules(cfg, `${SEED}\n## R2 — Kept\nBe kind.\n`);
+  assert.deepEqual(counts(fold()), ZERO);
+  const draft = read(shared.draft);
+  assert.doesNotMatch(draft, /Gone/);
+  assert.match(draft, /Rule from claude: Kept/);
+  assert.match(draft, /Rule from bob: Theirs/);
+  assert.deepEqual(Object.keys(JSON.parse(read(shared.foldState)).items).sort(),
+    [ruleKey('claude', 'Kept', 'Be kind.'), ruleKey('bob', 'Theirs', 'Be brief.')].sort());
+}));
+
+test('a ledger that does not parse stops the rules step before any rule moves', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n');
+  const text = '## R1 — Mine\nBe terse.\n';
+  hostRules(cfg, text);
+  fs.writeFileSync(shared.foldState, '{ torn');
+  assert.match(fold().failed.join(), /^rules: /);
+  assert.equal(rulesOf(cfg), text);
+}));
+
+test('a host file that cannot be replaced keeps every rule, and the next run finishes the merge', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n');
+  const text = '## R1 — Mine\nBe terse.\n\n## R2 — Other\nBe kind.\n';
+  hostRules(cfg, text);
+  const real = fs.renameSync;
+  const m = mock.method(fs, 'renameSync', (a, b) => {
+    if (String(b).endsWith('user-rules.md')) throw new Error('locked');
+    return real(a, b);
+  });
+  syncBuiltinESMExports();
+  try {
+    assert.match(fold().failed.join(), /^rules: locked/);
+  } finally {
+    m.mock.restore();
+    syncBuiltinESMExports();
+  }
+  assert.equal(rulesOf(cfg), text);
+  assert.deepEqual(fold().failed, []);
+  assert.equal(rulesOf(cfg), '## R2 — Other\nBe kind.\n');
+}));
+
+test('a host file linked to the shared one loses the link, never a rule: the shared file keeps it', (t) => world(({ cfg, shared, fold }) => {
+  const text = '## R1 — Mine\nBe terse.\n';
+  fs.writeFileSync(shared.rules, text);
+  fs.rmSync(path.join(cfg, 'user-rules.md'));
+  try {
+    fs.symlinkSync(shared.rules, path.join(cfg, 'user-rules.md'), 'file');
+  } catch (e) {
+    if (e.code === 'EPERM') { t.skip('file links need admin rights here'); return; }
+    throw e;
+  }
+  fold();
+  assert.equal(read(shared.rules), text);
+  assert.equal(rulesOf(cfg), SEED);
+}));
+
+test('a hand-made host draft is ignored: the fold reads only user-rules.md (C18)', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(path.join(cfg, 'user-rules.draft.md'), '## Rule from me: Mine\n## R1 — Mine\nBe terse.\n');
   fact(path.join(cfg, 'memory'), 'x.md', FACT);
   fold();
-  assert.equal(read(cfg, 'user-rules.md'), '# User rules\n\n## R1 — Mine\nBe terse.\n');
-  assert.equal(read(cfg, 'user-rules.draft.md'), 'my own draft\n');
+  assert.equal(read(cfg, 'user-rules.draft.md'), '## Rule from me: Mine\n## R1 — Mine\nBe terse.\n');
   assert.ok(!fs.existsSync(shared.draft));
   assert.doesNotMatch(read(shared.rules), /Be terse/);
 }));
+
+// ---- A decision on a profile or wiki: the Rite's writes, then the existing fold ---------------------
+
+test('the host file chosen: with the Rite\'s copy made, the next fold sets the host file aside and seeds it', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.profile, 'shared self\n');
+  fs.writeFileSync(path.join(cfg, 'PROFILE.md'), 'host self\n');
+  fold();
+  const [key] = Object.keys(JSON.parse(read(shared.foldState)).items);
+  fs.copyFileSync(path.join(cfg, 'PROFILE.md'), shared.profile);
+  decide(shared, key, 'approved');
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(read(shared.profile), 'host self\n');
+  assert.equal(lf(read(cfg, 'PROFILE.md')), SESSION_SEEDS['PROFILE.md']);
+  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-PROFILE.md'));
+  assert.equal(read(cfg, 'archived-PROFILE.md', stamp), 'host self\n');
+}));
+
+test('the shared file chosen: with the host file moved aside, the next emit seeds it and the fold is silent', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.profile, 'shared self\n');
+  fs.writeFileSync(path.join(cfg, 'PROFILE.md'), 'host self\n');
+  fold();
+  const [key] = Object.keys(JSON.parse(read(shared.foldState)).items);
+  fs.mkdirSync(path.join(cfg, 'archived-PROFILE.md'));
+  fs.renameSync(path.join(cfg, 'PROFILE.md'), path.join(cfg, 'archived-PROFILE.md', '20261105-120000'));
+  decide(shared, key, 'approved');
+  ensureProfileStub(cfg);
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(read(shared.profile), 'shared self\n');
+  assert.equal(lf(read(cfg, 'PROFILE.md')), SESSION_SEEDS['PROFILE.md']);
+}));
+
+test('the rule Rite carries the approval flow, and the ledger states the fold reads', () => {
+  const flow = fs.readFileSync(path.join(ROOT, 'src', 'skills', 'rule', 'approve.md'), 'utf8');
+  for (const word of ['.fold-state.json', '`approved`', '`rejected`', '## Renumbered', 'user-rules-retired.md']) {
+    assert.ok(flow.includes(word), word);
+  }
+  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'skills', 'rule.md'), 'utf8'), /\(rule\/approve\.md\)/);
+});
 
 // ---- Through the real emit ----------------------------------------------------------------------
 

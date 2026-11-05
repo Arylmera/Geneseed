@@ -15,6 +15,8 @@ fork — when the index outgrows one useful read (~40 lines) or holds duplicate,
 contradictory or stale entries (a file, flag or command that no longer exists), after
 a release or large refactor, or when the user says "clean up memory", "consolidate",
 "what do you actually remember". The user's wiki is the [wiki {{SKILL}}](wiki.md)'s.
+Run the **approval flow**, not the fork, when an emit reports items `to approve`, when
+`user-rules.draft.md` holds pending items, or when the user asks to review them.
 
 ## Procedure
 
@@ -110,11 +112,15 @@ adoption. Two more cases are due at any time:
 
 **Consolidation flow** → read [rule/consolidate.md](rule/consolidate.md) and follow it.
 
+**Approval flow** → read [rule/approve.md](rule/approve.md) and follow it.
+
 ## Done when
 - For a rule or memory: the fork was put to the user, and then either a {{MEMORY}} file exists carrying its
   `force`, its `type` and its index line — or a rule stands in the right
   `user-rules.md`, having survived reformulation, its own counter-example and the
   {{LAWS}}, consented to explicitly, with any promoted source memory archived. The
   {{ONTOLOGY}}, {{LAWS}} and {{DOCTRINES}} files are untouched either way.
+- For an approval: each item the user decided has its ledger state and no draft block, and no
+  rule left a host file by hand.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

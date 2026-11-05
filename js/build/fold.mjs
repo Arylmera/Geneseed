@@ -12,7 +12,8 @@
  * A SECOND RUN WRITES NOTHING, and no test of bytes alone can see that. A folded host holds seeds,
  * which every step passes over; `.fold-state.json` (C7) holds what stays behind on purpose.
  *
- * `user-rules.md` is the next slice's (fold step 5), and a host `user-rules.draft.md` is not the
+ * A RULE LEAVES A HOST FILE ONLY WHEN THE SHARED FILE ALREADY HOLDS IT (`foldRules`): everything
+ * else stays there, in force, until the user decides. A host `user-rules.draft.md` is not the
  * fold's at all (C18). Spawn-free, and it reaches neither `js/maintain` nor `js/web` (C20).
  */
 import { createHash } from 'node:crypto';
@@ -22,8 +23,10 @@ import {
 import path from 'node:path';
 
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
-import { listDir } from '../hosts/hooks-prims.mjs';
-import { archiveStore, consolidateMemory, existingSlugs, MEMORY_SEED } from '../hosts/memory-files.mjs';
+import { LINE_BREAK, listDir, splitLines } from '../hosts/hooks-prims.mjs';
+import {
+  archiveStore, consolidateMemory, existingSlugs, MEMORY_SEED, parseRules,
+} from '../hosts/memory-files.mjs';
 import { foldExcludes } from '../inspect/excludes.mjs';
 import { isDir, isFile, printErr, printOut, readText, writeTextAtomic } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
@@ -210,25 +213,30 @@ function readFoldState(shared) {
   return state;
 }
 
+const itemKey = (kind, host, bytes) => createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
+
 /**
- * A pointer in the draft, never a copy (C9), and a C7 record. The key names the host too, so two
- * hosts holding the same differing text are two decisions, and each gets its file set aside.
- * Draft first: a stop between the writes leaves a block the next run recognises, not a lost one.
+ * A block in the draft and a C7 record. The key names the host too, so two hosts holding the same
+ * text are two decisions. Draft first: a stop between the writes leaves a block the next run
+ * recognises, not a lost one.
  */
-function draftChoice(kind, hostFile, sharedFile, bytes, { host, shared, dryRun, report }) {
+function draftItem(kind, key, block, tally, { host, shared, dryRun, report }) {
   const state = readFoldState(shared);
-  const key = createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
   if (state.items[key]) return;
-  report.pending += 1;
+  report[tally] += 1;
   if (dryRun) return;
   const text = existsSync(shared.draft) ? readText(shared.draft) : DRAFT_HEAD;
-  if (!text.includes(`sha256: ${key}`)) {
-    writeTextAtomic(shared.draft, `${text}\n## Choose: ${path.basename(sharedFile)}\n`
-      + `(hosts: shared, ${host} | paths: ${sharedFile}, ${hostFile} | sha256: ${key})\n`
-      + 'Which one becomes the shared file?\n');
-  }
+  if (!text.includes(`sha256: ${key}`)) writeTextAtomic(shared.draft, `${text}\n${block}`);
   state.items[key] = { kind, host, state: 'pending' };
   writeTextAtomic(shared.foldState, `${jsonDumpsIndent(state)}\n`);
+}
+
+/** A pointer in the draft, never a copy (C9): each host's differing file gets its own decision. */
+function draftChoice(kind, hostFile, sharedFile, bytes, ctx) {
+  const key = itemKey(kind, ctx.host, bytes);
+  draftItem(kind, key, `## Choose: ${path.basename(sharedFile)}\n`
+    + `(hosts: shared, ${ctx.host} | paths: ${sharedFile}, ${hostFile} | sha256: ${key})\n`
+    + 'Which one becomes the shared file?\n', 'pending', ctx);
 }
 
 /**
@@ -258,6 +266,82 @@ function foldWholeFile(kind, hostFiles, sharedFile, reseed, ctx) {
   if (setAside) reseed();
 }
 
+/** What makes two rules one (fold step 5): metadata and number do not. Line endings are already gone. */
+const ruleText = (r) => `${r.title}\n${r.body}`;
+
+/**
+ * A pending rule this host no longer holds waits for nothing: it merged, because another host's
+ * copy was approved, or the user took it out. Left alone, it would count as pending for ever, and
+ * approving it would raise a rule the user removed. A rule body holds no `## ` line, so a block is
+ * one piece of this split. Block first: a stop between the writes is finished by the next run.
+ */
+function settleRules(live, { host, shared, dryRun }) {
+  if (dryRun) return;
+  const state = readFoldState(shared);
+  const gone = Object.keys(state.items).filter((key) => {
+    const item = state.items[key];
+    return item.kind === 'rule' && item.host === host && item.state === 'pending' && !live.has(key);
+  });
+  if (!gone.length) return;
+  if (existsSync(shared.draft)) {
+    const pieces = readText(shared.draft).split(/^(?=## )/m);
+    writeTextAtomic(shared.draft, pieces.filter((p) => !gone.some((key) => p.includes(`sha256: ${key}`))).join(''));
+  }
+  for (const key of gone) delete state.items[key];
+  writeTextAtomic(shared.foldState, `${jsonDumpsIndent(state)}\n`);
+}
+
+/**
+ * `text` without the merged rules, every other byte kept, or the seed when nothing of the user's
+ * is left. Anything else stays: `parseRules` reads only `## R<n> — Title`, so a hand-written
+ * section may be a rule in all but its form, and a seed would take it out of force.
+ */
+function withoutRules(text, merged) {
+  const drop = new Set(merged.flatMap((r) => Array.from({ length: r.end - r.start }, (_, i) => r.start + i)));
+  // The split keeps each break, so the line at index `i` is the piece at `2i`, its break at `2i + 1`.
+  const rest = text.split(new RegExp(`(${LINE_BREAK.source})`)).filter((_, n) => !drop.has(Math.floor(n / 2))).join('');
+  const seed = SESSION_SEEDS['user-rules.md'];
+  const seedLines = new Set(splitLines(seed));
+  return splitLines(rest).every((l) => !l.trim() || seedLines.has(l)) ? seed : rest;
+}
+
+/**
+ * Fold step 5. A rule the shared file holds word for word leaves the host file: it binds from
+ * there. Any other goes to the draft and stays, so nothing stops binding before the user decides
+ * (C8), and an approval needs no code here: the rule Rite puts it in the shared file, and the next
+ * fold finds a duplicate. A rejected rule is the exception to the merge, because "keep it on this
+ * host" holds even if the shared file later says the same.
+ *
+ * The old file is copied aside, not moved: the host file must exist at every moment, because the
+ * rules it keeps bind through it. A host file linked to the shared one needs no guard: the rename
+ * replaces the link, and the shared file keeps its rules.
+ */
+function foldRules(cfgDir, ctx) {
+  const { host, shared, dryRun } = ctx;
+  const file = path.join(cfgDir, path.basename(shared.rules));
+  if (!isFile(file)) return;
+  const { items } = readFoldState(shared);
+  const text = readFileSync(file, 'utf8');
+  const [rules] = parseRules(text);
+  const held = new Set(parseRules(isFile(shared.rules) ? readFileSync(shared.rules, 'utf8') : '')[0].map(ruleText));
+  const lines = splitLines(text);
+  const live = new Set();
+  const merged = [];
+  for (const r of rules) {
+    const key = itemKey('rule', host, ruleText(r));
+    if (held.has(ruleText(r)) && items[key]?.state !== 'rejected') { merged.push(r); continue; }
+    if (live.has(key)) continue;
+    live.add(key);
+    const own = lines.slice(r.start + 1, r.end).join('\n').trim();
+    draftItem('rule', key, `## Rule from ${host}: ${r.title}\n(source: ${file} | old: R${r.id} | sha256: ${key})\n${own}\n`,
+      'rules', ctx);
+  }
+  settleRules(live, ctx);
+  if (!merged.length || dryRun) return;
+  archiveStore(file, copyFileSync);
+  landFile(file, Buffer.from(withoutRules(text, merged)));
+}
+
 /**
  * Fold one host. Never throws: a step that fails lands in `report.failed`, the steps after it
  * still run, and what it did not finish stays in place for the next emit. `dryRun` walks the same
@@ -265,7 +349,7 @@ function foldWholeFile(kind, hostFiles, sharedFile, reseed, ctx) {
  */
 export function foldHost({ host, cfgDir, shared, dryRun = false }) {
   const report = {
-    host, facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions: 0, pending: 0,
+    host, facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions: 0, pending: 0, rules: 0,
     moved: [], archived: null, failed: [],
   };
   const step = (name, fn) => {
@@ -283,6 +367,7 @@ export function foldHost({ host, cfgDir, shared, dryRun = false }) {
     () => ensureProfileStub(cfgDir), ctx));
   step('wiki', () => foldWholeFile('wiki', WIKI_NAMES.map((n) => path.join(cfgDir, n)), shared.wiki,
     () => ensureWikiStub(cfgDir), ctx));
+  step('rules', () => foldRules(cfgDir, ctx));
   return report;
 }
 
@@ -298,6 +383,7 @@ export function foldSummary(r) {
     r.wired && `${counted(r.wired, 'excluded folder')} wired`,
     ...r.moved.map((kind) => `${kind} moved`),
     r.collisions && counted(r.collisions, 'collision'),
+    r.rules && `${counted(r.rules, 'rule')} to approve`,
     r.pending && `${r.pending} to approve`,
     r.archived && 'old store moved aside',
   ].filter(Boolean).join(', ');
