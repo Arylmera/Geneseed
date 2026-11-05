@@ -334,6 +334,54 @@ describe('Installs / Hosts', () => {
     )
   })
 
+  it('a project install offers the shared-tier switch with its trade, and rebuilds with the pick', async () => {
+    const proj = (over) => ({
+      installs: [
+        {
+          id: 'claude:C:/git/Terra',
+          host: 'claude',
+          scope: 'project',
+          path: 'C:/git/Terra',
+          state: 'active',
+          theme: 'neutral',
+          footprint: 'lean',
+          posture: 'peer',
+          mode: 'direct',
+          trust: 'balanced',
+          ...over,
+        },
+      ],
+      postures: ['peer'],
+      modes: ['direct'],
+      trusts: ['balanced'],
+    })
+    vi.mocked(api.installs).mockResolvedValueOnce(proj({ sharedTier: false }))
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const apply = await screen.findByRole('button', { name: 'Apply and rebuild' })
+    const sw = screen.getByRole('switch', { name: 'shared tier for Claude Code · project' })
+    expect(sw.checked).toBe(false)
+    // The trade is on the panel before the switch is flipped.
+    expect(screen.getByText(/machine-wide rules, profile and memory map/)).toBeTruthy()
+    expect(screen.getByText(/About 1 500 tokens at every session start/)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+    fireEvent.click(sw)
+    expect(apply.disabled).toBe(false)
+    fireEvent.click(apply)
+    await answered()
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'claude', scope: 'project', sharedTier: true }),
+    )
+  })
+
+  it('a global install has no shared-tier switch and never sends the key', async () => {
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    await screen.findByRole('button', { name: 'Apply and rebuild' })
+    expect(screen.queryByRole('switch', { name: /shared tier/ })).toBeNull()
+  })
+
   it('deploys to a folder with the picked host, naming what that host adds', async () => {
     const onAction = vi.fn(async () => 'job-1')
     render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)

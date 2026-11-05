@@ -13,7 +13,7 @@
  * `user-rules.md`'s parser lives here too: the web console edits through it and the fold merges
  * through it, and the build may not import `js/web` (spec C20).
  */
-import { existsSync, mkdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -48,13 +48,24 @@ const MAP_HINT = 'Each topic file lists its facts; open the one the task needs.'
 const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/;
 const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/;
 
-/** `append_agent_lesson` — one dated bullet, capped at the newest MAX_AGENT_BULLETS. */
+/**
+ * `append_agent_lesson` — one dated bullet, capped at the newest MAX_AGENT_BULLETS.
+ *
+ * A FILE THAT IS NOT UTF-8 IS LEFT WHOLE, the fold's rule (`foldRules` in js/build/fold.mjs): the
+ * read below replaces each bad byte, so rewriting the file would change a line nobody touched.
+ * The lesson is dropped and the answer is null; the caller says so. The tier's agent files are
+ * the ones that can be hand-edited in another encoding.
+ */
 export function appendAgentLesson(memDir, agent, lesson) {
   const d = path.join(memDir, 'agents');
   mkdirSync(d, { recursive: true });
   const f = path.join(d, `${agent}.md`);
   let bullets = [];
-  if (existsSync(f)) bullets = splitLines(readText(f)).filter((l) => l.startsWith('- '));
+  if (existsSync(f)) {
+    const raw = readFileSync(f);
+    if (!raw.equals(Buffer.from(raw.toString('utf8')))) return null;
+    bullets = splitLines(readText(f)).filter((l) => l.startsWith('- '));
+  }
   const now = new Date();
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`
     + `${String(now.getDate()).padStart(2, '0')}`;

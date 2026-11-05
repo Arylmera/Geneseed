@@ -197,7 +197,11 @@ function wizardJobs() {
     ['wizard-no-kit', [['collect_setup_lines', [NO_KIT_SRC]]], '\n\n\n\n\n\nn\n'],
     // A PROJECT emit, the arm that asks a seventh question — `out` and `root` both from one
     // answer. `1` at the packs gate is `all`, the same answer an empty line gives.
-    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n\n\n3\n1\n/tmp/somerepo\ny\n'],
+    // The shared-tier question follows the repo root, for a per-repo install only; the empty line takes
+    // its default, `no`, so this job's result is what it was before the question existed.
+    ['wizard-project', [['collect_setup_lines', []]], '1\n1\n1\n1\n\n\n3\n1\n/tmp/somerepo\n\ny\n'],
+    // The same walk answering `2` (yes) to the shared-tier question: the selection carries it and the plan line says it.
+    ['wizard-project-tier', [['collect_setup_lines', []]], '1\n1\n1\n1\n\n\n3\n1\n/tmp/somerepo\n2\ny\n'],
     // `files`, the other arm: one answer, `out` only, `root` left null. This is also the
     // per-pack arm — `choose`, then five y/n — and the subset it keeps is NON-CONTIGUOUS
     // (rigor and process, skipping craft, ops and comms), so a port that dropped the filter and kept
@@ -588,6 +592,25 @@ test('the project arm asks a sixth question and the files arm does not', () => {
   }]);
 });
 
+test('the project arm asks the shared-tier question with the trade and the machine figure; the files arm does not', () => {
+  const asked = runs()['wizard-project-tier'];
+  assert.deepEqual(asked.results, [{
+    theme: 'neutral', posture: 'peer', mode: 'direct',
+    doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null, sharedTier: true,
+    emit: 'opencode', out: '/tmp/somerepo', root: '/tmp/somerepo', footprint: 'lean',
+  }]);
+  for (const line of [
+    'Shared tier — Benefit: This project sees your machine-wide rules, profile and memory map, so what you taught one tool or repo applies here too.',
+    'Cost: About 0 tokens at every session start, growing with your rules.',
+    'Shared tier for this project:',
+    '--shared-tier on',
+  ]) assert.ok(asked.text.includes(line), asked.text.slice(-1800) + `\n  missing: ${line}`);
+  // The default answer keeps it off, and the files arm never asks.
+  assert.ok(!('sharedTier' in runs()['wizard-project'].results[0]));
+  assert.ok(!runs()['wizard-project'].text.includes('--shared-tier'));
+  assert.ok(!runs()['wizard-files'].text.includes('Shared tier'));
+});
+
 test('a narrowed pack selection reaches the plan line, and an emptied one says none', () => {
   // The whole point of the question: an answer that is not "all four" must arrive in the argv
   // the wizard prints and then runs. `all` elides the flag (asserted above), so these two are
@@ -615,7 +638,8 @@ test('the summary job produces rows and not an empty list', () => {
     'the opencode PROJECT emit did not reach the LSP rows');
   assert.ok(!results[3].some(([, t]) => t.includes('Java 21+ (jdtls)')),
     'a claude emit reached the LSP rows, which are opencode-only');
-  // Nine keys, and the four exclusion/pack/kit ones are the only lists. `doctrines` distinguishes
+  // Ten keys, and the four exclusion/pack/kit ones are the only lists. `sharedTier` is a boolean: false
+  // with no `Shared tier: on` line, which is written only for a per-repo install that reads the tier. `doctrines` distinguishes
   // three states (null = no carrier said, [] = a carrier said `none`, a list = it named packs);
   // `excludeRules` and `excludeSkills` have only two, because their markers are written only
   // when something IS excluded and their absence is therefore an answer — `[]` here, since this
@@ -626,6 +650,7 @@ test('the summary job produces rows and not an empty list', () => {
   assert.deepEqual(results[6], {
     theme: 'pirate', posture: 'artisan', mode: 'foreman', emit: 'claude-global', footprint: 'full',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: [], excludeSkills: [], kits: [],
+    sharedTier: false,
   });
 });
 
@@ -657,7 +682,7 @@ test('every job wrote something, and every newline in it is the platform\'s', ()
   // a stream of untranslated ones. A bare LF is an LF that is not the tail of a CRLF, and on
   // Windows there must be none; on POSIX there must be no CR at all.
   const all = runs();
-  assert.equal(Object.keys(all).length, 21, 'a job was dropped from the table');
+  assert.equal(Object.keys(all).length, 22, 'a job was dropped from the table');
   const win = process.platform === 'win32';
   let newlines = 0;
   for (const [name, { bytes }] of Object.entries(all)) {

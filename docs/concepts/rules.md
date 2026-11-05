@@ -48,6 +48,13 @@ A global install's text names these locations as absolute paths. A project insta
 
 Nothing is deleted. After every copy is read back, the old `memory/` moves to `archived-memory/<stamp>/` beside it, and the notes and whole files move to the same kind of folder. The host store returns to its seed and keeps its `README.md`. Hand-written index text and `archive/` stay in that folder, and the report line names every other file that stayed there and did not fold. A store or file already linked to the tier, in either direction, is left alone. If a copy fails, the old store stays readable, the emit reports it on stderr and goes on, and the next emit retries. There is no automatic way back: to downgrade, restore the archived folder by hand.
 
+**A project that reads the tier.** A project install does not read the tier by default: it sees only its own harness, as before. `--shared-tier on` (a `geneseed build` flag, a `setup` question for a per-repo install, and a switch on the project's panel in the console) adds a marker line, `Shared tier: on`, to the project's instructions file, and `rebuild-all` and `upgrade` keep it. Then the session start injects your machine-wide rules, profile and memory map as a labelled, read-only view, before the project's own docs. Writes stay local: the project keeps its own `memory/`, and its text keeps relative paths. A global install owns the tier, so the option is refused for one.
+
+- **Benefit:** This project sees your machine-wide rules, profile and memory map, so what you taught one tool or repo applies here too.
+- **Cost:** About 1 500 tokens at every session start, growing with your rules. The hook budget is fixed at 9 000 characters, and the tier loads before this project's docs, so a large tier can push them down to a lazy listing.
+
+Only one hook injects the tier. On Claude Code, Bob and OpenClaude a wired project hook decides, and the global hook stands down, except under `$GENESEED_STACK_GLOBAL`, when the global hook injects and the project hook skips the tier. On OpenCode both plugins run, so the project plugin skips the tier when a global OpenCode install exists, and injects it when there is none. With the option off, a project gets no tier from its own hook, as today.
+
 ### Doctrine packs
 
 {N_PACKS} packs ship, one file each under `src/doctrines/`:

@@ -564,6 +564,22 @@ export function kitsOfDir(d, host = null, notify = null) {
   }, [], host);
 }
 
+/** `Shared tier: on` — written only when a project install reads the machine tier. */
+const SHARED_TIER_RE = /^Shared tier:[ \t]*on[ \t]*$/m;
+
+/**
+ * Whether a DEPLOYED install reads the shared tier (`--shared-tier on`), read back so `rebuild-all`,
+ * `upgrade`, `diff`, the wizard and the console re-render it. A missing line is `false`: the default
+ * is off, and the marker is only ever written when on (the skills line's contract).
+ */
+export function sharedTierOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    return SHARED_TIER_RE.test(text) || undefined;
+  }, false, host);
+}
+
 /**
  * Whether a DEPLOYED install keeps one law's hook gate armed — `true` (armed) or `false` (its
  * `<marker>: off` line, written by a build with that gate's `--no-*-gate` flag; `GATE_SWITCHES`).
@@ -854,7 +870,7 @@ export function installsReferencingShim(shimPath = hookShimPath(), targets = ins
 export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
-    excludeRules: null, excludeSkills: null, kits: null,
+    excludeRules: null, excludeSkills: null, kits: null, sharedTier: false,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
@@ -903,6 +919,7 @@ export function installedDefaults() {
     if (!found.kits?.length) {
       try { found.kits = kitsOfDir(base); } catch { found.kits = []; }
     }
+    if (!found.sharedTier) found.sharedTier = sharedTierOfDir(base);
   }
   return found;
 }

@@ -21,7 +21,7 @@
  */
 import path from 'node:path';
 
-import { sessionFiles } from '../hosts/hooks-context.mjs';
+import { sessionFiles, tierSessionChars } from '../hosts/hooks-context.mjs';
 import { carriersFor } from '../hosts/installs.mjs';
 import { frontmatter } from '../hosts/memory-files.mjs';
 import { listDir } from '../hosts/hooks-prims.mjs';
@@ -36,6 +36,28 @@ import { isFile, readText } from '../lib/fs.mjs';
  * exactly the measured overrun and say why in that test's docblock, which keeps its history.
  */
 export const CARRIER_CEILING = { full: 66_432, lean: 41_612 };
+
+/**
+ * THE TRADE OF `--shared-tier on`, stated once. `--help` (js/cli-table.json), the console's toggle
+ * and docs/concepts/shared-tier.md quote these sentences; tests/unit/shared_tier_option.test.mjs
+ * holds the copies equal. The cost line carries the example figure (1 500 tokens, the estimate
+ * for a tier of 6 010 bytes before the memory map); the `setup` prompt swaps in this machine's.
+ */
+export const SHARED_TIER_BENEFIT = 'This project sees your machine-wide rules, profile and memory map, so what you taught '
+  + 'one tool or repo applies here too.';
+export const sharedTierCost = (figure = '1 500') => `About ${figure} tokens at every session start, growing with your rules. `
+  + 'The hook budget is fixed at 9 000 characters, and the tier loads before this project\'s docs, '
+  + 'so a large tier can push them down to a lazy listing.';
+
+/**
+ * This machine's tier cost as the prompt shows it: characters over four (the estimate this module
+ * always makes), rounded to 100 so the figure does not pretend to a precision it lacks, with a thin
+ * grouping space as the spec writes it. An empty tier says so instead of "about 0".
+ */
+export function sharedTierFigure() {
+  const tokens = Math.round(tierSessionChars() / 4 / 100) * 100;
+  return tokens > 0 ? String(tokens).replace(/\B(?=(\d{3})+$)/g, ' ') : null;
+}
 
 /**
  * A frontmatter value as the host shows it. The emit writes descriptions JSON-escaped

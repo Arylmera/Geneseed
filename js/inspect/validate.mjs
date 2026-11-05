@@ -34,7 +34,7 @@ export const VALIDATE_USAGE = [
   'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
   '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
-  '                         [--exclude-skills SKILLS] [--kits KITS] [--no-secrets-gate]',
+  '                         [--exclude-skills SKILLS] [--kits KITS] [--shared-tier on|off] [--no-secrets-gate]',
   '                         [--no-done-gate] [--no-deletion-gate] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
@@ -130,7 +130,7 @@ export function cmdValidate(args) {
     const opts = {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
-      excludeSkills: args.excludeSkills, kits: args.kits,
+      excludeSkills: args.excludeSkills, kits: args.kits, sharedTier: args.sharedTier === 'on',
       ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, args[g.arg] ? false : null])),
     };
     let scanDirs;

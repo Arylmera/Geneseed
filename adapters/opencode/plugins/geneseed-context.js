@@ -264,6 +264,18 @@ async function readsTier(dir) {
   return isHostConfigDir(dir)
 }
 
+// A PROJECT install with `Shared tier: on` in its AGENT.md reads the tier too (the hook's projectReadsTier),
+// unless a global OpenCode install exists: its plugin loads beside this one and already injects it, so a
+// second tier here would be a double. The global install's marker is <config dir>/.geneseed-emit.
+async function projectReadsTier(dir) {
+  try {
+    if (!/^Shared tier:[ \t]*on[ \t]*\r?$/m.test(await fs.readFile(path.join(dir, "AGENT.md"), "utf8"))) return false
+    const cfg = process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
+    return !(await isFile(path.join(cfg, ".geneseed-emit")))
+  } catch { return false }
+}
+async function tierFor(dir) { return (await readsTier(dir)) || (await projectReadsTier(dir)) }
+
 // A session file's text, CRLF-folded and trimmed; null when missing, unreadable or still its seed.
 async function sessionText(abs) {
   let text
@@ -279,7 +291,7 @@ async function sessionText(abs) {
 async function sessionFiles(dir) {
   const found = []
   if (!dir) return found
-  const tier = await readsTier(dir)
+  const tier = await tierFor(dir)
   const entry = (rel, abs, text, label) => {
     const nudge = rel === "memory/MEMORY.md" ? memoryNudge(text) : ""
     found.push({ rel, abs, label, text: nudge ? `${text}\n${nudge}` : text })
@@ -669,7 +681,7 @@ async function resolveWikiFile() {
       if (!host && (await isFile(p))) host = p
     }
   }
-  if (harness && (await readsTier(harness)) && (!host || (await sessionText(host)) === null)) {
+  if (harness && (await tierFor(harness)) && (!host || (await sessionText(host)) === null)) {
     const shared = path.join(machineDir(), WIKI_NAMES[0])
     if ((await sessionText(shared)) !== null) return shared
   }

@@ -277,7 +277,9 @@ function learnAgentLesson(meta, notes, args) {
     const lesson = splitLines(text)[0].replace(/^[-*]+/, '').trim();
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
     if (n >= 10 && n <= 300) {
-      err(`[learn] agent lesson -> ${appendAgentLesson(memDir, agent, lesson)}\n`);
+      const written = appendAgentLesson(memDir, agent, lesson);
+      err(written ? `[learn] agent lesson -> ${written}\n`
+        : `[learn] ${agent}'s lesson file is not UTF-8 - left as it is, lesson dropped\n`);
     }
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);

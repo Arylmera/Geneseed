@@ -97,7 +97,7 @@ export function configDefaults() {
 const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
   '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules', '--exclude-skills': 'excludeSkills',
-  '--kits': 'kits',
+  '--kits': 'kits', '--shared-tier': 'sharedTier',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
 };
@@ -151,6 +151,7 @@ function choicesFor() {
     '--posture': discoverNames('postures', 'peer'),
     '--mode': discoverNames('modes', 'direct'),
     '--trust': Object.keys(PRESETS),
+    '--shared-tier': ['on', 'off'],
   };
 }
 
@@ -333,6 +334,7 @@ export function parseArgs(argv, defaults) {
     excludeRules: defaults.excludeRules,
     excludeSkills: defaults.excludeSkills ?? [],
     kits: defaults.kits ?? [],
+    sharedTier: 'off',
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
     syncThemes: false, validateOnly: false, verbose: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),

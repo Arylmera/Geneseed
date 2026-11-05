@@ -584,6 +584,9 @@ export function effectiveTheme(cfg, themeName, {
   const kits = activeKits(cfg);
   theme.KITS_LINE = kits.length ? `\nActive kits: ${kits.map(([k]) => k).join(', ')}\n` : '';
   theme.KITS_BODY = kitsBody(cfg, theme, lawsPrefix);
+  // The shared-tier marker, under the same contract (`sharedTierOfDir` reads it): written only when
+  // `on`, so a default build stays byte-identical. Not `GATE_SWITCHES`, which holds `--no-*` disarms.
+  theme.SHARED_TIER_LINE = cfg.sharedTier ? '\nShared tier: on\n' : '';
   // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
   // written only when its gate is OFF, so a default build stays byte-identical and a missing
   // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so

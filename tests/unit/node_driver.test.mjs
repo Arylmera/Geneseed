@@ -89,6 +89,8 @@ const VALUED_FLAGS = [
   // Kits switched on: `none` binds the empty list. It is the one value the shipped tree accepts
   // while no kit ships; named kits are `tests/unit/kits.test.mjs`'s, on a fixture tree.
   ['--kits', 'kits', 'none', []],
+  // The project install's switch for the machine tier: `on`/`off`, bound as typed (the driver compares the string).
+  ['--shared-tier', 'sharedTier', 'on'],
   ['--out', 'out', 'Elsewhere'],
   // The alias, and the one row a set-equality alone could not state: `--target` binds `out`.
   ['--target', 'out', 'Elsewhere'],

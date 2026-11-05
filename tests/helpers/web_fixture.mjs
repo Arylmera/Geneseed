@@ -40,13 +40,14 @@ let SAVED_RELOCATION = null;
 /**
  * THE WEB TESTS OVER A HOST'S OWN FILES. An emit seeds the shared tier in the sandboxed home, and a
  * global install now edits the tier instead (`tierOf`); the tier's own cases live in
- * `shared_tier_console.test.mjs`. Dropping `memory/` is what `tierOf` reads as "no tier".
+ * `shared_tier_console.test.mjs`. Dropping the tier folder is what `tierOf` reads as "no tier": it asks
+ * the hook's question, whether the folder exists, so a tier with no `memory/` is still one.
  * Guarded: the temp root is the only place this may delete.
  */
 export function dropSandboxTier() {
-  const memory = sharedPaths().memory;
-  if (!memory.startsWith(TMP_ROOT)) throw new Error(`refusing to drop a tier outside the temp root: ${memory}`);
-  fs.rmSync(memory, { recursive: true, force: true });
+  const { root } = sharedPaths();
+  if (!root.startsWith(TMP_ROOT)) throw new Error(`refusing to drop a tier outside the temp root: ${root}`);
+  fs.rmSync(root, { recursive: true, force: true });
 }
 
 export function webFixture() {

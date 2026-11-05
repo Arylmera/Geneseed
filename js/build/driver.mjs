@@ -670,12 +670,12 @@ const PROJECT_EMITS = {
  * carry straight past the parameter default.
  */
 function axesCfg({
-  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates
+  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates
 }) {
   return makeCfg({
     ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
     ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
-    ...(excludeSkills ? { excludeSkills } : {}), ...(kits ? { kits } : {}),
+    ...(excludeSkills ? { excludeSkills } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
     // The gate switches (`GATE_SWITCHES` keys): only an explicit `false` disarms; `null` (no
     // opinion) keeps the gate.
     ...Object.fromEntries(GATE_SWITCHES.filter((g) => gates[g.key] === false).map((g) => [g.arg, true])),
@@ -684,7 +684,7 @@ function axesCfg({
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, seed = true, ...gates
+  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, seed = true, ...gates
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
@@ -695,7 +695,7 @@ export function emitProjectInto(host, {
   // the git root, which for a temp dir inside a repo is that repo, outside the sandbox.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
     { theme, footprint, root, seed }, out,
   ));
 }
@@ -710,16 +710,16 @@ export function emitProjectInto(host, {
  */
 export function buildInto({
   theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
-  excludeRules = null, excludeSkills = null, kits = null, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, ...gates
 }) {
   return withPlatformNewlines(() => build(axesCfg({
-    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
+    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
     theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null, kits = null, sharedRoot = undefined, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, sharedRoot = undefined, ...gates
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -736,7 +736,7 @@ export function emitGlobalInto(host, {
   // the same scar the footprint left in `diffCollect`, one axis over each time.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
     { theme, footprint, root: null, cfgDir, sharedRoot }, out,
   ));
 }
@@ -821,6 +821,12 @@ function run(argv) {
         + 'a per-repo emit writes under --out/--root');
     }
     args.cfgDir = resolveOut(args.cfgDir);
+  }
+  // D11: the option belongs to a project install. A global install owns the tier, and a plain
+  // bundle has no host to read it with, so either would write a marker nothing honours.
+  if (args.sharedTier === 'on' && (args.emit === 'files' || args.emit.endsWith('-global'))) {
+    die(2, `argument --shared-tier: only applies to a per-repo host emit (got --emit ${args.emit}); `
+      + 'a global install already owns the shared tier');
   }
   const cfg = makeCfg(args);
   warnDroppedKits(args, out);

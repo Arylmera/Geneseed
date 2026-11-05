@@ -312,6 +312,8 @@ export default function Hosts({
       posture: p.posture || inst.posture || 'peer',
       mode: p.mode || inst.mode || 'direct',
       trust: p.trust || inst.trust || 'balanced',
+      // Per-project installs only: a global install owns the shared tier.
+      sharedTier: p.sharedTier ?? !!inst.sharedTier,
     }
   }
   const setPick = (inst, key, v) =>
@@ -323,7 +325,8 @@ export default function Hosts({
       c.footprint === (inst.footprint || 'lean') &&
       c.posture === (inst.posture || 'peer') &&
       c.mode === (inst.mode || 'direct') &&
-      c.trust === (inst.trust || 'balanced')
+      c.trust === (inst.trust || 'balanced') &&
+      (inst.scope === 'global' || c.sharedTier === !!inst.sharedTier)
     )
   }
   const options = {
@@ -337,7 +340,7 @@ export default function Hosts({
   // Install a not-installed location, or rebuild an active one with its picks. Both go
   // through the 'install' action (a non-destructive in-place emit), streamed to the console.
   const applyVoice = async (inst) => {
-    const { theme, footprint, posture, mode, trust } = choiceFor(inst)
+    const { theme, footprint, posture, mode, trust, sharedTier } = choiceFor(inst)
     const tool = hostInfo(inst.host).label
     const axes = `${footprint} footprint, ${posture} posture, ${mode} mode, ${trust} loop trust`
     const msg =
@@ -359,6 +362,8 @@ export default function Hosts({
         posture,
         mode,
         trust,
+        // A global install never sends it: the server refuses a global `true`.
+        ...(inst.scope === 'global' ? {} : { sharedTier }),
       })
   }
 

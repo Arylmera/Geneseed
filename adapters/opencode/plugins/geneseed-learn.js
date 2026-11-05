@@ -270,7 +270,10 @@ async function appendAgentLesson(memDir, agent, lesson) {
   const file = path.join(dir, `${agent}.md`)
   let bullets = []
   try {
-    bullets = (await fs.readFile(file, "utf8")).split("\n").filter((l) => l.startsWith("- "))
+    // The fold's rule (js/build/fold.mjs foldRules): a file that is not UTF-8 is left whole, the lesson dropped.
+    const raw = await fs.readFile(file)
+    if (!raw.equals(Buffer.from(raw.toString("utf8")))) return null
+    bullets = raw.toString("utf8").split("\n").filter((l) => l.startsWith("- "))
   } catch { /* first lesson for this agent */ }
   const day = new Date().toISOString().slice(0, 10)
   bullets.push(`- ${day}: ${lesson.replace(/\s+/g, " ").trim()}`)
@@ -517,7 +520,7 @@ async function storeDistil(output, { isChild, memDir, agentName, existing }) {
     const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
     if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
     const f = await appendAgentLesson(memDir, agentName, lesson)
-    say(`agent lesson -> ${f}`, "info")
+    say(f ? `agent lesson -> ${f}` : `${agentName}'s lesson file is not UTF-8 - left as it is, lesson dropped`, "info")
     return
   }
   const res = await writeMemories(output, memDir, existing)

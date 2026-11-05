@@ -22,7 +22,7 @@ import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { autostartPaths } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
-  trustOfDir,
+  trustOfDir, sharedTierOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -197,6 +197,8 @@ export function apiInstalls(state) {
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
       trust: trustOfDir(root, host),
+      // A project install's switch for reading the machine tier (a global install owns it).
+      sharedTier: scope === 'global' ? false : sharedTierOfDir(root, host),
       // The install a request naming none reads (`defaultView`): the console's pickers start on it.
       default: !!def && samePath(viewCfg(host, scope, root), def[0]),
     });

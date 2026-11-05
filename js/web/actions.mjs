@@ -48,7 +48,7 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, renderedTier,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -142,6 +142,15 @@ function bodyExcludeRules(body) {
  */
 function bodyKits(body) {
   return bodyList(body, 'kits', () => [...loadKits().keys()]);
+}
+
+/**
+ * A request body's `sharedTier` — the project install's switch for reading the machine tier. Only
+ * a real JSON boolean counts, as a gate's does: anything else keeps the install's own answer.
+ */
+function bodySharedTier(body, root, host) {
+  const said = bget(body, 'sharedTier');
+  return typeof said === 'boolean' ? said : sharedTierOfDir(root, host);
 }
 
 /**
@@ -635,6 +644,7 @@ export function apiRestore(state, files) {
       excludeSkills: excludedSkillsOfDir(target),
       // The kits: a restored AGENT.md keeps its Kits block and `Active kits:` line.
       kits: kitsOfDir(target),
+      sharedTier: sharedTierOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));
@@ -758,10 +768,15 @@ export function apiInstallCmd(state, body) {
         + [...loadKits().keys()].join(', ') };
     }
   } catch (e) { return { error: String(e?.message ?? e) }; }
+  // D11: the shared tier is a project install's option; a global install owns it.
+  const sharedTier = scope === 'global' ? false : bodySharedTier(body, root, host);
+  if (scope === 'global' && bget(body, 'sharedTier') === true) {
+    return { error: 'the shared tier is a project option — a global install already owns it' };
+  }
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
-    kits ?? kitsOfDir(root, host));
+    kits ?? kitsOfDir(root, host), sharedTier);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -905,6 +920,7 @@ export function apiDeployCmd(state, body) {
   const gates = bodyGates(body, root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host),
+    bodySharedTier(body, root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

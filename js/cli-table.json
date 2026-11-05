@@ -249,6 +249,21 @@
         },
         {
           "names": [
+            "--shared-tier"
+          ],
+          "dest": "shared_tier",
+          "metavar": null,
+          "help": "let a per-repo install also read the machine-wide shared tier: on|off (default: off; refused for a global or bundle emit). Benefit: This project sees your machine-wide rules, profile and memory map, so what you taught one tool or repo applies here too. Cost: About 1 500 tokens at every session start, growing with your rules. The hook budget is fixed at 9 000 characters, and the tier loads before this project's docs, so a large tier can push them down to a lazy listing.",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--out"
           ],
           "dest": "out",

@@ -168,13 +168,14 @@ export function tierOf(state) {
   try {
     if (!withDiscardableStderr(() => isHostGlobalDir(null, state.target))) return null;
     const tier = sharedPaths();
-    return isDir(tier.memory) ? tier : null;
+    // The tier exists when its folder does, the hook's test: a tier with rules and no memory/ is still one.
+    return isDir(tier.root) ? tier : null;
   } catch { return null; }
 }
 
 /**
- * Always `<target>/memory` (a global install: the tier's) — never the CWD-scanning resolver. The ONE copy: `actions.mjs` and
- * `user-files.mjs` delete and promote facts in the same directory this lists.
+ * Always `<target>/memory` (a global install: the tier's) — never the CWD-scanning resolver. The ONE
+ * copy: `actions.mjs` and `user-files.mjs` delete and promote facts in the same directory this lists.
  */
 export const memoryDir = (state) => tierOf(state)?.memory ?? path.join(state.target, 'memory');
 const notebookDir = (state) => path.join(state.target, 'notebook');

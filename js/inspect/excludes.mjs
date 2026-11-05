@@ -22,7 +22,8 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync }
   from 'node:fs';
 import path from 'node:path';
 import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/stubs.mjs';
-import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
+import { archiveStore } from '../hosts/memory-files.mjs';
+import { loadJsonObject, wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
 import { GLOBAL_MANIFEST, HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import { readText, writeText, printOut, printErr, isDir, isFile, isOsError } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent, get, isDict } from '../lib/json.mjs';
@@ -124,10 +125,13 @@ function same(stored, repo) {
  */
 function updateShared(change) {
   const dir = machineDir();
+  const unsound = !listIsSound(dir);
   const data = readExcludes(dir);
   const before = JSON.stringify(data.excludes);
   data.excludes = change(data.excludes);
   if (JSON.stringify(data.excludes) === before) return;   // a no-op remove creates nothing
+  // D10: a shared list that does not parse is moved aside before the write replaces it.
+  if (unsound) archiveStore(path.join(dir, EXCLUDES_FILE));
   mkdirSync(dir, { recursive: true });
   writeExcludes(dir, data);
 }
@@ -155,7 +159,7 @@ export function excludeAdd(target) {
  * One install's half of `excludeAdd`: wire the per-repo suppression and keep the receipt. Returns
  * the files it wrote in the repo, which belongs to the user: the fold names each one.
  */
-function addToHost(host, cfg, repo, messages) {
+function addToHost(host, cfg, repo, messages, strict = false) {
   const written = [];
   const data = readExcludes(cfg);
   const prior = data.excludes.find((e) => isDict(e) && same(get(e, 'path'), repo));
@@ -175,7 +179,17 @@ function addToHost(host, cfg, repo, messages) {
     // else: the entry was already present for some OTHER reason (e.g. a project install's
     // own project-bypasses-global wiring, or a bailed write) — do NOT fabricate ownership,
     // or a later excludeRemove would strip wiring we never created.
-    if (!added.length) messages.push(`${host}: claudeMdExcludes already present (kept)`);
+    if (!added.length) {
+      // `wireClaudeExcludes` answers [] for both 'already there' and 'could not write' (a commented,
+      // torn or unwritable settings file). Only the first is wired; the second must not be counted as it.
+      if (hasClaudeExclude(localSettings(repo, host), claudeMdEntry(cfg))) {
+        messages.push(`${host}: claudeMdExcludes already present (kept)`);
+      } else {
+        const why = `${host}: claudeMdExcludes NOT wired in ${localSettings(repo, host)} (see the warning above)`;
+        if (strict) throw new Error(why);
+        messages.push(why);
+      }
+    }
     const note = worktreeNote(host, cfg, repo);
     if (note) messages.push(note);
   }
@@ -206,6 +220,12 @@ function addToHost(host, cfg, repo, messages) {
   data.excludes = entries;
   writeExcludes(cfg, data);
   return written;
+}
+
+/** Does the settings file already carry this `claudeMdExcludes` entry? A file that does not load carries none. */
+function hasClaudeExclude(file, entry) {
+  const { state, data } = loadJsonObject(file);
+  return state === 'ok' && Array.isArray(get(data, 'claudeMdExcludes')) && get(data, 'claudeMdExcludes').includes(entry);
 }
 
 /** What `addToHost` would write in `repo`, for a dry run. */
@@ -266,7 +286,7 @@ export function foldExcludes(host, cfg, dryRun = false) {
       updateShared((list) => [...list, ...toShare.map((r) => ({ path: r.split(path.sep).join('/') }))]);
     }
     for (const repo of toWire) {
-      try { paths.push(...addToHost(host, cfg, repo, notices)); } catch (e) { errors.push(`${repo}: ${e.message}`); }
+      try { paths.push(...addToHost(host, cfg, repo, notices, true)); } catch (e) { errors.push(`${repo}: ${e.message}`); }
     }
   }
   return { added: toShare.length, wired: toWire.length - errors.length, paths, notices, errors };

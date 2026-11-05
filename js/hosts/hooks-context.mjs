@@ -244,9 +244,43 @@ function tierFile(rel) {
   }[rel] ?? null;
 }
 
-/** Only a global install reads the tier. One that cannot tell stays on its own host layer. */
+/**
+ * Only a global install of THIS host reads the tier, as the OpenCode plugin's `readsTier` has it
+ * (it answers for OpenCode alone). The host is the one the emitted hook passed: an emit from before
+ * `--host` names none, and then any host's global qualifies. One that cannot tell stays on its own layer.
+ */
+let RAW_HOST = null;
 function readsTier(hookRoot) {
-  try { return withDiscardableStderr(() => isHostGlobalDir(null, hookRoot)); } catch { return false; }
+  try { return withDiscardableStderr(() => isHostGlobalDir(RAW_HOST, hookRoot)); } catch { return false; }
+}
+
+/** `Shared tier: on` as the build writes it (`--shared-tier on`); the OpenCode context plugin reads the same line. */
+const SHARED_TIER_ON = /^Shared tier:[ \t]*on[ \t]*\r?$/m;
+
+/**
+ * Does this PROJECT install read the machine tier? Its carrier says `Shared tier: on`, and no
+ * global hook is already injecting it: under `$GENESEED_STACK_GLOBAL` the global hook does not
+ * stand down (`globalHookStandingDown`), so a second tier here would be a double. Without the
+ * flag the global hook stands down for a wired project, and this hook is the only injector.
+ * A project with the option off reads no tier, as before.
+ */
+function projectReadsTier(hookRoot) {
+  if (process.env.GENESEED_STACK_GLOBAL) return false;
+  return SHARED_TIER_ON.test(installCarrier(hookRoot));
+}
+
+/**
+ * The characters the tier would add to a session: every changed-from-seed file the hook injects
+ * from it. The `setup` prompt turns this into the token figure it shows beside the option.
+ */
+export function tierSessionChars() {
+  let n = 0;
+  for (const rel of SESSION_FILES) {
+    const abs = tierFile(rel);
+    const text = abs ? sessionText(abs) : null;
+    if (text !== null) n += text.length;
+  }
+  return n;
 }
 
 /** A vault folder's `.md` notes, dot-folders skipped: a vault keeps its config and trash inside. */
@@ -361,7 +395,7 @@ function sessionEntry(rel, abs, text, label) {
  * A missing or unreadable file is simply absent — this is best-effort context, never a gate.
  */
 export function sessionFiles(hookRoot) {
-  const tier = readsTier(hookRoot);
+  const tier = readsTier(hookRoot) || projectReadsTier(hookRoot);
   const found = [];
   for (const rel of SESSION_FILES) {
     const wiki = rel === 'geneseed-wiki.jsonc';
@@ -620,6 +654,7 @@ function installCarrier(hookRoot) {
 
 export function cmdContext(args) {
   HOST = (args && args.host) || 'claude';
+  RAW_HOST = (args && args.host) || null;
   // Discovery (and the stand-down) runs against the SESSION's project root, not the harness
   // package dir: `$CLAUDE_PROJECT_DIR` when the host sets it (`hookProjectDir`), because
   // SessionStart also fires on resume/compact/clear, after the agent may have `cd`'d away.

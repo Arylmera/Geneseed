@@ -281,7 +281,7 @@ export function apiRulesPromote(state, body) {
 
 // ---- PROFILE.md --------------------------------------------------------------------------
 
-/** Beside the deployed AGENT.md. */
+/** In `userDir`: the tier for a global install, else beside the deployed AGENT.md. */
 export const PROFILE_FILE = 'PROFILE.md';
 const profilePath = (state) => path.join(userDir(state), PROFILE_FILE);
 

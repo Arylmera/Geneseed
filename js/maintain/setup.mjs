@@ -51,10 +51,11 @@ import { discoverNames, GATE_SWITCHES, PACK_ORDER, loadKits } from '../build/sou
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
+import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../inspect/cost.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults,
-  readJsonMaybe, themeFiles,
+  readJsonMaybe, sharedTierOfDir, themeFiles,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
@@ -248,6 +249,22 @@ export function askKits(deployed = null, kits = null) {
 }
 
 /**
+ * The shared-tier question, for a PROJECT install only (D11: a global install owns the tier).
+ * The default is what the target install already says, so holding Enter keeps it; the trade is
+ * printed above the question, with this machine's own token figure in place of the example.
+ */
+function askSharedTier(emit, root) {
+  const [host] = EMIT_HOST_SCOPE.get(emit) ?? [];
+  let on = false;
+  try { on = sharedTierOfDir(resolveOut(root || '.'), host); } catch { /* unreadable: off */ }
+  const figure = sharedTierFigure();
+  printOut(`\nShared tier — Benefit: ${SHARED_TIER_BENEFIT}\n  Cost: ${sharedTierCost(figure ?? '0')}\n`);
+  return askChoice('Shared tier for this project',
+    [['no', 'this project reads only its own harness'], ['yes', 'also read your machine-wide tier']],
+    on ? 'yes' : 'no') === 'yes';
+}
+
+/**
  * `_harness_setup._collect_setup_lines` — the six questions, the plan, the confirm.
  *
  * Returns the selection, or null when the confirm is declined. Every default is the
@@ -294,12 +311,14 @@ export function collectSetupLines(kitMap = null) {
     inst.footprint || 'lean');
   let out = null;
   let root = null;
+  let sharedTier = false;
   // Every PROJECT emit needs the repo root — claude/bob/openclaude included: without `--out`
   // their CLAUDE.md/.claude land in the generator's default ./Harness, where the host never
   // looks.
   if (['opencode', 'claude', 'bob', 'openclaude'].includes(emit)) {
     root = ask('Repo root to install into', '.');
     out = root;
+    sharedTier = askSharedTier(emit, root);
   } else if (emit === 'files') {
     out = ask('Output dir for the bundle', 'Harness');
   }
@@ -326,13 +345,13 @@ export function collectSetupLines(kitMap = null) {
   const gated = Object.values(gates).some((on) => on === false);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills, gates, kits).join(' ')}\n`);
+      excludeRules, undefined, excludeSkills, gates, kits, sharedTier).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
   // The key only when there is something to carry, so a selection that excludes no skill and
   // switches off no gate is the same object it was before either existed.
   return {
     theme, posture, mode, doctrines, excludeRules, ...(excludeSkills ? { excludeSkills } : {}),
-    ...(gated ? { gates } : {}), ...(kits ? { kits } : {}),
+    ...(gated ? { gates } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
     emit, out, root, footprint,
   };
 }
@@ -517,6 +536,7 @@ export function setupLines() {
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
     doctrines = null, excludeRules = null, excludeSkills = null, gates = {}, kits = null,
+    sharedTier = false,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, which may carry hand edits (or
@@ -535,7 +555,7 @@ export function setupLines() {
   // runs must carry the pack selection the plan line just previewed, or the wizard would print
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
-    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits);
+    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits, sharedTier);
   printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {

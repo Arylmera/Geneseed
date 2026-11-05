@@ -477,6 +477,7 @@ export function statusLines(d, color = false) {
     rows.push([`${p.host}:${p.scope}`, [p.state, p.theme, p.footprint, `${p.posture}/${p.mode}/${p.trust}`,
       packs, excl, ...(p.excludeSkills?.length ? [`skills off: ${p.excludeSkills.join(',')}`] : []),
       ...(p.kits?.length ? [`kits: ${p.kits.join(',')}`] : []),
+      ...(p.sharedTier ? ['shared tier: on'] : []),
       // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
         .map((g) => `${g.marker.toLowerCase()}: off${g.law ? ` (Law ${g.law} text still binds)` : ''}`)]
