@@ -541,7 +541,7 @@ export function resolveMemoryDir(explicit) {
     try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
   }
   const stores = bases.map((b) => path.join(b, 'memory'));
-  stores.push(sharedPaths().memory);
+  try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store */ }
   try { stores.push(path.join(opencodeConfigDir(), 'memory')); } catch { /* best-effort, as the Python */ }
   return stores.find(isDir) ?? null;
 }

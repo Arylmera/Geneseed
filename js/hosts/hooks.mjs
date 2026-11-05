@@ -58,6 +58,7 @@ import { readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
@@ -670,9 +671,9 @@ export const cmdGitGate = guardGate(gitGate, 'git-gate');
  * `_rule_gate_target` — name the store a write would land in, or null for ordinary work.
  *
  * A deployed install's folder and file names are theme-INDEPENDENT by design, so this
- * matches literal names and needs no install lookup. `user-rules.md` and `MEMORY.md` are
- * Geneseed's own coinage and match anywhere; any other markdown matches only inside THIS
- * install's `<root>/memory/`.
+ * matches literal names and needs no install lookup. `user-rules.md`, `user-rules.draft.md` and
+ * `MEMORY.md` are Geneseed's own coinage and match anywhere; any other markdown matches only
+ * inside THIS install's `<root>/memory/` or the machine tier's `memory/`.
  */
 // The close of the process-1 text, word for word the OpenCode guard's PERSIST_ASK (tests pin
 // both). A weak model once took a refusal as leave to write the same file through a shell
@@ -690,12 +691,16 @@ function ruleGateTarget(p, root) {
   const name = p.split(/[\\/]/).pop().toLowerCase();
   if (name === 'user-rules.md') return 'user-rules.md';
   if (name === 'memory.md') return 'the memory index';
-  if (!root || !name.endsWith('.md')) return null;
+  if (name === 'user-rules.draft.md') return 'the rule draft';
+  if (!name.endsWith('.md')) return null;
   try {
-    const store = normcase(resolvePath(path.join(root, 'memory')));
+    // This install's store, and the machine tier's (`~/.config/geneseed/memory`): a path compare.
+    const stores = [];
+    if (root) stores.push(path.join(root, 'memory'));
+    try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store to match */ }
+    const parents = selfAndParents(resolvePath(p)).slice(1).map(normcase);
     // `.parents`, so the store dir itself is not one of its own ancestors.
-    return selfAndParents(resolvePath(p)).slice(1).some((d) => normcase(d) === store)
-      ? 'memory' : null;
+    return stores.some((s) => parents.includes(normcase(resolvePath(s)))) ? 'memory' : null;
   } catch {
     return null;
   }

@@ -1253,20 +1253,51 @@ function stripJsonc(text) {
   return res
 }
 
-async function wikiFile() {
+// The machine tier: machineDir() in js/lib/machine-dir.mjs, which a plugin cannot import.
+function machineDir() {
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
+}
+
+// The wiki manifest's names, newest first: WIKI_NAMES in js/lib/machine-dir.mjs.
+const WIKI_NAMES = ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]
+
+// The host's own config dir counts as global too, whatever its marker says (the hook's
+// isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
+async function isHostConfigDir(dir) {
+  const real = async (d) => { const r = await fs.realpath(path.resolve(d)).catch(() => path.resolve(d)); return process.platform === "win32" ? r.toLowerCase() : r }
+  const cfg = process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
+  return (await real(dir)) === (await real(cfg))
+}
+
+// Whether this install reads the machine tier: its .geneseed-emit names a -global emit, or it IS
+// the host's own config dir (the two tests of the hook's isHostGlobalDir).
+async function readsTier() {
+  const dir = path.resolve(PLUGIN_DIR, "..")
+  try {
+    if ((await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global")) return true
+  } catch { /* no marker */ }
+  return isHostConfigDir(dir)
+}
+
+// Every manifest in force: $GENESEED_WIKI alone when set, else the host layer's and, for a global
+// install, the shared one. Protection only widens, so both are read; the context plugin's
+// seed-or-real choice would need seed hashes this plugin does not carry.
+async function wikiFiles() {
   const explicit = process.env.GENESEED_WIKI
-  if (explicit && (await isFile(explicit))) return explicit
+  if (explicit && (await isFile(explicit))) return [explicit]
   const bases = []
   if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
   bases.push(path.resolve(PLUGIN_DIR, ".."))
+  if (await readsTier()) bases.push(machineDir())
+  const found = []
   for (const base of bases) {
     // wiki.jsonc and wiki.json are the legacy names from earlier seeds — still honoured.
-    for (const name of ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) {
+    for (const name of WIKI_NAMES) {
       const p = path.join(base, name)
-      if (await isFile(p)) return p
+      if (await isFile(p)) { found.push(p); break }
     }
   }
-  return null
+  return found
 }
 
 // Cached absolute prefixes, refreshed on a short TTL so a manifest edit lands
@@ -1280,9 +1311,9 @@ async function protectedPrefixes() {
   if (now - _prot.at < PROT_TTL_MS) return _prot.prefixes
   const prefixes = []
   try {
-    const file = await wikiFile()
-    if (file) {
-      const data = JSON.parse(stripJsonc(await fs.readFile(file, "utf8")))
+    for (const file of await wikiFiles()) {
+      let data
+      try { data = JSON.parse(stripJsonc(await fs.readFile(file, "utf8"))) } catch { continue } // one bad manifest hides no other
       for (const w of Array.isArray(data?.wikis) ? data.wikis : []) {
         if (!w?.path || !Array.isArray(w.protected)) continue
         for (const d of w.protected) {
@@ -1321,9 +1352,14 @@ function ruleStoreTarget(p) {
   const base = path.basename(abs).toLowerCase()
   if (base === "user-rules.md") return "user-rules.md"
   if (base === "memory.md") return "the memory index"
+  if (base === "user-rules.draft.md") return "the rule draft"
   if (!base.endsWith(".md")) return null
-  const mem = path.join(path.dirname(PLUGIN_DIR), "memory").replace(/\\/g, "/")
-  return nocase(abs).startsWith(nocase(mem) + "/") ? "memory" : null
+  // This install's store and the machine tier's: a prefix compare, like the hook's ruleGateTarget.
+  for (const dir of [path.dirname(PLUGIN_DIR), machineDir()]) {
+    const mem = path.join(dir, "memory").replace(/\\/g, "/")
+    if (nocase(abs).startsWith(nocase(mem) + "/")) return "memory"
+  }
+  return null
 }
 
 // ---- protected checks (External Gate) ------------------------------------------

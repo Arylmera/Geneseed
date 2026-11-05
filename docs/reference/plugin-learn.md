@@ -23,7 +23,9 @@ One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed
    takes the facts of a global session.
 
 The Stop hook of a global install passes `--memory <cfg>/memory` and `learn` swaps in the shared
-store when it exists.
+store when it exists. A `--memory` you type yourself is never swapped: the swap applies only to a
+hook call, which names its event. The plugin counts an install as global when its marker says so
+or when it is the host's own config dir, as the hook does.
 
 So a global install needs nothing set; use `GENESEED_HARNESS` only to pin the location. If none resolves, it logs `no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.` and does nothing.
 

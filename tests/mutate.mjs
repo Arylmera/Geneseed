@@ -627,6 +627,18 @@ export const MUTATIONS = [
       + 'install would compare against it. The other stamp tests point three roots at nothing, '
       + 'so only the test that edits each root sees this.',
   },
+  {
+    id: 'M38',
+    name: "the rule gate stops matching the machine tier's memory/",
+    file: 'js/hosts/hooks.mjs',
+    find: "    try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store to match */ }",
+    replace: '',
+    gate: ['--test', '--test-name-pattern=S3: the hook gate', 'tests/unit/opencode_guard.test.mjs'],
+    why: 'A fact written straight into ~/.config/geneseed/memory would skip the rule-vs-memory '
+      + 'question on every host at once, since the shared store is where a global install keeps '
+      + 'its facts. The table runs the hook and the guard over the same paths, so only a row of '
+      + 'the shared store itself sees it.',
+  },
 ];
 
 function run(argv) {

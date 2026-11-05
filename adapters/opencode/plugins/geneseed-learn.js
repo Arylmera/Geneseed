@@ -196,6 +196,14 @@ async function isDir(p) {
 // memory/. Only "memory" names a store: a themed "anamnesis" matched Terra's Anamnesis/ vault
 // by Windows case folding (B3). The shared store is machineDir() in js/lib/machine-dir.mjs,
 // which a plugin cannot import.
+// The host's own config dir counts as global too, whatever its marker says (the hook's
+// isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
+async function isHostConfigDir(dir) {
+  const real = async (d) => { const r = await fs.realpath(path.resolve(d)).catch(() => path.resolve(d)); return process.platform === "win32" ? r.toLowerCase() : r }
+  const cfg = process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
+  return (await real(dir)) === (await real(cfg))
+}
+
 async function resolveMemoryDir(pluginDir = PLUGIN_DIR) {
   const env = process.env.GENESEED_MEMORY
   if (env && (await isDir(env))) return env
@@ -203,6 +211,7 @@ async function resolveMemoryDir(pluginDir = PLUGIN_DIR) {
   const own = path.resolve(pluginDir, "..")
   let global = false
   try { global = (await fs.readFile(path.join(own, ".geneseed-emit"), "utf8")).trim().endsWith("-global") } catch { /* project */ }
+  global = global || (await isHostConfigDir(own))
   const cands = []
   if (harness) cands.push(path.join(harness, "memory"))
   if (global) cands.push(path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed", "memory"))
@@ -426,7 +435,7 @@ async function writeIfChanged(p, text) {
   const old = await readLines(p)
   if (old && old.join("\n") + "\n" === text) return
   // temp file + rename: two hosts can rebuild the index at once, and a reader never sees half of it
-  const tmp = `${p}.${process.pid}.tmp`
+  const tmp = `${p}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp` // two sessions in one process share a pid
   await fs.writeFile(tmp, text, "utf8")
   await fs.rename(tmp, p)
 }

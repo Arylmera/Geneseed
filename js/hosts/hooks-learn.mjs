@@ -321,10 +321,6 @@ export function cmdLearn(args) {
   // second LLM call, and the global store learning facts the project owns (Claude B4).
   if (install && globalHookStandingDown(install, hookProjectDir(), args.host, 'learn')) return 0;
 
-  // A global install's hook passes its own host store; the shared store is where its facts live
-  // once it exists, or they land in the seeded host store and wait for the next fold.
-  args = { ...args, memory: sharedStoreFor(install, args) };
-
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);
   // A genuine lifecycle-hook call names its own event — `hook_event_name` (Claude/OpenClaude)
@@ -334,6 +330,11 @@ export function cmdLearn(args) {
   // by either check in this block.
   const hookEvent = typeof meta.hook_event_name === 'string' ? meta.hook_event_name
     : (typeof meta.event === 'string' ? meta.event : null);
+
+  // A global install's hook passes its own host store; the shared store is where its facts live
+  // once it exists, or they land in the seeded host store and wait for the next fold. Only a hook
+  // call (it names its event) is redirected: a person who typed `--memory` meant that store.
+  if (hookEvent) args = { ...args, memory: sharedStoreFor(install, args) };
 
   // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
   // means the turn goes on, so there is nothing to distil yet: the next Stop will.

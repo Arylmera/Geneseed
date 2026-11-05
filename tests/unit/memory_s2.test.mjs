@@ -111,18 +111,20 @@ test('plugin: the repo memory/ is the last resort, and $GENESEED_HARNESS beats t
 });
 
 /** Run the Stop hook's `learn` as `--memory <cfg>/memory` and report which store got the fact. */
-async function stopHook(w, d) {
+async function stopHook(w, d, { hook = true } = {}) {
   const llm = path.join(d, 'llm.mjs');
   fs.writeFileSync(llm, `console.log(${JSON.stringify(fact('alpha-fact'))})`);
   const notes = path.join(d, 'notes.txt');
-  fs.writeFileSync(notes, 'notes: the build fails on windows\n');
+  // A hook call names its own event; a hand-typed note carries none (the swap is for the hook only).
+  fs.writeFileSync(notes, hook ? JSON.stringify({ hook_event_name: 'Stop', note: 'the build fails on windows' })
+    : 'notes: the build fails on windows\n');
   const empty = path.join(d, 'empty-project');
   fs.mkdirSync(empty, { recursive: true });
   await inEnv({ GENESEED_LLM: `node ${llm}`, GENESEED_MEMORY: undefined, GENESEED_HARNESS: undefined,
     XDG_CONFIG_HOME: w.xdg, CLAUDE_PROJECT_DIR: empty, GENESEED_LEARN_CHILD: undefined }, w.repo,
   () => cmdLearn({ memory: path.join(w.cfg, 'memory'), host: 'claude', file: notes }));
-  return ['sharedMem'].map(() => fs.existsSync(path.join(w.sharedMem, 'alpha-fact.md'))).concat(
-    fs.existsSync(path.join(w.cfg, 'memory', 'alpha-fact.md')), fs.existsSync(path.join(w.repo, 'memory', 'alpha-fact.md')));
+  return [w.sharedMem, path.join(w.cfg, 'memory'), path.join(w.repo, 'memory')]
+    .map((dir) => fs.existsSync(path.join(dir, 'alpha-fact.md')));
 }
 
 test('Stop hook: a global install writes to the shared store when it exists, else to its host store', async () => {
@@ -140,5 +142,43 @@ test('Stop hook: a project install keeps writing to its own store even when the 
   await withDir(async (d) => {
     const w = world(d, 'claude', { shared: true });
     assert.deepEqual(await stopHook(w, d), [false, true, false]);
+  });
+});
+
+test('Stop hook: a hand-typed --memory <cfg>/memory wins over the shared store (explicit beats the swap)', async () => {
+  await withDir(async (d) => {
+    const w = world(d, 'claude-global', { shared: true });
+    assert.deepEqual(await stopHook(w, d, { hook: false }), [false, true, false]);
+  });
+});
+
+// ---- S3 carried points ------------------------------------------------------------------------
+
+test('plugin: the host\'s own config dir takes the shared store even when its marker says project', async () => {
+  // The hook's isHostGlobalDir accepts the marker or the host's config dir; the plugin tested only the marker.
+  await withDir(async (d) => {
+    const w = world(d, 'opencode', { shared: true });
+    const got = await inEnv({ GENESEED_MEMORY: undefined, GENESEED_HARNESS: undefined, XDG_CONFIG_HOME: w.xdg,
+      OPENCODE_CONFIG_DIR: w.cfg }, w.repo, () => GeneseedLearn.resolveMemoryDir(path.join(w.cfg, 'plugins')));
+    assert.equal(got, w.sharedMem);
+  });
+});
+
+test('plugin: the index temp name differs per write, so two sessions in one process cannot collide', async () => {
+  // Same pid in both sessions. (Racing the renames is no test: Windows refuses a rename onto a file
+  // another rename holds, with or without a shared name.)
+  await withDir(async (d) => {
+    const mem = path.join(d, 'mem');
+    fs.mkdirSync(mem);
+    const names = [];
+    const real = fs.promises.writeFile;
+    fs.promises.writeFile = (f, ...rest) => { if (String(f).endsWith('.tmp')) names.push(path.basename(String(f))); return real(f, ...rest); };
+    try {
+      for (const n of ['fact-1', 'fact-2']) await GeneseedLearn.writeMemories(`---FILE---
+${fact(n)}`, mem, new Set());
+    } finally { fs.promises.writeFile = real; }
+    const index = names.filter((n) => n.startsWith('MEMORY.md.'));
+    assert.equal(index.length, 2, names.join(', '));
+    assert.notEqual(index[0], index[1]);
   });
 });

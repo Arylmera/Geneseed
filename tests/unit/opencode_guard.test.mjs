@@ -103,3 +103,77 @@ test('ordinary work is untouched', () => {
     assert.equal(result[key], 'allowed', `${key}: ${result[key]}`);
   }
 });
+
+// ---- S3 (5.0.0): the rule gate and the guard cover the shared tier --------------------------
+// One table, both families. Each path asks on the hook's `rule-gate` (no `--root`: the machine tier
+// needs no install context) and is bumped by the guard, or both defer. A row one family answers
+// differently is the drift this pins. `S` is the machine dir under a throwaway $XDG_CONFIG_HOME.
+
+import fs from 'node:fs';
+import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
+import { spawnHook } from '../helpers/hook_run.mjs';
+
+/** Run `fn` with env vars set (undefined deletes), then put them back. */
+async function withEnv(env, fn) {
+  const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+  for (const [k, v] of Object.entries(env)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  try { return await fn(); } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+}
+
+const SHARED_ROWS = [
+  // [path under S (or absolute when it starts with /elsewhere), asks?, why]
+  ['memory/fact.md', true, 'a fact in the shared store'],
+  ['memory/agents/reviewer.md', true, 'a nested file in the shared store'],
+  ['user-rules.draft.md', true, 'the rule draft'],
+  ['/elsewhere/user-rules.draft.md', true, 'the draft by name, anywhere'],
+  ['memory/scratch.txt', false, 'not markdown'],
+  ['memory-old/fact.md', false, 'a sibling that only shares the prefix'],
+  ['notes/idea.md', false, 'the shared notes are not the memory store'],
+  ['user-rules.draft.txt', false, 'not the draft'],
+];
+
+test('S3: the hook gate and the guard answer the shared-tier table alike', async () => {
+  const sb = makeSandbox('s3-gate-');
+  try {
+    const xdg = path.join(sb.path, 'xdg');
+    const S = path.join(xdg, 'geneseed');
+    fs.mkdirSync(path.join(S, 'memory', 'agents'), { recursive: true });
+    const env = { ...process.env, ...homeOverrides(sb.path), XDG_CONFIG_HOME: xdg };
+    await withEnv({ XDG_CONFIG_HOME: xdg }, async () => {
+      for (const [rel, asks, why] of SHARED_ROWS) {
+        const p = rel.startsWith('/elsewhere') ? rel : path.join(S, rel);
+        const hook = spawnHook(['rule-gate'],
+          JSON.stringify({ tool_name: 'Write', tool_input: { file_path: p } }), { env });
+        assert.equal(hook.status, 0, `${why}: ${hook.stderr}`);
+        assert.equal(hook.stdout.trim() !== '', asks, `hook, ${why}: ${p} -> ${JSON.stringify(hook.stdout)}`);
+        assert.equal(await attempt(p), asks ? 'blocked' : 'allowed', `guard, ${why}: ${p}`);
+      }
+    });
+  } finally { sb.cleanup(); }
+});
+
+test('S3: the guard reads the shared manifest, legacy name included, for the host\'s own config dir', async () => {
+  const sb = makeSandbox('s3-wiki-');
+  try {
+    const xdg = path.join(sb.path, 'xdg');
+    const vault = path.join(sb.path, 'Vault');
+    fs.mkdirSync(path.join(vault, 'Locked'), { recursive: true });
+    fs.mkdirSync(path.join(xdg, 'geneseed'), { recursive: true });
+    // B5: the guard honoured `wiki.json`; the point here is that it now finds it under the machine dir.
+    fs.writeFileSync(path.join(xdg, 'geneseed', 'wiki.json'),
+      JSON.stringify({ wikis: [{ name: 'Vault', path: vault, protected: ['Locked/'] }] }));
+    const target = path.join(vault, 'Locked', 'x.md');
+    const verdict = (query, extra) => withEnv({ XDG_CONFIG_HOME: xdg, GENESEED_WIKI: undefined,
+      GENESEED_HARNESS: undefined, OPENCODE_CONFIG_DIR: undefined, ...extra }, async () => {
+      const fresh = await import(`${pathToFileURL(PLUGIN).href}?${query}`);
+      try { await (await fresh.GeneseedGuard())['tool.execute.before']({ tool: 'write' }, { args: { filePath: target } }); return 'allowed'; }
+      catch (e) { return String(e?.message).startsWith('[geneseed-guard]') ? 'blocked' : `unexpected: ${e}`; }
+    });
+    // The plugin dir is the host's config dir here (no `.geneseed-emit` marker needed).
+    assert.equal(await verdict('s3-global', { OPENCODE_CONFIG_DIR: CFG }), 'blocked');
+    // Any other install does not read the tier.
+    assert.equal(await verdict('s3-project', {}), 'allowed');
+  } finally { sb.cleanup(); }
+});

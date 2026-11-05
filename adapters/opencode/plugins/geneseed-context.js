@@ -245,9 +245,18 @@ function machineDir() {
   return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
 }
 
-// Only a global install reads the tier: its .geneseed-emit names a -global emit.
+// Only a global install reads the tier: its .geneseed-emit names a -global emit, or it is the host's config dir.
+// The host's own config dir counts as global too, whatever its marker says (the hook's
+// isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
+async function isHostConfigDir(dir) {
+  const real = async (d) => { const r = await fs.realpath(path.resolve(d)).catch(() => path.resolve(d)); return process.platform === "win32" ? r.toLowerCase() : r }
+  const cfg = process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
+  return (await real(dir)) === (await real(cfg))
+}
+
 async function readsTier(dir) {
-  try { return (await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global") } catch { return false }
+  try { if ((await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global")) return true } catch { /* no marker */ }
+  return isHostConfigDir(dir)
 }
 
 // A session file's text, CRLF-folded and trimmed; null when missing, unreadable or still its seed.
