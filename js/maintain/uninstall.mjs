@@ -68,6 +68,7 @@ import {
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths, isAbsolutePath } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
@@ -785,6 +786,17 @@ function printOtherHostHits(root, removedHost) {
   }
 }
 
+/** D8: where the tier lives, and that no uninstall touches it. Silent when there is none. */
+function printSharedTier() {
+  try {
+    const { root } = sharedPaths();
+    if (isDir(root)) {
+      printOut(`[uninstall] the shared tier at ${root} is never touched, even by the last host; `
+        + 'delete it by hand if you want it gone.\n');
+    }
+  } catch { /* no home directory: no tier to name */ }
+}
+
 /**
  * `_harness_mcp.cmd_uninstall`.
  *
@@ -832,6 +844,7 @@ export function cmdUninstall(args) {
   }
   printOut('[uninstall] memory/ and notebook/ are kept in place (never deleted here)'
     + (stores.length ? ' — --archive-memory sets both aside.' : '.') + '\n');
+  if (scope === 'global') printSharedTier();
   if (stores.length && args.archiveMemory) {
     printOut(`[uninstall] ${stores.join(' + ')}: will be ARCHIVED to a sibling `
       + 'archived-<name>/<timestamp>/ (never deleted)\n');

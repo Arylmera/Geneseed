@@ -17,7 +17,7 @@ import { normcase } from '../../js/lib/paths.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import { initState, renderLoopFile } from '../../js/loop/state.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { webFixture, ROOT } from '../helpers/web_fixture.mjs';
+import { webFixture, dropSandboxTier, ROOT } from '../helpers/web_fixture.mjs';
 
 
 // `js/web/api.mjs` keeps its own `samePath` module-private. Rebuilt here from the same two
@@ -64,6 +64,7 @@ export function emitInto(cfg, {
     { cwd: ROOT, encoding: 'utf8', windowsHide: true,
       env: { ...process.env, OPENCODE_CONFIG_DIR: cfg } });
   assert.equal(proc.status, 0, `emit into ${cfg} failed:\n${proc.stdout}\n${proc.stderr}`);
+  dropSandboxTier();
   return cfg;
 }
 

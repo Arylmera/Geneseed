@@ -10,8 +10,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Added
 - **The shared tier goes live.** A global emit in a host's own config directory creates `~/.config/geneseed/` and seeds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, `memory/` and `notes/`. Global installs name these locations as absolute paths, and state the rule order: project over host over shared. Project installs and default builds keep their bytes. No emit grants a directory permission. `geneseed doctor` adds a note when a rendered path differs from the run-time one. `geneseed diff` also lists the notes in the tier.
+- **The web console meets the shared tier.** On a global install the console reads and edits the tier's rules, profile, memory and wiki manifest, and the Rules page shows how many drafted rules wait for approval. `geneseed uninstall` prints where the tier lives and never touches it, whatever `--archive-memory` says.
 
 ### Fixed
+- **The web console finds a `wiki.json` manifest.** It stopped at `wiki.jsonc`, while the plugin and the guard also read the older name.
 - **Concurrent installs no longer lose a registry row.** Two processes could each load `installs.json` and the later write dropped the other's root. A record now takes a bounded lock.
 - **A `learn` hook payload with a transcript and no event name reaches the shared store.**
 - **`geneseed update` no longer rolls back a healthy pull when the doctor gate cannot finish.** A doctor timeout is now reported as a gate that did not finish. The pull stays, nothing is rebuilt, and the exit code is 1. The next update runs the gate again before it rebuilds. A real doctor failure still rolls back.

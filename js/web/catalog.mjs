@@ -15,7 +15,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { GLOBAL_MANIFEST, resolvePath } from '../hosts/hosts.mjs';
+import { GLOBAL_MANIFEST, isHostGlobalDir, resolvePath } from '../hosts/hosts.mjs';
 import { doctrinesForBuild, excludedRulesOfDir, readMaybe } from '../hosts/installs.mjs';
 import { frontmatter, readFacts } from '../hosts/memory-files.mjs';
 import {
@@ -23,6 +23,7 @@ import {
 } from '../inspect/inventory.mjs';
 import { firstBlockquote } from '../hosts/native.mjs';
 import { readText, withDiscardableStderr, isDir, isFile } from '../lib/fs.mjs';
+import { WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
@@ -157,10 +158,25 @@ export function inventoryFor(state) {
 // ---- the catalog stores overview counts ---------------------------------------------------
 
 /**
- * Always `<target>/memory` — never the CWD-scanning resolver. The ONE copy: `actions.mjs` and
+ * The shared tier's paths when `state` is a GLOBAL install and the tier exists, else `null`.
+ * A global install reads the tier (hooks-context does the same); editing a host seed the hook
+ * layers beneath the shared file would change nothing the agent sees. A project install, or an
+ * account with no home directory, stays on its own files. THE ONE PREDICATE: memory, rules,
+ * profile and the wiki manifest all ask here.
+ */
+export function tierOf(state) {
+  try {
+    if (!withDiscardableStderr(() => isHostGlobalDir(null, state.target))) return null;
+    const tier = sharedPaths();
+    return isDir(tier.memory) ? tier : null;
+  } catch { return null; }
+}
+
+/**
+ * Always `<target>/memory` (a global install: the tier's) — never the CWD-scanning resolver. The ONE copy: `actions.mjs` and
  * `user-files.mjs` delete and promote facts in the same directory this lists.
  */
-export const memoryDir = (state) => path.join(state.target, 'memory');
+export const memoryDir = (state) => tierOf(state)?.memory ?? path.join(state.target, 'memory');
 const notebookDir = (state) => path.join(state.target, 'notebook');
 
 /**
@@ -214,11 +230,8 @@ export function notebookItems(state) {
   }));
 }
 
-/**
- * The wiki manifest's names, current first. `wiki.jsonc` is the name before the `geneseed-`
- * prefix: the build renames it on the next emit, and until then it is still read (no end date; see `LEGACY_WIKI_FILES`).
- */
-const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc'];
+// The wiki manifest's names come from `WIKI_NAMES` (machine-dir.mjs), the one list every reader
+// shares: this one used to stop at `wiki.jsonc`, so a `wiki.json` install showed no wiki (B5).
 const WIKI_META = ['Wiki manifest', 'your machine-wide knowledge base(s)'];
 
 /** The two setup manifests, in listing order (the wiki under either of its names). */
@@ -226,17 +239,27 @@ const CONFIG_META = {
   'context.json': ['Project context', 'what the agent loads for this project'],
   'geneseed-wiki.jsonc': WIKI_META,
   'wiki.jsonc': WIKI_META,
+  'wiki.json': WIKI_META,
 };
 
-/** The wiki manifest beside the bundle under whichever name it has, or `null`. */
-const wikiName = (state) => WIKI_NAMES.find((n) => isFile(path.join(state.target, n))) ?? null;
+/**
+ * The wiki manifest's file, under whichever name it has, or `null`: the tier's when a global
+ * install has one, else the one beside the bundle.
+ */
+function wikiFile(state) {
+  for (const dir of [tierOf(state)?.root, state.target]) {
+    const hit = dir && WIKI_NAMES.find((n) => isFile(path.join(dir, n)));
+    if (hit) return path.join(dir, hit);
+  }
+  return null;
+}
 
 export function configItems(state) {
   const out = [];
-  for (const fname of ['context.json', wikiName(state)]) {
-    if (!fname) continue;
-    const p = path.join(state.target, fname);
-    if (!isFile(p)) continue;
+  const wiki = wikiFile(state);
+  for (const p of [path.join(state.target, 'context.json'), wiki]) {
+    if (!p || !isFile(p)) continue;
+    const fname = path.basename(p);
     const [title, desc] = CONFIG_META[fname] ?? [fname, ''];
     out.push({ name: fname, title, desc, type: 'config', kind: 'manifest',
       source: resolvePath(p) });
@@ -283,8 +306,7 @@ function wikiPath(p) {
  */
 function wikiManifest(state) {
   const cand = process.env.GENESEED_WIKI;
-  const name = cand ? null : wikiName(state);
-  const p = cand ? wikiPath(cand) : name && path.join(state.target, name);
+  const p = cand ? wikiPath(cand) : wikiFile(state);
   if (!p || !isFile(p)) return [];
   const cfg = mcpLoad(p);
   const wikis = cfg.wikis;
@@ -663,8 +685,8 @@ export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
     // install — `.geneseed-web.json` (this daemon's own CSRF token) and `settings.json` among
     // them — over a GET that carries no token. Only the manifests the catalogue lists can open.
     if (!Object.hasOwn(CONFIG_META, name)) throw new NotFound(name);
-    const p = path.join(state.target, name);
-    if (!isFile(p)) throw new NotFound(name);
+    const p = WIKI_NAMES.includes(name) ? wikiFile(state) : path.join(state.target, name);
+    if (!p || !isFile(p) || path.basename(p) !== name) throw new NotFound(name);
     const raw = readMaybe(p) ?? '';
     const [title, desc] = CONFIG_META[name];
     return { type, name, title, desc, manifest: configManifest(name, p),

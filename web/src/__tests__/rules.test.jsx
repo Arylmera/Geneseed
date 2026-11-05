@@ -54,6 +54,17 @@ beforeEach(() => {
 })
 
 describe('Rules', () => {
+  it('says how many rules wait for approval, and nothing when none do', async () => {
+    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, pending: 2 }))
+    const { unmount } = render(<Rules />)
+    await waitFor(() => expect(screen.getByText(/2 rules from another host are/)).toBeTruthy())
+    unmount()
+    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, pending: 0 }))
+    render(<Rules />)
+    await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
+    expect(screen.queryByText(/waiting for your approval/)).toBeNull()
+  })
+
   it('renders the rule rows with scope and trial chips', async () => {
     render(<Rules />)
     await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())

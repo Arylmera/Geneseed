@@ -8,6 +8,7 @@
  * reader half and a writer half, and the two halves had ended up in different files.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { PROFILE_STUB } from '../build/stubs.mjs';
@@ -19,7 +20,7 @@ import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
 import { splitLines } from '../lib/udiff.mjs';
 import { isFactName } from '../maintain/memory.mjs';
 import { apiMemoryDelete, bget, strOr } from './actions.mjs';
-import { BadRequest, NotFound, memoryDir } from './catalog.mjs';
+import { BadRequest, NotFound, memoryDir, tierOf } from './catalog.mjs';
 
 /** Splits on runs of `WHITESPACE` (not `\s`), dropping empty strings. */
 const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
@@ -59,7 +60,23 @@ const fpMatches = (got, want) => typeof got === 'string' && got === want;
 // ---- user rules (user-rules.md) ----------------------------------------------------------
 
 export const RULES_FILE = 'user-rules.md';
-const rulesPath = (state) => path.join(state.target, RULES_FILE);
+/** The folder of the two hand-written files: the tier for a global install, else the bundle. */
+const userDir = (state) => tierOf(state)?.root ?? state.target;
+const rulesPath = (state) => path.join(userDir(state), RULES_FILE);
+
+/**
+ * Items the fold drafted and nobody decided yet (`.fold-state.json`, C7). The console only
+ * COUNTS them: the rule Rite is the only draft writer (C15), so no verb here decides one.
+ * 0 for a project install, a missing ledger or one that does not parse.
+ */
+function pendingCount(state) {
+  const tier = tierOf(state);
+  if (!tier) return 0;
+  try {
+    const items = JSON.parse(readFileSync(tier.foldState, 'utf8')).items ?? {};
+    return Object.values(items).filter((i) => i?.state === 'pending').length;
+  } catch { return 0; }
+}
 
 /**
  * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
@@ -154,6 +171,7 @@ export function apiRules(state) {
   const p = rulesPath(state);
   if (!isFile(p)) {
     return { exists: false, path: p, rules: [], warnings: [], fingerprint: '',
+      shared: tierOf(state) !== null, pending: pendingCount(state),
       stats: { rules: 0, lines: 0, tokens: 0, ...RULES_BUDGET } };
   }
   const text = readMaybe(p) ?? '';
@@ -167,6 +185,7 @@ export function apiRules(state) {
     body: r.body,
   }));
   return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
+    shared: tierOf(state) !== null, pending: pendingCount(state),
     // CODE POINTS, not `String.length` (UTF-16 units) — an emoji in a rule body would
     // otherwise put the token estimate off.
     stats: { rules: rules.length, lines: splitLines(text).length,
@@ -270,7 +289,7 @@ export function apiRulesMutate(state, body) {
       detail: 'user-rules.md changed since you loaded it — reloading' };
   }
   const [rules] = parseRules(text);
-  const retiredPath = path.join(state.target, RETIRED_RULES_FILE);
+  const retiredPath = path.join(userDir(state), RETIRED_RULES_FILE);
   let rid;
   let next;
   if (op === 'add') {
@@ -350,7 +369,7 @@ export function apiRulesPromote(state, body) {
 
 /** Beside the deployed AGENT.md. */
 export const PROFILE_FILE = 'PROFILE.md';
-const profilePath = (state) => path.join(state.target, PROFILE_FILE);
+const profilePath = (state) => path.join(userDir(state), PROFILE_FILE);
 
 export function apiProfile(state) {
   const p = profilePath(state);

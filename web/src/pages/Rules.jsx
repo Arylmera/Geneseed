@@ -340,6 +340,9 @@ export default function Rules({ onChanged, dataRev }) {
     (data.warnings || []).map((w) => (many ? `${installTag(inst)}: ${w}` : w)),
   )
 
+  // Drafted by the fold and not yet decided; deciding one is the rule Rite's job, not this page's.
+  const pending = sets.reduce((n, { data }) => n + (data.pending || 0), 0)
+
   return (
     <>
       <div className="head-row mb-16">
@@ -374,6 +377,12 @@ export default function Rules({ onChanged, dataRev }) {
         <p className="sub rule-notice" role="status">
           Could not read user-rules.md of{' '}
           {read.failed.map((i) => (i ? installTag(i) : 'the default install')).join(', ')}.
+        </p>
+      ) : null}
+      {pending ? (
+        <p className="sub rule-notice" role="status">
+          {pending} rule{pending === 1 ? '' : 's'} from another host {pending === 1 ? 'is' : 'are'}{' '}
+          waiting for your approval. Ask the agent to run the rule Rite.
         </p>
       ) : null}
       {warnings.map((w) => (
