@@ -65,7 +65,7 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "lint": "eslint js bin tests adapters fuzz",
-    "typecheck": "tsc -p ."
+    "lint": "eslint --cache --cache-location node_modules/.cache/eslint/ js bin tests adapters fuzz",
+    "typecheck": "tsc -p . --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsbuildinfo"
   }
 }

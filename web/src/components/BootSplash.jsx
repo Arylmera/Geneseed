@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { reloadPage } from '../hooks/reloadPage.js'
 
 // Startup splash: sprout germinates inside the dial while the progress ring fills,
 // then the overlay fades out. Dismissal waits for BOTH a minimum display time AND
@@ -125,7 +126,7 @@ export default function BootSplash({ ready, onDone }) {
       {showStall ? (
         <div className="boot-status" role="alert">
           <span>The server is not answering.</span>{' '}
-          <button type="button" className="btn" onClick={() => window.location.reload()}>
+          <button type="button" className="btn" onClick={reloadPage}>
             Retry
           </button>
         </div>

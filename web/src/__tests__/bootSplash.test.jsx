@@ -7,9 +7,9 @@ import BootSplash from '../components/BootSplash.jsx'
 // never answers must not leave a full-screen, aria-hidden splash up forever: after 8 s it
 // says so and offers Retry (a page reload).
 const reload = vi.fn()
+vi.mock('../hooks/reloadPage.js', () => ({ reloadPage: () => reload() }))
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, reload })
 })
 afterEach(() => {
   vi.useRealTimers()
