@@ -232,18 +232,18 @@ export function diffCollect({
   if (!existsSync(path.join(dir, GLOBAL_MANIFEST))) return { target: dir, theme, files: null };
   if (manifestScope(dir) === 'project') return { target: dir, theme, files: null };
 
-  let themeName = theme;
-  if (!themeName) themeName = themeOfDir(dir);
-  // The Python INLINES this read rather than calling `_default_theme`, and the two bodies
-  // are identical — so this calls the one owner instead of copying the body a third time.
-  if (!themeName) themeName = defaultTheme();
-
   let emitName = emit;
   if (!emitName) {
     const marker = readMaybe(path.join(dir, '.geneseed-emit'));
     emitName = marker === null ? '' : marker.trim();
   }
   const host = (EMIT_HOST_SCOPE.get(emitName) ?? ['opencode', 'global'])[0];
+
+  let themeName = theme;
+  if (!themeName) themeName = themeOfDir(dir, host);
+  // The Python INLINES this read rather than calling `_default_theme`, and the two bodies
+  // are identical — so this calls the one owner instead of copying the body a third time.
+  if (!themeName) themeName = defaultTheme();
 
   const fp = footprint || footprintOfDir(dir);
 
@@ -256,18 +256,18 @@ export function diffCollect({
     // four reports its entire doctrines section — and its `Active packs:` line — as drift.
     // `null` (no marker) means unknown and renders at all four, which `doctrinesForBuild`
     // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
-    posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
+    posture: postureOfDir(dir, host), mode: modeOfDir(dir, host), doctrines: doctrinesForBuild(dir, host),
     // The loop skill's preset, or its `Default trust preset:` line reads as edited.
     trust: trustOfDir(dir, host),
     // The excluded rules, or an install built `--exclude-rules "process 5"` reads its
     // carrier as drift: `expected` would re-state the rule the deployment took away.
-    excludeRules: excludedRulesOfDir(dir),
+    excludeRules: excludedRulesOfDir(dir, host),
     // The excluded skills, or every skill the install left out reads as deleted.
-    excludeSkills: excludedSkillsOfDir(dir),
+    excludeSkills: excludedSkillsOfDir(dir, host),
     // The kits on, or every kit file reads as added and the Kits block as drift.
-    kits: kitsOfDir(dir),
+    kits: kitsOfDir(dir, host),
     // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
-    ...gatesOfDir(dir),
+    ...gatesOfDir(dir, host),
   };
   const deployedDir = resolvePath(dir);
   const exp = memo

@@ -39,9 +39,11 @@ import {
   CONFIG, GATE_SWITCHES, PACK_ORDER, RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
-  CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, isHostGlobalDir, liveRecordedHooks,
-  resolvePath,
+  CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, carriersFor, isHostGlobalDir,
+  liveRecordedHooks, resolvePath,
 } from './hosts.mjs';
+
+export { carriersFor };
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
@@ -140,56 +142,6 @@ function themeFromAgent(agentMd) {
     if (sig && text.includes(sig)) return path.basename(tf, '.json');
   }
   return null;
-}
-
-/**
- * `_harness_setup.CARRIERS` — the Python's four root-level carriers, plus one JS-only addition.
- *
- * A shared table rather than three copies of the same list: `_theme_of_dir`,
- * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
- * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
- * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
- *
- * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is half
- * of the fix for host-compat verdict B1 (the other half is `carriersFor`, below).
- * OpenClaude's own per-repo carrier is `carrierInLayer` (see `CLAUDE_SHAPED.openclaude` in
- * `js/build/driver.mjs`, and the `HOSTS` column of the same name): it sits at
- * `<repo>/.openclaude/CLAUDE.md`, and the root `CLAUDE.md` is deliberately left untouched so a
- * Claude Code install can share the repo.
- *
- * ⚠ THIS LIST STAYS HOST-AGNOSTIC ON PURPOSE — it is only `firstCarrier`'s FALLBACK for a
- * caller with no host to narrow by (none of this module's exported `*OfDir` readers is one;
- * see `carriersFor`). A caller that DOES have a host must pass it, or in a repo sharing two
- * carriers that answer the same probe — only root `CLAUDE.md` today, between `claude` and
- * `openclaude`'s global scope — this host-agnostic order decides for both of them, which was
- * exactly B1's failure mode reversed: reading `.openclaude/CLAUDE.md` unconditionally made
- * `claude`'s OWN read-back answer OpenClaude's settings in a shared repo.
- */
-const CARRIERS = [
-  'AGENT.md', path.join('.openclaude', 'CLAUDE.md'), 'CLAUDE.md',
-  path.join('rules', 'geneseed.md'), 'AGENTS.md',
-];
-
-/**
- * `host`'s own carrier path(s), narrowed off the single `HOSTS` table — `carrierInLayer` and
- * `projectMarker`/`agentFile` — rather than a second hand-rolled host→carrier map.
- *
- * ONE HOST, ONE ANSWER, EXCEPT BOB. `carrierInLayer` true (OpenClaude only) tries the nested
- * per-repo path FIRST and the bare `agentFile` SECOND, because the same column name means two
- * different locations depending on scope: `<repo>/.openclaude/CLAUDE.md` for a project
- * install, `<cfgDir>/CLAUDE.md` for a global one (see `CLAUDE_SHAPED.openclaude-global`,
- * which has no `carrierInLayer`). Bob is the one host with a second, differently-NAMED
- * carrier — `rules/geneseed.md` at global scope, because Bob never auto-loads a global
- * `AGENTS.md` (`CLAUDE_SHAPED['bob-global']`'s summary says so) — which `HOSTS` has no column
- * for and this hard-codes, same as the un-narrowed `CARRIERS` above always did.
- */
-export function carriersFor(host) {
-  const row = HOSTS.find((h) => h.host === host);
-  if (!row) return CARRIERS;
-  if (host === 'bob') return [path.join('rules', 'geneseed.md'), row.agentFile];
-  return row.carrierInLayer
-    ? [path.join(row.projectMarker, row.agentFile), row.agentFile]
-    : [row.agentFile];
 }
 
 /**

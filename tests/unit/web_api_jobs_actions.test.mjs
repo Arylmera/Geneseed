@@ -290,6 +290,26 @@ test('restore never replaces a seed-once user file', () => {
   } finally { sb.cleanup(); }
 });
 
+// The legacy `anamnesis/` store was a seed-once folder too (SESSION_FILES named it until the memory
+// store moved), and restore refused it. SESSION_FILES no longer lists it, so the refusal is spelled.
+test('restore never replaces a file under the legacy anamnesis/ store', () => {
+  const sb = makeSandbox();
+  try {
+    const cfg = emitInto(path.join(sb.path, 'cfg'));
+    const rel = 'anamnesis/MEMORY.md';
+    fs.mkdirSync(path.join(cfg, 'anamnesis'));
+    fs.writeFileSync(path.join(cfg, rel), 'MY OWN MEMORY\n');
+    ownInManifest(cfg, rel);
+    assert.ok(diffCollect({ target: cfg }).files.some((f) => f.rel === rel),
+      'the fixture did not put the file in the diff');
+    const res = apiRestore(webState('neutral', cfg), [rel]);
+    assert.deepEqual(res.restored, []);
+    assert.deepEqual(res.deleted, []);
+    assert.equal(res.errors.length, 1);
+    assert.equal(fs.readFileSync(path.join(cfg, rel), 'utf8'), 'MY OWN MEMORY\n');
+  } finally { sb.cleanup(); }
+});
+
 test('restore without a deployed install is an error', () => {
   const sb = makeSandbox();
   try {

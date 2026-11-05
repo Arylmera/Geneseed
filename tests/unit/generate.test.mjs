@@ -583,7 +583,7 @@ test('validate renders at the axes it was given, read back off the sandbox', () 
   // Two emits: the `files` bundle and a per-repo host, which went through two different
   // `*Into` functions.
   withDir((d) => {
-    for (const emit of ['files', 'claude']) {
+    for (const emit of ['files', 'claude', 'claude-global']) {
       const r = validateRun(d, ['--theme', 'neutral', '--emit', emit, '--posture', 'artisan',
         '--mode', 'foreman', '--doctrines', 'craft,process', '--exclude-rules', 'process 5']);
       assert.equal(r.status, 0, r.stdout + r.stderr);

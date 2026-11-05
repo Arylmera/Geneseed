@@ -2518,3 +2518,93 @@ test('a Bob emit opens what Bob auto-loads with the first-reply override; Claude
     assert.ok(!read(crepo, 'CLAUDE.md').includes('First-reply override'), 'Claude got the Bob-only override');
   }));
 });
+
+// ---- S8b: carrier reads ------------------------------------------------------------------------
+
+// B1: `Done gate: off` is read off the HOST's own carrier. The hook read `<hookRoot>/AGENT.md` for
+// every host, a file no hooked host has, so the switch never worked. A project install keeps its
+// carrier in the repo (`CLAUDE.md` / `AGENTS.md`), a global one in the config dir. Each row: the
+// host, where the install sits, the carrier's path from that base. The repo is a git repo with
+// a package.json, so the line is there to see when the gate is armed.
+const CARRIER_ROWS = [
+  { name: 'claude project', host: 'claude', project: true, rel: 'CLAUDE.md', dir: '.claude' },
+  { name: 'claude global', host: 'claude', project: false, rel: 'CLAUDE.md', dir: 'cfg' },
+  { name: 'bob project', host: 'bob', project: true, rel: 'AGENTS.md', dir: '.bob' },
+  { name: 'bob global', host: 'bob', project: false, rel: path.join('rules', 'geneseed.md'), dir: 'cfg' },
+  { name: 'openclaude project', host: 'openclaude', project: true,
+    rel: path.join('.openclaude', 'CLAUDE.md'), dir: '.openclaude' },
+];
+for (const row of CARRIER_ROWS) {
+  test(`the context hook reads Done gate off from the ${row.name} carrier`, () => withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ scripts: { test: 'x' } }));
+    const cfg = row.project ? path.join(repo, row.dir) : path.join(d, row.dir);
+    fs.mkdirSync(cfg, { recursive: true });
+    if (!row.project) fs.writeFileSync(path.join(cfg, '.geneseed-emit'), `${row.host}-global\n`);
+    const carrier = path.join(row.project ? repo : cfg, row.rel);
+    const prev = ['XDG_CONFIG_HOME', 'GENESEED_ROOT'].map((v) => [v, process.env[v]]);
+    process.env.XDG_CONFIG_HOME = path.join(d, 'xdg');
+    process.env.GENESEED_ROOT = repo;
+    try {
+      const run = () => capturedOut(() => cmdContext({ root: cfg, host: row.host }))[1];
+      fs.mkdirSync(path.dirname(carrier), { recursive: true });
+      fs.writeFileSync(carrier, '# carrier\n');
+      assert.match(run(), /Done gate:/, 'the fixture did not arm the gate');
+      fs.writeFileSync(carrier, '# carrier\n\nDone gate: off\n');
+      assert.doesNotMatch(run(), /Done gate:/, 'Done gate: off was ignored');
+    } finally {
+      for (const [v, val] of prev) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+    }
+  }));
+}
+
+// A directory link is not walked: the OpenCode plugin's `readdir` withFileTypes does not follow
+// one, and a vault link into a big tree would otherwise fill the scan cap with foreign notes.
+test('the wiki walk does not follow a directory link', () => withTier((t) => {
+  const vault = path.join(t.d, 'Brain');
+  const outside = path.join(t.d, 'Elsewhere');
+  t.put(path.join(vault, 'MAP.md'), '# Map\n');
+  t.put(path.join(outside, 'foreign.md'), '# Foreign\n');
+  try {
+    fs.symlinkSync(outside, path.join(vault, 'Linked'), 'junction');
+  } catch { return; /* no link right on this machine: nothing to prove */ }
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), JSON.stringify({ wikis: [{ name: 'Brain', path: vault,
+    entries: [{ path: '.', load: 'lazy' }] }] }));
+  const out = t.context();
+  assert.ok(out.includes('MAP.md'), out);
+  assert.ok(!out.includes('foreign.md'), `the walk crossed a link:\n${out}`);
+}));
+
+// The line per file the budget left out names the memory map even when the paths are so long that
+// the rest fold into a count: C12 owes the map's cut a line that names the file.
+test('a count line never replaces the memory map in the leftover listing', () => withTier((t) => {
+  const deep = path.join('d'.repeat(100), 'e'.repeat(100), 'f'.repeat(100));
+  const cfg = path.join(t.d, deep, 'cfg');
+  const big = `${'x'.repeat(99)}\n`.repeat(100);
+  t.put(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+  for (const f of ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md']) {
+    t.put(path.join(cfg, f), big);
+  }
+  t.put(path.join(t.tier.memory, 'MEMORY.md'), big);
+  t.put(t.tier.profile, big);
+  t.put(path.join(t.tier.rules), big);
+  t.put(path.join(cfg, 'geneseed-wiki.jsonc'), manifestOf('W', t.d));
+  const out = capturedOut(() => cmdContext({ root: cfg }))[1].replace(/\r\n/g, '\n');
+  assert.match(out, /\[context\] memory\/MEMORY\.md not injected/, out.slice(-1500));
+}));
+
+// Only a backtick fence was stripped before the import test, so an `@AGENTS.md` in a tilde fence or
+// an HTML comment read as a real import and the doc was dropped.
+for (const [what, text] of [['a tilde fence', '~~~\n@AGENTS.md\n~~~\n'],
+  ['an HTML comment', '<!--\n@AGENTS.md\n-->\n']]) {
+  test(`the context hook keeps AGENTS.md when the import sits in ${what}`, () => withDir((d) => {
+    fs.writeFileSync(path.join(d, 'AGENTS.md'), '# Agents\n');
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'), text);
+    const [eager] = discoverContext(d, 'claude');
+    assert.ok(eager.some((e) => path.basename(e.path) === 'AGENTS.md'));
+  }));
+}

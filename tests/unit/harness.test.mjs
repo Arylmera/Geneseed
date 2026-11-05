@@ -2023,6 +2023,28 @@ test('the memory store is found in $GENESEED_HARNESS from an unrelated cwd', () 
   });
 });
 
+test('the write resolver survives a home directory it cannot read', () => {
+  // `sharedPaths()` asks `os.homedir()`, which throws when the account has none. The resolver is
+  // on the learn hook's path, so the throw would be a stack trace and a non-zero exit. Run in a
+  // child that makes `os.homedir` throw, with a store the resolver can still find without it.
+  withDir((d) => {
+    const store = path.join(d, 'store');
+    const work = path.join(d, 'work');
+    fs.mkdirSync(path.join(store, 'memory'), { recursive: true });
+    fs.mkdirSync(work);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')), GENESEED_HARNESS: store };
+    delete env.GENESEED_MEMORY;
+    delete env.XDG_CONFIG_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'hosts', 'hosts.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { resolveMemoryDir } = await import(${JSON.stringify(url)});`
+      + 'process.stdout.write(String(resolveMemoryDir(null)));'],
+    { cwd: work, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(`${r.status} ${r.stdout}`, `0 ${path.join(store, 'memory')}`, r.stderr);
+  });
+});
+
 test('the write resolver takes the spec order, and the shared store counts only when it exists', () => {
   // `--memory` and `$GENESEED_MEMORY` are first and need no row here. Below them: a store beside
   // cwd, then `$GENESEED_HARNESS/memory`, then the shared store, then the OpenCode config store.

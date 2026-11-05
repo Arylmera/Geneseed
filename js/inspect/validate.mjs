@@ -11,7 +11,7 @@ import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs'
 import { GATE_SWITCHES } from '../build/source.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import {
-  doctrinesOfDir, excludedRulesOfDir, gatesOfDir, modeOfDir, postureOfDir,
+  EMIT_HOST_SCOPE, doctrinesOfDir, excludedRulesOfDir, gatesOfDir, modeOfDir, postureOfDir,
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
@@ -172,11 +172,13 @@ export function cmdValidate(args) {
     // READ BACK OFF THE RENDER, not echoed from `args`: this line is the proof the axes reached
     // the sandbox, which an echo of the flags would print just as happily if they had not.
     const at = scanDirs[0];
-    const packs = doctrinesOfDir(at);
-    const excluded = excludedRulesOfDir(at);
-    const gates = gatesOfDir(at);
-    printOut(`[validate-only] rendered at posture=${postureOfDir(at) ?? '?'} `
-      + `mode=${modeOfDir(at) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
+    // The emit names the host whose carrier carries these lines; `files` has none to name.
+    const host = EMIT_HOST_SCOPE.get(emit)?.[0] ?? null;
+    const packs = doctrinesOfDir(at, host);
+    const excluded = excludedRulesOfDir(at, host);
+    const gates = gatesOfDir(at, host);
+    printOut(`[validate-only] rendered at posture=${postureOfDir(at, host) ?? '?'} `
+      + `mode=${modeOfDir(at, host) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
       + `excluded=${excluded.map((id) => id.replace('.', ' ')).join(', ') || 'none'}`
       // Each elided when armed, so an armed dry run prints the line it always did.
       + `${GATE_SWITCHES.filter((g) => gates[g.key] === false)

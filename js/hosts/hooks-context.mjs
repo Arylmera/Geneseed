@@ -3,7 +3,7 @@
  * docs. Runs once per session, so it is loaded only when the hook entry dispatches it; see
  * `js/hosts/hooks.mjs`'s header for the contract every hook verb holds.
  */
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readText, printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
@@ -12,7 +12,7 @@ import { WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import {
-  globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolvePath, sovereignBypass,
+  carriersFor, globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 import { gitRootOf } from './gitref.mjs';
@@ -113,7 +113,7 @@ const AGENTS_IMPORT_RE = /(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m;
 
 /**
  * Does Claude Code load this repo's AGENTS.md by itself? Yes when CLAUDE.md imports it (fenced
- * blocks do not import), on any version. Yes when the repo has no CLAUDE.md, from 2.1.277 on.
+ * blocks and HTML comments do not import), on any version. Yes when the repo has no CLAUDE.md, from 2.1.277 on.
  *
  * The version comes from `AI_AGENT`, which Claude Code sets for its hooks as
  * `claude-code_2-1-302_harness` (CLI) or `claude-code_2-1-317_agent` (desktop). Observed 2026-11-05,
@@ -123,7 +123,7 @@ const AGENTS_IMPORT_RE = /(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m;
 function claudeLoadsAgents(root) {
   let claudeMd = null;
   try { claudeMd = readText(path.join(root, 'CLAUDE.md')); } catch { /* none at the root */ }
-  if (claudeMd !== null) return AGENTS_IMPORT_RE.test(claudeMd.replace(/```[\s\S]*?```/g, ''));
+  if (claudeMd !== null) return AGENTS_IMPORT_RE.test(claudeMd.replace(/```[\s\S]*?```|~~~[\s\S]*?~~~|<!--[\s\S]*?-->/g, ''));
   if (isFile(path.join(root, '.claude', 'CLAUDE.md'))) return false;
   const v = /^claude-code_(\d+)-(\d+)-(\d+)/.exec(process.env.AI_AGENT || '');
   if (!v) return false;
@@ -252,12 +252,15 @@ function readsTier(hookRoot) {
 /** A vault folder's `.md` notes, dot-folders skipped: a vault keeps its config and trash inside. */
 function walkWiki(dir, depth = 1, acc = []) {
   if (depth > WIKI_MAX_DEPTH) return acc;
-  for (const name of listDir(dir)) {
+  let entries;
+  // `withFileTypes`, as the OpenCode plugin: a link or junction is neither a folder nor a note.
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+  for (const e of entries) {
     if (acc.length >= WIKI_MAX_FILES) return acc;
-    const full = path.join(dir, name);
-    if (isDir(full)) {
-      if (!EXCLUDE_DIRS.has(name) && !name.startsWith('.')) walkWiki(full, depth + 1, acc);
-    } else if (name.toLowerCase().endsWith('.md') && isFile(full)) acc.push(full);
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (!EXCLUDE_DIRS.has(e.name) && !e.name.startsWith('.')) walkWiki(full, depth + 1, acc);
+    } else if (e.isFile() && e.name.toLowerCase().endsWith('.md')) acc.push(full);
   }
   return acc;
 }
@@ -600,6 +603,19 @@ function fitLines(lines, room, tailOf) {
   return kept;
 }
 
+/**
+ * The text of this host's own carrier, or '' (armed). A global install keeps it in its config dir;
+ * a project install keeps it in the repo, one level above the harness dir. The first candidate
+ * that exists answers, as `firstCarrier` does.
+ */
+function installCarrier(hookRoot) {
+  const base = readsTier(hookRoot) ? hookRoot : path.dirname(hookRoot);
+  for (const rel of carriersFor(HOST)) {
+    try { return readFileSync(path.join(base, rel), 'utf8'); } catch { /* next candidate */ }
+  }
+  return '';
+}
+
 export function cmdContext(args) {
   HOST = (args && args.host) || 'claude';
   // Discovery (and the stand-down) runs against the SESSION's project root, not the harness
@@ -638,8 +654,7 @@ export function cmdContext(args) {
   // `--no-done-gate` carries `Done gate: off` in its AGENT.md and gets no line — the OpenCode
   // context plugin's `doneGateOff` reads the same marker with the same pattern.
   const gitRoot = gitRootOf(root);
-  let carrier = '';
-  try { carrier = hookRoot ? readFileSync(path.join(hookRoot, 'AGENT.md'), 'utf8') : ''; } catch { /* no carrier: armed */ }
+  const carrier = hookRoot ? installCarrier(hookRoot) : '';
   const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, 'm').test(carrier);
   // Bob's Stop carries no transcript, so the gate never judges a turn there (`hooks-done.mjs`).
   const done = gitRoot && !gateOff('Done gate') ? doneLine(gitRoot, HOST !== 'bob') : null;
@@ -673,7 +688,7 @@ export function cmdContext(args) {
       const room = OUTPUT_BUDGET - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
       const where = `${s.abs} on demand`;
       if (room <= 0) {
-        left.push(`[context] ${s.rel} not injected (session budget) \u2014 read ${where}`);
+        left.push({ rel: s.rel, line: `[context] ${s.rel} not injected (session budget) \u2014 read ${where}` });
         continue;
       }
       const text = capToRoom(s.wiki && cost(s.text) > room ? renderWiki(s.wiki, room) : s.text, room, where);
@@ -682,8 +697,19 @@ export function cmdContext(args) {
     }
     // Paths have no length limit, so these lines answer to the budget like any listing.
     if (left.length) {
-      push(...fitLines(left, OUTPUT_BUDGET - LIST_RESERVE - spent - cost(''),
-        (n) => `[context] ${n} more session files not injected (session budget)`), '');
+      const room = OUTPUT_BUDGET - LIST_RESERVE - spent - cost('');
+      const tail = (n) => `[context] ${n} more session files not injected (session budget)`;
+      // The memory map first, and by its short name when its path cannot fit: a count line must
+      // never replace the one file C12 owes a line that names it.
+      const isMap = (l) => l.rel === 'memory/MEMORY.md';
+      const maps = left.filter(isMap);
+      const lines = [...maps, ...left.filter((l) => !isMap(l))].map((l) => l.line);
+      let shown = fitLines(lines, room, tail);
+      if (maps.length && shown[0] !== lines[0]) {
+        const short = [...new Set(maps.map((l) => `[context] ${l.rel} not injected (session budget)`))];
+        shown = fitLines([...short, ...lines.slice(maps.length)], room, tail);
+      }
+      push(...shown, '');
     }
   }
   if (eager.length || lazy.length) {

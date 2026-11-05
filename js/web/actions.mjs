@@ -560,7 +560,8 @@ export function globalEmitHostFor(emit) {
  * user's after the first build. Derived from `SESSION_FILES`, the one list of them.
  */
 const SEED_FILES = new Set(SESSION_FILES.filter((r) => !r.includes('/')));
-const SEED_DIRS = new Set(SESSION_FILES.filter((r) => r.includes('/')).map((r) => r.split('/')[0]));
+// `anamnesis` is the memory store's older name: no longer a session file, still the user's.
+const SEED_DIRS = new Set(['anamnesis', ...SESSION_FILES.filter((r) => r.includes('/')).map((r) => r.split('/')[0])]);
 const isSeedOnce = (rel) => SEED_FILES.has(rel) || SEED_DIRS.has(rel.split('/')[0]);
 
 /**
