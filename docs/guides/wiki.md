@@ -47,7 +47,7 @@ The build writes a `geneseed-wiki.jsonc` stub beside `AGENT.md` (for the OpenCod
 
 You can declare several wikis. An empty `wikis` list keeps the feature off. The file may hold private paths. It is specific to this machine and must never be committed. A project install's own `.gitignore` already lists it.
 
-Geneseed looks for the file in this order: `$GENESEED_WIKI`, then `$GENESEED_HARNESS/geneseed-wiki.jsonc`, then beside the installed `AGENT.md`. The build renames a `wiki.jsonc` or `wiki.json` left by an older install to `geneseed-wiki.jsonc`, contents untouched, and adds the new name to a `.gitignore` that listed the old one. Until that next build, the old `wiki.jsonc` is still read at each of those places.
+Geneseed looks for the file in this order: `$GENESEED_WIKI`, then `$GENESEED_HARNESS/geneseed-wiki.jsonc`, then beside the installed `AGENT.md`, then, on a global install, in the machine tier at `~/.config/geneseed/geneseed-wiki.jsonc`. A host file you changed replaces the tier's whole file; a host file still at its seed does not. The build renames a `wiki.jsonc` or `wiki.json` left by an older install to `geneseed-wiki.jsonc`, contents untouched, and adds the new name to a `.gitignore` that listed the old one. Until that next build, both old names are still read at each of those places.
 
 ## How each host honours it
 
@@ -60,7 +60,7 @@ The context plugin loads your eager entries and lists your lazy ones at session 
 <!--harness:claude-->
 *(Claude Code only)*
 
-No hook reads the wiki. The instructions in your harness tell the agent to read `geneseed-wiki.jsonc` at session start and to honour it, including the `protected` folders. That is an instruction the model follows, not a block. Nothing stops a write at the tool boundary. The same applies to Bob, OpenClaude and plain `AGENT.md` tools. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
+The context hook loads your eager entries and lists your lazy ones at session start, inside its 9,000-character budget: a note that does not fit is listed instead, and a long listing folds by folder and ends with a count. It also prints your `conventions`, `inbox` and `protected` lines. Bob and OpenClaude run the same hook. Honouring `protected` is an instruction the model follows, not a block. Nothing stops a write at the tool boundary. Plain `AGENT.md` tools have no hook, so the agent reads `geneseed-wiki.jsonc` itself. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
 <!--/harness-->
 
 ## What the agent does with it

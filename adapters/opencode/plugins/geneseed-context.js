@@ -28,7 +28,8 @@
 //
 // MACHINE WIKI (AGENT.md §8): the same block also carries the user's own knowledge
 // base(s) — typically an Obsidian vault — declared once per machine in `geneseed-wiki.jsonc`
-// ($GENESEED_WIKI -> $GENESEED_HARNESS/geneseed-wiki.jsonc -> beside this plugin's install).
+// ($GENESEED_WIKI -> $GENESEED_HARNESS/geneseed-wiki.jsonc -> beside this plugin's install ->
+// the machine tier).
 // Each wiki's eager entries inject in full and lazy entries list, drawing on the
 // SAME budgets as the project context; its conventions/inbox/protected metadata is
 // surfaced so the agent knows the house rules before writing. No wiki manifest, or an
@@ -214,8 +215,9 @@ async function isDir(p) {
 // tests/unit/claude.test.mjs gates both copies against SESSION_SEEDS in js/build/stubs.mjs.
 // context.json is not here: it is a manifest, honoured by resolveSource. geneseed-wiki.jsonc
 // is not here either: the MACHINE WIKI block below already renders it in full.
-const SESSION_FILES = ["user-rules.md", "PROFILE.md", "memory/MEMORY.md", "anamnesis/MEMORY.md",
-  "notebook/NOTEBOOK.md"]
+const SESSION_FILES = ["user-rules.md", "PROFILE.md", "memory/MEMORY.md", "notebook/NOTEBOOK.md"]
+// The wiki manifest's names, newest first: WIKI_NAMES in js/lib/machine-dir.mjs.
+const WIKI_NAMES = ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]
 const SEED_SHA256 = new Set([
   "5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721", // user-rules.md
   "29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816", // PROFILE.md
@@ -238,18 +240,43 @@ async function harnessDir() {
   return null
 }
 
-// Session files present under the harness dir and changed from their seed: [{ rel, abs, text }].
+// The machine tier: machineDir() in js/lib/machine-dir.mjs, which a plugin cannot import.
+function machineDir() {
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
+}
+
+// Only a global install reads the tier: its .geneseed-emit names a -global emit.
+async function readsTier(dir) {
+  try { return (await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global") } catch { return false }
+}
+
+// A session file's text, CRLF-folded and trimmed; null when missing, unreadable or still its seed.
+async function sessionText(abs) {
+  let text
+  try { text = (await fs.readFile(abs, "utf8")).replace(/\r\n/g, "\n") } catch { return null }
+  if (SEED_SHA256.has(createHash("sha256").update(text).digest("hex"))) return null
+  return text.replace(/\n+$/, "")
+}
+
+// Session files in force for the harness dir, changed from their seed: [{ rel, abs, text, label }],
+// one per layer. A global install reads the tier first, then its own host layer; the notebook stays
+// per host. PROFILE.md is whole, so a non-seed host copy replaces the shared one. The others
+// concatenate. The (shared) and (host: …) labels appear only when the tier has a say in that file.
 async function sessionFiles(dir) {
   const found = []
   if (!dir) return found
+  const tier = await readsTier(dir)
+  const entry = (rel, abs, text, label) => {
+    const nudge = rel === "memory/MEMORY.md" ? memoryNudge(text) : ""
+    found.push({ rel, abs, label, text: nudge ? `${text}\n${nudge}` : text })
+  }
   for (const rel of SESSION_FILES) {
     const abs = path.join(dir, rel)
-    let text
-    try { text = (await fs.readFile(abs, "utf8")).replace(/\r\n/g, "\n") } catch { continue }
-    if (SEED_SHA256.has(createHash("sha256").update(text).digest("hex"))) continue
-    text = text.replace(/\n+$/, "")
-    const nudge = rel.endsWith("MEMORY.md") ? memoryNudge(text) : ""
-    found.push({ rel, abs, text: nudge ? `${text}\n${nudge}` : text })
+    const host = await sessionText(abs)
+    const sharedAbs = tier && rel !== "notebook/NOTEBOOK.md" ? path.join(machineDir(), rel) : null
+    const shared = sharedAbs ? await sessionText(sharedAbs) : null
+    if (shared !== null && !(host !== null && rel === "PROFILE.md")) entry(rel, sharedAbs, shared, "shared")
+    if (host !== null) entry(rel, abs, host, shared === null ? "" : "host: opencode")
   }
   return found
 }
@@ -610,6 +637,7 @@ async function resolveSource(root, harness = null) {
 //   1. $GENESEED_WIKI                      explicit manifest path
 //   2. $GENESEED_HARNESS/geneseed-wiki.jsonc pinned install dir
 //   3. <plugin dir>/../geneseed-wiki.jsonc  auto-locate: beside the installed AGENT.md
+//   4. <machine dir>/geneseed-wiki.jsonc    global install only, when 2 and 3 are absent or a seed
 async function resolveWikiFile() {
   const explicit = process.env.GENESEED_WIKI
   if (explicit && (await isFile(explicit))) return explicit
@@ -620,14 +648,18 @@ async function resolveWikiFile() {
   const harness = await harnessDir()
   if (harness) bases.push(harness)
   bases.push(path.resolve(PLUGIN_DIR, ".."))
+  let host = null
   for (const base of bases) {
-    // wiki.jsonc and wiki.json are the legacy names from earlier seeds — still honoured.
-    for (const name of ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) {
+    for (const name of WIKI_NAMES) {
       const p = path.join(base, name)
-      if (await isFile(p)) return p
+      if (!host && (await isFile(p))) host = p
     }
   }
-  return null
+  if (harness && (await readsTier(harness)) && (!host || (await sessionText(host)) === null)) {
+    const shared = path.join(machineDir(), WIKI_NAMES[0])
+    if ((await sessionText(shared)) !== null) return shared
+  }
+  return host
 }
 
 // Walk a vault folder for .md notes — like the project walk, but dot-folders are
@@ -806,7 +838,7 @@ async function buildBlock(sets, wikis = [], commands = [], session = [], done = 
   const ses = []
   for (const s of session) {
     const size = Buffer.byteLength(s.text, "utf8")
-    ses.push(`----- ${s.rel} -----`)
+    ses.push(`----- ${s.rel}${s.label ? ` (${s.label})` : ""} -----`)
     if (size > EAGER_FILE_KB * 1024) {
       ses.push(`[demoted: ${s.rel} exceeded ${EAGER_FILE_KB} KB — read ${s.abs} on demand]`, "")
       continue

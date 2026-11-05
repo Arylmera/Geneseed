@@ -13,6 +13,13 @@
 import os from 'node:os';
 import path from 'node:path';
 
+/**
+ * The wiki manifest's names, newest first. The last two are earlier seeds', read with no end date:
+ * nothing yet tells a user an install missed the rename, so dropping one would lose a wiki in
+ * silence. The OpenCode plugins carry a copy (tests/unit/claude.test.mjs holds the context one equal).
+ */
+export const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json'];
+
 export function machineDir() {
   const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   return path.join(base, 'geneseed');

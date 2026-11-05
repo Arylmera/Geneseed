@@ -14,6 +14,7 @@ import path from 'node:path';
 import { writeText } from '../lib/fs.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
+import { WIKI_NAMES } from '../lib/machine-dir.mjs';
 import { EXCLUDES_FILE } from '../hosts/hosts.mjs';
 import { MEMORY_SEED } from '../hosts/memory-files.mjs';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -239,10 +240,8 @@ export function ensureContextStub(out) {
 }
 
 /** The wiki manifest's name. `geneseed-` says who owns it in a shared `.claude/`/`.opencode/`. */
-export const WIKI_FILE = 'geneseed-wiki.jsonc';
-/** Its earlier names, newest first. Readers still fall back to them, with no end date:
- * nothing yet tells a user an install missed the rename, so dropping the fallback would lose a wiki in silence. */
-const LEGACY_WIKI_FILES = ['wiki.jsonc', 'wiki.json'];
+export const WIKI_FILE = WIKI_NAMES[0];
+const LEGACY_WIKI_FILES = WIKI_NAMES.slice(1);
 
 /**
  * `_build_render.ensure_wiki_stub`, plus the rename. A legacy manifest is the user's file: it is

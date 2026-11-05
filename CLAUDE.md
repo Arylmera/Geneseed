@@ -132,8 +132,9 @@ overran by its line count before that. Measure a hook change with `node bin/gene
 context --root <install> | wc -c`. The OpenCode plugin injects a synthetic *user* message on
 every request (`experimental.chat.messages.transform` on V1, with a visible fallback for the first
 turn; `session.hook("context")` on V2), never the system prompt, and has no stdout-style cap at all, which is why its budget
-stays 48 KB. The Claude hook injects `geneseed-wiki.jsonc` as raw text and never renders wiki
-entries; the OpenCode plugin does — a known parity gap.
+stays 48 KB. The Claude hook renders the wiki as the OpenCode plugin does, with the same header
+lines, inside its own budget: its lazy listing folds and cuts with a count, and it reads no note
+headings.
 
 **Every OpenCode plugin serves two plugin APIs from one file.** OpenCode 2 loads only
 `export default { id, setup }`; V1 (>= 1.3.4) loads `{ id, server }`; each ignores the other's

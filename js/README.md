@@ -90,7 +90,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 |---|---|
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), their `family` (`CLAUDE_STYLE`), plus `resolvePath`/`expanduser` |
 | `hooks.mjs` | The gate verbs, run on every tool call: `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), plus `ask`/the gate ledger/`guardGate`. `--host` picks the verdict dialect |
-| `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
+| `hooks-context.mjs` | The `context` verb — SessionStart: session files (shared tier first on a global install, wiki rendered) plus the repo's context docs |
 | `ownership-gate.mjs` | The ownership first-write gate, last in `rule-gate`: in an application repo (git root + build manifest) whose root `AGENTS.md` has no `## Ownership` section, denies the session's first write once (a tmpdir marker per session). Builtins + `gitRootOf` only. Twin: the OpenCode guard plugin |
 | `hooks-done.mjs` | The done gate (#289): on Stop, inside `learn` and before its spawn, judges a turn that edited files against the project's checks — blocks until `.geneseed/done-checks.txt`'s checks passed after the last edit; without that file, the inferred checks are advisory (a `systemMessage`, never a block) |
 | `done-checks.mjs` | Where the done gate's checks come from: `.geneseed/done-checks.txt`, else inferred from the git root's manifests (package.json scripts, pom.xml, Gradle, pyproject.toml, Cargo.toml, go.mod), each a group of accepted command forms; plus `doneLine`, the SessionStart line `context` prints. Spawn-free: `context` is in the CLI's closure. Twin: the OpenCode context plugin |
@@ -164,7 +164,7 @@ into files users have committed, so change the test that states it in the same c
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
-| `machine-dir.mjs` | `machineDir()` and `sharedPaths()`: the one home of `$XDG_CONFIG_HOME/geneseed` and the names beneath it. Spawn-free, so the hook and driver may import it |
+| `machine-dir.mjs` | `machineDir()`, `sharedPaths()` and `WIKI_NAMES`: the one home of `$XDG_CONFIG_HOME/geneseed`, the names beneath it, and the wiki manifest's names. Spawn-free, so the hook and driver may import it |
 | `node-floor.mjs` | The first import of all three binaries: below Node 22.7, one sentence on stderr and exit 1 (0 in the hook) instead of a stack trace |
 
 **Before editing:** parse with `parseJson`, never `JSON.parse` — the latter collapses int `1` and

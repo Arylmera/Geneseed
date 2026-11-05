@@ -38,8 +38,9 @@ never puts them, and none reached the session at all. The
 eager-injection path is budget-capped on every host. The SessionStart hook (Claude Code,
 Bob, OpenClaude) keeps its whole payload under 9,000 characters: Claude Code persists a
 hook output past ~10k to a file and shows the model a 2 KB preview, so until 2026-10 a
-doc-heavy repo's context was cut off unannounced. Session files come first, eager docs
-are injected whole or listed lazy with the reason. The OpenCode plugin has no such cap
+doc-heavy repo's context was cut off unannounced. Session files come first, in the order
+rules, profile, wiki, memory map, notebook, and a global install counts the shared tier's
+layers with its own. Eager docs are injected whole or listed lazy with the reason. The OpenCode plugin has no such cap
 and keeps 16 KB per file / 48 KB per session. Both fold a lazy listing: three or more
 docs in one folder become one `dir/ — N docs` line. The hook also **never injects
 the root file the host loads by itself** (`CLAUDE.md` on Claude Code,
