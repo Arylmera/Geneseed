@@ -204,6 +204,15 @@ function pre(code) {
   return { ok: code === 'ready', code, kind, message };
 }
 
+/**
+ * Is this root a git checkout, even one whose git cannot answer? The `.git` entry says so where
+ * git does not: a damaged repository or a missing binary must not pass for an npm install.
+ */
+function isGitCheckout() {
+  const [rc, out] = gitRun(['rev-parse', '--is-inside-work-tree']);
+  return (rc === 0 && out === 'true') || existsSync(path.join(String(ROOT), '.git'));
+}
+
 /** `_preflight()` — Phase A, local only, no network. Never raises. */
 export function preflight() {
   let [rc, out] = gitRun(['rev-parse', '--is-inside-work-tree']);
@@ -1113,11 +1122,12 @@ function reexec(argv) {
  * the real `setup` exits 1 off a terminal, which would make the two answers indistinguishable.
  *
  * AN UNCHECKED SOURCE IS THE EXCEPTION: `setup` renders, and no doctor has judged this tree.
+ * An npm install has no record to hold, so it is not asked.
  */
 export async function cmdBootstrap(args, { handoff = reexec } = {}) {
   const failed = await bootstrapPlain();
   flushExportNotes();
-  if (pendingGate()) {
+  if (isGitCheckout() && pendingGate()) {
     printOut('[geneseed] setup not started: the source has no doctor verdict yet. '
       + 'Run `geneseed update`, then `geneseed setup`.\n');
     return 1;

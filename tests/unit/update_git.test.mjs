@@ -126,6 +126,31 @@ test('preflight reports an untracked file as READY, not dirty', () => {
   try { assert.equal(U.preflight().code, 'ready'); } finally { fs.unlinkSync(f); }
 });
 
+test('bootstrap on a root that is no git checkout still hands off to setup', async () => {
+  // The npm install: no record can exist, so nothing is pending. Reading "no git answer" as an
+  // unknown gate stopped setup on every npm install.
+  const dotgit = path.join(CO, '.git');
+  const stashed = path.join(sb.path, 'dotgit-stashed');
+  let handedOff = false;
+  fs.renameSync(dotgit, stashed);
+  try {
+    const rc = await U.cmdBootstrap({ noSetup: false }, { handoff: () => { handedOff = true; return 0; } });
+    assert.equal(rc, 0);
+  } finally { fs.renameSync(stashed, dotgit); }
+  assert.equal(handedOff, true, 'an npm install never reached setup');
+});
+
+test('bootstrap in a git checkout where git cannot answer still refuses', async () => {
+  const saved = process.env.PATH;
+  let handedOff = false;
+  process.env.PATH = '';
+  try {
+    const rc = await U.cmdBootstrap({ noSetup: false }, { handoff: () => { handedOff = true; return 0; } });
+    assert.equal(rc, 1);
+  } finally { process.env.PATH = saved; }
+  assert.equal(handedOff, false, 'no answer from git read as nothing pending');
+});
+
 test('preflight reports a missing upstream', () => {
   git(CO, 'branch', '--unset-upstream');
   try { assert.equal(U.preflight().code, 'no_upstream'); } finally {
