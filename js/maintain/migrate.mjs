@@ -28,7 +28,7 @@ import { ROOT } from '../build/source.mjs';
 import { CLAUDE_STYLE, isCanonical, settingsFile } from '../hosts/hosts.mjs';
 import {
   claudeCfg, claudeReadManifest, EMIT_HOST_SCOPE, installState, installTargets,
-  legacyProcessCarrierOfDir, readMaybe,
+  readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile } from '../build/generate.mjs';
 import { autostartPaths, autostartStale, hookShimPath, shimHome } from '../hosts/shim.mjs';
@@ -196,22 +196,8 @@ export function cmdMigrate(args = {}) {
   // `process 5` among them) and dropped `--config-dir`, so a global found through
   // `CLAUDE_CONFIG_DIR`/`OPENCODE_CONFIG_DIR` re-emitted into the DEFAULT dir instead.
   //
-  // A LEGACY CARRIER IS SKIPPED, NOT ROLLED BACK — the one exception to Step 4's ALL OR
-  // NOTHING, same reasoning as `rebuild-all` (`js/build/generate.mjs`): `installProfile` would
-  // read a pre-comms carrier exactly as written now (`comms` missing, `process 7`/`process 8`
-  // unaddressed) and `driverMain` would write that back PERMANENTLY — the fresh carrier carries
-  // no `process 8` text, so nothing could ever catch it again. Rolling back everything else on
-  // the machine over an install that merely needs `geneseed setup` would be a worse outcome
-  // than leaving it as it was found.
-  const skipped = [];
   for (const r of rows) {
     const label = `${r.host}:${r.scope} (${r.root})`;
-    if (legacyProcessCarrierOfDir(r.root, r.host)) {
-      skipped.push(label);
-      printOut(`[migrate] SKIPPED ${label}: pre-comms carrier (names 'process 8') — `
-        + 'run `geneseed setup` for it.\n');
-      continue;
-    }
     const { emit, theme, argv } = installProfile(r.host, r.scope, r.root,
       (n) => printErr(`[migrate] ${label}: ${n}\n`));
     printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
@@ -234,13 +220,7 @@ export function cmdMigrate(args = {}) {
     writeText(stampPath(), `${ROOT}\n`);
   } catch { /* an unwritable stamp costs a redundant re-emit next run, never correctness */ }
 
-  const migrated = rows.length - skipped.length;
-  if (skipped.length) {
-    printOut(`[migrate] migrated ${migrated} install(s), skipped ${skipped.length}: `
-      + `${skipped.join(', ')}.\n`);
-  } else {
-    printOut(`[migrate] migrated ${rows.length} install(s).\n`);
-  }
+  printOut(`[migrate] migrated ${rows.length} install(s).\n`);
 
   // Step 5 — what could NOT be fixed automatically. Reported, never rewritten: nothing in
   // this repository has ever written an autostart entry, so migrate does not own the file.

@@ -54,6 +54,10 @@ The npm route never uses `sudo` and never retries. If npm refuses (no permission
 
 When the update is done, the console restarts and the page reloads. If you ran `git pull` yourself, the Overview shows a banner that the console runs old code. Click **Rebuild** on an install that is behind, or **Rebuild all behind** in the header. The console asks you to confirm, rebuilds only the installs it names, then restarts and reloads the page. If no install is behind, click **Restart** in the banner.
 
+## The oldest install an upgrade accepts
+
+5.0.0 no longer recognises an install built before the comms pack (3.7.0, 2026-09-27) and no longer skips it. Its carrier names `process 8` and its `Active packs:` line has no `comms`; `rebuild-all`, `upgrade`, `migrate` and the web console now rebuild it as it reads, which drops the codes rule and leaves the old rule numbers unmapped. Upgrade such an install to a 4.x release first and run `geneseed rebuild-all` there, or run `geneseed setup` for it before moving to 5.0.0.
+
 ## What an upgrade keeps
 
 A rebuild only replaces files the install's manifest says Geneseed owns. It leaves these alone:

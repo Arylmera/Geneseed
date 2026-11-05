@@ -50,7 +50,7 @@ import {
 import {
   EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
-  installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, themeOfDir,
+  installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
 } from '../hosts/installs.mjs';
 import {
@@ -722,15 +722,6 @@ export function apiInstallCmd(state, body) {
   if (installState(root, host, scope) === 'disabled') {
     return { error: 'install is disabled — reactivate it before (re)building' };
   }
-  // A LEGACY CARRIER IS REFUSED, NEVER REBUILT — same guard as `rebuild-all`/`migrate` (see
-  // `legacyProcessCarrierOfDir`'s docblock): `doctrinesForBuild`/`excludedRulesOfDir` below
-  // read a pre-comms carrier exactly as written, and this endpoint's `{cmd}` is EXECUTED by
-  // `startJob` (`js/web/handler.mjs`'s `install` action) — building that argv here would write
-  // the same permanent loss a console click away.
-  if (legacyProcessCarrierOfDir(root, host)) {
-    return { error: `${host}:${scope} (${root}) predates the comms pack (its carrier names `
-      + "'process 8') — run `geneseed setup` for it before rebuilding from the console" };
-  }
   const emit = EMIT_FOR.get(`${host} ${scope}`);
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
@@ -790,7 +781,7 @@ export function apiInstallCmd(state, body) {
  * built from the REGISTRY's host/scope/root, never from body strings, and it is what `rebuildAll`
  * replays (`installProfile`), so a console rebuild of one row equals the CLI's of all of them.
  *
- * ALL OR NOTHING: one unknown, inactive or legacy entry (or a malformed body) is `{ error }` and no
+ * ALL OR NOTHING: one unknown or inactive entry (or a malformed body) is `{ error }` and no
  * job starts. `detectedInstall`'s `NotFound` would answer 404; a refusal here means the world
  * changed under the client, so the dispatcher answers 409, as for `install`. The shape is checked
  * before the registry is read, so a bad body never costs a detect.
@@ -809,11 +800,6 @@ export function rebuildCmds(body) {
     const hit = active.findLast(([host, , root]) => JSON.stringify([host, String(root)]) === key);
     if (hit === undefined) return { error: `not an active install: ${key}` };
     const [host, scope, root] = hit;
-    // Asked BEFORE `installProfile`, as `rebuildAll` does: a legacy carrier must never be rebuilt.
-    if (legacyProcessCarrierOfDir(root, host)) {
-      return { error: `${host}:${scope} (${root}) predates the comms pack (its carrier names `
-        + "'process 8') — run `geneseed setup` for it before rebuilding from the console" };
-    }
     steps.push(...actionCommands('build', { buildArgv: installProfile(host, scope, root).argv }));
   }
   return { cmds: steps };
@@ -894,13 +880,6 @@ export function apiDeployCmd(state, body) {
   }
   if (cfgdirs.has(root)) {
     return { error: "that's a host global config dir — use its existing row to build a global install" };
-  }
-  // Same guard as `apiInstallCmd` above: a landing folder that already holds a pre-comms
-  // install must not be rebuilt through `doctrinesForBuild`/`excludedRulesOfDir` below. A
-  // fresh, never-built folder has no carrier at all, so this is a no-op for the common case.
-  if (legacyProcessCarrierOfDir(root, host)) {
-    return { error: `${root} predates the comms pack (its carrier names 'process 8') — `
-      + 'run `geneseed setup` for it before deploying over it' };
   }
   // A fresh deploy is LEAN, at the default register, mode and trust: the same default as the
   // CLI's `--footprint`, which the user chose (2026-10-24) over the console's old `full` — a

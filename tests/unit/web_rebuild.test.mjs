@@ -106,18 +106,6 @@ test('a deactivated install is refused, never rebuilt', async () => {
   } finally { fs.rmSync(stash, { recursive: true }); }
 });
 
-test('a legacy carrier is refused, never rebuilt', async () => {
-  started.length = 0;
-  const carrier = path.join(dir, 'AGENT.md');
-  fs.writeFileSync(carrier, '# Rules\nprocess 8\n');
-  try {
-    const r = await post({ installs: [{ host: 'opencode', path: dir }] });
-    assert.equal(r.status, 409);
-    assert.match(r.json.error, /predates the comms pack/);
-    assert.deepEqual(started, []);
-  } finally { fs.rmSync(carrier); }
-});
-
 test('a stale server refuses the per-install rebuild and starts nothing', async () => {
   // The argv is built by THIS process's installProfile but run by the new build-driver on
   // disk; after a pull the two can disagree on an axis, so the console must restart first.

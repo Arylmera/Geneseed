@@ -21,7 +21,7 @@ import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { autostartPaths } from '../hosts/shim.mjs';
 import {
-  footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
+  footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir,
   trustOfDir, sharedTierOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
@@ -334,9 +334,7 @@ export function apiKits() {
     if (st === 'absent') continue;
     try {
       const p = installProfile(host, scope, root);
-      const reason = st === 'disabled' ? 'install is disabled — reactivate it first'
-        : legacyProcessCarrierOfDir(root, host) ? 'predates the comms pack — run geneseed setup for it first'
-          : null;
+      const reason = st === 'disabled' ? 'install is disabled — reactivate it first' : null;
       installs.push({ ...installRowBase(host, scope, root, st), kits: p.kits,
         keptKitFiles: keptKitFiles(host, scope, root, p.kits), editable: reason === null, reason });
     } catch (e) {

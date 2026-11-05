@@ -317,80 +317,6 @@ export function trustOfDir(d, host = null) {
 const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
 
 /**
- * A carrier rendered BEFORE the comms pack existed — the pre-4.0.0 address migration's one
- * detector, kept only to WARN now.
- *
- * The comms pack took `process 7` (reference codes) out of process, and `process 8` (one
- * writer per file) was renumbered to `process 7`. An install built before that names
- * `process` in its marker and not `comms`, and so does a later install whose owner turned
- * comms OFF — the marker alone cannot tell them apart. The carrier text can: a pre-comms
- * process pack had eight rules, so wherever it was active the carrier renders a
- * `process 8` heading, and wherever that rule was excluded the `Excluded rules:` line names
- * it. No current carrier can say `process 8` — the pack has seven rules and nothing cites
- * an eighth.
- *
- * 4.0.0 RETIRED THE AUTO-MIGRATION THIS DROVE (see `warnLegacyProcessCarrier` below): it used
- * to add `comms` and re-address `process 7`/`process 8` on sight, silently, which is exactly
- * backward the day the process pack ever regains an eighth rule for an unrelated reason —
- * this sniff would then fire on a CURRENT carrier and rewrite data nobody asked rewritten. A
- * false positive that only prints a loud warning and reads the carrier as written is safe to
- * keep; a false positive that mutates data was not. See CHANGELOG "Removed" (4.0.0) for the
- * upgrade instruction this now points installs at.
- */
-const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
-
-/**
- * The loud half of retiring the migration: one stderr line pointing a pre-comms install at
- * `geneseed setup`, instead of the silent rewrite `doctrinesOfDir`/`excludedRulesOfDir` used
- * to perform on the same detection. Never thrown — both are read-only introspection called by
- * `uninstall`, `diff`, `validate` and the web console, none of which should become
- * un-runnable against an install that merely needs a rebuild.
- *
- * NEVER `geneseed rebuild-all` — that is the exact command `rebuildAll` (`js/build/generate.mjs`)
- * now REFUSES to run against a legacy carrier (see `legacyProcessCarrierOfDir` there), because
- * running it is what caused the permanent data loss this fix round exists to stop. Pointing the
- * warning at the one command that is guaranteed to do nothing here would be a second silent
- * misread wearing a loud one's clothes.
- *
- * DEDUPED ONCE PER PROCESS — `doctor`/`validate`/`uninstall` read the same install's carrier
- * more than once per run, and a line per read drowns the one thing the owner needs to act on.
- * `resetLegacyProcessCarrierWarning` (below) exists only so tests can see the line fire more
- * than once in one process; nothing else should call it.
- */
-let warnedLegacyProcessCarrier = false;
-function warnLegacyProcessCarrier() {
-  if (warnedLegacyProcessCarrier) return;
-  warnedLegacyProcessCarrier = true;
-  printErr('[geneseed] WARN: this install predates the comms pack (3.7.0, 2026-09-27) — its '
-    + "carrier still names 'process 8'. The automatic migration (adding comms, re-addressing "
-    + 'process 7/process 8) was removed in 4.0.0; the carrier is now read as written. Run '
-    + '`geneseed setup` once to rebuild this install on the current rule addresses.\n');
-}
-
-/** Test-only: undo the dedup above so a test can see the warning fire again. */
-export function resetLegacyProcessCarrierWarning() {
-  warnedLegacyProcessCarrier = false;
-}
-
-/**
- * Whether ANY of `d`'s own carriers still shows the pre-comms signature — the one question
- * `rebuildAll`, `upgrade` (which shells into it) and `migrate` must ask BEFORE calling
- * `installProfile`/`driverMain` on an install, now that `doctrinesOfDir`/`excludedRulesOfDir`
- * no longer rewrite it for them. Re-emitting a legacy carrier through the current template
- * does not raise an error — it just writes a fresh `Active packs:` line that silently drops
- * `comms` and leaves `process 7`/`process 8` unaddressed, permanently, with no further carrier
- * text left afterward for THIS function to ever detect again. Checking before the write is the
- * only point where the loss is still preventable.
- */
-export function legacyProcessCarrierOfDir(d, host = null) {
-  return firstCarrier(d, (carrierPath) => {
-    const text = readMaybe(carrierPath);
-    if (text === null) return undefined;
-    return legacyProcessCarrier(text) || undefined;
-  }, false, host) === true;
-}
-
-/**
  * The doctrine packs a DEPLOYED install carries — the third register read back off disk,
  * beside `postureOfDir` and `modeOfDir`, and the first that is a SET.
  *
@@ -430,12 +356,6 @@ export function doctrinesOfDir(d, host = null) {
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
     if (!named.every((n) => PACK_ORDER.includes(n))) return null;
-    // RETIRED MIGRATION (4.0.0): a pre-comms install used to gain `comms` here so it kept the
-    // codes rule it carried inside `process`. That rewrite is gone — the carrier is read as
-    // written, and the owner is warned loudly instead, once per read.
-    if (named.includes('process') && !named.includes('comms') && legacyProcessCarrier(text)) {
-      warnLegacyProcessCarrier();
-    }
     return PACK_ORDER.filter((pk) => named.includes(pk));
   }, null, host);
 }
@@ -499,11 +419,6 @@ export function excludedRulesOfDir(d, host = null) {
         ? `${parts[0]}.${Number(parts[1])}` : null;
     });
     if (!ids.every(Boolean)) return [];
-    // RETIRED MIGRATION (4.0.0): a pre-comms carrier used to have its old addresses
-    // (`process.7` -> `comms.1`, `process.8` -> `process.7`) remapped here, once, so
-    // `process 8` could not chain onward. That rewrite is gone — the addresses are returned
-    // exactly as named, and the owner is warned loudly instead of having them silently moved.
-    if (legacyProcessCarrier(text)) warnLegacyProcessCarrier();
     return [...new Set(ids)].sort();
   }, [], host);
 }

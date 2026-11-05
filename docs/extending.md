@@ -313,11 +313,9 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    pack cannot, or the moved rule disappears on the next rebuild — `comms` (2026-09-27) is the
    worked example. Through 3.x this was auto-migrated on sight; 4.0.0 retired that (CHANGELOG
    "Removed") because the detector it relied on breaks the day the donor pack regains a rule at
-   the same old count. `js/hosts/installs.mjs`'s `legacyProcessCarrier` now only warns a
-   pre-migration install to re-run `geneseed setup` rather than rewriting its data for it, and
-   `legacyProcessCarrierOfDir` makes `rebuild-all`/`upgrade` (§9 below) skip that install
-   entirely rather than re-emit it — re-emitting would write a fresh carrier that drops the
-   rewrite silently and for good, since no `process 8` text survives it to warn about next time.
+   the same old count. 5.0.0 removed the leftover warning and the `rebuild-all`/`upgrade`/`migrate`
+   skip that went with it: an install older than the comms pack is rebuilt as it reads (see the
+   upgrade guide for the floor).
 
 ---
 

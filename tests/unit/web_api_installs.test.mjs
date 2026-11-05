@@ -279,17 +279,6 @@ test('GET /api/kits names an edited member kept from a kit that is off', () => {
   });
 });
 
-test('GET /api/kits locks a legacy-carrier install with a reason naming setup', () => {
-  // `process 8` in the carrier is the pre-comms signature; reddens if the legacy arm is dropped.
-  withThreeInstalls(({ oc }) => {
-    fs.writeFileSync(path.join(oc, 'AGENT.md'), '# Rules\nActive kits: spring-boot\nprocess 8\n');
-    const row = apiKits(neutral()).installs.find((r) => samePath(r.path, oc));
-    assert.equal(row.editable, false);
-    assert.match(row.reason, /predates the comms pack.*geneseed setup/);
-    assert.ok(!row.reason.includes('`'), 'backticks show literally in the console');
-  });
-});
-
 test('GET /api/kits lists an install whose row cannot be built as unreadable, with the error', async () => {
   // No fixture makes the real readers throw (they all swallow), so the copied checkout's
   // `keptKitFiles` throws: reddens if the per-row catch is dropped (the whole call would throw).
