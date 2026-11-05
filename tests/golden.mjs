@@ -160,7 +160,8 @@ function fanOut(argv, jobs) {
  * outside. A listing with size and mtime of the REAL `machineDir()`, taken in THIS process (the
  * parent's environment, not a shard's sandboxed one) before and after the run. A cell that wrote
  * to the developer's own config directory changes the listing and fails the run. An absent
- * directory is an empty listing, so a run that CREATES it fails too.
+ * directory is an empty listing, so a run that CREATES it fails too. Directories are listed
+ * too, as `dir`, so an empty one made or removed is seen.
  */
 function machineSnapshot(dir = machineDir()) {
   const out = new Map();
@@ -169,7 +170,7 @@ function machineSnapshot(dir = machineDir()) {
     try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const p = path.join(d, e.name);
-      if (e.isDirectory()) { walk(p); continue; }
+      if (e.isDirectory()) { out.set(p, 'dir'); walk(p); continue; }
       try {
         const st = fs.statSync(p);
         out.set(p, `${st.size}:${st.mtimeMs}`);
@@ -191,7 +192,7 @@ async function guarded(argv) {
   const code = await main(argv);
   const drift = machineDrift(before, machineSnapshot());
   if (drift.length) {
-    const head = `the run changed the REAL machine dir ${machineDir()} — a cell escaped its sandbox:`;
+    const head = `the run changed the REAL machine dir ${machineDir()} — a cell escaped its sandbox, or another process (the web daemon, an install writing installs.json) wrote there while the run was going:`;
     console.error(['', `[golden] ${head}`, ...drift].join('\n'));
     return 1;
   }

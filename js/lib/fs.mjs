@@ -29,7 +29,7 @@
  */
 import {
   appendFileSync, writeFileSync, readFileSync, copyFileSync, statSync, utimesSync,
-  openSync, fstatSync, readSync, closeSync,
+  openSync, fstatSync, readSync, closeSync, renameSync,
 } from 'node:fs';
 import { EOL } from 'node:os';
 import { resolve } from 'node:path';
@@ -79,6 +79,18 @@ export function writeText(path, text) {
     const st = statSync(path);
     textWrites.map.set(resolve(path), { text: out, size: st.size, mtimeMs: st.mtimeMs });
   }
+}
+
+/**
+ * `writeText` through a temp file and a rename, for a file two processes may rewrite at once (the
+ * memory index, which two hosts can rebuild together). A reader sees the old file or the new one,
+ * never half of one. A crash leaves a `.tmp` beside it, which no `*.md` glob lists and the next
+ * write by the same pid overwrites.
+ */
+export function writeTextAtomic(path, text) {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeText(tmp, text);
+  renameSync(tmp, path);
 }
 
 /**

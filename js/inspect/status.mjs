@@ -76,6 +76,7 @@ import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { isDoctorNote } from './scan.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
 // ---- version ---------------------------------------------------------------------------
@@ -165,6 +166,18 @@ export function memoryFactCount(mdir) {
     n += 1;
   }
   return n;
+}
+
+/**
+ * The themed `anamnesis/` stores an older install left behind: a non-empty one in a host config
+ * dir, `./Harness` or the machine dir. No resolver reads one any more (M1), so its facts are
+ * invisible until copied into `memory/`. Never looks at cwd itself: Terra's `Anamnesis/` vault
+ * is not a store.
+ */
+export function anamnesisLeftovers(dirs) {
+  return dirs.map((d) => path.join(d, 'anamnesis')).filter((p) => {
+    try { return readdirSync(p).length > 0; } catch { return false; }
+  });
 }
 
 /** `_harness_tui_draw._accent_for` — the ACCENT a theme declares, default cyan. */
@@ -297,6 +310,8 @@ export function statusData() {
     const v = readVersion(base);
     if (v) { installedFp = v; verTarget = base; break; }
   }
+  const leftover = anamnesisLeftovers([...(cfgDir ? [cfgDir] : []), ...otherCfg,
+    path.join(process.cwd(), 'Harness'), sharedPaths().root]);
   const agentMd = (inst.emit === 'opencode-global' && cfgDir)
     ? path.join(cfgDir, 'AGENT.md') : null;
   return {
@@ -317,6 +332,7 @@ export function statusData() {
     doctrine_rules: inv.doctrineRules,
     memory_dir: mdir ? String(mdir) : null,
     facts: mdir ? memoryFactCount(mdir) : 0,
+    ...(leftover.length ? { anamnesis_leftover: leftover } : {}),
     source_fp: sourceFp,
     installed_fp: installedFp,
     version_target: verTarget ? String(verTarget) : null,
@@ -398,6 +414,7 @@ export function statusLines(d, color = false) {
     ['components', `${d.agents} agents ${DOT} ${d.skills} skills ${DOT} ${d.laws} laws`],
     ['memory', `${d.memory_dir || '(not found)'}  `
       + `(${d.facts} fact${d.facts === 1 ? '' : 's'})`],
+    ...(d.anamnesis_leftover ? [['leftover', `${d.anamnesis_leftover.join(', ')}  ${DOT}  no longer read: copy its facts into memory/`]] : []),
     ['version', `${d.installed_fp || '(none)'}  ${DOT}  source ${d.source_fp}`],
   ];
   // ⚠ A ROW, NOT A WIDER `components` LINE. When this landed, `statusLines` had 30 recorded

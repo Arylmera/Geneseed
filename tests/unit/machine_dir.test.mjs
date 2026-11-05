@@ -60,4 +60,11 @@ test('the golden fence reports a write to, and a creation of, the machine dir', 
   assert.equal(drift.length, 1);
   assert.match(drift[0], /installs\.json: absent -> 2:/);
   assert.deepEqual(machineDrift(machineSnapshot(dir), machineSnapshot(dir)), []);
+  // A directory is listed too, so an EMPTY one a cell made (a file listing cannot see it) is drift.
+  const withFile = machineSnapshot(dir);
+  mkdirSync(path.join(dir, 'memory'));
+  const dirDrift = machineDrift(withFile, machineSnapshot(dir));
+  assert.equal(dirDrift.length, 1);
+  assert.match(dirDrift[0], /memory: absent -> dir/);
+  sb.cleanup();
 });

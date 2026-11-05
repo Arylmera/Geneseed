@@ -25,8 +25,10 @@
 //
 // Where it writes — first match wins:
 //   1. $GENESEED_MEMORY            an explicit memory dir
-//   2. $GENESEED_HARNESS/memory    (or /anamnesis for the imperial theme)
-//   3. ./memory  or  ./Harness/memory   (when the bundle is inside the project)
+//   2. $GENESEED_HARNESS/memory
+//   3. the install's own target: a GLOBAL install uses the shared store, <machine dir>/memory,
+//      when it exists, else its own memory/; a project install uses its own memory/
+//   4. ./memory  or  ./Harness/memory   (the repo, last: never ahead of the install)
 // If none resolve, it logs once and does nothing — it never blocks a session.
 //
 // It is intentionally conservative: trivial sessions are skipped, one session never
@@ -130,7 +132,6 @@ async function sovereignBypass(cwd) {
 
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
-const MEMORY_DIR_NAMES = ["memory", "anamnesis"]   // neutral + imperial
 // NaN-safe: garbage in the env var would make setTimeout fire immediately (NaN
 // delay → 0), distilling after EVERY turn instead of at session end.
 const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
@@ -189,20 +190,24 @@ async function isDir(p) {
   try { return (await fs.stat(p)).isDirectory() } catch { return false }
 }
 
-async function resolveMemoryDir() {
+// The install's own target comes BEFORE the repo: a global session in a repo that has its own
+// memory/ (possibly tracked) must not learn into it. A global install (.geneseed-emit ends in
+// -global, as geneseed-context.js tests it) takes the shared store when it exists, else its own
+// memory/. Only "memory" names a store: a themed "anamnesis" matched Terra's Anamnesis/ vault
+// by Windows case folding (B3). The shared store is machineDir() in js/lib/machine-dir.mjs,
+// which a plugin cannot import.
+async function resolveMemoryDir(pluginDir = PLUGIN_DIR) {
   const env = process.env.GENESEED_MEMORY
   if (env && (await isDir(env))) return env
   const harness = process.env.GENESEED_HARNESS
-  const bases = []
-  if (harness) bases.push(harness)
-  // The plugin's own dir (global install: <cfg>/plugins → <cfg>/memory) and the repo.
-  bases.push(path.resolve(PLUGIN_DIR, ".."), process.cwd(), path.join(process.cwd(), "Harness"))
-  for (const base of bases) {
-    for (const name of MEMORY_DIR_NAMES) {
-      const cand = path.join(base, name)
-      if (await isDir(cand)) return cand
-    }
-  }
+  const own = path.resolve(pluginDir, "..")
+  let global = false
+  try { global = (await fs.readFile(path.join(own, ".geneseed-emit"), "utf8")).trim().endsWith("-global") } catch { /* project */ }
+  const cands = []
+  if (harness) cands.push(path.join(harness, "memory"))
+  if (global) cands.push(path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed", "memory"))
+  cands.push(path.join(own, "memory"), path.join(process.cwd(), "memory"), path.join(process.cwd(), "Harness", "memory"))
+  for (const cand of cands) if (await isDir(cand)) return cand
   return null
 }
 
@@ -420,7 +425,10 @@ const listMd = async (dir) => {
 async function writeIfChanged(p, text) {
   const old = await readLines(p)
   if (old && old.join("\n") + "\n" === text) return
-  await fs.writeFile(p, text, "utf8")
+  // temp file + rename: two hosts can rebuild the index at once, and a reader never sees half of it
+  const tmp = `${p}.${process.pid}.tmp`
+  await fs.writeFile(tmp, text, "utf8")
+  await fs.rename(tmp, p)
 }
 // `topic:`, else `type:` (a `type:` nested under `metadata:` reads the same: keys are trimmed).
 function topicOf(fm) {
@@ -610,7 +618,7 @@ export const GeneseedLearn = async (ctx) => {
 
 // OpenCode treats every export as a plugin and rejects non-functions; hang the test
 // helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedLearn, { writeMemories, resolveAgentName, appendAgentLesson, flattenV2 })
+Object.assign(GeneseedLearn, { resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2 })
 
 // ---- OpenCode 2 ----------------------------------------------------------------
 // `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and

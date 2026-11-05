@@ -151,8 +151,10 @@ the filename, the `.js` extension, and that the path is exactly the plugins dir.
 The plugin writes into the first location that resolves:
 
 1. `$GENESEED_MEMORY` — an explicit memory dir;
-2. `$GENESEED_HARNESS/memory` (or `/anamnesis` for the imperial theme);
-3. `./memory` or `./Harness/memory` — when the bundle lives inside the project.
+2. `$GENESEED_HARNESS/memory`;
+3. the install's own target: the shared store, `<machine dir>/memory`, on a global install when it
+   exists, else the `memory/` beside the plugin;
+4. `./memory` or `./Harness/memory` in the repo, last.
 
 Because your Harness is global (used from any directory), set `GENESEED_HARNESS`
 once to the bundle's absolute path so the plugin always writes to the same memory

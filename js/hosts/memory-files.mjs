@@ -12,7 +12,7 @@
  */
 import { existsSync, mkdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
-import { readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
 
@@ -117,7 +117,7 @@ function readLines(p) {
 function writeIfChanged(p, text) {
   const old = readLines(p);
   if (old && `${old.join('\n')}\n` === text) return;
-  writeText(p, text);
+  writeTextAtomic(p, text);
 }
 
 /** A topic name as a file stem: `[a-z0-9-]`, any other run becomes `-`, empty becomes `misc`. */
@@ -387,7 +387,7 @@ function dropLines(p, needle) {
   const keep = lines.filter((ln) => !ln.includes(needle));
   if (keep.length === lines.length) return null;
   try {
-    writeText(p, `${keep.join('\n')}\n`);
+    writeTextAtomic(p, `${keep.join('\n')}\n`);
   } catch { /* the reference swallows OSError here too */ }
   return keep;
 }

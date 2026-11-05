@@ -2023,6 +2023,38 @@ test('the memory store is found in $GENESEED_HARNESS from an unrelated cwd', () 
   });
 });
 
+test('the write resolver takes the spec order, and the shared store counts only when it exists', () => {
+  // `--memory` and `$GENESEED_MEMORY` are first and need no row here. Below them: a store beside
+  // cwd, then `$GENESEED_HARNESS/memory`, then the shared store, then the OpenCode config store.
+  // The shared store is `<machine dir>/memory`; a machine dir without it is no store, and the
+  // answer is `null`, not a path that was never made.
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const shared = path.join(home, '.config', 'geneseed', 'memory');
+    const harness = path.join(d, 'store');
+    const work = path.join(d, 'work');
+    fs.mkdirSync(work);
+    const ask = (h) => memoryResolver(h, work, home);
+    assert.equal(ask(path.join(d, 'no-store')), '0 null', 'no store anywhere');
+    fs.mkdirSync(shared, { recursive: true });
+    assert.equal(ask(path.join(d, 'no-store')), `0 ${shared}`, 'the shared store alone');
+    fs.mkdirSync(path.join(harness, 'memory'), { recursive: true });
+    assert.equal(ask(harness), `0 ${path.join(harness, 'memory')}`, '$GENESEED_HARNESS beats shared');
+    fs.mkdirSync(path.join(work, 'memory'));
+    assert.equal(ask(harness), `0 ${path.join(work, 'memory')}`, 'a store beside cwd beats both');
+  });
+});
+
+test('B3: a cwd holding Anamnesis/ is no memory store', () => {
+  // Windows folds case, so `path.join(cwd, 'anamnesis')` was a directory whenever the cwd held
+  // Terra's `Anamnesis/` vault, and `learn` wrote facts into it. Only `memory` names a store.
+  withDir((d) => {
+    const work = path.join(d, 'work');
+    fs.mkdirSync(path.join(work, 'Anamnesis'), { recursive: true });
+    assert.equal(memoryResolver(path.join(d, 'no-store'), work, path.join(d, 'home')), '0 null');
+  });
+});
+
 test('a ~user $GENESEED_HARNESS is skipped, not raised', () => {
   // THE FOURTH USER-CONTROLLED TILDE INPUT, and the one the `~user` refusal missed. Making
   // `expanduser` THROW on `~user` guarded excludes.json, $GENESEED_ROOT and --root, and left

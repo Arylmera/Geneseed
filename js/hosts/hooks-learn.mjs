@@ -6,12 +6,13 @@
  */
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
+import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import {
-  globalHookStandingDown, hookProjectDir, resolveMemoryDir, sovereignBypass,
+  globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
 import { doneGate } from './hooks-done.mjs';
 import {
@@ -283,6 +284,15 @@ function learnAgentLesson(meta, notes, args) {
   return proc.returncode;
 }
 
+/** `--memory` of a global install's hook, swapped for the shared store when that exists. */
+function sharedStoreFor(install, args) {
+  if (!install) return args.memory;
+  try {
+    const shared = sharedPaths().memory;
+    return isDir(shared) && isHostGlobalDir(args.host ?? null, install) ? shared : args.memory;
+  } catch { return args.memory; }
+}
+
 export function cmdLearn(args) {
   // B2: stand straight down inside a model-CLI child `runLlm` just spawned (see its comment).
   // Checked before anything else — a child never gets as far as reading its own stdin, let
@@ -310,6 +320,10 @@ export function cmdLearn(args) {
   // Same install root, and a project install of this host beside it learns on its own Stop: a
   // second LLM call, and the global store learning facts the project owns (Claude B4).
   if (install && globalHookStandingDown(install, hookProjectDir(), args.host, 'learn')) return 0;
+
+  // A global install's hook passes its own host store; the shared store is where its facts live
+  // once it exists, or they land in the seeded host store and wait for the next fold.
+  args = { ...args, memory: sharedStoreFor(install, args) };
 
   const raw = args.file ? readText(args.file) : readStdin();
   const meta = hookMeta(raw);

@@ -19,6 +19,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { mainWorktreeOf } from './gitref.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
@@ -497,17 +498,18 @@ export function hostCatalogsNatively(host) {
   return HOSTS.find((h) => h.host === host)?.catalog || false;
 }
 
-/** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */
-const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
-
 /**
  * `_harness_learn._resolve_memory_dir` — where `learn` dedups and indexes, and what
  * `status` reports on its memory row.
  *
- * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` (or `anamnesis/`) beside cwd or
- * under `./Harness` > `$GENESEED_HARNESS/memory` > the OpenCode GLOBAL config dir's store.
- * The last two matter for the recommended opencode-global install, whose store lives in
- * `~/.config/opencode` rather than beside any repo. null => stdout-only.
+ * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` beside cwd or under `./Harness` >
+ * `$GENESEED_HARNESS/memory` > the shared store (`<machine dir>/memory`) > the OpenCode GLOBAL
+ * config dir's store. Each counts only when it exists, so a machine without the shared tier
+ * falls through. null => stdout-only.
+ *
+ * ONLY `memory` NAMES A STORE. The imperial theme's `anamnesis` alias matched Terra's
+ * `Anamnesis/` vault by Windows case folding (B3) and `learn` wrote facts into it. The alias is
+ * read only where it is copied forward (`globalMemory`, `migrateStrayBundle`).
  *
  * HERE rather than in `js/hosts/hooks.mjs`, where it was written, because P5d gave it a second
  * caller that cannot import that file: `bin/geneseed-cli.mjs` is under a transitive
@@ -538,12 +540,8 @@ export function resolveMemoryDir(explicit) {
     // (`rituals/_harness_learn.py`, same guard) prints nothing here.
     try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
   }
-  try { bases.push(opencodeConfigDir()); } catch { /* best-effort, as the Python */ }
-  for (const base of bases) {
-    for (const name of MEMORY_DIR_NAMES) {
-      const cand = path.join(base, name);
-      if (isDir(cand)) return cand;
-    }
-  }
-  return null;
+  const stores = bases.map((b) => path.join(b, 'memory'));
+  stores.push(sharedPaths().memory);
+  try { stores.push(path.join(opencodeConfigDir(), 'memory')); } catch { /* best-effort, as the Python */ }
+  return stores.find(isDir) ?? null;
 }

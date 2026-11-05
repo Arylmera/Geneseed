@@ -16,9 +16,14 @@ One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed
 
 **Where it writes** — the first that resolves:
 1. `GENESEED_MEMORY` — an explicit memory dir;
-2. `$GENESEED_HARNESS/memory` (`/anamnesis` for the imperial theme);
-3. the `memory/` beside the plugin's own install (the global install's store);
-4. `./memory` or `./Harness/memory`, when the bundle lives in the project.
+2. `$GENESEED_HARNESS/memory`;
+3. the install's own target: a global install uses the shared store, `<machine dir>/memory`, when
+   it exists, else the `memory/` beside the plugin; a project install uses its own `memory/`;
+4. `./memory` or `./Harness/memory` in the repo, last, so a repo's own `memory/` folder never
+   takes the facts of a global session.
+
+The Stop hook of a global install passes `--memory <cfg>/memory` and `learn` swaps in the shared
+store when it exists.
 
 So a global install needs nothing set; use `GENESEED_HARNESS` only to pin the location. If none resolves, it logs `no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.` and does nothing.
 

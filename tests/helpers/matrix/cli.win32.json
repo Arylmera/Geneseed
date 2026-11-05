@@ -2169,12 +2169,15 @@
         "GENESEED_LLM": "{py} {llm}"
       },
       "expect": [
+        "alpha-fact"
+      ],
+      "expect_absent": [
         "wrote 1 memory file"
       ],
-      "expect_files": [
+      "expect_absent_files": [
         "repo/anamnesis/alpha-fact.md"
       ],
-      "id": "learn/memory-named-anamnesis",
+      "id": "learn/anamnesis-is-no-store",
       "steps": [
         {
           "argv": [
