@@ -175,11 +175,12 @@ streams the output of background jobs and keeps their history across reloads.
   `--no-deletion-gate`; *Enforced by* reads *Gate off* while one is off) — flipping one asks,
   then rebuilds the install once; the other Rules read *no gate*. The ownership gate belongs
   to no Rule, so its switch (`--no-ownership-gate`) has its own *Ownership gate* row in the
-  rules band and works the same way. That row exists only in the console: it has no number
-  and does not expand, it counts in *Gated* but not as a Rule, it shows only where an install
-  can be rebuilt, and the RANK 1 pill counts it while it is off. The Ethos band's Ownership
-  section stays text only. A precedence ladder heads the page (a state pill per rank; ranks
-  5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes
+  Ethos band, right after the Ownership section, and works the same way. That row exists only
+  in the console: it has no number and does not expand, it counts in *Gated* but not as a Rule
+  or a section, it shows only where an install can be rebuilt, and the Ethos rank's pill counts
+  it while it is off. Every tab shows it; unlike the sections around it, it answers *Gated* and
+  the filter. The Ownership section itself stays text only.
+  A precedence ladder heads the page (a state pill per rank; ranks 5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes
   collect in a sticky *Unapplied changes* bar that holds Revert and the page's one Apply.
   Every row but the *Ownership gate* row expands to its full body, lazily fetched. The rail
   entry is labelled *Constitution* while the route, the id and the badge key stay `laws`; deep links

@@ -491,7 +491,7 @@ describe('Constitution page — doctrine toggles', () => {
   it('changes a switch without opening its rule', async () => {
     const { container } = render(withInstall())
     await settled(container)
-    const disclosure = container.querySelector('.law-disclosure')
+    const disclosure = container.querySelector('[data-addr="craft.1"] .law-disclosure')
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(sw(container, 'Automate Repetition'))
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
@@ -701,8 +701,9 @@ describe('Constitution page — the deletion gate switch', () => {
 
 // ---------------------------------------------------------------------------------------------
 // The ownership gate has no Rule (`--no-ownership-gate`, `law: null`). The switch is split from
-// the Credo's Ownership section, which stays text only: it gets a row of its own in the rules
-// band, which exists only in the console. Same click, confirm and rebuild as a law's switch.
+// the Credo's Ownership section, which stays text only: it gets a row of its own right after that
+// section, in the Ethos band, which exists only in the console. Same click, confirm and rebuild
+// as a law's switch. Unlike the sections around it, the row obeys the view and the text filter.
 
 const ONT_OWN = { name: 'ont:ownership', title: 'Ownership', desc: '', tier: 'ontology' }
 const ownRow = (c) => c.querySelector('[data-addr="ownership"]')
@@ -716,7 +717,7 @@ describe('Constitution page — the ownership gate row', () => {
     api.item.mockClear()
   })
 
-  it('renders its own armed row in the rules band, with no number and nothing to expand', async () => {
+  it('renders its own armed row in the Ethos band, with no number and nothing to expand', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
     expect(ownRow(container).contains(ownSwitch(container))).toBe(true)
@@ -726,9 +727,43 @@ describe('Constitution page — the ownership gate row', () => {
     expect(ownRow(container).querySelector('.law-status').textContent).toBe('Active')
     expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
     expect(ownRow(container).querySelector('[aria-expanded]')).toBeNull()
-    // It follows the last law: the rules band, not the ethos band.
+    // It follows the Credo's Ownership section, above the toolbar: the Ethos band, not the rules
+    // band. Each row's address, in page order, up to the first law.
     const rows = [...container.querySelectorAll('[data-addr]')].map((r) => r.dataset.addr)
-    expect(rows.indexOf('ownership')).toBe(rows.indexOf('III') + 1)
+    expect(rows.slice(0, 7)).toEqual([
+      'ont:telos',
+      'ont:evidence',
+      'ont:decisions',
+      'ont:conduct',
+      'ont:ownership',
+      'ownership',
+      'I',
+    ])
+    expect(
+      ownRow(container).compareDocumentPosition(container.querySelector('.law-toolbar')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  // A section can sit anywhere in the band, so the row follows it, not the band's end.
+  it('stays right after the Ownership section when more sections follow it', async () => {
+    api.catalog.mockResolvedValue({
+      section: 'laws',
+      items: [ONT_OWN, ...ONT, ...INV, ...DOC],
+    })
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    const rows = [...container.querySelectorAll('[data-addr]')].map((r) => r.dataset.addr)
+    expect(rows.slice(0, 3)).toEqual(['ont:ownership', 'ownership', 'ont:telos'])
+  })
+
+  // A catalog with no Ethos tier at all (an older daemon) must not lose the switch: the band
+  // then holds the row alone.
+  it('keeps the row when the catalog has no Ethos section', async () => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, ...DOC] })
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    expect(container.querySelector('.band-head .tier-h').textContent).toBe('Ethos')
   })
 
   it('leaves the Credo row text only, whatever the gate says', async () => {
@@ -767,30 +802,50 @@ describe('Constitution page — the ownership gate row', () => {
     expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, ownershipGate: true }]])
   })
 
-  // The rungs by rank: Dictates, Your rules, Ethos, Doctrines. The row sits in the Dictates band,
-  // so that rung warns, once; the Ethos rung always reads "always".
-  it('warns on the Dictates rung, counted once, and never on the Ethos rung', async () => {
+  // The rungs by rank: Dictates, Your rules, Ethos, Doctrines. The row sits in the Ethos band, so
+  // that rung warns, once; the Dictates rung counts laws alone.
+  it('warns on the Ethos rung, counted once, and never on the Dictates rung', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    expect(pillsOf(container).slice(0, 3)).toEqual(['1 gate off', 'yours', 'always'])
+    expect(pillsOf(container).slice(0, 3)).toEqual(['always', 'yours', '1 gate off'])
   })
 
-  it('adds to a law gate that is off on the same rung', async () => {
+  it('reads "always" on both rungs while armed', async () => {
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    expect(pillsOf(container).slice(0, 3)).toEqual(['always', 'yours', 'always'])
+  })
+
+  it('stays apart from a law gate that is off: each rung counts its own', async () => {
     const { container } = render(gatePage({ ...INSTALL, secretsGate: false, ownershipGate: false }))
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    expect(pillsOf(container)[0]).toBe('2 gates off')
+    expect(pillsOf(container).slice(0, 3)).toEqual(['1 gate off', 'yours', '1 gate off'])
   })
 
-  // A switch, not a rule: INV holds 3 laws, and the row adds to neither the rung's "active" line
-  // nor the Dictates tab. Gated is about hooks, so it is there.
-  it('counts as no rule, and shows in the Gated view while armed', async () => {
+  // A switch, not a rule: INV holds 3 laws and the band 5 sections, and the row adds to neither
+  // rung's line nor the Dictates tab. Gated is about hooks, so it is there.
+  it('counts as no rule or section, and shows in the Gated view while armed', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
     expect(container.querySelector('.ladder').textContent).toContain('3 active')
+    expect(container.querySelector('.ladder').textContent).toContain('5 sections')
     expect(screen.getByRole('button', { name: 'Dictates 3' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     expect(ownRow(container)).toBeTruthy()
     expect(container.querySelector('[data-addr="II"]')).toBeNull()
+  })
+
+  // The Ethos band sits above the tabs, so every tab shows the row, and Gated counts it on each:
+  // the Dictates tab adds laws I and III to it, the Doctrines tab process.5.
+  it('shows under every tab, and counts in Gated on each', async () => {
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /^Dictates/ }))
+    expect(ownRow(container)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Gated 3' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
+    expect(ownRow(container)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Gated 2' })).toBeTruthy()
   })
 
   it('leaves the Gated view while off, as a switched-off law does', async () => {
@@ -798,10 +853,35 @@ describe('Constitution page — the ownership gate row', () => {
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     expect(ownRow(container)).toBeNull()
+    // The sections around it stay: the view narrows the row, never the character.
+    expect(container.querySelector('[data-addr="ont:ownership"]')).toBeTruthy()
+  })
+
+  it('answers the text filter, which the sections around it ignore', async () => {
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'Sealed' } })
+    expect(ownRow(container)).toBeNull()
+    expect(container.querySelector('[data-addr="ont:ownership"]')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'ownership gate' } })
+    expect(ownRow(container)).toBeTruthy()
+    // The row is the match, so the empty state must not deny it from under it.
+    expect(screen.queryByText('No matching rules')).toBeNull()
+  })
+
+  // Unfiltered, the row is no content of a tier: a tier with nothing in it still says so.
+  it('leaves an empty tier its empty state', async () => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...ONT, ONT_OWN, ...INV] })
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
+    expect(ownRow(container)).toBeTruthy()
+    expect(screen.getByText('Nothing in this tier')).toBeTruthy()
   })
 
   // The ledger keys it `ownership`: the card names the row, reads it off, and lands on it from a
-  // tab that hides it. The row has no catalog item, so the jump must fetch nothing.
+  // view that hides it. No tab hides it, so the jump leaves the tab alone. The row has no catalog
+  // item, so the jump must fetch nothing.
   it('the Gate asks card names the row, reads it off, and jumps to it', async () => {
     window.location.hash = '#/laws'
     const { container } = render(
@@ -817,10 +897,14 @@ describe('Constitution page — the ownership gate row', () => {
     expect(entry().querySelector('.off').textContent).toBe('off · opencode global')
     expect(ownRow(container).querySelector('.law-asks').textContent).toBe('2 asks')
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     expect(ownRow(container)).toBeNull()
     fireEvent.click(entry())
     expect(window.location.hash).toBe('#/item/law/ownership')
     expect(ownRow(container)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Doctrines/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
     expect(api.item).not.toHaveBeenCalled()
   })
 
@@ -1204,7 +1288,7 @@ describe('Constitution page — the ladder layout', () => {
 
   // Each rung's pill: Dictates and Ethos always bind; Your rules are yours; Doctrines count the
   // rules the install excludes (craft.3, ops.1, ops.2 in the fixture). A switched-off gate is
-  // the one way the Dictates rung stops reading "always".
+  // the one way the Dictates or Ethos rung stops reading "always".
   it('marks each rung with its state, and lists ranks 5 and 6 below', async () => {
     const { container } = render(withInstall())
     await settled(container)
