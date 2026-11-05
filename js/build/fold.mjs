@@ -1,7 +1,7 @@
 /**
  * The fold: a global install's own stores move into the shared tier, once, in the emit (D2).
  *
- * Nothing here deletes. A file reaches the tier through a temp name and a rename, is read back,
+ * Nothing here deletes. A file reaches the tier through a temp name, is read back,
  * and only then does the host copy move aside (`archiveStore`, D10). A failed copy keeps the old
  * store readable, because the host layer still serves it, and the next emit retries from the
  * files on disk: there is no progress record to go stale.
@@ -18,7 +18,8 @@
  */
 import { createHash } from 'node:crypto';
 import {
-  copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
+  constants, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync,
+  rmSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 
@@ -29,7 +30,7 @@ import {
 } from '../hosts/memory-files.mjs';
 import { foldExcludes } from '../inspect/excludes.mjs';
 import { isDir, isFile, printErr, printOut, readText, writeTextAtomic } from '../lib/fs.mjs';
-import { jsonDumpsIndent } from '../lib/json.mjs';
+import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
 import { LEGACY_WIKI_SEED, NOTES_DIRS, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase } from '../lib/paths.mjs';
 import {
@@ -47,18 +48,54 @@ const isWholeFileSeed = (bytes) => WHOLE_FILE_SEEDS.has(seedHash(bytes));
 const STORE_KEEPS = ['README.md', '.gitignore'];
 const DRAFT_HEAD = '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n';
 
-/** `bytes` at `dest`, or nothing there: a short write fails on its temp name, never on `dest`. */
-function landFile(dest, bytes) {
+/**
+ * Claim `dest` with the finished bytes, or throw EEXIST: a rename would replace a file another
+ * process landed since the `existsSync`. A hard link is atomic and exclusive.
+ * shortcut: a volume with no hard links takes the exclusive copy, which a crash can leave torn.
+ */
+function claimFile(tmp, dest) {
+  try {
+    linkSync(tmp, dest);
+  } catch (e) {
+    if (e.code === 'EEXIST') throw e;
+    copyFileSync(tmp, dest, constants.COPYFILE_EXCL);
+  }
+  rmSync(tmp, { force: true });
+}
+
+/**
+ * `bytes` at `dest`, or nothing there: a short write fails on its temp name, never on `dest`.
+ * `exclusive` is for a name the caller found free; without it the file is meant to be replaced.
+ */
+function landFile(dest, bytes, { exclusive = false } = {}) {
   mkdirSync(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.${process.pid}.fold-tmp`;
   try {
     writeFileSync(tmp, bytes);
     if (!readFileSync(tmp).equals(bytes)) throw new Error(`a short write to ${dest}`);
-    renameSync(tmp, dest);
+    if (exclusive) claimFile(tmp, dest);
+    else renameSync(tmp, dest);
   } catch (e) {
     try { rmSync(tmp, { force: true }); } catch { /* a stray temp name is no fact; the error below matters */ }
     throw e;
   }
+}
+
+/** A path with its links resolved, for comparing. A path that does not exist yet stands for itself. */
+function realOf(p) {
+  try { return normcase(realpathSync.native(p)); } catch { return normcase(path.resolve(p)); }
+}
+
+/**
+ * Is `src` the tier under another name, or inside it, or around it? Then moving it aside would move
+ * what the tier reads, through a link either way round, and there is nothing to fold. Every
+ * `archiveStore` here is behind this check, or behind `verifyCopies` for a single linked file.
+ */
+function sharesTier(src, shared) {
+  const a = realOf(src);
+  return [shared.root, shared.memory, shared.notes, ...NOTES_DIRS.map((sub) => path.join(shared.notes, sub)),
+    shared.profile, shared.wiki, shared.rules].map(realOf)
+    .some((b) => a === b || a.startsWith(b + path.sep) || b.startsWith(a + path.sep));
 }
 
 /**
@@ -70,7 +107,8 @@ function landing(bytes, name, dir, host) {
   const { name: stem, ext } = path.parse(name);
   for (let n = 1; ; n += 1) {
     const dest = path.join(dir, n === 1 ? name : `${stem}-${host}${n === 2 ? '' : `-${n - 1}`}${ext}`);
-    if (!existsSync(dest)) return { dest, write: true, collision: n > 1 };
+    // `lstat`: a dangling link reads as absent to `existsSync` and as taken to the claim.
+    if (!lstatSync(dest, { throwIfNoEntry: false })) return { dest, write: true, collision: n > 1 };
     if (readFileSync(dest).equals(bytes)) return { dest, write: false, collision: false };
   }
 }
@@ -82,24 +120,49 @@ function copyFiles(names, srcDir, destDir, ctx, tally) {
   for (const name of names) {
     const src = path.join(srcDir, name);
     const bytes = readFileSync(src);
-    const { dest, write, collision } = landing(bytes, name, destDir, host);
-    pairs.push([src, dest]);
-    if (!write) continue;
-    report[tally] += 1;
-    if (collision) report.collisions += 1;
-    if (!dryRun) landFile(dest, bytes);
+    for (;;) {
+      const { dest, write, collision } = landing(bytes, name, destDir, host);
+      try {
+        if (write && !dryRun) landFile(dest, bytes, { exclusive: true });
+      } catch (e) {
+        if (e.code === 'EEXIST') continue;      // lost the name: walk the chain again
+        throw e;
+      }
+      pairs.push([src, dest]);
+      if (write) report[tally] += 1;
+      if (collision) report.collisions += 1;
+      break;
+    }
   }
   return pairs;
 }
 
+/** Is `tierFile` a link to `hostFile`? */
+function readsThrough(tierFile, hostFile) {
+  return !!lstatSync(tierFile, { throwIfNoEntry: false })?.isSymbolicLink() && realOf(tierFile) === realOf(hostFile);
+}
+
+/** A link the fold is about to move out from under would dangle, so it stops the move. */
+function refuseLink(src, dest) {
+  if (realOf(src) === realOf(dest)) throw new Error(`${dest} is a link to ${src}`);
+}
+
 function verifyCopies(pairs) {
   for (const [src, dest] of pairs) {
+    refuseLink(src, dest);
     if (!readFileSync(src).equals(readFileSync(dest))) throw new Error(`${dest} does not match ${src}`);
   }
 }
 
-/** A lesson file's lessons: every line that is not blank and not a heading, CRLF folded. */
-const lessonsOf = (text) => text.split(/\r?\n/).filter((l) => l.trim() && !l.startsWith('#'));
+/**
+ * Lessons are compared and rewritten as BYTES: latin1 maps each byte to one character and back, so
+ * a line that is not UTF-8 survives, where a UTF-8 decode would write U+FFFD over it and then
+ * verify its own damage. A newline byte never sits inside a UTF-8 sequence, so lines still split.
+ */
+const AS_BYTES = 'latin1';
+
+/** A lesson file's lines: every one that is not blank, CRLF folded. */
+const lessonsOf = (text) => text.split(/\r?\n/).filter((l) => l.trim());
 
 /**
  * `agents/<name>.md`: one tier file per agent, so hosts merge by line rather than collide. No cap
@@ -113,14 +176,14 @@ function foldLessons(store, tierMemory, { dryRun, report }) {
     const src = path.join(srcDir, name);
     const dest = path.join(tierMemory, 'agents', name);
     const raw = readFileSync(src);
-    const lessons = lessonsOf(raw.toString('utf8'));
+    const lessons = lessonsOf(raw.toString(AS_BYTES));
     pairs.push([src, dest]);
     if (!existsSync(dest)) {
-      report.lessons += lessons.length;
-      if (!dryRun) landFile(dest, raw);
+      report.lessons += lessons.filter((l) => !l.startsWith('# ')).length;
+      if (!dryRun) landFile(dest, raw, { exclusive: true });
       continue;
     }
-    const text = readFileSync(dest, 'utf8');
+    const text = readFileSync(dest, AS_BYTES);
     const have = new Set(lessonsOf(text));
     const missing = [...new Set(lessons)].filter((l) => !have.has(l));
     if (!missing.length) continue;
@@ -128,15 +191,16 @@ function foldLessons(store, tierMemory, { dryRun, report }) {
     if (dryRun) continue;
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
     const sep = text.endsWith('\n') || !text ? '' : eol;
-    landFile(dest, Buffer.from(`${text}${sep}${missing.join(eol)}${eol}`));
+    landFile(dest, Buffer.from(`${text}${sep}${missing.join(eol)}${eol}`, AS_BYTES));
   }
   return pairs;
 }
 
 function verifyLessons(pairs) {
   for (const [src, dest] of pairs) {
-    const have = new Set(lessonsOf(readFileSync(dest, 'utf8')));
-    const lost = lessonsOf(readFileSync(src, 'utf8')).find((l) => !have.has(l));
+    refuseLink(src, dest);
+    const have = new Set(lessonsOf(readFileSync(dest, AS_BYTES)));
+    const lost = lessonsOf(readFileSync(src, AS_BYTES)).find((l) => !have.has(l));
     if (lost !== undefined) throw new Error(`${dest} lacks a lesson of ${src}`);
   }
 }
@@ -151,9 +215,16 @@ function storeHolds(store) {
   });
 }
 
-/** One directory under two names: a store a user already linked to the tier has nothing to fold. */
-function sameDir(a, b) {
-  try { return normcase(realpathSync(a)) === normcase(realpathSync(b)); } catch { return false; }
+/**
+ * Every file under `dir` that `carried` does not claim, as `<label>/<path>`. The archive keeps them,
+ * and only the report tells the user so. A link is listed, not walked: only the link moves.
+ */
+function leftBehind(dir, label, carried, rel = '') {
+  return readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1)).flatMap((e) => {
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (carried(r)) return [];
+    return e.isDirectory() ? leftBehind(path.join(dir, e.name), label, carried, r) : [`${label}/${r}`];
+  });
 }
 
 const factNames = (store) => [...existingSlugs(store)].map((s) => `${s}.md`).sort();
@@ -162,11 +233,15 @@ const factNames = (store) => [...existingSlugs(store)].map((s) => `${s}.md`).sor
 function foldMemory(cfgDir, ctx) {
   const { shared, dryRun, report } = ctx;
   const store = path.join(cfgDir, 'memory');
-  if (sameDir(store, shared.memory) || !storeHolds(store)) return;
+  if (sharesTier(store, shared) || !storeHolds(store)) return;
   const names = factNames(store);
   const facts = copyFiles(names, store, shared.memory, ctx, 'facts');
   const lessons = foldLessons(store, shared.memory, ctx);
+  const carried = new Set([...STORE_KEEPS, 'MEMORY.md', 'topics', ...names, ...lessons.map(([src]) => `agents/${path.basename(src)}`)]
+    .map(normcase));
+  const stayed = leftBehind(store, 'memory', (r) => carried.has(normcase(r)));
   if (dryRun) {
+    report.stayed.push(...stayed);
     report.archived = path.join(cfgDir, 'archived-memory');
     return;
   }
@@ -176,6 +251,7 @@ function foldMemory(cfgDir, ctx) {
   if (factNames(store).join('\n') !== names.join('\n')) throw new Error(`${store} changed during the fold`);
   consolidateMemory(shared.memory);
   report.archived = archiveStore(store);
+  report.stayed.push(...stayed);
   mkdirSync(store, { recursive: true });
   for (const keep of STORE_KEEPS) {
     const kept = path.join(report.archived, keep);
@@ -190,26 +266,37 @@ function foldMemory(cfgDir, ctx) {
  * a collision. `collectNotes` would also list each one twice while both exist.
  */
 function foldNotes(cfgDir, ctx) {
-  const { shared, dryRun } = ctx;
+  const { shared, dryRun, report } = ctx;
   for (const sub of NOTES_DIRS) {
     const src = path.join(cfgDir, 'notebook', sub);
     const names = listDir(src).filter((n) => n.endsWith('.md') && isFile(path.join(src, n))).sort();
-    if (!names.length) continue;
+    if (!names.length || sharesTier(src, shared)) continue;
     const pairs = copyFiles(names, src, path.join(shared.notes, sub), ctx, 'notes');
-    if (dryRun) continue;
-    verifyCopies(pairs);
-    archiveStore(src);
+    const stayed = leftBehind(src, `notebook/${sub}`, (r) => names.includes(r));
+    if (!dryRun) {
+      verifyCopies(pairs);
+      archiveStore(src);
+    }
+    report.stayed.push(...stayed);
   }
 }
 
 /**
- * The ledger, or an empty one. A file that does not parse throws: treating it as empty would draft
- * every decided item again, and the failed step is what the user should see.
+ * The ledger, or an empty one. One that holds nothing counts as empty and is written whole by the
+ * next item, because a key set on `[]` never reaches the file and the item would be reported on
+ * every emit. Anything else that is no ledger throws: treating it as empty would draft every
+ * decided item again, and the failed step is what the user should see.
  */
 function readFoldState(shared) {
+  const blank = (v) => v === null || v === undefined || (Array.isArray(v) && !v.length);
   if (!existsSync(shared.foldState)) return { version: 1, items: {} };
-  const state = JSON.parse(readFileSync(shared.foldState, 'utf8'));
-  state.items ??= {};
+  const text = readFileSync(shared.foldState, 'utf8');
+  const state = text.trim() ? JSON.parse(text) : null;
+  if (blank(state)) return { version: 1, items: {} };
+  if (!isDict(state) || !(blank(state.items) || isDict(state.items))) {
+    throw new Error(`${shared.foldState} is not a ledger`);
+  }
+  if (blank(state.items)) state.items = {};
   return state;
 }
 
@@ -247,7 +334,7 @@ function foldWholeFile(kind, hostFiles, sharedFile, reseed, ctx) {
   const { dryRun, report } = ctx;
   let setAside = false;
   for (const file of hostFiles) {
-    if (!isFile(file)) continue;
+    if (!isFile(file) || sharesTier(file, ctx.shared)) continue;
     const bytes = readFileSync(file);
     if (isWholeFileSeed(bytes)) continue;
     const held = isFile(sharedFile) ? readFileSync(sharedFile) : null;
@@ -258,7 +345,7 @@ function foldWholeFile(kind, hostFiles, sharedFile, reseed, ctx) {
     }
     if (!same) report.moved.push(kind);
     if (dryRun) continue;
-    if (!same) landFile(sharedFile, bytes);
+    if (!same) landFile(sharedFile, bytes, { exclusive: held === null });
     verifyCopies([[file, sharedFile]]);
     archiveStore(file);
     setAside = true;
@@ -314,12 +401,13 @@ function withoutRules(text, merged) {
  *
  * The old file is copied aside, not moved: the host file must exist at every moment, because the
  * rules it keeps bind through it. A host file linked to the shared one needs no guard: the rename
- * replaces the link, and the shared file keeps its rules.
+ * replaces the link, and the shared file keeps its rules. The other way round the shared file IS
+ * the host file, and rewriting it would take the merged rules out of force.
  */
 function foldRules(cfgDir, ctx) {
   const { host, shared, dryRun } = ctx;
   const file = path.join(cfgDir, path.basename(shared.rules));
-  if (!isFile(file)) return;
+  if (!isFile(file) || readsThrough(shared.rules, file)) return;
   const { items } = readFoldState(shared);
   const text = readFileSync(file, 'utf8');
   const [rules] = parseRules(text);
@@ -350,7 +438,7 @@ function foldRules(cfgDir, ctx) {
 export function foldHost({ host, cfgDir, shared, dryRun = false }) {
   const report = {
     host, facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions: 0, pending: 0, rules: 0,
-    moved: [], archived: null, failed: [],
+    moved: [], archived: null, stayed: [], wiredPaths: [], notices: [], failed: [],
   };
   const step = (name, fn) => {
     try { fn(); } catch (e) { report.failed.push(`${name}: ${e.message}`); }
@@ -359,9 +447,9 @@ export function foldHost({ host, cfgDir, shared, dryRun = false }) {
   step('memory', () => foldMemory(cfgDir, ctx));
   step('notes', () => foldNotes(cfgDir, ctx));
   step(EXCLUDES_FILE, () => {
-    const { added, wired } = foldExcludes(host, cfgDir, dryRun);
-    report.excludes = added;
-    report.wired = wired;
+    const { added, wired, paths, notices, errors } = foldExcludes(host, cfgDir, dryRun);
+    Object.assign(report, { excludes: added, wired, wiredPaths: paths, notices });
+    report.failed.push(...errors.map((e) => `${EXCLUDES_FILE}: ${e}`));
   });
   step('profile', () => foldWholeFile('profile', [path.join(cfgDir, 'PROFILE.md')], shared.profile,
     () => ensureProfileStub(cfgDir), ctx));
@@ -372,6 +460,14 @@ export function foldHost({ host, cfgDir, shared, dryRun = false }) {
 }
 
 const counted = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
+const STAYED_SHOWN = 5;
+
+/** The files only the archive holds now. The line stays one line, and `report.stayed` keeps them all. */
+function stayedWords(stayed) {
+  const more = stayed.length - STAYED_SHOWN;
+  return `${counted(stayed.length, 'file')} left in the archive: ${stayed.slice(0, STAYED_SHOWN).join(', ')}`
+    + `${more > 0 ? ` and ${more} more` : ''}`;
+}
 
 /** A report as the words after `<host>: `, or '' when it did nothing (C7: nothing is reported twice). */
 export function foldSummary(r) {
@@ -380,12 +476,13 @@ export function foldSummary(r) {
     r.lessons && counted(r.lessons, 'lesson'),
     r.notes && counted(r.notes, 'note'),
     r.excludes && counted(r.excludes, 'exclude path'),
-    r.wired && `${counted(r.wired, 'excluded folder')} wired`,
+    r.wired && `${counted(r.wired, 'excluded folder')} wired${r.wiredPaths.length ? ` (${r.wiredPaths.join(', ')})` : ''}`,
     ...r.moved.map((kind) => `${kind} moved`),
     r.collisions && counted(r.collisions, 'collision'),
     r.rules && `${counted(r.rules, 'rule')} to approve`,
     r.pending && `${r.pending} to approve`,
     r.archived && 'old store moved aside',
+    r.stayed.length && stayedWords(r.stayed),
   ].filter(Boolean).join(', ');
 }
 
@@ -395,6 +492,7 @@ export function foldOnEmit(host, cfgDir) {
   const report = foldHost({ host, cfgDir, shared: sharedPaths() });
   const summary = foldSummary(report);
   if (summary) printOut(`[shared] ${host}: ${summary}\n`);
+  for (const n of report.notices) printErr(`[shared] ${n}\n`);
   for (const f of report.failed) {
     printErr(`[shared] ${host}: fold stopped at ${f}; what was not folded stays in place, `
       + 'and the next emit retries\n');

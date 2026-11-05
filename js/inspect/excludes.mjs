@@ -151,8 +151,12 @@ export function excludeAdd(target) {
   return { ok: true, path: repo, messages };
 }
 
-/** One install's half of `excludeAdd`: wire the per-repo suppression and keep the receipt. */
+/**
+ * One install's half of `excludeAdd`: wire the per-repo suppression and keep the receipt. Returns
+ * the files it wrote in the repo, which belongs to the user: the fold names each one.
+ */
 function addToHost(host, cfg, repo, messages) {
+  const written = [];
   const data = readExcludes(cfg);
   const prior = data.excludes.find((e) => isDict(e) && same(get(e, 'path'), repo));
   const priorWired = (isDict(prior) ? get(prior, 'wired') : null) || {};
@@ -161,6 +165,7 @@ function addToHost(host, cfg, repo, messages) {
     const added = wireClaudeExcludes(localSettings(repo, host), [claudeMdEntry(cfg)]);
     if (added.length) {
       wired.claude_md_excludes = added;
+      written.push(localSettings(repo, host));
     } else if (get(priorWired, 'claude_md_excludes')) {
       // Idempotent re-add: OUR own prior excludeAdd call genuinely wired this entry
       // (confirmed by the manifest record), so ownership carries forward even though
@@ -193,12 +198,22 @@ function addToHost(host, cfg, repo, messages) {
       mkdirSync(path.dirname(stub), { recursive: true });
       writeText(stub, BOB_RULES_STUB);
       wired.bob_rules_stub = true;
+      written.push(stub);
     }
   }
   const entries = data.excludes.filter((e) => !(isDict(e) && same(get(e, 'path'), repo)));
   entries.push({ path: repo.split(path.sep).join('/'), wired });
   data.excludes = entries;
   writeExcludes(cfg, data);
+  return written;
+}
+
+/** What `addToHost` would write in `repo`, for a dry run. */
+function wiringTargets(host, repo) {
+  if (!isDir(repo)) return [];
+  if (host === 'claude' || host === 'openclaude') return [localSettings(repo, host)];
+  const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');
+  return host === 'bob' && !existsSync(stub) ? [stub] : [];
 }
 
 /** The folders a list names, resolved; a `~user` form names no folder (`same`). */
@@ -227,8 +242,10 @@ function listIsSound(cfg) {
 /**
  * Fold step 3, both ways: this host's folders join the shared list, and a shared folder this host
  * never heard of gets the wiring `exclude add` gave the installs it found then. Writes only what
- * is missing, so a second run writes nothing. Throws, leaving both files as they are, when either
- * list does not parse: the write would replace what the user can still repair by hand.
+ * is missing, so a second run writes nothing. The share goes first and each repo answers for
+ * itself: one a write cannot reach lands in `errors`, and its entry stays out of this host's list,
+ * so the next emit retries it. Throws, leaving both files as they are, when either list does not
+ * parse: the write would replace what the user can still repair by hand.
  */
 export function foldExcludes(host, cfg, dryRun = false) {
   const tier = machineDir();
@@ -239,13 +256,20 @@ export function foldExcludes(host, cfg, dryRun = false) {
   const shared = readExcludes(tier).excludes;
   const toShare = [...new Set(reposOf(own))].filter((r) => !listedIn(shared, r));
   const toWire = [...new Set(reposOf(shared))].filter((r) => !listedIn(own, r));
-  if (!dryRun) {
-    for (const repo of toWire) addToHost(host, cfg, repo, []);
+  const paths = [];
+  const notices = [];
+  const errors = [];
+  if (dryRun) {
+    paths.push(...toWire.flatMap((repo) => wiringTargets(host, repo)));
+  } else {
     if (toShare.length) {
       updateShared((list) => [...list, ...toShare.map((r) => ({ path: r.split(path.sep).join('/') }))]);
     }
+    for (const repo of toWire) {
+      try { paths.push(...addToHost(host, cfg, repo, notices)); } catch (e) { errors.push(`${repo}: ${e.message}`); }
+    }
   }
-  return { added: toShare.length, wired: toWire.length };
+  return { added: toShare.length, wired: toWire.length - errors.length, paths, notices, errors };
 }
 
 /**

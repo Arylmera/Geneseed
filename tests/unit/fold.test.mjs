@@ -262,9 +262,9 @@ test('a short write never reaches its real name, so a retry is no collision', ()
 test('verification fails on a tier file that does not match: nothing moves aside', () => world(({ cfg, shared, fold }) => {
   const store = path.join(cfg, 'memory');
   fact(store, 'x.md', FACT);
-  const realRename = fs.renameSync;
-  const r = withFsMock('renameSync', (a, b) => {
-    realRename(a, b);
+  const realLink = fs.linkSync;
+  const r = withFsMock('linkSync', (a, b) => {
+    realLink(a, b);
     if (String(a).endsWith('.fold-tmp')) fs.appendFileSync(b, 'changed under the fold');
   }, () => fold());
   assert.match(r.failed.join(), /does not match/);
@@ -279,10 +279,13 @@ test('verification fails on a tier file that does not match: nothing moves aside
 test('verification of agents fails when a lesson line is missing: nothing moves aside', () => world(({ cfg, fold }) => {
   const store = path.join(cfg, 'memory');
   fact(path.join(store, 'agents'), 'tester.md', '# tester — lessons\n- one\n- two\n');
-  const realRename = fs.renameSync;
-  const r = withFsMock('renameSync', (a, b) => {
-    realRename(a, b);
-    if (String(a).endsWith('.fold-tmp')) fs.writeFileSync(b, '# tester — lessons\n- one\n');
+  const realLink = fs.linkSync;
+  const r = withFsMock('linkSync', (a, b) => {
+    realLink(a, b);
+    if (String(a).endsWith('.fold-tmp')) {
+      fs.rmSync(b);
+      fs.writeFileSync(b, '# tester — lessons\n- one\n');
+    }
   }, () => fold());
   assert.match(r.failed.join(), /lacks a lesson/);
   assert.ok(exists(store, 'agents', 'tester.md'));
@@ -781,6 +784,229 @@ test('the rule Rite carries the approval flow, and the ledger states the fold re
     assert.ok(flow.includes(word), word);
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'src', 'skills', 'rule.md'), 'utf8'), /\(rule\/approve\.md\)/);
+});
+
+// ---- The data-loss review ------------------------------------------------------------------------
+
+test('review 1: what is no fact is named when it stays in the archive', () => world(({ cfg, fold }) => {
+  const store = path.join(cfg, 'memory');
+  fact(store, 'x.md', FACT);
+  fact(path.join(store, 'projects'), 'deep.md', 'nested\n');
+  fact(store, 'data.json', '{}\n');
+  fact(store, 'x.txt', 'plain\n');
+  fact(path.join(store, 'topics'), 'misc.md', 'derived\n');
+  const dry = fold({ dryRun: true });
+  assert.deepEqual([...dry.stayed].sort(), ['memory/data.json', 'memory/projects/deep.md', 'memory/x.txt']);
+  const r = fold();
+  assert.deepEqual([...r.stayed].sort(), ['memory/data.json', 'memory/projects/deep.md', 'memory/x.txt']);
+  assert.match(foldSummary(r), /3 files left in the archive: memory\/data\.json, memory\/projects\/deep\.md, memory\/x\.txt/);
+  assert.equal(read(archiveOf(cfg), 'projects', 'deep.md'), 'nested\n');
+  assert.deepEqual(fold().stayed, [], 'reported twice');
+}));
+
+test('review 1: a long list is cut in the line and whole in the report', () => world(({ cfg, fold }) => {
+  const store = path.join(cfg, 'memory');
+  for (const n of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) fact(store, n + '.txt', 'x\n');
+  const r = fold();
+  assert.equal(r.stayed.length, 7);
+  assert.match(foldSummary(r), /7 files left in the archive: memory\/a\.txt, memory\/b\.txt, memory\/c\.txt, memory\/d\.txt, memory\/e\.txt and 2 more/);
+}));
+
+test('review 1: what a notes folder holds beside its notes is named too', () => world(({ cfg, fold }) => {
+  const src = path.join(cfg, 'notebook', 'skill-notes');
+  fact(src, 'debug.md', 'a note\n');
+  fact(src, 'trace.log', 'not a note\n');
+  assert.deepEqual(fold().stayed, ['notebook/skill-notes/trace.log']);
+}));
+
+test('review 2: a notebook junction onto the tier never moves the tier notes', () => world(({ cfg, shared, fold }) => {
+  fact(path.join(shared.notes, 'skill-notes'), 'debug.md', 'a note\n');
+  fs.mkdirSync(path.join(cfg, 'notebook'), { recursive: true });
+  fs.symlinkSync(path.join(shared.notes, 'skill-notes'), path.join(cfg, 'notebook', 'skill-notes'), 'junction');
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(shared.notes, 'skill-notes', 'debug.md'), 'a note\n');
+  assert.ok(!exists(cfg, 'notebook', 'archived-skill-notes'));
+}));
+
+test('review 2: a whole notebook linked onto the tier notes root is the same case', () => world(({ cfg, shared, fold }) => {
+  fact(path.join(shared.notes, 'agent-notes'), 'tester.md', 'a note\n');
+  fs.symlinkSync(shared.notes, path.join(cfg, 'notebook'), 'junction');
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(shared.notes, 'agent-notes', 'tester.md'), 'a note\n');
+  assert.deepEqual(fs.readdirSync(shared.notes).filter((n) => n.startsWith('archived')), []);
+}));
+
+test('review 2: a tier file linked to the host file keeps its text', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(path.join(cfg, 'PROFILE.md'), 'who I am\n');
+  fs.rmSync(shared.profile);
+  fs.symlinkSync(path.join(cfg, 'PROFILE.md'), shared.profile, 'file');
+  const r = fold();
+  assert.deepEqual(r.failed, []);
+  assert.deepEqual(r.moved, []);
+  assert.equal(read(shared.profile), 'who I am\n');
+  assert.equal(read(cfg, 'PROFILE.md'), 'who I am\n');
+  assert.ok(!exists(cfg, 'archived-PROFILE.md'));
+}));
+
+test('review 2: a tier rules file linked to the host file keeps every rule', () => world(({ cfg, shared, fold }) => {
+  const rules = '# User rules\n\n## R1 — Mine\nBe terse.\n';
+  fs.writeFileSync(path.join(cfg, 'user-rules.md'), rules);
+  fs.rmSync(shared.rules);
+  fs.symlinkSync(path.join(cfg, 'user-rules.md'), shared.rules, 'file');
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(shared.rules), rules);
+}));
+
+test('review 2: a tier fact linked to its host fact stops the move, so the link cannot dangle', () => world(({ cfg, shared, fold }) => {
+  const store = path.join(cfg, 'memory');
+  fact(store, 'x.md', FACT);
+  fs.symlinkSync(path.join(store, 'x.md'), path.join(shared.memory, 'x.md'), 'file');
+  const r = fold();
+  assert.match(r.failed.join(), /is a link to/);
+  assert.equal(read(shared.memory, 'x.md'), FACT);
+  assert.ok(!exists(cfg, 'archived-memory'));
+}));
+
+test('review 3: lesson bytes that are not UTF-8 survive unchanged, in the tier and through verify', () => world(({ cfg, shared, fold }) => {
+  const dir = path.join(cfg, 'memory', 'agents');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.join(shared.memory, 'agents'), { recursive: true });
+  const line = Buffer.from([0x2d, 0x20, 0x63, 0x61, 0x66, 0xe9]);
+  const tierOld = Buffer.from([0x2d, 0x20, 0x74, 0xe9, 0x0a]);
+  fs.writeFileSync(path.join(dir, 'tester.md'), Buffer.concat([line, Buffer.from('\n')]));
+  fs.writeFileSync(path.join(shared.memory, 'agents', 'tester.md'), tierOld);
+  assert.deepEqual(fold().failed, []);
+  assert.deepEqual(fs.readFileSync(path.join(shared.memory, 'agents', 'tester.md')),
+    Buffer.concat([tierOld, line, Buffer.from('\n')]));
+}));
+
+test('review 4: each repo file the wiring wrote is named, and "not ours" reaches the report', () => world(({ home, cfg, shared }) => {
+  const repo = path.join(home, 'repo');
+  const taken = path.join(home, 'taken');
+  fs.mkdirSync(repo);
+  fact(path.join(taken, '.bob', 'rules'), 'geneseed.md', 'my own rules\n');
+  fs.writeFileSync(shared.excludes, JSON.stringify({ excludes: [{ path: spelled(repo) }, { path: spelled(taken) }] }));
+  const bob = seedHost(path.join(home, '.bob'));
+  const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');
+  const dry = foldHost({ host: 'bob', cfgDir: bob, shared, dryRun: true });
+  assert.deepEqual(dry.wiredPaths, [stub]);
+  const r = foldHost({ host: 'bob', cfgDir: bob, shared });
+  assert.deepEqual(r.wiredPaths, [stub]);
+  assert.ok(foldSummary(r).includes('2 excluded folders wired (' + stub + ')'), foldSummary(r));
+  assert.deepEqual(r.notices, ['bob: rules/geneseed.md already exists (kept, not ours)']);
+  const c = foldHost({ host: 'claude', cfgDir: cfg, shared });
+  assert.deepEqual([...c.wiredPaths].sort(), [path.join(repo, '.claude', 'settings.local.json'),
+    path.join(taken, '.claude', 'settings.local.json')].sort());
+}));
+
+test('review 5: a #hash lesson and a heading reach an existing tier file', () => world(({ cfg, shared, fold }) => {
+  fact(path.join(shared.memory, 'agents'), 'tester.md', '# tester — lessons\n- one\n');
+  fact(path.join(cfg, 'memory', 'agents'), 'tester.md', '# tester — lessons\n#hash lesson\n## Build\n- one\n');
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(shared.memory, 'agents', 'tester.md'), '# tester — lessons\n- one\n#hash lesson\n## Build\n');
+}));
+
+for (const empty of ['', '[]', 'null', '{"version":1,"items":[]}']) {
+  test('review 6: an empty ledger (' + JSON.stringify(empty) + ') persists, so an item is reported once', () => world(({ cfg, shared, fold }) => {
+    fs.writeFileSync(shared.profile, 'shared self\n');
+    fs.writeFileSync(path.join(cfg, 'PROFILE.md'), 'host self\n');
+    fs.writeFileSync(shared.foldState, empty);
+    const first = fold();
+    assert.deepEqual(first.failed, []);
+    assert.equal(first.pending, 1);
+    assert.equal(fold().pending, 0, 'reported again');
+    assert.equal(Object.keys(JSON.parse(read(shared.foldState)).items).length, 1);
+  }));
+}
+
+test('review 6: a ledger of another shape is refused and left as it is', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.profile, 'shared self\n');
+  fs.writeFileSync(path.join(cfg, 'PROFILE.md'), 'host self\n');
+  fs.writeFileSync(shared.foldState, '["decided"]');
+  assert.match(fold().failed.join(), /is not a ledger/);
+  assert.equal(read(shared.foldState), '["decided"]');
+}));
+
+test('review 7: a wiring failure neither skips the share nor the next repo', () => world(({ home, shared }) => {
+  const cfg = seedHost(path.join(home, '.bob'));
+  const own = path.join(home, 'own');
+  const bad = path.join(home, 'bad');
+  const good = path.join(home, 'good');
+  for (const d of [own, bad, good]) fs.mkdirSync(d);
+  fs.writeFileSync(path.join(bad, '.bob'), 'a file where the folder goes');
+  fs.writeFileSync(path.join(cfg, 'excludes.json'), JSON.stringify({ excludes: [{ path: spelled(own), wired: {} }] }));
+  fs.writeFileSync(shared.excludes, JSON.stringify({ excludes: [{ path: spelled(bad) }, { path: spelled(good) }] }));
+  const r = foldHost({ host: 'bob', cfgDir: cfg, shared });
+  assert.equal(r.failed.length, 1, r.failed.join());
+  assert.ok(r.failed[0].includes(bad), r.failed[0]);
+  assert.ok(excludesOf(shared.root).some((e) => e.path === spelled(own)), 'the share was skipped');
+  assert.ok(exists(good, '.bob', 'rules', 'geneseed.md'), 'the next repo was skipped');
+  assert.equal(r.wired, 1);
+}));
+
+test('review 8: a tier file that appears under the fold is never replaced', () => world(({ cfg, shared, fold }) => {
+  fact(path.join(cfg, 'memory'), 'x.md', FACT);
+  const realWrite = fs.writeFileSync;
+  let raced = false;
+  const r = withFsMock('writeFileSync', (p, ...rest) => {
+    realWrite(p, ...rest);
+    if (String(p).endsWith('.fold-tmp') && !raced) {
+      raced = true;
+      realWrite(String(p).replace(/\.\d+\.fold-tmp$/, ''), OTHER);
+    }
+  }, () => fold());
+  assert.deepEqual(r.failed, []);
+  assert.equal(read(shared.memory, 'x.md'), OTHER, 'the other writer lost its file');
+  assert.equal(read(shared.memory, 'x-claude.md'), FACT);
+}));
+
+test('a dangling link at a tier name fails the step: it neither spins nor moves the store', () => world(({ cfg, shared, fold }) => {
+  fact(path.join(cfg, 'memory'), 'x.md', FACT);
+  fs.symlinkSync(path.join(shared.root, 'gone.md'), path.join(shared.memory, 'x.md'), 'file');
+  const r = fold();
+  assert.match(r.failed.join(), /^memory: /);
+  assert.equal(read(cfg, 'memory', 'x.md'), FACT);
+  assert.ok(!exists(cfg, 'archived-memory'));
+}));
+
+test('crash injection: a stop before any write leaves nothing lost, and the retry makes no collision', () => {
+  const NAMES = ['writeFileSync', 'linkSync', 'renameSync', 'copyFileSync', 'mkdirSync', 'rmSync'];
+  let survived = false;
+  for (let stopAt = 1; !survived; stopAt += 1) {
+    assert.ok(stopAt < 200, 'the fold never finished');
+    world((w) => {
+      fullHost(w);
+      const { cfg, shared, fold } = w;
+      let calls = 0;
+      const mocks = NAMES.map((name) => {
+        const real = fs[name];
+        return mock.method(fs, name, (...args) => {
+          calls += 1;
+          if (calls >= stopAt) throw new Error('crash at write ' + calls);
+          return real(...args);
+        });
+      });
+      syncBuiltinESMExports();
+      try { fold(); } finally { for (const m of mocks) m.mock.restore(); syncBuiltinESMExports(); }
+      survived = calls < stopAt;
+      const seen = (name, text) => {
+        const archives = exists(cfg, 'archived-memory') ? fs.readdirSync(path.join(cfg, 'archived-memory')) : [];
+        const places = [path.join(cfg, 'memory', name), path.join(shared.memory, name),
+          ...archives.map((a) => path.join(cfg, 'archived-memory', a, name))];
+        return places.some((p) => fs.existsSync(p) && fs.readFileSync(p, 'utf8') === text);
+      };
+      assert.ok(seen('x.md', FACT), 'stop ' + stopAt + ' lost x.md');
+      assert.ok(seen('y.md', OTHER), 'stop ' + stopAt + ' lost y.md');
+      fs.mkdirSync(path.join(cfg, 'memory'), { recursive: true });   // the next emit seeds it
+      const retry = fold();
+      assert.deepEqual(retry.failed, [], 'stop ' + stopAt);
+      assert.equal(read(shared.memory, 'x.md'), FACT, 'stop ' + stopAt);
+      assert.ok(!exists(shared.memory, 'x-claude.md'), 'stop ' + stopAt + ' made a collision of its own copy');
+      assert.equal(read(shared.memory, 'y-claude.md'), OTHER, 'stop ' + stopAt);
+      assert.ok(!exists(shared.memory, 'y-claude-2.md'), 'stop ' + stopAt);
+      assert.equal(read(shared.profile), 'who I am\n', 'stop ' + stopAt);
+    });
+  }
 });
 
 // ---- Through the real emit ----------------------------------------------------------------------
