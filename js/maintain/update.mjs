@@ -396,6 +396,8 @@ export async function measureUpstream(log = null) {
   return ['ready', behind, ''];
 }
 
+const DOCTOR_TIMEOUT_MS = 300 * 1000;
+
 const DOCTOR_LEGEND = [
   '[geneseed] doctor problem legend — what the lines above mean / how to fix:',
   "  • 'dead link'          → a skill/agent body links a sibling as <dir>/<name>.md; use the BARE <name>.md (source bug)",
@@ -408,19 +410,21 @@ const DOCTOR_LEGEND = [
 
 /**
  * `_run_doctor(cand)` — validate a source tree with its OWN `doctor --all --no-bundle`.
- * Fail-closed: any nonzero exit, timeout or spawn error is a failure.
+ * Returns `[passed, output]`. A nonzero exit is a failure. `passed` is `null` when the doctor
+ * gave no verdict at all (timeout, kill or spawn error): a busy machine can outrun the deadline,
+ * and that says nothing about the pulled source.
  *
  * THE SPAWN THAT CANNOT BE AN IMPORT. `cand` is the tree as it exists AFTER the merge, and
  * this process's module graph was loaded before it. `cmdDoctor` in-process would validate the
  * source this program started with and pass, which is the one answer that must never be
  * given here — the gate exists to catch a bad upstream commit.
  */
-export function runDoctor(cand) {
+export function runDoctor(cand, timeoutMs = DOCTOR_TIMEOUT_MS) {
   const r = spawnSync(process.execPath,
     [path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],
-    { encoding: 'utf8', timeout: 300 * 1000, maxBuffer: 256 * 1024 * 1024, ...NO_WINDOW });
+    { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 256 * 1024 * 1024, ...NO_WINDOW });
   if (r.error || r.status === null) {
-    return [false, `[geneseed] doctor gate could not run: ${r.error || 'no exit status'}`];
+    return [null, `[geneseed] doctor gate could not run: ${r.error || 'no exit status'}`];
   }
   // `stderr=subprocess.STDOUT` — the reference gives the child ONE handle, so its two
   // streams are interleaved in write order and arrive as `proc.stdout`. `spawnSync` has no
@@ -444,8 +448,13 @@ export function runDoctor(cand) {
  * `--keep` refuses instead when such an edit touches a file the rollback must change; that
  * refusal is reported as itself — the user is left on the pulled commit, with the command to
  * finish the rollback — rather than as a rollback that did not happen.
+ *
+ * `doctor_unfinished` IS NOT A FAILED GATE. With no verdict the pull stays, because rolling back
+ * called a healthy pull bad. It is not a pass either: the caller stops before the rebuild, and
+ * the message sends the user to `doctor --all` first, since a second `update` finds nothing to
+ * pull and rebuilds with no gate.
  */
-export function pullAndValidate(log) {
+export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   const [rc0, old] = gitRun(['rev-parse', 'HEAD']);
   if (rc0 !== 0 || !old) return [false, 'not_git', 'could not read HEAD'];
   log('[geneseed] fast-forwarding to upstream ...');
@@ -464,8 +473,14 @@ export function pullAndValidate(log) {
     for (const line of pulled.split('\n')) log(`  ${line}`);
   }
   log('[geneseed] validating the pulled source (doctor — can take a minute) ...');
-  const [passed, output] = runDoctor(ROOT);
+  const [passed, output] = runDoctor(ROOT, doctorTimeoutMs);
   log(output.replace(/\n+$/, ''));
+  if (passed === null) {
+    return [false, 'doctor_unfinished',
+      'the doctor did not finish, so the pulled source is UNCHECKED: nothing says it is bad. '
+      + 'You stay on the pulled commit and nothing was rebuilt. Run `geneseed doctor --all`; '
+      + 'if it is clean, run `geneseed update` to rebuild.'];
+  }
   if (!passed) {
     const [rc3, , rerr] = gitRun(['reset', '--keep', old], { timeout: 60 });
     for (const line of DOCTOR_LEGEND) log(line);

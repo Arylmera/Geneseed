@@ -131,7 +131,9 @@ test('a failed precondition returns 3 and writes no bundle at all', async () => 
 test('a checkout behind its origin pulls, then rebuilds, and returns 0', async () => {
   // `test_ready_pulls_then_rebuilds`, with both halves observed rather than counted: HEAD really
   // moves and the bundle really appears. ⚠ THIS ARM CONSUMES THE PENDING COMMIT — the `uptodate`
-  // test below depends on it having run first.
+  // test below depends on it having run first. ⚠ THE ONE REAL `doctor --all` THROUGH THE WHOLE
+  // `upgrade()`, beside `update_git.test.mjs`'s clean fast-forward through `pullAndValidate`: the
+  // log line asserted below shows a real doctor answered the gate. Keep this arm real.
   fs.writeFileSync(path.join(OTHER, 'an-upstream-change.txt'), 'from upstream\n');
   git(OTHER, 'add', '-A');
   git(OTHER, 'commit', '-qm', 'something to pull');
@@ -144,6 +146,10 @@ test('a checkout behind its origin pulls, then rebuilds, and returns 0', async (
   assert.notEqual(git(CO, 'rev-parse', 'HEAD'), before, 'the pull never happened');
   assert.ok(fs.existsSync(path.join(CO, 'an-upstream-change.txt')), 'the pulled file never arrived');
   assert.ok(!isEmpty(out), 'the upgrade succeeded without rebuilding the bundle');
+  const themes = fs.readdirSync(path.join(CO, 'themes'))
+    .filter((f) => f.endsWith('.json') && !f.startsWith('_')).length;
+  assert.ok(fs.readFileSync(U.logfile(), 'utf8').includes(`[doctor] ok — ${themes} theme(s) clean`),
+    'the gate did not run a real doctor over every theme');
 });
 
 test('an up-to-date checkout still rebuilds, and still returns 0', async () => {
@@ -194,11 +200,11 @@ test('an upgrade re-emits an opencode-global install on its OWN footprint and ex
 test('a pulled source that fails the doctor returns 1 and leaves no bundle', async () => {
   // `test_doctor_fail_returns_1_no_rebuild`. The pulled tip's doctor is a STAND-IN that exits 1
   // at once: what this arm owns is the orchestration — the exit code, and no bundle written from
-  // a rolled-back tree — and that holds for any doctor that says no. Whether the REAL doctor
+  // a rolled-back tree — and that holds for any doctor that says no. Whether the real doctor
   // rejects a real fault, and the rollback lands on the exact sha with the tree restored, is
-  // `update_git.test.mjs`'s "rolled back to the exact previous commit", which keeps the full
-  // sweep. A real sweep here cost a whole `doctor --all` (and a second one in the bootstrap arm
-  // below) to re-prove it. ⚠ LAST, because it leaves the failing tip on the origin.
+  // `update_git.test.mjs`'s "rolled back to the exact previous commit". A real sweep here cost a
+  // whole `doctor --all` (and a second one in the bootstrap arm below) to re-prove it.
+  // ⚠ LAST, because it leaves the failing tip on the origin.
   fs.writeFileSync(path.join(OTHER, 'bin', 'geneseed-cli.mjs'), 'process.exit(1);\n');
   git(OTHER, 'add', '-A');
   git(OTHER, 'commit', '-qm', 'a doctor that always fails');

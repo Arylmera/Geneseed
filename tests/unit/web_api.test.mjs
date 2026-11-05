@@ -26,7 +26,7 @@ import {
   viewCfg, apiLoops, apiLoopsActive,
 } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog, apiItem, specDesc, wikiItems } from '../../js/web/catalog.mjs';
-import { defaultView, warmDoctor, webState } from '../../js/web/state.mjs';
+import { defaultView, warmDoctor, webState as realWebState } from '../../js/web/state.mjs';
 import { buildActionCmds, installView } from '../../js/web/actions.mjs';
 import { apiRules, apiRulesMutate, apiRulesPromote, RULES_FILE } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
@@ -80,6 +80,27 @@ const samePath = (a, b) => normcase(resolvePath(a)) === normcase(resolvePath(b))
 
 const FIXTURE = webFixture();
 after(webFixtureTeardown);
+
+// ONE REAL DOCTOR PER THEME FOR THE WHOLE FILE. `apiOverview` and `apiFleet` read the verdict, so
+// every state that reached them paid a full `doctorCollect`: 14 runs, 44% of this file's profile.
+// The run takes only the theme from the state, so a state's first ask replays the theme's one real
+// verdict. The doctor also reads the machine (env, OpenCode dirs, hook shim), so the verdict is the
+// one the first ask saw: a test that asserts verdict content under a changed env needs
+// `realWebState`. Only `runDoctor` is replaced: `_doctor` still starts null, and the getter, the
+// cache and the warm-up run as shipped. The `?fresh=1` test takes `realWebState` too, a real run
+// being its subject.
+const verdicts = new Map();
+function webState(...args) {
+  const st = realWebState(...args);
+  const run = st.runDoctor;
+  st.runDoctor = () => {
+    const seen = verdicts.get(st.theme);
+    if (seen) { st.stampDoctor(...seen); return; }
+    run();
+    verdicts.set(st.theme, [st._doctor.problems, st._doctorRun.themes, st._doctorRun.groups]);
+  };
+  return st;
+}
 
 // A REAL INSTALL AT A CHOSEN FOOTPRINT, through the shipping driver rather than through an
 // internal render call. The reference could say `build.emit_opencode_global(..., cfg=...)`
@@ -4656,9 +4677,9 @@ test('a finished job drops the cached doctor verdict', async () => {
 });
 
 // `/api/doctor` serves the cached run — groups and themes included — and re-runs only on
-// `?fresh=1`, the Doctor page's Re-run button. The fresh call is the one real doctor run here.
+// `?fresh=1`, the Doctor page's Re-run button. The fresh call is a real doctor run: no shared verdict.
 test('the doctor endpoint serves the cache, and re-runs only when fresh', () => {
-  const st = neutral();
+  const st = realWebState('neutral');
   plant(st);
   const cached = STATE_ROUTES['/api/doctor'](st, '/api/doctor');
   assert.deepEqual(cached.problems, [SENTINEL]);

@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **`geneseed update` no longer rolls back a healthy pull when the doctor gate cannot finish.** A timeout or a killed doctor is now reported as a gate that did not finish. The pull stays, nothing is rebuilt, and the exit code is 1. A real doctor failure still rolls back.
+
 ## [4.32.0] — 2026-11-05
 
 Minor: shell writes reach the rule gate, a weakened test is reported at the end of the turn, a loop `pass` cannot hide a skipped check, and the `feature` and `bugfix` loops prove their tests. Run `geneseed rebuild-all` once after updating to get the new hooks, agents and loops.
