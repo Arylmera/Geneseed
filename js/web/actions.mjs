@@ -48,7 +48,7 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -627,6 +627,8 @@ export function apiRestore(state, files) {
       // behind it — prompt and boundary disagreeing by a WRITE, the write-side twin of the
       // read-side hole `diffCollect` had (and the reason the panel offered the file at all).
       doctrines: doctrinesForBuild(target),
+      // Its own tier root, or a restored file names a tier this install does not read.
+      sharedRoot: renderedTier(target, globalEmitHostFor(state.emit)).root,
       // The excluded rules for the same boundary reason: without them a restored AGENT.md
       // re-states a rule whose hook gate the install deliberately left unwired.
       excludeRules: excludedRulesOfDir(target),

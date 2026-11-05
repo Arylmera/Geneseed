@@ -204,7 +204,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
   // pointer's relative `laws/universal.md` resolves with no prefix.
-  const sharedRoot = sharedRootFor(cfgDir, 'opencode');
+  // A re-render of a deployed install sends that install's root, null included.
+  const { sharedRoot = sharedRootFor(cfgDir, 'opencode') } = job;
   const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog, sharedRoot });
   assertSourceComplete(cfg, 'opencode-global');
   mkdirSync(cfgDir, { recursive: true });

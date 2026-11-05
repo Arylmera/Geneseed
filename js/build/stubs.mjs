@@ -310,8 +310,9 @@ export function ensureSharedTier() {
 
 /**
  * The root a global emit renders. Rendering and creating are two decisions: every global emit
- * renders the same path, so `diff`'s temp render shows no false drift, and only a canonical one
- * creates the tier. null, so relative paths, only when that creation failed or there is no home.
+ * renders the same path, and only a canonical one creates the tier. null, so relative paths, only
+ * when that creation failed or there is no home. `diff` and Restore do not ask: they re-render a
+ * deployed install, so they send its own root (`renderedTier`).
  */
 export function sharedRootFor(cfgDir, host) {
   const root = renderedSharedRoot();

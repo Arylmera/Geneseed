@@ -52,7 +52,7 @@ import {
   excludedSkillsOfDir, gatesOfDir, kitsOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
-  readJsonMaybe, readMaybe, themeOfDir,
+  readJsonMaybe, readMaybe, renderedTier, themeOfDir,
 } from '../hosts/installs.mjs';
 import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
@@ -269,6 +269,9 @@ export function diffCollect({
     kits: kitsOfDir(dir, host),
     // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
     ...gatesOfDir(dir, host),
+    // The tier root it rendered, or an install left relative reads every file as behind source.
+    // A root that differs from the run-time one is `renderedPathNotes`'s to report.
+    sharedRoot: renderedTier(dir, host).root,
   };
   const deployedDir = resolvePath(dir);
   const exp = memo

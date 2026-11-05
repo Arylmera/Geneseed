@@ -605,6 +605,20 @@ export function manifestIsClaude(cfgDir) {
   return isDict(claudeReadManifest(cfgDir).managed);
 }
 
+/** The tier root a carrier renders: the absolute `user-rules.md` of its session-start line. */
+const RENDERED_RULES_RE = /`((?:[A-Za-z]:)?\/[^`\n]*)\/user-rules\.md`/;
+
+/**
+ * What `dir`'s carriers say of the tier: their text, and the root they render. null is relative;
+ * undefined is no carrier to ask (it was deleted), so the emit decides as it would for a new install.
+ * Every re-render of a deployed install takes this root, like its theme and footprint: a failed
+ * tier creation leaves it relative, and a reference rendered absolute would be drift no rebuild clears.
+ */
+export function renderedTier(dir, host) {
+  const text = ['AGENT.md', ...carriersFor(host)].map((c) => readMaybe(path.join(dir, c)) ?? '').join('\n');
+  return { text, root: text.includes('user-rules.md') ? RENDERED_RULES_RE.exec(text)?.[1] ?? null : undefined };
+}
+
 /**
  * `_harness_mcp._EMIT_HOST_SCOPE` — a marker's emit name fixes (host, scope). Derived from
  * `HOSTS`, whose emit names are `<host>` and `<host>-global`, so a new host is one row there.

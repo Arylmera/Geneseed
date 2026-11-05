@@ -30,7 +30,7 @@ When two instructions disagree, the higher one wins.
 
 ### The shared tier
 
-A global install keeps what you teach it in one place for every host on the machine: `~/.config/geneseed/` (or `$XDG_CONFIG_HOME/geneseed/`). It holds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, the `memory/` store and `notes/`, where the self-improvement notes live. The first global emit creates it and seeds each file once. Only an install in its host's own config directory creates it: an emit into another directory, and the render `geneseed diff` makes, write the same paths into their text and create nothing.
+A global install keeps what you teach it in one place for every host on the machine: `~/.config/geneseed/` (or `$XDG_CONFIG_HOME/geneseed/`). It holds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, the `memory/` store and `notes/`, where the self-improvement notes live. The first global emit creates it and seeds each file once. Only an install in its host's own config directory creates it: an emit into another directory writes the same paths into its text and creates nothing, and `geneseed diff` compares an install against the paths it already names.
 
 Your rules now come in layers, and the later layer wins: **project over host over shared**. A session reads the shared file first, then the host file, so a host or a project can narrow a machine-wide rule. All three stay in the place the list above gives `user-rules.md`, under the rules. `PROFILE.md` and the wiki manifest do not merge: a host file that is no longer its seed replaces the shared one.
 

@@ -390,7 +390,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const rendered = emitOpencodeGlobalRender(
     { ...cfg, primaryAgentSrc: PRIMARY_AGENT_SRC },
     {
-      theme: args.theme, cfgDir, out,
+      theme: args.theme, cfgDir, out, sharedRoot: args.sharedRoot,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
       oldOwned, agentPath, oldDenies, oldEdit, oldHashes,
     });
@@ -444,7 +444,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // `preambleExclude`'s own docblock). Spelling it as a call rather than a literal is what
   // makes that a measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
-    theme: args.theme, cfgDir, claudeMd, scope, host,
+    theme: args.theme, cfgDir, claudeMd, scope, host, sharedRoot: args.sharedRoot,
     out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
@@ -719,7 +719,7 @@ export function buildInto({
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null, kits = null, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedRoot = undefined, ...gates
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
@@ -737,7 +737,7 @@ export function emitGlobalInto(host, {
   return withPlatformNewlines(() => emit(
     axesCfg({
       posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
-    { theme, footprint, root: null, cfgDir }, out,
+    { theme, footprint, root: null, cfgDir, sharedRoot }, out,
   ));
 }
 

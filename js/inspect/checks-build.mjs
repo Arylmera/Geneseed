@@ -10,8 +10,8 @@ import path from 'node:path';
 import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, CREDIT_RE, makeCfg } from '../build/source.mjs';
-import { CLAUDE_STYLE, HOSTS, carriersFor, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
-import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, themeFiles } from '../hosts/installs.mjs';
+import { CLAUDE_STYLE, HOSTS, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
+import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, renderedTier, themeFiles } from '../hosts/installs.mjs';
 import { isVendoredPath } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
@@ -187,15 +187,6 @@ export function colorThemeProblems() {
     }
   }
   return problems;
-}
-
-/** The tier root a carrier renders: the absolute `user-rules.md` of its session-start line. */
-const RENDERED_RULES_RE = /`((?:[A-Za-z]:)?\/[^`\n]*)\/user-rules\.md`/;
-
-/** What `dir`'s carriers say of the tier: their text, and the root they render (null: relative). */
-function renderedTier(dir, host) {
-  const text = ['AGENT.md', ...carriersFor(host)].map((c) => readMaybe(path.join(dir, c)) ?? '').join('\n');
-  return { text, root: RENDERED_RULES_RE.exec(text)?.[1] ?? null };
 }
 
 /**

@@ -14,6 +14,8 @@ import { ROOT } from '../../js/build/source.mjs';
 import { isCanonical } from '../../js/hosts/hosts.mjs';
 import { renderedPathNotes } from '../../js/inspect/checks-build.mjs';
 import { collectNotes } from '../../js/inspect/diff.mjs';
+import { apiRestore } from '../../js/web/actions.mjs';
+import { webState } from '../../js/web/state.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 
 const withDir = async (fn) => {
@@ -324,5 +326,40 @@ test('concurrent registry records lose no root', async () => {
     const rows = JSON.parse(read(d, '.config', 'geneseed', 'installs.json'));
     assert.deepEqual(rows.map((r) => path.basename(r)).sort(), dirs.map((r) => path.basename(r)));
     assert.equal(fs.existsSync(path.join(d, '.config', 'geneseed', 'installs.json.lock')), false, 'the lock is let go');
+  });
+});
+
+test('geneseed diff keeps the relative paths of an install whose tier could not be created', async () => {
+  // `~/.config` is a file: the emit warned and rendered relative. A reference rendered absolute
+  // calls every file behind source, and no rebuild can clear that.
+  await withDir(async (home) => {
+    fs.writeFileSync(path.join(home, '.config'), 'x');
+    driver(home, 'claude-global');
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'diff', '--target', path.join(home, '.claude')],
+      { cwd: home, encoding: 'utf8', env: envOf(home), windowsHide: true, maxBuffer: 1 << 26 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /behind source|stale/i, r.stdout);
+    assert.doesNotMatch(r.stdout, /\.md/, r.stdout);
+  });
+});
+
+test('Restore writes an install\'s own relative paths back when its tier could not be created', async () => {
+  await withDir(async (home) => {
+    fs.writeFileSync(path.join(home, '.config'), 'x');
+    driver(home, 'claude-global');
+    const cfg = path.join(home, '.claude');
+    const file = path.join(cfg, 'agents', 'reviewer.md');
+    const fresh = read(file);
+    fs.writeFileSync(file, 'edited by hand\n');
+    const err = process.stderr.write;
+    process.stderr.write = () => true;
+    try {
+      await inEnv({ ...homeOverrides(home), OPENCODE_CONFIG_DIR: undefined, CLAUDE_CONFIG_DIR: undefined,
+        BOB_CONFIG_DIR: undefined, OPENCLAUDE_CONFIG_DIR: undefined }, () => {
+        const res = apiRestore(webState('neutral', cfg), ['agents/reviewer.md']);
+        assert.deepEqual(res.errors, []);
+      });
+    } finally { process.stderr.write = err; }
+    assert.equal(read(file), fresh);
   });
 });

@@ -57,7 +57,8 @@ export function emitClaudeRender(cfg, job) {
   // that Python answers '.' for an identical pair where `path.relative` answers ''.
   const relCfg = relPosix(path.dirname(claudeMd), cfgDir) || '.';
   const lawsPrefix = relCfg === '.' ? '' : `${relCfg}/`;
-  const sharedRoot = scope === 'global' ? sharedRootFor(cfgDir, host) : null;
+  // A re-render of a deployed install sends that install's root, null included.
+  const { sharedRoot = scope === 'global' ? sharedRootFor(cfgDir, host) : null } = job;
   const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog, sharedRoot });
   assertSourceComplete(cfg, `claude-${scope}`);
   mkdirSync(cfgDir, { recursive: true });
