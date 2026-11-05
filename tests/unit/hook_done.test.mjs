@@ -508,7 +508,9 @@ test('context: the done gate line reaches SessionStart, even with nothing else t
     const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), GENESEED_ROOT: proj };
     const bare = spawnHook(['context'], '', { cwd: proj, env });
     assert.equal(bare.status, 0, bare.stderr);
-    assert.equal(bare.stdout.trim(), 'Done gate: inferred from package.json — npm run lint (advisory)');
+    // This package.json has no `engines`, so the runtime floor line follows, on this path too.
+    assert.deepEqual(bare.stdout.trim().split(/\r?\n/), ['Done gate: inferred from package.json — npm run lint (advisory)',
+      'Runtime floor: package.json declares no engines — name the supported runtime before you add a dependency or a language feature.']);
     assert.match(bare.stderr, /nothing to load/);
     fs.writeFileSync(path.join(proj, 'README.md'), '# P\n\nThe readme.\n');
     const full = spawnHook(['context'], '', { cwd: proj, env });

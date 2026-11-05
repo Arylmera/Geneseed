@@ -6,6 +6,7 @@
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
+import { execFileSync } from "node:child_process"
 import * as path from "node:path"
 import { makeSandbox } from "../helpers/sandbox.mjs"
 import { groupPasses as nodeGroupPasses, runsUnpiped as nodeRunsUnpiped } from "../../js/hosts/hooks-done.mjs"
@@ -183,6 +184,43 @@ test("the done gate line on OpenCode 2: named, and not judged", async () => {
   assert.equal(await v2Line(inferred), "Done gate: inferred from package.json — npm test (not judged on this host)")
   const listed = await gitRepo("v2-listed", { ".geneseed/done-checks.txt": "make check\n" })
   assert.equal(await v2Line(listed), "Done gate: from .geneseed/done-checks.txt — make check (not judged on this host)")
+})
+
+// The runtime floor: one line when the git root's package.json is a JSON object with no `engines`
+// field, and nothing otherwise. `engines` present counts even empty; a file that is no manifest
+// (invalid JSON, a JSON array) says nothing about the runtime. Each row runs through the real hook
+// binary, OpenCode 1's transform and OpenCode 2's context hook, against the line written out here.
+test("the runtime floor line: hook, OpenCode 1 and OpenCode 2 agree, row by row", async () => {
+  const LINE = "Runtime floor: package.json declares no engines — name the supported runtime before you "
+    + "add a dependency or a language feature."
+  const hook = (dir) => execFileSync(process.execPath, [path.resolve("bin/geneseed-hook.mjs"), "context"],
+    { env: { ...process.env, GENESEED_ROOT: dir }, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+  const v2 = async (dir) => {
+    const hooks = {}
+    await contextPlugin.setup({
+      location: { directory: dir, project: { directory: dir } },
+      session: { hook: async (name, cb) => { hooks[name] = cb }, get: async () => ({ title: "work" }) },
+    })
+    const ev = { sessionID: "s1", system: [], messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] }
+    await hooks.context(ev)
+    return ev.messages[0].content[0].text
+  }
+  const rows = [
+    ["without engines", { "package.json": "{}" }, true],
+    ["with engines", { "package.json": JSON.stringify({ engines: { node: ">=20" } }) }, false],
+    ["with empty engines", { "package.json": JSON.stringify({ engines: {} }) }, false],
+    ["no manifest", { "README.md": "# x\n" }, false],
+    ["invalid JSON", { "package.json": "{ nope" }, false],
+    ["a JSON array", { "package.json": "[]" }, false],
+    ["JSON null", { "package.json": "null" }, false],
+    ["a JSON number", { "package.json": "5" }, false],
+  ]
+  for (const [name, files, fires] of rows) {
+    const dir = await gitRepo(`floor-${name.replaceAll(" ", "-")}`, files)
+    for (const [host, text] of [["hook", hook(dir)], ["V1", await injected(dir)], ["V2", await v2(dir)]]) {
+      assert.equal(text.split(/\r?\n/).includes(LINE), fires, `${host}: ${name}`)
+    }
+  }
 })
 
 test("inferred checks: the V1 reminder says advisory, and any accepted form clears it", async () => {

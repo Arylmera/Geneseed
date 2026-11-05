@@ -30,10 +30,13 @@
    is not proof.
 
 ## Output contract
+- The report starts with one line, `STATUS: OK|BLOCKED|OUT_OF_SCOPE|ERROR`: `OK` the contract is met;
+  `BLOCKED` an input or a decision is missing; `OUT_OF_SCOPE` not this task; `ERROR` a step failed,
+  red tests included.
 - The test files written/changed, the command to run them, and the actual run
   output (pass/fail counts). For diagnosis: root cause + recommended fix location.
 - If the suite cannot be run or the expected behaviour is unspecified, report
-  that blocker instead of delivering tests that were never seen to fail.
+  that blocker (`STATUS: BLOCKED`) instead of delivering tests that were never seen to fail.
 
 ## Pipeline role
 

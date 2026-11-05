@@ -859,7 +859,8 @@ async function resolveBlock(root, judged = true) {
   const commands = await discoverCommands(root)
   const done = (await doneGateOff()) ? null : await doneLine(root, judged).catch(() => null)
   const owned = (await ownershipGateOff()) ? null : await ownershipLine(root).catch(() => null)
-  const heads = [done, owned].filter(Boolean).join("\n") || null
+  const floor = await runtimeFloorLine(root).catch(() => null)
+  const heads = [done, owned, floor].filter(Boolean).join("\n") || null
   return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness), heads), src }
 }
 
@@ -1136,6 +1137,18 @@ async function ownershipLine(dir) {
   const personal = await fs.readFile(path.join(home, ".geneseed", "ownership.md"), "utf8").catch(() => "")
   const since = OWN_DECLINED_RE.exec(personal.replace(/^\uFEFF/, ""))?.[1]
   return since ? `Ownership: setup declined since ${since} — not set up; say "set up ownership" to run it` : null
+}
+
+// ---- The runtime floor: the twin of js/hosts/hooks-context.mjs `runtimeFloorLine` ----
+// One line when the git root's package.json is a JSON object with no `engines` field; the hook's
+// shortcut comment names the manifests not read. No done-gate or ownership switch silences it.
+const FLOOR_LINE = "Runtime floor: package.json declares no engines — name the supported runtime before you "
+  + "add a dependency or a language feature."
+async function runtimeFloorLine(dir) {
+  const root = await gitRootOf(dir)
+  if (!root) return null
+  const pkg = await readJson(path.join(root, "package.json"))
+  return pkg && typeof pkg === "object" && !Array.isArray(pkg) && pkg.engines === undefined ? FLOOR_LINE : null
 }
 
 function runsUnpiped(command, line) {

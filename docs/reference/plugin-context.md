@@ -23,6 +23,8 @@ One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed
 
 **The ownership decline line.** In an application repo whose root `AGENTS.md` has no `## Ownership` section, a `Setup: declined <YYYY-MM-DD>` line in the personal `.geneseed/ownership.md` of the main worktree (the main checkout's, from a linked git worktree) adds one line beside the done line: `Ownership: setup declined since <date> — not set up; say "set up ownership" to run it`. An install built `--no-ownership-gate` (`Ownership gate: off` in its `AGENT.md`, read once when OpenCode starts) prints no such line.
 
+**The runtime floor line.** A git root whose `package.json` has no `engines` field adds one line after those: `Runtime floor: package.json declares no engines — name the supported runtime before you add a dependency or a language feature.` There is no line when `engines` exists, when there is no `package.json`, or when the file is not a JSON object.
+
 **What you see.** Normally nothing — the context is there, but not shown. With the visible fallback, a `PROJECT CONTEXT` block at the top of the session.
 
 **Switches.**
