@@ -322,7 +322,10 @@ function sourceStamp(cfg) {
   for (const root of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {
     if (!isDir(root)) continue;
     for (const p of sortedSourceFiles(root)) {
-      const { size, mtimeMs, ctimeMs } = statSync(p);
+      // A file deleted since the walk listed it is simply not in the tree any more.
+      const st = statSync(p, { throwIfNoEntry: false });
+      if (!st) continue;
+      const { size, mtimeMs, ctimeMs } = st;
       newest = Math.max(newest, mtimeMs);
       lines.push(`${p}\0${size}\0${mtimeMs}\0${ctimeMs}`);
     }

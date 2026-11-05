@@ -449,10 +449,8 @@ export function runDoctor(cand, timeoutMs = DOCTOR_TIMEOUT_MS) {
  * refusal is reported as itself — the user is left on the pulled commit, with the command to
  * finish the rollback — rather than as a rollback that did not happen.
  *
- * `doctor_unfinished` IS NOT A FAILED GATE. With no verdict the pull stays, because rolling back
- * called a healthy pull bad. It is not a pass either: the caller stops before the rebuild, and
- * the message sends the user to `doctor --all` first, since a second `update` finds nothing to
- * pull and rebuilds with no gate.
+ * The doctor and what follows it are `gatePulled`. A new pull over an unchecked one takes its
+ * rollback point from `pendingGate`, since HEAD is then a commit no verdict covers.
  */
 export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   const [rc0, old] = gitRun(['rev-parse', 'HEAD']);
@@ -472,29 +470,76 @@ export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
     log('[geneseed] pulled:');
     for (const line of pulled.split('\n')) log(`  ${line}`);
   }
+  return gatePulled(pendingGate() ?? old, log, doctorTimeoutMs);
+}
+
+/** Where the unchecked state lives: under `.git`, so it dirties nothing and follows no branch. */
+function pendingGateFile() {
+  const [rc, rel] = gitRun(['rev-parse', '--git-path', 'geneseed-doctor-pending']);
+  return rc === 0 && rel ? path.resolve(String(ROOT), rel) : null;
+}
+
+function setPendingGate(verified) {
+  const file = pendingGateFile();
+  if (file) writeText(file, `${verified}\n`);
+}
+
+function clearPendingGate() {
+  const file = pendingGateFile();
+  if (file) rmSync(file, { force: true });
+}
+
+/**
+ * The last commit a verdict covers, while HEAD is ahead of it unchecked; null otherwise. Back on
+ * that commit, or on a line that does not hold it, the user has moved on: the record is dropped.
+ */
+export function pendingGate() {
+  const file = pendingGateFile();
+  if (!file || !existsSync(file)) return null;
+  const verified = stripWhitespace(readText(file));
+  const [rc0, head] = gitRun(['rev-parse', 'HEAD']);
+  const [rc1] = gitRun(['merge-base', '--is-ancestor', verified, 'HEAD']);
+  if (rc0 === 0 && rc1 === 0 && head !== verified) return verified;
+  clearPendingGate();
+  return null;
+}
+
+/**
+ * The doctor gate over HEAD, with `verified` as the commit to roll back to.
+ *
+ * `doctor_unfinished` IS NOT A FAILED GATE, AND NOT A PASS. With no verdict the pull stays, because
+ * rolling back called a healthy pull bad. But the record under `.git` holds the rebuild back: the
+ * next update finds nothing to pull, and without it would rebuild from a tree nothing has judged.
+ * It asks here again, and only a verdict clears the record. A refused rollback keeps it too.
+ */
+export function gatePulled(verified, log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   log('[geneseed] validating the pulled source (doctor — can take a minute) ...');
   const [passed, output] = runDoctor(ROOT, doctorTimeoutMs);
   log(output.replace(/\n+$/, ''));
   if (passed === null) {
+    setPendingGate(verified);
     return [false, 'doctor_unfinished',
       'the doctor did not finish, so the pulled source is UNCHECKED: nothing says it is bad. '
-      + 'You stay on the pulled commit and nothing was rebuilt. Run `geneseed doctor --all`; '
-      + 'if it is clean, run `geneseed update` to rebuild.'];
+      + 'You stay on the pulled commit and nothing was rebuilt. Run `geneseed update` again when '
+      + 'the machine is quieter: it runs the doctor first and rebuilds only on a pass.'];
   }
   if (!passed) {
-    const [rc3, , rerr] = gitRun(['reset', '--keep', old], { timeout: 60 });
+    const [rc3, , rerr] = gitRun(['reset', '--keep', verified], { timeout: 60 });
     for (const line of DOCTOR_LEGEND) log(line);
     if (rc3 !== 0) {
+      setPendingGate(verified);
       return [false, 'doctor_fail',
         'the pulled source FAILS validation, and the rollback was REFUSED — a file it must '
         + 'restore was edited while the doctor ran, and those edits were kept. You are still '
-        + `on the pulled commit; save your edits, then roll back with: git reset --keep ${old}\n`
+        + `on the pulled commit; save your edits, then roll back with: git reset --keep ${verified}\n`
         + rerr];
     }
+    clearPendingGate();
     return [false, 'doctor_fail',
       'the pulled source FAILS validation — rolled back to the previous commit. '
       + 'Fix the problems listed above.'];
   }
+  clearPendingGate();
   return [true, 'ready', ''];
 }
 
@@ -771,6 +816,15 @@ export async function upgrade(ref = null, themeArg = null) {
     }
   } else {                                     // uptodate
     log('[geneseed] already up to date.');
+    const verified = pendingGate();
+    if (verified) {
+      log('[geneseed] the last doctor did not finish — this source has no verdict yet.');
+      const [ok, , msg] = gatePulled(verified, log);
+      if (!ok) {
+        log(`[geneseed] ${msg}`);
+        return 1;
+      }
+    }
   }
 
   const theme = themeArg || markerTheme(cfg, out) || cfgTheme;

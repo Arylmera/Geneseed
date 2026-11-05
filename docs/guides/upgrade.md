@@ -32,7 +32,7 @@ geneseed upgrade imperial     # the same, switching the theme
 2. It runs a blocking `doctor` pass over the result, and rolls back if it fails.
 3. It rebuilds the bundle and every install in place.
 
-If the `doctor` pass cannot finish, for example on a busy machine after 300 seconds, `upgrade` keeps the pull, rebuilds nothing, and exits 1. The pulled source is unchecked, not bad. Run `geneseed doctor --all`. If it is clean, run `geneseed upgrade` again to rebuild.
+If the `doctor` pass cannot finish, for example on a busy machine after 300 seconds, `upgrade` keeps the pull, rebuilds nothing, and exits 1. The pulled source is unchecked, not bad. Run `geneseed upgrade` again: it runs `doctor` first, rebuilds on a pass, and rolls back to the last checked commit on a failure.
 
 A dirty working tree, or a folder that is not a git clone, is reported rather than force-updated. `update` and `sync-self` are aliases of `upgrade`. `bootstrap` does the same and then opens the setup wizard (`--no-setup` skips the wizard).
 

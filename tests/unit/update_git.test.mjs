@@ -425,7 +425,7 @@ test('a doctor that cannot finish keeps the pull and does not call it bad', () =
     assert.equal(git(CO2, 'rev-parse', 'HEAD'), git(CO2, 'rev-parse', 'origin/main'),
       'a doctor that never finished rolled the pull back');
     assert.match(msg, /did not finish/);
-    assert.match(msg, /geneseed doctor --all/, 'the message names no way to get the verdict');
+    assert.match(msg, /geneseed update/, 'the message names no way to get the verdict');
     assert.doesNotMatch(`${msg}\n${logged.join('\n')}`, /FAILS validation|problem legend/,
       'a doctor that never finished was reported as a failed one');
   } finally {

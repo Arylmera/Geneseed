@@ -9,7 +9,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ## [Unreleased]
 
 ### Fixed
-- **`geneseed update` no longer rolls back a healthy pull when the doctor gate cannot finish.** A timeout or a killed doctor is now reported as a gate that did not finish. The pull stays, nothing is rebuilt, and the exit code is 1. A real doctor failure still rolls back.
+- **`geneseed update` no longer rolls back a healthy pull when the doctor gate cannot finish.** A timeout or a killed doctor is now reported as a gate that did not finish. The pull stays, nothing is rebuilt, and the exit code is 1. The next update runs the gate again before it rebuilds. A real doctor failure still rolls back.
+- **An install registry write is no longer lost in silence.** On Windows a rename over `installs.json` can be refused for a moment. The write now waits it out within a small bound, and a write that still fails is reported on stderr.
+- **The source stamp survives a file deleted during its walk.**
 
 ## [4.32.0] — 2026-11-05
 

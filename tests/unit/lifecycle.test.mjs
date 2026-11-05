@@ -20,6 +20,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -1201,6 +1202,58 @@ test('a real registry never records a temp root, and prunes one it already holds
     else process.env.XDG_CONFIG_HOME = saved;
     fs.rmSync(cfgHome, { recursive: true, force: true });
   }
+});
+
+/** Refuse the next `times` renames, as a scanner holding the target does on Windows. */
+function withRefusedRename(times, fn) {
+  const real = fs.renameSync;
+  let left = times;
+  fs.renameSync = (...args) => {
+    if (left-- > 0) throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+    return real(...args);
+  };
+  syncBuiltinESMExports();
+  try { return fn(); } finally {
+    fs.renameSync = real;
+    syncBuiltinESMExports();
+  }
+}
+
+function withRegistryIn(d, fn) {
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(d, 'config');
+  const root = path.join(d, 'install');
+  fs.mkdirSync(root);
+  fs.writeFileSync(path.join(root, '.geneseed-emit'), 'claude\n', 'utf8');
+  try { return fn(root, path.join(d, 'config', 'geneseed', 'installs.json')); } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  }
+}
+
+test('a registry write survives a rename the scanner refuses for a moment', () => {
+  // Measured on Windows: about 1 rename in 500 over a just-written file failed with EPERM under
+  // load, and the row was lost without a word. That was the flake in the prune test above.
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    withRefusedRename(2, () => registryRecord(root));
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).length, 1, 'a refused rename lost the row');
+    assert.ok(!fs.existsSync(`${file}.tmp`), 'the temp file was left behind');
+  }));
+});
+
+test('a registry write that stays refused is reported, and never breaks the build', () => {
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    const write = process.stderr.write;
+    let said = '';
+    process.stderr.write = (s) => { said += s; return true; };
+    try {
+      withRefusedRename(1000, () => registryRecord(root));
+    } finally { process.stderr.write = write; }
+    assert.match(said, /could not update the install registry/);
+    assert.ok(said.includes(file), `the report names no file: ${said}`);
+    assert.match(said, /EPERM/);
+    assert.ok(!fs.existsSync(`${file}.tmp`), 'the temp file was left behind');
+  }));
 });
 
 test('--archive-memory archives a project store', () => {

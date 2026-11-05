@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -2761,6 +2762,52 @@ test('cfgs share what an unchanged tree yields, so 84 emits read it once', () =>
     assert.equal(sourceGeneration(treeCfg(src)), generation, 'a new cfg started over');
     fs.writeFileSync(path.join(src, 'y.md'), 'added\n');
     assert.notEqual(sourceGeneration(treeCfg(src)), generation, 'an added file went unseen');
+  });
+});
+
+test('an edit in any of the four source roots reaches the fingerprint', () => {
+  // `treeCfg` points three roots at nothing, so the tests around this one stay green on a stamp
+  // that walks only `cfg.src`. Each root here holds a real file, and an edit of each must move
+  // the fingerprint a fresh cfg reports: a blind stamp serves the old generation and its memo.
+  withDir((d) => {
+    const roots = { src: 'src', themes: 'themes', pluginSrc: 'plugins', workflowSrc: 'workflows' };
+    const dirs = Object.fromEntries(Object.entries(roots).map(([k, v]) => [k, path.join(d, v)]));
+    const cfg = () => ({ ...makeCfg(), ...dirs });
+    for (const dir of Object.values(dirs)) {
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'x.md'), 'first\n');
+    }
+    for (const [name, dir] of Object.entries(dirs)) {
+      settle(d);
+      const before = sourceFingerprint(cfg());
+      assert.equal(sourceGeneration(cfg()), sourceGeneration(cfg()), 'fixture: the tree is not shared');
+      fs.writeFileSync(path.join(dir, 'x.md'), `edited ${name}\n`);
+      assert.notEqual(sourceFingerprint(cfg()), before, `an edit under ${name} went unseen`);
+    }
+  });
+});
+
+test('a file deleted between the walk and its stat does not break the stamp', () => {
+  // The web daemon stamps a live tree, and an editor's save can delete a file the walk just listed.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    const gone = path.join(src, 'gone.md');
+    fs.mkdirSync(src);
+    fs.writeFileSync(path.join(src, 'kept.md'), 'kept\n');
+    fs.writeFileSync(gone, 'gone\n');
+    const real = fs.statSync;
+    fs.statSync = (p, ...rest) => {
+      if (p === gone && fs.existsSync(gone)) fs.unlinkSync(gone);
+      return real(p, ...rest);
+    };
+    syncBuiltinESMExports();
+    try {
+      assert.ok(sourceGeneration(treeCfg(src)), 'no generation came back');
+    } finally {
+      fs.statSync = real;
+      syncBuiltinESMExports();
+    }
+    assert.ok(!fs.existsSync(gone), 'fixture: the stat never met the file');
   });
 });
 

@@ -13,7 +13,7 @@
  * compares `installs.json` byte-for-byte, so a changed path or a dropped prune fails cells
  * rather than passing quietly.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -50,16 +50,42 @@ function registryLoad() {
   } catch { return []; }
 }
 
+/**
+ * The rename, waited out while Windows refuses it. A process holding the just-written target (real-time
+ * scanning, by every sign) fails the replace with EPERM: measured at about 1 rename in 500 under
+ * load, gone within moments. Writing in place instead would give up the atomicity: a reader could
+ * see a torn file, load `[]`, and save only its own root over every other install. Bounded at about
+ * 400 ms. Not gated on the platform: elsewhere these codes are rare and the bound is the same.
+ */
+const RENAME_WAITS_MS = [10, 30, 90, 270];
+const SHARING_ERRORS = new Set(['EPERM', 'EACCES', 'EBUSY']);
+function renameOver(tmp, file) {
+  for (const wait of RENAME_WAITS_MS) {
+    try {
+      renameSync(tmp, file);
+      return;
+    } catch (e) {
+      if (!SHARING_ERRORS.has(e.code)) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
+    }
+  }
+  renameSync(tmp, file);
+}
+
+/** A failed write must never break a deploy, and is never silent: stderr, since hooks speak on stdout. */
 export function registrySave(items) {
+  const file = registryPath();
+  const tmp = `${file}.tmp`;
   try {
-    const file = registryPath();
     mkdirSync(path.dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
     // `jsonDumpsIndent` for the same reason as the manifest: these are absolute paths, and
     // a machine whose username carries an accent writes one here.
     writeText(tmp, `${jsonDumpsIndent(items)}\n`);
-    renameSync(tmp, file);
-  } catch { /* best-effort: a registry hiccup must never break a deploy */ }
+    renameOver(tmp, file);
+  } catch (e) {
+    try { rmSync(tmp, { force: true }); } catch { /* the report below is the one that matters */ }
+    process.stderr.write(`[geneseed] could not update the install registry ${file}: ${e.message}\n`);
+  }
 }
 
 /**

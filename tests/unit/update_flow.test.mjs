@@ -197,6 +197,90 @@ test('an upgrade re-emits an opencode-global install on its OWN footprint and ex
   }
 });
 
+// A SCRIPTED DOCTOR for the unfinished-gate arms. It counts its runs, hangs while `HANG` exists,
+// and otherwise exits with the code in `VERDICT`, so one pulled tip can say all three things.
+const HANG = path.join(sb.path, 'doctor-hangs');
+const VERDICT = path.join(sb.path, 'doctor-verdict');
+const CALLS = path.join(sb.path, 'doctor-calls');
+const doctorRuns = () => (fs.existsSync(CALLS) ? fs.readFileSync(CALLS, 'utf8').length : 0);
+function pushed(name) {
+  fs.writeFileSync(path.join(OTHER, name), 'from upstream\n');
+  git(OTHER, 'add', '-A');
+  git(OTHER, 'commit', '-qm', name);
+  git(OTHER, 'push', '-q');
+  git(CO, 'fetch', '-q');
+}
+/** Pull the pending tip under a doctor that never answers. */
+function pullUnfinished() {
+  fs.writeFileSync(HANG, '');
+  const [ok, code] = U.pullAndValidate(() => {}, 1500);
+  fs.unlinkSync(HANG);
+  assert.equal(ok, false);
+  assert.equal(code, 'doctor_unfinished');
+}
+
+test('after an unfinished gate the next update runs the gate, and only then rebuilds', async () => {
+  // An unfinished gate is not a pass. With nothing left to pull, the next update used to go
+  // straight to the rebuild, so a tree no doctor had judged reached every install.
+  fs.writeFileSync(path.join(OTHER, 'bin', 'geneseed-cli.mjs'), [
+    "import { appendFileSync, existsSync, readFileSync } from 'node:fs';",
+    "if (process.argv[2] !== 'doctor') process.exit(0);",
+    `appendFileSync(${JSON.stringify(CALLS)}, 'x');`,
+    `if (existsSync(${JSON.stringify(HANG)})) setTimeout(() => {}, 120000);`,
+    `else process.exit(Number(readFileSync(${JSON.stringify(VERDICT)}, 'utf8')));`,
+    '',
+  ].join('\n'));
+  fs.writeFileSync(VERDICT, '0');
+  pushed('scripted-doctor.txt');
+  pullUnfinished();
+
+  const out = freshOut('regate-pass');
+  const runs = doctorRuns();
+  assert.equal(await U.upgrade(null, null), 0);
+  assert.equal(doctorRuns(), runs + 1, 'the update rebuilt with no verdict on the pulled source');
+  assert.ok(!isEmpty(out), 'a passed gate did not rebuild');
+
+  freshOut('regate-done');
+  assert.equal(await U.upgrade(null, null), 0);
+  assert.equal(doctorRuns(), runs + 1, 'a verdict given once was asked for again');
+});
+
+test('a gate that stays unfinished still holds the rebuild back', () => {
+  const verified = git(CO, 'rev-parse', 'HEAD');
+  pushed('still-unfinished.txt');
+  pullUnfinished();
+  const pending = U.pendingGate();
+  assert.equal(pending, verified, 'the commit the last verdict covers was not kept');
+  fs.writeFileSync(HANG, '');
+  const [ok, code] = U.gatePulled(pending, () => {}, 1500);
+  fs.unlinkSync(HANG);
+  assert.equal(ok, false);
+  assert.equal(code, 'doctor_unfinished');
+  assert.equal(U.pendingGate(), verified, 'a second unfinished gate forgot the first');
+});
+
+test('a failed verdict after an unfinished gate rolls back to the last verified commit', async () => {
+  // Rides on the arm above: HEAD is unchecked, and the verified commit is one behind it.
+  const verified = U.pendingGate();
+  assert.ok(verified, 'fixture: no gate is pending');
+  fs.writeFileSync(VERDICT, '1');
+  const out = freshOut('regate-fail');
+  assert.equal(await U.upgrade(null, null), 1);
+  assert.equal(git(CO, 'rev-parse', 'HEAD'), verified, 'the rollback missed the verified commit');
+  assert.ok(isEmpty(out), `a failed gate rebuilt: ${fs.readdirSync(out)}`);
+});
+
+test('a new pull over an unfinished gate rolls back past both unchecked commits', async () => {
+  fs.writeFileSync(VERDICT, '0');
+  const verified = git(CO, 'rev-parse', 'HEAD');
+  pullUnfinished();
+  pushed('over-the-unfinished.txt');
+  fs.writeFileSync(VERDICT, '1');
+  freshOut('regate-pull');
+  assert.equal(await U.upgrade(null, null), 1);
+  assert.equal(git(CO, 'rev-parse', 'HEAD'), verified, 'the rollback stopped on an unchecked commit');
+});
+
 test('a pulled source that fails the doctor returns 1 and leaves no bundle', async () => {
   // `test_doctor_fail_returns_1_no_rebuild`. The pulled tip's doctor is a STAND-IN that exits 1
   // at once: what this arm owns is the orchestration — the exit code, and no bundle written from

@@ -616,6 +616,17 @@ export const MUTATIONS = [
       + 'result carries no `is_error`. Without the pipe rule the gate would accept exactly the '
       + 'proof that proves nothing; the segment table in `hook_done.test.mjs` pins it.',
   },
+  {
+    id: 'M37',
+    name: 'the source stamp walks only cfg.src',
+    file: 'js/build/render.mjs',
+    find: 'for (const root of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {',
+    replace: 'for (const root of [cfg.src]) {',
+    gate: ['--test', '--test-name-pattern=four source roots', 'tests/unit/generate.test.mjs'],
+    why: 'The daemon would keep the fingerprint of an old theme or plugin for days, and every '
+      + 'install would compare against it. The other stamp tests point three roots at nothing, '
+      + 'so only the test that edits each root sees this.',
+  },
 ];
 
 function run(argv) {
