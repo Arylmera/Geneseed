@@ -45,7 +45,7 @@ import { rglobFiles } from '../build/emit-common.mjs';
 import { CONFIG, makeCfg } from '../build/source.mjs';
 import { sourceFingerprint } from '../build/version.mjs';
 import {
-  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
+  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
@@ -57,6 +57,7 @@ import {
 import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 
@@ -347,8 +348,15 @@ export const drifted = (files) => files.filter((f) => f.status !== 'linked');
  */
 export const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
 
-/** Where the self-improvement loops write, relative to an install's `notebook/`. */
+/** Where the self-improvement loops write, relative to a notes root (`notesRoots`). */
 export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
+
+/** An install's notebook; a global install's loops write to the tier's `notes/` too (D6). */
+function notesRoots(dir) {
+  const roots = [[path.join(dir, 'notebook'), 'notebook']];
+  try { if (isHostGlobalDir(null, dir)) roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
+  return roots;
+}
 
 /**
  * The self-improvement notes an install has accumulated, as `{rel, body}` sorted by `rel`.
@@ -363,15 +371,17 @@ export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
  */
 export function collectNotes(dir) {
   const notes = [];
-  for (const sub of NOTES_DIRS) {
-    const d = path.join(dir, 'notebook', sub);
-    let names;
-    try { names = readdirSync(d); } catch { continue; }
-    for (const n of names.filter((x) => x.endsWith('.md')).sort()) {
-      const a = path.join(d, n);
-      if (!isFile(a)) continue;
-      const body = readText(a);
-      if (body.trim()) notes.push({ rel: `notebook/${sub}/${n}`, body });
+  for (const [root, label] of notesRoots(dir)) {
+    for (const sub of NOTES_DIRS) {
+      const d = path.join(root, sub);
+      let names;
+      try { names = readdirSync(d); } catch { continue; }
+      for (const n of names.filter((x) => x.endsWith('.md')).sort()) {
+        const a = path.join(d, n);
+        if (!isFile(a)) continue;
+        const body = readText(a);
+        if (body.trim()) notes.push({ rel: `${label}/${sub}/${n}`, body });
+      }
     }
   }
   return notes;

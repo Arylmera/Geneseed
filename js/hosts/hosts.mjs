@@ -263,6 +263,19 @@ export function isHostGlobalDir(host, dir) {
 }
 
 /**
+ * Is `cfgDir` the one directory `host`'s `configDir()` resolves to? Only such an install creates
+ * and folds the shared tier. Stricter than `isHostGlobalDir` on purpose: `diff` renders a global
+ * emit into a temp dir and `rebuild-all` passes `--config-dir` for every row, so neither a
+ * `-global` marker, the flag nor a default `~/.claude` proves this is the live install.
+ */
+export function isCanonical(cfgDir, host) {
+  const row = HOSTS.find((h) => h.host === host);
+  try {
+    return !!row && normcase(resolvePath(cfgDir)) === normcase(resolvePath(row.configDir()));
+  } catch { return false; }
+}
+
+/**
  * The project root a hook judges against: `$CLAUDE_PROJECT_DIR` (Claude Code and OpenClaude set
  * it for every hook — the session's root, where its project hooks were loaded from), else the
  * cwd. Bob documents no such variable, so under Bob this is the cwd.

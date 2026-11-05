@@ -58,6 +58,28 @@ export const STRUCTURE = {
 };
 
 /**
+ * Where a fact, rule, profile or note LIVES, as prose names it (C10). `DIR_MEMORY` cannot say
+ * so: it also names the output dir and takes `prefixedAgentText`'s prefix. On a global emit these
+ * are absolute under `sharedRoot`, which no prefix may touch. Otherwise each follows the `DIR_*`
+ * token it replaced, prefix included, so a project emit keeps its bytes: `prefixedAgentText`
+ * calls this again after prefixing. `LINK_MEMORY` drops the link on a global emit, because an
+ * absolute target is what `linkProblems` refuses as non-hermetic.
+ */
+export function pathTokens(theme, sharedRoot = null) {
+  const memory = theme.DIR_MEMORY ?? 'memory';
+  const at = sharedRoot ? `${sharedRoot}/` : theme.AT_HARNESS ?? '';
+  return {
+    PATH_MEMORY: sharedRoot ? `${at}memory` : memory,
+    PATH_NOTES: sharedRoot ? `${at}notes` : theme.DIR_NOTEBOOK ?? 'notebook',
+    PATH_RULES: `${at}user-rules.md`,
+    PATH_PROFILE: `${at}PROFILE.md`,
+    LINK_MEMORY: sharedRoot ? `\`${at}memory/\`` : `[\`${memory}/\`](${memory}/)`,
+    PROFILE_LOCATION: sharedRoot ? `\`${at}PROFILE.md\``
+      : '`PROFILE.md` beside the deployed AGENT.md',
+  };
+}
+
+/**
  * Source top-level dirs whose OUTPUT name is themed. Mirrors `SRC_DIR_TOKENS`.
  * Exported because `js/build/bundle.mjs`'s `build` resolves the same tokens to decide which
  * dirs it owns and wipes — one owner, so the two cannot disagree about a folder name.
@@ -508,8 +530,21 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
  * it reaches nothing at all unless it travels. The constant stays as the default for the
  * parity harnesses, which drive this module directly.
  */
-export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix = '' } = {}) {
+export function effectiveTheme(cfg, themeName, {
+  footprint = 'full', lawsPrefix = '', sharedRoot = null,
+} = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
+  Object.assign(theme, pathTokens(theme, sharedRoot));
+  // Empty without a tier, so a project emit and a default build stay byte-identical (the
+  // `EXCLUDED_SKILLS_LINE` contract). Each rides the end of a template line, so its value carries
+  // the blank line. C1 lives in this text: the readers only concatenate, shared first.
+  theme.RULE_LAYERS_LINE = sharedRoot ? '\n\n`user-rules.md` has layers: the shared file above, '
+    + `this host's file, then a project's. Where they disagree the later layer wins, so project `
+    + `over host over shared, and all three stay under the ${theme.LAWS}.` : '';
+  theme.SHARED_STORE_NOTE = sharedRoot ? `\n\n> **On this install the store is shared.** New facts `
+    + `go to \`${sharedRoot}/memory/\`, which every host on this machine reads. This directory `
+    + 'holds this convention, and any fact\n> that landed here waits for the next emit to move it.'
+    : '';
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
   theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
   // The loop skill's default trust preset (`--trust`), raw for `--preset` and capitalised for
@@ -607,12 +642,13 @@ export function destRel(rel) {
  * same data with the field names the Python docstring already uses.
  * @param {any} cfg
  * @param {string} themeName
- * @param {{ footprint?: string, lawsPrefix?: string, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
+ * `sharedRoot` is the tier's root on a global emit (`sharedRootFor`): see `pathTokens`.
+ * @param {{ footprint?: string, lawsPrefix?: string, sharedRoot?: string | null, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
  */
 export function renderAll(cfg, themeName, {
-  footprint = 'full', lawsPrefix = '', nativeCatalog = false,
+  footprint = 'full', lawsPrefix = '', nativeCatalog = false, sharedRoot = null,
 } = {}) {
-  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix });
+  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix, sharedRoot });
   const items = [];
   const skipped = new Set(cfg.excludeSkills ?? []);
   // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.

@@ -44,7 +44,7 @@ it as your very first tool call — before loading context, reading files, or se
 **Session start.** The harness hook injects your session files (any still at its seed is
 skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
 `=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
-`{{AT_HARNESS}}user-rules.md`, `{{AT_HARNESS}}PROFILE.md`, `{{DIR_MEMORY}}/MEMORY.md`,
+`{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`,
 `{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{AT_HARNESS}}geneseed-wiki.jsonc`, `{{AT_HARNESS}}context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
@@ -60,7 +60,7 @@ never move.
 | 3 | The {{ONTOLOGY}} | never against a user rule |
 | 4 | The active {{DOCTRINES}} (§2) | may tighten, never repeal |
 | 5 | The mode | binds how work runs |
-| 6 | `PROFILE.md`, posture, theme | inform only; never bind |
+| 6 | `PROFILE.md`, posture, theme | inform only; never bind |{{RULE_LAYERS_LINE}}
 
 ---
 
@@ -110,7 +110,7 @@ workers get only approved decisions.{{OWNERSHIP_PROPOSAL}}
 
 <!-- INCLUDE: laws/universal.md -->
 
-**The user's own rules.** `{{AT_HARNESS}}user-rules.md` (a session file) holds the
+**The user's own rules.** `{{PATH_RULES}}` (a session file) holds the
 user's own rules: obey every rule in it with the same force as the {{LAWS}} above
 — always, in every task (its rank is in the precedence table above). That file belongs
 to the user — the build seeds it once, never overwrites it, and no update touches
@@ -121,7 +121,7 @@ append it there with the user's consent (the [rule]({{DIR_SKILLS}}/rule.md)
 add, edit, or remove a {{DOCTRINE}} rule in §2 — both are regenerated on every
 update, and an edit to either is silently lost.
 
-**The user's profile.** `{{AT_HARNESS}}PROFILE.md` (a session file) colours how you
+**The user's profile.** `{{PATH_PROFILE}}` (a session file) colours how you
 work — who the user is, how they work, the register they prefer. Unlike `user-rules.md`,
 it is *identity, not rules*: it never binds,
 it only informs. It too belongs to the user: seeded once, never overwritten. Never
@@ -192,7 +192,7 @@ contract you do not already know.
 {{AGENT}} that *writes* must return a summary of exactly what it changed. Every
 {{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
 `spec-feedback:` line, weigh it — record a real flaw (with the user's assent) in
-`{{DIR_NOTEBOOK}}/agent-notes/<name>.md` and pass it to later dispatches;
+`{{PATH_NOTES}}/agent-notes/<name>.md` and pass it to later dispatches;
 {{MEMORY}} gets a record only when it clears {{DOCTRINE:persist-insight}}'s bar.
 
 <!-- LEAN:begin -->
@@ -309,12 +309,12 @@ the file, or to {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 *{{EPI_MEMORY}}*
 
 <!-- LEAN:begin -->
-Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per file, indexed by a
+Persistent facts live in {{LINK_MEMORY}} — one fact per file, indexed by a
 local `MEMORY.md`, a session file (**Session start**, above); write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
 keeping — through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with
 the user whether it is a memory or a standing rule before either is written
-({{DOCTRINE:persist-insight}}). The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
+({{DOCTRINE:persist-insight}}). The `{{PATH_MEMORY}}/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
 project's `user-rules.md` (§1). When the same feedback lesson keeps recurring,
 propose promoting it into a standing rule — the [rule]({{DIR_SKILLS}}/rule.md)
@@ -325,7 +325,7 @@ evidence contradicts one, revise it rather than ignore it, and never overturn a
 the session — memory, notebook, notes, commits, docs — cite a rule by its principle
 ("Verify Before Asserting"), never its number: numbers are positional. Full convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 <!-- LEAN:else -->
-Durable facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/), one per file, indexed by
+Durable facts live in {{LINK_MEMORY}}, one per file, indexed by
 `MEMORY.md`, a session file. Write one through the
 [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with the user whether a
 lesson is a memory or a standing rule ({{DOCTRINE:persist-insight}}). The directory is

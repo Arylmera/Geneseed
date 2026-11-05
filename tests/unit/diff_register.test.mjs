@@ -53,7 +53,9 @@ function install(d, { posture, mode, doctrines, excludeRules }) {
     cwd: ROOT,
     encoding: 'utf8',
     env: {
+      // The tier's path is rendered, so the install and `diffCollect` must share one XDG base.
       ...process.env, ...homeOverrides(path.join(d, 'home')), OPENCODE_CONFIG_DIR: gcfg,
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
     },
     maxBuffer: 1 << 26,
     windowsHide: true,
@@ -195,7 +197,8 @@ test('a stale AGENT.md beside a Claude install answers for none of its registers
     const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'),
       '--emit', 'claude-global', '--theme', 'neutral'], {
       cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true,
-      env: { ...process.env, ...homeOverrides(path.join(d, 'home')), CLAUDE_CONFIG_DIR: gcfg },
+      env: { ...process.env, ...homeOverrides(path.join(d, 'home')), CLAUDE_CONFIG_DIR: gcfg,
+        XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME },
     });
     assert.equal(r.status, 0, (r.stderr || r.stdout).slice(-1200));
     assert.deepEqual(rels(diffCollect({ target: gcfg }).files), [], 'a fresh install reported drift');

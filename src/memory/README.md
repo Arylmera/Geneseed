@@ -4,7 +4,7 @@
 > to each developer, never committed or shared. The convention (`README.md`) and
 > the `.gitignore` are the only files tracked; your `MEMORY.md` index and all
 > fact files live only on your machine. (To share knowledge with the team, put
-> it in code, docs, or the project's `user-rules.md` instead.)
+> it in code, docs, or the project's `user-rules.md` instead.){{SHARED_STORE_NOTE}}
 
 Durable knowledge that must survive across sessions lives here as **one fact per
 file**. An agent reads `MEMORY.md` (the local index map) at the start of a session,

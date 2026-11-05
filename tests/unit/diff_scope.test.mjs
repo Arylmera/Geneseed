@@ -172,7 +172,8 @@ test('a fresh global Bob install diffs clean, though its folder skills name thei
     const gcfg = path.join(d, 'dotbob');
     fs.mkdirSync(gcfg, { recursive: true });
     mustEmit(['--emit', 'bob-global', '--theme', 'neutral'], path.join(d, 'home'),
-      { BOB_CONFIG_DIR: gcfg });
+      // The tier's path is rendered too, so the install and `diffCollect` share one XDG base.
+      { BOB_CONFIG_DIR: gcfg, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME });
     assert.ok(fs.readFileSync(path.join(gcfg, 'skills', 'token-report', 'SKILL.md'), 'utf8')
       .includes(path.join(fs.realpathSync(gcfg), 'skills', 'token-report').split(path.sep).join('/')),
     'the precondition: the path is written (resolved, as `bobConfigDir` resolves it, `/`-separated)');

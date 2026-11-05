@@ -333,8 +333,11 @@ export function cmdLearn(args) {
 
   // A global install's hook passes its own host store; the shared store is where its facts live
   // once it exists, or they land in the seeded host store and wait for the next fold. Only a hook
-  // call (it names its event) is redirected: a person who typed `--memory` meant that store.
-  if (hookEvent) args = { ...args, memory: sharedStoreFor(install, args) };
+  // call is redirected: it names its event or carries a transcript, and a person who typed
+  // `--memory` meant that store. Empty stdin is neither, and has no notes to write anywhere.
+  if (hookEvent || typeof meta.transcript_path === 'string') {
+    args = { ...args, memory: sharedStoreFor(install, args) };
+  }
 
   // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
   // means the turn goes on, so there is nothing to distil yet: the next Stop will.

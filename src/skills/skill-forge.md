@@ -5,7 +5,7 @@
 {{CREDIT:mattpocock-skills:skills/productivity/writing-for-agents/SKILL.md}}
 
 **Trigger:** a task has repeated and no {{SKILL}} covers it; a {{SKILL}}'s
-notes in `{{DIR_NOTEBOOK}}/skill-notes/` hold a correction worth making; the user says "make this a
+notes in `{{PATH_NOTES}}/skill-notes/` hold a correction worth making; the user says "make this a
 skill", "write a skill for…", "fix the trigger of…"; or two {{SKILLS}} keep
 disambiguating against each other and should merge. Meta by nature: it edits the
 apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, {{LAW:deletion-is-deliberate}}).

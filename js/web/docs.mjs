@@ -19,7 +19,7 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { DOCS, DOC_FOLDERS, ROOT, THEMES, resolveRuleIds } from '../build/source.mjs';
-import { STRUCTURE, substitute } from '../build/render.mjs';
+import { STRUCTURE, pathTokens, substitute } from '../build/render.mjs';
 import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
@@ -477,7 +477,10 @@ function themeWords(theme) {
 function renderSource(text, theme) {
   const words = Object.entries({ ...themeWords('neutral'), ...themeWords(theme) })
     .filter(([, v]) => typeof v === 'string');
-  return substitute(resolveRuleIds(text), { ...Object.fromEntries(words), ...STRUCTURE });
+  // A docs page describes no install, so it reads as a project's: relative, no tier note.
+  return substitute(resolveRuleIds(text), {
+    ...Object.fromEntries(words), ...STRUCTURE, ...pathTokens(STRUCTURE), SHARED_STORE_NOTE: '',
+  });
 }
 
 /** The deployed theme's words beside the neutral ones, from `docs/reference/glossary.md`. */

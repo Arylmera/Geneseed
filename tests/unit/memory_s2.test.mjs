@@ -111,13 +111,13 @@ test('plugin: the repo memory/ is the last resort, and $GENESEED_HARNESS beats t
 });
 
 /** Run the Stop hook's `learn` as `--memory <cfg>/memory` and report which store got the fact. */
-async function stopHook(w, d, { hook = true } = {}) {
+async function stopHook(w, d, { hook = true, payload = null } = {}) {
   const llm = path.join(d, 'llm.mjs');
   fs.writeFileSync(llm, `console.log(${JSON.stringify(fact('alpha-fact'))})`);
   const notes = path.join(d, 'notes.txt');
   // A hook call names its own event; a hand-typed note carries none (the swap is for the hook only).
-  fs.writeFileSync(notes, hook ? JSON.stringify({ hook_event_name: 'Stop', note: 'the build fails on windows' })
-    : 'notes: the build fails on windows\n');
+  fs.writeFileSync(notes, payload ?? (hook ? JSON.stringify({ hook_event_name: 'Stop', note: 'the build fails on windows' })
+    : 'notes: the build fails on windows\n'));
   const empty = path.join(d, 'empty-project');
   fs.mkdirSync(empty, { recursive: true });
   await inEnv({ GENESEED_LLM: `node ${llm}`, GENESEED_MEMORY: undefined, GENESEED_HARNESS: undefined,
@@ -149,6 +149,22 @@ test('Stop hook: a hand-typed --memory <cfg>/memory wins over the shared store (
   await withDir(async (d) => {
     const w = world(d, 'claude-global', { shared: true });
     assert.deepEqual(await stopHook(w, d, { hook: false }), [false, true, false]);
+  });
+});
+
+test('Stop hook: an envelope that names no event still reaches the shared store, and an empty stdin writes nowhere', async () => {
+  // Only a person's note stays on its --memory. A host's payload carries a transcript even when
+  // it leaves the event out; an empty stdin has no notes, so no store gets anything.
+  await withDir(async (d) => {
+    const w = world(d, 'claude-global', { shared: true });
+    const transcript = path.join(d, 't.jsonl');
+    fs.writeFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'the build fails on windows' } })}\n`);
+    assert.deepEqual(await stopHook(w, d, { payload: JSON.stringify({ session_id: 's', transcript_path: transcript }) }),
+      [true, false, false]);
+  });
+  await withDir(async (d) => {
+    const w = world(d, 'claude-global', { shared: true });
+    assert.deepEqual(await stopHook(w, d, { payload: '' }), [false, false, false]);
   });
 });
 

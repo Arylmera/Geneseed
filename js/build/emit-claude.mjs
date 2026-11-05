@@ -19,11 +19,11 @@ import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs'
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
-import { kitsBody, renderAll, renderFile } from './render.mjs';
+import { kitsBody, pathTokens, renderAll, renderFile } from './render.mjs';
 import {
   BOB_RULES_STUB, bobFirstReply, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
   ensureProfileStub,
-  ensureRulesStub, ensureWikiStub, WIKI_FILE,
+  ensureRulesStub, ensureWikiStub, sharedRootFor, WIKI_FILE,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -57,7 +57,8 @@ export function emitClaudeRender(cfg, job) {
   // that Python answers '.' for an identical pair where `path.relative` answers ''.
   const relCfg = relPosix(path.dirname(claudeMd), cfgDir) || '.';
   const lawsPrefix = relCfg === '.' ? '' : `${relCfg}/`;
-  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog });
+  const sharedRoot = scope === 'global' ? sharedRootFor(cfgDir, host) : null;
+  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog, sharedRoot });
   assertSourceComplete(cfg, `claude-${scope}`);
   mkdirSync(cfgDir, { recursive: true });
 
@@ -82,6 +83,9 @@ export function emitClaudeRender(cfg, job) {
       ptheme[tok] = prefix + (ptheme[tok] ?? tok.split('_').slice(1).join('_').toLowerCase());
     }
     ptheme.AT_HARNESS = prefix;
+    // The PATH_* tokens are not in the loop: absolute ones take no prefix, and relative ones
+    // follow the tokens just prefixed.
+    Object.assign(ptheme, pathTokens(ptheme, sharedRoot));
     // The Kits block was substituted with the unprefixed DIR_* tokens; rebuild it, or its links dangle.
     ptheme.KITS_BODY = kitsBody(cfg, ptheme, '');
     // Same catalogue decision as the renderAll above — a re-render that forgot it would

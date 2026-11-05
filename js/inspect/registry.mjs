@@ -13,7 +13,7 @@
  * compares `installs.json` byte-for-byte, so a changed path or a dropped prune fails cells
  * rather than passing quietly.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -76,7 +76,7 @@ function renameOver(tmp, file) {
       return;
     } catch (e) {
       if (!SHARING_ERRORS.has(e.code)) throw e;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
+      pause(wait);
     }
   }
   renameSync(tmp, file);
@@ -98,6 +98,37 @@ export function registrySave(items) {
   }
 }
 
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const LOCK_WAITS_MS = [10, 30, 90, 270, 500, 1000];
+const LOCK_STALE_MS = 10_000;
+
+/**
+ * `fn` under a directory lock, or without it after about 2 s. An atomic rename stops a torn file,
+ * not a lost update: two records both load the list, and the later rename drops the other's root,
+ * which `rebuild-all` then never reaches. A crashed holder is outwaited by age. Past the bound
+ * `fn` runs anyway, reported, because a registry hiccup must never fail a build.
+ */
+function withRegistryLock(fn) {
+  const lock = `${registryPath()}.lock`;
+  mkdirSync(path.dirname(lock), { recursive: true });
+  let held = false;
+  for (const wait of LOCK_WAITS_MS) {
+    try {
+      mkdirSync(lock);
+      held = true;
+      break;
+    } catch (e) {
+      if (e.code !== 'EEXIST' && !SHARING_ERRORS.has(e.code)) throw e;
+      try {
+        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmSync(lock, { recursive: true, force: true });
+      } catch { /* the holder just let go */ }
+      pause(wait);
+    }
+  }
+  if (!held) process.stderr.write(`[geneseed] the install registry stayed locked: ${lock}\n`);
+  try { return fn(); } finally { if (held) rmSync(lock, { recursive: true, force: true }); }
+}
+
 /**
  * `_install_registry.record` — idempotent, best-effort, and it must NEVER raise into a build.
  *
@@ -111,8 +142,11 @@ export function registryRecord(dir) {
     let root;
     try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
     if (isScratchRoot(root, registryPath())) return;
-    const cur = registryLoad();
-    if (cur && !cur.includes(root)) registrySave([...cur, root]);
+    if (registryLoad()?.includes(root)) return;   // the usual case takes no lock
+    withRegistryLock(() => {
+      const cur = registryLoad();
+      if (cur && !cur.includes(root)) registrySave([...cur, root]);
+    });
   } catch { /* a registry hiccup must never fail a build */ }
 }
 

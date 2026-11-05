@@ -10,14 +10,16 @@ import path from 'node:path';
 import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
 import { CONFIG, CREDIT_RE, makeCfg } from '../build/source.mjs';
-import { CLAUDE_STYLE, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
-import { EMIT_HOST_SCOPE, footprintOfDir, themeFiles } from '../hosts/installs.mjs';
+import { CLAUDE_STYLE, HOSTS, carriersFor, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
+import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, themeFiles } from '../hosts/installs.mjs';
 import { isVendoredPath } from '../hosts/native.mjs';
 import { PALETTE_ROLES, colorThemeFiles } from '../hosts/opencode.mjs';
 import { readText, withDiscardableStderr } from '../lib/fs.mjs';
 import { parseJson, formatRepr } from '../lib/json.mjs';
+import { renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
+import { normcase } from '../lib/paths.mjs';
 import {
-  ABS_LINK_RE, LINK_RE, TOKEN_RE, has, isDir, isFile, rglob, sortedUnique, stemOf, stripCode, within,
+  ABS_LINK_RE, LINK_RE, NOTE, TOKEN_RE, has, isDir, isFile, rglob, sortedUnique, stemOf, stripCode, within,
 } from './scan.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 
@@ -187,6 +189,40 @@ export function colorThemeProblems() {
   return problems;
 }
 
+/** The tier root a carrier renders: the absolute `user-rules.md` of its session-start line. */
+const RENDERED_RULES_RE = /`((?:[A-Za-z]:)?\/[^`\n]*)\/user-rules\.md`/;
+
+/** What `dir`'s carriers say of the tier: their text, and the root they render (null: relative). */
+function renderedTier(dir, host) {
+  const text = ['AGENT.md', ...carriersFor(host)].map((c) => readMaybe(path.join(dir, c)) ?? '').join('\n');
+  return { text, root: RENDERED_RULES_RE.exec(text)?.[1] ?? null };
+}
+
+/**
+ * Each global install whose carrier names another tier than the one this process resolves: the
+ * agent writes where the text says, the hooks read where the environment says. `$XDG_CONFIG_HOME`
+ * moved, or the install rendered relative and the tier has since appeared. A NOTE, because a
+ * rebuild clears it and `update` rolls a pull back on a doctor problem, and that rebuild comes
+ * after its gate. A relative carrier with no tier is a pre-tier install and is consistent.
+ */
+export function renderedPathNotes() {
+  const root = renderedSharedRoot();
+  if (root === null) return [];
+  const notes = [];
+  for (const { host, configDir } of HOSTS) {
+    let dir;
+    try { dir = configDir(); } catch { continue; }
+    if (readMaybe(path.join(dir, '.geneseed-emit'))?.trim() !== `${host}-global`) continue;
+    const { text, root: rendered } = renderedTier(dir, host);
+    if (!text.includes('user-rules.md')) continue;
+    if (rendered === null ? isDir(sharedPaths().memory) : normcase(rendered) !== normcase(root)) {
+      notes.push(`${NOTE}[shared-tier] ${host}: the carrier renders ${rendered ?? 'relative paths'}, `
+        + `the run-time tier is ${root} — run geneseed rebuild-all`);
+    }
+  }
+  return notes;
+}
+
 /**
  * `_harness_build._rendered_problems` — a committed bundle must match a fresh render of
  * `src/` for its OWN recorded theme, emit and footprint.
@@ -235,6 +271,9 @@ export function renderedProblems(bundle) {
     // legitimately emits still reaches the user, and discarded with the refusal it belongs to.
     ({ items } = withDiscardableStderr(() => renderAll(cfg, themeName, {
       footprint: footprintOfDir(bundle), nativeCatalog: hostCatalogsNatively(host),
+      // The bundle's own root, like its theme and footprint: `renderedPathNotes` judges that value,
+      // and a second verdict here would call every file stale for one moved directory.
+      sharedRoot: scope === 'global' ? renderedTier(bundle, host).root : null,
     })));
   } catch (e) {
     // `except SystemExit` — `effectiveTheme` refuses an unknown theme, and the driver's

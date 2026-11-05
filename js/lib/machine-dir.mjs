@@ -25,6 +25,14 @@ export function machineDir() {
   return path.join(base, 'geneseed');
 }
 
+/**
+ * The tier's root as a render spells it: `/`-separated on every platform, as a global Bob skill
+ * pointer is, so a doctor can compare strings. null when the account has no home directory.
+ */
+export function renderedSharedRoot() {
+  try { return machineDir().split(path.sep).join('/'); } catch { return null; }
+}
+
 /** Every file or directory the machine tier names, resolved under `machineDir()`. */
 export function sharedPaths() {
   const root = machineDir();

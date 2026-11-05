@@ -23,7 +23,7 @@ import {
 import { renderAll } from './render.mjs';
 import {
   ensureExcludesStub, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
-  ensureWikiStub,
+  ensureWikiStub, sharedRootFor,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { mkdirSync } from 'node:fs';
@@ -204,7 +204,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
   // pointer's relative `laws/universal.md` resolves with no prefix.
-  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog });
+  const sharedRoot = sharedRootFor(cfgDir, 'opencode');
+  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog, sharedRoot });
   assertSourceComplete(cfg, 'opencode-global');
   mkdirSync(cfgDir, { recursive: true });
 
@@ -212,9 +213,10 @@ export function emitOpencodeGlobalRender(cfg, job) {
   const agentText = items.find((i) => i.rel === 'AGENT.md' && i.text !== null)?.text ?? null;
   if (agentText !== null) {
     // OpenCode loads agents/skills natively, so drop AGENT.md's per-row spec links to
-    // plain names. Memory links stay RELATIVE: in the global layout AGENT.md and the
-    // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
-    // hermetic — no absolute path a doctor check would flag as an escape.
+    // plain names. Memory LINKS stay relative: in the global layout AGENT.md and the host
+    // store are siblings, so `memory/README.md` resolves from AGENT.md's own location and stays
+    // hermetic. The shared store is named in code spans only (`pathTokens`), never as a link
+    // target, which a doctor check would flag as an escape.
     const agentDest = path.join(cfgDir, 'AGENT.md');
     claimAndWrite(cfgDir, agentDest, 'AGENT.md', stripCapabilityLinks(agentText), owned);
   }

@@ -25,7 +25,7 @@
 <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Pin the question: which metric (wall time, p95 latency, peak memory, allocations,
    query count), under which workload, and what number would count as fixed.
 2. Take a baseline with the project's own tooling where it has some, run several

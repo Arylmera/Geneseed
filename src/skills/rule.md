@@ -37,7 +37,7 @@ re-derived. Then take exactly one branch.
    per the {{MEMORY}} convention, and **show the exact content, frontmatter
    included** — so a wrong inference is visible before it is written, not after.
 4. On the user's word, write the file and rebuild the index
-   (`geneseed learn --consolidate --memory <the {{DIR_MEMORY}}/ dir's path>`) so its line
+   (`geneseed learn --consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`) so its line
    lands in `topics/<topic>.md` and the `MEMORY.md` map recounts.
 
 ### Branch B — a standing rule
@@ -70,7 +70,7 @@ re-derived. Then take exactly one branch.
    rules into the {{ONTOLOGY}}, {{LAWS}}, or {{DOCTRINES}} files themselves: they are
    regenerated on every update and the edit would be silently lost.
 5. **Destination.** Scope decides the file: a rule that holds across all the user's
-   work goes to the *global* install's `user-rules.md`, a rule bound to this
+   work goes to the *global* install's `{{PATH_RULES}}`, a rule bound to this
    codebase to the project's. Tag it to match: `scope: project` — this repo, committable,
    binds the team; `scope: global` — every repository on the machine. `user` is still read
    as `global`. Read the target first ({{LAW:verify-before-asserting}} — the real current

@@ -14,10 +14,10 @@ import path from 'node:path';
 import { writeText } from '../lib/fs.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
-import { WIKI_NAMES } from '../lib/machine-dir.mjs';
-import { EXCLUDES_FILE } from '../hosts/hosts.mjs';
+import { WIKI_NAMES, renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
+import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { MEMORY_SEED } from '../hosts/memory-files.mjs';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Seeded stubs. Written once into the bundle and NEVER overwritten — each holds
@@ -283,6 +283,40 @@ export const ensureProfileStub = stubWriter(PROFILE_FILE, PROFILE_STUB);
  * since that is where the hook looks for it.
  */
 export const ensureExcludesStub = stubWriter(EXCLUDES_FILE, EXCLUDES_STUB);
+
+/**
+ * Create the machine tier and seed what is absent; every file is the user's once it exists, as a
+ * host's are. Nothing here enters a manifest: uninstall never touches the tier (D8). False when it
+ * cannot be created, and that is never fatal: the emit renders relative and the host layer serves.
+ */
+export function ensureSharedTier() {
+  try {
+    const tier = sharedPaths();
+    mkdirSync(tier.memory, { recursive: true });
+    mkdirSync(path.join(tier.notes, 'skill-notes'), { recursive: true });
+    mkdirSync(path.join(tier.notes, 'agent-notes'), { recursive: true });
+    ensureMemoryIndex(tier.memory);
+    ensureRulesStub(tier.root);
+    ensureProfileStub(tier.root);
+    ensureWikiStub(tier.root);
+    ensureExcludesStub(tier.root);
+    return true;
+  } catch (e) {
+    process.stderr.write(`[geneseed] WARN could not create the shared tier: ${e.message}; `
+      + 'this emit renders relative paths\n');
+    return false;
+  }
+}
+
+/**
+ * The root a global emit renders. Rendering and creating are two decisions: every global emit
+ * renders the same path, so `diff`'s temp render shows no false drift, and only a canonical one
+ * creates the tier. null, so relative paths, only when that creation failed or there is no home.
+ */
+export function sharedRootFor(cfgDir, host) {
+  const root = renderedSharedRoot();
+  return root !== null && (!isCanonical(cfgDir, host) || ensureSharedTier()) ? root : null;
+}
 
 /** `_build_render.ensure_bundle_gitignore`. */
 export const ensureBundleGitignore = stubWriter('.gitignore', BUNDLE_GITIGNORE);

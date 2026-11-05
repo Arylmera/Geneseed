@@ -42,7 +42,7 @@ import { printOut } from '../lib/fs.mjs';
 import { authoringProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
-  checkBuild, colorThemeProblems, renderedProblems, themeParityProblems,
+  checkBuild, colorThemeProblems, renderedPathNotes, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
 import { hostMatrixProblems, moduleMapProblems, scorecardProblems, shimProblems } from './checks-repo.mjs';
 import { NOTE, isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
@@ -260,6 +260,7 @@ export function doctorCollect({
   // configuration its owner chose, and doctor must not fail a legal configuration.
   problems = problems.concat(ran('openclaude_dual', 'OpenClaude dual harness',
     openclaudeDualHarnessNotes()));
+  problems = problems.concat(ran('shared_paths', 'Rendered shared paths', renderedPathNotes()));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));

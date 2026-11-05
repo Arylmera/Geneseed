@@ -28,6 +28,14 @@ When two instructions disagree, the higher one wins.
 5. **Mode** — chosen at build time ([Foreman mode](foreman-mode.md)). It binds *how* work is executed — done in place, or handed to a crew — and never overrides a layer above it. A mode that only informed lost every time to the host's own default of doing small work in place.
 6. **`PROFILE.md`** — who you are. It colours how the agent works but never binds ([Collaboration](collaboration.md)).
 
+### The shared tier
+
+A global install keeps what you teach it in one place for every host on the machine: `~/.config/geneseed/` (or `$XDG_CONFIG_HOME/geneseed/`). It holds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, the `memory/` store and `notes/`, where the self-improvement notes live. The first global emit creates it and seeds each file once. Only an install in its host's own config directory creates it: an emit into another directory, and the render `geneseed diff` makes, write the same paths into their text and create nothing.
+
+Your rules now come in layers, and the later layer wins: **project over host over shared**. A session reads the shared file first, then the host file, so a host or a project can narrow a machine-wide rule. All three stay in the place the list above gives `user-rules.md`, under the rules. `PROFILE.md` and the wiki manifest do not merge: a host file that is no longer its seed replaces the shared one.
+
+A global install's text names these locations as absolute paths. A project install keeps its relative paths and its own `memory/`. Geneseed grants no directory permission for the tier, so an agent write there follows your host's permission mode, as a write to `~/.claude/memory/` does. If the tier cannot be created, that emit renders relative paths and the host files serve as before. `geneseed doctor` adds a note when a carrier names another tier than the one in force, for example after `$XDG_CONFIG_HOME` moves. `geneseed rebuild-all` clears it.
+
 ### Doctrine packs
 
 {N_PACKS} packs ship, one file each under `src/doctrines/`:
