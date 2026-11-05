@@ -14,9 +14,10 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
-  substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, STRUCTURE,
+  substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, sourceGeneration, STRUCTURE,
 } from '../../js/build/render.mjs';
 import { build } from '../../js/build/bundle.mjs';
+import { sourceFingerprint } from '../../js/build/version.mjs';
 import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
   validateIsVendored, VENDORED_SKILL_DIRS,
@@ -2715,22 +2716,98 @@ test('knownRuleIds is every rule this checkout ships, in render order', () => {
   });
 });
 
+/** A cfg whose whole tree is `src`, so the real `themes/` has no say in a stamp. */
+const treeCfg = (src) => ({ ...makeCfg(), src, themes: `${src}-none`, pluginSrc: `${src}-none`, workflowSrc: `${src}-none` });
+
+/** Age every file past the settle window: a tree written just now is never shared, so a test of
+ * the stamp on a fresh tree would pass however blind the stamp was. */
+function settle(src) {
+  const old = new Date(Date.now() - 60_000);
+  for (const e of fs.readdirSync(src, { recursive: true, withFileTypes: true })) {
+    if (e.isFile()) fs.utimesSync(path.join(e.parentPath, e.name), old, old);
+  }
+}
+
 test('a render reads each source file once per cfg, and a new cfg sees an edit', () => {
-  // The source cache is keyed on the cfg OBJECT: one operation (an emit, a doctor pass) reads
-  // a partial once however many specs include it — but the web daemon renders in-process for
-  // days, so a fresh `makeCfg()` must see today's file. Both halves, or a process-wide cache
-  // (the obvious spelling) would pass the first and serve stale source forever.
+  // The tree is stamped once per cfg: one operation (an emit, a doctor pass) reads a partial once
+  // however many specs include it — but the web daemon renders in-process for days, so a fresh
+  // `makeCfg()` must see today's file. Both halves, or a process-wide cache (the obvious
+  // spelling) would pass the first and serve stale source forever.
   withDir((d) => {
     const src = path.join(d, 'src');
     fs.mkdirSync(src, { recursive: true });
     const f = path.join(src, 'x.md');
     fs.writeFileSync(f, 'first\n');
-    const cfg = { ...makeCfg(), src };
+    settle(src);
+    const cfg = treeCfg(src);
     assert.equal(renderFile(cfg, f, {}).trim(), 'first');
     fs.writeFileSync(f, 'second\n');
     assert.equal(renderFile(cfg, f, {}).trim(), 'first', 'the same cfg re-read its source');
-    assert.equal(renderFile({ ...makeCfg(), src }, f, {}).trim(), 'second',
+    assert.equal(renderFile(treeCfg(src), f, {}).trim(), 'second',
       'a new cfg was served the old text');
+  });
+});
+
+test('cfgs share what an unchanged tree yields, so 84 emits read it once', () => {
+  // The other half of the test above: `doctor --all` builds a cfg per emit, and a cache that
+  // dies with its cfg is the 35% of doctor CPU this exists to save. Nothing visible in the
+  // output tells the two apart, so the generation itself is what is compared.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, 'x.md'), 'first\n');
+    settle(src);
+    const generation = sourceGeneration(treeCfg(src));
+    assert.equal(sourceGeneration(treeCfg(src)), generation, 'a new cfg started over');
+    fs.writeFileSync(path.join(src, 'y.md'), 'added\n');
+    assert.notEqual(sourceGeneration(treeCfg(src)), generation, 'an added file went unseen');
+  });
+});
+
+test('a tree written just now is not shared, so a same-tick edit cannot hide', () => {
+  // On a coarse clock two same-size edits share a stamp. Only refusing to share a young tree
+  // keeps the second edit visible, and no stat of the file can.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, 'x.md'), 'first\n');
+    assert.notEqual(sourceGeneration(treeCfg(src)), sourceGeneration(treeCfg(src)), 'a young tree was shared');
+  });
+});
+
+test('an edit to a law reaches a file that cites it, whose own stat never moved', () => {
+  // A resolved text depends on the canon, not only on its own file. A key that stats the file
+  // being read passes every other test here and serves the daemon the old name of the rule.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    const law = path.join(src, 'laws', 'universal.md');
+    const citing = path.join(src, 'citing.md');
+    fs.mkdirSync(path.dirname(law), { recursive: true });
+    fs.writeFileSync(law, '### {{LAW:demo-rule}} Old Name\n\nBody.\n');
+    fs.writeFileSync(citing, 'See {{LAW:demo-rule}}.\n');
+    settle(src);
+    assert.equal(renderFile(treeCfg(src), citing, {}).trim(), 'See *Old Name*.');
+    fs.writeFileSync(law, '### {{LAW:demo-rule}} A Longer Name\n\nBody.\n');
+    assert.equal(renderFile(treeCfg(src), citing, {}).trim(), 'See *A Longer Name*.');
+  });
+});
+
+test('the fingerprint moves with a same-size edit, and stays put without one', () => {
+  // The stat stamp decides whether the tree is hashed again at all, so a stamp blind to an edit
+  // would freeze the version every install is compared against. Same size, so only the
+  // timestamps can tell; set well in the past, so the settle window cannot decide it.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    const f = path.join(src, 'x.md');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(f, 'aaaa\n');
+    settle(src);
+    const before = sourceFingerprint(treeCfg(src));
+    assert.equal(sourceFingerprint(treeCfg(src)), before, 'nothing changed, yet it moved');
+    fs.writeFileSync(f, 'bbbb\n');
+    const later = new Date(Date.now() - 30_000);
+    fs.utimesSync(f, later, later);
+    assert.notEqual(sourceFingerprint(treeCfg(src)), before, 'the edit went unseen');
   });
 });
 

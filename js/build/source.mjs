@@ -199,6 +199,7 @@ export function ruleSummaries(src = SRC) {
  */
 const AUTHOR_NOTE_RE = /[ \t]*<!--[ \t]*note:[\s\S]*?-->[ \t]*\r?\n?/g;
 export function stripAuthorNotes(text) {
+  if (!text.includes('note:')) return text;   // most files: skips the blanking and the regex scan
   const masked = blankCodeSpans(text);
   const ranges = [...masked.matchAll(AUTHOR_NOTE_RE)]
     .map((m) => [m.index, m.index + m[0].length]);

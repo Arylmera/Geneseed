@@ -30,7 +30,7 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText } from '../lib/fs.mjs';
+import { isDir, readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
@@ -281,18 +281,60 @@ export function lawsPointer(theme, lawsPrefix = '') {
 }
 
 /**
- * SOURCE TEXT, READ ONCE PER `cfg`. One emit renders the same partials over and over — the
- * self-improvement footer is included by ~50 specs — and `doctor --all` repeats that per theme:
- * 91% of its file reads were repeats. Keyed on the `cfg` OBJECT, not the process: the web
- * daemon renders in-process for days, and `makeCfg()` is called per operation, so each request
- * sees today's source. Only files under `cfg.src` — the one tree nothing in a render writes to.
+ * WHAT THE SOURCE TREE YIELDS, SHARED UNTIL IT CHANGES. One emit renders the same partials over
+ * and over — the self-improvement footer is included by ~50 specs — and `doctor --all` repeats
+ * that across 84 emits, each with its own `makeCfg()`, so a cache per `cfg` object still read,
+ * stripped and resolved everything 84 times. A cache per process is no answer either: the web
+ * daemon renders in-process for days, and each request must see today's source.
+ *
+ * So a generation lives as long as the tree's stamp. The stamp covers the WHOLE tree, never the
+ * one file being read, because a resolved text depends on other files: rename a law and every
+ * file citing it renders differently with its own mtime untouched. Paths are in it, so an added
+ * or deleted file moves it, and so is `cfg.root`, which `sourceFingerprint` hashes against.
+ *
+ * Stamped once per `cfg`: the source cannot change under one operation, and a stat walk is what
+ * each operation now pays instead of the reads. The stamp is taken BEFORE anything is read, so
+ * an edit landing mid-operation costs a repeat read next time, never an old text kept.
+ *
+ * A tree written in the last `SETTLE_MS` is never shared, the way git distrusts a racy index
+ * entry: a second edit of the same size inside one timestamp tick would leave the stamp as it was,
+ * and a tick is 2 s on FAT. A shared stamp is therefore always older than any later edit's.
  */
-const SRC_TEXT = new WeakMap();
+const SETTLE_MS = 3_000;
+const GENERATIONS = new Map();     // cfg.src -> the latest generation: one per tree, never a history
+const GENERATION_OF = new WeakMap();
+export function sourceGeneration(cfg) {
+  let generation = GENERATION_OF.get(cfg);
+  if (generation) return generation;
+  const { stamp, newest } = sourceStamp(cfg);
+  generation = GENERATIONS.get(cfg.src);
+  if (generation?.stamp !== stamp) {
+    generation = { stamp, texts: new Map() };
+    if (Date.now() - newest > SETTLE_MS) GENERATIONS.set(cfg.src, generation);
+  }
+  GENERATION_OF.set(cfg, generation);
+  return generation;
+}
+
+function sourceStamp(cfg) {
+  const lines = [cfg.root];
+  let newest = 0;
+  for (const root of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {
+    if (!isDir(root)) continue;
+    for (const p of sortedSourceFiles(root)) {
+      const { size, mtimeMs, ctimeMs } = statSync(p);
+      newest = Math.max(newest, mtimeMs);
+      lines.push(`${p}\0${size}\0${mtimeMs}\0${ctimeMs}`);
+    }
+  }
+  return { stamp: lines.join('\n'), newest };
+}
+
+/** Only files under `cfg.src` — the one tree nothing in a render writes to. */
 function readSource(cfg, p) {
   const src = cfg && cfg.src ? normcase(path.resolve(cfg.src)) + path.sep : null;
   if (!src || !normcase(p).startsWith(src)) return readText(p);
-  let seen = SRC_TEXT.get(cfg);
-  if (!seen) SRC_TEXT.set(cfg, (seen = new Map()));
+  const seen = sourceGeneration(cfg).texts;
   let text = seen.get(p);
   // Rule ids and credits resolve here, once per file, so every stage after sees the addressed form.
   if (text === undefined) seen.set(p, (text = resolveCredits(resolveRuleIds(readText(p), cfg.src), cfg.src)));
