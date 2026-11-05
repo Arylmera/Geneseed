@@ -137,9 +137,15 @@ function copyFiles(names, srcDir, destDir, ctx, tally) {
   return pairs;
 }
 
-/** Is `tierFile` a link to `hostFile`? */
-function readsThrough(tierFile, hostFile) {
-  return !!lstatSync(tierFile, { throwIfNoEntry: false })?.isSymbolicLink() && realOf(tierFile) === realOf(hostFile);
+/**
+ * Would replacing `hostFile` replace what the tier reads? Real paths, because a link anywhere on
+ * the way counts: the tier file, or a folder above it. The one safe case is a host link to a tier
+ * file that is no link: the rename takes the link, and the tier file stays.
+ */
+function isTierFile(hostFile, tierFile) {
+  if (realOf(hostFile) !== realOf(tierFile)) return false;
+  const isLink = (p) => lstatSync(p).isSymbolicLink();
+  return !isLink(hostFile) || isLink(tierFile);
 }
 
 /** A link the fold is about to move out from under would dangle, so it stops the move. */
@@ -400,16 +406,23 @@ function withoutRules(text, merged) {
  * host" holds even if the shared file later says the same.
  *
  * The old file is copied aside, not moved: the host file must exist at every moment, because the
- * rules it keeps bind through it. A host file linked to the shared one needs no guard: the rename
- * replaces the link, and the shared file keeps its rules. The other way round the shared file IS
- * the host file, and rewriting it would take the merged rules out of force.
+ * rules it keeps bind through it. When the shared file IS the host file (`isTierFile`), rewriting
+ * it would take the merged rules out of force.
+ *
+ * A FILE THAT IS NOT UTF-8 IS LEFT WHOLE, and no rule in it is read: the text below has each bad
+ * byte replaced, so a rewrite or a draft would change a rule the user never touched.
  */
 function foldRules(cfgDir, ctx) {
-  const { host, shared, dryRun } = ctx;
+  const { host, shared, dryRun, report } = ctx;
   const file = path.join(cfgDir, path.basename(shared.rules));
-  if (!isFile(file) || readsThrough(shared.rules, file)) return;
+  if (!isFile(file) || isTierFile(file, shared.rules)) return;
   const { items } = readFoldState(shared);
-  const text = readFileSync(file, 'utf8');
+  const raw = readFileSync(file);
+  const text = raw.toString('utf8');
+  if (!raw.equals(Buffer.from(text))) {
+    report.notices.push(`${file} is not UTF-8, so its rules stay there and bind; save it as UTF-8 to fold them`);
+    return;
+  }
   const [rules] = parseRules(text);
   const held = new Set(parseRules(isFile(shared.rules) ? readFileSync(shared.rules, 'utf8') : '')[0].map(ruleText));
   const lines = splitLines(text);

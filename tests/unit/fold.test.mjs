@@ -780,7 +780,8 @@ test('the shared file chosen: with the host file moved aside, the next emit seed
 
 test('the rule Rite carries the approval flow, and the ledger states the fold reads', () => {
   const flow = fs.readFileSync(path.join(ROOT, 'src', 'skills', 'rule', 'approve.md'), 'utf8');
-  for (const word of ['.fold-state.json', '`approved`', '`rejected`', '## Renumbered', 'user-rules-retired.md']) {
+  for (const word of ['.fold-state.json', '`approved`', '`rejected`', '## Renumbered', 'user-rules-retired.md',
+    String.raw`'<kind>\0<host>\0'`, 'installs.json']) {
     assert.ok(flow.includes(word), word);
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'src', 'skills', 'rule.md'), 'utf8'), /\(rule\/approve\.md\)/);
@@ -855,6 +856,46 @@ test('review 2: a tier rules file linked to the host file keeps every rule', () 
   fs.symlinkSync(path.join(cfg, 'user-rules.md'), shared.rules, 'file');
   assert.deepEqual(fold().failed, []);
   assert.equal(read(shared.rules), rules);
+}));
+
+test('review 3: a tier root junctioned onto the host folder is one file: no rule leaves it', () => world(({ cfg, shared, fold }) => {
+  const rules = '# User rules\n\n## R1 — Mine\nBe terse.\n';
+  fs.rmSync(shared.root, { recursive: true });
+  fs.symlinkSync(cfg, shared.root, 'junction');
+  fs.writeFileSync(path.join(cfg, 'user-rules.md'), rules);
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(cfg, 'user-rules.md'), rules);
+  assert.ok(!exists(cfg, 'archived-user-rules.md'));
+}));
+
+test('review 3: a host link stays when the tier reads through it, by folder or by a link of its own', () => world(({ home, cfg, shared, fold }) => {
+  const rules = '# User rules\n\n## R1 — Mine\nBe terse.\n';
+  const real = path.join(home, 'rules-elsewhere.md');
+  fs.writeFileSync(real, rules);
+  const hostFile = path.join(cfg, 'user-rules.md');
+  fs.rmSync(hostFile);
+  fs.symlinkSync(real, hostFile, 'file');
+  fs.rmSync(shared.rules);
+  fs.symlinkSync(hostFile, shared.rules, 'file');
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(shared.rules), rules, 'through a link of its own');
+  fs.rmSync(shared.root, { recursive: true });
+  fs.symlinkSync(cfg, shared.root, 'junction');
+  assert.deepEqual(fold().failed, []);
+  assert.equal(read(shared.rules), rules, 'through the folder');
+}));
+
+test('review 3: a host file that is not UTF-8 keeps every byte and every rule, and says so', () => world(({ cfg, shared, fold }) => {
+  fs.writeFileSync(shared.rules, '## R1 — Mine\nBe terse.\n');
+  const bytes = Buffer.concat([Buffer.from('## R1 — Mine\nBe terse.\n\n## R2 — Caf'), Buffer.from([0xe9]), Buffer.from('\nBe kind.\n')]);
+  fs.writeFileSync(path.join(cfg, 'user-rules.md'), bytes);
+  const dry = fold({ dryRun: true });
+  const r = fold();
+  assert.deepEqual(counts(r), ZERO);
+  assert.deepEqual(r.notices, [`${path.join(cfg, 'user-rules.md')} is not UTF-8, so its rules stay there and bind; save it as UTF-8 to fold them`]);
+  assert.deepEqual(dry.notices, r.notices);
+  assert.ok(fs.readFileSync(path.join(cfg, 'user-rules.md')).equals(bytes));
+  assert.ok(!exists(shared.draft), 'a draft would carry the text with its byte replaced');
 }));
 
 test('review 2: a tier fact linked to its host fact stops the move, so the link cannot dangle', () => world(({ cfg, shared, fold }) => {
