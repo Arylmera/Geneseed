@@ -185,10 +185,23 @@ describe('Ledger KPI helpers', () => {
 })
 
 describe('Ledger KPI cards', () => {
+  // A card's sparkline stretches to the card; at its own 96:22 ratio it sat small in the middle.
+  it('stretch their sparklines to the card', async () => {
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const calls = await screen.findByRole('region', { name: 'Skill and agent calls' })
+    const gates = screen.getByRole('region', { name: 'Gate asks · 30 days' })
+    for (const card of [calls, gates]) {
+      expect(card.querySelector('.spark-fill svg').getAttribute('preserveAspectRatio')).toBe('none')
+      expect(card.querySelector('.spark-fill circle')).toBeNull()
+      expect(card.querySelector('.spark-fill i.spk-end').style.top).toMatch(/%$/)
+    }
+  })
+
   it('render the worst root file, the cost range, the call count and the gate asks', async () => {
     render(<Ledger overview={null} onAction={vi.fn()} />)
     const root = within(await screen.findByRole('region', { name: 'Root file vs ceiling' }))
-    expect(await root.findByText('≈8.5k / ≈10.0k tokens')).toBeTruthy()
+    expect(await root.findByText('≈8.5k tokens')).toBeTruthy()
+    expect(root.getByText('of ≈10.0k ceiling')).toBeTruthy()
     expect(root.getByText('bob · global')).toBeTruthy()
     expect(
       root.getByRole('img', {

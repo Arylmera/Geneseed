@@ -103,7 +103,7 @@ export function LibRow({ item, isOpen, href, children }) {
     >
       <span className="lr-name">
         {item.title || item.name}
-        <StatusBadge status={item.status} />
+        <StatusBadge status={item.status} compact />
         {item.kit ? <KitBadge name={item.kit} /> : null}
         {children}
       </span>
