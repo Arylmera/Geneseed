@@ -174,19 +174,21 @@ streams the output of background jobs and keeps their history across reloads.
   secrets gate, the done gate and the deletion gate (`--no-secrets-gate`, `--no-done-gate`,
   `--no-deletion-gate`; *Enforced by* reads *Gate off* while one is off) — flipping one asks,
   then rebuilds the install once; the other Rules read *no gate*. The ownership gate belongs
-  to no Rule, so its switch (`--no-ownership-gate`) has its own *Ownership gate* row in the
-  Ethos band, right after the Ownership section, and works the same way. That row exists only
-  in the console: it has no number and does not expand, it counts in *Gated* but not as a Rule
-  or a section, it shows only where an install can be rebuilt, and the Ethos rank's pill counts
-  it while it is off. Every tab shows it; unlike the sections around it, it answers *Gated* and
-  the filter. The Ownership section itself stays text only.
+  to no Rule, so its switch (`--no-ownership-gate`) sits inside the Ethos band's *Ownership*
+  row and works the same way. Closed, the row reads *Always* (the section's text binds whatever
+  the gate does) and *Hook gate* or *Gate off*. Open, it shows the text, then a gate line with
+  the gate's asks and the switch. That line exists only in the console and only where an install
+  can be rebuilt: with no install the row reads *Instruction*. The gate counts in *Gated* but
+  not as a Rule or a section, and the Ethos rank's pill counts it while it is off. Every tab,
+  view and filter shows the row, like the sections around it.
   A precedence ladder heads the page (a state pill per rank; ranks 5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes
   collect in a sticky *Unapplied changes* bar that holds Revert and the page's one Apply.
-  Every row but the *Ownership gate* row expands to its full body, lazily fetched. The rail
+  Every row expands to its full body, lazily fetched. The rail
   entry is labelled *Constitution* while the route, the id and the badge key stay `laws`; deep links
   are `#/item/law/ont:telos`, `#/item/law/IV`, `#/item/law/process.5` and `#/item/law/ownership` — address
   shapes that cannot collide, because a slug carries a colon no numeral has, a doctrine
-  address carries a dot, and `ownership`, the gate's console-only row, is a word no rule uses.
+  address carries a dot, and `ownership`, which opens the Ownership row at its gate, is a word
+  no rule uses.
 - **Library** (`#/library`) — browse the content that has no tab of its own: **Memory ·
   Notebook · Knowledge** (the wiki chip, which also carries the two setup manifests).
   Constitution, Skills and Agents each have their own rail entry instead. Drill into a section, then an item, to read its

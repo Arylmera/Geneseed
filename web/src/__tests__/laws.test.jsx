@@ -700,84 +700,133 @@ describe('Constitution page — the deletion gate switch', () => {
 })
 
 // ---------------------------------------------------------------------------------------------
-// The ownership gate has no Rule (`--no-ownership-gate`, `law: null`). The switch is split from
-// the Credo's Ownership section, which stays text only: it gets a row of its own right after that
-// section, in the Ethos band, which exists only in the console. Same click, confirm and rebuild
-// as a law's switch. Unlike the sections around it, the row obeys the view and the text filter.
+// The ownership gate has no Rule (`--no-ownership-gate`, `law: null`), so its switch lives in the
+// Credo's Ownership row: the closed row states the gate, and the open row ends with a gate line
+// that exists only in the console. Same click, confirm and rebuild as a law's switch. The row is
+// an Ethos section, so no tab, view or filter hides it; the gate still counts in Gated, and as a
+// match for the text filter. `selected` is what a hash gives the page: a row click only moves it.
 
 const ONT_OWN = { name: 'ont:ownership', title: 'Ownership', desc: '', tier: 'ontology' }
-const ownRow = (c) => c.querySelector('[data-addr="ownership"]')
+const ownRow = (c) => c.querySelector('[data-addr="ont:ownership"]')
+const gateLine = (c) => c.querySelector('.law-gate')
 const ownSwitch = (c) => c.querySelector('[aria-label="Ownership gate"]')
 const pillsOf = (c) => [...c.querySelectorAll('.tier-pill')].map((p) => p.textContent)
+const openPage = (install, onAction = () => {}) => (
+  <Laws selected="ownership" overview={{ install }} onAction={onAction} />
+)
 
-describe('Constitution page — the ownership gate row', () => {
+describe('Constitution page — the Ownership row and its gate', () => {
   beforeEach(() => {
     api.catalog.mockResolvedValue({ section: 'laws', items: [...ONT, ONT_OWN, ...INV, ...DOC] })
     askConfirm.mockClear()
     api.item.mockClear()
   })
 
-  it('renders its own armed row in the Ethos band, with no number and nothing to expand', async () => {
+  // One row, in the Ethos band: each address in page order, up to the first law. Closed, it shows
+  // the gate's state but holds no switch.
+  it('renders one closed row with a chevron, Always and Hook gate, and no gate line', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    expect(ownRow(container).contains(ownSwitch(container))).toBe(true)
-    expect(ownSwitch(container).getAttribute('aria-checked')).toBe('true')
-    expect(ownRow(container).querySelector('.law-name').textContent).toBe('Ownership gate')
-    expect(ownRow(container).querySelector('.law-no').textContent).toBe('')
-    expect(ownRow(container).querySelector('.law-status').textContent).toBe('Active')
-    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
-    expect(ownRow(container).querySelector('[aria-expanded]')).toBeNull()
-    // It follows the Credo's Ownership section, above the toolbar: the Ethos band, not the rules
-    // band. Each row's address, in page order, up to the first law.
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     const rows = [...container.querySelectorAll('[data-addr]')].map((r) => r.dataset.addr)
-    expect(rows.slice(0, 7)).toEqual([
+    expect(rows.slice(0, 6)).toEqual([
       'ont:telos',
       'ont:evidence',
       'ont:decisions',
       'ont:conduct',
       'ont:ownership',
-      'ownership',
       'I',
     ])
+    expect(ownRow(container).querySelector('.law-name').textContent).toBe('Ownership')
+    expect(ownRow(container).querySelector('.law-no .x')).toBeTruthy()
+    expect(ownRow(container).querySelector('.law-status').textContent).toBe('Always')
+    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+    expect(ownRow(container).getAttribute('aria-expanded')).toBe('false')
+    expect(gateLine(container)).toBeNull()
+    expect(ownSwitch(container)).toBeNull()
+  })
+
+  // The Credo text binds whatever the gate does, so only the enforcement changes.
+  it('shows Gate off on the closed row, with the status still Always', async () => {
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
+    expect(ownRow(container).querySelector('.law-status').textContent).toBe('Always')
+    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
+    expect(ownRow(container).getAttribute('aria-label')).toBe('Ownership, Always, Gate off')
+  })
+
+  it('opens to the Credo text, then the gate line with its asks, description and switch', async () => {
+    const { container } = render(
+      <Laws
+        selected="ont:ownership"
+        overview={{ install: { ...INSTALL, ownershipGate: true } }}
+        setup={{ gates: { asks: { ownership: 4 }, total: 4, standing_down: [] } }}
+        onAction={() => {}}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    expect(api.item).toHaveBeenCalledWith('law', 'ont:ownership')
+    const panel = container.querySelector('.law-expand')
+    expect(panel.lastElementChild).toBe(gateLine(container))
     expect(
-      ownRow(container).compareDocumentPosition(container.querySelector('.law-toolbar')) &
+      screen.getByText(/The canonical text/).compareDocumentPosition(gateLine(container)) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+    expect([...gateLine(container).querySelector('.law-name').children].map((e) => e.textContent))
+      // The name, the asks, the description; the asks are the gate's, never the closed row's.
+      .toEqual([
+        'Ownership gate',
+        '4 asks',
+        'Stops the first write in an undecided application, once per session.',
+      ])
+    expect(ownRow(container).querySelector('.law-asks')).toBeNull()
+    expect(gateLine(container).contains(ownSwitch(container))).toBe(true)
+    expect(ownSwitch(container).getAttribute('role')).toBe('switch')
+    expect(ownSwitch(container).getAttribute('aria-checked')).toBe('true')
   })
 
-  // A section can sit anywhere in the band, so the row follows it, not the band's end.
-  it('stays right after the Ownership section when more sections follow it', async () => {
-    api.catalog.mockResolvedValue({
-      section: 'laws',
-      items: [ONT_OWN, ...ONT, ...INV, ...DOC],
-    })
-    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    const rows = [...container.querySelectorAll('[data-addr]')].map((r) => r.dataset.addr)
-    expect(rows.slice(0, 3)).toEqual(['ont:ownership', 'ownership', 'ont:telos'])
+  // The switch must not wait for the Credo text, or fail with it.
+  it('keeps the gate line when the Credo text fails to load', async () => {
+    api.item.mockRejectedValueOnce(new Error('daemon gone'))
+    const { container } = render(openPage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('daemon gone'))
+    expect(ownSwitch(container)).toBeTruthy()
   })
 
-  // A catalog with no Ethos tier at all (an older daemon) must not lose the switch: the band
-  // then holds the row alone.
-  it('keeps the row when the catalog has no Ethos section', async () => {
-    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, ...DOC] })
-    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    expect(container.querySelector('.band-head .tier-h').textContent).toBe('Ethos')
+  // No install at all: no gate to read, so the row says only what the text does.
+  it('has no gate line with no install to rebuild, and reads Instruction', async () => {
+    const { container } = render(
+      <Laws
+        selected="ownership"
+        setup={{ gates: { asks: { ownership: 2 }, total: 2, standing_down: [] } }}
+      />,
+    )
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    expect(gateLine(container)).toBeNull()
+    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Instruction')
+    expect(document.querySelector('.gate-name').textContent).toBe('Ownership gate')
   })
 
-  it('leaves the Credo row text only, whatever the gate says', async () => {
-    const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    const credo = container.querySelector('[data-addr="ont:ownership"]')
-    expect(credo.querySelector('[role="switch"]')).toBeNull()
-    expect(credo.querySelector('.law-status').textContent).toBe('Always')
-    expect(credo.querySelector('.law-enf').textContent).toBe('Instruction')
+  // An install the page may not rebuild yet: the switch cannot act, but the state is known.
+  it('has no gate line while it cannot act, and still reads the install it knows', async () => {
+    const { container } = render(
+      <Laws selected="ownership" overview={{ install: { ...INSTALL, ownershipGate: false } }} />,
+    )
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    expect(gateLine(container)).toBeNull()
+    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
+  })
+
+  // The switch needs its section. Only a daemon older than the console can send no section.
+  it('has no gate line when the catalog has no Ownership section', async () => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...ONT, ...INV, ...DOC] })
+    const { container } = render(openPage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(container.querySelector('[data-addr="II"]')).toBeTruthy())
+    expect(ownSwitch(container)).toBeNull()
   })
 
   it('a confirmed click asks, then rebuilds once with the gate off', async () => {
     const onAction = vi.fn()
-    const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }, onAction))
+    const { container } = render(openPage({ ...INSTALL, ownershipGate: true }, onAction))
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
     fireEvent.click(ownSwitch(container))
     await answered()
@@ -790,11 +839,9 @@ describe('Constitution page — the ownership gate row', () => {
 
   it('re-arming asks to re-arm, and rebuilds with the gate on', async () => {
     const onAction = vi.fn()
-    const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }, onAction))
+    const { container } = render(openPage({ ...INSTALL, ownershipGate: false }, onAction))
     await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
     expect(ownSwitch(container).getAttribute('aria-checked')).toBe('false')
-    expect(ownRow(container).querySelector('.law-status').textContent).toBe('Off')
-    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
     fireEvent.click(ownSwitch(container))
     await answered()
     expect(askConfirm.mock.calls[0][0]).toMatch(/Re-arm the ownership gate/)
@@ -802,31 +849,44 @@ describe('Constitution page — the ownership gate row', () => {
     expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, ownershipGate: true }]])
   })
 
-  // The rungs by rank: Dictates, Your rules, Ethos, Doctrines. The row sits in the Ethos band, so
+  // A row toggle moves the hash, so a switch click that bubbled to one would show here.
+  it('a click on the switch leaves the dropdown open', async () => {
+    window.location.hash = '#/item/law/ownership'
+    const { container } = render(openPage({ ...INSTALL, ownershipGate: true }))
+    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    fireEvent.click(ownSwitch(container))
+    await answered()
+    expect(askConfirm).toHaveBeenCalledTimes(1)
+    expect(window.location.hash).toBe('#/item/law/ownership')
+    expect(ownRow(container).getAttribute('aria-expanded')).toBe('true')
+    expect(gateLine(container)).toBeTruthy()
+  })
+
+  // The rungs by rank: Dictates, Your rules, Ethos, Doctrines. The gate sits in the Ethos band, so
   // that rung warns, once; the Dictates rung counts laws alone.
   it('warns on the Ethos rung, counted once, and never on the Dictates rung', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     expect(pillsOf(container).slice(0, 3)).toEqual(['always', 'yours', '1 gate off'])
   })
 
   it('reads "always" on both rungs while armed', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     expect(pillsOf(container).slice(0, 3)).toEqual(['always', 'yours', 'always'])
   })
 
   it('stays apart from a law gate that is off: each rung counts its own', async () => {
     const { container } = render(gatePage({ ...INSTALL, secretsGate: false, ownershipGate: false }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     expect(pillsOf(container).slice(0, 3)).toEqual(['1 gate off', 'yours', '1 gate off'])
   })
 
-  // A switch, not a rule: INV holds 3 laws and the band 5 sections, and the row adds to neither
+  // A switch, not a rule: INV holds 3 laws and the band 5 sections, and the gate adds to neither
   // rung's line nor the Dictates tab. Gated is about hooks, so it is there.
-  it('counts as no rule or section, and shows in the Gated view while armed', async () => {
+  it('counts as no rule or section, and the Gated view keeps the row while armed', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     expect(container.querySelector('.ladder').textContent).toContain('3 active')
     expect(container.querySelector('.ladder').textContent).toContain('5 sections')
     expect(screen.getByRole('button', { name: 'Dictates 3' })).toBeTruthy()
@@ -835,11 +895,11 @@ describe('Constitution page — the ownership gate row', () => {
     expect(container.querySelector('[data-addr="II"]')).toBeNull()
   })
 
-  // The Ethos band sits above the tabs, so every tab shows the row, and Gated counts it on each:
-  // the Dictates tab adds laws I and III to it, the Doctrines tab process.5.
+  // The Ethos band sits above the tabs, so every tab shows the row, and Gated counts the gate on
+  // each: the Dictates tab adds laws I and III to it, the Doctrines tab process.5.
   it('shows under every tab, and counts in Gated on each', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /^Dictates/ }))
     expect(ownRow(container)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Gated 3' })).toBeTruthy()
@@ -848,96 +908,91 @@ describe('Constitution page — the ownership gate row', () => {
     expect(screen.getByRole('button', { name: 'Gated 2' })).toBeTruthy()
   })
 
-  it('leaves the Gated view while off, as a switched-off law does', async () => {
+  // Off, a hook enforces nothing, so Gated stops counting it: Dictates I and III, and process.5.
+  // The row stays, as the sections around it do, and says Gate off.
+  it('leaves the Gated count while off, and the row stays', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
-    expect(ownRow(container)).toBeNull()
-    // The sections around it stay: the view narrows the row, never the character.
-    expect(container.querySelector('[data-addr="ont:ownership"]')).toBeTruthy()
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Gated 3' }))
+    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
   })
 
-  it('answers the text filter, which the sections around it ignore', async () => {
+  // The switch rebuilds at once, so it never stages: Changed has nothing of it to count.
+  it('counts nothing in Changed, and the view keeps the row', async () => {
+    const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Changed 0' }))
+    expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
+  })
+
+  it('stays through the text filter, and the gate counts as a match', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
-    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'Sealed' } })
-    expect(ownRow(container)).toBeNull()
-    expect(container.querySelector('[data-addr="ont:ownership"]')).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'ownership gate' } })
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
+    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'nothing-at-all' } })
     expect(ownRow(container)).toBeTruthy()
-    // The row is the match, so the empty state must not deny it from under it.
+    expect(screen.getByText('No matching rules')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Filter rules'), { target: { value: 'ownership gate' } })
+    // The gate is the match, so the empty state must not deny it from under its row.
     expect(screen.queryByText('No matching rules')).toBeNull()
   })
 
-  // Unfiltered, the row is no content of a tier: a tier with nothing in it still says so.
+  // Unfiltered, the gate is no content of a tier: a tier with nothing in it still says so.
   it('leaves an empty tier its empty state', async () => {
     api.catalog.mockResolvedValue({ section: 'laws', items: [...ONT, ONT_OWN, ...INV] })
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     expect(ownRow(container)).toBeTruthy()
     expect(screen.getByText('Nothing in this tier')).toBeTruthy()
   })
 
-  // The ledger keys it `ownership`: the card names the row, reads it off, and lands on it from a
-  // view that hides it. No tab hides it, so the jump leaves the tab alone. The row has no catalog
-  // item, so the jump must fetch nothing.
-  it('the Gate asks card names the row, reads it off, and jumps to it', async () => {
+  // The ledger keys it `ownership`: the card names the gate and reads it off. The jump keeps that
+  // address in the hash, and the page opens the Ownership row for it, so the gate line shows. No
+  // tab or view hides the row, so the jump leaves both alone.
+  it('a jump from the Gate asks card opens the row, shows the gate line, and lights it', async () => {
     window.location.hash = '#/laws'
-    const { container } = render(
+    const page = (selected) => (
       <Laws
+        selected={selected}
         overview={{ install: { ...INSTALL, ownershipGate: false } }}
         setup={{ gates: { asks: { ownership: 2, 'law-1': 1 }, total: 3, standing_down: [] } }}
         onAction={() => {}}
-      />,
+      />
     )
-    await waitFor(() => expect(ownSwitch(container)).toBeTruthy())
+    const { container, rerender } = render(page())
+    await waitFor(() => expect(ownRow(container)).toBeTruthy())
     const entry = () => document.querySelectorAll('.gate-row')[1]
     expect(entry().querySelector('.gate-name').textContent).toBe('Ownership gate')
     expect(entry().querySelector('.off').textContent).toBe('off · opencode global')
-    expect(ownRow(container).querySelector('.law-asks').textContent).toBe('2 asks')
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
-    expect(ownRow(container)).toBeNull()
+    expect(gateLine(container)).toBeNull()
     fireEvent.click(entry())
     expect(window.location.hash).toBe('#/item/law/ownership')
-    expect(ownRow(container)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^Doctrines/ }).getAttribute('aria-pressed')).toBe(
-      'true',
-    )
-    expect(api.item).not.toHaveBeenCalled()
+    rerender(page('ownership'))
+    await waitFor(() => expect(ownRow(container).classList.contains('law-flash')).toBe(true))
+    expect(ownRow(container).getAttribute('aria-expanded')).toBe('true')
+    expect(gateLine(container).querySelector('.law-asks').textContent).toBe('2 asks')
+    expect(ownSwitch(container)).toBeTruthy()
+    expect(api.item).toHaveBeenCalledWith('law', 'ont:ownership')
+    const pressed = (name) => screen.getByRole('button', { name }).getAttribute('aria-pressed')
+    expect(pressed(/^Doctrines/)).toBe('true')
+    expect(pressed(/^Gated/)).toBe('true')
   })
 
-  it('has no row at all with no install to rebuild, and the card still names the gate', async () => {
-    const { container } = render(
-      <Laws setup={{ gates: { asks: { ownership: 2 }, total: 2, standing_down: [] } }} />,
-    )
-    await waitFor(() => expect(container.querySelector('[data-addr="II"]')).toBeTruthy())
-    expect(ownRow(container)).toBeNull()
-    expect(document.querySelector('.gate-name').textContent).toBe('Ownership gate')
-  })
-
-  // The row needs the install, so on a direct link it can arrive after the catalog: the page must
-  // look for it again then, or the link lands nowhere.
-  it('a deep link scrolls to the row when the overview lands after the catalog', async () => {
+  // `#/item/law/ownership` is also the Overview's link: it must find the row by its section.
+  it('a deep link to the gate scrolls to the Ownership row', async () => {
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll
+    const top = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ top: 0, bottom: 10 })
     try {
-      const { container, rerender } = render(<Laws selected="ownership" onAction={() => {}} />)
-      await waitFor(() => expect(container.querySelector('[data-addr="II"]')).toBeTruthy())
-      await act(async () => new Promise(requestAnimationFrame))
-      expect(ownRow(container)).toBeNull()
-      expect(scroll).not.toHaveBeenCalled()
-      rerender(
-        <Laws
-          selected="ownership"
-          overview={{ install: { ...INSTALL, ownershipGate: true } }}
-          onAction={() => {}}
-        />,
-      )
+      const { container } = render(openPage({ ...INSTALL, ownershipGate: true }))
       await waitFor(() => expect(scroll).toHaveBeenCalled())
       expect(scroll.mock.contexts[0]).toBe(ownRow(container))
     } finally {
+      top.mockRestore()
       delete Element.prototype.scrollIntoView
     }
   })
@@ -1187,7 +1242,7 @@ describe('Constitution page — themed tier nouns', () => {
 
 describe('Constitution page — the ladder layout', () => {
   // Gated: a hook enforces the row now. In the fixture that is laws I and III, process.5 and the
-  // ownership gate's own row; law II is text-only, no craft rule has a hook, and ops.2's root-scan
+  // ownership gate; law II is text-only, no craft rule has a hook, and ops.2's root-scan
   // hook goes with its pack, which this install does not build in.
   it('narrows to the hook-gated rules, and back with a second click', async () => {
     const { container } = render(withInstall())

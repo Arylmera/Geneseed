@@ -374,7 +374,7 @@ export function apiOverview(state) {
     try {
       if (samePath(viewCfg(host, scope, root), state.target)) {
         // `deletionGate`/`secretsGate`/`doneGate`/`ownershipGate`: the gate switches, for the
-        // Constitution page's toggles on rows IV, I, III and the console-only Ownership gate row.
+        // Constitution page's toggles on rows IV, I, III and inside the Credo's Ownership row.
         install = { host, scope, path: root, footprint: footprintOfDir(root),
           ...gatesOfDir(root, host) };
         break;
