@@ -1256,6 +1256,50 @@ test('a registry write that stays refused is reported, and never breaks the buil
   }));
 });
 
+test('a registry that cannot be read is never overwritten', () => {
+  // Read as empty, a refused read made the next write save only its own root over every install.
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    const other = path.join(d, 'other');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.mkdirSync(other);
+    fs.writeFileSync(path.join(other, '.geneseed-emit'), 'claude\n', 'utf8');
+    const rows = `${JSON.stringify([other])}\n`;
+    fs.writeFileSync(file, rows, 'utf8');
+
+    const stderr = process.stderr.write;
+    const read = fs.readFileSync;
+    let said = '';
+    process.stderr.write = (s) => { said += s; return true; };
+    fs.readFileSync = (p, ...rest) => {
+      if (p === file) throw Object.assign(new Error('EPERM: operation not permitted, open'), { code: 'EPERM' });
+      return read(p, ...rest);
+    };
+    syncBuiltinESMExports();
+    try {
+      registryRecord(root);
+      assert.deepEqual(registryRoots(), []);
+    } finally {
+      process.stderr.write = stderr;
+      fs.readFileSync = read;
+      syncBuiltinESMExports();
+    }
+    assert.equal(fs.readFileSync(file, 'utf8'), rows, 'a refused read dropped the rows');
+    assert.match(said, /could not read the install registry/);
+
+    fs.writeFileSync(file, 'not json', 'utf8');
+    process.stderr.write = () => true;
+    try { registryRecord(root); } finally { process.stderr.write = stderr; }
+    assert.equal(fs.readFileSync(file, 'utf8'), 'not json', 'a damaged registry was overwritten');
+  }));
+});
+
+test('a missing registry is an empty one', () => {
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    registryRecord(root);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).length, 1);
+  }));
+});
+
 test('--archive-memory archives a project store', () => {
   withDir((d) => {
     const repo = projectInstall(path.join(d, 'repo'), 'claude', path.join(d, 'home'));

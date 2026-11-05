@@ -26,7 +26,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import cp, { spawnSync } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
@@ -323,7 +324,7 @@ test('a clean fast-forward passes the doctor and does not roll back', () => {
 test('a pulled source that fails the doctor is rolled back to the exact previous commit', () => {
   // The property the whole verb exists for: an upgrade may never leave a user on a source tree
   // that does not validate. The fault is a REAL one — a theme missing a template key, which is
-  // the theme-parity gate — and the real doctor is shown rejecting it on one theme, so the exit
+  // the theme-parity gate — and the real doctor is shown rejecting it through `--all`, so the exit
   // status the gate reads stays proven. The pulled tip then carries a stand-in that exits 1, so
   // the rollback does not pay for a sweep of every theme. It records its arguments, since a
   // passing doctor cannot show that the gate asks for every theme: a sandbox sweeps them anyway.
@@ -333,10 +334,19 @@ test('a pulled source that fails the doctor is rolled back to the exact previous
   delete theme.VOICE;
   fs.writeFileSync(themePath, `${JSON.stringify(theme, null, 2)}\n`);
   const cli = path.join(OTHER2, 'bin', 'geneseed-cli.mjs');
-  const doctor = spawnSync(process.execPath, [cli, 'doctor', '--no-bundle', '--theme', 'neutral'],
+  // The gate's own argv over two themes: a sweep of all of them costs a minute.
+  const themesDir = path.join(OTHER2, 'themes');
+  for (const name of fs.readdirSync(themesDir)) {
+    if (name.endsWith('.json') && !['neutral.json', 'imperial.json', '_TEMPLATE.json'].includes(name)) {
+      fs.unlinkSync(path.join(themesDir, name));
+    }
+  }
+  const doctor = spawnSync(process.execPath, [cli, 'doctor', '--all', '--no-bundle'],
     { encoding: 'utf8', windowsHide: true });
   assert.equal(doctor.status, 1, `the real doctor passed a broken theme:\n${doctor.stdout}`);
   assert.match(doctor.stdout, /missing key/);
+  git(OTHER2, 'checkout', '--', 'themes');
+  fs.writeFileSync(themePath, `${JSON.stringify(theme, null, 2)}\n`);
   const argvFile = path.join(sb.path, 'doctor-argv.json');
   fs.writeFileSync(cli, "import { writeFileSync } from 'node:fs';\n"
     + `writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));\n`
@@ -402,6 +412,24 @@ test('a rollback that would destroy an edit made during the doctor is refused, a
   } finally {
     // The tests below drive the copy's CLI, which this one replaced: put the healthy tree back.
     git(CO2, 'reset', '-q', '--hard', before);
+  }
+});
+
+test('a doctor killed at the deadline is unfinished, whatever exit code the kill left', () => {
+  // A kill on Windows can read as exit 1, which is a real failure's code, and that failure rolls
+  // back. So the deadline is judged by this process's own clock. Inside it, exit 1 is a verdict.
+  const real = cp.spawnSync;
+  cp.spawnSync = () => {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);
+    return { status: 1, stdout: '', stderr: '' };
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.equal(U2.runDoctor(CO2, 5)[0], null, 'a kill at the deadline read as a verdict');
+    assert.equal(U2.runDoctor(CO2, 60000)[0], false, 'a real exit 1 lost its verdict');
+  } finally {
+    cp.spawnSync = real;
+    syncBuiltinESMExports();
   }
 });
 

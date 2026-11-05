@@ -43,11 +43,21 @@ export function isScratchRoot(root, registryFile) {
   return within(resolvePath(root), tmp) && !within(resolvePath(registryFile), tmp);
 }
 
+/**
+ * The rows, or `null` when the file exists and cannot be trusted. Only a missing file is an empty
+ * registry: read as `[]`, a refused read made the next save write one root over every install.
+ */
 function registryLoad() {
+  const file = registryPath();
   try {
-    const data = parseJson(readFileSync(registryPath(), 'utf8'));
-    return Array.isArray(data) ? data.map(String) : [];
-  } catch { return []; }
+    const data = parseJson(readFileSync(file, 'utf8'));
+    if (Array.isArray(data)) return data.map(String);
+    throw new Error('not a list');
+  } catch (e) {
+    if (e.code === 'ENOENT') return [];
+    process.stderr.write(`[geneseed] could not read the install registry ${file}: ${e.message}\n`);
+    return null;
+  }
 }
 
 /**
@@ -102,7 +112,7 @@ export function registryRecord(dir) {
     try { root = realpathSync.native(dir); } catch { root = path.resolve(dir); }
     if (isScratchRoot(root, registryPath())) return;
     const cur = registryLoad();
-    if (!cur.includes(root)) registrySave([...cur, root]);
+    if (cur && !cur.includes(root)) registrySave([...cur, root]);
   } catch { /* a registry hiccup must never fail a build */ }
 }
 
@@ -117,6 +127,7 @@ export function registryRecord(dir) {
  */
 export function registryRoots() {
   const original = registryLoad();
+  if (!original) return [];
   const file = registryPath();
   const out = [];
   const kept = [];

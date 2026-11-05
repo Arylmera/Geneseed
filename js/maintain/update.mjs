@@ -412,7 +412,9 @@ const DOCTOR_LEGEND = [
  * `_run_doctor(cand)` — validate a source tree with its OWN `doctor --all --no-bundle`.
  * Returns `[passed, output]`. A nonzero exit is a failure. `passed` is `null` when the doctor
  * gave no verdict at all (timeout, kill or spawn error): a busy machine can outrun the deadline,
- * and that says nothing about the pulled source.
+ * and that says nothing about the pulled source. The deadline is judged by this process's clock
+ * too, since a kill can read as exit 1 on Windows. A kill from outside, inside the deadline,
+ * cannot be told from a real exit 1.
  *
  * THE SPAWN THAT CANNOT BE AN IMPORT. `cand` is the tree as it exists AFTER the merge, and
  * this process's module graph was loaded before it. `cmdDoctor` in-process would validate the
@@ -420,11 +422,15 @@ const DOCTOR_LEGEND = [
  * given here — the gate exists to catch a bad upstream commit.
  */
 export function runDoctor(cand, timeoutMs = DOCTOR_TIMEOUT_MS) {
+  const started = Date.now();
   const r = spawnSync(process.execPath,
     [path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],
     { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 256 * 1024 * 1024, ...NO_WINDOW });
   if (r.error || r.status === null) {
     return [null, `[geneseed] doctor gate could not run: ${r.error || 'no exit status'}`];
+  }
+  if (r.status !== 0 && Date.now() - started >= timeoutMs) {
+    return [null, `[geneseed] doctor gate could not run: stopped at its ${timeoutMs} ms deadline`];
   }
   // `stderr=subprocess.STDOUT` — the reference gives the child ONE handle, so its two
   // streams are interleaved in write order and arrive as `proc.stdout`. `spawnSync` has no
@@ -451,10 +457,22 @@ export function runDoctor(cand, timeoutMs = DOCTOR_TIMEOUT_MS) {
  *
  * The doctor and what follows it are `gatePulled`. A new pull over an unchecked one takes its
  * rollback point from `pendingGate`, since HEAD is then a commit no verdict covers.
+ *
+ * THE RECORD GOES DOWN BEFORE THE MERGE, so an update killed during the doctor leaves one too. A
+ * record that cannot be written stops the pull: nothing could hold a later rebuild back. A merge
+ * that then fails leaves it naming HEAD, which `pendingGate` drops.
  */
 export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   const [rc0, old] = gitRun(['rev-parse', 'HEAD']);
   if (rc0 !== 0 || !old) return [false, 'not_git', 'could not read HEAD'];
+  const pending = pendingGate();
+  if (pending?.blocked) return [false, 'gate_unknown', pending.blocked];
+  const verified = pending?.verified ?? old;
+  if (!setPendingGate(verified)) {
+    return [false, 'gate_unrecorded',
+      'Update stopped before the pull: it could not write its record under .git, so an '
+      + 'unfinished doctor could not hold the rebuild back. Nothing changed.'];
+  }
   log('[geneseed] fast-forwarding to upstream ...');
   const [rc1, , err] = gitRun(['merge', '--ff-only', '@{u}'], { timeout: 60 });
   if (rc1 !== 0) {
@@ -470,38 +488,66 @@ export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
     log('[geneseed] pulled:');
     for (const line of pulled.split('\n')) log(`  ${line}`);
   }
-  return gatePulled(pendingGate() ?? old, log, doctorTimeoutMs);
+  return gatePulled(verified, log, doctorTimeoutMs);
 }
 
-/** Where the unchecked state lives: under `.git`, so it dirties nothing and follows no branch. */
+/**
+ * Where the unchecked state lives: under `.git`, so it dirties nothing. One record per branch, so
+ * a rollback can only ever move the branch the pull landed on. Null when git cannot say.
+ */
 function pendingGateFile() {
-  const [rc, rel] = gitRun(['rev-parse', '--git-path', 'geneseed-doctor-pending']);
-  return rc === 0 && rel ? path.resolve(String(ROOT), rel) : null;
+  const [rc0, branch] = gitRun(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (rc0 !== 0 || !branch) return null;
+  const name = `geneseed-doctor-pending-${encodeURIComponent(branch)}`;
+  const [rc1, rel] = gitRun(['rev-parse', '--git-path', name]);
+  return rc1 === 0 && rel ? path.resolve(String(ROOT), rel) : null;
 }
 
 function setPendingGate(verified) {
   const file = pendingGateFile();
-  if (file) writeText(file, `${verified}\n`);
+  if (!file) return false;
+  try {
+    writeText(file, `${verified}\n`);
+    return true;
+  } catch { return false; }
 }
 
+/** Failing here is safe: a record left behind only asks the doctor once more. */
 function clearPendingGate() {
   const file = pendingGateFile();
-  if (file) rmSync(file, { force: true });
+  try { if (file) rmSync(file, { force: true }); } catch { /* the next update asks again */ }
 }
 
 /**
- * The last commit a verdict covers, while HEAD is ahead of it unchecked; null otherwise. Back on
- * that commit, or on a line that does not hold it, the user has moved on: the record is dropped.
+ * `null` when this branch has nothing unchecked, `{ verified }` with the last commit a verdict
+ * covers while HEAD is ahead of it, `{ blocked }` with a message when nobody can tell.
+ *
+ * ONLY TWO ANSWERS DROP A RECORD: git saying the commit is not an ancestor (rc 1), and HEAD back
+ * on it. Both mean the user moved on. A timeout, an empty record or any other failure says
+ * nothing about the tree, so it refuses the rebuild and the record stays.
  */
 export function pendingGate() {
+  const blocked = (why) => ({
+    blocked: `Update stopped: the record of an unfinished doctor cannot be trusted (${why}), so this `
+      + 'source may be unchecked. Run `geneseed doctor --all`. If it is clean, delete the '
+      + 'geneseed-doctor-pending-* file under .git, then update.',
+  });
   const file = pendingGateFile();
-  if (!file || !existsSync(file)) return null;
-  const verified = stripWhitespace(readText(file));
+  if (!file) return blocked('git did not answer');
+  let verified;
+  try {
+    if (!existsSync(file)) return null;
+    verified = stripWhitespace(readText(file));
+  } catch (e) { return blocked(e.message); }
+  if (!verified) return blocked('it is empty');
   const [rc0, head] = gitRun(['rev-parse', 'HEAD']);
   const [rc1] = gitRun(['merge-base', '--is-ancestor', verified, 'HEAD']);
-  if (rc0 === 0 && rc1 === 0 && head !== verified) return verified;
-  clearPendingGate();
-  return null;
+  if (rc0 !== 0 || (rc1 !== 0 && rc1 !== 1)) return blocked(`git cannot place ${verified}`);
+  if (rc1 === 1 || head === verified) {
+    clearPendingGate();
+    return null;
+  }
+  return { verified };
 }
 
 /**
@@ -510,14 +556,14 @@ export function pendingGate() {
  * `doctor_unfinished` IS NOT A FAILED GATE, AND NOT A PASS. With no verdict the pull stays, because
  * rolling back called a healthy pull bad. But the record under `.git` holds the rebuild back: the
  * next update finds nothing to pull, and without it would rebuild from a tree nothing has judged.
- * It asks here again, and only a verdict clears the record. A refused rollback keeps it too.
+ * It asks here again, and only a verdict clears the record. A refused rollback keeps it too. The
+ * caller wrote the record, or found it, so nothing here needs to.
  */
 export function gatePulled(verified, log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   log('[geneseed] validating the pulled source (doctor — can take a minute) ...');
   const [passed, output] = runDoctor(ROOT, doctorTimeoutMs);
   log(output.replace(/\n+$/, ''));
   if (passed === null) {
-    setPendingGate(verified);
     return [false, 'doctor_unfinished',
       'the doctor did not finish, so the pulled source is UNCHECKED: nothing says it is bad. '
       + 'You stay on the pulled commit and nothing was rebuilt. Run `geneseed update` again when '
@@ -527,7 +573,6 @@ export function gatePulled(verified, log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
     const [rc3, , rerr] = gitRun(['reset', '--keep', verified], { timeout: 60 });
     for (const line of DOCTOR_LEGEND) log(line);
     if (rc3 !== 0) {
-      setPendingGate(verified);
       return [false, 'doctor_fail',
         'the pulled source FAILS validation, and the rollback was REFUSED — a file it must '
         + 'restore was edited while the doctor ran, and those edits were kept. You are still '
@@ -816,10 +861,14 @@ export async function upgrade(ref = null, themeArg = null) {
     }
   } else {                                     // uptodate
     log('[geneseed] already up to date.');
-    const verified = pendingGate();
-    if (verified) {
+    const pending = pendingGate();
+    if (pending?.blocked) {
+      log(`[geneseed] ${pending.blocked}`);
+      return 1;
+    }
+    if (pending) {
       log('[geneseed] the last doctor did not finish — this source has no verdict yet.');
-      const [ok, , msg] = gatePulled(verified, log);
+      const [ok, , msg] = gatePulled(pending.verified, log);
       if (!ok) {
         log(`[geneseed] ${msg}`);
         return 1;
@@ -1062,10 +1111,17 @@ function reexec(argv) {
  * and it can repair what the update could not — but its exit code used to become bootstrap's,
  * so a script saw 0 over an update that never happened. `handoff` is the seam a test needs:
  * the real `setup` exits 1 off a terminal, which would make the two answers indistinguishable.
+ *
+ * AN UNCHECKED SOURCE IS THE EXCEPTION: `setup` renders, and no doctor has judged this tree.
  */
 export async function cmdBootstrap(args, { handoff = reexec } = {}) {
   const failed = await bootstrapPlain();
   flushExportNotes();
+  if (pendingGate()) {
+    printOut('[geneseed] setup not started: the source has no doctor verdict yet. '
+      + 'Run `geneseed update`, then `geneseed setup`.\n');
+    return 1;
+  }
   if (!args.noSetup) {
     const rc = handoff([process.execPath,
       path.join(String(ROOT), 'bin', 'geneseed-cli.mjs'), 'setup']);
