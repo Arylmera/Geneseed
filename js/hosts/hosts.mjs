@@ -19,7 +19,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
-import { sharedPaths } from '../lib/machine-dir.mjs';
+import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
 import { mainWorktreeOf } from './gitref.mjs';
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
@@ -48,6 +48,9 @@ export const ADVISORY_VERB = 'done-gate-advisory';
  * second copy in `js/inspect/` was the alternative, and a copy is what let the `~user`
  * refusal diverge between the two CLIs once already (see `hooks.mjs`'s header).
  *
+ * SHARED LIST: a global install also honours `excludes.json` in the machine tier (B8: the lists
+ * drifted across hosts). The OpenCode plugins carry the same union in their twins.
+ *
  * A LINKED GIT WORKTREE OF AN EXCLUDED REPO IS EXCLUDED TOO, wherever it sits on disk: the
  * cwd matches, or the main worktree `mainWorktreeOf` reads off the `.git` file does. An
  * exclusion names a repository the user keeps sovereign, not a folder; a worktree elsewhere
@@ -55,13 +58,22 @@ export const ADVISORY_VERB = 'done-gate-advisory';
  */
 export function sovereignBypass(root) {
   if (!root) return false;
-  let entries;
+  const listOf = (file) => {
+    try {
+      const data = JSON.parse(readText(file));
+      return Array.isArray(data && data.excludes) ? data.excludes : [];
+    } catch {
+      return [];
+    }
+  };
+  const entries = listOf(path.join(root, EXCLUDES_FILE));
+  // The shared list (`<machineDir>/excludes.json`) adds to a GLOBAL install's own, never to a
+  // project install's: a folder excluded for the global harness must not silence a project
+  // install that lives inside it. The tier test runs only when the shared list has entries.
   try {
-    const data = JSON.parse(readText(path.join(root, EXCLUDES_FILE)));
-    entries = Array.isArray(data && data.excludes) ? data.excludes : [];
-  } catch {
-    return false;
-  }
+    const shared = listOf(path.join(machineDir(), EXCLUDES_FILE));
+    if (shared.length && isHostGlobalDir(null, root)) entries.push(...shared);
+  } catch { /* no home dir, or an unresolvable config dir: the host list alone */ }
   // Nothing to match, so no reason to pay for the cwd and `.git` reads below on every hook call.
   if (!entries.length) return false;
   let heres;

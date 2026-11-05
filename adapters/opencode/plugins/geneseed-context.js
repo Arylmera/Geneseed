@@ -117,8 +117,13 @@ async function mainWorktreeOf(dir) {
 async function sovereignBypass(cwd) {
   try {
     const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
-    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
-    const entries = (JSON.parse(raw).excludes) || []
+    const listOf = async (file) => {
+      try { const l = JSON.parse(await fs.readFile(file, "utf8")).excludes; return Array.isArray(l) ? l : [] } catch { return [] }
+    }
+    const entries = await listOf(path.join(cfg, "excludes.json"))
+    // Shared list (<machineDir>/excludes.json): a GLOBAL install adds it, a project install never does.
+    const shared = await listOf(path.join(machineDir(), "excludes.json"))
+    if (shared.length && await readsTier(cfg)) entries.push(...shared)
     const here = norm(cwd || process.cwd())
     const main = await mainWorktreeOf(cwd || process.cwd())
     const heres = main ? [here, norm(main)] : [here]

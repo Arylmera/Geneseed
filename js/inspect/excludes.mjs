@@ -27,6 +27,7 @@ import { GLOBAL_MANIFEST, HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import { readText, writeText, printOut, printErr, isDir, isFile, isOsError } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent, get, isDict } from '../lib/json.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
 
 /** The per-repo settings file a claudeMdExcludes entry goes in (Claude and OpenClaude). */
 const localSettings = (repo, host) =>
@@ -116,6 +117,22 @@ function same(stored, repo) {
 }
 
 /**
+ * The shared list (B8): the machine tier's `excludes.json`, read by every global install's hook
+ * and plugin next to its own. It holds paths only; the `wired` receipts stay in each host's file,
+ * because only that host can unwire what it wired. Written beside the host files, so one stale
+ * host no longer decides which folders are silent.
+ */
+function updateShared(change) {
+  const dir = machineDir();
+  const data = readExcludes(dir);
+  const before = JSON.stringify(data.excludes);
+  data.excludes = change(data.excludes);
+  if (JSON.stringify(data.excludes) === before) return;   // a no-op remove creates nothing
+  mkdirSync(dir, { recursive: true });
+  writeExcludes(dir, data);
+}
+
+/**
  * `exclude_add` — add `path` to every global install's list and wire the per-repo
  * suppression. Idempotent; returns `{ok, path, messages}`.
  */
@@ -176,6 +193,8 @@ export function excludeAdd(target) {
     data.excludes = entries;
     writeExcludes(cfg, data);
   }
+  updateShared((list) => [...list.filter((e) => !(isDict(e) && same(get(e, 'path'), repo))),
+    { path: repo.split(path.sep).join('/') }]);
   return { ok: true, path: repo, messages };
 }
 
@@ -225,6 +244,12 @@ export function excludeRemove(target) {
     data.excludes = keep;
     writeExcludes(cfg, data);
   }
+  // A folder only the shared list names (a fold put it there) is still excluded, so it comes out too.
+  updateShared((list) => {
+    const keep = list.filter((e) => !(isDict(e) && same(get(e, 'path'), repo)));
+    if (keep.length !== list.length) found = true;
+    return keep;
+  });
   if (!found) messages.push(`${repo} was not excluded`);
   return { ok: found, path: repo, messages };
 }
@@ -237,7 +262,7 @@ export function excludeRemove(target) {
 export function excludesSnapshot() {
   const installs = globalInstalls();
   const byPath = new Map();
-  for (const { host, cfg } of installs) {
+  const collect = (cfg, host) => {
     for (const e of readExcludes(cfg).excludes) {
       const p = isDict(e) ? get(e, 'path') : e;
       if (typeof p !== 'string' || !p) continue;
@@ -246,9 +271,12 @@ export function excludesSnapshot() {
         byPath.set(key, { path: p, hosts: [],
           wired: (isDict(e) ? get(e, 'wired') : null) || {} });
       }
-      byPath.get(key).hosts.push(host);
+      if (host) byPath.get(key).hosts.push(host);
     }
-  }
+  };
+  for (const { host, cfg } of installs) collect(cfg, host);
+  // A folder only the shared list names is silent everywhere but wired nowhere: it lists with no host.
+  if (installs.length) collect(machineDir(), null);
   const excludes = [...byPath.values()].sort(
     (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { excludes, installs: installs.map(({ host, cfg }) => ({ host, cfg })) };

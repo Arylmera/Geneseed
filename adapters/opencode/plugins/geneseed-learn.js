@@ -112,11 +112,25 @@ async function mainWorktreeOf(dir) {
     return path.basename(common) === ".git" ? path.dirname(common) : null
   } catch { return null }
 }
+// The machine tier: machineDir() in js/lib/machine-dir.mjs, which a plugin cannot import.
+function machineDir() {
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
+}
+// A global install reads the tier: its .geneseed-emit names a -global emit, or it IS the host's config dir.
+async function readsTier(dir) {
+  try { if ((await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global")) return true } catch { /* no marker */ }
+  return isHostConfigDir(dir)
+}
 async function sovereignBypass(cwd) {
   try {
     const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
-    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
-    const entries = (JSON.parse(raw).excludes) || []
+    const listOf = async (file) => {
+      try { const l = JSON.parse(await fs.readFile(file, "utf8")).excludes; return Array.isArray(l) ? l : [] } catch { return [] }
+    }
+    const entries = await listOf(path.join(cfg, "excludes.json"))
+    // Shared list (<machineDir>/excludes.json): a GLOBAL install adds it, a project install never does.
+    const shared = await listOf(path.join(machineDir(), "excludes.json"))
+    if (shared.length && await readsTier(cfg)) entries.push(...shared)
     const here = norm(cwd || process.cwd())
     const main = await mainWorktreeOf(cwd || process.cwd())
     const heres = main ? [here, norm(main)] : [here]

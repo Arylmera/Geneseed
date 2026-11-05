@@ -137,7 +137,7 @@ Everything that inspects an already-built or already-deployed harness and report
 | `status.mjs` | `geneseed status` and `version` — the panel data, counts, accent colour, version verdict |
 | `cost.mjs` | What one install injects every session, by part (root file, skill and agent lists, session files), in characters; owns `CARRIER_CEILING`, which the smoke test gates and the console draws |
 | `diff.mjs` | `geneseed diff` — what a deployed install has that a fresh render of `src/` does not |
-| `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json`; `hooks.mjs` only reads it |
+| `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json` and the shared list in the machine tier; `hosts.mjs` `sovereignBypass` reads both |
 | `registry.mjs` | `installs.json` under XDG — the persistent deploy-root list `rebuild-all` re-emits into |
 | `scorecard.mjs` | `geneseed scorecard` — a port of the AI Harness Scorecard (upstream pinned in its docblock): the repo walk, the CI-YAML parsing, `assessRepo`, the text/JSON renderers. Pure: no spawn, no network |
 | `scorecard-yaml.mjs` | The YAML 1.1 subset the scorecard reads CI configs with, plus Python's `str()`/`bool()` over its values; `scorecard.mjs` re-exports it. Its ceiling is in its `ponytail:` note |

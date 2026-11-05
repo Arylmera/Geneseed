@@ -7,7 +7,7 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
-import { pathToFileURL } from "node:url"
+import { pathToFileURL, fileURLToPath } from "node:url"
 import { opencodeEditAsks } from "../../js/hosts/settings.mjs"
 import { makeSandbox } from "../helpers/sandbox.mjs";
 import { LOSS_ROWS, makeLossWorkspace, rowCommand } from "../helpers/loss_repos.mjs"
@@ -845,4 +845,27 @@ test("a home the guard cannot place costs the shim dir, never the other native-a
   await withHome("~nobody/x", async () => {
     assert.match(await denial("bash", { command: `echo x > "${path.join(f.repo, "opencode.json")}"`, workdir: f.repo }) ?? "", /\(External Gate\)/)
   })
+})
+
+// B8: the OpenCode guard denies a write to the shared exclude list (OpenCode's native ask covers only
+// this install's own files), and a global install honours the shared list while a project one does not.
+test("the shared exclude list is denied; a global install stands down in a folder it names", async () => {
+  const xdg = path.join(tmp, "shared-xdg")
+  const shared = path.join(xdg, "geneseed", "excludes.json")
+  const saved = { x: process.env.XDG_CONFIG_HOME, o: process.env.OPENCODE_CONFIG_DIR }
+  const here = process.cwd()
+  const restore = (k, v) => { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+  try {
+    process.env.XDG_CONFIG_HOME = xdg
+    await gateConfigDenied(shared)
+    await fs.mkdir(path.dirname(shared), { recursive: true })
+    await fs.writeFile(shared, JSON.stringify({ excludes: [{ path: here }] }))
+    const key = "C:\\Users\\me\\.ssh\\id_rsa"
+    assert.equal(await blocked("write", { filePath: key }), true, "a project install must not read the shared list")
+    // The host's own config dir is global: the same list now silences it.
+    process.env.OPENCODE_CONFIG_DIR = fileURLToPath(new URL("../../adapters/opencode", import.meta.url))
+    assert.equal(await blocked("write", { filePath: key }), false, "the shared list did not silence a global install")
+  } finally {
+    restore("XDG_CONFIG_HOME", saved.x); restore("OPENCODE_CONFIG_DIR", saved.o); process.chdir(here)
+  }
 })

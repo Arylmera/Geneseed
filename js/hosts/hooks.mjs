@@ -58,7 +58,7 @@ import { readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { sharedPaths } from '../lib/machine-dir.mjs';
+import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
@@ -784,7 +784,8 @@ function gateConfig(p, root) {
       if (bin && t.startsWith(bin + path.sep)) return true;
       if (/^opencode\.jsonc?$/.test(path.basename(t))) return true;
       const up = [path.dirname(target), path.dirname(path.dirname(target))];
-      const homes = [...roots, ...up.filter((d) => GATE_CONFIG_MARKERS.some((m) => normcase(m) === normcase(path.basename(d))))];
+      // The machine tier is a home too, so the shared `excludes.json` is gated like a host's (a home, not a `.claude`-style marker).
+      const homes = [...roots, machineDir(), ...up.filter((d) => GATE_CONFIG_MARKERS.some((m) => normcase(m) === normcase(path.basename(d))))];
       if (homes.some((h) => GATE_CONFIG_FILES.some((f) => normcase(path.join(h, f)) === t))) return true;
     }
   } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
