@@ -42,13 +42,13 @@ import {
   CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, carriersFor, isHostGlobalDir,
   liveRecordedHooks, resolvePath,
 } from './hosts.mjs';
-
-export { carriersFor };
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { claudeHookShell, hookShimPath } from './shim.mjs';
+
+export { carriersFor };
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.

@@ -297,15 +297,6 @@ test('the OpenCode context plugin drops only the done reminder when the carrier 
   }
 });
 
-// The hook reads the HOST's own carrier (CLAUDE.md for the default host), not the bundle's AGENT.md:
-// a built bundle is made a Claude global the way an emit makes one, by its marker and its carrier.
-function asClaudeGlobal(...dirs) {
-  for (const dir of dirs) {
-    fs.writeFileSync(path.join(dir, '.geneseed-emit'), 'claude-global\n');
-    fs.copyFileSync(path.join(dir, 'AGENT.md'), path.join(dir, 'CLAUDE.md'));
-  }
-}
-
 // The Claude/Bob/OpenClaude twin of the row above: the `context` hook reads the same carrier
 // line with the same pattern, and a disarmed install's session starts without the done line.
 test('the context hook drops the done gate line when the carrier says so', () => {
@@ -317,7 +308,6 @@ test('the context hook drops the done gate line when the carrier says so', () =>
     const off = path.join(d, 'off');
     quiet(() => build(makeCfg({}), 'neutral', armed));
     quiet(() => build(makeCfg({ noDoneGate: true }), 'neutral', off));
-    asClaudeGlobal(armed, off);
     const ctx = (root) => spawnHook(['context', '--root', root], '',
       { cwd: repo, env: { ...process.env, GENESEED_ROOT: repo } }).stdout;
     assert.match(ctx(armed), /^Done gate: inferred from package\.json — npm run lint \(advisory\)\r?$/m,
@@ -346,7 +336,6 @@ test('the context hook prints the ownership decline line only when the gate is a
     const off = path.join(d, 'off');
     quiet(() => build(makeCfg({}), 'neutral', armed));
     quiet(() => build(makeCfg({ noOwnershipGate: true }), 'neutral', off));
-    asClaudeGlobal(armed, off);
     const ctx = (root) => spawnHook(['context', '--root', root], '',
       { cwd: repo, env: { ...process.env, GENESEED_ROOT: repo } }).stdout.split(/\r?\n/);
     assert.ok(ctx(armed).includes(DECLINED_LINE), 'the armed install lost the decline line');

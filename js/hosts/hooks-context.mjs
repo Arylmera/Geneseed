@@ -610,8 +610,10 @@ function fitLines(lines, room, tailOf) {
  */
 function installCarrier(hookRoot) {
   const base = readsTier(hookRoot) ? hookRoot : path.dirname(hookRoot);
-  for (const rel of carriersFor(HOST)) {
-    try { return readFileSync(path.join(base, rel), 'utf8'); } catch { /* next candidate */ }
+  // Last, a plain bundle or git-clone harness dir keeps its AGENT.md in the dir itself.
+  const found = [...carriersFor(HOST).map((rel) => path.join(base, rel)), path.join(hookRoot, 'AGENT.md')];
+  for (const file of found) {
+    try { return readFileSync(file, 'utf8'); } catch { /* next candidate */ }
   }
   return '';
 }

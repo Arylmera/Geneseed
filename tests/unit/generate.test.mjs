@@ -13,6 +13,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 import {
   substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, sourceGeneration, STRUCTURE,
@@ -583,13 +584,43 @@ test('validate renders at the axes it was given, read back off the sandbox', () 
   // Two emits: the `files` bundle and a per-repo host, which went through two different
   // `*Into` functions.
   withDir((d) => {
-    for (const emit of ['files', 'claude', 'claude-global']) {
+    for (const emit of ['files', 'claude']) {
       const r = validateRun(d, ['--theme', 'neutral', '--emit', emit, '--posture', 'artisan',
         '--mode', 'foreman', '--doctrines', 'craft,process', '--exclude-rules', 'process 5']);
       assert.equal(r.status, 0, r.stdout + r.stderr);
       assert.ok(r.stdout.includes('[validate-only] rendered at posture=artisan mode=foreman '
         + 'packs=craft,process excluded=process 5'), `${emit}:\n${r.stdout}`);
     }
+  });
+});
+
+test('validate reads its registers off the host carrier, not a stray AGENT.md', () => {
+  // The sandbox render of a Claude install holds no AGENT.md, so a stray one has to be planted:
+  // a preload writes one beside every CLAUDE.md the render writes, saying the gate is off. The
+  // host-less walk met it first and printed `done-gate=off` for an install that is armed.
+  withDir((d) => {
+    const preload = path.join(d, 'plant.mjs');
+    fs.writeFileSync(preload, `import fs from 'node:fs';
+import path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+const write = fs.writeFileSync;
+fs.writeFileSync = (p, ...rest) => {
+  write(p, ...rest);
+  if (path.basename(String(p)) === 'CLAUDE.md') write(path.join(path.dirname(String(p)), 'AGENT.md'), 'Done gate: off\\n');
+};
+syncBuiltinESMExports();
+`);
+    const run = (extra) => spawnSync(process.execPath, ['--import', pathToFileURL(preload).href,
+      path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'validate', '--theme', 'neutral', '--emit', 'claude-global', ...extra], {
+      cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true,
+      env: { ...process.env, ...homeOverrides(path.join(d, 'home')) },
+    });
+    const armed = run([]);
+    assert.equal(armed.status, 0, armed.stdout + armed.stderr);
+    assert.ok(armed.stdout.includes('[validate-only] rendered at'), armed.stdout);
+    assert.ok(!armed.stdout.includes('done-gate=off'), `a stray AGENT.md answered:\n${armed.stdout}`);
+    const off = run(['--no-done-gate']);
+    assert.ok(off.stdout.includes('done-gate=off'), `the carrier's own switch was lost:\n${off.stdout}`);
   });
 });
 
