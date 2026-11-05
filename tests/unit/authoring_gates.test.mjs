@@ -41,7 +41,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/inventory.mjs';
+import { ENTITY_STATUSES, entityStatus } from '../../js/inspect/inventory.mjs';
 import {
   folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
 } from '../../js/inspect/checks-repo.mjs';
@@ -436,8 +436,10 @@ test('a listed folder that does not exist is flagged', async () => {
 // THE LIFECYCLE BADGE
 
 test('the status of a known entity', () => {
-  const registry = loadRegistry();
-  assert.equal(entityStatus(registry, 'skills/loop'), 'experimental');
+  // A fixture, not the shipped registry: no shipped row is `experimental` now, and the status
+  // stays a valid one for the next new entity.
+  const registry = { 'skills/new': row({ status: 'experimental' }), 'skills/commit': row() };
+  assert.equal(entityStatus(registry, 'skills/new'), 'experimental');
   assert.equal(entityStatus(registry, 'skills/commit'), 'approved');
 });
 

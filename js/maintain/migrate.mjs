@@ -24,7 +24,7 @@ import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
 import { foldHost, foldSummary } from '../build/fold.mjs';
-import { ROOT } from '../build/source.mjs';
+import { RETIRED_SKILL_IDS, ROOT, knownSkillIds, skillAliases } from '../build/source.mjs';
 import { CLAUDE_STYLE, isCanonical, settingsFile } from '../hosts/hosts.mjs';
 import {
   claudeCfg, claudeReadManifest, EMIT_HOST_SCOPE, installState, installTargets,
@@ -122,6 +122,35 @@ function foldPreview(rows) {
   }
 }
 
+/**
+ * M5 — files an earlier build wrote that no manifest owns, so no emit will ever prune them: the
+ * root `AGENT.md` and the folder of a skill that no longer ships under its own name. REPORTED,
+ * never moved: they go aside on the user's word.
+ *
+ * The candidate names come from what git history already settled and the source still records —
+ * `RETIRED_SKILL_IDS` and the `aliases:` markers — because the CLI may not spawn `git`. Each
+ * candidate is checked before it is listed: a live skill is never an orphan (`teach` is live,
+ * `quiz` is its alias), and a path the manifest owns is not one either — the next emit prunes it.
+ */
+export function orphanFindings(cfg, owned, { live = knownSkillIds(), aliases = skillAliases() } = {}) {
+  const owns = (rel) => owned.some((o) => o === rel || o.startsWith(`${rel}/`));
+  const names = [...new Set([...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)])].filter((n) => !live.includes(n));
+  return ['AGENT.md', ...names.map((n) => `skills/${n}`)]
+    .filter((rel) => !owns(rel) && existsSync(path.join(cfg, rel)))
+    .map((rel) => path.join(cfg, rel));
+}
+
+/** The `--dry-run` half of M5: one line per orphan on each global Claude-style install. */
+function orphanPreview(rows) {
+  for (const { host, scope, root } of rows) {
+    if (scope !== 'global' || !CLAUDE_STYLE.includes(host) || !isCanonical(root, host)) continue;
+    const owned = claudeReadManifest(root).owned;
+    for (const p of orphanFindings(root, Array.isArray(owned) ? owned : [])) {
+      printOut(`[migrate] orphan: ${p} (an earlier build wrote it; no manifest owns it). It moves aside on your word.\n`);
+    }
+  }
+}
+
 /** A stash key that cannot collide across drives, and is a legal file name on both platforms. */
 const stashKey = (p) => p.replace(/[\\/:]/g, '_');
 
@@ -146,7 +175,7 @@ export function cmdMigrate(args = {}) {
     return 0;
   }
 
-  if (dryRun) foldPreview(rows);
+  if (dryRun) { foldPreview(rows); orphanPreview(rows); }
 
   if (!needed) {
     printOut(`[migrate] already on the npm shape (${rows.length} install(s)); nothing to do.\n`);

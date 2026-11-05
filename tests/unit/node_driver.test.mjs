@@ -85,7 +85,7 @@ const VALUED_FLAGS = [
   ['--exclude-rules', 'excludeRules', 'process 7,craft 2', ['craft.2', 'process.7']],
   // Skills left out of the install: a comma list too, bound sorted so the marker it writes is
   // stable whatever order the names were typed in.
-  ['--exclude-skills', 'excludeSkills', 'quiz,daydream', ['daydream', 'quiz']],
+  ['--exclude-skills', 'excludeSkills', 'adhd,daydream', ['adhd', 'daydream']],
   // Kits switched on: `none` binds the empty list. It is the one value the shipped tree accepts
   // while no kit ships; named kits are `tests/unit/kits.test.mjs`'s, on a fixture tree.
   ['--kits', 'kits', 'none', []],

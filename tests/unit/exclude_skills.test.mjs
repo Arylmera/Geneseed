@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { build } from '../../js/build/bundle.mjs';
-import { makeCfg, knownSkillIds, linkedSkillIds, kitMembers, loadKits } from '../../js/build/source.mjs';
+import { makeCfg, knownSkillIds, linkedSkillIds, kitMembers, loadKits, RETIRED_SKILL_IDS } from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { excludedSkillsOfDir } from '../../js/hosts/installs.mjs';
@@ -78,8 +78,8 @@ test('the flag refuses an unknown skill and a linked one, and normalises the res
   // Every linked skill is protected — the constitution would ship a dead link to it.
   for (const name of linkedSkillIds()) refuse(name, new RegExp(`'${name}' cannot be excluded`));
   assert.ok(linkedSkillIds().includes('council'), 'the scan found none of the known links');
-  const args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'quiz, daydream,quiz']);
-  assert.deepEqual(args.excludeSkills, ['daydream', 'quiz'], 'not sorted and deduped');
+  const args = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'adhd, daydream,adhd']);
+  assert.deepEqual(args.excludeSkills, ['adhd', 'daydream'], 'not sorted and deduped');
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--exclude-skills', 'none']).excludeSkills, []);
 });
 
@@ -89,8 +89,8 @@ test('setupBuildArgs elides an empty exclusion and spells a non-empty one', () =
   for (const none of [null, []]) {
     assert.ok(!at(none).includes('--exclude-skills'), `${JSON.stringify(none)} grew a flag`);
   }
-  const argv = at(['daydream', 'quiz']);
-  assert.equal(argv[argv.indexOf('--exclude-skills') + 1], 'daydream,quiz');
+  const argv = at(['adhd', 'daydream']);
+  assert.equal(argv[argv.indexOf('--exclude-skills') + 1], 'adhd,daydream');
 });
 
 test('a global install keeps its excluded skills through a rebuild', () => {
@@ -123,4 +123,10 @@ test('a command whose skill was excluded is skipped, not a build failure', () =>
       else process.env.GENESEED_COMMANDS = prev;
     }
   });
+});
+
+test('F21: the old `quiz` name excludes `teach`, which absorbed it, and is not retired', () => {
+  const r = parseDriverArgs(['--emit', 'files', '--exclude-skills', 'quiz']);
+  assert.deepEqual(r.excludeSkills, ['teach'], 'quiz did not resolve through its alias');
+  assert.ok(!Object.hasOwn(RETIRED_SKILL_IDS, 'quiz'), 'an alias that is also retired fails doctor');
 });

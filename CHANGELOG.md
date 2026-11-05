@@ -14,7 +14,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 - **The fold moves existing stores into the shared tier.** Each global emit in a host's own config directory copies facts, agent lessons, self-improvement notes and exclude paths into the tier, and moves a profile or wiki manifest there when the tier holds only a seed. It prints one line per host and nothing on a second run. A differing profile or wiki stays in force, with a pointer in `user-rules.draft.md`. A host rule with the same title and body as a shared rule merges; any other goes to the draft and stays in the host file, still binding, until the `rule` skill records your decision. Approve moves it to the shared file under a new number, reject keeps it on that host. Nothing is deleted: after every copy is read back, the old store moves to `archived-memory/<stamp>/`, and a failed copy keeps it readable until the next emit retries. A host installed after an `exclude add` now gets the repo-side wiring on its emit. A downgrade is not automatic: restore the archived store by hand.
 
+- **`migrate --dry-run` lists orphans.** It names the root `AGENT.md` and the folder of a retired or merged skill that an earlier build wrote and no manifest owns. It moves nothing.
+- **The 24 remaining `experimental` entries are `approved`.** The status stays valid for a new entity.
+
 ### Removed
+- **The `quiz` skill is part of `teach`.** `teach` now also runs the drill, feynman and gap-check shapes, and `/quiz` still opens it through the alias.
 - **The legacy process carrier guard.** `rebuild-all`, `upgrade`, `migrate`, `status` and the web console no longer detect an install whose carrier names `process 8`, and no longer skip it or warn about it. The floor is a 3.7.0 install (the comms pack); see the upgrade guide.
 - **`migrate` no longer classifies the wiring shape.** The stamp alone was always the trigger, so its value was only printed.
 - **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.

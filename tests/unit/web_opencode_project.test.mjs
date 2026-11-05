@@ -33,7 +33,7 @@ import {
   homeOverrides, makeSandbox, restoreProcessHome, sandboxProcessHome,
 } from '../helpers/sandbox.mjs';
 
-const EXCLUDED = 'quiz';
+const EXCLUDED = 'adhd';
 
 let home;
 let sb;

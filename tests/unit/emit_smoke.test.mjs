@@ -325,9 +325,9 @@ const EXPECTED = {
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;
-const N_SKILLS = 50;
-const N_ALIASES = 14;
-const N_USER_ONLY = 4;
+const N_SKILLS = 49;
+const N_ALIASES = 15;
+const N_USER_ONLY = 3;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
 // translates `\n` to `os.linesep`, so on Windows the file really is CRLF on disk (gated as M1).

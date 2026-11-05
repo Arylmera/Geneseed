@@ -1571,7 +1571,7 @@ test('writeNativeLayer reports the claimed user-only skill stems, and only those
     const { userOnlySkills } = native(d);
     // Real authored skills carrying the literal `<!-- invocation: user -->` marker in
     // src/skills (skill-forge only DESCRIBES the convention in prose; it does not carry it).
-    for (const name of ['learn-mode', 'quiz', 'teach']) {
+    for (const name of ['adhd', 'learn-mode', 'teach']) {
       assert.ok(userOnlySkills.includes(name), `${name} missing from userOnlySkills: ${userOnlySkills}`);
     }
     // An ordinary, model-invocable skill gets no row.

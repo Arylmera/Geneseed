@@ -462,7 +462,7 @@ test('a real re-emit sweeps a stale skill deny once --exclude-skills drops it', 
     perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
     assert.ok(!('teach' in perm.skill), 'an excluded skill kept a stale deny after a re-emit');
     // A still-wanted deny rides along unaffected.
-    assert.equal(perm.skill.quiz, 'deny', 'a still-wanted deny was swept along with the stale one');
+    assert.equal(perm.skill['learn-mode'], 'deny', 'a still-wanted deny was swept along with the stale one');
   });
 });
 
@@ -505,7 +505,7 @@ test('a deny the user wrote before the first emit is never recorded as Geneseed\
     globalReemit(d, cfg);
     const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
     assert.ok(!man.skill_denies.includes('teach'), 'a pre-existing user deny was claimed');
-    assert.ok(man.skill_denies.includes('quiz'), 'a deny Geneseed did write went unrecorded');
+    assert.ok(man.skill_denies.includes('learn-mode'), 'a deny Geneseed did write went unrecorded');
     uninstallGlobal(cfg, false);
     const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
     assert.deepEqual(skill, { teach: 'deny' });

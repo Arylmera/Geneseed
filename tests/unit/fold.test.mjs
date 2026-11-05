@@ -10,6 +10,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 
 import { foldHost, foldSummary } from '../../js/build/fold.mjs';
+import { orphanFindings } from '../../js/maintain/migrate.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
   SESSION_SEEDS, ensureExcludesStub, ensureMemoryIndex, ensureProfileStub, ensureRulesStub,
@@ -1156,3 +1157,36 @@ test('B7: migrate --dry-run prints the fold report on a stamped machine', () => 
   assert.equal(read(store, 'x.md'), FACT, 'a dry run moved a fact');
   assert.ok(!exists(tierOf(home), 'memory', 'x.md'));
 }));
+
+// M5: an orphan is a file an earlier build wrote that no manifest owns. The report lists it and
+// moves nothing; a live skill, an alias whose folder the manifest owns, and an owned file are not.
+test('M5: migrate --dry-run lists an unowned AGENT.md and a retired skill folder, and moves nothing', () => withHome((home) => {
+  emit(home);
+  fs.mkdirSync(path.join(home, '.geneseed'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.geneseed', '.migrated'), `${ROOT}\n`);
+  const cfg = path.join(home, '.claude');
+  const r0 = run(home, 'geneseed-cli.mjs', ['migrate', '--dry-run']);
+  assert.doesNotMatch(r0.stdout, /orphan/, 'a clean emit reported an orphan');
+  fs.writeFileSync(path.join(cfg, 'AGENT.md'), 'an old carrier\n');
+  fs.mkdirSync(path.join(cfg, 'skills', 'tickets'), { recursive: true });
+  fs.writeFileSync(path.join(cfg, 'skills', 'tickets', 'SKILL.md'), 'gone\n');
+  const r = run(home, 'geneseed-cli.mjs', ['migrate', '--dry-run']);
+  assert.equal(r.status, 0, r.stderr);
+  const lines = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('[migrate] orphan:'));
+  assert.equal(lines.length, 2, r.stdout);
+  assert.ok(lines.some((l) => l.includes(path.join(cfg, 'AGENT.md'))), r.stdout);
+  assert.ok(lines.some((l) => l.includes(path.join(cfg, 'skills', 'tickets'))), r.stdout);
+  assert.equal(read(cfg, 'AGENT.md'), 'an old carrier\n', 'the report moved a file');
+}));
+
+test('M5: a live skill is never an orphan, and neither is a path the manifest owns', () => {
+  const home = makeSandbox('m5-').path;
+  fs.mkdirSync(path.join(home, 'skills', 'teach'), { recursive: true });
+  fs.mkdirSync(path.join(home, 'skills', 'quiz'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'AGENT.md'), 'x\n');
+  const at = (owned) => orphanFindings(home, owned).map((p) => path.relative(home, p).replaceAll(path.sep, '/'));
+  // `teach` is live, so it is never listed, owned or not. `quiz` is its alias: the folder is stale
+  // unless the manifest owns it, and then the next emit prunes it.
+  assert.deepEqual(at([]), ['AGENT.md', 'skills/quiz']);
+  assert.deepEqual(at(['AGENT.md', 'skills/quiz/SKILL.md']), []);
+});

@@ -23,18 +23,18 @@
       "last_verified": ""
     },
     "agents/devops-engineer": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/docker-expert": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/docs": {
       "status": "approved",
@@ -72,18 +72,18 @@
       "last_verified": ""
     },
     "agents/kubernetes-specialist": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/memory-curator": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-16",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/operator": {
       "status": "approved",
@@ -100,18 +100,18 @@
       "last_verified": ""
     },
     "agents/react-engineer": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-21",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/react-reviewer": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-21",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/researcher": {
       "status": "approved",
@@ -128,11 +128,11 @@
       "last_verified": ""
     },
     "agents/performance": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-14",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/security": {
       "status": "approved",
@@ -149,25 +149,25 @@
       "last_verified": ""
     },
     "agents/spring-boot-engineer": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/spring-reviewer": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/spring-security": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "agents/steward": {
       "status": "approved",
@@ -198,11 +198,11 @@
       "last_verified": ""
     },
     "skills/adhd": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-29",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/brainstorm": {
       "status": "approved",
@@ -212,18 +212,18 @@
       "last_verified": "2026-09-06"
     },
     "skills/brick-forge": {
-      "status": "experimental",
+      "status": "approved",
       "version": "0.1.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-03",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/bruno": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-08",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/codebase-design": {
       "status": "approved",
@@ -261,11 +261,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/deck": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-16",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/dependencies": {
       "status": "approved",
@@ -282,11 +282,11 @@
       "last_verified": "2026-09-06"
     },
     "skills/diagram-design": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-29",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/document-project": {
       "status": "approved",
@@ -359,25 +359,25 @@
       "last_verified": "2026-09-06"
     },
     "skills/learn-mode": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-02",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/loop": {
-      "status": "experimental",
+      "status": "approved",
       "version": "0.1.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-03",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/ownership": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-26",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/parallel-agents": {
       "status": "approved",
@@ -428,26 +428,19 @@
       "added": "2026-07-13",
       "last_verified": "2026-09-06"
     },
-    "skills/quiz": {
-      "status": "experimental",
-      "version": "1.0.0",
-      "owner": "Guillaume Lemer",
-      "added": "2026-09-06",
-      "last_verified": ""
-    },
     "skills/react": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-21",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/react-testing": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-21",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/react-view-transitions": {
       "status": "approved",
@@ -520,32 +513,32 @@
       "last_verified": "2026-10-13"
     },
     "skills/spring-boot": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/spring-data-jpa": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/spring-testing": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-10-20",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/teach": {
-      "status": "experimental",
+      "status": "approved",
       "version": "1.0.0",
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
-      "last_verified": ""
+      "last_verified": "2026-11-06"
     },
     "skills/token-report": {
       "status": "approved",

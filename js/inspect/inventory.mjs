@@ -109,7 +109,7 @@ export const SKILL_CLASS = {
   // `understand` before, which made that class a grab-bag.
   wiki: 'harness', geneseed: 'harness', rule: 'harness', profile: 'harness',
   'skill-forge': 'harness', adhd: 'harness',
-  teach: 'learn', quiz: 'learn', 'learn-mode': 'learn',
+  teach: 'learn', 'learn-mode': 'learn',
 };
 
 /** `k in dict` — own keys only, where `k in obj` also finds `Object.prototype` members. */
