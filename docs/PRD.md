@@ -41,7 +41,7 @@ host, with hooks or plugins that enforce what the host allows.
 ## Non-goals
 
 - Geneseed does not manage MCP servers. It lists them read-only (`geneseed mcp`).
-- It does not sync between machines. Use git or a vault for that. `⚠ to confirm`: the spec states this; no public page does.
+- It does not sync between machines. The shared tier covers one machine; use git or a vault to carry it further.
 - It does not call a model API or hold an API key. `learn` uses the host's model or a CLI the user names.
 - It does not bypass a host's permission mode: no emit grants a directory permission.
 - `DESIGN.md` has the full list under *Explicitly out of scope*.
