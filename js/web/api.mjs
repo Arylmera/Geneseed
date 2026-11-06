@@ -33,10 +33,9 @@ import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
 import { isFile } from '../lib/fs.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
-  configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
+  configItems, deployed, dget, memoryDir, memoryItems, notebookItems, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
-import { memoryDir } from './catalog.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
 
 /**

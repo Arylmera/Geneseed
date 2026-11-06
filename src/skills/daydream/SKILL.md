@@ -23,7 +23,7 @@ procedure; this one is the overview.
 
 Before the first run, make sure the pieces this skill depends on are in place:
 
-1. **A vault to mine.** Declare your Obsidian vault in the harness `geneseed-wiki.jsonc`
+1. **A vault to mine.** Declare your Obsidian vault in `geneseed-wiki.jsonc`, beside the harness{{WIKI_TIER}}
    (AGENT.md §8) — give a `wikis[]` entry a `path` to the vault root. Without it the
    skill falls back to detecting a `.obsidian/` folder in the current directory, then
    asks. No vault → nothing to daydream about.
@@ -46,7 +46,7 @@ Glob/Read/Write/Bash and subagent tools. See [VENDOR.md](VENDOR.md) for provenan
 
 ## What it does
 
-1. Resolves vault root from the harness `geneseed-wiki.jsonc` manifest (a declared vault's `path`); falls back to auto-detecting `.obsidian/` from the current directory, then asks if still unfound
+1. Resolves vault root from the `geneseed-wiki.jsonc` manifest beside the harness{{WIKI_TIER}} (a declared vault's `path`); falls back to auto-detecting `.obsidian/` from the current directory, then asks if still unfound
 2. Scans vault for notes modified in last 120 days
 2. Generates 50 recency-weighted random pairs
 3. Synthesizes connections (Sonnet, parallel batches of 5)
