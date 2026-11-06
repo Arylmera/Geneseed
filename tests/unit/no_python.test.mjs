@@ -22,13 +22,13 @@
 // Expect it red until the sweep lands; that is the gate working, not the gate being wrong.
 //
 // WHAT COUNTS AS AN OFFENCE, WHICH IS THE WHOLE EDITORIAL LINE. An INVOCATION, or a path a
-// reader could follow, is an offence. A comment explaining why the port behaves as it does is
-// not — `js/hosts/hooks.mjs`'s "Ported from `_harness_context.py`" is the reason a maintainer can
+// reader could follow, is an offence. A comment explaining why the code behaves as it does is
+// not, even when it names the Python behaviour it matches: it is the reason a maintainer can
 // still understand the module, and a gate that demanded its deletion would be a gate on the
-// documentation (`tests/unit/no_panel.test.mjs` learnt that one the expensive way). MEASURED,
-// and this is why the bare-filename scan below is narrow rather than broad: a plain `\b\w+\.py\b`
-// over this scope hits 68 files and roughly 200 distinct filenames, almost all of them
-// provenance comments. That is the unsatisfiable grep the phase ledger already rejected.
+// documentation (`tests/unit/no_panel.test.mjs` learnt that one the expensive way). A bare
+// provenance tag with no reason behind it is deleted instead. That is why the bare-filename
+// scan below is narrow rather than broad: a plain `\b\w+\.py\b` over this scope would hit
+// every comment that explains a behaviour by naming where it came from.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';

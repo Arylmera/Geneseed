@@ -6,16 +6,14 @@
  * they are the last one that can be measured by a closure walk alone — `cmd_build`'s body is
  * three lines because the work is a `subprocess`, and a name walk cannot see through one.
  *
- * WHY `build` IMPORTS THE DRIVER RATHER THAN SPAWNING IT. The Python is
- * `run([sys.executable, BUILD, *extra]).returncode` — a passthrough to a second process.
- * Reproducing that shape here would mean spawning `node bin/build-driver.mjs`, and
+ * WHY `build` IMPORTS THE DRIVER RATHER THAN SPAWNING IT. Spawning would be
+ * a passthrough to a second process, and would mean spawning `node bin/build-driver.mjs`, and
  * `tests/unit/hook_cli.test.mjs`'s 'the CLI entry reaches child_process only where it is
  * declared' forbids it: the check is transitive over this entry's imports and allow-lists only
  * the modules that genuinely start processes — `web`, `upgrade`, `setup` — and P5c's argument
  * for it is that the ban should outlive them rather than be dismantled by a verb that does not.
- * It is also the wrong shape on its own terms. Python needs a second
- * process because `build.py` is a different PROGRAM; `bin/build-driver.mjs` is a module in this
- * one, and a Node CLI spawning a Node driver to do work it could do in-process is exactly
+ * It is also the wrong shape on its own terms. `bin/build-driver.mjs` is a module in this
+ * process, and a Node CLI spawning a Node driver to do work it could do in-process is exactly
  * the passthrough the whole port has been removing. So the driver's `main` is exported and
  * called directly, and the observable contract — the tree, the streams, the exit code — is
  * what the `build/*` cells of `tests/golden.mjs --cli` assert.
@@ -58,8 +56,8 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
  *
  * The convention `js/build/bundle.mjs`'s `assertSourceComplete` set and `bin/geneseed-cli.mjs`
  * honours: write at the raise site, mark the throw as a DELIBERATE refusal with `exitCode`,
- * and let anything unmarked keep its stack. Python prints a traceback for an unhandled
- * exception, so dressing a crash as a one-liner would hide a bug.
+ * and let anything unmarked keep its stack, because dressing a crash as a one-liner
+ * would hide a bug.
  */
 function sysExit(msg) {
   // `printErr`, NOT a local newline translation. The first draft inlined the `\n` ->
@@ -78,8 +76,8 @@ function sysExit(msg) {
 /**
  * `_harness_build.cmd_build` — render `src/` into `./Harness`.
  *
- * `--out` defaults to the RELATIVE `"Harness"` in the generator and the Python passes no
- * `cwd=`, so the bundle lands under the invocation's directory rather than the checkout's.
+ * `--out` defaults to the RELATIVE `"Harness"` in the generator and no `cwd` is passed,
+ * so the bundle lands under the invocation's directory rather than the checkout's.
  * Calling the driver in-process keeps that: `resolveOut` resolves against `process.cwd()`
  * the same way. `build/the-bundle-follows-cwd-not-the-checkout` is the cell.
  *
@@ -117,7 +115,7 @@ export function cmdBuild(args) {
 /**
  * `_harness_setup._setup_build_args` — the generator argv for one selection. Pure.
  *
- * The elision rules are not symmetric and the Python says why: `footprint` is ALWAYS passed,
+ * The elision rules are not symmetric: `footprint` is ALWAYS passed,
  * because omitting it when it matched the generator's default silently coupled the answer to
  * whatever that default happened to be — the moment the default moved, picking the old one
  * produced the new one. `posture`, `mode` and `trust` still elide at theirs, and none has moved.
@@ -275,9 +273,8 @@ export function rebuildCommand(argv) {
 /**
  * `_harness_build.cmd_rebuild_all` — re-emit every ACTIVE install in place, best-effort.
  *
- * WHY THIS IS THE VERB THAT MADE THE DRIVER'S `die` A THROW. The Python spawns one
- * `build.py` per install and reads its return code, so "continue past a failure" is what a
- * subprocess gives you for nothing. Calling `main` in-process — the route P5e established for
+ * WHY THIS IS THE VERB THAT MADE THE DRIVER'S `die` A THROW. A subprocess per install
+ * would hand back a return code, so "continue past a failure" would come for nothing. Calling `main` in-process — the route P5e established for
  * `build`, and the only one the `child_process` ban leaves — makes a `process.exit` inside
  * the generator's flag parser end the whole loop instead of one install. So `die` throws and
  * `main` converts, and `rebuild-all/one-broken-install-does-not-stop-the-rest` is the cell
@@ -400,8 +397,7 @@ export function buildPrompt(cfg, themeName) {
 /**
  * `_harness_build.cmd_prompt`.
  *
- * Both output paths translate newlines: the Python writes the document through
- * `sys.stdout.write` and `Path.write_text`, and BOTH are `newline=None` translators on
+ * Both output paths translate newlines, as text-mode writes do on
  * Windows. At ~10,000 newlines in a 400 KB document that is the largest byte difference this
  * port could ship, and `harness_golden` can only see half of it — the FILE half is compared
  * directly, the stdout half is folded by `subprocess`'s universal-newline decode, which is
@@ -410,7 +406,7 @@ export function buildPrompt(cfg, themeName) {
  * platform's'.
  */
 export function cmdPrompt(args) {
-  // `args.theme or "neutral"` — a literal in the Python, NOT the config's theme, so this
+  // A literal 'neutral', NOT the config's theme, so this
   // deliberately does not go through `configDefaults()`.
   const themeName = args.theme || 'neutral';
   const text = buildPrompt(makeCfg(), themeName);
@@ -500,7 +496,7 @@ function loadUserPalette(args, cfg) {
  * `_harness_build.cmd_theme` — a user colour theme in both flavours, into the live dir.
  *
  * The palette is validated BEFORE the destination is resolved and before `mkdir`, so a
- * refusal leaves no directory behind — matching the Python's statement order.
+ * refusal leaves no directory behind.
  *
  * **THAT ORDER IS NOT OBSERVABLE, and the first draft of this comment claimed it was.**
  * Swapping the two halves so a refusal creates the directory first is GREEN across all 166

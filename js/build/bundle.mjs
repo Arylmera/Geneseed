@@ -59,7 +59,7 @@ function missingReferencedSpecs(cfg) {
 /**
  * `_build_render.assert_source_complete`.
  *
- * Python raises `SystemExit(1)` after writing to stderr. Here the message goes to the
+ * The message goes to the
  * captured stderr buffer and the throw carries the exit code, which the driver turns
  * into a process status by `bin/build-driver.mjs`'s `main` — so the caller sees the same stream
  * bytes and the same exit status whichever runtime rendered.
@@ -107,8 +107,8 @@ function writeSrcDirsMarker(out, resolved) {
  *
  * `.geneseed-srcdirs.json` is a plain file a user (or another tool) can edit, and the
  * name in it is joined onto `out` and handed to a recursive delete. `".."` would take out
- * the bundle's PARENT, an absolute path replaces `out` entirely under Python's
- * `Path.__truediv__`, and `"a/b"` reaches into nested content. Only a plain
+ * the bundle's PARENT, an absolute path replaces `out` entirely when joined, and
+ * `"a/b"` reaches into nested content. Only a plain
  * single-segment name resolving directly under `out` is ever deleted.
  */
 function safePriorDirName(out, priorName) {
@@ -161,9 +161,9 @@ export function phaseLog(phase) {
 /**
  * `_build_render.build` — render the bundle into `out`.
  *
- * `out` arrives as the STRING Python already resolved, and is echoed into the progress
- * lines verbatim: Python interpolates `str(Path)`, which is backslash-separated on
- * Windows, and re-deriving it here would differ by separator in every message.
+ * `out` arrives as an already-resolved STRING and is echoed into the progress lines
+ * verbatim: it is backslash-separated on Windows, and re-deriving it here would differ by
+ * separator in every message.
  */
 export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog = false } = {}) {
   phaseLog('RENDER');
@@ -177,17 +177,15 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
   const priorSrcDirs = isBundle ? readPriorSrcDirs(out) : {};
   const resolvedSrcDirs = {};
   for (const srcDir of OWNED_SRC_DIRS) {
-    // `theme.get(token, srcDir)` — `??` agrees with it except for an explicit JSON null,
-    // where Python would go on to join `None` onto a path and raise. No theme has one.
+    // `??` falls back on an explicit JSON null too. No theme has one.
     const dirname = theme[SRC_DIR_TOKENS[srcDir]] ?? srcDir;
     resolvedSrcDirs[srcDir] = dirname;
     const managed = path.join(out, dirname);
 
-    // `isTruthy`, not `priorName &&`: the marker is user-editable JSON, and Python's
-    // `if prior_name` is false for `[]`, `{}` and `0` where JS's is true for the first
-    // two. Getting that wrong warns about a value Python skips in silence — a stderr
-    // divergence reachable only from a hand-edited file, which is the one place nobody
-    // would look for it.
+    // `isTruthy`, not `priorName &&`: the marker is user-editable JSON, and an
+    // empty `[]`, `{}` or `0` must count as absent although JS's `&&` treats the first two
+    // as set. Getting that wrong warns about a value that is silently skipped — reachable
+    // only from a hand-edited file, which is the one place nobody would look for it.
     const priorName = priorSrcDirs[srcDir];
     if (isBundle && isTruthy(priorName) && priorName !== dirname) {
       if (safePriorDirName(out, priorName)) {

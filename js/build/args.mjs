@@ -23,12 +23,12 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
   'bob', 'bob-global', 'openclaude', 'openclaude-global'];
 
 /**
- * build.py:307-321 — the three defaults that come from `harness.config.json`.
+ * The three defaults that come from `harness.config.json`.
  *
  * The corrupt-file branch is reproduced including its imprecision: the warning says only
- * "using theme 'neutral'", but the branch also resets posture and mode. Matching the
- * Python text mattered more than fixing it here, because the two CLIs' stderr was compared
- * byte-for-byte by the former Python golden harness; nothing pins the wording now.
+ * "using theme 'neutral'", but the branch also resets posture and mode. The wording
+ * stays as it was: stderr was once compared byte-for-byte across the two CLIs, and nothing
+ * pins it now.
  */
 export function configDefaults() {
   const d = {
@@ -387,7 +387,7 @@ export function parseArgs(argv, defaults) {
  *
  * `geneseed validate` takes every render flag but `--sync-themes`/`--config-dir` (it refuses
  * those two, and prints its own `-h` before this parser can print the generator's) — the reference's
- * `--validate-only` reads exactly the flags `build.py`'s parser already produced, so the port
+ * `--validate-only` reads exactly the flags this parser produces, so validate
  * hands the CLI this parser rather than a second one beside it. That is not tidiness: a
  * hand-rolled copy would have its own `--target` alias, its own `choices` lists and its own
  * `-h`, and `tests/unit/node_driver.test.mjs`'s '--help names every flag the parser takes' gates only
@@ -411,8 +411,8 @@ function choice(flag, value, allowed) {
  * argparse's error exit — a THROW since P5f, where it used to be `process.exit(code)`.
  *
  * `harness rebuild-all` re-emits every active install and its whole contract is "continue
- * past a failure so one broken install never blocks the rest". The Python gets that for free:
- * each rebuild is a SUBPROCESS, and a child that exits 2 hands back a return code. Here the
+ * past a failure so one broken install never blocks the rest". A subprocess per rebuild would
+ * get that for free, since a child that exits 2 hands back a return code. Here the
  * driver is a module in the same process, so `process.exit` would take the loop, the CLI and
  * every remaining install with it — the one place where importing rather than spawning is not
  * transparent, and it turns a per-install failure into a total one.

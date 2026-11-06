@@ -43,8 +43,7 @@ import { mkdirSync } from 'node:fs';
  * earlier than RENDER, which still holds since nothing after this logs a phase at all.
  *
  * `manifestExisted` only ever arrives from the per-repo caller; the global emit does not pass
- * it, matching the Python side, so the pre-manifest header line stays unreachable from there on
- * both sides.
+ * it, so the pre-manifest header line stays unreachable from there.
  *
  * `overridesDir` is a THIRD directory, and it is not `dir` for the per-repo emit: the
  * per-repo `agent-overrides.json` lives beside the portable bundle in `out`, while every other
@@ -173,19 +172,14 @@ export function emitOpencodeRender(cfg, job) {
  * per-repo" OpenCode deployment. PRUNE and MANIFEST are the driver's; there is no VERIFY,
  * because this emit writes no settings file.
  *
- * ASSEMBLY, NOT TRANSLATION. Every unit it needs was already here — 58 of the 65 functions
- * in its Python closure, counted with `ast` rather than by name-mapping, which is how the
- * scout that produced this list first reported `_posture_body` and `_mode_body` as missing
- * when both are `registerBody` in `js/build/render.mjs`. What is new is the assembly and the
- * three values that had to be decided on the Python side.
+ * ASSEMBLY, NOT TRANSLATION. Every unit it needs already exists elsewhere (`_posture_body`
+ * and `_mode_body`, for one, are `registerBody` in `js/build/render.mjs`); what is here is the
+ * assembly and the values the caller must decide.
  *
- * `cfgDir` IS THE FIRST OF THEM AND THE REASON THE OTHERS WERE ASKED ABOUT.
- * `_build_core._opencode_config_dir` is an `_OWNED` name — the suite and `harness diff`
- * both redirect it at a sandbox — so resolving it here would render 135 files into the
- * developer's real `~/.config/opencode`. Python's entry point resolves it once, before
- * anything else, and sends the answer. Fourth phase running (`STRUCTURE` at P2d,
- * `capabilityLinkRe` at P2e, `_PREAMBLE_CONFIG_DIR` at P3b): send the decision, never the
- * resolver.
+ * `cfgDir` IS THE FIRST OF THEM. The suite and `harness diff` both redirect the OpenCode
+ * config dir at a sandbox, so resolving it here would render 135 files into the
+ * developer's real `~/.config/opencode`. The entry point resolves it once, before
+ * anything else, and sends the answer: send the decision, never the resolver.
  *
  * `out` IS NOT THE TARGET, and with the default nobody can tell. `emit_opencode_global`
  * writes into `<cfg>` and takes `out` ONLY as the legacy bundle to migrate a memory or
@@ -194,7 +188,7 @@ export function emitOpencodeRender(cfg, job) {
  * leaves them coincident — the `claude/bundle-in-subfolder` finding at a third call site.
  *
  * `agentPath` travels for the same reason `emitOpencodeRender`'s does: it is WIRE's one
- * input, and `Path.as_posix()` is the Python side's spelling of it.
+ * input, and it is a POSIX-style path.
  */
 export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
@@ -225,8 +219,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // Co-owned, so never in `owned` — see `opencodeSentinelWrite`.
   opencodeSentinelWrite(cfgDir);
 
-  // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
-  // the pre-manifest header line is unreachable from this emit on both sides.
+  // `manifestExisted` is deliberately not passed, so
+  // the pre-manifest header line is unreachable from this emit.
   const {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
