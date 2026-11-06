@@ -356,7 +356,7 @@ export function writeMemories(modelOutput, memDir, existing) {
 }
 
 /**
- * `_harness_tui_views._memory_drop_index` — remove the index line(s) naming `<name>.md`.
+ * Remove the index line(s) naming `<name>.md`.
  *
  * ITS PYTHON HOME IS THE TUI, and it is here because this is where its SIBLINGS' twins are:
  * `appendAgentLesson` writes the index lines this deletes and `consolidateMemory` rebuilds
@@ -367,7 +367,7 @@ export function writeMemories(modelOutput, memDir, existing) {
  * nothing in `js/` referenced it — which is the third time a plan's "already ported" column
  * was answered by reading rather than by trusting.
  *
- * SUBSTRING, NOT PARSE, exactly as the reference is: any line containing `(<name>.md)` goes,
+ * SUBSTRING, NOT PARSE: any line containing `(<name>.md)` goes,
  * so a hand-written index in a different shape still loses its entry. And the file is only
  * REWRITTEN when something actually changed, which keeps a delete of an unindexed fact from
  * touching the user's mtime.
@@ -392,23 +392,23 @@ export function memoryDropIndex(memDir, name) {
   }
   if (!touched) return;
   pruneTopicsDir(memDir);
-  try { writeMap(memDir, false); } catch { /* the reference swallows OSError here too */ }
+  try { writeMap(memDir, false); } catch { /* best-effort */ }
 }
 
 /** Drop every line holding `needle`; the kept lines when something went, else null. */
 function dropLines(p, needle) {
   const lines = readLines(p);
-  if (!lines) return null;        // the reference's `except OSError: return`
+  if (!lines) return null;        // unreadable: nothing to drop
   const keep = lines.filter((ln) => !ln.includes(needle));
   if (keep.length === lines.length) return null;
   try {
     writeTextAtomic(p, `${keep.join('\n')}\n`);
-  } catch { /* the reference swallows OSError here too */ }
+  } catch { /* best-effort */ }
   return keep;
 }
 
 /**
- * `_harness_mcp._archive_store` — move a runtime store aside to a sibling
+ * Move a runtime store aside to a sibling
  * `archived-<name>/<timestamp>/`.
  *
  * NEVER a delete. Memory is the one thing in this system a user cannot rebuild, so the

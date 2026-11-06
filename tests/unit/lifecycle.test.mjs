@@ -851,7 +851,7 @@ function projectInstall(repo, kind, home) {
   return repo;
 }
 
-/** `os.chdir` with the reference's tearDown, which every one of these tests needs. */
+/** `os.chdir` with a restoring tearDown, which every one of these tests needs. */
 function inCwd(dir, fn) {
   const saved = process.cwd();
   process.chdir(dir);

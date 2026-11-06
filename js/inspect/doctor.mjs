@@ -48,7 +48,7 @@ import { hostMatrixProblems, moduleMapProblems, scorecardProblems, shimProblems 
 import { NOTE, isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
 /**
- * `_harness_build._themes_to_check` — which themes doctor validates.
+ * Which themes doctor validates.
  *
  * An explicit `--theme` wins. Otherwise, unless `--all` forces the maintainer sweep, scope to
  * the theme THIS host installed so a one-theme user is not buried under the same problem
@@ -86,10 +86,10 @@ function withSwallowed(streams, fn) {
 }
 
 /**
- * `contextlib.redirect_stdout(io.StringIO())` — swallow an emit's log, and ONLY stdout.
+ * Swallow an emit's log, and ONLY stdout.
  *
- * The Python redirects stdout and leaves stderr alone, so a WARN from the emit still reaches
- * the user. Reproducing that exactly is the point: swallowing both would hide
+ * Stderr is left alone, so a WARN from the emit still reaches
+ * the user. That is the point: swallowing both would hide
  * `warnBobGlobalOverProject` and swallowing neither would put ~200 lines of emit summary into
  * doctor's output. `withPlatformNewlines` inside `emitGlobalInto` wraps whatever `write` is
  * installed at call time, so it translates into this buffer and the bytes never leave.
@@ -126,7 +126,7 @@ function emitProblemsOver(items, makeCell) {
 }
 
 /**
- * `_harness_build._global_emit_problems` — validate the opencode-global emit, in BOTH
+ * Validate the opencode-global emit, in BOTH
  * footprints.
  *
  * The RECOMMENDED install, and otherwise a doctor blind spot: the files build and ./Harness
@@ -150,7 +150,7 @@ export function globalEmitProblems(themeName) {
 }
 
 /**
- * `_harness_build._claude_bob_emit_problems` — validate the claude/bob/openclaude PER-REPO
+ * Validate the claude/bob/openclaude PER-REPO
  * emits, which were never checked before.
  *
  * That is exactly why the CLAUDE.md/AGENTS.md skill-table dead links shipped unnoticed: the
@@ -174,18 +174,16 @@ export function claudeBobEmitProblems(themeName) {
 }
 
 /**
- * `_harness_build._doctor_collect` — run every check; return `[themes, problems]`.
+ * Run every check; return `[themes, problems]`.
  *
- * ONE PARAMETER OF THE PYTHON IS NOT HERE, and the absence is on purpose. `on_progress` is
- * the TUI's — it drags ~140 lines of curses drawing behind it and nothing in this tree can
- * supply one. `groups` DID land, with the caller that needed it: it is the structured
+ * There is no `on_progress` parameter: nothing in this tree can supply one.
+ * `groups` is the structured
  * `{check, label, problems}` view the Doctor page renders, and `js/web/api.mjs`'s `apiDoctor`
  * passes an array. `cmdDoctor` passes nothing and gets the flat list, so the return contract
  * is the same either way.
  *
- * THE PER-THEME BUILD IS THE DRIVER, IN-PROCESS. The Python shells to `build.py` and reads a
- * return code; here that is `driverMain`, the route P5e established and the only one the
- * `child_process` allow-list leaves. `cwd=ROOT` does not travel in-process and does not have
+ * THE PER-THEME BUILD IS THE DRIVER, IN-PROCESS: `driverMain`, the only route the
+ * `child_process` allow-list leaves. A working directory does not travel in-process and does not have
  * to: `--out` is an absolute path, which is the one input `resolveOut` would have read the
  * working directory for.
  */
@@ -196,10 +194,10 @@ export function doctorCollect({
   const available = themeFiles().map(stemOf);
   if (!available.length) return [[], ['[doctor] no themes found']];
 
-  // `_ran` — the label is the one place each check is NAMED, and since P6b a caller can
+  // The label is the one place each check is NAMED, and a caller can
   // pass an array to collect them. `/api/doctor` renders one card per entry, which is the
-  // only reason the structured view exists; `cmd_doctor` passes nothing and gets the flat
-  // list, so the return contract is unchanged either way. `on_progress` is still P7's.
+  // only reason the structured view exists; `cmdDoctor` passes nothing and gets the flat
+  // list, so the return contract is unchanged either way.
   const ran = (check, label, probs) => {
     if (groups !== null) groups.push({ check, label, problems: sortedProblems(probs) });
     return probs;
@@ -264,16 +262,12 @@ export function doctorCollect({
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
-  // P10c's `cli` check is GONE, and the reason is not that it stopped mattering. It hashed
-  // `rituals/harness.py` and compared that against a digest baked into `cli.json`, to catch a
-  // parser edited without regenerating the table. P2 made the table the OWNED document
-  // (`js/cli-table.json`), so there is no generator to fall behind and no second file to hash
-  // — the digest was a claim about a file this migration deletes. What replaces it is
+  // There is no `cli` check: the table is the OWNED document (`js/cli-table.json`), so
+  // there is no generator to fall behind and no second file to hash. What gates it is
   // `tests/unit/cli_table.test.mjs`, which holds the owned table against the two entry points
-  // that dispatch from it: no second file to hash, and no generator that can fall behind.
+  // that dispatch from it.
   if (!noBundle) {
-    // `Path(bundle).expanduser().resolve()`, which `resolvePath` already IS — the default is
-    // deliberately NOT resolved, because the Python's `ROOT / "Harness"` is not either and
+    // `resolvePath` expands and resolves — the default is deliberately NOT resolved, because
     // the resolved spelling is what the messages print.
     const b = bundle ? resolvePath(bundle) : path.join(ROOT, 'Harness');
     problems = problems.concat(ran('bundle', 'Committed bundle drift', renderedProblems(b)));
@@ -287,7 +281,7 @@ function captureBoth(fn) {
 }
 
 /**
- * `_harness_build.cmd_doctor` — the CLI face.
+ * The CLI face.
  *
  * With `--theme`, one theme. With none it scopes to the INSTALLED theme, so a one-theme
  * install is not buried under the same issue repeated across every theme; `--all` is the full
@@ -342,7 +336,7 @@ function doctorReport(args, guard) {
     if (problems.some((p) => p.startsWith('[themes]') && p.includes('missing key'))) {
       // ⚠ THE TIP USED TO NAME `./geneseed build --sync-themes`, AND THAT COMMAND ERRORS.
       // It was argued here on the premise that "`build` forwards its extra arguments to the
-      // generator" — which was true of the reference and is not true of `cmdBuild`
+      // generator" — which is not true of `cmdBuild`
       // (`js/build/generate.mjs`), which forwards `--theme` and nothing else. So the front door
       // answered `unrecognized arguments: --sync-themes` to anyone who followed doctor's own
       // advice, for as long as the premise went unchecked. The flag belongs to the GENERATOR,

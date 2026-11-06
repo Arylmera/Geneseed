@@ -4,22 +4,18 @@
  * panel and the web console all read.
  *
  * WHY THIS FILE EXISTS RATHER THAN A THIRD COPY OF THE TABLES. `LAW_CLASS`, `SKILL_CLASS`,
- * `LAW_CLASSES` and `ENTITY_STATUSES` crossed in P5g, inside `js/inspect/doctor.mjs`, because
- * doctor's authoring gates are what validate them — and `js/inspect/status.mjs`'s docblock said
- * flatly that "the taxonomy P7 owns" was not ported, which was true of `_parse_laws` and
- * `entity_status` and had stopped being true of the tables. P6c needs all of it, so the
- * tables move HERE, to the module that mirrors where Python keeps them, and the doctor's
+ * `LAW_CLASSES` and `ENTITY_STATUSES` are validated by doctor's authoring gates, and the
+ * catalog needs all of them, so the
+ * tables live HERE, and the doctor's
  * check modules import them — `checks-authoring.mjs` takes `LAW_CLASS`, `LAW_CLASSES` and
  * `SKILL_CLASS`, `checks-repo.mjs` takes `ENTITY_STATUSES`. A copy of a value under test
  * silently stops being the value under test.
  *
- * AND `inventoryCounts` FOLDS BACK INTO `tuiInventory`. P5d shipped a counting-only twin
- * with a docblock warning that the two must not become two classifiers; this is the phase
- * that would have made them two, because `api_catalog` consumes the very fields the count
- * threw away. So there is one classifier — "a two-part relative path ending in `.md` and
- * not starting with `_`, under `agents/` or `skills/`" — and `inventoryCounts` is three
- * `length`s off it. The eleven `status` cells gate the counts; P6c's catalog cells gate
- * the fields; both run over the same walk.
+ * AND `inventoryCounts` IS THREE `length`s OFF `tuiInventory`: the two must not become two
+ * classifiers, because the catalog consumes the very fields the count throws away. So there
+ * is one classifier — "a two-part relative path ending in `.md` and
+ * not starting with `_`, under `agents/` or `skills/`". The eleven `status` cells gate the
+ * counts; the catalog cells gate the fields; both run over the same walk.
  */
 import path from 'node:path';
 
@@ -31,7 +27,7 @@ import { readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 
 /**
- * `_harness_tui.LAW_HEADING_RE` — a heading in the RENDERED laws file, e.g.
+ * A heading in the RENDERED laws file, e.g.
  * `### Rule IV — Deletion Is Deliberate`.
  *
  * The rendered side only: the unrendered source declares a rule as `{{LAW:<id>}} <Name>`, and
@@ -67,17 +63,17 @@ const ONTOLOGY_HEADING_RE = /^####\s+(.+?)\s*$/;
 /** The lead line of a pack file — `**Craft** — how code is written.` */
 const PACK_LEAD_RE = /^\*\*(.+?)\*\*\s+[—-]\s+(.+?)\s*$/;
 
-/** `_harness_tui.LAW_CLASS` — each rule's class, keyed by Roman numeral. */
+/** Each rule's class, keyed by Roman numeral. */
 export const LAW_CLASS = {
   I: 'security', II: 'process', III: 'verify', IV: 'security', V: 'verify',
   VI: 'security', VII: 'security', VIII: 'craft', IX: 'verify',
 };
 
-/** `_harness_tui.ENTITY_STATUSES` — the lifecycle statuses `registry.json` may carry. */
+/** The lifecycle statuses `registry.json` may carry. */
 export const ENTITY_STATUSES = ['experimental', 'approved', 'deprecated'];
 
 /**
- * `_harness_tui.LAW_CLASSES` — the six governance classes a law may carry.
+ * The six governance classes a law may carry.
  *
  * ⚠ SIX, THOUGH ONLY FOUR ARE IN USE. When the corpus became nine invariants, `context` and
  * `comms` stopped having a member — that material moved to the ontology and the doctrine packs,
@@ -87,7 +83,7 @@ export const ENTITY_STATUSES = ['experimental', 'approved', 'deprecated'];
  */
 export const LAW_CLASSES = ['security', 'process', 'verify', 'craft', 'context', 'comms'];
 
-/** `_harness_tui.SKILL_CLASS` — each skill's category, keyed by file stem. */
+/** Each skill's category, keyed by file stem. */
 export const SKILL_CLASS = {
   brainstorm: 'design', plan: 'design', council: 'design',
   workflow: 'design', 'parallel-agents': 'design', pipeline: 'design',
@@ -122,10 +118,9 @@ const has = (obj, k) => Object.hasOwn(obj, k);
  * (including a blank one) to the CURRENT record's body. Text before the first heading is
  * dropped on the floor because `cur` is still null.
  *
- * `str.strip()`, applied at the end to every body. `trim()`'s whitespace set differs from
- * Python's only at U+FEFF, which is the standing item this port has carried since P4 — a
- * rendered body cannot end in a BOM, and a fourth primitive to say so would cost more than
- * it gates.
+ * `trim()`, applied at the end to every body. Its whitespace set differs from a
+ * strip-style one only at U+FEFF — a rendered body cannot end in a BOM, and a primitive to
+ * say so would cost more than it gates.
  */
 function parseSections(text, re, makeRecord) {
   const out = [];
@@ -145,7 +140,7 @@ function parseSections(text, re, makeRecord) {
 }
 
 /**
- * `_harness_tui._parse_laws` — the rendered laws file split into
+ * The rendered laws file split into
  * `{num, title, klass, body}`.
  */
 function parseLaws(text) {
@@ -188,9 +183,9 @@ function parseOntology(text) {
 }
 
 /**
- * `_harness_tui.load_registry` — the `entities` map from `registry.json`, or `{}`.
+ * The `entities` map from `registry.json`, or `{}`.
  *
- * Deliberately forgiving on BOTH failure modes, as the reference is: a missing file and a
+ * Deliberately forgiving on BOTH failure modes: a missing file and a
  * corrupt one both yield `{}`, which reads every badge as "unknown" rather than breaking
  * the browser. `registryProblems` in `js/inspect/checks-repo.mjs` is the loud reader of the same file
  * and stays separate — the two answer different questions.
@@ -207,7 +202,7 @@ export function loadRegistry() {
 }
 
 /**
- * `_harness_tui.entity_status` — one entity's lifecycle status, plus the two derived
+ * One entity's lifecycle status, plus the two derived
  * states that are never stored.
  *
  * An entity the registry has never heard of is "personal": your own skill dropped into the
@@ -225,7 +220,7 @@ export function entityStatus(registry, key) {
 }
 
 /**
- * `_harness_tui._tui_inventory` — render-accurate inventory of all three constitutional tiers,
+ * Render-accurate inventory of all three constitutional tiers,
  * plus every agent and skill with its one-line purpose, rendered spec, source and badge.
  *
  * THE WHOLE CATALOGUE, NOT THE BUILT SUBSET. All four pack files ship in every bundle

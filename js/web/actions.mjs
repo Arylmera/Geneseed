@@ -245,7 +245,7 @@ export function targetView(base, [host, scope, root]) {
 // ---- OS-native folder picker ---------------------------------------------------------------
 
 /**
- * ms before an open dialog is abandoned. The Python original's 300 s, kept as a named
+ * ms before an open dialog is abandoned. 300 s, kept as a named
  * constant rather than a literal in the spawn call. `GENESEED_PICK_TIMEOUT_MS` is a TEST HOOK
  * ONLY — it overrides the constant so the timeout path can be proven in seconds instead of
  * five minutes (nobody is at the dialog to cancel it in an automated run); the 300 s default
@@ -267,8 +267,7 @@ const PICK_SCRIPT_WIN = 'Add-Type -AssemblyName System.Windows.Forms; '
   + 'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) '
   + '{ Write-Output $d.SelectedPath }';
 
-// Ported VERBATIM from the deleted Python (`git show 8860c72:rituals/_web_actions.py`,
-// `api_pick_folder`) — same prompt text, same AppleScript shape. `choose folder` is a
+// The prompt text and the AppleScript shape are fixed. `choose folder` is a
 // StandardAdditions command that runs in-process inside `osascript`, so it needs no
 // automation-consent prompt the way scripting another app would.
 const PICK_SCRIPT_MAC = 'set f to POSIX path of (choose folder with prompt '

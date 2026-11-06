@@ -218,8 +218,7 @@ export function buildLearnPrompt(notes, facts) {
  */
 function runLlm(llm, prompt) {
   const argv = splitWords(llm);
-  // `_harness_learn.py:85` runs this through the wrapped `run(..., capture_output=True)`,
-  // which folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
+  // `NO_WINDOW` folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
   //
   // `GENESEED_LEARN_CHILD=1` (Claude B2): `$GENESEED_LLM="claude -p"` with hooks not disabled

@@ -1,9 +1,8 @@
 /**
  * Comparing and locating — how a path is case-folded, ordered, contained, spelled and found.
  *
- * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
- * measurements against CPython are recorded per function, and why NONE of these is the Node
- * default — the warning the retired `py` prefix used to carry now lives in each docblock.
+ * These are definitions, not an adaptation of somebody else's, and NONE of these is the
+ * Node default — each docblock says why.
  * Path semantics are the most PLATFORM-SHAPED rules in the tool — several of these have a
  * different right answer on Windows and on POSIX, and each says which.
  */
@@ -21,11 +20,9 @@ const { X_OK } = constants;
  * compares by code point where JS compares by UTF-16 code unit (differs only above the
  * BMP), and `str.lower()` is not `toLowerCase()` for a handful of characters.
  *
- * THE SEPARATOR CONVERSION IS NOT OPTIONAL, and it was missing until the byte-bearing
- * corpus in the former Python parity suite asked. `ntpath.normcase` is
- * `s.replace('/', '\\').lower()`, and `PurePath._str_normcase` gets the same conversion for
- * free because `Path` has already done it — so BOTH readings of the reference fold slashes
- * and this did not. Every sort call site feeds it `path.join` output or a bare `readdir`
+ * THE SEPARATOR CONVERSION IS NOT OPTIONAL. `ntpath.normcase` is
+ * `s.replace('/', '\\').lower()`, so slashes fold to the native separator. Every sort call
+ * site feeds it `path.join` output or a bare `readdir`
  * name, which is why no emitted byte ever moved; `fnTranslate(normcase(pattern))` in
  * `js/hosts/hooks.mjs` is where it was reachable, because an exclude pattern is USER-WRITTEN and
  * `memory/*` never matched a native `memory\x` the way `fnmatch` does.
@@ -37,7 +34,7 @@ export const normcase = process.platform === 'win32'
 /**
  * `sorted()` over paths \u2014 one owner, so two call sites cannot drift apart.
  *
- * COMPONENT-WISE, and that was a flat string compare until P2 measured it. `PurePath.__lt__`
+ * COMPONENT-WISE, not a flat string compare. `PurePath.__lt__`
  * compares `_parts_normcase` \u2014 a TUPLE of path components \u2014 so the separator never takes part
  * in the comparison, and the two readings disagree in BOTH directions:
  *
@@ -47,12 +44,11 @@ export const normcase = process.platform === 'win32'
  *     flat cmp  : the reverse again
  *
  * Nothing in the emitted tree could see it: `js/build/render.mjs` sorts a list whose members share
- * a directory depth, and `golden.py` compared CONTENT rather than order. It became visible
- * the first time a full path list was PRINTED \u2014 `geneseed validate -v` \u2014 against a real
+ * a directory depth, and the golden harness compares CONTENT rather than order. It becomes
+ * visible when a full path list is PRINTED \u2014 `geneseed validate -v` \u2014 against a real
  * skills tree that happens to contain both `skills/geneseed/` and `skills/geneseed-code-review/`.
- * The former Python maintainer-tools test found it and died with the reference it compared
- * against. What HOLDS it now is `tests/unit/maintainer_tools.test.mjs`, and specifically its
- * `theme files are visited in THIS platform's Path collation order` test: it re-derives Python's
+ * What HOLDS it is `tests/unit/maintainer_tools.test.mjs`, and specifically its
+ * `theme files are visited in THIS platform's Path collation order` test: it re-derives the
  * `sorted(Path)` order for the running platform instead of replaying a recording, so it cannot
  * agree with a drift \u2014 and it is the measured killer of this function's mutation (M3).
  */
@@ -66,12 +62,10 @@ export function comparePaths(a, b) {
 }
 
 /**
- * `_harness_core._within` \u2014 containment through `normcase`, segment-wise.
+ * Containment through `normcase`, segment-wise.
  *
- * MOVED HERE IN P6i, from `js/web/api.mjs` where P6b first needed it. The Python is a harness
- * CORE primitive (`child.relative_to(parent)` in a try/except), and its second caller is
- * `_install_move_list` in `js/maintain/uninstall.mjs` \u2014 a CLI-level module that must not import the
- * web tree to reach it. Beside `normcase`, which is the thing it is actually about.
+ * Its callers include `js/maintain/uninstall.mjs` \u2014 a CLI-level module that must not import the
+ * web tree to reach it. It lives beside `normcase`, which is the thing it is actually about.
  * `js/web/api.mjs` re-exports it so its existing importers are unchanged.
  *
  * TRAILING SEPARATORS ARE STRIPPED FROM `parent` FIRST. A root is the one path whose canonical
@@ -90,7 +84,7 @@ export function within(child, parent) {
  * `Path` is `WindowsPath` on Windows and `PosixPath` everywhere else, and the two parsers
  * disagree about the two things below. A body that is right on one host is therefore wrong
  * on the other, which is exactly how this one passed a whole Windows suite and failed two
- * cases on the first Linux run of the former Python pure-function parity suite:
+ * cases on Linux:
  *
  *   * SEPARATORS. `ntpath` treats `\` and `/` alike; `posixpath` treats `\` as an ordinary
  *     filename character. `str(PurePosixPath('C:\\x\\bin\\'))` is that string VERBATIM —
@@ -104,8 +98,7 @@ export function within(child, parent) {
  * NOT reproduced, and named here rather than left as a gap nobody wrote down: `//` and
  * `///x` on WINDOWS, where `PureWindowsPath` answers `\\` and `\\\x` and this answers `\`
  * and `\x`. Those are incomplete UNC prefixes and matching them needs ntpath's share-name
- * parsing; both inputs were kept OUT of the retired parity corpus instead of sitting in it
- * wrong.
+ * parsing; both inputs are left alone rather than answered wrong.
  *
  * The root's separators are still rewritten ONE AT A TIME, never `replace(/[\\/]+/g, sep)`:
  * a UNC root's leading pair is part of it, so collapsing runs turns `//server/share/x` into
@@ -126,13 +119,13 @@ export function toPlatformPath(s) {
 /**
  * `pathlib.Path(s).is_absolute()`, which is NOT `path.isAbsolute(s)` on Windows.
  *
- * MEASURED against CPython 3.13, and the two disagree on exactly one shape: a ROOTLESS
+ * The two disagree on exactly one shape: a ROOTLESS
  * absolute path. `/x/AGENT.md` and `\x\AGENT.md` are `True` to `path.isAbsolute` and `False`
  * to Python, which requires a DRIVE (`C:/x`) or a UNC root (`//server/share/x`) before it
  * calls a Windows path absolute. `C:x/AGENT.md` — a drive-RELATIVE path — is False to both.
  * On POSIX the two rules coincide and this is `s.startsWith('/')`.
  *
- * Written in P5h for `installAgentEntry`, which filters an OpenCode config's `instructions`
+ * Used by `installAgentEntry`, which filters an OpenCode config's `instructions`
  * for the entries that are NOT absolute in order to tell a project install's relative
  * `…/AGENT.md` from a global install's absolute one. A hand-edited config naming
  * `/repo/AGENT.md` is the reachable input: Python keeps that entry and Node would have
@@ -144,11 +137,9 @@ export function toPlatformPath(s) {
  * and `js/build/bundle.mjs`'s `safePriorDirName` is `&&`-guarded by `basename(p) === p` immediately
  * after. The two in `js/hosts/hooks.mjs` (a context entry's `path`) DO carry the same hazard and
  * are deliberately not repointed here: that is the hook entry's shipped behaviour, no
- * `context` cell varies it, and changing it in this phase would be an ungated edit to a verb
- * that crossed three phases ago. Recorded in the spec's "Still owed" with this reproduction.
+ * `context` cell varies it, and changing it would be an ungated edit to a shipped verb.
  *
- * It was gated by a corpus in the retired Python pure-function parity suite; nothing has
- * replaced it, and no CLI test can vary the shape.
+ * Nothing gates this function directly, and no CLI test can vary the shape.
  */
 export function isAbsolutePath(s) {
   if (process.platform !== 'win32') return s.startsWith('/');
@@ -156,8 +147,7 @@ export function isAbsolutePath(s) {
   // drive and no root, `/x` has the root and no drive, and neither is absolute. In
   // `path.parse` terms that is exactly "the root is longer than a bare separator AND ends in
   // one": `C:` for `C:x`, `\` for `\x`, `C:\` for `C:\x`, `\\srv\share\` for a UNC path.
-  // The first draft tested `root !== '\\'`, which called `C:x` absolute; the corpus caught
-  // it on the two drive-relative cases and nothing else would have.
+  // Testing `root !== '\\'` alone would call `C:x` absolute.
   const root = path.parse(s).root;
   return root.length > 1 && /[\\/]$/.test(root);
 }
@@ -167,12 +157,11 @@ export function isAbsolutePath(s) {
  *
  * `doctor` runs `node --check` over the OpenCode plugins and SKIPS the whole check when node
  * is not on PATH. `process.execPath` is not that: it is always set, so a port that used it
- * would run the check in a world where the reference silently declines to — the divergence a
+ * would run the check in a world where it silently declines to — the divergence a
  * PATH-removal refutation is aimed at, and the reason this is a real lookup rather than one
  * line of "we are node, we know where node is".
  *
- * The Windows half is the part with behaviour in it, and its suffix rules were MEASURED
- * against CPython 3.13 rather than assumed. `PATHEXT` supplies the suffixes, and the
+ * The Windows half is the part with behaviour in it. `PATHEXT` supplies the suffixes, and the
  * returned path carries PATHEXT's OWN SPELLING of the extension rather than the file's
  * (`zzcmd.CMD` for a `zzcmd.cmd` on disk). An extension already in that set means the command
  * is spelled in full.

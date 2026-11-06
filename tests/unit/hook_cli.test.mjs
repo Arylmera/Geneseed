@@ -76,7 +76,7 @@ function verbsOf(rel) {
 const HOOK = 'bin/geneseed-hook.mjs';
 const CLI = 'bin/geneseed-cli.mjs';
 
-/** Every name the driver's table dispatches — the successor to the reference's argparse walk. */
+/** Every name the driver's table dispatches — the table is the one source. */
 function tableCommands() {
   const t = JSON.parse(read('js', 'cli-table.json'));
   assert.ok(Array.isArray(t.commands) && t.commands.length > 0, 'js/cli-table.json has no commands');

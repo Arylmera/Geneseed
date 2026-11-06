@@ -8,10 +8,8 @@
  * test, and probes the real handler, because a declaration is not a dispatcher — a route can be
  * declared here and missing from the dispatch, and nothing but a probe notices.
  *
- * This file used to also carry the Python→Node port's NOT_PORTED / DECLINED partition — five
- * sets, all empty once the port finished. They were deleted when the port bookkeeping retired
- * (see git history); an unmatched GET falls through to `serveStatic`'s SPA fallback and an
- * unmatched POST answers 404, which is what the empty sets already produced.
+ * An unmatched GET falls through to `serveStatic`'s SPA fallback and an unmatched POST
+ * answers 404.
  *
  * Split out of `server.mjs` because it is the half a reader consults to answer "does the console
  * expose X?", which has nothing to do with sockets, daemons or gzip.

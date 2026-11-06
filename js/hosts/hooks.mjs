@@ -23,14 +23,11 @@
  * this driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
  *
- * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`, whose shared
- * primitives live in `_harness_core.py`. `rituals/harness.py` links all fourteen
- * submodules into one namespace at import time, so a Python `harness context` loads
- * ~11,600 lines and the generator behind them. This module loads none of that, and that is
- * deliberate rather than incidental: the Python originals already refuse to import `build`
- * for the marker filenames they need ("literals keep the hook dependency-free"), and
+ * This module loads none of the generator behind `build`, and that is deliberate rather
+ * than incidental: it takes the marker filenames it needs as literals to stay
+ * dependency-free, and
  * `bin/build-driver.mjs` could not be imported anyway, since its last statement runs the
- * generator. What that rule does NOT license is a second copy of a shared resolver under a
+ * generator. What that does NOT license is a second copy of a shared resolver under a
  * different name — see `./hooks-prims.mjs`, where P5d found one that had silently diverged
  * from its twin.
  *

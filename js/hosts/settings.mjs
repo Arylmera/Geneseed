@@ -581,7 +581,7 @@ export function atomicWriteJson(p, config) {
 
 /** `_build_settings._merge_opencode_json`. Returns the resolved target path.
  *
- * Zero runtime callers — re-measured this phase and still true. `rituals/_harness_mcp.py`
+ * Zero runtime callers — re-measured this phase and still true. The MCP module
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
  * `_build_global.emit_opencode_global`).

@@ -91,11 +91,11 @@ export function sovereignBypass(root) {
     if (typeof raw !== 'string' || !raw.trim()) continue;
     let base;
     try {
-      // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
+      // `.rstrip("\\/")` AFTER normcase, so the separator
       // test below cannot be fooled by a trailing slash in the user's file.
       //
       // `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE
-      // and this caller catches: the reference prints nothing here, so replaying the
+      // and this caller catches: nothing should print here, so replaying the
       // message would be a stderr divergence on every hook call for one bad entry.
       //
       // `resolvePath`, the same resolution as `heres` above: symlinks and junctions are followed on
@@ -224,7 +224,7 @@ function projectWiresVerb(cand, verb) {
 }
 
 /**
- * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
+ * The file this install's hooks were actually wired into.
  *
  * `settings.local.json` for a Claude or OpenClaude PROJECT install (personal, untracked),
  * `settings.json` everywhere else (including Bob's, which documents no local variant), and
@@ -249,7 +249,7 @@ function emitMarkerOf(dir) {
   try { return readText(path.join(dir, '.geneseed-emit')).trim(); } catch { return ''; }
 }
 
-/** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
+/** A sibling dir whose presence means "disabled". */
 export const DISABLED_STASH = '.geneseed-disabled';
 
 /**
@@ -307,23 +307,11 @@ export const VERSION_MARKER = '.geneseed-version';
 /**
  * `Path.expanduser()` — a LEADING `~` only, and `~` alone counts.
  *
- * The docblock here used to claim "Python does not expand `~user` on Windows the way a
- * shell would". That claim was FALSE, and `921384f`'s widened probe corpus caught it:
- * `ntpath.expanduser('~someuser/x')` swaps the last component of `%USERPROFILE%` and
- * returns `C:\Users\someuser\x` — it happily expands a name that may not even be a real
- * account.
+ * `ntpath.expanduser('~someuser/x')` swaps the last component of `%USERPROFILE%`, expanding a
+ * name that may not be a real account. `Path.expanduser` on POSIX raises when the account is
+ * unknown. The two disagree, so the divergence is WINDOWS-ONLY.
  *
- * AND THE POSIX HALF OF THAT SENTENCE WAS WRONG IN ITS TURN, corrected here while the
- * reference is still on the machine to ask. `posixpath.expanduser` does the analogous thing
- * through the password database and returns the path unchanged when the account is unknown
- * — but the reference does not call it. It calls `Path.expanduser`, which re-checks the
- * result and RAISES `RuntimeError: Could not determine home directory.` So the divergence
- * below is WINDOWS-ONLY: on POSIX the reference and this port already agree in kind — both
- * refuse — and differ only in which exception says so.
- *
- * This port deliberately does NEITHER. Reproducing `ntpath`'s swap faithfully needs its own
- * corpus, and the Python reference is being deleted, so byte-parity on this one input stops
- * mattering the moment it is. What matters instead is that a `~user` form never resolves
+ * This port deliberately does NEITHER. What matters is that a `~user` form never resolves
  * SILENTLY to the wrong place: the old code below returned it untouched, so
  * `--target ~someone/x` created a literal `~someone` directory in whatever cwd the user ran
  * from. It now REFUSES the form outright. This is the single primitive every config-dir env
@@ -456,8 +444,8 @@ export function openclaudeConfigDir() {
  *
  * `projectMarker` joined in P5f. `_install_targets` asks "does this cwd carry a project
  * install of host H", and `_claude_cfg` asks "which subdir holds a project install's
- * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.openclaude` value the Python reads
- * out of `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
+ * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.openclaude` value as
+ * `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
  * than in a second table in `js/hosts/installs.mjs`.
  *
  * `agentFile` joined in P5h, and for one caller: `cmd_uninstall` names the managed block's
@@ -490,14 +478,13 @@ export const HOSTS = [
 ];
 
 /**
- * `_harness_setup.CARRIERS` — the Python's four root-level carriers, plus one JS-only addition.
+ * The four root-level carriers, plus one more.
  *
  * A shared table rather than three copies of the same list: `_theme_of_dir`,
  * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
- * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
- * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
+ * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use.
  *
- * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is half
+ * `.openclaude/CLAUDE.md` is half
  * of the fix for host-compat verdict B1 (the other half is `carriersFor`, below).
  * OpenClaude's own per-repo carrier is `carrierInLayer` (see `CLAUDE_SHAPED.openclaude` in
  * `js/build/driver.mjs`, and the `HOSTS` column of the same name): it sits at
@@ -554,7 +541,7 @@ export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) =
  * that catalogues natively gets AGENT.md's tables collapsed to a pointer and comparing the
  * portable shape against its bundle reports AGENT.md stale on every run forever. It is a
  * column and not a set literal so that the capability is declared in exactly one place
- * — the Python's own reason for the helper. The driver reads it through this function too.
+ * The driver reads it through this function too.
  *
  * Unknown host -> false, which is the shape that KEEPS the tables. The value arrives from a
  * user-editable `.geneseed-emit` marker, so an unrecognised one must degrade to the portable
@@ -574,7 +561,7 @@ export function hostCatalogsNatively(host) {
 }
 
 /**
- * `_harness_learn._resolve_memory_dir` — where `learn` dedups and indexes, and what
+ * Where `learn` dedups and indexes, and what
  * `status` reports on its memory row.
  *
  * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` beside cwd or under `./Harness` >
@@ -611,12 +598,12 @@ export function resolveMemoryDir(explicit) {
     // trace on a hook path and a non-zero exit, the exact failure the other three guards
     // exist to prevent. Skipping the base degrades to "no memory store from $GENESEED_HARNESS",
     // which is what an unset variable already does. `withDiscardableStderr` because the
-    // refusal prints at the RAISE SITE and both callers byte-compare stderr; the reference
-    // (`rituals/_harness_learn.py`, same guard) prints nothing here.
+    // refusal prints at the RAISE SITE and both callers byte-compare stderr, and nothing
+    // may print here.
     try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
   }
   const stores = bases.map((b) => path.join(b, 'memory'));
   try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store */ }
-  try { stores.push(path.join(opencodeConfigDir(), 'memory')); } catch { /* best-effort, as the Python */ }
+  try { stores.push(path.join(opencodeConfigDir(), 'memory')); } catch { /* best-effort */ }
   return stores.find(isDir) ?? null;
 }

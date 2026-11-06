@@ -4,8 +4,8 @@
 // `diffCollect` builds its `expected` tree by re-rendering `src/`, and it read the theme, the
 // emit and the footprint off the deployment precisely so that a legitimately-different install
 // would not be reported as edited. It did not read the posture or the mode: `makeCfg`'s
-// defaults are `peer`/`direct` (the reference's, inherited — `rituals/harness.py` never set
-// them either), so every install that chose any other register was diffed against a Peer/Direct
+// defaults are `peer`/`direct` (inherited, never set by
+// the caller), so every install that chose any other register was diffed against a Peer/Direct
 // AGENT.md and reported its own `## Posture` and `## Mode` sections as a local edit. The report
 // was permanent: no rebuild could clear it, because the rebuild wrote the register back.
 //

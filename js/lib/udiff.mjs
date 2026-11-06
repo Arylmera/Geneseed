@@ -4,9 +4,8 @@
  * WHY A HAND-WRITTEN MATCHER RATHER THAN A LIBRARY. The diff is the ENTIRE user-visible
  * payload of `geneseed diff`: the hunks in `--full` and in the exported improvements file
  * are this file's output and nothing else's. A generic JS diff would produce a CORRECT diff
- * and a DIFFERENT one, and the former Python suite's corpus compared the hunks character for
- * character, so "also a valid diff" failed every case (today only the `diff/--full-…` CLI cell
- * compares hunks, and only one; see `js/inspect/diff.mjs`). The alignment below IS the
+ * and a DIFFERENT one, so "also a valid diff" is not enough (only the `diff/--full-…` CLI
+ * cell compares hunks, and only one; see `js/inspect/diff.mjs`). The alignment below IS the
  * specification of what this tool prints, and three of its choices are choices no other
  * algorithm makes:
  *
@@ -19,13 +18,10 @@
  *     `floor(len(b) / 100) + 1` times is deleted from the index and stops matching entirely.
  *     On this tool's own files — hundreds of lines, many of them blank — that fires
  *     constantly and changes the hunks. It is off by construction for anything shorter, so a
- *     small fixture cannot see it at all; the recorded corpus is what carries inputs long
- *     enough to trip it.
+ *     small fixture cannot see it at all.
  *
- * PROVENANCE, not a contract with a live second party. Every rule above was measured from
- * CPython's `difflib`, which is why the odd ones are odd — `autojunk` in particular is a
- * heuristic no one would invent from scratch. That history explains the shape; it does not
- * govern it any more. The recording does, and the recording cannot be re-blessed.
+ * The rules above follow `difflib`, which is why the odd ones are odd — `autojunk` in
+ * particular is a heuristic no one would invent from scratch.
  *
  * No junk predicate is implemented: every call site is `opcodes(a, b)` with no `isjunk`, so
  * the junk set is empty and its test is constant false. That deletes two of the four
@@ -38,7 +34,7 @@
  * `SequenceMatcher.__chain_b` — b's element index, minus the popular elements.
  *
  * A `Map`, never an object: the elements are LINES, and a file whose first line is `0` would
- * have its index hoisted to the front of an object literal (the P3a hazard). Nothing here
+ * have its index hoisted to the front of an object literal. Nothing here
  * iterates `b2j`, so the hoist would be invisible until the day something did.
  */
 function chainB(b) {
@@ -61,7 +57,7 @@ function chainB(b) {
 /**
  * `SequenceMatcher.find_longest_match`, with `isbjunk` constant False.
  *
- * `j2len` is a `Map` keyed by INTEGER j, where the Python uses a dict. Nothing iterates it
+ * `j2len` is a `Map` keyed by INTEGER j. Nothing iterates it
  * either, so the key type is only about lookup; a plain object would coerce every key to a
  * string and work, and a Map says what the keys are.
  */
@@ -85,7 +81,7 @@ function findLongestMatch(a, b, b2j, alo, ahi, blo, bhi) {
   }
   // The two junk-free extension loops. The popular elements `chainB` dropped are NOT junk —
   // `bjunk` stays empty — so a popular line adjacent to a match is still extended over here
-  // even though it could never have started one. That asymmetry is the Python's.
+  // even though it could never have started one. That asymmetry is `difflib`'s.
   while (besti > alo && bestj > blo && a[besti - 1] === b[bestj - 1]) {
     besti -= 1; bestj -= 1; bestsize += 1;
   }
@@ -103,7 +99,7 @@ function matchingBlocks(a, b, b2j) {
   const queue = [[0, la, 0, lb]];
   const blocks = [];
   while (queue.length) {
-    // `queue.pop()` — LIFO, as the Python. The order reaches the output through the sort
+    // `queue.pop()` — LIFO, as `difflib`. The order reaches the output through the sort
     // below only when two blocks tie, which they cannot, so this is faithfulness rather
     // than necessity.
     const [alo, ahi, blo, bhi] = queue.pop();
@@ -157,7 +153,7 @@ function opcodes(a, b) {
 /**
  * `SequenceMatcher.get_grouped_opcodes` — the hunks, with `n` lines of context.
  *
- * Returns a list rather than a generator: the Python's caller is a `for` loop that consumes
+ * Returns a list rather than a generator: the caller is a `for` loop that consumes
  * it once, and a lazy JS equivalent would buy nothing but a second shape to reason about.
  */
 function groupedOpcodes(a, b, n = 3) {
@@ -203,7 +199,7 @@ function formatRangeUnified(start, stop) {
  * `difflib.unified_diff` — the lines, WITHOUT trailing newlines when `lineterm` is `""`.
  *
  * Every call site in this port passes `lineterm=""` and feeds it `splitlines()` output, which
- * is the form the Python's own caller uses; the parameter is kept so the shape is the
+ * is the form `difflib`'s own callers use; the parameter is kept so the shape is the
  * stdlib's rather than a specialisation that would have to be widened later.
  */
 export function unifiedDiff(a, b, {

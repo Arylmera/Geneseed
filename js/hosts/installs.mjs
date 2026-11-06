@@ -1,6 +1,5 @@
 /**
- * How a DEPLOYED install is recognised — `_harness_setup`'s detection half and
- * `_harness_mcp`'s registry-reading half, which are one subject in two Python files.
+ * How a DEPLOYED install is recognised — the detection half and the registry-reading half, one subject.
  *
  * EXTRACTED IN P5f, and by the same arithmetic that produced `js/hosts/hosts.mjs` and
  * `js/build/source.mjs`: this is the third verb-set to need it. P5d wrote `themeOfDir` and
@@ -29,7 +28,7 @@
  * That sentence was FALSE until wave 2 of the P0/P1 review: `installedDefaults` walked
  * `ROOT / "Harness"` and `ROOT.parent / "Harness"`, so on a checkout carrying a built
  * bundle every cell that seeded no emit marker read this developer's own install — four
- * web cells recorded it. Both candidates are gone (the argument is in the Python), and the
+ * web cells recorded it. Both candidates are gone, and the
  * claim is now true rather than aspirational.
  */
 import { existsSync, readdirSync } from 'node:fs';
@@ -75,16 +74,14 @@ export function readJsonMaybe(p) {
   try { return JSON.parse(txt); } catch { return null; }
 }
 
-// ---- the configured defaults (`_harness_setup._default_*`) --------------------------------
+// ---- the configured defaults ---------------------------------------------------------
 
 /**
- * `_harness_setup._default_theme` / `_default_posture` / `_default_mode`.
- *
  * One reader for three keys where the Python has three near-identical functions. The fallback
  * differs per key and is the argument, so nothing is shared that is not actually the same:
  * each is `harness.config.json`'s value or a literal, with an unreadable or non-JSON file
  * falling through to the literal. NOT `configDefaults()` from the driver, which warns on a
- * corrupt file — these three are silent, as their Python originals are.
+ * corrupt file — these three are silent.
  */
 function configuredDefault(key, fallback) {
   if (existsSync(CONFIG)) {
@@ -132,7 +129,7 @@ export function themeFiles(dir = THEMES) {
     .map((n) => path.join(dir, n)).sort(comparePaths);
 }
 
-/** `_harness_setup._theme_from_agent` — match a theme's unique LOADED_SIGIL in a carrier. */
+/** Match a theme's unique LOADED_SIGIL in a carrier. */
 function themeFromAgent(agentMd) {
   const text = readMaybe(agentMd);
   if (text === null) return null;
@@ -191,7 +188,7 @@ function firstCarrier(d, probe, fallback = null, host = null) {
 const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 /**
- * `_harness_setup._theme_of_dir` — the marker, else the sigil in one of five carriers.
+ * The marker, else the sigil in one of five carriers.
  *
  * The marker's value becomes `<themes>/<name>.json` in `loadTheme`, so a path in it
  * (`../harness.config`) loaded any `.json` as a theme. A value that is not a plain name falls
@@ -229,12 +226,9 @@ export function themeOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined, null, host);
 }
 
-/** `_harness_setup.FOOTPRINTS`. */
 const FOOTPRINTS = ['lean', 'full'];
 
 /**
- * `_harness_setup._footprint_of_dir`.
- *
  * `status` reads no footprint row at all; the WARN is why this function is ported there, and
  * `diff` and `rebuild-all` read the RETURN value as well. An unrecognised marker is reported
  * rather than swallowed (Rule V, *Surface Failures* — VII before the three-tier renumber, and
@@ -255,7 +249,7 @@ export function footprintOfDir(d) {
 }
 
 /**
- * `_harness_setup._posture_of_dir` / `_mode_of_dir` — CONTENT-detected, not markered.
+ * CONTENT-detected, not markered.
  *
  * The inlined `## Posture` / `## Mode` section opens with a distinctive `**<Name>**` lead, so
  * a deployed install carries its register in the prose and needs no extra marker file. The
@@ -519,16 +513,15 @@ export function gatesOfDir(d, host = null) {
   return Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, gateOfDir(d, g.marker, host)]));
 }
 
-// ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
+// ---- what host a deployed dir belongs to ---------------------------------------------
 
-/** `_harness_mcp._claude_read_manifest`. */
 export function claudeReadManifest(cfgDir) {
   const data = readJsonMaybe(path.join(cfgDir, GLOBAL_MANIFEST));
   return isDict(data) ? data : {};
 }
 
 /**
- * `_harness_mcp._manifest_is_claude` — keyed on the `managed` MAP, not on `claude_md`: a Bob
+ * Keyed on the `managed` MAP, not on `claude_md`: a Bob
  * global emit ships no AGENTS.md and records no `claude_md`, and still needs the
  * Claude-style reversal.
  */
@@ -551,14 +544,14 @@ export function renderedTier(dir, host) {
 }
 
 /**
- * `_harness_mcp._EMIT_HOST_SCOPE` — a marker's emit name fixes (host, scope). Derived from
+ * A marker's emit name fixes (host, scope). Derived from
  * `HOSTS`, whose emit names are `<host>` and `<host>-global`, so a new host is one row there.
  */
 export const EMIT_HOST_SCOPE = new Map(HOSTS.flatMap(({ host }) => [
   [host, [host, 'project']], [`${host}-global`, [host, 'global']],
 ]));
 
-/** `_harness_mcp._emit_host_scope_of` — `root`'s own marker, resolved, or null. */
+/** `root`'s own marker, resolved, or null. */
 export function emitHostScopeOf(root) {
   const emit = readMaybe(path.join(root, '.geneseed-emit'));
   if (emit === null) return null;
@@ -566,7 +559,7 @@ export function emitHostScopeOf(root) {
 }
 
 /**
- * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
+ * Where a Claude-STYLE install keeps its manifest.
  *
  * The config dir itself for a global install; `<repo>/<project_marker>` for a project one.
  * Host-aware so Bob and OpenClaude ride the whole Claude lifecycle with only the subdir
@@ -578,21 +571,20 @@ export function claudeCfg(root, scope, host = 'claude') {
   return path.join(root, spec ? spec.projectMarker : '.claude');
 }
 
-/** `_harness_mcp._claude_state`. */
 function claudeState(root, scope = 'global', host = 'claude') {
   const cfg = claudeCfg(root, scope, host);
   if (isDir(path.join(cfg, DISABLED_STASH, host))) return 'disabled';
   return existsSync(path.join(cfg, GLOBAL_MANIFEST)) ? 'active' : 'absent';
 }
 
-/** `_harness_mcp._install_kind` — 'global' | 'project' | null. */
+/** 'global' | 'project' | null. */
 export function installKind(root) {
   if (existsSync(path.join(root, GLOBAL_MANIFEST))) return 'global';
   if (isDir(path.join(root, '.opencode'))) return 'project';
   return null;
 }
 
-/** `_harness_mcp._install_state` — 'active' | 'disabled' | 'absent'. */
+/** 'active' | 'disabled' | 'absent'. */
 export function installState(root, host = 'opencode', scope = 'global') {
   if (CLAUDE_STYLE.includes(host)) return claudeState(root, scope, host);
   if (isDir(path.join(root, DISABLED_STASH))) return 'disabled';
@@ -626,7 +618,7 @@ export function openclaudeDualHarnessRoots() {
   return [...roots].filter(openclaudeDualHarnessRoot).sort(comparePaths);
 }
 
-/** `_harness_mcp._registered_targets` — (host, scope, root) for every registered root. */
+/** (host, scope, root) for every registered root. */
 export function registeredTargets() {
   const out = [];
   for (const root of registryRoots()) {
@@ -637,7 +629,7 @@ export function registeredTargets() {
 }
 
 /**
- * `_harness_mcp._install_targets` — every (host, scope, root) an install may live at,
+ * Every (host, scope, root) an install may live at,
  * most-local first.
  *
  * De-duplicated on the (host, RESOLVED path) pair, which is three behaviours in one rule: a
@@ -661,7 +653,7 @@ export function installTargets() {
       try {
         const spec = HOSTS.find((h) => h.host === host);
         if (isHostGlobalDir(host, path.join(root, spec.projectMarker))) return;
-      } catch { /* as the Python's bare `except Exception: pass` */ }
+      } catch { /* best-effort */ }
     }
     const key = `${host}\0${resolvePath(root)}`;
     if (!seen.has(key)) { seen.add(key); out.push([host, scope, root]); }
@@ -756,10 +748,10 @@ export function installsReferencingShim(shimPath = hookShimPath(), targets = ins
   return out;
 }
 
-// ---- what this machine installed (`_harness_setup._installed_defaults`) --------------------
+// ---- what this machine installed -----------------------------------------------------
 
 /**
- * `_harness_setup._installed_defaults` — eight keys: `theme`, `posture`, `mode`, `emit`,
+ * Eight keys: `theme`, `posture`, `mode`, `emit`,
  * `footprint`, `doctrines`, `excludeRules`, `excludeSkills`. NOT the gate switches: a walk
  * across every install on the machine would carry one host's `off` into another's re-run, and
  * for a gate that disarms a boundary its owner never switched off — `setup` reads them off the
@@ -789,10 +781,10 @@ export function installedDefaults() {
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
-    try { candidates.push([configDir(), `${host}-global`]); } catch { /* as the Python */ }
+    try { candidates.push([configDir(), `${host}-global`]); } catch { /* best-effort */ }
   }
   // One cwd-relative bundle candidate — `ROOT / "Harness"` and `ROOT.parent / "Harness"`
-  // left with the Python's, see `_harness_setup._installed_defaults` for the argument.
+  // left out, for the reason given on this function.
   candidates.push([path.join(process.cwd(), 'Harness'), null]);
   for (const [base, knownEmit] of candidates) {
     if (found.emit === null) {

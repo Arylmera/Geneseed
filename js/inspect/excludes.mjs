@@ -1,8 +1,8 @@
 /**
  * The sovereign-repo exclusion WRITER.
  *
- * THE READER WAS ALREADY HERE. `js/hosts/hosts.mjs` (since 2026-09; `hooks.mjs` before) has carried `sovereignBypass`, `EXCLUDES_FILE`
- * and `EXCLUDE_DIRS` since P5a: every hook call reads `excludes.json` and stands down when
+ * THE READER LIVES IN `js/hosts/hosts.mjs`, which carries `sovereignBypass`, `EXCLUDES_FILE`
+ * and `EXCLUDE_DIRS`: every hook call reads `excludes.json` and stands down when
  * cwd is under an excluded folder. This module is the other half — `harness exclude
  * add|remove|list`, which maintains that file across every global install and wires the
  * host-native per-repo suppression into the excluded repo.
@@ -10,8 +10,7 @@
  * THE WEB ENDPOINT IS THIS MODULE — there is exactly ONE writer. `js/web/actions.mjs`
  * dispatches straight to `excludeAdd`/`excludeRemove` here, and `apiExcludes` in
  * `js/web/api.mjs` is `excludesSnapshot()` unmodified, so the CLI and the console are one
- * writer over one user-owned file. It used to be two, with a Python endpoint calling the
- * same three names, and the surviving hazard is the one that outlived the split: two
+ * writer over one user-owned file. The surviving hazard is two
  * PROCESSES writing at the same instant. `writeExcludes` is temp-plus-rename, so a
  * concurrent pair loses one edit rather than tearing the file.
  *
@@ -64,7 +63,7 @@ function globalInstalls() {
     try {
       cfg = configDir();
     } catch {
-      continue;   // a broken resolver must not kill the CLI, as the Python's bare `except`
+      continue;   // a broken resolver must not kill the CLI
     }
     if (isFile(path.join(cfg, GLOBAL_MANIFEST))) out.push({ host, cfg });
   }
@@ -104,9 +103,9 @@ const canon = (p) => resolvePath(p);
  *
  * Resolved like `repo` itself (`canon`: `..` collapsed, symlinks followed), the one rule the
  * hook's `sovereignBypass` and the OpenCode plugins apply too — so an entry that EXCLUDES a
- * folder is exactly the entry `exclude remove` can take back. It used to compare lexically,
- * mirroring the former Python `Path()`, which made a hand-edited `<repo>/../repo` an entry the
- * plugins honoured, the hook ignored, and `remove` could not find.
+ * folder is exactly the entry `exclude remove` can take back. A lexical comparison would make
+ * a hand-edited `<repo>/../repo` an entry the plugins honoured, the hook ignored, and
+ * `remove` could not find.
  */
 function same(stored, repo) {
   if (typeof stored !== 'string' || !stored) return false;
@@ -325,13 +324,11 @@ export function excludeRemove(target) {
         }
       } catch (e) {
         if (!isOsError(e)) throw e;
-        // KNOWN DIVERGENCE, deliberately not papered over: Python interpolates
-        // `str(OSError)` — `[Errno 13] Permission denied: '<path>'` — and `e.message` is
-        // Node's own wording. No cell can reach this branch (`unlink` on a file that
+        // `e.message` is Node's own wording, not `[Errno 13] Permission denied: '<path>'`.
+        // No cell can reach this branch (`unlink` on a file that
         // `isFile` just confirmed, `rmdir` on a directory just measured empty), so a
-        // translation table here would be an unobservable guess. Same class as P5b's
-        // untested `die()` newline; `js/hosts/settings.mjs`'s `asOsError` is the same stub for
-        // the same reason.
+        // translation table here would be an unobservable guess.
+        // `js/hosts/settings.mjs`'s `asOsError` is the same stub for the same reason.
         messages.push(`${host}: could not remove ${stub} (${e.message})`);
       }
     }

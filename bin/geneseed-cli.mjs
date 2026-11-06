@@ -22,8 +22,7 @@
  *     names every verb it does not carry, is what makes "silently accepted `doctor` and did
  *     nothing" impossible; every Geneseed hook exits 0 and signals through stdout, so a
  *     no-op and a success are one observation.
- *   * `bin/build-driver.mjs` IS `build.py`'s `main()` — a different Python program from
- *     `rituals/harness.py`, not a different half of the same one. It parses generator FLAGS
+ *   * `bin/build-driver.mjs` is the generator, not a different half of this CLI. It parses generator FLAGS
  *     with a partition asserted over them ('the driver classifies every emit',
  *     `tests/unit/node_driver.test.mjs`),
  *     `tests/golden.mjs` drives it over every emit configuration, and it is under a hard `child_process`
@@ -36,10 +35,8 @@
  * `bin` per cell — and it would have been paid identically by the `bin/build-driver.mjs` option,
  * so it is not a discriminator between the two.
  *
- * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. It carries 22 of the
- * 26 names the reference's parser answered to (25 subparsers, plus the alias) — the other
- * four are the hook verbs — and, since the three rows at the end of the table below, three
- * that the reference never had at all. 'the two entry points carry disjoint verb sets'
+ * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. The four hook verbs live in the
+ * hook entry, and the last rows of the table below are native verbs. 'the two entry points carry disjoint verb sets'
  * (`tests/unit/hook_cli.test.mjs`) keeps the two tables from ever answering the same verb
  * twice, since the shim bakes only one of them.
  *
@@ -143,13 +140,11 @@ const VERBS = {
   catalog: () => import('../js/build/catalog.mjs').then((m) => m.cmdCatalog),
   mcp: () => import('../js/hosts/mcp.mjs').then((m) => m.cmdMcp),
   memory: () => import('../js/maintain/memory.mjs').then((m) => m.cmdMemory),
-  // Task 5. A fourth native verb: there was never a Python subparser for a state machine that
-  // lives entirely inside this port, so — like the three above — it has no recorded cell to
-  // compare against, only the absolute gates named beside it in `NATIVE`.
+  // Task 5. A fourth native verb: a state machine with
+  // no recorded cell to compare against, only the absolute gates named beside it in `NATIVE`.
   loop: () => import('../js/loop/cli.mjs').then((m) => m.cmdLoop),
   // A fifth native verb, and a port rather than an invention: the AI Harness Scorecard
-  // (upstream Python, pinned in the module's docblock). No Geneseed Python subparser ever
-  // existed for it, so there is no recorded cell — its absolute gate is
+  // (upstream Python, pinned in the module's docblock). There is no recorded cell — its absolute gate is
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.
   scorecard: () => import('../js/inspect/scorecard.mjs').then((m) => m.cmdScorecard),
 };
@@ -279,8 +274,7 @@ function parse(spec, argv) {
 }
 
 async function main(argv) {
-  // `geneseed exclude list | head` closes stdout early. Python exits quietly through
-  // BrokenPipeError; the Node equivalent is an EPIPE that would otherwise be an unhandled
+  // `geneseed exclude list | head` closes stdout early. That is an EPIPE that would otherwise be an unhandled
   // 'error' event and a stack trace.
   process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); });
 
@@ -376,9 +370,9 @@ async function main(argv) {
     return await (await load())(parsed.args);
   } catch (e) {
     // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
-    // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag, and it is
-    // `sys.exit(<message>)` on the Python side. Anything without it is a crash and keeps its
-    // stack: Python prints a traceback for an unhandled exception, and turning one into a
+    // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag.
+    // Anything without it is a crash and keeps its
+    // stack: turning one into a
     // tidy one-liner here would hide a bug behind a refusal's clothing.
     //
     // No verb needed this until `status`, which renders — and renders at a theme read out

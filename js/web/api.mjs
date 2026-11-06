@@ -470,7 +470,7 @@ const RECENT_LIMIT = 8;
 /**
  * THE NEWEST FILE-BACKED ENTRIES ACROSS THE HARNESS — the "freshly grown" card's whole payload.
  *
- * The first GET added after the Python→Node port froze its reference surface. It exists
+ * It exists
  * because NOTHING else in this API carries a per-entry date: every
  * catalog row is `{name, title, desc, source}` and the only two timestamps on the whole surface are
  * `overview.build_time` and `doctor.checked_at`. A client cannot stat a path, so "what changed

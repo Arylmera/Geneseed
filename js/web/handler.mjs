@@ -522,8 +522,7 @@ function logFault(req, path, e) {
  * needs and no further: values unquoted with `+` meaning a space, and a BLANK value dropped
  * (`keep_blank_values=False`), so `?harness=` resolves to the installed default rather than
  * to the empty string — `''  || null` is what drops it below. The first occurrence wins,
- * because `parse_qs` returns a list and the reference takes `[0]`, and so does
- * `URLSearchParams.get`.
+ * because `URLSearchParams.get` takes the first.
  *
  * `new URL(url, 'http://x')` rather than a hand-split on `&`/`=`: the base is a throwaway,
  * needed only because `URL` refuses a bare path-plus-query with no scheme. One measured

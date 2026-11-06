@@ -1,59 +1,37 @@
 /**
- * `harness status` and `harness version` — `rituals/_harness_status.py`, and the parts of
- * four other modules those two reach.
+ * `harness status` and `harness version`, and the parts of four other modules those two
+ * reach.
  *
- * WHAT THE CLOSURE ACTUALLY IS, MEASURED. An `ast` walk over `rituals/` puts `status` at 527
- * LOC across 7 modules with 17 `build.*` names, which is what carried it through two phases
- * as "the cheap half at 159 LOC". Both numbers are wrong in opposite directions, and the
- * second one is the interesting one: a closure walk counts what the CALLEE computes, and
- * `_status_data` consumes a fraction of it.
+ * The panel consumes only a fraction of what the modules it calls compute:
  *
- *   * `_tui_inventory` returns every agent and skill with its one-line purpose, full
- *     rendered body, source path and lifecycle badge, and every law with its title, body
- *     and governance class. `_status_data` reads three `len()`s off it. So `SKILL_CLASS`,
- *     `LAW_CLASS`, `ENTITY_STATUSES`, `load_registry`, `entity_status` and
- *     `build._first_blockquote` — the taxonomy P7 owns, ~111 LOC — are in the walk and are
- *     not in this file. `inventoryCounts` is the counting half and says so.
- *   * `_installed_defaults` detects theme, emit, posture, mode and footprint. The panel
- *     prints theme and emit. `_posture_of_dir`/`_mode_of_dir` are therefore not part of the
- *     value it returns, and `status/posture-and-mode-in-the-carrier-change-nothing` is the
- *     cell that says the omission is invisible rather than assuming it. **P5f ported those
- *     two detectors and did NOT change this** — `rebuild-all` calls them per install root,
- *     not through `_installed_defaults`, so the cell above is still a positive control over
- *     an unchanged omission rather than a claim that has quietly gone stale.
- *   * `_footprint_of_dir` is reached from here, and it is the exception that names the rule:
- *     its return value is not consumed by the panel either, but an unrecognised marker makes
- *     it WARN on stderr, and stderr is a compared column. A closure pruned by what the
- *     caller consumes drops a function whose whole contribution is a side effect.
- *   * `_memory_facts` builds a record per fact through `_frontmatter`; the panel counts
- *     them. `memoryFactCount` is the count, and `frontmatter` stays where it is.
+ *   * `tuiInventory` returns every agent and skill with its purpose, rendered body, source
+ *     path and lifecycle badge, and every law with its title, body and governance class.
+ *     The panel reads three `length`s off it, and `inventoryCounts` is that counting half.
+ *   * `installedDefaults` detects theme, emit, posture, mode and footprint. The panel
+ *     prints theme and emit, and `status/posture-and-mode-in-the-carrier-change-nothing` is
+ *     the cell that says the omission is invisible rather than assuming it.
+ *   * `footprintOfDir` is reached from here though the panel does not consume its return
+ *     value: an unrecognised marker makes it WARN on stderr, and stderr is a compared
+ *     column. Pruning by what the caller consumes would drop a function whose whole
+ *     contribution is a side effect.
+ *   * `memoryFactCount` counts the memory facts; `frontmatter` stays where it is.
  *
- * WHERE THE DETECTORS WENT. `themeOfDir`, `footprintOfDir`, `installedDefaults`,
- * `manifestIsClaude` and the configured defaults were written here in P5d because `status`
- * was their only caller. `js/hosts/installs.mjs` owns them since P5f, when `diff` and `rebuild-all`
- * became the second and third. Nothing about them changed in the move — the 166-cell
- * acceptance matrix is what licensed attempting it, `status`'s own eleven cells among them.
+ * `themeOfDir`, `footprintOfDir`, `installedDefaults`, `manifestIsClaude` and the configured
+ * defaults live in `js/hosts/installs.mjs`, shared with `diff` and `rebuild-all`.
  *
- * WHAT NO CELL CAN REACH, and where it is gated instead. The former Python matrix's
- * status/version section carried the long form; the short form is that ROOT is not
- * redirectable across a process boundary, so three things here are unreachable from any
- * cell: `versionVerdict`'s "up to date" (needs a marker holding a fingerprint no cell can
- * know), `accentFor`'s cyan fallback (an unknown theme is refused upstream by
- * `effectiveTheme`), and the whole ANSI half of `statusLines` (`_color_enabled` is
- * `sys.stdout.isatty()`, and every harness captures stdout through a pipe). All three are
- * PURE FUNCTIONS of their arguments, so the former Python suite gated all three as a corpus
- * instead — a third answer to the colour question, which had been posed as a choice between
- * shipping it ungated and not shipping it. That corpus is gone: `tests/unit/lifecycle.test.mjs`
- * now calls `versionVerdict` and both halves of `statusLines` directly, and nothing pins
- * `accentFor`'s fallback.
+ * WHAT NO CELL CAN REACH, and where it is gated instead. ROOT is not redirectable across a
+ * process boundary, so three things here are unreachable from any cell: `versionVerdict`'s
+ * "up to date" (needs a marker holding a fingerprint no cell can know), `accentFor`'s cyan
+ * fallback (an unknown theme is refused upstream by `effectiveTheme`), and the whole ANSI
+ * half of `statusLines` (`colorEnabled` reads `process.stdout.isTTY`, and every harness
+ * captures stdout through a pipe). All three are PURE FUNCTIONS of their arguments:
+ * `tests/unit/lifecycle.test.mjs` calls `versionVerdict` and both halves of `statusLines`
+ * directly, and nothing pins `accentFor`'s fallback.
  *
- * `manifestIsClaude` was a FOURTH until wave 2 of the P0/P1 review: it is only reached for
- * a candidate with no known host, and `ROOT/"Harness"` was ordered ahead of the sandbox's
- * own. Both ROOT-relative bundle candidates are gone from this walk and from
- * `installedDefaults`, so the only no-known-host candidate left is `cwd/"Harness"`, which
- * is inside the sandbox. It is reachable now; no cell seeds a manifest without an emit
- * marker, so it is gated only by the direct calls in `tests/unit/claude.test.mjs`, and that is
- * a gap rather than a wall.
+ * `manifestIsClaude` is only reached for a candidate with no known host, and the only such
+ * candidate is `cwd/"Harness"`, which is inside the sandbox. No cell seeds a manifest
+ * without an emit marker, so it is gated only by the direct calls in
+ * `tests/unit/claude.test.mjs`, and that is a gap rather than a wall.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -66,9 +44,9 @@ import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
   isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER, ADVISORY_VERB, HOSTS,
 } from '../hosts/hosts.mjs';
-// P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
-// deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
-// three verbs now read them.
+// The install DETECTORS live in `js/hosts/installs.mjs` — `diff` renders its expected copy in
+// the deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
+// three verbs read them.
 import {
   defaultTheme, hookShellProblems, installedDefaults, installTargets, installsReferencingShim,
   openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
@@ -83,7 +61,6 @@ import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
 // ---- version ---------------------------------------------------------------------------
 
-/** `_harness_status._version_verdict`. */
 export function versionVerdict(installed, current) {
   if (installed === null || installed === undefined) {
     return 'no Geneseed install detected to compare';
@@ -93,7 +70,6 @@ export function versionVerdict(installed, current) {
     + '`./geneseed update` (or rebuild) to apply it';
 }
 
-/** `_harness_status.cmd_version`. */
 export function cmdVersion(args) {
   const cfg = makeCfg();
   const current = sourceFingerprint(cfg);
@@ -103,7 +79,7 @@ export function cmdVersion(args) {
   let installed = readVersion(target);
   if (installed === null) {
     // A claude/bob/openclaude-only machine must not report "no install detected". The bundle
-    // candidates are cwd-relative only — see the Python for why `ROOT / "Harness"` left.
+    // candidates are cwd-relative only: a ROOT-relative one would sit outside the sandbox.
     for (const base of [claudeConfigDir(), bobConfigDir(), openclaudeConfigDir(),
       path.join(process.cwd(), 'Harness'), process.cwd()]) {
       const v = readVersion(base);
@@ -120,15 +96,11 @@ export function cmdVersion(args) {
 // ---- what the panel counts ---------------------------------------------------------------
 
 /**
- * `_harness_tui._tui_inventory`, reduced to the three counts `_status_data` reads off it.
+ * `tuiInventory`, reduced to the three counts `statusData` reads off it.
  *
- * THREE `length`s OFF THE REAL WALK SINCE P6c, and the change is the point. P5d shipped a
- * counting-only twin — the bodies, purposes, source paths and taxonomy classes were P7's,
- * and porting them to produce three integers would have been absurd — with a docblock
- * warning that the two must not become two classifiers. `api_catalog` consumes exactly the
- * fields the count threw away, so P6c is the phase that would have made them two. It did
- * not: `tuiInventory` in `js/inspect/inventory.mjs` is the one walk, this is three `length`s off
- * it, and the eleven `status` cells and the catalog cells now gate the same classifier
+ * THREE `length`s OFF THE REAL WALK, so there are not two classifiers: the catalog consumes
+ * exactly the fields the count throws away. `tuiInventory` in `js/inspect/inventory.mjs` is
+ * the one walk, and the eleven `status` cells and the catalog cells gate the same classifier
  * from opposite ends.
  */
 export function inventoryCounts(themeName, doctrines = null, cfg = makeCfg()) {
@@ -162,7 +134,7 @@ export function inventoryCounts(themeName, doctrines = null, cfg = makeCfg()) {
 }
 
 /**
- * `_harness_tui_views._memory_facts`, reduced to its length.
+ * The memory facts, reduced to their count.
  *
  * A path `glob("*.md")` matches but `read_text` cannot read — a DIRECTORY called `notes.md`
  * is the reachable case — is skipped, not counted and not fatal.
@@ -192,7 +164,7 @@ export function anamnesisLeftovers(dirs) {
   });
 }
 
-/** `_harness_tui_draw._accent_for` — the ACCENT a theme declares, default cyan. */
+/** The ACCENT a theme declares, default cyan. */
 export function accentFor(theme) {
   const doc = readJsonMaybe(path.join(THEMES, `${theme}.json`));
   if (!doc || typeof doc !== 'object') return 'cyan';
@@ -263,7 +235,6 @@ export function gateSummary(cfgDirs, platform = process.platform) {
   };
 }
 
-/** `_harness_status._status_data`. */
 /**
  * Spec R6: the member files of every kit NOT on in this install that are still on disk — the ones
  * `pruneOwned` kept because their owner edited them — as `{ kit: [rel, ...] }`, or `null` when
@@ -378,17 +349,16 @@ export function statusData() {
   };
 }
 
-/** `_harness_status._ANSI_CODES`. */
 const ANSI_CODES = {
   red: '31', green: '32', yellow: '33', blue: '34', magenta: '35', cyan: '36', white: '37',
 };
 
 /**
- * `_harness_status._color_enabled`.
+ * Whether to colour the panel.
  *
  * `process.stdout.isTTY` is `undefined` rather than `false` off a terminal, so the Boolean
- * is not optional. The three terms are Python's, in Python's order — and because `and`
- * short-circuits on the first, NO_COLOR and TERM are never read through a pipe, which is
+ * is not optional. Because `&&` short-circuits on the first term, NO_COLOR and TERM are
+ * never read through a pipe, which is
  * why `golden.cell_env` clearing them is insurance rather than a fix.
  */
 function colorEnabled() {
@@ -397,12 +367,11 @@ function colorEnabled() {
 }
 
 /**
- * `_harness_status._status_lines` — pure, returns the lines.
+ * Pure, returns the lines.
  *
- * `_TUI_ASCII` is read from the environment at CALL time here where Python reads it at
- * import time (`_harness_tui_draw:12`). Same value for a process that runs one verb and
- * exits; spelled this way because a module-level constant in a file the corpus gate imports
- * would freeze at whatever the test runner's environment was.
+ * `_TUI_ASCII` is read from the environment at CALL time, not import time. Same value for a
+ * process that runs one verb and exits; spelled this way because a module-level constant in
+ * a file the tests import would freeze at whatever the test runner's environment was.
  */
 export function statusLines(d, color = false) {
   const asc = Boolean(process.env.GENESEED_TUI_ASCII);
@@ -428,12 +397,10 @@ export function statusLines(d, color = false) {
     ...(d.anamnesis_leftover ? [['leftover', `${d.anamnesis_leftover.join(', ')}  ${DOT}  no longer read: copy its facts into memory/`]] : []),
     ['version', `${d.installed_fp || '(none)'}  ${DOT}  source ${d.source_fp}`],
   ];
-  // ⚠ A ROW, NOT A WIDER `components` LINE. When this landed, `statusLines` had 30 recorded
-  // cases per platform in the former Python suite's corpus, every one holding the box's exact
-  // bytes — including `17 agents · 47 skills · 37 laws` — and no recorder left to re-bless them.
-  // Touching `components` would have moved all 30; adding a row would too, since the box width
-  // is measured over `rows`. So the row is CONDITIONAL on a key those arguments did not carry,
-  // exactly as `agent_md` below already is. The corpus is gone; a caller without the key still
+  // ⚠ A ROW, NOT A WIDER `components` LINE. Touching `components` would move every box's
+  // exact bytes; adding a row would too, since the box width
+  // is measured over `rows`. So the row is CONDITIONAL on a key some arguments do not carry,
+  // exactly as `agent_md` below already is. A caller without the key still
   // gets the box it got before.
   //
   // It carries the two tiers `components` cannot: `components` counts the invariants as
@@ -521,7 +488,7 @@ export function statusLines(d, color = false) {
 }
 
 /**
- * `_harness_status.cmd_status` — and `--json`, the machine face of the same payload. An agent
+ * And `--json`, the machine face of the same payload. An agent
  * reading the panel had to scrape box-drawing; the object below is what the panel is drawn
  * FROM, so the two cannot disagree.
  */

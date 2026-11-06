@@ -1,22 +1,17 @@
 /**
  * Reading and writing — files on disk, and the two process streams.
  *
- * These are definitions, not an adaptation of somebody else's. Every rule below was
- * originally MEASURED against CPython, because the generator these functions serve had to
- * emit bytes indistinguishable from a Python one; that second party is gone and the rules
- * are not. The recorded corpora that compared this module's output byte for byte went with
- * the former Python suite; what holds the rules now is `tests/unit/lib_primitives.test.mjs`
- * (`isFile`/`isDir`), `tests/unit/hook_cli.test.mjs`'s platform-newline count (the stream
- * funnels), and for the rest only the per-function provenance below. A rule here is still a
- * frozen fact about what this tool emits, and changing one is a product change.
+ * These are definitions, not an adaptation of somebody else's. What holds the rules is
+ * `tests/unit/lib_primitives.test.mjs` (`isFile`/`isDir`),
+ * `tests/unit/hook_cli.test.mjs`'s platform-newline count (the stream funnels), and for the
+ * rest only the per-function notes below. A rule here is a frozen fact about what this tool
+ * emits, and changing one is a product change.
  *
  * ⚠ NONE OF THESE IS THE NODE DEFAULT, AND THAT IS THE ONE THING TO KNOW BEFORE EDITING ONE.
  * Each is a deliberate divergence from the obvious one-liner, and the obvious one-liner is
- * wrong here in a way no test in this repository would tell you about pleasantly. These names
- * carried a `py` prefix until the prefix was retired, precisely to say so; the warning now
- * lives where it belongs, in the per-function comment naming WHAT WAS MEASURED and against
- * what. That provenance is the only surviving record of why a rule has the shape it has, and
- * it is the first thing to read before touching one.
+ * wrong here in a way no test in this repository would tell you about pleasantly. The
+ * per-function comment says what the rule is and why it has that shape; it is the first thing
+ * to read before touching one.
  *
  * In this module the divergence is `os.linesep`: every write translates `\n` to the platform's
  * separator, and `printOut`/`printErr` do the same on the way to the console.
@@ -58,17 +53,14 @@ export function withWriteRecord(fn) {
 /**
  * `Path.write_text(text, encoding="utf-8")`.
  *
- * Python opens that file in TEXT mode with `newline=None`, so every `\n` is translated
- * to `os.linesep` on the way out — a freshly emitted AGENT.md is 504 CRLF and 0 bare LF
- * on Windows. `fs.writeFileSync` translates nothing. Without this wrapper *every* text
- * file the port emits differs from Python's on Windows, and the byte-identity gate that
- * is the whole acceptance test of the port yields exactly zero signal: it reports 100%
- * failure whether the render is right or wrong.
+ * Text mode: every `\n` is translated to `os.linesep` on the way out — a freshly emitted
+ * AGENT.md is 504 CRLF and 0 bare LF on Windows. `fs.writeFileSync` translates nothing, so
+ * without this wrapper *every* text file the tool emits would be LF on Windows.
  *
  * Two categories must NOT go through here, and they are the reason this is a named
  * function rather than a blanket rule:
- *   - the hook shim, which Python writes with `newline=""` (raw);
- *   - anything Python copies with `shutil.copy2` (the OpenCode `plugins/*.js` and the
+ *   - the hook shim, which is written raw;
+ *   - anything copied with `copyFile` (the OpenCode `plugins/*.js` and the
  *     vendored skill folders), which is a byte copy and keeps its LF.
  * The same vendored skill folder can contain files from both categories.
  */
@@ -110,7 +102,7 @@ export function appendText(path, text) {
 /**
  * `Path.read_text(encoding="utf-8")`.
  *
- * Python decodes text files in universal-newlines mode: `\r\n` and a lone `\r` both
+ * Text files are decoded in universal-newlines mode: `\r\n` and a lone `\r` both
  * become `\n` before any regex ever sees them. Node hands back the bytes as-is. The
  * repo's `.gitattributes` normalises `src/` to LF so today this is a no-op, but a
  * checkout with `core.autocrlf=true`, a copied tree, or an editor that rewrote one file
@@ -173,7 +165,7 @@ export function readTail(path, bytes) {
  * Deliberate deviation: `copy2` copies the permission bits too (`copymode`), which on
  * Windows means the read-only attribute. Reproducing that would make a second emit fail
  * to overwrite its own output if a source file were ever marked read-only — a failure
- * mode the Python side has and nothing depends on. Mode is not copied here.
+ * mode and nothing depends on it. Mode is not copied here.
  */
 export function copyFile(src, dest) {
   textWrites.map?.delete(resolve(dest));
@@ -183,20 +175,18 @@ export function copyFile(src, dest) {
 }
 
 /**
- * `print()` — the two output funnels, with Python's newline translation reproduced.
+ * The two output funnels, with text-mode newline translation.
  *
  * The STREAM twin of `writeText` above, and it lives beside it because it is the same rule:
- * `sys.stdout` is a TextIOWrapper with `newline=None`, so on Windows every `\n` a CLI prints
- * leaves the process as `\r\n` — and `harness.py`'s `reconfigure(encoding="utf-8")` changes
- * the encoding only, not that. `process.stdout` translates nothing, so a Node CLI would hand
- * its caller different BYTES than the Python one: measured at 176 vs 171 for one `context`
- * run before this existed.
+ * on Windows every `\n` a CLI prints leaves the process as `\r\n`. `process.stdout`
+ * translates nothing, so without this a Node CLI would hand its caller different BYTES: 171
+ * where 176 are expected for one `context` run.
  *
  * The CLI matrix structurally cannot see the difference — every cell decodes stdout with
  * universal newlines, folding both shapes to `\n` before anything compares them. So the gate
  * for it is `tests/unit/hook_cli.test.mjs`'s `every newline the entry points write is the
- * platform's`, which counts raw bytes. Moved here
- * from `js/hosts/hooks.mjs` in P5c, when `js/inspect/excludes.mjs` became the second caller: a translation
+ * platform's`, which counts raw bytes. It lives here, not in `js/hosts/hooks.mjs`,
+ * because `js/inspect/excludes.mjs` is a second caller: a translation
  * that exists twice is a translation that can be fixed once.
  */
 const xlate = (s) => (EOL === '\n' ? s : s.replaceAll('\n', EOL));
@@ -206,15 +196,12 @@ export const printErr = (s) => process.stderr.write(xlate(s));
 /**
  * Hold `fn`'s stderr, and emit it only if `fn` RETURNS.
  *
- * The reproduction of `except SystemExit` for a port that writes its refusal at the raise
- * site (`js/build/generate.mjs`'s `sysExit` docblock states the convention). `sys.exit(msg)`
- * attaches the message to the EXCEPTION and the interpreter prints it on the way out, so a
- * Python caller that catches sees no output at all — which makes write-at-the-raise-site
- * identical for every caller that lets the throw propagate, and wrong for every caller that
- * catches.
+ * For code that writes its refusal at the raise site (`js/build/generate.mjs`'s `sysExit`
+ * docblock states the convention). That is right for every caller that lets the throw
+ * propagate, and wrong for every caller that catches: the message is already out.
  *
- * MOVED HERE beside `printErr`, whose writes it intercepts, when the hook became the
- * second and third such caller: `js/hosts/hosts.mjs`'s `expanduser` refuses a `~user` path by
+ * It lives beside `printErr`, whose writes it intercepts. `js/hosts/hosts.mjs`'s
+ * `expanduser` refuses a `~user` path by
  * printing and throwing, and `js/hosts/hooks.mjs` catches it twice — once per `excludes.json`
  * entry and once around `$GENESEED_ROOT`/`--root`. Its old docblock in `js/inspect/doctor.mjs`
  * warned that a general helper "would invite a second caller that wanted silence the
@@ -238,27 +225,25 @@ export function withDiscardableStderr(fn) {
 
 /**
  * The same rule applied to a whole CALL rather than to one string — `bin/build-driver.mjs`'s
- * answer to the newline item P5e recorded and could not gate.
+ * answer to newlines it cannot gate cell by cell.
  *
  * WHY THE DRIVER NEEDS A FUNNEL WHERE EVERY OTHER CALLER NEEDS `printOut`. The generator
  * prints from ~25 sites across `bin/build-driver.mjs`, `js/build/bundle.mjs`, `js/hosts/settings.mjs`,
- * `js/hosts/opencode.mjs`, `js/hosts/native.mjs` and `js/build/render.mjs`, and those modules are ALSO the
- * body of what used to be a seam child, whose `main` buffered both streams and handed them
- * to a Python parent that re-printed them through `print()`. Converting those sites to
- * `printOut` would have translated once in Node and again in Python — `\r\r\n` on every line.
- * So the translation belongs to whichever process OWNS the stream, and that child did not.
+ * `js/hosts/opencode.mjs`, `js/hosts/native.mjs` and `js/build/render.mjs`. Converting those
+ * sites to `printOut` would translate once per layer that re-prints the output, and a second
+ * translation turns `\r\n` into `\r\r\n` on every line. So the translation belongs to
+ * whichever process OWNS the stream.
  * This wraps the driver's `main`, and equally the four render entry points the CLI can reach
  * WITHOUT `main` on the stack: `parseDriverArgs`, `buildInto`, `emitProjectInto` and
  * `emitGlobalInto`.
  *
- * The item it closes: a plain `--emit files` handed its caller 104 bytes where `python
- * build.py` handed over 105, and a `text=True` capture folds both to the same string.
+ * What it closes: a plain `--emit files` handed its caller 104 bytes where 105 are expected,
+ * and a text-mode capture folds both to the same string.
  * `tests/unit/hook_cli.test.mjs`'s newline test carries a `build` row (through `geneseed
  * build`, which calls this `main` in-process), and that is what can see it.
  *
  * A Buffer chunk passes through untouched: `writeText` owns file bytes and nothing on this
- * path writes binary to a stream, so translating one would be corrupting data rather than
- * reproducing Python.
+ * path writes binary to a stream, so translating one would be corrupting data.
  */
 export function withPlatformNewlines(fn) {
   if (EOL === '\n') return fn();

@@ -28,7 +28,7 @@ import { existsSync, readFileSync } from 'node:fs';
 // --------------------------------------------------------------------------------------
 
 /**
- * `_harness_build._link_problems` — dead links AND non-hermetic ones.
+ * Dead links AND non-hermetic ones.
  *
  * Hermeticity is what lets a bundle be copied or subtree-split into any repo; a link that
  * escapes `out` breaks it silently. The two are separate messages because they have separate
@@ -45,9 +45,8 @@ export function linkProblems(md, text, out, rel) {
       problems.push(`non-hermetic absolute link '${link}' in ${rel}`);
       continue;
     }
-    // `(md.parent / raw).resolve()` — `resolvePath`, not `path.resolve`, because Python's
-    // canonicalises the symlinks in the part that exists and this comparison is against an
-    // `out` that went through the same call.
+    // `resolvePath`, not `path.resolve`, because it canonicalises the symlinks in the part
+    // that exists and this comparison is against an `out` that went through the same call.
     const target = resolvePath(path.join(path.dirname(md), raw));
     if (!existsSync(target)) problems.push(`dead link '${link}' in ${rel}`);
     else if (!within(target, out)) {
@@ -58,7 +57,7 @@ export function linkProblems(md, text, out, rel) {
 }
 
 /**
- * `_harness_build._check_build` — scan one rendered tree for unresolved tokens and bad links.
+ * Scan one rendered tree for unresolved tokens and bad links.
  *
  * `isVendored` decides which relative shape counts as a vendored folder, and the two callers
  * pass different ones ON PURPOSE: a `files`/opencode-global bundle nests skills at
@@ -66,7 +65,7 @@ export function linkProblems(md, text, out, rel) {
  * Vendored folders are verbatim upstream docs carrying their own license, and their internal
  * cross-links point at the upstream project's own files, so they are exempt.
  *
- * `rel` is `str(Path)`, i.e. the platform's separator, because that is what the Python prints
+ * `rel` keeps the platform's separator, because that is what the messages print
  * — every emit-scan cell in the acceptance matrix names a backslash on Windows.
  */
 export function checkBuild(themeName, out, isVendored = isVendoredPath) {
@@ -122,7 +121,7 @@ export function descriptionProblems(text, rel) {
 }
 
 /**
- * `_harness_build._theme_parity_problems` — every theme defines the same VOICE keys.
+ * Every theme defines the same VOICE keys.
  *
  * A token present in one theme map and missing from another renders as a raw `{{TOKEN}}`
  * only in the files that use it and only under that theme, so a plain build can miss it
@@ -150,11 +149,11 @@ export function themeParityProblems() {
   return problems;
 }
 
-/** `_harness_build._HEX_RE`. Anchored at BOTH ends, so `#12345` and `#1122334` both fail. */
+/** Anchored at BOTH ends, so `#12345` and `#1122334` both fail. */
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 /**
- * `_harness_build._color_theme_problems` — every curated colour theme carries the full
+ * Every curated colour theme carries the full
  * palette, in 6-digit hex. Voice-theme parity, for colours.
  *
  * TWO OF ITS THREE ARMS ARE UNREACHABLE FROM ANY CELL, and it is doctor's own ordering that
@@ -215,7 +214,7 @@ export function renderedPathNotes() {
 }
 
 /**
- * `_harness_build._rendered_problems` — a committed bundle must match a fresh render of
+ * A committed bundle must match a fresh render of
  * `src/` for its OWN recorded theme, emit and footprint.
  *
  * Doctor's temp builds never touch the committed bundle, so drift there is invisible to
@@ -253,11 +252,9 @@ export function renderedProblems(bundle) {
   if (scope === 'project' && CLAUDE_STYLE.includes(host)) return [];
   let items;
   try {
-    // THE FIRST CALLER IN THE PORT THAT CATCHES A REFUSAL, and that is why the stderr is
-    // buffered. `sys.exit(msg)` attaches the message to the EXCEPTION and the interpreter
-    // prints it on the way out, so a Python caller that catches SystemExit sees no output at
-    // all; this port's convention is to write at the raise site (`loadTheme`, and its
-    // docblock says why), which is identical for every caller that lets the throw propagate
+    // THIS CALLER CATCHES A REFUSAL, and that is why the stderr is buffered. The
+    // convention is to write at the raise site (`loadTheme`, and its docblock says why),
+    // which is right for every caller that lets the throw propagate
     // and wrong for exactly this one. Buffered and replayed on success, so a WARN the render
     // legitimately emits still reaches the user, and discarded with the refusal it belongs to.
     ({ items } = withDiscardableStderr(() => renderAll(cfg, themeName, {

@@ -1,9 +1,8 @@
 /**
  * String primitives — measuring, padding, stripping, decoding and reading an integer.
  *
- * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
- * measurements against CPython are recorded per function, and why NONE of these is the Node
- * default — the warning the retired `py` prefix used to carry now lives in each docblock.
+ * These are definitions, not an adaptation of somebody else's, and NONE of these is the
+ * Node default — each docblock says why.
  * Every function here is a place the Node default DIVERGES from the answer this tool needs:
  * `codePointLength` counts code points where `.length` counts units, `WHITESPACE` is a wider
  * set than `String.trim`'s, `parseIntStrict` accepts what `Number()` does not and rejects what
@@ -52,8 +51,7 @@ export const padEndToWidth = (s, width) => s + ' '.repeat(Math.max(0, width - co
  * raw environment value do it — `js/ui/cli.mjs`'s `helpWidth` and `js/web/activity.mjs` wrap
  * the argument in `stripWhitespace` first.
  *
- * Its own corpus retired with the Python suite — a primitive reproduction gets one owner and
- * a corpus, never a cell (P5c) — so what reaches it now is only its callers' gates:
+ * What reaches it is its callers' gates:
  * `tests/unit/wizard.test.mjs`'s choice corpus and `tests/unit/web_daemon.test.mjs`'s
  * non-integer port.
  */
@@ -116,9 +114,8 @@ export function stripWhitespace(s) {
 /**
  * `str.lstrip()` / `str.rstrip()` — the ONE-SIDED halves, over the same `WHITESPACE`.
  *
- * P2 added them for `_build_render._insert_theme_keys`, which uses all three spellings within
- * four lines (`lines[0].strip()`, `ln.lstrip().startswith('"')`,
- * `lines[pred].rstrip().endswith(",")`). They are here rather than in `js/build/themes.mjs` for the
+ * The theme-key insertion uses all three spellings within four lines. They are here rather
+ * than in `js/build/themes.mjs` for the
  * reason this file exists at all: `js/hosts/settings.mjs` already carries a private second copy of
  * the character class, and a THIRD one — in the module that decides where a comma goes in a
  * committed theme file — is how the three drift apart. One owner of the set, three views of it.
@@ -136,8 +133,8 @@ export function stripWhitespaceEnd(s) {
  *
  * The whole difference is what happens to a sequence that is not an escape.
  * `decodeURIComponent('a%ZZ')` throws a `URIError`, and so does a trailing bare `%`; the
- * web shell would answer both as a 500 where the reference answers a 404 naming the
- * literal text. `unquote` leaves them alone: CPython builds a table of every two-hex-digit
+ * web shell would answer both as a 500 where a 404 naming the
+ * literal text is wanted. `unquote` leaves them alone: CPython builds a table of every two-hex-digit
  * pair in both cases and treats a `KeyError` as "this was not an escape", emitting `%` and
  * the rest of the fragment verbatim.
  *
@@ -150,8 +147,7 @@ export function stripWhitespaceEnd(s) {
  * `Buffer.toString('utf-8')` substitutes U+FFFD for an undecodable sequence, which is
  * `errors='replace'`. The two decoders can disagree on HOW MANY replacement characters a
  * truncated multi-byte sequence yields — Python's maximal-subpart rule against WHATWG's —
- * and the former Python corpus is where that was measured rather than assumed; nothing
- * measures it now.
+ * and nothing measures it.
  */
 const HEX_PAIR = /^[0-9A-Fa-f]{2}$/;
 

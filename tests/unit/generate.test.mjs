@@ -102,9 +102,8 @@ const isFile = (...p) => fs.existsSync(path.join(...p)) && fs.statSync(path.join
  * The bundle emit through its PUBLIC entry, in a child so the driver's own `ROOT` and
  * `process.exit` semantics are the real ones.
  *
- * Stronger than the reference's fixture for the posture/mode axis: `_build_core.POSTURE` is
- * a module global the Python rebinds directly, so nothing on that side ever gated the
- * `--posture` flag reaching the renderer. Here the flag IS the input.
+ * The posture/mode axis is driven through the flag itself, so the `--posture` flag reaching the
+ * renderer is gated. Here the flag IS the input.
  */
 function emitFiles(dir, out, extra = []) {
   const r = spawnSync(process.execPath,

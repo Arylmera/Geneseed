@@ -403,7 +403,7 @@ test('a folder emit round-trips into the repo, with machine paths kept out of th
 // and then the whole uninstall. The mechanism being right is not the same as the emit and the
 // teardown both USING it, and the second half is where the sticky-`whole` bug below lived.
 
-/** The reference's `setUp`: a `.claude` a user already has content in, colliding by name. */
+/** Fixture: a `.claude` a user already has content in, colliding by name. */
 function seededUserCfg(d) {
   const cfg = path.join(d, 'dotclaude');
   fs.mkdirSync(path.join(cfg, 'skills', 'impeccable'), { recursive: true });
@@ -530,7 +530,7 @@ test('a CLAUDE.md Geneseed created and nobody edited is removed entirely', () =>
 // install a user cannot use again without hand-editing their own config directory, which is why
 // the state machine is asserted at each step rather than only at the ends.
 
-/** The reference's `setUp`: a user's own CLAUDE.md, then a real global emit over it. */
+/** Fixture: a user's own CLAUDE.md, then a real global emit over it. */
 function activatedCfg(d, host = 'claude', name = 'dotclaude') {
   const cfg = path.join(d, name);
   fs.mkdirSync(cfg, { recursive: true });

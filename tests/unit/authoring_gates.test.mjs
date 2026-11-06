@@ -4,15 +4,13 @@
  * SUCCESSOR TO `tests/test_registry.py`. Subject unchanged: `src/` — the content tree, not
  * either implementation — so nothing here is a comparison and nothing was.
  *
- * EACH GATE IS EXERCISED BOTH WAYS, which is the reference's own rule and the reason the file
+ * EACH GATE IS EXERCISED BOTH WAYS, which is the reason the file
  * exists: a gate that only ever returns `[]` is indistinguishable from a gate that is silently
  * broken. What changed is HOW the fault gets planted.
  *
- * THE FIXTURE IS THE WHOLE PORT. The reference monkeypatched six module globals —
- * `_harness_build.ROOT`, `_build_core.SRC/THEMES/PLUGIN_SRC/WORKFLOW_SRC/VENDORED_SKILL_DIRS`
- * — and built a two-file tree underneath them. ESM cannot rebind an imported binding, and the
+ * THE FIXTURE IS THE WHOLE PORT. ESM cannot rebind an imported binding, and the
  * standing question ("does the port already take this as a PARAMETER?") answers no here: every
- * one of the six is a module constant, five of them derived from `js/build/source.mjs`'s own file
+ * one of the six (ROOT, SRC, THEMES, PLUGIN_SRC, WORKFLOW_SRC, VENDORED_SKILL_DIRS) is a module constant, five of them derived from `js/build/source.mjs`'s own file
  * location. So the fixture is P5g's: `copyCheckout` a private checkout, plant the fault in the
  * COPY, and `import` the copy's `js/inspect/checks-repo.mjs` so its `ROOT` resolves there.
  *

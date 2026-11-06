@@ -160,7 +160,6 @@ function offerShellPath(dir) {
   return true;
 }
 
-/** `_harness_lifecycle._win_bin_dir`. */
 function winBinDir() {
   // `os.environ.get(...) or str(Path.home())` — an EMPTY LOCALAPPDATA falls back too,
   // which `??` would not do.
@@ -169,7 +168,7 @@ function winBinDir() {
 }
 
 /**
- * `_harness_lifecycle._win_user_path_script` — the PowerShell one-liner, built but not run.
+ * The PowerShell one-liner, built but not run.
  *
  * Every quoting hazard in this verb is in this string, which is why it is a separate
  * function: `''` is PowerShell's single-quote escape, the `;` split drops
@@ -201,7 +200,7 @@ export function winUserPathScript(action, directory) {
 }
 
 /**
- * `_harness_lifecycle._win_user_path` — the spawn, and the sixth row of `_ALLOWED_SPAWNS`.
+ * The spawn, and the sixth row of `_ALLOWED_SPAWNS`.
  *
  * There is no in-process equivalent: the persistent USER Path lives in the registry
  * (`HKCU\Environment`), not in this process's environment, and Node has no registry API.
@@ -265,7 +264,7 @@ function isOurLauncher(f) {
   return existsSync(f) && (readMaybe(f) ?? '').includes(SHIM_MARKER);
 }
 
-/** `_harness_lifecycle.cmd_link` — put `geneseed` on PATH so it runs from any directory. */
+/** Put `geneseed` on PATH so it runs from any directory. */
 export function cmdLink(args) {
   const here = ROOT;
   if (IS_WIN) {
@@ -347,7 +346,6 @@ export function cmdLink(args) {
   return 0;
 }
 
-/** `_harness_lifecycle.cmd_unlink`. */
 export function cmdUnlink() {
   if (IS_WIN) {
     const bindir = winBinDir();

@@ -1,7 +1,7 @@
 // `tests/test_update.py` — the cross-platform update core, re-aimed at `js/maintain/update.mjs`.
 //
-// The reference covers the network-free logic so the update verbs are exercised without hitting
-// GitHub. That split survives here, and this file is the half of it that needs no git repository
+// The network-free logic is covered here so the update verbs are exercised without hitting
+// GitHub. This file is the half of it that needs no git repository
 // at all: emit and theme precedence, the stray-bundle migration, credential redaction, and the
 // origin parser.
 //
@@ -42,7 +42,7 @@ function withCfgOut(fn) {
   } finally { sb.cleanup(); }
 }
 
-/** `os.environ.pop(name)` with the reference's restore, for one call. */
+/** `os.environ.pop(name)` with restore, for one call. */
 function withEnv(name, value, fn) {
   const saved = process.env[name];
   if (value === null) delete process.env[name]; else process.env[name] = value;

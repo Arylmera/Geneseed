@@ -1,15 +1,14 @@
 /**
- * `_install_registry.py` — the persistent list of folders a harness was deployed into.
+ * The persistent list of folders a harness was deployed into.
  *
- * MOVED OUT OF `bin/build-driver.mjs` IN P5f, for the third time the same arithmetic has decided
- * a module boundary in this port (P5c took the host resolvers, P5d the checkout paths). The
+ * IT LIVES HERE, NOT IN `bin/build-driver.mjs`. The
  * driver WRITES the registry, one row per per-repo emit; `harness rebuild-all` READS it to
  * find every install it must re-emit, and `bin/geneseed-cli.mjs` may not reach into a driver
  * for a reader. `js/build/generate.mjs` importing `main` from `bin/build-driver.mjs` is not a
  * precedent for it either: `harness build` IS the driver, and a registry reader is not.
  *
- * The move is licensed the same way the two before it were: `tests/golden.mjs` drives
- * `bin/build-driver.mjs` over 259 cells with `$XDG_CONFIG_HOME` redirected into the sandbox and
+ * `tests/golden.mjs` drives
+ * `bin/build-driver.mjs` over many cells with `$XDG_CONFIG_HOME` redirected into the sandbox and
  * compares `installs.json` byte-for-byte, so a changed path or a dropped prune fails cells
  * rather than passing quietly.
  */
@@ -130,9 +129,9 @@ function withRegistryLock(fn) {
 }
 
 /**
- * `_install_registry.record` — idempotent, best-effort, and it must NEVER raise into a build.
+ * Idempotent, best-effort, and it must NEVER raise into a build.
  *
- * `realpathSync` rather than `path.resolve`, because Python's `Path.resolve()` returns the
+ * `realpathSync` rather than `path.resolve`, because it returns the
  * filesystem's own casing and follows links; `path.resolve` only makes a path absolute. The
  * registry is compared byte-for-byte by `tests/golden.mjs` (XDG is redirected into the
  * sandbox), so a differently-cased entry is a failing cell.
@@ -167,13 +166,12 @@ export function registryRoots() {
   const kept = [];
   const seen = new Set();
   for (const s of original) {
-    // `Path(s).expanduser()`, and `toPlatformPath` is the `str()` around it — which is where the
-    // NORMALISATION happens. Python turns `C:/x/other` into `C:\x\other` before it is
-    // compared, kept, returned and printed, so a registry entry spelled with forward slashes
-    // (routine: every tool that writes one from Git Bash) makes Python rewrite the file and
-    // print a backslash path while a raw `expanduser` prints the entry verbatim and leaves
-    // installs.json alone. Invisible to every cell before P5h, because `rebuild-all`'s
-    // registry cells seed native spellings; `uninstall`'s inventory prints the root.
+    // `toPlatformPath` around `expanduser` is where the NORMALISATION happens. `C:/x/other`
+    // becomes `C:\x\other` before it is compared, kept, returned and printed, so a registry
+    // entry spelled with forward slashes (routine: every tool that writes one from Git Bash)
+    // makes the file be rewritten and a backslash path printed, where a raw `expanduser`
+    // prints the entry verbatim and leaves installs.json alone. `rebuild-all`'s registry
+    // cells seed native spellings; `uninstall`'s inventory prints the root.
     // `expanduser` now REFUSES a `~user` entry (js/hosts/hosts.mjs's docblock) instead of passing
     // it through. This loop scans STORED registry rows, not a fresh CLI argument — a single
     // bad row (hand-edited, or written before this refusal existed) must not abort the scan

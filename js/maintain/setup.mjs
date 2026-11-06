@@ -67,7 +67,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 // the option tables
 // --------------------------------------------------------------------------------------
 
-/** `_harness_setup.THEME_BLURBS`. A theme without one shows its bare name. */
+/** A theme without one shows its bare name. */
 const THEME_BLURBS = {
   neutral: 'plain professional voice',
   imperial: 'Warhammer 40k',
@@ -79,7 +79,6 @@ const THEME_BLURBS = {
   sports: 'play-by-play commentator',
 };
 
-/** `_harness_setup.POSTURE_BLURBS`. */
 const POSTURE_BLURBS = {
   peer: 'candid equal — dense, challenges, no flattery (default)',
   mentor: 'explains the why, checks understanding',
@@ -88,7 +87,6 @@ const POSTURE_BLURBS = {
   artisan: 'peer with toolsmith reflexes — terminal-first',
 };
 
-/** `_harness_setup.MODE_BLURBS`. */
 const MODE_BLURBS = {
   direct: 'the agent works every task itself, turn by turn (default)',
   foreman: 'triages tasks, hands blocking work to task workers',
@@ -113,8 +111,6 @@ const DOCTRINE_BLURBS = {
 };
 
 /**
- * `_harness_setup._theme_options`.
- *
  * The sort key is `(name != "neutral", name)`, which floats `neutral` to the top and leaves
  * the rest alphabetical — a boolean sorts False before True in Python, and `false < true` is
  * the same order once both are numbers here. `themeFiles()` is already name-sorted, so the
@@ -134,12 +130,10 @@ export function themeOptions() {
   return opts.length ? opts : [['neutral', THEME_BLURBS.neutral]];
 }
 
-/** `_harness_setup._posture_options`. */
 function postureOptions() {
   return discoverNames('postures', 'peer').map((n) => [n, POSTURE_BLURBS[n] ?? '']);
 }
 
-/** `_harness_setup._mode_options`. */
 function modeOptions() {
   return discoverNames('modes', 'direct').map((n) => [n, MODE_BLURBS[n] ?? '']);
 }
@@ -159,8 +153,6 @@ export function doctrineOptions() {
 }
 
 /**
- * `_harness_setup.EMIT_OPTIONS`.
- *
  * Exported since P6b: `/api/themes` returns the same nine as its `emits` list, and a copy
  * of a table under test silently stops being the table under test.
  */
@@ -178,7 +170,6 @@ export const EMIT_OPTIONS = [
   ['openclaude', 'Per-repo .openclaude/ (CLAUDE.md, agents, skills, hooks) for OpenClaude, committed into one repository.'],
 ];
 
-/** `_harness_setup.FOOTPRINT_OPTIONS`. */
 const FOOTPRINT_OPTIONS = [
   ['lean', 'Lean — terse rule lines + a pointer to the full laws file (default, lighter context).'],
   ['full', 'Full — every law\'s complete text inlined in AGENT.md.'],
@@ -265,7 +256,7 @@ function askSharedTier(emit, root) {
 }
 
 /**
- * `_harness_setup._collect_setup_lines` — the six questions, the plan, the confirm.
+ * The six questions, the plan, the confirm.
  *
  * Returns the selection, or null when the confirm is declined. Every default is the
  * DEPLOYED value first (`installedDefaults`) and the CONFIGURED one second, which is why
@@ -361,7 +352,7 @@ export function collectSetupLines(kitMap = null) {
 // --------------------------------------------------------------------------------------
 
 /**
- * `_harness_setup._java_major_ok` — does a `java -version` banner name a major >= minimum?
+ * Does a `java -version` banner name a major >= minimum?
  *
  * `21.0.2` gives 21 and the legacy `1.8.0` gives 1, which is never >= 21 — that asymmetry is
  * the whole function. `\p{Nd}` rather than `[0-9]` because Python's `\d` matches any Unicode
@@ -377,7 +368,7 @@ export function javaMajorOk(versionOutput, minimum = 21) {
 }
 
 /**
- * `_harness_setup._lsp_prereqs` — `(label, present, hint)` for what OpenCode cannot install
+ * `(label, present, hint)` for what OpenCode cannot install
  * for itself. Today that is a JDK 21+ for `jdtls`; the JS-runtime servers self-download.
  *
  * THE SECOND SPAWN ON THIS ENTRY POINT, and the reason `ALLOWED_SPAWNS` in
@@ -392,13 +383,8 @@ export function lspPrereqs() {
   let ok = false;
   if (java) {
     try {
-      // `capture_output=True, text=True` — the banner goes to STDERR on every JVM, which is
-      // why the Python reads `.stderr` and not `.stdout`.
-      // `NO_WINDOW` on BOTH sides as of this commit. The reference reached for a bare
-      // `subprocess.run` here rather than `_harness_core.run`, so the flag was missing from
-      // the Python too and the java probe flashed a console from the web's setup action —
-      // a defect the two implementations SHARED, which is exactly what a cross-
-      // implementation comparison cannot report. Fixed in `_harness_setup.py` beside this.
+      // The banner goes to STDERR on every JVM, which is why this reads `.stderr`.
+      // `NO_WINDOW` so the java probe does not flash a console from the web's setup action.
       const out = spawnSync(java, ['-version'], { encoding: 'utf8', ...NO_WINDOW }).stderr;
       ok = javaMajorOk(out ?? '');
     } catch { ok = false; }
@@ -443,7 +429,7 @@ function emitFacts(emit, out) {
 }
 
 /**
- * `_harness_setup._setup_summary_lines` — the post-build report as `[kind, text]` rows,
+ * The post-build report as `[kind, text]` rows,
  * `kind` being ok | warn | info.
  *
  * `ok` is the build's own success, so the first row is the only one that can say "build
@@ -482,7 +468,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
       lines.push(['warn', `a global install exists at ${cfg} — OpenCode loads THAT, `
         + `not this build; re-run with 'opencode-global' to change it`]);
     }
-  } catch { /* as the Python's bare `except Exception` */ }
+  } catch { /* best effort */ }
   // LSP prereqs, for the OpenCode emits alone — they are the ones that get `"lsp": true`.
   if (ok && emit.startsWith('opencode')) {
     for (const [label, present, hint] of lspPrereqs()) {
@@ -503,7 +489,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
 // --------------------------------------------------------------------------------------
 
 /**
- * `_harness_setup._setup_lines` — gather, export drift, build, summarise, offer the doctor.
+ * Gather, export drift, build, summarise, offer the doctor.
  *
  * THE BUILD IS AN IMPORT, NOT A SPAWN, for the reason P5e established for `harness build`:
  * the Python needs a second process because `build.py` is a different PROGRAM, and here the
@@ -576,7 +562,7 @@ export function setupLines() {
 }
 
 /**
- * `_harness_setup.cmd_setup` — the TTY gate, then the wizard.
+ * The TTY gate, then the wizard.
  *
  * The refusal is the whole of what a cell can observe (see the module header) and it is the
  * only part of this file the acceptance matrix compares. `process.stdin.isTTY` is `undefined`

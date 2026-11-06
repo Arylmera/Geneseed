@@ -105,10 +105,8 @@ export function gitRun(args, { timeout = 10, network = false } = {}) {
   const r = spawnSync(exe, cmd, {
     encoding: 'utf8', timeout: timeout * 1000, env, maxBuffer: 64 * 1024 * 1024, ...NO_WINDOW,
   });
-  // `except Exception` — a spawn error, an OS error, or the timeout Python raises on. A
-  // signal-killed git has `status === null` too and Python would report a negative code for
-  // it; no call site here distinguishes the two, and treating it as "git did not answer" is
-  // the arm the reference reaches for every other failure.
+  // A spawn error, an OS error or a timeout. A signal-killed git has `status === null` too;
+  // no call site distinguishes the two, so both mean "git did not answer".
   if (r.error || r.status === null) return [null, '', ''];
   return [r.status,
     redactUrlCreds(stripWhitespace(universal(r.stdout))),
@@ -930,7 +928,7 @@ export async function upgrade(themeArg = null) {
 }
 
 /**
- * `_harness_lifecycle.cmd_upgrade` — the harness verb, which is `export_improvements()` and
+ * The harness verb, which is `export_improvements()` and
  * then `upgrade()`.
  *
  * THE EXPORT RUNS FIRST AND MUST NEVER BLOCK. A deployed harness can carry in-place edits (by
@@ -998,7 +996,7 @@ function updateStepCmd(sub) {
 }
 
 /**
- * `_harness_lifecycle._diagnose_failed_step` — the diagnosis for a failed update step, PERSISTED
+ * The diagnosis for a failed update step, PERSISTED
  * before it is printed.
  *
  * The persistence is the point rather than a nicety: the curses log pane is ephemeral and the
@@ -1030,7 +1028,7 @@ export function diagnoseFailedStep(n, total, title, cmd, rc, output) {
 }
 
 /**
- * `_harness_lifecycle._bootstrap_plain` — run the update step with plain output, never fatally.
+ * Run the update step with plain output, never fatally.
  *
  * EXIT 3 IS NOT A FAILURE. `upgrade` returns 3 for an info precondition — a dirty tree, no
  * upstream, already up to date — and a bootstrap that reported those as failures would tell
@@ -1069,7 +1067,7 @@ async function bootstrapPlain() {
 }
 
 /**
- * `_harness_lifecycle._reexec` — hand off to a FRESH process so the just-updated code on disk
+ * Hand off to a FRESH process so the just-updated code on disk
  * runs, not the modules this one loaded before the pull.
  *
  * Node has no `execv`, so this is always the reference's WINDOWS branch: run the child normally
@@ -1084,7 +1082,7 @@ function reexec(argv) {
 }
 
 /**
- * `_harness_lifecycle.cmd_bootstrap` — update everything, then hand off to a fresh `setup`.
+ * Update everything, then hand off to a fresh `setup`.
  *
  * `flushExportNotes()` runs BEFORE the handoff, deliberately: the re-exec replaces this process
  * and the update step's own improvements notice has scrolled past (or, under the reference's
