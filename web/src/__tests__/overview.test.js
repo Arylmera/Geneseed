@@ -8,6 +8,7 @@ import {
   needsAttention,
   needsRebuild,
   neverFired,
+  sessionStartFigure,
   skillsByStage,
 } from '../lib/overview.js'
 import { applyAccent } from '../lib/accents.js'
@@ -270,6 +271,103 @@ describe('fleetVerdict', () => {
       head: 'Harness healthy.',
       facts: ['1 active install', 'doctor clean', 'all in step with source', 'no hand edits'],
     })
+  })
+})
+
+// A fleet row's session-start figure; 85 % of the 9 000 budget is 7 650.
+const started = (host, chars, rest = {}) => ({
+  id: host,
+  host,
+  scope: 'global',
+  state: 'active',
+  session_start: chars === null ? null : { chars, budget: 9000, cut: rest.cut ?? false },
+  ...rest,
+})
+
+describe('sessionStartFigure', () => {
+  it('shows the largest install, the budget as a whole number of KB', () => {
+    const f = sessionStartFigure([
+      started('bob', 6400),
+      started('claude', 7500),
+      started('x', null),
+    ])
+    expect([f.install.host, f.size]).toEqual(['claude', '7.5 / 9 KB'])
+  })
+
+  it('turns near at 85 % of the budget and not one character before', () => {
+    expect(sessionStartFigure([started('claude', 7649)]).near).toBe(false)
+    expect(sessionStartFigure([started('claude', 7650)]).near).toBe(true)
+  })
+
+  // 7 533 is 83.7 %, a real cut payload (rules of 16 000 characters); 7 641 is 84.9 %.
+  it.each([
+    ['cut at 83.7 %', 7533, true, true],
+    ['uncut at 84.9 %', 7641, false, false],
+    ['uncut at 85 %', 7650, false, true],
+  ])('reads %s', (_name, chars, cut, near) => {
+    expect(sessionStartFigure([started('claude', chars, { cut })]).near).toBe(near)
+  })
+
+  it('shows a cut install over a larger uncut one', () => {
+    const f = sessionStartFigure([started('bob', 7641), started('claude', 7533, { cut: true })])
+    expect([f.install.host, f.cut]).toEqual(['claude', true])
+  })
+
+  it('is null with no install measured', () => {
+    expect(sessionStartFigure([started('opencode', null)])).toBeNull()
+    expect(sessionStartFigure(undefined)).toBeNull()
+  })
+})
+
+describe('ledgerNeeds session start', () => {
+  const rows = (...installs) =>
+    ledgerNeeds({ fleet: { installs } }).filter((r) => r.id === 'session-start')
+
+  it('says nothing below the threshold', () => {
+    expect(rows(started('claude', 7649))).toEqual([])
+  })
+
+  // Shared files are no install's, so the row names none; two installs near are still one row.
+  it('is one suggestion at the threshold, with no install named for shared files', () => {
+    const near = rows(
+      started('claude', 7700, { shared: true }),
+      started('bob', 7700, { shared: true }),
+    )
+    expect(near).toEqual([
+      {
+        id: 'session-start',
+        tag: 'Session',
+        tone: 'warn',
+        sugg: true,
+        title: 'Session files are near the session-start budget',
+        detail: '7.7 / 9 KB · without project context',
+        where: 'personal',
+        verb: 'Trim',
+        href: '#/personal',
+      },
+    ])
+  })
+
+  it('fires at exactly the threshold', () => {
+    expect(rows(started('claude', 7650))).toHaveLength(1)
+  })
+
+  it('names the install when its files are its own', () => {
+    expect(rows(started('claude', 8100, { shared: false }))[0].title).toBe(
+      'claude · global: session files are near the session-start budget',
+    )
+  })
+
+  it('says content was cut, under the 85 % line, and stays silent for an uncut 84.9 %', () => {
+    const [row] = rows(started('claude', 7533, { cut: true, shared: true }))
+    expect([row.title, row.detail]).toEqual([
+      'Session files were cut to fit the session-start budget',
+      '7.5 / 9 KB · without project context',
+    ])
+    expect(rows(started('claude', 7533, { cut: true }))[0].title).toBe(
+      'claude · global: session files were cut to fit the session-start budget',
+    )
+    expect(rows(started('claude', 7641))).toEqual([])
   })
 })
 

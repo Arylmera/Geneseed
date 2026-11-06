@@ -154,6 +154,8 @@ const LIST_RESERVE = 500;
 // because stdout goes out as \r\n on Windows — a 144-line listing overran by 137 before this.
 // Multi-line text pays one more per inner line break, for the same reason.
 const cost = (s) => s.length + (s.match(/\n/g) || []).length + 2;
+// How a listing marks an eager file the budget kept out; `renderPayload` reads it back in a wiki.
+const OVER_BUDGET = ' (eager, but over the session budget — read on demand)';
 
 // The files the root instruction file names for session start, relative to the HARNESS dir
 // (`--root`: `.claude/`, `.bob/`, a global config dir) — not to the repo root discovery walks,
@@ -616,7 +618,7 @@ function lazyLines(entries, root, room) {
       lines.push(`  - ${dir.replace(/\\/g, '/')}/ — ${byDir.get(dir)} docs`);
       continue;
     }
-    const why = e.over ? ' (eager, but over the session budget — read on demand)' : '';
+    const why = e.over ? OVER_BUDGET : '';
     lines.push(`  - ${shown}${e.description ? ` — ${e.description}` : ''}${why}`);
   }
   return fitLines(lines, room, (n) => `  - … ${n} more not listed (session budget)`);
@@ -651,6 +653,111 @@ function installCarrier(hookRoot) {
     try { return readFileSync(file, 'utf8'); } catch { /* next candidate */ }
   }
   return '';
+}
+
+/**
+ * The payload, what it spent against `OUTPUT_BUDGET`, and whether the budget `cut` content from it:
+ * THE ONE WRITER of all three, so what the hook prints and what `sessionStartSize` reports cannot
+ * differ. Cut means a session file truncated or left out, a wiki note or an eager doc listed
+ * instead of injected; a lazy listing shortened is not, since it only names files. `heads` are the
+ * lines above the session block; `root` places `eager` and `lazy`. Reads, never prints.
+ */
+function renderPayload({ heads, session, eager, lazy, source, root }) {
+  const lines = [];
+  // `spent` counts every character pushed, headers included: the budget is the host's cap on
+  // the whole payload, not on the file bodies alone.
+  let spent = 0;
+  let cut = false;
+  const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
+  if (heads.length) push(...heads, '');
+  if (session.length) {
+    push('=== SESSION FILES \u2014 your harness files, injected at session start '
+      + '(untouched seeds skipped) ===', '');
+    // Rules answer only to their own size: the lines above them never push one out, so they are
+    // capped when their layers together pass the share, and everything after them spends `spent`.
+    let rulesSpent = 0;
+    const left = [];
+    for (const s of session) {
+      const head = `----- ${s.rel}${s.label ? ` (${s.label})` : ''} -----`;
+      const rules = s.rel === 'user-rules.md';
+      const room = OUTPUT_BUDGET - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
+      const where = `${s.abs} on demand`;
+      if (room <= 0) {
+        left.push({ rel: s.rel, line: `[context] ${s.rel} not injected (session budget) \u2014 read ${where}` });
+        continue;
+      }
+      const text = capToRoom(s.wiki && cost(s.text) > room ? renderWiki(s.wiki, room) : s.text, room, where);
+      if (text !== s.text || (s.wiki && text.includes(OVER_BUDGET))) cut = true;
+      push(head, text, '');
+      if (rules) rulesSpent += cost(head) + cost(text) + cost('');
+    }
+    // Paths have no length limit, so these lines answer to the budget like any listing.
+    if (left.length) {
+      cut = true;
+      const room = OUTPUT_BUDGET - LIST_RESERVE - spent - cost('');
+      const tail = (n) => `[context] ${n} more session files not injected (session budget)`;
+      // The memory map first, and by its short name when its path cannot fit: a count line must
+      // never replace the one file C12 owes a line that names it.
+      const isMap = (l) => l.rel === 'memory/MEMORY.md';
+      const maps = left.filter(isMap);
+      const lines = [...maps, ...left.filter((l) => !isMap(l))].map((l) => l.line);
+      let shown = fitLines(lines, room, tail);
+      if (maps.length && shown[0] !== lines[0]) {
+        const short = [...new Set(maps.map((l) => `[context] ${l.rel} not injected (session budget)`))];
+        shown = fitLines([...short, ...lines.slice(maps.length)], room, tail);
+      }
+      push(...shown, '');
+    }
+  }
+  if (eager.length || lazy.length) {
+    push(`=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`, '');
+  }
+  const demoted = [];
+  for (const entry of eager) {
+    const p = entry.path === undefined ? '' : entry.path;
+    const desc = entry.description === undefined ? '' : entry.description;
+    const target = path.isAbsolute(p) ? p : path.join(root, p);
+    const head = `----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`;
+    let text;
+    try {
+      text = readText(target).replace(/\n+$/, '');
+    } catch (e) {
+      push(head, `[context] MISSING eager file: ${asOsError(e, target)}`, '');
+      continue;
+    }
+    if (spent + cost(head) + cost(text) + cost('') > OUTPUT_BUDGET - LAZY_RESERVE) {
+      demoted.push({ ...entry, over: true });
+      continue;
+    }
+    push(head, text, '');
+  }
+
+  if (lazy.length || demoted.length) {
+    const title = '--- Lazy entries (load only when the task needs them) ---';
+    push(title);
+    push(...lazyLines([...lazy, ...demoted], root, OUTPUT_BUDGET - spent - cost('')), '');
+  }
+  return { text: `${lines.join('\n')}\n`, spent, cut: cut || demoted.length > 0 };
+}
+
+/**
+ * What the session-start hook of a GLOBAL install prints with no project around it, against the
+ * budget: `{ chars, budget, cut }`, for the console, which has no repo. `chars` is `spent`, in the
+ * budget's own unit (`cost`), so on Windows it is the output's length in characters. `cut` is told
+ * apart from `chars` because session files stop near 83% of the budget: a size cannot show it.
+ *
+ * `HOST` and `RAW_HOST` take what the emitted command passes: Claude's carries no `--host`
+ * (`claudeHookGroups`). They go back after, because a daemon shares this module's state with
+ * `alwaysOnCost`, where a hook process answers one call. Reads files, writes nothing.
+ */
+export function sessionStartSize(hookRoot, host) {
+  const was = [HOST, RAW_HOST];
+  [HOST, RAW_HOST] = [host, host === 'claude' ? null : host];
+  try {
+    const payload = { heads: [], session: sessionFiles(hookRoot), eager: [], lazy: [], source: '', root: hookRoot };
+    const { spent, cut } = renderPayload(payload);
+    return { chars: spent, budget: OUTPUT_BUDGET, cut };
+  } finally { [HOST, RAW_HOST] = was; }
 }
 
 export function cmdContext(args) {
@@ -707,79 +814,7 @@ export function cmdContext(args) {
     return 0;
   }
 
-  const lines = [];
-  // `spent` counts every character pushed, headers included: the budget is the host's cap on
-  // the whole payload, not on the file bodies alone.
-  let spent = 0;
-  const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
-  if (heads.length) push(...heads, '');
-  if (session.length) {
-    push('=== SESSION FILES \u2014 your harness files, injected at session start '
-      + '(untouched seeds skipped) ===', '');
-    // Rules answer only to their own size: the lines above them never push one out, so they are
-    // capped when their layers together pass the share, and everything after them spends `spent`.
-    let rulesSpent = 0;
-    const left = [];
-    for (const s of session) {
-      const head = `----- ${s.rel}${s.label ? ` (${s.label})` : ''} -----`;
-      const rules = s.rel === 'user-rules.md';
-      const room = OUTPUT_BUDGET - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
-      const where = `${s.abs} on demand`;
-      if (room <= 0) {
-        left.push({ rel: s.rel, line: `[context] ${s.rel} not injected (session budget) \u2014 read ${where}` });
-        continue;
-      }
-      const text = capToRoom(s.wiki && cost(s.text) > room ? renderWiki(s.wiki, room) : s.text, room, where);
-      push(head, text, '');
-      if (rules) rulesSpent += cost(head) + cost(text) + cost('');
-    }
-    // Paths have no length limit, so these lines answer to the budget like any listing.
-    if (left.length) {
-      const room = OUTPUT_BUDGET - LIST_RESERVE - spent - cost('');
-      const tail = (n) => `[context] ${n} more session files not injected (session budget)`;
-      // The memory map first, and by its short name when its path cannot fit: a count line must
-      // never replace the one file C12 owes a line that names it.
-      const isMap = (l) => l.rel === 'memory/MEMORY.md';
-      const maps = left.filter(isMap);
-      const lines = [...maps, ...left.filter((l) => !isMap(l))].map((l) => l.line);
-      let shown = fitLines(lines, room, tail);
-      if (maps.length && shown[0] !== lines[0]) {
-        const short = [...new Set(maps.map((l) => `[context] ${l.rel} not injected (session budget)`))];
-        shown = fitLines([...short, ...lines.slice(maps.length)], room, tail);
-      }
-      push(...shown, '');
-    }
-  }
-  if (eager.length || lazy.length) {
-    push(`=== PROJECT CONTEXT \u2014 binding for this repo (via ${source}) ===`, '');
-  }
-  const demoted = [];
-  for (const entry of eager) {
-    const p = entry.path === undefined ? '' : entry.path;
-    const desc = entry.description === undefined ? '' : entry.description;
-    const target = path.isAbsolute(p) ? p : path.join(root, p);
-    const head = `----- ${disp(p, root)}${desc ? ` \u2014 ${desc}` : ''} -----`;
-    let text;
-    try {
-      text = readText(target).replace(/\n+$/, '');
-    } catch (e) {
-      push(head, `[context] MISSING eager file: ${asOsError(e, target)}`, '');
-      continue;
-    }
-    if (spent + cost(head) + cost(text) + cost('') > OUTPUT_BUDGET - LAZY_RESERVE) {
-      demoted.push({ ...entry, over: true });
-      continue;
-    }
-    push(head, text, '');
-  }
-
-  if (lazy.length || demoted.length) {
-    const title = '--- Lazy entries (load only when the task needs them) ---';
-    push(title);
-    push(...lazyLines([...lazy, ...demoted], root, OUTPUT_BUDGET - spent - cost('')), '');
-  }
-
   // Claude Code takes a SessionStart hook's plain stdout as context; Bob reads it the same way.
-  out(`${lines.join('\n')}\n`);
+  out(renderPayload({ heads, session, eager, lazy, source, root }).text);
   return 0;
 }

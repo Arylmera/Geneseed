@@ -28,7 +28,7 @@ import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { statusLines } from '../../js/inspect/status.mjs';
 import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../../js/inspect/cost.mjs';
-import { cmdContext } from '../../js/hosts/hooks-context.mjs';
+import { cmdContext, sessionFiles, sessionStartSize } from '../../js/hosts/hooks-context.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { appendAgentLesson } from '../../js/hosts/memory-files.mjs';
 import { sharedTierOfDir } from '../../js/hosts/installs.mjs';
@@ -477,6 +477,23 @@ test('a settings file the wiring cannot touch is reported, and the fold does not
     // The repo stays out of this host's list, so the next emit retries it.
     assert.ok(!fs.existsSync(path.join(cfg, 'excludes.json')) || !fs.readFileSync(path.join(cfg, 'excludes.json'), 'utf8').includes('repo'));
   });
+});
+
+// The console's measure answers as each host's own hook would, and a daemon keeps serving after
+// it. Hand count: block title and blank 99; the 34-character shared head 36, the 31-character
+// tier rule 33, a blank 2; the 37-character `host: bob` head 39, `mine` 6, a blank 2 = 217.
+// Without the tier: 99, the 25-character plain head 27, 6, 2 = 134.
+test('the session-start measure reads as the named host and leaves no host behind', () => {
+  const w = world(false);
+  try {
+    fs.rmSync(path.join(w.repo, '.claude'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(w.gcfg, '.geneseed-emit'), 'bob-global\n');
+    fs.writeFileSync(path.join(w.gcfg, 'user-rules.md'), 'mine\n');
+    capture(() => cmdContext({ root: w.gcfg }));
+    assert.deepEqual(sessionStartSize(w.gcfg, 'bob'), { chars: 217, budget: 9000, cut: false });
+    assert.deepEqual(sessionStartSize(w.gcfg, 'openclaude'), { chars: 134, budget: 9000, cut: false });
+    assert.deepEqual(sessionFiles(w.gcfg).map((s) => s.label), ['shared', 'host: claude']);
+  } finally { w.restore(); }
 });
 
 test('a hook that names its host reads the tier only for a global of that host', () => {

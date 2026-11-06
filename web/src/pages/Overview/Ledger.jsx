@@ -16,6 +16,7 @@ import {
   costTotal,
   fleetVerdict,
   ledgerNeeds,
+  sessionStartFigure,
   needsRebuild,
   neverFired,
   rebuildTarget,
@@ -274,6 +275,7 @@ function RootKpi({ installs }) {
 // fleet's range stays as one quiet line, so the card answers one question first.
 function CostKpi({ installs }) {
   const r = alwaysOnRange(installs)
+  const start = sessionStartFigure(installs)
   const span =
     r &&
     (approxTokens(r.min) === approxTokens(r.max)
@@ -289,6 +291,11 @@ function CostKpi({ installs }) {
           </span>
           <StackBar parts={costParts(r.top.cost)} label={`Loaded every turn, ${labelOf(r.top)}`} />
           <span className="dim ldg-kpi-cap">{`All installs: ${span} tokens`}</span>
+          {start ? (
+            <span className={`ldg-kpi-cap ${start.near ? 't-warn' : 'dim'}`}>
+              {`Session start · ${start.size} · without project context`}
+            </span>
+          ) : null}
         </>
       ) : (
         <p className="dim">No install has a root file to measure.</p>

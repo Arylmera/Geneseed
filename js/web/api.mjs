@@ -18,7 +18,8 @@ import { alwaysOnCost } from '../inspect/cost.mjs';
 import { installProfile } from '../build/generate.mjs';
 import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { VERSION_MARKER } from '../hosts/hosts.mjs';
+import { sessionStartSize } from '../hosts/hooks-context.mjs';
+import { CLAUDE_STYLE, VERSION_MARKER } from '../hosts/hosts.mjs';
 import { autostartPaths } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir,
@@ -260,6 +261,11 @@ export function apiInstalls(state) {
  * Every unknown stays `null` — `verdict: 'unknown'`, `drift: null` — never a reassuring zero.
  */
 export function apiFleet(state) {
+  // ~5 ms per install, measured 2026-11, like `alwaysOnCost` beside it, so it is not cached.
+  const sessionStart = (host, scope, st, dir) => {
+    if (st !== 'active' || scope !== 'global' || !CLAUDE_STYLE.includes(host)) return null;
+    try { return sessionStartSize(dir, host); } catch { return null; }
+  };
   const sourceFp = sourceFingerprint(makeCfg());
   const installs = [];
   for (const [host, scope, root] of installTargets()) {
@@ -295,6 +301,9 @@ export function apiFleet(state) {
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
+      // Its session-start hook against the budget. Global hook hosts only: the console has no
+      // repo to add, a project install's size is that repo's, and OpenCode has no stdout cap.
+      session_start: sessionStart(host, scope, st, dir),
     });
   }
   // `version` is the source's release label, the "Behind 4.19.0" a behind row names; the same

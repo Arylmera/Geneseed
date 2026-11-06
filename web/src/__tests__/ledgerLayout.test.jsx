@@ -224,6 +224,60 @@ describe('Ledger KPI cards', () => {
     )
   })
 
+  // Amber at 85 % of the 9 000 budget: 7 650. The words are the same on both sides of it.
+  it('add the session-start line to the cost card, amber only near the budget', async () => {
+    const line = (chars) => ({
+      ...FLEET,
+      installs: [{ ...CLAUDE, session_start: { chars, budget: 9000 } }, BOB],
+    })
+    api.fleet.mockResolvedValue(line(7649))
+    const first = render(<Ledger overview={null} onAction={vi.fn()} />)
+    const low = await within(
+      await screen.findByRole('region', { name: 'Loaded every turn' }),
+    ).findByText('Session start · 7.6 / 9 KB · without project context')
+    expect(low.className).toBe('ldg-kpi-cap dim')
+    first.unmount()
+
+    clearAsyncCache()
+    api.fleet.mockResolvedValue(line(7650))
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const high = await within(
+      await screen.findByRole('region', { name: 'Loaded every turn' }),
+    ).findByText(/^Session start · 7\.\d \/ 9 KB · without project context$/)
+    expect(high.className).toBe('ldg-kpi-cap t-warn')
+  })
+
+  // Session files stop near 83 % of the budget, so a cut payload is amber under the 85 % line.
+  it('turn the session-start line amber for a cut payload at 83.7 %', async () => {
+    api.fleet.mockResolvedValue({
+      ...FLEET,
+      installs: [{ ...CLAUDE, session_start: { chars: 7533, budget: 9000, cut: true } }, BOB],
+    })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const line = await within(
+      await screen.findByRole('region', { name: 'Loaded every turn' }),
+    ).findByText('Session start · 7.5 / 9 KB · without project context')
+    expect(line.className).toBe('ldg-kpi-cap t-warn')
+  })
+
+  it('leave an uncut payload at 84.9 % plain', async () => {
+    api.fleet.mockResolvedValue({
+      ...FLEET,
+      installs: [{ ...CLAUDE, session_start: { chars: 7641, budget: 9000, cut: false } }, BOB],
+    })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const line = await within(
+      await screen.findByRole('region', { name: 'Loaded every turn' }),
+    ).findByText('Session start · 7.6 / 9 KB · without project context')
+    expect(line.className).toBe('ldg-kpi-cap dim')
+  })
+
+  it('draw no session-start line when no install reports one', async () => {
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const cost = within(await screen.findByRole('region', { name: 'Loaded every turn' }))
+    expect(cost.queryByText(/Session start/)).toBeNull()
+  })
+
   // per_day is always the last 30 days: past day 30 an older `since` would label a 30-day sum
   // as all-time, so the card says "30 days" instead.
   it('name the call window "30 days" once 30 days are counted', async () => {

@@ -34,7 +34,7 @@ import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
-  cmdContext, discoverContext, SEED_SHA256, SESSION_FILES, sessionFiles,
+  cmdContext, discoverContext, SEED_SHA256, SESSION_FILES, sessionFiles, sessionStartSize,
   CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge,
 } from '../../js/hosts/hooks-context.mjs';
 import {
@@ -2413,6 +2413,85 @@ test('the OpenCode context plugin carries the same curation nudge as the hook', 
   const re = (src) => src.match(/const MAP_COUNT_RE = (\/.*\/);?$/m)?.[1];
   assert.ok(re(hook), 'the hook no longer declares MAP_COUNT_RE');
   assert.equal(re(plugin), re(hook), 'the plugin MAP_COUNT_RE drifted from the hook');
+});
+
+// sessionStartSize is the console's figure. Hand count of the fixture, in the budget's unit (a
+// line's characters + 2, + 1 per inner break): the 95-character block title 97, its blank 2, the
+// 25-character head 27, `ab\ncd` 8, its blank 2 = 136. Nothing but seeds to inject is 0.
+test('the session-start measure counts the payload in the budget unit, and writes nothing', () => {
+  withDir((d) => {
+    assert.deepEqual(sessionStartSize(d, 'claude'), { chars: 0, budget: 9000, cut: false });
+    fs.writeFileSync(path.join(d, 'user-rules.md'), 'ab\ncd\n');
+    const before = fs.readdirSync(d, { recursive: true }).sort();
+    const [size, out, err] = capturedOut(() => sessionStartSize(d, 'claude'));
+    assert.deepEqual(size, { chars: 136, budget: 9000, cut: false });
+    assert.deepEqual([out, err], ['', '']);
+    assert.deepEqual(fs.readdirSync(d, { recursive: true }).sort(), before);
+  });
+});
+
+// The figure must be what the hook prints, also where the budget cuts: the rules are truncated,
+// so the memory map and the notebook are left out. Each \n is 2 in the budget's unit (\r\n).
+test('the session-start measure is the hook output of an install with no project around it', () => {
+  withDir((d) => withDir((empty) => {
+    fs.mkdirSync(path.join(d, 'memory'));
+    fs.mkdirSync(path.join(d, 'notebook'));
+    fs.writeFileSync(path.join(d, 'user-rules.md'), `${'x'.repeat(80)}\n`.repeat(200));
+    fs.writeFileSync(path.join(d, 'memory', 'MEMORY.md'), 'a fact\n');
+    fs.writeFileSync(path.join(d, 'notebook', 'NOTEBOOK.md'), 'a note\n');
+    const prev = process.env.GENESEED_ROOT;
+    process.env.GENESEED_ROOT = empty;
+    try {
+      const [rc, raw] = capturedOut(() => cmdContext({ root: d }));
+      assert.equal(rc, 0);
+      const out = raw.replace(/\r\n/g, '\n');
+      assert.ok(out.includes('truncated (session budget)') && out.includes('not injected (session budget)'),
+        `the budget did not bind:\n${out.slice(-400)}`);
+      const size = sessionStartSize(d, 'claude');
+      assert.equal(size.chars, out.length + out.match(/\n/g).length);
+      assert.equal(size.cut, true);
+    } finally {
+      if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
+    }
+  }));
+});
+
+// `cut` says the budget took content, which the size cannot: most cut rows here sit under
+// the console's 85 % line. 7 000 characters of rules fit whole. Words about the budget
+// in a file the budget did not touch are the user's own text, not a cut.
+const LONG = (n) => `${'x'.repeat(79)}\n`.repeat(n / 80);
+const CUT_ROWS = [
+  { name: 'rules that fit', files: { 'user-rules.md': LONG(7000) }, cut: false },
+  { name: 'rules that name the budget', files: { 'user-rules.md': 'keep the (session budget) small\n' }, cut: false },
+  { name: 'rules truncated', files: { 'user-rules.md': LONG(16000) }, cut: true },
+  { name: 'memory map truncated', files: { 'memory/MEMORY.md': LONG(16000) }, cut: true },
+  { name: 'rules 5k, memory truncated', files: { 'user-rules.md': LONG(5040), 'memory/MEMORY.md': LONG(16000) }, cut: true },
+  // Rules that fit whole spend 7 499, so the next file has no room: left out, nothing truncated.
+  { name: 'a file left out', files: { 'user-rules.md': LONG(7280), 'notebook/NOTEBOOK.md': 'a note\n' }, cut: true },
+];
+for (const { name, files, cut } of CUT_ROWS) {
+  test(`the session-start measure reports the cut: ${name}`, () => {
+    withDir((d) => {
+      for (const [rel, text] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true });
+        fs.writeFileSync(path.join(d, rel), text);
+      }
+      assert.equal(sessionStartSize(d, 'claude').cut, cut);
+    });
+  });
+}
+
+// A wiki note over the budget is listed, not injected, and nothing else in the payload is cut.
+test('the session-start measure reports a wiki note listed instead of injected', () => {
+  withDir((d) => withDir((vault) => {
+    fs.writeFileSync(path.join(vault, 'big.md'), LONG(16000));
+    fs.writeFileSync(path.join(vault, 'small.md'), 'a note\n');
+    const wiki = (note) => JSON.stringify({ wikis: [{ name: 'V', path: vault, entries: [{ path: note }] }] });
+    fs.writeFileSync(path.join(d, 'geneseed-wiki.jsonc'), wiki('small.md'));
+    assert.equal(sessionStartSize(d, 'claude').cut, false);
+    fs.writeFileSync(path.join(d, 'geneseed-wiki.jsonc'), wiki('big.md'));
+    assert.equal(sessionStartSize(d, 'claude').cut, true);
+  }));
 });
 
 test('a nudged memory map keeps the whole payload under 9 000 chars', () => {

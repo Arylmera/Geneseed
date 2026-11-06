@@ -13,6 +13,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.config/geneseed`, and existing stores fold into it on the next global emit. Breaking: see Removed.
 
 ### Added
+- **The Overview shows session-start hook size against its budget**, and warns when it is near the limit or content was cut.
 - **The shared tier goes live.** A global emit in a host's own config directory creates `~/.config/geneseed/` and seeds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, `memory/` and `notes/`. Global installs name these locations as absolute paths, and state the rule order: project over host over shared. Project installs and default builds keep their bytes. No emit grants a directory permission. `geneseed doctor` adds a note when a rendered path differs from the run-time one. `geneseed diff` also lists the notes in the tier.
 - **The web console meets the shared tier.** On a global install the console reads and edits the tier's rules, profile, memory and wiki manifest. What the harnesses share is shown once and names no harness: Rules, Profile, Memory and the Overview's *Needs you* each list the shared store one time, tagged `shared`, and a project install keeps its own entry. `geneseed uninstall` prints where the tier lives and never touches it, whatever `--archive-memory` says.
 

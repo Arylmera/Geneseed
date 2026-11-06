@@ -23,7 +23,7 @@ import { makeSandbox } from '../helpers/sandbox.mjs';
 import { webFixtureTeardown, ROOT } from '../helpers/web_fixture.mjs';
 import { withGlobalInstalls as withGlobalInstallsFixture } from '../helpers/installs_fixture.mjs';
 import {
-  neutral, withGlobalRoot, seedGlobal, withThreeInstalls, withTwoViews, seedFact, fetchStatus, withRules, webState,
+  DISABLED, neutral, withGlobalRoot, seedGlobal, withThreeInstalls, withTwoViews, seedFact, fetchStatus, withRules, webState,
 } from '../helpers/web_api_fixture.mjs';
 
 after(webFixtureTeardown);
@@ -199,6 +199,32 @@ test('the fleet rows carry each install its own posture, mode and fact count', (
     // Its memory facts too: MEMORY.md is the index, not a fact; no memory folder is none.
     seedFact(cl);
     assert.deepEqual(apiFleet(st).installs.map((r) => [r.host, r.facts]), [['opencode', 0], ['claude', 1]]);
+  });
+});
+
+// Session start is measured where the hook's stdout is capped and no repo is needed: an active
+// global Claude-style install. 136 is `claude.test.mjs`'s hand count of the same `ab\ncd` rules.
+test('the fleet measures session start on an active global hook install only', () => {
+  withTwoViews(({ st, oc, cl }) => {
+    const proj = path.join(path.dirname(oc), 'proj');
+    fs.mkdirSync(path.join(proj, '.claude'), { recursive: true });
+    for (const d of [oc, cl, path.join(proj, '.claude')]) {
+      fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+      fs.writeFileSync(path.join(d, 'user-rules.md'), 'ab\ncd\n');
+    }
+    const cwd = process.cwd();
+    process.chdir(proj);
+    try {
+      const read = () => Object.fromEntries(apiFleet(st).installs
+        .map((r) => [`${r.host} ${r.scope}`, r.session_start]));
+      assert.deepEqual(read(), {
+        'opencode global': null,
+        'claude global': { chars: 136, budget: 9000, cut: false },
+        'claude project': null,
+      });
+      fs.mkdirSync(path.join(cl, DISABLED, 'claude'), { recursive: true });
+      assert.equal(read()['claude global'], null);
+    } finally { process.chdir(cwd); }
   });
 });
 

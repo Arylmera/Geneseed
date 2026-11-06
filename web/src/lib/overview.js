@@ -219,6 +219,30 @@ export const approxTokens = (chars) => `≈${(chars / 4 / 1000).toFixed(1)}k`
 
 const installLabel = (i) => `${i.host} · ${i.scope}`
 
+// At this share of its budget the session-start figure turns amber and Needs you says so.
+const SESSION_START_NEAR = 0.85
+
+// The session-start hook output the fleet should see, or null when no global hook install reports
+// one: a payload the budget cut, else the largest. Cut outranks size because session files stop
+// near 83 % of the budget, so an uncut install can be larger. A cut payload is near at any share.
+// A KB here is 1 000 of the budget's characters.
+export function sessionStartFigure(installs) {
+  const weight = ({ chars, budget, cut }) => chars + (cut ? budget : 0)
+  const rows = (installs || []).filter((i) => i.session_start)
+  const top = rows.reduce(
+    (a, b) => (!a || weight(b.session_start) > weight(a.session_start) ? b : a),
+    null,
+  )
+  if (!top) return null
+  const { chars, budget, cut } = top.session_start
+  return {
+    install: top,
+    size: `${(chars / 1000).toFixed(1)} / ${budget / 1000} KB`,
+    cut,
+    near: cut || chars / budget >= SESSION_START_NEAR,
+  }
+}
+
 // The rebuild target the `rebuild` action takes ({host, path}, the path exactly as the fleet
 // gave it), plus the row id and a label the Ledger names in its confirm and its progress bar.
 export const rebuildTarget = (i) => ({
@@ -293,6 +317,27 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
       where: 'library/skills',
       verb: 'Triage',
       href: '#/skills',
+    })
+  }
+  // One row however many installs are near: the largest speaks for them. Its files are the
+  // machine's shared ones when `shared` says so, which are no install's to be named after.
+  const start = sessionStartFigure(fleet?.installs)
+  if (start?.near) {
+    const state = start.cut
+      ? 'were cut to fit the session-start budget'
+      : 'are near the session-start budget'
+    out.push({
+      id: 'session-start',
+      tag: 'Session',
+      tone: 'warn',
+      sugg: true,
+      title: start.install.shared
+        ? `Session files ${state}`
+        : `${installLabel(start.install)}: session files ${state}`,
+      detail: `${start.size} · without project context`,
+      where: 'personal',
+      verb: 'Trim',
+      href: '#/personal',
     })
   }
   const rows = (fleet?.installs || []).filter((x) => x.state === 'active')
