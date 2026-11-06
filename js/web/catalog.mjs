@@ -596,6 +596,16 @@ function fleetEntries(fleet, section) {
   return [...rows.values()].sort((a, b) => (a.e.name < b.e.name ? -1 : a.e.name > b.e.name ? 1 : 0));
 }
 
+/** The fleet keys of the installs that read the shared tier: their memory is one store. */
+const sharedInstalls = (fleet) => fleet
+  .filter((v) => v.install !== null && tierOf(v.state) !== null).map((v) => v.install);
+
+/** `fleet` with the tier's readers folded into the first: one store is listed once, not per host. */
+function memoryFleet(fleet) {
+  const [, ...merged] = sharedInstalls(fleet);
+  return fleet.filter((v) => !merged.includes(v.install));
+}
+
 /**
  * `fleet` defaults to `state` alone, which answers as one install did before the console
  * listed the fleet; the `/api/catalog/` route passes every active install for `FLEET_SECTIONS`.
@@ -613,11 +623,12 @@ export function apiCatalog(state, section, fleet = [{ install: null, state }]) {
   } else if (section === 'laws') {
     return { section, items: constitutionItems(state.inventory), nouns: tierNouns(state.theme) };
   } else if (section === 'memory') {
-    items = fleetItems(fleet, memoryItems);
+    return { section, items: fleetItems(memoryFleet(fleet), memoryItems),
+      sharedInstalls: sharedInstalls(fleet) };
   } else if (section === 'notebook') {
     items = fleetItems(fleet, notebookItems);
   } else if (section === 'wiki') {
-    items = wikiItems(state);
+    return { section, items: wikiItems(state), shared: tierOf(state) !== null };
   } else {
     items = configItems(state);
   }
@@ -671,14 +682,15 @@ export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
     flatName(name);
     const fileOf = (st) => path.join(type === 'notebook' ? notebookDir(st) : memoryDir(st), `${name}.md`);
     // As a skill: the named install's copy, else the first holder in fleet order.
-    const has = fleet.filter((v) => isFile(fileOf(v.state)));
+    const has = (type === 'memory' ? memoryFleet(fleet) : fleet).filter((v) => isFile(fileOf(v.state)));
     const from = fleet.find((v) => v.state === state) ?? (state.pinned ? { install: null, state } : has[0]);
     const p = from ? fileOf(from.state) : null;
     if (!p || !isFile(p)) throw new NotFound(name);
     const body = readMaybe(p) ?? '';
     return { type, name, title: name, desc: '', body,
       links: resolveLinks(from.state, body), source: resolvePath(p),
-      install: from.install, installs: has.map((v) => v.install).filter((k) => k !== null) };
+      install: from.install, installs: has.map((v) => v.install).filter((k) => k !== null),
+      shared: type === 'memory' && tierOf(from.state) !== null };
   }
   if (type === 'wiki') return apiWikiItem(state, name);
   if (type === 'config') {

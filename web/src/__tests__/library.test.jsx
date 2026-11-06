@@ -166,6 +166,52 @@ describe('Library', () => {
     await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a', undefined))
   })
 
+  // Every global install reads one store. The server lists it under the first of them and names
+  // the rest in `sharedInstalls`: the list then shows `shared` beside a project's own store, and
+  // the other global installs hold no slot, so no harness is named for the shared facts.
+  it('names the shared memory store shared, and gives the others no slot', async () => {
+    const OC = 'opencode:global:/oc'
+    const CL = 'claude:global:/cl'
+    const REPO = 'bob:project:/r/repo'
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { id: CL, host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+        { id: OC, host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+        { id: REPO, host: 'bob', scope: 'project', path: '/r/repo', state: 'active' },
+      ],
+    }))
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve(
+        section === 'memory'
+          ? {
+              section,
+              sharedInstalls: [CL, OC],
+              items: [
+                { name: 'fact-a', title: 'fact-a', installs: [CL] },
+                { name: 'fact-b', title: 'fact-b', installs: [REPO] },
+              ],
+            }
+          : { section, items: [] },
+      ),
+    )
+    try {
+      render(<Library lock="memory" base="#/personal/memory" overview={overview({})} />)
+      await screen.findByText('fact-b')
+      await waitFor(() =>
+        expect([...document.querySelectorAll('.lk-install')].map((t) => t.textContent)).toEqual([
+          'shared',
+          'repo · bob',
+        ]),
+      )
+      expect([...document.querySelectorAll('.lr-install')].map((t) => t.textContent)).toEqual([
+        'shared',
+        'repo · bob',
+      ])
+    } finally {
+      delete api.installs
+    }
+  })
+
   // Memory across installs (Q3): each row is tagged with the installs that hold it, and a forget
   // or a promote acts on the install of the copy on screen, never the default one.
   it('tags memory rows by install and forgets from the copy on screen', async () => {

@@ -5,7 +5,6 @@ import { useRules } from '../hooks/useRules.js'
 import Tabs from '../components/Tabs.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
-import { Bar } from '../components/StackBar.jsx'
 import Rules from './Rules.jsx'
 import Profile from './Profile.jsx'
 import Library, { installLabel } from './Library.jsx'
@@ -21,81 +20,46 @@ const countOf = (catalog) =>
     ? (catalog.items || []).filter((i) => !FURNITURE.has(String(i.name).toUpperCase())).length
     : null
 
-// The two panels over the rules editor: the one budget the rule file spends every turn, and
-// how much the agent has been told about you across your files. The rule file and the profile are
-// ONE install's (the default, `tag`), so both cards name it; memory and notebook count every install.
-function RuleCards({ rules, profile, facts, notes, tag }) {
+// The panel over the rules editor: how much the agent has been told about you across your files.
+// On a global install the rules, profile and memory are the one shared tier, and that is what the
+// note says, naming no harness. A project install's rules and profile are its own, so it names the
+// install (`tag`, the default, once two are active).
+function KnownCard({ rules, profile, facts, notes, tag, projects }) {
   const st = rules?.exists ? rules.stats : null
   if (!st) return null
-  // One threshold for the whole strip: whichever budget is closer to spent, count or tokens.
-  const pct = Math.round(Math.max(st.rules / st.max_rules, st.tokens / st.max_tokens) * 100)
-  const [tone, note] =
-    pct >= 100
-      ? ['bad', 'over budget: a bloated rule set dilutes the rules that matter']
-      : pct >= 70
-        ? ['warn', 'getting heavy; consider merging or pruning']
-        : [
-            'accent',
-            st.rules
-              ? `${st.rules} rules in ${st.lines} lines.`
-              : 'All of it is the file’s preamble; no rule text yet.',
-          ]
   const known = [
     {
       k: 'Profile',
       v: profile?.seeded ? 'template' : profile?.exists ? 'written' : 'missing',
       warn: !!profile?.seeded,
     },
-    { k: 'Rules', v: `${st.rules}/${st.max_rules}` },
+    { k: 'Rules', v: plural(st.rules, 'rule') },
     { k: 'Memory', v: facts == null ? 'n/a' : plural(facts, 'fact') },
     { k: 'Notebook', v: notes == null ? 'n/a' : plural(notes, 'note') },
   ]
   return (
-    <div className="card-row">
-      <section className="panel" aria-labelledby="pc-budget">
-        <div className="panel-head">
-          <h2 id="pc-budget">Rule budget</h2>
-          <span className="mono dim">
-            {st.rules} of {st.max_rules}
-            {tag ? ` · ${tag}` : ''}
-          </span>
-        </div>
-        <div
-          className="slots"
-          style={{ '--slots': st.max_rules }}
-          role="img"
-          aria-label={`${st.rules} of ${st.max_rules} rule slots used`}
-        >
-          {Array.from({ length: st.max_rules }, (_, i) => (
-            <span key={i} className={i < st.rules ? 'used' : ''} />
-          ))}
-        </div>
-        <p className="big-num">
-          <span className="mono">{st.tokens}</span>{' '}
-          <span className="dim">/ {st.max_tokens.toLocaleString('en-US')} tokens, every turn</span>
+    <section className="panel pm-topics" aria-labelledby="pc-known">
+      <div className="panel-head">
+        <h2 id="pc-known">What the agent knows about you</h2>
+      </div>
+      <ul className="hbars">
+        {known.map((r) => (
+          <li key={r.k}>
+            <span className="hb-label">{r.k}</span>
+            <span className={`mono hb-n${r.warn ? ' warn' : ''}`}>{r.v}</span>
+          </li>
+        ))}
+      </ul>
+      {tag ? (
+        <p className="panel-note">
+          {!rules.shared
+            ? `Profile and rules of ${tag}; memory and notebook across every install.`
+            : projects
+              ? 'Profile and rules are shared by every harness; memory counts the shared store and each project’s own, and the notebook every install.'
+              : 'Profile, rules and memory are shared by every harness; the notebook counts every install.'}
         </p>
-        <Bar value={st.tokens} max={st.max_tokens} label="tokens" tone={tone} />
-        <p className="panel-note">{note}</p>
-      </section>
-      <section className="panel" aria-labelledby="pc-known">
-        <div className="panel-head">
-          <h2 id="pc-known">What the agent knows about you</h2>
-        </div>
-        <ul className="hbars">
-          {known.map((r) => (
-            <li key={r.k}>
-              <span className="hb-label">{r.k}</span>
-              <span className={`mono hb-n${r.warn ? ' warn' : ''}`}>{r.v}</span>
-            </li>
-          ))}
-        </ul>
-        {tag ? (
-          <p className="panel-note">
-            Profile and rules of {tag}; memory and notebook across every install.
-          </p>
-        ) : null}
-      </section>
-    </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -109,14 +73,19 @@ const topicsOf = (body) =>
     .filter(Boolean)
     .map((m) => ({ topic: m[1], n: Number(m[2]) }))
 
-// The map is one install's (the first that has it, `install`), so the panel names it.
-function Topics({ topics, install }) {
+// The map is one store's. The shared store is every harness's, so the panel names none; a
+// project install's own store (the first that has it, `install`) is named.
+function Topics({ topics, install, shared }) {
   if (!topics.length) return null
   return (
     <section className="panel pm-topics" aria-labelledby="pm-topics">
       <div className="panel-head">
         <h2 id="pm-topics">Topics</h2>
-        {install ? <span className="mono dim">{installLabel(install)}</span> : null}
+        {shared ? (
+          <span className="mono dim">shared</span>
+        ) : install ? (
+          <span className="mono dim">{installLabel(install)}</span>
+        ) : null}
         <span className="mono dim">{plural(topics.length, 'topic')}</span>
       </div>
       <ul className="hbars">
@@ -215,7 +184,14 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
       <Tabs page="personal" current={tab} badges={badges} label="Personal files" />
       {tab === 'rules' && (
         <>
-          <RuleCards rules={rules} profile={profile} facts={facts} notes={notes} tag={tag} />
+          <KnownCard
+            rules={rules}
+            profile={profile}
+            facts={facts}
+            notes={notes}
+            tag={tag}
+            projects={active?.some((i) => i.scope === 'project')}
+          />
           <Rules onChanged={reloadRules} dataRev={dataRev} />
         </>
       )}
@@ -226,7 +202,9 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
         </EmptyState>
       ) : folder ? (
         <>
-          {tab === 'memory' && <Topics topics={topicsOf(map?.body)} install={map?.install} />}
+          {tab === 'memory' && (
+            <Topics topics={topicsOf(map?.body)} install={map?.install} shared={map?.shared} />
+          )}
           <Library
             key={tab}
             lock={tab}

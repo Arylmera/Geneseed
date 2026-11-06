@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -14,7 +14,7 @@ import Rules from '../pages/Rules.jsx'
 import { api } from '../api/index.js'
 import { ConfirmContext } from '../hooks/useConfirm.jsx'
 
-const STATS = { rules: 2, lines: 20, tokens: 300, max_rules: 15, max_tokens: 1500 }
+const STATS = { rules: 2, lines: 20, tokens: 1300 }
 const PAYLOAD = {
   exists: true,
   path: '/x/user-rules.md',
@@ -31,6 +31,7 @@ const PAYLOAD = {
       status: 'active',
       overdue: false,
       body: 'Commit subjects are plain text.',
+      tokens: 21,
     },
     {
       id: 2,
@@ -41,6 +42,7 @@ const PAYLOAD = {
       status: 'trial',
       overdue: false,
       body: 'Always use tabs in this repo.',
+      tokens: 34,
     },
   ],
 }
@@ -54,16 +56,58 @@ beforeEach(() => {
 })
 
 describe('Rules', () => {
-  it('says how many rules wait for approval, and nothing when none do', async () => {
-    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, pending: 2 }))
-    const { unmount } = render(<Rules />)
-    await waitFor(() => expect(screen.getByText(/2 items from another host are/)).toBeTruthy())
-    expect(screen.getByText(/Until you decide, the host files bind/)).toBeTruthy()
-    unmount()
-    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, pending: 0 }))
+  // Read-only: the rule Rite is the draft's one writer, so the section offers no control.
+  it('lists pending drafts read-only, with the host they bind on', async () => {
+    api.rules.mockImplementation(() =>
+      Promise.resolve({
+        ...PAYLOAD,
+        drafts: [
+          { title: 'Mine', host: 'claude', body: '(scope: global)\nBe terse.' },
+          { title: 'Choose: PROFILE.md', host: null, body: '' },
+        ],
+      }),
+    )
     render(<Rules />)
-    await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
-    expect(screen.queryByText(/waiting for your approval/)).toBeNull()
+    const pending = await screen.findByRole('region', { name: 'Pending' })
+    expect(within(pending).getByText('Mine')).toBeTruthy()
+    expect(within(pending).getByText('binds on claude')).toBeTruthy()
+    expect(within(pending).getByText(/Be terse\./)).toBeTruthy()
+    expect(within(pending).getByText('Choose: PROFILE.md')).toBeTruthy()
+    expect(pending.textContent).toMatch(/still binds on its host/)
+    expect(pending.textContent).toMatch(/rule Rite decides each one/)
+    expect(within(pending).queryByRole('button')).toBeNull()
+  })
+
+  it('shows no Pending section when nothing waits', async () => {
+    render(<Rules />)
+    await screen.findByText('No emoji in commits')
+    expect(screen.queryByRole('region', { name: 'Pending' })).toBeNull()
+  })
+
+  // Each row its own cost, the page one total; the file's header is why they do not add up.
+  it('shows each rule its token cost and the page one total, with no ceiling', async () => {
+    render(<Rules />)
+    await screen.findByText('No emoji in commits')
+    const costs = [...document.querySelectorAll('.rule-head')].map(
+      (h) => h.textContent.match(/≈\d+ tokens/)?.[0],
+    )
+    expect(costs).toEqual(['≈21 tokens', '≈34 tokens'])
+    expect(screen.getByText('2 rules · ≈1,300 tokens every turn')).toBeTruthy()
+    expect(screen.getByText('The total counts the file’s header too.')).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/ of 15|budget/)
+  })
+
+  it('says the rules are shared across harnesses, and only when a file is shared', async () => {
+    const says = () => screen.queryByText(/Every harness on this machine shares that one file/)
+    const { unmount } = render(<Rules />)
+    await screen.findByText('No emoji in commits')
+    expect(says()).toBeNull()
+    unmount()
+    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, shared: true }))
+    render(<Rules />)
+    await screen.findByText('No emoji in commits')
+    expect(says()).toBeTruthy()
+    expect(screen.queryByText(/beside the\s+deployed AGENT\.md/)).toBeNull()
   })
 
   it('renders the rule rows with scope and trial chips', async () => {
@@ -406,8 +450,6 @@ describe('Rules', () => {
     expect(screen.queryByText('Add rule')).toBeNull()
   })
 
-  // The budget meter moved to Personal's "Rule budget" panel (personal.test.jsx).
-
   it('labels the form fields with visible text and focuses the title on Add', async () => {
     render(<Rules />)
     fireEvent.click(await screen.findByText('Add rule'))
@@ -576,15 +618,56 @@ describe('Rules across installs', () => {
   })
 
   // Every global install answers with the one shared file: one list, one count, one write target.
-  it('lists a file two installs share once, and counts its pending items once', async () => {
-    api.rules.mockImplementation(() => Promise.resolve({ ...clRules, pending: 2 }))
+  it('lists a file two installs share once, and its drafts once', async () => {
+    api.rules.mockImplementation(() =>
+      Promise.resolve({ ...clRules, drafts: [{ title: 'Mine', host: 'bob', body: 'Be terse.' }] }),
+    )
     render(<Rules />)
     expect((await screen.findAllByText('Claude only')).length).toBe(1)
-    expect(screen.getByText(/2 items from another host are/)).toBeTruthy()
-    expect(document.querySelector('.rule-head').textContent).toMatch(/shared/)
+    expect(screen.getAllByText('Mine').length).toBe(1)
+    expect(document.querySelector('button.rule-head').textContent).toMatch(/shared/)
     fireEvent.click(screen.getByText('Add rule'))
     expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
     expect(document.querySelector('.rule-form .install-pick').textContent).toBe('Write to: shared')
+  })
+
+  // No session loads two files, so a sum would not be per turn: each file keeps its own figure.
+  it('gives each listed file its own total', async () => {
+    api.rules.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'opencode'
+          ? { ...ocRules, stats: { ...STATS, tokens: 200 } }
+          : { ...clRules, stats: { ...STATS, tokens: 1100 } },
+      ),
+    )
+    render(<Rules />)
+    await screen.findByText('Claude only')
+    expect(screen.getByText('claude · global · 1 rule · ≈1,100 tokens every turn')).toBeTruthy()
+    expect(screen.getByText('opencode · global · 1 rule · ≈200 tokens every turn')).toBeTruthy()
+    expect(screen.getByText('Each total counts its file’s header too.')).toBeTruthy()
+  })
+
+  // One global install beside a project: the paths differ, yet the global file is still the
+  // shared one, so it reads as shared, and the project keeps its install tag.
+  it('tags a lone global install shared, in the rows and in the Write to picker', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [CL, { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' }],
+    }))
+    api.rules.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'bob'
+          ? { ...ocRules, path: '/r/repo/user-rules.md', shared: false }
+          : { ...clRules, shared: true },
+      ),
+    )
+    render(<Rules />)
+    await screen.findByText('Claude only')
+    const heads = [...document.querySelectorAll('.rule-head')].map((h) => h.textContent)
+    expect(heads[0]).toMatch(/shared/)
+    expect(heads[1]).toMatch(/repo · bob/)
+    fireEvent.click(screen.getByText('Add rule'))
+    const picker = await screen.findByRole('combobox', { name: 'Write to:' })
+    expect([...picker.options].map((o) => o.textContent)).toEqual(['shared', 'repo · bob'])
   })
 
   // Two installs listed but one writable: no picker to hide behind, the form names its target.

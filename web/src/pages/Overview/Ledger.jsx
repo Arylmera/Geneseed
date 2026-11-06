@@ -40,6 +40,11 @@ export const UPDATE_POLL_MS = 60 * 60 * 1000
 // this soon, once per answer, so the chip does not wait the hour to learn it.
 export const UPDATE_RETRY_MS = 5000
 
+// Why a clone with a release out has no Update button: `behind: false` says only that a pull
+// cannot run, so this names every reason.
+const NO_PULL =
+  'This checkout cannot pull: it has local changes, a detached HEAD, no upstream or a diverged branch.'
+
 // `canFill` false: the page already has its one primary (a rebuild is due), so a due Update
 // stays ghost instead of becoming a second filled button.
 function VersionChip({ update, onAction, canFill = true }) {
@@ -47,6 +52,8 @@ function VersionChip({ update, onAction, canFill = true }) {
   // `install` picks the route; a daemon older than the field only sent `git`.
   const install = update.install ?? (update.git ? 'git' : 'npm-global')
   const behind = install === 'git' && typeof update.behind === 'number' ? update.behind : null
+  // A clone's own ask still out: no verdict yet, so neither "latest" nor a button that may refuse.
+  const asking = install === 'git' && update.behind === null && update.checking
   const chip =
     behind !== null ? (
       behind > 0 ? (
@@ -59,7 +66,7 @@ function VersionChip({ update, onAction, canFill = true }) {
       ) : (
         <span className="mono dim ver-chip">{update.current ?? ''} · up to date</span>
       )
-    ) : update.latest === null ? (
+    ) : update.latest === null || asking ? (
       <span className="mono dim ver-chip">
         {update.current ?? ''} · {update.checking ? 'checking…' : 'update check unavailable'}
       </span>
@@ -82,9 +89,12 @@ function VersionChip({ update, onAction, canFill = true }) {
       </>
     )
   }
-  // A git clone can always pull: main moves between releases, and the release check may be
-  // unanswered behind a proxy. An npm install updates only when a release is out.
-  if (install !== 'git' && !update.available) return chip
+  // A git clone can pull even with nothing released: main moves between releases, and the release
+  // check may be unanswered behind a proxy. Not when the server says the pull would be refused
+  // (`behind: false`: no upstream, a detached HEAD, a diverged branch), and an npm install updates
+  // only when a release is out.
+  if (update.behind === false && update.available) return <span title={NO_PULL}>{chip}</span>
+  if (asking || update.behind === false || (install !== 'git' && !update.available)) return chip
   const due = behind === null ? Boolean(update.available) : behind > 0
   const title =
     install === 'git'

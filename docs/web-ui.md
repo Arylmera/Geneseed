@@ -76,7 +76,9 @@ Every `/api/*` read takes and checks the pair, with these exceptions:
 
 The skill, agent, memory and notebook lists read every active install (memory and notebook
 entries are your own files, so a fact's Forget and Promote act on the install of the copy on
-screen, and Promote writes to that install's `user-rules.md`). Each row is one id (kind and name), and
+screen, and Promote writes to that install's `user-rules.md`). The installs that read the shared
+tier hold one memory store: it is listed under the first of them, and `/api/catalog/memory` names
+them all in `sharedInstalls`. Each row is one id (kind and name), and
 its `installs` field names the installs that have it, as `host:scope:root` keys (the same keys
 as `/api/usage`). An id that only some installs have lists only those installs, so an exclusion
 stays visible. The other catalog sections stay install-scoped. `/api/item/skill/<name>` and
@@ -120,15 +122,18 @@ breadcrumb starts at the page: it names no install.
 
 **Install pickers.** The console has no install switch. Where a page acts on one install, an
 `InstallPicker` sits beside what it applies to, labelled for it (*Write to:*, *Doctor for:*), and
-starts on the default install; with one active install it is not shown. Rules and Profile list
-every active install's entries together, each tagged with its install, and write back to the
-install an entry came from; so do Memory and Notebook, whose Forget and Promote act on the
+starts on the default install; with one active install it is not shown. The Personal page names
+no harness for what the harnesses share: every global install reads one set of rules, one profile
+and one memory store in the shared tier (`~/.config/geneseed`), so Rules, Profile and Memory list
+each once, tagged `shared`, and a project install keeps its own, tagged with its install. A write
+goes back to the file an entry came from. Notebook stays per install, and its Forget acts on the
 install of the copy on screen. Doctor, Local edits, Server, the Constitution (*Constitution of:*,
 for its gate switches and doctrine Apply), Loops (*Templates and bricks of:*) and the rail's Voice
 popover (*Rebuild:*) each keep their own pick (in the browser's localStorage). The Overview is
 fleet-wide: each install's own facts (voice, footprint, posture, mode, memory facts, drift) sit on
-its row, and a figure still read off the default install (a suggestion, a tab badge, an older
-Overview view, Personal's Rule budget) names that install once two or more are active.
+its row, and a figure still read off a project install set as the default (a suggestion, an older
+Overview view, Personal's summary) names that install once two or more are active. A *Needs you*
+suggestion about a shared file or the shared memory store appears once and names no harness.
 
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type
@@ -162,14 +167,17 @@ streams the output of background jobs and keeps their history across reloads.
 ### 📖 Codex
 
 - **Rules** (`#/rules`) — your own standing rules, read from and written to the
-  `user-rules.md` beside the deployed AGENT.md (the seed-once file no update ever
-  touches) of every active install, listed together and tagged with their install; an edit,
-  graduate or retire writes back to the rule's own install, and a new rule goes to the install
-  its form's *Write to:* picker names. List with scope (project/global — a hand-written `user` opens as global — or any other scope written by hand, which a
+  `user-rules.md` (the seed-once file no update ever touches): the shared file every global
+  install reads, listed once and tagged `shared`, beside each project install's own, tagged with
+  its install. An edit, graduate or retire writes back to the rule's own file, and a new rule goes
+  to the file its form's *Write to:* picker names. List with scope (project/global — a hand-written `user` opens as global — or any other scope written by hand, which a
   save keeps as written) and trial chips, add/edit/retire forms (retire moves the rule to `user-rules-retired.md`, which is never loaded; its id is never reused) (a body line starting
   `## ` is refused: the file would read it as a new rule heading), a
-  **Graduate** action that adopts a trial rule for good, and a budget meter that turns
-  amber as the always-loaded set gets heavy. Every write carries the fingerprint of the
+  **Graduate** action that adopts a trial rule for good. Each rule row shows its token cost
+  (code points / 4 of its own block), and each listed file shows one total, such as
+  `4 rules · ≈1,055 tokens every turn`, which counts the file's header too. There is no ceiling.
+  A **Pending** section lists what waits undecided in `user-rules.draft.md`: read-only, because
+  the rule skill alone decides a draft, and a pending rule still binds on its host. Every write carries the fingerprint of the
   content the page last read — if an agent session edited the file meanwhile, the save
   409s and the page reloads instead of clobbering it.
 - **Constitution** (`#/laws`) — the whole governance surface on one page, in three bands:
@@ -237,8 +245,9 @@ streams the output of background jobs and keeps their history across reloads.
   the page's only write), what an awaiting loop waits on (launch / declared / actual / a
   human gate, with its node) — the answer is given in the agent's session, never here — and
   its ring with the current node filled, with its iteration history under it.
-- **Profile** (`#/profile`) — `PROFILE.md` beside the deployed AGENT.md: who you are and
-  how you like to work, one card per active install, each saving to its own. Opens rendered; **Edit** is a whole-file editor. The save carries
+- **Profile** (`#/profile`) — `PROFILE.md`: who you are and how you like to work, one card
+  per file: the shared one every global install reads, tagged `shared`, and each project
+  install's own. Opens rendered; **Edit** is a whole-file editor. The save carries
   the fingerprint it loaded — if an agent session changed the file first, your edit stays
   on screen and a second Save replaces the newer version.
 - **Skills** (`#/skills`) and **Agents** (`#/agents`) — the deployed catalogue of every

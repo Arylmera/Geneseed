@@ -1395,14 +1395,12 @@ describe('Constitution page — hostile or empty inputs', () => {
     }
   })
 
-  // A user-rules budget of zero is no budget: the bar stays empty instead of a NaN% width.
-  it('draws an empty Your rules bar when the budget is zero', async () => {
-    api.rules.mockImplementation(() =>
-      Promise.resolve({ stats: { rules: 0, max_rules: 0, tokens: 0, max_tokens: 0 } }),
-    )
+  // No ceiling: the tier reports the count and the tokens, and an empty file draws an empty bar.
+  it('draws an empty Your rules bar when no rule exists', async () => {
+    api.rules.mockImplementation(() => Promise.resolve({ stats: { rules: 0, tokens: 0 } }))
     try {
       const { container } = render(<Laws />)
-      await waitFor(() => expect(container.textContent).toContain('0 of 0 · 0/0 tok'))
+      await waitFor(() => expect(container.textContent).toContain('0 rules · ≈0 tok'))
       const cell = [...container.querySelectorAll('.tier')].find((t) =>
         t.textContent.includes('Your rules'),
       )

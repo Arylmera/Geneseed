@@ -391,10 +391,10 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     yours: {
       name: 'Your rules',
       n: stats?.rules ?? 0,
-      // A zero budget draws an empty bar, not a NaN% width.
-      fill: stats?.max_rules ? stats.rules / stats.max_rules : 0,
+      // No ceiling to measure against: the bar only says whether the tier holds a rule.
+      fill: stats?.rules ? 1 : 0,
       sub: stats
-        ? `${stats.rules} of ${stats.max_rules} · ${stats.tokens}/${stats.max_tokens} tok`
+        ? `${stats.rules} rule${stats.rules === 1 ? '' : 's'} · ≈${stats.tokens.toLocaleString('en-US')} tok`
         : 'user-rules.md',
       href: '#/personal/rules',
       pill: ['yours', ''],

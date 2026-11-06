@@ -1975,6 +1975,7 @@ dialog.confirm[open]::backdrop { transition: opacity .2s ease-out; }
   font: inherit; color: var(--text); transition: background .1s;
 }
 .rule-head:hover { background: var(--surface-2); }
+.rule-head.static, .rule-head.static:hover { background: transparent; cursor: default; }
 .rule-row.on .rule-head { background: var(--accent-soft); }
 .rule-no {
   font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--accent-text);
@@ -2944,14 +2945,6 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .reader-links { display: flex; flex-wrap: wrap; gap: 10px; /* off-scale: 10px between --sp-2 and --sp-3 */ margin-top: var(--sp-3); }
 
 /* ---- Personal ---- */
-.card-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4);
-  margin-bottom: var(--sp-5); }
-.big-num { margin: 0; color: var(--text-3); }
-.big-num .mono { font-size: 26px; color: var(--text); } /* off-scale: 26px, 2px under --fs-2xl */
-.slots { display: grid; grid-template-columns: repeat(var(--slots, 15), minmax(0, 1fr)); gap: var(--sp-1);
-  padding-top: 6px; } /* off-scale: 6px, 2px from a step */
-.slots span { height: 26px; border-radius: 4px; border: 1px dashed var(--line-3); }
-.slots span.used { background: var(--accent); border: 0; }
 .hb-n.warn { color: var(--warn-text); }
 .pm-topics { margin-bottom: var(--sp-5); }
 /* A topic slug can be long: let it take the row and wrap, not run into its count. */
@@ -3110,7 +3103,6 @@ a.kit-name:hover { color: var(--accent-text); }
 
 /* ---- breakpoints (the three-tier contract at the top of this file) ---- */
 @media (max-width: 1180px) {
-  .card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split { flex-direction: column; align-items: stretch; }
   .aside-stack { width: auto; }
   .hosts { grid-template-columns: minmax(0, 1fr); }
@@ -3167,7 +3159,6 @@ a.kit-name:hover { color: var(--accent-text); }
   .tabbar a.on { color: var(--accent-text); }
   .tabbar .glyph { width: 20px; height: 20px; }
   .console { bottom: 64px; }
-  .card-row { grid-template-columns: minmax(0, 1fr); }
   .health { flex-wrap: wrap; }
   .needs { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 10px; }
   .needs .tag { display: none; }
@@ -3519,8 +3510,6 @@ html { scrollbar-gutter: stable; }
 .lib-lede a { margin-left: var(--sp-1); }
 
 /* ── V5b-D personal ── */
-.card-row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 720px) { .card-row.two { grid-template-columns: 1fr; } }
 .panel-note.warn { color: var(--warn-text); }
 .panel-note.bad { color: var(--bad-text); }
 

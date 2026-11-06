@@ -34,7 +34,7 @@ import { isFile, writeTextAtomic } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
-  configItems, deployed, dget, memoryDir, memoryItems, notebookItems, wikiItems,
+  configItems, deployed, dget, memoryDir, memoryItems, notebookItems, tierOf, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
@@ -290,6 +290,8 @@ export function apiFleet(state) {
       mode: modeOfDir(root, host),
       // Its memory facts: one directory listing (`memoryFactCount`), no file read.
       facts: memoryFactCount(memoryDir({ target: dir })),
+      // Those facts are the machine's shared store, the same on every row that says so.
+      shared: tierOf({ target: dir }) !== null,
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
@@ -596,17 +598,22 @@ export function apiLoopsActive() {
  *
  * `install` picks the Update route (`git`, `npm-global`, `other`); `git` is kept beside it for a
  * console bundle older than the field. `behind` is a clone's own "up to date": commits upstream
- * holds that it does not, null when unknown — a clone can always pull, since `main` moves between
- * releases and a work proxy can leave the release check unanswered. `command` is what to run by
- * hand when the console cannot update this copy itself.
+ * holds that it does not, null when unknown — a clone can always try to pull, since `main` moves
+ * between releases and a work proxy can leave the release check unanswered — and false when the
+ * update job would refuse: local changes, no upstream, a detached HEAD, a diverged branch.
+ * `checking` covers both asks, so a slow fetch reads as "checking…", not as a settled unknown.
+ * `command` is what to run by hand when the console cannot update this copy itself.
  */
 export function apiUpdate(state) {
   const install = installKind();
+  const status = updateStatus(state, releaseLabel());
+  const behind = install === 'git' ? gitBehind(state, { busy: Boolean(state.jobBusy?.()) }) : null;
   return {
-    ...updateStatus(state, releaseLabel()),
+    ...status,
+    checking: status.checking || Boolean(state._behind?.inflight),
     install,
     git: install === 'git',
-    behind: install === 'git' ? gitBehind(state, { busy: Boolean(state.jobBusy?.()) }) : null,
+    behind,
     command: install === 'other' ? MANUAL_UPDATE : null,
   };
 }

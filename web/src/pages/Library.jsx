@@ -300,6 +300,10 @@ export default function Library({
   // matches, or the first row would be the PREVIOUS kind's first item, fetched under the
   // new kind's type: a guaranteed NotFound flash on every switch.
   const items = catalog?.section === sec ? catalog?.items || [] : []
+  // Every global install reads one memory store: the server lists it under the first of them
+  // (`sharedInstalls`), which reads as "shared", and the others hold no slot of their own.
+  const [sharedKey, ...merged] = (catalog?.section === sec && catalog.sharedInstalls) || []
+  const tagOf = (k) => (k === sharedKey ? 'shared' : installLabel(k))
   // The entry on display: the URL-selected one, or the first row when the kind was opened
   // without a selection, so the highlighted row and the reader always agree.
   // Skills are listed class by class (splitSkills), so their first row is not items[0].
@@ -326,7 +330,7 @@ export default function Library({
   // another entry or copy loads, `item` is still the previous one, which must never be written.
   const copy = item && item.name === activeName && (!pick || item.install === pick) ? item : null
   // Which install the copy is, named in a confirm once the list spans two installs or more.
-  const ofCopy = (c) => (fleetWide && c?.install ? ` in ${installLabel(c.install)}` : '')
+  const ofCopy = (c) => (fleetWide && c?.install ? ` in ${tagOf(c.install)}` : '')
 
   const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
@@ -345,7 +349,11 @@ export default function Library({
   // The install a one-install kind (wiki, config) is read from: the default, named once two
   // installs are active.
   const activeInsts = useInstalls(dataRev)
-  const oneOf = activeInsts?.length > 1 ? `of ${installTag(activeInsts[0])}` : null
+  // The wiki manifest of a global install is the shared one, which is no install's.
+  const oneOf =
+    activeInsts?.length > 1 && !(catalog?.section === sec && catalog.shared)
+      ? `of ${installTag(activeInsts[0])}`
+      : null
   // Install badges only say something when the list spans two installs or more.
   const fleetWide = fleetOn && new Set(items.flatMap((it) => it.installs || [])).size > 1
   // Every install's dot slot, in the install list's order, so a colour holds across the kinds.
@@ -354,7 +362,7 @@ export default function Library({
       ...(activeInsts || []).map((i) => i.id),
       ...items.flatMap((it) => it.installs || []),
     ]),
-  ]
+  ].filter((k) => !merged.includes(k))
 
   // Skills are divided by class, as the old Skills page did: listed class by class under a
   // header, with a category per class under Skills in the rail to narrow to one. A skill the
@@ -540,7 +548,7 @@ export default function Library({
                   ? fleetKeys.map((k, i) => (
                       <span key={k} className="lk-install" title={installOfKey(k).path}>
                         <i className="lr-dot" style={dotColour(i)} aria-hidden="true" />
-                        {installLabel(k)}
+                        {tagOf(k)}
                       </span>
                     ))
                   : null}
@@ -585,9 +593,9 @@ export default function Library({
                               key={k}
                               className="lr-dot lr-install"
                               style={dotColour(i)}
-                              title={`${installLabel(k)} — ${installOfKey(k).path}`}
+                              title={`${tagOf(k)} — ${installOfKey(k).path}`}
                             >
-                              <span className="sr-only">{installLabel(k)}</span>
+                              <span className="sr-only">{tagOf(k)}</span>
                             </span>
                           ) : (
                             <span key={k} className="lr-dot off" aria-hidden="true" />
@@ -710,7 +718,7 @@ export default function Library({
                   >
                     {item.installs.map((k) => (
                       <option key={k} value={k} title={installOfKey(k).path}>
-                        {installLabel(k)}
+                        {tagOf(k)}
                       </option>
                     ))}
                   </select>

@@ -147,7 +147,7 @@ function orphanPreview(rows) {
     if (scope !== 'global' || !CLAUDE_STYLE.includes(host) || !isCanonical(root, host)) continue;
     const owned = claudeReadManifest(root).owned;
     for (const p of orphanFindings(root, Array.isArray(owned) ? owned : [])) {
-      printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). It moves aside on your word.\n`);
+      printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). Nothing moves it: if it is not yours, move it by hand.\n`);
     }
   }
 }

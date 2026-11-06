@@ -84,6 +84,44 @@ describe('Overview Update button per install kind', () => {
     expect(b.title).toMatch(/^Nothing to pull/)
   })
 
+  // A checkout with no upstream, or diverged: the job would refuse, so no button that fails.
+  it('a clone that cannot pull shows the version and no button', async () => {
+    show({ ...base, install: 'git', git: true, behind: false, command: null })
+    await screen.findByText(/latest/)
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  it('a clone that cannot pull says why when a release is out', async () => {
+    show({
+      ...base,
+      latest: '4.17.0',
+      available: true,
+      install: 'git',
+      git: true,
+      behind: false,
+      command: null,
+    })
+    const chip = await screen.findByText('4.17.0 available')
+    expect(chip.closest('[title]').title).toMatch(
+      /^This checkout cannot pull: it has local changes/,
+    )
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  // The ask is still out: nothing is known, so neither "latest" nor a button yet.
+  it('a clone still asking says checking, with no button', async () => {
+    show({ ...base, install: 'git', git: true, behind: null, checking: true, command: null })
+    await screen.findByText(/checking…/)
+    expect(screen.queryByText(/latest/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  it('a clone with an unanswered remote keeps its button', async () => {
+    show({ ...base, install: 'git', git: true, behind: null, command: null })
+    await screen.findByText(/latest/)
+    expect(screen.getByRole('button', { name: 'Update' }).className).toBe('btn ghost')
+  })
+
   it('one commit is singular', async () => {
     show({ ...base, install: 'git', git: true, behind: 1, command: null })
     await screen.findByText('1 commit to pull')

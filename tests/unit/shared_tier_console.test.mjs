@@ -11,7 +11,7 @@ import { ROOT } from '../../js/build/source.mjs';
 import { cmdUninstall, installUninstall } from '../../js/maintain/uninstall.mjs';
 import { apiMemoryDelete } from '../../js/web/actions.mjs';
 import { apiFleet } from '../../js/web/api.mjs';
-import { configItems, memoryItems } from '../../js/web/catalog.mjs';
+import { apiCatalog, apiItem, configItems, memoryItems } from '../../js/web/catalog.mjs';
 import { webState } from '../../js/web/state.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
@@ -40,10 +40,6 @@ async function withTier(fn) {
     fs.writeFileSync(path.join(tier, 'wiki.json'), '{"wikis": [{"name": "legacy"}]}\n');
     fs.writeFileSync(path.join(tier, 'memory', 'shared-fact.md'), '---\nname: shared-fact\ndescription: kept\n---\nbody\n');
     fs.writeFileSync(path.join(tier, 'notes', 'skill-notes', 'n.md'), 'a note\n');
-    fs.writeFileSync(path.join(tier, '.fold-state.json'), JSON.stringify({ version: 1, items: {
-      a: { kind: 'rule', host: 'bob', state: 'pending' },
-      b: { kind: 'profile', host: 'bob', state: 'pending' },
-      c: { kind: 'rule', host: 'bob', state: 'approved' } } }));
     fs.writeFileSync(path.join(cfg, 'memory', 'host-fact.md'), '---\nname: host-fact\ndescription: h\n---\nh\n');
     return await fn({ home, cfg, tier });
   } finally {
@@ -73,16 +69,120 @@ const quiet = (fn) => {
   try { return [fn(), out]; } finally { process.stdout.write = ow; process.stderr.write = ew; }
 };
 
-test('a global install reads the tier: rules, profile, memory, wiki (legacy name too) and the pending count', async () => {
+test('a global install reads the tier: rules, profile, memory and wiki (legacy name too)', async () => {
   await withTier(({ cfg }) => {
     const state = { target: cfg, refresh() {} };
     const rules = apiRules(state);
     assert.deepEqual(rules.rules.map((r) => r.title), ['Shared rule']);
     assert.equal(rules.shared, true);
-    assert.equal(rules.pending, 2, 'two pending, one approved');
     assert.match(apiProfile(state).text, /shared profile/);
     assert.deepEqual(memoryItems(state).map((m) => m.name).filter((n) => n.endsWith('fact')), ['shared-fact']);
     assert.ok(configItems(state).some((c) => c.name === 'wiki.json'), 'B5: the console must find wiki.json');
+  });
+});
+
+// The draft as the fold writes it (fold.test.mjs pins those bytes): a header, then blocks. The
+// rule Rite's record in `## Renumbered` is no draft, and a `Choose` block is a question, not a rule.
+const DRAFT = '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n\n'
+  + '## Rule from claude: Mine\n(source: /h/user-rules.md | old: R2 | sha256: aa)\n'
+  + '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.\n\n'
+  + '## Renumbered\n- bob R3 -> R4: Done\n\n'
+  + '## Choose: PROFILE.md\n(hosts: shared, bob | paths: /t/PROFILE.md, /b/PROFILE.md | sha256: bb)\n'
+  + 'Which one becomes the shared file?\n\n'
+  + '## Rule from bob: Theirs: with a colon\n(source: /b/user-rules.md | old: R1 | sha256: cc)\nStay.\n';
+
+test('apiRules lists the draft blocks: rule text, a Choose by title, and no Renumbered record', async () => {
+  await withTier(({ cfg, tier }) => {
+    const state = { target: cfg, refresh() {} };
+    assert.deepEqual(apiRules(state).drafts, [], 'no draft file is no drafts');
+    fs.writeFileSync(path.join(tier, 'user-rules.draft.md'), DRAFT);
+    assert.deepEqual(apiRules(state).drafts, [
+      { title: 'Mine', host: 'claude', body: '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.' },
+      { title: 'Choose: PROFILE.md', host: null, body: '' },
+      { title: 'Theirs: with a colon', host: 'bob', body: 'Stay.' },
+    ]);
+    fs.rmSync(path.join(tier, 'user-rules.md'));
+    assert.equal(apiRules(state).drafts.length, 3, 'a draft outlives a missing rule file');
+  });
+});
+
+// A block the ledger holds as decided is what a stopped Rite write leaves: not pending. A block
+// with no row is shown, and so is every block when the ledger does not parse.
+test('apiRules leaves out a draft block the ledger already decided', async () => {
+  await withTier(({ cfg, tier }) => {
+    const state = { target: cfg, refresh() {} };
+    const titles = () => apiRules(state).drafts.map((d) => d.title);
+    fs.writeFileSync(path.join(tier, 'user-rules.draft.md'), DRAFT);
+    const ledger = path.join(tier, '.fold-state.json');
+    fs.writeFileSync(ledger, JSON.stringify({ version: 1, items: {
+      aa: { kind: 'rule', host: 'claude', state: 'approved' },
+      bb: { kind: 'profile', host: 'bob', state: 'pending' } } }));
+    assert.deepEqual(titles(), ['Choose: PROFILE.md', 'Theirs: with a colon']);
+    fs.writeFileSync(ledger, JSON.stringify({ version: 1, items: {
+      bb: { kind: 'profile', host: 'bob', state: 'rejected' } } }));
+    assert.deepEqual(titles(), ['Mine', 'Theirs: with a colon']);
+    fs.writeFileSync(ledger, 'not json');
+    assert.deepEqual(titles(), ['Mine', 'Choose: PROFILE.md', 'Theirs: with a colon']);
+  });
+});
+
+// Each rule's cost is its own block, code points / 4; the file's total also holds the header. The
+// emoji is one code point and two UTF-16 units, so `String.length` would put the second row at 12.
+test('apiRules prices each rule on its own block, and the file total holds the header', async () => {
+  await withTier(({ cfg, tier }) => {
+    fs.writeFileSync(path.join(tier, 'user-rules.md'),
+      '# User rules\n\n## R1 — Shared rule\n(scope: global)\nBe terse.\n\n## R2 — Emoji\n🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉🎉\n');
+    const { rules, stats } = apiRules({ target: cfg, refresh() {} });
+    // '## R1 — Shared rule\n(scope: global)\nBe terse.' is 44 code points;
+    // '## R2 — Emoji\n' is 14, and the 30 emoji make it 44 too.
+    assert.deepEqual(rules.map((r) => r.tokens), [11, 11]);
+    // 105 code points: the two blocks, their blank separator, the 14 of '# User rules\n\n', the
+    // final newline. Eight lines, the blank ones counted.
+    assert.deepEqual(stats, { rules: 2, lines: 8, tokens: 26 });
+  });
+});
+
+test('apiProfile says whether it answers with the shared file', async () => {
+  await withTier(({ home, cfg }) => {
+    assert.equal(apiProfile({ target: cfg, refresh() {} }).shared, true);
+    const repo = path.join(home, 'repo');
+    fs.mkdirSync(repo);
+    assert.equal(apiProfile({ target: repo, refresh() {} }).shared, false);
+  });
+});
+
+// Two global installs read one store: one row, under the first, and a project install's own store
+// beside it. The list says which installs share, so the console can name none of them.
+test('the memory list folds the installs that read the tier into one', async () => {
+  await withTier(({ home, cfg, tier }) => {
+    const bob = path.join(home, '.bob');
+    fs.mkdirSync(path.join(bob, 'memory'), { recursive: true });
+    const repo = path.join(home, 'repo');
+    fs.mkdirSync(path.join(repo, 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'memory', 'local-fact.md'), '---\nname: local-fact\n---\nbody\n');
+    const fleet = [
+      { install: 'claude:global:c', state: webState('neutral', cfg) },
+      { install: 'bob:global:b', state: webState('neutral', bob) },
+      { install: 'bob:project:r', state: webState('neutral', repo) },
+    ];
+    const list = apiCatalog(fleet[0].state, 'memory', fleet);
+    assert.deepEqual(list.sharedInstalls, ['claude:global:c', 'bob:global:b']);
+    const installsOf = (name) => list.items.find((i) => i.name === name).installs;
+    assert.deepEqual(installsOf('shared-fact'), ['claude:global:c']);
+    assert.deepEqual(installsOf('local-fact'), ['bob:project:r']);
+    fs.writeFileSync(path.join(repo, 'memory', 'shared-fact.md'), '---\nname: shared-fact\n---\nmine\n');
+    const item = apiItem(fleet[1].state, 'memory', 'shared-fact', fleet);
+    assert.deepEqual([item.install, item.installs, item.shared],
+      ['bob:global:b', ['claude:global:c', 'bob:project:r'], true]);
+    assert.equal(apiItem(fleet[2].state, 'memory', 'shared-fact', fleet).shared, false);
+    assert.ok(fs.existsSync(path.join(tier, 'memory', 'shared-fact.md')));
+  });
+});
+
+test('the wiki list says when its manifest is the shared one', async () => {
+  await withTier(({ home, cfg }) => {
+    assert.equal(apiCatalog({ target: cfg, refresh() {} }, 'wiki').shared, true);
+    assert.equal(apiCatalog({ target: path.join(home, 'repo'), refresh() {} }, 'wiki').shared, false);
   });
 });
 
@@ -92,6 +192,7 @@ test('the Overview counts the facts the tier holds, not the host store', async (
     fs.writeFileSync(path.join(tier, 'memory', 'second-fact.md'), '---\nname: second-fact\ndescription: k\n---\nb\n');
     const row = apiFleet(webState()).installs.find((i) => i.host === 'claude' && i.scope === 'global');
     assert.equal(row?.facts, 2);
+    assert.equal(row?.shared, true, 'the row must say its facts are the shared store');
   });
 });
 
@@ -115,7 +216,7 @@ test('a global install writes the tier, never the host seed', async () => {
   });
 });
 
-test('a project install keeps its own files and reports no pending count', async () => {
+test('a project install keeps its own files and reports no drafts', async () => {
   await withTier(({ home, tier }) => {
     const repo = path.join(home, 'repo');
     fs.mkdirSync(repo);
@@ -124,7 +225,7 @@ test('a project install keeps its own files and reports no pending count', async
     const rules = apiRules(state);
     assert.deepEqual(rules.rules.map((r) => r.title), ['Local']);
     assert.equal(rules.shared, false);
-    assert.equal(rules.pending, 0);
+    assert.deepEqual(rules.drafts, []);
     assert.deepEqual(memoryItems(state), []);
     assert.ok(fs.existsSync(path.join(tier, 'user-rules.md')));
   });

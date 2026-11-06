@@ -69,7 +69,7 @@ const ALL = {
     diff: { edited: 2, added: 1, missing: 0 },
   },
   setup: { facts: 0, gates: { asks: { 'process-1': 2, 'process-5': 4 }, total: 6 } },
-  rules: { exists: true, stats: { rules: 0, max_rules: 15, tokens: 332, max_tokens: 1500 } },
+  rules: { exists: true, stats: { rules: 0, tokens: 1332 } },
   activity: { enabled: false },
   profile: { exists: true, seeded: true },
   skills: {
@@ -107,7 +107,13 @@ describe('needsAttention', () => {
         'every section holds placeholder text',
         '#/personal/profile',
       ],
-      ['Rules', '', 'No standing rules yet', '0 of 15 · 332 of 1500 tokens', '#/personal/rules'],
+      [
+        'Rules',
+        '',
+        'No standing rules yet',
+        "≈1,332 tokens, the file's header alone",
+        '#/personal/rules',
+      ],
       // The top ask names its doctrine from the catalog: process-5 is Consent Before Push.
       [
         'Gates',
@@ -128,7 +134,7 @@ describe('needsAttention', () => {
       needsAttention({
         overview: { doctor: { ok: true, problems: [] }, diff: { edited: 0, added: 0, missing: 0 } },
         setup: { facts: 3, gates: { asks: {}, total: 0 } },
-        rules: { exists: true, stats: { rules: 2, max_rules: 15, tokens: 400, max_tokens: 1500 } },
+        rules: { exists: true, stats: { rules: 2, tokens: 400 } },
         activity: { enabled: true },
         profile: { exists: true, seeded: false },
         skills: { items: [{ klass: 'build', status: 'approved' }] },
@@ -290,6 +296,37 @@ describe('ledgerNeeds', () => {
       ['memory:oc', 'opencode · global: memory holds no facts'],
       ['profile', 'claude · global: Profile is still the seeded template'],
       ['rules', 'claude · global: No standing rules yet'],
+    ])
+  })
+  // Global installs read one store: a shared memory, profile or rule file is one suggestion that
+  // names no harness, however many installs read it. A project install with its own store keeps
+  // its own row, and a project install's own files, read as the default, keep its name.
+  it('says a shared store once and names no harness', () => {
+    const fleet = {
+      installs: [
+        { id: 'oc', host: 'opencode', scope: 'global', state: 'active', facts: 0, shared: true },
+        { id: 'cl', host: 'claude', scope: 'global', state: 'active', facts: 0, shared: true },
+        { id: 'p', host: 'bob', scope: 'project', state: 'active', facts: 0, shared: false },
+      ],
+    }
+    const rowsOf = (input) =>
+      ledgerNeeds({ fleet, usage: null, defaultLabel: 'opencode · global', ...input })
+        .filter((r) => /^(memory|profile|rules)/.test(r.id))
+        .map((r) => [r.id, r.title])
+    expect(
+      rowsOf({
+        rules: { ...ALL.rules, shared: true },
+        profile: { ...ALL.profile, shared: true },
+      }),
+    ).toEqual([
+      ['memory:shared', 'Memory holds no facts'],
+      ['memory:p', 'bob · project: memory holds no facts'],
+      ['profile', 'Profile is still the seeded template'],
+      ['rules', 'No standing rules yet'],
+    ])
+    expect(rowsOf({ profile: { ...ALL.profile, shared: false } })).toContainEqual([
+      'profile',
+      'opencode · global: Profile is still the seeded template',
     ])
   })
   it('lists per-install problems first, then the older nudges as suggestions', () => {

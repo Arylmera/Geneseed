@@ -23,7 +23,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
-import { measureUpstream } from '../maintain/update.mjs';
+import { measureUpstream, preflight } from '../maintain/update.mjs';
 import { normcase, which } from '../lib/paths.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -68,12 +68,13 @@ export function updateStatus(state, current, { fetcher = npmLatest, now = Date.n
 /**
  * The once-a-day cache both checks share: answer from `state[slot]` at once and, when that is
  * missing or stale, start ONE background ask whose answer the next poll reads. A null answer
- * (every failure) is re-asked after RETRY_MS, a good one after DAY_MS.
+ * (every failure) is re-asked after RETRY_MS, and so is `false` (a pull that cannot run), which a
+ * `git checkout main` can end at any moment. A good one is re-asked after DAY_MS.
  */
 function daily(state, slot, ask, now, off) {
   const c = state[slot] || (state[slot] = { value: null, checked_at: null, inflight: false });
   const stale = c.checked_at === null
-    || now - c.checked_at > (c.value === null ? RETRY_MS : DAY_MS);
+    || now - c.checked_at > (c.value === null || c.value === false ? RETRY_MS : DAY_MS);
   if (stale && !c.inflight && !off && !process.env.GENESEED_NO_UPDATE_CHECK) {
     c.inflight = true;
     Promise.resolve()
@@ -84,18 +85,32 @@ function daily(state, slot, ask, now, off) {
   return c;
 }
 
-/** `measureUpstream`'s verdict as a count: 0 up to date, N to pull, null when unknown. */
-async function fetchBehind() {
-  const [code, behind] = await measureUpstream();
+/**
+ * `measureUpstream`'s verdict: 0 up to date, N to pull, null when the remote gave no answer, false
+ * when it did and `upgrade` would refuse to pull (no upstream, diverged, unrelated history).
+ */
+export function behindOf(code, behind) {
   if (code === 'uptodate') return 0;
-  return code === 'ready' ? behind : null;
+  if (code === 'ready') return behind;
+  return code === 'fetch_failed' ? null : false;
+}
+
+/**
+ * `upgrade`'s two gates in its own order. The local one comes first, so a checkout that could
+ * never pull (local changes, a detached HEAD, no upstream) answers `false` with no fetch at all,
+ * and so offline too. `pre` and `measure` are injectable for the tests.
+ */
+export async function fetchBehind({ pre = preflight, measure = measureUpstream } = {}) {
+  if (!pre().ok) return false;
+  const [code, behind] = await measure();
+  return behindOf(code, behind);
 }
 
 /**
  * Commits the clone's upstream holds that it does not: `upgrade`'s own `git fetch` (timeboxed by
  * `GENESEED_NET_TIMEOUT`, 120 s by default) then a count, once a day, in the background. Null
- * until the first answer lands and on every failure — an unreachable remote, no upstream, a
- * branch that diverged — and the console then keeps its "a clone can always pull" button.
+ * until the first answer lands and on an unreachable remote, and the console then keeps its "a
+ * clone can always pull" button; false for a pull that cannot run, and the console drops it.
  *
  * `busy` skips the ask while a job runs: a fetch beside the update job's own pull would race it
  * for `.git` locks. `measure` and `now` are injectable for the tests.

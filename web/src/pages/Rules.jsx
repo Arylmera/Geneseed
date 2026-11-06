@@ -10,14 +10,18 @@ import { useFileEditor } from '../hooks/useFileEditor.js'
 import { useInstalls } from '../hooks/useInstalls.js'
 import { installTag, pairOf } from '../lib/hosts.js'
 
-// Rules — the user's own standing rules (user-rules.md beside the deployed
-// AGENT.md). The page is the curation surface for the file the agent obeys
-// alongside the Laws: list with status/scope chips and add/edit/retire. The
-// budget that keeps the set lean (a bloated rule set is ignored, not obeyed —
-// Design decision 7) is Personal's "Rule budget" panel, above. Every mutation carries the fingerprint of the
+// Rules — the user's own standing rules (user-rules.md, one file shared by every global
+// install). The page is the curation surface for the file the agent obeys alongside the Laws:
+// list with status/scope chips and add/edit/retire. Each rule shows what it costs and the page
+// its total, with no ceiling: a bloated rule set is ignored, not obeyed (Design decision 7), and
+// that call is the user's. Rules the fold drafted are shown, never decided: the rule Rite is the
+// draft's only writer. Every mutation carries the fingerprint of the
 // content we last read; a 409 means an agent session edited the file first,
 // and we reload instead of clobbering its write. The open form is a useFileEditor
 // draft, so a reload never wipes it and leaving with it unsaved asks first.
+
+const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`
+const approxTokens = (n) => `≈${n.toLocaleString('en-US')} tokens`
 
 const EMPTY_FORM = { title: '', body: '', scope: 'project', trial_until: '' }
 
@@ -150,6 +154,7 @@ function RuleRow({ rule, tag, isOpen, onToggle, onEdit, onDelete, onGraduate }) 
             {rule.overdue ? 'review due' : `trial · ${rule.trial_until}`}
           </span>
         )}
+        <span className="rule-chip mono">{approxTokens(rule.tokens)}</span>
       </button>
       {isOpen && (
         <div className="rule-expand">
@@ -183,9 +188,42 @@ function RuleRow({ rule, tag, isOpen, onToggle, onEdit, onDelete, onGraduate }) 
   )
 }
 
-// EVERY ACTIVE INSTALL'S RULES IN ONE LIST. Each install keeps its own user-rules.md, so the page
-// reads one file per install (client-side, one request each: an install count is a handful, and
-// a merged server read would only re-implement the per-file fingerprint the 409 rests on). Each
+// What the fold drafted and nobody decided yet. Read-only: the rule Rite decides each one.
+function PendingRules({ drafts }) {
+  if (!drafts.length) return null
+  return (
+    <section className="mb-16" aria-labelledby="rules-pending">
+      <div className="panel-head">
+        <h2 id="rules-pending">Pending</h2>
+        <span className="mono dim">{drafts.length}</span>
+      </div>
+      <p className="sub">
+        Waiting in <code className="mono">user-rules.draft.md</code>. A pending rule still binds on
+        its host, and only there. The agent’s rule Rite decides each one: ask the agent to run it.
+      </p>
+      <div className="card rules-list">
+        {drafts.map((d, i) => (
+          <div className="rule-row" key={i}>
+            <div className="rule-head static">
+              <span className="rule-title">{d.title}</span>
+              {d.host ? <span className="rule-chip mono">binds on {d.host}</span> : null}
+            </div>
+            {d.body ? (
+              <div className="rule-expand">
+                <p>{d.body}</p>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// EVERY ACTIVE INSTALL'S RULES IN ONE LIST. The page reads one file per install (client-side, one
+// request each: an install count is a handful, and a merged server read would only re-implement
+// the per-file fingerprint the 409 rests on); global installs all answer with the shared file,
+// which counts once, and a project install keeps its own. Each
 // row carries its install; an edit, graduate or retire writes back to THAT install with THAT
 // file's fingerprint, and a new rule goes to the install its form's own picker names. With no
 // active install read, the page reads the default install, as a request naming none does.
@@ -212,7 +250,8 @@ export default function Rules({ onChanged, dataRev }) {
                 .filter((s, i) => paths.indexOf(s.data.path) === i)
                 .map((s) => ({
                   ...s,
-                  shared: paths.indexOf(s.data.path) !== paths.lastIndexOf(s.data.path),
+                  shared:
+                    s.data.shared || paths.indexOf(s.data.path) !== paths.lastIndexOf(s.data.path),
                 })),
               failed: rs.flatMap((r, i) => (r.status === 'rejected' ? [targets[i]] : [])),
             }
@@ -251,7 +290,7 @@ export default function Rules({ onChanged, dataRev }) {
   }, [focusTick])
 
   if (error) return <ErrorState error={error} onRetry={reload} />
-  if (!sets) return <Loading />
+  if (!sets || !targets) return <Loading />
 
   const many = targets.length > 1
   const idOf = (inst) => inst?.id ?? ''
@@ -290,6 +329,7 @@ export default function Rules({ onChanged, dataRev }) {
       value={writeTo}
       onChange={(i) => editor.setDraft({ ...draft, to: i.id })}
       label="Write to:"
+      tagOf={tagOf}
     />
   ) : many && writeTo ? (
     <p className="install-pick">
@@ -350,8 +390,9 @@ export default function Rules({ onChanged, dataRev }) {
     (data.warnings || []).map((w) => (many ? `${tagOf(inst)}: ${w}` : w)),
   )
 
-  // Drafted by the fold and not yet decided; deciding one is the rule Rite's job, not this page's.
-  const pending = sets.reduce((n, { data }) => n + (data.pending || 0), 0)
+  const drafts = sets.flatMap(({ data }) => data.drafts || [])
+  // No session loads two of these files, so each keeps its own figure: a sum would not be per turn.
+  const files = sets.filter((s) => s.data.exists)
 
   return (
     <>
@@ -360,12 +401,27 @@ export default function Rules({ onChanged, dataRev }) {
           <div className="eyebrow">governance · yours</div>
           <h2 className="h">Rules</h2>
           <p className="sub">
-            Your own standing rules, from <code className="mono">user-rules.md</code> beside the
-            deployed AGENT.md{many ? ' of each install, each rule tagged with its install' : ''}.
+            Your own standing rules, from <code className="mono">user-rules.md</code>.
+            {sets.some((s) => s.shared)
+              ? ' Every harness on this machine shares that one file, so a rule here binds all of them; a project install keeps its own file, tagged with its install.'
+              : ''}{' '}
             The agent obeys them with the same force as the Laws — they may tighten a Law, never
             repeal one — and no update ever touches the file. Keep the set small: every rule is
             loaded every session.
           </p>
+          {files.map(({ inst, data }) => (
+            <p className="sub mono" key={idOf(inst)}>
+              {files.length > 1 ? `${tagOf(inst)} · ` : ''}
+              {plural(data.rules.length, 'rule')} · {approxTokens(data.stats.tokens)} every turn
+            </p>
+          ))}
+          {exists ? (
+            <p className="sub">
+              {files.length > 1
+                ? 'Each total counts its file’s header too.'
+                : 'The total counts the file’s header too.'}
+            </p>
+          ) : null}
         </div>
         {exists && draft === null && (
           <button
@@ -389,18 +445,13 @@ export default function Rules({ onChanged, dataRev }) {
           {read.failed.map((i) => (i ? installTag(i) : 'the default install')).join(', ')}.
         </p>
       ) : null}
-      {pending ? (
-        <p className="sub rule-notice" role="status">
-          {pending} item{pending === 1 ? '' : 's'} from another host {pending === 1 ? 'is' : 'are'}{' '}
-          waiting for your approval. Until you decide, the host files bind. Ask the agent to run the
-          rule Rite.
-        </p>
-      ) : null}
       {warnings.map((w) => (
         <p key={w} className="sub rule-notice">
           format warning: {w}
         </p>
       ))}
+
+      <PendingRules drafts={drafts} />
 
       {newCard && (
         <div className="card pad-lg mb-16">
@@ -428,7 +479,7 @@ export default function Rules({ onChanged, dataRev }) {
 
       {!exists ? (
         <EmptyState title="No user-rules.md here yet">
-          The build seeds it beside AGENT.md — run a build/update from the Dashboard (or{' '}
+          The build seeds it — run a build/update from the Dashboard (or{' '}
           <code className="mono">geneseed update</code>) and it appears, ready for your rules.
         </EmptyState>
       ) : rules.length === 0 && !newCard ? (

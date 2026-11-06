@@ -92,9 +92,11 @@ re-derived. Then take exactly one branch.
    appending it to `user-rules.md` (retired rules live in `user-rules-retired.md`, which is
    never loaded — never write a rule there). For a promotion, after the rule lands, archive the source memory into
    `archive/` (with the same consent) so the lesson is not loaded twice.
-8. **Keep the set lean.** After writing, if the file holds more than ~15 rules or
-   any rule no longer changes behaviour, say so and propose merges or prunes — every
-   rule is loaded every session, and a bloated set dilutes the rules that matter.
+8. **Keep the set lean.** After writing, state the file's token total (characters / 4;
+   the console's Rules page shows it, with each rule's cost). If that total has grown
+   beyond what the rules earn, or any rule no longer changes behaviour, say so and propose
+   merges or prunes — every rule is loaded every session, and a bloated set dilutes the
+   rules that matter.
 
 The asymmetry is deliberate: Branch A costs one question, Branch B costs several.
 The price is the safeguard — make remembering cheap and legislating expensive, or

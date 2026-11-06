@@ -3,8 +3,16 @@ import { installTag } from '../lib/hosts.js'
 
 // The install ONE entry, form or page acts on, placed beside it and labelled for it ("Write to:",
 // "Checks for:"). There is no console-wide install: each picker speaks for its own spot only.
-// With one active install there is nothing to pick, so it renders nothing.
-export default function InstallPicker({ installs, value, onChange, label, className = '' }) {
+// With one active install there is nothing to pick, so it renders nothing. `tagOf` names an
+// option, for a page where an install stands for something wider (the shared files).
+export default function InstallPicker({
+  installs,
+  value,
+  onChange,
+  label,
+  className = '',
+  tagOf = installTag,
+}) {
   if (!value || !installs || installs.length < 2) return null
   return (
     <label className={`install-pick ${className}`.trim()}>
@@ -17,7 +25,7 @@ export default function InstallPicker({ installs, value, onChange, label, classN
       >
         {installs.map((i) => (
           <option key={i.id} value={i.id}>
-            {installTag(i)}
+            {tagOf(i)}
           </option>
         ))}
       </select>

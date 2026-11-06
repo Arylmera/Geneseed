@@ -32,12 +32,13 @@ const TRIAL = {
   status: 'trial',
   overdue: false,
   body: 'Always use tabs.',
+  tokens: 12,
 }
 const rulesWith = (stats) => ({
   exists: true,
   fingerprint: 'f1',
   warnings: [],
-  stats: { rules: 2, lines: 20, tokens: 300, max_rules: 15, max_tokens: 1500, ...stats },
+  stats: { rules: 2, lines: 20, tokens: 300, ...stats },
   rules: [TRIAL],
 })
 const entries = (n) => Array.from({ length: n }, (_, i) => ({ name: `fact-${i}`, title: '' }))
@@ -65,60 +66,75 @@ beforeEach(() => {
 
 // `setup.facts` disagrees with the catalog on purpose: the counts must come from the catalog.
 const SETUP = { facts: 5 }
-const budget = () => screen.findByRole('region', { name: 'Rule budget' })
+const known = () => screen.findByRole('region', { name: 'What the agent knows about you' })
 const badgeOf = (tab) =>
   screen.getByRole('link', { name: new RegExp(`^${tab}`) }).querySelector('.tab-badge')
 
 describe('Personal', () => {
-  it('shows one budget strip: slots, a token bar, and no meter in the Rules editor', async () => {
-    const { container } = render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const panel = await budget()
+  // No limit anywhere: the panel counts the rules and nothing measures them against a ceiling.
+  it('counts the rules with no budget and no ceiling', async () => {
+    render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
+    const panel = await known()
     await screen.findByText('Prefer tabs')
-    expect(screen.getAllByRole('region', { name: 'Rule budget' })).toHaveLength(1)
-    expect(within(panel).getByText('2 of 15')).toBeTruthy()
-    expect(within(panel).getByRole('img', { name: 'tokens: 300 of 1500' })).toBeTruthy()
-    // Below both thresholds the note is the file's size.
-    expect(within(panel).getByText('2 rules in 20 lines.')).toBeTruthy()
-    expect(container.querySelector('.rules-meter')).toBeNull()
+    expect(within(panel).getByText('2 rules')).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Rule budget' })).toBeNull()
+    expect(document.querySelector('.slots')).toBeNull()
   })
 
-  // The budget and the profile are the DEFAULT install's (the unnamed reads): with two active
-  // installs both cards name it, and the memory/notebook counts say they span every install.
-  it('names the install the rule budget and the profile come from', async () => {
-    api.installs = vi.fn(async () => ({
-      installs: [
-        { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
-        { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
-      ],
-    }))
+  const TWO = {
+    installs: [
+      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
+      { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+    ],
+  }
+
+  // Rules, profile and memory of a global install are the one shared tier: the summary says so
+  // and names no harness, whichever install is the default.
+  it('names no harness when the files are shared', async () => {
+    api.installs = vi.fn(async () => TWO)
+    api.rules.mockImplementation(() => Promise.resolve({ ...rulesWith({}), shared: true }))
     try {
       render(<Personal tab="rules" dataRev={0} />)
-      const panel = await budget()
-      await waitFor(() => expect(within(panel).getByText('2 of 15 · claude · global')).toBeTruthy())
-      expect(
-        screen.getByText(
-          'Profile and rules of claude · global; memory and notebook across every install.',
-        ),
-      ).toBeTruthy()
+      const panel = await known()
+      await within(panel).findByText(
+        'Profile, rules and memory are shared by every harness; the notebook counts every install.',
+      )
+      expect(panel.textContent).not.toMatch(/claude|opencode/)
     } finally {
       delete api.installs
     }
   })
-  // Tokens alone reach 70 % (1050/1500) while the count is at 13 %: the strip reads the max.
-  it('warns at 70 % of either budget', async () => {
-    api.rules.mockImplementation(() => Promise.resolve(rulesWith({ tokens: 1050 })))
-    render(<Personal tab="rules" dataRev={0} />)
-    const panel = await budget()
-    expect(within(panel).getByText('getting heavy; consider merging or pruning')).toBeTruthy()
+
+  // `facts` counts every listed store, so beside a project install the note must say so.
+  it('says memory counts each project too when a project install is active', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        TWO.installs[1],
+        { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' },
+      ],
+    }))
+    api.rules.mockImplementation(() => Promise.resolve({ ...rulesWith({}), shared: true }))
+    try {
+      render(<Personal tab="rules" dataRev={0} />)
+      await within(await known()).findByText(
+        'Profile and rules are shared by every harness; memory counts the shared store and each project’s own, and the notebook every install.',
+      )
+    } finally {
+      delete api.installs
+    }
   })
 
-  it('says over budget at 100 % of either budget', async () => {
-    api.rules.mockImplementation(() => Promise.resolve(rulesWith({ rules: 15 })))
-    render(<Personal tab="rules" dataRev={0} />)
-    const panel = await budget()
-    expect(
-      within(panel).getByText('over budget: a bloated rule set dilutes the rules that matter'),
-    ).toBeTruthy()
+  // A project install as the default has files of its own, so the summary names it.
+  it('names a project install whose files are its own', async () => {
+    api.installs = vi.fn(async () => TWO)
+    try {
+      render(<Personal tab="rules" dataRev={0} />)
+      await within(await known()).findByText(
+        'Profile and rules of claude · global; memory and notebook across every install.',
+      )
+    } finally {
+      delete api.installs
+    }
   })
 
   it('counts one fact in the singular', async () => {
@@ -226,6 +242,21 @@ describe('Personal', () => {
     const rows = within(topics).getAllByRole('listitem')
     expect(rows.map((li) => li.textContent)).toEqual(['release2 facts', 'web1 fact'])
     expect(within(topics).getByText('2 topics')).toBeTruthy()
+  })
+
+  it('tags the topics of the shared store as shared, never with a harness', async () => {
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        body: '- [release](topics/release.md) — 2 facts',
+        install: 'claude:global:/cl',
+        shared: true,
+        links: [],
+      }),
+    )
+    render(<Personal tab="memory" dataRev={0} />)
+    const topics = await screen.findByRole('region', { name: 'Topics' })
+    expect(within(topics).getByText('shared')).toBeTruthy()
+    expect(topics.textContent).not.toMatch(/claude/)
   })
 
   // A forget rewrites the map server-side; the panel must not keep the old count.

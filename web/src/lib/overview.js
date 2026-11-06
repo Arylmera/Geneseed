@@ -81,7 +81,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
       tag: 'Rules',
       tone: '',
       title: 'No standing rules yet',
-      detail: `0 of ${st.max_rules} · ${st.tokens} of ${st.max_tokens} tokens`,
+      detail: `≈${st.tokens.toLocaleString('en-US')} tokens, the file's header alone`,
       where: 'personal/rules',
       verb: 'Write a rule',
       href: '#/personal/rules',
@@ -233,8 +233,9 @@ export const rebuildTarget = (i) => ({
 // never-fired row is held back until 30 days are counted, so a fresh install is not told every
 // skill is unused. Rows carry `act` (a console action) or `href`, never both; an `act: 'rebuild'`
 // row also names its `installs`. `defaultLabel` names the install the unnamed reads come from
-// (profile, rules): with it, those suggestions say whose they are. A fleet's memory nudge is per
-// install, off each row's `facts`.
+// (profile, rules): with it, those suggestions say whose they are, unless the file is the shared
+// one, which is no install's. A fleet's memory nudge reads each row's `facts`: one for the shared
+// store however many installs read it, one per project install with its own.
 export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
   const out = []
   const d = fleet?.doctor
@@ -295,7 +296,20 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
     })
   }
   const rows = (fleet?.installs || []).filter((x) => x.state === 'active')
-  for (const i of rows.filter((x) => x.facts === 0)) {
+  if (rows.some((x) => x.shared && x.facts === 0)) {
+    out.push({
+      id: 'memory:shared',
+      tag: 'Memory',
+      tone: '',
+      sugg: true,
+      title: 'Memory holds no facts',
+      detail: 'no durable lesson recorded yet',
+      where: 'personal/memory',
+      verb: 'Open',
+      href: '#/personal/memory',
+    })
+  }
+  for (const i of rows.filter((x) => !x.shared && x.facts === 0)) {
     out.push({
       id: `memory:${i.id}`,
       tag: 'Memory',
@@ -318,7 +332,10 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
   })
   const OWN = new Set(['profile', 'rules'])
   for (const r of older) {
-    const named = defaultLabel && OWN.has(r.id) ? { title: `${defaultLabel}: ${r.title}` } : {}
+    const named =
+      defaultLabel && OWN.has(r.id) && !rest[r.id]?.shared
+        ? { title: `${defaultLabel}: ${r.title}` }
+        : {}
     out.push({ ...r, ...named, sugg: true })
   }
   return out

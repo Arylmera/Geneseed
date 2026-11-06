@@ -8,7 +8,6 @@
  * reader half and a writer half, and the two halves had ended up in different files.
  */
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { PROFILE_STUB } from '../build/stubs.mjs';
@@ -65,45 +64,67 @@ const userDir = (state) => tierOf(state)?.root ?? state.target;
 const rulesPath = (state) => path.join(userDir(state), RULES_FILE);
 
 /**
- * Items the fold drafted and nobody decided yet (`.fold-state.json`, C7). The console only
- * COUNTS them: the rule Rite is the only draft writer (C15), so no verb here decides one.
- * 0 for a project install, a missing ledger or one that does not parse.
+ * The blocks the fold left in `<tier>/user-rules.draft.md`, as `{title, host, body}`, in file
+ * order. The console only SHOWS them: the rule Rite is the only draft writer (C15), so no verb
+ * here decides one. A `## Rule from <host>: <title>` block is a pointer line, then the rule. A
+ * `## Choose: <file>` block is a question about two files, so it keeps its title alone. Every
+ * other heading (`## Renumbered`, the file's record of past decisions) ends the block before it
+ * and adds none. A block the ledger already holds as decided is left over from a stopped Rite
+ * write, so it is not pending; a block with no row, or a ledger that does not parse, still shows.
+ * Empty for a project install and for a missing draft.
  */
-function pendingCount(state) {
+function ruleDrafts(state) {
   const tier = tierOf(state);
-  if (!tier) return 0;
-  try {
-    const items = JSON.parse(readFileSync(tier.foldState, 'utf8')).items ?? {};
-    return Object.values(items).filter((i) => i?.state === 'pending').length;
-  } catch { return 0; }
+  const out = [];
+  let open = null;
+  for (const line of splitLines((tier && readMaybe(tier.draft)) ?? '')) {
+    if (line.startsWith('## ')) {
+      const rule = /^## Rule from ([^:]+): (.+)$/.exec(line);
+      open = rule ? { title: rule[2], host: rule[1], lines: [] }
+        : line.startsWith('## Choose: ') ? { title: line.slice(3), host: null, lines: [] } : null;
+      if (open) out.push(open);
+    } else open?.lines.push(line);
+  }
+  let ledger = {};
+  try { ledger = JSON.parse((tier && readMaybe(tier.foldState)) ?? '{}').items ?? {}; } catch { /* shows all */ }
+  const decided = ({ lines }) => {
+    const row = ledger[/sha256: (\w+)/.exec(lines[0] ?? '')?.[1]];
+    return row != null && row.state !== 'pending';
+  };
+  return out.filter((d) => !decided(d)).map(({ title, host, lines }) => (
+    { title, host, body: host ? stripWhitespace(lines.slice(1).join('\n')) : '' }));
 }
 
-/** Advisory only; nothing blocks past it. */
-const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
+/**
+ * The estimate of what a text costs in the context, each turn. CODE POINTS, not `String.length`
+ * (UTF-16 units): an emoji in a rule body would otherwise put it off.
+ */
+const tokensOf = (text) => Math.floor(codePointLength(text) / 4);
 
 export function apiRules(state) {
   const p = rulesPath(state);
   if (!isFile(p)) {
     return { exists: false, path: p, rules: [], warnings: [], fingerprint: '',
-      shared: tierOf(state) !== null, pending: pendingCount(state),
-      stats: { rules: 0, lines: 0, tokens: 0, ...RULES_BUDGET } };
+      shared: tierOf(state) !== null, drafts: ruleDrafts(state),
+      stats: { rules: 0, lines: 0, tokens: 0 } };
   }
   const text = readMaybe(p) ?? '';
   const [rules, warnings] = parseRules(text);
   const today = todayIso();
+  const lines = splitLines(text);
   const out = rules.map((r) => ({
     id: r.id, title: r.title, scope: r.scope, source: r.source,
     trial_until: r.trial_until,
     status: r.trial_until ? 'trial' : 'active',
     overdue: Boolean(r.trial_until) && r.trial_until < today,
     body: r.body,
+    // The rule's whole block, heading and metadata too: that is what the agent reads.
+    tokens: tokensOf(stripWhitespace(lines.slice(r.start, r.end).join('\n'))),
   }));
   return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
-    shared: tierOf(state) !== null, pending: pendingCount(state),
-    // CODE POINTS, not `String.length` (UTF-16 units) — an emoji in a rule body would
-    // otherwise put the token estimate off.
-    stats: { rules: rules.length, lines: splitLines(text).length,
-      tokens: Math.floor(codePointLength(text) / 4), ...RULES_BUDGET } };
+    shared: tierOf(state) !== null, drafts: ruleDrafts(state),
+    // The whole file, so it holds its header too: more than the rules' own tokens added up.
+    stats: { rules: rules.length, lines: lines.length, tokens: tokensOf(text) } };
 }
 
 function rulesRead(state) {
@@ -287,13 +308,14 @@ const profilePath = (state) => path.join(userDir(state), PROFILE_FILE);
 
 export function apiProfile(state) {
   const p = profilePath(state);
-  if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '' };
+  const shared = tierOf(state) !== null;
+  if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '', shared };
   const text = readMaybe(p) ?? '';
   // `seeded`: the file is still the template the build wrote once and never touched since.
   // `readMaybe` normalises line endings, so a CRLF copy (the emit writes the platform's, and
   // an editor may re-save either way) still compares equal to the LF literal.
   const seeded = text === PROFILE_STUB;
-  return { exists: true, path: p, text, fingerprint: fingerprint(text), seeded };
+  return { exists: true, path: p, text, fingerprint: fingerprint(text), seeded, shared };
 }
 
 /** The whole file, fingerprint-guarded like the rules above. */

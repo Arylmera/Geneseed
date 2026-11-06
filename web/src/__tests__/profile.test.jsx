@@ -61,7 +61,8 @@ describe('Profile', () => {
     let calls = 0
     api.profile.mockImplementation(() =>
       Promise.resolve(
-        ++calls === 1 ? FILLED : { ...FILLED, fingerprint: 'f9', text: '# Agent wrote this' },
+        // Two reads before the save: the page's, for the path, and the card's own.
+        ++calls <= 2 ? FILLED : { ...FILLED, fingerprint: 'f9', text: '# Agent wrote this' },
       ),
     )
     render(<Profile />)
@@ -69,7 +70,7 @@ describe('Profile', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'my draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(api.profile).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(api.profile).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(screen.getByText(/Your draft is kept/)).toBeTruthy())
     expect(screen.getByLabelText('Profile markdown').value).toBe('my draft')
     // …and the next save carries the NEW fingerprint.
@@ -125,7 +126,7 @@ describe('Profile', () => {
     // The disk read after the save stays pending, so only the painted copy can answer.
     let calls = 0
     api.profile.mockImplementation(() =>
-      ++calls === 1
+      ++calls <= 2
         ? Promise.resolve({ ...FILLED, seeded: true, text: '# Your profile\n\nStub.' })
         : new Promise(() => {}),
     )
@@ -149,6 +150,20 @@ describe('Profile', () => {
 
 // EVERY ACTIVE INSTALL'S PROFILE (D1): one card each, tagged with its install, and a save writes
 // back to the card's own install with its own fingerprint.
+describe('Profile, the sharing sentence', () => {
+  const says = () => screen.queryByText(/Every harness on this machine shares that one file/)
+  it('appears only when a file is shared', async () => {
+    const { unmount } = render(<Profile />)
+    await screen.findByRole('heading', { name: 'Who I am' })
+    expect(says()).toBeNull()
+    unmount()
+    api.profile.mockImplementation(() => Promise.resolve({ ...FILLED, shared: true }))
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Who I am' })
+    expect(says()).toBeTruthy()
+  })
+})
+
 describe('Profile across installs', () => {
   const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
   const CL = {
@@ -164,8 +179,8 @@ describe('Profile across installs', () => {
     api.profile.mockImplementation((inst) =>
       Promise.resolve(
         inst?.host === 'opencode'
-          ? { ...FILLED, fingerprint: 'oc-fp', text: '# OpenCode me' }
-          : { ...FILLED, fingerprint: 'cl-fp', text: '# Claude me' },
+          ? { ...FILLED, path: '/oc/PROFILE.md', fingerprint: 'oc-fp', text: '# OpenCode me' }
+          : { ...FILLED, path: '/cl/PROFILE.md', fingerprint: 'cl-fp', text: '# Claude me' },
       ),
     )
   })
@@ -186,14 +201,56 @@ describe('Profile across installs', () => {
     expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
   })
 
-  it('shows one card per install, default first, and saves to the card own install', async () => {
+  // Every global install answers with the one shared file: one card, tagged shared, no harness.
+  it('shows a file two installs share as one card, tagged shared', async () => {
+    api.profile.mockImplementation(() => Promise.resolve({ ...FILLED, shared: true }))
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Who I am' })
+    expect(screen.getAllByRole('heading', { name: 'Who I am' })).toHaveLength(1)
+    expect(screen.getByRole('region').getAttribute('aria-label')).toBe('Profile, shared')
+    expect(document.querySelector('.rule-chip').textContent).toBe('shared')
+    expect(document.body.textContent).not.toMatch(/claude|opencode/)
+  })
+
+  // A project install beside the shared file keeps its own card and its install name.
+  it('keeps a project install apart from the shared card', async () => {
+    const REPO = { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' }
+    api.installs = vi.fn(async () => ({ installs: [CL, REPO] }))
+    api.profile.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'bob'
+          ? { ...FILLED, path: '/r/repo/PROFILE.md', text: '# Repo me', shared: false }
+          : { ...FILLED, shared: true },
+      ),
+    )
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Repo me' })
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Profile, shared',
+      'Profile, repo · bob',
+    ])
+  })
+
+  // An install whose read failed is not folded away: its own card says so.
+  it('keeps a card for an install whose first read failed', async () => {
+    api.profile.mockImplementation((inst) =>
+      inst?.host === 'opencode'
+        ? Promise.reject(new Error('unreadable'))
+        : Promise.resolve({ ...FILLED, shared: true }),
+    )
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Who I am' })
+    await waitFor(() => expect(screen.getByText(/unreadable/)).toBeTruthy())
+  })
+
+  it('shows one card per file, default first, and saves to the card own install', async () => {
     render(<Profile />)
     await screen.findByRole('heading', { name: 'OpenCode me' })
     expect(screen.getByRole('heading', { name: 'Claude me' })).toBeTruthy()
     // Each card is a region named after its install.
     expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
-      'Profile of claude · global',
-      'Profile of opencode · global',
+      'Profile, claude · global',
+      'Profile, opencode · global',
     ])
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))
     expect(groups).toEqual(['Profile mode, claude · global', 'Profile mode, opencode · global'])
