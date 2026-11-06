@@ -1,10 +1,12 @@
-import React, { memo, useMemo } from 'react'
+import React, { memo, useMemo, useRef } from 'react'
 import { W, H } from '../../lib/garden.js'
 
 // The parts of a pixel bonsai that the Garden and a session's detail page share: the tree
 // SVG with its hoverable pads, the card a pad hover shows, and the Sakura preference.
 
 const PAD_LIST = 12
+// How far a finger may travel, in CSS pixels, and still be a tap and not a scroll.
+const TAP_SLOP = 10
 
 export const SAKURA_KEY = 'geneseed-garden-sakura'
 export function readSakura() {
@@ -62,7 +64,8 @@ export function padKeys(e, count, pad, onPad) {
 // `t` is a gardenTree() drawing; `pad` the hovered pad's index, or null; `onPad(p)` reports a
 // pad hover (null on leave) and must be stable, or the ~400 rects are rebuilt on every render.
 // A tap shows the pad too, and a second one clears it; preventDefault cancels the click, so the
-// tap does not also open the session. With `label` the SVG is an image with that text
+// tap does not also open the session. A touch that moved is a scroll, not a tap, and the browser
+// makes the touchend of a scroll non-cancelable. With `label` the SVG is an image with that text
 // alternative, else it is hidden from screen readers (its owner labels it).
 export const TreeSvg = memo(function TreeSvg({ t, pad, swaying, onPad, px, label }) {
   const groups = useMemo(() => {
@@ -73,8 +76,17 @@ export const TreeSvg = memo(function TreeSvg({ t, pad, swaying, onPad, px, label
     }
     return [...by.entries()]
   }, [t])
+  const touch = useRef(null)
+  const moved = (e) => {
+    const [from, to] = [touch.current, e.changedTouches?.[0]]
+    return !!from && !!to && Math.hypot(to.clientX - from.x, to.clientY - from.y) > TAP_SLOP
+  }
   return (
     <svg
+      onTouchStart={(e) => {
+        const f = e.touches?.[0]
+        touch.current = f ? { x: f.clientX, y: f.clientY } : null
+      }}
       className={`gd-svg${pad != null ? ' gd-dimming' : ''}`}
       viewBox={`0 0 ${W} ${H}`}
       width={W * px}
@@ -97,7 +109,8 @@ export const TreeSvg = memo(function TreeSvg({ t, pad, swaying, onPad, px, label
           onTouchEnd={
             p >= 0
               ? (e) => {
-                  e.preventDefault()
+                  if (moved(e)) return
+                  if (e.cancelable) e.preventDefault()
                   onPad(p === pad ? null : p)
                 }
               : undefined

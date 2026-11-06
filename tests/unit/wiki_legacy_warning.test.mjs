@@ -33,7 +33,7 @@ test('renamedFilesIn names an old file by its path and its new name, and skips c
 
 test('status carries a wiki row only when the payload names an old manifest', () => {
   const base = { theme: 'x', accent: 'cyan', emit: 'e', agents: 1, skills: 1, laws: 1, memory_dir: null,
-    facts: 0, installed_fp: 'a', source_fp: 'a', version_verdict: 'up to date' };
+    facts: 0, installed_fp: 'a', source_fp: 'a', version_verdict: 'in sync' };
   assert.ok(!statusLines(base, false).some((l) => l.includes('old name')));
   const lines = statusLines({ ...base, renamed_files: [{ file: '/h/wiki.jsonc', now: 'geneseed-wiki.jsonc' }] }, false);
   assert.ok(lines.some((l) => l.includes('/h/wiki.jsonc') && l.includes('geneseed-wiki.jsonc')), lines.join('\n'));

@@ -375,7 +375,7 @@ export default function App() {
                 <PageBoundary key={route.page}>
                   <Suspense fallback={<Loading />}>
                     {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from
-                      several routes (the Library from `#/skills`, `#/section/memory` and
+                      several routes (the Library from `#/skills`, `#/section/agents` and
                       `#/item/agent/x`; the Constitution from `#/laws` and `#/item/law/IV`)
                       must render from ONE position in this tree, or React unmounts and
                       remounts it whenever the route crosses between them: the page throws

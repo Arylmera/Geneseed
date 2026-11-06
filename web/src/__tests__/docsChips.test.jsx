@@ -182,7 +182,9 @@ describe('Docs host selector', () => {
     render(<Docs page="clone" overview={{ emit }} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
     expect(pressed().textContent).toBe(label)
-    expect(api.docsPage).toHaveBeenCalledWith('clone', host)
+    // Awaited: the rows paint with the menu, and the page's read fires from the effect after that
+    // commit, so a yield between the two left only the glossary call and reddened this at random.
+    await waitFor(() => expect(api.docsPage).toHaveBeenCalledWith('clone', host))
   })
 
   it('keeps a choice stored by the old two-family selector', async () => {

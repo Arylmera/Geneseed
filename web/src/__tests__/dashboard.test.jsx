@@ -49,7 +49,7 @@ const themes = [
 const setup = {
   installed_fp: 'a3f1c9e2',
   source_fp: 'a3f1c9e2',
-  version_verdict: 'up to date (0.1.0)',
+  version_verdict: 'in sync (0.1.0)',
 }
 const runs = [
   {

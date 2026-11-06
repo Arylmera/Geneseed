@@ -212,7 +212,7 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
             {doctorState === 'failed' && (
               <button className="btn ghost b-hero-retry" onClick={() => onAction('doctor')}>
                 <Icon name="doctor" />
-                Run doctor
+                Retry doctor
               </button>
             )}
             <p className="sub">

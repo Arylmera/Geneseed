@@ -380,7 +380,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       // the new code on disk, so an axis or marker the pull added would be dropped. build-all
       // spawns the new CLI, which builds every profile with the new code; this path cannot.
       if (state.daemonStale?.()) {
-        return sendJson(res, { error: 'the console is running older code than the disk — restart it first (Installs › Server › Restart), then rebuild' }, 422, ae);
+        return sendJson(res, { error: 'the console is running older code than the disk — restart it first (Settings › Server › Restart), then rebuild' }, 422, ae);
       }
       return startJob(res, 'rebuild', plan.cmds, ae);
     }

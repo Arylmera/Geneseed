@@ -2121,6 +2121,53 @@ test('the migrate dry-run fold preview survives a home directory it cannot read'
   });
 });
 
+test('the migrate dry run reaches its end with no home directory', () => {
+  // No GENESEED_HOME and no home: the stamp read misses, so the verb goes on past the fold preview
+  // to the autostart scan. Neither is a crash: a read with nowhere to look finds nothing.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    delete env.GENESEED_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'maintain', 'migrate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdMigrate } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = cmdMigrate({ dryRun: true });'],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /--dry-run: nothing was written/);
+  });
+});
+
+test('a real migrate with no home directory refuses cleanly and changes nothing', () => {
+  // The backup lives under the home, so with neither a home nor GENESEED_HOME the verb has no safe
+  // way to run. It refuses as it refuses a bad marker: exit 3, a reason, a way out, no stack.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    delete env.GENESEED_HOME;
+    const before = fs.readdirSync(repo, { recursive: true }).sort();
+    const noHome = 'data:text/javascript,import os from "node:os"; os.homedir = () => { throw new Error("no home"); };';
+    const r = spawnSync(process.execPath, ['--import', noHome, path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'migrate'],
+      { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stderr, /REFUSED — no home directory/);
+    assert.match(r.stderr, /Nothing was changed\. Set GENESEED_HOME/);
+    assert.doesNotMatch(r.stderr, /\n\s+at /);
+    assert.deepEqual(fs.readdirSync(repo, { recursive: true }).sort(), before);
+  });
+});
+
 test('the write resolver takes the spec order, and the shared store counts only when it exists', () => {
   // `--memory` and `$GENESEED_MEMORY` are first and need no row here. Below them:
   // `$GENESEED_HARNESS/memory`, a project install in the cwd, the shared store, the OpenCode config

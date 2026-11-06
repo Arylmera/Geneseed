@@ -106,7 +106,7 @@ of them.
 
 ## The rail
 
-The left rail has one flat list, and two entries at its foot:
+The left rail has one flat list, and three entries at its foot:
 
 | Entry | Holds |
 | --- | --- |
@@ -158,9 +158,9 @@ install. Each `/api/installs` and `/api/fleet` row carries `shared`, which the p
 entry came from. Notebook stays per install, and its Forget acts on the install of the copy on
 screen. Doctor, Local edits, the Constitution (for its gate switches and doctrine Apply), Loops and
 the rail's Voice popover each keep their own pick (in the browser's localStorage). The Overview is
-fleet-wide: each install's own facts (voice, footprint, posture, mode, drift) sit on
-its row, and a figure still read off a project install set as the default (a suggestion, an older
-Overview view, Personal's summary) names that install once two or more are active. A *Needs you*
+fleet-wide: each install's own facts (voice, footprint, posture, mode, local edits) sit on
+its row, and a figure still read off a project install set as the default (a suggestion, a lens)
+names that install once two or more are active. A *Needs you*
 suggestion about a shared file or the shared memory store appears once and names no harness.
 
 The Loaded every turn card also shows the session-start hook output against its 9 000-character
@@ -244,11 +244,11 @@ streams the output of background jobs and keeps their history across reloads.
 - **Library** (`#/library`) — browse the catalogue: **Skills · Agents · Wiki · Setup files**.
   Constitution has its own rail entry, and Memory and Notebook are Personal's tabs, their one home:
   the same reader, locked to one kind, with one empty state each. Drill into a section, then an item, to read its
-  rendered markdown body and follow its cross-links. On a memory fact, a **Forget this
+  rendered markdown body and follow its cross-links. On a memory fact in Personal, a **Forget this
   fact** control deletes it (token-gated; bare-slug guarded server-side), and a
   **Promote to rule** control turns a recurring lesson into a trial rule in
   `user-rules.md` — provenance recorded, the source fact deleted so it isn't loaded
-  twice — landing you on the Rules page.
+  twice — landing you on Personal's Rules tab.
 - **Kits** (`#/kits`, `#/kits/<kit>`) — a card per shipped kit over a kits × installs matrix of
   switches; a staged-changes bar applies one install at a time (the server runs one job at a
   time). `#/kits/<kit>` is the kit's page: rules, word budget, banned APIs, upstream credits,

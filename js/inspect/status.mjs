@@ -21,7 +21,7 @@
  *
  * WHAT NO CELL CAN REACH, and where it is gated instead. ROOT is not redirectable across a
  * process boundary, so three things here are unreachable from any cell: `versionVerdict`'s
- * "up to date" (needs a marker holding a fingerprint no cell can know), `accentFor`'s cyan
+ * "in sync" (needs a marker holding a fingerprint no cell can know), `accentFor`'s cyan
  * fallback (an unknown theme is refused upstream by `effectiveTheme`), and the whole ANSI
  * half of `statusLines` (`colorEnabled` reads `process.stdout.isTTY`, and every harness
  * captures stdout through a pipe). All three are PURE FUNCTIONS of their arguments:
@@ -69,7 +69,7 @@ export function versionVerdict(installed, current) {
   if (installed === null || installed === undefined) {
     return 'no Geneseed install detected to compare';
   }
-  if (installed === current) return 'up to date with this source';
+  if (installed === current) return 'in sync with this source';
   return 'installed build differs from the current source — run '
     + '`./geneseed update` (or rebuild) to apply it';
 }
@@ -401,7 +401,7 @@ export function statusLines(d, color = false) {
   const badge = asc ? '*' : '◆';
   const emdash = asc ? '-' : '—';
 
-  const up = d.version_verdict.includes('up to date');
+  const up = d.version_verdict.includes('in sync');
   const noneInst = d.installed_fp === null || d.installed_fp === undefined;
   const mark = up ? (asc ? 'OK' : '✓') : (noneInst ? (asc ? '-' : '·') : '!');
   const vcode = up ? '32' : (noneInst ? '2' : '33');

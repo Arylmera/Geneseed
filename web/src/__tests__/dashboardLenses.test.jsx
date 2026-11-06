@@ -178,12 +178,15 @@ describe('GreenhouseView', () => {
     expect(screen.getByText('Checking…')).toBeTruthy()
   })
 
-  it('says doctor did not answer, and offers to run it', () => {
+  // The Overview's header keeps its Run doctor in this state, so this one is named for what it
+  // does here: two buttons sharing one name read as a duplicate to a screen reader.
+  it('says doctor did not answer, and offers a retry', () => {
     const onAction = vi.fn()
     greenhouse({ verdict: good, doctor: { state: 'failed', data: null } }, { onAction })
     expect(screen.getByText('Doctor did not answer')).toBeTruthy()
     expect(screen.queryByText(/checks pass now/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Run doctor/ }))
+    expect(screen.queryByRole('button', { name: /Run doctor/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry doctor' }))
     expect(onAction).toHaveBeenCalledWith('doctor')
   })
 
@@ -323,7 +326,7 @@ describe('LineageView', () => {
   })
 
   it('reads in sync from the verdict', () => {
-    lineage('up to date with this source')
+    lineage('in sync with this source')
     expect(screen.getByText('in sync')).toBeTruthy()
   })
 

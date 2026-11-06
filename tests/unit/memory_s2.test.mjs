@@ -43,7 +43,7 @@ test('anamnesisLeftovers lists a non-empty anamnesis/ and ignores an empty or ab
 
 test('status shows a leftover row only when the payload carries one', () => {
   const base = { theme: 'x', accent: 'cyan', emit: 'e', agents: 1, skills: 1, laws: 1, memory_dir: null,
-    facts: 0, installed_fp: 'a', source_fp: 'a', version_verdict: 'up to date' };
+    facts: 0, installed_fp: 'a', source_fp: 'a', version_verdict: 'in sync' };
   assert.ok(!statusLines(base, false).some((l) => l.includes('leftover')));
   assert.ok(statusLines({ ...base, anamnesis_leftover: ['/h/anamnesis'] }, false)
     .some((l) => l.includes('leftover') && l.includes('/h/anamnesis')));

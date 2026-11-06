@@ -23,16 +23,27 @@ const CONFLICT =
 
 // ONE CARD PER PROFILE FILE: the installs on the shared tier share one, tagged shared, and a project
 // install keeps its own, tagged with its install. An install whose read failed keeps a card of its
-// own, which says so. Personal's header states the shared scope; a card only says which it is.
+// own, which says so, tagged with its install: `shared` names the one card the shared file got.
+// Personal's header states the shared scope; a card only says which it is.
+const idOf = (inst) => inst?.id ?? ''
+
 export default function Profile({ onChanged, dataRev }) {
   const { targets, sets, failed } = useInstallFiles(api.profile, dataRev)
   if (!sets) return <Loading />
-  const listed = new Set([...sets.map((s) => s.inst), ...failed])
+  // By id, never by object: a refetch lands new rows while `sets` still holds the old ones, and a
+  // card dropped for that takes its unsaved draft with it.
+  const unread = new Set(failed.map(idOf))
+  const listed = new Set([...sets.map((s) => idOf(s.inst)), ...unread])
   const cards = targets
-    .filter((i) => listed.has(i))
+    .filter((i) => listed.has(idOf(i)))
     .map((install) => ({
       install,
-      tag: targets.length < 2 ? null : install?.shared ? 'shared' : installTag(install),
+      tag:
+        targets.length < 2
+          ? null
+          : install?.shared && !unread.has(idOf(install))
+            ? 'shared'
+            : installTag(install),
     }))
   return (
     <>
@@ -40,11 +51,11 @@ export default function Profile({ onChanged, dataRev }) {
         <h2 className="h">Profile</h2>
         <p className="sub sub-wide">
           Who you are and how you like to work, from <code className="mono">PROFILE.md</code>. It
-          guides the agent and never binds it. <a href="#/docs/rules">Docs</a>
+          guides the agent and never binds it. <a href="#/docs/collaboration">Docs</a>
         </p>
       </div>
       {cards.map(({ install, tag }) => (
-        <ProfileOf key={install?.id ?? ''} install={install} tag={tag} onChanged={onChanged} />
+        <ProfileOf key={idOf(install)} install={install} tag={tag} onChanged={onChanged} />
       ))}
     </>
   )
@@ -63,7 +74,14 @@ function ProfileOf({ install, tag, onChanged }) {
   }
 
   if (loading && !data) return <Loading />
-  if (error) return <ErrorState error={error} onRetry={reload} />
+  if (error) {
+    return (
+      <section aria-label={tag ? `Profile, ${tag}` : undefined}>
+        {tag ? <span className="rule-chip mono">{tag}</span> : null}
+        <ErrorState error={error} onRetry={reload} />
+      </section>
+    )
+  }
 
   const editing = draft !== null
   const text = data?.text || ''

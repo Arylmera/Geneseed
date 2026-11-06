@@ -617,6 +617,16 @@ describe('Activity garden switch', () => {
     expect(window.location.hash).toBe('#/activity')
   })
 
+  // A tap has no mouseenter before it, so the tap itself reports where the card goes.
+  it('opens a tapped pad’s card above its own tree', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
+    render(<Activity />)
+    const tree = await screen.findByRole('link', { name: /^grow it, Claude Code, working/ })
+    Object.defineProperty(tree, 'offsetLeft', { value: 120 })
+    fireEvent.touchEnd(tree.querySelector('g[data-p="0"]'))
+    expect(document.querySelector('.gd-info').style.left).toBe('120px')
+  })
+
   // The list is written next to the filters, in the order f, v, host, project.
   it('writes v=list next to the filters', async () => {
     window.history.replaceState(null, '', '#/activity?f=needs')

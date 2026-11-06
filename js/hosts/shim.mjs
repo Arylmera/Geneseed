@@ -372,9 +372,11 @@ export function hookRunnerEntry() {
  * Both platforms' paths on both platforms, deliberately — the scan is a read that misses
  * harmlessly, and returning only the host platform's would make the macOS arm unreachable
  * from the Windows machine this port is developed on: an ungated branch dressed as a fork.
+ * With no home directory there is nowhere to look, and the same read misses: `[]`, not a throw.
  */
 export function autostartPaths() {
-  const home = os.homedir();
+  let home;
+  try { home = os.homedir(); } catch { return []; }
   return [
     path.join(home, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Start Menu',
       'Programs', 'Startup', 'geneseed-web.vbs'),

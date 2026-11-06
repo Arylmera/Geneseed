@@ -10,7 +10,7 @@ import VerdictBadge from './VerdictBadge.jsx'
 // belong in a badge. The badge used to print "in sync · <sentence>" whatever it said.
 function syncBadge(verdict) {
   if (!verdict) return null
-  if (verdict.includes('up to date')) return { label: 'in sync', tone: 'ok' }
+  if (verdict.includes('in sync')) return { label: 'in sync', tone: 'ok' }
   if (verdict.includes('no Geneseed install')) return { label: 'not installed', tone: '' }
   return { label: 'behind source', tone: 'warn' }
 }

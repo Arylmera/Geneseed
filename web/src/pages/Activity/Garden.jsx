@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { baseName, needsYou, STATUS } from '../../lib/activity.jsx'
 import {
   cardKey,
@@ -103,10 +103,13 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
   const loop = Array.isArray(s.loops) ? s.loops[0] : null
   const swaying = s.status !== 'idle'
   const sid = cardKey(s)
-  // Stable, so the tree's ~400 rects are rebuilt only when its drawing or its hover changes.
-  const onPad = useCallback((p) => onHover(sid, p), [onHover, sid])
+  // Stable, so the tree's ~400 rects are rebuilt only when its drawing or its hover changes. It
+  // reports the x too: a tap has no mouseenter before it to report one.
+  const link = useRef(null)
+  const onPad = useCallback((p) => onHover(sid, p, xOf(link.current)), [onHover, sid])
   return (
     <a
+      ref={link}
       className={`gd-tree${needsYou(s) ? ' gd-needs' : ''}`}
       href={s.href || detailHref(s.session_id)}
       aria-label={treeLabel(s, t, mine)}

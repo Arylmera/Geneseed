@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -18,6 +18,8 @@ const FILLED = {
   fingerprint: 'f1',
   text: '# Who I am\n\nA builder.',
 }
+
+const texts = (sel) => [...document.querySelectorAll(sel)].map((n) => n.textContent)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -187,6 +189,46 @@ describe('Profile across installs', () => {
     expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
   })
 
+  // The real fetch parses a new body each time, so the refetched rows are NEW objects with the
+  // same ids, landing after the file reads that still hold the old rows. A card is matched by its
+  // install's id: matched by identity, the list came up empty and took the draft with it.
+  it('keeps an open draft when the refetched install rows are new objects', async () => {
+    api.installs = vi.fn(async () => ({ installs: [{ ...OC }, { ...CL }] }))
+    const { rerender } = render(<Profile dataRev={1} />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
+    rerender(<Profile dataRev={2} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(api.installs).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
+  })
+
+  // A refetch that fails caches null for App's "install list unreadable" notice, and null reads as
+  // no install at all. The files keep the last good list: falling to the default install would
+  // swap every card's key and unmount the draft.
+  it('keeps an open draft when the install list refetch fails', async () => {
+    api.installs = vi
+      .fn()
+      .mockResolvedValueOnce({ installs: [OC, CL] })
+      .mockRejectedValue(new Error('daemon gone'))
+    const { rerender } = render(<Profile dataRev={1} />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
+    rerender(<Profile dataRev={2} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(api.installs).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
+    expect(screen.getAllByRole('region')).toHaveLength(2)
+  })
+
   // Every global install answers with the one shared file: one card, tagged shared, no harness.
   it('shows a file two installs share as one card, tagged shared', async () => {
     api.installs = vi.fn(async () => ({
@@ -233,6 +275,29 @@ describe('Profile across installs', () => {
     render(<Profile />)
     await screen.findByRole('heading', { name: 'Who I am' })
     await waitFor(() => expect(screen.getByText(/unreadable/)).toBeTruthy())
+  })
+
+  // `shared` names the one card the shared file got. A failed read is not that card, whatever its
+  // row says: it is tagged with its install, and the tag stays on the error it shows.
+  it('tags a failed read with its install, not shared', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...OC, shared: true },
+        { ...CL, shared: true },
+      ],
+    }))
+    api.profile.mockImplementation((inst) =>
+      inst?.host === 'opencode'
+        ? Promise.reject(new Error('unreadable'))
+        : Promise.resolve({ ...FILLED, path: '/tier/PROFILE.md' }),
+    )
+    render(<Profile />)
+    await waitFor(() => expect(screen.getByText(/unreadable/)).toBeTruthy())
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Profile, shared',
+      'Profile, OpenCode · global',
+    ])
+    expect(texts('.rule-chip')).toEqual(['shared', 'OpenCode · global'])
   })
 
   it('shows one card per file, default first, and saves to the card own install', async () => {

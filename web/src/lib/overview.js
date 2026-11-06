@@ -131,7 +131,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
       tone: '',
       title: 'Memory holds no facts',
       detail: 'MEMORY.md is an empty index',
-      where: 'library/memory',
+      where: 'personal/memory',
       verb: 'Open',
       href: '#/personal/memory',
     })

@@ -92,7 +92,9 @@ function migrateSurvey() {
     }
     rows.push({ host, scope, root, marker, file: hookSettingsFile(root, host, scope) });
   }
-  const stamped = (readMaybe(stampPath()) || '').trim();
+  // No home and no GENESEED_HOME: no stamp to read, so nothing says this machine has migrated.
+  let stamped = '';
+  try { stamped = (readMaybe(stampPath()) || '').trim(); } catch { /* the survey only reads */ }
   return { rows, unrecognised, needed: stamped !== ROOT };
 }
 
@@ -197,7 +199,15 @@ export function cmdMigrate(args = {}) {
   }
 
   // Step 2 — stash every file the re-emit can touch, so step 4 can put it all back.
-  const stash = stashDir();
+  // Refused before the first write: with no home and no GENESEED_HOME there is nowhere to stage it.
+  let stash;
+  try {
+    stash = stashDir();
+  } catch {
+    printErr('[migrate] REFUSED — no home directory, so there is nowhere to stage a backup.\n');
+    printErr('[migrate] Nothing was changed. Set GENESEED_HOME, then re-run.\n');
+    return 3;
+  }
   const saved = [];
   try {
     rmSync(stash, { recursive: true, force: true });

@@ -137,7 +137,7 @@ function bodyExcludeRules(body) {
 }
 
 /**
- * A request body's `kits` — REPLACES the install's kits (the Kits tab sends the whole set it
+ * A request body's `kits` — REPLACES the install's kits (the Kits page sends the whole set it
  * wants): `[]`/`'none'` give `[]`, an omitted key gives `null` (keep the install's own), and an
  * unknown name gives `null` too, which `apiInstallCmd` refuses for a body that HAS the key.
  */
@@ -728,7 +728,7 @@ export function apiInstallCmd(state, body) {
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
   // comment at `installProfile` in `js/build/generate.mjs`.
-  // The theme default is THIS install's own, not the viewed one's: the Kits tab acts on any row.
+  // The theme default is THIS install's own, not the viewed one's: the Kits page acts on any row.
   // An ABSENT row has no footprint of its own (`footprintOfDir` answers its no-marker `full`),
   // so a new install takes the CLI's default, lean — see `apiDeployCmd` below.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {

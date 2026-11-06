@@ -7,13 +7,15 @@ import { installTag } from '../lib/hosts.js'
 // popover that acts on an install of its own holds the same control inside it. There is no
 // console-wide install: each picker speaks for its own spot only. With one active install there is
 // nothing to pick, so it renders nothing. `tagOf` names an option, for a page where an install
-// stands for something wider (the shared files).
+// stands for something wider (the shared files). `label` is its accessible name: a popover's picker
+// opens over a page's, and two controls may not share one name.
 export default function InstallPicker({
   installs,
   value,
   onChange,
   className = '',
   tagOf = installTag,
+  label = 'Install',
 }) {
   if (!value || !installs || installs.length < 2) return null
   return (
@@ -21,7 +23,7 @@ export default function InstallPicker({
       <span className="dim">Install:</span>
       <select
         className="sel mono"
-        aria-label="Install"
+        aria-label={label}
         value={value.id}
         onChange={(e) => onChange(installs.find((i) => i.id === e.target.value))}
       >

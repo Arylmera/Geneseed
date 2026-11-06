@@ -210,7 +210,8 @@ describe('VoicePopover', () => {
         />
       </ConfirmContext.Provider>,
     )
-    const pick = screen.getByRole('combobox', { name: 'Install' })
+    // Not plain "Install": the popover opens over a page whose own picker holds that name.
+    const pick = screen.getByRole('combobox', { name: 'Install to switch voice' })
     expect(pick.value).toBe('r')
     fireEvent.change(pick, { target: { value: 'oc' } })
     expect(onInstall).toHaveBeenCalledWith(two[0])

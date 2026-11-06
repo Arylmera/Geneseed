@@ -143,7 +143,7 @@ test('the release version is read from the config, not restated', () => {
 
 test('the version verdict names all three states', () => {
   assert.match(versionVerdict(null, 'abc'), /no Geneseed install/);
-  assert.match(versionVerdict('abc', 'abc'), /up to date/);
+  assert.match(versionVerdict('abc', 'abc'), /in sync/);
   assert.match(versionVerdict('old', 'new'), /differs/);
 });
 

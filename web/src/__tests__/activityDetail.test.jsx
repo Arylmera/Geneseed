@@ -1,5 +1,5 @@
 import React from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import ActivityDetail from '../pages/ActivityDetail.jsx'
@@ -234,6 +234,35 @@ describe('bonsai pads without a mouse', () => {
     rerender(ui(0))
     fireEvent.touchEnd(container.querySelector('g'))
     expect(onPad).toHaveBeenLastCalledWith(null)
+  })
+
+  const tapped = () => {
+    const onPad = vi.fn()
+    const t = { runs: [{ p: 0, x: 0, y: 0, w: 1, c: '#000' }], pads: [{ key: null, files: [] }] }
+    const { container } = render(<TreeSvg t={t} pad={null} swaying={false} onPad={onPad} px={1} />)
+    return [container.querySelector('g'), onPad]
+  }
+  const at = (y) => ({ clientX: 0, clientY: y })
+
+  // A finger that travelled is a scroll: no pad, and the browser keeps the event.
+  it('ignores a touch that moved past the slop, and takes one that stayed inside it', () => {
+    const [g, onPad] = tapped()
+    fireEvent.touchStart(g, { touches: [at(0)] })
+    expect(fireEvent.touchEnd(g, { changedTouches: [at(11)] })).toBe(true)
+    expect(onPad).not.toHaveBeenCalled()
+    fireEvent.touchStart(g, { touches: [at(0)] })
+    expect(fireEvent.touchEnd(g, { changedTouches: [at(10)] })).toBe(false)
+    expect(onPad).toHaveBeenCalledWith(0)
+  })
+
+  // preventDefault on a non-cancelable event does nothing but warn in the console.
+  it('does not cancel a touchend the browser marks non-cancelable', () => {
+    const [g, onPad] = tapped()
+    const ev = createEvent.touchEnd(g, { cancelable: false })
+    ev.preventDefault = vi.fn()
+    fireEvent(g, ev)
+    expect(ev.preventDefault).not.toHaveBeenCalled()
+    expect(onPad).toHaveBeenCalledWith(0)
   })
 })
 

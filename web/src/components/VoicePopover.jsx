@@ -47,7 +47,12 @@ export default function VoicePopover({
       <div className="tick" style={{ padding: '4px 10px 8px' }}>
         Switch voice
       </div>
-      <InstallPicker installs={installs} value={install} onChange={onInstall} />
+      <InstallPicker
+        installs={installs}
+        value={install}
+        onChange={onInstall}
+        label="Install to switch voice"
+      />
       {themes.map((t) => (
         <button
           type="button"

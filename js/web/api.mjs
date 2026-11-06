@@ -318,7 +318,7 @@ export function apiFleet(state, { now = Date.now() } = {}) {
 }
 
 /**
- * What the Server tab says about the process answering it — built FIELD BY FIELD, never from the
+ * What Settings' Server panel says about the process answering it — built FIELD BY FIELD, never from the
  * daemon record, which holds the write token: a GET is readable by anything that passes the Host
  * check, and the token is the only guard on a POST. `started` is the process's own start (the
  * server is the process), in epoch seconds. `autostart` is whether the hand-written login
@@ -361,10 +361,10 @@ function kitCredits(m, rules) {
 }
 
 /**
- * EVERY INSTALL'S KITS — the Kits tab. Its own route, like `apiFleet`: it re-reads each carrier
+ * EVERY INSTALL'S KITS — the Kits page. Its own route, like `apiFleet`: it re-reads each carrier
  * and the kit manifests, which the sidebar's `/api/installs` refetch must not pay for.
  *
- * `kits` per row is `installProfile(...).kits`, the reader `rebuild-all` uses, so the tab shows
+ * `kits` per row is `installProfile(...).kits`, the reader `rebuild-all` uses, so the page shows
  * what a rebuild would keep. A malformed manifest answers 200 with `error` and EMPTY lists, never
  * rows without kits (which would read as "no kit on") and never a 500. `editable:false` carries
  * the two refusals `apiInstallCmd` makes, so the page can say why before the click.

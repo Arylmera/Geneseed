@@ -152,7 +152,7 @@ test('setupBuildArgs spells --shared-tier on last, and only when on', () => {
 
 test('status shows the switch in an install row only when it is on', () => {
   const base = {
-    version_verdict: 'up to date', theme: 'neutral', accent: 'x', emit: 'claude', agents: 1,
+    version_verdict: 'in sync', theme: 'neutral', accent: 'x', emit: 'claude', agents: 1,
     skills: 1, laws: 1, memory_dir: null, facts: 0, installed_fp: 'a', source_fp: 'a',
   };
   const row = { host: 'claude', scope: 'project', root: 'r', state: 'ok', theme: 'neutral',

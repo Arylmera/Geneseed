@@ -1421,8 +1421,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   opacity: .03; mix-blend-mode: overlay;
 }
 
-/* ---- Settings: the status line under each Appearance control ---- */
-
 /* ============================================================================
    PER-FLAVOUR LAYOUT TWEAKS — beyond palette/radius, each direction reshapes
    shared dashboard primitives so they feel distinctly different even on
@@ -1562,7 +1560,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 20px; flex-wrap: wrap; margin-bottom: 18px;
 }
-.b-greet h1.b-h { font-size: 31px; letter-spacing: -.025em; margin: 4px 0 0; }
 /* The fleet verdict badge under the headline (VerdictBadge.jsx). */
 .b-greet .badge { margin-top: 8px; }
 .b-hero-retry { align-self: flex-start; }
@@ -3418,11 +3415,7 @@ html { scrollbar-gutter: stable; }
 /* V5b-A overview and lenses */
 /* V5b-A PARENT ROWS for web/src/styles.css — new selectors only, declarations copied. */
 
-/* 1. Right after `h2.h { ... }` (line ~245). :where() keeps it at h2.h's specificity, so the
-      later `.fl-* h2` flavour rules still win letter-spacing exactly as they beat `h1.h`. */
-:where(.jr-head) h2.h { font-size: 27px; letter-spacing: -.02em; margin: 10px 0 4px; }
-
-/* 2. Beside `.b-greet h1.b-h` (line ~1563); the h1 rule is dead once this lands. */
+/* 2. The greeting's headline, beside `.b-greet`. */
 .b-greet h2.b-h { font-size: 31px; letter-spacing: -.025em; margin: 4px 0 0; }
 
 /* 3. Beside `.c-h1` (line ~1718): (0,2,1) so `.fl-cultivar h2` / `.fl-operator h2` (0,1,1)
