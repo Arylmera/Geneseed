@@ -153,14 +153,7 @@ function ProfileOf({ install, tag, onChanged }) {
         <>
           {/* The seeded stub reads like a profile; say first that nobody has written it. */}
           {data?.seeded ? (
-            <EmptyState
-              title="This is still the template"
-              action={
-                <button type="button" className="btn ghost" onClick={() => editor.open(text)}>
-                  Edit it here
-                </button>
-              }
-            >
+            <EmptyState title="This is still the template">
               Ask the agent to run the <code className="mono">profile</code> skill — it interviews
               you and drafts this file with your consent.
             </EmptyState>

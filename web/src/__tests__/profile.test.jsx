@@ -107,7 +107,7 @@ describe('Profile', () => {
     ])
   })
 
-  it('a seeded profile says it is still the template, and "Edit it here" opens the editor', async () => {
+  it('a seeded profile says it is still the template, and the Edit switch opens the editor', async () => {
     api.profile.mockImplementation(() =>
       Promise.resolve({ ...FILLED, seeded: true, text: '# Your profile\n\nStub.' }),
     )
@@ -115,8 +115,8 @@ describe('Profile', () => {
     expect(await screen.findByText('This is still the template')).toBeTruthy()
     // The rendered stub stays under the panel.
     expect(screen.getByRole('heading', { name: 'Your profile' })).toBeTruthy()
-    const button = screen.getByRole('button', { name: 'Edit it here' })
-    expect(button.className).toBe('btn ghost')
+    expect(screen.queryByRole('button', { name: 'Edit it here' })).toBeNull()
+    const button = screen.getByRole('button', { name: 'Edit' })
     fireEvent.click(button)
     expect(screen.getByLabelText('Profile markdown').value).toBe('# Your profile\n\nStub.')
     expect(screen.queryByText('This is still the template')).toBeNull()
@@ -131,7 +131,7 @@ describe('Profile', () => {
         : new Promise(() => {}),
     )
     render(<Profile />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit it here' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
     fireEvent.change(screen.getByLabelText('Profile markdown'), {
       target: { value: '# Mine\n\nWritten.' },
     })
