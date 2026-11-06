@@ -53,8 +53,8 @@ test('an unknown or half (host, path) pair is refused with 404', async () => {
       { host: 'nope', path: clPair.path }, { host: 'claude' }, { path: clPair.path },
       { host: '', path: '' }]) {
       assert.equal((await get('/api/setup', p)).status, 404, `GET ${JSON.stringify(p)} was answered`);
-      // A per-install section; skills, agents, memory and notebook are machine-wide and ignore it.
-      assert.equal((await get('/api/catalog/wiki', p)).status, 404, `catalog ${JSON.stringify(p)}`);
+      // The one per-install section; the Library's kinds are machine-wide and ignore it.
+      assert.equal((await get('/api/catalog/laws', p)).status, 404, `catalog ${JSON.stringify(p)}`);
     }
     const res = await post('/api/profile', { host: 'claude', path: '/no/such/root',
       fingerprint: '', text: 'x' });

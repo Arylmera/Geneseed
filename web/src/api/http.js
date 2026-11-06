@@ -23,10 +23,21 @@ async function fail(r) {
   return err
 }
 
+// Longer than the slowest answer a read can give: `/api/doctor` waits on the warm-up run, which the
+// server stops at 180 s. Past this the daemon is wedged, and a page must fail, not stay pending.
+export const GET_TIMEOUT_MS = 200_000
+
 export async function get(path) {
-  const r = await fetch(path)
-  if (!r.ok) throw await fail(r)
-  return r.json()
+  try {
+    const r = await fetch(path, { signal: AbortSignal.timeout(GET_TIMEOUT_MS) })
+    if (!r.ok) throw await fail(r)
+    return await r.json()
+  } catch (e) {
+    if (e?.name === 'TimeoutError') {
+      throw new Error('the local server did not answer in time', { cause: e })
+    }
+    throw e
+  }
 }
 
 export async function post(path, body = {}) {

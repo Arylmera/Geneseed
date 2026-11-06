@@ -35,7 +35,7 @@ import { isFile, writeTextAtomic } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
-  configItems, deployed, dget, memoryDir, memoryItems, notebookItems, tierOf, wikiItems,
+  configItems, deployed, dget, fleetCounts, isFurniture, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
@@ -163,14 +163,14 @@ const driftCounts = (files) => ({
 
 /**
  * How many memory facts a store holds: the `.md` files of `store` (`memoryDir`, where
- * `memoryItems` reads them), minus its index and README (the console's furniture), any case.
+ * `memoryItems` reads them), minus its furniture.
  * No folder is no facts (0); a folder that cannot be listed is null, so a row says "not read"
  * rather than "no facts".
  */
 export function memoryFactCount(store) {
   try {
     return readdirSync(store)
-      .filter((f) => /\.md$/i.test(f) && !/^(memory|readme)\.md$/i.test(f)).length;
+      .filter((f) => /\.md$/i.test(f) && !isFurniture(f, 'memory')).length;
   } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
 }
 
@@ -407,9 +407,37 @@ export function apiKits() {
   return { kits, installs };
 }
 
-/** The dashboard aggregate. */
-export function apiOverview(state) {
-  const inv = state.inventory;
+/**
+ * Every count the console prints, over `fleet`: `fleetCounts`, plus the rail's Loops badge. That one
+ * is templates only (a brick is a part, the template is what a person runs), from the catalogue
+ * `/api/loops` reads, and the union across installs, where its page lists the picked install's.
+ */
+export function machineCounts(state, fleet) {
+  const templates = (v) => [...loadCatalog({ projectRoot: v.state.root }).templates.keys()];
+  return { ...fleetCounts(state, fleet),
+    loops: new Set(fleet.flatMap((v) => orSkip(v, () => templates(v)))).size };
+}
+
+// How long `machineCounts` may serve a read: the overview is asked every 1.5 s while the doctor
+// warms. A mutation drops it (`refreshOwn`); this bounds what a session writes behind the console.
+const COUNTS_MS = 5_000;
+
+/** `machineCounts` over `fleet()`, memoised on the daemon's state `base`. */
+export function memoCounts(base, fleet, now = Date.now()) {
+  const hit = base._counts;
+  if (hit && now - hit.at < COUNTS_MS) return hit.counts;
+  const counts = machineCounts(base, fleet());
+  base._counts = { at: now, counts };
+  return counts;
+}
+
+/**
+ * The dashboard aggregate. One install's facts, but its `counts` are the machine's (`memoCounts`):
+ * every install, deduped, the same answer whichever install asks. They default to `state` alone.
+ * A pinned view runs no doctor: its one reader wants its `install`, and a cold run blocks the request
+ * for seconds. It serves the verdict it holds, or null.
+ */
+export function apiOverview(state, counts = machineCounts(state, [{ install: null, state }])) {
   let diff = null;
   if (deployed(state)) {
     const { files } = diffCollect({
@@ -462,37 +490,8 @@ export function apiOverview(state) {
     // `serve` installs the comparison; a state built without a server has none and is false.
     daemon_stale: Boolean(state.daemonStale?.()),
     server: serverFacts(),
-    counts: {
-      agents: inv.agents.length,
-      skills: inv.skills.length,
-      // ⚠ `laws` STAYS THE INVARIANT COUNT. The rail badge reads it, `docCounts` mirrors it as
-      // `{N_LAWS}`, and the doctor's frozen `proseMirrorProblems` compares README and
-      // SHIPPED.md prose against the same number. Widening it to "the whole constitution"
-      // would silently move all four at once.
-      laws: inv.laws.length,
-      ontology: (inv.ontology ?? []).length,
-      // The tier's own summary, kept out of the section counts because it is not a section:
-      // `active`/`total` is the fraction the dashboard shows, `rules` counts only the packs
-      // this install built in — what it is bound by, not what its bundle carries.
-      doctrines: {
-        active: (inv.doctrines ?? []).filter((p) => p.active).length,
-        total: (inv.doctrines ?? []).length,
-        // Counted RULE BY RULE, not pack by pack: with the per-rule axis an active pack can
-        // carry an inactive rule, so `p.rules.length` over active packs over-counts by
-        // exactly what the user switched off — the one number on the dashboard that claims
-        // to say how many rules bind this install.
-        rules: (inv.doctrines ?? [])
-          .reduce((n, p) => n + p.rules.filter((r) => r.active !== false).length, 0),
-      },
-      memory: memoryItems(state).length,
-      notebook: notebookItems(state).length,
-      wiki: wikiItems(state).length,
-      config: configItems(state).length,
-      // The rail's Loops badge: templates only, from the same catalogue `/api/loops` reads —
-      // a brick is a part, the template is what a person runs.
-      loops: loadCatalog({ projectRoot: state.root }).templates.size,
-    },
-    doctor: state.doctor,
+    counts,
+    doctor: state.pinned ? state._doctor : state.doctor,
     diff,
     build_time: buildTime,
     build_epoch: buildEpoch,

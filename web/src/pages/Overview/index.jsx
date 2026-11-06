@@ -9,6 +9,7 @@ import StaleBanner from '../../components/StaleBanner.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
 import Ledger from './Ledger.jsx'
 import { docsHostOf } from '../../hooks/useHarness.js'
+import { installTag } from '../../lib/hosts.js'
 import { LAYOUTS } from '../../hooks/useLayout.js'
 import { readSeen, TRACK_GROUP } from '../Docs/Track.jsx'
 
@@ -43,11 +44,14 @@ export function NewHere({ harness }) {
           {pages.length} short pages: what a harness is, what was installed, what changes in your
           day, and what is guaranteed.
         </p>
-        <div className="newhere-dots" aria-label={`${done} of ${pages.length} read`}>
-          {pages.map((p) => (
-            <i key={p.id} className={seen.includes(p.id) ? 'f' : ''} />
-          ))}
-        </div>
+        {/* A meter with nothing on it is noise: it appears with the first page read. */}
+        {done ? (
+          <div className="newhere-dots" aria-label={`${done} of ${pages.length} read`}>
+            {pages.map((p) => (
+              <i key={p.id} className={seen.includes(p.id) ? 'f' : ''} />
+            ))}
+          </div>
+        ) : null}
       </div>
       <a className="btn ghost" href={`#/docs/${encodeURIComponent(pages[next].id)}`}>
         {done ? `Continue · step ${next + 1}` : 'Start'}
@@ -158,12 +162,14 @@ export default function Overview({
           no behind set to narrow it to. */}
       <PageHeader
         title="Overview"
-        // A lens reads ONE install (the default's overview): the line names it first.
+        // A lens's health facts are ONE install's (the default's overview), and the line names it
+        // first. Its counts cover every install, and the line says that too.
         sub={[
-          overview.install && `${overview.install.host} · ${overview.install.scope}`,
+          overview.install && installTag(overview.install),
           overview.theme && `${overview.theme} voice`,
           overview.footprint && `${overview.footprint} footprint`,
           overview.target,
+          'counts cover every install',
         ]
           .filter(Boolean)
           .join(' · ')}

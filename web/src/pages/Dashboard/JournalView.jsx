@@ -1,7 +1,7 @@
 import React from 'react'
 import { go } from '../../lib/router.js'
 import { SECTIONS } from '../../lib/sections.js'
-import { relTime, rulesInForce } from '../../lib/format.js'
+import { relTime, ruleCount } from '../../lib/format.js'
 import ConstitutionMap from './ConstitutionMap.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
@@ -31,12 +31,8 @@ function today() {
 function GrowthRings({ counts }) {
   const rows = [
     { label: SECTIONS.skills.label, n: counts.skills ?? 0, hash: '#/skills' },
-    // "Rules in force", NOT "Constitution" — the rail badges the Constitution with
-    // `counts.laws`, which is the INVARIANT count and frozen that way by contract. Both
-    // numbers are right and they are not the same quantity, so labelling this row with the
-    // rail's word would put "Constitution 9" and "Constitution 32" on one screen. The map's
-    // hub below says "N rules in force" for the same figure; this matches its words.
-    { label: 'Rules in force', n: rulesInForce(counts), hash: '#/laws' },
+    // The rail's Constitution figure, under the same word as the map's hub below.
+    { label: 'Rules', n: ruleCount(counts), hash: '#/laws' },
     { label: SECTIONS.agents.label, n: counts.agents ?? 0, hash: '#/agents' },
     { label: SECTIONS.memory.label, n: counts.memory ?? 0, hash: '#/section/memory' },
     { label: SECTIONS.notebook.label, n: counts.notebook ?? 0, hash: '#/section/notebook' },

@@ -107,16 +107,23 @@ export function docRows(part) {
 // so every cross-link, search hit and bookmark lands where it always did; a part is opened
 // through its first page.
 export default function Docs({ page, overview, onAction }) {
-  const [harness, setHarness] = useHarness(docsHostOf(overview?.emit))
-  const { data: menu, error } = useAsync(() => api.docs(harness), [harness])
+  const [chosen, setHarness] = useHarness(docsHostOf(overview?.emit))
+  // Every host's pages: the switch is shown only where it changes something, so a filter it set
+  // elsewhere would hide a page with no way back to it.
+  const { data: menu, error } = useAsync(() => api.docs('all'), [])
   const pageId = page || defaultPageId(menu)
+  const place = placeOf(menu, pageId)
+  // A page for one host reads as that host, whatever was chosen on another page.
+  const hosts = place.page?.hosts
+  const harness = !hosts?.length || hosts.includes(chosen) ? chosen : hosts[0]
+  const offered = HARNESSES.filter((h) => !hosts || hosts.includes(h.id))
   const {
     data: pageData,
     error: pageError,
     loading: pageLoading,
   } = useAsync(
-    () => (pageId ? api.docsPage(pageId, harness) : Promise.resolve(null)),
-    [pageId, harness],
+    () => (pageId && (menu || error) ? api.docsPage(pageId, harness) : Promise.resolve(null)),
+    [pageId, harness, Boolean(menu || error)],
   )
   // Fetched once per harness for the margin's term cards; a missing glossary just means
   // no cards, never an error on the page being read.
@@ -126,10 +133,9 @@ export default function Docs({ page, overview, onAction }) {
     'docs:glossary',
   )
 
-  // Switching harness (or a deep link) can land on a page the active harness
-  // hides — the server still renders it, but the menu wouldn't list it. Send
-  // such a page back to the default so the list and the pane stay in sync. Replace, not `go`:
-  // a pushed entry is a Back trap — Back lands on the hidden page, which redirects again.
+  // A deep link can name a page the menu does not list. Send it back to the default so the list
+  // and the pane stay in sync. Replace, not `go`: a pushed entry is a Back trap — Back lands on
+  // the unlisted page, which redirects again.
   useEffect(() => {
     if (!menu || !pageId) return
     const visible = menu.groups.some((g) => g.pages.some((p) => p.id === pageId))
@@ -149,7 +155,6 @@ export default function Docs({ page, overview, onAction }) {
     }
   }, [pageId])
 
-  const place = placeOf(menu, pageId)
   const part = place.part || menu?.groups?.[0] || null
   const onTrack = part?.id === TRACK_GROUP
 
@@ -187,19 +192,22 @@ export default function Docs({ page, overview, onAction }) {
             <span className="dim">How it works, and how to use it</span>
           </div>
           {/* Host selector — filters the menu and per-page config to the chosen host (one
-            button per host in lib/hosts.js). Persists across reloads. */}
-          <Seg aria-label="Harness">
-            {HARNESSES.map((h) => (
-              <button
-                key={h.id}
-                className={harness === h.id ? 'on' : ''}
-                onClick={() => setHarness(h.id)}
-                aria-pressed={harness === h.id}
-              >
-                {h.label}
-              </button>
-            ))}
-          </Seg>
+            button per host in lib/hosts.js). Persists across reloads. Shown only on a page the
+            host changes (`varies`, js/web/docs.mjs): elsewhere it would switch nothing. */}
+          {place.page?.varies && offered.length > 1 ? (
+            <Seg aria-label="Harness">
+              {offered.map((h) => (
+                <button
+                  key={h.id}
+                  className={harness === h.id ? 'on' : ''}
+                  onClick={() => setHarness(h.id)}
+                  aria-pressed={harness === h.id}
+                >
+                  {h.label}
+                </button>
+              ))}
+            </Seg>
+          ) : null}
           <nav className="kind-list" aria-label="Parts">
             {(menu?.groups || []).map((g) => (
               <React.Fragment key={g.id}>

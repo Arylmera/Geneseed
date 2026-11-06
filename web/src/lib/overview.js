@@ -3,6 +3,7 @@
 // table of inputs -> rows can pin them (__tests__/overview.test.js), and so the component
 // is only layout.
 import { driftTotal, relTime } from './format.js'
+import { hostInfo, installTag } from './hosts.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
 import { GATE_SWITCH, gateAddress, parseRuleTitle } from './constitution.js'
 
@@ -217,7 +218,7 @@ export const needsRebuild = (i) =>
 
 export const approxTokens = (chars) => `≈${(chars / 4 / 1000).toFixed(1)}k`
 
-const installLabel = (i) => `${i.host} · ${i.scope}`
+const installLabel = installTag
 
 // At this share of its budget the session-start figure turns amber and Needs you says so.
 const SESSION_START_NEAR = 0.85
@@ -285,7 +286,7 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
         tone: 'warn',
         title: `${installLabel(i)} is behind its source`,
         detail: stale ? `${built} · ${plural(stale, 'file')} behind` : built,
-        where: i.host,
+        where: hostInfo(i.host).label,
         verb: 'Rebuild',
         act: 'rebuild',
         installs: [rebuildTarget(i)],

@@ -13,7 +13,7 @@ describe('InstallPicker', () => {
     const pick = screen.getByRole('combobox', { name: 'Write to:' })
     expect([pick.value, [...pick.options].map((o) => o.textContent)]).toEqual([
       'r',
-      ['opencode · global', 'repo · bob'],
+      ['OpenCode · global', 'repo · BOB (IBM)'],
     ])
   })
 

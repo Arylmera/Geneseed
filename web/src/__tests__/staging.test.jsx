@@ -91,8 +91,8 @@ const mountShell = async (page) => {
   return { confirm, onAction, update }
 }
 const installsPage = (onAction, rev) => <InstallKits onAction={onAction} dataRev={rev} />
-const GLOBAL = 'claude · global'
-const PROJECT = 'claude · project'
+const GLOBAL = 'Claude Code · global'
+const PROJECT = 'b · Claude Code'
 const panel = (who) => within(screen.getByRole('region', { name: who }))
 const hint = (who) => panel(who).getByRole('status').textContent
 const sw = (kitName, who) => screen.getByRole('switch', { name: `${kitName} for ${who}` })

@@ -963,7 +963,7 @@ describe('Constitution page — the Ownership row and its gate', () => {
     await waitFor(() => expect(ownRow(container)).toBeTruthy())
     const entry = () => document.querySelectorAll('.gate-row')[1]
     expect(entry().querySelector('.gate-name').textContent).toBe('Ownership gate')
-    expect(entry().querySelector('.off').textContent).toBe('off · opencode global')
+    expect(entry().querySelector('.off').textContent).toBe('off · OpenCode · global')
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     expect(gateLine(container)).toBeNull()
@@ -1173,7 +1173,7 @@ describe('Constitution page — the Gate asks card', () => {
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
     expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
     // The switch is one install's, inside a card of every install's asks: the badge names it.
-    expect(second.querySelector('.off').textContent).toBe('off · opencode global')
+    expect(second.querySelector('.off').textContent).toBe('off · OpenCode · global')
     expect(bar(second).querySelector('.tone-warn')).toBeNull()
     expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
     // Each bar is named by its gate, so a reader can tell them apart; the count is against the
@@ -1372,7 +1372,7 @@ describe('Constitution page — the ladder layout', () => {
     )
     await settled(container)
     expect(container.querySelector('.page-head .eyebrow').textContent).toBe(
-      'imperial · lean footprint · opencode · global',
+      'imperial · lean footprint · OpenCode · global',
     )
   })
 })

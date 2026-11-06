@@ -26,7 +26,14 @@ Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.
 - **`status` and `rebuild-all` warn about a legacy wiki name.** A `wiki.jsonc` or `wiki.json` still in place is named, with what it renames to.
 - **`migrate --dry-run` lists orphans.** It names the root `AGENT.md` and the folder of a retired or merged skill that no manifest owns, and says that such a folder may be yours: if it is not, move it by hand. Nothing moves it.
 - **The 24 remaining `experimental` entries are `approved`.** The status stays valid for a new entity.
+- **The console's motion has one token scale.** `--dur-*` and `--ease-*` in `styles.css` now set every duration and curve, in CSS and in anime.js. A duration moved to the nearest step. Curves were unified too: `ease` became `ease-out`, a near-twin of `--ease-swing` merged into it, and Spotlight's anime.js curve became `outExpo`. Each JS animation keeps its `settle()`.
 - **You can choose the default install.** On the Installs page, *Make default* on any active install sets the install that the console's pickers start on and that a request naming no install reads. The `install` and `theme` lines of `geneseed status` follow it. The choice is machine-wide, in `default-install.json` in the shared tier. If that install is removed or disabled, the console goes back to the fixed host order.
+
+### Changed
+- **Every console count covers every install, deduped, and equals what its page lists.** `/api/overview` `counts` now reads the same lists the pages show, so the rail, the Library, the Constitution and each Overview lens print one figure. Wiki and setup files join the fleet lists. The Constitution counts its rules, on or off, and no longer the Ethos sections. The Installs badge is one figure: what is installed. The Installs tabs lose their one-install badges, and an Overview row loses its memory-fact count.
+- **`MEMORY.md`, `NOTEBOOK.md` and a folder's README leave the Memory and Notebook lists.** They are never counted. They stay readable by name.
+- **Install names use the host's label everywhere.** A tag now reads `BOB (IBM) · global` or `my-repo · Claude Code`. A KPI card titles its scope *Highest install*, and the Docs host switch shows only on a page that differs by host.
+- **The Hosts table fits beside its panel at 1440 px.** Path moves under the name, and Voice and Footprint leave the row: the side panel has them.
 
 ### Removed
 - **The console's rule limit.** The 15-rule and 1,500-token budget, its meter on the Personal page and the "getting heavy" warning are gone: the console reports the token total and sets no ceiling. The `rule` skill now weighs that total too, not a rule count.
@@ -38,6 +45,10 @@ Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.
 - **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.
 
 ### Fixed
+- **The console tells a pending read from a failed or empty one.** The Overview, Library and Activity show `Loading` until a first read lands, and no count before its data. The Constitution no longer shows "always", "Instruction" or an extra *Gated* row before the picked install is read, and says so when that read fails.
+- **The Overview's Sync cell draws a bar only for stale or edited files.** Otherwise it states one result: *No edits*, or *3 linked by you*. The New here meter appears after the first page read.
+- **Console copy says what is true.** Kits no longer mention a topbar selector. Activity reads *1 session*. Doctor states that it builds this install's theme. The garden's hint works on touch, and its *Sakura* button is *Pink blossom*. An empty Activity names no host.
+- **The console's Memory page names the shared store.** On a tier install it shows the emit's note and the tier's paths.
 - **`geneseed memory rm --purge` no longer deletes a file of a repo that is no install.** A `memory/` beside the cwd, or under `./Harness`, came ahead of the shared tier. The order is now `--memory`, `$GENESEED_MEMORY`, `$GENESEED_HARNESS`, a project install in the cwd or `./Harness`, the shared tier, then the OpenCode config store. A `memory/` counts as a project store only when an emit made it: a known `.geneseed-emit`, `.geneseed-version` beside it and `MEMORY.md` in it. Any other is reached through `--memory`. `status`, `memory list` and a hand-run `learn` follow, and `memory rm` prints the store it acted on. The OpenCode learn plugin keeps its own order, which still ends in a bare `./memory`; it only writes there.
 - **The console no longer takes a 4.x machine folder for the shared tier.** `~/.config/geneseed` holds `installs.json`, `bricks/` and `loops/` on 4.x, and `default-install.json` can create it. The console now tests what the tier holds, its `memory/` or a session file, so until the fold it edits the host files that the hooks read.
 - **`geneseed status` and `rebuild-all` survive an account with no home directory.** With no `$XDG_CONFIG_HOME`, the scan of the tier crashed the verb.

@@ -132,7 +132,7 @@ describe('Installs / Hosts', () => {
     const make = await screen.findByRole('button', { name: 'Make Claude Code the default install' })
     const cells = [...document.querySelectorAll('.hosts-tbl tbody tr')].map((tr) => [
       tr.querySelector('.row-pick').textContent,
-      tr.querySelectorAll('td')[4].textContent.trim(),
+      tr.querySelectorAll('td')[1].textContent.trim(),
     ])
     expect(cells).toEqual([
       ['OpenCode', 'Active Default'],
@@ -212,7 +212,7 @@ describe('Installs / Hosts', () => {
     expect(names(await table('Global installs'))).toEqual(['OpenCode'])
     const proj = await table('Per-project installs')
     expect(names(proj)).toEqual(['Terra'])
-    expect(proj.querySelector('tbody td:nth-child(2)').textContent).toBe('Claude Code')
+    expect(proj.querySelector('tbody .path-cell').textContent).toBe('Claude Code')
   })
 
   it('says so when no repo has its own harness', async () => {
@@ -925,7 +925,7 @@ describe('Installs / Hosts', () => {
     })
     // The cell's words, without the bar (its legend repeats the counts for sighted readers).
     const syncOf = (name) => {
-      const td = screen.getByRole('button', { name }).closest('tr').querySelector('td:nth-child(6)')
+      const td = screen.getByRole('button', { name }).closest('tr').querySelector('td:nth-child(3)')
       const copy = td.cloneNode(true)
       copy.querySelector('.stackbar-box')?.remove()
       return copy.textContent

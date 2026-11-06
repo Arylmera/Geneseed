@@ -260,11 +260,20 @@ export default function App() {
         section={route.section}
         selected={route.item}
         dataRev={dataRev}
+        onCountsChanged={reload}
       />
     ),
     kits: () => <Kits item={route.item} onAction={runAction} dataRev={dataRev} />,
     loops: () => <Loops tab={route.tab} item={route.item} dataRev={dataRev} />,
-    personal: () => <Personal tab={route.tab} item={route.item} setup={setup} dataRev={dataRev} />,
+    personal: () => (
+      <Personal
+        tab={route.tab}
+        item={route.item}
+        setup={setup}
+        dataRev={dataRev}
+        onCountsChanged={reload}
+      />
+    ),
     installs: () => (
       <Installs
         tab={route.tab}

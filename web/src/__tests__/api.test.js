@@ -14,6 +14,15 @@ beforeEach(() => {
 })
 
 describe('api surface', () => {
+  // A wedged daemon must end a read, on the same branch as any failure.
+  it('gives every read a timeout, and turns it into a failure', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.reject(Object.assign(new Error('x'), { name: 'TimeoutError' })),
+    )
+    await expect(api.overview()).rejects.toThrow('the local server did not answer in time')
+    expect(global.fetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+  })
+
   it('exposes every endpoint the UI uses', () => {
     const names = [
       'overview',
@@ -52,16 +61,16 @@ describe('http get/post', () => {
   it('returns parsed JSON on success', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ theme: 'neutral' })))
     await expect(api.overview()).resolves.toEqual({ theme: 'neutral' })
-    expect(global.fetch).toHaveBeenCalledWith('/api/overview')
+    expect(global.fetch.mock.calls[0][0]).toBe('/api/overview')
   })
 
   // The cached read and the explicit re-run are two URLs: only `?fresh=1` makes the daemon re-run.
   it('asks for a fresh doctor run only when told to', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({})))
     await api.doctor()
-    expect(global.fetch).toHaveBeenLastCalledWith('/api/doctor')
+    expect(global.fetch.mock.lastCall[0]).toBe('/api/doctor')
     await api.doctor(true)
-    expect(global.fetch).toHaveBeenLastCalledWith('/api/doctor?fresh=1')
+    expect(global.fetch.mock.lastCall[0]).toBe('/api/doctor?fresh=1')
   })
 
   it('throws the server-provided error message on failure', async () => {
@@ -103,13 +112,13 @@ describe('the install a call names', () => {
   it('rides a read as ?host=&path=, after any query already there', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({})))
     await api.overview(win)
-    expect(global.fetch).toHaveBeenLastCalledWith(`/api/overview?${winQ}`)
+    expect(global.fetch.mock.lastCall[0]).toBe(`/api/overview?${winQ}`)
     await api.doctor(true, win)
-    expect(global.fetch).toHaveBeenLastCalledWith(`/api/doctor?fresh=1&${winQ}`)
+    expect(global.fetch.mock.lastCall[0]).toBe(`/api/doctor?fresh=1&${winQ}`)
     await api.docs('claude', win)
-    expect(global.fetch).toHaveBeenLastCalledWith(`/api/docs?harness=claude&${winQ}`)
+    expect(global.fetch.mock.lastCall[0]).toBe(`/api/docs?harness=claude&${winQ}`)
     await api.overview()
-    expect(global.fetch).toHaveBeenLastCalledWith('/api/overview')
+    expect(global.fetch.mock.lastCall[0]).toBe('/api/overview')
   })
 
   it('rides a write in the body', async () => {

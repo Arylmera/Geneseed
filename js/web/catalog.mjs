@@ -28,6 +28,7 @@ import { comparePaths, normcase, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { readJsonc } from '../hosts/settings.mjs';
 import { SRC, loadKits, makeCfg, ruleCanon, ruleSummaries } from '../build/source.mjs';
+import { RESERVED_STEMS } from '../hosts/memory-files.mjs';
 import { loadTheme } from '../build/render.mjs';
 
 /** A requested catalog section or item that does not exist. */
@@ -205,15 +206,25 @@ function globMd(dir) {
 export const stemOf = (name) => name.slice(0, name.length - path.extname(name).length);
 
 /**
+ * THE ONE ANSWER TO "IS THIS FILE AN ENTRY": a folder's index (`MEMORY.md`, `NOTEBOOK.md`) and its
+ * README, any case, are its furniture. They stay readable by name (`apiItem`; Personal reads the
+ * map) but no list holds them, so a list and its count cannot disagree.
+ */
+export const isFurniture = (file, index) => {
+  const stem = stemOf(file).toLowerCase();
+  return stem === index || (stem !== 'memory' && RESERVED_STEMS.has(stem));
+};
+
+/**
  * Each fact row carries the `topic` the store files it under, so the console can group the list.
  * Read through `readFacts`, the store's own reader, so the slug rule (`topic:`, else `type:`,
- * else `misc`) has one home. MEMORY and README are not facts there, so their rows have none.
+ * else `misc`) has one home.
  */
 export function memoryItems(state) {
   const d = memoryDir(state);
   if (!isDir(d)) return [];
   const facts = readFacts(d);
-  return globMd(d).map((n) => {
+  return globMd(d).filter((n) => !isFurniture(n, 'memory')).map((n) => {
     const p = path.join(d, n);
     const [fm] = frontmatter(readMaybe(p) ?? '');
     const stem = stemOf(n);
@@ -230,7 +241,7 @@ export function memoryItems(state) {
 export function notebookItems(state) {
   const d = notebookDir(state);
   if (!isDir(d)) return [];
-  return globMd(d).map((n) => ({
+  return globMd(d).filter((n) => !isFurniture(n, 'notebook')).map((n) => ({
     name: stemOf(n), title: stemOf(n), desc: '', source: resolvePath(path.join(d, n)),
   }));
 }
@@ -503,10 +514,7 @@ export const SECTIONS = ['agents', 'skills', 'laws', 'memory', 'notebook', 'wiki
  * address the canon renders now (`ruleSummaries`, `js/build/source.mjs`). `desc` stays empty:
  * the search index reads `desc`, and the summary is display copy, not a description to match.
  */
-function constitutionItems(inv) {
-  const said = ruleSummaries(SRC);
-  const summary = new Map(ruleCanon(SRC).rules.map((r) => [
-    r.kind === 'LAW' ? r.label : `${r.pack}.${r.n}`, said.get(r.id) ?? '']));
+function constitutionItems(inv, summary = ruleSummaryMap()) {
   return [
     ...(inv.ontology ?? []).map((e) => ({ name: `ont:${e.id}`, title: e.title, desc: '',
       tier: 'ontology' })),
@@ -530,6 +538,13 @@ function constitutionItems(inv) {
       packActive: p.active,
     }))),
   ];
+}
+
+/** Each rule's address to its summary line: read off `src/`, so a loop over installs reads it once. */
+function ruleSummaryMap() {
+  const said = ruleSummaries(SRC);
+  return new Map(ruleCanon(SRC).rules.map((r) => [
+    r.kind === 'LAW' ? r.label : `${r.pack}.${r.n}`, said.get(r.id) ?? '']));
 }
 
 /** `Map<'skills/x' | 'agents/y', kit>` from the shipped manifests; a broken manifest means no badges, not a 500. */
@@ -556,12 +571,24 @@ function tierNouns(theme) {
 }
 
 /**
- * The sections listed across every install (`fleet`), not off one: skills, agents, and the
- * personal memory and notebook (each entry tagged with the installs that hold it, so a forget or
- * a promote names its own). The other sections are one install's own wiki manifest, config or
- * constitution.
+ * The sections listed across every install (`fleet`), not off one: skills, agents, the personal
+ * memory and notebook, the wiki and the setup files (each entry tagged with the installs that
+ * hold it, so a forget or a promote names its own). Only the constitution stays one install's:
+ * its page is a set of switches on the picked install.
  */
-export const FLEET_SECTIONS = ['agents', 'skills', 'memory', 'notebook'];
+export const FLEET_SECTIONS = ['agents', 'skills', 'memory', 'notebook', 'wiki', 'config'];
+
+/**
+ * What one install of a fleet reads, or nothing when it cannot be read: a retired theme or a broken
+ * manifest on one install must not take every list and count down with it. A lone state (`install`
+ * null) has no others to protect, so its failure stays the request's.
+ */
+export function orSkip(v, read) {
+  try { return read(); } catch (e) {
+    if (v.install === null) throw e;
+    return [];
+  }
+}
 
 /**
  * A per-install item list (`read(state)`) over `fleet`, one row per name with the `installs` that
@@ -570,8 +597,9 @@ export const FLEET_SECTIONS = ['agents', 'skills', 'memory', 'notebook'];
  */
 function fleetItems(fleet, read) {
   const rows = new Map();
-  for (const { install, state } of fleet) {
-    for (const it of read(state)) {
+  for (const v of fleet) {
+    const { install, state } = v;
+    for (const it of orSkip(v, () => read(state))) {
       let r = rows.get(it.name);
       if (r === undefined) rows.set(it.name, r = { ...it, installs: [] });
       if (install !== null) r.installs.push(install);
@@ -590,8 +618,9 @@ function fleetItems(fleet, read) {
  */
 function fleetEntries(fleet, section) {
   const rows = new Map();
-  for (const { install, state } of fleet) {
-    for (const e of state.inventory[section]) {
+  for (const v of fleet) {
+    const { install, state } = v;
+    for (const e of orSkip(v, () => state.inventory[section])) {
       let r = rows.get(e.name);
       if (r === undefined) rows.set(e.name, r = { e, installs: [] });
       if (install !== null) r.installs.push(install);
@@ -610,14 +639,29 @@ function memoryFleet(fleet) {
   return fleet.filter((v) => !merged.includes(v.install));
 }
 
+/** `fleet` with one view per wiki manifest: the machine's shared one is walked once, not per host. */
+function wikiFleet(fleet) {
+  const seen = new Set();
+  return fleet.filter((v) => {
+    const f = String(wikiFile(v.state));
+    return !seen.has(f) && seen.add(f);
+  });
+}
+
+/** The fleet keys of the installs whose wiki manifest is the shared tier's. */
+const sharedWiki = (fleet) => fleet.filter((v) => {
+  const tier = v.install !== null ? tierOf(v.state) : null;
+  const file = tier && wikiFile(v.state);
+  return Boolean(file) && path.dirname(file) === tier.root;
+}).map((v) => v.install);
+
 /**
  * `fleet` defaults to `state` alone, which answers as one install did before the console
  * listed the fleet; the `/api/catalog/` route passes every active install for `FLEET_SECTIONS`.
  */
-export function apiCatalog(state, section, fleet = [{ install: null, state }]) {
+export function apiCatalog(state, section, fleet = [{ install: null, state }], owner = kitOwners()) {
   if (!SECTIONS.includes(section)) throw new NotFound(section);
   let items;
-  const owner = kitOwners();
   if (section === 'agents') {
     items = fleetEntries(fleet, 'agents').map(({ e, installs }) => ({ name: e.name, title: e.name, desc: e.desc,
       source: e.source ?? null, status: e.status ?? 'unknown', kit: owner.get(`agent:${e.name}`) ?? null, installs }));
@@ -632,11 +676,43 @@ export function apiCatalog(state, section, fleet = [{ install: null, state }]) {
   } else if (section === 'notebook') {
     items = fleetItems(fleet, notebookItems);
   } else if (section === 'wiki') {
-    return { section, items: wikiItems(state), shared: tierOf(state) !== null };
+    return { section, items: fleetItems(wikiFleet(fleet), wikiItems), sharedInstalls: sharedWiki(fleet) };
   } else {
-    items = configItems(state);
+    items = fleetItems(fleet, configItems);
   }
   return { section, items };
+}
+
+/**
+ * THE ONE DEFINITION OF EVERY COUNT THE CONSOLE PRINTS: each is the size of the list its page
+ * shows, over every install, deduped by name. Read off `apiCatalog` itself, so a list and its count
+ * cannot part; `tests/unit/web_counts.test.mjs` holds them together. `laws` stays the invariants.
+ * The constitution counts what its page lists, on or off: a rule one install excludes is still a
+ * row there, with its switch. `doctrines.active` is the packs any install built in. An install that
+ * cannot be read is skipped (`orSkip`), so the rest still count.
+ */
+export function fleetCounts(state, fleet = [{ install: null, state }]) {
+  const owner = kitOwners();
+  const listed = (sec) => apiCatalog(state, sec, fleet, owner).items.length;
+  const summary = ruleSummaryMap();
+  const items = fleet.flatMap((v) => orSkip(v, () => constitutionItems(v.state.inventory, summary)));
+  const named = (tier) => new Set(items.filter((it) => it.tier === tier).map((it) => it.name)).size;
+  const packs = fleet.flatMap((v) => orSkip(v, () => v.state.inventory.doctrines ?? []));
+  return {
+    agents: listed('agents'),
+    skills: listed('skills'),
+    laws: named('invariant'),
+    ontology: named('ontology'),
+    doctrines: {
+      active: new Set(packs.filter((p) => p.active).map((p) => p.pack)).size,
+      total: new Set(packs.map((p) => p.pack)).size,
+      rules: named('doctrine'),
+    },
+    memory: listed('memory'),
+    notebook: listed('notebook'),
+    wiki: listed('wiki'),
+    config: listed('config'),
+  };
 }
 
 /**
@@ -696,18 +772,34 @@ export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
       install: from.install, installs: has.map((v) => v.install).filter((k) => k !== null),
       shared: type === 'memory' && tierOf(from.state) !== null };
   }
-  if (type === 'wiki') return apiWikiItem(state, name);
+  if (type === 'wiki') {
+    // As a skill: the named install's copy, else the first manifest that has the page.
+    const named = fleet.find((v) => v.state === state) ?? (state.pinned ? { state } : null);
+    for (const v of named ? [named] : wikiFleet(fleet)) {
+      try { return apiWikiItem(v.state, name); } catch (e) { if (!(e instanceof NotFound)) throw e; }
+    }
+    throw new NotFound(name);
+  }
   if (type === 'config') {
     // THE ALLOWLIST, NOT `flatName`: a flat name still reached every top-level file of the
     // install — `.geneseed-web.json` (this daemon's own CSRF token) and `settings.json` among
     // them — over a GET that carries no token. Only the manifests the catalogue lists can open.
     if (!Object.hasOwn(CONFIG_META, name)) throw new NotFound(name);
-    const p = WIKI_NAMES.includes(name) ? wikiFile(state) : path.join(state.target, name);
-    if (!p || !isFile(p) || path.basename(p) !== name) throw new NotFound(name);
+    const fileOf = (st) => (WIKI_NAMES.includes(name) ? wikiFile(st) : path.join(st.target, name));
+    const holds = (st) => {
+      const f = fileOf(st);
+      return Boolean(f) && isFile(f) && path.basename(f) === name;
+    };
+    // As a skill: the named install's copy, else the first holder in fleet order.
+    const has = fleet.filter((v) => holds(v.state));
+    const from = fleet.find((v) => v.state === state) ?? (state.pinned ? { install: null, state } : has[0]);
+    if (!from || !holds(from.state)) throw new NotFound(name);
+    const p = fileOf(from.state);
     const raw = readMaybe(p) ?? '';
     const [title, desc] = CONFIG_META[name];
     return { type, name, title, desc, manifest: configManifest(name, p),
-      body: `\`\`\`json\n${raw}\n\`\`\``, links: [], source: resolvePath(p) };
+      body: `\`\`\`json\n${raw}\n\`\`\``, links: [], source: resolvePath(p),
+      install: from.install, installs: has.map((v) => v.install).filter((k) => k !== null) };
   }
   throw new NotFound(type);
 }

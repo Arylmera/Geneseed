@@ -1,7 +1,7 @@
 // Small, pure presentation helpers shared across pages. Kept dependency-free and
 // side-effect-free so they are trivially testable and reusable — the JS analogue
 // of the little helpers in _harness_core (run, _within, strip_code).
-import { SECTION_ORDER } from './sections.js'
+import { LIBRARY_ORDER, SECTION_ORDER } from './sections.js'
 
 const SECS_PER_MIN = 60
 const SECS_PER_HOUR = 3600
@@ -84,12 +84,15 @@ export const editCount = (diff) => (diff?.edited ?? 0) + (diff?.added ?? 0)
 // Every drifted file = edited + added + missing; 0 when there is no diff.
 export const driftTotal = (diff) => editCount(diff) + (diff?.missing ?? 0)
 
-// How many RULES bind this install: every invariant, plus the doctrine rules the
-// packs it built in actually switched on.
+// THE ONE RULE COUNT: every rule the Constitution page lists, the rail's badge, the "All" tab and
+// the Journal's figure alike. `overview.counts` covers every install, deduped, so a rule one
+// install switched off still counts: the page lists it, with its switch.
 //
 // THE ONTOLOGY IS DELIBERATELY NOT IN IT. That tier is sections of framing the agent
 // thinks with — telos, evidence, decisions, conduct — not clauses it can break, and
 // `counts.ontology` counts sections, not rules. Adding it would inflate one number by
-// a quantity of a different kind, on the one figure that claims to say what the agent
-// is bound by. The map lists the sections beside the total instead.
-export const rulesInForce = (counts) => (counts?.laws ?? 0) + (counts?.doctrines?.rules ?? 0)
+// a quantity of a different kind. The map lists the sections beside the total instead.
+export const ruleCount = (counts) => (counts?.laws ?? 0) + (counts?.doctrines?.rules ?? 0)
+
+// Every entry the Library lists: the sum of its kinds, each already deduped across installs.
+export const libraryCount = (counts) => LIBRARY_ORDER.reduce((n, k) => n + (counts?.[k] ?? 0), 0)

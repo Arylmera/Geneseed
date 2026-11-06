@@ -28,7 +28,7 @@ import GateAsks from './Laws/GateAsks.jsx'
 import PackPanel from './Laws/PackPanel.jsx'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
-import { pairOf } from '../lib/hosts.js'
+import { installTag, pairOf } from '../lib/hosts.js'
 
 // THE FILENAME AND THE ROUTE STAY `laws`: a rename buys nothing and costs a redirect. Only what
 // a reader sees says "Constitution".
@@ -98,15 +98,6 @@ function doctrinePacks(items) {
 export default function Laws(props) {
   const active = useInstalls(props.dataRev)
   const [install, pick] = useInstallPick('laws', active)
-  const { data: own } = useAsync(
-    () => (install ? api.overview(pairOf(install)).catch(() => null) : Promise.resolve(null)),
-    [install?.id ?? '', props.dataRev],
-  )
-  const mine =
-    install && own?.install?.host === install.host && own.install.path === install.path ? own : null
-  // No install to pick (none active, or the list unreadable): the default's overview, as before.
-  const overview = install ? mine : props.overview
-  const ready = active !== null && (!install || mine !== null)
   return (
     <>
       <InstallPicker
@@ -116,18 +107,52 @@ export default function Laws(props) {
         onChange={pick}
         label="Constitution of:"
       />
+      {/* Keyed on the pick, so its read starts as pending and no other pick's answer shows. */}
+      <LawsFor key={install?.id ?? 'none'} {...props} install={install} listed={active !== null} />
+    </>
+  )
+}
+
+const isInstall = (o, i) => o?.install?.host === i.host && o.install.path === i.path
+
+// The overview the page reads for its pick: App's when it is that install, else one named read.
+// The gates and the Enforced-by column read it, and a missing switch reads as armed, so until it
+// lands the page shows no verdict. `loading` ends the wait: a finished read that names another
+// install, or none, is unread and says so, and never hangs.
+function LawsFor({ install, listed, ...props }) {
+  const held = install && isInstall(props.overview, install) ? props.overview : null
+  const {
+    data: own,
+    error: ownError,
+    loading,
+  } = useAsync(
+    () => Promise.resolve().then(() => (install && !held ? api.overview(pairOf(install)) : null)),
+    [Boolean(held), props.dataRev],
+  )
+  const mine = held || (install && isInstall(own, install) ? own : null)
+  // No install to pick (none active, or the list unreadable): the default's overview, as before.
+  const overview = install ? mine : props.overview
+  const unread = Boolean(install && !mine && !loading)
+  return (
+    <>
+      {unread ? (
+        <ErrorState
+          error={`Could not read this install's gates${ownError ? `: ${ownError}` : '.'}`}
+        />
+      ) : null}
       <LawsOf
-        key={install?.id ?? 'none'}
         {...props}
         overview={overview}
         pair={pairOf(install)}
-        onAction={ready ? props.onAction : undefined}
+        onAction={listed && (!install || mine !== null) ? props.onAction : undefined}
+        pending={!listed || Boolean(install && !mine && loading)}
+        gatesUnread={unread}
       />
     </>
   )
 }
 
-function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
+function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, gatesUnread }) {
   const confirm = useConfirm()
   // The default install's catalog shares the Overview's cached read; another install's is its own.
   const { data, error } = useAsync(
@@ -194,7 +219,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const { deployedRules, isOn, toggleRule, packOn, packState, allRules } = sel
 
   if (error) return <ErrorState error={error} />
-  if (!data) return <Loading />
+  if (!data || pending) return <Loading />
 
   // The tier nouns in the install's theme voice (`nouns` on /api/catalog/laws). An older daemon
   // sends none, and the page keeps the names it always printed.
@@ -203,6 +228,12 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     law: data.nouns?.law || 'Dictate',
     laws: data.nouns?.laws || 'Dictates',
     doctrines: data.nouns?.doctrines || 'Doctrines',
+  }
+
+  // A gate's state is what the unread overview would have said: never guess it armed.
+  const enfOf = (addr, gates) => {
+    const enf = enforcedBy(addr, gates)
+    return gatesUnread && GATE_SWITCH[addr] && enf === 'Hook gate' ? 'Unknown' : enf
   }
 
   const ontology = items
@@ -216,7 +247,10 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
       status: 'Always',
       statusTone: 'ok',
       // With no install there is no gate to read, so only the text is known to bind.
-      enf: it.name === OWNERSHIP_ROW && install ? enforcedBy('ownership', install) : 'Instruction',
+      enf:
+        it.name === OWNERSHIP_ROW && (install || gatesUnread)
+          ? enfOf('ownership', install)
+          : 'Instruction',
       c: 'var(--text-3)',
       src: 'ontology/universal.md',
     }))
@@ -240,7 +274,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
         retired: t.retired,
         status: t.retired ? 'Retired' : 'Active',
         statusTone: t.retired ? '' : 'ok',
-        enf: t.retired ? 'None' : enforcedBy(it.name, overview?.install),
+        enf: t.retired ? 'None' : enfOf(it.name, overview?.install),
         cat,
         c: LAW_CATS[cat].c,
         off: t.retired,
@@ -271,7 +305,13 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     const on = isOn(r.addr)
     const live = deployedRules.includes(r.addr)
     const status = on === live ? (on ? 'Active' : 'Off') : on ? 'Staged on' : 'Staged off'
-    return { ...r, off: !on, status, statusTone: on ? 'ok' : on === live ? '' : 'warn' }
+    return {
+      ...r,
+      enf: gatesUnread && GATE_SWITCH[r.addr] && r.enf === 'Hook gate' ? 'Unknown' : r.enf,
+      off: !on,
+      status,
+      statusTone: on ? 'ok' : on === live ? '' : 'warn',
+    }
   }
 
   // What the install excludes today: a rule that is off inside a pack it still builds in.
@@ -287,7 +327,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     const { key, label } = GATE_SWITCH[addr]
     const name = label.toLowerCase()
     const next = !armed(addr)
-    const where = `${install.host} · ${install.scope}`
+    const where = installTag(install)
     // The rebuild carries the DEPLOYED doctrine rules (`install` is spread), so staged switches
     // are neither applied nor lost by it: say so, or a yes reads as applying them too.
     const stays = sel.dirty
@@ -358,6 +398,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
   const activeDoc = deployedRules.length
   // Each tier's pill warns for the switches in its own band.
   const gatePill = (rows) => {
+    if (gatesUnread) return ['gates unread', 'warn']
     const off = rows.filter((r) => GATE_SWITCH[r.addr] && !armed(r.addr)).length
     return off ? [`${off} gate${off === 1 ? '' : 's'} off`, 'warn'] : ['always', 'ok']
   }
@@ -373,7 +414,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     },
     invariants: {
       name: nouns.laws,
-      n: activeInv,
+      n: laws.length,
       fill: laws.length ? activeInv / laws.length : 0,
       sub:
         laws.length > activeInv
@@ -383,14 +424,15 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     },
     doctrines: {
       name: nouns.doctrines,
-      n: activeDoc,
+      n: allRules.length,
       fill: allRules.length ? activeDoc / allRules.length : 0,
-      sub: `${activeDoc} rules · ${packs.filter((p) => p.active).length} of ${packs.length} packs`,
+      sub: `${packs.length} packs`,
       pill: excludedDoc > 0 ? [`${excludedDoc} excluded`, 'warn'] : ['all on', 'ok'],
     },
     yours: {
       name: 'Your rules',
-      n: stats?.rules ?? 0,
+      // Blank until the read lands: "0" would say the file holds no rule.
+      n: stats?.rules ?? '',
       // No ceiling to measure against: the bar only says whether the tier holds a rule.
       fill: stats?.rules ? 1 : 0,
       sub: stats
@@ -427,7 +469,8 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
     ...(showDoc ? packs.flatMap((p) => p.rules) : []),
   ]
   const VIEWS = [
-    ['gated', 'Gated', tierRows.filter((r) => inView(r, 'gated')).length],
+    // No figure with the gates unread: what enforces a rule is the unknown here.
+    ['gated', 'Gated', gatesUnread ? null : tierRows.filter((r) => inView(r, 'gated')).length],
     ['changed', 'Changed', tierRows.filter((r) => inView(r, 'changed')).length],
   ]
   // A pack holding the open rule never reads folded: a deep link or a gate jump must find its
@@ -491,8 +534,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
             ? [
                 overview?.theme,
                 install.footprint && `${install.footprint} footprint`,
-                install.host,
-                install.scope,
+                installTag(install),
               ]
                 .filter(Boolean)
                 .join(' · ')
@@ -570,9 +612,10 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair }) {
                   key={k}
                   className={view === k ? 'on' : ''}
                   aria-pressed={view === k}
+                  disabled={n === null}
                   onClick={() => setView(view === k ? 'all' : k)}
                 >
-                  {l} <span className="mono">{n}</span>
+                  {l} {n === null ? null : <span className="mono">{n}</span>}
                 </button>
               ))}
             </Seg>

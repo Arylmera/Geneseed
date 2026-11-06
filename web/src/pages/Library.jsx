@@ -14,6 +14,7 @@ import { GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRow
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import Loading from '../components/Loading.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import Seg from '../components/Seg.jsx'
 import Stat from '../components/Stat.jsx'
@@ -24,13 +25,6 @@ const AgentGlyph = lazy(() => import('../components/AgentGlyph.jsx'))
 
 // The usage ledger's kind for a Library section; only these two are counted.
 const USE_KIND = { skills: 'skill', agents: 'agent' }
-// The kinds listed across every install (the server's FLEET_SECTIONS): the rail counts them off
-// those lists, not off `overview.counts`, which counts one install. A folder's index and README
-// are furniture, not entries, and are not counted.
-const FLEET_KINDS = ['skills', 'agents', 'memory', 'notebook']
-const FURNITURE = new Set(['MEMORY', 'NOTEBOOK', 'README'])
-const entryCount = (list) =>
-  list.filter((it) => !FURNITURE.has(String(it.name).toUpperCase())).length
 const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
@@ -172,8 +166,8 @@ export function splitSkills(items) {
 }
 
 // Memory facts topic by topic, each row headed by its `topic` (the catalog reads it off the
-// fact's frontmatter, as the store files it), in the map's sorted topic order. The store's own
-// MEMORY and README rows carry none: they lead, unheaded. Exported for the test that pins it.
+// fact's frontmatter, as the store files it), in the map's sorted topic order. A row with none
+// leads, unheaded. Exported for the test that pins it.
 export function groupMemory(items) {
   const facts = items.filter((it) => it.topic).map((it) => ({ ...it, group: it.topic }))
   // Array.prototype.sort is stable: within a topic the catalog's name order holds.
@@ -198,6 +192,7 @@ export default function Library({
   lock,
   base,
   onRulesChanged,
+  onCountsChanged,
 }) {
   const confirm = useConfirm()
   const [sec, setSec] = useState(() => resolveSec(section, lock))
@@ -249,18 +244,6 @@ export default function Library({
   // How often each skill or agent fires, fleet-wide (GET /api/usage `names`). A soft read: a
   // failed, missing or older-shaped answer hides the usage UI and never breaks the page.
   const useKind = lock ? null : USE_KIND[sec] || null
-  // Skills, agents, memory and notebook are listed across every install; each row names the
-  // installs that have it.
-  const fleetOn = useKind !== null || sec === 'memory' || sec === 'notebook'
-  // The rail counts skills and agents off the same fleet-wide lists the page shows, not off
-  // `overview.counts`, which counts one install.
-  const { data: fleetLists } = useAsync(
-    () =>
-      lock
-        ? Promise.resolve(null)
-        : Promise.all(FLEET_KINDS.map((k) => api.catalog(k))).catch(() => null),
-    [lock, dataRev],
-  )
   const want = useKind !== null
   const { data: usage } = useAsync(
     () =>
@@ -299,10 +282,13 @@ export default function Library({
   // (so the list doesn't flash empty). Only treat it as current when its `section`
   // matches, or the first row would be the PREVIOUS kind's first item, fetched under the
   // new kind's type: a guaranteed NotFound flash on every switch.
-  const items = catalog?.section === sec ? catalog?.items || [] : []
-  // Every global install reads one memory store: the server lists it under the first of them
-  // (`sharedInstalls`), which reads as "shared", and the others hold no slot of their own.
-  const [sharedKey, ...merged] = (catalog?.section === sec && catalog.sharedInstalls) || []
+  const listed = catalog?.section === sec
+  const items = listed ? catalog?.items || [] : []
+  // A first read still out: no count, no list, no reader, and never an empty state.
+  const pending = !listed && !catErr
+  // Every global install reads one memory store and one wiki manifest: the server lists each under
+  // the first of them (`sharedInstalls`), which reads as "shared", and the others hold no slot.
+  const [sharedKey, ...merged] = (listed && catalog.sharedInstalls) || []
   const tagOf = (k) => (k === sharedKey ? 'shared' : installLabel(k))
   // The entry on display: the URL-selected one, or the first row when the kind was opened
   // without a selection, so the highlighted row and the reader always agree.
@@ -339,23 +325,11 @@ export default function Library({
     ? { name: activeName, title: item?.title || activeName, desc: item?.desc || '' }
     : null
   const activeItem = fromCatalog || synthetic
-  const counts = overview?.counts || {}
-  const railCount = (k) => {
-    if (!FLEET_KINDS.includes(k)) return counts[k] ?? ''
-    if (k === sec && catalog?.section === sec) return entryCount(items)
-    const list = fleetLists?.find((c) => c?.section === k)?.items
-    return list ? entryCount(list) : ''
-  }
-  // The install a one-install kind (wiki, config) is read from: the default, named once two
-  // installs are active.
+  // The kind on screen counts its own list, so a forget moves the badge with the row.
+  const railCount = (k) => (k === sec && listed ? items.length : (overview?.counts?.[k] ?? ''))
   const activeInsts = useInstalls(dataRev)
-  // The wiki manifest of a global install is the shared one, which is no install's.
-  const oneOf =
-    activeInsts?.length > 1 && !(catalog?.section === sec && catalog.shared)
-      ? `of ${installTag(activeInsts[0])}`
-      : null
   // Install badges only say something when the list spans two installs or more.
-  const fleetWide = fleetOn && new Set(items.flatMap((it) => it.installs || [])).size > 1
+  const fleetWide = new Set(items.flatMap((it) => it.installs || [])).size > 1
   // Every install's dot slot, in the install list's order, so a colour holds across the kinds.
   const fleetKeys = [
     ...new Set([
@@ -435,6 +409,7 @@ export default function Library({
     }
     go(base || '#/section/memory')
     reloadCatalog()
+    onCountsChanged?.()
   }
 
   // Promote a memory fact into a standing trial rule in user-rules.md, the web twin of the
@@ -460,6 +435,7 @@ export default function Library({
       // reloads its read; a Personal mounted next must not be served the cached old copy.
       dropRules()
       onRulesChanged?.()
+      onCountsChanged?.()
       go('#/personal/rules')
     } catch (e) {
       setActionErr(`Could not promote: ${e.message}`)
@@ -470,7 +446,7 @@ export default function Library({
   const head = item?.body ? bodyHead(item.body, item.desc || activeItem?.desc) : null
   const named = item?.title || activeItem?.title || activeItem?.name
   const title = named === activeItem?.name && head?.title ? head.title : named
-  const empty = catalog?.section === sec && items.length === 0
+  const empty = listed && items.length === 0
   const status = item?.status || activeItem?.status
   const skillCat = sec === 'skills' ? SKILL_CATS[fromCatalog?.klass] : null
   const label = SECTIONS[sec].label
@@ -513,7 +489,7 @@ export default function Library({
                   </a>
                   {/* The skill classes, nested under Skills while it is the selected kind:
                     they cut this kind's list only, so they sit with it, not across the card. */}
-                  {k === sec && isSkills && (
+                  {k === sec && isSkills && listed && (
                     <RailCats
                       label="Skill types"
                       total={items.length}
@@ -530,7 +506,7 @@ export default function Library({
 
         <LibList
           label={label}
-          count={ql ? `${matches.length} of ${pool.length}` : pool.length}
+          count={!listed ? '' : ql ? `${matches.length} of ${pool.length}` : pool.length}
           q={q}
           onQ={setQ}
           matched={matches.length}
@@ -539,9 +515,6 @@ export default function Library({
             <>
               {useOn && usage.since ? (
                 <span className="mono dim lib-since">calls since {usage.since}</span>
-              ) : !FLEET_KINDS.includes(sec) && sec !== 'laws' && oneOf ? (
-                // A one-install kind (wiki, config): whose files these are, once two are active.
-                <span className="mono dim lib-since">{oneOf}</span>
               ) : null}
               <span className="lib-legend mono">
                 {fleetWide
@@ -557,7 +530,7 @@ export default function Library({
             </>
           }
           tools={
-            shows.length > 1 ? (
+            listed && shows.length > 1 ? (
               <Seg aria-label="Show">
                 {shows.map(([k, l, n, t]) => (
                   <button
@@ -575,6 +548,7 @@ export default function Library({
             ) : null
           }
         >
+          {pending ? <Loading /> : null}
           <GroupedRows
             rows={shown}
             activeName={activeItem?.name}
@@ -736,7 +710,7 @@ export default function Library({
                 item ? (
                   <ManifestDoc manifest={item.manifest} body={item.body} name={activeItem.name} />
                 ) : (
-                  <p className="sub">Loading…</p>
+                  <Loading />
                 )
               ) : item?.body ? (
                 <div className="lib-doc detail-doc">
@@ -745,7 +719,7 @@ export default function Library({
                   </Suspense>
                 </div>
               ) : item === null && activeName ? (
-                <p className="sub">Loading…</p>
+                <Loading />
               ) : (
                 <EmptyDoc section={sec} source={libSource(sec, activeItem.name)} />
               )}
@@ -757,12 +731,9 @@ export default function Library({
                 </div>
               ) : null}
             </>
-          ) : empty ? null : (
-            // An empty kind has nothing to pick; the list pane already says how to fill it.
-            <EmptyState title="Select an entry">
-              Pick something from the list to read it.
-            </EmptyState>
-          )}
+          ) : pending ? (
+            <Loading />
+          ) : null}
         </article>
       </div>
     </>

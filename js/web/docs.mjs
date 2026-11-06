@@ -18,8 +18,8 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { DOCS, DOC_FOLDERS, ROOT, THEMES, resolveRuleIds } from '../build/source.mjs';
-import { STRUCTURE, pathTokens, substitute } from '../build/render.mjs';
+import { DOCS, DOC_FOLDERS, ROOT, THEMES, makeCfg, resolveRuleIds } from '../build/source.mjs';
+import { STRUCTURE, effectiveTheme, pathTokens, substitute } from '../build/render.mjs';
 import { cliReference } from '../ui/cli.mjs';
 import { readJsonMaybe, readMaybe } from '../hosts/installs.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
@@ -30,6 +30,7 @@ import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { statusData } from '../inspect/status.mjs';
 import { originDisplay } from '../maintain/update.mjs';
 import { NotFound, deployed, resolveLinks } from './api.mjs';
+import { tierOf } from './catalog.mjs';
 
 /**
  * A docs page split into its frontmatter map and its body.
@@ -413,6 +414,16 @@ function splitLines(s) {
   return parts;
 }
 
+/**
+ * Whether the host changes what this page says: a page-level tag, or a host block in its text. The
+ * console shows its host switch only on these pages, since anywhere else it would switch nothing.
+ */
+const pageVaries = (p) => Boolean(p.harness)
+  || HARNESS_HINT_RE.test(p.source ? readDocSource(p.source) : p.body ?? '');
+
+/** `?harness=all`: the Docs page's own menu, every host's pages, each row naming its `hosts`. */
+const ALL_HOSTS = 'all';
+
 /** Pure; the registry is never mutated. */
 function visibleGroups(harnessName) {
   const groups = [];
@@ -469,17 +480,22 @@ function themeWords(theme) {
 }
 
 /**
- * A `src/` file as an install would render it: rule citations named, then the deployed theme's
+ * A `src/` file as this install would render it: rule citations named, then the deployed theme's
  * words (neutral underneath, for a key the theme lacks) and the fixed STRUCTURE substituted —
  * the build's own functions, so the page cannot drift from what lands on disk. Only string
  * words go in: `substitute` throws on any other value, and a theme's AGENT_COLORS is a dict.
+ * The tier's paths and note come from the same render a global emit runs: a page read on a
+ * machine with no tier, or from a project install, stays relative and carries no note.
  */
-function renderSource(text, theme) {
-  const words = Object.entries({ ...themeWords('neutral'), ...themeWords(theme) })
+function renderSource(text, state) {
+  const words = Object.entries({ ...themeWords('neutral'), ...themeWords(state.theme) })
     .filter(([, v]) => typeof v === 'string');
-  // A docs page describes no install, so it reads as a project's: relative, no tier note.
+  const root = tierOf(state)?.root;
+  const sharedRoot = root ? String(root).split(path.sep).join('/') : null;
   return substitute(resolveRuleIds(text), {
-    ...Object.fromEntries(words), ...STRUCTURE, ...pathTokens(STRUCTURE), SHARED_STORE_NOTE: '',
+    ...Object.fromEntries(words), ...STRUCTURE, ...pathTokens(STRUCTURE, sharedRoot),
+    SHARED_STORE_NOTE: sharedRoot
+      ? effectiveTheme(makeCfg(), 'neutral', { sharedRoot }).SHARED_STORE_NOTE : '',
   });
 }
 
@@ -543,11 +559,13 @@ function about(state) {
 }
 
 export function apiDocs(state, harnessName = null) {
-  const hn = normHarness(harnessName, state);
-  const groups = visibleGroups(hn).map((g) => ({
+  const all = harnessName === ALL_HOSTS;
+  const hn = normHarness(all ? null : harnessName, state);
+  const groups = (all ? docGroups() : visibleGroups(hn)).map((g) => ({
     id: g.id,
     label: g.label,
     pages: g.pages.map((p) => ({ id: p.id, title: p.title, kind: p.kind, section: p.section,
+      varies: pageVaries(p), hosts: HARNESSES.filter((h) => harnessShows(p.harness, h)),
       ...(typeof p.description === 'string' ? { description: p.description } : {}) })),
   }));
   return { groups, harness: hn };
@@ -577,7 +595,7 @@ export function apiDocsPage(state, pageId, harnessName = null) {
 const KIND_ROUTES = {
   // The body's own H1 goes: MarkdownPage prints the page title as the H1, and a page has one.
   markdown: (state, pageId, page, hn) => {
-    const text = renderSource(stripHarnessBlocks(readDocSource(page.source), hn), state.theme)
+    const text = renderSource(stripHarnessBlocks(readDocSource(page.source), hn), state)
       .replace(/^# [^\n]*(?:\r?\n)+/, '');
     const body = rewriteDocLinks(text, page.source, idsByRel());
     return { id: pageId, title: page.title, kind: 'markdown', body,

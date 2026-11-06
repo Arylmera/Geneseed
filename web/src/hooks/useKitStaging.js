@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useConfirm } from './useConfirm.jsx'
 import { sortedKey, useStaging } from './useStaging.jsx'
+import { installTag } from '../lib/hosts.js'
 
 // The kits payload's rows, shared by Installs / Kits and the Kits page: toggling a kit only
 // STAGES a set per install; apply() confirms, then rebuilds that install with exactly that
@@ -52,7 +53,7 @@ export function useKitStaging(data, onAction) {
   const apply = async (row) => {
     const kits = [...setOf(row)]
     const msg =
-      `Rebuild ${row.host} · ${row.scope} with kits: ${kits.join(', ') || 'none'}? ` +
+      `Rebuild ${installTag(row)} with kits: ${kits.join(', ') || 'none'}? ` +
       'Members of kits turned off are removed; files you edited are kept.'
     if (!(await confirm(msg, { confirmLabel: 'Rebuild' }))) return
     // runAction resolves to the job id, or undefined when the server refused it.

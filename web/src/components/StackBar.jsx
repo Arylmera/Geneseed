@@ -1,8 +1,8 @@
 import React, { useLayoutEffect, useRef } from 'react'
 import { animate, utils } from 'animejs'
-import { motionOK, settle } from '../lib/motion.js'
+import { DUR, EASE_OUT, motionOK, settle } from '../lib/motion.js'
 
-const SWEEP_MS = 500
+const SWEEP_MS = DUR[8]
 
 // A proportional bar of parts, `parts` = [{ key, label, n, tone }] with tone one of good,
 // warn, bad, accent, muted. The hand-rolled `.stackbar`s on the pages were aria-hidden and
@@ -26,7 +26,7 @@ export default function StackBar({ parts, total, label, legend = true }) {
     // Collapsed before paint (a layout effect), so the full bar never flashes first.
     utils.set(bar.current, { scaleX: 0 })
     return settle(
-      animate(bar.current, { scaleX: [0, 1], duration: SWEEP_MS, ease: 'outExpo' }),
+      animate(bar.current, { scaleX: [0, 1], duration: SWEEP_MS, ease: EASE_OUT }),
       SWEEP_MS,
     )
   }, [sig])

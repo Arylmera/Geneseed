@@ -209,7 +209,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       && !MACHINE_GETS.has(path)) ? installView(state, installParams(req.url)) : state;
     const route = STATE_ROUTES[path];
     if (route !== undefined) {
-      const answer = route(st, req.url);
+      const answer = route(st, req.url, state);
       // Only `/api/doctor`, during the warm-up. A rejection here is past the handler's own catch.
       if (answer instanceof Promise) {
         return answer.then((a) => sendJson(res, a, 200, ae)).catch((e) => {

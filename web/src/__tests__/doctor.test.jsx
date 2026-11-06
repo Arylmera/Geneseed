@@ -172,8 +172,8 @@ describe('Doctor', () => {
       render(<Doctor />)
       const pick = await screen.findByRole('combobox', { name: 'Doctor for:' })
       expect([...pick.options].map((o) => o.textContent)).toEqual([
-        'claude · global',
-        'opencode · global',
+        'Claude Code · global',
+        'OpenCode · global',
       ])
       await waitFor(() =>
         expect(api.doctor).toHaveBeenLastCalledWith(false, { host: 'claude', path: '/cl' }),

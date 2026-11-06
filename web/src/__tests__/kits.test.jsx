@@ -83,8 +83,8 @@ describe('Installs / Kits', () => {
     )
     expect(screen.getAllByRole('switch')).toHaveLength(4)
     expect(screen.getAllByRole('button', APPLY).map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Apply kits for claude · global',
-      'Apply kits for claude · project',
+      'Apply kits for Claude Code · global',
+      'Apply kits for p · Claude Code',
     ])
   })
 

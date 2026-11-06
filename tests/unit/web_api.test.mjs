@@ -135,8 +135,9 @@ test('the overview counts the tiers without moving the laws badge', () => {
   assert.deepEqual(o.counts.doctrines, { active: 5, total: 5, rules: 31 });
   const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft', 'rigor']) });
   assert.equal(narrowed.counts.laws, 9, 'a pack toggle moved the invariant count');
-  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 5, rules: 12 },
-    'the summary counts rules this install did not build in (craft 7 + rigor 5, rigor 5 being the former Law IX)');
+  // The two packs it built in, but all 31 rules: the Constitution page lists a rule that is off,
+  // with its switch, and the rail's count is what the page lists.
+  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 5, rules: 31 });
 });
 
 // ---------------------------------------------------------------------------------------------

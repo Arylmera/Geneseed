@@ -117,9 +117,6 @@ function InstallTable({
         <thead>
           <tr>
             <th scope="col">{project ? 'Project' : 'Host'}</th>
-            <th scope="col">{project ? 'Host' : 'Path'}</th>
-            <th scope="col">Voice</th>
-            <th scope="col">Footprint</th>
             <th scope="col">State</th>
             <th scope="col">Sync with source</th>
             <th scope="col">
@@ -149,16 +146,12 @@ function InstallTable({
                   >
                     {installName(inst)}
                   </button>
+                  {/* Under the name, not a column: the side panel holds the voice and footprint,
+                      and the row must fit beside it at 1440 px. */}
+                  <div className="mono path-cell" title={inst.path}>
+                    {project ? hostInfo(inst.host).label : inst.path}
+                  </div>
                 </td>
-                {project ? (
-                  <td>{hostInfo(inst.host).label}</td>
-                ) : (
-                  <td className="mono path-cell" title={inst.path}>
-                    {inst.path}
-                  </td>
-                )}
-                <td>{quiet ? '' : inst.theme || ''}</td>
-                <td>{quiet ? '' : inst.footprint || ''}</td>
                 <td>
                   <span className={`tag ${tone}`}>{stateLabel}</span>
                   {inst.default ? (
@@ -569,8 +562,7 @@ export default function Hosts({
       <div className="hosts-main">
         <div className="toolbar">
           <span className="dim">
-            {installs.filter((i) => i.state === 'active').length} active of {installs.length}{' '}
-            detected.
+            {installs.filter((i) => i.state !== 'absent').length} installed.
           </span>
           {onAction ? (
             <div className="row gap-8">

@@ -1,4 +1,5 @@
 import { GATE_SWITCH, gateAddress } from '../../lib/constitution.js'
+import { installTag } from '../../lib/hosts.js'
 import { Bar } from '../../components/StackBar.jsx'
 
 // How often each hook gate stopped to ask, from the gate ledger (`setup.gates`). The ledger
@@ -8,7 +9,7 @@ import { Bar } from '../../components/StackBar.jsx'
 // `disarmed(addr)` is true for a gate this install switched off (Laws.jsx, GATE_SWITCH only).
 // Its past asks stay in the ledger, but it asks nothing now: it sorts after every armed gate,
 // reads "off", and its bar drops the warning colour. The ledger counts every install's asks but the
-// switch is ONE install's (`install`, {host, scope}), so the badge names it: "off · claude global".
+// switch is ONE install's (`install`, {host, scope}), so the badge names it: "off · Claude Code · global".
 export default function GateAsks({
   gates,
   byAddr,
@@ -16,7 +17,7 @@ export default function GateAsks({
   disarmed = () => false,
   install = null,
 }) {
-  const offText = install ? `off · ${install.host} ${install.scope}` : 'off'
+  const offText = install ? `off · ${installTag(install)}` : 'off'
   const asks = Object.entries(gates?.asks || {})
     .map(([gate, n]) => [gate, n, disarmed(gateAddress(gate))])
     .sort((a, b) => a[2] - b[2] || b[1] - a[1])

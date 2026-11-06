@@ -193,7 +193,7 @@ describe('Profile across installs', () => {
   it('keeps an open draft across a dataRev refetch', async () => {
     const { rerender } = render(<Profile dataRev={1} />)
     await screen.findByRole('heading', { name: 'OpenCode me' })
-    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
     fireEvent.click(oc.querySelectorAll('button')[1])
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
     rerender(<Profile dataRev={2} />)
@@ -227,7 +227,7 @@ describe('Profile across installs', () => {
     await screen.findByRole('heading', { name: 'Repo me' })
     expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
       'Profile, shared',
-      'Profile, repo · bob',
+      'Profile, repo · BOB (IBM)',
     ])
   })
 
@@ -249,12 +249,15 @@ describe('Profile across installs', () => {
     expect(screen.getByRole('heading', { name: 'Claude me' })).toBeTruthy()
     // Each card is a region named after its install.
     expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
-      'Profile, claude · global',
-      'Profile, opencode · global',
+      'Profile, Claude Code · global',
+      'Profile, OpenCode · global',
     ])
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))
-    expect(groups).toEqual(['Profile mode, claude · global', 'Profile mode, opencode · global'])
-    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    expect(groups).toEqual([
+      'Profile mode, Claude Code · global',
+      'Profile mode, OpenCode · global',
+    ])
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
     fireEvent.click(oc.querySelectorAll('button')[1])
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'mine' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

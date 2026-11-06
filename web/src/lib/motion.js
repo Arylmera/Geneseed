@@ -1,6 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { animate, utils } from 'animejs'
 
+// The duration scale for anime.js, which cannot read a CSS variable: `DUR[n]` is `--dur-n` in
+// styles.css, the one writer; __tests__/motionTokens.test.js fails when the two part. `EASE_OUT`
+// is the anime.js name closest to `--ease-out`. A settle()'s +400 ms is a safety margin, not motion.
+export const DUR = [
+  20, 50, 100, 150, 200, 250, 300, 400, 500, 700, 1000, 1500, 2500, 3000, 4000, 6000, 8000, 24000,
+  40000,
+]
+export const EASE_OUT = 'outExpo'
+
 // The one gate every JS-driven animation passes. The global reduced-motion rule in
 // styles.css only reaches CSS animations and transitions — anime.js writes inline styles
 // frame by frame, which that rule cannot see — so each motion here asks this first.
@@ -30,7 +39,7 @@ export function settle(anim, ms) {
 // A number that travels to `value` instead of jumping: from 0 on the first render, from
 // the previous value on every change after it — so a refresh that moves a count shows
 // the move. Returns the in-flight (unrounded) number; the caller rounds or not.
-export function useCountUp(value, duration = 700) {
+export function useCountUp(value, duration = DUR[9]) {
   const target = typeof value === 'number' && Number.isFinite(value) ? value : null
   const animated = target !== null && motionOK()
   const [shown, setShown] = useState(0)
@@ -41,7 +50,7 @@ export function useCountUp(value, duration = 700) {
     const anim = animate(box, {
       n: target,
       duration,
-      ease: 'outExpo',
+      ease: EASE_OUT,
       onUpdate: () => {
         from.current = box.n
         setShown(box.n)
@@ -120,9 +129,9 @@ export function useGlide(activeSel) {
         flight.current = null
       }
       if (moveOnChange && prev && prev.el !== a && motionOK()) {
-        const anim = animate(mark, { ...to, duration: 280, ease: 'outExpo' })
+        const anim = animate(mark, { ...to, duration: DUR[6], ease: EASE_OUT })
         // the same rAF-less safety as settle(), minus the cleanup it would register
-        flight.current = { anim, t: setTimeout(() => anim.complete(), 680) }
+        flight.current = { anim, t: setTimeout(() => anim.complete(), DUR[6] + 400) }
       } else utils.set(mark, to)
     }
     place.current(true)
@@ -159,17 +168,17 @@ export function useFlip() {
       const was = before.get(r.dataset.flip)
       if (was === undefined)
         settle(
-          animate(r, { opacity: [0, 1], translateY: [-12, 0], duration: 340, ease: 'outExpo' }),
-          340,
+          animate(r, { opacity: [0, 1], translateY: [-12, 0], duration: DUR[6], ease: EASE_OUT }),
+          DUR[6],
         )
       else if (Math.abs(was - now.get(r.dataset.flip)) > 1)
         settle(
           animate(r, {
             translateY: [was - now.get(r.dataset.flip), 0],
-            duration: 340,
-            ease: 'outExpo',
+            duration: DUR[6],
+            ease: EASE_OUT,
           }),
-          340,
+          DUR[6],
         )
     }
   })

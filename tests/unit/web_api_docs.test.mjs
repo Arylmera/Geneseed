@@ -356,6 +356,21 @@ test('every plugin ships a reference page and its README/SHIPPED rows', () => {
 
 // Counts in concept prose are `{N_*}` placeholders resolved from the SAME inventory the rail
 // uses — never hardcoded numbers.
+// The Docs page shows every host's pages: a host filter it could not undo would strand a page.
+test('the whole menu lists every host\'s pages, each naming its hosts', () => {
+  const st = neutral();
+  const rows = (h) => apiDocs(st, h).groups.flatMap((g) => g.pages);
+  const whole = rows('all');
+  assert.ok(whole.length > rows('claude').length, 'the filter hides nothing, so this proves nothing');
+  // No one host sees all of these, so a filtered menu cannot pass.
+  for (const id of ['headless', 'machine-opencode', 'machine-claude', 'machine-bob']) {
+    assert.ok(whole.some((p) => p.id === id), `${id} is not in the whole menu`);
+  }
+  const oc = whole.find((p) => p.id === 'machine-opencode');
+  assert.deepEqual(oc.hosts, ['opencode']);
+  assert.equal(oc.varies, true);
+});
+
 test('concept counts are substituted live from the inventory', () => {
   const st = neutral();
   const inv = st.inventory;

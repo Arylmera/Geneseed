@@ -642,8 +642,10 @@ describe('Rules across installs', () => {
     )
     render(<Rules />)
     await screen.findByText('Claude only')
-    expect(screen.getByText('claude · global · 1 rule · ≈1,100 tokens every turn')).toBeTruthy()
-    expect(screen.getByText('opencode · global · 1 rule · ≈200 tokens every turn')).toBeTruthy()
+    expect(
+      screen.getByText('Claude Code · global · 1 rule · ≈1,100 tokens every turn'),
+    ).toBeTruthy()
+    expect(screen.getByText('OpenCode · global · 1 rule · ≈200 tokens every turn')).toBeTruthy()
     expect(screen.getByText('Each total counts its file’s header too.')).toBeTruthy()
   })
 
@@ -664,10 +666,10 @@ describe('Rules across installs', () => {
     await screen.findByText('Claude only')
     const heads = [...document.querySelectorAll('.rule-head')].map((h) => h.textContent)
     expect(heads[0]).toMatch(/shared/)
-    expect(heads[1]).toMatch(/repo · bob/)
+    expect(heads[1]).toMatch(/repo · BOB \(IBM\)/)
     fireEvent.click(screen.getByText('Add rule'))
     const picker = await screen.findByRole('combobox', { name: 'Write to:' })
-    expect([...picker.options].map((o) => o.textContent)).toEqual(['shared', 'repo · bob'])
+    expect([...picker.options].map((o) => o.textContent)).toEqual(['shared', 'repo · BOB (IBM)'])
   })
 
   // Two installs listed but one writable: no picker to hide behind, the form names its target.
@@ -681,7 +683,7 @@ describe('Rules across installs', () => {
     fireEvent.click(await screen.findByText('Add rule'))
     expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
     expect(document.querySelector('.rule-form .install-pick').textContent).toBe(
-      'Write to: claude · global',
+      'Write to: Claude Code · global',
     )
   })
 
@@ -692,7 +694,7 @@ describe('Rules across installs', () => {
     )
     render(<Rules />)
     await screen.findByText('Claude only')
-    expect(screen.getByText('Could not read user-rules.md of opencode · global.')).toBeTruthy()
+    expect(screen.getByText('Could not read user-rules.md of OpenCode · global.')).toBeTruthy()
   })
 
   it('lists both installs, each row tagged with its own', async () => {
@@ -703,7 +705,7 @@ describe('Rules across installs', () => {
       (h) => h.querySelector('.rule-chip').textContent,
     )
     // The default install's rules first, then the others in the server's order.
-    expect(tags).toEqual(['claude · global', 'opencode · global'])
+    expect(tags).toEqual(['Claude Code · global', 'OpenCode · global'])
   })
 
   it('retires a rule from the install it came from, with that file fingerprint', async () => {
@@ -713,7 +715,7 @@ describe('Rules across installs', () => {
       </ConfirmContext.Provider>,
     )
     fireEvent.click(await screen.findByText('No emoji in commits'))
-    fireEvent.click(screen.getByRole('button', { name: 'Retire R1 · opencode · global' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retire R1 · OpenCode · global' }))
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         { op: 'delete', id: 1, fingerprint: 'oc-fp' },

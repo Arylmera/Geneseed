@@ -42,7 +42,7 @@ const row = (over) => ({
   ...over,
 })
 const PROJECT = { id: 'claude:project:/p', scope: 'project', path: '/p' }
-const APPLY_PROJECT = { name: 'Apply kits for claude · project' }
+const APPLY_PROJECT = { name: 'Apply kits for p · Claude Code' }
 // The bar's accessible name starts with its visible text (WCAG 2.5.3, label in name).
 const BAR_APPLY = (who) => ({ name: `Apply and rebuild kits for ${who}` })
 
@@ -99,7 +99,7 @@ describe('Kits page', () => {
     )
     expect(spring.textContent).toContain('on in 1 of 2 installs')
     expect(spring.querySelector('[role="img"].kit-dots').getAttribute('aria-label')).toBe(
-      'claude · global: on, claude · project: off',
+      'Claude Code · global: on, p · Claude Code: off',
     )
     // No credits: no "Adapted from" line.
     expect(other.textContent).not.toContain('Adapted from')
@@ -123,16 +123,14 @@ describe('Kits page', () => {
     expect(screen.getAllByRole('switch')).toHaveLength(4)
     expect(screen.getByText('No staged changes')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Apply and rebuild kits' }).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for p · Claude Code' }))
     expect(screen.getByText('staged on')).toBeTruthy()
     expect(screen.getByText('+ spring-boot')).toBeTruthy()
     expect(screen.getByText('1 change on 1 install')).toBeTruthy()
     expect(screen.getAllByRole('article')[0].textContent).toContain('· 1 staged')
     const bar = screen.getByRole('region', { name: 'Staged changes' })
-    expect(bar.textContent).toContain('claude · project: turn on spring-boot')
-    await act(async () =>
-      fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · project'))),
-    )
+    expect(bar.textContent).toContain('p · Claude Code: turn on spring-boot')
+    await act(async () => fireEvent.click(screen.getByRole('button', BAR_APPLY('p · Claude Code'))))
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(confirm.mock.calls[0][0]).toContain('with kits: spring-boot?')
     expect(onAction).toHaveBeenCalledWith('install', {
@@ -144,12 +142,10 @@ describe('Kits page', () => {
 
   it('Discard drops the staged switch', async () => {
     await mount({ kits: [kit('spring-boot')], installs: [row(), row(PROJECT)] })
-    const sw = screen.getByRole('switch', { name: 'spring-boot for claude · project' })
+    const sw = screen.getByRole('switch', { name: 'spring-boot for p · Claude Code' })
     fireEvent.click(sw)
     expect(sw.checked).toBe(true)
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Discard staged kits for claude · project' }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Discard staged kits for p · Claude Code' }))
     expect(sw.checked).toBe(false)
     expect(screen.getByText('No staged changes')).toBeTruthy()
     expect(screen.queryByText('staged on')).toBeNull()
@@ -160,12 +156,14 @@ describe('Kits page', () => {
       kits: [kit('spring-boot')],
       installs: [row(), row(PROJECT)],
     })
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for p · Claude Code' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for Claude Code · global' }))
     expect(screen.getByText('2 changes on 2 installs')).toBeTruthy()
     const bar = screen.getByRole('region', { name: 'Staged changes' })
-    expect(bar.textContent).toContain('claude · global: turn on spring-boot — 1 more staged')
-    await act(async () => fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · global'))))
+    expect(bar.textContent).toContain('Claude Code · global: turn on spring-boot — 1 more staged')
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', BAR_APPLY('Claude Code · global'))),
+    )
     expect(onAction).toHaveBeenCalledWith('install', {
       host: 'claude',
       path: 'C:/c',
@@ -189,13 +187,15 @@ describe('Kits page', () => {
     await act(async () => {
       view = render(ui(null, null))
     })
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
-    await act(async () => fireEvent.click(screen.getByRole('button', BAR_APPLY('claude · global'))))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for Claude Code · global' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for p · Claude Code' }))
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', BAR_APPLY('Claude Code · global'))),
+    )
     await act(async () => view.rerender(ui('job-1', null)))
-    expect(screen.getByText(/claude · global: Rebuilding…/)).toBeTruthy()
+    expect(screen.getByText(/Claude Code · global: Rebuilding…/)).toBeTruthy()
     await act(async () => view.rerender(ui(null, { status: 'failed' })))
-    expect(screen.getByRole('button', BAR_APPLY('claude · project')).disabled).toBe(false)
+    expect(screen.getByRole('button', BAR_APPLY('p · Claude Code')).disabled).toBe(false)
     expect(screen.getByText('2 changes on 2 installs')).toBeTruthy()
   })
 
@@ -213,7 +213,7 @@ describe('Kits page', () => {
         </ConfirmContext.Provider>,
       )
     })
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for p · Claude Code' }))
     const btn = screen.getByRole('button', APPLY_PROJECT)
     expect(btn.disabled).toBe(true)
     expect(btn.title).toBe('A job is running')
@@ -232,8 +232,8 @@ describe('Kits page', () => {
         </ConfirmContext.Provider>,
       )
     })
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · global' }))
-    const btn = screen.getByRole('button', BAR_APPLY('claude · global'))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for Claude Code · global' }))
+    const btn = screen.getByRole('button', BAR_APPLY('Claude Code · global'))
     expect(btn.disabled).toBe(true)
     expect(btn.title).toBe('A job is running')
   })
@@ -267,7 +267,7 @@ describe('Kits page', () => {
       'spring-boot',
     )
     expect(screen.getByRole('button', APPLY_PROJECT).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for claude · project' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'spring-boot for p · Claude Code' }))
     expect(screen.getByText('turn on spring-boot')).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', APPLY_PROJECT)))
     expect(confirm.mock.calls[0][0]).toContain('with kits: spring-boot?')
@@ -317,15 +317,13 @@ describe('Kits page', () => {
     expect(off.getAttribute('title')).toBe('Installed when this kit is on')
   })
 
-  // The Library link follows the install the topbar views, but a kit that IS on for another
+  // A member the catalog does not list has no Library link, but a kit that IS on for another
   // install has its members installed there: the chip must not say "installed when on".
   it('a member of a kit on for another install is not called "installed when on"', async () => {
     await mount({ kits: [kit('a')], installs: [row({ kits: ['a'] })] }, 'a', true, ['jpa'])
     const off = screen.getByText('spring-reviewer')
     expect(off.getAttribute('href')).toBeNull()
-    expect(off.getAttribute('title')).toBe(
-      'Not in the install the topbar views; on in 1 of 1 install',
-    )
+    expect(off.getAttribute('title')).toBe('On in 1 of 1 install')
   })
 
   it('copes with a backend that sends no credits or rules', async () => {
@@ -357,8 +355,8 @@ describe('Kits page', () => {
     const filled = () =>
       document.querySelectorAll('.btn:not(.ghost):not(.soft):not(.danger-line)').length
     await mount({ kits: [kit('a')], installs: [row(), row(PROJECT)] })
-    fireEvent.click(screen.getByRole('switch', { name: 'a for claude · global' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'a for claude · project' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'a for Claude Code · global' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'a for p · Claude Code' }))
     expect(filled()).toBe(1)
     cleanup()
     await mount({ kits: [kit('a')], installs: [row(), row(PROJECT)] }, 'a')

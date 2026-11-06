@@ -20,7 +20,7 @@ import { percentDecode } from '../lib/text.mjs';
 import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, targetView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
-  apiDefaultInstallSet, apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview,
+  apiDefaultInstallSet, apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview, memoCounts,
   apiRecent, apiSetup, apiThemes, activeInstalls, apiUpdate,
 } from './api.mjs';
 import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem } from './catalog.mjs';
@@ -82,13 +82,14 @@ export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/
  * toggle (a `VIEW_POSTS` write) still take the pair. Every other `/api/*` GET, ping and jobs
  * aside, takes the pair and refuses an unknown one.
  *
- * The Library's fleet lists (`/api/catalog/skills|agents|memory|notebook`) are here because they
- * read every active install (`fleetOf`), which caches one view per install on the daemon state;
- * the other catalog sections, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
+ * The Library's fleet lists (`/api/catalog/<FLEET_SECTIONS>`) are here because they read every
+ * active install (`fleetOf`), which caches one view per install on the daemon state; the laws
+ * section, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
  */
 export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/kits',
   '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/activity',
-  '/api/catalog/skills', '/api/catalog/agents', '/api/catalog/memory', '/api/catalog/notebook']);
+  '/api/catalog/skills', '/api/catalog/agents', '/api/catalog/memory', '/api/catalog/notebook',
+  '/api/catalog/wiki', '/api/catalog/config']);
 
 /**
  * The 409 column, exported so a test can assert it directly. Giving `/api/activity` the 409
@@ -142,9 +143,8 @@ export function readJsonBody(buf) {
 }
 
 /**
- * Every ACTIVE install as `{install, state}`, the Library's fleet lists' source (skills, agents,
- * memory, notebook: `FLEET_SECTIONS`): `install`
- * is the usage ledger's `host:scope:root` key, `state` the install's cached view off the daemon
+ * Every ACTIVE install as `{install, state}`, the source of the Library's fleet lists
+ * (`FLEET_SECTIONS`) and of the overview's counts: `install` is the usage ledger's `host:scope:root` key, `state` the install's cached view off the daemon
  * state `base` (`targetView`), so each install keeps its own inventory cache. ONE
  * `installTargets()` scan: the targets it yields are the allowlist, so no view re-checks its
  * pair the way a request-named one must (`installView`). In the console's install order
@@ -174,12 +174,11 @@ export const PREFIX_ROUTES = [
   }],
   // /api/item/<type>/<name> — TYPE has no slash, the NAME keeps its slashes so a wiki
   // page's relpath survives. A missing name is a 404 here rather than a 500 two frames down.
-  // Install-scoped: a skill, agent, memory or notebook entry is the named install's copy, else
-  // the fleet's first.
+  // Install-scoped: a Library entry is the named install's copy, else the fleet's first.
   ['/api/item/', (state, p, base) => {
     const m = /^\/api\/item\/([^/]+)\/(.+)$/.exec(p);
     if (!m) throw new NotFound(p);
-    const fleet = ['skill', 'agent', 'memory', 'notebook'].includes(m[1]) ? fleetOf(base) : undefined;
+    const fleet = m[1] !== 'law' ? fleetOf(base) : undefined;
     return apiItem(state, m[1], percentDecode(m[2]), fleet);
   }],
   // The sid is passed through unquoted — `apiActivityDetail`'s safe-name scheme is what
@@ -195,7 +194,7 @@ export const PREFIX_ROUTES = [
  * test, so a route cannot appear or vanish unenumerated.
  */
 export const STATE_ROUTES = {
-  '/api/overview': apiOverview,
+  '/api/overview': (state, url, base) => apiOverview(state, memoCounts(base, () => fleetOf(base))),
   '/api/recent': apiRecent,
   '/api/themes': apiThemes,
   '/api/setup': apiSetup,

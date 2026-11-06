@@ -5,7 +5,7 @@ import { editCount } from '../../lib/format.js'
 import { bucketJobsByDay, newestJobs } from '../../lib/jobBuckets.js'
 import { headlineFor } from '../../lib/headlines.js'
 import { SECTION_ORDER, SECTIONS } from '../../lib/sections.js'
-import { CountUp } from '../../lib/motion.js'
+import { CountUp, DUR } from '../../lib/motion.js'
 import RunChips from './RunChips.jsx'
 import VerdictBadge from './VerdictBadge.jsx'
 
@@ -21,7 +21,7 @@ const B_CATS = Array.from({ length: 7 }, (_, i) => `var(--cat-${i})`)
 // caption is a prop so the same donut serves both the capability mix and the doctor-checks
 // readiness ring without mislabelling one as the other. `segments` are the ring's own
 // [{ key, label, n, tone }].
-const DONUT_SWEEP_MS = 650
+const DONUT_SWEEP_MS = DUR[9]
 function Donut({ segments, size = 186, stroke = 26, caption = 'capabilities' }) {
   const sum = segments.reduce((s, x) => s + x.n, 0)
   return (

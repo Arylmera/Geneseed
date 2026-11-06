@@ -13,18 +13,13 @@ import { installTag } from '../lib/hosts.js'
 
 const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`
 
-// Each folder's own index and README are furniture, not entries (any case, as the server counts).
-const FURNITURE = new Set(['MEMORY', 'NOTEBOOK', 'README'])
-const countOf = (catalog) =>
-  catalog
-    ? (catalog.items || []).filter((i) => !FURNITURE.has(String(i.name).toUpperCase())).length
-    : null
+// The catalog lists entries only: a folder's index and README never reach it.
+const countOf = (catalog) => (catalog ? (catalog.items || []).length : null)
 
 // The panel over the rules editor: how much the agent has been told about you across your files.
-// On a global install the rules, profile and memory are the one shared tier, and that is what the
-// note says, naming no harness. A project install's rules and profile are its own, so it names the
-// install (`tag`, the default, once two are active).
-function KnownCard({ rules, profile, facts, notes, tag, projects }) {
+// Memory and notebook count every install. A project install's rules and profile are its own, so
+// the note names it (`tag`, the default, once two are active); the shared tier needs no note.
+function KnownCard({ rules, profile, facts, notes, tag }) {
   const st = rules?.exists ? rules.stats : null
   if (!st) return null
   const known = [
@@ -50,15 +45,7 @@ function KnownCard({ rules, profile, facts, notes, tag, projects }) {
           </li>
         ))}
       </ul>
-      {tag ? (
-        <p className="panel-note">
-          {!rules.shared
-            ? `Profile and rules of ${tag}; memory and notebook across every install.`
-            : projects
-              ? 'Profile and rules are shared by every harness; memory counts the shared store and each project’s own, and the notebook every install.'
-              : 'Profile, rules and memory are shared by every harness; the notebook counts every install.'}
-        </p>
-      ) : null}
+      {tag && !rules.shared ? <p className="panel-note">{`Profile and rules of ${tag}.`}</p> : null}
     </section>
   )
 }
@@ -137,7 +124,7 @@ const EMPTY = {
 // Personal: the files that are yours alone and survive every update, reinstall and voice
 // change. Rules and Profile are editors; Memory and Notebook are the Library reader
 // locked to one kind, so an entry opened here keeps its address on this page.
-export default function Personal({ tab = 'rules', item, dataRev }) {
+export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged }) {
   const soft = (p) => Promise.resolve(p).catch(() => null)
   // Each editor reloads only its own file after a write, so the cards above it follow. Not
   // the app-wide `dataRev`: neither file feeds the overview, the fleet or an install.
@@ -184,14 +171,7 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
       <Tabs page="personal" current={tab} badges={badges} label="Personal files" />
       {tab === 'rules' && (
         <>
-          <KnownCard
-            rules={rules}
-            profile={profile}
-            facts={facts}
-            notes={notes}
-            tag={tag}
-            projects={active?.some((i) => i.scope === 'project')}
-          />
+          <KnownCard rules={rules} profile={profile} facts={facts} notes={notes} tag={tag} />
           <Rules onChanged={reloadRules} dataRev={dataRev} />
         </>
       )}
@@ -211,6 +191,7 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
             base={`#/personal/${tab}`}
             selected={item}
             dataRev={dataRev}
+            onCountsChanged={onCountsChanged}
             // A promote deletes the fact it turns into a rule, so both counts move.
             onRulesChanged={() => {
               reloadRules()

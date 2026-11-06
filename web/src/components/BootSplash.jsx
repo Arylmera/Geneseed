@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { DUR } from '../lib/motion.js'
 import { reloadPage } from '../hooks/reloadPage.js'
 
 // Startup splash: sprout germinates inside the dial while the progress ring fills,
@@ -59,10 +60,10 @@ export default function BootSplash({ ready, onDone }) {
   // Belt and braces: animationend is the normal dismissal, but it never fires
   // when animations are disabled (prefers-reduced-motion) or the tab is
   // throttled — which left the splash mounted forever. The timeout outlasts
-  // the .55s fade and guarantees dismissal either way.
+  // the `--dur-8` fade and guarantees dismissal either way.
   useEffect(() => {
     if (!fading) return
-    const t = setTimeout(() => onDone?.(), 700)
+    const t = setTimeout(() => onDone?.(), DUR[9])
     return () => clearTimeout(t)
   }, [fading]) // eslint-disable-line react-hooks/exhaustive-deps
 

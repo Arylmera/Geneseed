@@ -309,7 +309,6 @@ test('a memory row carries the topic the store files it under', () => {
     const topics = Object.fromEntries(apiCatalog(st, 'memory').items.map((i) => [i.name, i.topic]));
     assert.deepEqual(topics, {
       'a-topic': 'web-ui', 'b-type': 'feedback', 'c-none': 'misc', 'd-empty': 'misc',
-      MEMORY: undefined, README: undefined,
     });
   } finally { sb.cleanup(); }
 });

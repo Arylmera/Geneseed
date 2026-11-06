@@ -5,6 +5,7 @@ import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
 import KitApply, { KitState } from '../../components/KitApply.jsx'
 import { kitsLocked, useKitStaging } from '../../hooks/useKitStaging.js'
+import { installTag } from '../../lib/hosts.js'
 import { Switch } from './controls.jsx'
 
 // Installs / Kits: one panel per install (the Hosts tab's panel + head) with a switch per
@@ -24,7 +25,7 @@ export default function Kits({ onAction, dataRev }) {
       {data.installs.map((row) => {
         const locked = kitsLocked(row)
         const set = stage.setOf(row)
-        const who = `${row.host} · ${row.scope}`
+        const who = installTag(row)
         return (
           <section className="panel flush" key={row.id} aria-label={who}>
             <div className="inst-head">

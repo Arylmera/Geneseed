@@ -354,7 +354,7 @@ describe('ledgerNeeds session start', () => {
 
   it('names the install when its files are its own', () => {
     expect(rows(started('claude', 8100, { shared: false }))[0].title).toBe(
-      'claude · global: session files are near the session-start budget',
+      'Claude Code · global: session files are near the session-start budget',
     )
   })
 
@@ -365,7 +365,7 @@ describe('ledgerNeeds session start', () => {
       '7.5 / 9 KB · without project context',
     ])
     expect(rows(started('claude', 7533, { cut: true }))[0].title).toBe(
-      'claude · global: session files were cut to fit the session-start budget',
+      'Claude Code · global: session files were cut to fit the session-start budget',
     )
     expect(rows(started('claude', 7641))).toEqual([])
   })
@@ -387,13 +387,13 @@ describe('ledgerNeeds', () => {
       usage: null,
       ...ALL,
       overview: { ...ALL.overview },
-      defaultLabel: 'claude · global',
+      defaultLabel: 'Claude Code · global',
     })
     const sugg = rows.filter((r) => r.sugg).map((r) => [r.id, r.title])
     expect(sugg.filter(([id]) => /^(memory|profile|rules)/.test(id))).toEqual([
-      ['memory:oc', 'opencode · global: memory holds no facts'],
-      ['profile', 'claude · global: Profile is still the seeded template'],
-      ['rules', 'claude · global: No standing rules yet'],
+      ['memory:oc', 'OpenCode · global: memory holds no facts'],
+      ['profile', 'Claude Code · global: Profile is still the seeded template'],
+      ['rules', 'Claude Code · global: No standing rules yet'],
     ])
   })
   // Global installs read one store: a shared memory, profile or rule file is one suggestion that
@@ -404,11 +404,19 @@ describe('ledgerNeeds', () => {
       installs: [
         { id: 'oc', host: 'opencode', scope: 'global', state: 'active', facts: 0, shared: true },
         { id: 'cl', host: 'claude', scope: 'global', state: 'active', facts: 0, shared: true },
-        { id: 'p', host: 'bob', scope: 'project', state: 'active', facts: 0, shared: false },
+        {
+          id: 'p',
+          host: 'bob',
+          scope: 'project',
+          path: '/r/repo',
+          state: 'active',
+          facts: 0,
+          shared: false,
+        },
       ],
     }
     const rowsOf = (input) =>
-      ledgerNeeds({ fleet, usage: null, defaultLabel: 'opencode · global', ...input })
+      ledgerNeeds({ fleet, usage: null, defaultLabel: 'OpenCode · global', ...input })
         .filter((r) => /^(memory|profile|rules)/.test(r.id))
         .map((r) => [r.id, r.title])
     expect(
@@ -418,13 +426,13 @@ describe('ledgerNeeds', () => {
       }),
     ).toEqual([
       ['memory:shared', 'Memory holds no facts'],
-      ['memory:p', 'bob · project: memory holds no facts'],
+      ['memory:p', 'repo · BOB (IBM): memory holds no facts'],
       ['profile', 'Profile is still the seeded template'],
       ['rules', 'No standing rules yet'],
     ])
     expect(rowsOf({ profile: { ...ALL.profile, shared: false } })).toContainEqual([
       'profile',
-      'opencode · global: Profile is still the seeded template',
+      'OpenCode · global: Profile is still the seeded template',
     ])
   })
   it('lists per-install problems first, then the older nudges as suggestions', () => {
@@ -434,21 +442,21 @@ describe('ledgerNeeds', () => {
         id: 'behind:oc',
         tag: 'Behind',
         tone: 'warn',
-        title: 'opencode · global is behind its source',
+        title: 'OpenCode · global is behind its source',
         detail: 'built 6d ago',
-        where: 'opencode',
+        where: 'OpenCode',
         verb: 'Rebuild',
         // Per install: the row rebuilds the one it names, never the whole machine.
         act: 'rebuild',
         installs: [
-          { id: 'oc', host: 'opencode', path: '/h/.config/opencode', label: 'opencode · global' },
+          { id: 'oc', host: 'opencode', path: '/h/.config/opencode', label: 'OpenCode · global' },
         ],
       },
       {
         id: 'drift:oc',
         tag: 'Drift',
         tone: 'warn',
-        title: 'opencode · global: 3 files edited by hand',
+        title: 'OpenCode · global: 3 files edited by hand',
         detail: '2 edited, 1 added, 0 missing',
         where: 'installs/edits',
         verb: 'Review',
@@ -468,7 +476,7 @@ describe('ledgerNeeds', () => {
     }
     const rows = ledgerNeeds({ fleet })
     expect(rows.map((r) => [r.id, r.title, r.detail])).toEqual([
-      ['behind:oc', 'opencode · global is behind its source', 'built 6d ago · 4 files behind'],
+      ['behind:oc', 'OpenCode · global is behind its source', 'built 6d ago · 4 files behind'],
     ])
   })
   // The usage ledger lists never-fired rows per install, so one skill unused on two installs

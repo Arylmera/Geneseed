@@ -129,6 +129,8 @@ export function webState(theme = null, target = null) {
     renderMemo: null,
     // `apiFleet`'s per-install reads, made on first use; dropped with `_inv`, or aged out there.
     _fleetReads: null,
+    // `memoCounts`' last answer, on the daemon's state; every refresh and re-point drops it.
+    _counts: null,
     // The emit `selectView` was told, which outranks any marker; null reads the markers.
     _knownEmit: null,
     // True for a per-install view (`installView` in actions.mjs): `refresh` must never re-point
@@ -229,6 +231,7 @@ export function webState(theme = null, target = null) {
     readMarkers(host);
     st._inv = null;
     st._fleetReads = null;
+    st._counts = null;
     st._doctor = null;
     st._doctorJob = null;
   };
@@ -242,6 +245,7 @@ export function webState(theme = null, target = null) {
     if (def && !samePath(def[0], st.target)) { st.selectView(...def); return; }
     st._inv = null;
     st._fleetReads = null;
+    st._counts = null;
     // The job goes too: what it read may be what this mutation changed, so its answer is dropped.
     if (doctor) { st._doctor = null; st._doctorJob = null; }
     st.emit = st.detectEmit() || st.emit;

@@ -12,6 +12,7 @@ import { cmdUninstall, installUninstall } from '../../js/maintain/uninstall.mjs'
 import { apiMemoryDelete } from '../../js/web/actions.mjs';
 import { apiFleet } from '../../js/web/api.mjs';
 import { apiCatalog, apiItem, configItems, memoryDir, memoryItems, tierOf } from '../../js/web/catalog.mjs';
+import { apiDocsPage } from '../../js/web/docs.mjs';
 import { webState } from '../../js/web/state.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
@@ -204,8 +205,23 @@ test('the memory list folds the installs that read the tier into one', async () 
 
 test('the wiki list says when its manifest is the shared one', async () => {
   await withTier(({ home, cfg }) => {
-    assert.equal(apiCatalog({ target: cfg, refresh() {} }, 'wiki').shared, true);
-    assert.equal(apiCatalog({ target: path.join(home, 'repo'), refresh() {} }, 'wiki').shared, false);
+    const shared = (target) => {
+      const state = { target, refresh() {} };
+      return apiCatalog(state, 'wiki', [{ install: 'k', state }]).sharedInstalls;
+    };
+    assert.deepEqual(shared(cfg), ['k']);
+    assert.deepEqual(shared(path.join(home, 'repo')), []);
+  });
+});
+
+// The console's Memory page renders src/memory/README.md, and the emit's note for a shared store
+// must reach it, or the page describes a per-host folder the install no longer writes to.
+test('the Memory docs page names the shared store on a tier install, and only there', async () => {
+  await withTier(({ home, cfg, tier }) => {
+    const page = (target) => apiDocsPage(Object.create(webState('neutral'), { target: { value: target } }), 'memory').body;
+    assert.match(page(cfg), /On this install the store is shared/);
+    assert.ok(page(cfg).includes(`${tier.split(path.sep).join('/')}/memory/`), 'the note names the tier');
+    assert.doesNotMatch(page(path.join(home, 'repo')), /store is shared/);
   });
 });
 

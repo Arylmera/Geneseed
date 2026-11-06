@@ -270,7 +270,7 @@ describe('JournalView', () => {
     expect(screen.getByText('Doctrinae')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Credo: 0 sections' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edicts: 9, never broken' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Doctrinae: 0 rules chosen at build' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Doctrinae: 0 rules' })).toBeTruthy()
     expect(screen.queryByText('Ethos')).toBeNull()
     expect(screen.queryByText('Dictates')).toBeNull()
   })

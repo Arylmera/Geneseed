@@ -81,7 +81,7 @@ function DoctorOf({ install, dataRev }) {
     return api.doctor(f, pairOf(install))
   }, [dataRev])
   // Re-running clears the result first so the button reads "Running…" and the
-  // sandbox-build loading copy shows while every theme is re-validated.
+  // sandbox-build loading copy shows while the install's theme is re-validated.
   const rerun = () => {
     fresh.current = true
     setData(null)
@@ -100,7 +100,7 @@ function DoctorOf({ install, dataRev }) {
         <div>
           <h2 className="h">Doctor</h2>
           <p className="sub">
-            Every check builds each theme in a sandbox and validates the result: token resolution,
+            Builds this install’s theme in a sandbox and validates the result: token resolution,
             link integrity, parity, and drift.
           </p>
         </div>
@@ -111,7 +111,7 @@ function DoctorOf({ install, dataRev }) {
       </div>
 
       {!data ? (
-        <Loading label="Running every check (builds each theme in a sandbox)…" />
+        <Loading label="Running every check (builds this install’s theme in a sandbox)…" />
       ) : (
         <>
           <div className="card pad-md mb-16 doc-summary">

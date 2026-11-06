@@ -42,13 +42,11 @@ const rulesWith = (stats) => ({
   rules: [TRIAL],
 })
 const entries = (n) => Array.from({ length: n }, (_, i) => ({ name: `fact-${i}`, title: '' }))
-// The folder's index and README sit in the listing beside the entries.
-const FURNITURE = [{ name: 'MEMORY' }, { name: 'README' }]
 
 let memoryItems
 beforeEach(() => {
   vi.clearAllMocks()
-  memoryItems = [...FURNITURE, ...entries(3)]
+  memoryItems = entries(3)
   api.rules.mockImplementation(() => Promise.resolve(rulesWith({})))
   api.profile.mockImplementation(() =>
     Promise.resolve({ exists: true, seeded: false, fingerprint: 'p1', text: '# Me' }),
@@ -56,7 +54,7 @@ beforeEach(() => {
   api.catalog.mockImplementation((section) =>
     Promise.resolve({
       section,
-      items: section === 'memory' ? memoryItems : [{ name: 'NOTEBOOK' }, { name: 'plan' }],
+      items: section === 'memory' ? memoryItems : [{ name: 'plan' }],
     }),
   )
   api.item.mockImplementation((type, name) =>
@@ -96,29 +94,9 @@ describe('Personal', () => {
     try {
       render(<Personal tab="rules" dataRev={0} />)
       const panel = await known()
-      await within(panel).findByText(
-        'Profile, rules and memory are shared by every harness; the notebook counts every install.',
-      )
-      expect(panel.textContent).not.toMatch(/claude|opencode/)
-    } finally {
-      delete api.installs
-    }
-  })
-
-  // `facts` counts every listed store, so beside a project install the note must say so.
-  it('says memory counts each project too when a project install is active', async () => {
-    api.installs = vi.fn(async () => ({
-      installs: [
-        TWO.installs[1],
-        { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' },
-      ],
-    }))
-    api.rules.mockImplementation(() => Promise.resolve({ ...rulesWith({}), shared: true }))
-    try {
-      render(<Personal tab="rules" dataRev={0} />)
-      await within(await known()).findByText(
-        'Profile and rules are shared by every harness; memory counts the shared store and each project’s own, and the notebook every install.',
-      )
+      await within(panel).findByText('3 facts')
+      expect(panel.querySelector('.panel-note')).toBeNull()
+      expect(panel.textContent).not.toMatch(/claude|opencode/i)
     } finally {
       delete api.installs
     }
@@ -129,38 +107,30 @@ describe('Personal', () => {
     api.installs = vi.fn(async () => TWO)
     try {
       render(<Personal tab="rules" dataRev={0} />)
-      await within(await known()).findByText(
-        'Profile and rules of claude · global; memory and notebook across every install.',
-      )
+      await within(await known()).findByText('Profile and rules of Claude Code · global.')
     } finally {
       delete api.installs
     }
   })
 
   it('counts one fact in the singular', async () => {
-    memoryItems = [...FURNITURE, ...entries(1)]
+    memoryItems = entries(1)
     render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
     const known = await screen.findByRole('region', { name: 'What the agent knows about you' })
     await waitFor(() => expect(within(known).getByText('1 fact')).toBeTruthy())
   })
 
   it('counts 237 facts in the plural', async () => {
-    memoryItems = [...FURNITURE, ...entries(237)]
+    memoryItems = entries(237)
     render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
     const known = await screen.findByRole('region', { name: 'What the agent knows about you' })
     await waitFor(() => expect(within(known).getByText('237 facts')).toBeTruthy())
     expect(within(known).getByText('1 note')).toBeTruthy()
   })
 
-  it('badges the Memory tab with the catalog entries, not its index or README', async () => {
+  it('badges the Memory tab with the catalog entries', async () => {
     render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
     await waitFor(() => expect(badgeOf('Memory')?.textContent).toBe('3'))
-  })
-
-  it('ignores the furniture names in any case', async () => {
-    memoryItems = [{ name: 'memory' }, { name: 'Readme' }, ...entries(2)]
-    render(<Personal tab="rules" dataRev={0} />)
-    await waitFor(() => expect(badgeOf('Memory')?.textContent).toBe('2'))
   })
 
   // A promote deletes the fact it turns into a rule (`delete_memory`): the Memory count must
@@ -187,7 +157,7 @@ describe('Personal', () => {
   })
 
   it('an empty memory folder shows "No facts yet" instead of the reader', async () => {
-    memoryItems = [...FURNITURE]
+    memoryItems = []
     const { container } = render(<Personal tab="memory" setup={SETUP} dataRev={0} />)
     expect(await screen.findByText('No facts yet')).toBeTruthy()
     expect(screen.getByText(/remember that…/)).toBeTruthy()
@@ -196,7 +166,7 @@ describe('Personal', () => {
 
   // First run: the empty state explains the store and links out, with no filled button.
   it('the first-run memory state links to the docs and the rule skill', async () => {
-    memoryItems = [...FURNITURE]
+    memoryItems = []
     const { container } = render(<Personal tab="memory" dataRev={0} />)
     await screen.findByText('No facts yet')
     expect(screen.getByRole('link', { name: 'How memory works' }).getAttribute('href')).toBe(

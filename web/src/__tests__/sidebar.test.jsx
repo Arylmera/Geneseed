@@ -51,16 +51,16 @@ describe('Sidebar', () => {
   })
 
   // Each count is a sum the overview already holds, written out:
-  //   Constitution = 4 ethos + 11 invariants (counts.laws) + 28 doctrine = 43
+  //   Constitution = 11 invariants (counts.laws) + 28 doctrine = 39; the 4 ethos sections are no rules
   //   Library      = 52 skills + 18 agents + 2 memory + 2 notebook + 0 wiki + 2 setup = 76
   //   Loops        = templates only (counts.loops), not bricks = 3
-  //   Installs     = active of detected, from the installs list = 1/3
+  //   Installs     = installed, on or off, from the installs list = 2 of the 3 rows
   it('counts what each page lists', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
-    expect(row('Constitution').querySelector('.sb-count').textContent).toBe('43')
+    expect(row('Constitution').querySelector('.sb-count').textContent).toBe('39')
     expect(row('Library').querySelector('.sb-count').textContent).toBe('76')
     expect(row('Loops').querySelector('.sb-count').textContent).toBe('3')
-    expect(row('Installs').querySelector('.sb-count').textContent).toBe('1/3')
+    expect(row('Installs').querySelector('.sb-count').textContent).toBe('2')
     // No honest single number for these: no badge rather than an invented one.
     expect(row('Overview').querySelector('.sb-count')).toBeNull()
     expect(row('Personal').querySelector('.sb-count')).toBeNull()
@@ -116,8 +116,8 @@ describe('Sidebar', () => {
     ]
     const ov = { ...overview, install: { host: 'claude', scope: 'global', path: '/cl' } }
     render(<Sidebar route={{ page: 'overview' }} overview={ov} installs={two} />)
-    const card = screen.getByRole('region', { name: 'Install vitals, claude · global' })
-    expect(within(card).getByText('claude · global')).toBeTruthy()
+    const card = screen.getByRole('region', { name: 'Install vitals, Claude Code · global' })
+    expect(within(card).getByText('Claude Code · global')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Voice · imperial' })).toBeTruthy()
     expect(document.querySelector('.sb-ver').textContent).toMatch(/imperial$/)
   })
@@ -216,7 +216,7 @@ describe('VoicePopover', () => {
     expect(onInstall).toHaveBeenCalledWith(two[0])
     await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
     expect(ask.mock.calls[0][0]).toBe(
-      'Rebuild repo · bob in the “plain” voice? It rebuilds in place, non-destructive.',
+      'Rebuild repo · BOB (IBM) in the “plain” voice? It rebuilds in place, non-destructive.',
     )
   })
 

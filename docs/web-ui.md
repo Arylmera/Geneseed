@@ -123,6 +123,21 @@ The old flat routes still resolve to their tab (`VIEW_ALIAS`, `web/src/lib/route
 `#/profile`, `#/harness`, `#/harnesses`, `#/themes`, `#/diff`, `#/doctor`, `#/settings`, `#/about`.
 The view notes below keep those older names and their old grouping.
 
+**A rail badge equals what its page lists.** Every count covers every install, deduped by name, and
+`/api/overview` `counts` is the size of the same lists the pages show (`fleetCounts`,
+`js/web/catalog.mjs`). A folder's index and README (`MEMORY.md`, `NOTEBOOK.md`) are in no list and no
+count, and stay readable by name. Constitution counts its rules, on or off, and not the Ethos
+sections. Library is the sum of its kinds. Installs counts what is installed, on or off. A number
+measured on one install, such as a root file's size on an Overview row, is a measurement and stays
+on its row. An install that cannot be read is skipped, and the rest still count. The Loops badge is
+the union across installs, and its title says so; the page lists the picked install's templates.
+`web/src/__tests__/railCounts.test.jsx` and `tests/unit/web_counts.test.mjs` hold this.
+
+**A read still out is not a failed one.** Each card tells three states apart: `Loading.jsx` while the
+first read is out, a sentence when it failed, and what it found when it is empty. No count appears
+before its data. The Constitution waits for the picked install's own overview too: a gate read
+before it would read as armed.
+
 At the foot of the rail sits a **vitals** card — the doctor's verdict, drift, how long ago the
 harness was built, and a Voice button — so those facts are on screen from every page. It is
 hidden where the rail collapses to icons (≤960px) and returns with the phone drawer. The topbar's
@@ -138,7 +153,7 @@ goes back to the file an entry came from. Notebook stays per install, and its Fo
 install of the copy on screen. Doctor, Local edits, Server, the Constitution (*Constitution of:*,
 for its gate switches and doctrine Apply), Loops (*Templates and bricks of:*) and the rail's Voice
 popover (*Rebuild:*) each keep their own pick (in the browser's localStorage). The Overview is
-fleet-wide: each install's own facts (voice, footprint, posture, mode, memory facts, drift) sit on
+fleet-wide: each install's own facts (voice, footprint, posture, mode, drift) sit on
 its row, and a figure still read off a project install set as the default (a suggestion, an older
 Overview view, Personal's summary) names that install once two or more are active. A *Needs you*
 suggestion about a shared file or the shared memory store appears once and names no harness.
@@ -311,7 +326,7 @@ streams the output of background jobs and keeps their history across reloads.
   roots in the moss when they stand side by side, a thread under the pots when they do not.
   Hover a tree for its model, turns, context and compactions, or a pad for its author's files;
   click it to open the session. Past ten trees, quiet shelves (no session working or waiting on
-  you) fold into chips, the largest first; the last standing shelf never folds. **Sakura** repaints the crowns pink, nothing more.
+  you) fold into chips, the largest first; the last standing shelf never folds. **Pink blossom** repaints the crowns pink, nothing more.
   A session's detail page shows its tree too, live or ended, with the same pad hovers and a
   legend of its turns, context, compactions and sub-agents; an ended session's tree stands still, without the `!`.
 - **Changes** (`#/diff`) — the diff between the install its *Local edits of:* picker names and the source: edited /
@@ -321,8 +336,8 @@ streams the output of background jobs and keeps their history across reloads.
   Restore acts only on files the diff lists, and never on your own files (`user-rules.md`,
   `PROFILE.md`, `memory/`, `notebook/`). An added file is moved into
   `archived-restore/<date-time>/` in the install, not deleted.
-- **Doctor** (`#/doctor`) — runs, for the install its *Doctor for:* picker names, the same health engine as the `doctor` command (every
-  theme, parity, links, authoring gates, drift), grouping any problems per check. It shows
+- **Doctor** (`#/doctor`) — runs, for the install its *Doctor for:* picker names, the same health engine as the `doctor` command (that
+  install's theme, parity, links, authoring gates, drift), grouping any problems per check. It shows
   the server's last run for that install — warmed at start, redone after a job or an install
   toggle — and **Re-run checks** runs every check again on demand.
 

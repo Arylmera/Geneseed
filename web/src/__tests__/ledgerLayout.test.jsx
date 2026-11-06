@@ -114,7 +114,7 @@ describe('Ledger health card', () => {
 describe('Ledger fleet details row', () => {
   it('starts collapsed, and the toggle reveals the cost breakdown and the diff link', async () => {
     render(<Ledger overview={null} onAction={vi.fn()} />)
-    const toggle = await screen.findByRole('button', { name: 'Details for claude · global' })
+    const toggle = await screen.findByRole('button', { name: 'Details for Claude Code · global' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText(/What rides every turn/)).toBeNull()
     fireEvent.click(toggle)
@@ -124,15 +124,15 @@ describe('Ledger fleet details row', () => {
     // The breakdown is one labelled image, each part in tokens (characters ÷ 4) of the 15500.
     expect(
       within(table).getByRole('img', {
-        name: 'claude · global: Root file: 8400 of 15500, Skill list: 5100 of 15500, Agent list: 1200 of 15500, Session files: 800 of 15500',
+        name: 'Claude Code · global: Root file: 8400 of 15500, Skill list: 5100 of 15500, Agent list: 1200 of 15500, Session files: 800 of 15500',
       }),
     ).toBeTruthy()
-    const link = within(table).getByRole('link', { name: 'View diff for claude · global' })
+    const link = within(table).getByRole('link', { name: 'View diff for Claude Code · global' })
     expect(link.getAttribute('href')).toBe('#/installs/edits')
     // The other rows stay collapsed.
     expect(
       screen
-        .getByRole('button', { name: 'Details for bob · global' })
+        .getByRole('button', { name: 'Details for BOB (IBM) · global' })
         .getAttribute('aria-expanded'),
     ).toBe('false')
     fireEvent.click(toggle)
@@ -144,7 +144,7 @@ describe('Ledger KPI helpers', () => {
   // The console views no single install, so the card shows the fleet's worst share of its ceiling.
   it('rootFileFigure picks the highest share of the ceiling', () => {
     expect(rootFileFigure(FLEET.installs)).toEqual({
-      label: 'bob · global',
+      label: 'BOB (IBM) · global',
       carrier: 34000,
       ceiling: 40000,
       pct: 85,
@@ -160,7 +160,7 @@ describe('Ledger KPI helpers', () => {
     // A carrier that is not a number has no share; it must not win the rank as NaN.
     expect(
       rootFileFigure([install('opencode', 'synced', { ...BOB.cost, carrier: undefined }), BOB]),
-    ).toMatchObject({ label: 'bob · global', pct: 85 })
+    ).toMatchObject({ label: 'BOB (IBM) · global', pct: 85 })
   })
 
   it('alwaysOnRange spans the measured installs and names the most expensive', () => {
@@ -202,16 +202,16 @@ describe('Ledger KPI cards', () => {
     const root = within(await screen.findByRole('region', { name: 'Root file vs ceiling' }))
     expect(await root.findByText('≈8.5k tokens')).toBeTruthy()
     expect(root.getByText('of ≈10.0k ceiling')).toBeTruthy()
-    expect(root.getByText('bob · global')).toBeTruthy()
+    expect(root.getByText('Highest install').title).toBe('BOB (IBM) · global')
     expect(
       root.getByRole('img', {
-        name: 'Worst root file: bob · global, 85 percent of its ceiling: 8500 of 10000',
+        name: 'Worst root file: BOB (IBM) · global, 85 percent of its ceiling: 8500 of 10000',
       }),
     ).toBeTruthy()
     // The card details the most expensive install, the fleet range under it.
     const cost = within(screen.getByRole('region', { name: 'Loaded every turn' }))
     expect(cost.getByText('≈15.5k tokens')).toBeTruthy()
-    expect(cost.getByText('claude · global')).toBeTruthy()
+    expect(cost.getByText('Highest install').title).toBe('Claude Code · global')
     expect(cost.getByText('All installs: ≈12.0k – ≈15.5k tokens')).toBeTruthy()
     const calls = within(screen.getByRole('region', { name: 'Skill and agent calls' }))
     expect(await calls.findByText('144')).toBeTruthy()

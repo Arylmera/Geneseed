@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The Library: kinds column, list pane, reader. Skills and Agents used to be pages of their
@@ -63,20 +63,20 @@ describe('Library', () => {
       />,
     )
     await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(0))
-    await waitFor(() => expect(kinds()[0][1]).toBe('2'))
+    // The overview's fleet-wide counts, but the kind on screen counts its own list: the fixture
+    // holds two agents, and a forget must move the badge with the row.
     expect(kinds()).toEqual([
-      ['Skills', '2', null],
+      ['Skills', '52', null],
       ['Agents', '2', 'page'],
-      // Memory and notebook are fleet lists too: one fact in the fixture, no notebook entry.
-      ['Memory', '1', null],
-      ['Notebook', '0', null],
+      ['Memory', '2', null],
+      ['Notebook', '2', null],
       ['Wiki', '0', null],
       ['Setup files', '2', null],
     ])
   })
 
-  // Wiki and setup files are one install's (the default): once two are active, the list says whose.
-  it('names the install a one-install kind is read from', async () => {
+  // Every kind lists every install, so no list head names one.
+  it('names no install over a setup-file list', async () => {
     api.installs = vi.fn(async () => ({
       installs: [
         { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
@@ -84,11 +84,29 @@ describe('Library', () => {
       ],
     }))
     try {
-      render(<Library section="config" overview={overview({})} />)
-      expect(await screen.findByText('of claude · global')).toBeTruthy()
+      const { container } = render(<Library section="config" overview={overview({})} />)
+      await waitFor(() => expect(api.catalog).toHaveBeenCalledWith('config'))
+      await waitFor(() => expect(container.querySelector('.lib-list .loading')).toBeNull())
+      expect(container.querySelector('.lib-since')).toBeNull()
     } finally {
       delete api.installs
     }
+  })
+
+  // A first read still out is neither a count nor an empty list.
+  it('shows Loading, no count and no empty state before the first read lands', async () => {
+    let land
+    api.catalog.mockImplementation(() => new Promise((r) => (land = r)))
+    const { container } = render(<Library section="skills" overview={null} />)
+    expect(container.querySelector('.lib-list .loading')).toBeTruthy()
+    expect(container.querySelector('.lib-reader .loading')).toBeTruthy()
+    expect(container.querySelector('.lib-list-head .mono').textContent).toBe('')
+    expect(kinds()[0][1]).toBe('')
+    expect(screen.queryByText('Nothing here yet')).toBeNull()
+    expect(screen.queryByText('Select an entry')).toBeNull()
+    await act(async () => land({ section: 'skills', items: [] }))
+    expect(screen.getByText('Nothing here yet')).toBeTruthy()
+    expect(container.querySelector('.loading')).toBeNull()
   })
 
   it('opens on skills when #/library carries no kind, and lists them', async () => {
@@ -200,12 +218,12 @@ describe('Library', () => {
       await waitFor(() =>
         expect([...document.querySelectorAll('.lk-install')].map((t) => t.textContent)).toEqual([
           'shared',
-          'repo · bob',
+          'repo · BOB (IBM)',
         ]),
       )
       expect([...document.querySelectorAll('.lr-install')].map((t) => t.textContent)).toEqual([
         'shared',
-        'repo · bob',
+        'repo · BOB (IBM)',
       ])
     } finally {
       delete api.installs
@@ -244,8 +262,8 @@ describe('Library', () => {
       }),
     )
     expect([...document.querySelectorAll('.lr-install')].map((t) => t.textContent)).toEqual([
-      'opencode · global',
-      'claude · global',
+      'OpenCode · global',
+      'Claude Code · global',
     ])
   })
 
@@ -295,7 +313,7 @@ describe('Library', () => {
     expect(api.memoryDelete).toHaveBeenCalledTimes(1)
     // The list spans two installs, so the confirm said which one.
     expect(askConfirm.mock.calls.at(-1)[0]).toMatch(
-      /^Forget the memory fact "fact-b" in claude · global\?/,
+      /^Forget the memory fact "fact-b" in Claude Code · global\?/,
     )
   })
 
@@ -1059,9 +1077,9 @@ describe('Library across installs', () => {
   it('badges each row with the installs that have it, and only those', async () => {
     render(<Library section="skills" overview={overview({})} />)
     await waitFor(() =>
-      expect(badges('brainstorm')).toEqual(['opencode · global', 'claude · global']),
+      expect(badges('brainstorm')).toEqual(['OpenCode · global', 'Claude Code · global']),
     )
-    expect(badges('rule')).toEqual(['shop · bob'])
+    expect(badges('rule')).toEqual(['shop · BOB (IBM)'])
   })
 
   it("reads the first install's copy, and another install's on request", async () => {
@@ -1070,8 +1088,8 @@ describe('Library across installs', () => {
     expect(screen.getByText('opencode text')).toBeTruthy()
     expect(api.item).toHaveBeenLastCalledWith('skill', 'brainstorm')
     expect([...picker.options].map((o) => o.textContent)).toEqual([
-      'opencode · global',
-      'claude · global',
+      'OpenCode · global',
+      'Claude Code · global',
     ])
     fireEvent.change(picker, { target: { value: CL } })
     await waitFor(() => expect(screen.getByText('claude text')).toBeTruthy())
@@ -1134,7 +1152,7 @@ describe('Library across installs', () => {
       [...document.querySelectorAll('a.lib-row[href="#/item/skill/rule"] .lr-install')].map(
         (b) => b.title,
       ),
-    ).toEqual(['shop · bob — D:\\work\\shop'])
+    ).toEqual(['shop · BOB (IBM) — D:\\work\\shop'])
   })
 
   // A row's dots mean nothing without the names: the legend gives one per install, and a row
@@ -1150,14 +1168,5 @@ describe('Library across installs', () => {
     const row = document.querySelector('a.lib-row[href="#/item/skill/rule"]')
     expect(row.querySelectorAll('.lr-dot')).toHaveLength(legend.length)
     expect(row.querySelectorAll('.lr-dot.off')).toHaveLength(legend.length - 1)
-  })
-
-  it('counts skills and agents in the rail off the fleet-wide lists', async () => {
-    render(<Library section="skills" overview={overview({ skills: 52, agents: 18 })} />)
-    await waitFor(() => expect(kinds()[1][1]).toBe('2'))
-    expect(kinds().slice(0, 2)).toEqual([
-      ['Skills', '2', 'page'],
-      ['Agents', '2', null],
-    ])
   })
 })

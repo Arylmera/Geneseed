@@ -2,6 +2,7 @@
 // /api/usage, /api/gates). Kept out of the component so __tests__/ledgerLayout.test.jsx can
 // pin each figure against hand-worked fixtures. Every helper returns null (or zero) when it
 // has nothing to measure, and the card says so in words.
+import { installTag } from '../../lib/hosts.js'
 import { costTotal, gateRows } from '../../lib/overview.js'
 
 // Active installs with a measured cost: the only rows either cost figure may claim.
@@ -19,7 +20,7 @@ export function rootFileFigure(installs) {
   if (!pick) return null
   const { carrier, ceiling } = pick.cost
   return {
-    label: `${pick.host} · ${pick.scope}`,
+    label: installTag(pick),
     carrier,
     ceiling,
     pct: Math.round(share(pick) * 100),

@@ -32,12 +32,12 @@ const SCOPES = ['project', 'global']
 // writes `global`: a rule nobody edits stays as written.
 const formScope = (s) => (s === 'user' ? 'global' : s)
 
-// The server's rule too (`isRuleEdge`, user-files.mjs): a body line starting `## ` would end
-// this rule's block in user-rules.md and could forge another rule. Checked here so the user
-// sees why before anything is sent.
 // Same line breaks as the server's `splitLines` (js/lib/udiff.mjs); the server stays the authority.
 // eslint-disable-next-line no-control-regex
 const LINE_BREAK = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/
+// The server's rule too (`isRuleEdge`, js/hosts/memory-files.mjs): a body line starting `## ` would
+// end this rule's block in user-rules.md and could forge another rule. Checked here so the user
+// sees why before anything is sent.
 const isRuleEdge = (l) => l.startsWith('## ') || /^##\s+R\d+\s*[—–-]+\s*\S/.test(l)
 
 // The 409 notices: a draft save keeps the draft; a delete/graduate has none to keep.

@@ -110,7 +110,7 @@ function globMd(dir) {
 }
 
 /** Stems that name the store's own files, never a fact — `MEMORY` is the index itself. */
-const RESERVED_STEMS = new Set(['memory', 'readme']);
+export const RESERVED_STEMS = new Set(['memory', 'readme']);
 
 /**
  * `_existing_slugs` — slugs already stored. learn never CREATES one of these; it may only

@@ -16,7 +16,7 @@ decisions are in the root [`DESIGN.md`](../DESIGN.md), and console behaviour in
 - **A developer terminal, not a marketing page.** Deep ink surfaces, mono chrome, one accent (`styles.css:1-5`).
 - **Skins, not themes.** Four flavours (`cultivar`, `operator`, `matrix`, `atlas`, `web/src/hooks/useFlavour.js`) redefine the same tokens on `.app`, each in dark and light. The accent follows the deployed theme.
 - **Offline first.** Fonts are self-hosted through `@fontsource`; nothing loads from a CDN (`styles.css:19-22`).
-- **Motion defers to the user.** Every JS animation passes `motionOK()` (`web/src/lib/motion.js`), and CSS motion stops under `prefers-reduced-motion`.
+- **Motion defers to the user.** Every JS animation passes `motionOK()` (`web/src/lib/motion.js`) and keeps its `settle()`, and CSS motion stops under `prefers-reduced-motion`.
 <!-- geneseed:doc:end -->
 
 <!-- geneseed:doc:start -->
@@ -81,8 +81,25 @@ Breakpoints are three, and only three: 1180, 960 and 720 px.
 
 ### Motion
 
-⚠ no motion token scale found: durations and easings are literal in each rule and in
-`web/src/lib/motion.js`.
+One scale, written once in `styles.css` `:root`. anime.js cannot read a CSS variable, so `DUR` in
+`web/src/lib/motion.js` mirrors it, and `web/src/__tests__/motionTokens.test.js` fails when the two
+part or a literal time or curve returns. The two exceptions: the reduced-motion stop (`.01ms`,
+`.01s`), which is an off switch, and a negative `animation-delay`, which sets a loop's phase.
+`linear` and `steps()` stay as they are: neither is a curve to tune.
+
+| Name | Value | Role | Source |
+|---|---|---|---|
+| `--dur-0`, `--dur-1` | 20, 50 ms | Stagger steps; `--dur-1` also the shortest arc | `styles.css` `:root` |
+| `--dur-2` … `--dur-5` | 100, 150, 200, 250 ms | Hover, press, colour | same |
+| `--dur-6` … `--dur-8` | 300, 400, 500 ms | Expand, entrance, sweep | same |
+| `--dur-9`, `--dur-10` | 700, 1000 ms | Count-up, ring sweep, one-shot flourish | same |
+| `--dur-11` … `--dur-16` | 1500, 2500, 3000, 4000, 6000, 8000 ms | Ambient loops | same |
+| `--dur-17`, `--dur-18` | 24, 40 s | Slow orbits | same |
+| `--ease-out` | `cubic-bezier(.22,1,.36,1)` | The console's settle; `EASE_OUT` (`outExpo`) in anime.js | same |
+| `--ease-soft` | `cubic-bezier(.2,.7,.2,1)` | A gentler settle | same |
+| `--ease-swing` | `cubic-bezier(.65,0,.35,1)` | Both ends eased, for a sweep | same |
+| `--ease-fade`, `--ease-in` | `ease-out`, `ease-in` | Fades | same |
+| `--ease-loop` | `ease-in-out` | Ambient loops | same |
 
 ### Layers
 
@@ -124,5 +141,8 @@ Shared primitives in `web/src/components/`.
 - **Do** put an `InstallPicker` beside what it acts on. **Do not** add a console-wide install switch.
 - **Do** tag what the harnesses share as `shared` and name no harness. A project install's entry names its install.
 - **Do** pass a JS animation through `motionOK()` and give it a settled end state.
+- **Do** take a duration and a curve from the motion tokens. **Do not** write a literal one; pick the nearest step.
+- **Do** show `Loading.jsx` while a first read is out, and print no count before its data. **Do not** let a pending read say it failed or found nothing.
+- **Do** name an install with `installTag` and a host with `hostInfo().label`, and only where it differs.
 - **Do** rebuild and commit `web/dist/` with every change under `web/src/`.
 <!-- geneseed:doc:end -->

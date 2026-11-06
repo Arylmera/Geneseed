@@ -1,13 +1,13 @@
 import React from 'react'
 import { go } from '../lib/router.js'
-import { driftTotal, relTime } from '../lib/format.js'
+import { driftTotal, libraryCount, relTime, ruleCount } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 import { activeInstalls, installTag } from '../lib/hosts.js'
 
 // The seven pages, in the order a visit reads them: how the harness is doing, what it
-// obeys, what it knows, how it iterates, what is yours, and where it is installed. Each count reads data
-// the shell already holds (the overview and the installs list); a page with no honest
-// single number carries none rather than an invented one.
+// obeys, what it knows, how it iterates, what is yours, and where it is installed. A badge is what
+// its page lists, across every install, deduped (`overview.counts`; __tests__/railCounts.test.jsx
+// holds each one to its page); a page with no honest single number carries none.
 const NAV = [
   { hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
   {
@@ -15,25 +15,14 @@ const NAV = [
     page: 'laws',
     label: 'Constitution',
     icon: 'law',
-    // Every entry the page lists: the ethos sections, the invariants (a retired one an older
-    // install still lists is counted too), and the doctrine rules.
-    count: (o) =>
-      o?.counts
-        ? (o.counts.ontology ?? 0) + (o.counts.laws ?? 0) + (o.counts.doctrines?.rules ?? 0)
-        : null,
+    count: (o) => (o?.counts ? ruleCount(o.counts) : null),
   },
   {
     hash: '#/library',
     page: 'library',
     label: 'Library',
     icon: 'library',
-    count: (o) =>
-      o?.counts
-        ? ['skills', 'agents', 'memory', 'notebook', 'wiki', 'config'].reduce(
-            (n, k) => n + (o.counts[k] ?? 0),
-            0,
-          )
-        : null,
+    count: (o) => (o?.counts ? libraryCount(o.counts) : null),
   },
   {
     hash: '#/kits',
@@ -47,6 +36,8 @@ const NAV = [
     page: 'loops',
     label: 'Loops',
     icon: 'loop',
+    // The union across installs, by the owner's ruling; the page lists the picked install's.
+    countTitle: 'Templates across every install',
     count: (o) => o?.counts?.loops ?? null,
   },
   { hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
@@ -55,8 +46,8 @@ const NAV = [
     page: 'installs',
     label: 'Installs',
     icon: 'layers',
-    count: (o, installs) =>
-      installs ? `${installs.filter((i) => i.state === 'active').length}/${installs.length}` : null,
+    // What is installed, on or off: a host row with nothing on it is an offer, not an install.
+    count: (o, installs) => (installs ? installs.filter((i) => i.state !== 'absent').length : null),
   },
 ]
 
@@ -76,7 +67,11 @@ function NavLink({ n, lit, count, onNavigate }) {
       >
         <Icon name={n.icon} />
         <span className="sb-label">{n.label}</span>
-        {count != null ? <span className="sb-count">{count}</span> : null}
+        {count != null ? (
+          <span className="sb-count" title={n.countTitle}>
+            {count}
+          </span>
+        ) : null}
       </a>
     </li>
   )

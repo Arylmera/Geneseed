@@ -208,8 +208,8 @@ export default function Garden({ sessions, collisions }) {
       <div className="row between wrap gap-8 gd-head">
         <span className="dim act-sm">
           {sessions.length} tree{sessions.length === 1 ? '' : 's'} · {shelves.length}{' '}
-          {shelves.length === 1 ? 'shelf' : 'shelves'} · hover a tree, or one of its pads, for its
-          details
+          {shelves.length === 1 ? 'shelf' : 'shelves'} · a tree opens its session; hover or focus
+          shows its details
         </span>
         <button
           type="button"
@@ -217,7 +217,7 @@ export default function Garden({ sessions, collisions }) {
           aria-pressed={sakura}
           onClick={toggleSakura}
         >
-          Sakura
+          Pink blossom
         </button>
       </div>
       {folded.length > 0 && (
