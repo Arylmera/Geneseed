@@ -284,9 +284,8 @@ export const MUTATIONS = [
     id: 'M14',
     name: 'drop the registry prune-on-read write',
     file: 'js/inspect/registry.mjs',
-    find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {\n'
-      + '    registrySave(kept);',
-    replace: '  if (false) {\n    registrySave(kept);',
+    find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {',
+    replace: '  if (false) {',
     gate: UNIT,
     why: 'The prune is a WRITE performed by a READ, and it is the part of that path most likely '
       + 'to be wrong. Every golden cell emitted into a fresh sandbox whose registry was empty, so '

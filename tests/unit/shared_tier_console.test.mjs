@@ -10,7 +10,9 @@ import path from 'node:path';
 import { ROOT } from '../../js/build/source.mjs';
 import { cmdUninstall, installUninstall } from '../../js/maintain/uninstall.mjs';
 import { apiMemoryDelete } from '../../js/web/actions.mjs';
+import { apiFleet } from '../../js/web/api.mjs';
 import { configItems, memoryItems } from '../../js/web/catalog.mjs';
+import { webState } from '../../js/web/state.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 
@@ -81,6 +83,15 @@ test('a global install reads the tier: rules, profile, memory, wiki (legacy name
     assert.match(apiProfile(state).text, /shared profile/);
     assert.deepEqual(memoryItems(state).map((m) => m.name).filter((n) => n.endsWith('fact')), ['shared-fact']);
     assert.ok(configItems(state).some((c) => c.name === 'wiki.json'), 'B5: the console must find wiki.json');
+  });
+});
+
+test('the Overview counts the facts the tier holds, not the host store', async () => {
+  // Two in the tier and one in the host store, so the two stores cannot give the same figure.
+  await withTier(({ tier }) => {
+    fs.writeFileSync(path.join(tier, 'memory', 'second-fact.md'), '---\nname: second-fact\ndescription: k\n---\nb\n');
+    const row = apiFleet(webState()).installs.find((i) => i.host === 'claude' && i.scope === 'global');
+    assert.equal(row?.facts, 2);
   });
 });
 

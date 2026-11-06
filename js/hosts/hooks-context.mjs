@@ -235,7 +235,8 @@ function sessionText(abs) {
 
 /** The machine tier's copy of a session file; null for what stays per host (the notebook). */
 function tierFile(rel) {
-  const tier = sharedPaths();
+  let tier;
+  try { tier = sharedPaths(); } catch { return null; }   // no home: the host layer still loads
   return {
     'user-rules.md': tier.rules,
     'PROFILE.md': tier.profile,

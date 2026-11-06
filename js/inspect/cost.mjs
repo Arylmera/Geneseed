@@ -39,7 +39,7 @@ export const CARRIER_CEILING = { full: 66_432, lean: 41_612 };
 
 /**
  * THE TRADE OF `--shared-tier on`, stated once. `--help` (js/cli-table.json), the console's toggle
- * and docs/concepts/shared-tier.md quote these sentences; tests/unit/shared_tier_option.test.mjs
+ * and docs/concepts/rules.md quote these sentences; tests/unit/shared_tier_option.test.mjs
  * holds the copies equal. The cost line carries the example figure (1 500 tokens, the estimate
  * for a tier of 6 010 bytes before the memory map); the `setup` prompt swaps in this machine's.
  */

@@ -25,6 +25,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -33,7 +34,7 @@ import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
-  makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
+  HOME_VARS, makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
 } from '../helpers/sandbox.mjs';
 
 sandboxProcessHome();
@@ -286,6 +287,33 @@ test('a locked file OUTSIDE agents/skills keeps the markers and the registry row
       assert.deepEqual(registryRoots(), [], 'the row survived a completed uninstall');
     });
   });
+});
+
+test('a row recorded during the prune survives it, and the dead row still goes', (t) => {
+  // `registryRoots` walks a snapshot, then writes. A record landing in that walk is played here by
+  // the walk's own existence check, the one moment both processes hold the file: no timing needed.
+  const sb = makeSandbox('prune-race-');
+  const saved = Object.fromEntries(HOME_VARS.map((k) => [k, process.env[k]]));
+  Object.assign(process.env, homeOverrides(sb.path));
+  const real = fs.existsSync;
+  t.after(() => {
+    fs.existsSync = real;
+    syncBuiltinESMExports();
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    sb.cleanup();
+  });
+  const reg = path.join(sb.path, '.config', 'geneseed', 'installs.json');
+  const dead = path.join(sb.path, 'deleted-install');
+  const late = path.join(sb.path, 'late-install');
+  fs.mkdirSync(path.dirname(reg), { recursive: true });
+  fs.writeFileSync(reg, `${JSON.stringify([dead])}\n`);
+  fs.existsSync = (p) => {
+    if (p === dead) fs.writeFileSync(reg, `${JSON.stringify([dead, late])}\n`);
+    return real(p);
+  };
+  syncBuiltinESMExports();
+  assert.deepEqual(registryRoots(), []);
+  assert.deepEqual(JSON.parse(fs.readFileSync(reg, 'utf8')), [late]);
 });
 
 test('the jam fixture blocks removal of a file that is STILL A FILE', (t) => {

@@ -63,7 +63,8 @@ export const STRUCTURE = {
  * are absolute under `sharedRoot`, which no prefix may touch. Otherwise each follows the `DIR_*`
  * token it replaced, prefix included, so a project emit keeps its bytes: `prefixedAgentText`
  * calls this again after prefixing. `LINK_MEMORY` drops the link on a global emit, because an
- * absolute target is what `linkProblems` refuses as non-hermetic.
+ * absolute target is what `linkProblems` refuses as non-hermetic. `WIKI_TIER` is the hop a Rite
+ * takes past the host's wiki file, which the fold re-seeds to an empty list: nothing off a tier.
  */
 export function pathTokens(theme, sharedRoot = null) {
   const memory = theme.DIR_MEMORY ?? 'memory';
@@ -73,6 +74,8 @@ export function pathTokens(theme, sharedRoot = null) {
     PATH_NOTES: sharedRoot ? `${at}notes` : theme.DIR_NOTEBOOK ?? 'notebook',
     PATH_RULES: `${at}user-rules.md`,
     PATH_PROFILE: `${at}PROFILE.md`,
+    PATH_WIKI: `${at}geneseed-wiki.jsonc`,
+    WIKI_TIER: sharedRoot ? `, then, when that one declares no wiki, the shared \`${at}geneseed-wiki.jsonc\`` : '',
     LINK_MEMORY: sharedRoot ? `\`${at}memory/\`` : `[\`${memory}/\`](${memory}/)`,
     PROFILE_LOCATION: sharedRoot ? `\`${at}PROFILE.md\``
       : '`PROFILE.md` beside the deployed AGENT.md',

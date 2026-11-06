@@ -20,7 +20,7 @@ When a memory fact or a notebook note hardens into knowledge worth keeping acros
 
 ## Declare it in `geneseed-wiki.jsonc`
 
-The build writes a `geneseed-wiki.jsonc` stub beside `AGENT.md` (for the OpenCode global install, `~/.config/opencode/geneseed-wiki.jsonc`) and never overwrites it. The file is JSONC, so comments and trailing commas are fine. The stub contains this example, commented out:
+The build writes a `geneseed-wiki.jsonc` stub beside `AGENT.md` (for the OpenCode global install, `~/.config/opencode/geneseed-wiki.jsonc`) and never overwrites it. On a global install, declare your wiki in the shared file, `~/.config/geneseed/geneseed-wiki.jsonc`: every host reads it, and a declaration in a host file replaces that whole file. The file is JSONC, so comments and trailing commas are fine. The stub contains this example, commented out:
 
 ```json
 {

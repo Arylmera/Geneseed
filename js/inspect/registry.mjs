@@ -154,9 +154,9 @@ export function registryRecord(dir) {
  *
  * The prune is a WRITE, and reproducing it matters: `installs.json` is compared byte-for-byte,
  * so a read that failed to drop a dead row would leave the two implementations holding
- * different registries. The snapshot is taken once on purpose (its own comment says why):
- * comparing `kept` against a SECOND read could clobber a root a concurrent `record()`
- * appended between the two.
+ * different registries. The snapshot is taken once on purpose: comparing `kept` against a SECOND
+ * read could clobber a root a concurrent `record()` appended between the two. So the write takes
+ * the lock and adds what that second read holds and the snapshot did not.
  */
 export function registryRoots() {
   const original = registryLoad();
@@ -189,7 +189,13 @@ export function registryRoots() {
     }
   }
   if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {
-    registrySave(kept);
+    try {
+      withRegistryLock(() => {
+        registrySave([...kept, ...(registryLoad() ?? []).filter((r) => !original.includes(r))]);
+      });
+    } catch (e) {   // a lock that cannot be made must not fail the read; the next one prunes
+      process.stderr.write(`[geneseed] could not update the install registry ${file}: ${e.message}\n`);
+    }
   }
   return out;
 }

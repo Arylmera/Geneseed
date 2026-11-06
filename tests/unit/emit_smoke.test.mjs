@@ -321,7 +321,7 @@ const EXPECTED = {
 // skills on every host, N_ALIASES alias folders only on Claude and OpenClaude.
 //
 // A genuinely user-only skill (not an alias, `<!-- invocation: user -->` on its own target
-// — 4: learn-mode, quiz, teach, adhd) is the same story one level up: Bob gets NO
+// — 3: learn-mode, teach, adhd) is the same story one level up: Bob gets NO
 // SKILL.md for it at all (host-compat R1), only a `.bob/commands/<name>.md`, so Bob's own
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;

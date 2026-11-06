@@ -59,17 +59,20 @@ test('the PATH tokens follow the DIR tokens when relative and ignore any prefix 
   // takes no prefix: `../C:/x` is a path to nowhere.
   const cases = [
     ['bundle', STRUCTURE, null, 'memory', 'notebook', 'user-rules.md', 'PROFILE.md', '[`memory/`](memory/)',
-      '`PROFILE.md` beside the deployed AGENT.md'],
+      '`PROFILE.md` beside the deployed AGENT.md', 'geneseed-wiki.jsonc', ''],
     ['prefixed', { DIR_MEMORY: '.claude/memory', DIR_NOTEBOOK: '.claude/notebook', AT_HARNESS: '.claude/' }, null,
       '.claude/memory', '.claude/notebook', '.claude/user-rules.md', '.claude/PROFILE.md',
-      '[`.claude/memory/`](.claude/memory/)', '`PROFILE.md` beside the deployed AGENT.md'],
+      '[`.claude/memory/`](.claude/memory/)', '`PROFILE.md` beside the deployed AGENT.md',
+      '.claude/geneseed-wiki.jsonc', ''],
     ['global', { DIR_MEMORY: '../memory', DIR_NOTEBOOK: '../notebook', AT_HARNESS: '../' }, 'C:/h/.config/geneseed',
       'C:/h/.config/geneseed/memory', 'C:/h/.config/geneseed/notes', 'C:/h/.config/geneseed/user-rules.md',
-      'C:/h/.config/geneseed/PROFILE.md', '`C:/h/.config/geneseed/memory/`', '`C:/h/.config/geneseed/PROFILE.md`'],
+      'C:/h/.config/geneseed/PROFILE.md', '`C:/h/.config/geneseed/memory/`', '`C:/h/.config/geneseed/PROFILE.md`',
+      'C:/h/.config/geneseed/geneseed-wiki.jsonc',
+      ', then, when that one declares no wiki, the shared `C:/h/.config/geneseed/geneseed-wiki.jsonc`'],
   ];
-  for (const [label, theme, root, memory, notes, rules, profile, link, located] of cases) {
+  for (const [label, theme, root, memory, notes, rules, profile, link, located, wiki, wikiTier] of cases) {
     assert.deepEqual(pathTokens(theme, root), { PATH_MEMORY: memory, PATH_NOTES: notes, PATH_RULES: rules,
-      PATH_PROFILE: profile, LINK_MEMORY: link, PROFILE_LOCATION: located }, label);
+      PATH_PROFILE: profile, PATH_WIKI: wiki, WIKI_TIER: wikiTier, LINK_MEMORY: link, PROFILE_LOCATION: located }, label);
   }
 });
 
@@ -126,6 +129,24 @@ test('a canonical global emit creates the tier, renders it, and grants no direct
     fs.writeFileSync(path.join(tier, 'user-rules.md'), '# mine\n');
     driver(home, 'claude-global');
     assert.equal(read(tier, 'user-rules.md'), '# mine\n', 'the second emit keeps what the user wrote');
+  });
+});
+
+test('the wiki prose reads the host file, then the tier, on a global emit only', async () => {
+  // The fold re-seeds the host file to `"wikis": []`, so a Rite that read only that file would stop
+  // and say the machine has no knowledge base while the hook still injects the wiki.
+  await withDir(async (home) => {
+    driver(home, 'claude-global');
+    const wiki = `${spelled(tierOf(home))}/geneseed-wiki.jsonc`;
+    const hop = `, then, when that one declares no wiki, the shared \`${wiki}\``;
+    assert.ok(read(home, '.claude', 'skills', 'wiki', 'SKILL.md').includes(`or at \`$GENESEED_WIKI\`${hop}. No`), 'wiki Rite');
+    assert.ok(read(home, '.claude', 'skills', 'daydream', 'instructions.md').includes(`(or at \`$GENESEED_WIKI\`)${hop}. Strip`), 'daydream');
+    assert.ok(read(home, '.claude', 'CLAUDE.md').includes(`Declared in \`${wiki}\``), 'the carrier');
+    const repo = path.join(home, 'repo');
+    fs.mkdirSync(repo);
+    driver(home, 'claude', ['--root', repo]);
+    assert.ok(read(repo, '.claude', 'skills', 'wiki', 'SKILL.md').includes('or at `$GENESEED_WIKI`. No'), 'a project emit keeps its bytes');
+    assert.ok(read(repo, 'CLAUDE.md').includes('Declared in `.claude/geneseed-wiki.jsonc`'), 'a project carrier keeps its prefix');
   });
 });
 
@@ -268,6 +289,25 @@ test('the rule gate survives a home directory it cannot read, and still guards t
     assert.match(inStore.stdout, /writing to memory/, 'the install store still asks');
     const outside = gate(path.join(d, 'elsewhere.md'));
     assert.equal(`${outside.status} ${outside.stdout}`, '0 ');
+  });
+});
+
+test('the context hook survives a home directory it cannot read', async () => {
+  // The marker alone answers `readsTier` for a global install, so `tierFile` is the first to ask
+  // `os.homedir()`, and the hook entry has no outer try.
+  await withDir(async (d) => {
+    const root = path.join(d, 'install');
+    fs.mkdirSync(root);
+    fs.writeFileSync(path.join(root, '.geneseed-emit'), 'claude-global');
+    fs.writeFileSync(path.join(root, 'user-rules.md'), '# Host rules\n\n## R1 — Kept\nBe terse.\n');
+    const env = envOf(path.join(d, 'home'));
+    delete env.XDG_CONFIG_HOME;
+    const r = spawnSync(process.execPath, [
+      '--import', 'data:text/javascript,import os from "node:os"; os.homedir = () => { throw new Error("no home"); };',
+      path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'context', '--root', root],
+    { cwd: d, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /R1 — Kept/, 'the host layer still loads');
   });
 });
 

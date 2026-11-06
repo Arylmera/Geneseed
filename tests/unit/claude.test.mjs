@@ -195,8 +195,8 @@ test('a skill is byte-identical across the Claude and OpenCode global emits', ()
 });
 
 test('a user-only skill renders disable-model-invocation; an ordinary one does not', () => {
-  // The marker is `<!-- invocation: user -->` in the source spec. `quiz` carries it — a
-  // teaching drill a human runs on themselves, which the model must never self-trigger —
+  // The marker is `<!-- invocation: user -->` in the source spec. `teach` carries it, and
+  // so does `quiz`, its alias — a drill a human runs on themselves, never self-triggered —
   // and `develop` does not. Asserted on the emitted SKILL.md, the artifact the host reads.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');

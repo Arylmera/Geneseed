@@ -45,7 +45,7 @@ it as your very first tool call — before loading context, reading files, or se
 skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
 `=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
 `{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`,
-`{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{AT_HARNESS}}geneseed-wiki.jsonc`, `{{AT_HARNESS}}context.json`.
+`{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{PATH_WIKI}}`, `{{AT_HARNESS}}context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
@@ -414,7 +414,7 @@ It receives only the task's deliverables; your working files go in the {{NOTEBOO
 *{{EPI_WIKI}}*
 
 <!-- LEAN:begin -->
-{{INTRO_WIKI}} It is declared in `{{AT_HARNESS}}geneseed-wiki.jsonc`, a session file — or
+{{INTRO_WIKI}} It is declared in `{{PATH_WIKI}}`, a session file — or
 wherever `$GENESEED_WIKI` points. An empty `wikis` list means none is declared and this
 section stays dormant. (On OpenCode its `eager` entries are loaded for you.)
 
@@ -441,7 +441,7 @@ durable fact worth sharing across projects goes here via the
 [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to you stays in
 {{MEMORY}} (§5).
 <!-- LEAN:else -->
-{{INTRO_WIKI}} Declared in `{{AT_HARNESS}}geneseed-wiki.jsonc`, a session file (or at
+{{INTRO_WIKI}} Declared in `{{PATH_WIKI}}`, a session file (or at
 `$GENESEED_WIKI`; an empty `wikis` list means dormant) — honour each wiki: load `entries` by `load` mode as in `context.json` (§9), read
 `conventions` before your first write there, drop an unplaceable note in `inbox`,
 never write inside `protected`. It is the user's: wikilinks over bare paths, every

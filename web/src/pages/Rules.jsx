@@ -202,10 +202,18 @@ export default function Rules({ onChanged, dataRev }) {
       targets
         ? Promise.allSettled(targets.map((inst) => api.rules(pairOf(inst)))).then((rs) => {
             if (rs.every((r) => r.status === 'rejected')) throw rs[0].reason
+            const all = rs.flatMap((r, i) =>
+              r.status === 'fulfilled' ? [{ inst: targets[i], data: r.value }] : [],
+            )
+            const paths = all.map((s) => s.data.path)
             return {
-              sets: rs.flatMap((r, i) =>
-                r.status === 'fulfilled' ? [{ inst: targets[i], data: r.value }] : [],
-              ),
+              // Every global install answers with the one tier file: it counts once, tagged shared.
+              sets: all
+                .filter((s, i) => paths.indexOf(s.data.path) === i)
+                .map((s) => ({
+                  ...s,
+                  shared: paths.indexOf(s.data.path) !== paths.lastIndexOf(s.data.path),
+                })),
               failed: rs.flatMap((r, i) => (r.status === 'rejected' ? [targets[i]] : [])),
             }
           })
@@ -247,6 +255,8 @@ export default function Rules({ onChanged, dataRev }) {
 
   const many = targets.length > 1
   const idOf = (inst) => inst?.id ?? ''
+  const tagOf = (inst) =>
+    sets.find((s) => idOf(s.inst) === idOf(inst))?.shared ? 'shared' : installTag(inst)
   // A rule's key is its install and its number: two installs each have an R1.
   const rules = sets.flatMap(({ inst, data }) =>
     (data.rules || []).map((r) => ({ ...r, inst, key: `${idOf(inst)}#${r.id}` })),
@@ -283,7 +293,7 @@ export default function Rules({ onChanged, dataRev }) {
     />
   ) : many && writeTo ? (
     <p className="install-pick">
-      <span className="dim">Write to:</span> <span className="mono">{installTag(writeTo)}</span>
+      <span className="dim">Write to:</span> <span className="mono">{tagOf(writeTo)}</span>
     </p>
   ) : null
 
@@ -308,7 +318,7 @@ export default function Rules({ onChanged, dataRev }) {
 
   const onDelete = async (r) => {
     const ok = await confirm(
-      `Retire rule R${r.id} — “${r.title}”${many ? ` from ${installTag(r.inst)}` : ''}? ` +
+      `Retire rule R${r.id} — “${r.title}”${many ? ` from ${tagOf(r.inst)}` : ''}? ` +
         'It moves to user-rules-retired.md, which is never loaded.',
       {
         title: 'Retire this rule?',
@@ -337,7 +347,7 @@ export default function Rules({ onChanged, dataRev }) {
     if (res) setFocusTo(r.key)
   }
   const warnings = sets.flatMap(({ inst, data }) =>
-    (data.warnings || []).map((w) => (many ? `${installTag(inst)}: ${w}` : w)),
+    (data.warnings || []).map((w) => (many ? `${tagOf(inst)}: ${w}` : w)),
   )
 
   // Drafted by the fold and not yet decided; deciding one is the rule Rite's job, not this page's.
@@ -381,8 +391,9 @@ export default function Rules({ onChanged, dataRev }) {
       ) : null}
       {pending ? (
         <p className="sub rule-notice" role="status">
-          {pending} rule{pending === 1 ? '' : 's'} from another host {pending === 1 ? 'is' : 'are'}{' '}
-          waiting for your approval. Ask the agent to run the rule Rite.
+          {pending} item{pending === 1 ? '' : 's'} from another host {pending === 1 ? 'is' : 'are'}{' '}
+          waiting for your approval. Until you decide, the host files bind. Ask the agent to run the
+          rule Rite.
         </p>
       ) : null}
       {warnings.map((w) => (
@@ -447,7 +458,7 @@ export default function Rules({ onChanged, dataRev }) {
               <RuleRow
                 key={r.key}
                 rule={r}
-                tag={many ? installTag(r.inst) : null}
+                tag={many ? tagOf(r.inst) : null}
                 isOpen={open === r.key}
                 onToggle={() => setOpen(open === r.key ? null : r.key)}
                 onEdit={() => {

@@ -57,7 +57,8 @@ describe('Rules', () => {
   it('says how many rules wait for approval, and nothing when none do', async () => {
     api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, pending: 2 }))
     const { unmount } = render(<Rules />)
-    await waitFor(() => expect(screen.getByText(/2 rules from another host are/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/2 items from another host are/)).toBeTruthy())
+    expect(screen.getByText(/Until you decide, the host files bind/)).toBeTruthy()
     unmount()
     api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, pending: 0 }))
     render(<Rules />)
@@ -552,9 +553,15 @@ describe('Rules across installs', () => {
     state: 'active',
     default: true,
   }
-  const ocRules = { ...PAYLOAD, fingerprint: 'oc-fp', rules: [PAYLOAD.rules[0]] }
+  const ocRules = {
+    ...PAYLOAD,
+    path: '/oc/user-rules.md',
+    fingerprint: 'oc-fp',
+    rules: [PAYLOAD.rules[0]],
+  }
   const clRules = {
     ...PAYLOAD,
+    path: '/cl/user-rules.md',
     fingerprint: 'cl-fp',
     rules: [{ ...PAYLOAD.rules[0], title: 'Claude only' }],
   }
@@ -566,6 +573,18 @@ describe('Rules across installs', () => {
   })
   afterEach(() => {
     delete api.installs
+  })
+
+  // Every global install answers with the one shared file: one list, one count, one write target.
+  it('lists a file two installs share once, and counts its pending items once', async () => {
+    api.rules.mockImplementation(() => Promise.resolve({ ...clRules, pending: 2 }))
+    render(<Rules />)
+    expect((await screen.findAllByText('Claude only')).length).toBe(1)
+    expect(screen.getByText(/2 items from another host are/)).toBeTruthy()
+    expect(document.querySelector('.rule-head').textContent).toMatch(/shared/)
+    fireEvent.click(screen.getByText('Add rule'))
+    expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
+    expect(document.querySelector('.rule-form .install-pick').textContent).toBe('Write to: shared')
   })
 
   // Two installs listed but one writable: no picker to hide behind, the form names its target.

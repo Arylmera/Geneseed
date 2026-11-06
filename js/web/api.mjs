@@ -36,6 +36,7 @@ import {
   configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
+import { memoryDir } from './catalog.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
 
 /**
@@ -160,14 +161,14 @@ const driftCounts = (files) => ({
 });
 
 /**
- * How many memory facts an install's data dir holds: the `.md` files of `<dir>/memory` (where
+ * How many memory facts a store holds: the `.md` files of `store` (`memoryDir`, where
  * `memoryItems` reads them), minus its index and README (the console's furniture), any case.
  * No folder is no facts (0); a folder that cannot be listed is null, so a row says "not read"
  * rather than "no facts".
  */
-export function memoryFactCount(dir) {
+export function memoryFactCount(store) {
   try {
-    return readdirSync(path.join(dir, 'memory'))
+    return readdirSync(store)
       .filter((f) => /\.md$/i.test(f) && !/^(memory|readme)\.md$/i.test(f)).length;
   } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
 }
@@ -260,7 +261,7 @@ export function apiFleet(state) {
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
       // Its memory facts: one directory listing (`memoryFactCount`), no file read.
-      facts: memoryFactCount(dir),
+      facts: memoryFactCount(memoryDir({ target: dir })),
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
