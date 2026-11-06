@@ -42,7 +42,11 @@ function Row({ k, help, children, control }) {
 
 function Section({ id, title, head, className = '', children }) {
   return (
-    <section id={`set-${id}`} className={`card sheet-sec ${className}`} aria-labelledby={`${id}-h`}>
+    <section
+      id={`set-${id}`}
+      className={`card pad-md sheet-sec ${className}`}
+      aria-labelledby={`${id}-h`}
+    >
       <div className="card-head">
         <h3 id={`${id}-h`}>{title}</h3>
         {head}
@@ -226,7 +230,7 @@ export default function Settings({ overview, onAction }) {
         : 'unknown'
 
   return (
-    <div className="narrow-lg">
+    <div>
       <PageHeader title="Settings" sub="This copy of Geneseed and the local server." />
 
       <div className="sheet">
@@ -245,6 +249,11 @@ export default function Settings({ overview, onAction }) {
                       update with <code className="mono">{upd.command}</code>
                     </span>
                   ) : null
+                ) : upd?.behind === false ? (
+                  <span className="dim">
+                    This checkout cannot pull: it has local changes, a detached HEAD, no upstream or
+                    a diverged branch.
+                  </span>
                 ) : (
                   <button className="btn" onClick={update}>
                     <Icon name="download" />
