@@ -248,6 +248,8 @@ h1.h { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-2
 h2.h { font-family: var(--font-display); font-weight: 600; font-size: 19px; /* off-scale: 19px between steps */
   letter-spacing: -.01em; margin: 0; }
 .sub { color: var(--text-2); font-size: var(--fs-md); margin: 0; max-width: 70ch; }
+.sub-wide { max-width: none; }
+.head-text { flex: 1 1 0; min-width: 0; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .muted { color: var(--text-2); }
 .dim { color: var(--text-3); }

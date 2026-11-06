@@ -53,7 +53,7 @@ export default function Profile({ onChanged, dataRev }) {
       <div className="mb-16">
         <div className="eyebrow">identity · yours</div>
         <h2 className="h">Profile</h2>
-        <p className="sub">
+        <p className="sub sub-wide">
           Who you are and how you like to work, from <code className="mono">PROFILE.md</code>.
           {reads.some((r) => r.value?.shared)
             ? ' Every harness on this machine shares that one file; a project install keeps its own.'
@@ -135,7 +135,7 @@ function ProfileOf({ install, tag, onChanged }) {
       </div>
 
       {notice ? (
-        <p className="sub rule-notice" role="status">
+        <p className="sub sub-wide rule-notice" role="status">
           {notice}
         </p>
       ) : null}

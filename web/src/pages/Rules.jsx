@@ -85,7 +85,7 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy, writeTo = null }
         />
       </label>
       {bodyError ? (
-        <p id="rule-body-error" className="sub rule-notice" role="alert">
+        <p id="rule-body-error" className="sub sub-wide rule-notice" role="alert">
           {bodyError}
         </p>
       ) : null}
@@ -197,7 +197,7 @@ function PendingRules({ drafts }) {
         <h2 id="rules-pending">Pending</h2>
         <span className="mono dim">{drafts.length}</span>
       </div>
-      <p className="sub">
+      <p className="sub sub-wide">
         Waiting in <code className="mono">user-rules.draft.md</code>. A pending rule still binds on
         its host, and only there. The agent’s rule Rite decides each one: ask the agent to run it.
       </p>
@@ -319,7 +319,7 @@ export default function Rules({ onChanged, dataRev }) {
   // Where a new rule goes, said beside its form: a picker over two writable installs or more;
   // with one, its tag, once the page lists two installs; and a refusal when the draft's is gone.
   const writeToLine = lost ? (
-    <p className="sub rule-notice" role="alert">
+    <p className="sub sub-wide rule-notice" role="alert">
       The install this draft was for has no user-rules.md now, so it is not saved anywhere else.
       Cancel it, or copy the text into a new rule.
     </p>
@@ -397,10 +397,10 @@ export default function Rules({ onChanged, dataRev }) {
   return (
     <>
       <div className="head-row mb-16">
-        <div>
+        <div className="head-text">
           <div className="eyebrow">governance · yours</div>
           <h2 className="h">Rules</h2>
-          <p className="sub">
+          <p className="sub sub-wide">
             Your own standing rules, from <code className="mono">user-rules.md</code>.
             {sets.some((s) => s.shared)
               ? ' Every harness on this machine shares that one file, so a rule here binds all of them; a project install keeps its own file, tagged with its install.'
@@ -416,7 +416,7 @@ export default function Rules({ onChanged, dataRev }) {
             </p>
           ))}
           {exists ? (
-            <p className="sub">
+            <p className="sub sub-wide">
               {files.length > 1
                 ? 'Each total counts its file’s header too.'
                 : 'The total counts the file’s header too.'}
@@ -435,18 +435,18 @@ export default function Rules({ onChanged, dataRev }) {
       </div>
 
       {notice ? (
-        <p className="sub rule-notice" role="status">
+        <p className="sub sub-wide rule-notice" role="status">
           {notice}
         </p>
       ) : null}
       {read.failed.length ? (
-        <p className="sub rule-notice" role="status">
+        <p className="sub sub-wide rule-notice" role="status">
           Could not read user-rules.md of{' '}
           {read.failed.map((i) => (i ? installTag(i) : 'the default install')).join(', ')}.
         </p>
       ) : null}
       {warnings.map((w) => (
-        <p key={w} className="sub rule-notice">
+        <p key={w} className="sub sub-wide rule-notice">
           format warning: {w}
         </p>
       ))}
@@ -459,7 +459,7 @@ export default function Rules({ onChanged, dataRev }) {
             new rule
           </div>
           {gone ? (
-            <p className="sub rule-notice" role="status">
+            <p className="sub sub-wide rule-notice" role="status">
               Rule R{draft.no} is no longer in user-rules.md (an agent session removed or renumbered
               it). Your draft is kept — Save adds it as a new rule.
             </p>
