@@ -106,14 +106,22 @@ of them.
 
 ## The rail
 
-The left rail mirrors the harness's own shape:
+The left rail has one flat list, and two entries at its foot:
 
-| Group | Views |
+| Entry | Holds |
 | --- | --- |
-| *(ungrouped)* | Dashboard |
-| **📖 Codex** | Constitution · Rules · Profile · Skills · Agents · Library · Loops · Docs |
-| **🩺 Care** | Activity · Changes · Doctor |
-| **🎨 Setup** | Harness · Settings |
+| **Overview** (`#/`) | The fleet: every install on one Ledger, and *Needs you* |
+| **Constitution** (`#/laws`) | Ethos, Rules and doctrines |
+| **Library** (`#/library`) | Skills, agents and the rest of the catalogue |
+| **Kits** (`#/kits`) | The kit catalogue |
+| **Loops** (`#/loops`) | Tabs: Templates · Bricks · Active |
+| **Personal** (`#/personal`) | Tabs: Rules · Profile · Memory · Notebook |
+| **Installs** (`#/installs`) | Tabs: Hosts · Kits · Local edits · Doctor · Server |
+| **Docs**, **Activity** (foot) | The documentation, and the agent sessions on this machine |
+
+The old flat routes still resolve to their tab (`VIEW_ALIAS`, `web/src/lib/router.js`): `#/rules`,
+`#/profile`, `#/harness`, `#/harnesses`, `#/themes`, `#/diff`, `#/doctor`, `#/settings`, `#/about`.
+The view notes below keep those older names and their old grouping.
 
 At the foot of the rail sits a **vitals** card — the doctor's verdict, drift, how long ago the
 harness was built, and a Voice button — so those facts are on screen from every page. It is
@@ -205,7 +213,7 @@ streams the output of background jobs and keeps their history across reloads.
   no rule uses.
 - **Library** (`#/library`) — browse the content that has no tab of its own: **Memory ·
   Notebook · Knowledge** (the wiki chip, which also carries the two setup manifests).
-  Constitution, Skills and Agents each have their own rail entry instead. Drill into a section, then an item, to read its
+  Constitution has its own rail entry, and Memory and Notebook are also tabs of Personal. Drill into a section, then an item, to read its
   rendered markdown body and follow its cross-links. On a memory fact, a **Forget this
   fact** control deletes it (token-gated; bare-slug guarded server-side), and a
   **Promote to rule** control turns a recurring lesson into a trial rule in
@@ -315,12 +323,13 @@ streams the output of background jobs and keeps their history across reloads.
 
 ### 🎨 Setup
 
-- **Harness** (`#/harness`) — this machine's own install first (path, voice, footprint,
+- **Hosts** (`#/installs/hosts`; `#/harness` resolves here) — this machine's own install first (path, voice, footprint,
   and when it was built), then the **Voice** reference, then every detected install. A
   **Sync with source** column says whether each install is behind the source (and by how many
   files), in sync or not checked, shows hand edits apart from stale files, and links to Local edits.
   `#/harnesses` and `#/themes` both still resolve here, so old links and bookmarks keep
-  working.
+  working. *Make default* on an active row sets the default install (above), and a per-repo
+  install's panel has the **Shared tier** switch, with its benefit and cost beside it.
   - The **Voice** card is the former Themes tab, kept as a REFERENCE rather than a second
     control: a collapsed row that opens to every shipped voice with its tagline, the
     deployed one pinned first and marked. It is the one place you can read what a voice
@@ -350,7 +359,7 @@ streams the output of background jobs and keeps their history across reloads.
 - **Server** (`#/installs/server`; `#/settings` and `#/about` resolve here) — a settings sheet
   with a section index. **Appearance**: skin, accent (a skin change resets it to the skin's own), Overview view. **Machine**:
   version + Update (labelled by how this copy updates: git pull, npm install -g, or the command
-  to run by hand), Add to PATH, the footprint of the install the head's *Footprint of:* picker names (read-only, links to Hosts). **Server**: running · port ·
+  to run by hand; on the Overview the button shows only when the pull can run), Add to PATH, the footprint of the install the head's *Footprint of:* picker names (read-only, links to Hosts). **Server**: running · port ·
   pid · uptime, whether the code matches the disk (with Restart), start-at-login state (read
   only), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
   **Danger zone**: Stop server, Remove from PATH, and a pointer to each install's own

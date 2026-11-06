@@ -13,7 +13,7 @@ a module that does not exist, is a test failure. `geneseed doctor` reports the s
 
 ```
 bin/geneseed-cli.mjs     the `geneseed` CLI — 20+ verbs, may NOT spawn
-bin/geneseed-hook.mjs    the hook entry — 5 verbs, loads on EVERY tool call (~14 ms)
+bin/geneseed-hook.mjs    the hook entry — 6 verbs, loads on EVERY tool call (~14 ms)
 bin/build-driver.mjs     `geneseed-build` — a thin entry over js/build/driver.mjs
 
 js/build/     src/ + themes/  →  rendered text  →  a bundle  →  a per-host install

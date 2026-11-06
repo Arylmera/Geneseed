@@ -61,7 +61,7 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 - on **Stop**, runs `geneseed-hook learn` over the session to capture durable memories.
   Claude Code pipes the hook payload (with the session's `transcript_path`) to the
   command on stdin; `learn` reads that, flattens the transcript, distils new
-  memories, and **writes them into the bundle's `memory/` while updating
+  memories, and **writes them into the memory store while updating
   `MEMORY.md`** — deduping against what is already stored. No `< /dev/null` and no
   redirection: the stdin payload is the whole point.
 - on **SubagentStop**, runs the *same* `geneseed-hook learn` command. `learn` reads the
@@ -86,8 +86,9 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   a harmless no-op — it returns immediately rather than reading the transcript for
   nothing; running `learn` by hand with notes piped in still prints the prompt it
   would have sent. Geneseed never embeds an API key.
-  If your bundle's `memory/` is not at `./memory` or `./Harness/memory`, point at
-  it with `GENESEED_MEMORY=/abs/path/to/memory`.
+  A global install writes to the shared store, `~/.config/geneseed/memory/`. A bundle
+  whose `memory/` is not at `./memory` or `./Harness/memory` needs it named:
+  `GENESEED_MEMORY=/abs/path/to/memory`.
 
 Adjust the paths if your harness bundle is not at the repository root. On Windows
 the commands are identical (`node bin/geneseed-hook.mjs …`).

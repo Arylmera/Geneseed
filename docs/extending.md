@@ -888,8 +888,11 @@ rows, nor `web/package.json`.
 the `.geneseed-disabled` stash; registry rows whose directory is gone; and everything after the
 point where a `rebuild-all` fails mid-loop — it is best-effort by contract and leaves a mixed
 machine. Autostart entries are surveyed and reported, never rewritten. An install whose carrier
-predates the comms pack (§2d item 7) is also skipped, deliberately, every run until its owner
-runs `geneseed setup` for it — `rebuild-all` names it SKIPPED rather than re-emitting it.
+predates the comms pack (§2d item 7) is no longer skipped: it is rebuilt as it reads.
+
+**A global emit also folds.** In a host's own config directory it moves that host's stores into the
+shared tier (`foldOnEmit`, `js/build/fold.mjs`), so a rebuild is not only a re-render there. Nothing
+moves on a project install, in `geneseed diff`, or under a `--config-dir` that is not the host's own.
 
 **The web daemon serves the code it launched with**, plus an in-memory cache of every dist file.
 After a `web/dist` rebuild the correct move is `geneseed web restart`, not a hard refresh —

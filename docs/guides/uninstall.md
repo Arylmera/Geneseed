@@ -18,7 +18,7 @@ geneseed uninstall --target ~/.claude       # a global install: pass its config 
 
 Without `--target`, the command picks the project install in the current folder if there is one, and the OpenCode global install otherwise. It prints what it will remove and asks before going on. Pass `--yes` to skip the question. In a shell without an interactive terminal, `--yes` is required: without it, the command refuses and exits 1.
 
-To see where each install lives, run `geneseed status`. The web console's **Harnesses** page can also uninstall.
+To see where each install lives, run `geneseed status`. The web console's **Installs** page can also uninstall.
 
 ## What it removes
 

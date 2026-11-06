@@ -30,6 +30,7 @@
 | Set up | [MCP servers](guides/mcp.md) · [MarkItDown](guides/mcp-markitdown.md) · [GitLab](guides/mcp-gitlab.md) · [Filesystem](guides/mcp-filesystem.md) · [Reading non-markdown docs](guides/read-non-markdown.md) | Where the config lives, the three presets, and reading PDF and Office files |
 | Loops | [Run a loop](guides/run-a-loop.md) · [Which loop template](guides/loop-which-template.md) · [While a loop runs](guides/loop-running.md) · [Finish a loop](guides/loop-finish.md) | Working a requirement as small, validated, committed iterations |
 | Keep it running | [Upgrade](guides/upgrade.md) | Getting a new version onto every install |
+| Keep it running | [Upgrade to 5.0](guides/upgrade-to-5.md) | A 4.x machine reaching 5.0: what moves, what to check, how to go back |
 | Keep it running | [Migrate from a clone to npm](guides/migrate.md) | Moving an old clone install to the npm package |
 | Keep it running | [Start the web console at login](guides/autostart.md) | Keeping the console running |
 | Keep it running | [Uninstall](guides/uninstall.md) | Removing an install — and what stays behind |
@@ -40,7 +41,7 @@
 
 **Harness** — [Hosts](concepts/hosts.md) · [What each host automates](concepts/host-matrix.md) · [Rules](concepts/rules.md) · [Agents](concepts/agents.md) · [Skills](concepts/skills.md) · [Hooks](concepts/hooks.md) · [Hook gates, settings and the shim](concepts/hook-gates.md)
 
-**Memory** — [Memory](concepts/memory.md) · [Notebook](concepts/notebook.md)
+**Memory** — [Memory](concepts/memory.md) · [Notebook](concepts/notebook.md) · [The shared tier](concepts/shared-tier.md)
 
 **Configuration** — [Footprint](concepts/footprint.md) · [Themes](concepts/themes.md) · [Exclusions](concepts/exclusions.md) · [Kits](concepts/kits.md) · [Code intelligence (LSP)](concepts/lsp.md)
 
@@ -60,4 +61,4 @@
 
 ## For contributors
 
-[Extending Geneseed](extending.md) — what each kind of addition costs · [DESIGN.md](../DESIGN.md) · [Design history](design-history.md) · [Token footprint](token-footprint.md) · [Web console internals](web-ui.md) · [OpenCode plugin wiring](opencode-plugin-setup.md) · [Candidate hosts](candidate-hosts.md) · adapters: [OpenCode](../adapters/opencode/README.md), [Claude Code](../adapters/claude-code/README.md), [Bob](../adapters/bob/README.md), [OpenClaude](../adapters/openclaude/README.md)
+[Product requirements](PRD.md) · [Architecture, C4](architecture.md) · [Console design system](DESIGN.md) · [Extending Geneseed](extending.md) — what each kind of addition costs · [DESIGN.md](../DESIGN.md) · [Design history](design-history.md) · [Token footprint](token-footprint.md) · [Web console internals](web-ui.md) · [OpenCode plugin wiring](opencode-plugin-setup.md) · [Candidate hosts](candidate-hosts.md) · adapters: [OpenCode](../adapters/opencode/README.md), [Claude Code](../adapters/claude-code/README.md), [Bob](../adapters/bob/README.md), [OpenClaude](../adapters/openclaude/README.md)

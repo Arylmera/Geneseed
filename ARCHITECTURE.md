@@ -1,5 +1,9 @@
 # Architecture
 
+<!-- geneseed:doc:start -->
+Detailed architecture, with C4 views: [`docs/architecture.md`](docs/architecture.md).
+<!-- geneseed:doc:end -->
+
 A bird's-eye map of Geneseed, in the [matklad](https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html)
 sense: what the parts are, where they live, and which lines between them must not be crossed. It
 points at the detail rather than repeating it — [`js/README.md`](js/README.md) is the module map,
@@ -17,6 +21,9 @@ theme. It ships as an npm package and as a plain git clone that updates itself w
 ```
 src/ + themes/ ──render──▶ bundle (Harness/) ──emit──▶ host install (.claude/, .opencode/, …)
                 js/build/                     js/build/emit-*  +  js/hosts/
+                                                      │ fold, global installs only
+                                                      ▼
+                              shared tier (~/.config/geneseed): memory, rules, profile, wiki
 ```
 
 | Where | What lives there |
@@ -29,7 +36,7 @@ src/ + themes/ ──render──▶ bundle (Harness/) ──emit──▶ host 
 | `js/inspect/` | The read-only half: `doctor`, `status`, `diff`, `validate`, the catalog |
 | `js/maintain/` | Lifecycle verbs that change an existing install: setup, update, uninstall, migrate |
 | `js/loop/` | `geneseed loop`, the state machine over a loop file |
-| `js/lib/`, `js/ui/`, `js/web/` | Primitives, terminal output, the `geneseed web` console |
+| `js/lib/`, `js/ui/`, `js/web/` | Primitives (`machine-dir.mjs` is the one home of the shared tier's paths), terminal output, the `geneseed web` console |
 | `adapters/` | Code that runs inside a host's process (OpenCode plugins) |
 | `web/` | The console UI; `web/dist/` is built and committed |
 | `tests/` | `node --test` units, the golden emit/CLI matrix, the mutation matrix |
@@ -67,6 +74,7 @@ Each one is enforced by a test or a doctor arm, not by convention.
 - **Install never needs a backup.** Root files get a delimited managed block, settings are merged
   key by key, skills and agents are claimed on create, and uninstall deletes only manifest-owned
   paths. → [ADR 0004](docs/adr/0004-uninstall-without-backups.md)
+- **The fold never deletes.** It moves a global install's stores into the shared tier, reads each copy back, and only then moves the old store aside; a second run writes nothing (`tests/unit/fold.test.mjs`). → [ADR 0011](docs/adr/0011-shared-tier.md)
 - **Rules are cited by id, numbered by position.** → [ADR 0005](docs/adr/0005-stable-rule-ids.md)
 - **Expected values are written out.** No snapshot directory, no `--record`. →
   [ADR 0003](docs/adr/0003-expected-values-written-out.md)

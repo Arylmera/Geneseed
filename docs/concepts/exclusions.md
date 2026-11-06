@@ -5,7 +5,7 @@ title: "Exclusions"
 kind: "concept"
 section: "Configuration"
 description: "Three ways to switch things off: one rule, one skill, or every hook in a folder."
-link: {"hash": "#/harness", "label": "Manage in Harness →"}
+link: {"hash": "#/installs/hosts", "label": "Manage on Installs →"}
 ---
 Geneseed has three ways to switch something off, and they work at different scales (plus an on/off switch for the hook gates of Laws I, III and IV, and for the ownership gate, below):
 
@@ -46,7 +46,7 @@ What "dormant" means per host:
 
 **Limits.** Globally installed skills and agents stay *listed* by the host — no host offers a per-repo switch for them. And a global install created *after* you added exclusions is silent in those folders at once, through the shared list, and its next emit applies the repo-side wiring there. Until that emit, `geneseed exclude list` flags it.
 
-The web console has the same controls in the **Excluded folders** card on the Harness page, shown once a global install exists.
+The web console has the same controls in the **Excluded folders** card on the Installs page, shown once a global install exists.
 
 ### Per-rule exclusion — one rule off
 

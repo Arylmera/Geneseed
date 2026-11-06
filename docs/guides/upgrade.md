@@ -8,6 +8,8 @@ description: "Get a new version onto every install, and keep your local edits."
 ---
 Upgrading happens in two steps: get the new Geneseed, then rebuild every install from it. Editing or updating Geneseed changes nothing on your machine until something rebuilds. The route depends on how you installed.
 
+**Coming from 4.x?** Read [Upgrade to 5.0](upgrade-to-5.md) first: the rebuild moves your memory, rules and profile into the [shared tier](../concepts/shared-tier.md).
+
 ## Installed from npm
 
 ```
@@ -42,11 +44,11 @@ The **Update** button on the Overview picks its route from how this copy of Gene
 
 | Install | What **Update** runs | When the button shows |
 |---|---|---|
-| A clone (or a worktree) | `geneseed upgrade` | Always, because `main` moves between releases. |
+| A clone (or a worktree) | `geneseed upgrade` | When the pull can run, even with no release out, because `main` moves between releases. A clone with local changes, a detached HEAD, no upstream or a diverged branch shows no button, since the job would refuse. While the clone's own check runs, the chip says so and no button shows. |
 | A global npm install (`npm root -g`/geneseed) | `npm install -g geneseed@latest`, then `geneseed rebuild-all` from the new package | When npm has a newer release. |
 | Anything else (an npx cache, a project's `node_modules`, an unzipped copy) | Nothing. The Overview shows the command to run instead. | Never. |
 
-On a clone, the Overview also says whether there is anything to pull. Once a day the console runs `git fetch` in the background and counts the commits upstream has that the clone does not: "3 commits to pull", or "up to date". The fetch has the same timeout as `upgrade` (`GENESEED_NET_TIMEOUT`, 120 s by default). If the fetch fails, the Overview shows the release check instead, and the button stays. `GENESEED_NO_UPDATE_CHECK` turns off both the npm check and the fetch.
+On a clone, the Overview also says whether there is anything to pull. Once a day the console runs `git fetch` in the background and counts the commits upstream has that the clone does not: "3 commits to pull", or "up to date". The fetch has the same timeout as `upgrade` (`GENESEED_NET_TIMEOUT`, 120 s by default). If the fetch fails, the Overview shows the release check instead, and the button stays. If a release is out and the clone cannot pull, the chip's tooltip names the reasons. `GENESEED_NO_UPDATE_CHECK` turns off both the npm check and the fetch.
 
 The console asks npm for the latest release once a day. An Overview page that stays open asks the console again every hour, and each time you come back to its tab, so it shows a new release within a day.
 
@@ -56,21 +58,25 @@ When the update is done, the console restarts and the page reloads. If you ran `
 
 ## The oldest install an upgrade accepts
 
+A 1.x install must rebuild on a 4.x release first: hooks that name `harness.py` no longer read as Geneseed's.
+
 5.0.0 no longer recognises an install built before the comms pack (3.7.0, 2026-09-27) and no longer skips it. Its carrier names `process 8` and its `Active packs:` line has no `comms`; `rebuild-all`, `upgrade`, `migrate` and the web console now rebuild it as it reads, which drops the codes rule and leaves the old rule numbers unmapped. Upgrade such an install to a 4.x release first and run `geneseed rebuild-all` there, or run `geneseed setup` for it before moving to 5.0.0.
 
 ## What an upgrade keeps
 
 A rebuild only replaces files the install's manifest says Geneseed owns. It leaves these alone:
 
-- the `memory/` and `notebook/` stores;
-- your `context.json` and `geneseed-wiki.jsonc` (an older `wiki.jsonc` is renamed to it, contents untouched);
+- the `memory/` and `notebook/` stores of a project install;
+- your `context.json` and a project's `geneseed-wiki.jsonc` (an older `wiki.jsonc` is renamed to it, contents untouched);
 - the marker files that record each install's choices (theme, footprint, packs, excluded rules), which every rebuild reads back;
 - your own agents, skills, plugins and hooks, and any `opencode.json` or `settings.json` keys you wrote yourself;
 - the `improvements/` folder (see below).
 
+A rebuild of a global install in its host's own config directory also runs [the fold](../concepts/shared-tier.md#the-fold). That moves its facts, self-improvement notes, exclude paths and, where the tier holds only a seed, its profile and wiki manifest into `~/.config/geneseed/`. Its other rules stay in force in the host file until you decide. Nothing is deleted: the old store moves to `archived-memory/<stamp>/`. The tier itself is never rebuilt, so what you keep there survives every upgrade.
+
 ## Local edits, and the improvements file
 
-The agent records what it learns about a skill or agent in notes under `notebook/skill-notes/` and `notebook/agent-notes/`, which rebuilds never touch. Edits made to the deployed agent and skill files themselves, by you or by an older harness, are another matter: a rebuild would overwrite those, so **setup, re-theme and upgrade export them first**. When deployed files carry local edits (files only behind the source are not edits and are not exported), the differences are written to a markdown **improvements file** in `improvements/`, inside the install's own folder (for the OpenCode global install, `~/.config/opencode/improvements/`). The manifest does not list that folder, so rebuilds never overwrite it and uninstall never removes it.
+The agent records what it learns about a skill or agent in notes, which rebuilds never overwrite: under `notes/skill-notes/` and `notes/agent-notes/` in the shared tier on a global install, and under `notebook/skill-notes/` and `notebook/agent-notes/` on a project install. Edits made to the deployed agent and skill files themselves, by you or by an older harness, are another matter: a rebuild would overwrite those, so **setup, re-theme and upgrade export them first**. When deployed files carry local edits (files only behind the source are not edits and are not exported), the differences are written to a markdown **improvements file** in `improvements/`, inside the install's own folder (for the OpenCode global install, `~/.config/opencode/improvements/`). The manifest does not list that folder, so rebuilds never overwrite it and uninstall never removes it.
 
 A rebuild also refuses to overwrite a file you edited. The manifest records a fingerprint of every file Geneseed wrote; when a file no longer matches it, the rebuild leaves it alone and prints `kept your edited <file> — delete it to get Geneseed's copy back`. From then on the file is yours and later rebuilds skip it. A file the new version no longer ships is kept the same way, with `(no longer shipped)`. Line-ending changes from a git checkout do not count as edits. Installs made before fingerprints existed are overwritten as before.
 
@@ -82,7 +88,7 @@ geneseed diff --full                   # with line-level diffs
 geneseed diff --out improvements.md    # write the improvements file
 ```
 
-`diff` compares the global OpenCode install by default. Pass `--target <config dir>` to compare another install. A file you replaced with a link to your own copy (a skill folder junctioned or symlinked elsewhere, say) is listed as `linked`: Geneseed never writes through a link, so it is yours and not drift, and it stays out of the improvements file. A file unmodified since its build that differs only because the source moved on is listed as behind source; a rebuild updates it, and it stays out of the improvements file too. `diff` also lists every non-empty self-improvement note, and `--out` copies them into the improvements file; the upgrade export does not fire on notes alone, since a rebuild cannot lose them. The improvements file is self-contained. To make the changes permanent, hand it to an agent in a Geneseed clone and ask it to fold them back into `src/`. Then they survive every future build. The web console's **Changes** page exports the same file.
+`diff` compares the global OpenCode install by default. Pass `--target <config dir>` to compare another install. A file you replaced with a link to your own copy (a skill folder junctioned or symlinked elsewhere, say) is listed as `linked`: Geneseed never writes through a link, so it is yours and not drift, and it stays out of the improvements file. A file unmodified since its build that differs only because the source moved on is listed as behind source; a rebuild updates it, and it stays out of the improvements file too. `diff` also lists every non-empty self-improvement note, the tier's included, and `--out` copies them into the improvements file; the upgrade export does not fire on notes alone, since a rebuild cannot lose them. The improvements file is self-contained. To make the changes permanent, hand it to an agent in a Geneseed clone and ask it to fold them back into `src/`. Then they survive every future build. The web console's **Changes** page exports the same file.
 
 ## Moving from a clone to npm
 
@@ -90,4 +96,4 @@ If you installed from a clone and now want the npm package, `geneseed migrate` m
 
 ---
 
-**Next:** [Verify it works](verify.md) · [Uninstall](uninstall.md)
+**Next:** [Upgrade to 5.0](upgrade-to-5.md) · [Verify it works](verify.md) · [Uninstall](uninstall.md)

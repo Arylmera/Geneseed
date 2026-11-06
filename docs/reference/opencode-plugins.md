@@ -27,7 +27,7 @@ If a plugin seems silent on OpenCode 2, check that `~/.config/opencode/plugins/`
 
 - [geneseed-context](plugin-context.md): Puts your project docs, rules, profile, memory index and wiki in front of the agent.
 - [geneseed-guard](plugin-guard.md): Blocks credential files, catastrophic commands and protected wiki writes before they run.
-- [geneseed-learn](plugin-learn.md): Distils durable facts into memory/ once a session goes quiet.
+- [geneseed-learn](plugin-learn.md): Distils durable facts into the memory store once a session goes quiet.
 - [geneseed-workflow](plugin-workflow.md): Adds a workflow tool that runs saved orchestration scripts.
 - [geneseed-notify](plugin-notify.md): A desktop notification when a long turn finishes.
 - [geneseed-ponytail](plugin-ponytail.md): An opt-in minimal-code mode, re-applied every turn.
@@ -35,4 +35,4 @@ If a plugin seems silent on OpenCode 2, check that `~/.config/opencode/plugins/`
 
 ## Excluded folders
 
-`geneseed-context`, `geneseed-guard` and `geneseed-learn` go dormant inside a folder listed in the global install's `excludes.json` (managed by `geneseed exclude`), and inside any linked git worktree of such a folder. See [Exclusions](../concepts/exclusions.md).
+`geneseed-context`, `geneseed-guard` and `geneseed-learn` go dormant inside a folder listed in the shared `excludes.json` or the global install's own (managed by `geneseed exclude`), and inside any linked git worktree of such a folder. See [Exclusions](../concepts/exclusions.md).

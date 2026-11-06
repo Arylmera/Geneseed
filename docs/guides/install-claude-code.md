@@ -13,7 +13,7 @@ geneseed build --emit claude-global                                  # ~/.claude
 geneseed build --emit claude --out /path/to/repo --root /path/to/repo   # one repo
 ```
 
-The install writes `CLAUDE.md`, `agents/`, `skills/`, `memory/` and `notebook/`, plus hooks in Claude Code's `settings.json`. Hooks are commands Claude Code runs around each tool call. They gate risky actions and load project context (see [Hooks](../concepts/hooks.md)). For a project install the hooks go into `.claude/settings.local.json`, which stays out of git because it names a path on your machine.
+The install writes `CLAUDE.md`, `agents/`, `skills/`, `memory/` and `notebook/`, plus hooks in Claude Code's `settings.json`. A global install also creates the [shared tier](../concepts/shared-tier.md), `~/.config/geneseed/`, where your rules, profile and memory live for every host. Hooks are commands Claude Code runs around each tool call. They gate risky actions and load project context (see [Hooks](../concepts/hooks.md)). For a project install the hooks go into `.claude/settings.local.json`, which stays out of git because it names a path on your machine.
 
 Every hook calls `geneseed-hook <verb>` through one stable file, the **hook shim** at `~/.geneseed/bin/geneseed-hook` (`geneseed-hook.cmd` on Windows). The shim knows where Node and Geneseed live. If you move or replace Geneseed, one rebuild rewrites the shim and every install works again. `GENESEED_HOME` moves the shim's folder.
 

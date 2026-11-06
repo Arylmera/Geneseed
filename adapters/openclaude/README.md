@@ -40,15 +40,16 @@ repo root like every other host.
   Gitignored by the emit's `.openclaude/.gitignore`, because the hook commands name
   this machine's paths.
 - `memory/`, `notebook/` stores and their indices.
-- MCP servers you wire with `geneseed mcp` or the web console go in the repo's
-  `.mcp.json`, as on Claude.
+- MCP servers you add go in the repo's `.mcp.json`, as on Claude. `geneseed mcp` and
+  the web console list them read-only.
 
 ### Global (`--emit openclaude-global` → `~/.openclaude`, or `$OPENCLAUDE_CONFIG_DIR`)
 
 The same layout under the config dir, with `CLAUDE.md` (auto-loaded as user
 memory) and `settings.json`. `$OPENCLAUDE_CONFIG_DIR` is OpenClaude's own
 documented variable, so Geneseed honours it. Claude's `$CLAUDE_CONFIG_DIR` is
-ignored, as OpenClaude ignores it. MCP servers go in `~/.openclaude.json`, or in
+ignored, as OpenClaude ignores it. Rules, profile, facts and notes live in the shared
+tier, `~/.config/geneseed/`, which every global install on the machine reads. MCP servers go in `~/.openclaude.json`, or in
 `$OPENCLAUDE_CONFIG_DIR/.openclaude.json` when the variable is set: OpenClaude's
 global config file.
 

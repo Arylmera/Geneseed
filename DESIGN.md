@@ -193,7 +193,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Doctrines | `src/doctrines/` | `doctrines/` | the four practice packs — the one build-time axis that changes *which rules ship*; the whole catalogue is written to disk either way |
 | Delegation | `src/agents/` | `agents/` | capability specialists with output contracts |
 | Workflows | `src/skills/` | `skills/` | repeatable procedures |
-| Memory | `src/memory/` | `memory/` | one-fact-per-file convention + index |
+| Memory | `src/memory/` | `memory/` | one-fact-per-file convention + index; a global install keeps the facts in the shared tier, `~/.config/geneseed/memory/` |
 | Notebook | `src/notebook/` | `notebook/` | the agent's sovereign space — any medium, seed-once charter the agent may rewrite; only `.gitignore` re-asserted |
 | Posture | `src/postures/` | inlined into `AGENT.md` | how much ceremony the agent brings to a task |
 | Mode | `src/modes/` | inlined into `AGENT.md` | the working axis (solo, foreman, …) — orthogonal to posture |

@@ -23,7 +23,7 @@ geneseed migrate               # do it
 
 `migrate` rebuilds every registered install **with its own theme, host, footprint, posture and mode**. Nothing is reset to a default. It then rewrites the hook shim to point at the npm package, and reports anything it is not allowed to fix for you. A second run prints `already on the npm shape` and writes nothing.
 
-`--dry-run` also previews [the fold](../concepts/rules.md) for each global install, even on a machine that has already migrated, because the fold runs in every global emit. Each host is read against the shared tier as it stands, so two hosts that hold the same new fact both count it.
+`--dry-run` also previews [the fold](../concepts/shared-tier.md#the-fold) for each global install, even on a machine that has already migrated, because the fold runs in every global emit. Each host is read against the shared tier as it stands, so two hosts that hold the same new fact both count it.
 
 ## All or nothing
 

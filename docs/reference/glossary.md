@@ -24,6 +24,8 @@ Every word Geneseed uses that you would not find in a general programming glossa
 | Memory | MEMORY | durable, one-fact-per-file knowledge | a team wiki the agent writes |
 | Notebook | NOTEBOOK | the agent's sovereign space | the agent's scratch branch |
 | Wiki | WIKI | the machine-wide knowledge base | your personal notes, shared with the agent |
+| Shared tier | — | the machine-wide folder `~/.config/geneseed`: rules, profile, memory, wiki manifest, exclude paths and notes, read by every global install | `~/.gitconfig` beside each repo's config |
+| Fold | — | the step of a global emit that moves a host's stores into the shared tier, moved aside and never deleted | a migration that runs at deploy |
 | Pact | PACT | the two-way collaboration contract, stated in Telos, the first Ethos section | a working agreement |
 | Posture | — | the relationship register the agent works in (peer, mentor, expert, assistant, artisan) | pairing style |
 | Mode | — | how work gets executed — direct (the agent works every task itself) or foreman (tasks that would block the session go to a background task worker) | solo vs. delegating to a sub-team |

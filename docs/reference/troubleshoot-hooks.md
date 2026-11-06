@@ -119,13 +119,13 @@ and unset `GENESEED_CONTEXT_INJECT`.
 
 **Cause.** The learn plugin found no memory directory, or it did not load.
 
-**Fix.** Pin the store, then restart OpenCode:
+**Fix.** Run a global emit so the shared store `~/.config/geneseed/memory/` exists, then restart OpenCode. Confirm the `geneseed-*.js` files are in the plugins dir. A project install with no `memory/`, or a store elsewhere, needs one named:
 
 ```bash
-export GENESEED_HARNESS=~/.config/opencode
+export GENESEED_MEMORY=/abs/path/to/memory
 ```
 
-(or `GENESEED_MEMORY` for an explicit directory), and confirm the `geneseed-*.js` files are in the plugins dir.
+This variable and `GENESEED_HARNESS` win over the shared store, so leave them unset on a global install.
 
 **Confirm.** About a minute after the session goes quiet, stderr shows `[geneseed-learn] wrote N memory file(s): …` or a `skipped:` reason. Total silence means the plugin did not load.
 <!--/harness-->

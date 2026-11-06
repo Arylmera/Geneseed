@@ -35,14 +35,14 @@ A **skill** is a repeatable workflow written as a markdown playbook: when it app
 | stage the right paths and write a focused commit | `commit` |
 | open a pull request, or finish and merge a branch | `ship` |
 | decide whether something is a standing rule or a fact to remember | `rule` |
-| be taught a topic, or quizzed on it | `teach` |
+| be taught a topic, or quizzed on it (`/quiz` opens it too) | `teach` |
 | have every reply lead with the next action and keep the state in view (ADHD mode) | `adhd` |
 
 The full list, with each description, is in the catalog.
 
 ### Skills improve themselves
 
-Every skill ends with one beat of reflection: if a step misled or a step was missing, the agent writes the exact correction, with your assent, into that skill's notes file, `notebook/skill-notes/<name>.md`, and reads those notes the next time the skill runs. It never edits the installed skill itself: that file is rendered from `src/`, a rebuild would overwrite the edit, and `doctor` would report it as drift. Agents work the same way through `notebook/agent-notes/`. Each note is one line that carries its evidence, `- [skill|general] <correction> — seen: <what happened, against what was expected> (<date>)`: `seen:` is what you judge the correction by before folding it in, and `general` marks one that belongs in a law, doctrine or memory rather than in that one skill. `geneseed diff` lists the notes so you can fold them back into `src/`. Most runs end with nothing to change.
+Every skill ends with one beat of reflection: if a step misled or a step was missing, the agent writes the exact correction, with your assent, into that skill's notes file, `notebook/skill-notes/<name>.md` (`notes/skill-notes/<name>.md` in the [shared tier](shared-tier.md) on a global install), and reads those notes the next time the skill runs. It never edits the installed skill itself: that file is rendered from `src/`, a rebuild would overwrite the edit, and `doctor` would report it as drift. Agents work the same way through `agent-notes/`. Each note is one line that carries its evidence, `- [skill|general] <correction> — seen: <what happened, against what was expected> (<date>)`: `seen:` is what you judge the correction by before folding it in, and `general` marks one that belongs in a law, doctrine or memory rather than in that one skill. `geneseed diff` lists the notes so you can fold them back into `src/`. Most runs end with nothing to change.
 
 ### Old names keep working
 

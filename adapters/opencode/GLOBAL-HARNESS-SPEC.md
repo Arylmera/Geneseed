@@ -1,6 +1,8 @@
 # Global Harness + Convention-Glob Context — Spec
 
 Status: **implemented** (build emitter + context plugin v2 landed; docs synced).
+Since 5.0.0 a global install keeps its memory in the shared tier, so the `<cfg>/memory` and
+`GENESEED_HARNESS` steps below are history: see `docs/concepts/shared-tier.md`.
 Target adapter: OpenCode. A *second deployment mode* ("everything global, zero
 per-repo files") plus the context-discovery redesign that makes it safe.
 
@@ -370,7 +372,7 @@ git-tracked folder), else `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`
    ```powershell
    cd C:\path\to\Geneseed
    $env:GENESEED_EMIT = "opencode-global"
-   .\geneseed.cmd upgrade main imperial      # PowerShell runs a .cmd directly
+   .\geneseed.cmd upgrade imperial           # PowerShell runs a .cmd directly
    ```
    This populates `C:\Users\<user>\.config\opencode\{AGENT.md,agents,skills,plugins,memory}`.
 

@@ -197,6 +197,8 @@ So the token and the entry go in the same commit as the ported text — `docs/ex
 
 ## Conventions
 
+Docs format: markdown
+
 ESM only, `.mjs`, zero runtime dependencies. Docblocks in this repo carry *why*, not *what* — they
 are the reason a maintainer can still understand a decision, and they are worth reading before
 editing the code under them. When one contradicts the code, the code wins and the docblock is a bug.

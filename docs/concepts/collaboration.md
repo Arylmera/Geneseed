@@ -61,4 +61,4 @@ When new evidence contradicts a memory with a force, the agent must revise it in
 
 ### Profile — who you are
 
-`PROFILE.md` sits beside the instructions file, is seeded once and is never overwritten. It holds your role, habits and how you like answers pitched. It colours how the agent works but never binds — it is last in [precedence](rules.md). Edit the file directly, use the Profile tab in the web console, or let the `profile` [skill](skills.md) interview you and draft it; it writes only with your consent, and routes anything that is really a standing rule to `user-rules.md`.
+`PROFILE.md` is seeded once and never overwritten. A global install keeps it in the [shared tier](shared-tier.md), one for the machine; a project install keeps it beside the instructions file. It holds your role, habits and how you like answers pitched. It colours how the agent works but never binds — it is last in [precedence](rules.md). Edit the file directly, use the Profile tab in the web console, or let the `profile` [skill](skills.md) interview you and draft it; it writes only with your consent, and routes anything that is really a standing rule to `user-rules.md`.

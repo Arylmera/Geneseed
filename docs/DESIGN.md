@@ -1,0 +1,128 @@
+---
+type: design-system
+mirrors-commit: 9c4af014
+generated: 2026-11-06
+---
+
+# Console design system
+
+The design system of the `geneseed web` console, extracted from `web/src/styles.css`. Product
+decisions are in the root [`DESIGN.md`](../DESIGN.md), and console behaviour in
+[`web-ui.md`](web-ui.md).
+
+<!-- geneseed:doc:start -->
+## Principles
+
+- **A developer terminal, not a marketing page.** Deep ink surfaces, mono chrome, one accent (`styles.css:1-5`).
+- **Skins, not themes.** Four flavours (`cultivar`, `operator`, `matrix`, `atlas`, `web/src/hooks/useFlavour.js`) redefine the same tokens on `.app`, each in dark and light. The accent follows the deployed theme.
+- **Offline first.** Fonts are self-hosted through `@fontsource`; nothing loads from a CDN (`styles.css:19-22`).
+- **Motion defers to the user.** Every JS animation passes `motionOK()` (`web/src/lib/motion.js`), and CSS motion stops under `prefers-reduced-motion`.
+<!-- geneseed:doc:end -->
+
+<!-- geneseed:doc:start -->
+## Tokens
+
+Values are the `:root` defaults, before a flavour block overrides them. Each flavour's own values
+are in its `.fl-*` block. Contrast is the WCAG 2.x ratio against `--bg` (`#08090B`).
+`web/src/__tests__/contrast.test.js` gates AA on every flavour and surface.
+
+### Colour
+
+| Name | Value | Role | Contrast | Source |
+|---|---|---|---|---|
+| `--bg` | `#08090B` | Page background | — | `styles.css` `:root` |
+| `--bg-2` | `#0C0E11` | Second background | — | same |
+| `--surface` | `#101317` | Card | 1.07 | same |
+| `--surface-2` | `#14181D` | Raised card | — | same |
+| `--surface-3` | `#1B2026` | Highest surface | 1.22 | same |
+| `--line` | `#2C333B` | Border | 1.56 (not text) | same |
+| `--line-2` | `#3A434D` | Stronger border | 1.98 (not text) | same |
+| `--line-3` | `#4C5762` | Strongest border | 2.70 (not text) | same |
+| `--text` | `#EAEEF2` | Body text | 17.08 AAA | same |
+| `--text-2` | `#9AA6B2` | Secondary text | 8.04 AAA | same |
+| `--text-3` | `#727F8E` | Tertiary text | 4.88 AA | same |
+| `--accent` | `#3AD4C4` | Accent, set at run time | 10.81 AAA | same |
+| `--accent-2` | `#2BA89B` | Accent, second step | 6.81 AA | same |
+| `--accent-ink` | `#04100D` | Text on a filled accent | 10.50 on `--accent` | same |
+| `--good` | `#4ED888` | Success | 10.91 AAA | same |
+| `--warn` | `#E8B53D` | Warning | 10.54 AAA | same |
+| `--bad` | `#FF5C57` | Failure | 6.56 AA | same |
+| `--bad-ink` | `#1A0605` | Text on a filled `--bad` | 6.45 on `--bad` | same |
+
+### Typography
+
+| Name | Value | Role | Source |
+|---|---|---|---|
+| `--font-display`, `--font-ui` | Hanken Grotesk, system-ui | Headings and interface | `styles.css` `:root` |
+| `--font-mono` | Geist Mono, ui-monospace | Code, chips, figures | same |
+| `--fs-2xs` … `--fs-2xl` | 11, 12, 13, 14, 17, 22, 28 px | Seven steps; 11 px is the floor, 28 px the page title | same |
+
+### Spacing
+
+| Name | Value | Role | Source |
+|---|---|---|---|
+| `--sp-1` … `--sp-8` | 4, 8, 12, 16, 20, 24, 32, 48 px | A 4 px grid | `styles.css` `:root` |
+| `--rail-w`, `--topbar-h` | 248 px, 64 px | Shell. `--rail-w` must stay on `:root`, or the breakpoints stop winning | same |
+
+Breakpoints are three, and only three: 1180, 960 and 720 px.
+
+### Radius
+
+| Name | Value | Role | Source |
+|---|---|---|---|
+| `--r-xs` … `--r-xl` | 4, 7, 11, 16, 22 px | Corners, small to large | `styles.css` `:root` |
+
+### Shadow
+
+| Name | Value | Role | Source |
+|---|---|---|---|
+| `--shadow-card` | `0 1px 0 rgba(255,255,255,.02) inset, 0 14px 40px -28px rgba(0,0,0,.9)` | Card | `styles.css` `:root` |
+| `--shadow-pop` | `0 18px 50px -12px rgba(0,0,0,.7), 0 2px 0 rgba(255,255,255,.02) inset` | Popover | same |
+
+### Motion
+
+⚠ no motion token scale found: durations and easings are literal in each rule and in
+`web/src/lib/motion.js`.
+
+### Layers
+
+`--z-page` 1, `--z-sticky` 6, `--z-spotlight` 12, `--z-console` 20, `--z-tabbar` 25, `--z-scrim` 39,
+`--z-drawer` 40, `--z-pop` 45, `--z-toast` 50, `--z-modal` 60, `--z-splash` 100. A new overlay picks a
+layer, not a number.
+
+### Drift
+
+Pages still carry literal font sizes: 131 `font-size` declarations in `styles.css` use a number, not
+a `--fs-*` token. The comment at the scale says they move one page at a time, not by codemod.
+<!-- geneseed:doc:end -->
+
+<!-- geneseed:doc:start -->
+## Components
+
+Shared primitives in `web/src/components/`.
+
+| Component | Role | Variants and states | Key props |
+|---|---|---|---|
+| `PageHeader.jsx` | Page title block | With or without actions | title, children |
+| `Tabs.jsx` | Sub-pages of a rail entry | Active tab | tabs |
+| `DataTable.jsx` | Sortable data | Empty | columns, rows |
+| `Stat.jsx`, `StatusBadge.jsx` | Figures and verdicts | good, warn, bad | value, label |
+| `InstallPicker.jsx` | Names the install an action applies to | Hidden with one active install | label, value |
+| `EmptyState.jsx`, `ErrorState.jsx`, `Loading.jsx` | The three non-data states | Retry on error | message |
+| `ConfirmDialog.jsx`, `Popover.jsx`, `Toast.jsx` | Overlays | Open, closed | children |
+| `Spotlight.jsx`, `Search.jsx` | Jump to anything | `/`, Ctrl or ⌘ + K | — |
+| `Markdown.jsx` | Rendered docs and rule text | — | text |
+
+⚠ to confirm: the prop names above are summaries from reading the files, not a full contract.
+<!-- geneseed:doc:end -->
+
+<!-- geneseed:doc:start -->
+## Usage rules
+
+- **Do** use a surface and text token, so a flavour can restyle the page. **Do not** add a colour outside a flavour block; `contrast.test.js` reads the blocks.
+- **Do** reuse one of the three breakpoints. **Do not** add a fourth.
+- **Do** put an `InstallPicker` beside what it acts on. **Do not** add a console-wide install switch.
+- **Do** tag what the harnesses share as `shared` and name no harness. A project install's entry names its install.
+- **Do** pass a JS animation through `motionOK()` and give it a settled end state.
+- **Do** rebuild and commit `web/dist/` with every change under `web/src/`.
+<!-- geneseed:doc:end -->

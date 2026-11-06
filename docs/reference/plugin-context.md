@@ -12,6 +12,7 @@ One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed
 
 - **Injected in full (eager):** root `README.md`, `CONTRIBUTING.md` (or `README.adoc`, `CONTRIBUTING.adoc`), `.cursorrules`, `user-rules.md`, `PROFILE.md`. Budget-capped; an oversized file is listed instead, never silently truncated. (`AGENT.md`, `AGENTS.md` and `CLAUDE.md` are not injected — OpenCode already loads them.)
 - **Listed (lazy, path + first heading, read on demand):** `docs/`, `doc/`, `documentation/`, `architecture/`, `adr/`, and `packages/*/README.md` / `apps/*/README.md` in a monorepo, AsciiDoc `.adoc` docs included. `node_modules`, `.git`, `dist`, `build`, `vendor` and similar are never scanned.
+- **Shared tier:** a global install reads `user-rules.md`, `PROFILE.md`, the memory index and the wiki manifest from [the shared tier](../concepts/shared-tier.md) first. A project install built `--shared-tier on` reads it too, unless a global OpenCode install already does.
 - **Machine wiki:** the wikis declared in `geneseed-wiki.jsonc` ride in the same block, on the same budgets. See [Wiki](../guides/wiki.md).
 - **Explicit manifest:** `$GENESEED_CONTEXT`, `.harness/context.json` or a root `context.json` takes over from discovery; `"extend": true` layers it on top instead. See [Project context](../guides/project-context.md).
 
