@@ -12,7 +12,7 @@ import { LEGACY_WIKI_SEED, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mj
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import {
-  carriersFor, globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolvePath, sovereignBypass,
+  SHARED_TIER_RE, carriersFor, globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 import { gitRootOf } from './gitref.mjs';
@@ -163,8 +163,8 @@ const SESSION_FILES = ['user-rules.md', 'PROFILE.md', 'geneseed-wiki.jsonc', 'me
 const WHOLE_FILES = new Set(['PROFILE.md', 'geneseed-wiki.jsonc']);
 // SHA-256 of each seed body in `js/build/stubs.mjs` (`SESSION_SEEDS`), CRLF folded. A file still
 // byte-identical to its seed says nothing, so it is skipped rather than injected as noise.
-// Hashes, not an import: stubs.mjs pulls in the build's writers, and this module loads on every
-// tool call. tests/unit/claude.test.mjs gates this set, and the plugin's copy, against the seeds.
+// Hashes, not an import: stubs.mjs pulls in the build's writers, which a session start has no
+// use for. tests/unit/claude.test.mjs gates this set, and the plugin's copy, against the seeds.
 const SEED_SHA256 = new Set([
   '5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721', // user-rules.md
   '29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816', // PROFILE.md
@@ -256,9 +256,6 @@ function readsTier(hookRoot, host) {
   try { return withDiscardableStderr(() => isHostGlobalDir(host, hookRoot)); } catch { return false; }
 }
 
-/** `Shared tier: on` as the build writes it (`--shared-tier on`); the OpenCode context plugin reads the same line. */
-const SHARED_TIER_ON = /^Shared tier:[ \t]*on[ \t]*\r?$/m;
-
 /**
  * Does this PROJECT install read the machine tier? Its carrier says `Shared tier: on`, and no
  * global hook is already injecting it: under `$GENESEED_STACK_GLOBAL` the global hook does not
@@ -268,7 +265,25 @@ const SHARED_TIER_ON = /^Shared tier:[ \t]*on[ \t]*\r?$/m;
  */
 function projectReadsTier(carrier) {
   if (process.env.GENESEED_STACK_GLOBAL) return false;
-  return SHARED_TIER_ON.test(carrier);
+  return SHARED_TIER_RE.test(carrier);
+}
+
+/**
+ * How many items of the fold's ledger still wait for the user: a drafted rule, or a file with two
+ * versions. The fold writes them, and nothing else would say so. Unreadable counts as none: this is a
+ * reminder, and the fold itself reports a broken ledger.
+ */
+export function pendingDrafts() {
+  try {
+    const { items } = JSON.parse(readFileSync(sharedPaths().foldState, 'utf8'));
+    return Object.values(items ?? {}).filter((i) => i?.state === 'pending').length;
+  } catch { return 0; }
+}
+
+/** The session's reminder of them, or null. The OpenCode context plugin's `draftLine` is its twin. */
+function draftLine() {
+  const n = pendingDrafts();
+  return n ? `[drafts] ${n} drafted item${n === 1 ? '' : 's'} in user-rules.draft.md wait${n === 1 ? 's' : ''} for the user's decision (the rule skill).` : null;
 }
 
 /**
@@ -392,8 +407,8 @@ function sessionEntry(rel, abs, text, label) {
 
 /**
  * The session files in force for `hookRoot`, changed from their seed, in `SESSION_FILES` order:
- * `{ rel, abs, text, label }` per layer. A global install reads the machine tier first, then its
- * own host layer. `$GENESEED_WIKI` overrides the wiki declaration on both, as it does on OpenCode.
+ * `{ rel, abs, text, label }` per layer. A global install, or a project built `--shared-tier on`,
+ * reads the machine tier first, then its own host layer. `$GENESEED_WIKI` overrides the wiki declaration on both, as it does on OpenCode.
  * A missing or unreadable file is simply absent — this is best-effort context, never a gate.
  * `host` is what the emitted hook passes (`emittedHost`), null for none, which reads as claude.
  */
@@ -800,7 +815,8 @@ export function cmdContext(args) {
   // The ownership decline reminder (`./ownership-gate.mjs`), under the same contract: an install
   // built `--no-ownership-gate` carries `Ownership gate: off` and gets no line.
   const owned = gitRoot && !gateOff('Ownership gate') ? ownershipLine(gitRoot) : null;
-  const heads = [done, owned, gitRoot && runtimeFloorLine(gitRoot)].filter(Boolean);
+  const drafts = hookRoot && (readsTier(hookRoot, host) || projectReadsTier(carrier)) ? draftLine() : null;
+  const heads = [done, owned, gitRoot && runtimeFloorLine(gitRoot), drafts].filter(Boolean);
   if (!session.length && !eager.length && !lazy.length) {
     err(`[context] nothing to load for ${root} `
       + '(no docs discovered, no manifest entries).\n');

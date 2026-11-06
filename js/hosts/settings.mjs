@@ -404,9 +404,14 @@ function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = 
 export function opencodeEditAsks(cfgDir, global, agentRel = null) {
   const cfg = path.basename(cfgDir);
   const tails = ['opencode.json', 'opencode.jsonc', ...['excludes.json', GLOBAL_MANIFEST, '.geneseed-emit',
-    'plugins/geneseed-*.js', ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
+    'plugins/*', 'plugin/*', 'agents/*.md', 'agent/*.md', 'mode/*.md', 'modes/*.md', 'tool/*', 'tools/*',
+    ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
   ...['.claude', '.openclaude', '.bob'].flatMap((m) => [`${m}/settings.json`, `${m}/settings.local.json`]),
-  '.bob/settings/settings.json'];
+  '.bob/settings/settings.json',
+  // Persist Insight: the rule and memory stores, which the guard no longer releases on a re-issue.
+  // The coined names match anywhere, as the guard and Claude's rule gate match them; the memory
+  // folders by their last segments, so a project's unrelated `memory/` is never asked about.
+  'user-rules.md', 'user-rules.draft.md', 'MEMORY.md', `${cfg}/memory/*.md`, 'geneseed/memory/*.md'];
   const keys = [];
   if (agentRel) {
     const abs = path.resolve(path.dirname(cfgDir), agentRel);
@@ -414,6 +419,10 @@ export function opencodeEditAsks(cfgDir, global, agentRel = null) {
     const gitRel = git ? path.relative(git, abs).split(path.sep).join('/') : agentRel;
     keys.push(...new Set([agentRel, gitRel, `*../${agentRel}`,
       ...(agentRel.includes('/') ? [`*/${agentRel}`] : [])]));
+    // The store sits beside the carrier (`<out>/memory`, js/build/bundle.mjs), the same four shapes.
+    const beside = (rel) => path.posix.join(path.posix.dirname(rel), 'memory/*.md');
+    keys.push(...new Set([beside(agentRel), beside(gitRel), `*../${beside(agentRel)}`,
+      ...(agentRel.includes('/') ? [`*/${beside(agentRel)}`] : [])]));
   }
   try {
     const home = shimHome();

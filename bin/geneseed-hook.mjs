@@ -109,6 +109,21 @@ const VERBS = {
 };
 
 /**
+ * The change report's baseline (js/hosts/store-watch.mjs): `context` only, so once per session, after
+ * it has printed. Never a gate verb, whose stdout is its verdict and which runs on every tool call.
+ * Prints nothing, and a failure costs the report, never the session.
+ */
+async function baselineStores(verb, args) {
+  try {
+    if (verb !== 'context' || !args.root || process.env.GENESEED_LEARN_CHILD || isatty(0)) return;
+    const raw = readStdin();
+    if (!raw.includes('session_id')) return;
+    const { writeBaseline } = await import('../js/hosts/store-watch.mjs');
+    writeBaseline(args.root, JSON.parse(raw).session_id);
+  } catch { /* see above */ }
+}
+
+/**
  * Records the payload the verb just answered into `<root>/activity/` (js/hosts/activity.mjs),
  * AFTER the verb has decided and printed, so a verdict never waits on it and never sees it.
  * Here rather than inside each verb because Claude routes its gated tools through THREE verbs
@@ -235,6 +250,7 @@ async function main(argv) {
   }
   const rc = (await spec.load())[spec.fn](parsed.args);
   await trackActivity(verb, parsed.args);
+  await baselineStores(verb, parsed.args);
   return rc;
 }
 

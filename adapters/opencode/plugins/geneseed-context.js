@@ -253,10 +253,10 @@ function machineDir() {
 // Only a global install reads the tier: its .geneseed-emit names a -global emit, or it is the host's config dir.
 // The host's own config dir counts as global too, whatever its marker says (the hook's
 // isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
+const hostConfigDir = () => process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
 async function isHostConfigDir(dir) {
   const real = async (d) => { const r = await fs.realpath(path.resolve(d)).catch(() => path.resolve(d)); return process.platform === "win32" ? r.toLowerCase() : r }
-  const cfg = process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
-  return (await real(dir)) === (await real(cfg))
+  return (await real(dir)) === (await real(hostConfigDir()))
 }
 
 async function readsTier(dir) {
@@ -270,11 +270,19 @@ async function readsTier(dir) {
 async function projectReadsTier(dir) {
   try {
     if (!/^Shared tier:[ \t]*on[ \t]*\r?$/m.test(await fs.readFile(path.join(dir, "AGENT.md"), "utf8"))) return false
-    const cfg = process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
-    return !(await isFile(path.join(cfg, ".geneseed-emit")))
+    return !(await isFile(path.join(hostConfigDir(), ".geneseed-emit")))
   } catch { return false }
 }
 async function tierFor(dir) { return (await readsTier(dir)) || (await projectReadsTier(dir)) }
+
+// The fold's pending items, the twin of js/hosts/hooks-context.mjs `draftLine`: same line, same count.
+async function draftLine() {
+  try {
+    const { items } = JSON.parse(await fs.readFile(path.join(machineDir(), ".fold-state.json"), "utf8"))
+    const n = Object.values(items ?? {}).filter((i) => i?.state === "pending").length
+    return n ? `[drafts] ${n} drafted item${n === 1 ? "" : "s"} in user-rules.draft.md wait${n === 1 ? "s" : ""} for the user's decision (the rule skill).` : null
+  } catch { return null }
+}
 
 // A session file's text, CRLF-folded and trimmed; null when missing, unreadable or still its seed.
 async function sessionText(abs) {
@@ -918,7 +926,8 @@ async function resolveBlock(root, judged = true) {
   const done = (await doneGateOff()) ? null : await doneLine(root, judged).catch(() => null)
   const owned = (await ownershipGateOff()) ? null : await ownershipLine(root).catch(() => null)
   const floor = await runtimeFloorLine(root).catch(() => null)
-  const heads = [done, owned, floor].filter(Boolean).join("\n") || null
+  const drafts = harness && (await tierFor(harness)) ? await draftLine() : null
+  const heads = [done, owned, floor, drafts].filter(Boolean).join("\n") || null
   return { block: await buildBlock(sets, wikis, commands, await sessionFiles(harness), heads), src }
 }
 

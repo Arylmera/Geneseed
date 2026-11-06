@@ -103,6 +103,18 @@ const ZERO = { facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions
 
 // ---- Memory -------------------------------------------------------------------------------------
 
+// The change report's log (js/hosts/store-watch.mjs) is bookkeeping, like the README: it never makes a
+// seeded store look unfolded, and a folded store keeps it.
+test('the own-writes log neither triggers a fold nor is lost by one', () => world(({ cfg, fold }) => {
+  const store = path.join(cfg, 'memory');
+  fs.writeFileSync(path.join(store, '.own-writes.json'), '{}');
+  assert.deepEqual(counts(fold()), ZERO);
+  assert.equal(exists(cfg, 'archived-memory'), false);
+  fact(store, 'x.md', '---\nname: x\n---\nbody\n');
+  fold();
+  assert.equal(read(store, '.own-writes.json'), '{}');
+}));
+
 test('fresh: a fact lands byte for byte, the store moves aside and returns to its seed', () => world(({ cfg, shared, fold }) => {
   const store = path.join(cfg, 'memory');
   fact(store, 'x.md', '---\r\nname: x\r\n---\r\nbody with CRLF kept\r\n');

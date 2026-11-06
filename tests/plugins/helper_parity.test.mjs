@@ -30,14 +30,17 @@ function helperSource(src, name) {
 
 // helper -> the plugins that carry a copy. A helper added to another plugin goes in its row.
 const COPIES = {
-  norm: ["context", "guard", "learn"],
-  resolvePath: ["context", "guard", "learn"],
+  norm: ["context", "guard", "learn", "activity"],
+  resolvePath: ["context", "guard", "learn", "activity"],
   sovereignBypass: ["context", "guard", "learn"],
   mainWorktreeOf: ["context", "guard", "learn"],
   stripJsonc: ["context", "guard"],
   isFile: ["context", "guard"],
   isDir: ["context", "guard", "learn"],
   patchSections: ["guard", "context"],
+  machineDir: ["context", "guard", "learn"],
+  readsTier: ["context", "guard", "learn"],
+  storeScan: ["guard", "learn"],
 }
 
 for (const [helper, plugins] of Object.entries(COPIES)) {
@@ -49,6 +52,16 @@ for (const [helper, plugins] of Object.entries(COPIES)) {
     }
   })
 }
+
+// A one-line array has no closing brace at column 0, so it is compared by value, with the module's own.
+test("WIKI_NAMES is the same in context, guard and js/lib/machine-dir.mjs", async () => {
+  const { WIKI_NAMES } = await import("../../js/lib/machine-dir.mjs")
+  for (const p of ["context", "guard"]) {
+    const m = /^const WIKI_NAMES = \[([^\]]*)\]/m.exec(read(p))
+    assert.ok(m, `geneseed-${p}.js no longer declares WIKI_NAMES`)
+    assert.deepEqual(m[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)), WIKI_NAMES, p)
+  }
+})
 
 // Both OpenCode majors read the DEFAULT export, and each ignores the other's key: V1
 // (>= 1.3.4) loads `{ id, server }`, V2 loads `{ id, setup }` (it rejects a bare function —

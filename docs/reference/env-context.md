@@ -31,6 +31,8 @@ What gets loaded into the agent's context at session start — your project's do
 
 Where distilled memories land at session end, and which model distils them. See [Memory](../concepts/memory.md).
 
+`GENESEED_MEMORY` and `GENESEED_HARNESS` are deprecated as of 5.0.0, with removal planned for 6.0. They keep working, and the CLI prints one warning on stderr when one is set. A global install finds the shared store by itself; to pin a store for one command, pass `--memory <dir>`.
+
 | Variable | Read by | Effect |
 | --- | --- | --- |
 | `GENESEED_HARNESS` | learn, context, guard plugins; CLI | Base whose `memory/` is written (and where `geneseed-wiki.jsonc` is looked up). Optional — a global install finds the shared store by itself. Set it only to pin another store: it wins over the shared one, so a value such as `~/.config/opencode` keeps facts out of the tier. |

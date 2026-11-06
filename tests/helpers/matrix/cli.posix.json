@@ -1660,9 +1660,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/case-insensitive-name",
       "steps": [
         {

@@ -1,5 +1,5 @@
 /**
- * The OpenCode guard plugin's rule/memory speed bump (Doctrine process 1).
+ * The OpenCode guard plugin's rule/memory gate (Doctrine process 1).
  *
  * A CHANGE OF RUNNER AND NOTHING ELSE. The subject is an emitted artefact,
  * `adapters/opencode/plugins/geneseed-guard.js`, and the reference already drove it by writing a
@@ -7,11 +7,12 @@
  * plugin is imported, its hook table built, and `tool.execute.before` called the way OpenCode
  * calls it. One process instead of two, and the module under test is reached directly.
  *
- * WHY THE BUMP HAS THIS SHAPE. `tool.execute.before` can only allow or throw — there is no
- * "ask the user" tier the way a Claude hook has one. So the guard refuses the FIRST write to a
- * given rule or memory path and lets a re-issued write through: one beat of reconsideration,
- * never a trap. A guard that refused twice would silently lose the user's memory; a guard that
- * refused never would be a speed bump that is not there.
+ * WHY THE GATE HAS THIS SHAPE. `tool.execute.before` can only allow or throw — there is no
+ * "ask the user" tier the way a Claude hook has one. The guard once refused the FIRST write and
+ * let a re-issue through, and an agent released itself that way, claiming the user's authorization
+ * (2026-11). Permission must not live in the governed agent's own prompt (External Gate), so the
+ * host asks: a native edit passes only when the merged config makes the host prompt, and everything
+ * else is refused every time. No call here releases a later one.
  *
  * `plugins/` sits directly in the config dir, so the install's memory dir is `<cfg>/memory` — the
  * same resolution the plugin itself does from its own location, which is why nothing here has to
@@ -30,6 +31,7 @@ const mod = await import(pathToFileURL(PLUGIN).href);
 const factory = mod.GeneseedGuard ?? mod.default;
 assert.ok(typeof factory === 'function',
   'the plugin exports neither GeneseedGuard nor a default — OpenCode would load nothing');
+// No client: V1 cannot be read, so no prompt is proven and every store write is refused.
 const hooks = await factory();
 const before = hooks['tool.execute.before'];
 assert.ok(typeof before === 'function',
@@ -51,8 +53,8 @@ async function attempt(file) {
 const MEMORY = path.join(CFG, 'memory', 'pnpm-preferred.md');
 const RULES = path.join(CFG, 'user-rules.md');
 
-// ORDER MATTERS AND IS THE SUBJECT: the state is per-path and one call deep, so each pair below
-// has to run first-then-reissued in that order, once, against the same module instance.
+// ORDER IS THE SUBJECT: the same write twice, against one module instance, so any state a refusal
+// left behind would show as a release on the second call.
 const result = {
   memory_first: await attempt(MEMORY),
   memory_reissued: await attempt(MEMORY),
@@ -69,33 +71,105 @@ const result = {
   foreign_memory: await attempt(path.join(CFG, 'src', 'memory', 'notes.md')),
 };
 
-test('the first write to a rule or memory path is bumped', () => {
+test('with no host prompt, a rule or memory write is refused', () => {
   for (const key of ['memory_first', 'nested_memory', 'rules_first']) {
     assert.equal(result[key], 'blocked', `${key}: ${result[key]}`);
   }
 });
 
-test('a reissued write goes through', () => {
-  // The bump costs one beat, then gets out of the way. A legitimate write must never be trapped,
-  // or the agent silently loses what the user asked it to remember.
+test('a re-issued write is refused too: the agent cannot release itself', () => {
   for (const key of ['memory_reissued', 'rules_reissued']) {
-    assert.equal(result[key], 'allowed', `${key}: ${result[key]}`);
+    assert.equal(result[key], 'blocked', `${key}: ${result[key]}`);
   }
 });
 
 // A weak model (4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the blocked
-// memory index through `python3`. The refusal names one way forward, forbids the detour, names
-// no switch, and closes with the hook's own sentences (js/hosts/hooks.mjs PERSIST_ASK).
-test('the bump tells the model to ask, then re-issue the same edit once answered, and nothing else', async () => {
-  const { PERSIST_ASK } = await import('../../js/hosts/hooks.mjs');
-  assert.equal(messages.length, 3, messages.join('\n'));
+// memory index through `python3`. The refusal names one way forward, forbids the detour and names
+// no switch. It no longer closes with the hook's PERSIST_ASK: "re-issue after they answer" is the
+// release this gate gave up, and Claude's text is a real prompt the user reads.
+test('the refusal tells the model to ask and that a re-issue changes nothing', () => {
+  assert.equal(messages.length, 5, messages.join('\n'));
   for (const m of messages) {
     assert.doesNotMatch(m, /GENESEED_/, m);
     assert.match(m, /\(Persist Insight\)/, m);
-    assert.match(m, /If this edit was refused, re-issue the same edit only after they answer/, m);
+    assert.match(m, /re-issuing it changes nothing/, m);
+    assert.doesNotMatch(m, /re-issue the same edit/, m);
     assert.match(m, /never write it another way \(for example through a shell command\)/, m);
-    assert.ok(m.endsWith(PERSIST_ASK), `the twin drifted from the hook's text: ${m}`);
   }
+});
+
+// V1 with its real prompt: the keys the emit wires, read back through the merged config. Each row is
+// [tool, args, verdict, why]; the host asks inside the tool, after this hook has let it run.
+const { opencodeEditAsks } = await import('../../js/hosts/settings.mjs');
+const v1With = (edit, worktree = path.dirname(CFG)) => factory({ worktree, directory: worktree,
+  client: { config: { get: async () => ({ data: { permission: { edit } } }) }, app: { agents: async () => ({ data: [] }) } } });
+const wired = () => Object.fromEntries(opencodeEditAsks(CFG, true).map((k) => [k, 'ask']));
+async function verdict(hookSet, tool, args) {
+  try { await hookSet['tool.execute.before']({ tool }, { args }); return 'allowed'; } catch (e) {
+    const m = String(e?.message ?? e);
+    if (m.startsWith('[geneseed-guard]')) return m;
+    throw e;
+  }
+}
+
+test('V1: a native edit passes to the host prompt only where the merged config asks', async () => {
+  const asks = await v1With(wired());
+  for (const tool of ['write', 'edit', 'apply_patch']) {
+    assert.equal(await verdict(asks, tool, { filePath: MEMORY }), 'allowed', tool);
+    assert.equal(await verdict(asks, tool, { filePath: RULES }), 'allowed', tool);
+  }
+  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'src', 'MEMORY.md') }), 'allowed',
+    'the coined name asks anywhere, as Claude\'s rule gate does');
+});
+
+test('V1: a config that does not make the host ask leaves the write refused, re-issued or not', async () => {
+  const rows = [
+    ['no key at all', {}],
+    ['a blanket allow', 'allow'],
+    ['the user answered our key with allow', { ...wired(), [`${path.basename(CFG)}/memory/*.md`]: 'allow' }],
+    ['a later rule wins, as the host\'s findLast does', { ...wired(), '*': 'allow' }],
+  ];
+  for (const [why, edit] of rows) {
+    const hooksFor = await v1With(edit);
+    for (let i = 0; i < 2; i += 1) {
+      assert.match(await verdict(hooksFor, 'write', { filePath: MEMORY }), /host has no prompt wired/, why);
+    }
+  }
+  const broken = await factory({ worktree: CFG, directory: CFG,
+    client: { config: { get: async () => { throw new Error('down'); } } } });
+  assert.match(await verdict(broken, 'write', { filePath: MEMORY }), /host has no prompt wired/, 'a failed read proves no prompt');
+  assert.equal(await verdict(await v1With('ask'), 'write', { filePath: MEMORY }), 'allowed', 'a blanket ask covers it');
+});
+
+// V1's edit tools ask with `always: ["*"]`, so that answer ends every later prompt in this instance.
+test('V1: after an "always" on an edit the host will not ask, so the write is refused', async () => {
+  const fire = (h, type, properties) => h.event({ event: { type, properties } });
+  const asks = await v1With(wired());
+  await fire(asks, 'permission.asked', { id: 'p1', permission: 'bash' });
+  await fire(asks, 'permission.replied', { requestID: 'p1', reply: 'always' });
+  await fire(asks, 'permission.asked', { id: 'p2', permission: 'edit' });
+  await fire(asks, 'permission.replied', { requestID: 'p2', reply: 'once' });
+  assert.equal(await verdict(asks, 'write', { filePath: MEMORY }), 'allowed', 'a bash "always" or an edit "once" changes nothing');
+  await fire(asks, 'permission.asked', { id: 'p3', permission: 'edit' });
+  await fire(asks, 'permission.replied', { requestID: 'p3', reply: 'always' });
+  assert.match(await verdict(asks, 'write', { filePath: MEMORY }), /host has no prompt wired/);
+  const older = await v1With(wired());
+  await fire(older, 'permission.updated', { id: 'p4', type: 'edit' });
+  await fire(older, 'permission.replied', { permissionID: 'p4', response: 'always' });
+  assert.match(await verdict(older, 'write', { filePath: RULES }), /host has no prompt wired/, 'the older event names');
+  await assert.doesNotReject(asks.event({}), 'an empty event is nothing');
+});
+
+test('V1: a shell or foreign tool never reaches the prompt, so it is refused with the config wired', async () => {
+  const asks = await v1With(wired());
+  const cmds = [`echo x >> "${MEMORY}"`, `tee "${RULES}"`, `rm "${MEMORY}"`, `mv a.md "${MEMORY}"`];
+  for (const command of cmds) {
+    for (let i = 0; i < 2; i += 1) {
+      assert.match(await verdict(asks, 'bash', { command, workdir: CFG }), /through a shell command .*\(Persist Insight\)/, command);
+    }
+  }
+  assert.match(await verdict(asks, 'mcp_fs_write_file', { path: MEMORY }), /Only the host's own edit tool/);
+  assert.equal(await verdict(asks, 'bash', { command: 'echo x > notes.txt', workdir: CFG }), 'allowed');
 });
 
 test('ordinary work is untouched', () => {

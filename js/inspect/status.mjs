@@ -53,6 +53,8 @@ import {
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { isDoctorNote } from './scan.mjs';
+import { pendingDrafts } from '../hosts/hooks-context.mjs';
+import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { readDefaultInstall, sharedPaths } from '../lib/machine-dir.mjs';
@@ -360,6 +362,8 @@ export function statusData() {
     agent_md: agentMd ? String(agentMd) : null,
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
+    drafts_pending: pendingDrafts(),
+    store_report: lastStoreReport(),
     opencode_shadow: opencodeShadowedInstall(),
     openclaude_dual_harness: openclaudeDualHarnessRoots(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
@@ -462,6 +466,13 @@ export function statusLines(d, color = false) {
       .map(([k, v]) => `${k} ${v}`).join(', ');
     rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
       + (byRule ? ` (${byRule})` : '')]);
+  }
+  if (d.drafts_pending) {
+    rows.push(['drafts', `${d.drafts_pending} in user-rules.draft.md wait${d.drafts_pending === 1 ? 's' : ''} for your decision`]);
+  }
+  if (d.store_report) {
+    rows.push(['changes', `${d.store_report.files.length} rule or memory file(s) changed outside a session's approved writes, `
+      + `last on ${String(d.store_report.at).slice(0, 10)}`]);
   }
   // Conditional: null on every machine that has not set `OPENCODE_CONFIG_DIR` over an old install.
   if (d.opencode_shadow) {

@@ -383,7 +383,8 @@ test("SECRET_CONTENT_RE stays in parity with the Node hook's SECRET_RE (Law I tw
 test("permission.ask: the guard registers no dead permission hook", async () => {
   const hooks = await GeneseedGuard({ directory: tmp })
   assert.equal(hooks["permission.ask"], undefined)
-  assert.deepEqual(Object.keys(hooks), ["tool.execute.before"])
+  // `event` and `tool.execute.after` only listen: an "always" on an edit, and the change report.
+  assert.deepEqual(Object.keys(hooks).sort(), ["event", "tool.execute.after", "tool.execute.before"])
 })
 
 // ---- protected checks (External Gate) ------------------------------------------
@@ -817,6 +818,10 @@ async function installAt(cfgDir, keys, wireDir) {
   }
 }
 const keyPath = (root, k) => path.resolve(root, k.replace(/^\*\.\.\//, "").replace(/^\*\//, "deep/").replace(/\*/g, "x"))
+// The Persist Insight keys. The coined names walk like any key; a memory key's `*/` form spells a
+// `../` path, not a folder here, so the memory folders have rows in tests/unit/opencode_guard.test.mjs.
+const nameKey = (k) => /(?:^|\/)(?:user-rules(?:\.draft)?|MEMORY)\.md$/.test(k)
+const gateKey = (k) => !nameKey(k) && !/(?:^|\/)memory\/\*\.md$/.test(k)
 
 test("a shell write reaches every key opencodeEditAsks wires, project and global", async () => {
   const f = await gateConfigFixture("walk")
@@ -828,7 +833,8 @@ test("a shell write reaches every key opencodeEditAsks wires, project and global
       const keys = opencodeEditAsks(cfg, false, agentRel)
       assert.ok(keys.length > 20, "the walk has keys to walk")
       const refused = await installAt(cfg, keys, proj)
-      for (const k of keys) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(External Gate\)/, k)
+      for (const k of keys.filter(gateKey)) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(External Gate\)/, k)
+      for (const k of keys.filter(nameKey)) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(Persist Insight\)/, k)
       for (const p of [path.join(proj, "src", "AGENT.md"), path.join(proj, "settings.json"), path.join(proj, "src", "a.js")]) {
         assert.equal(await refused(p, proj), null, p)
       }
@@ -836,7 +842,8 @@ test("a shell write reaches every key opencodeEditAsks wires, project and global
     const cfg = path.join(tmp, "walk-home", ".config", "opencode")
     const keys = opencodeEditAsks(cfg, true)
     const refused = await installAt(cfg, keys, cfg)
-    for (const k of keys) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(External Gate\)/, k)
+    for (const k of keys.filter(gateKey)) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(External Gate\)/, k)
+    for (const k of keys.filter(nameKey)) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(Persist Insight\)/, k)
   })
 })
 

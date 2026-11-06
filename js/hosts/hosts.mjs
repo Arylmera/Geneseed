@@ -22,6 +22,10 @@ import { toPlatformPath, normcase } from '../lib/paths.mjs';
 import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
 import { mainWorktreeOf } from './gitref.mjs';
 
+/** The marker a project built `--shared-tier on` carries, and its one reader. The OpenCode context plugin holds a copy. */
+export const SHARED_TIER_LINE = 'Shared tier: on';
+export const SHARED_TIER_RE = /^Shared tier:[ \t]*on[ \t]*\r?$/m;
+
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
 

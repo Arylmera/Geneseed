@@ -11,6 +11,7 @@ import { promises as fs, existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { makeSandbox } from "../helpers/sandbox.mjs"
+import { spawnHook } from "../helpers/hook_run.mjs"
 
 const PLUGINS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../adapters/opencode/plugins")
 const WORKFLOWS = path.resolve(PLUGINS, "../workflows")
@@ -38,12 +39,13 @@ after(async () => {
   await fs.rm(tmp, { recursive: true, force: true })
 })
 
+const cfgRoot = () => path.resolve(PLUGINS, "..")
 const load = async (name) => (await import(pathToFileURL(path.join(PLUGINS, `geneseed-${name}.js`)).href)).default
 
 // The V2 plugin context, reduced to what the plugins touch. `calls` records every session
 // / generate call as [method, input]; `emit` pushes an event to every live subscription.
-function fakeCtx({ directory = tmp, session = {}, generate } = {}) {
-  const hooks = { session: {}, tool: {} }
+function fakeCtx({ directory = tmp, session = {}, generate, permission = true } = {}) {
+  const hooks = { session: {}, tool: {}, permission: {} }
   const calls = []
   const transforms = []
   const subs = new Set()
@@ -60,6 +62,7 @@ function fakeCtx({ directory = tmp, session = {}, generate } = {}) {
       transform: async (cb) => { transforms.push(cb); return { dispose: async () => {} } },
     },
     generate: { text: record("generate.text", generate) },
+    ...(permission ? { permission: { hook: async (name, cb) => { hooks.permission[name] = cb; return { dispose: async () => {} } } } } : {}),
     event: {
       subscribe: ({ signal } = {}) => {
         const queue = []
@@ -91,33 +94,170 @@ const until = async (ok, ms = 5000) => { for (const end = Date.now() + ms; !ok()
 
 // ---- guard ----------------------------------------------------------------------
 // A deny cannot throw on V2 (a throwing hook fails the whole step), so the call is renamed
-// to the reason and its input emptied: core settles it as "no tool named …".
+// to the reason and its input emptied: core settles it as "no tool named …", which is why the
+// name opens by saying nothing is missing.
+const REFUSED = "^BLOCKED, not a missing tool: \\[geneseed-guard\\] blocked: "
 test("guard: a denied call is renamed to the reason and emptied; an allowed one is untouched", async () => {
   const { ctx, hooks } = fakeCtx()
   await (await load("guard")).setup(ctx)
   const before = hooks.tool["execute.before"]
   const secret = { tool: "write", input: { path: "/home/u/.ssh/id_rsa", content: "k" } }
   await before(secret)
-  assert.match(secret.tool, /^\[geneseed-guard\] blocked: write to secret\/key file/)
+  assert.match(secret.tool, new RegExp(`${REFUSED}write to secret/key file`))
   assert.deepEqual(secret.input, {})
   const rm = { tool: "shell", input: { command: "rm -rf /" } }
   await before(rm)
-  assert.match(rm.tool, /^\[geneseed-guard\] blocked: catastrophic command/)
+  assert.match(rm.tool, new RegExp(`${REFUSED}catastrophic command`))
   // The rename reason is what the model reads: it never names a switch that turns the guard off
   // (a weak model took "set GENESEED_GUARD=off to allow" as leave to write through a shell).
-  const memo = { tool: "write", input: { path: path.join(tmp, "user-rules.md"), content: "x" } }
+  const memo = { tool: "shell", input: { command: `echo x > "${path.join(tmp, "user-rules.md")}"` } }
   await before(memo)
-  assert.match(memo.tool, /^\[geneseed-guard\] blocked: .*\(Persist Insight\).* re-issue the same edit only after they answer; never write it another way/)
+  assert.match(memo.tool, new RegExp(`${REFUSED}.*\\(Persist Insight\\).* re-issuing this call changes nothing, and never write it another way`))
   // The gates' own configuration (External Gate): another host's exclusion list, renamed the same way.
   // (Hook settings and OpenCode's own files are asked natively through permission.edit, not refused here.)
   const excl = { tool: "write", input: { path: path.join(tmp, ".claude", "excludes.json"), content: "{}" } }
   await before(excl)
-  assert.match(excl.tool, /^\[geneseed-guard\] blocked: .* is a gate's own configuration .*\(External Gate\)$/)
+  assert.match(excl.tool, new RegExp(`${REFUSED}.* is a gate's own configuration .*\\(External Gate\\)$`))
   assert.deepEqual(excl.input, {})
   for (const why of [secret.tool, rm.tool, memo.tool, excl.tool]) assert.doesNotMatch(why, /GENESEED_/, why)
   const ok = { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } }
   await before(ok)
   assert.deepEqual(ok, { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } })
+})
+
+// The host asks, never the agent: an edit reaches the tool, whose `permission.assert` runs
+// `evaluate`, and the hook raises it to a real prompt. Saved "always" arrives as "allow".
+test("guard: a rule-store edit passes to the host, and evaluate turns it into a prompt", async () => {
+  const { ctx, hooks } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const store = path.join(tmp, "user-rules.md")
+  for (const tool of ["write", "edit", "patch"]) {
+    const call = { tool, input: { path: store, content: "x" } }
+    await hooks.tool["execute.before"](call)
+    assert.equal(call.tool, tool, "the guard leaves it to the host's prompt")
+  }
+  const evaluate = hooks.permission.evaluate
+  const ask = async (over) => {
+    const event = { sessionID: "s", action: "edit", resources: [store], effect: "allow", ...over }
+    await evaluate(event)
+    return event
+  }
+  const asked = await ask()
+  assert.equal(asked.effect, "ask")
+  assert.match(asked.message, /Persist Insight/)
+  assert.doesNotMatch(asked.message, /GENESEED_/)
+  assert.equal((await ask({ resources: ["src/a.js", "memory/x.md", "MEMORY.md"] })).effect, "ask", "a location-relative resource, among others")
+  assert.equal((await ask({ resources: ["src/a.js"] })).effect, "allow", "ordinary work is untouched")
+  assert.equal((await ask({ action: "read" })).effect, "allow", "only an edit")
+  assert.equal((await ask({ effect: "deny" })).effect, "deny", "never softens a deny")
+  assert.equal((await ask({ resources: null })).effect, "ask", "an event it cannot read is asked about, and never throws")
+  assert.equal((await ask({ resources: ["opencode.json"] })).effect, "ask", "a gate's own file, whatever was saved")
+})
+
+// The shell tool's own assert reaches `evaluate` too (action `shell`, core/src/permission.ts has no
+// filter): the tool hook marks the call by id, so the prompt is the host's, on that call alone.
+test("guard: a parsed shell write to a store becomes a real prompt, by call id", async () => {
+  const { ctx, hooks } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const store = path.join(tmp, "user-rules.md")
+  const call = { tool: "shell", id: "c1", input: { command: `echo x > "${store}"` } }
+  await hooks.tool["execute.before"](call)
+  assert.equal(call.tool, "shell", "the host asks; nothing is refused here")
+  const ev = (id) => ({ sessionID: "s", action: "shell", resources: ["echo x"], effect: "allow", source: { type: "tool", messageID: "m", id } })
+  const other = ev("c2"); await hooks.permission.evaluate(other)
+  assert.equal(other.effect, "allow", "another call in the same session")
+  const mine = ev("c1"); await hooks.permission.evaluate(mine)
+  assert.equal(mine.effect, "ask")
+  assert.match(mine.message, /Persist Insight/)
+  const again = ev("c1"); await hooks.permission.evaluate(again)
+  assert.equal(again.effect, "allow", "one ask per call")
+  // No program word: the host's parser finds no command, asserts nothing, and so never asks.
+  for (const command of [`> "${store}"`, `A=1 > "${store}"`, `ls; > "${store}"`]) {
+    const bare = { tool: "shell", id: "c9", input: { command } }
+    await hooks.tool["execute.before"](bare)
+    assert.match(bare.tool, new RegExp(`${REFUSED}writing to user-rules\\.md through a shell command`), command)
+  }
+  const plain = { tool: "shell", id: "c3", input: { command: "echo 'see MEMORY.md' > notes.txt" } }
+  await hooks.tool["execute.before"](plain)
+  const p = ev("c3"); await hooks.permission.evaluate(p)
+  assert.equal(p.effect, "allow")
+})
+
+// The change report on V2: baseline at the turn's start, compare at its end, approval from execute.after.
+test("guard: the change report tells the user of an unapproved change, once", async () => {
+  const { ctx, hooks, calls, emit } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const fact = path.join(cfgRoot(), "memory", "w2g-report.md")
+  await fs.mkdir(path.dirname(fact), { recursive: true })
+  await fs.rm(fact, { force: true })
+  try {
+    const turn = async (type) => { emit(type, { sessionID: "r1" }); await settle() }
+    const said = () => calls.filter(([n]) => n === "synthetic").map(([, i]) => i)
+    await turn("session.execution.started")
+    await fs.writeFile(fact, "planted")
+    await turn("session.execution.succeeded")
+    assert.equal(said().length, 1)
+    assert.equal(said()[0].text, "Geneseed change report: 1 rule or memory file changed outside this session's approved writes (another session may have made it): memory/w2g-report.md. This detects a change; it prevented nothing.")
+    assert.equal(said()[0].sessionID, "r1")
+    await turn("session.execution.succeeded")
+    assert.equal(said().length, 1, "said once")
+    await fs.writeFile(fact, "approved by the host")
+    await hooks.tool["execute.after"]({ tool: "write", input: { filePath: fact }, status: "completed" })
+    await turn("session.execution.succeeded")
+    assert.equal(said().length, 1, "a write the host let through is approved")
+  } finally { await fs.rm(fact, { force: true }) }
+})
+
+test("guard: a V2 with no permission domain has no prompt, so the write is refused, re-issued or not", async () => {
+  const { ctx, hooks } = fakeCtx({ permission: false })
+  await (await load("guard")).setup(ctx)
+  for (let i = 0; i < 2; i += 1) {
+    const call = { tool: "write", input: { path: path.join(tmp, "user-rules.md"), content: "x" } }
+    await hooks.tool["execute.before"](call)
+    assert.match(call.tool, new RegExp(`${REFUSED}.*host has no prompt wired`))
+    assert.deepEqual(call.input, {})
+  }
+})
+
+// A drafted rule has no other reminder. Both families, one line: the hook's output is the reference.
+test("context: pending fold items add one line, the hook's; none add nothing", async () => {
+  const xdg = path.join(tmp, "draft-xdg")
+  const harness = path.join(tmp, "draft-install")
+  const repo = path.join(tmp, "draft-repo")
+  for (const d of [path.join(xdg, "geneseed"), harness, repo]) await fs.mkdir(d, { recursive: true })
+  await fs.writeFile(path.join(harness, ".geneseed-emit"), "opencode-global\n")
+  await fs.writeFile(path.join(repo, "README.md"), "# Demo\n")
+  const ledger = path.join(xdg, "geneseed", ".fold-state.json")
+  const env = { ...process.env, XDG_CONFIG_HOME: xdg }
+  const hookOut = () => spawnHook(["context", "--root", harness, "--host", "opencode"], "", { env, cwd: repo }).stdout
+  const pluginOut = async () => {
+    const { ctx, hooks } = fakeCtx({ directory: repo })
+    await (await load("context")).setup(ctx)
+    const ev = { sessionID: "d1", model: { providerID: "a", id: "m" }, system: [],
+      messages: [{ role: "user", content: [{ type: "text", text: "hi" }], constructor: Object }] }
+    await hooks.session.context(ev)
+    return ev.messages[0].content[0].text
+  }
+  const keep = { xdg: process.env.XDG_CONFIG_HOME, harness: process.env.GENESEED_HARNESS }
+  process.env.XDG_CONFIG_HOME = xdg
+  process.env.GENESEED_HARNESS = harness
+  try {
+    const line = /^\[drafts\] .*$/m
+    await fs.writeFile(ledger, JSON.stringify({ version: 1, items: { a: { kind: "rule", host: "claude", state: "pending" },
+      b: { kind: "rule", host: "claude", state: "pending" }, c: { kind: "rule", host: "claude", state: "approved" } } }))
+    const twin = line.exec(hookOut())?.[0]
+    assert.equal(twin, "[drafts] 2 drafted items in user-rules.draft.md wait for the user's decision (the rule skill).")
+    assert.equal(line.exec(await pluginOut())?.[0], twin)
+    await fs.writeFile(ledger, JSON.stringify({ version: 1, items: { c: { kind: "rule", state: "approved" } } }))
+    assert.doesNotMatch(hookOut(), line)
+    await fs.writeFile(ledger, "not json")
+    assert.doesNotMatch(hookOut(), line, "a reminder never breaks a session")
+    assert.doesNotMatch(await pluginOut(), line)
+  } finally {
+    for (const [k, v] of [["XDG_CONFIG_HOME", keep.xdg], ["GENESEED_HARNESS", keep.harness]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v
+    }
+  }
 })
 
 // ---- context --------------------------------------------------------------------

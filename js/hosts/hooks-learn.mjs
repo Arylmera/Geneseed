@@ -15,6 +15,7 @@ import {
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
 import { doneGate } from './hooks-done.mjs';
+import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
@@ -276,7 +277,7 @@ function learnAgentLesson(meta, notes, args) {
     const lesson = splitLines(text)[0].replace(/^[-*]+/, '').trim();
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
     if (n >= 10 && n <= 300) {
-      const written = appendAgentLesson(memDir, agent, lesson);
+      const written = recordOwnWrites(path.dirname(memDir), () => appendAgentLesson(memDir, agent, lesson));
       err(written ? `[learn] agent lesson -> ${written}\n`
         : `[learn] ${agent}'s lesson file is not UTF-8 - left as it is, lesson dropped\n`);
     }
@@ -306,7 +307,7 @@ export function cmdLearn(args) {
       err('[learn] no memory store found \u2014 nothing to consolidate.\n');
       return 0;
     }
-    const report = consolidateMemory(memDir);
+    const report = recordOwnWrites(path.dirname(memDir), () => consolidateMemory(memDir));
     err(`[learn] consolidated ${memDir}: +${report.added.length} indexed, `
       + `-${report.pruned.length} pruned, `
       + `${report.duplicates.length} duplicate description(s)\n`);
@@ -350,6 +351,17 @@ export function cmdLearn(args) {
   const verdict = hookEvent === 'Stop' && !args.file && !args.noDoneGate
     ? doneGate(meta, args, install, read) : null;
   if (verdict === 'block') return 0;
+
+  // The change report, at the turn's real end (./store-watch.mjs). One JSON document on stdout, so an
+  // advisory already there keeps it, and Bob reads no stdout here at all: those go to stderr.
+  if (hookEvent === 'Stop' && !args.file && install) {
+    const said = storeReport(install, meta.session_id, {
+      transcript: typeof meta.transcript_path === 'string' ? meta.transcript_path : null,
+      cwd: meta.cwd, host: args.host || 'claude',
+    });
+    if (said && (verdict === 'advisory' || args.host === 'bob')) err(`[geneseed] ${said}\n`);
+    else if (said) out(`${JSON.stringify({ systemMessage: said })}\n`);
+  }
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call
@@ -403,7 +415,7 @@ export function cmdLearn(args) {
   const proc = runLlm(llm, prompt);
   const output = proc.stdout;
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
-    const { created, updated, archived } = writeMemories(output, memDir, existing);
+    const { created, updated, archived } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
     if (created.length) {
       err(`[learn] wrote ${created.length} memory file(s) to `
         + `${memDir}: ${created.join(', ')}\n`);

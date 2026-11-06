@@ -1480,7 +1480,10 @@
       }
     },
     {
-      "expect_silent": true,
+      "expect": [
+        "permissionDecision",
+        "writing to user-rules.md"
+      ],
       "id": "rule-gate/drive-relative-path-has-no-separator",
       "steps": [
         {
@@ -1496,7 +1499,10 @@
       }
     },
     {
-      "expect_silent": true,
+      "expect": [
+        "permissionDecision",
+        "writing to user-rules.md"
+      ],
       "id": "rule-gate/trailing-separator-leaves-no-name",
       "steps": [
         {
@@ -1660,9 +1666,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/case-insensitive-name",
       "steps": [
         {

@@ -38,7 +38,7 @@ What "dormant" means per host:
 - **Claude Code** — every hook exits silently, and the global `CLAUDE.md` is suppressed natively through `claudeMdExcludes` in the repo's `.claude/settings.local.json`.
 - **OpenClaude** — the same, in the repo's `.openclaude/settings.local.json`.
 - **Bob** — every hook exits silently, and a stub `.bob/rules/geneseed.md` in the repo shadows the global rules file. A hand-written stub already there is never overwritten.
-- **OpenCode** — Geneseed's plugins stand down.
+- **OpenCode** — the `geneseed-context`, `geneseed-guard`, `geneseed-learn` and `geneseed-activity` plugins stand down. Three plugins do not read the list: `geneseed-notify` still pings the desktop, `geneseed-ponytail` still injects its ruleset if you switched it on, and `geneseed-workflow` keeps its tool. The `permission` keys in a global `opencode.json` still apply, because OpenCode reads them before any plugin.
 
 `geneseed exclude remove` undoes all of it.
 

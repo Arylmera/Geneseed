@@ -143,7 +143,7 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
  * Validate and normalise a rule's writable fields. Throws `BadRequest` (→ the shell's 400,
  * carrying the message) on an unusable rule.
  *
- * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` above: this is a pure predicate over a
+ * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` in ../hosts/memory-files.mjs: this is a pure predicate over a
  * string that stays a string, so accepting any Unicode decimal digit costs nothing and
  * needs no numeric parse afterward.
  *

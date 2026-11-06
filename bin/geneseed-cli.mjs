@@ -274,6 +274,12 @@ function parse(spec, argv) {
 }
 
 async function main(argv) {
+  // One line on stderr, here and never in the hook: its stdout is its verdict.
+  const deprecated = ['GENESEED_MEMORY', 'GENESEED_HARNESS'].filter((v) => process.env[v]);
+  if (deprecated.length) {
+    printErr(`[geneseed] ${deprecated.map((v) => `$${v}`).join(' and ')}: deprecated, removal planned for 6.0. `
+      + 'A global install finds the shared store by itself; pass --memory <dir> to pin one.\n');
+  }
   // `geneseed exclude list | head` closes stdout early. That is an EPIPE that would otherwise be an unhandled
   // 'error' event and a stack trace.
   process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); });

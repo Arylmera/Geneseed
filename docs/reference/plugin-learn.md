@@ -27,7 +27,7 @@ store when it exists. A `--memory` you type yourself is never swapped: the swap 
 hook call, which names its event. The plugin counts an install as global when its marker says so
 or when it is the host's own config dir, as the hook does.
 
-So a global install needs nothing set; use `GENESEED_HARNESS` only to pin the location. If none resolves, it logs `no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.` and does nothing.
+So a global install needs nothing set. `GENESEED_HARNESS` and `GENESEED_MEMORY` are deprecated, with removal planned for 6.0. If none resolves, it logs `no memory dir — this install has no memory/ folder, and neither does the shared tier or this repo.` and does nothing.
 
 **Switches.**
 - `GENESEED_MODEL=provider/model` — fallback when the session's model can't be read. Without it you get `could not determine a model`.

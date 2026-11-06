@@ -37,6 +37,7 @@ import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
 import { archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
 
@@ -75,11 +76,13 @@ export function memoryDelete(dir, name, purge = false) {
   if (!isFactName(name)) return null;
   const p = path.join(dir, `${name}.md`);
   if (!isFile(p)) return null;
-  let dest = '';
-  if (purge) unlinkSync(p);
-  else dest = archiveFact(dir, name);
-  memoryDropIndex(dir, name);
-  return dest;
+  return recordOwnWrites(path.dirname(dir), () => {
+    let dest = '';
+    if (purge) unlinkSync(p);
+    else dest = archiveFact(dir, name);
+    memoryDropIndex(dir, name);
+    return dest;
+  });
 }
 
 /** Unlink `archive/<name>.md`. True when a file went. The archive has no index to update. */
@@ -97,8 +100,8 @@ export function cmdMemory(args) {
   if (dir === null) {
     // The resolver answers null for "no store anywhere on the chain", which is also what an
     // explicit `--memory` that is not a directory gives — so the message names both.
-    printErr('[memory] no memory store found. Pass --memory <dir>, set $GENESEED_MEMORY, '
-      + 'or run this from a project install.\n');
+    printErr('[memory] no memory store found. Pass --memory <dir>, or run this from a project '
+      + 'install.\n');
     return 1;
   }
   const where = args.archived ? path.join(dir, 'archive') : dir;

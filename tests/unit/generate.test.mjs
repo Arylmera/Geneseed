@@ -1719,20 +1719,26 @@ function withShimHome(home, fn) {
 test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows agentPath', () => {
   withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
     const tails = ['opencode.json', 'opencode.jsonc', '.opencode/excludes.json',
-      '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/geneseed-*.js',
+      '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/*', '.opencode/plugin/*',
+      '.opencode/agents/*.md', '.opencode/agent/*.md', '.opencode/mode/*.md', '.opencode/modes/*.md', '.opencode/tool/*', '.opencode/tools/*',
       '.claude/settings.json', '.claude/settings.local.json', '.openclaude/settings.json',
       '.openclaude/settings.local.json', '.bob/settings.json', '.bob/settings.local.json',
-      '.bob/settings/settings.json', '.geneseed/bin/*'];
+      '.bob/settings/settings.json',
+      // Persist Insight: the coined names anywhere, the memory folders by their last segments.
+      'user-rules.md', 'user-rules.draft.md', 'MEMORY.md', '.opencode/memory/*.md', 'geneseed/memory/*.md',
+      '.geneseed/bin/*'];
     // A project AGENT.md never gets `*/AGENT.md`, which would ask about every AGENT.md in the repo:
     // install-root-relative, git-root-relative (1.x, a subpackage install) and `*../` (2.x subdir session).
     withDir((d) => {
       fs.mkdirSync(path.join(d, '.git'));
       assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'AGENT.md'),
-        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md']);
-      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-3),
-        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md']);
-      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-3),
-        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md']);
+        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md', 'memory/*.md', '*../memory/*.md']);
+      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-6),
+        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md', 'memory/*.md', 'pkg/memory/*.md', '*../memory/*.md']);
+      // The store sits beside the carrier: the default project install's is Harness/memory.
+      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-6),
+        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md',
+          'Harness/memory/*.md', '*../Harness/memory/*.md', '*/Harness/memory/*.md']);
     });
     const global = opencodeEditAsks(path.join('home', '.config', 'opencode'), true);
     for (const k of ['opencode/config.json', '*/opencode/config.json', '*/opencode/AGENT.md', '*/opencode/excludes.json']) {
@@ -1747,17 +1753,18 @@ test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows
   });
 });
 
-test('OpenCode asks for gate config and nothing else, at the root, below it and outside it', () => {
+test('OpenCode asks for gate config, the stores and what can load code, at the root, below it and outside it', () => {
   withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
     const edit = { '*': 'allow', ...Object.fromEntries(opencodeEditAsks('/r/.opencode', false, 'AGENT.md').map((k) => [k, 'ask'])) };
     // 1.x: relative to the worktree; 2.x: relative to the session dir, absolute outside it.
     for (const rel of ['opencode.json', 'pkg/opencode.jsonc', '../opencode.json', '.opencode/excludes.json',
-      'AGENT.md', '../AGENT.md', '../../AGENT.md', '.opencode/plugins/geneseed-guard.js', '../.opencode/.geneseed-manifest.json',
+      'AGENT.md', '../AGENT.md', '../../AGENT.md', '.opencode/plugins/geneseed-guard.js', '.opencode/plugins/my-plugin.js',
+      '.opencode/agents/x.md', '.opencode/tool/x.js', 'memory/fact.md', '../.opencode/.geneseed-manifest.json',
       '.claude/settings.json', 'pkg/.bob/settings.json', 'C:/Users/u/.bob/settings/settings.json',
       '../../.geneseed/bin/geneseed-hook.cmd', 'C:/Users/u/.geneseed/bin/geneseed-hook',
       'C:\\r\\.opencode\\excludes.json']) assert.equal(ocDecide(edit, rel), 'ask', rel);
-    for (const rel of ['src/app.js', 'docs/AGENT.md', '.opencode/plugins/my-plugin.js', '.claude/agents/x.md',
-      '.opencode/agents/x.md', 'opencode.json.bak', 'excludes.json', 'config/settings.json']) {
+    for (const rel of ['src/app.js', 'docs/AGENT.md', '.claude/agents/x.md',
+      'opencode.json.bak', 'excludes.json', 'config/settings.json', 'src/memory/notes.md']) {
       assert.equal(ocDecide(edit, rel), 'allow', rel);
     }
     if (process.platform === 'win32') assert.equal(ocDecide(edit, '.OpenCode/EXCLUDES.JSON'), 'ask');

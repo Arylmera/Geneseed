@@ -29,6 +29,7 @@ import {
   archiveStore, consolidateMemory, existingSlugs, indexNotes, MEMORY_SEED, parseRules,
 } from '../hosts/memory-files.mjs';
 import { foldExcludes } from '../inspect/excludes.mjs';
+import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { isDir, isFile, printErr, printOut, readText, writeTextAtomic } from '../lib/fs.mjs';
 import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
 import { LEGACY_WIKI_SEED, NOTES_DIRS, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
@@ -45,7 +46,7 @@ const WHOLE_FILE_SEEDS = new Set([sha256(SESSION_SEEDS['PROFILE.md']), sha256(SE
 const isWholeFileSeed = (bytes) => WHOLE_FILE_SEEDS.has(seedHash(bytes));
 
 /** A folded store keeps these: the re-seed restores them, and their text never says "not folded". */
-const STORE_KEEPS = ['README.md', '.gitignore'];
+const STORE_KEEPS = ['README.md', '.gitignore', '.own-writes.json'];
 const DRAFT_HEAD = '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n';
 
 /**
@@ -518,7 +519,9 @@ export function foldSummary(r) {
 /** The emit's call, on a canonical install only: `diff`, Restore and a stray `--config-dir` fold nothing. */
 export function foldOnEmit(host, cfgDir) {
   if (!isCanonical(cfgDir, host)) return;
-  const report = foldHost({ host, cfgDir, shared: sharedPaths() });
+  const shared = sharedPaths();
+  // Both ends: the fold writes the tier, and moves the host's own files aside.
+  const report = recordOwnWrites(cfgDir, () => recordOwnWrites(shared.root, () => foldHost({ host, cfgDir, shared })));
   const summary = foldSummary(report);
   if (summary) printOut(`[shared] ${host}: ${summary}\n`);
   for (const n of report.notices) printErr(`[shared] ${n}\n`);

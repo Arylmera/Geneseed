@@ -421,15 +421,11 @@ function dropLines(p, needle) {
  * `archived-<name>/<timestamp>/`.
  *
  * NEVER a delete. Memory is the one thing in this system a user cannot rebuild, so the
- * destructive verb's most destructive option is still a move; `_archive_memory` is the same
- * function with `memory` hardcoded and is not ported separately because the only caller that
- * reaches it (`_uninstall_global(archive_memory=True)`) is called with `False` by
- * `_install_uninstall`, which is the CLI's only path in.
+ * destructive verb's most destructive option is still a move.
  *
  * `renameSync` rather than a copy-then-delete: the destination is a SIBLING of the source, so
- * it is the same device by construction and `shutil.move`'s cross-device fallback has nothing
- * to do. ponytail: rename, and the day a store can live on another volume this needs the
- * copy path back.
+ * it is the same device by construction and a cross-device fallback has nothing to do.
+ * shortcut: rename only, and the day a store can live on another volume this needs a copy path.
  *
  * `move` is `copyFileSync` for a file that must stay readable until its replacement lands.
  */

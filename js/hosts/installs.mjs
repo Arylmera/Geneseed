@@ -38,7 +38,7 @@ import {
   CONFIG, GATE_SWITCHES, PACK_ORDER, RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
-  CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, carriersFor, isHostGlobalDir,
+  CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, isHostGlobalDir,
   liveRecordedHooks, resolvePath,
 } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
@@ -473,8 +473,6 @@ export function kitsOfDir(d, host = null, notify = null) {
   }, [], host);
 }
 
-/** `Shared tier: on` — written only when a project install reads the machine tier. */
-const SHARED_TIER_RE = /^Shared tier:[ \t]*on[ \t]*$/m;
 
 /**
  * Whether a DEPLOYED install reads the shared tier (`--shared-tier on`), read back so `rebuild-all`,

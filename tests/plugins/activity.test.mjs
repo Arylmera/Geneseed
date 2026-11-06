@@ -8,6 +8,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 
 import { GeneseedActivity } from "../../adapters/opencode/plugins/geneseed-activity.js"
 import { makeSandbox } from "../helpers/sandbox.mjs";
@@ -93,6 +94,44 @@ test("safeName: keeps session ids filesystem-safe", () => {
 // temp config dir, asserting the on-disk file lifecycle + filtering + runtime toggle.
 // This covers the hook wiring (the switch + IO) that the pure-helper tests above
 // don't — the one piece that has to match how OpenCode delivers events.
+// Parity with js/hosts/activity.mjs `recordActivity`: an excluded repo gets no card. Driven from a
+// copy of the plugin, because the install it reads excludes.json from is the one it ships inside.
+test("an excluded folder gets no card, its sub-agents neither, and any other folder does", async () => {
+  const tmp = makeSandbox("gs-act-excl-").path
+  const saved = { cfg: process.env.OPENCODE_CONFIG_DIR, xdg: process.env.XDG_CONFIG_HOME }
+  const cfg = path.join(tmp, "cfg")
+  const xdg = path.join(tmp, "xdg")
+  const own = path.join(tmp, "own-list", "sub")
+  const tier = path.join(tmp, "tier-list")
+  const open = path.join(tmp, "open")
+  fs.mkdirSync(path.join(cfg, "plugins"), { recursive: true })
+  fs.mkdirSync(path.join(xdg, "geneseed"), { recursive: true })
+  for (const d of [own, tier, open]) fs.mkdirSync(d, { recursive: true })
+  const copy = path.join(cfg, "plugins", "geneseed-activity.js")
+  fs.copyFileSync(new URL("../../adapters/opencode/plugins/geneseed-activity.js", import.meta.url), copy)
+  fs.writeFileSync(path.join(cfg, "excludes.json"), JSON.stringify({ excludes: [path.dirname(own)] }))
+  fs.writeFileSync(path.join(xdg, "geneseed", "excludes.json"), JSON.stringify({ excludes: [tier] }))
+  process.env.OPENCODE_CONFIG_DIR = cfg
+  process.env.XDG_CONFIG_HOME = xdg
+  try {
+    const { GeneseedActivity: Fresh } = await import(pathToFileURL(copy).href)
+    const hooks = await Fresh()
+    const fire = (type, properties) => hooks.event({ event: { type, properties } })
+    const card = (sid) => fs.existsSync(path.join(cfg, "activity", `${sid}.json`))
+    await fire("session.created", { info: { id: "ses_own", title: "a", directory: own } })
+    await fire("session.status", { sessionID: "ses_own", status: { type: "busy" } })
+    await fire("session.created", { info: { id: "ses_kid", title: "b", parentID: "ses_own", directory: own } })
+    await fire("session.created", { info: { id: "ses_tier", title: "c", directory: tier } })
+    await fire("session.created", { info: { id: "ses_open", title: "d", directory: open } })
+    assert.deepEqual(["ses_own", "ses_kid", "ses_tier", "ses_open"].map(card), [false, false, false, true])
+  } finally {
+    for (const [k, v] of [["OPENCODE_CONFIG_DIR", saved.cfg], ["XDG_CONFIG_HOME", saved.xdg]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v
+    }
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
 test("event hook: full session lifecycle, filtering, and toggle (on disk)", async () => {
   const tmp = makeSandbox("gs-act-").path
   const saved = process.env.OPENCODE_CONFIG_DIR

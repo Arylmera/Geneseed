@@ -125,7 +125,7 @@ and unset `GENESEED_CONTEXT_INJECT`.
 export GENESEED_MEMORY=/abs/path/to/memory
 ```
 
-This variable and `GENESEED_HARNESS` win over the shared store, so leave them unset on a global install.
+This variable and `GENESEED_HARNESS` win over the shared store, so leave them unset on a global install. Both are deprecated, with removal planned for 6.0.
 
 **Confirm.** About a minute after the session goes quiet, stderr shows `[geneseed-learn] wrote N memory file(s): …` or a `skipped:` reason. Total silence means the plugin did not load.
 <!--/harness-->

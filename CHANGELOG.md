@@ -13,6 +13,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.config/geneseed`, and existing stores fold into it on the next global emit. Breaking: see Removed.
 
 ### Added
+- **A change report tells you when a rule or memory file changed outside a session's approved writes.** A session records each store file's size and time at its start, and compares at the end of each turn. It detects a change; it does not prevent one. Geneseed's own learn and fold writes are excused. See [Hooks](docs/concepts/hooks.md#the-change-report).
+- **A drafted rule has a reminder.** `geneseed status` gets a `drafts` row, and a session that reads the shared tier gets one line, while `.fold-state.json` holds pending items.
 - **The Overview shows session-start hook size against its budget**, and warns when it is near the limit or content was cut.
 - **The shared tier goes live.** A global emit in a host's own config directory creates `~/.config/geneseed/` and seeds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, `memory/` and `notes/`. Global installs name these locations as absolute paths, and state the rule order: project over host over shared. Project installs and default builds keep their bytes. No emit grants a directory permission. `geneseed doctor` adds a note when a rendered path differs from the run-time one. `geneseed diff` also lists the notes in the tier.
 - **The web console meets the shared tier.** On a global install the console reads and edits the tier's rules, profile, memory and wiki manifest. What the harnesses share is shown once and names no harness: Rules, Profile, Memory and the Overview's *Needs you* each list the shared store one time, tagged `shared`, and a project install keeps its own entry. `geneseed uninstall` prints where the tier lives and never touches it, whatever `--archive-memory` says.
@@ -34,6 +36,15 @@ Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.
 - **`MEMORY.md`, `NOTEBOOK.md` and a folder's README leave the Memory and Notebook lists.** They are never counted. They stay readable by name.
 - **Install names use the host's label everywhere.** A tag now reads `BOB (IBM) · global` or `my-repo · Claude Code`. A KPI card titles its scope *Highest install*, and the Docs host switch shows only on a page that differs by host.
 - **The Hosts table fits beside its panel at 1440 px.** Path moves under the name, and Voice and Footprint leave the row: the side panel has them.
+- **OpenCode asks you itself before a rule or memory write.** The guard used to refuse the first write and pass any re-issue, so an agent could release its own refusal. A write to `user-rules.md`, the rule draft or a memory file now gets the host's own prompt, through `permission.edit` keys and, on OpenCode 2, the `evaluate` hook. The check reads the file a write lands on, so a link, a `..` spelling or an NTFS stream no longer passes, and it covers a project install's own store. A file-tool write the host cannot prompt for is refused. On OpenCode 1, an "always" on an edit approves every later edit, so the guard refuses those writes until OpenCode restarts.
+- **Bob refuses rule and memory file-tool writes.** They were a warning and the call went through. Bob has no prompt, so they now exit 2, and its move and delete tools count as writes.
+- **Shell is not a boundary, and the docs now say so.** Only parsed forms are read: a redirect, `tee`, `cp`, `mv`, `rm`, `sed -i`. One that lands in a store asks on Claude Code and OpenCode 2, is refused on OpenCode 1, and warns on Bob. The host's own command permission is the backstop for everything else.
+- **The guard reads every path a call carries.** A decoy `patchText` or a second path key no longer hides the target, which also closes that route past the secret-file refusal.
+- **The package closes its deep imports.** `package.json` gains an `exports` field that opens only `package.json`, so `import 'geneseed/js/…'` now fails. The three `bin` commands are not affected.
+- **A guard refusal on OpenCode 2 opens with `BLOCKED, not a missing tool: `**, because OpenCode prints it as `No tool named "…"`.
+
+### Deprecated
+- **`$GENESEED_MEMORY` and `$GENESEED_HARNESS`.** They keep working, and the CLI prints one warning on stderr when one is set. Removal is planned for 6.0.
 
 ### Removed
 - **The console's rule limit.** The 15-rule and 1,500-token budget, its meter on the Personal page and the "getting heavy" warning are gone: the console reports the token total and sets no ceiling. The `rule` skill now weighs that total too, not a rule count.
