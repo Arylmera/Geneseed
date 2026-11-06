@@ -16,7 +16,7 @@ const { state } = vi.hoisted(() => ({ state: { ruleCount: 1 } }))
 const rulesPayload = () => ({
   exists: true,
   fingerprint: `f${state.ruleCount}`,
-  stats: { rules: state.ruleCount, lines: 10, tokens: 200, max_rules: 15, max_tokens: 1500 },
+  stats: { rules: state.ruleCount, lines: 10, tokens: 200 },
   rules: [],
 })
 
@@ -40,21 +40,29 @@ vi.mock('../api/index.js', () => ({
 }))
 
 // The two editors stand in as one button each that performs the write the real editor
-// performs, then calls `onChanged` exactly as Rules.jsx / Profile.jsx do after a write.
+// performs, then calls `onChanged` exactly as Rules.jsx / Profile.jsx do after a write. The rules
+// stand-in also prints the shared read Personal reloads: what the Overview and Constitution paint.
 vi.mock('../pages/Rules.jsx', async () => {
   const { api } = await import('../api/index.js')
+  const { useRules } = await import('../hooks/useRules.js')
   return {
-    default: ({ onChanged }) => (
-      <button
-        type="button"
-        onClick={async () => {
-          await api.rulesMutate({ action: 'retire', id: 1 })
-          onChanged?.()
-        }}
-      >
-        retire a rule
-      </button>
-    ),
+    default: function RulesStandIn({ onChanged }) {
+      const n = useRules(0).data?.stats?.rules
+      return (
+        <>
+          <button
+            type="button"
+            onClick={async () => {
+              await api.rulesMutate({ action: 'retire', id: 1 })
+              onChanged?.()
+            }}
+          >
+            retire a rule
+          </button>
+          {n == null ? null : <p>{`${n} rule${n === 1 ? '' : 's'}`}</p>}
+        </>
+      )
+    },
   }
 })
 vi.mock('../pages/Profile.jsx', async () => {
@@ -114,8 +122,9 @@ beforeEach(() => {
   }
 })
 
-// Personal's "Rule slots" card reads `<n> of 15`.
-const slots = (n) => screen.findByText(`${n} of 15`)
+// The stand-in's line reads `<n> rules`.
+const rulesRow = (n) => `${n} rule${n === 1 ? '' : 's'}`
+const slots = (n) => screen.findByText(rulesRow(n))
 
 describe('user-file writes reload only their own data', () => {
   it('a rules write refetches /api/rules once, and not the profile, overview or fleet', async () => {
@@ -170,7 +179,7 @@ describe('user-file writes reload only their own data', () => {
     holdRefetch()
     render(<Laws overview={{ counts: {} }} setup={null} onAction={() => {}} dataRev={0} />)
     // The "Your rules" tier: `<rules> of <max> · <tokens>/<max> tok`.
-    expect(await screen.findByText('0 of 15 · 200/1500 tok')).toBeTruthy()
+    expect(await screen.findByText('0 rules · ≈200 tok')).toBeTruthy()
     expect(api.rules).toHaveBeenCalledTimes(3)
   })
 
@@ -183,7 +192,7 @@ describe('user-file writes reload only their own data', () => {
     const laws = render(
       <Laws overview={{ counts: {} }} setup={null} onAction={() => {}} dataRev={0} />,
     )
-    expect(await screen.findByText('3 of 15 · 200/1500 tok')).toBeTruthy()
+    expect(await screen.findByText('3 rules · ≈200 tok')).toBeTruthy()
     laws.unmount()
 
     state.ruleCount = 0
@@ -220,7 +229,7 @@ describe('user-file writes reload only their own data', () => {
 
     render(<Personal tab="rules" dataRev={0} />)
     // Not even for one frame: the pre-promote copy was dropped, not served stale.
-    expect(screen.queryByText('1 of 15')).toBeNull()
+    expect(screen.queryByText(rulesRow(1))).toBeNull()
     await slots(2)
   })
 
@@ -241,9 +250,9 @@ describe('user-file writes reload only their own data', () => {
         <Laws overview={{ counts: {} }} setup={null} onAction={() => {}} dataRev={0} />
       </>,
     )
-    expect(await screen.findByText('1 of 15 · 200/1500 tok')).toBeTruthy()
+    expect(await screen.findByText('1 rule · ≈200 tok')).toBeTruthy()
     fireEvent.click(screen.getByText('retire a rule'))
     // Only Personal's read reloads; Laws is told by the landing fetch.
-    expect(await screen.findByText('0 of 15 · 200/1500 tok')).toBeTruthy()
+    expect(await screen.findByText('0 rules · ≈200 tok')).toBeTruthy()
   })
 })

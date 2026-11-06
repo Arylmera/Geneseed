@@ -8,6 +8,7 @@ import {
   needsAttention,
   needsRebuild,
   neverFired,
+  sessionStartFigure,
   skillsByStage,
 } from '../lib/overview.js'
 import { applyAccent } from '../lib/accents.js'
@@ -53,7 +54,7 @@ describe('skillsByStage', () => {
       rows: [
         { key: 'design', label: 'Design', ok: 1, exp: 0, n: 1 },
         { key: 'build', label: 'Build', ok: 1, exp: 2, n: 3 },
-        { key: 'personal', label: 'Personal', ok: 1, exp: 0, n: 1 },
+        { key: 'personal', label: 'Custom', ok: 1, exp: 0, n: 1 },
       ],
       total: 5,
       experimental: 2,
@@ -69,7 +70,7 @@ const ALL = {
     diff: { edited: 2, added: 1, missing: 0 },
   },
   setup: { facts: 0, gates: { asks: { 'process-1': 2, 'process-5': 4 }, total: 6 } },
-  rules: { exists: true, stats: { rules: 0, max_rules: 15, tokens: 332, max_tokens: 1500 } },
+  rules: { exists: true, stats: { rules: 0, tokens: 1332 } },
   activity: { enabled: false },
   profile: { exists: true, seeded: true },
   skills: {
@@ -93,13 +94,7 @@ describe('needsAttention', () => {
         '[global] AGENT.md missing',
         '#/installs/doctor',
       ],
-      [
-        'Drift',
-        'warn',
-        '3 files drifted from the source',
-        '2 edited, 1 added, 0 missing',
-        '#/installs/edits',
-      ],
+      ['Local edits', 'warn', '3 local edits', '2 edited, 1 added, 0 missing', '#/installs/edits'],
       [
         'Profile',
         'warn',
@@ -107,7 +102,13 @@ describe('needsAttention', () => {
         'every section holds placeholder text',
         '#/personal/profile',
       ],
-      ['Rules', '', 'No standing rules yet', '0 of 15 · 332 of 1500 tokens', '#/personal/rules'],
+      [
+        'Rules',
+        '',
+        'No standing rules yet',
+        "≈1,332 tokens, the file's header alone",
+        '#/personal/rules',
+      ],
       // The top ask names its doctrine from the catalog: process-5 is Consent Before Push.
       [
         'Gates',
@@ -118,7 +119,7 @@ describe('needsAttention', () => {
       ],
       // Most experimental class first: build 2, then harness 1.
       ['Skills', '', '3 skills still experimental', 'build 2, harness 1', '#/skills'],
-      ['Memory', '', 'Memory holds no facts', 'MEMORY.md is an empty index', '#/section/memory'],
+      ['Memory', '', 'Memory holds no facts', 'MEMORY.md is an empty index', '#/personal/memory'],
       ['Activity', '', 'Session tracking is off', 'no per-session trace is kept', '#/activity'],
     ])
   })
@@ -128,7 +129,7 @@ describe('needsAttention', () => {
       needsAttention({
         overview: { doctor: { ok: true, problems: [] }, diff: { edited: 0, added: 0, missing: 0 } },
         setup: { facts: 3, gates: { asks: {}, total: 0 } },
-        rules: { exists: true, stats: { rules: 2, max_rules: 15, tokens: 400, max_tokens: 1500 } },
+        rules: { exists: true, stats: { rules: 2, tokens: 400 } },
         activity: { enabled: true },
         profile: { exists: true, seeded: false },
         skills: { items: [{ klass: 'build', status: 'approved' }] },
@@ -141,7 +142,7 @@ describe('needsAttention', () => {
   it('claims nothing it has not read', () => {
     expect(needsAttention({})).toEqual([])
     expect(needsAttention({ ...ALL, laws: null }).find((r) => r.tag === 'Gates').title).toBe(
-      'process.5 asked 4 times',
+      'Process rule 5 asked 4 times',
     )
   })
 
@@ -161,8 +162,8 @@ describe('needsAttention', () => {
 })
 
 // ---- the Ledger (/api/fleet, /api/usage, /api/gates) ----
-// One fleet that raises every per-install problem: opencode is behind and has 3 hand-edited
-// files, claude is in step and clean, a bob project cannot be drift-checked (drift null), and
+// One fleet that raises every per-install problem: opencode is behind and has 3 local
+// edits, claude is in sync and clean, a bob project cannot be drift-checked (drift null), and
 // openclaude is disabled. The clock is pinned so "built 6d ago" is a written-out value.
 const NOW = Date.parse('2026-10-13T12:00:00Z')
 const FLEET = {
@@ -208,15 +209,15 @@ const FLEET = {
 }
 
 describe('fleetVerdict', () => {
-  it('warns on a behind or hand-edited install and counts what it read', () => {
+  it('warns on a behind install or local edits and counts what it read', () => {
     expect(fleetVerdict(FLEET)).toEqual({
       tone: 'warn',
-      head: 'Harness needs a look.',
+      head: 'Installs need a look.',
       facts: [
         '3 active installs, 1 disabled',
         'doctor clean',
         '1 install behind source',
-        '3 files hand-edited',
+        '3 local edits',
       ],
     })
   })
@@ -224,9 +225,18 @@ describe('fleetVerdict', () => {
     const v = fleetVerdict({ ...FLEET, doctor: { ok: false, problems: ['x', 'y'] } })
     expect([v.tone, v.facts[1]]).toEqual(['bad', 'doctor found 2 problems'])
   })
+  // A cold daemon's fleet answers before its doctor: nothing vouches for the harness yet.
+  it('claims no health while the doctor is still running', () => {
+    const v = fleetVerdict({ installs: [], doctor: null })
+    expect([v.tone, v.head, v.facts[1]]).toEqual([
+      'unknown',
+      'Checking the installs.',
+      'doctor still running',
+    ])
+  })
   // `stale` files are unedited ones the install's source has moved past: a rebuild updates
-  // them, so they read as "behind", never as hand edits.
-  it('says behind, not hand-edited, for an install whose only drift is stale', () => {
+  // them, so they read as "behind", never as local edits.
+  it('says behind, not local edits, for an install whose only drift is stale', () => {
     const one = {
       doctor: { ok: true, problems: [] },
       installs: [
@@ -235,12 +245,12 @@ describe('fleetVerdict', () => {
     }
     expect(fleetVerdict(one)).toEqual({
       tone: 'warn',
-      head: 'Harness needs a look.',
+      head: 'Installs need a look.',
       facts: [
         '1 active install',
         'doctor clean',
         '1 install behind source',
-        'no hand edits',
+        'no local edits',
         '4 files behind source',
       ],
     })
@@ -252,9 +262,106 @@ describe('fleetVerdict', () => {
     }
     expect(fleetVerdict(one)).toEqual({
       tone: 'good',
-      head: 'Harness healthy.',
-      facts: ['1 active install', 'doctor clean', 'all in step with source', 'no hand edits'],
+      head: 'Installs healthy.',
+      facts: ['1 active install', 'doctor clean', 'all in sync with source', 'no local edits'],
     })
+  })
+})
+
+// A fleet row's session-start figure; 85 % of the 9 000 budget is 7 650.
+const started = (host, chars, rest = {}) => ({
+  id: host,
+  host,
+  scope: 'global',
+  state: 'active',
+  session_start: chars === null ? null : { chars, budget: 9000, cut: rest.cut ?? false },
+  ...rest,
+})
+
+describe('sessionStartFigure', () => {
+  it('shows the largest install, the budget as a whole number of KB', () => {
+    const f = sessionStartFigure([
+      started('bob', 6400),
+      started('claude', 7500),
+      started('x', null),
+    ])
+    expect([f.install.host, f.size]).toEqual(['claude', '7.5 / 9 KB'])
+  })
+
+  it('turns near at 85 % of the budget and not one character before', () => {
+    expect(sessionStartFigure([started('claude', 7649)]).near).toBe(false)
+    expect(sessionStartFigure([started('claude', 7650)]).near).toBe(true)
+  })
+
+  // 7 533 is 83.7 %, a real cut payload (rules of 16 000 characters); 7 641 is 84.9 %.
+  it.each([
+    ['cut at 83.7 %', 7533, true, true],
+    ['uncut at 84.9 %', 7641, false, false],
+    ['uncut at 85 %', 7650, false, true],
+  ])('reads %s', (_name, chars, cut, near) => {
+    expect(sessionStartFigure([started('claude', chars, { cut })]).near).toBe(near)
+  })
+
+  it('shows a cut install over a larger uncut one', () => {
+    const f = sessionStartFigure([started('bob', 7641), started('claude', 7533, { cut: true })])
+    expect([f.install.host, f.cut]).toEqual(['claude', true])
+  })
+
+  it('is null with no install measured', () => {
+    expect(sessionStartFigure([started('opencode', null)])).toBeNull()
+    expect(sessionStartFigure(undefined)).toBeNull()
+  })
+})
+
+describe('ledgerNeeds session start', () => {
+  const rows = (...installs) =>
+    ledgerNeeds({ fleet: { installs } }).filter((r) => r.id === 'session-start')
+
+  it('says nothing below the threshold', () => {
+    expect(rows(started('claude', 7649))).toEqual([])
+  })
+
+  // Shared files are no install's, so the row names none; two installs near are still one row.
+  it('is one suggestion at the threshold, with no install named for shared files', () => {
+    const near = rows(
+      started('claude', 7700, { shared: true }),
+      started('bob', 7700, { shared: true }),
+    )
+    expect(near).toEqual([
+      {
+        id: 'session-start',
+        tag: 'Session',
+        tone: 'warn',
+        sugg: true,
+        title: 'Session files are near the session-start budget',
+        detail: '7.7 / 9 KB · without project context',
+        where: 'personal',
+        verb: 'Trim',
+        href: '#/personal',
+      },
+    ])
+  })
+
+  it('fires at exactly the threshold', () => {
+    expect(rows(started('claude', 7650))).toHaveLength(1)
+  })
+
+  it('names the install when its files are its own', () => {
+    expect(rows(started('claude', 8100, { shared: false }))[0].title).toBe(
+      'Claude Code · global: session files are near the session-start budget',
+    )
+  })
+
+  it('says content was cut, under the 85 % line, and stays silent for an uncut 84.9 %', () => {
+    const [row] = rows(started('claude', 7533, { cut: true, shared: true }))
+    expect([row.title, row.detail]).toEqual([
+      'Session files were cut to fit the session-start budget',
+      '7.5 / 9 KB · without project context',
+    ])
+    expect(rows(started('claude', 7533, { cut: true }))[0].title).toBe(
+      'Claude Code · global: session files were cut to fit the session-start budget',
+    )
+    expect(rows(started('claude', 7641))).toEqual([])
   })
 })
 
@@ -274,13 +381,52 @@ describe('ledgerNeeds', () => {
       usage: null,
       ...ALL,
       overview: { ...ALL.overview },
-      defaultLabel: 'claude · global',
+      defaultLabel: 'Claude Code · global',
     })
     const sugg = rows.filter((r) => r.sugg).map((r) => [r.id, r.title])
     expect(sugg.filter(([id]) => /^(memory|profile|rules)/.test(id))).toEqual([
-      ['memory:oc', 'opencode · global: memory holds no facts'],
-      ['profile', 'claude · global: Profile is still the seeded template'],
-      ['rules', 'claude · global: No standing rules yet'],
+      ['memory:oc', 'OpenCode · global: memory holds no facts'],
+      ['profile', 'Claude Code · global: Profile is still the seeded template'],
+      ['rules', 'Claude Code · global: No standing rules yet'],
+    ])
+  })
+  // Global installs read one store: a shared memory, profile or rule file is one suggestion that
+  // names no harness, however many installs read it. A project install with its own store keeps
+  // its own row, and a project install's own files, read as the default, keep its name.
+  it('says a shared store once and names no harness', () => {
+    const fleet = {
+      installs: [
+        { id: 'oc', host: 'opencode', scope: 'global', state: 'active', facts: 0, shared: true },
+        { id: 'cl', host: 'claude', scope: 'global', state: 'active', facts: 0, shared: true },
+        {
+          id: 'p',
+          host: 'bob',
+          scope: 'project',
+          path: '/r/repo',
+          state: 'active',
+          facts: 0,
+          shared: false,
+        },
+      ],
+    }
+    const rowsOf = (input) =>
+      ledgerNeeds({ fleet, usage: null, defaultLabel: 'OpenCode · global', ...input })
+        .filter((r) => /^(memory|profile|rules)/.test(r.id))
+        .map((r) => [r.id, r.title])
+    expect(
+      rowsOf({
+        rules: { ...ALL.rules, shared: true },
+        profile: { ...ALL.profile, shared: true },
+      }),
+    ).toEqual([
+      ['memory:shared', 'Memory holds no facts'],
+      ['memory:p', 'repo · BOB (IBM): memory holds no facts'],
+      ['profile', 'Profile is still the seeded template'],
+      ['rules', 'No standing rules yet'],
+    ])
+    expect(rowsOf({ profile: { ...ALL.profile, shared: false } })).toContainEqual([
+      'profile',
+      'OpenCode · global: Profile is still the seeded template',
     ])
   })
   it('lists per-install problems first, then the older nudges as suggestions', () => {
@@ -290,21 +436,21 @@ describe('ledgerNeeds', () => {
         id: 'behind:oc',
         tag: 'Behind',
         tone: 'warn',
-        title: 'opencode · global is behind its source',
+        title: 'OpenCode · global is behind its source',
         detail: 'built 6d ago',
-        where: 'opencode',
+        where: 'OpenCode',
         verb: 'Rebuild',
         // Per install: the row rebuilds the one it names, never the whole machine.
         act: 'rebuild',
         installs: [
-          { id: 'oc', host: 'opencode', path: '/h/.config/opencode', label: 'opencode · global' },
+          { id: 'oc', host: 'opencode', path: '/h/.config/opencode', label: 'OpenCode · global' },
         ],
       },
       {
         id: 'drift:oc',
-        tag: 'Drift',
+        tag: 'Local edits',
         tone: 'warn',
-        title: 'opencode · global: 3 files edited by hand',
+        title: 'OpenCode · global: 3 local edits',
         detail: '2 edited, 1 added, 0 missing',
         where: 'installs/edits',
         verb: 'Review',
@@ -316,7 +462,7 @@ describe('ledgerNeeds', () => {
     expect(rows.map((r) => r.id)).not.toContain('drift')
     expect(rows.slice(2).every((r) => r.sugg)).toBe(true)
   })
-  it('names stale files on the behind row and raises no hand-edit row for them', () => {
+  it('names stale files on the behind row and raises no local-edits row for them', () => {
     const fleet = {
       installs: [
         { ...FLEET.installs[0], drift: { edited: 0, added: 0, missing: 0, linked: 0, stale: 4 } },
@@ -324,7 +470,7 @@ describe('ledgerNeeds', () => {
     }
     const rows = ledgerNeeds({ fleet })
     expect(rows.map((r) => [r.id, r.title, r.detail])).toEqual([
-      ['behind:oc', 'opencode · global is behind its source', 'built 6d ago · 4 files behind'],
+      ['behind:oc', 'OpenCode · global is behind its source', 'built 6d ago · 4 files behind'],
     ])
   })
   // The usage ledger lists never-fired rows per install, so one skill unused on two installs

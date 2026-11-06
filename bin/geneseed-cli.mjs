@@ -22,8 +22,7 @@
  *     names every verb it does not carry, is what makes "silently accepted `doctor` and did
  *     nothing" impossible; every Geneseed hook exits 0 and signals through stdout, so a
  *     no-op and a success are one observation.
- *   * `bin/build-driver.mjs` IS `build.py`'s `main()` — a different Python program from
- *     `rituals/harness.py`, not a different half of the same one. It parses generator FLAGS
+ *   * `bin/build-driver.mjs` is the generator, not a different half of this CLI. It parses generator FLAGS
  *     with a partition asserted over them ('the driver classifies every emit',
  *     `tests/unit/node_driver.test.mjs`),
  *     `tests/golden.mjs` drives it over every emit configuration, and it is under a hard `child_process`
@@ -36,10 +35,8 @@
  * `bin` per cell — and it would have been paid identically by the `bin/build-driver.mjs` option,
  * so it is not a discriminator between the two.
  *
- * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. It carries 22 of the
- * 26 names the reference's parser answered to (25 subparsers, plus the alias) — the other
- * four are the hook verbs — and, since the three rows at the end of the table below, three
- * that the reference never had at all. 'the two entry points carry disjoint verb sets'
+ * THE VERB SET REFUSES THE REST BY NAME, exactly as the hook entry does. The four hook verbs live in the
+ * hook entry, and the last rows of the table below are native verbs. 'the two entry points carry disjoint verb sets'
  * (`tests/unit/hook_cli.test.mjs`) keeps the two tables from ever answering the same verb
  * twice, since the shim bakes only one of them.
  *
@@ -107,19 +104,11 @@ const VERBS = {
   // as an `aliases` field on the row above — because a field would be a DECLARATION and the
   // three matrix gates read this table as the DISPATCH (rule 7, and M23 is where it was
   // learned). As a key it is a real verb: `tests/unit/hook_cli.test.mjs`'s 'every entry verb
-  // is a command the driver table dispatches' finds it in `js/cli-table.json`, and 'the matrix
-  // covers every verb each entry claims' demands the `update/` cell group that proves
-  // it reaches `cmdUpgrade` — including the theme re-read, which is what separates it from
-  // `sync-self`.
+  // is a command the driver table dispatches' finds it in `js/cli-table.json`.
   //
   // It is NOT what the web console's `update` ACTION needs: that row's argv names `upgrade`,
   // the subparser, and always did. The two were coupled only in a handoff's note.
   update: () => import('../js/maintain/update.mjs').then((m) => m.cmdUpgrade),
-  // Points at `cmdSyncSelf` rather than at `cmdUpgrade`, and that is not tidiness:
-  // `sync-self` DROPS its `ref` before `upgrade` ever sees it, where `upgrade` both WARNS
-  // about one and re-reads it as a theme — so the two verbs answer `sync-self cyberpunk`
-  // and `sync-self v1.2.3` differently. See `js/maintain/update.mjs`'s `syncSelf` for both halves.
-  'sync-self': () => import('../js/maintain/update.mjs').then((m) => m.cmdSyncSelf),
   bootstrap: () => import('../js/maintain/update.mjs').then((m) => m.cmdBootstrap),
   // P7a. Both are DISPATCHERS whose off-TTY arm is the whole of what a cell can reach, and
   // `menu`'s on-TTY arm falls back rather than opening a panel — `js/ui/menu.mjs`'s header
@@ -151,13 +140,11 @@ const VERBS = {
   catalog: () => import('../js/build/catalog.mjs').then((m) => m.cmdCatalog),
   mcp: () => import('../js/hosts/mcp.mjs').then((m) => m.cmdMcp),
   memory: () => import('../js/maintain/memory.mjs').then((m) => m.cmdMemory),
-  // Task 5. A fourth native verb: there was never a Python subparser for a state machine that
-  // lives entirely inside this port, so — like the three above — it has no recorded cell to
-  // compare against, only the absolute gates named beside it in `NATIVE`.
+  // Task 5. A fourth native verb: a state machine with
+  // no recorded cell to compare against, only the absolute gates named beside it in `NATIVE`.
   loop: () => import('../js/loop/cli.mjs').then((m) => m.cmdLoop),
   // A fifth native verb, and a port rather than an invention: the AI Harness Scorecard
-  // (upstream Python, pinned in the module's docblock). No Geneseed Python subparser ever
-  // existed for it, so there is no recorded cell — its absolute gate is
+  // (upstream Python, pinned in the module's docblock). There is no recorded cell — its absolute gate is
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.
   scorecard: () => import('../js/inspect/scorecard.mjs').then((m) => m.cmdScorecard),
 };
@@ -287,8 +274,13 @@ function parse(spec, argv) {
 }
 
 async function main(argv) {
-  // `geneseed exclude list | head` closes stdout early. Python exits quietly through
-  // BrokenPipeError; the Node equivalent is an EPIPE that would otherwise be an unhandled
+  // One line on stderr, here and never in the hook: its stdout is its verdict.
+  const deprecated = ['GENESEED_MEMORY', 'GENESEED_HARNESS'].filter((v) => process.env[v]);
+  if (deprecated.length) {
+    printErr(`[geneseed] ${deprecated.map((v) => `$${v}`).join(' and ')}: deprecated, removal planned for 6.0. `
+      + 'A global install finds the shared store by itself; pass --memory <dir> to pin one.\n');
+  }
+  // `geneseed exclude list | head` closes stdout early. That is an EPIPE that would otherwise be an unhandled
   // 'error' event and a stack trace.
   process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); });
 
@@ -384,9 +376,9 @@ async function main(argv) {
     return await (await load())(parsed.args);
   } catch (e) {
     // `e.exitCode` is the generator's existing marker for a DELIBERATE refusal that has
-    // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag, and it is
-    // `sys.exit(<message>)` on the Python side. Anything without it is a crash and keeps its
-    // stack: Python prints a traceback for an unhandled exception, and turning one into a
+    // already explained itself on stderr — `js/build/emit-claude.mjs` reads the same flag.
+    // Anything without it is a crash and keeps its
+    // stack: turning one into a
     // tidy one-liner here would hide a bug behind a refusal's clothing.
     //
     // No verb needed this until `status`, which renders — and renders at a theme read out

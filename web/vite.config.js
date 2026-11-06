@@ -49,5 +49,7 @@ export default defineConfig({
       },
     },
   },
-  test: { environment: 'jsdom', globals: true, setupFiles: ['src/__tests__/setup.js'] },
+  // vmThreads builds the jsdom environment once per worker, not once per file (82% of the
+  // baseline run). Its VM context makes window.location unspyable: see the two location tests.
+  test: { pool: 'vmThreads', environment: 'jsdom', globals: true, setupFiles: ['src/__tests__/setup.js'] },
 })

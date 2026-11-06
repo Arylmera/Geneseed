@@ -1,10 +1,10 @@
 import React from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeAll, describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The Overview's actions: exactly ONE filled (primary) button or link per loaded view, and on
 // the Ledger no two controls share an accessible name, so a screen reader hears "Rebuild
-// claude · global" rather than six "Rebuild"s. The filled count is every `.btn` (button or
+// Claude Code · global" rather than six "Rebuild"s. The filled count is every `.btn` (button or
 // anchor) without `.ghost`. Every Ledger rebuild names its installs (the `rebuild` action) and
 // asks first; the confirm is a stub through ConfirmContext, so a test reads what it asked.
 
@@ -100,7 +100,7 @@ describe('Ledger: one primary action, every control named once', () => {
     // An update that is due yields to the rebuild: still there, but ghost.
     expect(screen.getByRole('button', { name: 'Update' }).className).toBe('btn ghost')
     const primary = screen.getByRole('button', { name: 'Rebuild all behind (2)' })
-    expect(primary.title).toBe('Rebuilds claude · global, opencode · global')
+    expect(primary.title).toBe('Rebuilds Claude Code · global, OpenCode · global')
   })
 
   it('with nothing behind and an update due, Update is the one filled action', async () => {
@@ -127,15 +127,15 @@ describe('Ledger: one primary action, every control named once', () => {
     await screen.findByRole('button', { name: 'Rebuild all behind (2)' })
     const names = [...screen.getAllByRole('button'), ...screen.queryAllByRole('link')].map(nameOf)
     expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([])
-    const row = screen.getByRole('button', { name: 'Rebuild claude · global' })
+    const row = screen.getByRole('button', { name: 'Rebuild Claude Code · global' })
     expect(row.className).toBe('btn ghost sm')
     expect(row.textContent).toBe('Rebuild')
-    expect(row.title).toBe('Rebuilds claude · global only')
-    expect(screen.getByRole('button', { name: 'Open bob · global' })).toBeTruthy()
+    expect(row.title).toBe('Rebuilds Claude Code · global only')
+    expect(screen.getByRole('button', { name: 'Open BOB (IBM) · global' })).toBeTruthy()
   })
 })
 
-// Two behind, one in step: every rebuild control must send exactly the installs it names.
+// Two behind, one in sync: every rebuild control must send exactly the installs it names.
 const MIXED = {
   installs: [install('claude', 'behind'), install('bob', 'synced'), install('opencode', 'behind')],
 }
@@ -152,7 +152,7 @@ describe('Ledger: a rebuild names its installs and asks first', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Rebuild all behind (2)' }))
     await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
     expect(confirm).toHaveBeenCalledWith(
-      'Rebuild claude · global, opencode · global? Each is re-rendered from source with its own ' +
+      'Rebuild Claude Code · global, OpenCode · global? Each is re-rendered from source with its own ' +
         'settings.',
       { title: 'Rebuild 2 installs?', confirmLabel: 'Rebuild' },
     )
@@ -172,10 +172,10 @@ describe('Ledger: a rebuild names its installs and asks first', () => {
     const confirm = vi.fn(async () => true)
     const onAction = vi.fn(async () => 'j1')
     render(withConfirm(<Ledger overview={null} onAction={onAction} />, confirm))
-    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild opencode · global' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild OpenCode · global' }))
     await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
     expect(confirm.mock.calls[0][1]).toEqual({
-      title: 'Rebuild opencode · global?',
+      title: 'Rebuild OpenCode · global?',
       confirmLabel: 'Rebuild',
     })
     expect(onAction).toHaveBeenCalledWith('rebuild', { installs: [OPENCODE] })
@@ -186,7 +186,7 @@ describe('Ledger: a rebuild names its installs and asks first', () => {
     render(withConfirm(<Ledger overview={null} onAction={onAction} />))
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Rebuild: claude · global is behind its source',
+        name: 'Rebuild: Claude Code · global is behind its source',
       }),
     )
     await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
@@ -197,12 +197,12 @@ describe('Ledger: a rebuild names its installs and asks first', () => {
     const onAction = vi.fn(async () => 'j7')
     const ui = (runs) => withConfirm(<Ledger overview={null} runs={runs} onAction={onAction} />)
     const { rerender } = render(ui([]))
-    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild opencode · global' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Rebuild OpenCode · global' }))
     await waitFor(() => expect(onAction).toHaveBeenCalledTimes(1))
     rerender(ui([{ id: 'j7', status: 'running' }]))
     const bar = await screen.findByRole('progressbar')
     expect(screen.getAllByRole('progressbar')).toHaveLength(1)
-    expect(bar.getAttribute('aria-label')).toBe('Rebuilding opencode · global')
+    expect(bar.getAttribute('aria-label')).toBe('Rebuilding OpenCode · global')
     expect(bar.closest('tr').textContent).toContain('/h/.opencode')
     rerender(ui([{ id: 'j7', status: 'done' }]))
     await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull())
@@ -220,7 +220,7 @@ describe('Ledger: Open', () => {
 
   it('picks the install on the Hosts tab, then goes there', async () => {
     render(<Ledger overview={null} onAction={vi.fn()} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Open opencode · global' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open OpenCode · global' }))
     await waitFor(() => expect(window.location.hash).toBe('#/installs/hosts'))
     const row = SYNCED.installs.find((i) => i.host === 'opencode')
     expect(localStorage.getItem('geneseed-install-hosts')).toBe(row.id)
@@ -232,11 +232,11 @@ describe('Ledger: Open', () => {
     const cl = { ...install('claude', 'synced'), posture: 'artisan', mode: 'foreman' }
     api.fleet.mockResolvedValue({ installs: [cl] })
     render(<Ledger overview={null} onAction={vi.fn()} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Details for claude · global' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Details for Claude Code · global' }))
     expect(
       screen.getByText('Voice neutral · lean footprint · artisan posture · foreman mode'),
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('link', { name: 'View diff for claude · global' }))
+    fireEvent.click(screen.getByRole('link', { name: 'View diff for Claude Code · global' }))
     expect(localStorage.getItem('geneseed-install-edits')).toBe(cl.id)
   })
 })
@@ -258,7 +258,7 @@ describe('Overview: onboarding only for an empty fleet', () => {
     api.installs.mockResolvedValue({ installs: [row('disabled'), { ...row('active'), id: 'o' }] })
     api.fleet.mockResolvedValue(SYNCED)
     render(<Overview overview={notHere} themes={[]} onAction={() => {}} />)
-    await screen.findByRole('heading', { name: 'Installed harnesses' })
+    await screen.findByRole('heading', { name: 'Installs' })
     expect(screen.queryByText('Deploy your harness')).toBeNull()
   })
 
@@ -279,14 +279,53 @@ describe('Overview: onboarding only for an empty fleet', () => {
   })
 })
 
+// A deployed default install opens the Ledger at once, so its fetches do not queue behind
+// `/api/installs`; only a machine with nothing deployed waits to know it should onboard.
+describe('Overview before the install list is read', () => {
+  const never = new Promise(() => {})
+  it('a deployed install starts the Ledger', async () => {
+    api.installs.mockReturnValue(never)
+    api.fleet.mockResolvedValue(SYNCED)
+    render(<Overview overview={{ ...overview, deployed: true }} themes={[]} onAction={() => {}} />)
+    await waitFor(() => expect(api.fleet).toHaveBeenCalled())
+  })
+  it('an undeployed one waits, and does not onboard early', async () => {
+    api.installs.mockReturnValue(never)
+    render(<Overview overview={{ ...overview, deployed: false }} themes={[]} onAction={() => {}} />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(api.fleet).not.toHaveBeenCalled()
+    expect(screen.queryByText('Deploy your harness')).toBeNull()
+  })
+})
+
+// A refetch of the install list (a finished job, or the cold verdict's `dataRev` bump) must not
+// unmount Onboarding: that loses the theme, emit and folder the user has filled in.
+describe('Onboarding across a refetch', () => {
+  it('keeps the form while the install list is read again', async () => {
+    const props = { overview: { ...overview, deployed: false }, themes: [], onAction: () => {} }
+    api.themes.mockResolvedValue({ themes: [], emits: [], current: 'neutral' })
+    api.installs.mockResolvedValueOnce({ installs: [] })
+    const { rerender } = render(<Overview {...props} dataRev={101} />)
+    const form = await screen.findByText('Deploy your harness')
+    api.installs.mockReturnValue(new Promise(() => {}))
+    rerender(<Overview {...props} dataRev={102} />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByText('Deploy your harness')).toBe(form)
+  })
+})
+
 const lensMarker = {
-  cultivar: 'germination',
+  genome: 'germination',
   greenhouse: 'Capability mix',
-  operator: 'HARNESS // STATUS READOUT',
-  journal: 'Today in this harness',
+  hud: 'HARNESS // STATUS',
+  journal: 'Growth rings',
 }
 
 describe('Overview lenses: one h1, one primary action', () => {
+  // The lenses are a lazy chunk. Loaded here, so the first case's 1 s `findByText` does not also
+  // pay for a cold import, which took longer than that under load.
+  beforeAll(() => import('../pages/Dashboard/index.jsx'))
+
   for (const lens of Object.keys(lensMarker)) {
     it(`${lens}`, async () => {
       api.fleet.mockResolvedValue(SYNCED)
@@ -297,10 +336,56 @@ describe('Overview lenses: one h1, one primary action', () => {
       await screen.findByText(/^Start$/)
       expect(document.querySelectorAll('h1').length).toBe(1)
       expect(filled().map(nameOf)).toEqual(['Rebuild'])
-      // `.pad:has(> .jr-head)` (styles.css) sizes the Journal page: the head stays a direct
-      // child of the page's own box, with the Overview header beside it, not around it.
+      // `.pad:has(.jr-head) .view-in` (styles.css) sizes the Journal page: the height runs from
+      // the page's own box through the sub-view wrapper to the head's map.
       if (lens === 'journal')
-        expect(container.querySelector('.jr-head').parentElement).toBe(container)
+        expect(container.querySelector('.jr-head').closest('.view-in').parentElement).toBe(
+          container,
+        )
+    })
+  }
+})
+
+// One header across the five views: the same title, the same count line, the same View control in
+// the same place. Every lens also keeps the three sub-views, the Journal included.
+describe('Overview: one stable header', () => {
+  // One disabled and one absent row: the line counts what is installed, on or off, as the rail
+  // does, whichever read feeds it (the Ledger the fleet, a lens the install list).
+  const OFF = { ...SYNCED.installs[0], id: 'off', state: 'disabled' }
+  const HEAD_LINE = `${SYNCED.installs.length + 1} installs on this machine`
+  const head = () => {
+    const h = document.querySelector('.page-head')
+    return [
+      h.querySelector('h1').textContent,
+      h.querySelector('.sub').textContent,
+      h.querySelector('[aria-label="View"]') !== null,
+    ]
+  }
+  for (const lens of ['overview', ...Object.keys(lensMarker)]) {
+    it(`${lens}`, async () => {
+      const fleet = { ...SYNCED, installs: [...SYNCED.installs, OFF] }
+      api.fleet.mockResolvedValue(fleet)
+      api.installs.mockResolvedValue({
+        installs: [...fleet.installs, { ...OFF, id: 'none', state: 'absent' }],
+      })
+      render(
+        <Overview
+          overview={overview}
+          themes={[]}
+          layout={lens}
+          onLayout={() => {}}
+          onAction={() => {}}
+        />,
+      )
+      await waitFor(() => expect(head()).toEqual(['Overview', HEAD_LINE, true]))
+      if (lens === 'overview') return
+      await screen.findByText(lensMarker[lens])
+      const subViews = within(screen.getByRole('group', { name: 'Dashboard view' }))
+      expect(subViews.getAllByRole('button').map((b) => b.textContent)).toEqual([
+        'Status',
+        'Lineage',
+        'Readout',
+      ])
     })
   }
 })
@@ -319,7 +404,9 @@ describe('Overview lenses name their install', () => {
     )
     await screen.findByText(lensMarker.greenhouse)
     expect(
-      screen.getByText('claude · global · imperial voice · lean footprint · /home/u/.claude'),
+      screen.getByText(
+        'Claude Code · global · imperial voice · lean footprint · /home/u/.claude · counts cover every install',
+      ),
     ).toBeTruthy()
   })
 })

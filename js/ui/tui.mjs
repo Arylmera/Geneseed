@@ -1,59 +1,36 @@
 /**
- * `tui` — and the TUI's pure half, which is the part of the panel that has no curses in it.
+ * `tui` — and the TUI's pure half: the layout helpers that have no screen in them.
  *
- * WHAT CROSSES HERE AND WHAT DOES NOT.
+ * `cmdTui` is an entry with no full-screen panel. Off a TTY it prints one line and returns 1;
+ * on a TTY it prints a refusal that names the console and returns 1, rather than inventing
+ * a screen — the same decision `js/ui/menu.mjs` makes. `tests/unit/no_panel.test.mjs` fakes
+ * `isTTY` true in a child and asserts BOTH arms — the exit code, and that the refusal names
+ * the console rather than pretending to draw.
  *
- * `cmd_tui` (`rituals/_harness_tui.py`) is twenty-six lines and three arms. Off a TTY it
- * prints one line and returns 1; when `import curses` fails it prints one line and returns
- * 1; otherwise it builds the inventory and hands the screen to `curses.wrapper(_tui_loop)`.
- * NO CELL COULD EVER GIVE `cmd_tui` A TTY while the acceptance matrix was the gate, so the
- * off-TTY arm was the whole of its reachable behaviour. That changed with the matrix:
- * `tests/unit/no_panel.test.mjs` fakes `isTTY` true in a child and asserts BOTH arms — the
- * exit code, and that the refusal names the console rather than pretending to draw.
- *
- * THE PANEL ITSELF IS P7C'S, AND THIS ENTRY FALLS BACK RATHER THAN INVENTING ONE — the same
- * decision `js/ui/menu.mjs` made in P7a, for the same reason. `cmd_tui` already owns a fourth
- * path: an `except Exception` around `curses.wrapper` that prints `[tui] full-screen panel
- * unavailable (<reason>)` and returns 1, written for the Windows shim's `Unsupported`. That
- * is the reference's own contract for "no full-screen panel is available here", so the port
- * speaks it with a reason that is permanent rather than machine-dependent. A Node panel that
- * differed from the reference on every screen, that no cell could reach, and that would be
- * deleted the day the real one crossed, would be a second user interface and not a port.
- *
- * WHAT DOES CROSS is the alignment contract — the functions below that decide what a row
+ * What lives here is the alignment contract — the functions below that decide what a row
  * looks like: display width, fitting, glyph tiers, the catalogue's entries and detail lines.
  * Each has a caller outside this file (the catalogue, the status panel, the web console).
- * The panel itself was REJECTED, not deferred, so the helpers that existed only for it —
- * the spinner, the wordmark, scroll clamping, the progress bar and the theme preview/flair
- * readers — were deleted rather than kept waiting for a screen that will not come.
+ * There is no panel, so nothing exists only for one: no spinner, wordmark, scroll clamping,
+ * progress bar or theme preview.
  *
- * WHAT IS DELIBERATELY NOT HERE: `_bx` (its non-ASCII arm returned `curses.ACS_*` chtype
- * ints, which belonged with the window) and every `(stdscr, curses, pal)` drawing helper.
- * `_wrap_lines` is NOT deferred but RETIRED — it reflowed a body into a fixed-width detail
- * pane, the pane is gone, and the web console does its own wrapping.
- *
- * **DO NOT WRITE A SECOND LINE BREAKER.** This block used to argue that `textwrap.wrap` was
- * "a second `difflib` — a stdlib payload with no Node twin". It has one since P1:
- * `wrapText` in `js/ui/cli.mjs`, written because `--help` was the caller that finally
- * required it, pinned by the written-out rows in `tests/unit/text_layout.test.mjs`.
- * Anything that needs wrapping wraps THAT. `_parse_laws`, `load_registry`, `entity_status` and
- * `_tui_inventory` crossed in P6c and live in `js/inspect/inventory.mjs`.
+ * **DO NOT WRITE A SECOND LINE BREAKER.** `wrapText` in `js/ui/cli.mjs` is the one,
+ * pinned by the written-out rows in `tests/unit/text_layout.test.mjs`. Anything that needs
+ * wrapping wraps THAT. The law parser, registry and inventory walk live in
+ * `js/inspect/inventory.mjs`.
  */
 import { splitLines } from '../lib/udiff.mjs';
 import { printOut } from '../lib/fs.mjs';
 
 // ---- display tiers -------------------------------------------------------------------
 //
-// The reference reads these into MODULE CONSTANTS at import time (`_TUI_ASCII = bool(
-// os.environ.get(...))`), so a process answers one way for its whole life and the corpus
-// runs one probe process per mode rather than monkeypatching. Read once here too, for the
-// same reason. `bool(os.environ.get(x))` and `!!process.env.x` agree on the case that
-// matters: an EMPTY value is not set.
+// Read into MODULE CONSTANTS at import time, so a process answers one way for its whole
+// life and a probe runs one process per mode rather than monkeypatching. An EMPTY value is
+// not set.
 const TUI_ASCII = !!process.env.GENESEED_TUI_ASCII;
 const TUI_PLAIN = !!process.env.GENESEED_TUI_PLAIN;
 const TUI_EMOJI = !(TUI_ASCII || TUI_PLAIN);
 
-/** `_glyphs` — the one glyph table for the whole TUI, unicode or ASCII stand-ins. */
+/** The one glyph table for the whole TUI, unicode or ASCII stand-ins. */
 export function glyphs(asciiMode) {
   return {
     sel: asciiMode ? '>' : '▸',
@@ -77,7 +54,7 @@ export const GLYPH = glyphs(TUI_ASCII);
 // `Mc` with combining class 0 and a great many `Mn` have class 0 too. So the tables below
 // are the port's own, and no dependency was added to get them.
 
-//: East_Asian_Width W or F, below U+1F000 — above it the reference's own `>= 0x1F000` rule
+//: East_Asian_Width W or F, below U+1F000 — above it the `>= 0x1F000` rule
 //: already answers 2, so the table stops where that rule takes over.
 const WIDE = [
   0x1100, 0x115F, 0x231A, 0x231B, 0x2329, 0x232A, 0x23E9, 0x23EC, 0x23F0, 0x23F0,
@@ -265,12 +242,11 @@ export function mark(kind) {
 // ---- the inventory's two consumers ----------------------------------------------------
 
 /**
- * `_tui_entries` — the ordered (kind, label, data) rows for the left list. `head` is a
+ * The ordered (kind, label, data) rows for the left list. `head` is a
  * section divider and is not selectable.
  *
- * ⚠ THE TWO NEW TIERS ARE GUARDED, AND THE GUARD IS NOT DEFENSIVENESS. When they landed, this
- * function had two recorded cases per platform in the former Python suite's corpus, and their
- * argument was a synthetic inventory carrying exactly `{agents, skills, laws, theme}`. Reading
+ * ⚠ THE TWO NEW TIERS ARE GUARDED, AND THE GUARD IS NOT DEFENSIVENESS. A synthetic inventory
+ * carrying exactly `{agents, skills, laws, theme}` is a valid argument. Reading
  * `inv.doctrines.length` on such an inventory THROWS; emitting a head unconditionally changes
  * the result array. Keyed on presence, an inventory without the tiers renders as it always did
  * and a real inventory gets all three tiers.
@@ -312,25 +288,11 @@ export function tuiEntries(inv) {
 }
 
 /**
- * `_detail_lines` — right-pane content for the selected entry.
+ * Right-pane content for the selected entry.
  *
- * The reference falls off the end for every other `kind`, so it returns `None` — not `[]`.
- * `null` here, because a caller that treated the two alike would render an empty pane where
- * the reference renders nothing at all.
- *
- * ⚠ A REFERENCE BUG LIVES ON THIS RETURN, FOUND BY P7B'S CORPUS AND DELIBERATELY NOT FIXED
- * (it is in the panel, which is P7c's). `_tui_loop` does, at `_harness_tui.py`:614:
- *
- *     wrapped = _wrap_lines(_detail_lines(kind, label, data), riw)
- *
- * and `_wrap_lines` iterates its argument. For a `head` row `_detail_lines` returns `None`,
- * so that is a `TypeError: 'NoneType' object is not iterable`. It is normally unreachable
- * because line 554 moves `sel` onto the first SELECTABLE row — but line 555 is
- * `if not selectable: sel = 0`, and row 0 is always the AGENTS header. So an inventory with
- * no agents, no skills AND no laws crashes the panel on its first frame instead of drawing
- * an empty state. `_TUI_INV_EMPTY` in the former Python parity suite is the corpus
- * entry that surfaced it. **P7c must not reproduce the crash when it ports `_tui_loop`** —
- * the fix is one `or []` at the call site, and it belongs in the same change as the port.
+ * Every other `kind` returns `null` — not `[]`. A caller that treated the two alike would
+ * render an empty pane where nothing should render at all, and a caller that iterates the
+ * result must guard for `null` (a `head` row is the one that reaches it).
  *
  * Its only consumer with direct assertions is `tests/unit/setup.test.mjs`.
  */
@@ -348,16 +310,14 @@ export function detailLines(kind, label, data) {
 // ---- the verb ------------------------------------------------------------------------
 
 /**
- * `cmd_tui`. Arm one is the reachable one and is byte for byte; the panel is P7c's and this
- * falls back through `cmd_tui`'s own `except` arm — see this module's header.
+ * The `tui` verb. Arm one is the reachable one; there is no panel, so the TTY arm
+ * refuses — see this module's header.
  */
 export function cmdTui() {
   if (!process.stdin.isTTY) {
     printOut('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
     return 1;
   }
-  // The pointer to the Python panel is gone for `js/ui/menu.mjs`'s reason: the
-  // panel it named is the Python being deleted. What is left is true and stays true.
   printOut('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
     + 'half, not its screens). Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
   return 1;

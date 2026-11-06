@@ -63,7 +63,9 @@ export default function OperatorView({ overview, setup, jobs, lens }) {
                 ) : (
                   <span className="badge warn">
                     <span className="dot" />
-                    {issueCount} issue{issueCount !== 1 ? 's' : ''}
+                    {overview.doctor === null
+                      ? 'checking'
+                      : `${issueCount} issue${issueCount !== 1 ? 's' : ''}`}
                   </span>
                 )}
               </div>

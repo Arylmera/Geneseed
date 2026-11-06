@@ -482,16 +482,14 @@ test('installsReferencingShim matches the exact shim path, not merely its marker
   });
 });
 
-test('the sniff recognises both the legacy and the shim shape', () => {
-  // During migration both shapes are in the wild. Dropping the legacy marker would make every
-  // not-yet-migrated install invisible to the orphan scan — an orphan the user deletes by hand.
+test('the sniff recognises the shim shape, and no longer the 1.x interpreter shape', () => {
+  // The stated floor (F17): a 1.x install rebuilds first, so its direct interpreter command reads
+  // as a user hook. The shim shape is the one every later install wires.
   withGeneseedHome(() => {
     const legacy = `"python" "${path.join(String(ROOT), 'rituals', 'harness.py')}" git-gate`;
     const shim = `"${hookShimPath()}" git-gate`;
-    for (const cmd of [legacy, shim]) {
-      assert.ok(GENESEED_HOOK_SNIFF.some((m) => cmd.includes(m)),
-        `the sniff does not recognise ${cmd}`);
-    }
+    assert.ok(GENESEED_HOOK_SNIFF.some((m) => shim.includes(m)), `the sniff does not recognise ${shim}`);
+    assert.ok(!GENESEED_HOOK_SNIFF.some((m) => legacy.includes(m)), `the sniff still recognises ${legacy}`);
     assert.ok(!GENESEED_HOOK_SNIFF.some((m) => 'echo hi'.includes(m)),
       'a plain user hook is mistaken for Geneseed\'s');
   });

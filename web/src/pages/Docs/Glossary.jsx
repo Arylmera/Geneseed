@@ -14,8 +14,8 @@ export default function Glossary({ page }) {
         sub={
           <>
             Geneseed&apos;s invented vocabulary, decoded. Left: the neutral, plain-English term.
-            Right: the word your <code className="cap">{theme}</code> theme actually uses in the
-            agent&apos;s voice. Last: the developer idea it maps to.
+            Right: the word the <code className="cap">{theme}</code> voice actually uses. Last: the
+            developer idea it maps to.
           </>
         }
       />

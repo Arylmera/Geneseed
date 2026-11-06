@@ -43,6 +43,15 @@ export function gateAddress(key) {
   return m[1] === 'law' ? toRoman(Number(m[2])) : `${m[1]}.${m[2]}`
 }
 
+// What a gate reads as when the catalog does not name it (still loading, or a rule since removed).
+// A person never sees the ledger's key: `law-4` is Rule IV, `process-5` is Process rule 5.
+export function gateFallback(addr) {
+  if (GATE_SWITCH[addr]) return GATE_SWITCH[addr].label
+  const pack = /^([a-z]+)\.(\d+)$/.exec(addr)
+  if (pack) return `${pack[1][0].toUpperCase()}${pack[1].slice(1)} rule ${pack[2]}`
+  return /^[IVXLC]+$/.test(addr) ? `Rule ${addr}` : addr
+}
+
 // The rules a hook enforces, by catalog address. Transcribed from the doctor's HOOK_PINNED
 // (js/inspect/checks-constitution.mjs): Law I's secret scan and process 1's persist check
 // (rule-gate), Law III's Stop-hook done gate (js/hosts/hooks-done.mjs), Law IV's history
@@ -123,7 +132,7 @@ export const PRECEDENCE_INFORM = [
   { source: 'mode', label: 'Mode', against: 'binds how work runs' },
   {
     source: 'PROFILE.md, posture, theme',
-    label: 'Profile, posture, theme',
+    label: 'Profile, posture, voice',
     against: 'inform only; never bind',
   },
 ]

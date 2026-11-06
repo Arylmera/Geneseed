@@ -4,7 +4,7 @@
 
 ## Proof
 
-<!-- Paste the counts, not "tests pass". See CLAUDE.md § Proving a change. -->
+<!-- Paste the counts, not "tests pass". See AGENTS.md § Proving a change. -->
 
 - [ ] `npm run lint` and `npm run typecheck`
 - [ ] `node --test --test-reporter=tap "tests/**/*.test.mjs"` — `# tests N`, `# fail 0`

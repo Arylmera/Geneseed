@@ -17,15 +17,17 @@ Claude Code, Bob and OpenClaude call Geneseed's hooks through one small file, th
 Install the package first (`npm install -g geneseed`, or prefix each command with `npx`), then:
 
 ```
-geneseed migrate --dry-run     # survey every install and print the plan; writes nothing
+geneseed migrate --dry-run     # survey every install, print the plan and the fold report; writes nothing
 geneseed migrate               # do it
 ```
 
 `migrate` rebuilds every registered install **with its own theme, host, footprint, posture and mode**. Nothing is reset to a default. It then rewrites the hook shim to point at the npm package, and reports anything it is not allowed to fix for you. A second run prints `already on the npm shape` and writes nothing.
 
+`--dry-run` also previews [the fold](../concepts/shared-tier.md#the-fold) for each global install, even on a machine that has already migrated, because the fold runs in every global emit. Each host is read against the shared tier as it stands, so two hosts that hold the same new fact both count it.
+
 ## All or nothing
 
-Before changing anything, `migrate` copies every host settings file and the hook shim into `~/.geneseed/.migrate-backup/`. If any install fails to rebuild, **everything is put back** and the command exits non-zero. You are never left half on one setup and half on the other.
+Before changing anything, `migrate` copies every host settings file and the hook shim into `~/.geneseed/.migrate-backup/`. If any install fails to rebuild, **everything is put back** and the command exits non-zero. You are never left half on one setup and half on the other. What an earlier install folded into the shared tier stays there: the tier and the host layer are read together, so nothing is lost.
 
 `rebuild-all` behaves the opposite way on purpose: it carries on past a broken install so that one failure cannot block the rest.
 

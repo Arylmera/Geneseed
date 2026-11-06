@@ -21,7 +21,7 @@ Spring Security 7 audit only. The generic audit (injection, secrets, dependencie
 <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Read the `SecurityFilterChain` beans first, then method-security usage and config files.
 2. Check:
    - Filter chain: a bean, never `WebSecurityConfigurerAdapter`; `authorizeHttpRequests` ends in `anyRequest().authenticated()` or `denyAll()`; only health and login endpoints open.

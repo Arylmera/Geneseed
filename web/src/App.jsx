@@ -38,6 +38,7 @@ const Loops = lazy(() => import('./pages/Loops.jsx'))
 const Laws = lazy(() => import('./pages/Laws.jsx'))
 const Personal = lazy(() => import('./pages/Personal.jsx'))
 const Installs = lazy(() => import('./pages/Installs/index.jsx'))
+const Settings = lazy(() => import('./pages/Settings/index.jsx'))
 const Docs = lazy(() => import('./pages/Docs/index.jsx'))
 
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the chrome
@@ -108,8 +109,13 @@ export default function App() {
 
   const onError = (e) =>
     setToast({ kind: e?.body?.kind || 'err', msg: e?.body?.message || e.message })
-  const { overview, error: overviewError, themes, reload } = useOverview(onError)
   const [dataRev, setDataRev] = useState(0)
+  const {
+    overview,
+    error: overviewError,
+    themes,
+    reload,
+  } = useOverview(onError, () => setDataRev((v) => v + 1))
   // Soft refresh after a mutation: refetch the overview and bump a revision every panel
   // depends on. No full page reload, so nothing flashes.
   const refresh = () => {
@@ -209,7 +215,7 @@ export default function App() {
       run: toggleMode,
     },
     ...FLAVOURS.filter((f) => f.id !== flavour).map((f) => ({
-      title: `Flavour: ${f.name}`,
+      title: `Skin: ${f.name}`,
       desc: f.tagline,
       run: () => switchFlavour(f.id),
     })),
@@ -220,8 +226,6 @@ export default function App() {
     onFlavour: switchFlavour,
     accentMode,
     onAccentMode: setAccentMode,
-    layout,
-    onLayout: setLayout,
   }
 
   // route.page -> its element. Keys are lib/router.js's PAGES.
@@ -255,11 +259,20 @@ export default function App() {
         section={route.section}
         selected={route.item}
         dataRev={dataRev}
+        onCountsChanged={reload}
       />
     ),
     kits: () => <Kits item={route.item} onAction={runAction} dataRev={dataRev} />,
     loops: () => <Loops tab={route.tab} item={route.item} dataRev={dataRev} />,
-    personal: () => <Personal tab={route.tab} item={route.item} setup={setup} dataRev={dataRev} />,
+    personal: () => (
+      <Personal
+        tab={route.tab}
+        item={route.item}
+        setup={setup}
+        dataRev={dataRev}
+        onCountsChanged={reload}
+      />
+    ),
     installs: () => (
       <Installs
         tab={route.tab}
@@ -269,9 +282,9 @@ export default function App() {
         onAction={runAction}
         onMutated={refresh}
         dataRev={dataRev}
-        appearance={appearance}
       />
     ),
+    settings: () => <Settings overview={overview} onAction={runAction} />,
     activity: () =>
       route.item ? <ActivityDetail key={route.item} sid={route.item} /> : <Activity />,
     docs: () => <Docs page={route.item} onAction={runAction} overview={overview} />,
@@ -362,7 +375,7 @@ export default function App() {
                 <PageBoundary key={route.page}>
                   <Suspense fallback={<Loading />}>
                     {/* ⚠ ONE SLOT PER PAGE, AND IT IS NOT A TIDY-UP. A page reachable from
-                      several routes (the Library from `#/skills`, `#/section/memory` and
+                      several routes (the Library from `#/skills`, `#/section/agents` and
                       `#/item/agent/x`; the Constitution from `#/laws` and `#/item/law/IV`)
                       must render from ONE position in this tree, or React unmounts and
                       remounts it whenever the route crosses between them: the page throws

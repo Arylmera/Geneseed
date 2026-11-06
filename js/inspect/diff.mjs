@@ -1,20 +1,12 @@
 /**
- * `harness diff` — `rituals/_harness_diff.py`. What a DEPLOYED install has that a fresh
+ * `harness diff`. What a DEPLOYED install has that a fresh
  * render of `src/` does not, so in-place edits can be reviewed and back-ported.
  *
- * WHAT THE CLOSURE WALK MISSED, AND IT IS A NEW KIND OF MISS. An import-aware `ast` walk puts
- * this verb at 252 LOC over 10 functions, and every one of those is a few lines of reading a
- * marker or a manifest. The verb's entire user-visible payload is `difflib.unified_diff`,
- * which the walk counts as zero because `difflib` is not in `rituals/`. P5e learned that a
- * walk cannot see through a `subprocess`; this is the same blind spot pointed the other way —
- * it cannot see through the STANDARD LIBRARY either, and a stdlib call with no JS equivalent
- * is a port, not a call. `js/lib/udiff.mjs` is where that went, and it is 273 lines against
- * this file's 312 — the module the walk described as the whole verb is not half of it.
+ * The verb's entire user-visible payload is the unified diff, and `js/lib/udiff.mjs` is
+ * where that lives: a port of `difflib.unified_diff`, which has no JS equivalent.
  *
- * THE SECOND thing the walk shows only as one name: `_diff_collect` runs a whole GLOBAL EMIT
- * into a temp dir. `build.HOSTS[host]["emit_global"]` is a `build.*` reference like any other
- * in the table, and behind it is the generator. That call is why this file imports
- * `bin/build-driver.mjs` — the same in-process route `js/build/generate.mjs` established for `build`,
+ * `diffCollect` runs a whole GLOBAL EMIT into a temp dir. That call is why this file imports
+ * `bin/build-driver.mjs` — the same in-process route `js/build/generate.mjs` uses for `build`,
  * under the same transitive `child_process` ban.
  *
  * WHAT NO CELL CAN VARY, stated rather than left implicit:
@@ -22,12 +14,11 @@
  *   * **The diff algorithm.** A cell can produce ONE edited file and see one hunk. It cannot
  *     produce the shapes where `difflib`'s choices differ from any other diff's — ties, the
  *     recursion's alignment, and above all `autojunk`, which only engages at 200 lines and
- *     changes the hunks on every real harness file. The former Python suite gated it as a
- *     corpus, measured in both directions (28 of its 176 cases disagreed when `autojunk` was
- *     switched off). That corpus is gone and no Node test drives `unifiedDiff` directly, so
- *     beyond the one hunk the `diff/--full-…` cell sees, nothing pins these shapes today.
- *   * **The timestamp.** `_write_improvements` names the file `improvements-%Y%m%d-%H%M%S.md`
- *     and stamps the report with `datetime.now()`, so the two implementations cannot write the
+ *     changes the hunks on every real harness file. No Node test drives `unifiedDiff`
+ *     directly, so beyond the one hunk the `diff/--full-…` cell sees, nothing pins these
+ *     shapes today.
+ *   * **The timestamp.** `writeImprovements` names the file `improvements-%Y%m%d-%H%M%S.md`
+ *     and stamps the report with the current time, so two runs cannot write the
  *     same bytes across a second boundary — and a cell runs them in sequence, so the boundary
  *     is a coin flip. The cell harness normalises both spellings out of the snapshot, which
  *     costs the FORMAT assertion and pays it back in `tests/unit/hook_cli.test.mjs`'s
@@ -45,37 +36,37 @@ import { rglobFiles } from '../build/emit-common.mjs';
 import { CONFIG, makeCfg } from '../build/source.mjs';
 import { sourceFingerprint } from '../build/version.mjs';
 import {
-  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, opencodeConfigDir, resolvePath,
+  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, isGlobalInstall, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
-  excludedSkillsOfDir, gatesOfDir, kitsOfDir,
+  excludedSkillsOfDir, gatesOfDir, kitsOfDir, sharedTierOfDir,
   footprintOfDir, modeOfDir, postureOfDir,
   trustOfDir,
-  readJsonMaybe, readMaybe, themeOfDir,
+  readJsonMaybe, readMaybe, renderedTier, themeOfDir,
 } from '../hosts/installs.mjs';
 import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
+import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 
 /**
- * `_harness_core._T0` — this process's start, in epoch seconds.
+ * This process's start, in epoch seconds.
  *
- * Python samples it at `_harness_core` import time and `_flush_export_notes` is its only
- * reader. Module load is the same moment here for the same reason: the entry imports this
- * module before it parses an argument, so nothing an invocation does can have happened
- * before it.
+ * `flushExportNotes` is its only reader. Module load is the sampling moment: the entry
+ * imports this module before it parses an argument, so nothing an invocation does can have
+ * happened before it.
  */
 const T0 = Date.now() / 1000;
 
 /**
- * `_harness_diff._cmp_key` — how an owned file is keyed for drift.
+ * How an owned file is keyed for drift.
  *
  * `.geneseed-version` carries a build-DATE stamp that is not a local edit, so it is keyed on
- * the fingerprint token alone. `text.split()` is Python's whitespace split with no separator:
- * it collapses runs AND strips leading whitespace, which `String.split(' ')` does neither of.
+ * the fingerprint token alone. Splitting on `/\s+/` collapses runs AND strips leading
+ * whitespace, which `String.split(' ')` does neither of.
  */
 export function cmpKey(rel, text) {
   if (rel === VERSION_MARKER) {
@@ -85,7 +76,7 @@ export function cmpKey(rel, text) {
   return text;
 }
 
-/** `_harness_diff._owned_set` — the files a global install claims, per its manifest. */
+/** The files a global install claims, per its manifest. */
 function ownedSet(d, data = readJsonMaybe(path.join(d, GLOBAL_MANIFEST))) {
   if (data === null || typeof data !== 'object') return new Set();
   const owned = data.owned;
@@ -93,11 +84,11 @@ function ownedSet(d, data = readJsonMaybe(path.join(d, GLOBAL_MANIFEST))) {
 }
 
 /**
- * `_harness_diff._manifest_scope` — "project" or "global", defaulting to "global".
+ * "project" or "global", defaulting to "global".
  *
  * Every manifest predating this key is a GLOBAL install, so a missing key, an unreadable file
- * and a malformed one all read as "global". `data.get("scope") or "global"` — an EMPTY string
- * falls back too, which `?? 'global'` alone would not do.
+ * and a malformed one all read as "global". An EMPTY string falls back too, which
+ * `?? 'global'` alone would not do.
  */
 export function manifestScope(d) {
   const data = readJsonMaybe(path.join(d, GLOBAL_MANIFEST));
@@ -106,10 +97,10 @@ export function manifestScope(d) {
 }
 
 /**
- * `contextlib.redirect_stdout(io.StringIO())` around the emit.
+ * Swallows the emit's stdout and nothing else.
  *
- * The emit prints its own summary line, which is not part of `diff`'s output; the Python
- * swallows it and lets stderr through, so a WARN from the emit still reaches the user. Both
+ * The emit prints its own summary line, which is not part of `diff`'s output; it is
+ * swallowed and stderr goes through, so a WARN from the emit still reaches the user. Both
  * halves matter and only the first needs code here — `printOut` and every driver funnel go
  * through `process.stdout.write`, so replacing that one method is the whole redirect.
  *
@@ -132,30 +123,19 @@ const posixRel = (rel) => rel.split('\\').join('/');
 /**
  * Render the `expected` tree for `host` at `axes` into a temp dir and SNAPSHOT it — every file,
  * not only the owned ones, because a rel the DEPLOYED manifest claims is looked up here too and
- * its presence decides "edited" against "added". The temp dir is gone before this returns.
- *
- * The one place a render depends on WHERE it is installed: a global Bob emit writes each
- * folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the
- * reference render names the temp tree. Mapped back to the deployed dir here, or every such
- * skill reads as edited. A deployment that has since MOVED still differs, and that is real
- * drift — its skills point at a directory that is no longer theirs. A side-file pointer (and a
- * global OpenCode command's) spells the same directory `/`-separated, so that spelling is
- * mapped too.
+ * its presence decides "edited" against "added". The temp dir is gone before this returns; `dir`
+ * is its name, which the texts still spell (`locatedAt`).
  */
-function renderExpected(host, axes, deployedDir) {
+function renderExpected(host, axes) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-diff-'));
   try {
     const expected = path.join(tmp, 'expected');
     withStdoutSwallowed(() => emitGlobalInto(host, {
       ...axes, out: path.join(tmp, 'bundle'), cfgDir: expected,
     }));
-    const posix = (p) => p.split(path.sep).join('/');
     const texts = new Map();
-    for (const p of rglobFiles(expected)) {
-      texts.set(relPosix(expected, p), readText(p).split(expected).join(deployedDir)
-        .split(posix(expected)).join(posix(deployedDir)));
-    }
-    return { owned: ownedSet(expected), texts };
+    for (const p of rglobFiles(expected)) texts.set(relPosix(expected, p), readText(p));
+    return { dir: expected, owned: ownedSet(expected), texts };
   } finally {
     // `tempfile.TemporaryDirectory()`'s cleanup, which runs on the exception path too.
     rmSync(tmp, { recursive: true, force: true });
@@ -163,46 +143,66 @@ function renderExpected(host, axes, deployedDir) {
 }
 
 /**
+ * A render, as it reads at `deployedDir`. The one place a render depends on WHERE it is installed:
+ * a global Bob emit writes each folder skill's absolute directory into its SKILL.md (see
+ * `writeNativeLayer`), so the expected render names the temp tree. Mapped back to the deployed
+ * dir here, or every such skill reads as edited. A deployment that has since MOVED still differs,
+ * and that is real drift — its skills point at a directory that is no longer theirs. A side-file
+ * pointer (and a global OpenCode command's) spells the same directory `/`-separated, so that
+ * spelling is mapped too. Apart from the render, so one render serves every install it fits.
+ */
+function locatedAt({ dir, owned, texts }, deployedDir) {
+  const posix = (p) => p.split(path.sep).join('/');
+  const located = new Map();
+  for (const [rel, text] of texts) {
+    located.set(rel, text.split(dir).join(deployedDir).split(posix(dir)).join(posix(deployedDir)));
+  }
+  return { owned, texts: located };
+}
+
+/**
  * A memo for `diffCollect`'s `expected` render — opt-in, so `geneseed diff` and every other
- * caller still renders afresh. The web console passes one: `/api/overview` and `/api/fleet`
- * both diff the selected install on every refresh, and the render is ~0.6 s of each.
+ * caller still renders afresh. The web console passes one: `/api/overview`, `/api/fleet` and
+ * `/api/diff` all diff an install, and the render is ~0.6 s of each. One memo serves the daemon's
+ * state and every per-install view.
  *
  * ONLY THE RENDER IS MEMOISED, NEVER THE RESULT: the compare against the deployed tree runs on
  * every call, because catching a hand edit there is the whole point of the drift figure.
- * One entry per deployed dir, at most `cap` of them (least recently used goes first); `renders`
- * counts real renders, for the tests.
+ * One entry per key, so installs alike in host and every axis share a render; at most `cap` of
+ * them (least recently used goes first), above one global install per host with room for a
+ * `--config-dir` or two; `renders` counts real renders, for the tests.
  */
-export function renderMemo(cap = 4) {
+export function renderMemo(cap = 8) {
   return { cap, renders: 0, entries: new Map() };
 }
 
 /**
  * The memoised `renderExpected`. The key is everything the render reads: the source
  * fingerprint, the two render inputs it does not hash (`harness.config.json` and the
- * orchestrator agent), the host and every axis. A deployed dir whose key changed is
- * re-rendered in place, and a fingerprint change drops every entry from the old source.
+ * orchestrator agent), the host and every axis, and never the deployed dir: `renderExpected` is
+ * not told it. A fingerprint change drops every entry from the old source.
  */
-function memoExpected(memo, host, axes, deployedDir, sourceFp) {
+function memoExpected(memo, host, axes, sourceFp) {
   const fp = sourceFp ?? sourceFingerprint(makeCfg());
   const extra = createHash('sha256');
   for (const p of [CONFIG, PRIMARY_AGENT_SRC]) extra.update(`${readMaybe(p) ?? ''}\0`);
   const key = JSON.stringify([fp, extra.digest('hex'), host, axes]);
-  const hit = memo.entries.get(deployedDir);
-  memo.entries.delete(deployedDir);
-  if (hit && hit.key === key) {
-    memo.entries.set(deployedDir, hit);
+  const hit = memo.entries.get(key);
+  if (hit) {
+    memo.entries.delete(key);
+    memo.entries.set(key, hit);
     return hit.exp;
   }
-  for (const [d, e] of memo.entries) if (e.fp !== fp) memo.entries.delete(d);
-  const exp = renderExpected(host, axes, deployedDir);
+  for (const [k, e] of memo.entries) if (e.fp !== fp) memo.entries.delete(k);
+  const exp = renderExpected(host, axes);
   memo.renders += 1;
-  memo.entries.set(deployedDir, { key, fp, exp });
+  memo.entries.set(key, { fp, exp });
   while (memo.entries.size > memo.cap) memo.entries.delete(memo.entries.keys().next().value);
   return exp;
 }
 
 /**
- * `_harness_diff._diff_collect` — returns `{target, theme, files}`, with `files === null` for
+ * Returns `{target, theme, files}`, with `files === null` for
  * "nothing to compare here".
  *
  * FIVE VALUES ARE READ OFF THE DEPLOYMENT rather than defaulted, and each has a scar behind
@@ -212,9 +212,8 @@ function memoExpected(memo, host, axes, deployedDir, sourceFp) {
  * AGENT.md and laws/universal.md as edited on every lean install, so a freshly rebuilt
  * harness looked drifted the moment it finished building and no rebuild could clear it.
  *
- * The POSTURE and the MODE joined them late, and the reference is where the hole came from:
- * `_build_core`'s defaults are `peer`/`direct` and `rituals/harness.py` never overrode them,
- * so every verb that rendered rendered at the defaults. An install that chose any other
+ * The POSTURE and the MODE joined them late: the build defaults are `peer`/`direct`
+ * and a verb that did not read them rendered at the defaults. An install that chose any other
  * register reported its own `## Posture` and `## Mode` sections as a local edit for as long
  * as it lived — and `apiRestore` would have written the default register back over the user's
  * choice, which is the same defect with teeth. `rebuild-all` never had it: it reads
@@ -223,20 +222,13 @@ function memoExpected(memo, host, axes, deployedDir, sourceFp) {
 export function diffCollect({
   target = null, theme = null, emit = null, footprint = null, memo = null, sourceFp = null,
 } = {}) {
-  // `Path(target).expanduser()` — expanded and NOT resolved, which is the opposite of
-  // `cmd_version`'s `.expanduser().resolve()` two files over. It is observable: `target` is
-  // printed on the summary line, so `--target .` reports `.` here and an absolute path
-  // there. Reproduced rather than made consistent, because consistency would be a change to
-  // the reference's output.
+  // Expanded and NOT resolved, which is the opposite of `cmdVersion`'s `resolvePath` two
+  // files over. It is observable: `target` is printed on the summary line, so `--target .`
+  // reports `.` here and an absolute path there. Kept rather than made consistent, because
+  // consistency would be a change to the verb's output.
   const dir = target ? expanduser(target) : opencodeConfigDir();
   if (!existsSync(path.join(dir, GLOBAL_MANIFEST))) return { target: dir, theme, files: null };
   if (manifestScope(dir) === 'project') return { target: dir, theme, files: null };
-
-  let themeName = theme;
-  if (!themeName) themeName = themeOfDir(dir);
-  // The Python INLINES this read rather than calling `_default_theme`, and the two bodies
-  // are identical — so this calls the one owner instead of copying the body a third time.
-  if (!themeName) themeName = defaultTheme();
 
   let emitName = emit;
   if (!emitName) {
@@ -244,6 +236,11 @@ export function diffCollect({
     emitName = marker === null ? '' : marker.trim();
   }
   const host = (EMIT_HOST_SCOPE.get(emitName) ?? ['opencode', 'global'])[0];
+
+  let themeName = theme;
+  if (!themeName) themeName = themeOfDir(dir, host);
+  // One owner for the default, rather than a copy of its body here.
+  if (!themeName) themeName = defaultTheme();
 
   const fp = footprint || footprintOfDir(dir);
 
@@ -256,23 +253,27 @@ export function diffCollect({
     // four reports its entire doctrines section — and its `Active packs:` line — as drift.
     // `null` (no marker) means unknown and renders at all four, which `doctrinesForBuild`
     // makes explicit rather than leaving to `makeCfg`'s parameter default two layers down.
-    posture: postureOfDir(dir), mode: modeOfDir(dir), doctrines: doctrinesForBuild(dir),
+    posture: postureOfDir(dir, host), mode: modeOfDir(dir, host), doctrines: doctrinesForBuild(dir, host),
     // The loop skill's preset, or its `Default trust preset:` line reads as edited.
     trust: trustOfDir(dir, host),
     // The excluded rules, or an install built `--exclude-rules "process 5"` reads its
     // carrier as drift: `expected` would re-state the rule the deployment took away.
-    excludeRules: excludedRulesOfDir(dir),
+    excludeRules: excludedRulesOfDir(dir, host),
     // The excluded skills, or every skill the install left out reads as deleted.
-    excludeSkills: excludedSkillsOfDir(dir),
+    excludeSkills: excludedSkillsOfDir(dir, host),
     // The kits on, or every kit file reads as added and the Kits block as drift.
-    kits: kitsOfDir(dir),
+    kits: kitsOfDir(dir, host),
+    // The shared-tier marker, or an install built `--shared-tier on` reads its `Shared tier: on` line as drift.
+    sharedTier: sharedTierOfDir(dir, host),
     // The gate switches, or a disarmed install reads its `<gate>: off` line as drift.
-    ...gatesOfDir(dir),
+    ...gatesOfDir(dir, host),
+    // The tier root it rendered, or an install left relative reads every file as behind source.
+    // A root that differs from the run-time one is `renderedPathNotes`'s to report.
+    sharedRoot: renderedTier(dir, host).root,
   };
   const deployedDir = resolvePath(dir);
-  const exp = memo
-    ? memoExpected(memo, host, axes, deployedDir, sourceFp)
-    : renderExpected(host, axes, deployedDir);
+  const exp = locatedAt(memo ? memoExpected(memo, host, axes, sourceFp) : renderExpected(host, axes),
+    deployedDir);
 
   // The deployed manifest, read once: its `owned` and its `hashes` both classify below.
   const manifest = readJsonMaybe(path.join(dir, GLOBAL_MANIFEST));
@@ -326,9 +327,9 @@ export function diffCollect({
     }
     files.push(rec);
   }
-  // Already sorted by `rel` above; the Python sorts again after the loop and so does this,
-  // because the two sorts are over different things — that one is over the RECORDS, and a
-  // port that dropped it would agree only while the set-union sort happens to be stable.
+  // Already sorted by `rel` above; sorted again here because the two sorts are over
+  // different things — this one is over the RECORDS, and dropping it would agree only while
+  // the set-union sort happens to be stable.
   files.sort((x, y) => (x.rel < y.rel ? -1 : x.rel > y.rel ? 1 : 0));
   return { target: dir, theme: themeName, files };
 }
@@ -345,10 +346,14 @@ export const drifted = (files) => files.filter((f) => f.status !== 'linked');
  * back-port (a rebuild updates it), so the improvements report and the export `setup` and
  * `update` fire read this set, not `drifted`.
  */
-export const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
+const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
 
-/** Where the self-improvement loops write, relative to an install's `notebook/`. */
-export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
+/** An install's notebook; a global install's loops write to the tier's `notes/` too (D6). */
+function notesRoots(dir) {
+  const roots = [[path.join(dir, 'notebook'), 'notebook']];
+  try { if (isGlobalInstall(null, dir)) roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
+  return roots;
+}
 
 /**
  * The self-improvement notes an install has accumulated, as `{rel, body}` sorted by `rel`.
@@ -363,21 +368,23 @@ export const NOTES_DIRS = ['skill-notes', 'agent-notes'];
  */
 export function collectNotes(dir) {
   const notes = [];
-  for (const sub of NOTES_DIRS) {
-    const d = path.join(dir, 'notebook', sub);
-    let names;
-    try { names = readdirSync(d); } catch { continue; }
-    for (const n of names.filter((x) => x.endsWith('.md')).sort()) {
-      const a = path.join(d, n);
-      if (!isFile(a)) continue;
-      const body = readText(a);
-      if (body.trim()) notes.push({ rel: `notebook/${sub}/${n}`, body });
+  for (const [root, label] of notesRoots(dir)) {
+    for (const sub of NOTES_DIRS) {
+      const d = path.join(root, sub);
+      let names;
+      try { names = readdirSync(d); } catch { continue; }
+      for (const n of names.filter((x) => x.endsWith('.md')).sort()) {
+        const a = path.join(d, n);
+        if (!isFile(a)) continue;
+        const body = readText(a);
+        if (body.trim()) notes.push({ rel: `${label}/${sub}/${n}`, body });
+      }
     }
   }
   return notes;
 }
 
-/** `_harness_diff._improvements_md` — pure; `when` is the caller's timestamp. */
+/** Pure; `when` is the caller's timestamp. */
 export function improvementsMd(target, theme, allFiles, when, notes = []) {
   // A linked path is never a back-port item: the file is the user's, not a local edit of ours.
   // Nor is a stale one: the source already has what it lacks.
@@ -442,14 +449,12 @@ function stamp(d) {
 }
 
 /**
- * `_harness_diff._write_improvements`.
- *
  * The default destination is `<deployed>/improvements/<timestamp>.md` — inside the install it
  * describes, and never in its manifest: rebuilds compare only owned files so the report is
  * not itself reported as drift, re-emits do not clobber it, and uninstall leaves it (the same
  * contract as the memory store).
  *
- * ONE `now` FOR BOTH USES, as the Python has: the filename and the `captured:` line come from
+ * ONE `now` FOR BOTH USES: the filename and the `captured:` line come from
  * the same instant, so a run that crosses a second boundary cannot name a file one second
  * away from what it says inside.
  */
@@ -468,7 +473,7 @@ export function writeImprovements(
 }
 
 /**
- * `_harness_diff.export_improvements` — the drift report as a LIBRARY call, for the callers
+ * The drift report as a LIBRARY call, for the callers
  * that want the artifact without the verb's printing.
  *
  * Returns `[path, files]`: `path` is null when nothing was written, and the two reasons are
@@ -476,13 +481,11 @@ export function writeImprovements(
  * "an install, and no drift". `setup` is the caller and reads exactly that: it prints the
  * path when there is one and says nothing when there is not.
  *
- * `flushExportNotes` below is its neighbour in the Python, and P5f left it out on the
- * keep-vs-delete criterion this port uses: a function with no caller in this binary. P8b is
- * the due date that docblock named — `cmdBootstrap` is the caller.
+ * `flushExportNotes` below is its neighbour; `cmdBootstrap` is the caller.
  */
 export function exportImprovements(target = null, theme = null, outPath = null) {
   const collected = diffCollect({ target, theme });
-  // Python's `if not files` — null AND the empty list both return, which is why the caller
+  // null AND the empty list both return, which is why the caller
   // gets `files` back rather than a bare path and can tell the two apart itself.
   // A linked path alone is not drift, or every update would export an empty report.
   // Nor are stale files alone, or every update over an older install would export one.
@@ -494,24 +497,22 @@ export function exportImprovements(target = null, theme = null, outPath = null) 
 }
 
 /**
- * `_harness_diff._flush_export_notes` — re-print, on the RESTORED terminal, every improvements
+ * Re-print, on the RESTORED terminal, every improvements
  * file exported since this process started.
  *
  * WHY IT SCANS RATHER THAN TRACKS. The export that matters most is the one an update STEP made
- * — in the reference that is a child process, so a call counter in this one would never see it.
+ * — that can be a child process, so a call counter in this one would never see it.
  * It reads the GLOBAL install's `improvements/` and takes anything newer than `T0 - 1`, and the
- * one-second slack is the reference's: a file written in the same second the process started
+ * one-second slack is deliberate: a file written in the same second the process started
  * can carry an mtime a hair below it.
  *
- * Its callers in the Python are `cmd_setup`'s curses arm, the TUI's teardown and
- * `cmd_bootstrap`; here it is `cmdBootstrap` alone, because the first two are P7's.
+ * Its caller is `cmdBootstrap`.
  */
 export function flushExportNotes() {
   let fresh = [];
   try {
     const d = path.join(String(opencodeConfigDir()), 'improvements');
-    // `Path.glob` on a directory that is not there yields nothing rather than raising, which
-    // is why the reference needs no existence check and this needs the readdir in the try.
+    // `readdirSync` raises on a directory that is not there, hence the readdir in the try.
     fresh = readdirSync(d)
       .filter((n) => n.startsWith('improvements-') && n.endsWith('.md'))
       .map((n) => path.join(d, n))
@@ -524,7 +525,6 @@ export function flushExportNotes() {
     + 'your agent to back-port them into src/.\n');
 }
 
-/** `_harness_diff.cmd_diff`. */
 export function cmdDiff(args) {
   const { target, theme, files } = diffCollect({ target: args.target, theme: args.theme });
   if (files === null) {

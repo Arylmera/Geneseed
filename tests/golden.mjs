@@ -34,6 +34,7 @@ import path from 'node:path';
 
 import { fileURLToPath } from 'node:url';
 
+import { machineDir } from '../js/lib/machine-dir.mjs';
 import { ROOT, VERBATIM_CELLS, cellId, runCell } from './helpers/golden.mjs';
 import { checkExpectations, runCell as runCliCell } from './helpers/cli_golden.mjs';
 
@@ -153,6 +154,51 @@ function fanOut(argv, jobs) {
   });
 }
 
+/**
+ * THE MACHINE-DIR FENCE. Every mode runs its children under `homeOverrides` (`cellEnv`), which
+ * moves `XDG_CONFIG_HOME` into the cell's sandbox; this is the check that says so from the
+ * outside. A listing with size and mtime of the REAL `machineDir()`, taken in THIS process (the
+ * parent's environment, not a shard's sandboxed one) before and after the run. A cell that wrote
+ * to the developer's own config directory changes the listing and fails the run. An absent
+ * directory is an empty listing, so a run that CREATES it fails too. Directories are listed
+ * too, as `dir`, so an empty one made or removed is seen.
+ */
+function machineSnapshot(dir = machineDir()) {
+  const out = new Map();
+  const walk = (d) => {
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { out.set(p, 'dir'); walk(p); continue; }
+      try {
+        const st = fs.statSync(p);
+        out.set(p, `${st.size}:${st.mtimeMs}`);
+      } catch { out.set(p, 'unreadable'); }
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+function machineDrift(before, after) {
+  const names = new Set([...before.keys(), ...after.keys()]);
+  return [...names].sort().filter((k) => before.get(k) !== after.get(k))
+    .map((k) => `  ${k}: ${before.get(k) ?? 'absent'} -> ${after.get(k) ?? 'absent'}`);
+}
+
+async function guarded(argv) {
+  const before = machineSnapshot();
+  const code = await main(argv);
+  const drift = machineDrift(before, machineSnapshot());
+  if (drift.length) {
+    const head = `the run changed the REAL machine dir ${machineDir()} — a cell escaped its sandbox, or another process (the web daemon, an install writing installs.json) wrote there while the run was going:`;
+    console.error(['', `[golden] ${head}`, ...drift].join('\n'));
+    return 1;
+  }
+  return code;
+}
+
 function main(argv) {
   const a = parseArgs(argv);
   const gen = a.gen.split(' ').filter(Boolean);
@@ -260,12 +306,12 @@ function diffMaps(a, b, aName, bName) {
 
 // Kept exported so `tests/unit/golden_flags.test.mjs` can drive the argument layer without
 // spawning 259 emits — the same split the reference's own flag-wiring tests relied on.
-export { parseArgs, selectCells, loadMatrix, loadCliMatrix, VERBATIM_CELLS };
+export { parseArgs, selectCells, loadMatrix, loadCliMatrix, VERBATIM_CELLS, machineSnapshot, machineDrift };
 
 if (import.meta.url === `file://${process.argv[1].split(path.sep).join('/')}`
   || process.argv[1] === fileURLToPath(import.meta.url)) {
   Promise.resolve()
-    .then(() => main(process.argv.slice(2)))
+    .then(() => guarded(process.argv.slice(2)))
     .then((code) => process.exit(code))
     .catch((e) => {
       console.error(`[golden] ${e.message}`);

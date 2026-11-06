@@ -15,7 +15,7 @@
   rule {{SKILL}}.
 
 ## Inputs
-- The path of the {{MEMORY}} store (`{{DIR_MEMORY}}/`), and the user's standing on
+- The path of the {{MEMORY}} store (`{{PATH_MEMORY}}/`), and the user's standing on
   scope: the whole store, or named topics only.
 
 ## Allowed tools
@@ -28,7 +28,7 @@
   approved by code ({{LAW:deletion-is-deliberate}}).
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Read the map (`MEMORY.md`), then one topic file at a time, then only the facts
    that topic needs ({{DOCTRINE:context-economy}}). On a large store, work topic by
    topic and report progress after each one (`3/14 topics: 4 merged, 2 archived`).

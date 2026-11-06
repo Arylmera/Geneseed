@@ -10,7 +10,7 @@ durable cross-project fact worth writing back. The knowledge base is declared in
 
 ## Procedure
 
-**Locate.** Read `geneseed-wiki.jsonc` — beside `AGENT.md`, or at `$GENESEED_WIKI`. No
+**Locate.** Read `geneseed-wiki.jsonc` — beside `AGENT.md`, or at `$GENESEED_WIKI`{{WIKI_TIER}}. No
 file, or an empty `wikis` list: stop; there is no knowledge base on this
 machine. Each declared wiki gives you its root `path`, its `entries`, a
 `conventions` note, an `inbox`, and `protected` folders.

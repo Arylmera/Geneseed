@@ -15,6 +15,10 @@ An install writes a handful of files into your host's config folder and, where t
 
 Token costs are for the default *lean* footprint. Before you type anything, a session carries about 12k tokens of harness. That is roughly 6% of a 200k window. A `--footprint full` build adds about 5k on the rules file. For a live figure on your own install, ask the agent to use the `token-report` skill.
 
+## One folder for the whole machine
+
+Host config folders are not the only place. Every global install shares `~/.config/geneseed/`, which holds what you teach the agent: your rules, profile, memory, wiki manifest, exclude paths and notes. Teach one tool something, and the others know it. See [The shared tier](../concepts/shared-tier.md). The rules text, agents, skills and kits stay in each host's own folder.
+
 ## One page per host
 
 <!--harness:opencode-->

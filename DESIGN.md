@@ -193,7 +193,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Doctrines | `src/doctrines/` | `doctrines/` | the four practice packs — the one build-time axis that changes *which rules ship*; the whole catalogue is written to disk either way |
 | Delegation | `src/agents/` | `agents/` | capability specialists with output contracts |
 | Workflows | `src/skills/` | `skills/` | repeatable procedures |
-| Memory | `src/memory/` | `memory/` | one-fact-per-file convention + index |
+| Memory | `src/memory/` | `memory/` | one-fact-per-file convention + index; a global install keeps the facts in the shared tier, `~/.config/geneseed/memory/` |
 | Notebook | `src/notebook/` | `notebook/` | the agent's sovereign space — any medium, seed-once charter the agent may rewrite; only `.gitignore` re-asserted |
 | Posture | `src/postures/` | inlined into `AGENT.md` | how much ceremony the agent brings to a task |
 | Mode | `src/modes/` | inlined into `AGENT.md` | the working axis (solo, foreman, …) — orthogonal to posture |
@@ -203,7 +203,7 @@ theme file defines a `DIR_*` key, so `laws/` is `laws/` in all fourteen voices.
 | Lifecycle | `registry.json` | — | maintainer-side status/version/owner per agent and skill; never rendered into a bundle |
 | Generator | `bin/build-driver.mjs` (`geneseed-build`) | — | substitution + `<!-- INCLUDE: -->` inlining, and the eleven `--emit` targets |
 | CLI, as data | `js/cli-table.json` | — | the owned document the entry point parses its own argv from |
-| Automation | `bin/geneseed-cli.mjs` (`geneseed`) | — | 25 verbs — `build` / `doctor` / `status` / `prompt` / `diff` / `setup` / `web` / `upgrade` / … |
+| Automation | `bin/geneseed-cli.mjs` (`geneseed`) | — | 24 verbs — `build` / `doctor` / `status` / `prompt` / `diff` / `setup` / `web` / `upgrade` / … |
 | Hooks | `bin/geneseed-hook.mjs` (`geneseed-hook`) | — | the six verbs an emitted hook config invokes: `context` / `git-gate` / `rule-gate` / `tool-gate` / `learn` / `activity` |
 | Adapters | `adapters/` | — | optional per-tool glue (hooks, OpenCode plugins) |
 

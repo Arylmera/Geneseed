@@ -19,7 +19,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
+import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
 import { mainWorktreeOf } from './gitref.mjs';
+
+/** The marker a project built `--shared-tier on` carries, and its one reader. The OpenCode context plugin holds a copy. */
+export const SHARED_TIER_LINE = 'Shared tier: on';
+export const SHARED_TIER_RE = /^Shared tier:[ \t]*on[ \t]*\r?$/m;
 
 /** `_build_global.GLOBAL_MANIFEST` — the file whose presence means "a global install". */
 export const GLOBAL_MANIFEST = '.geneseed-manifest.json';
@@ -47,6 +52,9 @@ export const ADVISORY_VERB = 'done-gate-advisory';
  * second copy in `js/inspect/` was the alternative, and a copy is what let the `~user`
  * refusal diverge between the two CLIs once already (see `hooks.mjs`'s header).
  *
+ * SHARED LIST: a global install also honours `excludes.json` in the machine tier (B8: the lists
+ * drifted across hosts). The OpenCode plugins carry the same union in their twins.
+ *
  * A LINKED GIT WORKTREE OF AN EXCLUDED REPO IS EXCLUDED TOO, wherever it sits on disk: the
  * cwd matches, or the main worktree `mainWorktreeOf` reads off the `.git` file does. An
  * exclusion names a repository the user keeps sovereign, not a folder; a worktree elsewhere
@@ -54,13 +62,22 @@ export const ADVISORY_VERB = 'done-gate-advisory';
  */
 export function sovereignBypass(root) {
   if (!root) return false;
-  let entries;
+  const listOf = (file) => {
+    try {
+      const data = JSON.parse(readText(file));
+      return Array.isArray(data && data.excludes) ? data.excludes : [];
+    } catch {
+      return [];
+    }
+  };
+  const entries = listOf(path.join(root, EXCLUDES_FILE));
+  // The shared list (`<machineDir>/excludes.json`) adds to a GLOBAL install's own, never to a
+  // project install's: a folder excluded for the global harness must not silence a project
+  // install that lives inside it. The tier test runs only when the shared list has entries.
   try {
-    const data = JSON.parse(readText(path.join(root, EXCLUDES_FILE)));
-    entries = Array.isArray(data && data.excludes) ? data.excludes : [];
-  } catch {
-    return false;
-  }
+    const shared = listOf(path.join(machineDir(), EXCLUDES_FILE));
+    if (shared.length && isGlobalInstall(null, root)) entries.push(...shared);
+  } catch { /* no home dir, or an unresolvable config dir: the host list alone */ }
   // Nothing to match, so no reason to pay for the cwd and `.git` reads below on every hook call.
   if (!entries.length) return false;
   let heres;
@@ -78,11 +95,11 @@ export function sovereignBypass(root) {
     if (typeof raw !== 'string' || !raw.trim()) continue;
     let base;
     try {
-      // `.rstrip("\\/")` AFTER normcase, exactly as the Python orders it, so the separator
+      // `.rstrip("\\/")` AFTER normcase, so the separator
       // test below cannot be fooled by a trailing slash in the user's file.
       //
       // `withDiscardableStderr` because `expanduser` writes its refusal at the RAISE SITE
-      // and this caller catches: the reference prints nothing here, so replaying the
+      // and this caller catches: nothing should print here, so replaying the
       // message would be a stderr divergence on every hook call for one bad entry.
       //
       // `resolvePath`, the same resolution as `heres` above: symlinks and junctions are followed on
@@ -211,7 +228,7 @@ function projectWiresVerb(cand, verb) {
 }
 
 /**
- * `_harness_mcp._settings_file` — the file this install's hooks were actually wired into.
+ * The file this install's hooks were actually wired into.
  *
  * `settings.local.json` for a Claude or OpenClaude PROJECT install (personal, untracked),
  * `settings.json` everywhere else (including Bob's, which documents no local variant), and
@@ -236,7 +253,7 @@ function emitMarkerOf(dir) {
   try { return readText(path.join(dir, '.geneseed-emit')).trim(); } catch { return ''; }
 }
 
-/** `_harness_mcp.DISABLED_STASH` — a sibling dir whose presence means "disabled". */
+/** A sibling dir whose presence means "disabled". */
 export const DISABLED_STASH = '.geneseed-disabled';
 
 /**
@@ -250,7 +267,7 @@ export const DISABLED_STASH = '.geneseed-disabled';
  *     only against `configDir()` made `rebuild-all` re-emit it as a PROJECT rooted at `$HOME`;
  *   * its own `.geneseed-emit` names a `-global` emit (`<host>-global` when `host` is given).
  * Case-folded on Windows. A `configDir()` that throws propagates: each caller already has the
- * catch that says what "cannot tell" means for it (the hook stays loud).
+ * catch that says what "cannot tell" means for it (`isGlobalInstall` is the one most share).
  */
 export function isHostGlobalDir(host, dir) {
   const emit = emitMarkerOf(dir);
@@ -259,6 +276,28 @@ export function isHostGlobalDir(host, dir) {
   return HOSTS.some((h) => (host === null || h.host === host)
     && (normcase(h.configDir()) === c || (h.family === 'claude'
       && normcase(resolvePath(path.join(os.homedir(), h.projectMarker))) === c)));
+}
+
+/**
+ * `isHostGlobalDir` for the callers that read "cannot tell" as "not global": whatever reads the
+ * machine tier stays on its own layer then, and no refusal printed on the way reaches stderr. A
+ * caller whose "cannot tell" must fail the other way (`holdsInstall`'s) keeps its own catch.
+ */
+export function isGlobalInstall(host, dir) {
+  try { return withDiscardableStderr(() => isHostGlobalDir(host, dir)); } catch { return false; }
+}
+
+/**
+ * Is `cfgDir` the one directory `host`'s `configDir()` resolves to? Only such an install creates
+ * and folds the shared tier. Stricter than `isHostGlobalDir` on purpose: `diff` renders a global
+ * emit into a temp dir and `rebuild-all` passes `--config-dir` for every row, so neither a
+ * `-global` marker, the flag nor a default `~/.claude` proves this is the live install.
+ */
+export function isCanonical(cfgDir, host) {
+  const row = HOSTS.find((h) => h.host === host);
+  try {
+    return !!row && normcase(resolvePath(cfgDir)) === normcase(resolvePath(row.configDir()));
+  } catch { return false; }
 }
 
 /**
@@ -281,23 +320,11 @@ export const VERSION_MARKER = '.geneseed-version';
 /**
  * `Path.expanduser()` — a LEADING `~` only, and `~` alone counts.
  *
- * The docblock here used to claim "Python does not expand `~user` on Windows the way a
- * shell would". That claim was FALSE, and `921384f`'s widened probe corpus caught it:
- * `ntpath.expanduser('~someuser/x')` swaps the last component of `%USERPROFILE%` and
- * returns `C:\Users\someuser\x` — it happily expands a name that may not even be a real
- * account.
+ * `ntpath.expanduser('~someuser/x')` swaps the last component of `%USERPROFILE%`, expanding a
+ * name that may not be a real account. `Path.expanduser` on POSIX raises when the account is
+ * unknown. The two disagree, so the divergence is WINDOWS-ONLY.
  *
- * AND THE POSIX HALF OF THAT SENTENCE WAS WRONG IN ITS TURN, corrected here while the
- * reference is still on the machine to ask. `posixpath.expanduser` does the analogous thing
- * through the password database and returns the path unchanged when the account is unknown
- * — but the reference does not call it. It calls `Path.expanduser`, which re-checks the
- * result and RAISES `RuntimeError: Could not determine home directory.` So the divergence
- * below is WINDOWS-ONLY: on POSIX the reference and this port already agree in kind — both
- * refuse — and differ only in which exception says so.
- *
- * This port deliberately does NEITHER. Reproducing `ntpath`'s swap faithfully needs its own
- * corpus, and the Python reference is being deleted, so byte-parity on this one input stops
- * mattering the moment it is. What matters instead is that a `~user` form never resolves
+ * This port deliberately does NEITHER. What matters is that a `~user` form never resolves
  * SILENTLY to the wrong place: the old code below returned it untouched, so
  * `--target ~someone/x` created a literal `~someone` directory in whatever cwd the user ran
  * from. It now REFUSES the form outright. This is the single primitive every config-dir env
@@ -430,8 +457,8 @@ export function openclaudeConfigDir() {
  *
  * `projectMarker` joined in P5f. `_install_targets` asks "does this cwd carry a project
  * install of host H", and `_claude_cfg` asks "which subdir holds a project install's
- * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.openclaude` value the Python reads
- * out of `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
+ * manifest" — both are the same `.opencode`/`.claude`/`.bob`/`.openclaude` value as
+ * `build.HOSTS[host]["project_marker"]`, so it belongs beside the config dir rather
  * than in a second table in `js/hosts/installs.mjs`.
  *
  * `agentFile` joined in P5h, and for one caller: `cmd_uninstall` names the managed block's
@@ -463,6 +490,55 @@ export const HOSTS = [
   { host: 'openclaude', family: 'claude', configDir: openclaudeConfigDir, projectMarker: '.openclaude', agentFile: 'CLAUDE.md', catalog: { skills: true, agents: true }, carrierInLayer: true },
 ];
 
+/**
+ * The four root-level carriers, plus one more.
+ *
+ * A shared table rather than three copies of the same list: `_theme_of_dir`,
+ * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
+ * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use.
+ *
+ * `.openclaude/CLAUDE.md` is half
+ * of the fix for host-compat verdict B1 (the other half is `carriersFor`, below).
+ * OpenClaude's own per-repo carrier is `carrierInLayer` (see `CLAUDE_SHAPED.openclaude` in
+ * `js/build/driver.mjs`, and the `HOSTS` column of the same name): it sits at
+ * `<repo>/.openclaude/CLAUDE.md`, and the root `CLAUDE.md` is deliberately left untouched so a
+ * Claude Code install can share the repo.
+ *
+ * ⚠ THIS LIST STAYS HOST-AGNOSTIC ON PURPOSE — it is only `firstCarrier`'s FALLBACK for a
+ * caller with no host to narrow by (none of this module's exported `*OfDir` readers is one;
+ * see `carriersFor`). A caller that DOES have a host must pass it, or in a repo sharing two
+ * carriers that answer the same probe — only root `CLAUDE.md` today, between `claude` and
+ * `openclaude`'s global scope — this host-agnostic order decides for both of them, which was
+ * exactly B1's failure mode reversed: reading `.openclaude/CLAUDE.md` unconditionally made
+ * `claude`'s OWN read-back answer OpenClaude's settings in a shared repo.
+ */
+export const CARRIERS = [
+  'AGENT.md', path.join('.openclaude', 'CLAUDE.md'), 'CLAUDE.md',
+  path.join('rules', 'geneseed.md'), 'AGENTS.md',
+];
+
+/**
+ * `host`'s own carrier path(s), narrowed off the single `HOSTS` table — `carrierInLayer` and
+ * `projectMarker`/`agentFile` — rather than a second hand-rolled host→carrier map.
+ *
+ * ONE HOST, ONE ANSWER, EXCEPT BOB. `carrierInLayer` true (OpenClaude only) tries the nested
+ * per-repo path FIRST and the bare `agentFile` SECOND, because the same column name means two
+ * different locations depending on scope: `<repo>/.openclaude/CLAUDE.md` for a project
+ * install, `<cfgDir>/CLAUDE.md` for a global one (see `CLAUDE_SHAPED.openclaude-global`,
+ * which has no `carrierInLayer`). Bob is the one host with a second, differently-NAMED
+ * carrier — `rules/geneseed.md` at global scope, because Bob never auto-loads a global
+ * `AGENTS.md` (`CLAUDE_SHAPED['bob-global']`'s summary says so) — which `HOSTS` has no column
+ * for and this hard-codes, same as the un-narrowed `CARRIERS` above always did.
+ */
+export function carriersFor(host) {
+  const row = HOSTS.find((h) => h.host === host);
+  if (!row) return CARRIERS;
+  if (host === 'bob') return [path.join('rules', 'geneseed.md'), row.agentFile];
+  return row.carrierInLayer
+    ? [path.join(row.projectMarker, row.agentFile), row.agentFile]
+    : [row.agentFile];
+}
+
 /** Each Claude-family host's project marker, keyed by host — `globalHookStandingDown`'s table. */
 const STAND_DOWN_MARKERS = Object.fromEntries(HOSTS.filter((h) => h.family === 'claude')
   .map((h) => [h.host, h.projectMarker]));
@@ -478,7 +554,7 @@ export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) =
  * that catalogues natively gets AGENT.md's tables collapsed to a pointer and comparing the
  * portable shape against its bundle reports AGENT.md stale on every run forever. It is a
  * column and not a set literal so that the capability is declared in exactly one place
- * — the Python's own reason for the helper. The driver reads it through this function too.
+ * The driver reads it through this function too.
  *
  * Unknown host -> false, which is the shape that KEEPS the tables. The value arrives from a
  * user-editable `.geneseed-emit` marker, so an unrecognised one must degrade to the portable
@@ -497,17 +573,44 @@ export function hostCatalogsNatively(host) {
   return HOSTS.find((h) => h.host === host)?.catalog || false;
 }
 
-/** `_harness_learn.MEMORY_DIR_NAMES` — the neutral name and the imperial theme's. */
-const MEMORY_DIR_NAMES = ['memory', 'anamnesis'];
+/** Did an emit make `base`? Every one leaves the version marker there and the index in `memory/`. */
+function holdsInstall(base) {
+  if (!isFile(path.join(base, VERSION_MARKER)) || !isFile(path.join(base, 'memory', 'MEMORY.md'))) return false;
+  try { return !withDiscardableStderr(() => isHostGlobalDir(null, base)); } catch { return false; /* no home: cannot tell, so a destructive path fails closed */ }
+}
 
 /**
- * `_harness_learn._resolve_memory_dir` — where `learn` dedups and indexes, and what
+ * The stores of the project install or bundle rooted at `root`, the marker's own first, so a repo
+ * that two hosts share answers with the host that emitted last. A Claude-family project keeps its
+ * data under its layer; OpenCode and the bundle at the root. A marker is only a claim: a stale or
+ * hand-written one over a repo's own folder must not make that folder deletable (I4).
+ */
+function projectStores(root) {
+  const emit = emitMarkerOf(root);
+  if (emit !== 'files' && !HOSTS.some((h) => h.host === emit)) return [];
+  const layers = HOSTS.filter((h) => h.family === 'claude').map((h) => h.projectMarker);
+  const own = HOSTS.find((h) => h.host === emit && h.family === 'claude')?.projectMarker ?? '';
+  return [...new Set([own, ...layers, ''])].map((l) => path.join(root, l)).filter(holdsInstall)
+    .map((base) => path.join(base, 'memory'));
+}
+
+/**
+ * Where `learn` dedups and indexes, and what
  * `status` reports on its memory row.
  *
- * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` (or `anamnesis/`) beside cwd or
- * under `./Harness` > `$GENESEED_HARNESS/memory` > the OpenCode GLOBAL config dir's store.
- * The last two matter for the recommended opencode-global install, whose store lives in
- * `~/.config/opencode` rather than beside any repo. null => stdout-only.
+ * Precedence: `--memory` > `$GENESEED_MEMORY` > `$GENESEED_HARNESS/memory` > the store of a project
+ * install in the cwd or `./Harness` > the shared store (`<machine dir>/memory`) > the OpenCode
+ * GLOBAL config dir's store. Each counts only when it exists, so a machine without the shared
+ * tier falls through. null => stdout-only. The learn plugin knows its own install and ends in a
+ * bare `./memory`: it only ever writes. This resolver also serves `memory rm --purge`.
+ *
+ * A FOLDER NAMED `memory` IS NOT A STORE (I4). `memory rm --purge` deleted a repo's own
+ * `memory/design-notes.md` when the mere name was enough, so only an install makes the folder
+ * count (`projectStores`). Without one it is reached through `--memory`.
+ *
+ * ONLY `memory` NAMES A STORE. The imperial theme's `anamnesis` alias matched Terra's
+ * `Anamnesis/` vault by Windows case folding (B3) and `learn` wrote facts into it. The alias is
+ * read only where it is copied forward (`globalMemory`, `migrateStrayBundle`).
  *
  * HERE rather than in `js/hosts/hooks.mjs`, where it was written, because P5d gave it a second
  * caller that cannot import that file: `bin/geneseed-cli.mjs` is under a transitive
@@ -522,8 +625,7 @@ export function resolveMemoryDir(explicit) {
   }
   const env = process.env.GENESEED_MEMORY;
   if (env && isDir(env)) return toPlatformPath(env);
-  const cwd = process.cwd();
-  const bases = [cwd, path.join(cwd, 'Harness')];
+  const stores = [];
   const gh = process.env.GENESEED_HARNESS;
   if (gh) {
     // PER BASE, and the walk continues. `$GENESEED_HARNESS` is the FOURTH user-controlled
@@ -534,16 +636,13 @@ export function resolveMemoryDir(explicit) {
     // trace on a hook path and a non-zero exit, the exact failure the other three guards
     // exist to prevent. Skipping the base degrades to "no memory store from $GENESEED_HARNESS",
     // which is what an unset variable already does. `withDiscardableStderr` because the
-    // refusal prints at the RAISE SITE and both callers byte-compare stderr; the reference
-    // (`rituals/_harness_learn.py`, same guard) prints nothing here.
-    try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
+    // refusal prints at the RAISE SITE and both callers byte-compare stderr, and nothing
+    // may print here.
+    try { stores.push(path.join(withDiscardableStderr(() => expanduser(gh)), 'memory')); } catch { /* skip it */ }
   }
-  try { bases.push(opencodeConfigDir()); } catch { /* best-effort, as the Python */ }
-  for (const base of bases) {
-    for (const name of MEMORY_DIR_NAMES) {
-      const cand = path.join(base, name);
-      if (isDir(cand)) return cand;
-    }
-  }
-  return null;
+  const cwd = process.cwd();
+  stores.push(...[cwd, path.join(cwd, 'Harness')].flatMap(projectStores));
+  try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store */ }
+  try { stores.push(path.join(opencodeConfigDir(), 'memory')); } catch { /* best-effort */ }
+  return stores.find(isDir) ?? null;
 }

@@ -98,7 +98,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
           <span>Deploy as</span>
           <select
             className="sel"
-            aria-label="host for the new harness"
+            aria-label="host for the new install"
             value={deploy.host}
             onChange={(e) => set('host', e.target.value)}
           >
@@ -109,7 +109,7 @@ export default function DeployForm({ host, theme, options, onAction, onClose, on
             ))}
           </select>
         </label>
-        <PickSelects value={deploy} options={options} onChange={set} who="the new harness" />
+        <PickSelects value={deploy} options={options} onChange={set} who="the new install" />
         {/* Secondary: the panel beside the form keeps the page's one filled action. */}
         <button className="btn ghost sm" onClick={submitDeploy}>
           Deploy

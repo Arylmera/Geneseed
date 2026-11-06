@@ -33,7 +33,7 @@ const installs = [
 const row = (label) => screen.getByText(label).closest('a')
 
 describe('Sidebar', () => {
-  it('lists the seven pages in order, then Docs and Activity', () => {
+  it('lists the seven pages in order, then Docs, Activity and Settings', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
     expect([...document.querySelectorAll('a.sb-item .sb-label')].map((n) => n.textContent)).toEqual(
       [
@@ -46,21 +46,22 @@ describe('Sidebar', () => {
         'Installs',
         'Docs',
         'Activity',
+        'Settings',
       ],
     )
   })
 
   // Each count is a sum the overview already holds, written out:
-  //   Constitution = 4 ethos + 11 invariants (counts.laws) + 28 doctrine = 43
-  //   Library      = 52 skills + 18 agents + 2 memory + 2 notebook + 0 wiki + 2 setup = 76
+  //   Constitution = 11 invariants (counts.laws) + 28 doctrine = 39; the 4 ethos sections are no rules
+  //   Library      = 52 skills + 18 agents + 0 wiki + 2 setup = 72; memory and notebook are Personal's
   //   Loops        = templates only (counts.loops), not bricks = 3
-  //   Installs     = active of detected, from the installs list = 1/3
+  //   Installs     = installed, on or off, from the installs list = 2 of the 3 rows
   it('counts what each page lists', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
-    expect(row('Constitution').querySelector('.sb-count').textContent).toBe('43')
-    expect(row('Library').querySelector('.sb-count').textContent).toBe('76')
+    expect(row('Constitution').querySelector('.sb-count').textContent).toBe('39')
+    expect(row('Library').querySelector('.sb-count').textContent).toBe('72')
     expect(row('Loops').querySelector('.sb-count').textContent).toBe('3')
-    expect(row('Installs').querySelector('.sb-count').textContent).toBe('1/3')
+    expect(row('Installs').querySelector('.sb-count').textContent).toBe('2')
     // No honest single number for these: no badge rather than an invented one.
     expect(row('Overview').querySelector('.sb-count')).toBeNull()
     expect(row('Personal').querySelector('.sb-count')).toBeNull()
@@ -72,7 +73,7 @@ describe('Sidebar', () => {
     expect(document.querySelectorAll('a.sb-item.on')).toHaveLength(1)
   })
 
-  // The vitals: doctor verdict, drift (edited + added + missing = 1 + 0 + 1), the voice.
+  // The vitals: doctor verdict, local edits (edited + added + missing = 1 + 0 + 1), the voice.
   it('shows the vitals from the overview', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} />)
     const v = document.querySelector('.sb-vitals')
@@ -85,13 +86,12 @@ describe('Sidebar', () => {
     ).toBeTruthy()
   })
 
-  // One list of nine pages, Docs and Activity included: a screen reader announces "list, 9
-  // items", and the spacer sits under the list, above the vitals card, not inside it.
+  // One list of ten pages, the foot's included: a screen reader announces "list, 10 items", and the spacer sits under the list, above the vitals card, not inside it.
   it('is one list of every page', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
     const lists = screen.getByRole('navigation', { name: 'Console' }).querySelectorAll('ul')
     expect(lists).toHaveLength(1)
-    expect(within(lists[0]).getAllByRole('listitem')).toHaveLength(9)
+    expect(within(lists[0]).getAllByRole('listitem')).toHaveLength(10)
   })
 
   // The vitals are a card a landmark list can reach by name; the voice button opens the
@@ -116,8 +116,8 @@ describe('Sidebar', () => {
     ]
     const ov = { ...overview, install: { host: 'claude', scope: 'global', path: '/cl' } }
     render(<Sidebar route={{ page: 'overview' }} overview={ov} installs={two} />)
-    const card = screen.getByRole('region', { name: 'Install vitals, claude · global' })
-    expect(within(card).getByText('claude · global')).toBeTruthy()
+    const card = screen.getByRole('region', { name: 'Install vitals, Claude Code · global' })
+    expect(within(card).getByText('Claude Code · global')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Voice · imperial' })).toBeTruthy()
     expect(document.querySelector('.sb-ver').textContent).toMatch(/imperial$/)
   })
@@ -166,7 +166,7 @@ describe('VoicePopover', () => {
   })
 
   // Before the install list is read, a pick would rebuild the default install whatever the
-  // remembered "Rebuild:" pick says: every voice is disabled until the list lands.
+  // remembered pick says: every voice is disabled until the list lands.
   it('offers no voice before the install list is read', async () => {
     const ask = vi.fn(async () => true)
     const onPick = vi.fn()
@@ -188,7 +188,7 @@ describe('VoicePopover', () => {
     expect(onPick).not.toHaveBeenCalled()
   })
 
-  // The switch rebuilds ONE install: with two active, the popover's own "Rebuild:" picker names
+  // The switch rebuilds ONE install: with two active, the popover's own picker names
   // it, a change of pick goes to the caller, and the confirm names the install it rebuilds.
   it('names and picks the install it rebuilds', async () => {
     const ask = vi.fn(async () => true)
@@ -210,13 +210,14 @@ describe('VoicePopover', () => {
         />
       </ConfirmContext.Provider>,
     )
-    const pick = screen.getByRole('combobox', { name: 'Rebuild:' })
+    // Not plain "Install": the popover opens over a page whose own picker holds that name.
+    const pick = screen.getByRole('combobox', { name: 'Install to switch voice' })
     expect(pick.value).toBe('r')
     fireEvent.change(pick, { target: { value: 'oc' } })
     expect(onInstall).toHaveBeenCalledWith(two[0])
     await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
     expect(ask.mock.calls[0][0]).toBe(
-      'Rebuild repo · bob in the “plain” voice? It rebuilds in place, non-destructive.',
+      'Rebuild repo · BOB (IBM) in the “plain” voice? It rebuilds in place, non-destructive.',
     )
   })
 

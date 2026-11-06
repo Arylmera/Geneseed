@@ -4,15 +4,13 @@
  * SUCCESSOR TO `tests/test_registry.py`. Subject unchanged: `src/` — the content tree, not
  * either implementation — so nothing here is a comparison and nothing was.
  *
- * EACH GATE IS EXERCISED BOTH WAYS, which is the reference's own rule and the reason the file
+ * EACH GATE IS EXERCISED BOTH WAYS, which is the reason the file
  * exists: a gate that only ever returns `[]` is indistinguishable from a gate that is silently
  * broken. What changed is HOW the fault gets planted.
  *
- * THE FIXTURE IS THE WHOLE PORT. The reference monkeypatched six module globals —
- * `_harness_build.ROOT`, `_build_core.SRC/THEMES/PLUGIN_SRC/WORKFLOW_SRC/VENDORED_SKILL_DIRS`
- * — and built a two-file tree underneath them. ESM cannot rebind an imported binding, and the
+ * THE FIXTURE IS THE WHOLE PORT. ESM cannot rebind an imported binding, and the
  * standing question ("does the port already take this as a PARAMETER?") answers no here: every
- * one of the six is a module constant, five of them derived from `js/build/source.mjs`'s own file
+ * one of the six (ROOT, SRC, THEMES, PLUGIN_SRC, WORKFLOW_SRC, VENDORED_SKILL_DIRS) is a module constant, five of them derived from `js/build/source.mjs`'s own file
  * location. So the fixture is P5g's: `copyCheckout` a private checkout, plant the fault in the
  * COPY, and `import` the copy's `js/inspect/checks-repo.mjs` so its `ROOT` resolves there.
  *
@@ -41,7 +39,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { ENTITY_STATUSES, entityStatus, loadRegistry } from '../../js/inspect/inventory.mjs';
+import { ENTITY_STATUSES, entityStatus } from '../../js/inspect/inventory.mjs';
 import {
   folderSkillProblems, registryProblems, secretProblems, vendorPinProblems,
 } from '../../js/inspect/checks-repo.mjs';
@@ -436,8 +434,10 @@ test('a listed folder that does not exist is flagged', async () => {
 // THE LIFECYCLE BADGE
 
 test('the status of a known entity', () => {
-  const registry = loadRegistry();
-  assert.equal(entityStatus(registry, 'skills/loop'), 'experimental');
+  // A fixture, not the shipped registry: no shipped row is `experimental` now, and the status
+  // stays a valid one for the next new entity.
+  const registry = { 'skills/new': row({ status: 'experimental' }), 'skills/commit': row() };
+  assert.equal(entityStatus(registry, 'skills/new'), 'experimental');
   assert.equal(entityStatus(registry, 'skills/commit'), 'approved');
 });
 

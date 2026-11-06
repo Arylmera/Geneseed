@@ -1,4 +1,5 @@
 import { api } from '../api/index.js'
+import { reloadPage } from './reloadPage.js'
 
 // After the server restarts (an update finishing, or a manual restart), the
 // connection drops for a few seconds while it comes back up. Poll /api/ping
@@ -34,7 +35,7 @@ export async function waitForServerThenReload(initialDelayMs = 0, oldPid = null)
     if (pid !== null && pid !== oldPid) break
     await sleep(RESTART_POLL_INTERVAL_MS)
   }
-  window.location.reload()
+  reloadPage()
 }
 
 // The one restart-then-wait, shared by the stale banner and Settings' server

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react'
+import { DUR } from '../lib/motion.js'
+import { reloadPage } from '../hooks/reloadPage.js'
 
 // Startup splash: sprout germinates inside the dial while the progress ring fills,
 // then the overlay fades out. Dismissal waits for BOTH a minimum display time AND
@@ -12,9 +14,10 @@ import React, { useEffect, useState } from 'react'
 // than half a second, and App skips it entirely on warm same-session loads.
 //
 // The floor applies to the FIRST boot on this machine only. After that the
-// overview fetch is the only thing worth waiting for — it now returns well
-// under 550ms, so keeping the floor would be pure added latency on every fresh
-// tab, several times a day. The splash still plays; it just stops waiting on a
+// overview fetch is the only thing worth waiting for — it returns well under
+// 550ms warm and in about 2s cold (the daemon's warm-up doctor has its own thread),
+// so keeping the floor would be pure added latency on every fresh tab, several
+// times a day. The splash still plays; it just stops waiting on a
 // timer once it has introduced itself.
 const MIN_DISPLAY_MS = 550
 const SEEN_KEY = 'gs-splash-seen'
@@ -57,10 +60,10 @@ export default function BootSplash({ ready, onDone }) {
   // Belt and braces: animationend is the normal dismissal, but it never fires
   // when animations are disabled (prefers-reduced-motion) or the tab is
   // throttled — which left the splash mounted forever. The timeout outlasts
-  // the .55s fade and guarantees dismissal either way.
+  // the `--dur-8` fade and guarantees dismissal either way.
   useEffect(() => {
     if (!fading) return
-    const t = setTimeout(() => onDone?.(), 700)
+    const t = setTimeout(() => onDone?.(), DUR[9])
     return () => clearTimeout(t)
   }, [fading]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -125,7 +128,7 @@ export default function BootSplash({ ready, onDone }) {
       {showStall ? (
         <div className="boot-status" role="alert">
           <span>The server is not answering.</span>{' '}
-          <button type="button" className="btn" onClick={() => window.location.reload()}>
+          <button type="button" className="btn" onClick={reloadPage}>
             Retry
           </button>
         </div>

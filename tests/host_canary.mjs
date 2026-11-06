@@ -48,6 +48,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -70,6 +71,15 @@ if (IDS.length === 0) {
   console.error(`no plugin files in ${PLUGINS}`);
   process.exit(2);
 }
+
+// V2's background service binds a fixed port, 28894 by default, machine-wide. A user's own
+// `opencode serve --service` holds it, and the throwaway home's service then dies on start, which
+// reads as a plugin failure. So the throwaway home gets a port the OS says is free.
+const freePort = () => new Promise((resolve, reject) => {
+  const s = net.createServer().once('error', reject);
+  s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
+});
+const V2_PORT = await freePort();
 
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
@@ -133,6 +143,8 @@ function checkOpencode(major) {
       // `/tmp/...` path is not — the first CI run missed every line by requiring the quotes.
       const loaded = (id) => new RegExp(`msg="loading plugin" id="?[^"\\s]*[\\\\/]${id}\\.js[" ]`).test(log);
       let listed = '';
+      // An older V2 has no such verb and keeps its default, which is all this ever had.
+      exec(['service', 'set', 'port', String(V2_PORT)], { cwd: project, env, timeout: 30_000 });
       try {
         for (let tick = 0; tick < 60; tick++) {
           if (tick % 20 === 0) {

@@ -13,8 +13,10 @@
  *
  *   * THE STORE IS RESOLVED, NOT CONFIGURED. The endpoint is always `<target>/memory`,
  *     because a server has a target. A CLI has a cwd, so this takes the resolver every other
- *     terminal-side reader of the store already uses — `$GENESEED_MEMORY`, then a store
- *     beside the cwd, then the global config dir — with `--memory` as the explicit override.
+ *     terminal-side reader of the store already uses — `$GENESEED_MEMORY`, then
+ *     `$GENESEED_HARNESS`, then a project install in the cwd, then the shared tier, then the
+ *     OpenCode config store — with
+ *     `--memory` as the explicit override, and the only way to a `memory/` no install owns.
  *     `status` prints the answer of that same resolver, so the two agree about which store
  *     is "the" store.
  *   * THE RESERVED-NAME CHECK IS CASE-INSENSITIVE, and the web endpoints use this one. On a
@@ -34,21 +36,16 @@
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { RESERVED_STEMS, archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
-
-/**
- * The two names the store owns rather than holds: the index the agent reads at session
- * start, and the file that documents the store. `api_memory_delete` refuses both.
- */
-const RESERVED = ['memory', 'readme'];
 
 /** Whether `name` is a fact this verb may act on — the endpoint's rule, plus the case fold. */
 export function isFactName(name) {
   return Boolean(name) && !name.includes('/') && !name.includes('\\')
     && ![...name].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)
-    && !RESERVED.includes(name.toLowerCase());
+    && !RESERVED_STEMS.has(name.toLowerCase());
 }
 
 /**
@@ -73,11 +70,13 @@ export function memoryDelete(dir, name, purge = false) {
   if (!isFactName(name)) return null;
   const p = path.join(dir, `${name}.md`);
   if (!isFile(p)) return null;
-  let dest = '';
-  if (purge) unlinkSync(p);
-  else dest = archiveFact(dir, name);
-  memoryDropIndex(dir, name);
-  return dest;
+  return recordOwnWrites(path.dirname(dir), () => {
+    let dest = '';
+    if (purge) unlinkSync(p);
+    else dest = archiveFact(dir, name);
+    memoryDropIndex(dir, name);
+    return dest;
+  });
 }
 
 /** Unlink `archive/<name>.md`. True when a file went. The archive has no index to update. */
@@ -95,8 +94,8 @@ export function cmdMemory(args) {
   if (dir === null) {
     // The resolver answers null for "no store anywhere on the chain", which is also what an
     // explicit `--memory` that is not a directory gives — so the message names both.
-    printErr('[memory] no memory store found. Pass --memory <dir>, set $GENESEED_MEMORY, '
-      + 'or run this from a directory with a memory/ store.\n');
+    printErr('[memory] no memory store found. Pass --memory <dir>, or run this from a project '
+      + 'install.\n');
     return 1;
   }
   const where = args.archived ? path.join(dir, 'archive') : dir;
@@ -128,6 +127,7 @@ export function cmdMemory(args) {
     printErr(`[memory] no such fact '${args.name}' in ${where}.\n`);
     return 1;
   }
+  printOut(`[memory] ${where}\n`);
   printOut(done ? `[memory] archived ${args.name} -> ${done}\n` : `[memory] deleted ${args.name}.\n`);
   return 0;
 }

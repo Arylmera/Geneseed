@@ -382,11 +382,11 @@ const WITHHELD = [
     + 'install never needs it and the README already carries the substance'],
   ['docs/assets/', 'README media (the animated terminal demo). `docs/*.md` ships the prose; the '
     + 'picture is for the repository page only'],
-  ['CLAUDE.md', "this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
+  ['CLAUDE.md', "a one-line `@AGENTS.md` import of this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
     + 'plus a sharper one: this tool EMITS a CLAUDE.md into a user\'s project, and shipping one in '
     + 'the tarball would put a file that talks about editing Geneseed next to the files that are '
     + 'Geneseed. It is not in `files[]`, and this row is what makes that deliberate'],
-  ['AGENTS.md', "this repository's own agent notes: a pointer to CLAUDE.md and the `## Ownership` "
+  ['AGENTS.md', "this repository's own contributor guide (CLAUDE.md imports it) and the `## Ownership` "
     + "section with `mode: off`, so the ownership gate stays silent in Geneseed's own sessions. "
     + "Withheld for the CLAUDE.md reason: this tool writes an AGENTS.md into a user's project"],
   ['eslint.config.js', 'the lint config for js/ bin/ tests/ adapters/ — a developer gate, and '
@@ -1045,6 +1045,24 @@ test('the installed doctor sweeps every theme the checkout does', { skip: NO_NPM
   assert.equal(a, b,
     'the installed doctor swept a different number of themes than the checkout — `themes/` '
     + `arrived as files but not as data (install ${a}, checkout ${b})`);
+});
+
+// CLOSED EXPORTS. Every internal path was importable until 5.0.0, so any of them could have become
+// an API by accident. Only the manifest is open: a bin runs by its file path, an emitted hook by the
+// absolute path the shim holds, and the web console reads web/dist from disk, so none passes through
+// `exports` (the entry-point tier above runs all three out of this same install).
+test('the package closes its deep imports, and only its manifest stays open', { skip: NO_NPM }, () => {
+  const { pkg } = packageUnderTest();
+  const consumer = path.dirname(path.dirname(pkg));
+  const importing = (spec) => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `await import(${JSON.stringify(spec)})`], { cwd: consumer, encoding: 'utf8' });
+  for (const spec of ['geneseed', 'geneseed/js/lib/fs.mjs', 'geneseed/bin/geneseed-hook.mjs']) {
+    const r = importing(spec);
+    assert.notEqual(r.status, 0, `${spec} still imports`);
+    assert.match(r.stderr, /ERR_PACKAGE_PATH_NOT_EXPORTED/, spec);
+  }
+  assert.equal(spawnSync(process.execPath, ['--input-type=module', '-e',
+    'await import("geneseed/package.json", { with: { type: "json" } })'], { cwd: consumer }).status, 0);
 });
 
 test('the emit from the installed tree really wrote something', { skip: NO_NPM }, () => {

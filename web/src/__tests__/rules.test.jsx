@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -14,7 +14,7 @@ import Rules from '../pages/Rules.jsx'
 import { api } from '../api/index.js'
 import { ConfirmContext } from '../hooks/useConfirm.jsx'
 
-const STATS = { rules: 2, lines: 20, tokens: 300, max_rules: 15, max_tokens: 1500 }
+const STATS = { rules: 2, lines: 20, tokens: 1300 }
 const PAYLOAD = {
   exists: true,
   path: '/x/user-rules.md',
@@ -31,6 +31,7 @@ const PAYLOAD = {
       status: 'active',
       overdue: false,
       body: 'Commit subjects are plain text.',
+      tokens: 21,
     },
     {
       id: 2,
@@ -41,6 +42,7 @@ const PAYLOAD = {
       status: 'trial',
       overdue: false,
       body: 'Always use tabs in this repo.',
+      tokens: 34,
     },
   ],
 }
@@ -54,12 +56,56 @@ beforeEach(() => {
 })
 
 describe('Rules', () => {
-  it('renders the rule rows with scope and trial chips', async () => {
+  // Read-only: the rule Rite is the draft's one writer, so the section offers no control.
+  it('lists pending drafts read-only, with the host they bind on', async () => {
+    api.rules.mockImplementation(() =>
+      Promise.resolve({
+        ...PAYLOAD,
+        drafts: [
+          { title: 'Mine', host: 'claude', body: '(scope: global)\nBe terse.' },
+          { title: 'Choose: PROFILE.md', host: null, body: '' },
+        ],
+      }),
+    )
+    render(<Rules />)
+    const pending = await screen.findByRole('region', { name: 'Pending' })
+    expect(within(pending).getByText('Mine')).toBeTruthy()
+    expect(within(pending).getByText('binds on claude')).toBeTruthy()
+    expect(within(pending).getByText(/Be terse\./)).toBeTruthy()
+    expect(within(pending).getByText('Choose: PROFILE.md')).toBeTruthy()
+    expect(pending.textContent).toMatch(/still binds on its host/)
+    expect(pending.textContent).toMatch(/rule Rite decides each one/)
+    expect(within(pending).queryByRole('button')).toBeNull()
+  })
+
+  it('shows no Pending section when nothing waits', async () => {
+    render(<Rules />)
+    await screen.findByText('No emoji in commits')
+    expect(screen.queryByRole('region', { name: 'Pending' })).toBeNull()
+  })
+
+  // Each row its own cost, the page one total; the file's header is why they do not add up.
+  it('shows each rule its token cost and the page one total, with no ceiling', async () => {
+    render(<Rules />)
+    await screen.findByText('No emoji in commits')
+    const costs = [...document.querySelectorAll('.rule-head')].map(
+      (h) => h.textContent.match(/≈\d+ tokens/)?.[0],
+    )
+    expect(costs).toEqual(['≈21 tokens', '≈34 tokens'])
+    expect(document.querySelector('.rules-file').textContent).toBe(
+      '2 rules · ≈1,300 tokens every turn · scope global unless marked',
+    )
+    expect(document.body.textContent).not.toMatch(/ of 15|budget/)
+  })
+
+  // A row shows a scope only when it differs from its file's usual one, which the file's head
+  // states. `user` is an alias of `global`, so it is the usual scope too.
+  it('renders the rule rows with trial chips, and a scope chip only where it differs', async () => {
     render(<Rules />)
     await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
     expect(screen.getByText('Prefer tabs')).toBeTruthy()
     expect(screen.getByText('project')).toBeTruthy()
-    expect(screen.getByText('user')).toBeTruthy()
+    expect(screen.queryByText('user')).toBeNull()
     expect(screen.getByText(/trial · 2026-08-06/)).toBeTruthy()
   })
 
@@ -179,7 +225,6 @@ describe('Rules', () => {
     await waitFor(() => expect(screen.queryByLabelText('Rule title')).toBeNull())
     expect(confirm).not.toHaveBeenCalled()
     expect(api.rulesMutate).not.toHaveBeenCalled()
-    expect(screen.getByText('user')).toBeTruthy()
   })
 
   // A hand-written scope the skill does not document: the select must show it (not "project")
@@ -375,7 +420,7 @@ describe('Rules', () => {
     )
     render(<Rules />)
     await waitFor(() => expect(screen.getByText('No rules yet')).toBeTruthy())
-    expect(screen.getByText(/promote a recurring memory fact/)).toBeTruthy()
+    expect(screen.getByText(/promote a recurring fact/)).toBeTruthy()
   })
 
   it('shows the not-seeded state when user-rules.md is missing', async () => {
@@ -393,8 +438,6 @@ describe('Rules', () => {
     await waitFor(() => expect(screen.getByText(/No user-rules.md here yet/)).toBeTruthy())
     expect(screen.queryByText('Add rule')).toBeNull()
   })
-
-  // The budget meter moved to Personal's "Rule budget" panel (personal.test.jsx).
 
   it('labels the form fields with visible text and focuses the title on Add', async () => {
     render(<Rules />)
@@ -530,7 +573,7 @@ describe('Rules', () => {
 // EVERY ACTIVE INSTALL'S RULES IN ONE LIST (D1). Two installs, each with its own user-rules.md
 // and fingerprint: the rows of both are listed, each tagged with its install; a write on a row
 // goes back to THAT install with THAT file's fingerprint; a new rule goes where its form's own
-// "Write to:" picker says, starting on the server's default row.
+// picker says, starting on the server's default row.
 describe('Rules across installs', () => {
   const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
   const CL = {
@@ -541,9 +584,15 @@ describe('Rules across installs', () => {
     state: 'active',
     default: true,
   }
-  const ocRules = { ...PAYLOAD, fingerprint: 'oc-fp', rules: [PAYLOAD.rules[0]] }
+  const ocRules = {
+    ...PAYLOAD,
+    path: '/oc/user-rules.md',
+    fingerprint: 'oc-fp',
+    rules: [PAYLOAD.rules[0]],
+  }
   const clRules = {
     ...PAYLOAD,
+    path: '/cl/user-rules.md',
     fingerprint: 'cl-fp',
     rules: [{ ...PAYLOAD.rules[0], title: 'Claude only' }],
   }
@@ -557,6 +606,68 @@ describe('Rules across installs', () => {
     delete api.installs
   })
 
+  // Every global install answers with the one shared file: one list, one count, one write target.
+  it('lists a file two installs share once, and its drafts once', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...CL, shared: true },
+        { ...OC, shared: true },
+      ],
+    }))
+    api.rules.mockImplementation(() =>
+      Promise.resolve({ ...clRules, drafts: [{ title: 'Mine', host: 'bob', body: 'Be terse.' }] }),
+    )
+    render(<Rules />)
+    expect((await screen.findAllByText('Claude only')).length).toBe(1)
+    expect(screen.getAllByText('Mine').length).toBe(1)
+    // The file's head says shared once; its rows repeat neither that nor the usual scope.
+    expect(document.querySelector('.rules-file b').textContent).toBe('shared')
+    expect(document.querySelector('button.rule-head').textContent).not.toMatch(/shared|global/)
+    fireEvent.click(screen.getByText('Add rule'))
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
+    expect(document.querySelector('.rule-form .install-pick').textContent).toBe('Install: shared')
+  })
+
+  // No session loads two files, so a sum would not be per turn: each file keeps its own figure.
+  it('gives each listed file its own total', async () => {
+    api.rules.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'opencode'
+          ? { ...ocRules, stats: { ...STATS, tokens: 200 } }
+          : { ...clRules, stats: { ...STATS, tokens: 1100 } },
+      ),
+    )
+    render(<Rules />)
+    await screen.findByText('Claude only')
+    expect([...document.querySelectorAll('.rules-file')].map((h) => h.textContent)).toEqual([
+      'Claude Code · global1 rule · ≈1,100 tokens every turn · scope global unless marked',
+      'OpenCode · global1 rule · ≈200 tokens every turn · scope global unless marked',
+    ])
+  })
+
+  // One global install beside a project: the paths differ, yet the global file is still the
+  // shared one, so it reads as shared, and the project keeps its install tag.
+  it('tags a lone global install shared, in its head and in the form picker', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...CL, shared: true },
+        { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' },
+      ],
+    }))
+    api.rules.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'bob' ? { ...ocRules, path: '/r/repo/user-rules.md' } : clRules,
+      ),
+    )
+    render(<Rules />)
+    await screen.findByText('Claude only')
+    const heads = [...document.querySelectorAll('.rules-file b')].map((h) => h.textContent)
+    expect(heads).toEqual(['shared', 'repo · BOB (IBM)'])
+    fireEvent.click(screen.getByText('Add rule'))
+    const picker = await screen.findByRole('combobox', { name: 'Install' })
+    expect([...picker.options].map((o) => o.textContent)).toEqual(['shared', 'repo · BOB (IBM)'])
+  })
+
   // Two installs listed but one writable: no picker to hide behind, the form names its target.
   it('names the one writable target beside the form', async () => {
     api.rules.mockImplementation((inst) =>
@@ -566,9 +677,9 @@ describe('Rules across installs', () => {
     )
     render(<Rules />)
     fireEvent.click(await screen.findByText('Add rule'))
-    expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
     expect(document.querySelector('.rule-form .install-pick').textContent).toBe(
-      'Write to: claude · global',
+      'Install: Claude Code · global',
     )
   })
 
@@ -579,18 +690,16 @@ describe('Rules across installs', () => {
     )
     render(<Rules />)
     await screen.findByText('Claude only')
-    expect(screen.getByText('Could not read user-rules.md of opencode · global.')).toBeTruthy()
+    expect(screen.getByText('Could not read user-rules.md of OpenCode · global.')).toBeTruthy()
   })
 
-  it('lists both installs, each row tagged with its own', async () => {
+  it('lists both installs, each file under its own head', async () => {
     render(<Rules />)
     await screen.findByText('Claude only')
     expect(screen.getByText('No emoji in commits')).toBeTruthy()
-    const tags = [...document.querySelectorAll('.rule-head')].map(
-      (h) => h.querySelector('.rule-chip').textContent,
-    )
+    const tags = [...document.querySelectorAll('.rules-file b')].map((h) => h.textContent)
     // The default install's rules first, then the others in the server's order.
-    expect(tags).toEqual(['claude · global', 'opencode · global'])
+    expect(tags).toEqual(['Claude Code · global', 'OpenCode · global'])
   })
 
   it('retires a rule from the install it came from, with that file fingerprint', async () => {
@@ -600,7 +709,7 @@ describe('Rules across installs', () => {
       </ConfirmContext.Provider>,
     )
     fireEvent.click(await screen.findByText('No emoji in commits'))
-    fireEvent.click(screen.getByRole('button', { name: 'Retire R1 · opencode · global' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retire R1 · OpenCode · global' }))
     await waitFor(() =>
       expect(api.rulesMutate).toHaveBeenCalledWith(
         { op: 'delete', id: 1, fingerprint: 'oc-fp' },
@@ -612,7 +721,7 @@ describe('Rules across installs', () => {
   it('adds a new rule to the install its form picks, default first', async () => {
     render(<Rules />)
     fireEvent.click(await screen.findByText('Add rule'))
-    const to = screen.getByRole('combobox', { name: 'Write to:' })
+    const to = screen.getByRole('combobox', { name: 'Install' })
     expect(to.value).toBe('cl')
     fireEvent.change(to, { target: { value: 'oc' } })
     fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'New rule' } })

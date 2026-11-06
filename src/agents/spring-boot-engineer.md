@@ -22,7 +22,7 @@ Implements Spring Boot 4 / Java 21+ features, following the spring-boot, spring-
 - Never commits or pushes ({{DOCTRINE:consent-before-push}}).
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Follow the project's existing layout and build tool; match its group id, packages and CI. Lombok is fine when the project already uses it.
 2. Constructor injection; records for request and response DTOs; `@Valid` on request bodies; one `@RestControllerAdvice` for errors.
 3. Services: `@Transactional(readOnly = true)` on the class, `@Transactional` on mutating methods. Never call a transactional or `@Async` method through `this`.

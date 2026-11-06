@@ -8,7 +8,7 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
@@ -18,11 +18,13 @@ import { alwaysOnCost } from '../inspect/cost.mjs';
 import { installProfile } from '../build/generate.mjs';
 import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
-import { VERSION_MARKER } from '../hosts/hosts.mjs';
+import { sessionStartSize } from '../hosts/hooks-context.mjs';
+import { CLAUDE_STYLE, VERSION_MARKER } from '../hosts/hosts.mjs';
+import { factCount } from '../hosts/memory-files.mjs';
 import { autostartPaths } from '../hosts/shim.mjs';
 import {
-  footprintOfDir, gatesOfDir, installState, installTargets, legacyProcessCarrierOfDir, modeOfDir,
-  trustOfDir,
+  footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir,
+  trustOfDir, sharedTierOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -30,10 +32,11 @@ import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops } from '../loop/registry.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
-import { isFile } from '../lib/fs.mjs';
+import { isFile, writeTextAtomic } from '../lib/fs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
-  configItems, deployed, dget, memoryItems, notebookItems, wikiItems,
+  configItems, deployed, dget, fleetCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
@@ -89,15 +92,21 @@ const DOCTOR_COOLDOWN_MS = 3_000;
  * A fresh ask within `DOCTOR_COOLDOWN_MS` of the last one THIS PATH ran reuses that run, so a
  * page looping on `?fresh=1` cannot pin the event loop. `_doctorFreshAt` is written here only: a
  * verdict planted any other way still re-runs. No single-flight promise — `runDoctor` is
- * synchronous, so two fresh runs cannot overlap (revisit if it ever goes async).
+ * synchronous, so two fresh runs cannot overlap; only the warm-up is not (`warmDoctor`).
+ *
+ * This page needs the groups, so during the warm-up it answers with a promise of the verdict
+ * rather than a pending one: the request waits, the event loop does not.
  */
 export function apiDoctor(state, fresh = false) {
   if (fresh && Date.now() - (state._doctorFreshAt ?? 0) >= DOCTOR_COOLDOWN_MS) {
     state.runDoctor();
     state._doctorFreshAt = Date.now();
   }
-  const { ok, problems, checked_at } = state.doctor;
-  return { ...state._doctorRun, ok, problems, checked_at };
+  const answer = () => {
+    const { ok, problems, checked_at } = state.doctor;
+    return { ...state._doctorRun, ok, problems, checked_at };
+  };
+  return state._doctorJob === null ? answer() : state._doctorJob.then(answer);
 }
 
 /**
@@ -109,7 +118,7 @@ export function apiDoctor(state, fresh = false) {
  */
 export function apiDiff(state) {
   const { target, theme, files } = diffCollect({
-    target: state.target, theme: state.theme, emit: state.emit });
+    target: state.target, theme: state.theme, emit: state.emit, memo: memoOf(state) });
   return { deployed: deployed(state), diffable: files !== null, target, theme,
     files: files || [] };
 }
@@ -154,19 +163,6 @@ const driftCounts = (files) => ({
 });
 
 /**
- * How many memory facts an install's data dir holds: the `.md` files of `<dir>/memory` (where
- * `memoryItems` reads them), minus its index and README (the console's furniture), any case.
- * No folder is no facts (0); a folder that cannot be listed is null, so a row says "not read"
- * rather than "no facts".
- */
-export function memoryFactCount(dir) {
-  try {
-    return readdirSync(path.join(dir, 'memory'))
-      .filter((f) => /\.md$/i.test(f) && !/^(memory|readme)\.md$/i.test(f)).length;
-  } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
-}
-
-/**
  * The fields every install row opens with, in this order. Theme is narrowed to this row's own
  * host (host-compat B1): a shared repo otherwise answers every row with whichever host's
  * carrier the host-agnostic scan favours.
@@ -175,7 +171,38 @@ const installRowBase = (host, scope, root, state) => ({
   id: `${host}:${scope}:${root}`, host, scope, path: root, state,
   theme: themeOfDir(root, host),
   footprint: footprintOfDir(root),
+  // Reads the machine's shared tier: its rules, profile and memory are the same on every row that
+  // says so. The one field the console asks; `sharedTier` is only a project install's switch.
+  shared: tierOf({ target: viewCfg(host, scope, root) }) !== null,
 });
+
+/** Move the daemon's own state to the default install `def`. A pinned view keeps the one it named. */
+function followDefault(state, def) {
+  if (def && state?.selectView && !state.pinned && !samePath(def[0], state.target)) state.selectView(...def);
+}
+
+/**
+ * `POST /api/default-install`: `{host, path}` makes that install the default. Anything else is
+ * refused (the 409 arm) and the stored pick stays: there is no clearing body, because
+ * `readJsonBody` turns a malformed request into `{}`, and that must not erase a choice. The
+ * pair is the VALUE here, so this route is no `VIEW_POSTS` row. It stores the detected root, not
+ * the request's spelling of it. The daemon state moves here and not by `refresh`, which would
+ * drop every install's cached doctor for a pick that changes none of them.
+ */
+export function apiDefaultInstallSet(state, body) {
+  const { host, path: root } = body;
+  const hit = typeof root === 'string' && root
+    ? [...activeInstalls(installTargets())].find(([h, , r]) => h === host && samePath(r, root))
+    : undefined;
+  if (hit === undefined) return { ok: false, error: 'not an active install (host, path)' };
+  const file = sharedPaths().defaultInstall;
+  // The folder normally exists already, through the install registry. Created here, it does not
+  // read as a tier: `tierOf` tests for the tier's memory store or a tier file, not the folder.
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeTextAtomic(file, `${JSON.stringify({ host, path: String(hit[2]) }, null, 2)}\n`);
+  followDefault(state, defaultView());
+  return { ok: true };
+}
 
 /**
  * The row `id` carries the ROOT, not only `host:scope`: two project installs of one host (two
@@ -190,13 +217,15 @@ export function apiInstalls(state) {
   const def = defaultView(targets);
   // The row marked `default` must be the install an unnamed request reads, so the daemon state
   // follows the marker here, where the console reads it, rather than only on a full refresh.
-  if (def && state?.selectView && !state.pinned && !samePath(def[0], state.target)) state.selectView(...def);
+  followDefault(state, def);
   for (const [host, scope, root] of targets) {
     out.push({
       ...installRowBase(host, scope, root, installState(root, host, scope)),
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
       trust: trustOfDir(root, host),
+      // A project install's switch for reading the machine tier (a global install owns it).
+      sharedTier: scope === 'global' ? false : sharedTierOfDir(root, host),
       // The install a request naming none reads (`defaultView`): the console's pickers start on it.
       default: !!def && samePath(viewCfg(host, scope, root), def[0]),
     });
@@ -205,6 +234,10 @@ export function apiInstalls(state) {
     modes: discoverNames('modes', 'direct'), trusts: Object.keys(PRESETS) };
 }
 
+
+// How long a poll may serve `apiFleet`'s memo: a rule or profile write and a session's memory write
+// call no `refresh`, so this is how late they show.
+const FLEET_READS_MS = 30_000;
 
 /**
  * EVERY INSTALLED HARNESS ON THE MACHINE, EACH JUDGED ON ITS OWN — the Overview's fleet table.
@@ -222,7 +255,23 @@ export function apiInstalls(state) {
  * a fixed walk finds, which describes the wrong install as soon as two hosts are deployed.
  * Every unknown stays `null` — `verdict: 'unknown'`, `drift: null` — never a reassuring zero.
  */
-export function apiFleet(state) {
+export function apiFleet(state, { now = Date.now() } = {}) {
+  // Both reads render the session files, and an eager wiki walks a whole vault each time, so a poll
+  // serves them from a memo. `refresh` clears it; `FLEET_READS_MS` bounds what no `refresh` reports.
+  // `st` is in the key: an install switched off stops being measured at once.
+  const reads = (host, scope, st, root, dir) => {
+    const memo = (state._fleetReads ??= new Map());
+    const key = JSON.stringify([host, scope, st, String(root)]);
+    const hit = memo.get(key);
+    if (hit && now - hit.at < FLEET_READS_MS) return hit;
+    let sessionStart = null;
+    if (st === 'active' && scope === 'global' && CLAUDE_STYLE.includes(host)) {
+      try { sessionStart = sessionStartSize(dir, host); } catch { /* not measured, this round */ }
+    }
+    const fresh = { at: now, sessionStart, cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }) };
+    memo.set(key, fresh);
+    return fresh;
+  };
   const sourceFp = sourceFingerprint(makeCfg());
   const installs = [];
   for (const [host, scope, root] of installTargets()) {
@@ -239,6 +288,8 @@ export function apiFleet(state) {
     }
     let built = null;
     try { built = Math.floor(statSync(path.join(dir, VERSION_MARKER)).mtimeMs / 1000); } catch { /* never built */ }
+    const { cost, sessionStart } = reads(host, scope, st, root, dir);
+    const tier = tierOf({ target: dir });
     installs.push({
       ...installRowBase(host, scope, root, st),
       installed_fp: fp,
@@ -251,11 +302,14 @@ export function apiFleet(state) {
       // Each install's own settings, on its row: the Overview has no viewed install to read them off.
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
-      // Its memory facts: one directory listing (`memoryFactCount`), no file read.
-      facts: memoryFactCount(dir),
+      // Its memory facts: directory listings (`factCount`), no file read.
+      facts: factCount(memoryDir({ target: dir }, tier)),
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
-      cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
+      cost,
+      // Its session-start hook against the budget. Global hook hosts only: the console has no
+      // repo to add, a project install's size is that repo's, and OpenCode has no stdout cap.
+      session_start: sessionStart,
     });
   }
   // `version` is the source's release label, the "Behind 4.19.0" a behind row names; the same
@@ -264,7 +318,7 @@ export function apiFleet(state) {
 }
 
 /**
- * What the Server tab says about the process answering it — built FIELD BY FIELD, never from the
+ * What Settings' Server panel says about the process answering it — built FIELD BY FIELD, never from the
  * daemon record, which holds the write token: a GET is readable by anything that passes the Host
  * check, and the token is the only guard on a POST. `started` is the process's own start (the
  * server is the process), in epoch seconds. `autostart` is whether the hand-written login
@@ -307,10 +361,10 @@ function kitCredits(m, rules) {
 }
 
 /**
- * EVERY INSTALL'S KITS — the Kits tab. Its own route, like `apiFleet`: it re-reads each carrier
+ * EVERY INSTALL'S KITS — the Kits page. Its own route, like `apiFleet`: it re-reads each carrier
  * and the kit manifests, which the sidebar's `/api/installs` refetch must not pay for.
  *
- * `kits` per row is `installProfile(...).kits`, the reader `rebuild-all` uses, so the tab shows
+ * `kits` per row is `installProfile(...).kits`, the reader `rebuild-all` uses, so the page shows
  * what a rebuild would keep. A malformed manifest answers 200 with `error` and EMPTY lists, never
  * rows without kits (which would read as "no kit on") and never a 500. `editable:false` carries
  * the two refusals `apiInstallCmd` makes, so the page can say why before the click.
@@ -332,9 +386,7 @@ export function apiKits() {
     if (st === 'absent') continue;
     try {
       const p = installProfile(host, scope, root);
-      const reason = st === 'disabled' ? 'install is disabled — reactivate it first'
-        : legacyProcessCarrierOfDir(root, host) ? 'predates the comms pack — run geneseed setup for it first'
-          : null;
+      const reason = st === 'disabled' ? 'install is disabled — reactivate it first' : null;
       installs.push({ ...installRowBase(host, scope, root, st), kits: p.kits,
         keptKitFiles: keptKitFiles(host, scope, root, p.kits), editable: reason === null, reason });
     } catch (e) {
@@ -345,9 +397,37 @@ export function apiKits() {
   return { kits, installs };
 }
 
-/** The dashboard aggregate. */
-export function apiOverview(state) {
-  const inv = state.inventory;
+/**
+ * Every count the console prints, over `fleet`: `fleetCounts`, plus the rail's Loops badge. That one
+ * is templates only (a brick is a part, the template is what a person runs), from the catalogue
+ * `/api/loops` reads, and the union across installs, where its page lists the picked install's.
+ */
+export function machineCounts(state, fleet) {
+  const templates = (v) => [...loadCatalog({ projectRoot: v.state.root }).templates.keys()];
+  return { ...fleetCounts(state, fleet),
+    loops: new Set(fleet.flatMap((v) => orSkip(v, () => templates(v)))).size };
+}
+
+// How long `machineCounts` may serve a read: the overview is asked every 1.5 s while the doctor
+// warms. A mutation drops it (`refreshOwn`); this bounds what a session writes behind the console.
+const COUNTS_MS = 5_000;
+
+/** `machineCounts` over `fleet()`, memoised on the daemon's state `base`. */
+export function memoCounts(base, fleet, now = Date.now()) {
+  const hit = base._counts;
+  if (hit && now - hit.at < COUNTS_MS) return hit.counts;
+  const counts = machineCounts(base, fleet());
+  base._counts = { at: now, counts };
+  return counts;
+}
+
+/**
+ * The dashboard aggregate. One install's facts, but its `counts` are the machine's (`memoCounts`):
+ * every install, deduped, the same answer whichever install asks. They default to `state` alone.
+ * A pinned view runs no doctor: its one reader wants its `install`, and a cold run blocks the request
+ * for seconds. It serves the verdict it holds, or null.
+ */
+export function apiOverview(state, counts = machineCounts(state, [{ install: null, state }])) {
   let diff = null;
   if (deployed(state)) {
     const { files } = diffCollect({
@@ -400,37 +480,8 @@ export function apiOverview(state) {
     // `serve` installs the comparison; a state built without a server has none and is false.
     daemon_stale: Boolean(state.daemonStale?.()),
     server: serverFacts(),
-    counts: {
-      agents: inv.agents.length,
-      skills: inv.skills.length,
-      // ⚠ `laws` STAYS THE INVARIANT COUNT. The rail badge reads it, `docCounts` mirrors it as
-      // `{N_LAWS}`, and the doctor's frozen `proseMirrorProblems` compares README and
-      // SHIPPED.md prose against the same number. Widening it to "the whole constitution"
-      // would silently move all four at once.
-      laws: inv.laws.length,
-      ontology: (inv.ontology ?? []).length,
-      // The tier's own summary, kept out of the section counts because it is not a section:
-      // `active`/`total` is the fraction the dashboard shows, `rules` counts only the packs
-      // this install built in — what it is bound by, not what its bundle carries.
-      doctrines: {
-        active: (inv.doctrines ?? []).filter((p) => p.active).length,
-        total: (inv.doctrines ?? []).length,
-        // Counted RULE BY RULE, not pack by pack: with the per-rule axis an active pack can
-        // carry an inactive rule, so `p.rules.length` over active packs over-counts by
-        // exactly what the user switched off — the one number on the dashboard that claims
-        // to say how many rules bind this install.
-        rules: (inv.doctrines ?? [])
-          .reduce((n, p) => n + p.rules.filter((r) => r.active !== false).length, 0),
-      },
-      memory: memoryItems(state).length,
-      notebook: notebookItems(state).length,
-      wiki: wikiItems(state).length,
-      config: configItems(state).length,
-      // The rail's Loops badge: templates only, from the same catalogue `/api/loops` reads —
-      // a brick is a part, the template is what a person runs.
-      loops: loadCatalog({ projectRoot: state.root }).templates.size,
-    },
-    doctor: state.doctor,
+    counts,
+    doctor: state.pinned ? state._doctor : state.doctor,
     diff,
     build_time: buildTime,
     build_epoch: buildEpoch,
@@ -464,7 +515,7 @@ const RECENT_LIMIT = 8;
 /**
  * THE NEWEST FILE-BACKED ENTRIES ACROSS THE HARNESS — the "freshly grown" card's whole payload.
  *
- * The first GET added after the Python→Node port froze its reference surface. It exists
+ * It exists
  * because NOTHING else in this API carries a per-entry date: every
  * catalog row is `{name, title, desc, source}` and the only two timestamps on the whole surface are
  * `overview.build_time` and `doctor.checked_at`. A client cannot stat a path, so "what changed
@@ -561,17 +612,22 @@ export function apiLoopsActive() {
  *
  * `install` picks the Update route (`git`, `npm-global`, `other`); `git` is kept beside it for a
  * console bundle older than the field. `behind` is a clone's own "up to date": commits upstream
- * holds that it does not, null when unknown — a clone can always pull, since `main` moves between
- * releases and a work proxy can leave the release check unanswered. `command` is what to run by
- * hand when the console cannot update this copy itself.
+ * holds that it does not, null when unknown — a clone can always try to pull, since `main` moves
+ * between releases and a work proxy can leave the release check unanswered — and false when the
+ * update job would refuse: local changes, no upstream, a detached HEAD, a diverged branch.
+ * `checking` covers both asks, so a slow fetch reads as "checking…", not as a settled unknown.
+ * `command` is what to run by hand when the console cannot update this copy itself.
  */
 export function apiUpdate(state) {
   const install = installKind();
+  const status = updateStatus(state, releaseLabel());
+  const behind = install === 'git' ? gitBehind(state, { busy: Boolean(state.jobBusy?.()) }) : null;
   return {
-    ...updateStatus(state, releaseLabel()),
+    ...status,
+    checking: status.checking || Boolean(state._behind?.inflight),
     install,
     git: install === 'git',
-    behind: install === 'git' ? gitBehind(state, { busy: Boolean(state.jobBusy?.()) }) : null,
+    behind,
     command: install === 'other' ? MANUAL_UPDATE : null,
   };
 }

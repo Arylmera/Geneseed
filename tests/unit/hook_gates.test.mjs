@@ -1262,6 +1262,28 @@ test('a link into a gate-config dir is caught', () => {
   } finally { sb.cleanup(); }
 });
 
+// B8: the shared exclude list is a gate's own configuration on both families. The machine tier is a
+// home of its own (not a `.claude`-style marker), so only the gate-config NAMES inside it count.
+test("a write to the shared exclude list asks on Claude and is blocked on Bob; a near miss defers", () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    const xdg = path.join(sb.path, 'xdg');
+    const env = { ...process.env, GENESEED_HOME: f.home, XDG_CONFIG_HOME: xdg };
+    const shared = path.join(xdg, 'geneseed', 'excludes.json');
+    gateConfigAsks(gateRun(f, shared, { env }), shared);
+    const shell = shellPayload(`echo '{}' > "${shared}"`, f.repo);
+    gateConfigAsks(hookRun('git-gate', { root: f.root, stdin: shell, env }), shared);
+    const bob = hookRun('tool-gate', {
+      root: f.root, host: 'bob', env,
+      stdin: bobPayload('execute_command', { command: `echo x > "${shared}"`, cwd: f.repo }),
+    });
+    assert.equal(bob.rc, 2, bob.err);
+    assert.match(bob.err, /BLOCKED: Geneseed \(External Gate\)/);
+    const near = path.join(xdg, 'geneseed', 'notes', 'skill-notes', 'x.md');
+    assertDefers(gateRun(f, near, { env }), near);
+  } finally { sb.cleanup(); }
+});
 // Bob (A2 L2): no ask tier, so an ask is a block — and `settings.json` is the user's shared host
 // config (MCP servers, approvals). So a hook-settings write passes on Bob unless it changes
 // Geneseed's own wiring: an entry whose command names `geneseed-hook` (event, matcher and hook

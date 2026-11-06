@@ -1,8 +1,8 @@
 /**
  * The sovereign-repo exclusion WRITER.
  *
- * THE READER WAS ALREADY HERE. `js/hosts/hosts.mjs` (since 2026-09; `hooks.mjs` before) has carried `sovereignBypass`, `EXCLUDES_FILE`
- * and `EXCLUDE_DIRS` since P5a: every hook call reads `excludes.json` and stands down when
+ * THE READER LIVES IN `js/hosts/hosts.mjs`, which carries `sovereignBypass`, `EXCLUDES_FILE`
+ * and `EXCLUDE_DIRS`: every hook call reads `excludes.json` and stands down when
  * cwd is under an excluded folder. This module is the other half — `harness exclude
  * add|remove|list`, which maintains that file across every global install and wires the
  * host-native per-repo suppression into the excluded repo.
@@ -10,8 +10,7 @@
  * THE WEB ENDPOINT IS THIS MODULE — there is exactly ONE writer. `js/web/actions.mjs`
  * dispatches straight to `excludeAdd`/`excludeRemove` here, and `apiExcludes` in
  * `js/web/api.mjs` is `excludesSnapshot()` unmodified, so the CLI and the console are one
- * writer over one user-owned file. It used to be two, with a Python endpoint calling the
- * same three names, and the surviving hazard is the one that outlived the split: two
+ * writer over one user-owned file. The surviving hazard is two
  * PROCESSES writing at the same instant. `writeExcludes` is temp-plus-rename, so a
  * concurrent pair loses one edit rather than tearing the file.
  *
@@ -22,11 +21,13 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync }
   from 'node:fs';
 import path from 'node:path';
 import { EXCLUDES_FILE, EXCLUDES_STUB, BOB_RULES_STUB } from '../build/stubs.mjs';
-import { wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
+import { archiveStore } from '../hosts/memory-files.mjs';
+import { loadJsonObject, wireClaudeExcludes, unwireClaudeExcludes } from '../hosts/settings.mjs';
 import { GLOBAL_MANIFEST, HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import { readText, writeText, printOut, printErr, isDir, isFile, isOsError } from '../lib/fs.mjs';
 import { parseJson, jsonDumpsIndent, get, isDict } from '../lib/json.mjs';
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
 
 /** The per-repo settings file a claudeMdExcludes entry goes in (Claude and OpenClaude). */
 const localSettings = (repo, host) =>
@@ -62,7 +63,7 @@ function globalInstalls() {
     try {
       cfg = configDir();
     } catch {
-      continue;   // a broken resolver must not kill the CLI, as the Python's bare `except`
+      continue;   // a broken resolver must not kill the CLI
     }
     if (isFile(path.join(cfg, GLOBAL_MANIFEST))) out.push({ host, cfg });
   }
@@ -102,9 +103,9 @@ const canon = (p) => resolvePath(p);
  *
  * Resolved like `repo` itself (`canon`: `..` collapsed, symlinks followed), the one rule the
  * hook's `sovereignBypass` and the OpenCode plugins apply too — so an entry that EXCLUDES a
- * folder is exactly the entry `exclude remove` can take back. It used to compare lexically,
- * mirroring the former Python `Path()`, which made a hand-edited `<repo>/../repo` an entry the
- * plugins honoured, the hook ignored, and `remove` could not find.
+ * folder is exactly the entry `exclude remove` can take back. A lexical comparison would make
+ * a hand-edited `<repo>/../repo` an entry the plugins honoured, the hook ignored, and
+ * `remove` could not find.
  */
 function same(stored, repo) {
   if (typeof stored !== 'string' || !stored) return false;
@@ -113,6 +114,25 @@ function same(stored, repo) {
   } catch {
     return false;  // a `~user` form `expanduser` refuses names no folder
   }
+}
+
+/**
+ * The shared list (B8): the machine tier's `excludes.json`, read by every global install's hook
+ * and plugin next to its own. It holds paths only; the `wired` receipts stay in each host's file,
+ * because only that host can unwire what it wired. Written beside the host files, so one stale
+ * host no longer decides which folders are silent.
+ */
+function updateShared(change) {
+  const dir = machineDir();
+  const unsound = !listIsSound(dir);
+  const data = readExcludes(dir);
+  const before = JSON.stringify(data.excludes);
+  data.excludes = change(data.excludes);
+  if (JSON.stringify(data.excludes) === before) return;   // a no-op remove creates nothing
+  // D10: a shared list that does not parse is moved aside before the write replaces it.
+  if (unsound) archiveStore(path.join(dir, EXCLUDES_FILE));
+  mkdirSync(dir, { recursive: true });
+  writeExcludes(dir, data);
 }
 
 /**
@@ -128,55 +148,147 @@ export function excludeAdd(target) {
     return { ok: false, path: repo,
       messages: ['no global Geneseed install found — nothing to exclude from'] };
   }
-  for (const { host, cfg } of installs) {
-    const data = readExcludes(cfg);
-    const prior = data.excludes.find((e) => isDict(e) && same(get(e, 'path'), repo));
-    const priorWired = (isDict(prior) ? get(prior, 'wired') : null) || {};
-    const wired = {};
-    if ((host === 'claude' || host === 'openclaude') && isDir(repo)) {
-      const added = wireClaudeExcludes(localSettings(repo, host), [claudeMdEntry(cfg)]);
-      if (added.length) {
-        wired.claude_md_excludes = added;
-      } else if (get(priorWired, 'claude_md_excludes')) {
-        // Idempotent re-add: OUR own prior excludeAdd call genuinely wired this entry
-        // (confirmed by the manifest record), so ownership carries forward even though
-        // wireClaudeExcludes reports nothing NEW this time.
-        wired.claude_md_excludes = get(priorWired, 'claude_md_excludes');
-      }
-      // else: the entry was already present for some OTHER reason (e.g. a project install's
-      // own project-bypasses-global wiring, or a bailed write) — do NOT fabricate ownership,
-      // or a later excludeRemove would strip wiring we never created.
-      if (!added.length) messages.push(`${host}: claudeMdExcludes already present (kept)`);
-      const note = worktreeNote(host, cfg, repo);
-      if (note) messages.push(note);
-    }
-    if (host === 'bob' && isDir(repo)) {
-      const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');
-      if (existsSync(stub)) {
-        // Ownership is decided by CONTENT, not mere existence — a re-add finds a stub that
-        // already exists because WE wrote it last time; an existence-only check would misread
-        // that as user content and orphan it on the next remove. Exact match means ours.
-        let ours;
-        try {
-          ours = readText(stub) === BOB_RULES_STUB;
-        } catch (e) {
-          if (!isOsError(e)) throw e;
-          ours = false;
-        }
-        wired.bob_rules_stub = ours;
-        if (!ours) messages.push(`${host}: rules/geneseed.md already exists (kept, not ours)`);
-      } else {
-        mkdirSync(path.dirname(stub), { recursive: true });
-        writeText(stub, BOB_RULES_STUB);
-        wired.bob_rules_stub = true;
-      }
-    }
-    const entries = data.excludes.filter((e) => !(isDict(e) && same(get(e, 'path'), repo)));
-    entries.push({ path: repo.split(path.sep).join('/'), wired });
-    data.excludes = entries;
-    writeExcludes(cfg, data);
-  }
+  for (const { host, cfg } of installs) addToHost(host, cfg, repo, messages);
+  updateShared((list) => [...list.filter((e) => !(isDict(e) && same(get(e, 'path'), repo))),
+    { path: repo.split(path.sep).join('/') }]);
   return { ok: true, path: repo, messages };
+}
+
+/**
+ * One install's half of `excludeAdd`: wire the per-repo suppression and keep the receipt. Returns
+ * the files it wrote in the repo, which belongs to the user: the fold names each one.
+ */
+function addToHost(host, cfg, repo, messages, strict = false) {
+  const written = [];
+  const data = readExcludes(cfg);
+  const prior = data.excludes.find((e) => isDict(e) && same(get(e, 'path'), repo));
+  const priorWired = (isDict(prior) ? get(prior, 'wired') : null) || {};
+  const wired = {};
+  if ((host === 'claude' || host === 'openclaude') && isDir(repo)) {
+    const added = wireClaudeExcludes(localSettings(repo, host), [claudeMdEntry(cfg)]);
+    if (added.length) {
+      wired.claude_md_excludes = added;
+      written.push(localSettings(repo, host));
+    } else if (get(priorWired, 'claude_md_excludes')) {
+      // Idempotent re-add: OUR own prior excludeAdd call genuinely wired this entry
+      // (confirmed by the manifest record), so ownership carries forward even though
+      // wireClaudeExcludes reports nothing NEW this time.
+      wired.claude_md_excludes = get(priorWired, 'claude_md_excludes');
+    }
+    // else: the entry was already present for some OTHER reason (e.g. a project install's
+    // own project-bypasses-global wiring, or a bailed write) — do NOT fabricate ownership,
+    // or a later excludeRemove would strip wiring we never created.
+    if (!added.length) {
+      // `wireClaudeExcludes` answers [] for both 'already there' and 'could not write' (a commented,
+      // torn or unwritable settings file). Only the first is wired; the second must not be counted as it.
+      if (hasClaudeExclude(localSettings(repo, host), claudeMdEntry(cfg))) {
+        messages.push(`${host}: claudeMdExcludes already present (kept)`);
+      } else {
+        const why = `${host}: claudeMdExcludes NOT wired in ${localSettings(repo, host)} (see the warning above)`;
+        if (strict) throw new Error(why);
+        messages.push(why);
+      }
+    }
+    const note = worktreeNote(host, cfg, repo);
+    if (note) messages.push(note);
+  }
+  if (host === 'bob' && isDir(repo)) {
+    const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');
+    if (existsSync(stub)) {
+      // Ownership is decided by CONTENT, not mere existence — a re-add finds a stub that
+      // already exists because WE wrote it last time; an existence-only check would misread
+      // that as user content and orphan it on the next remove. Exact match means ours.
+      let ours;
+      try {
+        ours = readText(stub) === BOB_RULES_STUB;
+      } catch (e) {
+        if (!isOsError(e)) throw e;
+        ours = false;
+      }
+      wired.bob_rules_stub = ours;
+      if (!ours) messages.push(`${host}: rules/geneseed.md already exists (kept, not ours)`);
+    } else {
+      mkdirSync(path.dirname(stub), { recursive: true });
+      writeText(stub, BOB_RULES_STUB);
+      wired.bob_rules_stub = true;
+      written.push(stub);
+    }
+  }
+  const entries = data.excludes.filter((e) => !(isDict(e) && same(get(e, 'path'), repo)));
+  entries.push({ path: repo.split(path.sep).join('/'), wired });
+  data.excludes = entries;
+  writeExcludes(cfg, data);
+  return written;
+}
+
+/** Does the settings file already carry this `claudeMdExcludes` entry? A file that does not load carries none. */
+function hasClaudeExclude(file, entry) {
+  const { state, data } = loadJsonObject(file);
+  return state === 'ok' && Array.isArray(get(data, 'claudeMdExcludes')) && get(data, 'claudeMdExcludes').includes(entry);
+}
+
+/** What `addToHost` would write in `repo`, for a dry run. */
+function wiringTargets(host, repo) {
+  if (!isDir(repo)) return [];
+  if (host === 'claude' || host === 'openclaude') return [localSettings(repo, host)];
+  const stub = path.join(repo, '.bob', 'rules', 'geneseed.md');
+  return host === 'bob' && !existsSync(stub) ? [stub] : [];
+}
+
+/** The folders a list names, resolved; a `~user` form names no folder (`same`). */
+function reposOf(list) {
+  const out = [];
+  for (const e of list) {
+    const p = isDict(e) ? get(e, 'path') : e;
+    if (typeof p !== 'string' || !p) continue;
+    try { out.push(canon(p)); } catch { /* skipped, as `same` does */ }
+  }
+  return out;
+}
+
+const listedIn = (list, repo) => list.some((e) => same(isDict(e) ? get(e, 'path') : e, repo));
+
+/** Does `cfg` hold a list a write would not destroy? `readExcludes` degrades a torn one to the stub. */
+function listIsSound(cfg) {
+  const f = path.join(cfg, EXCLUDES_FILE);
+  if (!isFile(f)) return true;
+  try {
+    const data = parseJson(readText(f));
+    return isDict(data) && Array.isArray(get(data, 'excludes'));
+  } catch { return false; }
+}
+
+/**
+ * Fold step 3, both ways: this host's folders join the shared list, and a shared folder this host
+ * never heard of gets the wiring `exclude add` gave the installs it found then. Writes only what
+ * is missing, so a second run writes nothing. The share goes first and each repo answers for
+ * itself: one a write cannot reach lands in `errors`, and its entry stays out of this host's list,
+ * so the next emit retries it. Throws, leaving both files as they are, when either list does not
+ * parse: the write would replace what the user can still repair by hand.
+ */
+export function foldExcludes(host, cfg, dryRun = false) {
+  const tier = machineDir();
+  for (const dir of [cfg, tier]) {
+    if (!listIsSound(dir)) throw new Error(`${path.join(dir, EXCLUDES_FILE)} does not parse`);
+  }
+  const own = readExcludes(cfg).excludes;
+  const shared = readExcludes(tier).excludes;
+  const toShare = [...new Set(reposOf(own))].filter((r) => !listedIn(shared, r));
+  const toWire = [...new Set(reposOf(shared))].filter((r) => !listedIn(own, r));
+  const paths = [];
+  const notices = [];
+  const errors = [];
+  if (dryRun) {
+    paths.push(...toWire.flatMap((repo) => wiringTargets(host, repo)));
+  } else {
+    if (toShare.length) {
+      updateShared((list) => [...list, ...toShare.map((r) => ({ path: r.split(path.sep).join('/') }))]);
+    }
+    for (const repo of toWire) {
+      try { paths.push(...addToHost(host, cfg, repo, notices, true)); } catch (e) { errors.push(`${repo}: ${e.message}`); }
+    }
+  }
+  return { added: toShare.length, wired: toWire.length - errors.length, paths, notices, errors };
 }
 
 /**
@@ -212,19 +324,23 @@ export function excludeRemove(target) {
         }
       } catch (e) {
         if (!isOsError(e)) throw e;
-        // KNOWN DIVERGENCE, deliberately not papered over: Python interpolates
-        // `str(OSError)` — `[Errno 13] Permission denied: '<path>'` — and `e.message` is
-        // Node's own wording. No cell can reach this branch (`unlink` on a file that
+        // `e.message` is Node's own wording, not `[Errno 13] Permission denied: '<path>'`.
+        // No cell can reach this branch (`unlink` on a file that
         // `isFile` just confirmed, `rmdir` on a directory just measured empty), so a
-        // translation table here would be an unobservable guess. Same class as P5b's
-        // untested `die()` newline; `js/hosts/settings.mjs`'s `asOsError` is the same stub for
-        // the same reason.
+        // translation table here would be an unobservable guess.
+        // `js/hosts/settings.mjs`'s `asOsError` is the same stub for the same reason.
         messages.push(`${host}: could not remove ${stub} (${e.message})`);
       }
     }
     data.excludes = keep;
     writeExcludes(cfg, data);
   }
+  // A folder only the shared list names (a fold put it there) is still excluded, so it comes out too.
+  updateShared((list) => {
+    const keep = list.filter((e) => !(isDict(e) && same(get(e, 'path'), repo)));
+    if (keep.length !== list.length) found = true;
+    return keep;
+  });
   if (!found) messages.push(`${repo} was not excluded`);
   return { ok: found, path: repo, messages };
 }
@@ -237,7 +353,7 @@ export function excludeRemove(target) {
 export function excludesSnapshot() {
   const installs = globalInstalls();
   const byPath = new Map();
-  for (const { host, cfg } of installs) {
+  const collect = (cfg, host) => {
     for (const e of readExcludes(cfg).excludes) {
       const p = isDict(e) ? get(e, 'path') : e;
       if (typeof p !== 'string' || !p) continue;
@@ -246,9 +362,12 @@ export function excludesSnapshot() {
         byPath.set(key, { path: p, hosts: [],
           wired: (isDict(e) ? get(e, 'wired') : null) || {} });
       }
-      byPath.get(key).hosts.push(host);
+      if (host) byPath.get(key).hosts.push(host);
     }
-  }
+  };
+  for (const { host, cfg } of installs) collect(cfg, host);
+  // A folder only the shared list names is silent everywhere but wired nowhere: it lists with no host.
+  if (installs.length) collect(machineDir(), null);
   const excludes = [...byPath.values()].sort(
     (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { excludes, installs: installs.map(({ host, cfg }) => ({ host, cfg })) };

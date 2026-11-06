@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { animate, utils } from 'animejs'
 import { Icon } from '../components/Icon.jsx'
-import { motionOK, settle } from './motion.js'
+import { DUR, EASE_OUT, motionOK, settle } from './motion.js'
 import { newestJobs } from './jobBuckets.js'
 
 // Shared render vocabulary for the Activity list (cards) and the session-detail page.
@@ -235,7 +235,7 @@ export function feedDays(jobs, rows, days, now = Date.now()) {
     })
 }
 
-const SWEEP_MS = 500
+const SWEEP_MS = DUR[8]
 
 // A 30-day sparkline, moved here from the Ledger so Activity draws the same one. With
 // `sweep`, the line draws itself in once per change of its values (keyed like StackBar's
@@ -251,7 +251,7 @@ export function Spark({ vals, i, sweep = false, fill = false }) {
     // Undrawn before paint (a layout effect), so the full line never flashes first.
     utils.set(line.current, { strokeDasharray: 1, strokeDashoffset: 1 })
     return settle(
-      animate(line.current, { strokeDashoffset: [1, 0], duration: SWEEP_MS, ease: 'outExpo' }),
+      animate(line.current, { strokeDashoffset: [1, 0], duration: SWEEP_MS, ease: EASE_OUT }),
       SWEEP_MS,
     )
   }, [sig, sweep])
@@ -295,7 +295,7 @@ export function useSweep(sig, prop) {
     const kids = ref.current ? [...ref.current.querySelectorAll('[data-sweep]')] : []
     if (!kids.length || !motionOK()) return
     utils.set(kids, { [prop]: 0 })
-    return settle(animate(kids, { [prop]: [0, 1], duration: SWEEP_MS, ease: 'outExpo' }), SWEEP_MS)
+    return settle(animate(kids, { [prop]: [0, 1], duration: SWEEP_MS, ease: EASE_OUT }), SWEEP_MS)
   }, [sig, prop])
   return ref
 }

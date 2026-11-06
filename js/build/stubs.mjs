@@ -14,9 +14,10 @@ import path from 'node:path';
 import { writeText } from '../lib/fs.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent } from '../lib/json.mjs';
-import { EXCLUDES_FILE } from '../hosts/hosts.mjs';
+import { NOTES_DIRS, WIKI_NAMES, renderedSharedRoot, sharedPaths } from '../lib/machine-dir.mjs';
+import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { MEMORY_SEED } from '../hosts/memory-files.mjs';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Seeded stubs. Written once into the bundle and NEVER overwritten — each holds
@@ -239,24 +240,50 @@ export function ensureContextStub(out) {
 }
 
 /** The wiki manifest's name. `geneseed-` says who owns it in a shared `.claude/`/`.opencode/`. */
-export const WIKI_FILE = 'geneseed-wiki.jsonc';
-/** Its earlier names, newest first. Readers still fall back to them, with no end date:
- * nothing yet tells a user an install missed the rename, so dropping the fallback would lose a wiki in silence. */
-const LEGACY_WIKI_FILES = ['wiki.jsonc', 'wiki.json'];
+export const WIKI_FILE = WIKI_NAMES[0];
+const LEGACY_WIKI_FILES = WIKI_NAMES.slice(1);
+
+/**
+ * `{new: [old…]}` — every file a build renamed, with the names it used to have. The fallback that
+ * still reads an old name has no end date, so `status` and `rebuild-all` warn while one is on disk
+ * (M3): removal waits for a release after users have been told. One table, so the next rename is
+ * one row and not a second warning.
+ */
+export const RENAMED_FILES = { [WIKI_FILE]: LEGACY_WIKI_FILES };
+
+/** The old-name files present in `dirs`, as `{file, now}`: the path found and the name it takes. */
+export function renamedFilesIn(dirs) {
+  const found = [];
+  for (const dir of dirs) {
+    for (const [now, olds] of Object.entries(RENAMED_FILES)) {
+      for (const old of olds) {
+        const file = path.join(dir, old);
+        if (existsSync(file)) found.push({ file, now });
+      }
+    }
+  }
+  return found;
+}
 
 /**
  * `_build_render.ensure_wiki_stub`, plus the rename. A legacy manifest is the user's file: it is
  * RENAMED to `WIKI_FILE` (bytes preserved by construction), never copied and never seeded beside.
  * A rename that fails (the file held open on Windows) leaves it where it is and seeds nothing —
- * a seed beside it would fork the user's declarations; the readers' fallback still finds it.
+ * a seed beside it would fork the user's declarations; the readers' fallback still finds it. The
+ * failure is WARNED (B6): it used to be swallowed, and the old name then stayed in use unseen.
  * The sibling `.gitignore` follows the rename, or the private paths become committable.
  */
-export function ensureWikiStub(out) {
+export function ensureWikiStub(out, { rename = renameSync,
+  warn = (m) => process.stderr.write(m) } = {}) {
   const dest = path.join(out, WIKI_FILE);
   if (existsSync(dest)) return;
   const legacy = LEGACY_WIKI_FILES.find((n) => existsSync(path.join(out, n)));
   if (!legacy) return seed(dest, WIKI_STUB);
-  try { renameSync(path.join(out, legacy), dest); } catch { return; }
+  try { rename(path.join(out, legacy), dest); } catch (e) {
+    warn(`[geneseed] WARN could not rename ${path.join(out, legacy)} to ${WIKI_FILE}: ${e.message}; `
+      + 'it is still read under its old name, and the next build tries again\n');
+    return;
+  }
   ignoreRenamedWiki(path.join(out, '.gitignore'), legacy);
 }
 
@@ -284,6 +311,40 @@ export const ensureProfileStub = stubWriter(PROFILE_FILE, PROFILE_STUB);
  * since that is where the hook looks for it.
  */
 export const ensureExcludesStub = stubWriter(EXCLUDES_FILE, EXCLUDES_STUB);
+
+/**
+ * Create the machine tier and seed what is absent; every file is the user's once it exists, as a
+ * host's are. Nothing here enters a manifest: uninstall never touches the tier (D8). False when it
+ * cannot be created, and that is never fatal: the emit renders relative and the host layer serves.
+ */
+export function ensureSharedTier() {
+  try {
+    const tier = sharedPaths();
+    mkdirSync(tier.memory, { recursive: true });
+    for (const sub of NOTES_DIRS) mkdirSync(path.join(tier.notes, sub), { recursive: true });
+    ensureMemoryIndex(tier.memory);
+    ensureRulesStub(tier.root);
+    ensureProfileStub(tier.root);
+    ensureWikiStub(tier.root);
+    ensureExcludesStub(tier.root);
+    return true;
+  } catch (e) {
+    process.stderr.write(`[geneseed] WARN could not create the shared tier: ${e.message}; `
+      + 'this emit renders relative paths\n');
+    return false;
+  }
+}
+
+/**
+ * The root a global emit renders. Rendering and creating are two decisions: every global emit
+ * renders the same path, and only a canonical one creates the tier. null, so relative paths, only
+ * when that creation failed or there is no home. `diff` and Restore do not ask: they re-render a
+ * deployed install, so they send its own root (`renderedTier`).
+ */
+export function sharedRootFor(cfgDir, host) {
+  const root = renderedSharedRoot();
+  return root !== null && (!isCanonical(cfgDir, host) || ensureSharedTier()) ? root : null;
+}
 
 /** `_build_render.ensure_bundle_gitignore`. */
 export const ensureBundleGitignore = stubWriter('.gitignore', BUNDLE_GITIGNORE);

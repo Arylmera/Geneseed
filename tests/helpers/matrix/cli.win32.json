@@ -1480,7 +1480,10 @@
       }
     },
     {
-      "expect_silent": true,
+      "expect": [
+        "permissionDecision",
+        "writing to user-rules.md"
+      ],
       "id": "rule-gate/drive-relative-path-has-no-separator",
       "steps": [
         {
@@ -1496,7 +1499,10 @@
       }
     },
     {
-      "expect_silent": true,
+      "expect": [
+        "permissionDecision",
+        "writing to user-rules.md"
+      ],
       "id": "rule-gate/trailing-separator-leaves-no-name",
       "steps": [
         {
@@ -1660,9 +1666,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/case-insensitive-name",
       "steps": [
         {
@@ -2120,7 +2124,70 @@
       "expect_files": [
         "repo/memory/alpha-fact.md"
       ],
-      "id": "learn/memory-beside-cwd",
+      "id": "learn/a-bundle-in-the-cwd",
+      "steps": [
+        {
+          "argv": [
+            "learn"
+          ],
+          "cwd": "repo",
+          "stdin": "notes: the build fails on windows\n"
+        }
+      ],
+      "world": {
+        "reply/out.md": "---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact. Links to [[beta-fact]].\n",
+        "repo/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/memory/MEMORY.md": "# Memory Index\n",
+        "repo/.geneseed-emit": "files\n",
+        "repo/memory/.keep": ""
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "FAKE_LLM_OUT": "{sb}/reply/out.md",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect": [
+        "wrote 1 memory file"
+      ],
+      "expect_files": [
+        "repo/Harness/memory/alpha-fact.md"
+      ],
+      "id": "learn/a-bundle-under-harness",
+      "steps": [
+        {
+          "argv": [
+            "learn"
+          ],
+          "cwd": "repo",
+          "stdin": "notes: the build fails on windows\n"
+        }
+      ],
+      "world": {
+        "reply/out.md": "---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact. Links to [[beta-fact]].\n",
+        "repo/Harness/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/Harness/memory/MEMORY.md": "# Memory Index\n",
+        "repo/Harness/.geneseed-emit": "files\n",
+        "repo/Harness/memory/.keep": ""
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "FAKE_LLM_OUT": "{sb}/reply/out.md",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect": [
+        "alpha-fact"
+      ],
+      "expect_absent": [
+        "wrote 1 memory file"
+      ],
+      "expect_absent_files": [
+        "repo/memory/alpha-fact.md"
+      ],
+      "id": "learn/a-bare-repo-memory-is-no-store",
       "steps": [
         {
           "argv": [
@@ -2142,39 +2209,15 @@
         "GENESEED_LLM": "{py} {llm}"
       },
       "expect": [
+        "alpha-fact"
+      ],
+      "expect_absent": [
         "wrote 1 memory file"
       ],
-      "expect_files": [
-        "repo/Harness/memory/alpha-fact.md"
-      ],
-      "id": "learn/memory-under-harness",
-      "steps": [
-        {
-          "argv": [
-            "learn"
-          ],
-          "cwd": "repo",
-          "stdin": "notes: the build fails on windows\n"
-        }
-      ],
-      "world": {
-        "reply/out.md": "---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact. Links to [[beta-fact]].\n",
-        "repo/Harness/memory/.keep": ""
-      }
-    },
-    {
-      "env": {
-        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
-        "FAKE_LLM_OUT": "{sb}/reply/out.md",
-        "GENESEED_LLM": "{py} {llm}"
-      },
-      "expect": [
-        "wrote 1 memory file"
-      ],
-      "expect_files": [
+      "expect_absent_files": [
         "repo/anamnesis/alpha-fact.md"
       ],
-      "id": "learn/memory-named-anamnesis",
+      "id": "learn/anamnesis-is-no-store",
       "steps": [
         {
           "argv": [
@@ -3235,13 +3278,13 @@
         }
       ],
       "world": {
+        "home/.config/geneseed/memory/one.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
+        "home/.config/geneseed/memory/two.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
         "home/.config/opencode/.geneseed-emit": "opencode-global\n",
         "home/.config/opencode/.geneseed-theme": "imperial\n",
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "home/.config/opencode/AGENT.md": "# deployed\n",
-        "repo/.keep": "",
-        "repo/memory/one.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
-        "repo/memory/two.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"
+        "repo/.keep": ""
       }
     },
     {
@@ -3453,6 +3496,9 @@
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "home/.config/opencode/AGENT.md": "# deployed\n",
         "repo/.keep": "",
+        "repo/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/memory/MEMORY.md": "# Memory Index\n",
+        "repo/.geneseed-emit": "files\n",
         "repo/memory/notes.md/inner.txt": "not a fact\n",
         "repo/memory/real.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"
       }
@@ -3480,6 +3526,8 @@
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "home/.config/opencode/AGENT.md": "# deployed\n",
         "repo/.keep": "",
+        "repo/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/.geneseed-emit": "files\n",
         "repo/memory/MEMORY.md": "# index\n",
         "repo/memory/README.md": "# readme\n",
         "repo/memory/real.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"
@@ -7289,20 +7337,19 @@
       "bin": "cli",
       "checkout": {},
       "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "This Geneseed install isn't a git checkout",
-        "ref 'v1.2.3' is IGNORED"
+        "unrecognized arguments"
       ],
       "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle"
+        "preflight: checking the local checkout",
+        "is IGNORED"
       ],
-      "id": "upgrade/a-ref-argument-that-names-no-theme-is-announced-and-ignored",
+      "id": "upgrade/a-second-positional-is-refused-before-anything-runs",
       "steps": [
         {
           "argv": [
             "upgrade",
-            "v1.2.3"
+            "main",
+            "imperial"
           ],
           "cwd": "repo"
         }
@@ -7557,7 +7604,7 @@
       "expect": [
         "rescued context.json from ",
         "rescued memory/ from ",
-        "removing stray in-folder bundle "
+        "set aside in "
       ],
       "expect_files": [
         "bundle/context.json",
@@ -7743,93 +7790,6 @@
         "GENESEED_OUT": "{sb}/bundle"
       },
       "expect": [
-        "[geneseed] already up to date.",
-        "[geneseed] rebuilding bundle -> ",
-        "(theme: neutral, emit: files)",
-        "[geneseed] ✓ upgrade complete."
-      ],
-      "expect_files": [
-        "bundle/AGENT.md",
-        "bundle/.geneseed-theme",
-        "bundle/.geneseed-version"
-      ],
-      "git": "uptodate",
-      "id": "sync-self/is-an-alias-of-upgrade-and-rebuilds-the-bundle-in-place",
-      "steps": [
-        {
-          "argv": [
-            "sync-self"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "env": {
-        "GENESEED_OUT": "{sb}/bundle"
-      },
-      "expect": [
-        "(theme: neutral, emit: files)"
-      ],
-      "expect_absent": [
-        "theme: cyberpunk",
-        "built theme 'cyberpunk'",
-        "is IGNORED"
-      ],
-      "expect_files": [
-        "bundle/AGENT.md",
-        "bundle/.geneseed-theme",
-        "bundle/.geneseed-version"
-      ],
-      "git": "uptodate",
-      "id": "sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme",
-      "steps": [
-        {
-          "argv": [
-            "sync-self",
-            "cyberpunk"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "expect": [
-        "[geneseed] preflight: checking the local checkout ...",
-        "You have local changes in the Geneseed folder"
-      ],
-      "expect_absent": [
-        "[geneseed] fetching from origin",
-        "rebuilding bundle"
-      ],
-      "git": "dirty",
-      "id": "sync-self/a-dirty-checkout-is-refused-through-the-alias-too",
-      "steps": [
-        {
-          "argv": [
-            "sync-self"
-          ],
-          "cwd": "repo"
-        }
-      ],
-      "world": {
-        "repo/.keep": ""
-      }
-    },
-    {
-      "bin": "cli",
-      "env": {
-        "GENESEED_OUT": "{sb}/bundle"
-      },
-      "expect": [
         "[geneseed] step 1/1: Update & rebuild ...",
         "[geneseed] already up to date.",
         "[geneseed] rebuilding bundle -> ",
@@ -7862,32 +7822,19 @@
     },
     {
       "bin": "cli",
-      "env": {
-        "GENESEED_OUT": "{sb}/bundle"
-      },
       "expect": [
-        "[geneseed] step 1/1: Update & rebuild ...",
-        "[geneseed] already up to date.",
-        "[geneseed] ✓ update complete."
+        "unrecognized arguments"
       ],
       "expect_absent": [
-        "unrecognized arguments",
-        "✗ step"
+        "step 1/1",
+        "is IGNORED"
       ],
-      "expect_files": [
-        "bundle/AGENT.md",
-        "bundle/.geneseed-theme",
-        "bundle/.geneseed-version",
-        "home/.geneseed-install.log"
-      ],
-      "git": "uptodate",
-      "id": "bootstrap/a-legacy-theme-argument-after-the-ref-is-tolerated-not-refused",
+      "id": "bootstrap/takes-no-positional-since-the-ref-went",
       "steps": [
         {
           "argv": [
             "bootstrap",
             "main",
-            "imperial",
             "--no-setup"
           ],
           "cwd": "repo"
@@ -8040,18 +7987,19 @@
       "bin": "cli",
       "checkout": {},
       "expect": [
-        "ref 'v1.2.3' is IGNORED",
-        "This Geneseed install isn't a git checkout"
+        "unrecognized arguments"
       ],
       "expect_absent": [
-        "rebuilding bundle"
+        "preflight: checking the local checkout",
+        "is IGNORED"
       ],
-      "id": "update/binds-upgrades-hidden-ref-positional-and-announces-it",
+      "id": "update/refuses-a-second-positional-like-upgrade",
       "steps": [
         {
           "argv": [
             "update",
-            "v1.2.3"
+            "main",
+            "imperial"
           ],
           "cwd": "repo"
         }
@@ -8224,7 +8172,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: legacy",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] re-emitting claude:global (",
         "theme=neutral emit=claude-global",
         "[migrate] migrated 1 install(s)."
@@ -8258,7 +8206,7 @@
     {
       "bin": "cli",
       "expect": [
-        "wiring shape: legacy",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] re-emitting bob:global (",
         "[migrate] migrated 1 install(s)."
       ],
@@ -8287,7 +8235,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: none",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] re-emitting opencode:global (",
         "[migrate] migrated 1 install(s)."
       ],
@@ -8353,6 +8301,7 @@
         "would report the autostart entry at",
         "geneseed-web.vbs",
         "dev.geneseed.web.plist",
+        "[migrate] claude: nothing to fold",
         "[migrate] --dry-run: nothing was written."
       ],
       "expect_absent": [
@@ -8362,7 +8311,8 @@
       "expect_absent_files": [
         "home/.geneseed/.migrated",
         "home/.geneseed/.migrate-backup",
-        "home/.claude/CLAUDE.md"
+        "home/.claude/CLAUDE.md",
+        "home/.config/geneseed"
       ],
       "id": "migrate/dry-run-writes-nothing",
       "steps": [
@@ -8424,7 +8374,7 @@
       "expect_absent": [
         "re-emitting",
         "migrated 1 install(s)",
-        "wiring shape"
+        "install(s) to migrate"
       ],
       "expect_files": [
         "home/.geneseed/.migrated"
@@ -8459,7 +8409,7 @@
       "expect": [
         "[migrate] FAILED claude:global",
         "rolling back",
-        "the install is unchanged."
+        "the wiring is as it was."
       ],
       "expect_absent": [
         "migrated 1 install(s)."
@@ -8494,13 +8444,13 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: legacy",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] migrated 1 install(s)."
       ],
       "expect_files": [
         "home/.geneseed/.migrated"
       ],
-      "id": "migrate/a-hand-edited-jsonc-config-still-classifies-as-legacy",
+      "id": "migrate/a-hand-edited-jsonc-config-still-migrates",
       "steps": [
         {
           "argv": [
@@ -8522,16 +8472,13 @@
     {
       "bin": "cli",
       "expect": [
-        "[migrate] 1 install(s), wiring shape: current",
+        "[migrate] 1 install(s) to migrate.",
         "[migrate] migrated 1 install(s)."
-      ],
-      "expect_absent": [
-        "wiring shape: legacy"
       ],
       "expect_files": [
         "home/.geneseed/.migrated"
       ],
-      "id": "migrate/a-node-baked-shim-reads-as-current",
+      "id": "migrate/a-node-baked-shim-still-migrates",
       "steps": [
         {
           "argv": [

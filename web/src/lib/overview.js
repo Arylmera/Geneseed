@@ -3,8 +3,9 @@
 // table of inputs -> rows can pin them (__tests__/overview.test.js), and so the component
 // is only layout.
 import { driftTotal, relTime } from './format.js'
+import { hostInfo, installTag } from './hosts.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
-import { GATE_SWITCH, gateAddress, parseRuleTitle } from './constitution.js'
+import { gateFallback, gateAddress, parseRuleTitle } from './constitution.js'
 
 // Skills per class, split by lifecycle stage. `experimental` is the one stage the chart
 // calls out; every other status (approved, a personal skill with none) counts as settled.
@@ -53,9 +54,9 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
   if (drift) {
     out.push({
       id: 'drift',
-      tag: 'Drift',
+      tag: 'Local edits',
       tone: 'warn',
-      title: `${plural(drift, 'file')} drifted from the source`,
+      title: plural(drift, 'local edit'),
       detail: `${diff.edited} edited, ${diff.added} added, ${diff.missing} missing`,
       where: 'installs/edits',
       verb: 'Review',
@@ -81,7 +82,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
       tag: 'Rules',
       tone: '',
       title: 'No standing rules yet',
-      detail: `0 of ${st.max_rules} · ${st.tokens} of ${st.max_tokens} tokens`,
+      detail: `≈${st.tokens.toLocaleString('en-US')} tokens, the file's header alone`,
       where: 'personal/rules',
       verb: 'Write a rule',
       href: '#/personal/rules',
@@ -92,14 +93,14 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
     const [gate, n] = asks[0]
     const addr = gateAddress(gate)
     const hit = (laws?.items || []).find((i) => i.name === addr)
-    const name = hit ? parseRuleTitle(hit.title).name : GATE_SWITCH[addr]?.label || addr
+    const name = hit ? parseRuleTitle(hit.title).name : gateFallback(addr)
     out.push({
       id: 'gates',
       tag: 'Gates',
       tone: '',
       title: `${name} asked ${plural(n, 'time')}`,
       detail: `${n} of ${setup.gates.total} gate asks`,
-      where: addr,
+      where: 'constitution',
       verb: 'Review',
       href: `#/item/law/${encodeURIComponent(addr)}`,
     })
@@ -130,9 +131,9 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
       tone: '',
       title: 'Memory holds no facts',
       detail: 'MEMORY.md is an empty index',
-      where: 'library/memory',
+      where: 'personal/memory',
       verb: 'Open',
-      href: '#/section/memory',
+      href: '#/personal/memory',
     })
   }
   if (activity && activity.enabled === false) {
@@ -176,21 +177,23 @@ export function fleetVerdict(fleet) {
   const edited = act.reduce((n, i) => n + driftOf(i), 0)
   const stale = act.reduce((n, i) => n + staleOf(i), 0)
   const d = fleet?.doctor
-  const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : 'good'
+  // No verdict yet (a cold daemon's doctor still running) vouches for nothing: neither good nor bad.
+  const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : d ? 'good' : 'unknown'
   const head = {
-    good: 'Harness healthy.',
-    warn: 'Harness needs a look.',
-    bad: 'Harness has problems.',
+    good: 'Installs healthy.',
+    unknown: 'Checking the installs.',
+    warn: 'Installs need a look.',
+    bad: 'Installs have problems.',
   }[tone]
   const facts = [
     plural(act.length, 'active install') + (disabled ? `, ${disabled} disabled` : ''),
     !d
-      ? 'doctor not run yet'
+      ? 'doctor still running'
       : d.ok
         ? 'doctor clean'
         : `doctor found ${plural(d.problems.length, 'problem')}`,
-    behind ? `${plural(behind, 'install')} behind source` : 'all in step with source',
-    edited ? `${plural(edited, 'file')} hand-edited` : 'no hand edits',
+    behind ? `${plural(behind, 'install')} behind source` : 'all in sync with source',
+    edited ? plural(edited, 'local edit') : 'no local edits',
   ]
   // Its own fact, only when there is one, so a fleet with nothing stale reads as before.
   if (stale) facts.push(`${plural(stale, 'file')} behind source`)
@@ -215,7 +218,31 @@ export const needsRebuild = (i) =>
 
 export const approxTokens = (chars) => `≈${(chars / 4 / 1000).toFixed(1)}k`
 
-const installLabel = (i) => `${i.host} · ${i.scope}`
+const installLabel = installTag
+
+// At this share of its budget the session-start figure turns amber and Needs you says so.
+const SESSION_START_NEAR = 0.85
+
+// The session-start hook output the fleet should see, or null when no global hook install reports
+// one: a payload the budget cut, else the largest. Cut outranks size because session files stop
+// near 83 % of the budget, so an uncut install can be larger. A cut payload is near at any share.
+// A KB here is 1 000 of the budget's characters.
+export function sessionStartFigure(installs) {
+  const weight = ({ chars, budget, cut }) => chars + (cut ? budget : 0)
+  const rows = (installs || []).filter((i) => i.session_start)
+  const top = rows.reduce(
+    (a, b) => (!a || weight(b.session_start) > weight(a.session_start) ? b : a),
+    null,
+  )
+  if (!top) return null
+  const { chars, budget, cut } = top.session_start
+  return {
+    install: top,
+    size: `${(chars / 1000).toFixed(1)} / ${budget / 1000} KB`,
+    cut,
+    near: cut || chars / budget >= SESSION_START_NEAR,
+  }
+}
 
 // The rebuild target the `rebuild` action takes ({host, path}, the path exactly as the fleet
 // gave it), plus the row id and a label the Ledger names in its confirm and its progress bar.
@@ -231,8 +258,9 @@ export const rebuildTarget = (i) => ({
 // never-fired row is held back until 30 days are counted, so a fresh install is not told every
 // skill is unused. Rows carry `act` (a console action) or `href`, never both; an `act: 'rebuild'`
 // row also names its `installs`. `defaultLabel` names the install the unnamed reads come from
-// (profile, rules): with it, those suggestions say whose they are. A fleet's memory nudge is per
-// install, off each row's `facts`.
+// (profile, rules): with it, those suggestions say whose they are, unless the file is the shared
+// one, which is no install's. A fleet's memory nudge reads each row's `facts`: one for the shared
+// store however many installs read it, one per project install with its own.
 export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
   const out = []
   const d = fleet?.doctor
@@ -258,7 +286,7 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
         tone: 'warn',
         title: `${installLabel(i)} is behind its source`,
         detail: stale ? `${built} · ${plural(stale, 'file')} behind` : built,
-        where: i.host,
+        where: hostInfo(i.host).label,
         verb: 'Rebuild',
         act: 'rebuild',
         installs: [rebuildTarget(i)],
@@ -268,9 +296,9 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
     if (n) {
       out.push({
         id: `drift:${i.id}`,
-        tag: 'Drift',
+        tag: 'Local edits',
         tone: 'warn',
-        title: `${installLabel(i)}: ${plural(n, 'file')} edited by hand`,
+        title: `${installLabel(i)}: ${plural(n, 'local edit')}`,
         detail: `${i.drift.edited} edited, ${i.drift.added} added, ${i.drift.missing} missing`,
         where: 'installs/edits',
         verb: 'Review',
@@ -292,8 +320,42 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
       href: '#/skills',
     })
   }
+  // One row however many installs are near: the largest speaks for them. Its files are the
+  // machine's shared ones when `shared` says so, which are no install's to be named after.
+  const start = sessionStartFigure(fleet?.installs)
+  if (start?.near) {
+    const state = start.cut
+      ? 'were cut to fit the session-start budget'
+      : 'are near the session-start budget'
+    out.push({
+      id: 'session-start',
+      tag: 'Session',
+      tone: 'warn',
+      sugg: true,
+      title: start.install.shared
+        ? `Session files ${state}`
+        : `${installLabel(start.install)}: session files ${state}`,
+      detail: `${start.size} · without project context`,
+      where: 'personal',
+      verb: 'Trim',
+      href: '#/personal',
+    })
+  }
   const rows = (fleet?.installs || []).filter((x) => x.state === 'active')
-  for (const i of rows.filter((x) => x.facts === 0)) {
+  if (rows.some((x) => x.shared && x.facts === 0)) {
+    out.push({
+      id: 'memory:shared',
+      tag: 'Memory',
+      tone: '',
+      sugg: true,
+      title: 'Memory holds no facts',
+      detail: 'no durable lesson recorded yet',
+      where: 'personal/memory',
+      verb: 'Open',
+      href: '#/personal/memory',
+    })
+  }
+  for (const i of rows.filter((x) => !x.shared && x.facts === 0)) {
     out.push({
       id: `memory:${i.id}`,
       tag: 'Memory',
@@ -316,7 +378,10 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
   })
   const OWN = new Set(['profile', 'rules'])
   for (const r of older) {
-    const named = defaultLabel && OWN.has(r.id) ? { title: `${defaultLabel}: ${r.title}` } : {}
+    const named =
+      defaultLabel && OWN.has(r.id) && !rest[r.id]?.shared
+        ? { title: `${defaultLabel}: ${r.title}` }
+        : {}
     out.push({ ...r, ...named, sugg: true })
   }
   return out
@@ -333,7 +398,7 @@ export function gateRows(gates, laws) {
         ? parseRuleTitle(hit.title).name
         : r.rule === 'wiki'
           ? 'Wiki guard'
-          : GATE_SWITCH[addr]?.label || addr,
+          : gateFallback(addr),
     }
   })
 }

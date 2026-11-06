@@ -192,7 +192,7 @@ function RunsCard({ jobs, loading }) {
         {jobs && <span className="act-big">{total}</span>}
       </div>
       {loading ? (
-        <p className="dim act-sm">Reading the job log…</p>
+        <Loading label="Reading the job log…" />
       ) : !jobs ? (
         <p className="dim act-sm">The job log could not be read.</p>
       ) : (
@@ -240,7 +240,7 @@ function GatesCard({ rows, gates, loading }) {
         {gates && <span className="act-big">{total}</span>}
       </div>
       {loading ? (
-        <p className="dim act-sm">Reading the gate ledger…</p>
+        <Loading label="Reading the gate ledger…" />
       ) : rows.length ? (
         <ul className="gate-rows">
           {rows.slice(0, 6).map((r, j) => (
@@ -506,14 +506,25 @@ export default function Activity() {
           <h2 id="act-wait-h" className="act-lbl">
             Waiting on you
           </h2>
-          <span className="act-big act-wait">
-            {waiting ?? '—'} <span className="dim act-sm">sessions</span>
-          </span>
-          <p className="dim act-sm">
-            {enabled
-              ? 'A session that waits on an approval or on your answer counts here.'
-              : 'Turn tracking on to count the sessions that wait on you.'}
-          </p>
+          {!data && !error ? (
+            <Loading />
+          ) : !data ? (
+            <p className="dim act-sm">The sessions could not be read.</p>
+          ) : (
+            <>
+              {enabled ? (
+                <span className="act-big act-wait">
+                  {waiting}{' '}
+                  <span className="dim act-sm">{waiting === 1 ? 'session' : 'sessions'}</span>
+                </span>
+              ) : null}
+              <p className="dim act-sm">
+                {enabled
+                  ? 'A session that waits on an approval or on your answer counts here.'
+                  : 'Turn tracking on to count the sessions that wait on you.'}
+              </p>
+            </>
+          )}
         </section>
       </div>
 
@@ -563,7 +574,7 @@ export default function Activity() {
             <EmptyState title="Nothing waits on you" />
           ) : (
             <EmptyState title="No active sessions">
-              Run <code>opencode</code> and the sessions it spins up appear here.
+              Start an agent session and it appears here.
             </EmptyState>
           )
         ) : view.v === 'garden' ? (

@@ -1,96 +1,79 @@
 /**
- * `harness status` and `harness version` — `rituals/_harness_status.py`, and the parts of
- * four other modules those two reach.
+ * `harness status` and `harness version`, and the parts of four other modules those two
+ * reach.
  *
- * WHAT THE CLOSURE ACTUALLY IS, MEASURED. An `ast` walk over `rituals/` puts `status` at 527
- * LOC across 7 modules with 17 `build.*` names, which is what carried it through two phases
- * as "the cheap half at 159 LOC". Both numbers are wrong in opposite directions, and the
- * second one is the interesting one: a closure walk counts what the CALLEE computes, and
- * `_status_data` consumes a fraction of it.
+ * The panel consumes only a fraction of what the modules it calls compute:
  *
- *   * `_tui_inventory` returns every agent and skill with its one-line purpose, full
- *     rendered body, source path and lifecycle badge, and every law with its title, body
- *     and governance class. `_status_data` reads three `len()`s off it. So `SKILL_CLASS`,
- *     `LAW_CLASS`, `ENTITY_STATUSES`, `load_registry`, `entity_status` and
- *     `build._first_blockquote` — the taxonomy P7 owns, ~111 LOC — are in the walk and are
- *     not in this file. `inventoryCounts` is the counting half and says so.
- *   * `_installed_defaults` detects theme, emit, posture, mode and footprint. The panel
- *     prints theme and emit. `_posture_of_dir`/`_mode_of_dir` are therefore not part of the
- *     value it returns, and `status/posture-and-mode-in-the-carrier-change-nothing` is the
- *     cell that says the omission is invisible rather than assuming it. **P5f ported those
- *     two detectors and did NOT change this** — `rebuild-all` calls them per install root,
- *     not through `_installed_defaults`, so the cell above is still a positive control over
- *     an unchanged omission rather than a claim that has quietly gone stale.
- *   * `_footprint_of_dir` is reached from here, and it is the exception that names the rule:
- *     its return value is not consumed by the panel either, but an unrecognised marker makes
- *     it WARN on stderr, and stderr is a compared column. A closure pruned by what the
- *     caller consumes drops a function whose whole contribution is a side effect.
- *   * `_memory_facts` builds a record per fact through `_frontmatter`; the panel counts
- *     them. `memoryFactCount` is the count, and `frontmatter` stays where it is.
+ *   * `tuiInventory` returns every agent and skill with its purpose, rendered body, source
+ *     path and lifecycle badge, and every law with its title, body and governance class.
+ *     The panel reads three `length`s off it, and `inventoryCounts` is that counting half.
+ *   * `installedDefaults` detects theme, emit, posture, mode and footprint. The panel
+ *     prints theme and emit, and `status/posture-and-mode-in-the-carrier-change-nothing` is
+ *     the cell that says the omission is invisible rather than assuming it.
+ *   * `footprintOfDir` is reached from here though the panel does not consume its return
+ *     value: an unrecognised marker makes it WARN on stderr, and stderr is a compared
+ *     column. Pruning by what the caller consumes would drop a function whose whole
+ *     contribution is a side effect.
+ *   * `factCount` counts the memory facts; `frontmatter` stays where it is.
  *
- * WHERE THE DETECTORS WENT. `themeOfDir`, `footprintOfDir`, `installedDefaults`,
- * `manifestIsClaude` and the configured defaults were written here in P5d because `status`
- * was their only caller. `js/hosts/installs.mjs` owns them since P5f, when `diff` and `rebuild-all`
- * became the second and third. Nothing about them changed in the move — the 166-cell
- * acceptance matrix is what licensed attempting it, `status`'s own eleven cells among them.
+ * `themeOfDir`, `footprintOfDir`, `installedDefaults`, `manifestIsClaude` and the configured
+ * defaults live in `js/hosts/installs.mjs`, shared with `diff` and `rebuild-all`.
  *
- * WHAT NO CELL CAN REACH, and where it is gated instead. The former Python matrix's
- * status/version section carried the long form; the short form is that ROOT is not
- * redirectable across a process boundary, so three things here are unreachable from any
- * cell: `versionVerdict`'s "up to date" (needs a marker holding a fingerprint no cell can
- * know), `accentFor`'s cyan fallback (an unknown theme is refused upstream by
- * `effectiveTheme`), and the whole ANSI half of `statusLines` (`_color_enabled` is
- * `sys.stdout.isatty()`, and every harness captures stdout through a pipe). All three are
- * PURE FUNCTIONS of their arguments, so the former Python suite gated all three as a corpus
- * instead — a third answer to the colour question, which had been posed as a choice between
- * shipping it ungated and not shipping it. That corpus is gone: `tests/unit/lifecycle.test.mjs`
- * now calls `versionVerdict` and both halves of `statusLines` directly, and nothing pins
- * `accentFor`'s fallback.
+ * WHAT NO CELL CAN REACH, and where it is gated instead. ROOT is not redirectable across a
+ * process boundary, so three things here are unreachable from any cell: `versionVerdict`'s
+ * "in sync" (needs a marker holding a fingerprint no cell can know), `accentFor`'s cyan
+ * fallback (an unknown theme is refused upstream by `effectiveTheme`), and the whole ANSI
+ * half of `statusLines` (`colorEnabled` reads `process.stdout.isTTY`, and every harness
+ * captures stdout through a pipe). All three are PURE FUNCTIONS of their arguments:
+ * `tests/unit/lifecycle.test.mjs` calls `versionVerdict` and both halves of `statusLines`
+ * directly, and nothing pins `accentFor`'s fallback.
  *
- * `manifestIsClaude` was a FOURTH until wave 2 of the P0/P1 review: it is only reached for
- * a candidate with no known host, and `ROOT/"Harness"` was ordered ahead of the sandbox's
- * own. Both ROOT-relative bundle candidates are gone from this walk and from
- * `installedDefaults`, so the only no-known-host candidate left is `cwd/"Harness"`, which
- * is inside the sandbox. It is reachable now; no cell seeds a manifest without an emit
- * marker, so it is gated only by the direct calls in `tests/unit/claude.test.mjs`, and that is
- * a gap rather than a wall.
+ * `manifestIsClaude` is only reached for a candidate with no known host, and the only such
+ * candidate is `cwd/"Harness"`, which is inside the sandbox. No cell seeds a manifest
+ * without an emit marker, so it is gated only by the direct calls in
+ * `tests/unit/claude.test.mjs`, and that is a gap rather than a wall.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { GATE_SWITCHES, THEMES, ROOT, loadKits, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
+import { sourceGeneration } from '../build/render.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
   isHostGlobalDir, resolvePath, resolveMemoryDir, sovereignBypass, CLAUDE_STYLE, GATE_LEDGER, ADVISORY_VERB, HOSTS,
 } from '../hosts/hosts.mjs';
-// P5f moved the install DETECTORS out of this file — `diff` renders its expected copy in the
-// deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
-// three verbs now read them.
+// The install DETECTORS live in `js/hosts/installs.mjs` — `diff` renders its expected copy in
+// the deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
+// three verbs read them.
 import {
-  defaultTheme, hookShellProblems, installedDefaults, installTargets, installsReferencingShim,
-  legacyProcessCarrierOfDir, openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
+  claudeCfg, defaultTheme, hookShellProblems, installedDefaults, installState, installTargets,
+  installsReferencingShim, openclaudeDualHarnessRoots, themeOfDir, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { isDoctorNote } from './scan.mjs';
+import { pendingDrafts } from '../hosts/hooks-context.mjs';
+import { factCount } from '../hosts/memory-files.mjs';
+import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
+import { readDefaultInstall, sharedPaths } from '../lib/machine-dir.mjs';
+import { normcase } from '../lib/paths.mjs';
+import { renamedFilesIn } from '../build/stubs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
 // ---- version ---------------------------------------------------------------------------
 
-/** `_harness_status._version_verdict`. */
 export function versionVerdict(installed, current) {
   if (installed === null || installed === undefined) {
     return 'no Geneseed install detected to compare';
   }
-  if (installed === current) return 'up to date with this source';
+  if (installed === current) return 'in sync with this source';
   return 'installed build differs from the current source — run '
     + '`./geneseed update` (or rebuild) to apply it';
 }
 
-/** `_harness_status.cmd_version`. */
 export function cmdVersion(args) {
   const cfg = makeCfg();
   const current = sourceFingerprint(cfg);
@@ -100,7 +83,7 @@ export function cmdVersion(args) {
   let installed = readVersion(target);
   if (installed === null) {
     // A claude/bob/openclaude-only machine must not report "no install detected". The bundle
-    // candidates are cwd-relative only — see the Python for why `ROOT / "Harness"` left.
+    // candidates are cwd-relative only: a ROOT-relative one would sit outside the sandbox.
     for (const base of [claudeConfigDir(), bobConfigDir(), openclaudeConfigDir(),
       path.join(process.cwd(), 'Harness'), process.cwd()]) {
       const v = readVersion(base);
@@ -117,21 +100,25 @@ export function cmdVersion(args) {
 // ---- what the panel counts ---------------------------------------------------------------
 
 /**
- * `_harness_tui._tui_inventory`, reduced to the three counts `_status_data` reads off it.
+ * `tuiInventory`, reduced to the three counts `statusData` reads off it.
  *
- * THREE `length`s OFF THE REAL WALK SINCE P6c, and the change is the point. P5d shipped a
- * counting-only twin — the bodies, purposes, source paths and taxonomy classes were P7's,
- * and porting them to produce three integers would have been absurd — with a docblock
- * warning that the two must not become two classifiers. `api_catalog` consumes exactly the
- * fields the count threw away, so P6c is the phase that would have made them two. It did
- * not: `tuiInventory` in `js/inspect/inventory.mjs` is the one walk, this is three `length`s off
- * it, and the eleven `status` cells and the catalog cells now gate the same classifier
+ * THREE `length`s OFF THE REAL WALK, so there are not two classifiers: the catalog consumes
+ * exactly the fields the count throws away. `tuiInventory` in `js/inspect/inventory.mjs` is
+ * the one walk, and the eleven `status` cells and the catalog cells gate the same classifier
  * from opposite ends.
  */
-export function inventoryCounts(themeName, doctrines = null) {
+export function inventoryCounts(themeName, doctrines = null, cfg = makeCfg()) {
+  // Counted once per source generation (render.mjs says how the stamp sees an edit), because the
+  // console's `/api/setup` asks after every page load. The key is every other input of the count;
+  // `harness.config.json` is rendered from and sits outside the stamp.
+  const generation = sourceGeneration(cfg);
+  generation.counts ??= new Map();
+  const key = JSON.stringify([themeName, doctrines, readMaybe(cfg.config)]);
+  const known = generation.counts.get(key);
+  if (known) return known;
   const inv = tuiInventory(themeName, doctrines);
   const on = inv.doctrines.filter((p) => p.active);
-  return {
+  const counts = {
     agents: inv.agents.length,
     skills: inv.skills.length,
     laws: inv.laws.length,
@@ -146,28 +133,23 @@ export function inventoryCounts(themeName, doctrines = null) {
     packsTotal: inv.doctrines.length,
     doctrineRules: on.reduce((n, p) => n + p.rules.length, 0),
   };
+  generation.counts.set(key, counts);
+  return counts;
 }
 
 /**
- * `_harness_tui_views._memory_facts`, reduced to its length.
- *
- * A path `glob("*.md")` matches but `read_text` cannot read — a DIRECTORY called `notes.md`
- * is the reachable case — is skipped, not counted and not fatal.
+ * The themed `anamnesis/` stores an older install left behind: a non-empty one in a host config
+ * dir, `./Harness` or the machine dir. No resolver reads one any more (M1), so its facts are
+ * invisible until copied into `memory/`. Never looks at cwd itself: Terra's `Anamnesis/` vault
+ * is not a store.
  */
-export function memoryFactCount(mdir) {
-  let names;
-  try { names = readdirSync(mdir); } catch { return 0; }
-  let n = 0;
-  for (const name of names.filter((x) => x.endsWith('.md')).sort()) {
-    const stem = name.slice(0, -3);
-    if (['memory', 'readme'].includes(stem.toLowerCase())) continue;
-    if (readMaybe(path.join(mdir, name)) === null) continue;
-    n += 1;
-  }
-  return n;
+export function anamnesisLeftovers(dirs) {
+  return dirs.map((d) => path.join(d, 'anamnesis')).filter((p) => {
+    try { return readdirSync(p).length > 0; } catch { return false; }
+  });
 }
 
-/** `_harness_tui_draw._accent_for` — the ACCENT a theme declares, default cyan. */
+/** The ACCENT a theme declares, default cyan. */
 export function accentFor(theme) {
   const doc = readJsonMaybe(path.join(THEMES, `${theme}.json`));
   if (!doc || typeof doc !== 'object') return 'cyan';
@@ -238,7 +220,6 @@ export function gateSummary(cfgDirs, platform = process.platform) {
   };
 }
 
-/** `_harness_status._status_data`. */
 /**
  * Spec R6: the member files of every kit NOT on in this install that are still on disk — the ones
  * `pruneOwned` kept because their owner edited them — as `{ kit: [rel, ...] }`, or `null` when
@@ -273,36 +254,73 @@ export function keptKitFiles(host, scope, root, active) {
   return Object.keys(kept).length ? kept : null;
 }
 
+/**
+ * The `[host, scope, root]` of `targets` the user chose as the default, or null: no pick, or a pick
+ * that no longer names an ACTIVE install (removed, disabled, or not seen from here). A stale pick
+ * stays on disk and works again if that install comes back.
+ *
+ * Here and not in `js/web/state.mjs`, whose `defaultView` is the other reader: `status` may not
+ * load the web tree. `targets` is scanned only when a pick exists.
+ */
+export function pickedInstall(targets = null) {
+  const want = readDefaultInstall();
+  if (want === null) return null;
+  const folded = normcase(resolvePath(want.path));
+  return (targets ?? installTargets()).find(([host, scope, root]) => {
+    try {
+      return host === want.host && normcase(resolvePath(root)) === folded
+        && installState(root, host, scope) === 'active';
+    } catch { return false; }
+  }) ?? null;
+}
+
+/** The emit name of a `[host, scope]`, the inverse of `EMIT_HOST_SCOPE`. */
+export const emitOf = (host, scope) => (scope === 'global' ? `${host}-global` : host);
+
+/** A picked install's own voice. OpenClaude keeps a project's sigil in its data dir alone. */
+function pickedTheme([host, scope, root]) {
+  return themeOfDir(root, host)
+    || (CLAUDE_STYLE.includes(host) ? themeOfDir(claudeCfg(root, scope, host), host) : null);
+}
+
 export function statusData() {
   const inst = installedDefaults();
-  const theme = inst.theme || defaultTheme();
+  // The `install` and `theme` lines name the install the console defaults to, when one was chosen.
+  // Nothing else does: `agent_md` below is a health row, and a preference must not hide it.
+  const picked = pickedInstall();
+  const emit = picked ? emitOf(picked[0], picked[1]) : inst.emit;
+  const theme = (picked && pickedTheme(picked)) || inst.theme || defaultTheme();
   const mdir = resolveMemoryDir(null);
   // `inst.doctrines` is what the machine's carriers say — `null` when none of them does, which
   // `tuiInventory` reads as every pack, the same resolution `doctrinesForBuild` gives unknown.
   // This is a DISPLAY read: nothing here decides what a build emits.
-  const inv = inventoryCounts(theme, inst.doctrines);
+  const cfg = makeCfg();
+  const inv = inventoryCounts(theme, inst.doctrines, cfg);
   let cfgDir = null;
   try { cfgDir = opencodeConfigDir(); } catch { cfgDir = null; }
-  const sourceFp = sourceFingerprint(makeCfg());
+  const sourceFp = sourceFingerprint(cfg);
   let installedFp = null;
   let verTarget = null;
   const otherCfg = [];
   for (const fn of [claudeConfigDir, bobConfigDir, openclaudeConfigDir]) {
     try { otherCfg.push(fn()); } catch { /* a missing host dir must not sink status */ }
   }
+  const hostDirs = [...(cfgDir ? [cfgDir] : []), ...otherCfg, path.join(process.cwd(), 'Harness')];
   // Same walk as `cmdVersion`'s fallback, and cwd-relative for the same reason.
-  const candidates = [...(cfgDir ? [cfgDir] : []), ...otherCfg,
-    path.join(process.cwd(), 'Harness'), process.cwd()];
-  for (const base of candidates) {
+  for (const base of [...hostDirs, process.cwd()]) {
     const v = readVersion(base);
     if (v) { installedFp = v; verTarget = base; break; }
   }
+  const scanned = [...hostDirs];
+  try { scanned.push(sharedPaths().root); } catch { /* no home dir: no tier to scan */ }
+  const leftover = anamnesisLeftovers(scanned);
+  const renamed = renamedFilesIn(scanned);
   const agentMd = (inst.emit === 'opencode-global' && cfgDir)
     ? path.join(cfgDir, 'AGENT.md') : null;
   return {
     theme,
     accent: accentFor(theme),
-    emit: inst.emit || '—',
+    emit: emit || '—',
     agents: inv.agents,
     skills: inv.skills,
     laws: inv.laws,
@@ -316,7 +334,9 @@ export function statusData() {
     packs_total: inv.packsTotal,
     doctrine_rules: inv.doctrineRules,
     memory_dir: mdir ? String(mdir) : null,
-    facts: mdir ? memoryFactCount(mdir) : 0,
+    facts: mdir ? factCount(mdir) ?? 0 : 0,
+    ...(leftover.length ? { anamnesis_leftover: leftover } : {}),
+    ...(renamed.length ? { renamed_files: renamed } : {}),
     source_fp: sourceFp,
     installed_fp: installedFp,
     version_target: verTarget ? String(verTarget) : null,
@@ -324,15 +344,13 @@ export function statusData() {
     agent_md: agentMd ? String(agentMd) : null,
     agent_md_present: Boolean(agentMd && existsSync(agentMd)),
     gates: gateSummary([...(cfgDir ? [cfgDir] : []), ...otherCfg]),
+    drafts_pending: pendingDrafts(),
+    store_report: lastStoreReport(),
     opencode_shadow: opencodeShadowedInstall(),
     openclaude_dual_harness: openclaudeDualHarnessRoots(),
     // EVERY install, not just the one `installedDefaults` settles on — and read through the
     // same `installProfile` `rebuild-all` uses, so the settings shown are the ones a rebuild
-    // keeps. `rebuild` is the pasteable command an agent edits one flag of — EXCEPT for a
-    // pre-comms carrier, where `p.argv` already carries the under-specified read-back
-    // (`doctrinesOfDir`/`excludedRulesOfDir` no longer migrate it) and pasting it would cause
-    // the exact permanent loss `rebuild-all`/`migrate`/the web console now refuse to cause, with
-    // no guard left to stop an agent or owner from running it by hand. A broken install must not
+    // keeps. `rebuild` is the pasteable command an agent edits one flag of. A broken install must not
     // sink the panel, so it is reported rather than thrown. `absent` slots are filtered out
     // here: an absent slot has no settings, so a row of defaults for it reads as an install that
     // does not exist — noise in the panel and misinformation in `--json`.
@@ -341,9 +359,7 @@ export function statusData() {
         const p = installProfile(host, scope, root);
         // Only when something is kept, so `--json` without kits stays the bytes it was.
         const kept = keptKitFiles(host, scope, root, p.kits);
-        const rebuild = legacyProcessCarrierOfDir(root, host)
-          ? "geneseed setup  # pre-comms carrier (names 'process 8') — run setup for this install, not a rebuild"
-          : rebuildCommand(p.argv);
+        const rebuild = rebuildCommand(p.argv);
         return { ...p, ...(kept ? { keptKitFiles: kept } : {}), rebuild };
       } catch (e) {
         return { host, scope, root, state: 'unreadable', error: String(e?.message ?? e) };
@@ -352,17 +368,16 @@ export function statusData() {
   };
 }
 
-/** `_harness_status._ANSI_CODES`. */
 const ANSI_CODES = {
   red: '31', green: '32', yellow: '33', blue: '34', magenta: '35', cyan: '36', white: '37',
 };
 
 /**
- * `_harness_status._color_enabled`.
+ * Whether to colour the panel.
  *
  * `process.stdout.isTTY` is `undefined` rather than `false` off a terminal, so the Boolean
- * is not optional. The three terms are Python's, in Python's order — and because `and`
- * short-circuits on the first, NO_COLOR and TERM are never read through a pipe, which is
+ * is not optional. Because `&&` short-circuits on the first term, NO_COLOR and TERM are
+ * never read through a pipe, which is
  * why `golden.cell_env` clearing them is insurance rather than a fix.
  */
 function colorEnabled() {
@@ -371,12 +386,11 @@ function colorEnabled() {
 }
 
 /**
- * `_harness_status._status_lines` — pure, returns the lines.
+ * Pure, returns the lines.
  *
- * `_TUI_ASCII` is read from the environment at CALL time here where Python reads it at
- * import time (`_harness_tui_draw:12`). Same value for a process that runs one verb and
- * exits; spelled this way because a module-level constant in a file the corpus gate imports
- * would freeze at whatever the test runner's environment was.
+ * `_TUI_ASCII` is read from the environment at CALL time, not import time. Same value for a
+ * process that runs one verb and exits; spelled this way because a module-level constant in
+ * a file the tests import would freeze at whatever the test runner's environment was.
  */
 export function statusLines(d, color = false) {
   const asc = Boolean(process.env.GENESEED_TUI_ASCII);
@@ -387,7 +401,7 @@ export function statusLines(d, color = false) {
   const badge = asc ? '*' : '◆';
   const emdash = asc ? '-' : '—';
 
-  const up = d.version_verdict.includes('up to date');
+  const up = d.version_verdict.includes('in sync');
   const noneInst = d.installed_fp === null || d.installed_fp === undefined;
   const mark = up ? (asc ? 'OK' : '✓') : (noneInst ? (asc ? '-' : '·') : '!');
   const vcode = up ? '32' : (noneInst ? '2' : '33');
@@ -398,14 +412,14 @@ export function statusLines(d, color = false) {
     ['components', `${d.agents} agents ${DOT} ${d.skills} skills ${DOT} ${d.laws} laws`],
     ['memory', `${d.memory_dir || '(not found)'}  `
       + `(${d.facts} fact${d.facts === 1 ? '' : 's'})`],
+    ...(d.renamed_files ? d.renamed_files.map((r) => ['renamed', `${r.file}  ${DOT}  old name still read: it is ${r.now} now; a rebuild renames it`]) : []),
+    ...(d.anamnesis_leftover ? [['leftover', `${d.anamnesis_leftover.join(', ')}  ${DOT}  no longer read: copy its facts into memory/`]] : []),
     ['version', `${d.installed_fp || '(none)'}  ${DOT}  source ${d.source_fp}`],
   ];
-  // ⚠ A ROW, NOT A WIDER `components` LINE. When this landed, `statusLines` had 30 recorded
-  // cases per platform in the former Python suite's corpus, every one holding the box's exact
-  // bytes — including `17 agents · 47 skills · 37 laws` — and no recorder left to re-bless them.
-  // Touching `components` would have moved all 30; adding a row would too, since the box width
-  // is measured over `rows`. So the row is CONDITIONAL on a key those arguments did not carry,
-  // exactly as `agent_md` below already is. The corpus is gone; a caller without the key still
+  // ⚠ A ROW, NOT A WIDER `components` LINE. Touching `components` would move every box's
+  // exact bytes; adding a row would too, since the box width
+  // is measured over `rows`. So the row is CONDITIONAL on a key some arguments do not carry,
+  // exactly as `agent_md` below already is. A caller without the key still
   // gets the box it got before.
   //
   // It carries the two tiers `components` cannot: `components` counts the invariants as
@@ -435,6 +449,13 @@ export function statusLines(d, color = false) {
     rows.push(['gates', `${armed}  ${DOT}  ${g.total} ask${g.total === 1 ? '' : 's'}`
       + (byRule ? ` (${byRule})` : '')]);
   }
+  if (d.drafts_pending) {
+    rows.push(['drafts', `${d.drafts_pending} in user-rules.draft.md wait${d.drafts_pending === 1 ? 's' : ''} for your decision`]);
+  }
+  if (d.store_report) {
+    rows.push(['changes', `${d.store_report.files.length} rule or memory file(s) changed outside a session's approved writes, `
+      + `last on ${String(d.store_report.at).slice(0, 10)}`]);
+  }
   // Conditional: null on every machine that has not set `OPENCODE_CONFIG_DIR` over an old install.
   if (d.opencode_shadow) {
     rows.push(['opencode', `ALSO LOADED: a second Geneseed install in ${d.opencode_shadow} (OpenCode `
@@ -460,6 +481,7 @@ export function statusLines(d, color = false) {
     rows.push([`${p.host}:${p.scope}`, [p.state, p.theme, p.footprint, `${p.posture}/${p.mode}/${p.trust}`,
       packs, excl, ...(p.excludeSkills?.length ? [`skills off: ${p.excludeSkills.join(',')}`] : []),
       ...(p.kits?.length ? [`kits: ${p.kits.join(',')}`] : []),
+      ...(p.sharedTier ? ['shared tier: on'] : []),
       // Each elided when armed. The law's text still binds; only its tool-boundary gate is off.
       ...GATE_SWITCHES.filter((g) => p[g.key] === false)
         .map((g) => `${g.marker.toLowerCase()}: off${g.law ? ` (Law ${g.law} text still binds)` : ''}`)]
@@ -492,7 +514,7 @@ export function statusLines(d, color = false) {
 }
 
 /**
- * `_harness_status.cmd_status` — and `--json`, the machine face of the same payload. An agent
+ * And `--json`, the machine face of the same payload. An agent
  * reading the panel had to scrape box-drawing; the object below is what the panel is drawn
  * FROM, so the two cannot disagree.
  */

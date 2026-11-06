@@ -45,9 +45,8 @@ const LEAN_FULL_TEXT_DIRS = ['laws', 'ontology', 'doctrines'];
 /**
  * `_build_core.CAPABILITY_LINK_RE`.
  *
- * NOT OVERRIDABLE. Python's `cfg.capabilityLinkRe` was the driver's seam for tests that
- * monkeypatch `_build_core.CAPABILITY_LINK_RE`; `bin/build-driver.mjs` deliberately never
- * sends one (see its docblock), so the override branch that used to sit in
+ * NOT OVERRIDABLE. A `cfg.capabilityLinkRe` seam once let tests swap the pattern;
+ * `bin/build-driver.mjs` deliberately never sends one (see its docblock), so the override branch that used to sit in
  * `stripCapabilityLinks` never took its left-hand side and was deleted as dead code in the
  * over-engineering cleanup. `tests/unit/harness.test.mjs`'s planted-fault test drives this
  * exact constant by rewriting the module's source text instead, which is what "no injection
@@ -60,7 +59,7 @@ const CAPABILITY_LINK_RE =
 export const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
 
 /**
- * `Path.rglob("*")` restricted to files, skipping `__pycache__` as Python's callers do.
+ * Every file under a directory, recursively, skipping `__pycache__`.
  *
  * `recursive: true, withFileTypes: true` (Node >= 20.1, `parentPath` >= 21.4 — this repo
  * requires >= 22.7) replaces a hand-rolled walk; the order it yields is NOT the walk's
@@ -94,7 +93,7 @@ export function stripCapabilityLinks(text) {
  * ever touching a store that already holds something.
  *
  * The three outcomes are the returned status string, which the emit prints, so they are
- * compared through stdout as well as through the tree. Python's `theme` parameter is
+ * compared through stdout as well as through the tree. A `theme` parameter is
  * dropped for both: the store dir is ALWAYS the classic English name, never themed (the
  * OpenCode config dir uses fixed names), so the argument was never read.
  *

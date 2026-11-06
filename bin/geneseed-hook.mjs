@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * The hook entry point — a Node twin of `rituals/harness.py` for the verbs the emitted
- * `settings.json` actually invokes (four from the reference, plus `tool-gate` for Bob and
+ * The hook entry point, for the verbs the emitted
+ * `settings.json` actually invokes (four hook verbs, plus `tool-gate` for Bob and
  * `activity` for the web console's Activity view).
  *
  * WHY IT IS A SECOND BINARY AND NOT A SUBCOMMAND OF `bin/build-driver.mjs`. Three reasons,
@@ -13,8 +13,8 @@
  *     it is a real implementation rather than a passthrough to `build.py`. `learn` MUST
  *     spawn — the whole verb is "hand these notes to whatever `$GENESEED_LLM` names".
  *     Putting it in that file means either breaking the gate or weakening it.
- *   * The hook shim bakes ONE entry and forwards `%*` to it. `harness.py` is that entry on
- *     the Python side; a Node twin needs its own, invoked as `<node> <this> context
+ *   * The hook shim bakes ONE entry and forwards `%*` to it. this file is that entry,
+ *     invoked as `<node> <this> context
  *     --root "<cfg>"`.
  *   * `bin/build-driver.mjs` parses generator FLAGS (`--emit`, `--theme`, `--footprint`), and
  *     'the driver classifies every emit' (`tests/unit/node_driver.test.mjs`) asserts a
@@ -36,7 +36,7 @@
  * written.
  *
  * The verb set is deliberately SMALL and refuses the rest by name. `harness.py` has 24
- * subparsers (25 invocable names — `update` is an alias of `upgrade`); a hook entry that
+ * subparsers (25 invocable names — `update` is an alias of `upgrade`; `sync-self`, one of them, was removed in 5.0.0); a hook entry that
  * silently accepted `doctor` and did nothing would be the worst available failure, because
  * every Geneseed hook returns 0 and signals through stdout — so "did nothing" and "worked"
  * are the same observation. That refusal exits **1**, never 2: on Claude Code and Bob, exit 2
@@ -109,6 +109,21 @@ const VERBS = {
 };
 
 /**
+ * The change report's baseline (js/hosts/store-watch.mjs): `context` only, so once per session, after
+ * it has printed. Never a gate verb, whose stdout is its verdict and which runs on every tool call.
+ * Prints nothing, and a failure costs the report, never the session.
+ */
+async function baselineStores(verb, args) {
+  try {
+    if (verb !== 'context' || !args.root || process.env.GENESEED_LEARN_CHILD || isatty(0)) return;
+    const raw = readStdin();
+    if (!raw.includes('session_id')) return;
+    const { writeBaseline } = await import('../js/hosts/store-watch.mjs');
+    writeBaseline(args.root, JSON.parse(raw).session_id);
+  } catch { /* see above */ }
+}
+
+/**
  * Records the payload the verb just answered into `<root>/activity/` (js/hosts/activity.mjs),
  * AFTER the verb has decided and printed, so a verdict never waits on it and never sees it.
  * Here rather than inside each verb because Claude routes its gated tools through THREE verbs
@@ -176,8 +191,7 @@ function parse(spec, argv) {
 }
 
 async function main(argv) {
-  // `geneseed status | head` closes stdout early. Python exits quietly through
-  // BrokenPipeError; the Node equivalent is an EPIPE that would otherwise be an unhandled
+  // `geneseed status | head` closes stdout early. That is an EPIPE that would otherwise be an unhandled
   // 'error' event and a stack trace on a hook path.
   process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); });
 
@@ -207,7 +221,7 @@ async function main(argv) {
   }
   // `<verb> --help`, for the same reason and by the same owner as `bin/geneseed-cli.mjs`:
   // argparse holds `-h` at the parser, so this entry's `parse` calls it an unrecognized
-  // argument. The four hook verbs are four of the reference's 26 and had the same gap.
+  // argument. The four hook verbs have the same gap.
   // `js/ui/cli.mjs` is imported HERE, not at the top: a static import cost every tool call
   // of every session a module parse (~3 ms of an ~12 ms controllable budget) for a branch
   // only a human at a terminal ever takes.
@@ -236,6 +250,7 @@ async function main(argv) {
   }
   const rc = (await spec.load())[spec.fn](parsed.args);
   await trackActivity(verb, parsed.args);
+  await baselineStores(verb, parsed.args);
   return rc;
 }
 

@@ -34,7 +34,7 @@ import { emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
-  cmdContext, SEED_SHA256, SESSION_FILES, sessionFiles,
+  cmdContext, discoverContext, SEED_SHA256, SESSION_FILES, sessionFiles, sessionStartSize,
   CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge,
 } from '../../js/hosts/hooks-context.mjs';
 import {
@@ -42,6 +42,7 @@ import {
   openclaudeConfigDir, globalHookStandingDown,
 } from '../../js/hosts/hosts.mjs';
 import { BOB_RULES_STUB, SESSION_SEEDS } from '../../js/build/stubs.mjs';
+import { WIKI_NAMES, sharedPaths } from '../../js/lib/machine-dir.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
@@ -194,8 +195,8 @@ test('a skill is byte-identical across the Claude and OpenCode global emits', ()
 });
 
 test('a user-only skill renders disable-model-invocation; an ordinary one does not', () => {
-  // The marker is `<!-- invocation: user -->` in the source spec. `quiz` carries it — a
-  // teaching drill a human runs on themselves, which the model must never self-trigger —
+  // The marker is `<!-- invocation: user -->` in the source spec. `teach` carries it, and
+  // so does `quiz`, its alias — a drill a human runs on themselves, never self-triggered —
   // and `develop` does not. Asserted on the emitted SKILL.md, the artifact the host reads.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
@@ -402,7 +403,7 @@ test('a folder emit round-trips into the repo, with machine paths kept out of th
 // and then the whole uninstall. The mechanism being right is not the same as the emit and the
 // teardown both USING it, and the second half is where the sticky-`whole` bug below lived.
 
-/** The reference's `setUp`: a `.claude` a user already has content in, colliding by name. */
+/** Fixture: a `.claude` a user already has content in, colliding by name. */
 function seededUserCfg(d) {
   const cfg = path.join(d, 'dotclaude');
   fs.mkdirSync(path.join(cfg, 'skills', 'impeccable'), { recursive: true });
@@ -529,7 +530,7 @@ test('a CLAUDE.md Geneseed created and nobody edited is removed entirely', () =>
 // install a user cannot use again without hand-editing their own config directory, which is why
 // the state machine is asserted at each step rather than only at the ends.
 
-/** The reference's `setUp`: a user's own CLAUDE.md, then a real global emit over it. */
+/** Fixture: a user's own CLAUDE.md, then a real global emit over it. */
 function activatedCfg(d, host = 'claude', name = 'dotclaude') {
   const cfg = path.join(d, name);
   fs.mkdirSync(cfg, { recursive: true });
@@ -1185,58 +1186,6 @@ ${err}`);
       assert.ok(err.includes(notice), `migrate replayed the old name silently:
 ${err}`);
       assert.ok(!out.includes(notice), 'the notice went to stdout');
-    } finally {
-      for (const [v, val] of Object.entries(savedEnv)) {
-        if (val === undefined) delete process.env[v]; else process.env[v] = val;
-      }
-    }
-  });
-});
-
-// FIX ROUND 3 (doc-1, 4.0.0): `migrate`'s own re-emit loop carries the identical risk
-// `rebuild-all` was found to have — `installProfile` reads a pre-comms carrier exactly as
-// written (no `comms`, unaddressed `process 7`/`process 8`) and feeding that into `driverMain`
-// would write it back PERMANENTLY. `migrate` must SKIP that one row (not roll back the whole
-// machine over it — see the comment at the loop in `js/maintain/migrate.mjs`) and say so.
-test('migrate skips a pre-comms install rather than re-emitting it, and says so', () => {
-  withDir((d) => {
-    const savedEnv = {};
-    for (const v of ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR', 'GENESEED_HOME']) {
-      savedEnv[v] = process.env[v];
-    }
-    // A fresh shim home, same reason as the test above: a stamped machine has nothing to
-    // migrate, and `needed` must be true for this row to ever reach the loop.
-    process.env.GENESEED_HOME = path.join(d, 'gs-home');
-    process.env.OPENCODE_CONFIG_DIR = path.join(d, 'oc-cfg');
-    process.env.BOB_CONFIG_DIR = path.join(d, 'bob-none');
-    process.env.OPENCLAUDE_CONFIG_DIR = path.join(d, 'openclaude-none');
-    try {
-      cliGlobalEmit('opencode-global');
-      const ocCfg = opencodeConfigDir();
-      const carrier = path.join(ocCfg, 'AGENT.md');
-      const original = fs.readFileSync(carrier, 'utf8');
-      assert.ok(original.includes('Active packs: craft, rigor, ops, process, comms'),
-        'sanity: a fresh opencode-global emit carries the full default pack line');
-      // Simulate a pre-comms install: no `comms` in the marker, carrier text still says
-      // `process 8` (its old eighth rule's heading) — the same signature the rebuild-all test
-      // uses.
-      const legacy = `${original.replace('Active packs: craft, rigor, ops, process, comms',
-        'Active packs: craft, rigor, ops, process')}\n### Doctrine process 8 — One Writer Per File\n`;
-      fs.writeFileSync(carrier, legacy);
-      const before = fs.readFileSync(carrier);
-
-      const [rc, out, err] = capturedOut(() => cmdMigrate({}));
-
-      assert.equal(rc, 0, `migrate failed:\n${out}\n${err}`);
-      assert.match(out, /SKIPPED/);
-      assert.match(out, /process 8/);
-      assert.match(out, /geneseed setup/);
-      assert.doesNotMatch(out, /rolled back/,
-        'a legacy row must be SKIPPED, never trigger the all-or-nothing rollback');
-
-      const after = fs.readFileSync(carrier);
-      assert.deepEqual(after, before,
-        'migrate re-emitted a pre-comms carrier instead of skipping it — permanent data loss');
     } finally {
       for (const [v, val] of Object.entries(savedEnv)) {
         if (val === undefined) delete process.env[v]; else process.env[v] = val;
@@ -1931,21 +1880,22 @@ test('the session files reach the hook from the harness dir, and an untouched se
 });
 
 // The hook's wiki read across the `wiki.jsonc` -> `geneseed-wiki.jsonc` rename. Each row: the
-// files in the harness dir -> the text the hook injects for the wiki (null = nothing injected).
+// files in the harness dir -> the wiki the hook renders (null = nothing injected).
 // The rule: the new name wins; the old name is read only when the new one is absent (an install
 // not yet re-emitted); a pristine OLD seed is still recognised as a seed and says nothing.
 const LEGACY_SEED_TEXT = SESSION_SEEDS['geneseed-wiki.jsonc']
   .replace('// geneseed-wiki.jsonc — declare', '// Geneseed wiki.jsonc — declare');
+const manifestOf = (name, root) => JSON.stringify({ wikis: [{ name, path: root }] });
 const HOOK_WIKI_READ = [
   // Only the old name: it is read, and reported under the current name.
-  { name: 'old name only', files: { 'wiki.jsonc': '{"wikis": ["old"]}' }, want: '{"wikis": ["old"]}' },
+  { name: 'old name only', files: (d) => ({ 'wiki.jsonc': manifestOf('Old', d) }), want: 'Old' },
   // Both names: the new one wins and the leftover is not injected a second time.
-  { name: 'both names', files: { 'wiki.jsonc': '{"wikis": ["old"]}', 'geneseed-wiki.jsonc': '{"wikis": ["new"]}' },
-    want: '{"wikis": ["new"]}' },
+  { name: 'both names', files: (d) => ({ 'wiki.jsonc': manifestOf('Old', d), 'geneseed-wiki.jsonc': manifestOf('New', d) }),
+    want: 'New' },
   // A pre-rename seed nobody edited, renamed byte for byte by the build: still a seed, not news.
-  { name: 'renamed untouched old seed', files: { 'geneseed-wiki.jsonc': LEGACY_SEED_TEXT }, want: null },
+  { name: 'renamed untouched old seed', files: () => ({ 'geneseed-wiki.jsonc': LEGACY_SEED_TEXT }), want: null },
   // The same untouched old seed not yet renamed: equally silent.
-  { name: 'unrenamed untouched old seed', files: { 'wiki.jsonc': LEGACY_SEED_TEXT }, want: null },
+  { name: 'unrenamed untouched old seed', files: () => ({ 'wiki.jsonc': LEGACY_SEED_TEXT }), want: null },
 ];
 
 for (const row of HOOK_WIKI_READ) {
@@ -1953,14 +1903,434 @@ for (const row of HOOK_WIKI_READ) {
     const prev = process.env.GENESEED_WIKI;
     delete process.env.GENESEED_WIKI;
     try {
-      for (const [f, t] of Object.entries(row.files)) fs.writeFileSync(path.join(d, f), t);
+      for (const [f, t] of Object.entries(row.files(d))) fs.writeFileSync(path.join(d, f), t);
       const wiki = sessionFiles(d).filter((f) => f.rel === 'geneseed-wiki.jsonc');
-      assert.deepEqual(wiki.map((f) => f.text), row.want === null ? [] : [row.want]);
+      assert.deepEqual(wiki.map((f) => f.text), row.want === null ? [] : [`--- wiki: ${row.want} (root: ${d}) ---`]);
     } finally {
       if (prev !== undefined) process.env.GENESEED_WIKI = prev;
     }
   }));
 }
+
+// B5: the OpenCode plugin and guard honoured `wiki.json`, the oldest name, and the hook did not, so
+// an install that missed the rename kept its wiki on one family only. The hook reads the same names.
+test('the context hook reads a manifest left under the oldest name, wiki.json', () => withDir((d) => {
+  const prev = process.env.GENESEED_WIKI;
+  delete process.env.GENESEED_WIKI;
+  try {
+    fs.writeFileSync(path.join(d, 'wiki.json'), JSON.stringify({ wikis: [{ name: 'Old', path: d }] }));
+    assert.deepEqual(sessionFiles(d).filter((f) => f.rel === 'geneseed-wiki.jsonc')
+      .map((f) => path.basename(f.abs)), ['wiki.json']);
+  } finally {
+    if (prev !== undefined) process.env.GENESEED_WIKI = prev;
+  }
+}));
+
+/**
+ * A global install at `cfg` and an empty machine tier: `XDG_CONFIG_HOME` moved into the sandbox, and
+ * `.geneseed-emit` making `cfg` a global the way a real emit does. Runs `cmdContext` from `repo`.
+ */
+function withTier(fn) {
+  return withDir((d) => {
+    const prev = ['XDG_CONFIG_HOME', 'GENESEED_ROOT', 'GENESEED_WIKI'].map((v) => [v, process.env[v]]);
+    const cfg = path.join(d, 'cfg');
+    const repo = path.join(d, 'repo');
+    for (const dir of [cfg, repo]) fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+    process.env.XDG_CONFIG_HOME = path.join(d, 'xdg');
+    process.env.GENESEED_ROOT = repo;
+    delete process.env.GENESEED_WIKI;
+    const put = (file, text) => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+    };
+    const context = () => {
+      const [rc, out] = capturedOut(() => cmdContext({ root: cfg }));
+      assert.equal(rc, 0);
+      return out.replace(/\r\n/g, '\n');
+    };
+    try {
+      return fn({ d, cfg, repo, tier: sharedPaths(), put, context });
+    } finally {
+      for (const [v, val] of prev) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+    }
+  });
+}
+
+// M2: the hook renders the manifest like the OpenCode plugin instead of pasting its JSONC. Written
+// out, so the header lines, the file-over-folder override, the exclude and the dot-folder rule all
+// show. The lazy listing is the hook's own, relative to the printed root: it folds, for its budget.
+test('the context hook renders the wiki: header lines, eager notes, a lazy listing', () => withTier((t) => {
+  const vault = path.join(t.d, 'Brain');
+  t.put(path.join(vault, 'MAP.md'), '# Map\nthe index\n');
+  t.put(path.join(vault, 'Areas', 'one.md'), '# One\n');
+  t.put(path.join(vault, 'Areas', 'two.md'), '# Two\n');
+  t.put(path.join(vault, 'Journal', 'secret.md'), '# Private\n');
+  t.put(path.join(vault, '.obsidian', 'skip.md'), '# Config\n');
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), `// mine
+{ "wikis": [{ "name": "Brain", "path": ${JSON.stringify(vault)}, "description": "the vault",
+  "conventions": "Areas/one.md", "inbox": "Inbox/", "protected": ["Sanctum/", "Codex/"],
+  "entries": [
+    { "path": "MAP.md", "load": "eager", "description": "the map" },
+    { "path": ".", "load": "lazy" },
+    { "path": "Journal", "load": "exclude" }
+  ] }] }
+`);
+  assert.equal(t.context(), `=== SESSION FILES — your harness files, injected at session start (untouched seeds skipped) ===
+
+----- geneseed-wiki.jsonc -----
+--- wiki: Brain — the vault (root: ${vault}) ---
+  conventions: Areas/one.md (read before your first write there)
+  inbox: Inbox/ (drop notes you cannot confidently file)
+  protected (never write): Sanctum/, Codex/
+
+----- Brain/MAP.md — the map -----
+# Map
+the index
+
+--- Lazy entries (load only when the task needs them) ---
+  - Areas/one.md
+  - Areas/two.md
+
+`);
+}));
+
+test('a wiki manifest that declares nothing costs nothing; one that does not parse says so', () => withTier((t) => {
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), '{ "wikis": [] }\n');
+  assert.deepEqual(sessionFiles(t.cfg), []);
+  // A root that is gone is skipped, as the plugin skips it.
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), manifestOf('Gone', path.join(t.d, 'nowhere')));
+  assert.deepEqual(sessionFiles(t.cfg), []);
+  const file = path.join(t.cfg, 'geneseed-wiki.jsonc');
+  t.put(file, '{ "wikis": [');
+  assert.deepEqual(sessionFiles(t.cfg).map((s) => s.text), [`[context] ${file} is not valid JSONC — no wiki loaded.`]);
+}));
+
+test('a wiki over the budget lists what does not fit, folds, and stays inside it', () => withTier((t) => {
+  // A whole-vault eager entry: 30 notes of 600 B is 18 000 B against a 7 500-char share, so the
+  // notes that do not fit are listed with the reason. 400 lazy notes in 400 folders cannot fold,
+  // so the listing ends in its count line. None of it may pass the payload budget.
+  const vault = path.join(t.d, 'Vast');
+  for (let i = 0; i < 30; i += 1) t.put(path.join(vault, 'big', `n${i}.md`), `${'x'.repeat(599)}\n`);
+  for (let i = 0; i < 400; i += 1) t.put(path.join(vault, `lazy${i}`, 'note.md'), '# n\n');
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), JSON.stringify({ wikis: [{ name: 'Vast', path: vault,
+    entries: [{ path: 'big', load: 'eager' }, ...Array.from({ length: 400 }, (_, i) => ({ path: `lazy${i}`, load: 'lazy' }))] }] }));
+  const out = t.context();
+  assert.ok(out.includes('----- Vast/big/n0.md -----'), 'the first note fits whole');
+  assert.ok(out.includes('(eager, but over the session budget — read on demand)'), `no note was demoted:\n${out}`);
+  assert.match(out, / {2}- … \d+ more not listed \(session budget\)/);
+  assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
+}));
+
+test('a wiki walk stops at the depth and file bounds the plugin keeps', () => withTier((t) => {
+  // Depth 6 is the plugin's MAX_DEPTH: the folder entry itself is depth 1, so a sixth-level folder
+  // is walked and a seventh is not.
+  const vault = path.join(t.d, 'Deep');
+  t.put(path.join(vault, 'a', 'b', 'c', 'd', 'e', 'six.md'), '# six\n');
+  t.put(path.join(vault, 'a', 'b', 'c', 'd', 'e', 'f', 'seven.md'), '# seven\n');
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), JSON.stringify({ wikis: [{ name: 'Deep', path: vault,
+    entries: [{ path: '.', load: 'lazy' }] }] }));
+  const [wiki] = sessionFiles(t.cfg);
+  assert.ok(wiki.text.includes('six.md'), wiki.text);
+  assert.ok(!wiki.text.includes('seven.md'), wiki.text);
+}));
+
+// A manifest is hand-edited and a note can be locked, and the hook pasted raw text before it parsed
+// either. Whatever the wiki does, rc stays 0 and the rules still arrive. Each row: a broken wiki.
+const BROKEN_WIKIS = [
+  { name: 'an entry path that is a number', entries: [{ path: 5 }, { path: ['a'] }, null, 'x'], want: '--- wiki: W ' },
+  { name: 'entries that are no list', entries: 'nope', want: '--- wiki: W ' },
+  // An eager note that is gone reports MISSING and costs only itself.
+  { name: 'an eager note that is missing', entries: [{ path: 'gone.md', load: 'eager' }], want: '[context] MISSING eager file: [Errno 2]' },
+];
+
+for (const row of BROKEN_WIKIS) {
+  test(`a broken wiki never costs the session its rules: ${row.name}`, () => withTier((t) => {
+    t.put(path.join(t.cfg, 'user-rules.md'), 'R1 plan first\n');
+    t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), JSON.stringify({ wikis: [{ name: 'W', path: t.d, entries: row.entries }] }));
+    const out = t.context();
+    assert.ok(out.includes('R1 plan first'), out);
+    assert.ok(out.includes(row.want), out);
+  }));
+}
+
+test('a manifest that throws while it renders is reported like one that does not parse', () => withTier((t) => {
+  // A wiki name with no string form makes the template literal throw: the catch around the render,
+  // not the entry filter, is what keeps the payload.
+  const file = path.join(t.cfg, 'geneseed-wiki.jsonc');
+  t.put(path.join(t.cfg, 'user-rules.md'), 'R1 plan first\n');
+  t.put(file, JSON.stringify({ wikis: [{ name: 'W', path: t.d, protected: [{ toString: 1 }] }] }));
+  const out = t.context();
+  assert.ok(out.includes('R1 plan first'), out);
+  assert.ok(out.includes(`[context] ${file} is not valid JSONC`), out);
+}));
+
+// C6: what each file reads on a global install. Each row: the shared and host files -> the heads
+// and bodies injected, in order. The rule: rules and the memory map concatenate, shared first;
+// PROFILE.md and the wiki are whole, so a non-seed host copy replaces the shared one. The labels
+// appear only when the tier has a say in that file; the notebook has no shared layer.
+const RULES = 'user-rules.md';
+const MEMORY_MAP = 'memory/MEMORY.md';
+const TIER_LAYERS = [
+  { name: 'rules in the tier alone', shared: { [RULES]: 'shared rule' },
+    want: [['user-rules.md (shared)', 'shared rule']] },
+  { name: 'rules in both layers: shared first', shared: { [RULES]: 'shared rule' }, host: { [RULES]: 'host rule' },
+    want: [['user-rules.md (shared)', 'shared rule'], ['user-rules.md (host: claude)', 'host rule']] },
+  { name: 'rules on the host alone', host: { [RULES]: 'host rule' }, want: [['user-rules.md', 'host rule']] },
+  { name: 'a memory map in both layers', shared: { [MEMORY_MAP]: 'shared map' }, host: { [MEMORY_MAP]: 'host map' },
+    want: [['memory/MEMORY.md (shared)', 'shared map'], ['memory/MEMORY.md (host: claude)', 'host map']] },
+  { name: 'a host file back at its seed reads the tier alone',
+    shared: { [RULES]: 'shared rule' }, host: { [RULES]: SESSION_SEEDS['user-rules.md'] },
+    want: [['user-rules.md (shared)', 'shared rule']] },
+  { name: 'a shared seed is no layer', shared: { [RULES]: SESSION_SEEDS['user-rules.md'] }, host: { [RULES]: 'host rule' },
+    want: [['user-rules.md', 'host rule']] },
+  { name: 'a host profile replaces the whole shared one', shared: { 'PROFILE.md': 'shared me' }, host: { 'PROFILE.md': 'host me' },
+    want: [['PROFILE.md (host: claude)', 'host me']] },
+  { name: 'a seeded host profile leaves the shared one', shared: { 'PROFILE.md': 'shared me' },
+    host: { 'PROFILE.md': SESSION_SEEDS['PROFILE.md'] }, want: [['PROFILE.md (shared)', 'shared me']] },
+  { name: 'the notebook has no shared layer', host: { 'notebook/NOTEBOOK.md': 'host note' },
+    shared: { 'notebook/NOTEBOOK.md': 'never read' }, want: [['notebook/NOTEBOOK.md', 'host note']] },
+];
+
+for (const row of TIER_LAYERS) {
+  test(`a global install layers its session files: ${row.name}`, () => withTier((t) => {
+    for (const [f, text] of Object.entries(row.shared || {})) t.put(path.join(t.tier.root, f), text);
+    for (const [f, text] of Object.entries(row.host || {})) t.put(path.join(t.cfg, f), text);
+    const got = sessionFiles(t.cfg).map((s) => [`${s.rel}${s.label ? ` (${s.label})` : ''}`, s.text]);
+    assert.deepEqual(got, row.want);
+    const out = t.context();
+    for (const [head, body] of row.want) assert.ok(out.includes(`----- ${head} -----\n${body}\n`), out);
+  }));
+}
+
+test('the wiki is one whole file across the layers, and $GENESEED_WIKI outranks both', () => withTier((t) => {
+  const names = () => sessionFiles(t.cfg).map((s) => [s.text.split(' ')[2], s.label]);
+  t.put(t.tier.wiki, manifestOf('Shared', t.d));
+  assert.deepEqual(names(), [['Shared', 'shared']]);
+  // An untouched host seed says nothing, so the shared manifest stands.
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), SESSION_SEEDS['geneseed-wiki.jsonc']);
+  assert.deepEqual(names(), [['Shared', 'shared']]);
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), manifestOf('Host', t.d));
+  assert.deepEqual(names(), [['Host', 'host: claude']]);
+  const pinned = path.join(t.d, 'pinned.jsonc');
+  t.put(pinned, manifestOf('Pinned', t.d));
+  process.env.GENESEED_WIKI = pinned;
+  assert.deepEqual(names(), [['Pinned', '']]);
+}));
+
+test('a project install never reads the tier, in this slice', () => withTier((t) => {
+  t.put(t.tier.rules, 'shared rule');
+  t.put(path.join(t.cfg, 'user-rules.md'), 'host rule');
+  fs.rmSync(path.join(t.cfg, '.geneseed-emit'));
+  assert.deepEqual(sessionFiles(t.cfg).map((s) => [s.rel, s.label, s.text]), [['user-rules.md', '', 'host rule']]);
+}));
+
+test('an empty tier changes nothing: absent, empty or seeded, the payload is the same bytes', () => withTier((t) => {
+  // Written out, the session block of a host-only global install after M1 and M2: the order is
+  // SESSION_FILES', and no head carries a label. The three tier states must all print exactly it.
+  t.put(path.join(t.cfg, 'user-rules.md'), 'R1 plan first\n');
+  t.put(path.join(t.cfg, 'PROFILE.md'), 'me\n');
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), manifestOf('W', t.d));
+  t.put(path.join(t.cfg, 'memory', 'MEMORY.md'), '- a fact\n');
+  t.put(path.join(t.cfg, 'notebook', 'NOTEBOOK.md'), 'a note\n');
+  const want = `=== SESSION FILES — your harness files, injected at session start (untouched seeds skipped) ===
+
+----- user-rules.md -----
+R1 plan first
+
+----- PROFILE.md -----
+me
+
+----- geneseed-wiki.jsonc -----
+--- wiki: W (root: ${t.d}) ---
+
+----- memory/MEMORY.md -----
+- a fact
+
+----- notebook/NOTEBOOK.md -----
+a note
+
+`;
+  assert.ok(!fs.existsSync(t.tier.root), 'the fixture tier should start absent');
+  assert.equal(t.context(), want, 'tier absent');
+  fs.mkdirSync(t.tier.memory, { recursive: true });
+  assert.equal(t.context(), want, 'tier empty');
+  for (const [f, seed] of Object.entries({ 'user-rules.md': 'user-rules.md', 'PROFILE.md': 'PROFILE.md',
+    'geneseed-wiki.jsonc': 'geneseed-wiki.jsonc', 'memory/MEMORY.md': 'MEMORY.md' })) {
+    t.put(path.join(t.tier.root, f), SESSION_SEEDS[seed]);
+  }
+  assert.equal(t.context(), want, 'tier seeded');
+}));
+
+// C12: the order is rules, profile, wiki, memory map, and each spends what the ones before it left.
+test('the budget cuts the memory map first, and the cut names the file', () => withTier((t) => {
+  const line = `${'x'.repeat(99)}\n`;
+  t.put(t.tier.rules, `shared rule\n${line.repeat(20)}`);
+  t.put(path.join(t.cfg, 'user-rules.md'), `host rule\n${line.repeat(20)}`);
+  t.put(path.join(t.cfg, 'PROFILE.md'), 'me\n');
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), manifestOf('W', t.d));
+  const map = path.join(t.tier.memory, 'MEMORY.md');
+  t.put(map, line.repeat(70));
+  const out = t.context();
+  const at = (s) => out.indexOf(s);
+  const order = ['----- user-rules.md (shared) -----', '----- user-rules.md (host: claude) -----',
+    '----- PROFILE.md -----', '----- geneseed-wiki.jsonc -----', '----- memory/MEMORY.md (shared) -----'].map(at);
+  assert.ok(order.every((n) => n >= 0), out);
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), 'the layers are out of order');
+  assert.ok(out.includes(`[context] truncated (session budget) — read ${map} on demand`), out);
+  assert.equal(out.split('truncated (session budget)').length, 2, 'only the map is cut');
+  assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
+}));
+
+test('rules are capped only past the whole share: the lines above them never push one out', () => withTier((t) => {
+  // The runtime-floor line opens the payload and spends the budget before the rules. 7 400 chars of
+  // rules fit the 7 500 share alone, so they arrive whole; spent-based room would have cut them.
+  t.put(path.join(t.repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  t.put(path.join(t.repo, 'package.json'), '{}\n');
+  const rules = `${'x'.repeat(99)}\n`.repeat(73);
+  t.put(path.join(t.cfg, 'user-rules.md'), rules);
+  const out = t.context();
+  assert.ok(out.indexOf('Runtime floor:') >= 0 && out.indexOf('Runtime floor:') < out.indexOf('----- user-rules.md'),
+    out.slice(0, 200));
+  assert.ok(out.includes(rules), 'the rules were cut');
+  assert.ok(!out.includes('truncated'), 'the rules were cut');
+}));
+
+test('rules over the whole share are cut with a line naming the file, across their layers', () => withTier((t) => {
+  // Layers count together: 5 000 shared and 5 000 host pass the share, so the host layer takes the
+  // cut and its line names the host file. The shared layer arrives whole.
+  const shared = `${'s'.repeat(99)}\n`.repeat(50);
+  const hostFile = path.join(t.cfg, 'user-rules.md');
+  t.put(t.tier.rules, shared);
+  t.put(hostFile, `${'h'.repeat(99)}\n`.repeat(50));
+  const out = t.context();
+  assert.ok(out.includes(shared), 'the shared layer was cut');
+  assert.ok(out.includes(`[context] truncated (session budget) — read ${hostFile} on demand`), out);
+  assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
+}));
+
+test('a full budget leaves one line per file it could not inject, and stays under the cap', () => withTier((t) => {
+  // Rules take the share, so every later layer has no room: each gets one line naming its file
+  // rather than a head with nothing under it. Eager docs and the listing still fit behind them.
+  const big = `${'x'.repeat(99)}\n`.repeat(100);
+  const map = path.join(t.tier.memory, 'MEMORY.md');
+  t.put(path.join(t.repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  t.put(path.join(t.repo, 'package.json'), '{}\n');
+  t.put(path.join(t.repo, 'README.md'), big);
+  t.put(path.join(t.cfg, 'user-rules.md'), big);
+  t.put(path.join(t.cfg, 'PROFILE.md'), big);
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), manifestOf('W', t.d));
+  t.put(map, big);
+  t.put(path.join(t.cfg, 'memory', 'MEMORY.md'), big);
+  t.put(path.join(t.cfg, 'notebook', 'NOTEBOOK.md'), big);
+  const out = t.context();
+  for (const [rel, file] of [['PROFILE.md', path.join(t.cfg, 'PROFILE.md')], ['memory/MEMORY.md', map],
+    ['memory/MEMORY.md', path.join(t.cfg, 'memory', 'MEMORY.md')],
+    ['notebook/NOTEBOOK.md', path.join(t.cfg, 'notebook', 'NOTEBOOK.md')]]) {
+    assert.ok(out.includes(`[context] ${rel} not injected (session budget) — read ${file} on demand`), out);
+  }
+  assert.ok(out.includes('- README.md (eager, but over the session budget'), out);
+  assert.ok(out.length < 9000, `payload ${out.length} chars is over budget`);
+}));
+
+test('the worst case stays under the cap: every head line, deep paths, rules at the share', () => withTier((t) => {
+  // Paths have no length limit, so the line per skipped file answers to the budget like a listing:
+  // it ends in a count rather than pass the cap. The fixture has all three head lines, a 300-char
+  // tail on each path, the rules at the share, and every later layer present on both sides.
+  const deep = path.join('d'.repeat(100), 'e'.repeat(100), 'f'.repeat(100));
+  const cfg = path.join(t.d, deep, 'cfg');
+  process.env.XDG_CONFIG_HOME = path.join(t.d, deep, 'xdg');
+  const tier = sharedPaths();
+  t.put(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+  t.put(path.join(t.repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  t.put(path.join(t.repo, 'package.json'), JSON.stringify({ scripts: { test: 'node --test', lint: 'eslint .' } }));
+  t.put(path.join(t.repo, 'README.md'), `${'r'.repeat(99)}\n`.repeat(20));
+  t.put(path.join(t.repo, '.geneseed', 'ownership.md'), 'Setup: declined 2026-11-01\n');
+  const big = `${'x'.repeat(99)}\n`.repeat(100);
+  t.put(path.join(cfg, 'user-rules.md'), big);
+  for (const f of ['PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md']) t.put(path.join(cfg, f), big);
+  t.put(tier.profile, big);
+  t.put(path.join(tier.memory, 'MEMORY.md'), big);
+  t.put(path.join(cfg, 'geneseed-wiki.jsonc'), manifestOf('W', t.d));
+  const [rc, raw] = capturedOut(() => cmdContext({ root: cfg }));
+  assert.equal(rc, 0);
+  const out = raw.replace(/\r\n/g, '\n');
+  for (const head of ['Done gate', 'Ownership: setup declined', 'Runtime floor:']) assert.ok(out.includes(head), out.slice(0, 400));
+  assert.match(out, /\[context\] (\d+ more session files|memory\/MEMORY\.md) not injected/);
+  // The real figure is the line terminators too: stdout is \r\n on Windows.
+  const onWire = out.length + (out.match(/\n/g) || []).length;
+  assert.ok(onWire < 9000, `payload ${onWire} chars is over budget`);
+}));
+
+// B4: whether Claude Code already loads a repo's AGENTS.md by itself. Each row: the root files, the
+// `AI_AGENT` value Claude Code sets in a hook's env (null = unset) -> does the hook still inject it.
+// The rule: an `@AGENTS.md` import in CLAUDE.md loads it on every version, so the hook drops it; a
+// repo with no CLAUDE.md loads it natively from 2.1.277, so the hook drops it only on a version it
+// can read at or above that. Anything it cannot tell keeps injecting: a duplicate costs tokens, a
+// miss loses the doc. A CLAUDE.md that does not import it means Claude Code never reads it.
+const CC = (v) => `claude-code_${v}_agent`;
+const NATIVE_AGENTS = [
+  { name: 'no CLAUDE.md, exactly 2.1.277', files: {}, agent: CC('2-1-277'), injected: false },
+  { name: 'no CLAUDE.md, newer patch', files: {}, agent: CC('2-1-317'), injected: false },
+  { name: 'no CLAUDE.md, the harness suffix', files: {}, agent: 'claude-code_2-1-302_harness', injected: false },
+  { name: 'no CLAUDE.md, newer major', files: {}, agent: CC('3-0-0'), injected: false },
+  { name: 'no CLAUDE.md, one patch too old', files: {}, agent: CC('2-1-276'), injected: true },
+  { name: 'no CLAUDE.md, older minor', files: {}, agent: CC('2-0-999'), injected: true },
+  { name: 'no CLAUDE.md, version unset', files: {}, agent: null, injected: true },
+  { name: 'no CLAUDE.md, another agent', files: {}, agent: 'cursor_2-1-317_agent', injected: true },
+  { name: 'no CLAUDE.md, unparseable', files: {}, agent: 'claude-code_latest', injected: true },
+  { name: 'import, version unset', files: { 'CLAUDE.md': '@AGENTS.md\n' }, agent: null, injected: false },
+  { name: 'import, old version', files: { 'CLAUDE.md': '@AGENTS.md\n' }, agent: CC('2-0-0'), injected: false },
+  { name: 'import with a dot path', files: { 'CLAUDE.md': '# Repo\n\n@./AGENTS.md\n' }, agent: null, injected: false },
+  { name: 'import inside a sentence', files: { 'CLAUDE.md': 'See @AGENTS.md first.\n' }, agent: null, injected: false },
+  { name: 'CLAUDE.md with no import', files: { 'CLAUDE.md': '# Repo\n' }, agent: CC('2-1-317'), injected: true },
+  { name: 'a mention in a code span is no import', files: { 'CLAUDE.md': 'Write `@AGENTS.md` there.\n' },
+    agent: null, injected: true },
+  { name: 'a mention in a fence is no import', files: { 'CLAUDE.md': '```\n@AGENTS.md\n```\n' },
+    agent: null, injected: true },
+  { name: 'another file named like it is no import', files: { 'CLAUDE.md': '@AGENTS.md.bak\n' },
+    agent: null, injected: true },
+  { name: 'a CLAUDE.md under .claude/ still counts as one', files: { '.claude/CLAUDE.md': '# Repo\n' },
+    agent: CC('2-1-317'), injected: true },
+];
+
+for (const row of NATIVE_AGENTS) {
+  test(`the context hook on Claude Code and AGENTS.md: ${row.name}`, () => withDir((d) => {
+    const prev = process.env.AI_AGENT;
+    if (row.agent === null) delete process.env.AI_AGENT; else process.env.AI_AGENT = row.agent;
+    try {
+      fs.writeFileSync(path.join(d, 'AGENTS.md'), '# Agents\n');
+      for (const [f, t] of Object.entries(row.files)) {
+        fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true });
+        fs.writeFileSync(path.join(d, f), t);
+      }
+      const [eager] = discoverContext(d, 'claude');
+      assert.equal(eager.some((e) => path.basename(e.path) === 'AGENTS.md'), row.injected);
+    } finally {
+      if (prev === undefined) delete process.env.AI_AGENT; else process.env.AI_AGENT = prev;
+    }
+  }));
+}
+
+test('AI_AGENT speaks for Claude Code alone: another host keeps its own native list', () => withDir((d) => {
+  const prev = process.env.AI_AGENT;
+  process.env.AI_AGENT = CC('2-1-317');
+  try {
+    fs.writeFileSync(path.join(d, 'AGENTS.md'), '# Agents\n');
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'), '# Repo\n');
+    const eagerOf = (host) => discoverContext(d, host)[0].map((e) => path.basename(e.path));
+    // OpenCode keeps its own rule in the plugin, so here it is a host with no native root at all.
+    assert.deepEqual(eagerOf('opencode'), ['AGENTS.md', 'CLAUDE.md']);
+    assert.deepEqual(eagerOf('bob'), ['CLAUDE.md']);
+    assert.deepEqual(eagerOf('openclaude'), ['CLAUDE.md']);
+    fs.rmSync(path.join(d, 'CLAUDE.md'));
+    assert.deepEqual(eagerOf('opencode'), ['AGENTS.md']);
+  } finally {
+    if (prev === undefined) delete process.env.AI_AGENT; else process.env.AI_AGENT = prev;
+  }
+}));
 
 test('LEGACY_SEED_TEXT really is the pre-rename seed', () => {
   // The rows above are only as good as their old seed: it must hash to the legacy entry.
@@ -1992,6 +2362,12 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
   assert.ok(files, 'the plugin no longer declares SESSION_FILES');
   assert.deepEqual(files[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)),
     SESSION_FILES.filter((f) => f !== 'geneseed-wiki.jsonc'));
+  // B5: one list of wiki names on both families, and the plugin's copy of the tier's address.
+  const names = plugin.match(/const WIKI_NAMES = \[([^\]]*)\]/);
+  assert.ok(names, 'the plugin no longer declares WIKI_NAMES');
+  assert.deepEqual(names[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)), WIKI_NAMES);
+  assert.ok(plugin.includes('path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")'),
+    'the plugin machineDir no longer spells js/lib/machine-dir.mjs');
   for (const name of Object.keys(SESSION_SEEDS)) {
     assert.ok(SESSION_FILES.some((f) => path.posix.basename(f) === name), `${name} is never read`);
   }
@@ -2037,6 +2413,85 @@ test('the OpenCode context plugin carries the same curation nudge as the hook', 
   const re = (src) => src.match(/const MAP_COUNT_RE = (\/.*\/);?$/m)?.[1];
   assert.ok(re(hook), 'the hook no longer declares MAP_COUNT_RE');
   assert.equal(re(plugin), re(hook), 'the plugin MAP_COUNT_RE drifted from the hook');
+});
+
+// sessionStartSize is the console's figure. Hand count of the fixture, in the budget's unit (a
+// line's characters + 2, + 1 per inner break): the 95-character block title 97, its blank 2, the
+// 25-character head 27, `ab\ncd` 8, its blank 2 = 136. Nothing but seeds to inject is 0.
+test('the session-start measure counts the payload in the budget unit, and writes nothing', () => {
+  withDir((d) => {
+    assert.deepEqual(sessionStartSize(d, 'claude'), { chars: 0, budget: 9000, cut: false });
+    fs.writeFileSync(path.join(d, 'user-rules.md'), 'ab\ncd\n');
+    const before = fs.readdirSync(d, { recursive: true }).sort();
+    const [size, out, err] = capturedOut(() => sessionStartSize(d, 'claude'));
+    assert.deepEqual(size, { chars: 136, budget: 9000, cut: false });
+    assert.deepEqual([out, err], ['', '']);
+    assert.deepEqual(fs.readdirSync(d, { recursive: true }).sort(), before);
+  });
+});
+
+// The figure must be what the hook prints, also where the budget cuts: the rules are truncated,
+// so the memory map and the notebook are left out. Each \n is 2 in the budget's unit (\r\n).
+test('the session-start measure is the hook output of an install with no project around it', () => {
+  withDir((d) => withDir((empty) => {
+    fs.mkdirSync(path.join(d, 'memory'));
+    fs.mkdirSync(path.join(d, 'notebook'));
+    fs.writeFileSync(path.join(d, 'user-rules.md'), `${'x'.repeat(80)}\n`.repeat(200));
+    fs.writeFileSync(path.join(d, 'memory', 'MEMORY.md'), 'a fact\n');
+    fs.writeFileSync(path.join(d, 'notebook', 'NOTEBOOK.md'), 'a note\n');
+    const prev = process.env.GENESEED_ROOT;
+    process.env.GENESEED_ROOT = empty;
+    try {
+      const [rc, raw] = capturedOut(() => cmdContext({ root: d }));
+      assert.equal(rc, 0);
+      const out = raw.replace(/\r\n/g, '\n');
+      assert.ok(out.includes('truncated (session budget)') && out.includes('not injected (session budget)'),
+        `the budget did not bind:\n${out.slice(-400)}`);
+      const size = sessionStartSize(d, 'claude');
+      assert.equal(size.chars, out.length + out.match(/\n/g).length);
+      assert.equal(size.cut, true);
+    } finally {
+      if (prev === undefined) delete process.env.GENESEED_ROOT; else process.env.GENESEED_ROOT = prev;
+    }
+  }));
+});
+
+// `cut` says the budget took content, which the size cannot: most cut rows here sit under
+// the console's 85 % line. 7 000 characters of rules fit whole. Words about the budget
+// in a file the budget did not touch are the user's own text, not a cut.
+const LONG = (n) => `${'x'.repeat(79)}\n`.repeat(n / 80);
+const CUT_ROWS = [
+  { name: 'rules that fit', files: { 'user-rules.md': LONG(7000) }, cut: false },
+  { name: 'rules that name the budget', files: { 'user-rules.md': 'keep the (session budget) small\n' }, cut: false },
+  { name: 'rules truncated', files: { 'user-rules.md': LONG(16000) }, cut: true },
+  { name: 'memory map truncated', files: { 'memory/MEMORY.md': LONG(16000) }, cut: true },
+  { name: 'rules 5k, memory truncated', files: { 'user-rules.md': LONG(5040), 'memory/MEMORY.md': LONG(16000) }, cut: true },
+  // Rules that fit whole spend 7 499, so the next file has no room: left out, nothing truncated.
+  { name: 'a file left out', files: { 'user-rules.md': LONG(7280), 'notebook/NOTEBOOK.md': 'a note\n' }, cut: true },
+];
+for (const { name, files, cut } of CUT_ROWS) {
+  test(`the session-start measure reports the cut: ${name}`, () => {
+    withDir((d) => {
+      for (const [rel, text] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(d, rel)), { recursive: true });
+        fs.writeFileSync(path.join(d, rel), text);
+      }
+      assert.equal(sessionStartSize(d, 'claude').cut, cut);
+    });
+  });
+}
+
+// A wiki note over the budget is listed, not injected, and nothing else in the payload is cut.
+test('the session-start measure reports a wiki note listed instead of injected', () => {
+  withDir((d) => withDir((vault) => {
+    fs.writeFileSync(path.join(vault, 'big.md'), LONG(16000));
+    fs.writeFileSync(path.join(vault, 'small.md'), 'a note\n');
+    const wiki = (note) => JSON.stringify({ wikis: [{ name: 'V', path: vault, entries: [{ path: note }] }] });
+    fs.writeFileSync(path.join(d, 'geneseed-wiki.jsonc'), wiki('small.md'));
+    assert.equal(sessionStartSize(d, 'claude').cut, false);
+    fs.writeFileSync(path.join(d, 'geneseed-wiki.jsonc'), wiki('big.md'));
+    assert.equal(sessionStartSize(d, 'claude').cut, true);
+  }));
 });
 
 test('a nudged memory map keeps the whole payload under 9 000 chars', () => {
@@ -2090,3 +2545,93 @@ test('a Bob emit opens what Bob auto-loads with the first-reply override; Claude
     assert.ok(!read(crepo, 'CLAUDE.md').includes('First-reply override'), 'Claude got the Bob-only override');
   }));
 });
+
+// ---- S8b: carrier reads ------------------------------------------------------------------------
+
+// B1: `Done gate: off` is read off the HOST's own carrier. The hook read `<hookRoot>/AGENT.md` for
+// every host, a file no hooked host has, so the switch never worked. A project install keeps its
+// carrier in the repo (`CLAUDE.md` / `AGENTS.md`), a global one in the config dir. Each row: the
+// host, where the install sits, the carrier's path from that base. The repo is a git repo with
+// a package.json, so the line is there to see when the gate is armed.
+const CARRIER_ROWS = [
+  { name: 'claude project', host: 'claude', project: true, rel: 'CLAUDE.md', dir: '.claude' },
+  { name: 'claude global', host: 'claude', project: false, rel: 'CLAUDE.md', dir: 'cfg' },
+  { name: 'bob project', host: 'bob', project: true, rel: 'AGENTS.md', dir: '.bob' },
+  { name: 'bob global', host: 'bob', project: false, rel: path.join('rules', 'geneseed.md'), dir: 'cfg' },
+  { name: 'openclaude project', host: 'openclaude', project: true,
+    rel: path.join('.openclaude', 'CLAUDE.md'), dir: '.openclaude' },
+];
+for (const row of CARRIER_ROWS) {
+  test(`the context hook reads Done gate off from the ${row.name} carrier`, () => withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ scripts: { test: 'x' } }));
+    const cfg = row.project ? path.join(repo, row.dir) : path.join(d, row.dir);
+    fs.mkdirSync(cfg, { recursive: true });
+    if (!row.project) fs.writeFileSync(path.join(cfg, '.geneseed-emit'), `${row.host}-global\n`);
+    const carrier = path.join(row.project ? repo : cfg, row.rel);
+    const prev = ['XDG_CONFIG_HOME', 'GENESEED_ROOT'].map((v) => [v, process.env[v]]);
+    process.env.XDG_CONFIG_HOME = path.join(d, 'xdg');
+    process.env.GENESEED_ROOT = repo;
+    try {
+      const run = () => capturedOut(() => cmdContext({ root: cfg, host: row.host }))[1];
+      fs.mkdirSync(path.dirname(carrier), { recursive: true });
+      fs.writeFileSync(carrier, '# carrier\n');
+      assert.match(run(), /Done gate:/, 'the fixture did not arm the gate');
+      fs.writeFileSync(carrier, '# carrier\n\nDone gate: off\n');
+      assert.doesNotMatch(run(), /Done gate:/, 'Done gate: off was ignored');
+    } finally {
+      for (const [v, val] of prev) {
+        if (val === undefined) delete process.env[v]; else process.env[v] = val;
+      }
+    }
+  }));
+}
+
+// A directory link is not walked: the OpenCode plugin's `readdir` withFileTypes does not follow
+// one, and a vault link into a big tree would otherwise fill the scan cap with foreign notes.
+test('the wiki walk does not follow a directory link', () => withTier((t) => {
+  const vault = path.join(t.d, 'Brain');
+  const outside = path.join(t.d, 'Elsewhere');
+  t.put(path.join(vault, 'MAP.md'), '# Map\n');
+  t.put(path.join(outside, 'foreign.md'), '# Foreign\n');
+  try {
+    fs.symlinkSync(outside, path.join(vault, 'Linked'), 'junction');
+  } catch { return; /* no link right on this machine: nothing to prove */ }
+  t.put(path.join(t.cfg, 'geneseed-wiki.jsonc'), JSON.stringify({ wikis: [{ name: 'Brain', path: vault,
+    entries: [{ path: '.', load: 'lazy' }] }] }));
+  const out = t.context();
+  assert.ok(out.includes('MAP.md'), out);
+  assert.ok(!out.includes('foreign.md'), `the walk crossed a link:\n${out}`);
+}));
+
+// The line per file the budget left out names the memory map even when the paths are so long that
+// the rest fold into a count: C12 owes the map's cut a line that names the file.
+test('a count line never replaces the memory map in the leftover listing', () => withTier((t) => {
+  const deep = path.join('d'.repeat(100), 'e'.repeat(100), 'f'.repeat(100));
+  const cfg = path.join(t.d, deep, 'cfg');
+  const big = `${'x'.repeat(99)}\n`.repeat(100);
+  t.put(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+  for (const f of ['user-rules.md', 'PROFILE.md', 'memory/MEMORY.md', 'notebook/NOTEBOOK.md']) {
+    t.put(path.join(cfg, f), big);
+  }
+  t.put(path.join(t.tier.memory, 'MEMORY.md'), big);
+  t.put(t.tier.profile, big);
+  t.put(path.join(t.tier.rules), big);
+  t.put(path.join(cfg, 'geneseed-wiki.jsonc'), manifestOf('W', t.d));
+  const out = capturedOut(() => cmdContext({ root: cfg }))[1].replace(/\r\n/g, '\n');
+  assert.match(out, /\[context\] memory\/MEMORY\.md not injected/, out.slice(-1500));
+}));
+
+// Only a backtick fence was stripped before the import test, so an `@AGENTS.md` in a tilde fence or
+// an HTML comment read as a real import and the doc was dropped.
+for (const [what, text] of [['a tilde fence', '~~~\n@AGENTS.md\n~~~\n'],
+  ['an HTML comment', '<!--\n@AGENTS.md\n-->\n']]) {
+  test(`the context hook keeps AGENTS.md when the import sits in ${what}`, () => withDir((d) => {
+    fs.writeFileSync(path.join(d, 'AGENTS.md'), '# Agents\n');
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'), text);
+    const [eager] = discoverContext(d, 'claude');
+    assert.ok(eager.some((e) => path.basename(e.path) === 'AGENTS.md'));
+  }));
+}

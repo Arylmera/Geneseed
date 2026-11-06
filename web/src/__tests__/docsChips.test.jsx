@@ -21,7 +21,7 @@ const MENU = {
       label: 'Guides',
       pages: [
         { id: 'quick', title: 'Quick start', kind: 'concept', section: 'Install' },
-        { id: 'clone', title: 'From a clone', kind: 'concept', section: 'Install' },
+        { id: 'clone', title: 'From a clone', kind: 'concept', section: 'Install', varies: true },
         { id: 'verify', title: 'Verify it works', kind: 'concept', section: 'General' },
       ],
     },
@@ -136,6 +136,32 @@ describe('Docs host selector', () => {
   const hostButtons = () => [...document.querySelectorAll('.lib-kinds .seg button')]
   const pressed = () => hostButtons().find((b) => b.getAttribute('aria-pressed') === 'true')
 
+  // A page the host does not change has nothing to switch.
+  it('hides the switch on a page that does not vary', async () => {
+    render(<Docs page="quick" overview={{}} />)
+    await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
+    expect(hostButtons()).toEqual([])
+  })
+
+  // The menu is every host's, so a page for one host is reachable from any other, and reads as
+  // its own host. The switch set elsewhere must not hide it.
+  it('asks for the whole menu, and opens a one-host page as that host', async () => {
+    api.docs.mockResolvedValue({
+      harness: 'opencode',
+      groups: [
+        {
+          id: 'g',
+          label: 'G',
+          pages: [{ id: 'oc', title: 'OC', kind: 'concept', varies: true, hosts: ['opencode'] }],
+        },
+      ],
+    })
+    render(<Docs page="oc" overview={{ emit: 'claude-global' }} />)
+    await waitFor(() => expect(api.docsPage).toHaveBeenCalledWith('oc', 'opencode'))
+    expect(api.docs).toHaveBeenCalledWith('all')
+    expect(hostButtons()).toEqual([])
+  })
+
   it('lists the four hosts', async () => {
     render(<Docs page="clone" overview={{}} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
@@ -156,7 +182,9 @@ describe('Docs host selector', () => {
     render(<Docs page="clone" overview={{ emit }} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
     expect(pressed().textContent).toBe(label)
-    expect(api.docs).toHaveBeenCalledWith(host)
+    // Awaited: the rows paint with the menu, and the page's read fires from the effect after that
+    // commit, so a yield between the two left only the glossary call and reddened this at random.
+    await waitFor(() => expect(api.docsPage).toHaveBeenCalledWith('clone', host))
   })
 
   it('keeps a choice stored by the old two-family selector', async () => {
@@ -184,6 +212,6 @@ describe('Docs host selector', () => {
     render(<Docs page="clone" overview={{}} />)
     await waitFor(() => expect(texts('.lib-rows .lr-name').length).toBe(3))
     fireEvent.click(screen.getByRole('button', { name: 'OpenClaude' }))
-    await waitFor(() => expect(api.docs).toHaveBeenCalledWith('openclaude'))
+    await waitFor(() => expect(api.docsPage).toHaveBeenCalledWith('clone', 'openclaude'))
   })
 })

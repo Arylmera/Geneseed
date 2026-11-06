@@ -109,7 +109,7 @@ const GZIP_MIN = 1024;
  * a path); without a cap any web page could `no-cors` POST an arbitrary blob and this process
  * would buffer all of it before the token check refused it.
  */
-export const MAX_BODY = 1024 * 1024;
+const MAX_BODY = 1024 * 1024;
 
 const BUSY = { error: 'a job is running — wait for it to finish (or cancel it) first' };
 
@@ -208,7 +208,17 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     const st = (path.startsWith('/api/') && path !== '/api/ping' && !path.startsWith('/api/jobs')
       && !MACHINE_GETS.has(path)) ? installView(state, installParams(req.url)) : state;
     const route = STATE_ROUTES[path];
-    if (route !== undefined) return sendJson(res, route(st, req.url), 200, ae);
+    if (route !== undefined) {
+      const answer = route(st, req.url, state);
+      // Only `/api/doctor`, during the warm-up. A rejection here is past the handler's own catch.
+      if (answer instanceof Promise) {
+        return answer.then((a) => sendJson(res, a, 200, ae)).catch((e) => {
+          logFault(req, path, e);
+          sendJson(res, SERVER_FAULT, 500, ae);
+        });
+      }
+      return sendJson(res, answer, 200, ae);
+    }
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
     if (path === '/api/ping') {
@@ -370,7 +380,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       // the new code on disk, so an axis or marker the pull added would be dropped. build-all
       // spawns the new CLI, which builds every profile with the new code; this path cannot.
       if (state.daemonStale?.()) {
-        return sendJson(res, { error: 'the console is running older code than the disk — restart it first (Installs › Server › Restart), then rebuild' }, 422, ae);
+        return sendJson(res, { error: 'the console is running older code than the disk — restart it first (Settings › Server › Restart), then rebuild' }, 422, ae);
       }
       return startJob(res, 'rebuild', plan.cmds, ae);
     }
@@ -512,8 +522,7 @@ function logFault(req, path, e) {
  * needs and no further: values unquoted with `+` meaning a space, and a BLANK value dropped
  * (`keep_blank_values=False`), so `?harness=` resolves to the installed default rather than
  * to the empty string — `''  || null` is what drops it below. The first occurrence wins,
- * because `parse_qs` returns a list and the reference takes `[0]`, and so does
- * `URLSearchParams.get`.
+ * because `URLSearchParams.get` takes the first.
  *
  * `new URL(url, 'http://x')` rather than a hand-split on `&`/`=`: the base is a throwaway,
  * needed only because `URL` refuses a bare path-plus-query with no scheme. One measured

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useConfirm } from './useConfirm.jsx'
 import { sortedKey, useStaging } from './useStaging.jsx'
+import { installTag } from '../lib/hosts.js'
 
 // The Constitution's doctrine selection: which rules the switches have STAGED, against what the
 // deployed install carries, and the one Apply that rebuilds with the whole set. `items` is the
@@ -89,7 +90,7 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
       ? `${pickedRules.length} of ${allRules.length} doctrine rules`
       : 'no doctrine rules'
     const ok = await confirm(
-      `Rebuild ${install.host} · ${install.scope} with ${what}? ` +
+      `Rebuild ${installTag(install)} with ${what}? ` +
         `It rebuilds in place, non-destructive.${warn}`,
       { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild' },
     )

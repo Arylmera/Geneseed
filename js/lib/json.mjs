@@ -2,9 +2,8 @@
  * Quoting and the parsed-value model — `json.dumps`, `json.loads`, and the `str`/`repr`
  * rules that decide what a parsed number renders as.
  *
- * These are definitions, not an adaptation of somebody else's; see `fs.mjs` for why the
- * measurements against CPython are recorded per function, and why NONE of these is the Node
- * default — the warning the retired `py` prefix used to carry now lives in each docblock.
+ * These are definitions, not an adaptation of somebody else's, and NONE of these is the
+ * Node default — each docblock says why.
  * A rule here is a frozen fact about what this tool emits — the written-out tables in
  * `tests/unit/lib_primitives.test.mjs` and `tests/unit/settings_jsonc.test.mjs` pin it.
  *
@@ -20,9 +19,8 @@
  * and `String(1.0)` is `"1"` — so an `agent-overrides.json` carrying `"temperature": 1.0`
  * emits `temperature: 1.0` from Python and `temperature: 1` from Node.
  *
- * That divergence WAS invisible to the golden harness — the emit always writes an EMPTY
- * overrides stub, so no golden cell ever had an override to render, and mutation M6 stood
- * ungated for two phases because of it. What holds it now is
+ * That divergence is invisible to the golden harness — the emit always writes an EMPTY
+ * overrides stub, so no golden cell has an override to render. What holds it is
  * `tests/unit/lib_primitives.test.mjs`, which round-trips `{"temperature": 1.0}` and requires
  * the `1.0` back.
  */
@@ -304,9 +302,8 @@ function escapeNonAscii(text) {
  *
  * Indentation is what makes this tractable: passing `indent` switches Python's
  * separators from `(', ', ': ')` to `(',', ': ')`, which is exactly what
- * `JSON.stringify(v, null, 2)` emits. Verified rather than argued \u2014
- * the former Python suite compared both variants against Python over a corpus of container
- * shapes; `tests/unit/lib_primitives.test.mjs` now pins only this writer's number spellings.
+ * `JSON.stringify(v, null, 2)` emits. `tests/unit/lib_primitives.test.mjs` pins this
+ * writer's number spellings.
  */
 export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
   const text = JSON.stringify(value, null, 2);
@@ -316,10 +313,8 @@ export function jsonDumpsIndent(value, { ensureAscii = true } = {}) {
 /**
  * `json.dumps(obj)` and `json.dumps(obj, sort_keys=True)` — the COMPACT container form.
  *
- * Deferred through three phases because guessing its signature would have been worse than
- * not having it; `js/hosts/settings.mjs` is the code that finally needs it, and the shapes were
- * counted with `ast` rather than assumed: four bare `json.dumps(container)` and two
- * `sort_keys=True`, all inside `_build_settings.py`, none of them `ensure_ascii=False`.
+ * `js/hosts/settings.mjs` is the code that needs it: bare containers and `sort_keys`
+ * output, none of them `ensure_ascii=False`.
  *
  * It cannot delegate to `JSON.stringify` the way `jsonDumpsIndent` does. Without an indent
  * Python's separators are `(', ', ': ')` — `{"a": 1, "b": [1, 2]}` where `JSON.stringify`
@@ -378,10 +373,8 @@ function compactImpl(v, sortKeys, bareInts) {
 /**
  * `_build_settings._read_jsonc` — an EXPORTED PRIMITIVE, deliberately.
  *
- * Four runtime call sites use it as a plain JSONC parser rather than as wiring, all four
- * in `rituals/_harness_mcp.py` (P1b counted the call sites and named them callers; they
- * are one module). Folding it inside a wire entry point would leave those four with
- * nothing to call.
+ * Four runtime call sites use it as a plain JSONC parser rather than as wiring. Folding it
+ * inside a wire entry point would leave them with nothing to call.
  *
  * Returns `[data, hadComments]`, with `data === null` for UNPARSEABLE input — distinct
  * from a legitimately empty `{}`, because writers must refuse to rewrite a file they could

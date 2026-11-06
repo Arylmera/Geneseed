@@ -8,11 +8,12 @@ describe('sections taxonomy', () => {
     expect(SECTION_ORDER).toEqual(['agents', 'memory', 'notebook', 'wiki', 'config'])
   })
 
-  it('LIBRARY_ORDER is every section except the constitution, skills first', () => {
+  it('LIBRARY_ORDER leaves out the sections with a page of their own, skills first', () => {
     // The Library's kinds column. Skills and Agents stopped being pages of their own and
     // became its first two kinds; setup files (config) are a kind of their own rather than
-    // folding into the wiki. The constitution keeps its own page.
-    expect(LIBRARY_ORDER).toEqual(['skills', 'agents', 'memory', 'notebook', 'wiki', 'config'])
+    // folding into the wiki. The constitution keeps its own page, and Memory and Notebook are
+    // Personal's tabs: an entry has one home.
+    expect(LIBRARY_ORDER).toEqual(['skills', 'agents', 'wiki', 'config'])
     expect(LIBRARY_ORDER).not.toContain('laws')
   })
 

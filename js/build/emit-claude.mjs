@@ -16,14 +16,15 @@ import {
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
+import { foldOnEmit } from './fold.mjs';
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
-import { kitsBody, renderAll, renderFile } from './render.mjs';
+import { kitsBody, pathTokens, renderAll, renderFile } from './render.mjs';
 import {
   BOB_RULES_STUB, bobFirstReply, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
   ensureProfileStub,
-  ensureRulesStub, ensureWikiStub, WIKI_FILE,
+  ensureRulesStub, ensureWikiStub, sharedRootFor, WIKI_FILE,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { existsSync, mkdirSync } from 'node:fs';
@@ -53,11 +54,13 @@ export function emitClaudeRender(cfg, job) {
     oldOwned, oldHashes = {},
   } = job;
 
-  // `os.path.relpath(cfg, claude_md.parent)` — note the reversed argument order, and
-  // that Python answers '.' for an identical pair where `path.relative` answers ''.
+  // Relative to the CLAUDE.md directory, so the argument order is cfg-from-claude_md; an
+  // identical pair is '.' where `path.relative` answers ''.
   const relCfg = relPosix(path.dirname(claudeMd), cfgDir) || '.';
   const lawsPrefix = relCfg === '.' ? '' : `${relCfg}/`;
-  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog });
+  // A re-render of a deployed install sends that install's root, null included.
+  const { sharedRoot = scope === 'global' ? sharedRootFor(cfgDir, host) : null } = job;
+  const { theme, items } = renderAll(cfg, themeName, { footprint, lawsPrefix, nativeCatalog, sharedRoot });
   assertSourceComplete(cfg, `claude-${scope}`);
   mkdirSync(cfgDir, { recursive: true });
 
@@ -68,7 +71,7 @@ export function emitClaudeRender(cfg, job) {
     // Deliberately NOT the same lookup as `agentText` below: that one skips an
     // AGENT.md whose text is null, this one does not. Unreachable today (`.md` is a
     // text suffix, so the render is never null) and reproduced anyway, because the two
-    // spellings sit four lines apart in the Python and only one of them filters.
+    // spellings sit four lines apart and only one of them filters.
     //
     // The fast path itself is byte-inert, measured: removing it re-renders with a theme
     // whose DIR_* tokens gained an EMPTY prefix and with the same lawsPrefix, so it
@@ -82,6 +85,9 @@ export function emitClaudeRender(cfg, job) {
       ptheme[tok] = prefix + (ptheme[tok] ?? tok.split('_').slice(1).join('_').toLowerCase());
     }
     ptheme.AT_HARNESS = prefix;
+    // The PATH_* tokens are not in the loop: absolute ones take no prefix, and relative ones
+    // follow the tokens just prefixed.
+    Object.assign(ptheme, pathTokens(ptheme, sharedRoot));
     // The Kits block was substituted with the unprefixed DIR_* tokens; rebuild it, or its links dangle.
     ptheme.KITS_BODY = kitsBody(cfg, ptheme, '');
     // Same catalogue decision as the renderAll above — a re-render that forgot it would
@@ -113,8 +119,8 @@ export function emitClaudeRender(cfg, job) {
     : scope === 'project' ? (name) => relPosix(path.dirname(cfgDir), path.join(cfgDir, 'skills', name))
       : (name) => path.join(cfgDir, 'skills', name).split(path.sep).join('/');
   // Bob's and OpenClaude's agents/skills use the Claude dialect verbatim.
-  // `manifestExisted` is deliberately not passed: the Python does not pass it either, so
-  // the pre-manifest header line is unreachable from this emit on both sides.
+  // `manifestExisted` is deliberately not passed, so
+  // the pre-manifest header line is unreachable from this emit.
   // One shared `claim` (see `claimer`): the skills/agents writer and the Bob command writer
   // below both push into the same `owned` list, so a pre-manifest-install warning still
   // prints once across the whole emit rather than once per writer.
@@ -148,6 +154,8 @@ export function emitClaudeRender(cfg, job) {
   ensureRulesStub(cfgDir);
   ensureProfileStub(cfgDir);
   ensureExcludesStub(cfgDir);
+  // After the seeds, so what the fold sets aside is all it re-seeds. A project emit has no root.
+  if (sharedRoot !== null) foldOnEmit(host, cfgDir);
 
   // Project hygiene, claim-on-create: an existing (possibly user-authored) .gitignore is
   // never rewritten, but one we created stays owned across re-emits. The hook file is
@@ -216,8 +224,7 @@ export function emitClaudeRender(cfg, job) {
  *
  * `GENESEED_STACK_GLOBAL` is read from the environment on BOTH sides — the child inherits
  * `process.env`, so the opt-out reaches here without travelling in the job. `isTruthy` is
- * not needed for it: Python tests `os.environ.get(...)` for truthiness and an env var is
- * always a string, so `''` is the only falsy value either language sees.
+ * not needed for it: an env var is always a string, so `''` is the only falsy value.
  */
 function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRules = [],
   gates = {}) {
@@ -240,8 +247,8 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     // when nothing else remains — a whole-file delete would eat prose the user added AFTER
     // Geneseed created the file.
     //
-    // `os.path.relpath(claude_md, cfg).replace(os.sep, '/')`. Python answers '.' where
-    // `path.relative` answers '' for an identical pair, the same guard `lawsPrefix` needs
+    // Relative path with '/' separators. An identical pair is '.' where
+    // `path.relative` answers '', the same guard `lawsPrefix` needs
     // above — unreachable here (CLAUDE.md is a file, cfgDir a directory, so the pair is
     // never identical) and spelled anyway, because the two call sites are 400 lines apart
     // and only one of them is obviously safe.
@@ -249,8 +256,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     managed.claude_md = { rel };
   } else if (isBob && scope === 'global' && isTruthy(get(old, 'claude_md'))) {
     const oldCm = isDict(get(old, 'claude_md')) ? get(old, 'claude_md') : {};
-    // `.resolve()` on the Python side; `path.resolve` is its counterpart and both are
-    // applied to a path already built from an absolute cfgDir.
+    // `path.resolve` is applied to a path already built from an absolute cfgDir.
     const victim = path.resolve(cfgDir, get(oldCm, 'rel') || path.basename(claudeMd));
     managedBlockRemove(victim);
   }
@@ -306,8 +312,8 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
       const addedExcl = wireClaudeExcludes(settingsPath, wantExcl);
       // Claim only what Geneseed itself wired (prior + newly added) — folding `wantExcl`
       // in unconditionally would claim a user's own pre-existing exclude, and uninstall
-      // would then strip it. `sorted(set(a) | set(b))` — Python sorts strings by code
-      // point and so does the default `Array.sort`, which is why no comparator is passed.
+      // would then strip it. The default `Array.sort` orders strings by code
+      // unit, which is the order wanted, so no comparator is passed.
       managed.settings_excludes = [...new Set([...priorExcl, ...addedExcl])].sort();
     }
   } else if (priorExcl.length && isBob) {

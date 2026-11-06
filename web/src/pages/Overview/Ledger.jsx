@@ -5,6 +5,8 @@ import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { storeInstallPick, useInstalls } from '../../hooks/useInstalls.js'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
+import { hostInfo, installTag } from '../../lib/hosts.js'
+import Loading from '../../components/Loading.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Ring from '../../components/Ring.jsx'
 import StackBar, { Bar } from '../../components/StackBar.jsx'
@@ -16,6 +18,7 @@ import {
   costTotal,
   fleetVerdict,
   ledgerNeeds,
+  sessionStartFigure,
   needsRebuild,
   neverFired,
   rebuildTarget,
@@ -26,10 +29,17 @@ import { alwaysOnRange, gateSummary, rootFileFigure, usageTotal } from './ledger
 // The health card (verdict and actions), four KPIs, the fleet, then what needs you and what
 // fires; each fleet row opens a details row with its cost breakdown. Hosts with nothing
 // installed are not listed; installing lives on the Installs page with its other settings.
-// Every read but the fleet degrades to null (a soft fetch), and a part that has no data says so
-// in words. The fleet is the page's spine, so its failure is said out loud, with a Retry.
+// Each part tells three states apart: a read still out shows `Loading`, a failed one says so in
+// words, and an empty one says what it found. The fleet is the page's spine, so its failure is
+// said out loud, with a Retry.
 
 const soft = (p) => p.catch(() => null)
+// A first read still out. `data` beats `loading`: a reload keeps the last answer on screen.
+const pendingOf = (q) => q.loading && !q.data
+// A read that ended with nothing: rejected, or a soft read's null.
+const failedOf = (q) => !q.loading && !q.data
+// Keyed reads are shared, so a failure must reject: a soft null would be cached for every reader.
+const shared = (fn) => Promise.resolve().then(fn)
 const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
 
 // The page re-asks /api/update this often while it stays open, and again when its tab comes
@@ -40,6 +50,11 @@ export const UPDATE_POLL_MS = 60 * 60 * 1000
 // this soon, once per answer, so the chip does not wait the hour to learn it.
 export const UPDATE_RETRY_MS = 5000
 
+// Why a clone with a release out has no Update button: `behind: false` says only that a pull
+// cannot run, so this names every reason.
+const NO_PULL =
+  'This checkout cannot pull: it has local changes, a detached HEAD, no upstream or a diverged branch.'
+
 // `canFill` false: the page already has its one primary (a rebuild is due), so a due Update
 // stays ghost instead of becoming a second filled button.
 function VersionChip({ update, onAction, canFill = true }) {
@@ -47,6 +62,8 @@ function VersionChip({ update, onAction, canFill = true }) {
   // `install` picks the route; a daemon older than the field only sent `git`.
   const install = update.install ?? (update.git ? 'git' : 'npm-global')
   const behind = install === 'git' && typeof update.behind === 'number' ? update.behind : null
+  // A clone's own ask still out: no verdict yet, so neither "latest" nor a button that may refuse.
+  const asking = install === 'git' && update.behind === null && update.checking
   const chip =
     behind !== null ? (
       behind > 0 ? (
@@ -57,9 +74,9 @@ function VersionChip({ update, onAction, canFill = true }) {
           </span>
         </span>
       ) : (
-        <span className="mono dim ver-chip">{update.current ?? ''} · up to date</span>
+        <span className="mono dim ver-chip">{update.current ?? ''} · latest</span>
       )
-    ) : update.latest === null ? (
+    ) : update.latest === null || asking ? (
       <span className="mono dim ver-chip">
         {update.current ?? ''} · {update.checking ? 'checking…' : 'update check unavailable'}
       </span>
@@ -82,14 +99,17 @@ function VersionChip({ update, onAction, canFill = true }) {
       </>
     )
   }
-  // A git clone can always pull: main moves between releases, and the release check may be
-  // unanswered behind a proxy. An npm install updates only when a release is out.
-  if (install !== 'git' && !update.available) return chip
+  // A git clone can pull even with nothing released: main moves between releases, and the release
+  // check may be unanswered behind a proxy. Not when the server says the pull would be refused
+  // (`behind: false`: no upstream, a detached HEAD, a diverged branch), and an npm install updates
+  // only when a release is out.
+  if (update.behind === false && update.available) return <span title={NO_PULL}>{chip}</span>
+  if (asking || update.behind === false || (install !== 'git' && !update.available)) return chip
   const due = behind === null ? Boolean(update.available) : behind > 0
   const title =
     install === 'git'
       ? behind === 0
-        ? 'Nothing to pull: up to date with upstream. Pulls and rebuilds every install anyway.'
+        ? 'Nothing to pull: this is the latest. Pulls and rebuilds every install anyway.'
         : 'git pull, then rebuild every install'
       : 'npm install -g geneseed@latest, then rebuild every install'
   return (
@@ -112,6 +132,7 @@ const HEALTH_ICON = {
   good: 'M8 12.5l2.7 2.7L16 9.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
   warn: 'M12 3 22 20H2zM12 10v4M12 17v.5',
   bad: 'M9 9l6 6M15 9l-6 6M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+  unknown: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
 }
 function HealthIcon({ tone }) {
   return (
@@ -140,7 +161,9 @@ function Health({ fleet, error, behind, onAction, onRebuild }) {
         <div className="health-acts">{doctor}</div>
       </section>
     ) : (
-      <div className="health unknown" aria-busy="true" />
+      <div className="health unknown" aria-busy="true">
+        <Loading label="Reading the installs…" />
+      </div>
     )
   }
   const v = fleetVerdict(fleet)
@@ -183,7 +206,7 @@ const tok = (chars) => Math.round(chars / 4)
 const PART_TONE = { carrier: 'accent', skills: 'skill', agents: 'agent', context: 'context' }
 const costParts = (c) =>
   COST_PARTS.map(([k, l]) => ({ key: k, label: l, n: tok(c[k]), tone: PART_TONE[k] }))
-const labelOf = (i) => `${i.host} · ${i.scope}`
+const labelOf = installTag
 
 // The carrier against its ceiling, as a small ring: the phone card's root-file mark (CSS shows
 // it only at phone width). Decorative: the row's own cells carry the figure in words.
@@ -221,11 +244,17 @@ function Kpi({ id, title, aside, className = '', children }) {
   )
 }
 
-function RootKpi({ installs }) {
+const NO_FLEET = <p className="dim">The installs could not be read.</p>
+
+function RootKpi({ installs, pending, failed }) {
   const w = rootFileFigure(installs)
   return (
     <Kpi id="ldg-k-root" title="Root file vs ceiling" className="ldg-kpi-root">
-      {w ? (
+      {pending ? (
+        <Loading />
+      ) : failed ? (
+        NO_FLEET
+      ) : w ? (
         <div className="ldg-kpi-ring">
           <span className="ldg-ringbox">
             {/* Past its ceiling the ring is full and reads bad, as the row's bar does. */}
@@ -248,7 +277,9 @@ function RootKpi({ installs }) {
           <span className="ldg-kpi-stack">
             <span className="mono ldg-kpi-fig">{`${approxTokens(w.carrier)} tokens`}</span>
             <span className="dim">{`of ${approxTokens(w.ceiling)} ceiling`}</span>
-            <span className="dim">{w.label}</span>
+            <span className="dim" title={w.label}>
+              Highest install
+            </span>
           </span>
         </div>
       ) : (
@@ -261,8 +292,9 @@ function RootKpi({ installs }) {
 // What the costliest install loads into every turn before you type: its total, then the parts
 // (root file, skill list, agent list, session files) with their tokens in the legend. The
 // fleet's range stays as one quiet line, so the card answers one question first.
-function CostKpi({ installs }) {
+function CostKpi({ installs, pending, failed }) {
   const r = alwaysOnRange(installs)
+  const start = sessionStartFigure(installs)
   const span =
     r &&
     (approxTokens(r.min) === approxTokens(r.max)
@@ -270,14 +302,25 @@ function CostKpi({ installs }) {
       : `${approxTokens(r.min)} – ${approxTokens(r.max)}`)
   return (
     <Kpi id="ldg-k-cost" title="Loaded every turn" className="ldg-kpi-cost">
-      {r ? (
+      {pending ? (
+        <Loading />
+      ) : failed ? (
+        NO_FLEET
+      ) : r ? (
         <>
           <span className="ldg-kpi-stack">
             <span className="mono ldg-kpi-fig">{`${approxTokens(costTotal(r.top.cost))} tokens`}</span>
-            <span className="dim">{labelOf(r.top)}</span>
+            <span className="dim" title={labelOf(r.top)}>
+              Highest install
+            </span>
           </span>
           <StackBar parts={costParts(r.top.cost)} label={`Loaded every turn, ${labelOf(r.top)}`} />
           <span className="dim ldg-kpi-cap">{`All installs: ${span} tokens`}</span>
+          {start ? (
+            <span className={`ldg-kpi-cap ${start.near ? 't-warn' : 'dim'}`}>
+              {`Session start · ${start.size} · without project context`}
+            </span>
+          ) : null}
         </>
       ) : (
         <p className="dim">No install has a root file to measure.</p>
@@ -286,7 +329,7 @@ function CostKpi({ installs }) {
   )
 }
 
-function CallsKpi({ usage }) {
+function CallsKpi({ usage, pending }) {
   // `per_day` always spans the last 30 days, so the figure is named "since" only while fewer
   // than 30 are counted; past that, an older `since` would pass a 30-day sum off as all-time.
   const since = !usage?.enabled
@@ -301,7 +344,9 @@ function CallsKpi({ usage }) {
       className="ldg-kpi-calls"
       aside={since ? <span className="mono dim ldg-kpi-aside">{since}</span> : null}
     >
-      {!usage ? (
+      {pending ? (
+        <Loading />
+      ) : !usage ? (
         <p className="dim">Usage could not be read.</p>
       ) : !usage.enabled ? (
         <p className="dim">Usage counting is off on this machine.</p>
@@ -317,7 +362,7 @@ function CallsKpi({ usage }) {
   )
 }
 
-function GatesKpi({ gates, laws }) {
+function GatesKpi({ gates, laws, pending }) {
   const g = gateSummary(gates, laws)
   return (
     <Kpi
@@ -330,7 +375,9 @@ function GatesKpi({ gates, laws }) {
         </a>
       }
     >
-      {!gates ? (
+      {pending ? (
+        <Loading />
+      ) : !gates ? (
         <p className="dim">Gate activity could not be read.</p>
       ) : !g.total ? (
         <p className="dim">No gate asked in 30 days.</p>
@@ -354,7 +401,7 @@ const COLS = 6
 function SyncCell({ i }) {
   if (!i.diffable) {
     return (
-      <span className="dim" title="Drift is only checked for global installs">
+      <span className="dim" title="Local edits are only checked for global installs">
         not checkable
       </span>
     )
@@ -364,26 +411,29 @@ function SyncCell({ i }) {
   const stale = i.drift?.stale ?? 0
   return (
     <>
-      <span className="ldg-syncbar">
-        <StackBar
-          parts={[
-            { key: 'stale', label: 'Behind source', n: stale, tone: 'warn' },
-            { key: 'edited', label: 'Edited by hand', n: drift, tone: 'bad' },
-          ]}
-          label={`Sync with source, ${labelOf(i)}`}
-          legend={false}
-        />
-      </span>
+      {/* A bar only for something to draw: an empty track beside a final word reads as pending. */}
+      {stale || drift ? (
+        <span className="ldg-syncbar">
+          <StackBar
+            parts={[
+              { key: 'stale', label: 'Behind source', n: stale, tone: 'warn' },
+              { key: 'edited', label: 'Local edits', n: drift, tone: 'bad' },
+            ]}
+            label={`Sync with source, ${labelOf(i)}`}
+            legend={false}
+          />
+        </span>
+      ) : null}
       {drift ? (
         <span className="mono t-bad">{drift} edited</span>
       ) : i.drift?.linked ? (
         // The user's own links: shown, so their absence from the count is explained, but
         // muted and with no Rebuild, because no rebuild clears them.
         <span className="mono dim" title="Yours: links Geneseed leaves alone">
-          {i.drift.linked} linked
+          {i.drift.linked} linked by you
         </span>
-      ) : (
-        <span className="mono dim">none</span>
+      ) : stale ? null : (
+        <span className="mono dim">No edits</span>
       )}
       {stale ? (
         <div className="mono dim ldg-sub">
@@ -396,7 +446,7 @@ function SyncCell({ i }) {
 
 // What differs from the source, in words, for the details row.
 function differs(i) {
-  if (!i.diffable) return 'Not checkable: drift is only checked for global installs.'
+  if (!i.diffable) return 'Not checkable: local edits are only checked for global installs.'
   const d = i.drift || {}
   const parts = [
     d.stale ? `${d.stale} behind` : null,
@@ -423,7 +473,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
             className={`ldg-glyph ${driftTotal(i.drift) ? 'bad' : 'warn'}`}
             viewBox="0 0 10 10"
             role="img"
-            aria-label={driftTotal(i.drift) ? 'edited by hand' : 'needs a rebuild'}
+            aria-label={driftTotal(i.drift) ? 'local edits' : 'needs a rebuild'}
           >
             <path d="M5 1 9 9H1z" fill="currentColor" />
           </svg>
@@ -434,7 +484,8 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
           </span>
         ) : null}
         <div className="ldg-name">
-          <span className="ldg-host">{i.host}</span> <span className="dim">{i.scope}</span>
+          <span className="ldg-host">{hostInfo(i.host).label}</span>{' '}
+          <span className="dim">{i.scope}</span>
           <div className="mono dim ldg-path">{i.path}</div>
         </div>
       </div>
@@ -464,7 +515,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
     )
   }
   const sync = {
-    synced: <span className="pill good">in step</span>,
+    synced: <span className="pill good">in sync</span>,
     behind: <span className="pill warn">behind source</span>,
     unknown: <span className="pill off">not checked</span>,
   }[i.verdict]
@@ -570,7 +621,6 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
                     `${i.footprint} footprint`,
                     i.posture && `${i.posture} posture`,
                     i.mode && `${i.mode} mode`,
-                    i.facts != null && `${i.facts} memory fact${i.facts === 1 ? '' : 's'}`,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -600,8 +650,18 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
   )
 }
 
-function Needs({ rows, onAction, onRebuild }) {
+function Needs({ rows, pending, partial, onAction, onRebuild }) {
   const problems = rows.filter((r) => !r.sugg).length
+  if (pending) {
+    return (
+      <section className="panel" aria-labelledby="ldg-needs">
+        <div className="panel-head panel-head-rule">
+          <h2 id="ldg-needs">Needs you</h2>
+        </div>
+        <Loading />
+      </section>
+    )
+  }
   return (
     <section className="panel" aria-labelledby="ldg-needs">
       <div className="panel-head panel-head-rule">
@@ -638,14 +698,16 @@ function Needs({ rows, onAction, onRebuild }) {
             </li>
           ))}
         </ul>
-      ) : (
+      ) : partial ? null : (
         <p className="needs-empty">Nothing needs you.</p>
       )}
+      {/* A failed read may hide a row, so the list never reads as an all-clear. */}
+      {partial ? <p className="dim">Some reads failed, so this list may be incomplete.</p> : null}
     </section>
   )
 }
 
-function WhatFires({ usage }) {
+function WhatFires({ usage, pending }) {
   const head = (
     <div className="panel-head">
       <h2 id="ldg-usage">What fires</h2>
@@ -656,7 +718,7 @@ function WhatFires({ usage }) {
     return (
       <section className="panel" aria-labelledby="ldg-usage">
         {head}
-        <p className="dim">Usage could not be read.</p>
+        {pending ? <Loading /> : <p className="dim">Usage could not be read.</p>}
       </section>
     )
   }
@@ -725,20 +787,10 @@ function WhatFires({ usage }) {
   )
 }
 
-// `view` is the Overview's View control, handed down so both arms carry the same one.
-export default function Ledger({ overview, setup, runs, onAction, dataRev, banner, view }) {
-  const confirm = useConfirm()
-  // job id → the row ids its rebuild names; a row shows the sweep while that run is running.
-  const [rebuilding, setRebuilding] = useState({})
-  // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
-  // last good answer on a failed reload, so a blip shows the old table under an error line.
-  const {
-    data: fleet,
-    error: fleetError,
-    reload: reloadFleet,
-  } = useAsync(() => api.fleet(), [dataRev])
-  const { data: usage } = useAsync(() => soft(api.usage()), [dataRev])
-  const { data: gates } = useAsync(() => soft(api.gates()), [dataRev])
+// The Overview's one header, under every view: the title, how many installs (`count`, null until
+// read), the version chip, and the View control. Owns the update read, so a lens gets the chip too.
+// `canFill` false keeps Update a ghost button: the page already has its one filled action.
+export function OverviewHead({ count, canFill, onAction, view, dataRev }) {
   // A failed re-poll (the daemon restarting under it) keeps the last answer rather than hiding
   // the chip and the button until the next good one. It is no longer "checking" then: the page
   // could not learn more, so it stops the early re-ask and says "unavailable" until the next poll.
@@ -770,11 +822,60 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
     const timer = setTimeout(reloadUpdate, UPDATE_RETRY_MS)
     return () => clearTimeout(timer)
   }, [checking, update, reloadUpdate])
-  const { data: rules } = useRules(dataRev)
-  const { data: activity } = useAsync(() => soft(api.activity()), [dataRev])
-  const { data: profile } = useAsync(() => soft(api.profile()), [dataRev])
-  const { data: skills } = useAsync(() => soft(api.catalog('skills')), [dataRev], 'catalog:skills')
-  const { data: laws } = useAsync(() => soft(api.catalog('laws')), [dataRev], 'catalog:laws')
+  return (
+    <PageHeader
+      title="Overview"
+      sub={count === null ? null : `${count} install${count === 1 ? '' : 's'} on this machine`}
+      actions={
+        <>
+          <VersionChip update={update} onAction={onAction} canFill={canFill} />
+          {view}
+        </>
+      }
+    />
+  )
+}
+
+// `view` is the Overview's View control, handed down so both arms carry the same one.
+export default function Ledger({ overview, setup, runs, onAction, dataRev, banner, view }) {
+  const confirm = useConfirm()
+  // job id → the row ids its rebuild names; a row shows the sweep while that run is running.
+  const [rebuilding, setRebuilding] = useState({})
+  // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
+  // last good answer on a failed reload, so a blip shows the old table under an error line.
+  const fleetRead = useAsync(() => api.fleet(), [dataRev])
+  const { data: fleet, error: fleetError, reload: reloadFleet } = fleetRead
+  const usageRead = useAsync(() => soft(api.usage()), [dataRev])
+  const gatesRead = useAsync(() => soft(api.gates()), [dataRev])
+  const { data: usage } = usageRead
+  const { data: gates } = gatesRead
+  const rulesRead = useRules(dataRev)
+  const activityRead = useAsync(() => soft(api.activity()), [dataRev])
+  const profileRead = useAsync(() => soft(api.profile()), [dataRev])
+  const skillsRead = useAsync(
+    () => shared(() => api.catalog('skills')),
+    [dataRev],
+    'catalog:skills',
+  )
+  const lawsRead = useAsync(() => shared(() => api.catalog('laws')), [dataRev], 'catalog:laws')
+  const { data: rules } = rulesRead
+  const { data: activity } = activityRead
+  const { data: profile } = profileRead
+  const { data: skills } = skillsRead
+  const { data: laws } = lawsRead
+  const fleetPending = pendingOf(fleetRead)
+  // "Nothing needs you" is a verdict over all of these, so it waits for all of them.
+  const needsReads = [
+    fleetRead,
+    usageRead,
+    rulesRead,
+    activityRead,
+    profileRead,
+    skillsRead,
+    lawsRead,
+  ]
+  const needsPending = needsReads.some(pendingOf)
+  const fleetFailed = failedOf(fleetRead)
 
   const installs = fleet?.installs || []
   // Open hands this row to the Hosts panel, then goes there: there is no viewed install to move.
@@ -822,19 +923,12 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
 
   return (
     <>
-      <PageHeader
-        eyebrow={
-          fleet
-            ? `${installs.length} harness${installs.length === 1 ? '' : 'es'} installed on this machine`
-            : null
-        }
-        title="Overview"
-        actions={
-          <>
-            <VersionChip update={update} onAction={onAction} canFill={!behind.length} />
-            {view}
-          </>
-        }
+      <OverviewHead
+        count={fleet ? installs.length : null}
+        canFill={!behind.length}
+        onAction={onAction}
+        view={view}
+        dataRev={dataRev}
       />
       {banner}
       <div className="ov-stack ldg">
@@ -849,14 +943,14 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
           <h2 id="ldg-kpis-h" className="sr-only">
             Key figures
           </h2>
-          <RootKpi installs={installs} />
-          <CostKpi installs={installs} />
-          <CallsKpi usage={usage} />
-          <GatesKpi gates={gates} laws={laws} />
+          <RootKpi installs={installs} pending={fleetPending} failed={fleetFailed} />
+          <CostKpi installs={installs} pending={fleetPending} failed={fleetFailed} />
+          <CallsKpi usage={usage} pending={pendingOf(usageRead)} />
+          <GatesKpi gates={gates} laws={laws} pending={pendingOf(gatesRead)} />
         </div>
         <section className="panel" aria-labelledby="ldg-fleet">
           <div className="panel-head panel-head-rule">
-            <h2 id="ldg-fleet">Installed harnesses</h2>
+            <h2 id="ldg-fleet">Installs</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
           {fleetError && fleet ? (
@@ -903,6 +997,13 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
                     </td>
                   </tr>
                 ) : null}
+                {fleetPending ? (
+                  <tr>
+                    <td colSpan={COLS}>
+                      <Loading />
+                    </td>
+                  </tr>
+                ) : null}
                 {installs.map((i, n) => (
                   <FleetRow
                     key={i.id}
@@ -918,8 +1019,14 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
           </div>
         </section>
         <div className="ldg-bottom">
-          <Needs rows={needs} onAction={onAction} onRebuild={rebuild} />
-          <WhatFires usage={usage} />
+          <Needs
+            rows={needs}
+            pending={needsPending}
+            partial={needsReads.some(failedOf)}
+            onAction={onAction}
+            onRebuild={rebuild}
+          />
+          <WhatFires usage={usage} pending={pendingOf(usageRead)} />
         </div>
       </div>
     </>

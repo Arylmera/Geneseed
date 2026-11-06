@@ -70,15 +70,17 @@ export function selfAndParents(p) {
  * the other. The trailing empty is dropped the way Python drops it (`"a\n"` is one line,
  * `""` is none).
  */
+export const LINE_BREAK = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
+
 export function splitLines(text) {
   if (!text) return [];
-  const parts = text.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/);
+  const parts = text.split(LINE_BREAK);
   if (parts.length && parts[parts.length - 1] === '') parts.pop();
   return parts;
 }
 
 /** The first window a Stop reads from a transcript's end; real transcripts reach 50 MB. */
-export const TAIL_BYTES = 2 * 1024 * 1024;
+const TAIL_BYTES = 2 * 1024 * 1024;
 
 /**
  * A transcript reader for ONE hook invocation: `read(file, judge)` hands `judge(text, whole)`

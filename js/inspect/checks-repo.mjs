@@ -27,7 +27,7 @@ import { isDir, isFile, rglob, srcStems, within } from './scan.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 /**
- * `_harness_build._registry_keys` — every entity the registry must describe.
+ * Every entity the registry must describe.
  *
  * The flat agent and skill specs plus the vendored skill FOLDERS, which have no flat spec and
  * are still shipped capabilities. Keyed `<folder>/<stem>`, the shape doctor already prints.
@@ -47,7 +47,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // it too, and a copy would stop being the value under test the first time one side changed.
 
 /**
- * `_harness_build._registry_problems` — `registry.json` describes exactly what `src/`
+ * `registry.json` describes exactly what `src/`
  * provides, with well-formed fields.
  *
  * Two-way, like every anti-drift gate here: a new spec with no row and a row whose spec is
@@ -106,10 +106,10 @@ export function registryProblems() {
 }
 
 /**
- * `_harness_build._SECRET_PATTERNS` — credential shapes, by the prefix each issuer stamps,
+ * Credential shapes, by the prefix each issuer stamps,
  * plus the generic assignment. Deliberately narrow: a gate that cries wolf gets disabled.
  *
- * `(?i)` becomes the `i` flag on the last one only, which is where the Python puts it.
+ * `(?i)` becomes the `i` flag on the last one only.
  */
 /** @type {Array<[string, RegExp]>} */
 const SECRET_PATTERNS = [
@@ -124,7 +124,7 @@ const SECRET_PATTERNS = [
 ];
 
 /**
- * `_harness_build._secret_problems` — no credential may ship.
+ * No credential may ship.
  *
  * Sweeps the four trees `sourceFingerprint()` hashes, which is exactly the material that ends
  * up inside a user's bundle. Reports file:line and the KIND only — echoing the matched text
@@ -136,17 +136,16 @@ export function secretProblems() {
     if (!isDir(root)) continue;
     for (const p of rglob(root)) {
       if (!isFile(p) || p.split(path.sep).includes('__pycache__')) continue;
-      // `except (OSError, UnicodeDecodeError): continue` — binary or unreadable, nothing to
-      // scan. `readText` would substitute U+FFFD where Python RAISES, so the strict decode is
-      // the check rather than a catch, and the newline folding `Path.read_text` does has to
-      // be applied by hand afterwards for the LINE NUMBERS to agree.
+      // Binary or unreadable: nothing to scan. `readText` would substitute U+FFFD rather than
+      // raise, so the strict decode is the check rather than a catch, and the newline
+      // folding has to be applied by hand afterwards for the LINE NUMBERS to agree.
       let raw;
       try { raw = readFileSync(p); } catch { continue; }
       let s;
       try { s = new TextDecoder('utf-8', { fatal: true }).decode(raw); } catch { continue; }
       s = s.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-      // `path.relative` returns a `..`-prefixed path where `relative_to` RAISES; the fallback
-      // is the Python's, for a tree outside the repo (a test tmpdir).
+      // `path.relative` returns a `..`-prefixed path for a tree outside the repo (a test
+      // tmpdir); the fallback is the path as given.
       const r = path.relative(ROOT, p);
       const rel = (r.startsWith('..') || path.isAbsolute(r) ? p : r)
         .split(path.sep).join('/');
@@ -166,7 +165,7 @@ export function secretProblems() {
 }
 
 /**
- * `_harness_build._shim_problems` — the hook shim exists and points at something real.
+ * The hook shim exists and points at something real.
  *
  * This gate exists because the shim DISARMED an accidental safety net. When the emitted hook
  * command still carried the checkout path, moving the checkout made that command
@@ -225,7 +224,7 @@ const HEX40_RE = /^[0-9a-f]{40}$/;
 const MOVING_REFS = new Set(['main', 'master', 'develop', 'dev', 'head', 'latest', 'trunk']);
 
 /**
- * `_harness_build._vendor_pin_problems` — every vendored skill folder records where it came
+ * Every vendored skill folder records where it came
  * from: `**Upstream key:** <key>`, naming its `src/upstreams.json` entry, which holds the repo,
  * the pinned commit and the licence (`creditProblems` checks those facts).
  *
@@ -621,7 +620,7 @@ export function hostMatrixProblems(root = ROOT) {
  *
  * Taken from `geneseed scorecard` on main after #209-#213 (security policy, PR template, ARCHITECTURE
  * and ADRs, the audit and commitlint jobs, Dependabot, coverage, property tests, fuzzing): 26 of 31,
- * 81.2/100, matching upstream's Python tool check for check. Then the weekly Stryker run and the
+ * 81.2/100, matching upstream's scorecard tool check for check. Then the weekly Stryker run and the
  * offline link check added mutation_testing and stale_doc_detection: 28 of 31, 88.7 (A); the checkJs
  * pass added type_safety (partial: `strict` is off): 29 of 31, 90.4; calling the web job's prettier and vitest
  * directly (the scorecard reads only the root package.json's scripts) added formatter_enforcement

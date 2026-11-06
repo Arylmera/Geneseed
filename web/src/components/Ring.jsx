@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef } from 'react'
 import { animate, svg, utils } from 'animejs'
-import { motionOK, settle } from '../lib/motion.js'
+import { DUR, motionOK, settle } from '../lib/motion.js'
 
 // A ring chart in plain SVG arcs: `segments` = [{ key, label, n, tone }], or a single
 // `value` of `max`. The three cases a hand-rolled donut got wrong are the reason it is
@@ -19,7 +19,7 @@ export default function Ring({
   size = 120,
   stroke = 12,
   label,
-  sweepMs = 650,
+  sweepMs = DUR[9],
 }) {
   const cap = max > 0 ? max : 0
   const parts = segments || [
@@ -54,7 +54,7 @@ export default function Ring({
     utils.set(drawn, { draw: '0 0' })
     const anim = animate(drawn, {
       draw: ['0 0', '0 1'],
-      duration: (_, i) => Math.max(sweepMs * fr[i], 60),
+      duration: (_, i) => Math.max(sweepMs * fr[i], DUR[1]),
       delay: (_, i) => sweepMs * from[i],
       ease: 'linear',
     })

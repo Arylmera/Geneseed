@@ -1,7 +1,7 @@
 /**
  * The generator's render core, in Node — the first half of the port.
  *
- * This is a faithful translation of `_build_render.py`'s pure text pipeline: load a
+ * The pure text pipeline: load a
  * theme, lay the fixed neutral STRUCTURE over it, inline INCLUDE directives, resolve
  * AGENT.md's CATALOG blocks, substitute {{TOKENS}}, and hand back every source file with
  * its themed output path. It writes nothing and reads nothing but `src/` and `themes/`.
@@ -14,11 +14,11 @@
  * THIS module is only RENDER
  * because it is the only stage whose output is a pure function of the source tree.
  *
- * PARITY IS THE CONTRACT, NOT THE INTENT. Every function here has a named Python
- * counterpart and had to produce byte-identical output for it. The reference is gone, so
+ * BYTE IDENTITY IS THE CONTRACT, NOT THE INTENT. The output must stay byte-identical for
+ * the same inputs, so
  * what holds the line is `tests/golden.mjs --against`, replaying recorded emit cells;
  * drives both over every theme x footprint x posture x mode and byte-compares the
- * written trees. Where Python and JS semantics differ silently — path sort order,
+ * written trees. Where the earlier Python semantics and JS differ silently — path sort order,
  * `.suffix`, `splitlines`, universal newlines — the difference is spelled out at the
  * call site rather than left to the reader.
  *
@@ -30,13 +30,14 @@
  */
 import { readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { readText } from '../lib/fs.mjs';
+import { isDir, readText } from '../lib/fs.mjs';
 import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import {
   CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, upstreamOf,
 } from './source.mjs';
+import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 
@@ -56,6 +57,31 @@ export const STRUCTURE = {
   ONT_TELOS: 'Telos', ONT_EVIDENCE: 'Evidence', ONT_DECISIONS: 'Decisions',
   ONT_OWNERSHIP: 'Ownership', ONT_CONDUCT: 'Conduct',
 };
+
+/**
+ * Where a fact, rule, profile or note LIVES, as prose names it (C10). `DIR_MEMORY` cannot say
+ * so: it also names the output dir and takes `prefixedAgentText`'s prefix. On a global emit these
+ * are absolute under `sharedRoot`, which no prefix may touch. Otherwise each follows the `DIR_*`
+ * token it replaced, prefix included, so a project emit keeps its bytes: `prefixedAgentText`
+ * calls this again after prefixing. `LINK_MEMORY` drops the link on a global emit, because an
+ * absolute target is what `linkProblems` refuses as non-hermetic. `WIKI_TIER` is the hop a Rite
+ * takes past the host's wiki file, which the fold re-seeds to an empty list: nothing off a tier.
+ */
+export function pathTokens(theme, sharedRoot = null) {
+  const memory = theme.DIR_MEMORY ?? 'memory';
+  const at = sharedRoot ? `${sharedRoot}/` : theme.AT_HARNESS ?? '';
+  return {
+    PATH_MEMORY: sharedRoot ? `${at}memory` : memory,
+    PATH_NOTES: sharedRoot ? `${at}notes` : theme.DIR_NOTEBOOK ?? 'notebook',
+    PATH_RULES: `${at}user-rules.md`,
+    PATH_PROFILE: `${at}PROFILE.md`,
+    PATH_WIKI: `${at}geneseed-wiki.jsonc`,
+    WIKI_TIER: sharedRoot ? `, then, when that one declares no wiki, the shared \`${at}geneseed-wiki.jsonc\`` : '',
+    LINK_MEMORY: sharedRoot ? `\`${at}memory/\`` : `[\`${memory}/\`](${memory}/)`,
+    PROFILE_LOCATION: sharedRoot ? `\`${at}PROFILE.md\``
+      : '`PROFILE.md` beside the deployed AGENT.md',
+  };
+}
 
 /**
  * Source top-level dirs whose OUTPUT name is themed. Mirrors `SRC_DIR_TOKENS`.
@@ -96,7 +122,7 @@ export const LEAN_BLOCK_RE =
   /[ \t]*<!-- LEAN:begin -->\n(?<full>[\s\S]*?)[ \t]*<!-- LEAN:else -->\n(?<lean>[\s\S]*?)[ \t]*<!-- LEAN:end -->\n/g;
 
 /**
- * `PurePath.suffix`. Not `path.extname`: Python returns '' for a name whose only dot is
+ * A file suffix, `PurePath.suffix` style. Not `path.extname`: it is '' for a name whose only dot is
  * leading (`.gitignore`) or trailing (`foo.`), where `extname` returns '' and '.'
  * respectively. Neither spelling is in TEXT_SUFFIXES, so the divergence is invisible
  * today — which is exactly why it is written out rather than relied upon.
@@ -120,7 +146,7 @@ function sortedSourceFiles(src) {
   return out.sort(comparePaths);   // `sorted()` — case-folded on Windows only
 }
 
-/** `_build_render.load_theme`. Throws where Python calls `sys.exit`. */
+/** Load a theme. Throws a marked refusal, which the driver turns into an exit code. */
 export function loadTheme(cfg, name) {
   const p = path.join(cfg.themes, `${name}.json`);
   if (!existsSync(p)) {
@@ -135,12 +161,12 @@ export function loadTheme(cfg, name) {
     // is the refusal, on every path. It is also reachable from `geneseed status`, which takes
     // its theme from a `.geneseed-theme`
     // marker — an unvalidated file in a user's install. A bare `throw` there printed a Node
-    // stack trace where Python printed one line, and the acceptance matrix is what said so.
+    // stack trace where one line was wanted, and the acceptance matrix is what said so.
     process.stderr.write(`[geneseed] unknown theme '${name}'. available: ${available}\n`);
     throw Object.assign(new Error(`unknown theme '${name}'`), { exitCode: 1 });
   }
   // parseJson, not JSON.parse: one rule for every JSON the generator reads, so a numeric
-  // theme value keeps the int/float distinction Python's `str()` and `repr()` render
+  // theme value keeps the int/float distinction that `str()` and `repr()` render
   // differently. No shipped theme has one today; `_theme_json`'s ACCENT and the
   // AGENT_COLORS validation warning are both one authoring typo away from needing it.
   return parseJson(readText(p));
@@ -151,8 +177,8 @@ export function substitute(text, theme) {
   return text.replace(TOKEN_RE, (whole, key) => {
     if (!Object.hasOwn(theme, key)) return whole;  // visible for debugging
     const v = theme[key];
-    // Python renders `str(theme[key])`, which agrees with JS only for strings —
-    // `str(True)`/`String(true)` and `str({...})`/`String({...})` do not. Every one of
+    // A token renders as `String(theme[key])`, which is only well-defined for strings —
+    // `String(true)` and `String({...})` are not what a Python-minded author expects. Every one of
     // the 148 tokens the source tree actually uses resolves to a string today
     // (AGENT_COLORS is a dict but is never a token), so a non-string here means the
     // source or a theme grew a case nobody has decided the semantics for. Fail loudly
@@ -254,7 +280,7 @@ function resolveLean(text, footprint) {
  * `re.split(r"(?m)^(?=### )", text)`.
  *
  * Hand-rolled rather than `String.split` with a lookahead: splitting on a zero-width
- * match is a corner both engines implement, and the leading '' Python produces when the
+ * match is a corner both engines implement, and the leading '' produced when the
  * text starts with a heading is load-bearing (it becomes `blocks[0]`, the preamble).
  */
 export function splitAtLawHeadings(text) {
@@ -281,18 +307,63 @@ export function lawsPointer(theme, lawsPrefix = '') {
 }
 
 /**
- * SOURCE TEXT, READ ONCE PER `cfg`. One emit renders the same partials over and over — the
- * self-improvement footer is included by ~50 specs — and `doctor --all` repeats that per theme:
- * 91% of its file reads were repeats. Keyed on the `cfg` OBJECT, not the process: the web
- * daemon renders in-process for days, and `makeCfg()` is called per operation, so each request
- * sees today's source. Only files under `cfg.src` — the one tree nothing in a render writes to.
+ * WHAT THE SOURCE TREE YIELDS, SHARED UNTIL IT CHANGES. One emit renders the same partials over
+ * and over — the self-improvement footer is included by ~50 specs — and `doctor --all` repeats
+ * that across 84 emits, each with its own `makeCfg()`, so a cache per `cfg` object still read,
+ * stripped and resolved everything 84 times. A cache per process is no answer either: the web
+ * daemon renders in-process for days, and each request must see today's source.
+ *
+ * So a generation lives as long as the tree's stamp. The stamp covers the WHOLE tree, never the
+ * one file being read, because a resolved text depends on other files: rename a law and every
+ * file citing it renders differently with its own mtime untouched. Paths are in it, so an added
+ * or deleted file moves it, and so is `cfg.root`, which `sourceFingerprint` hashes against.
+ *
+ * Stamped once per `cfg`: the source cannot change under one operation, and a stat walk is what
+ * each operation now pays instead of the reads. The stamp is taken BEFORE anything is read, so
+ * an edit landing mid-operation costs a repeat read next time, never an old text kept.
+ *
+ * A tree written in the last `SETTLE_MS` is never shared, the way git distrusts a racy index
+ * entry: a second edit of the same size inside one timestamp tick would leave the stamp as it was,
+ * and a tick is 2 s on FAT. A shared stamp is therefore always older than any later edit's.
  */
-const SRC_TEXT = new WeakMap();
+const SETTLE_MS = 3_000;
+const GENERATIONS = new Map();     // cfg.src -> the latest generation: one per tree, never a history
+const GENERATION_OF = new WeakMap();
+export function sourceGeneration(cfg) {
+  let generation = GENERATION_OF.get(cfg);
+  if (generation) return generation;
+  const { stamp, newest } = sourceStamp(cfg);
+  generation = GENERATIONS.get(cfg.src);
+  if (generation?.stamp !== stamp) {
+    generation = { stamp, texts: new Map() };
+    if (Date.now() - newest > SETTLE_MS) GENERATIONS.set(cfg.src, generation);
+  }
+  GENERATION_OF.set(cfg, generation);
+  return generation;
+}
+
+function sourceStamp(cfg) {
+  const lines = [cfg.root];
+  let newest = 0;
+  for (const root of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {
+    if (!isDir(root)) continue;
+    for (const p of sortedSourceFiles(root)) {
+      // A file deleted since the walk listed it is simply not in the tree any more.
+      const st = statSync(p, { throwIfNoEntry: false });
+      if (!st) continue;
+      const { size, mtimeMs, ctimeMs } = st;
+      newest = Math.max(newest, mtimeMs);
+      lines.push(`${p}\0${size}\0${mtimeMs}\0${ctimeMs}`);
+    }
+  }
+  return { stamp: lines.join('\n'), newest };
+}
+
+/** Only files under `cfg.src` — the one tree nothing in a render writes to. */
 function readSource(cfg, p) {
   const src = cfg && cfg.src ? normcase(path.resolve(cfg.src)) + path.sep : null;
   if (!src || !normcase(p).startsWith(src)) return readText(p);
-  let seen = SRC_TEXT.get(cfg);
-  if (!seen) SRC_TEXT.set(cfg, (seen = new Map()));
+  const seen = sourceGeneration(cfg).texts;
   let text = seen.get(p);
   // Rule ids and credits resolve here, once per file, so every stage after sees the addressed form.
   if (text === undefined) seen.set(p, (text = resolveCredits(resolveRuleIds(readText(p), cfg.src), cfg.src)));
@@ -457,14 +528,27 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
  * `_build_render.effective_theme`.
  *
  * `cfg.structure` overrides the constant below when the driver supplies one, and it
- * always does. STRUCTURE is a module-level dict on the Python side that tests MUTATE to
+ * always does. STRUCTURE is a module-level constant that tests once MUTATED to
  * simulate a themed DIR_* rename (`SrcDirRenameOrphanTests`); in-process that reaches
  * every reader because the splice shares one dict object, and across a process boundary
  * it reaches nothing at all unless it travels. The constant stays as the default for the
  * parity harnesses, which drive this module directly.
  */
-export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix = '' } = {}) {
+export function effectiveTheme(cfg, themeName, {
+  footprint = 'full', lawsPrefix = '', sharedRoot = null,
+} = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
+  Object.assign(theme, pathTokens(theme, sharedRoot));
+  // Empty without a tier, so a project emit and a default build stay byte-identical (the
+  // `EXCLUDED_SKILLS_LINE` contract). Each rides the end of a template line, so its value carries
+  // the blank line. C1 lives in this text: the readers only concatenate, shared first.
+  theme.RULE_LAYERS_LINE = sharedRoot ? '\n\n`user-rules.md` has layers: the shared file above, '
+    + `this host's file, then a project's. Where they disagree the later layer wins, so project `
+    + `over host over shared, and all three stay under the ${theme.LAWS}.` : '';
+  theme.SHARED_STORE_NOTE = sharedRoot ? `\n\n> **On this install the store is shared.** New facts `
+    + `go to \`${sharedRoot}/memory/\`, which every host on this machine reads. This directory `
+    + 'holds this convention, and any fact\n> that landed here waits for the next emit to move it.'
+    : '';
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
   theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
   // The loop skill's default trust preset (`--trust`), raw for `--preset` and capitalised for
@@ -504,6 +588,9 @@ export function effectiveTheme(cfg, themeName, { footprint = 'full', lawsPrefix 
   const kits = activeKits(cfg);
   theme.KITS_LINE = kits.length ? `\nActive kits: ${kits.map(([k]) => k).join(', ')}\n` : '';
   theme.KITS_BODY = kitsBody(cfg, theme, lawsPrefix);
+  // The shared-tier marker, under the same contract (`sharedTierOfDir` reads it): written only when
+  // `on`, so a default build stays byte-identical. Not `GATE_SWITCHES`, which holds `--no-*` disarms.
+  theme.SHARED_TIER_LINE = cfg.sharedTier ? `\n${SHARED_TIER_LINE}\n` : '';
   // The gate switches (`GATE_SWITCHES`: Laws I, III, IV), under the same contract: a line is
   // written only when its gate is OFF, so a default build stays byte-identical and a missing
   // line reads back as armed (`gatesOfDir`). The OpenCode plugins read these lines at load, so
@@ -535,8 +622,7 @@ export function themedRel(rel, theme) {
  * `_build_render.dest_rel` — AGENT.md.tmpl -> AGENT.md; gitignore -> .gitignore;
  * everything else keeps its name.
  *
- * WHY THE IGNORE FILES ARE STORED WITHOUT THE DOT — the Python twin's comment carries the
- * full argument. In short: `src/memory/.gitignore` and `src/notebook/.gitignore` are
+ * WHY THE IGNORE FILES ARE STORED WITHOUT THE DOT — in short: `src/memory/.gitignore` and `src/notebook/.gitignore` are
  * product content, and under their real names `npm install` renamed them to `.npmignore`
  * on extraction (so an npm-installed Geneseed emitted bundles with NO `.gitignore` and
  * leaked the user's agent memory into their repo) while `npm pack` read the notebook's
@@ -558,16 +644,16 @@ export function destRel(rel) {
  * Returns `{ theme, items }` where each item is `{ rel, text, src }` — `rel` is the
  * themed POSIX output path, `text` is the rendered text or `null` for a binary that the
  * caller copies from `src`. A credited skill's licence copy also carries `licenceOf` (the
- * skill's stem), since its `src` is not under that skill. Python returns a tuple of tuples; the object form is the
- * same data with the field names the Python docstring already uses.
+ * skill's stem), since its `src` is not under that skill. Each entry is an object with named fields.
  * @param {any} cfg
  * @param {string} themeName
- * @param {{ footprint?: string, lawsPrefix?: string, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
+ * `sharedRoot` is the tier's root on a global emit (`sharedRootFor`): see `pathTokens`.
+ * @param {{ footprint?: string, lawsPrefix?: string, sharedRoot?: string | null, nativeCatalog?: boolean | { skills?: boolean, agents?: boolean } }} [opts]
  */
 export function renderAll(cfg, themeName, {
-  footprint = 'full', lawsPrefix = '', nativeCatalog = false,
+  footprint = 'full', lawsPrefix = '', nativeCatalog = false, sharedRoot = null,
 } = {}) {
-  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix });
+  const theme = effectiveTheme(cfg, themeName, { footprint, lawsPrefix, sharedRoot });
   const items = [];
   const skipped = new Set(cfg.excludeSkills ?? []);
   // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.

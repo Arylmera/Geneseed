@@ -9,8 +9,8 @@
 //   - Deletion Is Deliberate:  block catastrophic shell commands, and every command that would
 //     really lose data, judged against the repository's state (`lossReason`, below).
 //   - Commands Must Return:  block a recursive scan rooted at a whole filesystem (find /).
-//   - Persist Insight (rule vs memory):  speed-bump the first write to user-rules.md
-//     memory file — that choice belongs to the user, via the rule skill.
+//   - Persist Insight (rule vs memory):  a write to user-rules.md or a memory file needs the
+//     HOST's own prompt (`permission.edit`; on V2 the `evaluate` hook too); with none, it is refused.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
 //   - Ownership:  in an application repo whose root AGENTS.md has no `## Ownership` section,
@@ -51,7 +51,7 @@
 // upgrade path there is still a session-level `permission` ruleset set by the loop launcher
 // when it creates the loop session (`session.create` accepts one).
 
-import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, statSync, lstatSync } from "node:fs"
+import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -114,8 +114,13 @@ async function mainWorktreeOf(dir) {
 async function sovereignBypass(cwd) {
   try {
     const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
-    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
-    const entries = (JSON.parse(raw).excludes) || []
+    const listOf = async (file) => {
+      try { const l = JSON.parse(await fs.readFile(file, "utf8")).excludes; return Array.isArray(l) ? l : [] } catch { return [] }
+    }
+    const entries = await listOf(path.join(cfg, "excludes.json"))
+    // Shared list (<machineDir>/excludes.json): a GLOBAL install adds it, a project install never does.
+    const shared = await listOf(path.join(machineDir(), "excludes.json"))
+    if (shared.length && await readsTier(cfg)) entries.push(...shared)
     const here = norm(cwd || process.cwd())
     const main = await mainWorktreeOf(cwd || process.cwd())
     const heres = main ? [here, norm(main)] : [here]
@@ -1106,22 +1111,22 @@ function parsePatchPaths(patchText) {
   return patchSections(patchText).flatMap((s) => [s.from, s.path]).filter(Boolean)
 }
 
-// Returns every candidate path for this call, normalized (backslashes -> `/`) and,
-// for an `apply_patch` call, resolved against `cwd` (the session's `ctx.directory` —
-// the same root `apply_patch.ts:72` resolves against upstream) since a patch marker
-// is worktree-relative. Non-patch tools keep the single-path shape every other gate
-// already expects, just wrapped in an array.
+// The argument keys that can name a target. Every one is read, never the first found: a call that
+// carried a decoy `patchText` or a harmless `path` beside the real `filePath` once hid the target
+// from every gate, a hard refusal such as `.ssh/id_rsa` included.
+const PATH_KEYS = ["filePath", "file_path", "path", "file", "target", "filename", "destination", "dest"]
+function plainPaths(args) {
+  // Normalize Windows backslashes to `/` so the secret-path patterns (which use `/`
+  // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
+  return PATH_KEYS.map((k) => args?.[k]).filter((v) => typeof v === "string" && v).map((v) => v.replace(/\\/g, "/"))
+}
+// Returns every candidate path for this call, normalized (backslashes -> `/`): every path key, and
+// every patch marker resolved against `cwd` (the session's `ctx.directory` — the same root
+// `apply_patch.ts:72` resolves against upstream) since a patch marker is worktree-relative.
 function pickPath(args, cwd) {
-  if (args && typeof args.patchText === "string") {
-    return parsePatchPaths(args.patchText)
-      .map((p) => path.resolve(cwd || process.cwd(), p).replace(/\\/g, "/"))
-  }
-  for (const k of ["filePath", "path", "file", "target", "filename"]) {
-    // Normalize Windows backslashes to `/` so the secret-path patterns (which use `/`
-    // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
-    if (args && typeof args[k] === "string") return [args[k].replace(/\\/g, "/")]
-  }
-  return []
+  const marked = args && typeof args.patchText === "string" ? parsePatchPaths(args.patchText)
+    .map((p) => path.resolve(cwd || process.cwd(), p).replace(/\\/g, "/")) : []
+  return [...new Set([...marked, ...plainPaths(args)])]
 }
 // Per-FILE added content for an `apply_patch` call: `parsePatchPaths` flattens every marker
 // path into one list (right for the path-only gates, which must catch a secret/protected name
@@ -1169,19 +1174,17 @@ function patchSections(patchText) {
 // NEW content — a `-` line is text being REMOVED, so a secret there is leaving the file, not
 // landing in it, and must not block the call.
 function pickAddedContentByPath(args, cwd) {
-  if (args && typeof args.patchText === "string") {
-    return parsePatchSections(args.patchText)
-      .filter((s) => s.added.length)
-      .map((s) => ({
-        path: path.resolve(cwd || process.cwd(), s.path).replace(/\\/g, "/"),
-        content: s.added.join("\n"),
-      }))
-  }
-  const [p] = pickPath(args, cwd)
-  if (!p) return []
-  if (typeof args.content === "string") return [{ path: p, content: args.content }]
-  if (typeof args.newString === "string") return [{ path: p, content: args.newString }]
-  return []
+  const found = args && typeof args.patchText === "string" ? parsePatchSections(args.patchText)
+    .filter((s) => s.added.length)
+    .map((s) => ({
+      path: path.resolve(cwd || process.cwd(), s.path).replace(/\\/g, "/"),
+      content: s.added.join("\n"),
+    })) : []
+  // Beside a patch too: a decoy `patchText` must not hide the content a call also carries.
+  const [p] = plainPaths(args)
+  if (!p) return found
+  for (const text of [args.content, args.newString]) if (typeof text === "string") found.push({ path: p, content: text })
+  return found
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -1253,20 +1256,48 @@ function stripJsonc(text) {
   return res
 }
 
-async function wikiFile() {
+// The machine tier: machineDir() in js/lib/machine-dir.mjs, which a plugin cannot import.
+function machineDir() {
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
+}
+
+// The wiki manifest's names, newest first: WIKI_NAMES in js/lib/machine-dir.mjs.
+const WIKI_NAMES = ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]
+
+// The host's own config dir counts as global too, whatever its marker says (the hook's
+// isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
+const hostConfigDir = () => process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
+async function isHostConfigDir(dir) {
+  const real = async (d) => { const r = await fs.realpath(path.resolve(d)).catch(() => path.resolve(d)); return process.platform === "win32" ? r.toLowerCase() : r }
+  return (await real(dir)) === (await real(hostConfigDir()))
+}
+
+// Whether this install reads the machine tier: its .geneseed-emit names a -global emit, or it IS
+// the host's own config dir (the two tests of the hook's isHostGlobalDir).
+async function readsTier(dir) {
+  try { if ((await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global")) return true } catch { /* no marker */ }
+  return isHostConfigDir(dir)
+}
+
+// Every manifest in force: $GENESEED_WIKI alone when set, else the host layer's and, for a global
+// install, the shared one. Protection only widens, so both are read; the context plugin's
+// seed-or-real choice would need seed hashes this plugin does not carry.
+async function wikiFiles() {
   const explicit = process.env.GENESEED_WIKI
-  if (explicit && (await isFile(explicit))) return explicit
+  if (explicit && (await isFile(explicit))) return [explicit]
   const bases = []
   if (process.env.GENESEED_HARNESS) bases.push(process.env.GENESEED_HARNESS)
   bases.push(path.resolve(PLUGIN_DIR, ".."))
+  if (await readsTier(path.dirname(PLUGIN_DIR))) bases.push(machineDir())
+  const found = []
   for (const base of bases) {
     // wiki.jsonc and wiki.json are the legacy names from earlier seeds — still honoured.
-    for (const name of ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) {
+    for (const name of WIKI_NAMES) {
       const p = path.join(base, name)
-      if (await isFile(p)) return p
+      if (await isFile(p)) { found.push(p); break }
     }
   }
-  return null
+  return found
 }
 
 // Cached absolute prefixes, refreshed on a short TTL so a manifest edit lands
@@ -1280,9 +1311,9 @@ async function protectedPrefixes() {
   if (now - _prot.at < PROT_TTL_MS) return _prot.prefixes
   const prefixes = []
   try {
-    const file = await wikiFile()
-    if (file) {
-      const data = JSON.parse(stripJsonc(await fs.readFile(file, "utf8")))
+    for (const file of await wikiFiles()) {
+      let data
+      try { data = JSON.parse(stripJsonc(await fs.readFile(file, "utf8"))) } catch { continue } // one bad manifest hides no other
       for (const w of Array.isArray(data?.wikis) ? data.wikis : []) {
         if (!w?.path || !Array.isArray(w.protected)) continue
         for (const d of w.protected) {
@@ -1299,32 +1330,156 @@ async function protectedPrefixes() {
 }
 
 // ---- the rule / memory stores (Persist Insight) --------------------------------
-// Whether something the user wants kept is a standing rule or a durable fact is THEIR
-// call, settled through the rule skill. `tool.execute.before` can only allow or throw —
-// it has no "ask the user" tier like the Claude/Bob rule-gate hook —
-// so this is a SPEED BUMP, not a wall: the first write to a given path is refused with
-// the Law and the skill named, and a re-issued write goes through. One beat of
-// reconsideration, and a legitimate write is never trapped.
+// Whether something the user wants kept is a standing rule or a durable fact is THEIR call, and
+// the HOST asks it, never the agent (External Gate). This was a speed bump: the first write was
+// refused and any re-issue passed, so an agent could release itself by claiming the user's
+// authorization, and one did (2026-11). `tool.execute.before` can only allow or throw, so the
+// prompt comes from what runs AFTER it, inside the host's own edit tools:
+//   - V1: `permission.edit` "ask" keys (`opencodeEditAsks`, js/hosts/settings.mjs). V1 calls no
+//     plugin hook on an ask, so the guard passes a native edit only when the merged config really
+//     asks for that path and no "always" has switched that off (`hostPrompts`), and refuses it otherwise.
+//   - V2: the same keys, and `permission.hook("evaluate")` (`setupV2`), which also asks over a saved
+//     approval and a config that drifted.
+// A tool outside those never reaches either prompt, so a write the guard can see there is refused. A
+// refusal has no release: a re-issue meets the same answer. Shell is not a boundary: only the parsed
+// forms `shellWriteTargets` reads are seen, V2 asks on them through `evaluate`, V1 refuses them, and
+// everything else in a command is the host's own command permission's business.
 //
 // Install folder and file names are theme-independent by design, so the match is on
 // literal names. `user-rules.md` / `MEMORY.md` are Geneseed's own coinage and match
 // anywhere; other markdown matches only inside this install's own memory/ dir, so a
 // project's unrelated memory/ folder is never caught.
-const RULE_STORE_BUMPED = new Set()
 const nocase = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
-// Word for word js/hosts/hooks.mjs's PERSIST_ASK. A weak model once took a refusal as leave to
-// write the same file through a shell command, so the text names the one way forward.
-const PERSIST_ASK = "Stop and ask the user now (the rule skill). If this edit was refused, re-issue " +
-  "the same edit only after they answer; never write it another way (for example through a shell command)."
-function ruleStoreTarget(p) {
-  const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/")
-  const base = path.basename(abs).toLowerCase()
-  if (base === "user-rules.md") return "user-rules.md"
-  if (base === "memory.md") return "the memory index"
-  if (!base.endsWith(".md")) return null
-  const mem = path.join(path.dirname(PLUGIN_DIR), "memory").replace(/\\/g, "/")
-  return nocase(abs).startsWith(nocase(mem) + "/") ? "memory" : null
+// The host's own edit tools, the only ones its `edit` permission covers (V1 `edit`, `write`,
+// `apply_patch`; V2 `patch`). The guard's WRITE_TOOLS is a wider substring class, which also
+// catches an MCP server's writer: that one gets no prompt.
+const NATIVE_EDIT_TOOLS = new Set(["write", "edit", "apply_patch", "patch"])
+// A weak model once took a refusal as leave to write the same file through a shell command, so
+// each text names the one way forward. Neither invites a re-issue: nothing here releases one.
+const PERSIST_EDIT_TOOL = "Stop and ask the user now (the rule skill). Only the host's own edit tool " +
+  "reaches its prompt, so make this write with it and the host asks the user; re-issuing this " +
+  "call changes nothing, and never write it another way (for example through a shell command)."
+const PERSIST_NO_PROMPT = "Stop and ask the user now (the rule skill). The host has no prompt wired for " +
+  "this file, so this write stays refused and re-issuing it changes nothing: leave it for the user " +
+  "to write themself, and never write it another way (for example through a shell command)."
+// Whether the merged `permission.edit` makes V1 ask about `rel`, a path from the worktree: its own
+// evaluation, the LAST matching rule, with `Wildcard.match`'s pattern (util/wildcard.ts, 1.19.5).
+function editRuleAsks(edit, rel) {
+  if (typeof edit === "string") return edit === "ask"
+  return Object.entries(edit ?? {}).findLast(([k]) => wildMatch(k, rel))?.[1] === "ask"
 }
+// Whether one agent's own ruleset (`client.app.agents()`, config and frontmatter merged) leaves the
+// write to a prompt: its last rule for `edit` on `rel`. A deny is fine, the host refuses that itself.
+const agentMayAsk = (rules, rel) => (Array.isArray(rules) ? rules : [])
+  .findLast((r) => wildMatch(r?.permission ?? "", "edit") && wildMatch(r?.pattern ?? "", rel))?.action !== "allow"
+// The coined names, with their label. Exact case outside a store: `docs/concepts/memory.md` is another
+// file, on Windows too, and a fold would refuse it for ever. A file that EXISTS under a coined name
+// comes back in its true case through `landsOn`'s link-followed form, on NTFS and APFS alike; a
+// differently cased spelling of one that does not exist yet is not caught. Inside a store every .md
+// counts, whatever its case.
+const COINED_NAMES = [["user-rules.md", "user-rules.md"], ["MEMORY.md", "the memory index"], ["user-rules.draft.md", "the rule draft"]]
+const coined = (name) => COINED_NAMES.find(([n]) => n === name)?.[1] ?? null
+const foldPath = (s) => nocase(s.replace(/\\/g, "/"))
+// A path with a colon past its drive names an NTFS stream, which writes through to the real file.
+const namesStream = (p) => process.platform === "win32"
+  && String(p).replace(/^(?:[\\/]{2}[?.][\\/])?[a-zA-Z]:/, "").includes(":")
+// What a path lands on: spelled out against `base`, as written and with links followed, the two forms
+// `protectedCheck` reads, because a link from outside into a store and a store that links out are both
+// real. `path.resolve` folds `..`, `//` and `.`. Windows also drops a stream and trailing dots and spaces
+// from each segment, and its `realpath` turns an existing `~1` short name long. A short name of a file
+// that does not exist yet does not exist either.
+function landsOn(p, base) {
+  let raw = String(p)
+  if (/^~(?=[\\/]|$)/.test(raw)) raw = homedir() + raw.slice(1)
+  // A Git Bash `/c/…`, a device path, and this machine's admin share all name the drive path.
+  if (process.platform === "win32") {
+    raw = raw.replace(/^\/([a-zA-Z])(?=\/|$)/, "$1:").replace(/^[\\/]{2}[?.][\\/](?=[a-zA-Z]:)/, "")
+      .replace(/^[\\/]{2}(?:localhost|127\.0\.0\.1|\[?::1\]?)[\\/]([a-zA-Z])\$(?=[\\/]|$)/i, "$1:")
+  }
+  let abs = path.resolve(base || process.cwd(), raw)
+  if (process.platform === "win32") {
+    const drive = /^[a-zA-Z]:|^\\\\[^\\]+\\[^\\]+/.exec(abs)?.[0] ?? ""
+    abs = drive + abs.slice(drive.length).split("\\").map((s) => s.replace(/:.*$/, "").replace(/[. ]+$/, "")).join("\\")
+  }
+  // A dangling link has no realpath, and a write through it creates its target: follow it by hand,
+  // each hop through `resolvePath`, because a hop may pass a folder link. Bounded: links can loop.
+  const forms = [abs, resolvePath(abs)]
+  for (let cur = forms[1], hop = 0; hop < 8; hop += 1) {
+    try { cur = resolvePath(path.resolve(path.dirname(cur), readlinkSync(cur))); forms.push(cur) } catch { break }
+  }
+  return forms
+}
+// Every memory store this install writes, folded. Not only `<plugin dir>/../memory`: a project install
+// keeps its store beside its AGENT.md, `<out>/memory`, by default `<root>/Harness/memory`
+// (js/build/bundle.mjs). A carrier counts only when it holds an AGENT.md, so a project's unrelated
+// `memory/` is not caught. `$GENESEED_HARNESS` and `$GENESEED_MEMORY` are read live, as `machineDir` is.
+let wiredHomes = null
+function storeHomes() {
+  const cfg = path.dirname(PLUGIN_DIR)
+  const root = path.dirname(cfg)
+  wiredHomes ??= agentAskTails(cfg).map((t) => path.resolve(root, path.dirname(t)))
+  const homes = [cfg, machineDir(), path.join(root, "Harness"), ...wiredHomes,
+    ...CARRIER_DIRS.filter((d) => existsSync(path.join(d, "AGENT.md")))]
+  if (process.env.GENESEED_HARNESS) homes.push(process.env.GENESEED_HARNESS)
+  return [...new Set(homes.map((h) => path.resolve(h)))]
+}
+function storeDirs() {
+  const dirs = storeHomes().map((h) => path.join(h, "memory"))
+  if (process.env.GENESEED_MEMORY) dirs.push(process.env.GENESEED_MEMORY)
+  return [...new Set(dirs.flatMap((d) => [path.resolve(d), resolvePath(d)]).map(foldPath))]
+}
+// The store files under one home, as `path -> "size:mtime"`: stats, no reads. Twin of
+// js/hosts/store-watch.mjs `storeScan`; the plugins' copies are held equal by helper_parity.
+function storeScan(home, found = {}) {
+  const stamp = (f) => {
+    try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}` } catch { /* absent */ }
+  }
+  for (const n of ["user-rules.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
+  const walk = (dir) => {
+    let items = []
+    try { items = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of items) {
+      if (e.isDirectory()) { if (e.name !== "archive" && !e.name.startsWith("archived-")) walk(path.join(dir, e.name)) }
+      else if (e.name.endsWith(".md")) stamp(path.join(dir, e.name))
+    }
+  }
+  walk(path.join(home, "memory"))
+  return found
+}
+
+// ---- the change report (twin of js/hosts/store-watch.mjs, whose header says why) ---------------
+// It detects; it prevents nothing. Here the baseline lives in memory, for as long as the plugin does.
+const scanAllStores = () => storeHomes().reduce((found, h) => storeScan(h, found), {})
+const ownWrites = () => storeHomes().reduce((log, h) => {
+  try { return { ...log, ...JSON.parse(readFileSync(path.join(h, "memory", ".own-writes.json"), "utf8")) } } catch { return log }
+}, {})
+const storeLine = (files) => {
+  const shown = files.slice(0, 5).map((f) => f.split(/[\\/]/).slice(-2).join("/")).join(", ")
+  const more = files.length > 5 ? ` (+${files.length - 5} more)` : ""
+  return `Geneseed change report: ${files.length} rule or memory file${files.length === 1 ? "" : "s"} ` +
+    `changed outside this session's approved writes (another session may have made it): ${shown}${more}. This detects a change; it prevented nothing.`
+}
+function noteForStatus(files) {
+  try {
+    if (existsSync(machineDir())) writeFileSync(path.join(machineDir(), ".store-report.json"), JSON.stringify({ at: new Date().toISOString(), host: "opencode", files }))
+  } catch { /* a status line never fails a turn */ }
+}
+
+// The store a write would land in, or null. `base` is the session's directory: a relative path is
+// the tool's, never this process's.
+function ruleStoreTarget(p, base) {
+  const stores = storeDirs()
+  for (const abs of landsOn(p, base)) {
+    const hit = coined(path.basename(abs))
+    if (hit) return hit
+    const t = foldPath(abs)
+    if (nocase(t).endsWith(".md") && stores.some((d) => t.startsWith(`${d}/`))) return "memory"
+  }
+  return null
+}
+// Whether the merged `permission.edit`'s pattern `k` matches `rel`: V1's `Wildcard.match` (1.19.5).
+const wildMatch = (k, s) => new RegExp(`^${k.replace(/\\/g, "/").replace(/[.+^${}()|[\]\\]/g, "\\$&")
+  .replace(/\*/g, ".*").replace(/\?/g, ".")}$`, process.platform === "win32" ? "si" : "s").test(s)
 
 // ---- protected checks (External Gate) ------------------------------------------
 // Twin of js/hosts/hooks.mjs's `protectedCheck` — keep in step. A project lists the checks its agent
@@ -1380,6 +1535,7 @@ function gateConfig(p) {
     for (const target of [path.resolve(p), resolvePath(p)]) {
       const t = fold(target)
       if (carriers.includes(t)) return true
+      if (fold(path.join(machineDir(), "excludes.json")) === t) return true   // the shared exclude list
       const dir = path.dirname(target)
       if (GATE_CONFIG_MARKERS.some((m) => nocase(m) === nocase(path.basename(dir)))
         && GATE_CONFIG_FILES.some((f) => fold(path.join(dir, f)) === t)) return true
@@ -1414,10 +1570,11 @@ function nativeAskFile(p) {
     const name = path.basename(cfg)
     const tails = ["opencode.json", "opencode.jsonc", ...[".claude", ".openclaude", ".bob"].flatMap((m) =>
       [`${m}/settings.json`, `${m}/settings.local.json`]), ".bob/settings/settings.json", ".geneseed/bin/*",
-    ...["excludes.json", ".geneseed-manifest.json", ".geneseed-emit", "plugins/geneseed-*.js", "AGENT.md", "config.json"]
+    ...["excludes.json", ".geneseed-manifest.json", ".geneseed-emit", "plugins/*", "plugin/*", "agents/*.md", "agent/*.md",
+      "mode/*.md", "modes/*.md", "tool/*", "tools/*", "AGENT.md", "config.json"]
       .map((f) => `${name}/${f}`), ...agentAskTails(cfg)]
     const fold = (s) => nocase(s.replace(/\\/g, "/"))
-    const asked = tails.map((t) => new RegExp(`(?:^|/)${fold(t).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*")}$`))
+    const asked = tails.map((t) => new RegExp(`(?:^|/)${fold(t).replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`))
     // Its own try: a home that cannot be read costs the shim dir, never the entries above.
     let bin = null
     try { bin = fold(path.join(resolvePath(process.env.GENESEED_HOME || "~/.geneseed"), "bin")) } catch { /* no shim dir */ }
@@ -1524,6 +1681,12 @@ function shellWriteTargets(command, cwd) {
 }
 // ---- shell-write twin: END
 
+// A segment that is only a redirect: `> f`, or `A=1 > f`. V2's shell tool asserts only when its parser
+// finds a command, so no `evaluate` runs for one, and the guard refuses it as it does on V1.
+const noProgramWord = (command) => scanSegments(command).some((seg) => seg.includes(">")
+  && !stripStructure(seg.replace(REDIRECT_RE, (m, op) => (op === undefined ? m : " ")).match(SCAN_TOKEN_RE) || [])
+    .some((t) => !/^\w+=/.test(t)))
+
 // ---- the ownership first-write gate --------------------------------------------
 // Twin of js/hosts/ownership-gate.mjs's `ownershipBlock` — keep in step (same manifests, same
 // managed-block strip, same section match, same reason). In an application repo (a git root
@@ -1593,6 +1756,33 @@ function ownershipBlock(p, sessionID) {
 // renaming, or deleting a protected note is as destructive as overwriting it. Same
 // substring stance: over-matching the class is harmless (see WRITE_TOOLS note).
 const WIKI_MUTATE_TOOLS = [...WRITE_TOOLS, "delete", "remove", "rename", "move", "trash"]
+// The rule-store walk reads EVERY tool the host's prompt does not cover, except a named read set: a
+// list of writers can only ever be short of the next MCP server (`append`, `put`, `download`). Host
+// tools by exact name, an MCP tool by a read verb among the words of its name, unless a writer verb
+// is there too.
+const HOST_READ_TOOLS = new Set(["read", "grep", "glob", "list", "webfetch", "websearch", "codesearch", "lsp", "skill",
+  "todoread", "todowrite", "task", "subagent", "question", "workflow"])
+const READ_WORDS = new Set(["read", "get", "list", "search", "find", "grep", "glob", "view", "query", "stat", "describe", "show", "exists"])
+const readsOnly = (tool) => HOST_READ_TOOLS.has(tool)
+  || (tool.split(/[^a-z0-9]+/).some((w) => READ_WORDS.has(w))
+    && !hasAny(tool, [...WIKI_MUTATE_TOOLS, "copy", "append", "put", "download", "update", "set", "sync", "upload"]))
+// The strings a call carries that name a path, nested ones too: an MCP writer spells its target as it
+// likes. A string counts by its key, or by a separator with no whitespace, or by a `file:` URL. A title
+// or a comment that happens to read MEMORY.md is text, and another scheme's URL is not a path here.
+// Nesting past the bound sets `overflow`: what cannot be read is refused, not passed.
+const PATH_KEY_RE = /path|file|dest|target|out|dir|ur[il]|where|src|source|^to$|^from$/i
+const TEXT_KEY_RE = /^(?:title|name|content|text|body|data|description|summary|message|newString|oldString|new_string|old_string|patchText)$/i
+const ARG_DEPTH = 32
+function argPaths(v, key = "", out = [], depth = 0) {
+  if (depth > ARG_DEPTH) { out.overflow = true; return out }
+  if (typeof v === "string") {
+    if (!v || v.includes("\n") || TEXT_KEY_RE.test(key)) return out
+    if (/^file:/i.test(v)) { try { out.push(fileURLToPath(v)) } catch { /* no local file */ } }
+    else if (!/^[a-z][a-z0-9+.-]+:\/\//i.test(v) && (PATH_KEY_RE.test(key) || (/[\\/]/.test(v) && !/\s/.test(v)))) out.push(v)
+  } else if (Array.isArray(v)) v.forEach((x) => argPaths(x, key, out, depth + 1))
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) argPaths(x, k, out, depth + 1)
+  return out
+}
 
 // Usage counting: the same rules as js/hosts/usage.mjs, inline because a plugin cannot import
 // from the repo (V2 loads every .js in plugins/ as a plugin). One line per skill or subagent
@@ -1639,7 +1829,88 @@ export const GeneseedGuard = async (ctx) => {
       return Boolean(meta?.parentID ?? meta?.parentId)
     } catch { return false }
   }
+  // Whether the host itself will ask the user about this write once this hook lets it run. V2
+  // hands in `hostAsks` once its `evaluate` hook is registered; V1 is read from the merged config,
+  // every source included, and a failed read is no prompt. Read only on a rule-store write.
+  // V1's edit tools ask with `always: ["*"]`, so one "always" approves every edit of this instance
+  // and the rule above stops asking: from then on nothing here can pass to a prompt.
+  // What this can see of an "always": a reply this plugin heard, in this instance, since it loaded.
+  // What it cannot: the hook names no agent, so every agent's ruleset must leave the prompt in place.
+  const editAsks = new Set()
+  let everyEditApproved = false
+  const hostPrompts = async (tool, p, cwd) => {
+    if (!NATIVE_EDIT_TOOLS.has(tool)) return false
+    if (ctx?.hostAsks) return true
+    if (everyEditApproved) return false
+    try {
+      const got = await ctx?.client?.config?.get?.()
+      const edit = (got?.data ?? got)?.permission?.edit
+      if (edit === undefined) return false
+      const rel = path.relative(root(), path.resolve(cwd, p)).replace(/\\/g, "/")
+      if (!editRuleAsks(edit, rel)) return false
+      if (typeof ctx?.client?.app?.agents !== "function") return false
+      const agents = await ctx.client.app.agents()
+      return (agents?.data ?? agents ?? []).every((a) => agentMayAsk(a?.permission, rel))
+    } catch { return false }
+  }
+  // The change report. One baseline per root session, in memory. V2 feeds this hook from its own
+  // events (`setupV2`). `say` reaches the USER: a V1 toast, a V2 synthetic message.
+  const watched = new Map()
+  const say = ctx?.say ?? (async (_sid, line) => {
+    await ctx?.client?.tui?.showToast?.({ body: { title: "Geneseed", message: line, variant: "warning" } })
+  })
+  const unwatched = new Set()
+  const watch = async (sid) => {
+    if (OFF || !sid || watched.has(sid) || unwatched.has(sid)) return
+    if (await sovereignBypass(root()) || await isChildSession(sid)) { unwatched.add(sid); return }
+    watched.set(sid, scanAllStores())
+  }
+  const compare = async (sid) => {
+    const before = watched.get(sid)
+    if (!before) return
+    const now = scanAllStores()
+    watched.set(sid, now)
+    const changed = [...new Set([...Object.keys(before), ...Object.keys(now)])].filter((f) => before[f] !== now[f]).sort()
+    if (!changed.length) return
+    const own = ownWrites()
+    const files = changed.filter((f) => own[f] !== (now[f] ?? "gone"))
+    if (!files.length) return
+    const line = storeLine(files)
+    log(line)
+    noteForStatus(files)
+    await say(sid, line)
+  }
   return {
+    // V1's `permission.asked` / `permission.replied` (1.19.5), and the older `permission.updated`
+    // with `permissionID` and `response`. Never throws: an event has no one to catch it.
+    event: async ({ event }) => {
+      try {
+        const e = event?.properties ?? {}
+        if (event?.type === "permission.asked" || event?.type === "permission.updated") {
+          if ((e.permission ?? e.type) === "edit") editAsks.add(e.id)
+        } else if (event?.type === "permission.replied" && (e.reply ?? e.response) === "always"
+          && editAsks.has(e.requestID ?? e.permissionID)) everyEditApproved = true
+        else if (event?.type === "session.created") await watch(e.info?.id)
+        else if (event?.type === "session.idle") await compare(e.sessionID)
+      } catch (err) { log(`change report error (ignored): ${err?.message ?? err}`) }
+    },
+    // A native edit that ran went past the host's prompt: approved, so its new stamp joins every
+    // baseline here. Only those tools, and only with a session watched.
+    "tool.execute.after": async (input) => {
+      try {
+        const tool = String(input?.tool ?? "").toLowerCase()
+        if (!watched.size || !NATIVE_EDIT_TOOLS.has(tool)) return
+        const cwd = ctx?.directory || process.cwd()
+        for (const raw of pickPath(input?.args ?? {}, cwd)) {
+          if (!ruleStoreTarget(raw, cwd)) continue
+          // Only keys the scan itself names: a link's other spellings would read as files gone.
+          const now = scanAllStores()
+          for (const f of landsOn(raw, cwd)) {
+            for (const base of watched.values()) { if (f in now) base[f] = now[f]; else delete base[f] }
+          }
+        }
+      } catch (err) { log(`change report error (ignored): ${err?.message ?? err}`) }
+    },
     "tool.execute.before": async (input, output) => {
       // Bypass before counting, the order Claude's toolGate keeps: an excluded repo is
       // dormant, so nothing is written there. GENESEED_GUARD=off still counts — Claude's
@@ -1647,6 +1918,8 @@ export const GeneseedGuard = async (ctx) => {
       if (await sovereignBypass(root())) return
       await recordUse(input?.tool || input?.name, output?.args || input?.args)
       if (OFF) return
+      // A session that predates this plugin never sent `session.created`. Once per session.
+      try { await watch(input?.sessionID) } catch { /* the report never decides a tool call */ }
       const tool = (input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
@@ -1672,18 +1945,22 @@ export const GeneseedGuard = async (ctx) => {
           // one of them is a write target, so every one runs every gate; the first hit
           // blocks the whole call (see `pickPath` for why this is not a single path).
           const paths = pickPath(args, cwd)
-          for (const p of paths) {
+          for (const raw of paths) {
+            if (namesStream(raw)) { await deny(`${raw} names an NTFS stream, which writes through to the file it hangs on — name the file itself (External Gate)`, "rigor-5"); return }
+            // Once, here: under `opencode serve` this process's cwd is not the session's directory, and
+            // every gate below resolves a relative path against it.
+            const p = landsOn(raw, cwd)[0].replace(/\\/g, "/")
             if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
             if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
             const sensor = protectedCheck(p)
             if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
             if (gateConfig(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
-            const store = ruleStoreTarget(p)
-            if (store && !RULE_STORE_BUMPED.has(p)) {
-              RULE_STORE_BUMPED.add(p)
-              // Twin of js/hosts/hooks.mjs's process-1 text — keep the closing sentences in step.
+            // V1 after an "always": the `permission.edit` ask on these files is gone too.
+            if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
+            const store = ruleStoreTarget(raw, cwd)
+            if (store && !(await hostPrompts(tool, raw, cwd))) {
               await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                   `choice is the user's (Persist Insight). ${PERSIST_ASK}`, "process-1")
+                   `choice is the user's (Persist Insight). ${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
               return
             }
           }
@@ -1708,9 +1985,23 @@ export const GeneseedGuard = async (ctx) => {
             }
           }
         }
+        // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
+        // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
+        if (!NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
+          const named = argPaths(args)
+          if (named.overflow) { await deny(`${tool}'s arguments nest too deep to read, so a rule or memory write cannot be ruled out (Persist Insight)`, "process-1"); return }
+          for (const v of named) {
+            const store = ruleStoreTarget(v, cwd)
+            if (store) {
+              await deny(`writing to ${store} through ${tool} — a standing rule, or a fact to remember? That ` +
+                `choice is the user's (Persist Insight). ${PERSIST_EDIT_TOOL}`, "process-1")
+              return
+            }
+          }
+        }
         if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
           for (const p of pickPath(args, cwd)) {
-            const abs = (path.isAbsolute(p) ? p : path.resolve(p)).replace(/\\/g, "/").toLowerCase()
+            const abs = landsOn(p, cwd)[0].replace(/\\/g, "/").toLowerCase()
             const hit = (await protectedPrefixes()).find(
               (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
             if (hit) { await deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §8)`, "wiki"); return }
@@ -1719,6 +2010,8 @@ export const GeneseedGuard = async (ctx) => {
         // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
         // classes, and the shell check must still run after the write check.
         if (hasAny(tool, SHELL_TOOLS)) {
+          // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
+          const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
           const c = pickCommand(args)
           const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
           if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
@@ -1728,8 +2021,6 @@ export const GeneseedGuard = async (ctx) => {
               "search a specific directory instead: the project, node_modules, ~/.npm, %APPDATA%", "ops-2")
             return
           }
-          // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
-          const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
           if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
             const loss = lossReason(cut(c), wd, { always: false, split: cut })
             if (loss) { await deny(`${loss} (Deletion Is Deliberate) — confirm with the user first`, "law-4"); return }
@@ -1740,6 +2031,15 @@ export const GeneseedGuard = async (ctx) => {
             const sensor = protectedCheck(p)
             if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
             if (gateConfig(p) || nativeAskFile(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
+            // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
+            // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
+            const store = ruleStoreTarget(p, wd)
+            if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.add(input.callID); continue }
+            if (store) {
+              await deny(`writing to ${store} through a shell command — a standing rule, or a fact to ` +
+                `remember? That choice is the user's (Persist Insight). ${PERSIST_EDIT_TOOL}`, "process-1")
+              return
+            }
           }
         }
       } catch (err) {
@@ -1764,25 +2064,86 @@ export const GeneseedGuard = async (ctx) => {
 // original tool whatever the event's name says; every tool this guard gates requires
 // arguments, so `{}` fails validation there before anything executes.
 //
-// `permission.evaluate` (V2's deny hook) was not used: it sees only the action and a
-// resource list (the shell tool's is per sub-command), not the full input the content
-// scan and the patch-path gates need.
+// A deny stays here, not in `permission.hook("evaluate")`: that hook sees only the action and a
+// resource list (the shell tool's is per sub-command), not the full input the content scan and
+// the patch-path gates need. Its use is the ask this hook has no tier for. It runs after the
+// configured and saved rules, and for `edit` and `patch` a resource is relative to
+// `location.directory` or absolute, so a rule-store write becomes a real prompt whatever the config
+// and any saved "always" say (core/src/permission.ts, 2.2.5). A configured deny never reaches it,
+// and an unattended session turns the ask into a deny. A V2 without the domain has no `hostAsks`,
+// so the guard refuses those writes.
+async function askOnRuleStore(ctx, shellAsks) {
+  const dir = ctx?.location?.directory || process.cwd()
+  try {
+    await ctx.permission.hook("evaluate", async (event) => {
+      try {
+        if (OFF || event.effect === "deny") return
+        if (event.action === "shell") {
+          // The shell tool's assert: action `shell`, one resource per parsed command, `source.id` the
+          // call the tool hook marked. A command the host's parser finds no command in asserts nothing.
+          if (!shellAsks.delete(event.source?.id)) return
+          if (WARN_ONLY) { log("WARN (would ask): a shell write to a rule or memory file (Persist Insight)"); return }
+          event.effect = "ask"
+          event.message = "Geneseed (Persist Insight): this command writes a rule or memory file. A standing rule, or a fact to remember? That choice is yours."
+          return
+        }
+        if (event.action !== "edit") return
+        const store = event.resources.map((r) => ruleStoreTarget(r, dir)).find(Boolean)
+        // The gate's own files have a static ask a saved "always" can outvote, so they are raised too.
+        const gate = !store && event.resources.some((r) => nativeAskFile(path.resolve(dir, r)))
+        if ((!store && !gate) || await sovereignBypass(ctx?.location?.project?.directory || dir)) return
+        if (WARN_ONLY) { log(`WARN (would ask): writing to ${store || "a gate's configuration"} (Persist Insight)`); return }
+        event.effect = "ask"
+        event.message = store ? `Geneseed (Persist Insight): writing to ${store}. A standing rule, or a fact to remember? That choice is yours.`
+          : "Geneseed (External Gate): this file is a gate's own configuration. Editing it could switch a check off."
+      } catch {
+        // An event this hook cannot read is asked about. A V2 callback never throws.
+        try { if (event?.action === "edit") event.effect = "ask" } catch { /* a frozen event: the static key still asks */ }
+      }
+    })
+    return true
+  } catch { return false }
+}
+
 async function setupV2(ctx) {
+  const shellAsks = new Set()
+  const hostAsks = await askOnRuleStore(ctx, shellAsks)
   const hooks = await GeneseedGuard({
     worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory,
     sessionMeta: (sessionID) => ctx.session.get({ sessionID }),
+    hostAsks, shellAsks: hostAsks ? shellAsks : null,
+    say: (sessionID, text) => ctx.session.synthetic({ sessionID, text, description: "Geneseed change report", resume: false }),
   })
+  const report = (type, properties) => hooks.event({ event: { type, properties } })
+  // V2's turn edges, as geneseed-notify reads them. `say` above is the only way out to the user.
+  const controller = new AbortController()
+  try {
+    await ctx.tool.hook("execute.after", async (event) => {
+      if (event?.status === "completed") await hooks["tool.execute.after"]({ tool: event.tool, args: event.input })
+    })
+    if (ctx?.event?.subscribe) {
+      void (async () => {
+        for await (const ev of ctx.event.subscribe({ signal: controller.signal })) {
+          const sessionID = ev?.data?.sessionID
+          if (ev?.type === "session.execution.started") await report("session.created", { info: { id: sessionID } })
+          else if (/^session\.execution\.(?:succeeded|failed|interrupted)$/.test(ev?.type ?? "")) await report("session.idle", { sessionID })
+        }
+      })().catch((err) => log(`change report stream ended: ${err?.message ?? err}`))
+    }
+  } catch (err) { log(`change report not wired: ${err?.message ?? err}`) }
   await ctx.tool.hook("execute.before", async (event) => {
     try {
       // `sessionID` rides on every V2 execute.before event (@opencode/plugin 2.1.4 `ToolHooks`).
-      await hooks["tool.execute.before"]({ tool: event.tool, sessionID: event.sessionID }, { args: event.input })
+      await hooks["tool.execute.before"]({ tool: event.tool, sessionID: event.sessionID, callID: event.id }, { args: event.input })
     } catch (err) {
       const why = String(err?.message || "")
       if (!why.startsWith("[geneseed-guard]")) return
-      event.tool = why
+      // Core prints `No tool named "<this>"`, so the name must say first that nothing is missing.
+      event.tool = `BLOCKED, not a missing tool: ${why}`
       event.input = {}
     }
   })
+  return () => controller.abort()
 }
 
 export default { id: "geneseed-guard", server: GeneseedGuard, setup: setupV2 }

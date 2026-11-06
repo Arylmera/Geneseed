@@ -33,7 +33,7 @@ import {
   homeOverrides, makeSandbox, restoreProcessHome, sandboxProcessHome,
 } from '../helpers/sandbox.mjs';
 
-const EXCLUDED = 'quiz';
+const EXCLUDED = 'adhd';
 
 let home;
 let sb;
@@ -119,7 +119,7 @@ test('Build rebuilds it in place, its exclusion kept', () => {
 test('alone, it is the default install, viewed at the repo root', () => {
   // Its manifest sits in .opencode/, not at the root: the default must still count it active.
   const targets = [['opencode', 'project', repo], ['opencode', 'global', path.join(home, 'nothing-here')]];
-  assert.deepEqual(defaultView(targets), [repo, repo]);
+  assert.deepEqual(defaultView(targets), [repo, repo, 'opencode']);
 });
 
 test('the never-fired list reads the OpenCode layer, not the root bundle', () => {

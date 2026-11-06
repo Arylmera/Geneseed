@@ -23,7 +23,7 @@ import {
 } from '../../js/hosts/hooks-learn.mjs';
 import { tailReader } from '../../js/hosts/hooks-prims.mjs';
 import {
-  frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
+  factCount, frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
   migrateMemoryIndex, readFacts,
 } from '../../js/hosts/memory-files.mjs';
 import { discoverContext, resolveContextSets } from '../../js/hosts/hooks-context.mjs';
@@ -34,7 +34,6 @@ import { themeParityProblems, renderedProblems, descriptionProblems } from '../.
 import {
   themesToCheck, globalEmitProblems, claudeBobEmitProblems,
 } from '../../js/inspect/doctor.mjs';
-import { memoryFactCount } from '../../js/inspect/status.mjs';
 import { stripSkillBodyLinks, agentDescription } from '../../js/hosts/native.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
@@ -417,9 +416,8 @@ const baseEnv = (home) => {
   for (const k of ['GENESEED_LLM', 'GENESEED_LEARN_CHILD', 'CLAUDE_PROJECT_DIR']) delete env[k];
   return env;
 };
-// `cwd` is the sandbox, not the checkout: `resolveMemoryDir(null)` falls back to a `memory/`
-// directory under `process.cwd()`, and running from the repo's own checkout would pick up
-// whatever is actually there.
+// `cwd` is the sandbox, not the checkout: `resolveMemoryDir(null)` reads a project install in
+// `process.cwd()`, and running from the repo's own checkout would pick up whatever is there.
 const runLearn = (extra, stdin, env, cwd) => spawnSync(process.execPath,
   [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn', ...extra],
   { encoding: 'utf8', windowsHide: true, input: stdin, env, cwd });
@@ -1509,7 +1507,7 @@ test('a credit to an unknown upstream is flagged through the authoring gate', ()
 //
 // `_memory_facts` HAS NO SINGLE SUCCESSOR, and that is a split rather than a loss. It built one
 // record per fact — name, description, body — for the TUI's memory screen, and the port kept the
-// half each surviving caller needs: `memoryFactCount` (status, the number) and
+// half each surviving caller needs: `factCount` (status and the console, the number) and
 // `js/web/api.mjs`'s `memoryItems` (the console's list, gated by the 114 web cells). What is
 // asserted here is the part with no other owner: that the index really tracks the store.
 
@@ -1523,12 +1521,25 @@ test('the fact count sees the facts and skips the index and the readme', () => {
     fs.writeFileSync(path.join(d, 'b.md'),
       '---\nname: b\ndescription: beta\n---\nbody B', 'utf8');
     // Two facts — MEMORY.md and README.md are the store's furniture, not entries in it.
-    assert.equal(memoryFactCount(d), 2);
+    assert.equal(factCount(d), 2);
 
     memoryDropIndex(d, 'b');
     const index = fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8');
     assert.ok(!index.includes('(b.md)'), index);
     assert.ok(index.includes('(a.md)'), 'dropping one pointer removed the other too');
+  });
+});
+
+test('the fact count tells no folder from a folder it cannot list, and counts what the list shows', () => {
+  withDir((d) => {
+    // No store is no facts. A store path that is a file cannot be listed: that is "not read".
+    assert.equal(factCount(path.join(d, 'absent')), 0);
+    fs.writeFileSync(path.join(d, 'file'), 'x', 'utf8');
+    assert.equal(factCount(path.join(d, 'file')), null);
+    // A directory with a fact's name is no entry in the console's list, so it is none here.
+    fs.mkdirSync(path.join(d, 'notes.md'));
+    fs.writeFileSync(path.join(d, 'a.md'), 'a', 'utf8');
+    assert.equal(factCount(d), 1);
   });
 });
 
@@ -2020,6 +2031,178 @@ test('the memory store is found in $GENESEED_HARNESS from an unrelated cwd', () 
     fs.mkdirSync(work);
     assert.equal(memoryResolver(store, work, path.join(d, 'home')),
       `0 ${path.join(store, 'memory')}`);
+  });
+});
+
+test('the write resolver survives a home directory it cannot read', () => {
+  // `sharedPaths()` asks `os.homedir()`, which throws when the account has none. The resolver is
+  // on the learn hook's path, so the throw would be a stack trace and a non-zero exit. Run in a
+  // child that makes `os.homedir` throw, with a store the resolver can still find without it.
+  withDir((d) => {
+    const store = path.join(d, 'store');
+    const work = path.join(d, 'work');
+    fs.mkdirSync(path.join(store, 'memory'), { recursive: true });
+    fs.mkdirSync(work);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')), GENESEED_HARNESS: store };
+    delete env.GENESEED_MEMORY;
+    delete env.XDG_CONFIG_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'hosts', 'hosts.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { resolveMemoryDir } = await import(${JSON.stringify(url)});`
+      + 'process.stdout.write(String(resolveMemoryDir(null)));'],
+    { cwd: work, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(`${r.status} ${r.stdout}`, `0 ${path.join(store, 'memory')}`, r.stderr);
+  });
+});
+
+test('status survives a home directory it cannot read', () => {
+  // B2: `statusData` called `sharedPaths()` bare, for two scans of the tier. No `$XDG_CONFIG_HOME`
+  // and an account with no home is the one way that throws, and it took the whole verb down.
+  withDir((d) => {
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    delete env.XDG_CONFIG_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'inspect', 'status.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdStatus } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = cmdStatus({});'],
+    { cwd: d, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /memory/);
+  });
+});
+
+// B2's twin: the same bare `sharedPaths()`, reached after every install is rebuilt. It takes a real
+// project install to get there: with no target the verb returns first. A Claude-family project also
+// resolves the host's own config dir for `preambleExclude`, which asks the home directory too.
+for (const host of ['opencode', 'claude', 'openclaude']) test(`rebuild-all survives a home directory it cannot read: ${host}`, () => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', host,
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    for (const name of ['XDG_CONFIG_HOME', 'CLAUDE_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) delete env[name];
+    const url = pathToFileURL(path.join(ROOT, 'js', 'build', 'generate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { rebuildAll } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = rebuildAll();'],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true, maxBuffer: 1 << 26 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /rebuilt 1 install/);
+  });
+});
+
+test('the migrate dry-run fold preview survives a home directory it cannot read', () => {
+  // The fold preview runs for a real install only, so it takes one to reach the bare `sharedPaths()`.
+  // The stamp ends the verb right after it: this pins the preview, not the rest of the dry run.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    env.GENESEED_HOME = path.join(d, 'stamp');
+    fs.mkdirSync(env.GENESEED_HOME);
+    fs.writeFileSync(path.join(env.GENESEED_HOME, '.migrated'), `${ROOT}\n`, 'utf8');
+    const url = pathToFileURL(path.join(ROOT, 'js', 'maintain', 'migrate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdMigrate } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = cmdMigrate({ dryRun: true });'],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /already on the npm shape/);
+  });
+});
+
+test('the migrate dry run reaches its end with no home directory', () => {
+  // No GENESEED_HOME and no home: the stamp read misses, so the verb goes on past the fold preview
+  // to the autostart scan. Neither is a crash: a read with nowhere to look finds nothing.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    delete env.GENESEED_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'maintain', 'migrate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdMigrate } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = cmdMigrate({ dryRun: true });'],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /--dry-run: nothing was written/);
+  });
+});
+
+test('a real migrate with no home directory refuses cleanly and changes nothing', () => {
+  // The backup lives under the home, so with neither a home nor GENESEED_HOME the verb has no safe
+  // way to run. It refuses as it refuses a bad marker: exit 3, a reason, a way out, no stack.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    delete env.GENESEED_HOME;
+    const before = fs.readdirSync(repo, { recursive: true }).sort();
+    const noHome = 'data:text/javascript,import os from "node:os"; os.homedir = () => { throw new Error("no home"); };';
+    const r = spawnSync(process.execPath, ['--import', noHome, path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'migrate'],
+      { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stderr, /REFUSED — no home directory/);
+    assert.match(r.stderr, /Nothing was changed\. Set GENESEED_HOME/);
+    assert.doesNotMatch(r.stderr, /\n\s+at /);
+    assert.deepEqual(fs.readdirSync(repo, { recursive: true }).sort(), before);
+  });
+});
+
+test('the write resolver takes the spec order, and the shared store counts only when it exists', () => {
+  // `--memory` and `$GENESEED_MEMORY` are first and need no row here. Below them:
+  // `$GENESEED_HARNESS/memory`, a project install in the cwd, the shared store, the OpenCode config
+  // store. The shared store is `<machine dir>/memory`; a machine dir without it is no store, and
+  // the answer is `null`, not a path that was never made. A `memory/` beside the cwd with no
+  // install there is a repo's own folder, and no row at all (I4).
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const shared = path.join(home, '.config', 'geneseed', 'memory');
+    const harness = path.join(d, 'store');
+    const work = path.join(d, 'work');
+    fs.mkdirSync(work);
+    const ask = (h) => memoryResolver(h, work, home);
+    assert.equal(ask(path.join(d, 'no-store')), '0 null', 'no store anywhere');
+    fs.mkdirSync(shared, { recursive: true });
+    assert.equal(ask(path.join(d, 'no-store')), `0 ${shared}`, 'the shared store alone');
+    fs.mkdirSync(path.join(harness, 'memory'), { recursive: true });
+    assert.equal(ask(harness), `0 ${path.join(harness, 'memory')}`, '$GENESEED_HARNESS beats shared');
+    fs.mkdirSync(path.join(work, 'memory'));
+    assert.equal(ask(path.join(d, 'no-store')), `0 ${shared}`, 'a bare memory/ beside cwd counts for nothing');
+    fs.writeFileSync(path.join(work, '.geneseed-emit'), 'files\n');
+    fs.writeFileSync(path.join(work, '.geneseed-version'), 'abc\n');
+    fs.writeFileSync(path.join(work, 'memory', 'MEMORY.md'), '# Memory Index\n');
+    assert.equal(ask(path.join(d, 'no-store')), `0 ${path.join(work, 'memory')}`, 'a project install beats shared');
+    assert.equal(ask(harness), `0 ${path.join(harness, 'memory')}`, '$GENESEED_HARNESS beats a project install');
+  });
+});
+
+test('B3: a cwd holding Anamnesis/ is no memory store', () => {
+  // Windows folds case, so `path.join(cwd, 'anamnesis')` was a directory whenever the cwd held
+  // Terra's `Anamnesis/` vault, and `learn` wrote facts into it. Only `memory` names a store.
+  withDir((d) => {
+    const work = path.join(d, 'work');
+    fs.mkdirSync(path.join(work, 'Anamnesis'), { recursive: true });
+    assert.equal(memoryResolver(path.join(d, 'no-store'), work, path.join(d, 'home')), '0 null');
   });
 });
 

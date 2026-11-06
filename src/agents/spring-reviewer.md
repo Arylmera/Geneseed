@@ -22,7 +22,7 @@ Spring-specific review only. Generic correctness, naming and structure belong to
 <!-- bash: allow -->
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Read the changed files and the build file to learn the Boot version.
 2. Check, in this order:
    - Injection: field `@Autowired`, circular dependencies.

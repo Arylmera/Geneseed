@@ -506,7 +506,6 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           installs={active}
           value={install}
           onChange={pickInstall}
-          label="Templates and bricks of:"
         />
       )}
       <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />

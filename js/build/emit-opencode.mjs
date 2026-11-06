@@ -20,10 +20,11 @@ import { assertSourceComplete, build, phaseLog, ensureMemoryStore } from './bund
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
+import { foldOnEmit } from './fold.mjs';
 import { renderAll } from './render.mjs';
 import {
   ensureExcludesStub, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
-  ensureWikiStub,
+  ensureWikiStub, sharedRootFor,
 } from './stubs.mjs';
 import { writeVersion } from './version.mjs';
 import { mkdirSync } from 'node:fs';
@@ -42,8 +43,7 @@ import { mkdirSync } from 'node:fs';
  * earlier than RENDER, which still holds since nothing after this logs a phase at all.
  *
  * `manifestExisted` only ever arrives from the per-repo caller; the global emit does not pass
- * it, matching the Python side, so the pre-manifest header line stays unreachable from there on
- * both sides.
+ * it, so the pre-manifest header line stays unreachable from there.
  *
  * `overridesDir` is a THIRD directory, and it is not `dir` for the per-repo emit: the
  * per-repo `agent-overrides.json` lives beside the portable bundle in `out`, while every other
@@ -172,19 +172,14 @@ export function emitOpencodeRender(cfg, job) {
  * per-repo" OpenCode deployment. PRUNE and MANIFEST are the driver's; there is no VERIFY,
  * because this emit writes no settings file.
  *
- * ASSEMBLY, NOT TRANSLATION. Every unit it needs was already here — 58 of the 65 functions
- * in its Python closure, counted with `ast` rather than by name-mapping, which is how the
- * scout that produced this list first reported `_posture_body` and `_mode_body` as missing
- * when both are `registerBody` in `js/build/render.mjs`. What is new is the assembly and the
- * three values that had to be decided on the Python side.
+ * ASSEMBLY, NOT TRANSLATION. Every unit it needs already exists elsewhere (`_posture_body`
+ * and `_mode_body`, for one, are `registerBody` in `js/build/render.mjs`); what is here is the
+ * assembly and the values the caller must decide.
  *
- * `cfgDir` IS THE FIRST OF THEM AND THE REASON THE OTHERS WERE ASKED ABOUT.
- * `_build_core._opencode_config_dir` is an `_OWNED` name — the suite and `harness diff`
- * both redirect it at a sandbox — so resolving it here would render 135 files into the
- * developer's real `~/.config/opencode`. Python's entry point resolves it once, before
- * anything else, and sends the answer. Fourth phase running (`STRUCTURE` at P2d,
- * `capabilityLinkRe` at P2e, `_PREAMBLE_CONFIG_DIR` at P3b): send the decision, never the
- * resolver.
+ * `cfgDir` IS THE FIRST OF THEM. The suite and `harness diff` both redirect the OpenCode
+ * config dir at a sandbox, so resolving it here would render 135 files into the
+ * developer's real `~/.config/opencode`. The entry point resolves it once, before
+ * anything else, and sends the answer: send the decision, never the resolver.
  *
  * `out` IS NOT THE TARGET, and with the default nobody can tell. `emit_opencode_global`
  * writes into `<cfg>` and takes `out` ONLY as the legacy bundle to migrate a memory or
@@ -193,7 +188,7 @@ export function emitOpencodeRender(cfg, job) {
  * leaves them coincident — the `claude/bundle-in-subfolder` finding at a third call site.
  *
  * `agentPath` travels for the same reason `emitOpencodeRender`'s does: it is WIRE's one
- * input, and `Path.as_posix()` is the Python side's spelling of it.
+ * input, and it is a POSIX-style path.
  */
 export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
@@ -204,7 +199,9 @@ export function emitOpencodeGlobalRender(cfg, job) {
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
   // pointer's relative `laws/universal.md` resolves with no prefix.
-  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog });
+  // A re-render of a deployed install sends that install's root, null included.
+  const { sharedRoot = sharedRootFor(cfgDir, 'opencode') } = job;
+  const { theme, items } = renderAll(cfg, themeName, { footprint, nativeCatalog, sharedRoot });
   assertSourceComplete(cfg, 'opencode-global');
   mkdirSync(cfgDir, { recursive: true });
 
@@ -212,17 +209,18 @@ export function emitOpencodeGlobalRender(cfg, job) {
   const agentText = items.find((i) => i.rel === 'AGENT.md' && i.text !== null)?.text ?? null;
   if (agentText !== null) {
     // OpenCode loads agents/skills natively, so drop AGENT.md's per-row spec links to
-    // plain names. Memory links stay RELATIVE: in the global layout AGENT.md and the
-    // store are siblings, so `memory/` resolves from AGENT.md's own location and stays
-    // hermetic — no absolute path a doctor check would flag as an escape.
+    // plain names. Memory LINKS stay relative: in the global layout AGENT.md and the host
+    // store are siblings, so `memory/README.md` resolves from AGENT.md's own location and stays
+    // hermetic. The shared store is named in code spans only (`pathTokens`), never as a link
+    // target, which a doctor check would flag as an escape.
     const agentDest = path.join(cfgDir, 'AGENT.md');
     claimAndWrite(cfgDir, agentDest, 'AGENT.md', stripCapabilityLinks(agentText), owned);
   }
   // Co-owned, so never in `owned` — see `opencodeSentinelWrite`.
   opencodeSentinelWrite(cfgDir);
 
-  // `manifestExisted` is deliberately not passed — the Python does not pass it either, so
-  // the pre-manifest header line is unreachable from this emit on both sides.
+  // `manifestExisted` is deliberately not passed, so
+  // the pre-manifest header line is unreachable from this emit.
   const {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
@@ -237,6 +235,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
   ensureRulesStub(cfgDir);
   ensureProfileStub(cfgDir);
   ensureExcludesStub(cfgDir);
+  // As in `emitClaudeRender`: after the seeds.
+  if (sharedRoot !== null) foldOnEmit('opencode', cfgDir);
 
   if (writeVersion(cfg, cfgDir) !== null) owned.push(VERSION_MARKER);
 

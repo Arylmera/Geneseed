@@ -209,8 +209,7 @@ test('GENESEED knobs are cleared and GENESEED_HOME is kept', () => {
   }
 });
 
-// A PROPERTY THE PYTHON SUITE COULD NOT HAVE HAD, and the reason it is here. `os.environ`
-// upper-cases its keys on Windows, so the reference's `env.pop("TERM")` cannot miss.
+// A PROPERTY THAT NEEDS ITS OWN TEST on Windows.
 // `process.env` preserves whatever case the parent used, so a plain `delete env.TERM` leaves a
 // `Term` behind — and the knob this function exists to clear survives into the child.
 test('a knob spelled in another case is still cleared', () => {

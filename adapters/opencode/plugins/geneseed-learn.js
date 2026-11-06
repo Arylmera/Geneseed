@@ -25,8 +25,10 @@
 //
 // Where it writes — first match wins:
 //   1. $GENESEED_MEMORY            an explicit memory dir
-//   2. $GENESEED_HARNESS/memory    (or /anamnesis for the imperial theme)
-//   3. ./memory  or  ./Harness/memory   (when the bundle is inside the project)
+//   2. $GENESEED_HARNESS/memory
+//   3. the install's own target: a GLOBAL install uses the shared store, <machine dir>/memory,
+//      when it exists, else its own memory/; a project install uses its own memory/
+//   4. ./memory  or  ./Harness/memory   (the repo, last: never ahead of the install)
 // If none resolve, it logs once and does nothing — it never blocks a session.
 //
 // It is intentionally conservative: trivial sessions are skipped, one session never
@@ -37,6 +39,7 @@ import { promises as fs, realpathSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
+import { readdirSync, statSync, writeFileSync as writeLogSync, mkdirSync, readFileSync as readLogSync } from "node:fs"
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
 // writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
@@ -110,11 +113,25 @@ async function mainWorktreeOf(dir) {
     return path.basename(common) === ".git" ? path.dirname(common) : null
   } catch { return null }
 }
+// The machine tier: machineDir() in js/lib/machine-dir.mjs, which a plugin cannot import.
+function machineDir() {
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
+}
+// A global install reads the tier: its .geneseed-emit names a -global emit, or it IS the host's config dir.
+async function readsTier(dir) {
+  try { if ((await fs.readFile(path.join(dir, ".geneseed-emit"), "utf8")).trim().endsWith("-global")) return true } catch { /* no marker */ }
+  return isHostConfigDir(dir)
+}
 async function sovereignBypass(cwd) {
   try {
     const cfg = path.dirname(PLUGIN_DIR)           // plugins/ sits directly in <cfg>
-    const raw = await fs.readFile(path.join(cfg, "excludes.json"), "utf8")
-    const entries = (JSON.parse(raw).excludes) || []
+    const listOf = async (file) => {
+      try { const l = JSON.parse(await fs.readFile(file, "utf8")).excludes; return Array.isArray(l) ? l : [] } catch { return [] }
+    }
+    const entries = await listOf(path.join(cfg, "excludes.json"))
+    // Shared list (<machineDir>/excludes.json): a GLOBAL install adds it, a project install never does.
+    const shared = await listOf(path.join(machineDir(), "excludes.json"))
+    if (shared.length && await readsTier(cfg)) entries.push(...shared)
     const here = norm(cwd || process.cwd())
     const main = await mainWorktreeOf(cwd || process.cwd())
     const heres = main ? [here, norm(main)] : [here]
@@ -130,7 +147,6 @@ async function sovereignBypass(cwd) {
 
 const MAX_NOTES_CHARS = 16000          // cap the prompt; keep the most recent tail
 const MIN_NOTES_CHARS = 200            // below this, the session is too trivial to mine
-const MEMORY_DIR_NAMES = ["memory", "anamnesis"]   // neutral + imperial
 // NaN-safe: garbage in the env var would make setTimeout fire immediately (NaN
 // delay → 0), distilling after EVERY turn instead of at session end.
 const _debounceRaw = Number(process.env.GENESEED_LEARN_DEBOUNCE_MS || 60000)
@@ -189,20 +205,30 @@ async function isDir(p) {
   try { return (await fs.stat(p)).isDirectory() } catch { return false }
 }
 
-async function resolveMemoryDir() {
+// The install's own target comes BEFORE the repo: a global session in a repo that has its own
+// memory/ (possibly tracked) must not learn into it. A global install (.geneseed-emit ends in
+// -global, as geneseed-context.js tests it) takes the shared store when it exists, else its own
+// memory/. Only "memory" names a store: a themed "anamnesis" matched Terra's Anamnesis/ vault
+// by Windows case folding (B3). The shared store is machineDir() in js/lib/machine-dir.mjs,
+// which a plugin cannot import.
+// The host's own config dir counts as global too, whatever its marker says (the hook's
+// isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
+const hostConfigDir = () => process.env.OPENCODE_CONFIG_DIR || path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "opencode")
+async function isHostConfigDir(dir) {
+  const real = async (d) => { const r = await fs.realpath(path.resolve(d)).catch(() => path.resolve(d)); return process.platform === "win32" ? r.toLowerCase() : r }
+  return (await real(dir)) === (await real(hostConfigDir()))
+}
+
+async function resolveMemoryDir(pluginDir = PLUGIN_DIR) {
   const env = process.env.GENESEED_MEMORY
   if (env && (await isDir(env))) return env
   const harness = process.env.GENESEED_HARNESS
-  const bases = []
-  if (harness) bases.push(harness)
-  // The plugin's own dir (global install: <cfg>/plugins → <cfg>/memory) and the repo.
-  bases.push(path.resolve(PLUGIN_DIR, ".."), process.cwd(), path.join(process.cwd(), "Harness"))
-  for (const base of bases) {
-    for (const name of MEMORY_DIR_NAMES) {
-      const cand = path.join(base, name)
-      if (await isDir(cand)) return cand
-    }
-  }
+  const own = path.resolve(pluginDir, "..")
+  const cands = []
+  if (harness) cands.push(path.join(harness, "memory"))
+  if (await readsTier(own)) cands.push(path.join(machineDir(), "memory"))
+  cands.push(path.join(own, "memory"), path.join(process.cwd(), "memory"), path.join(process.cwd(), "Harness", "memory"))
+  for (const cand of cands) if (await isDir(cand)) return cand
   return null
 }
 
@@ -242,7 +268,10 @@ async function appendAgentLesson(memDir, agent, lesson) {
   const file = path.join(dir, `${agent}.md`)
   let bullets = []
   try {
-    bullets = (await fs.readFile(file, "utf8")).split("\n").filter((l) => l.startsWith("- "))
+    // The fold's rule (js/build/fold.mjs foldRules): a file that is not UTF-8 is left whole, the lesson dropped.
+    const raw = await fs.readFile(file)
+    if (!raw.equals(Buffer.from(raw.toString("utf8")))) return null
+    bullets = raw.toString("utf8").split("\n").filter((l) => l.startsWith("- "))
   } catch { /* first lesson for this agent */ }
   const day = new Date().toISOString().slice(0, 10)
   bullets.push(`- ${day}: ${lesson.replace(/\s+/g, " ").trim()}`)
@@ -420,7 +449,10 @@ const listMd = async (dir) => {
 async function writeIfChanged(p, text) {
   const old = await readLines(p)
   if (old && old.join("\n") + "\n" === text) return
-  await fs.writeFile(p, text, "utf8")
+  // temp file + rename: two hosts can rebuild the index at once, and a reader never sees half of it
+  const tmp = `${p}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp` // two sessions in one process share a pid
+  await fs.writeFile(tmp, text, "utf8")
+  await fs.rename(tmp, p)
 }
 // `topic:`, else `type:` (a `type:` nested under `metadata:` reads the same: keys are trimmed).
 function topicOf(fm) {
@@ -478,15 +510,57 @@ async function rebuildIndex(memDir, fresh = new Set()) {
   await writeIfChanged(index, body.length ? MEMORY_SEED + body.join("\n") + "\n" : MEMORY_SEED)
 }
 
+// The store files under one home, as `path -> "size:mtime"`: stats, no reads. Twin of
+// js/hosts/store-watch.mjs `storeScan`; the plugins' copies are held equal by helper_parity.
+function storeScan(home, found = {}) {
+  const stamp = (f) => {
+    try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}` } catch { /* absent */ }
+  }
+  for (const n of ["user-rules.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
+  const walk = (dir) => {
+    let items = []
+    try { items = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of items) {
+      if (e.isDirectory()) { if (e.name !== "archive" && !e.name.startsWith("archived-")) walk(path.join(dir, e.name)) }
+      else if (e.name.endsWith(".md")) stamp(path.join(dir, e.name))
+    }
+  }
+  walk(path.join(home, "memory"))
+  return found
+}
+
+// This plugin's own writes, logged so the change report does not call them unapproved: the store
+// around the run, and what moved, as an exact stamp. Twin of store-watch.mjs `recordOwnWrites`.
+async function recordOwnWrites(home, fn) {
+  const before = storeScan(home)
+  try { return await fn() } finally {
+    try {
+      const now = storeScan(home)
+      const moved = [...new Set([...Object.keys(before), ...Object.keys(now)])].filter((f) => before[f] !== now[f])
+      if (moved.length) {
+        const f = path.join(home, "memory", ".own-writes.json")
+        let log = {}
+        try { log = JSON.parse(readLogSync(f, "utf8")) } catch { /* the first */ }
+        for (const p of moved) { delete log[p]; log[p] = now[p] ?? "gone" }
+        mkdirSync(path.dirname(f), { recursive: true })
+        writeLogSync(f, JSON.stringify(Object.fromEntries(Object.entries(log).slice(-2000))))
+      }
+    } catch { /* the log never fails a write */ }
+  }
+}
+
 // The distil's reply into the store: a child session's one agent lesson, else memory
 // files plus their two-level index. Shared by the V1 and V2 runs.
-async function storeDistil(output, { isChild, memDir, agentName, existing }) {
+async function storeDistil(output, opts) {
+  return recordOwnWrites(path.dirname(opts.memDir), () => writeDistil(output, opts))
+}
+async function writeDistil(output, { isChild, memDir, agentName, existing }) {
   if (!output.trim() || output.trim().toUpperCase() === "NOTHING") return
   if (isChild) {
     const lesson = output.trim().split("\n")[0].replace(/^[-*]\s*/, "").trim()
     if (lesson.length < 10 || lesson.length > 300) return // junk / truncation guard
     const f = await appendAgentLesson(memDir, agentName, lesson)
-    say(`agent lesson -> ${f}`, "info")
+    say(f ? `agent lesson -> ${f}` : `${agentName}'s lesson file is not UTF-8 - left as it is, lesson dropped`, "info")
     return
   }
   const res = await writeMemories(output, memDir, existing)
@@ -527,7 +601,7 @@ export const GeneseedLearn = async (ctx) => {
         if (!warnedNoDir) {
           warnedNoDir = true
           say(
-            "no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY."
+            "no memory dir — this install has no memory/ folder, and neither does the shared tier or this repo."
           )
         }
         return
@@ -610,7 +684,7 @@ export const GeneseedLearn = async (ctx) => {
 
 // OpenCode treats every export as a plugin and rejects non-functions; hang the test
 // helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedLearn, { writeMemories, resolveAgentName, appendAgentLesson, flattenV2 })
+Object.assign(GeneseedLearn, { resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2 })
 
 // ---- OpenCode 2 ----------------------------------------------------------------
 // `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and
@@ -663,7 +737,7 @@ async function setupV2(ctx) {
       if (!memDir) {
         if (!warnedNoDir) {
           warnedNoDir = true
-          say("no memory dir — set $GENESEED_HARNESS or $GENESEED_MEMORY.")
+          say("no memory dir — this install has no memory/ folder, and neither does the shared tier or this repo.")
         }
         return
       }

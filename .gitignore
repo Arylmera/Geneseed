@@ -11,6 +11,8 @@
 
 # Generated build output — derivable from src/ via `geneseed build`, never committed.
 Harness/
+# A stray in-folder Harness/ is moved here whole, never deleted (B9); the user clears it.
+archived-Harness/
 # Exported deployed-vs-source improvements reports (geneseed diff --out). Auto-exports
 # land inside the deployed harness dir, but a hand-aimed --out here stays personal.
 improvements/

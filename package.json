@@ -1,7 +1,7 @@
 {
-  "//": "Every field here is argued and gated in tests/unit/package_manifest.test.mjs. `files`, `bin` and `engines` each have a test that fails when reality drifts from this file; `version` mirrors harness.config.json and is gated too. Read that docblock before editing this one.",
+  "//": "Every field here is argued and gated in tests/unit/package_manifest.test.mjs. `files`, `bin`, `exports` and `engines` each have a test that fails when reality drifts from this file; `version` mirrors harness.config.json and is gated too. Read that docblock before editing this one.",
   "name": "geneseed",
-  "version": "4.32.0",
+  "version": "5.0.0",
   "description": "A portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent.",
   "keywords": [
     "ai",
@@ -30,6 +30,9 @@
     "geneseed": "bin/geneseed-cli.mjs",
     "geneseed-hook": "bin/geneseed-hook.mjs",
     "geneseed-build": "bin/build-driver.mjs"
+  },
+  "exports": {
+    "./package.json": "./package.json"
   },
   "files": [
     "bin/",
@@ -65,7 +68,7 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "lint": "eslint js bin tests adapters fuzz",
-    "typecheck": "tsc -p ."
+    "lint": "eslint --cache --cache-location node_modules/.cache/eslint/ js bin tests adapters fuzz",
+    "typecheck": "tsc -p . --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsbuildinfo"
   }
 }

@@ -53,7 +53,7 @@ const JOBS = Array.from({ length: 20 }, (_, i) => ({
   started: BASE + i * 60,
 }))
 
-const good = { tone: 'good', head: 'Harness healthy.', facts: [] }
+const good = { tone: 'good', head: 'Installs healthy.', facts: [] }
 const ok = (groups) => ({ state: 'ok', data: { groups } })
 const clean = (n) => Array.from({ length: n }, (_, i) => ({ label: `check ${i}`, problems: [] }))
 
@@ -178,22 +178,25 @@ describe('GreenhouseView', () => {
     expect(screen.getByText('Checking…')).toBeTruthy()
   })
 
-  it('says doctor did not answer, and offers to run it', () => {
+  // The Overview's header keeps its Run doctor in this state, so this one is named for what it
+  // does here: two buttons sharing one name read as a duplicate to a screen reader.
+  it('says doctor did not answer, and offers a retry', () => {
     const onAction = vi.fn()
     greenhouse({ verdict: good, doctor: { state: 'failed', data: null } }, { onAction })
     expect(screen.getByText('Doctor did not answer')).toBeTruthy()
     expect(screen.queryByText(/checks pass now/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Run doctor/ }))
+    expect(screen.queryByRole('button', { name: /Run doctor/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry doctor' }))
     expect(onAction).toHaveBeenCalledWith('doctor')
   })
 
   it('shows the fleet verdict beside the headline', () => {
     greenhouse({
-      verdict: { tone: 'bad', head: 'Harness has problems.', facts: [] },
+      verdict: { tone: 'bad', head: 'Installs have problems.', facts: [] },
       tone: 'bad', // useLensData's headline tone, the verdict's here
       doctor: ok([]),
     })
-    expect(screen.getByText('Harness has problems.')).toBeTruthy()
+    expect(screen.getByText('Installs have problems.')).toBeTruthy()
     expect(screen.getByText('Deployed')).toBeTruthy()
   })
 })
@@ -216,7 +219,7 @@ describe('OperatorHudView', () => {
     expect(chip.textContent).toContain('3 s')
     expect(document.body.textContent).not.toContain('$ C:')
     expect([...document.querySelectorAll('[title]')].some((e) => e.title === CMD)).toBe(true)
-    expect(screen.getByText('Harness healthy.')).toBeTruthy()
+    expect(screen.getByText('Installs healthy.')).toBeTruthy()
   })
 
   it('names a doctor that did not answer', () => {
@@ -238,12 +241,12 @@ describe('JournalView', () => {
       <JournalView
         overview={overview}
         recent={null}
-        lens={{ verdict: { tone: 'warn', head: 'Harness needs a look.', facts: [] } }}
+        lens={{ verdict: { tone: 'warn', head: 'Installs need a look.', facts: [] } }}
         onAction={() => {}}
         dataRev={0}
       />,
     )
-    await waitFor(() => expect(screen.getByText('Harness needs a look.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Installs need a look.')).toBeTruthy())
   })
 
   const journal = () =>
@@ -270,7 +273,7 @@ describe('JournalView', () => {
     expect(screen.getByText('Doctrinae')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Credo: 0 sections' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Edicts: 9, never broken' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Doctrinae: 0 rules chosen at build' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Doctrinae: 0 rules' })).toBeTruthy()
     expect(screen.queryByText('Ethos')).toBeNull()
     expect(screen.queryByText('Dictates')).toBeNull()
   })
@@ -323,7 +326,7 @@ describe('LineageView', () => {
   })
 
   it('reads in sync from the verdict', () => {
-    lineage('up to date with this source')
+    lineage('in sync with this source')
     expect(screen.getByText('in sync')).toBeTruthy()
   })
 

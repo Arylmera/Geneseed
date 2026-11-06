@@ -64,7 +64,7 @@ describe('Overview Update button', () => {
 })
 
 // The install kind and a clone's upstream count. A clone says how many commits it would pull
-// (primary button) or that it is up to date (ghost button, still there); a global npm install
+// (primary button) or that it is the latest (ghost button, still there); a global npm install
 // names its npm route; a copy the console cannot update shows the command instead of a button,
 // and only when there is something newer.
 const base = { current: '4.16.0', latest: '4.16.0', available: false, checked_at: 1 }
@@ -76,12 +76,50 @@ describe('Overview Update button per install kind', () => {
     expect(screen.getByRole('button', { name: 'Update' }).className).toBe('btn')
   })
 
-  it('a clone level with upstream says up to date, and keeps a ghost button', async () => {
+  it('a clone level with upstream says latest, and keeps a ghost button', async () => {
     show({ ...base, install: 'git', git: true, behind: 0, command: null })
-    await screen.findByText(/up to date/)
+    await screen.findByText(/latest/)
     const b = screen.getByRole('button', { name: 'Update' })
     expect(b.className).toBe('btn ghost')
     expect(b.title).toMatch(/^Nothing to pull/)
+  })
+
+  // A checkout with no upstream, or diverged: the job would refuse, so no button that fails.
+  it('a clone that cannot pull shows the version and no button', async () => {
+    show({ ...base, install: 'git', git: true, behind: false, command: null })
+    await screen.findByText(/latest/)
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  it('a clone that cannot pull says why when a release is out', async () => {
+    show({
+      ...base,
+      latest: '4.17.0',
+      available: true,
+      install: 'git',
+      git: true,
+      behind: false,
+      command: null,
+    })
+    const chip = await screen.findByText('4.17.0 available')
+    expect(chip.closest('[title]').title).toMatch(
+      /^This checkout cannot pull: it has local changes/,
+    )
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  // The ask is still out: nothing is known, so neither "latest" nor a button yet.
+  it('a clone still asking says checking, with no button', async () => {
+    show({ ...base, install: 'git', git: true, behind: null, checking: true, command: null })
+    await screen.findByText(/checking…/)
+    expect(screen.queryByText(/latest/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Update' })).toBeNull()
+  })
+
+  it('a clone with an unanswered remote keeps its button', async () => {
+    show({ ...base, install: 'git', git: true, behind: null, command: null })
+    await screen.findByText(/latest/)
+    expect(screen.getByRole('button', { name: 'Update' }).className).toBe('btn ghost')
   })
 
   it('one commit is singular', async () => {
@@ -143,7 +181,7 @@ describe('Overview update re-check while the page is open', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     api.update.mockResolvedValue({ ...base, install: 'git', git: true, behind: 0 })
     const { unmount } = render(<Ledger overview={null} onAction={vi.fn()} />)
-    await screen.findByText(/up to date/)
+    await screen.findByText(/latest/)
     expect(api.update).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(UPDATE_POLL_MS - 1)
     expect(api.update).toHaveBeenCalledTimes(1)

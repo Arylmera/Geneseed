@@ -5,7 +5,7 @@ topic over 40 facts, or a `misc` topic) goes to the memory-curator {{AGENT}}
 instead: it runs this flow topic by topic in its own context and also assigns topics.
 
 1. **Read the whole set once**: `MEMORY.md`, its `topics/` files, every fact they
-   index, and any file in `{{DIR_MEMORY}}/` they forgot, into a scratch table — name, type, the claim in one
+   index, and any file in `{{PATH_MEMORY}}/` they forgot, into a scratch table — name, type, the claim in one
    line, date written, and whether this session already saw it contradicted
    ({{DOCTRINE:context-economy}}: read to decide, not to reread).
 2. **Verify against the live repo, not memory** ({{LAW:verify-before-asserting}}): every path,
@@ -17,7 +17,7 @@ instead: it runs this flow topic by topic in its own context and also assigns to
    that fired three times or more goes through Branch B of the rule {{SKILL}}), *retire* (wrong, superseded,
    or re-derivable by a fresh read). In doubt between keep and retire, keep and date it.
 4. **Show the plan, apply it with consent** ({{LAW:deletion-is-deliberate}}). To retire is to
-   archive: move the file into `{{DIR_MEMORY}}/archive/`, never delete it; deleting a file
+   archive: move the file into `{{PATH_MEMORY}}/archive/`, never delete it; deleting a file
    from `archive/` is a further act that needs its own consent. A merge archives the
    file that did not survive. Merges keep both parents' `[[links]]`; rewrites keep the file name so
    inbound links hold; every survivor keeps valid frontmatter and the `**Why** / **How
@@ -25,7 +25,7 @@ instead: it runs this flow topic by topic in its own context and also assigns to
    archiving would keep it on disk, so propose deleting it outright, on sight
    ({{LAW:sealed-secrets}}).
 5. **Rebuild the index** with
-   `geneseed learn --consolidate --memory <the {{DIR_MEMORY}}/ dir's path>`: one pointer line per
+   `geneseed learn --consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`: one pointer line per
    surviving file in its `topics/<topic>.md`, and the `MEMORY.md` map recounted. Each
    hook is the fact's `description`, so sharpen a weak hook there — it should say why a
    future session would open the fact.

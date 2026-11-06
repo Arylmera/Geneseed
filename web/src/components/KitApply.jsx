@@ -1,5 +1,6 @@
 import React from 'react'
 import { kitsLocked } from '../hooks/useKitStaging.js'
+import { installTag } from '../lib/hosts.js'
 
 // What one install's kit staging says: rebuilding, the last rebuild failed, or the staged
 // switches. Shared by this footer and the Kits page's staged-changes bar, so both say it alike.
@@ -12,7 +13,7 @@ export function kitHint(row, stage) {
 }
 
 // The staged-changes hint and the Apply action closing one install's kit switches, the same
-// footer on Installs / Kits and on a kit's page. While this row's rebuild runs it says so and
+// footer on a kit's page. While this row's rebuild runs it says so and
 // Apply waits; while any other job runs Apply waits too, titled why; after a failed one the
 // staged set is still there, and the hint says why.
 export default function KitApply({ row, stage }) {
@@ -27,7 +28,7 @@ export default function KitApply({ row, stage }) {
       <button
         type="button"
         className="btn soft sm"
-        aria-label={`Apply kits for ${row.host} · ${row.scope}`}
+        aria-label={`Apply kits for ${installTag(row)}`}
         disabled={kitsLocked(row) || !dirty || running || stage.busy}
         title={stage.busy && !running ? 'A job is running' : undefined}
         onClick={() => stage.apply(row)}

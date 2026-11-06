@@ -125,7 +125,7 @@ Notes that matter:
 
 ### The gates CI does not run
 
-- **The mutation matrix itself.** `tests/mutate.mjs` — 34 rows, each a one-string edit to a
+- **The mutation matrix itself.** `tests/mutate.mjs` — 35 rows, each a one-string edit to a
   product file with a written argument for which gate should catch it. The full run is **in no
   workflow** and should not be: it mutates the product tree 33 times and runs a gate per edit.
   Run `node tests/mutate.mjs --all` (or `--only M7`) by hand when you change something a gate is
@@ -219,9 +219,9 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
   `{N_PACKS}` / `{N_PACKS_ACTIVE}` / `{N_DOCTRINE_RULES}`, all computed at request time.
 - **No citation to rewire.** But there *are* written-out rule totals to bump — expected values are
   written out, never recorded — in `tests/unit/emit_smoke.test.mjs`, `harness.test.mjs`,
-  `setup.test.mjs` and `web_api.test.mjs`. Each fails loudly with the new count; change the
+  `setup.test.mjs` and the `web_api*.test.mjs` files. Each fails loudly with the new count; change the
   number *and* the comment that explains it. A rule in **craft** moves more: `setup` and
-  `web_api` also pin the craft-only narrowed counts, `generate.test.mjs` excludes every craft
+  `web_api*` also pin the craft-only narrowed counts, `generate.test.mjs` excludes every craft
   rule by address to empty the pack. Grep `tests/` for the previous
   rule's address before trusting this list. A rule long enough to matter can also breach the
   `full` carrier ceiling in `emit_smoke` — raise it with a dated note there, as every earlier
@@ -303,7 +303,7 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    step 2 already makes a new pack default-on. `constitutionProblems` refuses a `doctrines`
    array naming a pack this checkout does not ship.
 6. The written-out **pack lists** in `tests/` — not only the rule totals of §2a. The full set is
-   spelled out, in `PACK_ORDER`, in `emit_smoke`, `generate`, `harness`, `setup`, `web_api`,
+   spelled out, in `PACK_ORDER`, in `emit_smoke`, `generate`, `harness`, `setup`, `web_api*`,
    `web_jobs` and `wizard`, and the wizard cells also feed one y/n answer per pack on stdin.
    Grep `tests/` for `'process']` and `ops,process` before trusting this list.
 7. **Existing installs.** An install's pack set is read back off its carrier's `Active packs:`
@@ -313,11 +313,9 @@ Rare, and mechanical. On top of §2a for each rule the pack carries:
    pack cannot, or the moved rule disappears on the next rebuild — `comms` (2026-09-27) is the
    worked example. Through 3.x this was auto-migrated on sight; 4.0.0 retired that (CHANGELOG
    "Removed") because the detector it relied on breaks the day the donor pack regains a rule at
-   the same old count. `js/hosts/installs.mjs`'s `legacyProcessCarrier` now only warns a
-   pre-migration install to re-run `geneseed setup` rather than rewriting its data for it, and
-   `legacyProcessCarrierOfDir` makes `rebuild-all`/`upgrade` (§9 below) skip that install
-   entirely rather than re-emit it — re-emitting would write a fresh carrier that drops the
-   rewrite silently and for good, since no `process 8` text survives it to warn about next time.
+   the same old count. 5.0.0 removed the leftover warning and the `rebuild-all`/`upgrade`/`migrate`
+   skip that went with it: an install older than the comms pack is rebuilt as it reads (see the
+   upgrade guide for the floor).
 
 ---
 
@@ -551,7 +549,7 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
 4. `docs/concepts/host-matrix.md` — check the capability matrix still tells the truth.
 5. `README.md` — **three** sites: the badge, the `N plugins` prose, and the 🔌 Plugins row.
 6. `SHIPPED.md` — the bare name inside `plugins (…)`; that list must equal the directory exactly,
-   in both directions (`tests/unit/web_api.test.mjs:1655`).
+   in both directions (`tests/unit/web_api_docs.test.mjs:329`).
 7. `adapters/opencode/README.md` and `docs/opencode-plugin-setup.md` — spelled-out counts, in
    **word form** ("seven" → "eight"), the second file twice.
 8. `tests/plugins/<name>.test.mjs`. Auto-discovered; no workflow edit.
@@ -890,8 +888,11 @@ rows, nor `web/package.json`.
 the `.geneseed-disabled` stash; registry rows whose directory is gone; and everything after the
 point where a `rebuild-all` fails mid-loop — it is best-effort by contract and leaves a mixed
 machine. Autostart entries are surveyed and reported, never rewritten. An install whose carrier
-predates the comms pack (§2d item 7) is also skipped, deliberately, every run until its owner
-runs `geneseed setup` for it — `rebuild-all` names it SKIPPED rather than re-emitting it.
+predates the comms pack (§2d item 7) is no longer skipped: it is rebuilt as it reads.
+
+**A global emit also folds.** In a host's own config directory it moves that host's stores into the
+shared tier (`foldOnEmit`, `js/build/fold.mjs`), so a rebuild is not only a re-render there. Nothing
+moves on a project install, in `geneseed diff`, or under a `--config-dir` that is not the host's own.
 
 **The web daemon serves the code it launched with**, plus an in-memory cache of every dist file.
 After a `web/dist` rebuild the correct move is `geneseed web restart`, not a hard refresh —

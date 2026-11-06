@@ -19,6 +19,7 @@ old one's status becomes `Superseded by NNNN`.
 | [0008](0008-host-parity-ceiling-of-the-weakest-host.md) | Host parity: a feature lands everywhere, or nowhere yet | Accepted |
 | [0009](0009-self-update-is-a-git-pull.md) | Self-update is a git pull, not a download | Accepted |
 | [0010](0010-root-scan-guard.md) | A root scan is a boundary check, not a new verb | Accepted |
+| [0011](0011-shared-tier.md) | One shared tier per machine, reached by a fold in the emit | Accepted |
 
 ## Template
 

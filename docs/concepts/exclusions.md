@@ -5,7 +5,7 @@ title: "Exclusions"
 kind: "concept"
 section: "Configuration"
 description: "Three ways to switch things off: one rule, one skill, or every hook in a folder."
-link: {"hash": "#/harness", "label": "Manage in Harness →"}
+link: {"hash": "#/installs/hosts", "label": "Manage on Installs →"}
 ---
 Geneseed has three ways to switch something off, and they work at different scales (plus an on/off switch for the hook gates of Laws I, III and IV, and for the ownership gate, below):
 
@@ -31,22 +31,22 @@ geneseed exclude list
 geneseed exclude remove ~/code/my-vault
 ```
 
-One command updates every global install on the machine. Each keeps the list in its own `excludes.json`, and every hook and plugin reads it on each call, so a change takes effect at once.
+One command updates every global install on the machine. It writes the folder to the **shared list**, `excludes.json` in the machine-wide Geneseed folder (`~/.config/geneseed/`), and wires each global install. Every global hook and plugin reads the shared list on each call, beside the install's own `excludes.json`, so a change takes effect at once and the hosts cannot drift apart. The install's own file still holds the `wired` record of what the command set up on that host. A per-repo install never reads the shared list. An agent that edits either file is asked first, on every host: the list is a gate's own configuration.
 
 What "dormant" means per host:
 
 - **Claude Code** — every hook exits silently, and the global `CLAUDE.md` is suppressed natively through `claudeMdExcludes` in the repo's `.claude/settings.local.json`.
 - **OpenClaude** — the same, in the repo's `.openclaude/settings.local.json`.
 - **Bob** — every hook exits silently, and a stub `.bob/rules/geneseed.md` in the repo shadows the global rules file. A hand-written stub already there is never overwritten.
-- **OpenCode** — Geneseed's plugins stand down.
+- **OpenCode** — the `geneseed-context`, `geneseed-guard`, `geneseed-learn` and `geneseed-activity` plugins stand down. Three plugins do not read the list: `geneseed-notify` still pings the desktop, `geneseed-ponytail` still injects its ruleset if you switched it on, and `geneseed-workflow` keeps its tool. The `permission` keys in a global `opencode.json` still apply, because OpenCode reads them before any plugin.
 
 `geneseed exclude remove` undoes all of it.
 
 **Git worktrees.** A linked worktree of an excluded repo (`git worktree add`) is excluded too, wherever it sits on disk: the hooks and plugins follow its `.git` file back to the main repository. The global `CLAUDE.md` is the exception on Claude Code and OpenClaude: `settings.local.json` is gitignored, so a worktree never gets it. Geneseed writes no tracked file in a repo you told it to leave alone, so `exclude add` and `exclude list` print the snippet to commit yourself in the repo's tracked `.claude/settings.json` (`.openclaude/` for OpenClaude): `"claudeMdExcludes": ["<path to the global CLAUDE.md>"]`.
 
-**Limits.** Globally installed skills and agents stay *listed* by the host — no host offers a per-repo switch for them. And a global install created *after* you added exclusions starts with an empty list: run `geneseed exclude add` again (`geneseed exclude list` flags installs whose lists differ).
+**Limits.** Globally installed skills and agents stay *listed* by the host — no host offers a per-repo switch for them. And a global install created *after* you added exclusions is silent in those folders at once, through the shared list, and its next emit applies the repo-side wiring there. Until that emit, `geneseed exclude list` flags it.
 
-The web console has the same controls in the **Excluded folders** card on the Harness page, shown once a global install exists.
+The web console has the same controls in the **Excluded folders** card on the Installs page, shown once a global install exists.
 
 ### Per-rule exclusion — one rule off
 

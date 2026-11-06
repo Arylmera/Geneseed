@@ -37,6 +37,7 @@ vi.mock('../pages/Kits.jsx', () => ({ default: stub('Kits') }))
 vi.mock('../pages/Loops.jsx', () => ({ default: stub('Loops') }))
 vi.mock('../pages/Personal.jsx', () => ({ default: stub('Personal') }))
 vi.mock('../pages/Installs/index.jsx', () => ({ default: stub('Installs') }))
+vi.mock('../pages/Settings/index.jsx', () => ({ default: stub('Settings') }))
 vi.mock('../pages/Docs/index.jsx', () => ({ default: stub('Docs') }))
 // Every api call the shell makes answers with one empty-ish object; nothing here reads it.
 vi.mock('../api/index.js', () => ({
@@ -79,10 +80,10 @@ const TABLE = [
   ['#/agents', 'Library section=agents', 'Library', 'Library'],
   ['#/section/agents', 'Library section=agents', 'Library', 'Library'],
   ['#/item/agent/advocate', 'Library section=agents selected=advocate', 'Library', 'Library'],
-  ['#/section/memory', 'Library section=memory', 'Library', 'Library'],
+  ['#/section/memory', 'Personal tab=memory', 'Personal', 'Memory'],
   // Names are URI-decoded, so a space or a slash in a name survives the round trip.
-  ['#/item/memory/a%20b', 'Library section=memory selected=a b', 'Library', 'Library'],
-  ['#/item/notebook/x%2Fy', 'Library section=notebook selected=x/y', 'Library', 'Library'],
+  ['#/item/memory/a%20b', 'Personal tab=memory item=a b', 'Personal', 'Memory'],
+  ['#/item/notebook/x%2Fy', 'Personal tab=notebook item=x/y', 'Personal', 'Notebook'],
   ['#/section/config', 'Library section=config', 'Library', 'Library'],
   ['#/kits', 'Kits', 'Kits', 'Kits'],
   ['#/kits/spring-boot', 'Kits item=spring-boot', 'Kits', 'Kits'],
@@ -98,8 +99,10 @@ const TABLE = [
   ['#/themes', 'Installs tab=hosts', 'Installs', 'Hosts'],
   ['#/diff', 'Installs tab=edits', 'Installs', 'Local edits'],
   ['#/doctor', 'Installs tab=doctor', 'Installs', 'Doctor'],
-  ['#/settings', 'Installs tab=server', 'Installs', 'Server'],
-  ['#/about', 'Installs tab=server', 'Installs', 'Server'],
+  ['#/settings', 'Settings', 'Settings', 'Settings'],
+  ['#/about', 'Settings', 'Settings', 'Settings'],
+  ['#/installs/server', 'Settings', 'Settings', 'Settings'],
+  ['#/installs/kits', 'Kits', 'Kits', 'Kits'],
   ['#/docs', 'Docs page=', 'Docs', 'Docs'],
   ['#/docs/cli/build', 'Docs page=cli/build', 'Docs', 'Docs'],
   ['#/activity', 'Activity', 'Activity', 'Activity'],
@@ -133,12 +136,9 @@ describe('App routing', () => {
 describe('one slot per page', () => {
   const WALKS = [
     ['Laws', ['#/laws', '#/item/law/IV', '#/item/law/craft.1', '#/section/laws', '#/laws']],
-    [
-      'Library',
-      ['#/skills', '#/agents', '#/library', '#/section/memory', '#/item/agent/x', '#/item/wiki/y'],
-    ],
+    ['Library', ['#/skills', '#/agents', '#/library', '#/item/agent/x', '#/item/wiki/y']],
     ['Personal', ['#/rules', '#/profile', '#/personal/memory', '#/personal/memory/f']],
-    ['Installs', ['#/harness', '#/diff', '#/doctor', '#/settings', '#/installs/hosts']],
+    ['Installs', ['#/harness', '#/diff', '#/doctor', '#/installs/hosts']],
   ]
   it.each(WALKS)('%s mounts once across %j', async (name, hashes) => {
     window.location.hash = hashes[0]

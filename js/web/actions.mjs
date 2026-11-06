@@ -37,7 +37,7 @@ import { emitGlobalInto } from '../build/driver.mjs';
 import {
   ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
 } from '../build/source.mjs';
-import { diffCollect, drifted, withStdoutSwallowed } from '../inspect/diff.mjs';
+import { diffCollect, drifted, renderMemo, withStdoutSwallowed } from '../inspect/diff.mjs';
 import { SESSION_FILES } from '../hosts/hooks-context.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { installProfile, setupBuildArgs } from '../build/generate.mjs';
@@ -48,9 +48,9 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir,
+  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
-  installState, installTargets, legacyProcessCarrierOfDir, modeOfDir, postureOfDir, themeOfDir,
+  installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
 } from '../hosts/installs.mjs';
 import {
@@ -65,6 +65,7 @@ import { memoryDelete } from '../maintain/memory.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { emitChoices, themeChoices, viewCfg } from './api.mjs';
 import { actionCommands } from './jobs.mjs';
+import { emitOf } from '../inspect/status.mjs';
 import { webState } from './state.mjs';
 import { NotFound, deployed, memoryDir } from './catalog.mjs';
 
@@ -136,12 +137,21 @@ function bodyExcludeRules(body) {
 }
 
 /**
- * A request body's `kits` — REPLACES the install's kits (the Kits tab sends the whole set it
+ * A request body's `kits` — REPLACES the install's kits (the Kits page sends the whole set it
  * wants): `[]`/`'none'` give `[]`, an omitted key gives `null` (keep the install's own), and an
  * unknown name gives `null` too, which `apiInstallCmd` refuses for a body that HAS the key.
  */
 function bodyKits(body) {
   return bodyList(body, 'kits', () => [...loadKits().keys()]);
+}
+
+/**
+ * A request body's `sharedTier` — the project install's switch for reading the machine tier. Only
+ * a real JSON boolean counts, as a gate's does: anything else keeps the install's own answer.
+ */
+function bodySharedTier(body, root, host) {
+  const said = bget(body, 'sharedTier');
+  return typeof said === 'boolean' ? said : sharedTierOfDir(root, host);
 }
 
 /**
@@ -221,8 +231,10 @@ export function targetView(base, [host, scope, root]) {
   if (v === undefined) {
     const target = viewCfg(host, scope, root);
     v = webState(null, target);
-    v.selectView(target, root);
+    v.selectView(target, root, emitOf(host, scope));
     v.pinned = true;
+    // The daemon's one memo: a render is keyed on what it read, not on who asked for it.
+    v.renderMemo = (base.renderMemo ??= renderMemo());
     v.refresh = base.refresh;
     v.daemonStale = () => base.daemonStale?.();
     v.jobBusy = () => base.jobBusy?.();
@@ -234,7 +246,7 @@ export function targetView(base, [host, scope, root]) {
 // ---- OS-native folder picker ---------------------------------------------------------------
 
 /**
- * ms before an open dialog is abandoned. The Python original's 300 s, kept as a named
+ * ms before an open dialog is abandoned. 300 s, kept as a named
  * constant rather than a literal in the spawn call. `GENESEED_PICK_TIMEOUT_MS` is a TEST HOOK
  * ONLY — it overrides the constant so the timeout path can be proven in seconds instead of
  * five minutes (nobody is at the dialog to cancel it in an automated run); the 300 s default
@@ -256,8 +268,7 @@ const PICK_SCRIPT_WIN = 'Add-Type -AssemblyName System.Windows.Forms; '
   + 'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) '
   + '{ Write-Output $d.SelectedPath }';
 
-// Ported VERBATIM from the deleted Python (`git show 8860c72:rituals/_web_actions.py`,
-// `api_pick_folder`) — same prompt text, same AppleScript shape. `choose folder` is a
+// The prompt text and the AppleScript shape are fixed. `choose folder` is a
 // StandardAdditions command that runs in-process inside `osascript`, so it needs no
 // automation-consent prompt the way scripting another app would.
 const PICK_SCRIPT_MAC = 'set f to POSIX path of (choose folder with prompt '
@@ -560,7 +571,8 @@ export function globalEmitHostFor(emit) {
  * user's after the first build. Derived from `SESSION_FILES`, the one list of them.
  */
 const SEED_FILES = new Set(SESSION_FILES.filter((r) => !r.includes('/')));
-const SEED_DIRS = new Set(SESSION_FILES.filter((r) => r.includes('/')).map((r) => r.split('/')[0]));
+// `anamnesis` is the memory store's older name: no longer a session file, still the user's.
+const SEED_DIRS = new Set(['anamnesis', ...SESSION_FILES.filter((r) => r.includes('/')).map((r) => r.split('/')[0])]);
 const isSeedOnce = (rel) => SEED_FILES.has(rel) || SEED_DIRS.has(rel.split('/')[0]);
 
 /**
@@ -626,12 +638,15 @@ export function apiRestore(state, files) {
       // behind it — prompt and boundary disagreeing by a WRITE, the write-side twin of the
       // read-side hole `diffCollect` had (and the reason the panel offered the file at all).
       doctrines: doctrinesForBuild(target),
+      // Its own tier root, or a restored file names a tier this install does not read.
+      sharedRoot: renderedTier(target, globalEmitHostFor(state.emit)).root,
       // The excluded rules for the same boundary reason: without them a restored AGENT.md
       // re-states a rule whose hook gate the install deliberately left unwired.
       excludeRules: excludedRulesOfDir(target),
       excludeSkills: excludedSkillsOfDir(target),
       // The kits: a restored AGENT.md keeps its Kits block and `Active kits:` line.
       kits: kitsOfDir(target),
+      sharedTier: sharedTierOfDir(target),
       // The gate switches: a restored AGENT.md must keep the install's `<gate>: off` lines.
       ...gatesOfDir(target),
     }));
@@ -709,20 +724,11 @@ export function apiInstallCmd(state, body) {
   if (installState(root, host, scope) === 'disabled') {
     return { error: 'install is disabled — reactivate it before (re)building' };
   }
-  // A LEGACY CARRIER IS REFUSED, NEVER REBUILT — same guard as `rebuild-all`/`migrate` (see
-  // `legacyProcessCarrierOfDir`'s docblock): `doctrinesForBuild`/`excludedRulesOfDir` below
-  // read a pre-comms carrier exactly as written, and this endpoint's `{cmd}` is EXECUTED by
-  // `startJob` (`js/web/handler.mjs`'s `install` action) — building that argv here would write
-  // the same permanent loss a console click away.
-  if (legacyProcessCarrierOfDir(root, host)) {
-    return { error: `${host}:${scope} (${root}) predates the comms pack (its carrier names `
-      + "'process 8') — run `geneseed setup` for it before rebuilding from the console" };
-  }
   const emit = EMIT_FOR.get(`${host} ${scope}`);
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
   // comment at `installProfile` in `js/build/generate.mjs`.
-  // The theme default is THIS install's own, not the viewed one's: the Kits tab acts on any row.
+  // The theme default is THIS install's own, not the viewed one's: the Kits page acts on any row.
   // An ABSENT row has no footprint of its own (`footprintOfDir` answers its no-marker `full`),
   // so a new install takes the CLI's default, lean — see `apiDeployCmd` below.
   const { theme, footprint: fp, posture: pos, mode, trust } = bodyAxes(body, {
@@ -755,10 +761,15 @@ export function apiInstallCmd(state, body) {
         + [...loadKits().keys()].join(', ') };
     }
   } catch (e) { return { error: String(e?.message ?? e) }; }
+  // D11: the shared tier is a project install's option; a global install owns it.
+  const sharedTier = scope === 'global' ? false : bodySharedTier(body, root, host);
+  if (scope === 'global' && bget(body, 'sharedTier') === true) {
+    return { error: 'the shared tier is a project option — a global install already owns it' };
+  }
   const out = scope === 'global' ? null : String(root);
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
-    kits ?? kitsOfDir(root, host));
+    kits ?? kitsOfDir(root, host), sharedTier);
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 
@@ -772,7 +783,7 @@ export function apiInstallCmd(state, body) {
  * built from the REGISTRY's host/scope/root, never from body strings, and it is what `rebuildAll`
  * replays (`installProfile`), so a console rebuild of one row equals the CLI's of all of them.
  *
- * ALL OR NOTHING: one unknown, inactive or legacy entry (or a malformed body) is `{ error }` and no
+ * ALL OR NOTHING: one unknown or inactive entry (or a malformed body) is `{ error }` and no
  * job starts. `detectedInstall`'s `NotFound` would answer 404; a refusal here means the world
  * changed under the client, so the dispatcher answers 409, as for `install`. The shape is checked
  * before the registry is read, so a bad body never costs a detect.
@@ -791,11 +802,6 @@ export function rebuildCmds(body) {
     const hit = active.findLast(([host, , root]) => JSON.stringify([host, String(root)]) === key);
     if (hit === undefined) return { error: `not an active install: ${key}` };
     const [host, scope, root] = hit;
-    // Asked BEFORE `installProfile`, as `rebuildAll` does: a legacy carrier must never be rebuilt.
-    if (legacyProcessCarrierOfDir(root, host)) {
-      return { error: `${host}:${scope} (${root}) predates the comms pack (its carrier names `
-        + "'process 8') — run `geneseed setup` for it before rebuilding from the console" };
-    }
     steps.push(...actionCommands('build', { buildArgv: installProfile(host, scope, root).argv }));
   }
   return { cmds: steps };
@@ -877,13 +883,6 @@ export function apiDeployCmd(state, body) {
   if (cfgdirs.has(root)) {
     return { error: "that's a host global config dir — use its existing row to build a global install" };
   }
-  // Same guard as `apiInstallCmd` above: a landing folder that already holds a pre-comms
-  // install must not be rebuilt through `doctrinesForBuild`/`excludedRulesOfDir` below. A
-  // fresh, never-built folder has no carrier at all, so this is a no-op for the common case.
-  if (legacyProcessCarrierOfDir(root, host)) {
-    return { error: `${root} predates the comms pack (its carrier names 'process 8') — `
-      + 'run `geneseed setup` for it before deploying over it' };
-  }
   // A fresh deploy is LEAN, at the default register, mode and trust: the same default as the
   // CLI's `--footprint`, which the user chose (2026-10-24) over the console's old `full` — a
   // console install and a CLI install of the same folder must not differ in always-on text for
@@ -902,6 +901,7 @@ export function apiDeployCmd(state, body) {
   const gates = bodyGates(body, root, host);
   // project-scope emit name == host name (opencode / claude / bob / openclaude)
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host));
+    PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host),
+    bodySharedTier(body, root, host));
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

@@ -82,7 +82,7 @@ export default function CliPage({ page }) {
         sub={
           <>
             Every subcommand of <code>{prog}</code>. Generated from the parser at request time (the
-            same one <code>geneseed</code> actually parses), so this page cannot drift.
+            same one <code>geneseed</code> actually parses), so this page cannot fall behind.
           </>
         }
       />

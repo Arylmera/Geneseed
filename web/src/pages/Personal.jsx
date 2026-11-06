@@ -5,99 +5,15 @@ import { useRules } from '../hooks/useRules.js'
 import Tabs from '../components/Tabs.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
-import { Bar } from '../components/StackBar.jsx'
 import Rules from './Rules.jsx'
 import Profile from './Profile.jsx'
 import Library, { installLabel } from './Library.jsx'
 import { useInstalls } from '../hooks/useInstalls.js'
-import { installTag } from '../lib/hosts.js'
 
 const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`
 
-// Each folder's own index and README are furniture, not entries (any case, as the server counts).
-const FURNITURE = new Set(['MEMORY', 'NOTEBOOK', 'README'])
-const countOf = (catalog) =>
-  catalog
-    ? (catalog.items || []).filter((i) => !FURNITURE.has(String(i.name).toUpperCase())).length
-    : null
-
-// The two panels over the rules editor: the one budget the rule file spends every turn, and
-// how much the agent has been told about you across your files. The rule file and the profile are
-// ONE install's (the default, `tag`), so both cards name it; memory and notebook count every install.
-function RuleCards({ rules, profile, facts, notes, tag }) {
-  const st = rules?.exists ? rules.stats : null
-  if (!st) return null
-  // One threshold for the whole strip: whichever budget is closer to spent, count or tokens.
-  const pct = Math.round(Math.max(st.rules / st.max_rules, st.tokens / st.max_tokens) * 100)
-  const [tone, note] =
-    pct >= 100
-      ? ['bad', 'over budget: a bloated rule set dilutes the rules that matter']
-      : pct >= 70
-        ? ['warn', 'getting heavy; consider merging or pruning']
-        : [
-            'accent',
-            st.rules
-              ? `${st.rules} rules in ${st.lines} lines.`
-              : 'All of it is the file’s preamble; no rule text yet.',
-          ]
-  const known = [
-    {
-      k: 'Profile',
-      v: profile?.seeded ? 'template' : profile?.exists ? 'written' : 'missing',
-      warn: !!profile?.seeded,
-    },
-    { k: 'Rules', v: `${st.rules}/${st.max_rules}` },
-    { k: 'Memory', v: facts == null ? 'n/a' : plural(facts, 'fact') },
-    { k: 'Notebook', v: notes == null ? 'n/a' : plural(notes, 'note') },
-  ]
-  return (
-    <div className="card-row">
-      <section className="panel" aria-labelledby="pc-budget">
-        <div className="panel-head">
-          <h2 id="pc-budget">Rule budget</h2>
-          <span className="mono dim">
-            {st.rules} of {st.max_rules}
-            {tag ? ` · ${tag}` : ''}
-          </span>
-        </div>
-        <div
-          className="slots"
-          style={{ '--slots': st.max_rules }}
-          role="img"
-          aria-label={`${st.rules} of ${st.max_rules} rule slots used`}
-        >
-          {Array.from({ length: st.max_rules }, (_, i) => (
-            <span key={i} className={i < st.rules ? 'used' : ''} />
-          ))}
-        </div>
-        <p className="big-num">
-          <span className="mono">{st.tokens}</span>{' '}
-          <span className="dim">/ {st.max_tokens.toLocaleString('en-US')} tokens, every turn</span>
-        </p>
-        <Bar value={st.tokens} max={st.max_tokens} label="tokens" tone={tone} />
-        <p className="panel-note">{note}</p>
-      </section>
-      <section className="panel" aria-labelledby="pc-known">
-        <div className="panel-head">
-          <h2 id="pc-known">What the agent knows about you</h2>
-        </div>
-        <ul className="hbars">
-          {known.map((r) => (
-            <li key={r.k}>
-              <span className="hb-label">{r.k}</span>
-              <span className={`mono hb-n${r.warn ? ' warn' : ''}`}>{r.v}</span>
-            </li>
-          ))}
-        </ul>
-        {tag ? (
-          <p className="panel-note">
-            Profile and rules of {tag}; memory and notebook across every install.
-          </p>
-        ) : null}
-      </section>
-    </div>
-  )
-}
+// The catalog lists entries only: a folder's index and README never reach it.
+const countOf = (catalog) => (catalog ? (catalog.items || []).length : null)
 
 // A topic line of the generated memory map, as js/hosts/memory-files.mjs writeMap writes it
 // (js/hosts/hooks-context.mjs reads the same line). An old flat map has none.
@@ -109,14 +25,15 @@ const topicsOf = (body) =>
     .filter(Boolean)
     .map((m) => ({ topic: m[1], n: Number(m[2]) }))
 
-// The map is one install's (the first that has it, `install`), so the panel names it.
-function Topics({ topics, install }) {
+// The map is one store's. The header states the shared one; a project install's own store (the
+// first that has it, `install`) is named here.
+function Topics({ topics, install, shared }) {
   if (!topics.length) return null
   return (
     <section className="panel pm-topics" aria-labelledby="pm-topics">
       <div className="panel-head">
         <h2 id="pm-topics">Topics</h2>
-        {install ? <span className="mono dim">{installLabel(install)}</span> : null}
+        {install && !shared ? <span className="mono dim">{installLabel(install)}</span> : null}
         <span className="mono dim">{plural(topics.length, 'topic')}</span>
       </div>
       <ul className="hbars">
@@ -168,14 +85,13 @@ const EMPTY = {
 // Personal: the files that are yours alone and survive every update, reinstall and voice
 // change. Rules and Profile are editors; Memory and Notebook are the Library reader
 // locked to one kind, so an entry opened here keeps its address on this page.
-export default function Personal({ tab = 'rules', item, dataRev }) {
+export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged }) {
   const soft = (p) => Promise.resolve(p).catch(() => null)
-  // Each editor reloads only its own file after a write, so the cards above it follow. Not
-  // the app-wide `dataRev`: neither file feeds the overview, the fleet or an install.
-  const { data: rules, reload: reloadRules } = useRules(dataRev)
-  // The install the unnamed reads above answer for (the default), named once two are active.
   const active = useInstalls(dataRev)
-  const tag = active?.length > 1 ? installTag(active[0]) : null
+  // Each editor reloads only its own file after a write: the rules for the Overview and the
+  // Constitution, which paint that copy, the profile for the tab's "template" badge. Not the
+  // app-wide `dataRev`: neither file feeds the overview, the fleet or an install.
+  const { reload: reloadRules } = useRules(dataRev)
   const { data: profile, reload: reloadProfile } = useAsync(() => soft(api.profile()), [dataRev])
   // The same key and deps as Library's own read of each folder, so the count here and the
   // pane share one fetch, and a delete in the pane moves the count. No `soft`: a cached null
@@ -199,8 +115,8 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
   )
   const notes = countOf(notebook)
   const counts = { memory: facts, notebook: notes }
+  // No rules figure: each rules file heads its own list with its count and cost.
   const badges = {
-    rules: rules?.stats?.rules,
     profile: profile?.seeded ? 'template' : null,
     memory: facts,
     notebook: notes,
@@ -210,15 +126,15 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
     <>
       <PageHeader
         title="Personal"
-        sub="The only files you write. They survive updates, reinstalls and voice changes."
+        sub={
+          'The only files you write. They survive updates, reinstalls and voice changes.' +
+          (active?.some((i) => i.shared)
+            ? ' Global installs share one copy of the rules, profile and memory; a project install keeps its own.'
+            : '')
+        }
       />
       <Tabs page="personal" current={tab} badges={badges} label="Personal files" />
-      {tab === 'rules' && (
-        <>
-          <RuleCards rules={rules} profile={profile} facts={facts} notes={notes} tag={tag} />
-          <Rules onChanged={reloadRules} dataRev={dataRev} />
-        </>
-      )}
+      {tab === 'rules' && <Rules onChanged={reloadRules} dataRev={dataRev} />}
       {tab === 'profile' && <Profile onChanged={reloadProfile} dataRev={dataRev} />}
       {folder && counts[tab] === 0 && !item ? (
         <EmptyState title={EMPTY[tab].title} action={EMPTY[tab].action}>
@@ -226,14 +142,17 @@ export default function Personal({ tab = 'rules', item, dataRev }) {
         </EmptyState>
       ) : folder ? (
         <>
-          {tab === 'memory' && <Topics topics={topicsOf(map?.body)} install={map?.install} />}
+          {tab === 'memory' && (
+            <Topics topics={topicsOf(map?.body)} install={map?.install} shared={map?.shared} />
+          )}
           <Library
             key={tab}
             lock={tab}
             base={`#/personal/${tab}`}
             selected={item}
             dataRev={dataRev}
-            // A promote deletes the fact it turns into a rule, so both counts move.
+            onCountsChanged={onCountsChanged}
+            // A promote deletes the fact it turns into a rule, so both reads move.
             onRulesChanged={() => {
               reloadRules()
               reloadMemory()

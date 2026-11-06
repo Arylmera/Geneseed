@@ -22,7 +22,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { RELOCATION_VARS, sandboxProcessHome, restoreProcessHome } from './sandbox.mjs';
+import { sharedPaths } from '../../js/lib/machine-dir.mjs';
+import { RELOCATION_VARS, TMP_ROOT, sandboxProcessHome, restoreProcessHome } from './sandbox.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -36,6 +37,19 @@ let SAVED_RELOCATION = null;
  * Returns the install's config dir — the same path `opencodeConfigDir()` now resolves to, which
  * is what makes `webState()` with no target land here.
  */
+/**
+ * THE WEB TESTS OVER A HOST'S OWN FILES. An emit seeds the shared tier in the sandboxed home, and a
+ * global install now edits the tier instead (`tierOf`); the tier's own cases live in
+ * `shared_tier_console.test.mjs`. Dropping the tier folder takes what `tierOf` asks about: its `memory/`
+ * and session files.
+ * Guarded: the temp root is the only place this may delete.
+ */
+export function dropSandboxTier() {
+  const { root } = sharedPaths();
+  if (!root.startsWith(TMP_ROOT)) throw new Error(`refusing to drop a tier outside the temp root: ${root}`);
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
 export function webFixture() {
   if (FIXTURE) return FIXTURE;
 
@@ -58,6 +72,7 @@ export function webFixture() {
     throw new Error(`web fixture emit failed (${proc.status}):\n${proc.stdout}\n${proc.stderr}`);
   }
 
+  dropSandboxTier();
   const dir = path.join(home, '.config', 'opencode');
   // The fixture is the PRECONDITION of every count assertion below it. A silent miss here reads
   // downstream as "the port returns zero agents", which is a day of debugging aimed at the

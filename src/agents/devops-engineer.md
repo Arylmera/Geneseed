@@ -21,7 +21,7 @@ Builds CI/CD pipelines and delivery automation for Spring Boot applications.
 - Never commits, pushes or triggers a deployment ({{DOCTRINE:consent-before-push}}).
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Detect the CI the project already uses (GitHub Actions, GitLab CI, Jenkins, other) and extend it; do not switch providers. With none present, ask the user which to use.
 2. Pipeline order: checkout, restore build cache, `./mvnw verify` (or `./gradlew build`), publish test results, build image, scan, push, deploy.
 3. Cache the Maven or Gradle repository keyed on the build files.

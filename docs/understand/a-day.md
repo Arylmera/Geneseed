@@ -12,7 +12,7 @@ Start with one prompt on your first day:
 
 > *"Use the profile skill."*
 
-The agent interviews you briefly and drafts `PROFILE.md`: your role, your stack, and whether you want terse answers or explanations. From then on every session starts with it.
+The agent interviews you briefly and drafts `PROFILE.md`, once for all your tools on a global install: your role, your stack, and whether you want terse answers or explanations. From then on every session starts with it.
 
 ### 1. The agent tries to push
 
@@ -55,7 +55,7 @@ The reviewer reads the change, runs the tests, and comes back with findings orde
 
 When a session winds down, the **learn** step reads the conversation and keeps what is worth remembering. On OpenCode this happens by itself, with the model the session already uses. On Claude Code it is off until you set `GENESEED_LLM` to a model command, for example `claude -p`.
 
-A new file appears in the install's `memory/` folder:
+A new file appears in the memory store. On a global install that is `~/.config/geneseed/memory/`, so every host on the machine sees it; a project install keeps its own `memory/` folder:
 
 ```markdown
 ---

@@ -151,12 +151,14 @@ the filename, the `.js` extension, and that the path is exactly the plugins dir.
 The plugin writes into the first location that resolves:
 
 1. `$GENESEED_MEMORY` — an explicit memory dir;
-2. `$GENESEED_HARNESS/memory` (or `/anamnesis` for the imperial theme);
-3. `./memory` or `./Harness/memory` — when the bundle lives inside the project.
+2. `$GENESEED_HARNESS/memory`;
+3. the install's own target: the shared store, `<machine dir>/memory`, on a global install when it
+   exists, else the `memory/` beside the plugin;
+4. `./memory` or `./Harness/memory` in the repo, last.
 
-Because your Harness is global (used from any directory), set `GENESEED_HARNESS`
-once to the bundle's absolute path so the plugin always writes to the same memory
-store no matter where you launch OpenCode:
+A global install needs nothing set. Set `GENESEED_HARNESS` only for a bundle that is
+not a global install, so the plugin writes to the same memory store no matter where
+you launch OpenCode. It wins over the shared store:
 
 ```
 export GENESEED_HARNESS=/abs/path/to/Harness        # e.g. in your shell profile
@@ -208,7 +210,7 @@ the harness live entirely in the global config dir with zero per-repo files.
 - **Machine wiki (AGENT.md §8):** the same block carries a `MACHINE WIKI` segment
   for the user's own knowledge base(s) — typically an Obsidian vault — declared in
   `geneseed-wiki.jsonc` (`$GENESEED_WIKI` → `$GENESEED_HARNESS/geneseed-wiki.jsonc` → beside the
-  install). Per wiki: eager entries inject in full, lazy entries list, and the
+  install → the shared tier on a global install). Per wiki: eager entries inject in full, lazy entries list, and the
   `conventions` / `inbox` / `protected` metadata is surfaced — on the **same**
   budgets, compaction and transform paths as the project context. Schema and
   behaviour: [the wiki guide](../../docs/guides/wiki.md).
@@ -302,26 +304,24 @@ uses) and builds **no sibling `Harness/` folder**:
 
 - `AGENT.md` rendered straight in;
 - `agents/`, `skills/<name>/SKILL.md`, and a single `plugins/` copy;
-- the **memory store** at `<cfg>/memory` — always classic English, never themed
+- a **seeded memory folder** at `<cfg>/memory` — always classic English, never themed
   (like `agents/`/`skills/`); migrated once from a legacy `Harness/memory` (or a
-  themed `anamnesis/`) if you had one, else seeded;
+  themed `anamnesis/`) if you had one, else seeded. Its facts then fold into the shared
+  store, `$XDG_CONFIG_HOME/geneseed/memory`;
 - `opencode.json` merged to point `instructions` at the absolute `AGENT.md`;
 - **no** `context.json` — the context plugin auto-discovers each repo's docs.
 
-The learn plugin now **auto-locates** the in-config store: it resolves `memory/`
-relative to its own file (`<cfg>/plugins/geneseed-learn.js` → `<cfg>/memory`), so the
-`export GENESEED_HARNESS` step is **optional**. Set it only to point the plugin at a
-*different* store:
-
-```
-export GENESEED_HARNESS="$HOME/.config/opencode"     # optional override
-echo "export GENESEED_HARNESS=\"$HOME/.config/opencode\"" >> ~/.zshrc
-```
+The learn plugin **auto-locates** its store: a global install takes the shared store
+when it exists, else `memory/` relative to its own file
+(`<cfg>/plugins/geneseed-learn.js` → `<cfg>/memory`), so the `export GENESEED_HARNESS`
+step is **optional**. Set it only to point the plugin at a *different* store, which
+also takes facts out of the shared tier.
 
 The dir is shared with your own config, so it is never wiped: a
 `.geneseed-manifest.json` tracks only the files this layer owns (AGENT.md, agents,
 skills, plugins — **not** memory) and removes stale ones on re-emit, leaving your own
-agents/skills/plugins and the memory store untouched.
+agents/skills/plugins untouched. The fold moves a global store to the shared tier and
+keeps the old one under `archived-memory/<stamp>/`; see `docs/concepts/shared-tier.md`.
 
 Use `$OPENCODE_CONFIG_DIR` to keep the global harness in a **git-tracked** folder.
 On upgrade: `GENESEED_EMIT=opencode-global ./geneseed upgrade` — or, on Windows,

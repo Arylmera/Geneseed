@@ -31,7 +31,7 @@
  * run and varied in none. The phase filter is gated over a recorded transcript in
  * `tests/unit/update_git.test.mjs`; the heartbeat and the hard deadline are gated by nothing.
  *
- * ALSO HERE, SINCE P8b: `syncSelf`/`cmdSyncSelf` and the bootstrap step runner
+ * ALSO HERE, SINCE P8b: the bootstrap step runner
  * (`cmdBootstrap`, `bootstrapPlain`) at the bottom of this file. Still NOT here: `main`, the
  * launchers' self-heal entry. Every web action row crosses — see `js/web/jobs.mjs`.
  * `parseOrigin` is ported in full here even though only `upgrade`
@@ -39,14 +39,13 @@
  * pure function across two phases is how a second classifier gets written.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
 import { exportImprovements, flushExportNotes } from '../inspect/diff.mjs';
 import { opencodeConfigDir } from '../hosts/hosts.mjs';
-import { legacyProcessCarrierOfDir } from '../hosts/installs.mjs';
 import { appendText, copyFile, printOut, printErr, readText, writeText } from '../lib/fs.mjs';
 import { comparePaths, toPlatformPath, which } from '../lib/paths.mjs';
 import { WHITESPACE, parseIntStrict, stripWhitespace } from '../lib/text.mjs';
@@ -106,10 +105,8 @@ export function gitRun(args, { timeout = 10, network = false } = {}) {
   const r = spawnSync(exe, cmd, {
     encoding: 'utf8', timeout: timeout * 1000, env, maxBuffer: 64 * 1024 * 1024, ...NO_WINDOW,
   });
-  // `except Exception` — a spawn error, an OS error, or the timeout Python raises on. A
-  // signal-killed git has `status === null` too and Python would report a negative code for
-  // it; no call site here distinguishes the two, and treating it as "git did not answer" is
-  // the arm the reference reaches for every other failure.
+  // A spawn error, an OS error or a timeout. A signal-killed git has `status === null` too;
+  // no call site distinguishes the two, so both mean "git did not answer".
   if (r.error || r.status === null) return [null, '', ''];
   return [r.status,
     redactUrlCreds(stripWhitespace(universal(r.stdout))),
@@ -204,6 +201,18 @@ function pre(code) {
   return { ok: code === 'ready', code, kind, message };
 }
 
+/**
+ * Is ROOT itself a git checkout, even one whose git cannot answer? An npm install under a
+ * project's `node_modules` is INSIDE someone else's work tree and is not a checkout: only ROOT's
+ * own top level, or its own `.git` entry (a damaged repository or a missing binary), says so.
+ */
+function isGitCheckout() {
+  if (existsSync(path.join(String(ROOT), '.git'))) return true;
+  const [rc, top] = gitRun(['rev-parse', '--show-toplevel']);
+  if (rc !== 0 || !top) return false;
+  try { return realpathSync(top) === realpathSync(String(ROOT)); } catch { return false; }
+}
+
 /** `_preflight()` — Phase A, local only, no network. Never raises. */
 export function preflight() {
   let [rc, out] = gitRun(['rev-parse', '--is-inside-work-tree']);
@@ -235,7 +244,7 @@ export function fetchTimeout() {
  * (`rev-list --count` prints ASCII). Reproducing the crash would be reproducing a bug; the
  * divergence is confined to input git cannot emit and is recorded rather than matched.
  */
-export function countOccurrences(s) {
+function countOccurrences(s) {
   const t = stripWhitespace(s || '');
   return /^[0-9]+$/.test(t) ? Number(t) : 0;
 }
@@ -396,6 +405,8 @@ export async function measureUpstream(log = null) {
   return ['ready', behind, ''];
 }
 
+const DOCTOR_TIMEOUT_MS = 300 * 1000;
+
 const DOCTOR_LEGEND = [
   '[geneseed] doctor problem legend — what the lines above mean / how to fix:',
   "  • 'dead link'          → a skill/agent body links a sibling as <dir>/<name>.md; use the BARE <name>.md (source bug)",
@@ -408,19 +419,27 @@ const DOCTOR_LEGEND = [
 
 /**
  * `_run_doctor(cand)` — validate a source tree with its OWN `doctor --all --no-bundle`.
- * Fail-closed: any nonzero exit, timeout or spawn error is a failure.
+ * Returns `[passed, output]`. A nonzero exit is a failure. `passed` is `null` when the doctor
+ * gave no verdict at all (timeout, kill or spawn error): a busy machine can outrun the deadline,
+ * and that says nothing about the pulled source. The deadline is judged by this process's clock
+ * too, since a kill can read as exit 1 on Windows. A kill from outside, inside the deadline,
+ * cannot be told from a real exit 1.
  *
  * THE SPAWN THAT CANNOT BE AN IMPORT. `cand` is the tree as it exists AFTER the merge, and
  * this process's module graph was loaded before it. `cmdDoctor` in-process would validate the
  * source this program started with and pass, which is the one answer that must never be
  * given here — the gate exists to catch a bad upstream commit.
  */
-export function runDoctor(cand) {
+export function runDoctor(cand, timeoutMs = DOCTOR_TIMEOUT_MS) {
+  const started = Date.now();
   const r = spawnSync(process.execPath,
     [path.join(String(cand), 'bin', 'geneseed-cli.mjs'), 'doctor', '--all', '--no-bundle'],
-    { encoding: 'utf8', timeout: 300 * 1000, maxBuffer: 256 * 1024 * 1024, ...NO_WINDOW });
+    { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 256 * 1024 * 1024, ...NO_WINDOW });
   if (r.error || r.status === null) {
-    return [false, `[geneseed] doctor gate could not run: ${r.error || 'no exit status'}`];
+    return [null, `[geneseed] doctor gate could not run: ${r.error || 'no exit status'}`];
+  }
+  if (r.status !== 0 && Date.now() - started >= timeoutMs) {
+    return [null, `[geneseed] doctor gate could not run: stopped at its ${timeoutMs} ms deadline`];
   }
   // `stderr=subprocess.STDOUT` — the reference gives the child ONE handle, so its two
   // streams are interleaved in write order and arrive as `proc.stdout`. `spawnSync` has no
@@ -444,10 +463,25 @@ export function runDoctor(cand) {
  * `--keep` refuses instead when such an edit touches a file the rollback must change; that
  * refusal is reported as itself — the user is left on the pulled commit, with the command to
  * finish the rollback — rather than as a rollback that did not happen.
+ *
+ * The doctor and what follows it are `gatePulled`. A new pull over an unchecked one takes its
+ * rollback point from `pendingGate`, since HEAD is then a commit no verdict covers.
+ *
+ * THE RECORD GOES DOWN BEFORE THE MERGE, so an update killed during the doctor leaves one too. A
+ * record that cannot be written stops the pull: nothing could hold a later rebuild back. A merge
+ * that then fails leaves it naming HEAD, which `pendingGate` drops.
  */
-export function pullAndValidate(log) {
+export function pullAndValidate(log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   const [rc0, old] = gitRun(['rev-parse', 'HEAD']);
   if (rc0 !== 0 || !old) return [false, 'not_git', 'could not read HEAD'];
+  const pending = pendingGate();
+  if (pending?.blocked) return [false, 'gate_unknown', pending.blocked];
+  const verified = pending?.verified ?? old;
+  if (!setPendingGate(verified)) {
+    return [false, 'gate_unrecorded',
+      'Update stopped before the pull: it could not write its record under .git, so an '
+      + 'unfinished doctor could not hold the rebuild back. Nothing changed.'];
+  }
   log('[geneseed] fast-forwarding to upstream ...');
   const [rc1, , err] = gitRun(['merge', '--ff-only', '@{u}'], { timeout: 60 });
   if (rc1 !== 0) {
@@ -463,23 +497,125 @@ export function pullAndValidate(log) {
     log('[geneseed] pulled:');
     for (const line of pulled.split('\n')) log(`  ${line}`);
   }
+  return gatePulled(verified, log, doctorTimeoutMs);
+}
+
+/**
+ * Where the unchecked state lives: under `.git`, so it dirties nothing. One record per branch, so
+ * a rollback can only ever move the branch the pull landed on. Null when git cannot say.
+ *
+ * KNOWN GAP, STATED RATHER THAN CLOSED: a record belongs to a branch NAME, so a branch the user
+ * creates (and sets to track) at a commit that an unfinished doctor never judged starts with no
+ * record, and nothing holds its rebuild back. Closing it means keying the record by commit, and a
+ * pull would then need a record per ancestor; the doctor gate is a guard for the pull `update`
+ * itself made, not an audit of every tree a user checks out.
+ */
+function pendingGateFile() {
+  const [rc0, branch] = gitRun(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (rc0 !== 0 || !branch) return null;
+  const name = `geneseed-doctor-pending-${encodeURIComponent(branch)}`;
+  const [rc1, rel] = gitRun(['rev-parse', '--git-path', name]);
+  return rc1 === 0 && rel ? path.resolve(String(ROOT), rel) : null;
+}
+
+function setPendingGate(verified) {
+  const file = pendingGateFile();
+  if (!file) return false;
+  try {
+    writeText(file, `${verified}\n`);
+    return true;
+  } catch { return false; }
+}
+
+/** Failing here is safe: a record left behind only asks the doctor once more. */
+function clearPendingGate() {
+  const file = pendingGateFile();
+  try { if (file) rmSync(file, { force: true }); } catch { /* the next update asks again */ }
+}
+
+/**
+ * `null` when this branch has nothing unchecked, `{ verified }` with the last commit a verdict
+ * covers while HEAD is ahead of it, `{ blocked }` with a message when nobody can tell.
+ *
+ * ONLY TWO ANSWERS DROP A RECORD: git saying the commit is not an ancestor (rc 1), and HEAD back
+ * on it. Both mean the user moved on. A timeout, an empty record or any other failure says
+ * nothing about the tree, so it refuses the rebuild and the record stays.
+ */
+export function pendingGate() {
+  // A repository with no commits has no pull to have left a record on: nothing to honour.
+  const [rcHead, , errHead] = gitRun(['rev-parse', '--verify', '-q', 'HEAD']);
+  if (rcHead === 1 && !errHead) return null;
+  const blocked = (why) => ({
+    blocked: `Update stopped: the record of an unfinished doctor cannot be trusted (${why}), so this `
+      + 'source may be unchecked. Run `geneseed doctor --all`. If it is clean, delete the '
+      + 'geneseed-doctor-pending-* file under .git, then update.',
+  });
+  const file = pendingGateFile();
+  if (!file) return blocked('git did not answer');
+  let verified;
+  try {
+    if (!existsSync(file)) return null;
+    verified = stripWhitespace(readText(file));
+  } catch (e) { return blocked(e.message); }
+  if (!verified) return blocked('it is empty');
+  const [rc0, head] = gitRun(['rev-parse', 'HEAD']);
+  const [rc1] = gitRun(['merge-base', '--is-ancestor', verified, 'HEAD']);
+  if (rc0 !== 0 || (rc1 !== 0 && rc1 !== 1)) return blocked(`git cannot place ${verified}`);
+  if (rc1 === 1 || head === verified) {
+    clearPendingGate();
+    return null;
+  }
+  return { verified };
+}
+
+/**
+ * Why a direct `setup` or `rebuild-all` must not run now, or null. Both render this source, and an
+ * unfinished doctor (a record under `.git`) means nothing has judged it: `upgrade` and `bootstrap`
+ * hold back for the record, and a direct call used to walk around it. An npm install has no record.
+ */
+export function gateRefusal() {
+  if (!isGitCheckout()) return null;
+  const g = pendingGate();
+  if (!g) return null;
+  return g.blocked ?? 'the source has no doctor verdict yet. Run `geneseed update` (it runs the '
+    + 'doctor first), then retry.';
+}
+
+/**
+ * The doctor gate over HEAD, with `verified` as the commit to roll back to.
+ *
+ * `doctor_unfinished` IS NOT A FAILED GATE, AND NOT A PASS. With no verdict the pull stays, because
+ * rolling back called a healthy pull bad. But the record under `.git` holds the rebuild back: the
+ * next update finds nothing to pull, and without it would rebuild from a tree nothing has judged.
+ * It asks here again, and only a verdict clears the record. A refused rollback keeps it too. The
+ * caller wrote the record, or found it, so nothing here needs to.
+ */
+export function gatePulled(verified, log, doctorTimeoutMs = DOCTOR_TIMEOUT_MS) {
   log('[geneseed] validating the pulled source (doctor — can take a minute) ...');
-  const [passed, output] = runDoctor(ROOT);
+  const [passed, output] = runDoctor(ROOT, doctorTimeoutMs);
   log(output.replace(/\n+$/, ''));
+  if (passed === null) {
+    return [false, 'doctor_unfinished',
+      'the doctor did not finish, so the pulled source is UNCHECKED: nothing says it is bad. '
+      + 'You stay on the pulled commit and nothing was rebuilt. Run `geneseed update` again when '
+      + 'the machine is quieter: it runs the doctor first and rebuilds only on a pass.'];
+  }
   if (!passed) {
-    const [rc3, , rerr] = gitRun(['reset', '--keep', old], { timeout: 60 });
+    const [rc3, , rerr] = gitRun(['reset', '--keep', verified], { timeout: 60 });
     for (const line of DOCTOR_LEGEND) log(line);
     if (rc3 !== 0) {
       return [false, 'doctor_fail',
         'the pulled source FAILS validation, and the rollback was REFUSED — a file it must '
         + 'restore was edited while the doctor ran, and those edits were kept. You are still '
-        + `on the pulled commit; save your edits, then roll back with: git reset --keep ${old}\n`
+        + `on the pulled commit; save your edits, then roll back with: git reset --keep ${verified}\n`
         + rerr];
     }
+    clearPendingGate();
     return [false, 'doctor_fail',
       'the pulled source FAILS validation — rolled back to the previous commit. '
       + 'Fix the problems listed above.'];
   }
+  clearPendingGate();
   return [true, 'ready', ''];
 }
 
@@ -552,15 +688,21 @@ export function configTheme(here) {
 }
 
 /**
- * `_migrate_stray_bundle` — move host state (context.json, memory/) from an OLD in-folder
- * bundle to the canonical sibling `out` BEFORE rebuilding, then drop the stray.
+ * `_migrate_stray_bundle` — copy host state (context.json, memory/) from an OLD in-folder
+ * bundle to the canonical sibling `out` BEFORE rebuilding, then set the stray ASIDE.
+ *
+ * THE STRAY IS RENAMED, NEVER DELETED (B9). The rescue covers context.json and memory/ only, and
+ * memory/ only when `out` has none; the old `rmSync` took everything else with it (user-rules.md,
+ * PROFILE.md, notebook/, a wiki manifest) from a folder `.gitignore` hides, so git could not
+ * bring it back. It now moves whole to `archived-Harness/<stamp>` beside it, also git-ignored.
+ * With the stray gone the next run returns at the stat, which is what makes this idempotent.
  *
  * "IS `out` THE STRAY ITSELF?" IS A PATH COMPARISON, NOT A STRING ONE. `GENESEED_OUT` is typed
  * by a user, so on Windows `c:\x\Geneseed\harness` is the same directory as the stray and was a
  * different string: the rescue was skipped as "nothing to move into", and the `rmSync` at the
  * bottom then deleted the LIVE bundle — memory/ and context.json with it.
  */
-export function migrateStrayBundle(here, out, log) {
+export function migrateStrayBundle(here, out, log, now = new Date()) {
   const stray = path.join(String(here), 'Harness');
   const outStr = String(out);
   if (comparePaths(path.resolve(outStr), path.resolve(stray)) === 0) return;
@@ -581,8 +723,13 @@ export function migrateStrayBundle(here, out, log) {
       log(`[geneseed] rescued ${mem}/ from ${stray} -> ${outStr}`);
     }
   }
-  log(`[geneseed] removing stray in-folder bundle ${stray} (canonical: ${outStr})`);
-  rmSync(stray, { recursive: true, force: true });
+  const archive = path.join(String(here), 'archived-Harness');
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  let dest = path.join(archive, stamp);
+  for (let n = 2; existsSync(dest); n += 1) dest = path.join(archive, `${stamp}-${n}`);
+  mkdirSync(archive, { recursive: true });
+  renameSync(stray, dest);
+  log(`[geneseed] stray in-folder bundle ${stray} set aside in ${dest} (canonical: ${outStr}); delete it when you are done with it`);
 }
 
 /**
@@ -618,18 +765,9 @@ async function drainStdout() {
  * Only the TAIL of the argv is kept: theme and emit are `upgrade`'s to decide (a theme argument
  * may override the marker), and `setupBuildArgs` opens with exactly those four tokens when it
  * is given no out and no root.
- *
- * `null` — distinct from `[]`'s "never built, nothing to carry over" — means `dir` carries a
- * pre-comms carrier (same guard as `rebuild-all`/`migrate`/the web console, reusing
- * `legacyProcessCarrierOfDir`): `installProfile` would read it exactly as written, and feeding
- * that into a rebuild would write the loss back PERMANENTLY. `[]` here would be WORSE, not
- * neutral — it resets every axis to the generator's config default, the exact failure this
- * function exists to prevent, on top of the comms/process-address loss. `upgrade` must skip the
- * bundle rebuild entirely on `null`, never fall through to an empty axes list.
  */
 export async function installAxes(dir, { installProfile, setupBuildArgs }, notify = null) {
   if (!existsSync(path.join(String(dir), '.geneseed-emit'))) return [];
-  if (legacyProcessCarrierOfDir(String(dir), 'opencode')) return null;
   const p = installProfile('opencode', 'global', String(dir), notify);
   return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
     undefined, p.excludeRules, p.trust, p.excludeSkills, p, p.kits).slice(4);
@@ -678,18 +816,13 @@ async function rebuildInstalls(here, log) {
 }
 
 /**
- * `upgrade(ref, theme_arg, zip_arg)` — update from the install's own git origin
+ * `upgrade(themeArg)` — update from the install's own git origin
  * (fast-forward only), doctor-gate, and rebuild the bundle plus every registered install.
- * `ref`/`zip_arg` are accepted for back-compat but IGNORED. Returns a process exit code:
- * 0 ok/up-to-date, 3 info precondition, 1 error.
+ * Returns a process exit code: 0 ok/up-to-date, 3 info precondition, 1 error.
  */
-export async function upgrade(ref = null, themeArg = null) {
+export async function upgrade(themeArg = null) {
   const logger = new Log();
   const log = (m) => logger.call(m);
-  if (ref) {
-    log(`[geneseed] ⚠️  ref '${ref}' is IGNORED — updates follow the checkout's `
-      + 'current branch (tag/branch pinning was removed with the zip path).');
-  }
   const here = String(ROOT);
   // `Path(os.environ.get(...) or ...)`, and `toPlatformPath` is the `Path(str)` half of it: the
   // reference stringifies with the PLATFORM separator, so a `GENESEED_OUT` spelled
@@ -756,6 +889,19 @@ export async function upgrade(ref = null, themeArg = null) {
     }
   } else {                                     // uptodate
     log('[geneseed] already up to date.');
+    const pending = pendingGate();
+    if (pending?.blocked) {
+      log(`[geneseed] ${pending.blocked}`);
+      return 1;
+    }
+    if (pending) {
+      log('[geneseed] the last doctor did not finish — this source has no verdict yet.');
+      const [ok, , msg] = gatePulled(pending.verified, log);
+      if (!ok) {
+        log(`[geneseed] ${msg}`);
+        return 1;
+      }
+    }
   }
 
   const theme = themeArg || markerTheme(cfg, out) || cfgTheme;
@@ -766,18 +912,7 @@ export async function upgrade(ref = null, themeArg = null) {
   } catch (e) {
     log(`[geneseed] ⚠️  could not migrate the old in-folder bundle (${e && e.message ? e.message : e}) — continuing.`);
   }
-  let rc = 0;
-  if (axes === null) {
-    // `installAxes` found a pre-comms carrier at this bundle's own target — skip the rebuild
-    // entirely rather than fall through with no axes (which would reset it to the generator's
-    // config default, worse than the loss this guard exists to stop). `rebuildInstalls` below
-    // reaches the same directory through `rebuild-all`'s own, identically-reasoned skip.
-    log(`[geneseed] SKIPPED bundle rebuild: pre-comms carrier at `
-      + `${emit === 'opencode-global' ? cfg : out} (names 'process 8') — run `
-      + '`geneseed setup` for it.');
-  } else {
-    rc = await rebuildBundle(here, out, theme, emit, rootDir, log, axes, bounceDaemonIfRunning);
-  }
+  let rc = await rebuildBundle(here, out, theme, emit, rootDir, log, axes, bounceDaemonIfRunning);
   if (rc !== 0) {
     log(`[geneseed][E-BUILD] ✗ the bundle build FAILED (theme: ${theme || 'default'}, emit: ${emit}).`);
     return 1;
@@ -793,7 +928,7 @@ export async function upgrade(ref = null, themeArg = null) {
 }
 
 /**
- * `_harness_lifecycle.cmd_upgrade` — the harness verb, which is `export_improvements()` and
+ * The harness verb, which is `export_improvements()` and
  * then `upgrade()`.
  *
  * THE EXPORT RUNS FIRST AND MUST NEVER BLOCK. A deployed harness can carry in-place edits (by
@@ -812,43 +947,7 @@ export async function cmdUpgrade(args) {
     printErr(`[upgrade] ⚠️  could not export local edits (${e && e.message ? e.message : e}) — `
       + 'run `geneseed diff --out FILE` before upgrading to keep them.\n');
   }
-  let { ref } = args;
-  let theme = args.theme;
-  // Back-compat: the legacy hidden `ref` positional eats the FIRST argument, so
-  // `geneseed upgrade imperial` lands in `ref` (which `upgrade` ignores) and the theme
-  // silently drops. `ref` is dead — reinterpret it as the theme when it names one.
-  if (theme === null && ref && existsSync(path.join(String(ROOT), 'themes', `${ref}.json`))) {
-    theme = ref;
-    ref = null;
-  }
-  return upgrade(ref, theme);
-}
-
-/**
- * `_update.sync_self` — an ALIAS of `upgrade`, and the argument it drops is the behaviour.
- *
- * One `git pull` refreshes the launchers AND the factory, so the two verbs became one
- * operation; the separate subcommand is kept for the stable contract. `ref` is bound by the
- * parser for back-compat and then dropped HERE — this calls `upgrade()` with no arguments
- * rather than forwarding anything.
- *
- * "IGNORED" IS NOT SILENT, which is what makes the dropping observable and is a correction the
- * mutations made to this docblock. `upgrade(ref)` does not quietly disregard a ref — it opens by
- * LOGGING `⚠️ ref '<x>' is IGNORED — updates follow the checkout's current branch`. So
- * `syncSelf` forwarding its argument would make `sync-self v1.2.3` print a warning the reference
- * never prints (mutation M22), and wiring the verb table's row straight at `cmdUpgrade` would
- * additionally make `sync-self cyberpunk` rebuild in cyberpunk, because `cmdUpgrade` re-reads
- * the dead positional as a THEME when `themes/<ref>.json` exists (M21). Two different defects
- * behind one plausible-looking shortcut, and
- * `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` is the cell for both.
- */
-export function syncSelf(_ref = null) {
-  return upgrade();
-}
-
-/** `_harness_lifecycle.cmd_sync_self`. */
-export function cmdSyncSelf(args) {
-  return syncSelf(args.ref);
+  return upgrade(args.theme);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -897,7 +996,7 @@ function updateStepCmd(sub) {
 }
 
 /**
- * `_harness_lifecycle._diagnose_failed_step` — the diagnosis for a failed update step, PERSISTED
+ * The diagnosis for a failed update step, PERSISTED
  * before it is printed.
  *
  * The persistence is the point rather than a nicety: the curses log pane is ephemeral and the
@@ -929,7 +1028,7 @@ export function diagnoseFailedStep(n, total, title, cmd, rc, output) {
 }
 
 /**
- * `_harness_lifecycle._bootstrap_plain` — run the update step with plain output, never fatally.
+ * Run the update step with plain output, never fatally.
  *
  * EXIT 3 IS NOT A FAILURE. `upgrade` returns 3 for an info precondition — a dirty tree, no
  * upstream, already up to date — and a bootstrap that reported those as failures would tell
@@ -949,7 +1048,7 @@ async function bootstrapPlain() {
   // which was written for `_flush_export_notes` and found this instead.
   /** @type {Array<[string, string[], () => Promise<number>]>} */
   const steps = [['Update & rebuild', updateStepCmd('upgrade'),
-    () => cmdUpgrade({ ref: null, theme: null })]];
+    () => cmdUpgrade({ theme: null })]];
   let failed = false;
   for (let i = 0; i < steps.length; i += 1) {
     const [title, cmd, step] = steps[i];
@@ -968,7 +1067,7 @@ async function bootstrapPlain() {
 }
 
 /**
- * `_harness_lifecycle._reexec` — hand off to a FRESH process so the just-updated code on disk
+ * Hand off to a FRESH process so the just-updated code on disk
  * runs, not the modules this one loaded before the pull.
  *
  * Node has no `execv`, so this is always the reference's WINDOWS branch: run the child normally
@@ -983,7 +1082,7 @@ function reexec(argv) {
 }
 
 /**
- * `_harness_lifecycle.cmd_bootstrap` — update everything, then hand off to a fresh `setup`.
+ * Update everything, then hand off to a fresh `setup`.
  *
  * `flushExportNotes()` runs BEFORE the handoff, deliberately: the re-exec replaces this process
  * and the update step's own improvements notice has scrolled past (or, under the reference's
@@ -993,10 +1092,18 @@ function reexec(argv) {
  * and it can repair what the update could not — but its exit code used to become bootstrap's,
  * so a script saw 0 over an update that never happened. `handoff` is the seam a test needs:
  * the real `setup` exits 1 off a terminal, which would make the two answers indistinguishable.
+ *
+ * AN UNCHECKED SOURCE IS THE EXCEPTION: `setup` renders, and no doctor has judged this tree.
+ * An npm install has no record to hold, so it is not asked.
  */
 export async function cmdBootstrap(args, { handoff = reexec } = {}) {
   const failed = await bootstrapPlain();
   flushExportNotes();
+  if (isGitCheckout() && pendingGate()) {
+    printOut('[geneseed] setup not started: the source has no doctor verdict yet. '
+      + 'Run `geneseed update`, then `geneseed setup`.\n');
+    return 1;
+  }
   if (!args.noSetup) {
     const rc = handoff([process.execPath,
       path.join(String(ROOT), 'bin', 'geneseed-cli.mjs'), 'setup']);

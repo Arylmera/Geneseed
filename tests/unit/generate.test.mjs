@@ -9,14 +9,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 import {
-  substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, STRUCTURE,
+  substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, sourceGeneration, STRUCTURE,
 } from '../../js/build/render.mjs';
 import { build } from '../../js/build/bundle.mjs';
+import { sourceFingerprint } from '../../js/build/version.mjs';
 import {
   isVendoredPath, loadAgentOverrides, writeNativeLayer, descBlockProblem,
   validateIsVendored, VENDORED_SKILL_DIRS,
@@ -34,7 +37,7 @@ import {
 import { mergeOpencodeJson, opencodeEditAsks, opencodeTarget, readJsonc } from '../../js/hosts/settings.mjs';
 import { unmergeOpencodeJson } from '../../js/maintain/uninstall.mjs';
 import {
-  doctrinesOfDir, excludedRulesOfDir, resetLegacyProcessCarrierWarning, themeFiles,
+  doctrinesOfDir, excludedRulesOfDir, themeFiles,
 } from '../../js/hosts/installs.mjs';
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds,
@@ -99,9 +102,8 @@ const isFile = (...p) => fs.existsSync(path.join(...p)) && fs.statSync(path.join
  * The bundle emit through its PUBLIC entry, in a child so the driver's own `ROOT` and
  * `process.exit` semantics are the real ones.
  *
- * Stronger than the reference's fixture for the posture/mode axis: `_build_core.POSTURE` is
- * a module global the Python rebinds directly, so nothing on that side ever gated the
- * `--posture` flag reaching the renderer. Here the flag IS the input.
+ * The posture/mode axis is driven through the flag itself, so the `--posture` flag reaching the
+ * renderer is gated. Here the flag IS the input.
  */
 function emitFiles(dir, out, extra = []) {
   const r = spawnSync(process.execPath,
@@ -588,6 +590,36 @@ test('validate renders at the axes it was given, read back off the sandbox', () 
       assert.ok(r.stdout.includes('[validate-only] rendered at posture=artisan mode=foreman '
         + 'packs=craft,process excluded=process 5'), `${emit}:\n${r.stdout}`);
     }
+  });
+});
+
+test('validate reads its registers off the host carrier, not a stray AGENT.md', () => {
+  // The sandbox render of a Claude install holds no AGENT.md, so a stray one has to be planted:
+  // a preload writes one beside every CLAUDE.md the render writes, saying the gate is off. The
+  // host-less walk met it first and printed `done-gate=off` for an install that is armed.
+  withDir((d) => {
+    const preload = path.join(d, 'plant.mjs');
+    fs.writeFileSync(preload, `import fs from 'node:fs';
+import path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+const write = fs.writeFileSync;
+fs.writeFileSync = (p, ...rest) => {
+  write(p, ...rest);
+  if (path.basename(String(p)) === 'CLAUDE.md') write(path.join(path.dirname(String(p)), 'AGENT.md'), 'Done gate: off\\n');
+};
+syncBuiltinESMExports();
+`);
+    const run = (extra) => spawnSync(process.execPath, ['--import', pathToFileURL(preload).href,
+      path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'validate', '--theme', 'neutral', '--emit', 'claude-global', ...extra], {
+      cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true,
+      env: { ...process.env, ...homeOverrides(path.join(d, 'home')) },
+    });
+    const armed = run([]);
+    assert.equal(armed.status, 0, armed.stdout + armed.stderr);
+    assert.ok(armed.stdout.includes('[validate-only] rendered at'), armed.stdout);
+    assert.ok(!armed.stdout.includes('done-gate=off'), `a stray AGENT.md answered:\n${armed.stdout}`);
+    const off = run(['--no-done-gate']);
+    assert.ok(off.stdout.includes('done-gate=off'), `the carrier's own switch was lost:\n${off.stdout}`);
   });
 });
 
@@ -1538,7 +1570,7 @@ test('writeNativeLayer reports the claimed user-only skill stems, and only those
     const { userOnlySkills } = native(d);
     // Real authored skills carrying the literal `<!-- invocation: user -->` marker in
     // src/skills (skill-forge only DESCRIBES the convention in prose; it does not carry it).
-    for (const name of ['learn-mode', 'quiz', 'teach']) {
+    for (const name of ['adhd', 'learn-mode', 'teach']) {
       assert.ok(userOnlySkills.includes(name), `${name} missing from userOnlySkills: ${userOnlySkills}`);
     }
     // An ordinary, model-invocable skill gets no row.
@@ -1687,20 +1719,26 @@ function withShimHome(home, fn) {
 test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows agentPath', () => {
   withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
     const tails = ['opencode.json', 'opencode.jsonc', '.opencode/excludes.json',
-      '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/geneseed-*.js',
+      '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/*', '.opencode/plugin/*',
+      '.opencode/agents/*.md', '.opencode/agent/*.md', '.opencode/mode/*.md', '.opencode/modes/*.md', '.opencode/tool/*', '.opencode/tools/*',
       '.claude/settings.json', '.claude/settings.local.json', '.openclaude/settings.json',
       '.openclaude/settings.local.json', '.bob/settings.json', '.bob/settings.local.json',
-      '.bob/settings/settings.json', '.geneseed/bin/*'];
+      '.bob/settings/settings.json',
+      // Persist Insight: the coined names anywhere, the memory folders by their last segments.
+      'user-rules.md', 'user-rules.draft.md', 'MEMORY.md', '.opencode/memory/*.md', 'geneseed/memory/*.md',
+      '.geneseed/bin/*'];
     // A project AGENT.md never gets `*/AGENT.md`, which would ask about every AGENT.md in the repo:
     // install-root-relative, git-root-relative (1.x, a subpackage install) and `*../` (2.x subdir session).
     withDir((d) => {
       fs.mkdirSync(path.join(d, '.git'));
       assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'AGENT.md'),
-        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md']);
-      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-3),
-        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md']);
-      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-3),
-        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md']);
+        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md', 'memory/*.md', '*../memory/*.md']);
+      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-6),
+        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md', 'memory/*.md', 'pkg/memory/*.md', '*../memory/*.md']);
+      // The store sits beside the carrier: the default project install's is Harness/memory.
+      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-6),
+        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md',
+          'Harness/memory/*.md', '*../Harness/memory/*.md', '*/Harness/memory/*.md']);
     });
     const global = opencodeEditAsks(path.join('home', '.config', 'opencode'), true);
     for (const k of ['opencode/config.json', '*/opencode/config.json', '*/opencode/AGENT.md', '*/opencode/excludes.json']) {
@@ -1715,17 +1753,18 @@ test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows
   });
 });
 
-test('OpenCode asks for gate config and nothing else, at the root, below it and outside it', () => {
+test('OpenCode asks for gate config, the stores and what can load code, at the root, below it and outside it', () => {
   withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
     const edit = { '*': 'allow', ...Object.fromEntries(opencodeEditAsks('/r/.opencode', false, 'AGENT.md').map((k) => [k, 'ask'])) };
     // 1.x: relative to the worktree; 2.x: relative to the session dir, absolute outside it.
     for (const rel of ['opencode.json', 'pkg/opencode.jsonc', '../opencode.json', '.opencode/excludes.json',
-      'AGENT.md', '../AGENT.md', '../../AGENT.md', '.opencode/plugins/geneseed-guard.js', '../.opencode/.geneseed-manifest.json',
+      'AGENT.md', '../AGENT.md', '../../AGENT.md', '.opencode/plugins/geneseed-guard.js', '.opencode/plugins/my-plugin.js',
+      '.opencode/agents/x.md', '.opencode/tool/x.js', 'memory/fact.md', '../.opencode/.geneseed-manifest.json',
       '.claude/settings.json', 'pkg/.bob/settings.json', 'C:/Users/u/.bob/settings/settings.json',
       '../../.geneseed/bin/geneseed-hook.cmd', 'C:/Users/u/.geneseed/bin/geneseed-hook',
       'C:\\r\\.opencode\\excludes.json']) assert.equal(ocDecide(edit, rel), 'ask', rel);
-    for (const rel of ['src/app.js', 'docs/AGENT.md', '.opencode/plugins/my-plugin.js', '.claude/agents/x.md',
-      '.opencode/agents/x.md', 'opencode.json.bak', 'excludes.json', 'config/settings.json']) {
+    for (const rel of ['src/app.js', 'docs/AGENT.md', '.claude/agents/x.md',
+      'opencode.json.bak', 'excludes.json', 'config/settings.json', 'src/memory/notes.md']) {
       assert.equal(ocDecide(edit, rel), 'allow', rel);
     }
     if (process.platform === 'win32') assert.equal(ocDecide(edit, '.OpenCode/EXCLUDES.JSON'), 'ask');
@@ -2592,65 +2631,8 @@ test('excludedRulesOfDir round-trips the marker a real build wrote', () => {
   });
 });
 
-// THE ADDRESS MIGRATION (2026-09-27) AND ITS RETIREMENT (4.0.0). The comms pack took
-// `process 7` (reference codes) out of process as `comms 1`, and `process 8` (one writer per
-// file) became `process 7`. An install built before that carries a marker naming `process` and
-// not `comms` — and so does a current install whose owner switched comms off. The carrier's
-// text tells them apart: only a pre-comms carrier can say `process 8` (as a rendered heading,
-// or in its `Excluded rules:` line). Through 3.x a pre-comms carrier was silently rewritten on
-// read; 4.0.0 removed that rewrite because its detector breaks the day `process` ever regains
-// an eighth rule for an unrelated reason. Now the carrier is read exactly as written, and the
-// read warns on stderr instead of mutating anything — once per process (fix round 2), so
-// `resetLegacyProcessCarrierWarning` is called between the steps below that each expect to see
-// the line fire again; nothing outside a test should ever call it.
-
-test('a pre-comms install is read as written, and warned about loudly instead of migrated', () => {
-  withDir((d) => {
-    const old = path.join(d, 'old');
-    fs.mkdirSync(old);
-    const write = (body) => writeText(path.join(old, 'AGENT.md'), `# Geneseed\n\n${body}\n`);
-
-    // The default pre-comms carrier: process active, its eighth rule rendered. No `comms` is
-    // added any more — the pack list comes back exactly as named — and the read warns.
-    resetLegacyProcessCarrierWarning();
-    write('### Doctrine process 8 — One Writer Per File\n\nActive packs: craft, rigor, ops, process');
-    let [packs, , err] = captured(() => doctrinesOfDir(old));
-    assert.deepEqual(packs, ['craft', 'rigor', 'ops', 'process'],
-      'the retired migration must not add comms any more — the carrier is read as written');
-    assert.match(err, /process 8/, 'a pre-comms carrier must warn loudly, not read in silence');
-    assert.match(err, /geneseed setup/, 'the warning must name the fix: re-run setup');
-    assert.doesNotMatch(err, /geneseed rebuild-all/,
-      'the one command the warning must never suggest: it is now a refused no-op for this install');
-
-    // A second read in the SAME process says nothing more — the line is deduped, not repeated
-    // on every call a long-running `doctor`/`validate`/`uninstall` makes against one install.
-    [, , err] = captured(() => doctrinesOfDir(old));
-    assert.equal(err, '', 'the warning must not repeat within one process');
-
-    // Its exclusions are no longer re-addressed: the old `process 7`/`process 8` spellings come
-    // back literally, not remapped to `comms 1`/`process 7`, and the read still warns.
-    resetLegacyProcessCarrierWarning();
-    write('Active packs: craft, process\nExcluded rules: process 7, process 8');
-    let excluded;
-    [excluded, , err] = captured(() => excludedRulesOfDir(old));
-    assert.deepEqual(excluded, ['process.7', 'process.8'],
-      'the retired migration must not re-address old process addresses any more');
-    assert.match(err, /process 8/);
-
-    // No `process 8` in the carrier: nothing is legacy, nothing warns.
-    resetLegacyProcessCarrierWarning();
-    write('Active packs: craft');
-    [packs, , err] = captured(() => doctrinesOfDir(old));
-    assert.deepEqual(packs, ['craft']);
-    assert.equal(err, '', 'a carrier that never said process 8 has nothing to warn about');
-  });
-});
-
 test('a current install with comms switched off stays off across a rebuild', () => {
-  // The other direction: `process` without `comms` is also what a deliberate current choice
-  // says, and the retired migration's detector (sniffing `process 8`) is what told them apart
-  // rather than the marker alone — unchanged by the retirement, since this carrier never says
-  // `process 8`.
+  // `process` without `comms` is a deliberate current choice, read back as written.
   withDir((d) => {
     const out = path.join(d, 'bundle');
     buildInto(out, { doctrines: ['craft', 'process'], excludeRules: ['process.7'] });
@@ -2715,22 +2697,208 @@ test('knownRuleIds is every rule this checkout ships, in render order', () => {
   });
 });
 
+/** A cfg whose whole tree is `src`, so the real `themes/` has no say in a stamp. */
+const treeCfg = (src) => ({ ...makeCfg(), src, themes: `${src}-none`, pluginSrc: `${src}-none`, workflowSrc: `${src}-none` });
+
+/** Age every file past the settle window: a tree written just now is never shared, so a test of
+ * the stamp on a fresh tree would pass however blind the stamp was. */
+function settle(src) {
+  const old = new Date(Date.now() - 60_000);
+  for (const e of fs.readdirSync(src, { recursive: true, withFileTypes: true })) {
+    if (e.isFile()) fs.utimesSync(path.join(e.parentPath, e.name), old, old);
+  }
+}
+
 test('a render reads each source file once per cfg, and a new cfg sees an edit', () => {
-  // The source cache is keyed on the cfg OBJECT: one operation (an emit, a doctor pass) reads
-  // a partial once however many specs include it — but the web daemon renders in-process for
-  // days, so a fresh `makeCfg()` must see today's file. Both halves, or a process-wide cache
-  // (the obvious spelling) would pass the first and serve stale source forever.
+  // The tree is stamped once per cfg: one operation (an emit, a doctor pass) reads a partial once
+  // however many specs include it — but the web daemon renders in-process for days, so a fresh
+  // `makeCfg()` must see today's file. Both halves, or a process-wide cache (the obvious
+  // spelling) would pass the first and serve stale source forever.
   withDir((d) => {
     const src = path.join(d, 'src');
     fs.mkdirSync(src, { recursive: true });
     const f = path.join(src, 'x.md');
     fs.writeFileSync(f, 'first\n');
-    const cfg = { ...makeCfg(), src };
+    settle(src);
+    const cfg = treeCfg(src);
     assert.equal(renderFile(cfg, f, {}).trim(), 'first');
     fs.writeFileSync(f, 'second\n');
     assert.equal(renderFile(cfg, f, {}).trim(), 'first', 'the same cfg re-read its source');
-    assert.equal(renderFile({ ...makeCfg(), src }, f, {}).trim(), 'second',
+    assert.equal(renderFile(treeCfg(src), f, {}).trim(), 'second',
       'a new cfg was served the old text');
+  });
+});
+
+test('cfgs share what an unchanged tree yields, so 84 emits read it once', () => {
+  // The other half of the test above: `doctor --all` builds a cfg per emit, and a cache that
+  // dies with its cfg is the 35% of doctor CPU this exists to save. Nothing visible in the
+  // output tells the two apart, so the generation itself is what is compared.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, 'x.md'), 'first\n');
+    settle(src);
+    const generation = sourceGeneration(treeCfg(src));
+    assert.equal(sourceGeneration(treeCfg(src)), generation, 'a new cfg started over');
+    fs.writeFileSync(path.join(src, 'y.md'), 'added\n');
+    assert.notEqual(sourceGeneration(treeCfg(src)), generation, 'an added file went unseen');
+  });
+});
+
+test('an edit in any of the four source roots reaches the fingerprint', () => {
+  // `treeCfg` points three roots at nothing, so the tests around this one stay green on a stamp
+  // that walks only `cfg.src`. Each root here holds a real file, and an edit of each must move
+  // the fingerprint a fresh cfg reports: a blind stamp serves the old generation and its memo.
+  withDir((d) => {
+    const roots = { src: 'src', themes: 'themes', pluginSrc: 'plugins', workflowSrc: 'workflows' };
+    const dirs = Object.fromEntries(Object.entries(roots).map(([k, v]) => [k, path.join(d, v)]));
+    const cfg = () => ({ ...makeCfg(), ...dirs });
+    for (const dir of Object.values(dirs)) {
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'x.md'), 'first\n');
+    }
+    for (const [name, dir] of Object.entries(dirs)) {
+      settle(d);
+      const before = sourceFingerprint(cfg());
+      assert.equal(sourceGeneration(cfg()), sourceGeneration(cfg()), 'fixture: the tree is not shared');
+      fs.writeFileSync(path.join(dir, 'x.md'), `edited ${name}\n`);
+      assert.notEqual(sourceFingerprint(cfg()), before, `an edit under ${name} went unseen`);
+    }
+  });
+});
+
+test('the inventory counts are shared until an input moves: the source, the theme, the doctrines, the config', () => {
+  // In a child on a COPY: the counts read the checkout they are imported from, and this test edits
+  // it. Identity is the proof of a hit, a count the proof of a miss. The copy is settled first, or
+  // no generation is shared and the first row would hold only by luck.
+  withDir((d) => {
+    copyCheckout(d);
+    settle(d);
+    const script = `
+      import fs from 'node:fs';
+      import path from 'node:path';
+      import { pathToFileURL } from 'node:url';
+      const root = process.argv[1];
+      const { inventoryCounts } = await import(pathToFileURL(path.join(root, 'js/inspect/status.mjs')).href);
+      const first = inventoryCounts('neutral');
+      const again = inventoryCounts('neutral');
+      const narrowed = inventoryCounts('neutral', ['craft']);
+      const other = inventoryCounts('imperial');
+      const config = path.join(root, 'harness.config.json');
+      fs.appendFileSync(config, '\\n');
+      const reconfigured = inventoryCounts('neutral');
+      fs.copyFileSync(path.join(root, 'src/agents/reviewer.md'), path.join(root, 'src/agents/zz-added.md'));
+      const edited = inventoryCounts('neutral');
+      console.log(JSON.stringify({ hit: first === again, packs: [first.packs, narrowed.packs],
+        themed: other !== first, reconfigured: reconfigured !== first, agents: [first.agents, edited.agents] }));
+    `;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', script, d],
+      { encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    const got = JSON.parse(r.stdout);
+    assert.equal(got.hit, true, 'an unchanged source counted again');
+    assert.ok(got.packs[1] < got.packs[0], 'the doctrines are not in the key');
+    assert.equal(got.themed, true, 'the theme is not in the key');
+    assert.equal(got.reconfigured, true, 'harness.config.json is not in the key');
+    assert.equal(got.agents[1], got.agents[0] + 1, 'a source edit served the old count');
+  });
+});
+
+test('a file deleted between the walk and its stat does not break the stamp', () => {
+  // The web daemon stamps a live tree, and an editor's save can delete a file the walk just listed.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    const gone = path.join(src, 'gone.md');
+    fs.mkdirSync(src);
+    fs.writeFileSync(path.join(src, 'kept.md'), 'kept\n');
+    fs.writeFileSync(gone, 'gone\n');
+    const real = fs.statSync;
+    fs.statSync = (p, ...rest) => {
+      if (p === gone && fs.existsSync(gone)) fs.unlinkSync(gone);
+      return real(p, ...rest);
+    };
+    syncBuiltinESMExports();
+    try {
+      assert.ok(sourceGeneration(treeCfg(src)), 'no generation came back');
+    } finally {
+      fs.statSync = real;
+      syncBuiltinESMExports();
+    }
+    assert.ok(!fs.existsSync(gone), 'fixture: the stat never met the file');
+  });
+});
+
+test('a tree written just now is not shared, so a same-tick edit cannot hide', () => {
+  // On a coarse clock two same-size edits share a stamp. Only refusing to share a young tree
+  // keeps the second edit visible, and no stat of the file can.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, 'x.md'), 'first\n');
+    assert.notEqual(sourceGeneration(treeCfg(src)), sourceGeneration(treeCfg(src)), 'a young tree was shared');
+  });
+});
+
+test('an edit to a law reaches a file that cites it, whose own stat never moved', () => {
+  // A resolved text depends on the canon, not only on its own file. A key that stats the file
+  // being read passes every other test here and serves the daemon the old name of the rule.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    const law = path.join(src, 'laws', 'universal.md');
+    const citing = path.join(src, 'citing.md');
+    fs.mkdirSync(path.dirname(law), { recursive: true });
+    fs.writeFileSync(law, '### {{LAW:demo-rule}} Old Name\n\nBody.\n');
+    fs.writeFileSync(citing, 'See {{LAW:demo-rule}}.\n');
+    settle(src);
+    assert.equal(renderFile(treeCfg(src), citing, {}).trim(), 'See *Old Name*.');
+    fs.writeFileSync(law, '### {{LAW:demo-rule}} A Longer Name\n\nBody.\n');
+    assert.equal(renderFile(treeCfg(src), citing, {}).trim(), 'See *A Longer Name*.');
+  });
+});
+
+test('the fingerprint moves with a same-size edit, and stays put without one', () => {
+  // The stat stamp decides whether the tree is hashed again at all, so a stamp blind to an edit
+  // would freeze the version every install is compared against. Same size, so only the
+  // timestamps can tell; set well in the past, so the settle window cannot decide it.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    const f = path.join(src, 'x.md');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(f, 'aaaa\n');
+    settle(src);
+    const before = sourceFingerprint(treeCfg(src));
+    assert.equal(sourceFingerprint(treeCfg(src)), before, 'nothing changed, yet it moved');
+    fs.writeFileSync(f, 'bbbb\n');
+    const later = new Date(Date.now() - 30_000);
+    fs.utimesSync(f, later, later);
+    assert.notEqual(sourceFingerprint(treeCfg(src)), before, 'the edit went unseen');
+  });
+});
+
+test('a source file deleted between the walk and the hash is left out of the fingerprint', () => {
+  // The walk lists the files and the hash reads them later; the stamp already skips one that has
+  // gone (render.mjs), and the hash threw ENOENT out of every emit and `status` on it. The result
+  // must equal the fingerprint of the tree without that file. fs is patched because a real
+  // deletion between two statements of one synchronous call cannot be timed.
+  withDir((d) => {
+    const src = path.join(d, 'src');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, 'keep.md'), 'kept\n');
+    fs.writeFileSync(path.join(src, 'gone.md'), 'gone\n');
+    settle(src);
+    const real = fs.readFileSync;
+    fs.readFileSync = (p, ...rest) => {
+      if (String(p).endsWith('gone.md')) throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
+      return real(p, ...rest);
+    };
+    syncBuiltinESMExports();
+    let racing;
+    try { racing = sourceFingerprint(treeCfg(src)); } finally {
+      fs.readFileSync = real;
+      syncBuiltinESMExports();
+    }
+    fs.rmSync(path.join(src, 'gone.md'));
+    assert.equal(racing, sourceFingerprint(treeCfg(src)), 'the vanished file still moved the hash');
   });
 });
 

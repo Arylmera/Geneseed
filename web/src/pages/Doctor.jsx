@@ -55,13 +55,7 @@ export default function Doctor({ dataRev }) {
   const [install, pick] = useInstallPick('doctor', active)
   return (
     <>
-      <InstallPicker
-        className="page-pick"
-        installs={active}
-        value={install}
-        onChange={pick}
-        label="Doctor for:"
-      />
+      <InstallPicker className="page-pick" installs={active} value={install} onChange={pick} />
       {active === null ? (
         <Loading />
       ) : (
@@ -81,7 +75,7 @@ function DoctorOf({ install, dataRev }) {
     return api.doctor(f, pairOf(install))
   }, [dataRev])
   // Re-running clears the result first so the button reads "Running…" and the
-  // sandbox-build loading copy shows while every theme is re-validated.
+  // sandbox-build loading copy shows while the install's theme is re-validated.
   const rerun = () => {
     fresh.current = true
     setData(null)
@@ -100,25 +94,25 @@ function DoctorOf({ install, dataRev }) {
         <div>
           <h2 className="h">Doctor</h2>
           <p className="sub">
-            Every check builds each theme in a sandbox and validates the result: token resolution,
-            link integrity, parity, and drift.
+            Builds this install’s voice in a sandbox and validates the result: token resolution,
+            link integrity, parity, and local edits.
           </p>
         </div>
         <button className="btn" onClick={rerun} disabled={!data}>
           <Icon name="refresh" />
-          {data ? 'Re-run checks' : 'Running…'}
+          {data ? 'Run doctor' : 'Running…'}
         </button>
       </div>
 
       {!data ? (
-        <Loading label="Running every check (builds each theme in a sandbox)…" />
+        <Loading label="Running every check (builds this install’s voice in a sandbox)…" />
       ) : (
         <>
           <div className="card pad-md mb-16 doc-summary">
             <div className="row wrap between gap-12">
               <div className="row wrap gap-10">
                 <span className="dim mono">
-                  validated {data.themes.length} theme{data.themes.length === 1 ? '' : 's'}
+                  validated {data.themes.length} voice{data.themes.length === 1 ? '' : 's'}
                 </span>
                 {data.checked_at ? (
                   <span className="dim mono" title={data.checked_at}>

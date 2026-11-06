@@ -40,7 +40,7 @@ In [foreman mode](foreman-mode.md) the session chains several of them into a pip
 
 ### Agents learn too
 
-When a subagent finishes, the learn step can record a lesson for that agent alone, in `memory/agents/<name>.md` — one bullet per lesson, capped so it never grows unbounded. The next time that agent runs, it starts with what it learned. See [Memory](memory.md). (Not on Bob, which has no subagent-finished event.)
+When a subagent finishes, the learn step can record a lesson for that agent alone, in `agents/<name>.md` in the memory store (the [shared](shared-tier.md) one on a global install) — one bullet per lesson, capped so it never grows unbounded. The next time that agent runs, it starts with what it learned. See [Memory](memory.md). (Not on Bob, which has no subagent-finished event.)
 
 <!--harness:opencode-->
 *(OpenCode only)*

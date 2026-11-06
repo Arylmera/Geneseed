@@ -34,6 +34,21 @@ export function splitAtMapTable(body) {
   return [before.join('\n'), after.join('\n')]
 }
 
+// The page title is the H1, so a page's first level is H2. Many sources start at ###: every heading
+// moves up by the same step, which keeps their order and turns the skip into H1 then H2.
+function promoteHeadings(root) {
+  const heads = [...root.querySelectorAll('h2, h3, h4, h5, h6')]
+  const level = (h) => Number(h.tagName[1])
+  const step = heads.length ? Math.min(...heads.map(level)) - 2 : 0
+  if (step <= 0) return
+  for (const h of heads) {
+    const up = document.createElement(`h${level(h) - step}`)
+    for (const a of h.attributes) up.setAttribute(a.name, a.value)
+    up.append(...h.childNodes)
+    h.replaceWith(up)
+  }
+}
+
 // Ids and the outline come from the RENDERED html, in one pass, so the page and the margin
 // cannot disagree: the source of a heading holds link URLs and entities its text does not, and
 // two headings with one title need two ids. `seen` (ids taken, heading count, outline) is shared
@@ -42,6 +57,7 @@ export function splitAtMapTable(body) {
 function addIds(html, seen) {
   const t = document.createElement('template')
   t.innerHTML = html
+  promoteHeadings(t.content)
   t.content.querySelectorAll('h1, h2, h3').forEach((h) => {
     if (h.tagName !== 'H1') seen.idx += 1
     const base = h.id || slug(h.textContent || '', seen.idx)

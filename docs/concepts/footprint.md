@@ -5,7 +5,7 @@ title: "Footprint (lean vs full)"
 kind: "concept"
 section: "Configuration"
 description: "Lean or full: how much of the constitution rides inline every turn."
-link: {"hash": "#/installs/hosts", "label": "Change it on Hosts →"}
+link: {"hash": "#/installs/hosts", "label": "Change it on Installs →"}
 ---
 **Footprint** decides how much of the [constitution](rules.md) the agent carries *inline* in its instructions file on every turn. It has two settings, **lean** (the default) and **full**, chosen per install. It is a token-cost dial, not a rules dial: every rule the install adopted is in force at either setting.
 

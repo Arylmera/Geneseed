@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../api/index.js', () => ({
@@ -18,6 +18,8 @@ const FILLED = {
   fingerprint: 'f1',
   text: '# Who I am\n\nA builder.',
 }
+
+const texts = (sel) => [...document.querySelectorAll(sel)].map((n) => n.textContent)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -61,7 +63,8 @@ describe('Profile', () => {
     let calls = 0
     api.profile.mockImplementation(() =>
       Promise.resolve(
-        ++calls === 1 ? FILLED : { ...FILLED, fingerprint: 'f9', text: '# Agent wrote this' },
+        // Two reads before the save: the page's, for the path, and the card's own.
+        ++calls <= 2 ? FILLED : { ...FILLED, fingerprint: 'f9', text: '# Agent wrote this' },
       ),
     )
     render(<Profile />)
@@ -69,7 +72,7 @@ describe('Profile', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'my draft' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(api.profile).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(api.profile).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(screen.getByText(/Your draft is kept/)).toBeTruthy())
     expect(screen.getByLabelText('Profile markdown').value).toBe('my draft')
     // …and the next save carries the NEW fingerprint.
@@ -106,7 +109,7 @@ describe('Profile', () => {
     ])
   })
 
-  it('a seeded profile says it is still the template, and "Edit it here" opens the editor', async () => {
+  it('a seeded profile says it is still the template, and the Edit switch opens the editor', async () => {
     api.profile.mockImplementation(() =>
       Promise.resolve({ ...FILLED, seeded: true, text: '# Your profile\n\nStub.' }),
     )
@@ -114,8 +117,8 @@ describe('Profile', () => {
     expect(await screen.findByText('This is still the template')).toBeTruthy()
     // The rendered stub stays under the panel.
     expect(screen.getByRole('heading', { name: 'Your profile' })).toBeTruthy()
-    const button = screen.getByRole('button', { name: 'Edit it here' })
-    expect(button.className).toBe('btn ghost')
+    expect(screen.queryByRole('button', { name: 'Edit it here' })).toBeNull()
+    const button = screen.getByRole('button', { name: 'Edit' })
     fireEvent.click(button)
     expect(screen.getByLabelText('Profile markdown').value).toBe('# Your profile\n\nStub.')
     expect(screen.queryByText('This is still the template')).toBeNull()
@@ -125,12 +128,12 @@ describe('Profile', () => {
     // The disk read after the save stays pending, so only the painted copy can answer.
     let calls = 0
     api.profile.mockImplementation(() =>
-      ++calls === 1
+      ++calls <= 2
         ? Promise.resolve({ ...FILLED, seeded: true, text: '# Your profile\n\nStub.' })
         : new Promise(() => {}),
     )
     render(<Profile />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit it here' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
     fireEvent.change(screen.getByLabelText('Profile markdown'), {
       target: { value: '# Mine\n\nWritten.' },
     })
@@ -164,8 +167,8 @@ describe('Profile across installs', () => {
     api.profile.mockImplementation((inst) =>
       Promise.resolve(
         inst?.host === 'opencode'
-          ? { ...FILLED, fingerprint: 'oc-fp', text: '# OpenCode me' }
-          : { ...FILLED, fingerprint: 'cl-fp', text: '# Claude me' },
+          ? { ...FILLED, path: '/oc/PROFILE.md', fingerprint: 'oc-fp', text: '# OpenCode me' }
+          : { ...FILLED, path: '/cl/PROFILE.md', fingerprint: 'cl-fp', text: '# Claude me' },
       ),
     )
   })
@@ -178,7 +181,7 @@ describe('Profile across installs', () => {
   it('keeps an open draft across a dataRev refetch', async () => {
     const { rerender } = render(<Profile dataRev={1} />)
     await screen.findByRole('heading', { name: 'OpenCode me' })
-    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
     fireEvent.click(oc.querySelectorAll('button')[1])
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
     rerender(<Profile dataRev={2} />)
@@ -186,18 +189,132 @@ describe('Profile across installs', () => {
     expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
   })
 
-  it('shows one card per install, default first, and saves to the card own install', async () => {
+  // The real fetch parses a new body each time, so the refetched rows are NEW objects with the
+  // same ids, landing after the file reads that still hold the old rows. A card is matched by its
+  // install's id: matched by identity, the list came up empty and took the draft with it.
+  it('keeps an open draft when the refetched install rows are new objects', async () => {
+    api.installs = vi.fn(async () => ({ installs: [{ ...OC }, { ...CL }] }))
+    const { rerender } = render(<Profile dataRev={1} />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
+    rerender(<Profile dataRev={2} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(api.installs).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
+  })
+
+  // A refetch that fails caches null for App's "install list unreadable" notice, and null reads as
+  // no install at all. The files keep the last good list: falling to the default install would
+  // swap every card's key and unmount the draft.
+  it('keeps an open draft when the install list refetch fails', async () => {
+    api.installs = vi
+      .fn()
+      .mockResolvedValueOnce({ installs: [OC, CL] })
+      .mockRejectedValue(new Error('daemon gone'))
+    const { rerender } = render(<Profile dataRev={1} />)
+    await screen.findByRole('heading', { name: 'OpenCode me' })
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
+    fireEvent.click(oc.querySelectorAll('button')[1])
+    fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'unsaved' } })
+    rerender(<Profile dataRev={2} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(api.installs).toHaveBeenCalledTimes(2)
+    expect(screen.getByLabelText('Profile markdown').value).toBe('unsaved')
+    expect(screen.getAllByRole('region')).toHaveLength(2)
+  })
+
+  // Every global install answers with the one shared file: one card, tagged shared, no harness.
+  it('shows a file two installs share as one card, tagged shared', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...OC, shared: true },
+        { ...CL, shared: true },
+      ],
+    }))
+    api.profile.mockImplementation(() => Promise.resolve({ ...FILLED, path: '/tier/PROFILE.md' }))
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Who I am' })
+    expect(screen.getAllByRole('heading', { name: 'Who I am' })).toHaveLength(1)
+    expect(screen.getByRole('region').getAttribute('aria-label')).toBe('Profile, shared')
+    expect(document.querySelector('.rule-chip').textContent).toBe('shared')
+    expect(document.body.textContent).not.toMatch(/claude|opencode/)
+  })
+
+  // A project install beside the shared file keeps its own card and its install name.
+  it('keeps a project install apart from the shared card', async () => {
+    const REPO = { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' }
+    api.installs = vi.fn(async () => ({ installs: [{ ...CL, shared: true }, REPO] }))
+    api.profile.mockImplementation((inst) =>
+      Promise.resolve(
+        inst?.host === 'bob'
+          ? { ...FILLED, path: '/r/repo/PROFILE.md', text: '# Repo me' }
+          : { ...FILLED, path: '/tier/PROFILE.md' },
+      ),
+    )
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Repo me' })
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Profile, shared',
+      'Profile, repo · BOB (IBM)',
+    ])
+  })
+
+  // An install whose read failed is not folded away: its own card says so.
+  it('keeps a card for an install whose first read failed', async () => {
+    api.profile.mockImplementation((inst) =>
+      inst?.host === 'opencode'
+        ? Promise.reject(new Error('unreadable'))
+        : Promise.resolve({ ...FILLED, shared: true }),
+    )
+    render(<Profile />)
+    await screen.findByRole('heading', { name: 'Who I am' })
+    await waitFor(() => expect(screen.getByText(/unreadable/)).toBeTruthy())
+  })
+
+  // `shared` names the one card the shared file got. A failed read is not that card, whatever its
+  // row says: it is tagged with its install, and the tag stays on the error it shows.
+  it('tags a failed read with its install, not shared', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...OC, shared: true },
+        { ...CL, shared: true },
+      ],
+    }))
+    api.profile.mockImplementation((inst) =>
+      inst?.host === 'opencode'
+        ? Promise.reject(new Error('unreadable'))
+        : Promise.resolve({ ...FILLED, path: '/tier/PROFILE.md' }),
+    )
+    render(<Profile />)
+    await waitFor(() => expect(screen.getByText(/unreadable/)).toBeTruthy())
+    expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Profile, shared',
+      'Profile, OpenCode · global',
+    ])
+    expect(texts('.rule-chip')).toEqual(['shared', 'OpenCode · global'])
+  })
+
+  it('shows one card per file, default first, and saves to the card own install', async () => {
     render(<Profile />)
     await screen.findByRole('heading', { name: 'OpenCode me' })
     expect(screen.getByRole('heading', { name: 'Claude me' })).toBeTruthy()
     // Each card is a region named after its install.
     expect(screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual([
-      'Profile of claude · global',
-      'Profile of opencode · global',
+      'Profile, Claude Code · global',
+      'Profile, OpenCode · global',
     ])
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))
-    expect(groups).toEqual(['Profile mode, claude · global', 'Profile mode, opencode · global'])
-    const oc = screen.getByRole('group', { name: 'Profile mode, opencode · global' })
+    expect(groups).toEqual([
+      'Profile mode, Claude Code · global',
+      'Profile mode, OpenCode · global',
+    ])
+    const oc = screen.getByRole('group', { name: 'Profile mode, OpenCode · global' })
     fireEvent.click(oc.querySelectorAll('button')[1])
     fireEvent.change(screen.getByLabelText('Profile markdown'), { target: { value: 'mine' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

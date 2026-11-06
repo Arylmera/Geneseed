@@ -62,13 +62,13 @@ function SyncCell({ inst, fleet, version, onEdits }) {
           label={`Sync with source of ${installName(inst)}`}
           parts={[
             { key: 'stale', label: 'behind source', n: stale, tone: 'warn' },
-            { key: 'edited', label: 'edited by hand', n: edits, tone: 'bad' },
+            { key: 'edited', label: 'local edits', n: edits, tone: 'bad' },
           ]}
         />
       ) : null}
       <span className="dim">{syncLine(fleet, version)}</span>
       {!fleet.diffable ? (
-        <span className="dim" title="Drift is only checked for global installs">
+        <span className="dim" title="Local edits are only checked for global installs">
           {' '}
           · not checkable
         </span>
@@ -97,7 +97,17 @@ function SyncCell({ inst, fleet, version, onEdits }) {
 // per-project installs are named by their folder, with the host beside it, because the
 // question each table answers is different ("which tools carry the harness everywhere"
 // vs "which repos carry their own").
-function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits }) {
+function InstallTable({
+  rows,
+  project,
+  currentId,
+  onPick,
+  label,
+  fleet,
+  onEdits,
+  onDefault,
+  busyKey,
+}) {
   // Joined by id; an absent install is never in the fleet, so it reads as "—".
   const fleetRow = (inst) =>
     fleet === undefined ? undefined : fleet?.installs?.find((f) => f.id === inst.id) || null
@@ -107,9 +117,6 @@ function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits 
         <thead>
           <tr>
             <th scope="col">{project ? 'Project' : 'Host'}</th>
-            <th scope="col">{project ? 'Host' : 'Path'}</th>
-            <th scope="col">Voice</th>
-            <th scope="col">Footprint</th>
             <th scope="col">State</th>
             <th scope="col">Sync with source</th>
             <th scope="col">
@@ -139,18 +146,42 @@ function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits 
                   >
                     {installName(inst)}
                   </button>
+                  {/* Under the name, not a column: the side panel holds the voice and footprint,
+                      and the row must fit beside it at 1440 px. */}
+                  <div className="mono path-cell" title={inst.path}>
+                    {project ? hostInfo(inst.host).label : inst.path}
+                  </div>
                 </td>
-                {project ? (
-                  <td>{hostInfo(inst.host).label}</td>
-                ) : (
-                  <td className="mono path-cell" title={inst.path}>
-                    {inst.path}
-                  </td>
-                )}
-                <td>{quiet ? '' : inst.theme || ''}</td>
-                <td>{quiet ? '' : inst.footprint || ''}</td>
                 <td>
                   <span className={`tag ${tone}`}>{stateLabel}</span>
+                  {inst.default ? (
+                    <>
+                      {' '}
+                      <span
+                        className="tag"
+                        title="A page that names no install reads this one, and pickers start on it"
+                      >
+                        Default
+                      </span>
+                    </>
+                  ) : inst.state === 'active' && onDefault ? (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        aria-label={`Make ${installName(inst)} the default install`}
+                        disabled={busyKey === inst.id}
+                        onClick={(e) => {
+                          // Inside a row that picks on click.
+                          e.stopPropagation()
+                          onDefault(inst)
+                        }}
+                      >
+                        Make default
+                      </button>
+                    </>
+                  ) : null}
                   {isLeftover(inst) ? (
                     <>
                       {' '}
@@ -213,7 +244,9 @@ function Checkout({ setup, overview }) {
     <section className="panel" aria-labelledby="checkout-h">
       <div className="panel-head">
         <h2 id="checkout-h">This checkout</h2>
-        <span className={`mono ${synced ? 't-good' : 't-warn'}`}>{setup.version_verdict}</span>
+        <span className={`mono ${synced ? 't-good' : 't-warn'}`}>
+          {synced ? 'in sync' : setup.version_verdict}
+        </span>
       </div>
       <dl className="kv-grid">
         <dt>Source</dt>
@@ -312,6 +345,8 @@ export default function Hosts({
       posture: p.posture || inst.posture || 'peer',
       mode: p.mode || inst.mode || 'direct',
       trust: p.trust || inst.trust || 'balanced',
+      // Per-project installs only: a global install owns the shared tier.
+      sharedTier: p.sharedTier ?? !!inst.sharedTier,
     }
   }
   const setPick = (inst, key, v) =>
@@ -323,7 +358,8 @@ export default function Hosts({
       c.footprint === (inst.footprint || 'lean') &&
       c.posture === (inst.posture || 'peer') &&
       c.mode === (inst.mode || 'direct') &&
-      c.trust === (inst.trust || 'balanced')
+      c.trust === (inst.trust || 'balanced') &&
+      (inst.scope === 'global' || c.sharedTier === !!inst.sharedTier)
     )
   }
   const options = {
@@ -337,7 +373,7 @@ export default function Hosts({
   // Install a not-installed location, or rebuild an active one with its picks. Both go
   // through the 'install' action (a non-destructive in-place emit), streamed to the console.
   const applyVoice = async (inst) => {
-    const { theme, footprint, posture, mode, trust } = choiceFor(inst)
+    const { theme, footprint, posture, mode, trust, sharedTier } = choiceFor(inst)
     const tool = hostInfo(inst.host).label
     const axes = `${footprint} footprint, ${posture} posture, ${mode} mode, ${trust} loop trust`
     const msg =
@@ -359,6 +395,8 @@ export default function Hosts({
         posture,
         mode,
         trust,
+        // A global install never sends it: the server refuses a global `true`.
+        ...(inst.scope === 'global' ? {} : { sharedTier }),
       })
   }
 
@@ -387,6 +425,20 @@ export default function Hosts({
         })
         return
       }
+      onMutated?.()
+    } catch (e) {
+      setNote({ text: e.message, tone: 'bad' })
+    } finally {
+      setBusyKey('')
+    }
+  }
+
+  // Pickers, the sidebar and the Overview all follow from /api/installs on the next data revision.
+  const makeDefault = async (inst) => {
+    setBusyKey(inst.id)
+    setNote(null)
+    try {
+      await api.setDefaultInstall(inst.host, inst.path)
       onMutated?.()
     } catch (e) {
       setNote({ text: e.message, tone: 'bad' })
@@ -427,7 +479,7 @@ export default function Hosts({
       `Uninstall ${hostInfo(inst.host).label} · ${inst.scope}? It deletes ` +
         `${removeLayer(inst.host, inst.scope)}${where}${mem}. This can’t be undone.`,
       {
-        title: inst.scope === 'project' ? 'Remove this harness?' : 'Remove the global install?',
+        title: inst.scope === 'project' ? 'Remove this install?' : 'Remove the global install?',
         confirmLabel: memory === 'delete' ? 'Remove and delete memory' : 'Remove',
         tone: 'danger',
       },
@@ -512,8 +564,7 @@ export default function Hosts({
       <div className="hosts-main">
         <div className="toolbar">
           <span className="dim">
-            {installs.filter((i) => i.state === 'active').length} active of {installs.length}{' '}
-            detected.
+            {installs.filter((i) => i.state !== 'absent').length} installed.
           </span>
           {onAction ? (
             <div className="row gap-8">
@@ -546,6 +597,8 @@ export default function Hosts({
             label="Global installs"
             fleet={fleet}
             onEdits={openEdits}
+            onDefault={onAction ? makeDefault : undefined}
+            busyKey={busyKey}
           />
         </section>
         <section className="panel flush" aria-labelledby="inst-project">
@@ -553,7 +606,7 @@ export default function Hosts({
             <div>
               <h2 id="inst-project">Per-project installs</h2>
               <p className="dim">
-                A repo with its own harness. Inside it, only that harness loads.
+                A repo with its own install. Inside it, only that install loads.
               </p>
             </div>
             {onAction ? (
@@ -583,10 +636,12 @@ export default function Hosts({
               label="Per-project installs"
               fleet={fleet}
               onEdits={openEdits}
+              onDefault={onAction ? makeDefault : undefined}
+              busyKey={busyKey}
             />
           ) : (
             <EmptyState>
-              No repo has its own harness yet. Deploy one to give a project its own rules and voice.
+              No repo has its own install yet. Deploy one to give a project its own rules and voice.
             </EmptyState>
           )}
         </section>

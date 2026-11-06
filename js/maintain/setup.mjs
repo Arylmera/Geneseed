@@ -51,10 +51,11 @@ import { discoverNames, GATE_SWITCHES, PACK_ORDER, loadKits } from '../build/sou
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
+import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../inspect/cost.mjs';
 import { GLOBAL_MANIFEST, HOSTS, opencodeConfigDir } from '../hosts/hosts.mjs';
 import {
   claudeCfg, defaultMode, defaultPosture, defaultTheme, EMIT_HOST_SCOPE, gatesOfDir, installedDefaults,
-  readJsonMaybe, themeFiles,
+  readJsonMaybe, sharedTierOfDir, themeFiles,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { which } from '../lib/paths.mjs';
@@ -66,7 +67,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 // the option tables
 // --------------------------------------------------------------------------------------
 
-/** `_harness_setup.THEME_BLURBS`. A theme without one shows its bare name. */
+/** A theme without one shows its bare name. */
 const THEME_BLURBS = {
   neutral: 'plain professional voice',
   imperial: 'Warhammer 40k',
@@ -78,7 +79,6 @@ const THEME_BLURBS = {
   sports: 'play-by-play commentator',
 };
 
-/** `_harness_setup.POSTURE_BLURBS`. */
 const POSTURE_BLURBS = {
   peer: 'candid equal — dense, challenges, no flattery (default)',
   mentor: 'explains the why, checks understanding',
@@ -87,7 +87,6 @@ const POSTURE_BLURBS = {
   artisan: 'peer with toolsmith reflexes — terminal-first',
 };
 
-/** `_harness_setup.MODE_BLURBS`. */
 const MODE_BLURBS = {
   direct: 'the agent works every task itself, turn by turn (default)',
   foreman: 'triages tasks, hands blocking work to task workers',
@@ -112,8 +111,6 @@ const DOCTRINE_BLURBS = {
 };
 
 /**
- * `_harness_setup._theme_options`.
- *
  * The sort key is `(name != "neutral", name)`, which floats `neutral` to the top and leaves
  * the rest alphabetical — a boolean sorts False before True in Python, and `false < true` is
  * the same order once both are numbers here. `themeFiles()` is already name-sorted, so the
@@ -133,13 +130,11 @@ export function themeOptions() {
   return opts.length ? opts : [['neutral', THEME_BLURBS.neutral]];
 }
 
-/** `_harness_setup._posture_options`. */
-export function postureOptions() {
+function postureOptions() {
   return discoverNames('postures', 'peer').map((n) => [n, POSTURE_BLURBS[n] ?? '']);
 }
 
-/** `_harness_setup._mode_options`. */
-export function modeOptions() {
+function modeOptions() {
   return discoverNames('modes', 'direct').map((n) => [n, MODE_BLURBS[n] ?? '']);
 }
 
@@ -158,8 +153,6 @@ export function doctrineOptions() {
 }
 
 /**
- * `_harness_setup.EMIT_OPTIONS`.
- *
  * Exported since P6b: `/api/themes` returns the same nine as its `emits` list, and a copy
  * of a table under test silently stops being the table under test.
  */
@@ -177,7 +170,6 @@ export const EMIT_OPTIONS = [
   ['openclaude', 'Per-repo .openclaude/ (CLAUDE.md, agents, skills, hooks) for OpenClaude, committed into one repository.'],
 ];
 
-/** `_harness_setup.FOOTPRINT_OPTIONS`. */
 const FOOTPRINT_OPTIONS = [
   ['lean', 'Lean — terse rule lines + a pointer to the full laws file (default, lighter context).'],
   ['full', 'Full — every law\'s complete text inlined in AGENT.md.'],
@@ -248,7 +240,23 @@ export function askKits(deployed = null, kits = null) {
 }
 
 /**
- * `_harness_setup._collect_setup_lines` — the six questions, the plan, the confirm.
+ * The shared-tier question, for a PROJECT install only (D11: a global install owns the tier).
+ * The default is what the target install already says, so holding Enter keeps it; the trade is
+ * printed above the question, with this machine's own token figure in place of the example.
+ */
+function askSharedTier(emit, root) {
+  const [host] = EMIT_HOST_SCOPE.get(emit) ?? [];
+  let on = false;
+  try { on = sharedTierOfDir(resolveOut(root || '.'), host); } catch { /* unreadable: off */ }
+  const figure = sharedTierFigure();
+  printOut(`\nShared tier — Benefit: ${SHARED_TIER_BENEFIT}\n  Cost: ${sharedTierCost(figure ?? '0')}\n`);
+  return askChoice('Shared tier for this project',
+    [['no', 'this project reads only its own harness'], ['yes', 'also read your machine-wide tier']],
+    on ? 'yes' : 'no') === 'yes';
+}
+
+/**
+ * The six questions, the plan, the confirm.
  *
  * Returns the selection, or null when the confirm is declined. Every default is the
  * DEPLOYED value first (`installedDefaults`) and the CONFIGURED one second, which is why
@@ -294,12 +302,14 @@ export function collectSetupLines(kitMap = null) {
     inst.footprint || 'lean');
   let out = null;
   let root = null;
+  let sharedTier = false;
   // Every PROJECT emit needs the repo root — claude/bob/openclaude included: without `--out`
   // their CLAUDE.md/.claude land in the generator's default ./Harness, where the host never
   // looks.
   if (['opencode', 'claude', 'bob', 'openclaude'].includes(emit)) {
     root = ask('Repo root to install into', '.');
     out = root;
+    sharedTier = askSharedTier(emit, root);
   } else if (emit === 'files') {
     out = ask('Output dir for the bundle', 'Harness');
   }
@@ -326,13 +336,13 @@ export function collectSetupLines(kitMap = null) {
   const gated = Object.values(gates).some((on) => on === false);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills, gates, kits).join(' ')}\n`);
+      excludeRules, undefined, excludeSkills, gates, kits, sharedTier).join(' ')}\n`);
   if (!confirm('Proceed?', true)) return null;
   // The key only when there is something to carry, so a selection that excludes no skill and
   // switches off no gate is the same object it was before either existed.
   return {
     theme, posture, mode, doctrines, excludeRules, ...(excludeSkills ? { excludeSkills } : {}),
-    ...(gated ? { gates } : {}), ...(kits ? { kits } : {}),
+    ...(gated ? { gates } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
     emit, out, root, footprint,
   };
 }
@@ -342,7 +352,7 @@ export function collectSetupLines(kitMap = null) {
 // --------------------------------------------------------------------------------------
 
 /**
- * `_harness_setup._java_major_ok` — does a `java -version` banner name a major >= minimum?
+ * Does a `java -version` banner name a major >= minimum?
  *
  * `21.0.2` gives 21 and the legacy `1.8.0` gives 1, which is never >= 21 — that asymmetry is
  * the whole function. `\p{Nd}` rather than `[0-9]` because Python's `\d` matches any Unicode
@@ -358,7 +368,7 @@ export function javaMajorOk(versionOutput, minimum = 21) {
 }
 
 /**
- * `_harness_setup._lsp_prereqs` — `(label, present, hint)` for what OpenCode cannot install
+ * `(label, present, hint)` for what OpenCode cannot install
  * for itself. Today that is a JDK 21+ for `jdtls`; the JS-runtime servers self-download.
  *
  * THE SECOND SPAWN ON THIS ENTRY POINT, and the reason `ALLOWED_SPAWNS` in
@@ -373,13 +383,8 @@ export function lspPrereqs() {
   let ok = false;
   if (java) {
     try {
-      // `capture_output=True, text=True` — the banner goes to STDERR on every JVM, which is
-      // why the Python reads `.stderr` and not `.stdout`.
-      // `NO_WINDOW` on BOTH sides as of this commit. The reference reached for a bare
-      // `subprocess.run` here rather than `_harness_core.run`, so the flag was missing from
-      // the Python too and the java probe flashed a console from the web's setup action —
-      // a defect the two implementations SHARED, which is exactly what a cross-
-      // implementation comparison cannot report. Fixed in `_harness_setup.py` beside this.
+      // The banner goes to STDERR on every JVM, which is why this reads `.stderr`.
+      // `NO_WINDOW` so the java probe does not flash a console from the web's setup action.
       const out = spawnSync(java, ['-version'], { encoding: 'utf8', ...NO_WINDOW }).stderr;
       ok = javaMajorOk(out ?? '');
     } catch { ok = false; }
@@ -424,7 +429,7 @@ function emitFacts(emit, out) {
 }
 
 /**
- * `_harness_setup._setup_summary_lines` — the post-build report as `[kind, text]` rows,
+ * The post-build report as `[kind, text]` rows,
  * `kind` being ok | warn | info.
  *
  * `ok` is the build's own success, so the first row is the only one that can say "build
@@ -463,7 +468,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
       lines.push(['warn', `a global install exists at ${cfg} — OpenCode loads THAT, `
         + `not this build; re-run with 'opencode-global' to change it`]);
     }
-  } catch { /* as the Python's bare `except Exception` */ }
+  } catch { /* best effort */ }
   // LSP prereqs, for the OpenCode emits alone — they are the ones that get `"lsp": true`.
   if (ok && emit.startsWith('opencode')) {
     for (const [label, present, hint] of lspPrereqs()) {
@@ -484,7 +489,7 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
 // --------------------------------------------------------------------------------------
 
 /**
- * `_harness_setup._setup_lines` — gather, export drift, build, summarise, offer the doctor.
+ * Gather, export drift, build, summarise, offer the doctor.
  *
  * THE BUILD IS AN IMPORT, NOT A SPAWN, for the reason P5e established for `harness build`:
  * the Python needs a second process because `build.py` is a different PROGRAM, and here the
@@ -517,6 +522,7 @@ export function setupLines() {
   const {
     theme, emit, out, root, footprint = 'lean', posture = 'peer', mode = 'direct',
     doctrines = null, excludeRules = null, excludeSkills = null, gates = {}, kits = null,
+    sharedTier = false,
   } = sel;
   if (emit === 'opencode-global') {
     // The build below overwrites the deployed global harness, which may carry hand edits (or
@@ -535,7 +541,7 @@ export function setupLines() {
   // runs must carry the pack selection the plan line just previewed, or the wizard would print
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
-    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits);
+    doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits, sharedTier);
   printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {
@@ -556,13 +562,18 @@ export function setupLines() {
 }
 
 /**
- * `_harness_setup.cmd_setup` — the TTY gate, then the wizard.
+ * The TTY gate, then the wizard.
  *
  * The refusal is the whole of what a cell can observe (see the module header) and it is the
  * only part of this file the acceptance matrix compares. `process.stdin.isTTY` is `undefined`
  * off a terminal rather than `false`, which is why it is negated rather than compared.
  */
-export function cmdSetup() {
+export async function cmdSetup() {
+  const refusal = (await import('./update.mjs')).gateRefusal();
+  if (refusal) {
+    printErr(`[setup] not started: ${refusal}\n`);
+    return 1;
+  }
   if (!process.stdin.isTTY) {
     printErr('[setup] needs an interactive terminal. Non-interactive? e.g.:\n'
       + '  geneseed build --emit opencode-global --theme neutral\n');
@@ -661,7 +672,7 @@ function listDir(dir) {
  * search covers PATH and the usual per-user places, not every folder an installer may pick.
  * `false` is the user choosing to stop.
  */
-export function toolsReport(tools = hostTools()) {
+function toolsReport(tools = hostTools()) {
   printOut('AI coding tools on this machine:\n');
   for (const [label, present, url, where] of tools) {
     if (!present) printOut(`  --  ${label} not found — install: ${url}\n`);

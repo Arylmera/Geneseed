@@ -10,18 +10,25 @@ const CACHE = new Map()
 // Mounted consumers per cache key, so a fetch that lands updates every one of them,
 // not only the instance that asked.
 const SUBS = new Map()
+// The fetch under way per cache key: consumers mounting together (App, a page and its hooks all
+// read `installs`) share one request instead of each sending the same one.
+const INFLIGHT = new Map()
 
 // Tests re-mock the api between cases; without this the memo would serve one
 // case's catalog to the next. Runtime code never calls it.
 export function clearAsyncCache() {
   CACHE.clear()
+  INFLIGHT.clear()
 }
 
 // Drop every memoised entry under one `key`, whatever its deps: a write that lands
 // before the page that reads it is mounted (Library's memory->rule promote) has no
-// mounted `reload()` to call, and the next mount must not be served the old copy.
+// mounted `reload()` to call, and the next mount must not be served the old copy, nor join a
+// fetch that started before the write.
 export function dropAsyncKey(key) {
-  for (const ck of CACHE.keys()) if (ck.startsWith(`${key}|`)) CACHE.delete(ck)
+  for (const map of [CACHE, INFLIGHT]) {
+    for (const ck of map.keys()) if (ck.startsWith(`${key}|`)) map.delete(ck)
+  }
 }
 
 // Standardises the load-once-with-loading-and-error pattern that every page
@@ -63,7 +70,7 @@ export function useAsync(fn, deps = [], key = null, { revalidate = false } = {})
 
   // react-hooks/use-memo wants a literal dependency array; this hook's whole
   // contract is forwarding the caller's `deps`, so that rule cannot hold here.
-  const reload = useCallback(() => {
+  const load = useCallback((join) => {
     const gen = ++genRef.current
     const live = () => gen === genRef.current
     setLoading(true)
@@ -73,7 +80,19 @@ export function useAsync(fn, deps = [], key = null, { revalidate = false } = {})
     const at = ckRef.current
     // A failure sets `error` and leaves `data` alone: a failed refetch keeps the last
     // good result on screen, a failed first load leaves it null beside the error.
-    return Promise.resolve(fnRef.current())
+    let fetched = join ? INFLIGHT.get(at) : undefined
+    if (!fetched) {
+      fetched = Promise.resolve(fnRef.current())
+      if (at !== null) {
+        const mine = fetched
+        const done = () => {
+          if (INFLIGHT.get(at) === mine) INFLIGHT.delete(at)
+        }
+        INFLIGHT.set(at, mine)
+        mine.then(done, done)
+      }
+    }
+    return fetched
       .then((d) => {
         if (!live()) return
         setData(d)
@@ -90,6 +109,8 @@ export function useAsync(fn, deps = [], key = null, { revalidate = false } = {})
     // deps are the caller's refetch triggers; fnRef keeps the loader fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/use-memo
   }, deps)
+  // A caller's reload always hits the network; only a mount may join a fetch under way.
+  const reload = useCallback(() => load(false), [load])
 
   useEffect(() => {
     // A cache hit answers the (re)mount without a fetch (unless `revalidate`); `ck`
@@ -107,11 +128,11 @@ export function useAsync(fn, deps = [], key = null, { revalidate = false } = {})
       setLoading(false)
       if (!revalidate) return unsubscribe
     }
-    reload()
+    load(true)
     return unsubscribe
     // `revalidate` is a per-call-site constant, not a refetch trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reload])
+  }, [load])
 
   return { data, error, loading, reload, setData }
 }

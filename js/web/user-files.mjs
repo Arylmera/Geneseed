@@ -12,14 +12,14 @@ import path from 'node:path';
 
 import { PROFILE_STUB } from '../build/stubs.mjs';
 import { readMaybe } from '../hosts/installs.mjs';
-import { frontmatter } from '../hosts/memory-files.mjs';
+import { splitLines } from '../hosts/hooks-prims.mjs';
+import { frontmatter, isRuleEdge, parseDraft, parseRules, readFoldState } from '../hosts/memory-files.mjs';
 import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isTruthy } from '../lib/json.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
-import { splitLines } from '../lib/udiff.mjs';
 import { isFactName } from '../maintain/memory.mjs';
 import { apiMemoryDelete, bget, strOr } from './actions.mjs';
-import { BadRequest, NotFound, memoryDir } from './catalog.mjs';
+import { BadRequest, NotFound, memoryDir, tierOf } from './catalog.mjs';
 
 /** Splits on runs of `WHITESPACE` (not `\s`), dropping empty strings. */
 const splitWords = (s) => s.split(new RegExp(`[${WHITESPACE}]+`)).filter(Boolean);
@@ -59,122 +59,64 @@ const fpMatches = (got, want) => typeof got === 'string' && got === want;
 // ---- user rules (user-rules.md) ----------------------------------------------------------
 
 export const RULES_FILE = 'user-rules.md';
-const rulesPath = (state) => path.join(state.target, RULES_FILE);
+/** The folder of the two hand-written files: the tier for a global install, else the bundle. */
+const userDir = (state, tier = tierOf(state)) => tier?.root ?? state.target;
+const rulesPath = (state, tier) => path.join(userDir(state, tier), RULES_FILE);
 
 /**
- * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
- * indented format example never parse as rules.
- *
- * The whitespace classes are `WHITESPACE`, not `\s`: this pattern runs over a HAND-EDITED
- * file, which is where a non-breaking space actually turns up. `\S` is its complement for
- * the same reason.
- *
- * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight, unlike
- * `ruleFields` below which uses `\p{Nd}`. No theme seeds a non-ASCII rule id, no build
- * writes one, and the web editor cannot produce one either — it writes `R<n>` itself from
- * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
- * parses the captured digits back into a number.
+ * The blocks the fold left in `<tier>/user-rules.draft.md`, as `{title, host, body}`, in file
+ * order (`parseDraft` reads the format). The console only SHOWS them: the rule Rite is the only
+ * draft writer (C15), so no verb here decides one. A block the ledger already holds as decided is
+ * left over from a stopped Rite write, so it is not pending; a block with no row, or a ledger that
+ * does not parse, still shows. Empty for a project install and for a missing draft.
  */
-const RULE_HEAD_RE = new RegExp(
-  `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
-  + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
-);
-
-/**
- * A line `parseRules` reads as the edge of a rule: `## ` ends the current block, and a
- * `RULE_HEAD_RE` line opens one (a non-breaking space after `##` does the second, not the first).
- * ONE predicate for both the parser and `ruleFields`, so a body the writer accepts can never
- * split or forge a rule when read back.
- */
-const isRuleEdge = (line) => line.startsWith('## ') || RULE_HEAD_RE.test(line);
-
-/** Advisory only; nothing blocks past it. */
-const RULES_BUDGET = { max_rules: 15, max_tokens: 1500 };
-
-const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
-
-/** `{}` when the line is body rather than metadata. */
-function parseRuleMeta(line) {
-  const m = META_RE.exec(stripWhitespace(line));
-  if (!m) return {};
-  const meta = {};
-  for (const part of m[1].split('|')) {
-    const at = part.indexOf(':');
-    if (at < 0) continue;               // `partition` with no separator — not a pair
-    const key = stripWhitespace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
-    if (['scope', 'source', 'trial_until'].includes(key)) {
-      meta[key] = stripWhitespace(part.slice(at + 1));
-    }
-  }
-  return meta;
+function ruleDrafts(tier) {
+  if (tier === null) return [];
+  let ledger = {};
+  try { ledger = readFoldState(tier).items; } catch { /* shows all */ }
+  const decided = ({ key }) => {
+    const row = ledger[key];
+    return row != null && row.state !== 'pending';
+  };
+  return parseDraft(readMaybe(tier.draft) ?? '').filter((d) => !decided(d))
+    .map(({ title, host, body }) => ({ title, host, body }));
 }
 
 /**
- * `user-rules.md` parsed to `[rules, warnings]`.
- *
- * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
- * splice exactly one block and leave every other byte of the user's file — prose,
- * formatting, hand-written sections — untouched.
- * @returns {[Array<{id: number, start: number, end: number} & Record<string, any>>, string[]]}
+ * The estimate of what a text costs in the context, each turn. CODE POINTS, not `String.length`
+ * (UTF-16 units): an emoji in a rule body would otherwise put it off.
  */
-export function parseRules(text) {
-  const lines = splitLines(text);
-  const rules = [];
-  const warnings = [];
-  const seen = new Set();
-  for (let idx = 0; idx < lines.length; idx += 1) {
-    const m = RULE_HEAD_RE.exec(lines[idx]);
-    if (!m) continue;
-    let end = lines.length;
-    for (let j = idx + 1; j < lines.length; j += 1) {
-      if (isRuleEdge(lines[j])) { end = j; break; }
-    }
-    const rid = Number(m[1]);
-    if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
-    seen.add(rid);
-    let k = idx + 1;
-    while (k < end && !stripWhitespace(lines[k])) k += 1;
-    const meta = k < end ? parseRuleMeta(lines[k]) : {};
-    if (Object.keys(meta).length) k += 1;
-    rules.push({
-      id: rid,
-      title: m[2],
-      scope: Object.hasOwn(meta, 'scope') ? meta.scope : 'project',
-      source: Object.hasOwn(meta, 'source') ? meta.source : '',
-      trial_until: Object.hasOwn(meta, 'trial_until') ? meta.trial_until : '',
-      body: stripWhitespace(lines.slice(k, end).join('\n')),
-      start: idx,
-      end,
-    });
-  }
-  return [rules, warnings];
-}
+const tokensOf = (text) => Math.floor(codePointLength(text) / 4);
 
 export function apiRules(state) {
-  const p = rulesPath(state);
+  const tier = tierOf(state);
+  const p = rulesPath(state, tier);
+  const shared = tier !== null;
+  const drafts = ruleDrafts(tier);
   if (!isFile(p)) {
-    return { exists: false, path: p, rules: [], warnings: [], fingerprint: '',
-      stats: { rules: 0, lines: 0, tokens: 0, ...RULES_BUDGET } };
+    return { exists: false, path: p, rules: [], warnings: [], fingerprint: '', shared, drafts,
+      stats: { rules: 0, lines: 0, tokens: 0 } };
   }
   const text = readMaybe(p) ?? '';
   const [rules, warnings] = parseRules(text);
   const today = todayIso();
+  const lines = splitLines(text);
   const out = rules.map((r) => ({
     id: r.id, title: r.title, scope: r.scope, source: r.source,
     trial_until: r.trial_until,
     status: r.trial_until ? 'trial' : 'active',
     overdue: Boolean(r.trial_until) && r.trial_until < today,
     body: r.body,
+    // The rule's whole block, heading and metadata too: that is what the agent reads.
+    tokens: tokensOf(stripWhitespace(lines.slice(r.start, r.end).join('\n'))),
   }));
-  return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
-    // CODE POINTS, not `String.length` (UTF-16 units) — an emoji in a rule body would
-    // otherwise put the token estimate off.
-    stats: { rules: rules.length, lines: splitLines(text).length,
-      tokens: Math.floor(codePointLength(text) / 4), ...RULES_BUDGET } };
+  return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text), shared, drafts,
+    // The whole file, so it holds its header too: more than the rules' own tokens added up.
+    stats: { rules: rules.length, lines: lines.length, tokens: tokensOf(text) } };
 }
 
-function rulesRead(state) {
-  const p = rulesPath(state);
+function rulesRead(state, tier) {
+  const p = rulesPath(state, tier);
   return [p, isFile(p) ? (readMaybe(p) ?? '') : ''];
 }
 
@@ -189,7 +131,7 @@ function ruleBlock(rid, title, scope, source, trialUntil, body) {
  * Validate and normalise a rule's writable fields. Throws `BadRequest` (→ the shell's 400,
  * carrying the message) on an unusable rule.
  *
- * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` above: this is a pure predicate over a
+ * `\p{Nd}` here and not `\d`, unlike `RULE_HEAD_RE` in ../hosts/memory-files.mjs: this is a pure predicate over a
  * string that stays a string, so accepting any Unicode decimal digit costs nothing and
  * needs no numeric parse afterward.
  *
@@ -244,7 +186,7 @@ function ruleId(v) {
  * mistake; it exists so a retire never loses the text. Like user-rules.md it is the user's: no
  * install manifest claims it, so no uninstall deletes it.
  */
-export const RETIRED_RULES_FILE = 'user-rules-retired.md';
+const RETIRED_RULES_FILE = 'user-rules-retired.md';
 const RETIRED_HEADER = '# Retired rules — not in force, never loaded into any session.\n';
 const isBlank = (line) => !stripWhitespace(line);
 
@@ -263,14 +205,15 @@ export function apiRulesMutate(state, body) {
   if (op !== 'add' && op !== 'update' && op !== 'delete') {
     throw new NotFound(`rules op ${formatRepr(op)}`);
   }
-  const [p, original] = rulesRead(state);
+  const tier = tierOf(state);
+  const [p, original] = rulesRead(state, tier);
   let text = original;
   if (!fpMatches(bget(body, 'fingerprint', ''), fingerprint(text))) {
     return { ok: false, error: 'conflict',
       detail: 'user-rules.md changed since you loaded it — reloading' };
   }
   const [rules] = parseRules(text);
-  const retiredPath = path.join(state.target, RETIRED_RULES_FILE);
+  const retiredPath = path.join(userDir(state, tier), RETIRED_RULES_FILE);
   let rid;
   let next;
   if (op === 'add') {
@@ -348,19 +291,21 @@ export function apiRulesPromote(state, body) {
 
 // ---- PROFILE.md --------------------------------------------------------------------------
 
-/** Beside the deployed AGENT.md. */
+/** In `userDir`: the tier for a global install, else beside the deployed AGENT.md. */
 export const PROFILE_FILE = 'PROFILE.md';
-const profilePath = (state) => path.join(state.target, PROFILE_FILE);
+const profilePath = (state, tier) => path.join(userDir(state, tier), PROFILE_FILE);
 
 export function apiProfile(state) {
-  const p = profilePath(state);
-  if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '' };
+  const tier = tierOf(state);
+  const p = profilePath(state, tier);
+  const shared = tier !== null;
+  if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '', shared };
   const text = readMaybe(p) ?? '';
   // `seeded`: the file is still the template the build wrote once and never touched since.
   // `readMaybe` normalises line endings, so a CRLF copy (the emit writes the platform's, and
   // an editor may re-save either way) still compares equal to the LF literal.
   const seeded = text === PROFILE_STUB;
-  return { exists: true, path: p, text, fingerprint: fingerprint(text), seeded };
+  return { exists: true, path: p, text, fingerprint: fingerprint(text), seeded, shared };
 }
 
 /** The whole file, fingerprint-guarded like the rules above. */

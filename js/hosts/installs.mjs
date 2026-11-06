@@ -1,6 +1,5 @@
 /**
- * How a DEPLOYED install is recognised — `_harness_setup`'s detection half and
- * `_harness_mcp`'s registry-reading half, which are one subject in two Python files.
+ * How a DEPLOYED install is recognised — the detection half and the registry-reading half, one subject.
  *
  * EXTRACTED IN P5f, and by the same arithmetic that produced `js/hosts/hosts.mjs` and
  * `js/build/source.mjs`: this is the third verb-set to need it. P5d wrote `themeOfDir` and
@@ -29,7 +28,7 @@
  * That sentence was FALSE until wave 2 of the P0/P1 review: `installedDefaults` walked
  * `ROOT / "Harness"` and `ROOT.parent / "Harness"`, so on a checkout carrying a built
  * bundle every cell that seeded no emit marker read this developer's own install — four
- * web cells recorded it. Both candidates are gone (the argument is in the Python), and the
+ * web cells recorded it. Both candidates are gone, and the
  * claim is now true rather than aspirational.
  */
 import { existsSync, readdirSync } from 'node:fs';
@@ -39,14 +38,16 @@ import {
   CONFIG, GATE_SWITCHES, PACK_ORDER, RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
-  CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, isHostGlobalDir, liveRecordedHooks,
-  resolvePath,
+  CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, isHostGlobalDir,
+  liveRecordedHooks, resolvePath,
 } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { claudeHookShell, hookShimPath } from './shim.mjs';
+
+export { carriersFor };
 
 /**
  * `Path.read_text(encoding="utf-8")`, or null where Python raises OSError.
@@ -73,16 +74,14 @@ export function readJsonMaybe(p) {
   try { return JSON.parse(txt); } catch { return null; }
 }
 
-// ---- the configured defaults (`_harness_setup._default_*`) --------------------------------
+// ---- the configured defaults ---------------------------------------------------------
 
 /**
- * `_harness_setup._default_theme` / `_default_posture` / `_default_mode`.
- *
  * One reader for three keys where the Python has three near-identical functions. The fallback
  * differs per key and is the argument, so nothing is shared that is not actually the same:
  * each is `harness.config.json`'s value or a literal, with an unreadable or non-JSON file
  * falling through to the literal. NOT `configDefaults()` from the driver, which warns on a
- * corrupt file — these three are silent, as their Python originals are.
+ * corrupt file — these three are silent.
  */
 function configuredDefault(key, fallback) {
   if (existsSync(CONFIG)) {
@@ -130,7 +129,7 @@ export function themeFiles(dir = THEMES) {
     .map((n) => path.join(dir, n)).sort(comparePaths);
 }
 
-/** `_harness_setup._theme_from_agent` — match a theme's unique LOADED_SIGIL in a carrier. */
+/** Match a theme's unique LOADED_SIGIL in a carrier. */
 function themeFromAgent(agentMd) {
   const text = readMaybe(agentMd);
   if (text === null) return null;
@@ -140,56 +139,6 @@ function themeFromAgent(agentMd) {
     if (sig && text.includes(sig)) return path.basename(tf, '.json');
   }
   return null;
-}
-
-/**
- * `_harness_setup.CARRIERS` — the Python's four root-level carriers, plus one JS-only addition.
- *
- * A shared table rather than three copies of the same list: `_theme_of_dir`,
- * `_posture_of_dir` and `_mode_of_dir` each walk it, and the order is observable (the first
- * carrier that answers wins). `rules/geneseed.md` is spelled with `path.join` at each use
- * because the Python writes `d / "rules" / "geneseed.md"` for that one entry.
- *
- * `.openclaude/CLAUDE.md` is NOT in the Python — OpenClaude didn't exist yet — and it is half
- * of the fix for host-compat verdict B1 (the other half is `carriersFor`, below).
- * OpenClaude's own per-repo carrier is `carrierInLayer` (see `CLAUDE_SHAPED.openclaude` in
- * `js/build/driver.mjs`, and the `HOSTS` column of the same name): it sits at
- * `<repo>/.openclaude/CLAUDE.md`, and the root `CLAUDE.md` is deliberately left untouched so a
- * Claude Code install can share the repo.
- *
- * ⚠ THIS LIST STAYS HOST-AGNOSTIC ON PURPOSE — it is only `firstCarrier`'s FALLBACK for a
- * caller with no host to narrow by (none of this module's exported `*OfDir` readers is one;
- * see `carriersFor`). A caller that DOES have a host must pass it, or in a repo sharing two
- * carriers that answer the same probe — only root `CLAUDE.md` today, between `claude` and
- * `openclaude`'s global scope — this host-agnostic order decides for both of them, which was
- * exactly B1's failure mode reversed: reading `.openclaude/CLAUDE.md` unconditionally made
- * `claude`'s OWN read-back answer OpenClaude's settings in a shared repo.
- */
-const CARRIERS = [
-  'AGENT.md', path.join('.openclaude', 'CLAUDE.md'), 'CLAUDE.md',
-  path.join('rules', 'geneseed.md'), 'AGENTS.md',
-];
-
-/**
- * `host`'s own carrier path(s), narrowed off the single `HOSTS` table — `carrierInLayer` and
- * `projectMarker`/`agentFile` — rather than a second hand-rolled host→carrier map.
- *
- * ONE HOST, ONE ANSWER, EXCEPT BOB. `carrierInLayer` true (OpenClaude only) tries the nested
- * per-repo path FIRST and the bare `agentFile` SECOND, because the same column name means two
- * different locations depending on scope: `<repo>/.openclaude/CLAUDE.md` for a project
- * install, `<cfgDir>/CLAUDE.md` for a global one (see `CLAUDE_SHAPED.openclaude-global`,
- * which has no `carrierInLayer`). Bob is the one host with a second, differently-NAMED
- * carrier — `rules/geneseed.md` at global scope, because Bob never auto-loads a global
- * `AGENTS.md` (`CLAUDE_SHAPED['bob-global']`'s summary says so) — which `HOSTS` has no column
- * for and this hard-codes, same as the un-narrowed `CARRIERS` above always did.
- */
-export function carriersFor(host) {
-  const row = HOSTS.find((h) => h.host === host);
-  if (!row) return CARRIERS;
-  if (host === 'bob') return [path.join('rules', 'geneseed.md'), row.agentFile];
-  return row.carrierInLayer
-    ? [path.join(row.projectMarker, row.agentFile), row.agentFile]
-    : [row.agentFile];
 }
 
 /**
@@ -239,7 +188,7 @@ function firstCarrier(d, probe, fallback = null, host = null) {
 const THEME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 /**
- * `_harness_setup._theme_of_dir` — the marker, else the sigil in one of five carriers.
+ * The marker, else the sigil in one of five carriers.
  *
  * The marker's value becomes `<themes>/<name>.json` in `loadTheme`, so a path in it
  * (`../harness.config`) loaded any `.json` as a theme. A value that is not a plain name falls
@@ -277,12 +226,9 @@ export function themeOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => themeFromAgent(carrierPath) || undefined, null, host);
 }
 
-/** `_harness_setup.FOOTPRINTS`. */
 const FOOTPRINTS = ['lean', 'full'];
 
 /**
- * `_harness_setup._footprint_of_dir`.
- *
  * `status` reads no footprint row at all; the WARN is why this function is ported there, and
  * `diff` and `rebuild-all` read the RETURN value as well. An unrecognised marker is reported
  * rather than swallowed (Rule V, *Surface Failures* — VII before the three-tier renumber, and
@@ -303,7 +249,7 @@ export function footprintOfDir(d) {
 }
 
 /**
- * `_harness_setup._posture_of_dir` / `_mode_of_dir` — CONTENT-detected, not markered.
+ * CONTENT-detected, not markered.
  *
  * The inlined `## Posture` / `## Mode` section opens with a distinctive `**<Name>**` lead, so
  * a deployed install carries its register in the prose and needs no extra marker file. The
@@ -365,80 +311,6 @@ export function trustOfDir(d, host = null) {
 const ACTIVE_PACKS_RE = /^Active packs:[ \t]*(.+?)[ \t]*$/m;
 
 /**
- * A carrier rendered BEFORE the comms pack existed — the pre-4.0.0 address migration's one
- * detector, kept only to WARN now.
- *
- * The comms pack took `process 7` (reference codes) out of process, and `process 8` (one
- * writer per file) was renumbered to `process 7`. An install built before that names
- * `process` in its marker and not `comms`, and so does a later install whose owner turned
- * comms OFF — the marker alone cannot tell them apart. The carrier text can: a pre-comms
- * process pack had eight rules, so wherever it was active the carrier renders a
- * `process 8` heading, and wherever that rule was excluded the `Excluded rules:` line names
- * it. No current carrier can say `process 8` — the pack has seven rules and nothing cites
- * an eighth.
- *
- * 4.0.0 RETIRED THE AUTO-MIGRATION THIS DROVE (see `warnLegacyProcessCarrier` below): it used
- * to add `comms` and re-address `process 7`/`process 8` on sight, silently, which is exactly
- * backward the day the process pack ever regains an eighth rule for an unrelated reason —
- * this sniff would then fire on a CURRENT carrier and rewrite data nobody asked rewritten. A
- * false positive that only prints a loud warning and reads the carrier as written is safe to
- * keep; a false positive that mutates data was not. See CHANGELOG "Removed" (4.0.0) for the
- * upgrade instruction this now points installs at.
- */
-const legacyProcessCarrier = (text) => /\bprocess 8\b/.test(text);
-
-/**
- * The loud half of retiring the migration: one stderr line pointing a pre-comms install at
- * `geneseed setup`, instead of the silent rewrite `doctrinesOfDir`/`excludedRulesOfDir` used
- * to perform on the same detection. Never thrown — both are read-only introspection called by
- * `uninstall`, `diff`, `validate` and the web console, none of which should become
- * un-runnable against an install that merely needs a rebuild.
- *
- * NEVER `geneseed rebuild-all` — that is the exact command `rebuildAll` (`js/build/generate.mjs`)
- * now REFUSES to run against a legacy carrier (see `legacyProcessCarrierOfDir` there), because
- * running it is what caused the permanent data loss this fix round exists to stop. Pointing the
- * warning at the one command that is guaranteed to do nothing here would be a second silent
- * misread wearing a loud one's clothes.
- *
- * DEDUPED ONCE PER PROCESS — `doctor`/`validate`/`uninstall` read the same install's carrier
- * more than once per run, and a line per read drowns the one thing the owner needs to act on.
- * `resetLegacyProcessCarrierWarning` (below) exists only so tests can see the line fire more
- * than once in one process; nothing else should call it.
- */
-let warnedLegacyProcessCarrier = false;
-function warnLegacyProcessCarrier() {
-  if (warnedLegacyProcessCarrier) return;
-  warnedLegacyProcessCarrier = true;
-  printErr('[geneseed] WARN: this install predates the comms pack (3.7.0, 2026-09-27) — its '
-    + "carrier still names 'process 8'. The automatic migration (adding comms, re-addressing "
-    + 'process 7/process 8) was removed in 4.0.0; the carrier is now read as written. Run '
-    + '`geneseed setup` once to rebuild this install on the current rule addresses.\n');
-}
-
-/** Test-only: undo the dedup above so a test can see the warning fire again. */
-export function resetLegacyProcessCarrierWarning() {
-  warnedLegacyProcessCarrier = false;
-}
-
-/**
- * Whether ANY of `d`'s own carriers still shows the pre-comms signature — the one question
- * `rebuildAll`, `upgrade` (which shells into it) and `migrate` must ask BEFORE calling
- * `installProfile`/`driverMain` on an install, now that `doctrinesOfDir`/`excludedRulesOfDir`
- * no longer rewrite it for them. Re-emitting a legacy carrier through the current template
- * does not raise an error — it just writes a fresh `Active packs:` line that silently drops
- * `comms` and leaves `process 7`/`process 8` unaddressed, permanently, with no further carrier
- * text left afterward for THIS function to ever detect again. Checking before the write is the
- * only point where the loss is still preventable.
- */
-export function legacyProcessCarrierOfDir(d, host = null) {
-  return firstCarrier(d, (carrierPath) => {
-    const text = readMaybe(carrierPath);
-    if (text === null) return undefined;
-    return legacyProcessCarrier(text) || undefined;
-  }, false, host) === true;
-}
-
-/**
  * The doctrine packs a DEPLOYED install carries — the third register read back off disk,
  * beside `postureOfDir` and `modeOfDir`, and the first that is a SET.
  *
@@ -478,12 +350,6 @@ export function doctrinesOfDir(d, host = null) {
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
     if (!named.every((n) => PACK_ORDER.includes(n))) return null;
-    // RETIRED MIGRATION (4.0.0): a pre-comms install used to gain `comms` here so it kept the
-    // codes rule it carried inside `process`. That rewrite is gone — the carrier is read as
-    // written, and the owner is warned loudly instead, once per read.
-    if (named.includes('process') && !named.includes('comms') && legacyProcessCarrier(text)) {
-      warnLegacyProcessCarrier();
-    }
     return PACK_ORDER.filter((pk) => named.includes(pk));
   }, null, host);
 }
@@ -547,11 +413,6 @@ export function excludedRulesOfDir(d, host = null) {
         ? `${parts[0]}.${Number(parts[1])}` : null;
     });
     if (!ids.every(Boolean)) return [];
-    // RETIRED MIGRATION (4.0.0): a pre-comms carrier used to have its old addresses
-    // (`process.7` -> `comms.1`, `process.8` -> `process.7`) remapped here, once, so
-    // `process 8` could not chain onward. That rewrite is gone — the addresses are returned
-    // exactly as named, and the owner is warned loudly instead of having them silently moved.
-    if (legacyProcessCarrier(text)) warnLegacyProcessCarrier();
     return [...new Set(ids)].sort();
   }, [], host);
 }
@@ -612,6 +473,20 @@ export function kitsOfDir(d, host = null, notify = null) {
   }, [], host);
 }
 
+
+/**
+ * Whether a DEPLOYED install reads the shared tier (`--shared-tier on`), read back so `rebuild-all`,
+ * `upgrade`, `diff`, the wizard and the console re-render it. A missing line is `false`: the default
+ * is off, and the marker is only ever written when on (the skills line's contract).
+ */
+export function sharedTierOfDir(d, host = null) {
+  return firstCarrier(d, (carrierPath) => {
+    const text = readMaybe(carrierPath);
+    if (text === null) return undefined;
+    return SHARED_TIER_RE.test(text) || undefined;
+  }, false, host);
+}
+
 /**
  * Whether a DEPLOYED install keeps one law's hook gate armed — `true` (armed) or `false` (its
  * `<marker>: off` line, written by a build with that gate's `--no-*-gate` flag; `GATE_SWITCHES`).
@@ -636,16 +511,15 @@ export function gatesOfDir(d, host = null) {
   return Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, gateOfDir(d, g.marker, host)]));
 }
 
-// ---- what host a deployed dir belongs to (`_harness_mcp`) ---------------------------------
+// ---- what host a deployed dir belongs to ---------------------------------------------
 
-/** `_harness_mcp._claude_read_manifest`. */
 export function claudeReadManifest(cfgDir) {
   const data = readJsonMaybe(path.join(cfgDir, GLOBAL_MANIFEST));
   return isDict(data) ? data : {};
 }
 
 /**
- * `_harness_mcp._manifest_is_claude` — keyed on the `managed` MAP, not on `claude_md`: a Bob
+ * Keyed on the `managed` MAP, not on `claude_md`: a Bob
  * global emit ships no AGENTS.md and records no `claude_md`, and still needs the
  * Claude-style reversal.
  */
@@ -653,15 +527,29 @@ export function manifestIsClaude(cfgDir) {
   return isDict(claudeReadManifest(cfgDir).managed);
 }
 
+/** The tier root a carrier renders: the absolute `user-rules.md` of its session-start line. */
+const RENDERED_RULES_RE = /`((?:[A-Za-z]:)?\/[^`\n]*)\/user-rules\.md`/;
+
 /**
- * `_harness_mcp._EMIT_HOST_SCOPE` — a marker's emit name fixes (host, scope). Derived from
+ * What `dir`'s carriers say of the tier: their text, and the root they render. null is relative;
+ * undefined is no carrier to ask (it was deleted), so the emit decides as it would for a new install.
+ * Every re-render of a deployed install takes this root, like its theme and footprint: a failed
+ * tier creation leaves it relative, and a reference rendered absolute would be drift no rebuild clears.
+ */
+export function renderedTier(dir, host) {
+  const text = ['AGENT.md', ...carriersFor(host)].map((c) => readMaybe(path.join(dir, c)) ?? '').join('\n');
+  return { text, root: text.includes('user-rules.md') ? RENDERED_RULES_RE.exec(text)?.[1] ?? null : undefined };
+}
+
+/**
+ * A marker's emit name fixes (host, scope). Derived from
  * `HOSTS`, whose emit names are `<host>` and `<host>-global`, so a new host is one row there.
  */
 export const EMIT_HOST_SCOPE = new Map(HOSTS.flatMap(({ host }) => [
   [host, [host, 'project']], [`${host}-global`, [host, 'global']],
 ]));
 
-/** `_harness_mcp._emit_host_scope_of` — `root`'s own marker, resolved, or null. */
+/** `root`'s own marker, resolved, or null. */
 export function emitHostScopeOf(root) {
   const emit = readMaybe(path.join(root, '.geneseed-emit'));
   if (emit === null) return null;
@@ -669,7 +557,7 @@ export function emitHostScopeOf(root) {
 }
 
 /**
- * `_harness_mcp._claude_cfg` — where a Claude-STYLE install keeps its manifest.
+ * Where a Claude-STYLE install keeps its manifest.
  *
  * The config dir itself for a global install; `<repo>/<project_marker>` for a project one.
  * Host-aware so Bob and OpenClaude ride the whole Claude lifecycle with only the subdir
@@ -681,21 +569,20 @@ export function claudeCfg(root, scope, host = 'claude') {
   return path.join(root, spec ? spec.projectMarker : '.claude');
 }
 
-/** `_harness_mcp._claude_state`. */
 function claudeState(root, scope = 'global', host = 'claude') {
   const cfg = claudeCfg(root, scope, host);
   if (isDir(path.join(cfg, DISABLED_STASH, host))) return 'disabled';
   return existsSync(path.join(cfg, GLOBAL_MANIFEST)) ? 'active' : 'absent';
 }
 
-/** `_harness_mcp._install_kind` — 'global' | 'project' | null. */
+/** 'global' | 'project' | null. */
 export function installKind(root) {
   if (existsSync(path.join(root, GLOBAL_MANIFEST))) return 'global';
   if (isDir(path.join(root, '.opencode'))) return 'project';
   return null;
 }
 
-/** `_harness_mcp._install_state` — 'active' | 'disabled' | 'absent'. */
+/** 'active' | 'disabled' | 'absent'. */
 export function installState(root, host = 'opencode', scope = 'global') {
   if (CLAUDE_STYLE.includes(host)) return claudeState(root, scope, host);
   if (isDir(path.join(root, DISABLED_STASH))) return 'disabled';
@@ -729,7 +616,7 @@ export function openclaudeDualHarnessRoots() {
   return [...roots].filter(openclaudeDualHarnessRoot).sort(comparePaths);
 }
 
-/** `_harness_mcp._registered_targets` — (host, scope, root) for every registered root. */
+/** (host, scope, root) for every registered root. */
 export function registeredTargets() {
   const out = [];
   for (const root of registryRoots()) {
@@ -740,7 +627,7 @@ export function registeredTargets() {
 }
 
 /**
- * `_harness_mcp._install_targets` — every (host, scope, root) an install may live at,
+ * Every (host, scope, root) an install may live at,
  * most-local first.
  *
  * De-duplicated on the (host, RESOLVED path) pair, which is three behaviours in one rule: a
@@ -764,7 +651,7 @@ export function installTargets() {
       try {
         const spec = HOSTS.find((h) => h.host === host);
         if (isHostGlobalDir(host, path.join(root, spec.projectMarker))) return;
-      } catch { /* as the Python's bare `except Exception: pass` */ }
+      } catch { /* best-effort */ }
     }
     const key = `${host}\0${resolvePath(root)}`;
     if (!seen.has(key)) { seen.add(key); out.push([host, scope, root]); }
@@ -859,10 +746,10 @@ export function installsReferencingShim(shimPath = hookShimPath(), targets = ins
   return out;
 }
 
-// ---- what this machine installed (`_harness_setup._installed_defaults`) --------------------
+// ---- what this machine installed -----------------------------------------------------
 
 /**
- * `_harness_setup._installed_defaults` — eight keys: `theme`, `posture`, `mode`, `emit`,
+ * Eight keys: `theme`, `posture`, `mode`, `emit`,
  * `footprint`, `doctrines`, `excludeRules`, `excludeSkills`. NOT the gate switches: a walk
  * across every install on the machine would carry one host's `off` into another's re-run, and
  * for a gate that disarms a boundary its owner never switched off — `setup` reads them off the
@@ -888,14 +775,14 @@ export function installsReferencingShim(shimPath = hookShimPath(), targets = ins
 export function installedDefaults() {
   const found = {
     theme: null, posture: null, mode: null, emit: null, footprint: null, doctrines: null,
-    excludeRules: null, excludeSkills: null, kits: null,
+    excludeRules: null, excludeSkills: null, kits: null, sharedTier: false,
   };
   const candidates = [];
   for (const { host, configDir } of HOSTS) {
-    try { candidates.push([configDir(), `${host}-global`]); } catch { /* as the Python */ }
+    try { candidates.push([configDir(), `${host}-global`]); } catch { /* best-effort */ }
   }
   // One cwd-relative bundle candidate — `ROOT / "Harness"` and `ROOT.parent / "Harness"`
-  // left with the Python's, see `_harness_setup._installed_defaults` for the argument.
+  // left out, for the reason given on this function.
   candidates.push([path.join(process.cwd(), 'Harness'), null]);
   for (const [base, knownEmit] of candidates) {
     if (found.emit === null) {
@@ -937,6 +824,7 @@ export function installedDefaults() {
     if (!found.kits?.length) {
       try { found.kits = kitsOfDir(base); } catch { found.kits = []; }
     }
+    if (!found.sharedTier) found.sharedTier = sharedTierOfDir(base);
   }
   return found;
 }

@@ -1,5 +1,5 @@
 // Voice-flavoured hero headline per theme — UI copy, not server data. Shared by
-// the Status lenses (Cultivar and Greenhouse) so the hero reads the same line
+// the Status lenses (Genome and Greenhouse) so the hero reads the same line
 // whatever the wrapping; it used to be copied byte-for-byte into both.
 export const HEADLINES = {
   neutral: 'Loaded & ready',

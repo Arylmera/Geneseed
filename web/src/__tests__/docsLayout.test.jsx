@@ -212,3 +212,40 @@ describe('Docs layout', () => {
     }
   })
 })
+
+// On a phone the page comes first in the DOM, not only on screen: reading and Tab order agree.
+describe('Docs pane order', () => {
+  const panes = () =>
+    [...document.querySelector('.docs-lib').children].map((c) => c.className.split(' ')[0])
+  const stubWidth = (matches) => {
+    window.matchMedia = vi.fn(() => ({
+      matches,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+  }
+  afterEach(() => {
+    delete window.matchMedia
+  })
+  beforeEach(() => {
+    api.docs.mockResolvedValue(MENU)
+    api.docsPage.mockResolvedValue({
+      id: 'quick',
+      title: 'Quick start',
+      kind: 'markdown',
+      body: 'x',
+    })
+  })
+  it('reads nav first on a wide screen', async () => {
+    stubWidth(false)
+    render(<Docs page="quick" />)
+    await screen.findByRole('heading', { level: 1 })
+    expect(panes()).toEqual(['lib-kinds', 'lib-list', 'lib-reader'])
+  })
+  it('reads the page first on a phone', async () => {
+    stubWidth(true)
+    render(<Docs page="quick" />)
+    await screen.findByRole('heading', { level: 1 })
+    expect(panes()).toEqual(['lib-reader', 'lib-kinds', 'lib-list'])
+  })
+})

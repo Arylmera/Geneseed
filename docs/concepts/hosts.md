@@ -14,7 +14,7 @@ A **host** is the AI coding tool Geneseed installs into — OpenCode, Claude Cod
 
 One build renders the same text for every host: the constitution ([rules](rules.md)), the {N_AGENTS} [agents](agents.md), the {N_SKILLS} [skills](skills.md), the [memory](memory.md) and [notebook](notebook.md) conventions, and the theme's voice. No host drops an agent, a skill or the memory convention.
 
-Each host has a **global** install (in its config directory, active in every repo) and a **per-repo** install (inside one project). There is also a portable `files` bundle — a plain `Harness/` folder with an `AGENT.md` that any tool reading an instructions file can use, with no automation at all.
+Each host has a **global** install (in its config directory, active in every repo) and a **per-repo** install (inside one project). There is also a portable `files` bundle — a plain `Harness/` folder with an `AGENT.md` that any tool reading an instructions file can use, with no automation at all. That file is `AGENT.md`, singular, and the bundle owns it. `AGENTS.md`, plural, is the cross-tool name that OpenCode, Bob and OpenClaude read; Claude Code reads it through an `@AGENTS.md` import in `CLAUDE.md`. This repository keeps its own guide in `AGENTS.md` that way.
 
 ## Two engines
 

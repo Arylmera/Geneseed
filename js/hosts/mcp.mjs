@@ -1,5 +1,5 @@
 /**
- * MCP server state and config reading — `rituals/_harness_mcp.py`'s MCP block, minus its writers.
+ * MCP server state and config reading, minus its writers.
  *
  * READ-ONLY BY DECISION (2026-10). Which MCP servers an install wires depends on the user and on
  * the host, so Geneseed shows what each config already holds and where that file lives, and the

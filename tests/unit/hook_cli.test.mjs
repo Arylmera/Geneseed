@@ -76,7 +76,7 @@ function verbsOf(rel) {
 const HOOK = 'bin/geneseed-hook.mjs';
 const CLI = 'bin/geneseed-cli.mjs';
 
-/** Every name the driver's table dispatches — the successor to the reference's argparse walk. */
+/** Every name the driver's table dispatches — the table is the one source. */
 function tableCommands() {
   const t = JSON.parse(read('js', 'cli-table.json'));
   assert.ok(Array.isArray(t.commands) && t.commands.length > 0, 'js/cli-table.json has no commands');
@@ -630,6 +630,15 @@ test('the generator driver still reaches no child-process module', () => {
         + 'generator must not be able to spawn an interpreter');
     }
   }
+});
+
+test('the fold reaches neither js/maintain nor js/web', () => {
+  // C20. The driver ban above sees these two only while the module reached also spawns, and the
+  // fold runs inside every global emit, so the boundary is asserted by path.
+  const closure = [...importClosure(path.join(ROOT, 'js', 'build', 'fold.mjs'))]
+    .map((f) => path.relative(ROOT, f).split(path.sep).join('/'));
+  assert.ok(closure.length > 1, 'the import walk found no modules, so it proves nothing');
+  assert.deepEqual(closure.filter((f) => /^js\/(maintain|web)\//.test(f)), []);
 });
 
 test('the only spawn in the hook entry is the model CLI', () => {
@@ -1225,9 +1234,10 @@ test('the install log names this runtime\'s own command', () => {
   }
 });
 
-test('a mistyped flag is refused by the variadic sink', () => {
-  // `bootstrap` is the one verb here with a variadic positional, and a sink that absorbed an
-  // unknown OPTION would be the most dangerous parse bug in this entry point: `bootstrap
+test('a mistyped flag on bootstrap is refused', () => {
+  // `bootstrap` used to take a variadic positional (removed in 5.0.0, with `upgrade`'s `ref`), and
+  // a sink that absorbed an unknown OPTION was the most dangerous parse bug in this entry point.
+  // The sink is gone but the refusal still matters: `bootstrap
   // --no-setpu` would run an update AND a setup wizard while the user believes they asked for
   // neither.
   //
@@ -1244,7 +1254,7 @@ test('a mistyped flag is refused by the variadic sink', () => {
       GIT_TERMINAL_PROMPT: '0',
     };
     const argv = repoint([process.execPath, path.join(ROOT, ...CLI.split('/'))], ck);
-    const r = spawnSync(argv[0], [...argv.slice(1), 'bootstrap', 'main', '--no-setpu'],
+    const r = spawnSync(argv[0], [...argv.slice(1), 'bootstrap', '--no-setpu'],
       { cwd: ck, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     assert.equal(r.status, 2,
       `a mistyped flag was not refused (exit ${r.status})\n${r.stdout.slice(-500)}`);

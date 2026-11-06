@@ -31,13 +31,14 @@ limitation to be aware of on a shared repo.
   - `rules/geneseed.md` — a **slim shadow stub** (see *Bob-ism 1* below).
   - `settings.json` — Geneseed's lifecycle hooks (gitignored by the emit's
     `.bob/.gitignore`, see the caveat below).
-  - `mcp.json` — any MCP servers you wire with `geneseed mcp` / the web console.
+  - `mcp.json` — yours: Geneseed lists the servers in it (`geneseed mcp`, the web console) and never writes it.
   - `memory/`, `notebook/` stores + their indices.
 
 ### Global (`--emit bob-global` → `~/.bob`, or `$BOB_CONFIG_DIR`)
 
-Self-contained under `~/.bob`: agents, skills, `settings.json`, memory and
-notebook. **No `AGENTS.md` is written** — a global `~/.bob/AGENTS.md` is *not*
+Under `~/.bob`: agents, skills, `settings.json`, a seeded memory folder and the
+notebook. Rules, profile, facts and notes live in the shared tier,
+`~/.config/geneseed/`, which every global install on the machine reads. **No `AGENTS.md` is written** — a global `~/.bob/AGENTS.md` is *not*
 auto-loaded by Bob, so the preamble rides `rules/geneseed.md` instead (Bob's
 always-injected channel). An `AGENTS.md` left by an older install is removed on
 re-emit.
@@ -171,8 +172,8 @@ add the line yourself.
 
 ## MCP
 
-MCP servers are wired at runtime (web console, listed by `geneseed mcp`) into the
-`mcpServers` key of Bob's own MCP file — `.bob/mcp.json` per-repo,
+You add MCP servers yourself, and `geneseed mcp` and the web console list them read-only. They
+go in the `mcpServers` key of Bob's own MCP file — `.bob/mcp.json` per-repo,
 `~/.bob/settings/mcp.json` global — never `settings.json`, which Bob does not read
 servers from ([Bob docs](https://bob.ibm.com/docs/ide/configuration/mcp/mcp-in-bob)).
 

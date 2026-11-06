@@ -3,6 +3,13 @@ import { hostInfo, installName } from '../../lib/hosts.js'
 import { PickSelects, Switch } from './controls.jsx'
 import ExclusionsCard from './ExclusionsCard.jsx'
 
+// The trade of letting a project read the machine tier. The wording is js/inspect/cost.mjs's
+// SHARED_TIER_BENEFIT and sharedTierCost() (tests/unit/shared_tier_option.test.mjs holds them equal).
+const TIER_BENEFIT =
+  'This project sees your machine-wide rules, profile and memory map, so what you taught one tool or repo applies here too.'
+const TIER_COST =
+  "About 1 500 tokens at every session start, growing with your rules. The hook budget is fixed at 9 000 characters, and the tier loads before this project's docs, so a large tier can push them down to a lazy listing."
+
 // The MCP servers an active install's config already holds, read-only. Which servers to wire
 // depends on the user and on the host, so this shows what is there and where the file lives;
 // adding or switching one is an edit to that file, by hand. A file not written yet has
@@ -106,6 +113,30 @@ export default function InstallPanel({
       {(active || absent) && canAct ? (
         <div className="ip-picks">
           <PickSelects value={choice} options={options} onChange={onPick} who={who} />
+          <p className="sub">
+            {choice.footprint === 'lean'
+              ? 'Lean footprint: terse rule lines and a pointer to the full file, about 40% smaller.'
+              : 'Full footprint: every rule’s complete text inline, the largest context.'}{' '}
+            Every rule stays in force. <a href="#/docs/footprint">Learn more →</a>
+          </p>
+        </div>
+      ) : null}
+      {(active || absent) && canAct && inst.scope !== 'global' ? (
+        <div className="ip-block">
+          <label className="ip-switch">
+            <Switch
+              on={!!choice.sharedTier}
+              label={`shared tier for ${who}`}
+              onToggle={() => onPick('sharedTier', !choice.sharedTier)}
+            />
+            <span>Read the machine-wide shared tier</span>
+          </label>
+          <p className="sub">
+            <strong>Benefit:</strong> {TIER_BENEFIT}
+          </p>
+          <p className="sub">
+            <strong>Cost:</strong> {TIER_COST}
+          </p>
         </div>
       ) : null}
 

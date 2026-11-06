@@ -419,11 +419,11 @@ describe('cards across installs', () => {
       row('bob', 'project', '/w/two'),
     ])
     expect([...names.values()]).toEqual([
-      'opencode',
-      'claude · global',
-      'claude · project',
-      'bob · one',
-      'bob · two',
+      'OpenCode',
+      'Claude Code · global',
+      'Claude Code · project',
+      'BOB (IBM) · one',
+      'BOB (IBM) · two',
     ])
   })
 
@@ -458,12 +458,12 @@ describe('cards across installs', () => {
       row('/z/one'),
     ])
     expect([...names.values()]).toEqual([
-      'bob · a/app',
-      'bob · b/app',
-      'bob · w/c/x/app',
-      'bob · v/c/x/app',
-      'bob · /one',
-      'bob · z/one',
+      'BOB (IBM) · a/app',
+      'BOB (IBM) · b/app',
+      'BOB (IBM) · w/c/x/app',
+      'BOB (IBM) · v/c/x/app',
+      'BOB (IBM) · /one',
+      'BOB (IBM) · z/one',
     ])
   })
 

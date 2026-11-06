@@ -30,11 +30,10 @@ export const SECTIONS = {
 // the `law`/`skill` item types still resolve.
 export const SECTION_ORDER = ['agents', 'memory', 'notebook', 'wiki', 'config']
 
-// The Library's kinds column, in order: every section except the constitution,
-// which has a page of its own. Skills and agents first (the bulk of the harness),
-// then what the agent remembers, then the setup manifests. The first kind is what
-// a bare `#/library` opens on.
-export const LIBRARY_ORDER = ['skills', 'agents', 'memory', 'notebook', 'wiki', 'config']
+// The Library's kinds column, in order: every section except those with a page of their own (the
+// constitution; memory and notebook, on Personal). Skills and agents first (the bulk of the
+// harness), then the setup manifests. The first kind is what a bare `#/library` opens on.
+export const LIBRARY_ORDER = ['skills', 'agents', 'wiki', 'config']
 
 // Singular item type -> plural section key, for resolving #/item/<type>/<name>
 // routes back to the section that owns them.

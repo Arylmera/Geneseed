@@ -7,13 +7,12 @@ import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Markdown from '../components/Markdown.jsx'
 import Seg from '../components/Seg.jsx'
-import { useInstalls } from '../hooks/useInstalls.js'
+import { useInstallFiles } from '../hooks/useInstalls.js'
 import { installTag, pairOf } from '../lib/hosts.js'
 
-// Profile — the user's identity (PROFILE.md beside the deployed AGENT.md). Sibling
+// Profile — the user's identity (PROFILE.md, one file shared by every global install). Sibling
 // to Rules: Rules are what the agent must do, the Profile is who you are — role,
-// habits, register preferences. It never binds (precedence is Laws, then user-rules,
-// then this). A set-up profile opens as a rendered document; Edit switches to a
+// habits, register preferences. It never binds. A set-up profile opens as a rendered document; Edit switches to a
 // whole-file editor — no per-block structure. The draft, the fingerprint, the 409 and
 // the leave-guard are useFileEditor's: a refused save reloads the disk copy into the
 // VIEW and keeps the draft in the editor.
@@ -22,42 +21,47 @@ const CONFLICT =
   'PROFILE.md changed on disk since you opened it — reloaded the fresh copy. ' +
   'Your draft is kept — Save again.'
 
-// EVERY ACTIVE INSTALL'S PROFILE, one card each (D1): each install keeps its own PROFILE.md, so
-// each card reads and saves its own, tagged with its install once there are two or more. With no
-// active install read, the one card reads the default install, as a request naming none does.
+// ONE CARD PER PROFILE FILE: the installs on the shared tier share one, tagged shared, and a project
+// install keeps its own, tagged with its install. An install whose read failed keeps a card of its
+// own, which says so, tagged with its install: `shared` names the one card the shared file got.
+// Personal's header states the shared scope; a card only says which it is.
+const idOf = (inst) => inst?.id ?? ''
+
 export default function Profile({ onChanged, dataRev }) {
-  const active = useInstalls(dataRev)
-  if (active === null) return <Loading />
-  const targets = active.length ? active : [null]
-  const many = targets.length > 1
+  const { targets, sets, failed } = useInstallFiles(api.profile, dataRev)
+  if (!sets) return <Loading />
+  // By id, never by object: a refetch lands new rows while `sets` still holds the old ones, and a
+  // card dropped for that takes its unsaved draft with it.
+  const unread = new Set(failed.map(idOf))
+  const listed = new Set([...sets.map((s) => idOf(s.inst)), ...unread])
+  const cards = targets
+    .filter((i) => listed.has(idOf(i)))
+    .map((install) => ({
+      install,
+      tag:
+        targets.length < 2
+          ? null
+          : install?.shared && !unread.has(idOf(install))
+            ? 'shared'
+            : installTag(install),
+    }))
   return (
     <>
       <div className="mb-16">
-        <div className="eyebrow">identity · yours</div>
         <h2 className="h">Profile</h2>
-        <p className="sub">
-          Who you are and how you like to work, from <code className="mono">PROFILE.md</code> beside
-          the deployed AGENT.md{many ? ' of each install' : ''}. Unlike{' '}
-          <code className="mono">user-rules.md</code>, it is identity, not rules — it colours how
-          the agent works but never binds (precedence is Laws, then rules, then this). Seeded once,
-          never overwritten by an update. Prefer not to write it by hand? Ask the agent to run the{' '}
-          <code className="mono">profile</code> skill — it interviews you and drafts this file with
-          your consent.
+        <p className="sub sub-wide">
+          Who you are and how you like to work, from <code className="mono">PROFILE.md</code>. It
+          guides the agent and never binds it. <a href="#/docs/collaboration">Docs</a>
         </p>
       </div>
-      {targets.map((inst) => (
-        <ProfileOf
-          key={inst?.id ?? ''}
-          install={inst}
-          tag={many ? installTag(inst) : null}
-          onChanged={onChanged}
-        />
+      {cards.map(({ install, tag }) => (
+        <ProfileOf key={idOf(install)} install={install} tag={tag} onChanged={onChanged} />
       ))}
     </>
   )
 }
 
-// One install's PROFILE.md: its own read, draft, fingerprint and save.
+// One PROFILE.md: its own read, draft, fingerprint and save.
 function ProfileOf({ install, tag, onChanged }) {
   const { data, error, loading, reload, setData } = useAsync(() => api.profile(pairOf(install)), [])
   const editor = useFileEditor({ data, reload })
@@ -70,7 +74,14 @@ function ProfileOf({ install, tag, onChanged }) {
   }
 
   if (loading && !data) return <Loading />
-  if (error) return <ErrorState error={error} onRetry={reload} />
+  if (error) {
+    return (
+      <section aria-label={tag ? `Profile, ${tag}` : undefined}>
+        {tag ? <span className="rule-chip mono">{tag}</span> : null}
+        <ErrorState error={error} onRetry={reload} />
+      </section>
+    )
+  }
 
   const editing = draft !== null
   const text = data?.text || ''
@@ -91,7 +102,7 @@ function ProfileOf({ install, tag, onChanged }) {
   }
 
   return (
-    <section aria-label={tag ? `Profile of ${tag}` : undefined}>
+    <section aria-label={tag ? `Profile, ${tag}` : undefined}>
       <div className="head-row mb-16">
         <div>{tag ? <span className="rule-chip mono">{tag}</span> : null}</div>
         <div className="row">
@@ -120,7 +131,7 @@ function ProfileOf({ install, tag, onChanged }) {
       </div>
 
       {notice ? (
-        <p className="sub rule-notice" role="status">
+        <p className="sub sub-wide rule-notice" role="status">
           {notice}
         </p>
       ) : null}
@@ -138,14 +149,7 @@ function ProfileOf({ install, tag, onChanged }) {
         <>
           {/* The seeded stub reads like a profile; say first that nobody has written it. */}
           {data?.seeded ? (
-            <EmptyState
-              title="This is still the template"
-              action={
-                <button type="button" className="btn ghost" onClick={() => editor.open(text)}>
-                  Edit it here
-                </button>
-              }
-            >
+            <EmptyState title="This is still the template">
               Ask the agent to run the <code className="mono">profile</code> skill — it interviews
               you and drafts this file with your consent.
             </EmptyState>

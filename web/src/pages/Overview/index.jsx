@@ -3,19 +3,19 @@ import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import Loading from '../../components/Loading.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
-import PageHeader from '../../components/PageHeader.jsx'
 import Seg from '../../components/Seg.jsx'
 import StaleBanner from '../../components/StaleBanner.jsx'
 import Onboarding from '../Dashboard/Onboarding.jsx'
-import Ledger from './Ledger.jsx'
+import Ledger, { OverviewHead } from './Ledger.jsx'
 import { docsHostOf } from '../../hooks/useHarness.js'
+import { installTag } from '../../lib/hosts.js'
 import { LAYOUTS } from '../../hooks/useLayout.js'
 import { readSeen, TRACK_GROUP } from '../Docs/Track.jsx'
 
 const DISMISS_KEY = 'geneseed-newhere-dismissed'
 
-// The four older dashboards, kept as alternate views of this page. Lazy: they are behind
-// the Appearance palette's "Overview view", which most sessions never touch.
+// The four older dashboards, kept as lenses of this page. Lazy: they are behind the header's View
+// control, which most sessions never touch.
 const Dashboard = lazy(() => import('../Dashboard/index.jsx'))
 
 // "New here?": a pointer into the Docs' Understand track with the reader's progress on it.
@@ -43,11 +43,14 @@ export function NewHere({ harness }) {
           {pages.length} short pages: what a harness is, what was installed, what changes in your
           day, and what is guaranteed.
         </p>
-        <div className="newhere-dots" aria-label={`${done} of ${pages.length} read`}>
-          {pages.map((p) => (
-            <i key={p.id} className={seen.includes(p.id) ? 'f' : ''} />
-          ))}
-        </div>
+        {/* A meter with nothing on it is noise: it appears with the first page read. */}
+        {done ? (
+          <div className="newhere-dots" aria-label={`${done} of ${pages.length} read`}>
+            {pages.map((p) => (
+              <i key={p.id} className={seen.includes(p.id) ? 'f' : ''} />
+            ))}
+          </div>
+        ) : null}
       </div>
       <a className="btn ghost" href={`#/docs/${encodeURIComponent(pages[next].id)}`}>
         {done ? `Continue · step ${next + 1}` : 'Start'}
@@ -65,8 +68,8 @@ export function NewHere({ harness }) {
   )
 }
 
-// The Overview's View control: which of the five views this page shows. Both arms put it in
-// their header, so a lens is never a dead end back to the Ledger.
+// The Overview's View control, the lens's one home: which of the five views this page shows. Both
+// arms render it in the same header, so a lens is never a dead end back to the Ledger.
 function ViewSeg({ layout, onLayout }) {
   return (
     <Seg aria-label="View">
@@ -86,10 +89,9 @@ function ViewSeg({ layout, onLayout }) {
   )
 }
 
-// The landing page. By default the Ledger (Ledger.jsx: every installed harness, what needs you,
-// cost, usage and gates);
-// the Appearance palette's "Overview view" swaps in one of the four older dashboards, and
-// the choice persists (hooks/useLayout.js).
+// The landing page. By default the Ledger (Ledger.jsx: every install, what needs you, cost, usage
+// and gates); the View control swaps in one of the four older dashboards, and the choice persists
+// (hooks/useLayout.js).
 export default function Overview({
   overview,
   overviewError,
@@ -122,10 +124,11 @@ export default function Overview({
       <Loading />
     )
   // Onboard only a machine with NO active install, read off the fleet. `deployed` (the default
-  // install's manifest) decides only when the fleet is unreadable.
-  if (instLoading && !instData) return <Loading />
+  // install's manifest) decides until the fleet is read, so the Ledger's own fetches start now
+  // instead of queueing behind `/api/installs`; a not-deployed machine waits to know, on the
+  // FIRST read only: a refetch must not unmount Onboarding and lose what the user has filled in.
   const live = instData ? instData.installs?.some((i) => i.state === 'active') : overview.deployed
-  if (!live) return <Onboarding onAction={onAction} />
+  if (!live) return instLoading && !instData ? <Loading /> : <Onboarding onAction={onAction} />
 
   const banner = <NewHere harness={docsHostOf(overview.emit)} />
   const view = onLayout ? <ViewSeg layout={layout} onLayout={onLayout} /> : null
@@ -149,41 +152,44 @@ export default function Overview({
       />
     )
   }
-  // One of the four older dashboards, chosen in the Appearance palette.
+  // One of the four older dashboards, under the Ledger's own header. The row under it is what a
+  // lens lacks and the Ledger's health card holds: the facts it reads and its two actions.
   return (
     <>
-      {/* The one header and the one action row: each lens used to carry its own as well. */}
-      {/* Rebuild stays the machine-wide build-all here: the lenses read no fleet, so they have
-          no behind set to narrow it to. */}
-      <PageHeader
-        title="Overview"
-        // A lens reads ONE install (the default's overview): the line names it first.
-        sub={[
-          overview.install && `${overview.install.host} · ${overview.install.scope}`,
-          overview.theme && `${overview.theme} voice`,
-          overview.footprint && `${overview.footprint} footprint`,
-          overview.target,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-        primary={
+      <OverviewHead
+        // What is installed, on or off: the rail's figure, and what the Ledger's fleet lists.
+        count={instData ? instData.installs.filter((i) => i.state !== 'absent').length : null}
+        canFill={false}
+        onAction={onAction}
+        view={view}
+        dataRev={dataRev}
+      />
+      {banner}
+      <div className="head-row mb-16">
+        {/* A lens's health facts are ONE install's (the default's overview), and the line names it
+            first. Its counts cover every install, and the line says that too. */}
+        <p className="sub">
+          {[
+            overview.install && installTag(overview.install),
+            overview.theme && `${overview.theme} voice`,
+            overview.footprint && `${overview.footprint} footprint`,
+            overview.target,
+            'counts cover every install',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+        <div className="row gap-10">
+          <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
+            Run doctor
+          </button>
+          {/* The machine-wide build-all: the lenses read no fleet, so they have no behind set to
+              narrow it to. */}
           <button type="button" className="btn" onClick={() => onAction('build-all')}>
             Rebuild
           </button>
-        }
-        actions={
-          <>
-            <button type="button" className="btn ghost" onClick={() => onAction('update')}>
-              Update
-            </button>
-            <button type="button" className="btn ghost" onClick={() => onAction('doctor')}>
-              Run doctor
-            </button>
-            {view}
-          </>
-        }
-      />
-      {banner}
+        </div>
+      </div>
       <Suspense fallback={<Loading />}>
         <Dashboard
           overview={overview}

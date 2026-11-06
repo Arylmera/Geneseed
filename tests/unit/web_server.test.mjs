@@ -60,9 +60,10 @@ const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/d
   '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 14. `/api/mcp` left it when MCP became read-only, and
+/** Every POST path the daemon answers — 15. `/api/mcp` left it when MCP became read-only, and
  * `/api/view` when the console's install selector was retired (each page names its install). */
-const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/install',
+const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/default-install', '/api/excludes',
+  '/api/install',
   '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote',
   '/api/shutdown'];
@@ -75,7 +76,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/excludes', '/api/i
  * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
  * raise — so the column has to be checked as a column, below.
  */
-const EXPECT_409 = ['/api/excludes', '/api/install', '/api/profile', '/api/rules',
+const EXPECT_409 = ['/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
   '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */
@@ -543,7 +544,7 @@ test('the declared surface is the one the dispatcher uses', async () => {
     // reads the registry at all, so a READ-ONLY refusal, unlike `apiLoopsActive` (GET `/api/loops`'s
     // sibling), which this probe deliberately does not drive for the same reason it never drove
     // `/api/loops`: a real poll can write the DEVELOPER's own `loops.json` (a pruned stale row),
-    // and this probe runs against the real machine config, not a sandbox.
+    // and a probe has no reason to mutate it, even in the `webFixture` sandbox.
     // The refusal is a `NotFound`, which the outer catch maps to 404, proving the route reaches
     // `apiLoopsPresetMutate` rather than answering from the table alone.
     assert.equal(await hit('POST', '/api/loops/preset', 'tok'), 404,
@@ -552,6 +553,11 @@ test('the declared surface is the one the dispatcher uses', async () => {
     assert.equal(await hit('POST', '/api/excludes', 'tok'), 409,
       'a table POST must answer, and an empty body is the 409 arm of the convention — the '
       + 'control for the refusals below');
+    // Only the refusal: a pair that is no active install writes nothing. `webFixture()` above
+    // sandboxes this file's home, so a success would land in the sandbox's tier, not the real one.
+    assert.equal(await hit('POST', '/api/default-install', 'tok',
+      '{"host": "opencode", "path": "/no/such/install"}'), 409,
+    'POST /api/default-install must reach its allowlist and refuse a pair that is no active install');
     // An empty body reaches the endpoint, misses the (host, path) allowlist and raises
     // NotFound, which the outer catch answers 404 — proof the route reaches its endpoint.
     assert.equal(await hit('POST', '/api/install', 'tok'), 404,
@@ -642,13 +648,13 @@ test('the setup snapshot\'s missing interpreter field is gated where the snapsho
   // version under a key named for that one would be a lie the About page prints — so the field
   // was first answered `null` and is now GONE, which is the only fully honest shape.
   //
-  // The claim is owned by `tests/unit/web_api.test.mjs`, inside the full snapshot test, which is
+  // The claim is owned by `tests/unit/web_api_jobs_actions.test.mjs`, inside the full snapshot test, which is
   // the stronger site because it runs against a real snapshot rather than against source text.
   // Re-asserting it here would be a second owner of one claim; pointing at it is only worth
   // anything if the pointer is CHECKED, which is all this row does.
-  const owner = readFileSync(path.join(ROOT, 'tests', 'unit', 'web_api.test.mjs'), 'utf8');
+  const owner = readFileSync(path.join(ROOT, 'tests', 'unit', 'web_api_jobs_actions.test.mjs'), 'utf8');
   assert.ok(owner.includes('assert.ok(!(\'python\' in s),'),
-    'tests/unit/web_api.test.mjs no longer asserts the setup snapshot has NO interpreter-version '
+    'tests/unit/web_api_jobs_actions.test.mjs no longer asserts the setup snapshot has NO interpreter-version '
     + 'key — a field with nothing honest to put in it would now be free to grow back by silence');
 });
 

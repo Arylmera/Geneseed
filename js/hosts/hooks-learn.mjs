@@ -6,14 +6,16 @@
  */
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { readText, printOut as out, printErr as err } from '../lib/fs.mjs';
+import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs';
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import {
-  globalHookStandingDown, hookProjectDir, resolveMemoryDir, sovereignBypass,
+  globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
 import { doneGate } from './hooks-done.mjs';
+import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
@@ -217,8 +219,7 @@ export function buildLearnPrompt(notes, facts) {
  */
 function runLlm(llm, prompt) {
   const argv = splitWords(llm);
-  // `_harness_learn.py:85` runs this through the wrapped `run(..., capture_output=True)`,
-  // which folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
+  // `NO_WINDOW` folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
   //
   // `GENESEED_LEARN_CHILD=1` (Claude B2): `$GENESEED_LLM="claude -p"` with hooks not disabled
@@ -276,11 +277,22 @@ function learnAgentLesson(meta, notes, args) {
     const lesson = splitLines(text)[0].replace(/^[-*]+/, '').trim();
     const n = Array.from(lesson).length;   // code points, as `len()` counts them
     if (n >= 10 && n <= 300) {
-      err(`[learn] agent lesson -> ${appendAgentLesson(memDir, agent, lesson)}\n`);
+      const written = recordOwnWrites(path.dirname(memDir), () => appendAgentLesson(memDir, agent, lesson));
+      err(written ? `[learn] agent lesson -> ${written}\n`
+        : `[learn] ${agent}'s lesson file is not UTF-8 - left as it is, lesson dropped\n`);
     }
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
   return proc.returncode;
+}
+
+/** `--memory` of a global install's hook, swapped for the shared store when that exists. */
+function sharedStoreFor(install, args) {
+  if (!install) return args.memory;
+  try {
+    const shared = sharedPaths().memory;
+    return isDir(shared) && isGlobalInstall(args.host ?? null, install) ? shared : args.memory;
+  } catch { return args.memory; }
 }
 
 export function cmdLearn(args) {
@@ -295,7 +307,7 @@ export function cmdLearn(args) {
       err('[learn] no memory store found \u2014 nothing to consolidate.\n');
       return 0;
     }
-    const report = consolidateMemory(memDir);
+    const report = recordOwnWrites(path.dirname(memDir), () => consolidateMemory(memDir));
     err(`[learn] consolidated ${memDir}: +${report.added.length} indexed, `
       + `-${report.pruned.length} pruned, `
       + `${report.duplicates.length} duplicate description(s)\n`);
@@ -321,6 +333,14 @@ export function cmdLearn(args) {
   const hookEvent = typeof meta.hook_event_name === 'string' ? meta.hook_event_name
     : (typeof meta.event === 'string' ? meta.event : null);
 
+  // A global install's hook passes its own host store; the shared store is where its facts live
+  // once it exists, or they land in the seeded host store and wait for the next fold. Only a hook
+  // call is redirected: it names its event or carries a transcript, and a person who typed
+  // `--memory` meant that store. Empty stdin is neither, and has no notes to write anywhere.
+  if (hookEvent || typeof meta.transcript_path === 'string') {
+    args = { ...args, memory: sharedStoreFor(install, args) };
+  }
+
   // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
   // means the turn goes on, so there is nothing to distil yet: the next Stop will.
   // `--no-done-gate` (the install switched Law III's gate off) skips the check, never the
@@ -331,6 +351,17 @@ export function cmdLearn(args) {
   const verdict = hookEvent === 'Stop' && !args.file && !args.noDoneGate
     ? doneGate(meta, args, install, read) : null;
   if (verdict === 'block') return 0;
+
+  // The change report, at the turn's real end (./store-watch.mjs). One JSON document on stdout, so an
+  // advisory already there keeps it, and Bob reads no stdout here at all: those go to stderr.
+  if (hookEvent === 'Stop' && !args.file && install) {
+    const said = storeReport(install, meta.session_id, {
+      transcript: typeof meta.transcript_path === 'string' ? meta.transcript_path : null,
+      cwd: meta.cwd, host: args.host || 'claude',
+    });
+    if (said && (verdict === 'advisory' || args.host === 'bob')) err(`[geneseed] ${said}\n`);
+    else if (said) out(`${JSON.stringify({ systemMessage: said })}\n`);
+  }
 
   // I2 (Bob): its Stop payload never carries `transcript_path`, so there is never a transcript
   // to distil — and the bare envelope itself is not notes text (that would waste a model call
@@ -384,7 +415,7 @@ export function cmdLearn(args) {
   const proc = runLlm(llm, prompt);
   const output = proc.stdout;
   if (memDir && output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
-    const { created, updated, archived } = writeMemories(output, memDir, existing);
+    const { created, updated, archived } = recordOwnWrites(path.dirname(memDir), () => writeMemories(output, memDir, existing));
     if (created.length) {
       err(`[learn] wrote ${created.length} memory file(s) to `
         + `${memDir}: ${created.join(', ')}\n`);

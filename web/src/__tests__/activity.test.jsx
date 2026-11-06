@@ -435,7 +435,7 @@ describe('Activity page: Today strip and feed', () => {
     render(<Activity />)
     expect(await screen.findByText('Live sessions are off')).toBeTruthy()
     await screen.findAllByRole('img', { name: /^Took / })
-    screen.getByRole('switch', { name: 'Track live sessions in opencode' }).click()
+    screen.getByRole('switch', { name: 'Track live sessions in OpenCode' }).click()
     await vi.waitFor(() => {
       const post = global.fetch.mock.calls.find((c) => c[1]?.method === 'POST')
       expect(post).toBeTruthy()
@@ -604,7 +604,7 @@ describe('Activity garden switch', () => {
   it('opens on the garden, and keeps a switch to the list in the hash', async () => {
     global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
     render(<Activity />)
-    const tree = await screen.findByRole('link', { name: /^grow it, claude, working/ })
+    const tree = await screen.findByRole('link', { name: /^grow it, Claude Code, working/ })
     expect(screen.getByRole('button', { name: 'Garden' }).getAttribute('aria-pressed')).toBe('true')
     expect(tree.getAttribute('href')).toBe('#/activity/g1')
     expect(tree.getAttribute('aria-label')).toMatch(/1 sub-agent running: developer \(1 file\)/)
@@ -615,6 +615,16 @@ describe('Activity garden switch', () => {
     expect(document.querySelector('a.act-card[href="#/activity/g1"]')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Garden' }))
     expect(window.location.hash).toBe('#/activity')
+  })
+
+  // A tap has no mouseenter before it, so the tap itself reports where the card goes.
+  it('opens a tapped pad’s card above its own tree', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
+    render(<Activity />)
+    const tree = await screen.findByRole('link', { name: /^grow it, Claude Code, working/ })
+    Object.defineProperty(tree, 'offsetLeft', { value: 120 })
+    fireEvent.touchEnd(tree.querySelector('g[data-p="0"]'))
+    expect(document.querySelector('.gd-info').style.left).toBe('120px')
   })
 
   // The list is written next to the filters, in the order f, v, host, project.
@@ -631,7 +641,7 @@ describe('Activity garden switch', () => {
     window.history.replaceState(null, '', '#/activity?v=garden')
     global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
     render(<Activity />)
-    expect(await screen.findByRole('link', { name: /^grow it, claude, working/ })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: /^grow it, Claude Code, working/ })).toBeTruthy()
     expect(document.querySelector('a.act-card')).toBeNull()
   })
 
@@ -639,7 +649,7 @@ describe('Activity garden switch', () => {
     window.history.replaceState(null, '', '#/activity?v=garden&host=bob')
     global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: live })))
     render(<Activity />)
-    expect(await screen.findByRole('link', { name: /^other host, bob, idle/ })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: /^other host, BOB \(IBM\), idle/ })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /^grow it/ })).toBeNull()
   })
 })
@@ -681,8 +691,10 @@ describe('Activity across installs', () => {
     render(<Activity />)
     const oc = (await screen.findByText('from opencode')).closest('a')
     const cl = screen.getByText('from claude').closest('a')
-    expect(within(oc).getByTitle('The install this session runs in').textContent).toBe('opencode')
-    expect(within(cl).getByTitle('The install this session runs in').textContent).toBe('claude')
+    expect(within(oc).getByTitle('The install this session runs in').textContent).toBe('OpenCode')
+    expect(within(cl).getByTitle('The install this session runs in').textContent).toBe(
+      'Claude Code',
+    )
     // One id in two installs: two cards, each linking to the install that holds it.
     expect(oc.getAttribute('href')).toBe('#/activity/s1?host=opencode&path=%2Fh%2Foc')
     expect(cl.getAttribute('href')).toBe('#/activity/s1?host=claude&path=%2Fh%2Fcl')
@@ -704,8 +716,8 @@ describe('Activity across installs', () => {
       within(screen.getByText(t).closest('a')).getByTitle('The install this session runs in')
         .textContent
     await screen.findByText('global one')
-    expect(chip('global one')).toBe('claude · global')
-    expect(chip('project one')).toBe('claude · project')
+    expect(chip('global one')).toBe('Claude Code · global')
+    expect(chip('project one')).toBe('Claude Code · project')
   })
 
   // One session both installs recorded is one card (`installs` lists both): turning one install
@@ -726,7 +738,7 @@ describe('Activity across installs', () => {
     )
     render(<Activity />)
     await screen.findByText('seen twice')
-    screen.getByRole('switch', { name: 'Track live sessions in claude' }).click()
+    screen.getByRole('switch', { name: 'Track live sessions in Claude Code' }).click()
     await vi.waitFor(() =>
       expect(screen.getByText('seen twice').closest('a').getAttribute('href')).toBe(
         '#/activity/s?host=opencode&path=%2Fh%2Foc',
@@ -750,8 +762,8 @@ describe('Activity across installs', () => {
     )
     render(<Activity />)
     await screen.findByText('cl work')
-    const ocSw = screen.getByRole('switch', { name: 'Track live sessions in opencode' })
-    const clSw = screen.getByRole('switch', { name: 'Track live sessions in claude' })
+    const ocSw = screen.getByRole('switch', { name: 'Track live sessions in OpenCode' })
+    const clSw = screen.getByRole('switch', { name: 'Track live sessions in Claude Code' })
     expect([ocSw, clSw].map((s) => s.getAttribute('aria-checked'))).toEqual(['true', 'true'])
     clSw.click()
     await vi.waitFor(() => {

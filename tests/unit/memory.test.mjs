@@ -223,6 +223,184 @@ test('with no store anywhere the verb refuses and says how to point it at one', 
   }
 });
 
+/** `memory <argv>` from `cwd` with a sandboxed home: only what is under `home` can be found. */
+const inRepo = (home, cwd, ...argv) => spawnSync(process.execPath, [ENTRY, 'memory', ...argv],
+  { cwd, encoding: 'utf8', windowsHide: true, env: cellEnv(home) });
+
+/** What every real emit leaves: the seeded index in the store, the version marker beside it. */
+function installed(store) {
+  mkdirSync(store, { recursive: true });
+  writeFileSync(path.join(store, 'MEMORY.md'), '# Memory Index\n', 'utf8');
+  writeFileSync(path.join(path.dirname(store), '.geneseed-version'), 'abc (built 2026-01-01)\n', 'utf8');
+}
+
+test('a repo\'s own memory/ is no store: rm --purge leaves it, and --memory still reaches it', () => {
+  // I4: the resolver put a `memory/` beside the cwd ahead of the tier, so this deleted a design
+  // note in a repo that has nothing to do with Geneseed.
+  const sb = makeSandbox('gs-memory-repo-');
+  try {
+    const repo = path.join(sb.path, 'repo');
+    mkdirSync(path.join(repo, 'memory'), { recursive: true });
+    mkdirSync(path.join(repo, 'Harness', 'memory'), { recursive: true });
+    const note = path.join(repo, 'memory', 'design-notes.md');
+    writeFileSync(note, 'mine\n', 'utf8');
+    writeFileSync(path.join(repo, 'Harness', 'memory', 'design-notes.md'), 'mine too\n', 'utf8');
+    const r = inRepo(sb.path, repo, 'rm', 'design-notes', '--purge');
+    assert.equal(r.status, 1, `expected a refusal, got ${r.status}: ${r.stdout}${r.stderr}`);
+    assert.ok(existsSync(note), 'rm --purge deleted a file of a repo that is no install');
+    assert.ok(existsSync(path.join(repo, 'Harness', 'memory', 'design-notes.md')), './Harness counted by itself');
+    const named = inRepo(sb.path, repo, 'list', '--memory', path.join(repo, 'memory'));
+    assert.match(named.stdout, /design-notes/, '--memory no longer reaches it');
+    // With a tier, the same command acts on the tier and never looks at the repo.
+    const tier = path.join(sb.path, '.config', 'geneseed', 'memory');
+    mkdirSync(tier, { recursive: true });
+    writeFileSync(path.join(tier, 'tier-fact.md'), 'x\n', 'utf8');
+    assert.match(inRepo(sb.path, repo, 'list').stdout, /tier-fact/);
+    assert.equal(inRepo(sb.path, repo, 'rm', 'design-notes', '--purge').status, 1);
+    assert.ok(existsSync(note), 'the tier run reached the repo');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('a project install inside its own repo finds its own store, ahead of the tier', () => {
+  // Each row is where that emit puts the marker and the store. `memory/` beside the cwd stays a
+  // repo folder for a Claude-family install, whose store sits under its layer; for OpenCode and
+  // the plain bundle it IS the store, because the marker and the evidence beside it say so.
+  const rows = [
+    ['claude', '', '.claude/memory'], ['bob', '', '.bob/memory'], ['openclaude', '', '.openclaude/memory'],
+    ['opencode', '', 'memory'], ['files', '', 'memory'],
+    ['files', 'Harness', 'Harness/memory'], ['opencode', 'Harness', 'Harness/memory'],
+  ];
+  for (const [emit, base, store] of rows) {
+    const sb = makeSandbox('gs-memory-own-');
+    try {
+      const repo = path.join(sb.path, 'repo');
+      const tier = path.join(sb.path, '.config', 'geneseed', 'memory');
+      mkdirSync(path.join(repo, store), { recursive: true });
+      mkdirSync(path.join(repo, 'memory'), { recursive: true });
+      mkdirSync(tier, { recursive: true });
+      writeFileSync(path.join(repo, base, '.geneseed-emit'), `${emit}\n`, 'utf8');
+      installed(path.join(repo, store));
+      writeFileSync(path.join(repo, store, 'own-fact.md'), 'x\n', 'utf8');
+      writeFileSync(path.join(tier, 'tier-fact.md'), 'x\n', 'utf8');
+      const out = inRepo(sb.path, repo, 'list').stdout;
+      assert.match(out, /own-fact/, `${emit} at ${base || '.'} lost its store: ${out}`);
+      assert.doesNotMatch(out, /tier-fact/, `${emit} at ${base || '.'} read the tier`);
+    } finally {
+      sb.cleanup();
+    }
+  }
+});
+
+test('a marker alone proves no install: rm --purge leaves the repo\'s file, and the tier answers', () => {
+  // Blind review of I4: any non-empty marker made the folder a store. Each row is a repo that a
+  // real emit never produced, and each deleted `design-notes.md` then.
+  const rows = [
+    ['junk text', 'garbage-text', () => {}],
+    ['a stale files marker over a bare folder', 'files', () => {}],
+    ['a stale opencode marker over a bare folder', 'opencode', () => {}],
+    ['an index and no version', 'files', (repo) => writeFileSync(path.join(repo, 'memory', 'MEMORY.md'), '# Memory Index\n', 'utf8')],
+    ['a version and no index', 'files', (repo) => writeFileSync(path.join(repo, '.geneseed-version'), 'abc\n', 'utf8')],
+    ['a real install under a junk marker', 'garbage-text', (repo) => installed(path.join(repo, 'memory'))],
+  ];
+  for (const [name, emit, extra] of rows) {
+    const sb = makeSandbox('gs-memory-stale-');
+    try {
+      const repo = path.join(sb.path, 'repo');
+      const tier = path.join(sb.path, '.config', 'geneseed', 'memory');
+      const note = path.join(repo, 'memory', 'design-notes.md');
+      mkdirSync(path.dirname(note), { recursive: true });
+      mkdirSync(tier, { recursive: true });
+      writeFileSync(note, 'mine\n', 'utf8');
+      writeFileSync(path.join(repo, '.geneseed-emit'), `${emit}\n`, 'utf8');
+      extra(repo);
+      const r = inRepo(sb.path, repo, 'rm', 'design-notes', '--purge');
+      assert.equal(r.status, 1, `${name}: ${r.stdout}${r.stderr}`);
+      assert.ok(existsSync(note), `${name}: the file is gone`);
+      assert.ok(r.stderr.includes(tier), `${name}: ${r.stderr}`);
+    } finally {
+      sb.cleanup();
+    }
+  }
+});
+
+test('two hosts in one repo: the marker\'s host answers, and a marker that names a dead layer falls to the live one', () => {
+  const sb = makeSandbox('gs-memory-dual-');
+  try {
+    const repo = path.join(sb.path, 'repo');
+    const claude = path.join(repo, '.claude', 'memory');
+    const bob = path.join(repo, '.bob', 'memory');
+    installed(claude);
+    writeFileSync(path.join(repo, '.geneseed-emit'), 'bob\n', 'utf8');
+    assert.ok(inRepo(sb.path, repo, 'list').stdout.includes(claude), 'the live layer was not found');
+    installed(bob);
+    assert.ok(inRepo(sb.path, repo, 'list').stdout.includes(bob), 'the marker lost to another layer');
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('rm names the store it acted on, because --purge cannot be undone', () => {
+  withStore((d) => {
+    for (const argv of [['a-fact'], ['b-fact', '--purge']]) {
+      const { stdout } = run(d, 'rm', ...argv);
+      assert.ok(stdout.split(/\r?\n/).includes(`[memory] ${d}`), stdout);
+    }
+  });
+});
+
+test('a real project emit is found where it seeded its store', () => {
+  // The rows above state where each emit puts its marker, store and evidence. This asks the emits.
+  const rows = [['claude', 'repo', '.claude/memory'], ['bob', 'repo', '.bob/memory'], ['openclaude', 'repo', '.openclaude/memory'],
+    ['opencode', 'repo', 'memory'], ['files', 'repo/Harness', 'Harness/memory']];
+  for (const [emit, out, store] of rows) {
+    const sb = makeSandbox('gs-memory-emit-');
+    try {
+      const repo = path.join(sb.path, 'repo');
+      mkdirSync(repo);
+      const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', emit,
+        '--theme', 'neutral', '--footprint', 'lean', '--out', path.join(sb.path, out)],
+      { cwd: repo, encoding: 'utf8', windowsHide: true, env: cellEnv(sb.path), maxBuffer: 1 << 26 });
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(existsSync(path.join(repo, store, 'MEMORY.md')), `${emit} seeded no ${store}`);
+      assert.ok(inRepo(sb.path, repo, 'list').stdout.includes(path.join(repo, store)), emit);
+    } finally {
+      sb.cleanup();
+    }
+  }
+});
+
+test('a global marker in the cwd is no project: the tier answers', () => {
+  const sb = makeSandbox('gs-memory-global-');
+  try {
+    const cfg = path.join(sb.path, 'cfg');
+    const tier = path.join(sb.path, '.config', 'geneseed', 'memory');
+    mkdirSync(path.join(cfg, 'memory'), { recursive: true });
+    mkdirSync(tier, { recursive: true });
+    writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n', 'utf8');
+    writeFileSync(path.join(tier, 'tier-fact.md'), 'x\n', 'utf8');
+    assert.match(inRepo(sb.path, cfg, 'list').stdout, /tier-fact/);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('status names the store memory acts on, not a repo folder', () => {
+  const sb = makeSandbox('gs-memory-status-');
+  try {
+    const repo = path.join(sb.path, 'repo');
+    const tier = path.join(sb.path, '.config', 'geneseed', 'memory');
+    mkdirSync(path.join(repo, 'memory'), { recursive: true });
+    mkdirSync(tier, { recursive: true });
+    const r = spawnSync(process.execPath, [ENTRY, 'status', '--json'],
+      { cwd: repo, encoding: 'utf8', windowsHide: true, env: cellEnv(sb.path) });
+    assert.equal(JSON.parse(r.stdout).memory_dir, tier, r.stderr);
+  } finally {
+    sb.cleanup();
+  }
+});
+
 test('the entry dispatches `memory` at this module, with the actions the table declares', () => {
   const src = readFileSync(ENTRY, 'utf8');
   // The row is a lazy loader since the CLI slim pass (`memory: cmdMemory,` after Task 5

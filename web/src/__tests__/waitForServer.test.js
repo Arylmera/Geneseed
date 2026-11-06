@@ -6,6 +6,8 @@ vi.mock('../api/index.js', () => ({
   api: { ping: (...a) => ping(...a), restart: (...a) => restart(...a) },
 }))
 
+vi.mock('../hooks/reloadPage.js', () => ({ reloadPage: () => reload() }))
+
 import { restartAndReload } from '../hooks/waitForServer.js'
 
 let reload
@@ -14,11 +16,9 @@ beforeEach(() => {
   ping.mockReset()
   restart.mockReset()
   reload = vi.fn()
-  vi.stubGlobal('location', { reload })
 })
 afterEach(() => {
   vi.useRealTimers()
-  vi.unstubAllGlobals()
 })
 
 describe('restartAndReload', () => {

@@ -42,6 +42,7 @@ vi.mock('../api/index.js', () => ({
       }),
     ),
     installToggle: vi.fn(() => Promise.resolve({ ok: true })),
+    setDefaultInstall: vi.fn(() => Promise.resolve({ ok: true })),
     mcp: vi.fn(() =>
       Promise.resolve({
         targets: [
@@ -106,6 +107,80 @@ describe('Installs / Hosts', () => {
     expect(screen.getByRole('button', { name: /rebuild all/i })).toBeTruthy()
   })
 
+  // The server marks the default row; every other active row offers the act. An absent row offers
+  // nothing, and the click must not also pick the row into the side panel.
+  it('marks the default install and makes another active install the default', async () => {
+    const row = (id, host, extra) => ({
+      id,
+      host,
+      scope: 'global',
+      path: `C:/${host}`,
+      state: 'active',
+      ...extra,
+    })
+    api.installs.mockImplementationOnce(() =>
+      Promise.resolve({
+        installs: [
+          row('opencode:global', 'opencode', { default: true }),
+          row('claude:global', 'claude'),
+          row('bob:global', 'bob', { state: 'absent' }),
+        ],
+      }),
+    )
+    const onMutated = vi.fn()
+    render(<Hosts onAction={() => {}} onMutated={onMutated} />)
+    const make = await screen.findByRole('button', { name: 'Make Claude Code the default install' })
+    const cells = [...document.querySelectorAll('.hosts-tbl tbody tr')].map((tr) => [
+      tr.querySelector('.row-pick').textContent,
+      tr.querySelectorAll('td')[1].textContent.trim(),
+    ])
+    expect(cells).toEqual([
+      ['OpenCode', 'Active Default'],
+      ['Claude Code', 'Active Make default'],
+      ['BOB (IBM)', 'Not installed'],
+    ])
+    fireEvent.click(make)
+    await waitFor(() => expect(onMutated).toHaveBeenCalledTimes(1))
+    expect(api.setDefaultInstall).toHaveBeenCalledWith('claude', 'C:/claude')
+    expect(panel().querySelector('h2').textContent).toBe('OpenCode')
+  })
+
+  it('says why a default was refused, and asks for no refetch', async () => {
+    api.installs.mockImplementationOnce(() =>
+      Promise.resolve({
+        installs: [
+          {
+            id: 'opencode:global',
+            host: 'opencode',
+            scope: 'global',
+            path: 'C:/cfg',
+            state: 'active',
+            default: true,
+          },
+          {
+            id: 'claude:global',
+            host: 'claude',
+            scope: 'global',
+            path: 'C:/.claude',
+            state: 'active',
+          },
+        ],
+      }),
+    )
+    api.setDefaultInstall.mockImplementationOnce(() =>
+      Promise.reject(new Error('not an active install (host, path)')),
+    )
+    const onMutated = vi.fn()
+    render(<Hosts onAction={() => {}} onMutated={onMutated} />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Make Claude Code the default install' }),
+    )
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'not an active install (host, path)',
+    )
+    expect(onMutated).not.toHaveBeenCalled()
+  })
+
   // Global and per-project installs are two tables, not one mixed list: a global row is
   // named by its tool, a project row by its folder with the tool beside it, and with no
   // project installs the second table says so instead of rendering empty.
@@ -137,12 +212,12 @@ describe('Installs / Hosts', () => {
     expect(names(await table('Global installs'))).toEqual(['OpenCode'])
     const proj = await table('Per-project installs')
     expect(names(proj)).toEqual(['Terra'])
-    expect(proj.querySelector('tbody td:nth-child(2)').textContent).toBe('Claude Code')
+    expect(proj.querySelector('tbody .path-cell').textContent).toBe('Claude Code')
   })
 
   it('says so when no repo has its own harness', async () => {
     render(<Hosts onAction={() => {}} />)
-    expect(await screen.findByText(/No repo has its own harness yet/)).toBeTruthy()
+    expect(await screen.findByText(/No repo has its own install yet/)).toBeTruthy()
     expect(screen.queryByRole('table', { name: 'Per-project installs' })).toBeNull()
   })
 
@@ -230,6 +305,11 @@ describe('Installs / Hosts', () => {
     const fp = screen.getByLabelText('footprint for Claude Code · global')
     expect(fp.value).toBe('lean')
     expect([...fp.options].map((o) => o.value)).toEqual(['lean', 'full'])
+    // The panel is the footprint's one home: it says what the choice does, and follows it.
+    expect(within(panel()).getByText(/^Lean footprint/)).toBeTruthy()
+    fireEvent.change(fp, { target: { value: 'full' } })
+    expect(within(panel()).getByText(/^Full footprint/)).toBeTruthy()
+    fireEvent.change(fp, { target: { value: 'lean' } })
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     await answered()
     // The table-row install's seven fields, plus the loop trust preset at its default.
@@ -334,12 +414,60 @@ describe('Installs / Hosts', () => {
     )
   })
 
+  it('a project install offers the shared-tier switch with its trade, and rebuilds with the pick', async () => {
+    const proj = (over) => ({
+      installs: [
+        {
+          id: 'claude:C:/git/Terra',
+          host: 'claude',
+          scope: 'project',
+          path: 'C:/git/Terra',
+          state: 'active',
+          theme: 'neutral',
+          footprint: 'lean',
+          posture: 'peer',
+          mode: 'direct',
+          trust: 'balanced',
+          ...over,
+        },
+      ],
+      postures: ['peer'],
+      modes: ['direct'],
+      trusts: ['balanced'],
+    })
+    vi.mocked(api.installs).mockResolvedValueOnce(proj({ sharedTier: false }))
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const apply = await screen.findByRole('button', { name: 'Apply and rebuild' })
+    const sw = screen.getByRole('switch', { name: 'shared tier for Claude Code · project' })
+    expect(sw.checked).toBe(false)
+    // The trade is on the panel before the switch is flipped.
+    expect(screen.getByText(/machine-wide rules, profile and memory map/)).toBeTruthy()
+    expect(screen.getByText(/About 1 500 tokens at every session start/)).toBeTruthy()
+    expect(apply.disabled).toBe(true)
+    fireEvent.click(sw)
+    expect(apply.disabled).toBe(false)
+    fireEvent.click(apply)
+    await answered()
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'claude', scope: 'project', sharedTier: true }),
+    )
+  })
+
+  it('a global install has no shared-tier switch and never sends the key', async () => {
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    await screen.findByRole('button', { name: 'Apply and rebuild' })
+    expect(screen.queryByRole('switch', { name: /shared tier/ })).toBeNull()
+  })
+
   it('deploys to a folder with the picked host, naming what that host adds', async () => {
     const onAction = vi.fn(async () => 'job-1')
     render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
     fireEvent.click(await screen.findByRole('button', { name: /deploy to a repo/i }))
     // Default host: the active install's (opencode here), and its note says what it adds.
-    const host = screen.getByLabelText('host for the new harness')
+    const host = screen.getByLabelText('host for the new install')
     expect(host.value).toBe('opencode')
     expect(document.querySelector('.dp-note code').textContent).toBe('.opencode/ + AGENT.md')
     fireEvent.change(host, { target: { value: 'claude' } })
@@ -366,7 +494,7 @@ describe('Installs / Hosts', () => {
     const onAction = vi.fn(async () => 'job-1')
     render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
     fireEvent.click(await screen.findByRole('button', { name: /deploy to a repo/i }))
-    const fp = screen.getByLabelText('footprint for the new harness')
+    const fp = screen.getByLabelText('footprint for the new install')
     expect(fp.value).toBe('lean')
     expect([...fp.options].map((o) => o.value)).toEqual(['lean', 'full'])
     fireEvent.change(fp, { target: { value: 'full' } })
@@ -782,7 +910,7 @@ describe('Installs / Hosts', () => {
   })
 
   // "Sync with source", from /api/fleet joined by id. The verdict gives the headline: behind
-  // names the source release and the stale files (one file is singular), in step is "In sync",
+  // names the source release and the stale files (one file is singular), synced is "In sync",
   // no marker is "Not checked". Hand edits (edited + added) are counted apart and never summed
   // into the stale count; a row with no drift check says "not checkable"; a row the fleet does not
   // list (not installed) says "—". A null release label reads "Behind source".
@@ -802,13 +930,13 @@ describe('Installs / Hosts', () => {
     })
     // The cell's words, without the bar (its legend repeats the counts for sighted readers).
     const syncOf = (name) => {
-      const td = screen.getByRole('button', { name }).closest('tr').querySelector('td:nth-child(6)')
+      const td = screen.getByRole('button', { name }).closest('tr').querySelector('td:nth-child(3)')
       const copy = td.cloneNode(true)
       copy.querySelector('.stackbar-box')?.remove()
       return copy.textContent
     }
 
-    it('names each verdict in words, with hand edits apart from stale files', async () => {
+    it('names each verdict in words, with local edits apart from stale files', async () => {
       api.installs.mockResolvedValueOnce({
         installs: [
           ...four,
@@ -836,7 +964,7 @@ describe('Installs / Hosts', () => {
         screen
           .getByRole('img', { name: /Sync with source of OpenCode/ })
           .getAttribute('aria-label'),
-      ).toBe('Sync with source of OpenCode: behind source: 3 of 5, edited by hand: 2 of 5')
+      ).toBe('Sync with source of OpenCode: behind source: 3 of 5, local edits: 2 of 5')
     })
 
     it('a behind row with no drift figure and no release label still says it is behind', async () => {

@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Every module under `js/`, in eight folders. This page is the address book: **what each one owns**, and
+Every module under `js/`, in eight folders. For how to prove a change, read the repo guide, [`AGENTS.md`](../AGENTS.md), first. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 
@@ -13,7 +13,7 @@ a module that does not exist, is a test failure. `geneseed doctor` reports the s
 
 ```
 bin/geneseed-cli.mjs     the `geneseed` CLI — 20+ verbs, may NOT spawn
-bin/geneseed-hook.mjs    the hook entry — 5 verbs, loads on EVERY tool call (~14 ms)
+bin/geneseed-hook.mjs    the hook entry — 6 verbs, loads on EVERY tool call (~14 ms)
 bin/build-driver.mjs     `geneseed-build` — a thin entry over js/build/driver.mjs
 
 js/build/     src/ + themes/  →  rendered text  →  a bundle  →  a per-host install
@@ -64,6 +64,7 @@ as a per-host install at project or global scope.
 | `emit-claude.mjs` | The Claude/Bob/OpenClaude emit — the render half plus the settings + CLAUDE.md managed-block wire |
 | `emit-opencode.mjs` | The OpenCode emits — a project's `.opencode/` and the global config dir. Deliberate twin of the above |
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
+| `fold.mjs` | The fold: moves a global install's stores into the shared tier, in the emit. Moves aside, never deletes; a second run writes nothing |
 | `stubs.mjs` | Write-once seed files: context, wiki, rules, excludes, profile, `.gitignore`, memory/notebook indexes |
 | `version.mjs` | The release marker: fingerprint the sources, read/compare/write an install's version, warn on downgrade |
 | `driver.mjs` | The generator driver: the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |
@@ -90,15 +91,16 @@ user co-owns, and the hook verbs those emitted configs then run.
 |---|---|
 | `hosts.mjs` | The four host config dirs (opencode/claude/bob/openclaude), their `family` (`CLAUDE_STYLE`), plus `resolvePath`/`expanduser` |
 | `hooks.mjs` | The gate verbs, run on every tool call: `git-gate`, `rule-gate`, `tool-gate` (the two gates fused, for Bob), plus `ask`/the gate ledger/`guardGate`. `--host` picks the verdict dialect |
-| `hooks-context.mjs` | The `context` verb — SessionStart: session files plus the repo's context docs |
+| `hooks-context.mjs` | The `context` verb — SessionStart: session files (shared tier first on a global install, wiki rendered) plus the repo's context docs; `sessionStartSize`, the console's read of the same payload |
 | `ownership-gate.mjs` | The ownership first-write gate, last in `rule-gate`: in an application repo (git root + build manifest) whose root `AGENTS.md` has no `## Ownership` section, denies the session's first write once (a tmpdir marker per session). Builtins + `gitRootOf` only. Twin: the OpenCode guard plugin |
 | `hooks-done.mjs` | The done gate (#289): on Stop, inside `learn` and before its spawn, judges a turn that edited files against the project's checks — blocks until `.geneseed/done-checks.txt`'s checks passed after the last edit; without that file, the inferred checks are advisory (a `systemMessage`, never a block) |
 | `done-checks.mjs` | Where the done gate's checks come from: `.geneseed/done-checks.txt`, else inferred from the git root's manifests (package.json scripts, pom.xml, Gradle, pyproject.toml, Cargo.toml, go.mod), each a group of accepted command forms; plus `doneLine`, the SessionStart line `context` prints. Spawn-free: `context` is in the CLI's closure. Twin: the OpenCode context plugin |
 | `hooks-learn.mjs` | The `learn` verb — Stop/SubagentStop/PreCompact distiller; the hook path's ONE spawn (`$GENESEED_LLM`) |
 | `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`), plus the activity off switch (`activityOn`) and the do-nothing `activity` verb |
+| `store-watch.mjs` | The change report: a session's baseline of the rule and memory files (`writeBaseline`, from the hook entry after `context`), the compare at Stop (`storeReport`, from `learn`), and `recordOwnWrites`, around Geneseed's own writers. It detects; it prevents nothing. The OpenCode guard holds the twin |
 | `activity.mjs` | The hook-side activity writer and the owner of snapshot liveness: `recordActivity` (one payload into `<root>/activity/`), `readTranscriptDelta`, `sweepActivity` (archive, newest 50, 7 days). Loaded only when tracking is on; never prints |
 | `usage.mjs` | The usage counter `tool-gate` runs: one `{day, kind, name}` line per Skill or subagent call into `notebook/usage.jsonl`. Hook path: builtins only, silent, never throws |
-| `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate. No spawn: the CLI and web console import it |
+| `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate — the `user-rules.md` parser, the draft's format and the fold's ledger reader. No spawn: the CLI, web console and fold import it |
 | `geneseed-dir.mjs` | The Node writers into a project's `<git root>/.geneseed/`: the personal-by-default `.gitignore` (`GENESEED_GITIGNORE`, pinned to the two OpenCode copies), and the protected-checks seed every project emit runs (`seedProtectedChecks`: seed once when absent, then the user's — never recorded, rewritten or uninstalled). Never throws, never writes through a link. Spawn-free |
 | `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `gitCommonDirOf`, `currentBranch`, `protectedBranches`, `stashExists`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate, `loss.mjs` and `js/loop/cli.mjs`'s commit-message writer |
 | `loss.mjs` | Law IV calibrated to real loss: `lossReason` decides whether a command would really lose data (protected branch, unpushed branch, dirty tree, stash, reflog, files git cannot restore) and fails closed. The gate path's one `git` spawn, reached only after `LOSS_CANDIDATE_RE` matched. Twin: the OpenCode guard plugin |
@@ -137,7 +139,7 @@ Everything that inspects an already-built or already-deployed harness and report
 | `status.mjs` | `geneseed status` and `version` — the panel data, counts, accent colour, version verdict |
 | `cost.mjs` | What one install injects every session, by part (root file, skill and agent lists, session files), in characters; owns `CARRIER_CEILING`, which the smoke test gates and the console draws |
 | `diff.mjs` | `geneseed diff` — what a deployed install has that a fresh render of `src/` does not |
-| `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json`; `hooks.mjs` only reads it |
+| `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json` and the shared list in the machine tier; `hosts.mjs` `sovereignBypass` reads both |
 | `registry.mjs` | `installs.json` under XDG — the persistent deploy-root list `rebuild-all` re-emits into |
 | `scorecard.mjs` | `geneseed scorecard` — a port of the AI Harness Scorecard (upstream pinned in its docblock): the repo walk, the CI-YAML parsing, `assessRepo`, the text/JSON renderers. Pure: no spawn, no network |
 | `scorecard-yaml.mjs` | The YAML 1.1 subset the scorecard reads CI configs with, plus Python's `str()`/`bool()` over its values; `scorecard.mjs` re-exports it. Its ceiling is in its `ponytail:` note |
@@ -164,6 +166,7 @@ into files users have committed, so change the test that states it in the same c
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
+| `machine-dir.mjs` | `machineDir()`, `sharedPaths()`, `readDefaultInstall()` and `WIKI_NAMES`: the one home of `$XDG_CONFIG_HOME/geneseed`, the names beneath it, the reader of the chosen default install, and the wiki manifest's names. Spawn-free, so the hook and driver may import it |
 | `node-floor.mjs` | The first import of all three binaries: below Node 22.7, one sentence on stderr and exit 1 (0 in the hook) instead of a stack trace |
 
 **Before editing:** parse with `parseJson`, never `JSON.parse` — the latter collapses int `1` and
@@ -205,7 +208,7 @@ Verbs that change an install that already exists, as opposed to rendering one.
 
 | module | owns |
 |---|---|
-| `update.mjs` | `upgrade`/`sync-self`/`bootstrap` — git pull, doctor gate, rebuild, each via a respawn |
+| `update.mjs` | `upgrade`/`bootstrap` — git pull, doctor gate, rebuild, each via a respawn |
 | `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
@@ -240,6 +243,7 @@ the deployed harness as JSON.
 | `server.mjs` | `serve()`/`cmdWeb`: UI-build precheck, socket bind, token mint, daemon record wiring |
 | `routes.mjs` | The route tables — `STATE_ROUTES`, `PREFIX_ROUTES`, `POST_ROUTES` (+ its 409 column) — and the inline lists |
 | `handler.mjs` | One function per request: per-request install (`?host=&path=` on every read but `MACHINE_GETS`, or the body on `VIEW_POSTS`), dispatch, gzip, `requestGuard` (Host+port, Origin/Sec-Fetch-Site on `/api`, constant-time CSRF token) and body cap (before the body is read), `securityHeaders` (CSP nonce, framing), static SPA fallback |
+| `doctor-worker.mjs` | The warm-up doctor's thread: one `doctorCollect`, one message back (`warmDoctor` in `state.mjs`) |
 | `state.mjs` | `webState` — the resolved install view every endpoint reads, with its cached inventory and doctor, `defaultView` (the install a request naming none reads) and `fleetSort` (the one install order); per-install views (`installView` in `actions.mjs`) hang off it, pinned, refreshed with it |
 | `catalog.mjs` | The Library read model: inventory, constitution tiers, memory/notebook/wiki/config items, `apiCatalog`/`apiItem`, `NotFound`. Skills and agents are listed across every active install (`FLEET_SECTIONS`; `routes.mjs` builds the fleet), each item served from one install's copy |
 | `api.mjs` | The dashboard and settings reads: overview, recent, themes, setup, doctor, diff, installs, excludes, loops |

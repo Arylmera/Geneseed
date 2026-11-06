@@ -14,6 +14,7 @@ import { parseJson } from '../lib/json.mjs';
 import { isDir } from '../lib/fs.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { rglobFiles } from './emit-common.mjs';
+import { sourceGeneration } from './render.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
@@ -31,16 +32,12 @@ import { readFileSync } from 'node:fs';
  * in the output; reproducing the wrong one changes the fingerprint of every install.
  */
 export function sourceFingerprint(cfg) {
-  // Once per `cfg` — the source cannot change under one operation, and every emit (84 of them
-  // in `doctor --all`) hashed the whole tree again. Per cfg OBJECT, not per process, for the
-  // same reason as render.mjs's source cache: the web daemon is long-lived.
-  if (FINGERPRINT.has(cfg)) return FINGERPRINT.get(cfg);
-  const fp = hashSource(cfg);
-  FINGERPRINT.set(cfg, fp);
-  return fp;
+  // Once per source generation — every emit (84 of them in `doctor --all`) hashed the whole tree
+  // again, and the web daemon is long-lived, so the key has to see an edit: render.mjs says how.
+  const generation = sourceGeneration(cfg);
+  generation.fingerprint ??= hashSource(cfg);
+  return generation.fingerprint;
 }
-
-const FINGERPRINT = new WeakMap();
 
 function hashSource(cfg) {
   const h = createHash('sha256');
@@ -51,8 +48,11 @@ function hashSource(cfg) {
   const keyed = files.map((p) => [relPosix(cfg.root, p), p]);
   keyed.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   for (const [rel, p] of keyed) {
+    // A file deleted since the walk listed it is not in the tree any more (as in `sourceStamp`).
+    let bytes;
+    try { bytes = readFileSync(p); } catch (e) { if (e.code === 'ENOENT') continue; throw e; }
     h.update(Buffer.from(`${rel}\0`, 'utf8'));
-    h.update(readFileSync(p));
+    h.update(bytes);
     h.update(Buffer.from([0]));
   }
   return h.digest('hex').slice(0, 12);

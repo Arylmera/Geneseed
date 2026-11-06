@@ -166,15 +166,15 @@ test('an install that lacks the id, or an unknown install, is refused with 404',
   });
 });
 
-// Machine-wide: the skills, agents, memory and notebook lists ignore a pair (memory and notebook
-// joined them so each fact names its own install), while a per-install section still refuses one.
-test('the fleet lists ignore a named install; the wiki list still checks it', async () => {
+// Machine-wide: every Library kind ignores a pair (each entry names its own install), while the
+// constitution, which is one install's switches, still refuses one.
+test('the fleet lists ignore a named install; the laws list still checks it', async () => {
   await withFleetServed(async ({ get }) => {
     const bad = { host: 'nope', path: '/no/such' };
-    for (const sec of ['skills', 'agents', 'memory', 'notebook']) {
+    for (const sec of ['skills', 'agents', 'memory', 'notebook', 'wiki', 'config']) {
       assert.equal((await get(`/api/catalog/${sec}`, bad)).status, 200, sec);
     }
-    assert.equal((await get('/api/catalog/wiki', bad)).status, 404);
+    assert.equal((await get('/api/catalog/laws', bad)).status, 404);
   });
 });
 

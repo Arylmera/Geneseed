@@ -284,9 +284,8 @@ export const MUTATIONS = [
     id: 'M14',
     name: 'drop the registry prune-on-read write',
     file: 'js/inspect/registry.mjs',
-    find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {\n'
-      + '    registrySave(kept);',
-    replace: '  if (false) {\n    registrySave(kept);',
+    find: '  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {',
+    replace: '  if (false) {',
     gate: UNIT,
     why: 'The prune is a WRITE performed by a READ, and it is the part of that path most likely '
       + 'to be wrong. Every golden cell emitted into a fresh sandbox whose registry was empty, so '
@@ -615,6 +614,29 @@ export const MUTATIONS = [
     why: 'A pipe exits with its LAST stage, so `npm test | tail` is green on a red suite and its '
       + 'result carries no `is_error`. Without the pipe rule the gate would accept exactly the '
       + 'proof that proves nothing; the segment table in `hook_done.test.mjs` pins it.',
+  },
+  {
+    id: 'M37',
+    name: 'the source stamp walks only cfg.src',
+    file: 'js/build/render.mjs',
+    find: 'for (const root of [cfg.src, cfg.themes, cfg.pluginSrc, cfg.workflowSrc]) {',
+    replace: 'for (const root of [cfg.src]) {',
+    gate: ['--test', '--test-name-pattern=four source roots', 'tests/unit/generate.test.mjs'],
+    why: 'The daemon would keep the fingerprint of an old theme or plugin for days, and every '
+      + 'install would compare against it. The other stamp tests point three roots at nothing, '
+      + 'so only the test that edits each root sees this.',
+  },
+  {
+    id: 'M38',
+    name: "the rule gate stops matching the machine tier's memory/",
+    file: 'js/hosts/hooks.mjs',
+    find: "    try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store to match */ }",
+    replace: '',
+    gate: ['--test', '--test-name-pattern=S3: the hook gate', 'tests/unit/opencode_guard.test.mjs'],
+    why: 'A fact written straight into ~/.config/geneseed/memory would skip the rule-vs-memory '
+      + 'question on every host at once, since the shared store is where a global install keeps '
+      + 'its facts. The table runs the hook and the guard over the same paths, so only a row of '
+      + 'the shared store itself sees it.',
   },
 ];
 

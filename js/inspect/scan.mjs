@@ -1,5 +1,5 @@
 /**
- * `_harness_core`'s scanning primitives — what every doctor check reads the tree with.
+ * The scanning primitives — what every doctor check reads the tree with.
  *
  * Split out of `doctor.mjs` because all three check modules need them and none of the three
  * owns them. Nothing here decides anything: these walk, sort, strip and test, and the
@@ -23,10 +23,10 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 export { isDir, isFile, has };
 
 // --------------------------------------------------------------------------------------
-// _harness_core's scanning primitives
+// scanning primitives
 // --------------------------------------------------------------------------------------
 
-/** `_harness_core.TOKEN_RE` / `LINK_RE` / `ABS_LINK_RE`. `g` where `findall` is used. */
+/** `TOKEN_RE` / `LINK_RE` / `ABS_LINK_RE`. `g` where every match is collected. */
 // Must stay in step with `js/build/render.mjs`'s TOKEN_RE: a token the renderer substitutes but this
 // scan cannot see is an unresolved-token gate that silently stops gating. Digits are legal after
 // the first character for `DOC_<PACK>_<n>`; a leading digit is still not a token.
@@ -35,7 +35,7 @@ export const LINK_RE = /\]\((?!https?:\/\/|#)([^)]+)\)/g;
 export const ABS_LINK_RE = /^([A-Za-z]:[\\/]|\/|~)/;
 const COMMENT_RE = /<!--[\s\S]*?-->/g;
 
-/** `_harness_core.strip_code` — fenced blocks, then HTML comments, then inline code, in that order. */
+/** Fenced blocks, then HTML comments, then inline code, in that order. */
 export function stripCode(text) {
   return text.replace(FENCE_RE, '').replace(COMMENT_RE, '').replace(INLINE_CODE_RE, '');
 }
@@ -79,7 +79,7 @@ export const sortedUnique = (xs) => [...new Set(xs)].sort((a, b) => (a < b ? -1 
 /** `sorted(probs)` — SORTED, not deduped, which is what `_ran` fills a group with. */
 export const sortedProblems = (xs) => [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-/** `_harness_build._src_stems` — spec stems under `src/<folder>`, minus `_`-scaffolds. */
+/** Spec stems under `src/<folder>`, minus `_`-scaffolds. */
 export function srcStems(folder) {
   const d = path.join(SRC, folder);
   if (!isDir(d)) return new Set();

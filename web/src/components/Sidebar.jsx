@@ -1,13 +1,13 @@
 import React from 'react'
 import { go } from '../lib/router.js'
-import { driftTotal, relTime } from '../lib/format.js'
+import { driftTotal, libraryCount, relTime, ruleCount } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
 import { activeInstalls, installTag } from '../lib/hosts.js'
 
 // The seven pages, in the order a visit reads them: how the harness is doing, what it
-// obeys, what it knows, how it iterates, what is yours, and where it is installed. Each count reads data
-// the shell already holds (the overview and the installs list); a page with no honest
-// single number carries none rather than an invented one.
+// obeys, what it knows, how it iterates, what is yours, and where it is installed. A badge is what
+// its page lists, across every install, deduped (`overview.counts`; __tests__/railCounts.test.jsx
+// holds each one to its page); a page with no honest single number carries none.
 const NAV = [
   { hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
   {
@@ -15,25 +15,14 @@ const NAV = [
     page: 'laws',
     label: 'Constitution',
     icon: 'law',
-    // Every entry the page lists: the ethos sections, the invariants (a retired one an older
-    // install still lists is counted too), and the doctrine rules.
-    count: (o) =>
-      o?.counts
-        ? (o.counts.ontology ?? 0) + (o.counts.laws ?? 0) + (o.counts.doctrines?.rules ?? 0)
-        : null,
+    count: (o) => (o?.counts ? ruleCount(o.counts) : null),
   },
   {
     hash: '#/library',
     page: 'library',
     label: 'Library',
     icon: 'library',
-    count: (o) =>
-      o?.counts
-        ? ['skills', 'agents', 'memory', 'notebook', 'wiki', 'config'].reduce(
-            (n, k) => n + (o.counts[k] ?? 0),
-            0,
-          )
-        : null,
+    count: (o) => (o?.counts ? libraryCount(o.counts) : null),
   },
   {
     hash: '#/kits',
@@ -47,6 +36,8 @@ const NAV = [
     page: 'loops',
     label: 'Loops',
     icon: 'loop',
+    // The union across installs, by the owner's ruling; the page lists the picked install's.
+    countTitle: 'Templates across every install',
     count: (o) => o?.counts?.loops ?? null,
   },
   { hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
@@ -55,14 +46,15 @@ const NAV = [
     page: 'installs',
     label: 'Installs',
     icon: 'layers',
-    count: (o, installs) =>
-      installs ? `${installs.filter((i) => i.state === 'active').length}/${installs.length}` : null,
+    // What is installed, on or off: a host row with nothing on it is an offer, not an install.
+    count: (o, installs) => (installs ? installs.filter((i) => i.state !== 'absent').length : null),
   },
 ]
 
 const FOOT = [
   { hash: '#/docs', page: 'docs', label: 'Docs', icon: 'docs' },
   { hash: '#/activity', page: 'activity', label: 'Activity', icon: 'activity' },
+  { hash: '#/settings', page: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
 function NavLink({ n, lit, count, onNavigate }) {
@@ -76,14 +68,18 @@ function NavLink({ n, lit, count, onNavigate }) {
       >
         <Icon name={n.icon} />
         <span className="sb-label">{n.label}</span>
-        {count != null ? <span className="sb-count">{count}</span> : null}
+        {count != null ? (
+          <span className="sb-count" title={n.countTitle}>
+            {count}
+          </span>
+        ) : null}
       </a>
     </li>
   )
 }
 
-// The harness's pulse, on every page: whether the doctor is happy, how far the install
-// has drifted from its source, and when it was built. Three facts that decide whether
+// The harness's pulse, on every page: whether the doctor is happy, how many local edits the
+// install holds, and when it was built. Three facts that decide whether
 // anything else on screen can be trusted. The voice sits under them as a button, because
 // switching it is the one rebuild the sidebar offers. A named card (a region), so a
 // landmark list reaches it by name. Its facts are ONE install's (the default's overview): once
@@ -103,11 +99,11 @@ function Vitals({ overview, onOpenVoice, tag }) {
       <div>
         <span>doctor</span>
         <b className={!d ? '' : d.ok ? 'good' : 'bad'}>
-          {!d ? 'not run' : d.ok ? 'clean' : `${d.problems.length} to fix`}
+          {!d ? 'checking' : d.ok ? 'clean' : `${d.problems.length} to fix`}
         </b>
       </div>
       <div>
-        <span>drift</span>
+        <span>local edits</span>
         <b className={drift ? 'warn' : ''}>{overview.diff ? drift : 'n/a'}</b>
       </div>
       <div>
@@ -161,7 +157,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
           </span>
         </span>
       </button>
-      {/* One list of every page, Docs and Activity last: the spacer sits under it, so the
+      {/* One list of every page, the FOOT entries last: the spacer sits under it, so the
           vitals card is what the rail's foot holds. */}
       <ul className="sb-list">
         {[...NAV, ...FOOT].map((n) => (

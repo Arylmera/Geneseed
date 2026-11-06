@@ -7,6 +7,7 @@
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
 import { CLAUDE_STYLE, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -15,6 +16,7 @@ import {
   postureOfDir, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
+import { emitOf, pickedInstall } from '../inspect/status.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { readText, isFile } from '../lib/fs.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
@@ -50,12 +52,14 @@ export function fleetSort(list, of) {
 }
 
 /**
- * `[target, root]` of THE DEFAULT INSTALL — the one a request that names no install reads — or
- * null when no install is active.
+ * `[target, root, emit]` of THE DEFAULT INSTALL — the one a request that names no install reads —
+ * or null when no install is active. The three are `selectView`'s arguments: the emit travels
+ * because a repo with two project installs has one root marker, the last emit's.
  *
- * It is the first ACTIVE install in the console's one install order (`fleetSort`): host order
- * (opencode, claude, bob, openclaude), then global before project, then the order
- * `installTargets` found them.
+ * It is the install the user chose (`POST /api/default-install`, `pickedInstall`) while that one is
+ * still active, else the first ACTIVE install in the console's one install order (`fleetSort`):
+ * host order (opencode, claude, bob, openclaude), then global before project, then the order
+ * `installTargets` found them. A stale pick falls through in silence: it never breaks the console.
  * There is no viewed install to pick any more (the topbar selector and `POST /api/view` are
  * gone): a page that wants another install names it on the request. The console once opened
  * on the OpenCode global dir unconditionally, and on a Bob-only machine (reported 2026-10) it
@@ -66,8 +70,8 @@ export function defaultView(targets = installTargets()) {
   const active = targets.filter(([host, scope, root]) => {
     try { return installState(root, host, scope) === 'active'; } catch { return false; }
   });
-  const pick = fleetSort(active, ([host, scope]) => [host, scope])[0];
-  return pick ? [viewCfg(...pick), pick[2]] : null;
+  const pick = pickedInstall(active) ?? fleetSort(active, ([host, scope]) => [host, scope])[0];
+  return pick ? [viewCfg(...pick), pick[2], emitOf(pick[0], pick[1])] : null;
 }
 
 /**
@@ -118,9 +122,17 @@ export function webState(theme = null, target = null) {
     // beside it rather than inside so `/api/overview` (fetched after every mutation) does not
     // carry every group.
     _doctorRun: null,
+    // The warm-up run still in flight, a promise settled when its thread ends (`warmDoctor`).
+    _doctorJob: null,
     // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
     // it re-renders on its own key change, so `refresh()` leaves it alone.
     renderMemo: null,
+    // `apiFleet`'s per-install reads, made on first use; dropped with `_inv`, or aged out there.
+    _fleetReads: null,
+    // `memoCounts`' last answer, on the daemon's state; every refresh and re-point drops it.
+    _counts: null,
+    // The emit `selectView` was told, which outranks any marker; null reads the markers.
+    _knownEmit: null,
     // True for a per-install view (`installView` in actions.mjs): `refresh` must never re-point
     // it at another install, since the request named THIS one.
     pinned: false,
@@ -157,8 +169,10 @@ export function webState(theme = null, target = null) {
     },
   });
   Object.defineProperty(st, 'doctor', {
+    // NULL WHILE THE WARM-UP RUNS, and only then: a pending verdict, which the console draws as
+    // "checking" and asks again for. Blocking here would put the run back on the event loop.
     get() {
-      if (st._doctor === null) st.runDoctor();
+      if (st._doctor === null && st._doctorJob === null) st.runDoctor();
       return st._doctor;
     },
   });
@@ -169,6 +183,7 @@ export function webState(theme = null, target = null) {
     st.stampDoctor(problems, themes, groups);
   };
   st.stampDoctor = (problems, themes = [], groups = []) => {
+    st._doctorJob = null; // a run still in flight started earlier: this verdict is the newer one
     st._doctor = { ok: !problems.length, problems, checked_at: stampMinute(Date.now()) };
     st._doctorRun = { themes, groups };
   };
@@ -181,6 +196,7 @@ export function webState(theme = null, target = null) {
    * `installedDefaults()`.
    */
   st.detectEmit = () => {
+    if (st._knownEmit) return st._knownEmit;
     for (const d of [st.root, st.target]) {
       try {
         const em = path.join(d, '.geneseed-emit');
@@ -202,17 +218,22 @@ export function webState(theme = null, target = null) {
    * and a Diff or a Restore would then overwrite it in the wrong dialect. The theme/posture/mode
    * SIGILS are different: for claude/bob they live in the ROOT carrier (`themeOfDir` scans it);
    * for openclaude they live ONLY in the data dir's nested `.openclaude/CLAUDE.md`, since its
-   * root carrier is deliberately left untouched (host-compat B1/I1).
+   * root carrier is deliberately left untouched (host-compat B1/I1). `emit`, when the caller knows
+   * which install this is, settles the dialect; the root's marker cannot when two hosts share it.
    */
-  st.selectView = (target, root = null) => {
+  st.selectView = (target, root = null, emit = null) => {
     st.target = target;
     st.root = root || target;
+    st._knownEmit = emit;
     st.emit = st.detectEmit();
     const host = hostOf();
     st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || 'neutral';
     readMarkers(host);
     st._inv = null;
+    st._fleetReads = null;
+    st._counts = null;
     st._doctor = null;
+    st._doctorJob = null;
   };
   /** This state alone. `refresh` below is what callers use: it also reaches every view. */
   st.refreshOwn = ({ doctor = true } = {}) => {
@@ -223,7 +244,10 @@ export function webState(theme = null, target = null) {
     const def = doctor && !st.pinned ? defaultView() : null;
     if (def && !samePath(def[0], st.target)) { st.selectView(...def); return; }
     st._inv = null;
-    if (doctor) st._doctor = null;
+    st._fleetReads = null;
+    st._counts = null;
+    // The job goes too: what it read may be what this mutation changed, so its answer is dropped.
+    if (doctor) { st._doctor = null; st._doctorJob = null; }
     st.emit = st.detectEmit() || st.emit;
     const host = hostOf();
     st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || st.theme;
@@ -240,15 +264,50 @@ export function webState(theme = null, target = null) {
   return st;
 }
 
+// Several times the slowest run seen on a loaded machine: a run past this has hung.
+const WARM_DOCTOR_LIMIT_MS = 180_000;
+
 /**
- * Run the doctor once in the background, right after the server binds, so the first
- * `/api/overview` finds a verdict instead of paying the ~3.6 s itself. Still synchronous once it
- * starts — the event loop is blocked for that run — so a request landing mid-run waits for it,
- * no longer than it would have. The catch is not optional: a throw inside `setImmediate` is
- * uncaught and would kill the daemon; a failed warm-up just leaves the cache cold.
+ * Run the doctor once right after the server binds, ON ITS OWN THREAD. On the event loop this run
+ * held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s. Until it
+ * lands `st.doctor` is null and `/api/doctor` waits on the promise this returns.
+ *
+ * A verdict is stamped only while its job is still the current one: `refresh`, `selectView` and a
+ * newer run all clear `_doctorJob`, and the daemon must not serve what a mutation made stale. A
+ * failed warm-up, like the old one, just leaves the cache cold: the next ask runs in line. The
+ * `error` listener is not optional, an unheard worker error is uncaught and kills the daemon.
+ * `unref`: a stopping daemon does not wait for it.
+ *
+ * A HUNG run would leave `/api/doctor` unanswered and the console polling for good, so past
+ * `limitMs` it is stopped and stamped as a FAILED verdict: unknown is never a green. Re-run clears it.
  */
-export function warmDoctor(st) {
-  setImmediate(() => {
-    try { if (st._doctor === null) st.runDoctor(); } catch { /* cold cache, computed on demand */ }
+export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS) {
+  if (st._doctor !== null || st._doctorJob !== null) return st._doctorJob;
+  let worker;
+  try {
+    worker = new Worker(new URL('./doctor-worker.mjs', import.meta.url),
+      { workerData: { theme: st.theme } });
+  } catch { return null; }
+  worker.unref();
+  const job = new Promise((done) => {
+    const limit = setTimeout(() => {
+      if (st._doctorJob === job) {
+        const said = `[doctor] the warm-up run did not finish in ${limitMs / 1000} s, so nothing was checked`;
+        st.stampDoctor([said], [], [{ check: 'warm_up', label: 'Warm-up run', problems: [said] }]);
+      }
+      worker.terminate();
+    }, limitMs);
+    limit.unref();
+    worker.once('message', (r) => {
+      if (st._doctorJob === job) st.stampDoctor(r.problems, r.themes, r.groups);
+    });
+    worker.once('error', () => { /* cold cache, computed on demand */ });
+    worker.once('exit', () => {
+      clearTimeout(limit);
+      if (st._doctorJob === job) st._doctorJob = null;
+      done();
+    });
   });
+  st._doctorJob = job;
+  return job;
 }

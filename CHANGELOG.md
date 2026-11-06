@@ -8,6 +8,91 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.0.0] — 2026-11-06
+
+Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.config/geneseed`, and existing stores fold into it on the next global emit. Breaking: see Removed.
+
+### Added
+- **A change report tells you when a rule or memory file changed outside a session's approved writes.** A session records each store file's size and time at its start, and compares at the end of each turn. It detects a change; it does not prevent one. Geneseed's own learn and fold writes are excused. See [Hooks](docs/concepts/hooks.md#the-change-report).
+- **A drafted rule has a reminder.** `geneseed status` gets a `drafts` row, and a session that reads the shared tier gets one line, while `.fold-state.json` holds pending items.
+- **The Overview shows session-start hook size against its budget**, and warns when it is near the limit or content was cut.
+- **The shared tier goes live.** A global emit in a host's own config directory creates `~/.config/geneseed/` and seeds `user-rules.md`, `PROFILE.md`, `geneseed-wiki.jsonc`, `excludes.json`, `memory/` and `notes/`. Global installs name these locations as absolute paths, and state the rule order: project over host over shared. Project installs and default builds keep their bytes. No emit grants a directory permission. `geneseed doctor` adds a note when a rendered path differs from the run-time one. `geneseed diff` also lists the notes in the tier.
+- **The web console meets the shared tier.** On a global install the console reads and edits the tier's rules, profile, memory and wiki manifest. What the harnesses share is shown once and names no harness: Rules, Profile, Memory and the Overview's *Needs you* each list the shared store one time, tagged `shared`, and a project install keeps its own entry. `geneseed uninstall` prints where the tier lives and never touches it, whatever `--archive-memory` says.
+
+- **Rules show their cost, and pending rules show their text.** Each rule row on the Rules page gives its token cost, and the page gives one total. A read-only *Pending* section lists what waits in `user-rules.draft.md`, and says that a pending rule still binds on its host and that the `rule` skill decides it.
+
+- **The fold moves existing stores into the shared tier.** Each global emit in a host's own config directory copies facts, agent lessons, self-improvement notes and exclude paths into the tier, and moves a profile or wiki manifest there when the tier holds only a seed. It prints one line per host and nothing on a second run. A differing profile or wiki stays in force, with a pointer in `user-rules.draft.md`. A host rule with the same title and body as a shared rule merges; any other goes to the draft and stays in the host file, still binding, until the `rule` skill records your decision. Approve moves it to the shared file under a new number, reject keeps it on that host. Nothing is deleted: after every copy is read back, the old store moves to `archived-memory/<stamp>/`, and a failed copy keeps it readable until the next emit retries. A host installed after an `exclude add` now gets the repo-side wiring on its emit, so the first upgrade can write `.bob/rules/geneseed.md` and `settings.local.json` in an excluded repo. A downgrade is not automatic: restore the archived store by hand.
+
+- **`--shared-tier on` lets a project install read the machine tier.** It is off by default, so default builds keep their bytes. On gives a read-only, labelled view before the project's docs. `setup`, `--help`, the web toggle and `status` state the benefit and the token cost.
+- **The Claude hook renders the wiki.** It prints the same header lines as the OpenCode plugin, inside its own budget.
+- **`status` and `rebuild-all` warn about a legacy wiki name.** A `wiki.jsonc` or `wiki.json` still in place is named, with what it renames to.
+- **`migrate --dry-run` lists orphans.** It names the root `AGENT.md` and the folder of a retired or merged skill that no manifest owns, and says that such a folder may be yours: if it is not, move it by hand. Nothing moves it.
+- **The 24 remaining `experimental` entries are `approved`.** The status stays valid for a new entity.
+- **The console's motion has one token scale.** `--dur-*` and `--ease-*` in `styles.css` now set every duration and curve, in CSS and in anime.js. A duration moved to the nearest step. Curves were unified too: `ease` became `ease-out`, a near-twin of `--ease-swing` merged into it, and Spotlight's anime.js curve became `outExpo`. Each JS animation keeps its `settle()`.
+- **You can choose the default install.** On the Installs page, *Make default* on any active install sets the install that the console's pickers start on and that a request naming no install reads. The `install` and `theme` lines of `geneseed status` follow it. The choice is machine-wide, in `default-install.json` in the shared tier. If that install is removed or disabled, the console goes back to the fixed host order.
+
+### Changed
+- **The console gives each thing one home and one word.** `docs/DESIGN.md` now holds the term table, and the console follows it: *in sync*, *local edits*, *install*, *voice*, *skin*, *Run doctor*. A gate never prints its ledger key. Skin and accent live only in the Appearance popover, the lens only in the Overview header. Kit switches live only on the Kits page; `#/installs/kits` opens it. Settings is a rail entry of its own, and `#/installs/server`, `#/settings` and `#/about` open it. The footprint lives only in the Hosts panel. Memory and Notebook live only on Personal: the Library loses both kinds, its badge counts what it lists, and their old addresses open the Personal tabs. The Library's *Personal* skill category is now *Custom*.
+- **The Overview keeps one header across its five views.** The lenses that shared a skin's name are now Genome and HUD, the Operator sub-view is Readout, and the Journal keeps the sub-view control. A browser that stored `cultivar` or `operator` keeps its lens.
+- **Every install picker reads *Install:*, in one place.** A page's picker sits right above the heading of the view it acts on.
+- **Rules and Profile say less.** Each intro is two sentences and a Docs link. The shared scope is stated once, in the Personal header. The rule count is stated once, at the head of each file's list, and a row no longer repeats `shared` or its file's usual scope. The *What the agent knows about you* card is gone: the tabs carry its figures.
+- **`/api/installs` rows carry `shared`.** The field moved from the `/api/fleet` rows to the row base they both spread, so both have it, and the console reads it from `useInstalls`. `sharedTier` stays a project install's switch.
+- **The console reads better without a mouse.** On a phone the Docs page comes first in the DOM, as it does on screen. Docs pages go H1 then H2 whatever level the source starts at. On a coarse pointer, controls in a row or list reach 44 px. Garden pads answer a tap and the arrow keys. List panes pad their loading state.
+- **Every console count covers every install, deduped, and equals what its page lists.** `/api/overview` `counts` now reads the same lists the pages show, so the rail, the Library, the Constitution and each Overview lens print one figure. Wiki and setup files join the fleet lists. The Constitution counts its rules, on or off, and no longer the Ethos sections. The Installs badge is one figure: what is installed. The Installs tabs lose their one-install badges, and an Overview row loses its memory-fact count.
+- **`MEMORY.md`, `NOTEBOOK.md` and a folder's README leave the Memory and Notebook lists.** They are never counted. They stay readable by name.
+- **Install names use the host's label everywhere.** A tag now reads `BOB (IBM) · global` or `my-repo · Claude Code`. A KPI card titles its scope *Highest install*, and the Docs host switch shows only on a page that differs by host.
+- **The Hosts table fits beside its panel at 1440 px.** Path moves under the name, and Voice and Footprint leave the row: the side panel has them.
+- **OpenCode asks you itself before a rule or memory write.** The guard used to refuse the first write and pass any re-issue, so an agent could release its own refusal. A write to `user-rules.md`, the rule draft or a memory file now gets the host's own prompt, through `permission.edit` keys and, on OpenCode 2, the `evaluate` hook. The check reads the file a write lands on, so a link, a `..` spelling or an NTFS stream no longer passes, and it covers a project install's own store. A file-tool write the host cannot prompt for is refused. On OpenCode 1, an "always" on an edit approves every later edit, so the guard refuses those writes until OpenCode restarts.
+- **Bob refuses rule and memory file-tool writes.** They were a warning and the call went through. Bob has no prompt, so they now exit 2, and its move and delete tools count as writes.
+- **Shell is not a boundary, and the docs now say so.** Only parsed forms are read: a redirect, `tee`, `cp`, `mv`, `rm`, `sed -i`. One that lands in a store asks on Claude Code and OpenCode 2, is refused on OpenCode 1, and warns on Bob. The host's own command permission is the backstop for everything else.
+- **The guard reads every path a call carries.** A decoy `patchText` or a second path key no longer hides the target, which also closes that route past the secret-file refusal.
+- **The package closes its deep imports.** `package.json` gains an `exports` field that opens only `package.json`, so `import 'geneseed/js/…'` now fails. The three `bin` commands are not affected.
+- **A guard refusal on OpenCode 2 opens with `BLOCKED, not a missing tool: `**, because OpenCode prints it as `No tool named "…"`.
+
+### Deprecated
+- **`$GENESEED_MEMORY` and `$GENESEED_HARNESS`.** They keep working, and the CLI prints one warning on stderr when one is set. Removal is planned for 6.0.
+
+### Removed
+- **The console's rule limit.** The 15-rule and 1,500-token budget, its meter on the Personal page and the "getting heavy" warning are gone: the console reports the token total and sets no ceiling. The `rule` skill now weighs that total too, not a rule count.
+- **BREAKING: `sync-self` and the dead positionals are gone.** `upgrade` takes only a theme, so `upgrade imperial` still works and `upgrade main imperial` is an error. `bootstrap` no longer takes `ref` or `extra`.
+- **`anamnesis/` is no longer read as a store.** The memory resolver and the session files drop it, because on Windows it matched a vault named `Anamnesis/` by case folding. `status` reports a leftover store.
+- **The `quiz` skill is part of `teach`.** `teach` now also runs the drill, feynman and gap-check shapes, and `/quiz` still opens it through the alias.
+- **The legacy process carrier guard.** `rebuild-all`, `upgrade`, `migrate`, `status` and the web console no longer detect an install whose carrier names `process 8`, and no longer skip it or warn about it. The floor is a 3.7.0 install (the comms pack); see the upgrade guide.
+- **`migrate` no longer classifies the wiring shape.** The stamp alone was always the trigger, so its value was only printed.
+- **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.
+
+### Fixed
+- **The console tells a pending read from a failed or empty one.** The Overview, Library and Activity show `Loading` until a first read lands, and no count before its data. The Constitution no longer shows "always", "Instruction" or an extra *Gated* row before the picked install is read, and says so when that read fails.
+- **The Overview's Sync cell draws a bar only for stale or edited files.** Otherwise it states one result: *No edits*, or *3 linked by you*. The New here meter appears after the first page read.
+- **Console copy says what is true.** Kits no longer mention a topbar selector. Activity reads *1 session*. Doctor states that it builds this install's theme. The garden's hint works on touch, and its *Sakura* button is *Pink blossom*. An empty Activity names no host.
+- **The console's Memory page names the shared store.** On a tier install it shows the emit's note and the tier's paths.
+- **`geneseed memory rm --purge` no longer deletes a file of a repo that is no install.** A `memory/` beside the cwd, or under `./Harness`, came ahead of the shared tier. The order is now `--memory`, `$GENESEED_MEMORY`, `$GENESEED_HARNESS`, a project install in the cwd or `./Harness`, the shared tier, then the OpenCode config store. A `memory/` counts as a project store only when an emit made it: a known `.geneseed-emit`, `.geneseed-version` beside it and `MEMORY.md` in it. Any other is reached through `--memory`. `status`, `memory list` and a hand-run `learn` follow, and `memory rm` prints the store it acted on. The OpenCode learn plugin keeps its own order, which still ends in a bare `./memory`; it only writes there.
+- **The console no longer takes a 4.x machine folder for the shared tier.** `~/.config/geneseed` holds `installs.json`, `bricks/` and `loops/` on 4.x, and `default-install.json` can create it. The console now tests what the tier holds, its `memory/` or a session file, so until the fold it edits the host files that the hooks read.
+- **`geneseed status` and `rebuild-all` survive an account with no home directory.** With no `$XDG_CONFIG_HOME`, the scan of the tier crashed the verb.
+- **The fold names a hand-written line in a host `MEMORY.md`.** Such a line stops loading once the tier rebuilds the index, and so does a pointer to a file that is not a fact. The `[shared]` line now lists `memory/MEMORY.md` as left in the archive. Each file on that line names its own archive.
+- **Help and emit text match the shared tier.** A global emit no longer says that memory lives in `<cfg>/memory`. `migrate`, `uninstall`, `memory`, `exclude`, `bootstrap` and `learn --memory` state what they do on 5.0, and the upgrade guide says what is safe between install and rebuild.
+- **The Installs tables no longer widen the phone layout.** Their hidden "Selected" headers escaped the scroll box and made the page 702 px wide.
+- **A lens chosen with Cultivar › Lineage open now takes effect.** A lens change goes back to the Status direction.
+- **The Overview offers Update only when the pull can run.** A clone with local changes, no upstream, a detached HEAD or a diverged branch showed an Update button that the job then refused. While the clone's own check runs, the chip says so.
+- **A cold web console answers at once.** The doctor that warms the daemon now has its own thread, so a first Overview takes about a second where it took four or more, and the boot splash no longer stalls into Retry. Until the verdict lands the console says it is checking, then reads the fleet again. A run that hangs is stopped after three minutes and reads as a failed doctor.
+- **A warm Overview does less.** `/api/setup` counts the inventory once per source state, consumers that mount together share one fetch, and the Ledger starts without waiting for `/api/installs`. The Library loads its Markdown and agent glyphs on demand.
+- **The console renders an install's reference once.** One memo now serves the daemon and every per-install view, `/api/diff` reads it, and installs alike in host and every axis share a render.
+- **`setup` and `rebuild-all` are no longer refused for an npm install inside a git project with no commits.** The gate now asks whether Geneseed's own root is a checkout, and a repository with no commits has no pending record to honour.
+- **`geneseed migrate --dry-run` reports on a migrated machine.** It stopped at the stamp and printed nothing about what the next emit would do. It now prints the fold report for each global install.
+- **The web console finds a `wiki.json` manifest.** It stopped at `wiki.jsonc`, while the plugin and the guard also read the older name.
+- **Concurrent installs no longer lose a registry row.** Two processes could each load `installs.json` and the later write dropped the other's root. A record and the prune on read now take a bounded lock, and the prune keeps a row recorded during its walk.
+- **A `learn` hook payload with a transcript and no event name reaches the shared store.**
+- **`geneseed update` no longer rolls back a healthy pull when the doctor gate cannot finish.** A doctor timeout is now reported as a gate that did not finish. The pull stays, nothing is rebuilt, and the exit code is 1. The next update runs the gate again before it rebuilds. A real doctor failure still rolls back.
+- **An install registry write is no longer lost in silence.** On Windows a rename over `installs.json` can be refused for a moment. The write now waits it out within a small bound, and a write that still fails is reported on stderr.
+- **The source stamp survives a file deleted during its walk.**
+- **`Done gate: off` is honoured on a `CLAUDE.md` carrier.** The hook read only `AGENT.md`, so the line was ignored.
+- **`diff` and `validate` ask their own host.** A stale `AGENT.md` no longer answers for an install whose host reads another carrier.
+- **`AGENTS.md` no longer loads twice on Claude Code.** The hook leaves it out when `CLAUDE.md` imports it, and, from v2.1.277, when no `CLAUDE.md` exists.
+- **A stray `Harness/` moves to `archived-Harness/<stamp>`.** It was deleted before, which lost notes, rules and a profile. `.gitignore` gains the name.
+- **A failed wiki rename is reported.** The build said nothing when it could not rename a legacy wiki file.
+- **`rebuild-all` and the `migrate --dry-run` fold preview survive an account with no home directory.** A Claude Code or OpenClaude project stopped the rebuild; its exclude of the global preamble is now skipped.
+- **`status` and the console count memory facts by one rule.** A directory named like a fact no longer counts on the console's Overview, and `status` no longer drops a fact file it cannot read.
+
 ## [4.32.0] — 2026-11-05
 
 Minor: shell writes reach the rule gate, a weakened test is reported at the end of the turn, a loop `pass` cannot hide a skipped check, and the `feature` and `bugfix` loops prove their tests. Run `geneseed rebuild-all` once after updating to get the new hooks, agents and loops.

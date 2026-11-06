@@ -1,32 +1,21 @@
 /**
  * The per-theme install animation the LINE wizard plays.
  *
- * P7c, and the one leftover of that phase that is NOT the declared curses panel. P5i ported
- * `_setup_lines` and left this out with a note — "belongs to P7 with the rest of the terminal
- * layer" — and the rest of the terminal layer turned out to be the panel, which was rejected
- * (`tests/unit/no_panel.test.mjs` asserts it stays gone). This module is the part
- * that has nothing to do with curses: it draws on the ORDINARY terminal, with cursor-up
- * escapes and a sleep, and its only caller is a function that already crossed.
+ * It draws on the ORDINARY terminal, with cursor-up escapes and a sleep, and its only
+ * caller is a function that already crossed. There is no full-screen panel
+ * (`tests/unit/no_panel.test.mjs` asserts it stays gone).
  *
- * SO IT IS NOT IN `js/ui/tui.mjs`, DELIBERATELY. That module carries a structural assertion that
+ * IT IS NOT IN `js/ui/tui.mjs`, DELIBERATELY. That module carries a structural assertion that
  * it contains no escape sequence at all — the thing that makes "the panel is declared" a
  * measurement instead of a promise. This file necessarily contains `\x1b[{n}A`, so putting it
- * there would have turned that assertion red and invited someone to weaken it. A line-mode
- * animation and a full-screen panel are different subsystems in the reference too: they live
- * in different files there and they do here.
+ * there would have turned that assertion red and invited someone to weaken it.
  *
- * WHAT THE PYTHON DOES THAT THIS DOES NOT, and it is one line. `_anim_ok` calls
- * `os.system("")` on Windows, whose only purpose is the side effect of making the console
- * enable VT/ANSI processing; it is not a probe and its return value is discarded. Node's
- * console writer already enables virtual-terminal processing on Windows when stdout is a TTY
- * (libuv does it when the stream is opened), so the effect is present and the call is not
- * needed — which is fortunate, because it is a `child_process` spawn and this port is barred
- * from those. The consequence is that the reference's `except Exception: return False` arm
- * around it has no counterpart here. That arm needs `cmd.exe` to be unlaunchable on a machine
- * that has already reached an interactive wizard.
+ * NO VT/ANSI ENABLING CALL. Node's console writer already enables virtual-terminal
+ * processing on Windows when stdout is a TTY (libuv does it when the stream is opened), so
+ * nothing needs to spawn a process to switch it on — and this module is barred from
+ * `child_process`.
  *
- * WHAT GATES IT. Little, now: the recorded snapshot corpus that replayed `art_for`, `_place`,
- * `_tile`, `_height`, `anim_ok` and `play_line` is gone with the reference.
+ * WHAT GATES IT. Little:
  * `tests/unit/wizard.test.mjs` asserts the wizard still plays the animation, and in the right
  * place; `tests/unit/no_panel.test.mjs` that this file is the one allowed its cursor escapes.
  */
@@ -168,11 +157,10 @@ export const DEFAULT = 'neutral';
  *
  * `Object.hasOwn`, not `ART[theme] ?? ART[DEFAULT]`. `ART['constructor']` is a function on
  * the prototype chain and therefore not nullish, so the `??` spelling would hand a Function
- * back to `play_line` where the reference hands back the neutral theme. The third table in
- * this port to carry the trap — `_icon` and `_mark` were the first two — and the corpus
- * names all four inherited keys.
+ * back to `playLine` where the neutral theme is wanted. `_icon` and `_mark` carry the same
+ * trap.
  */
-export function artFor(theme) {
+function artFor(theme) {
   return Object.hasOwn(ART, theme) ? ART[theme] : ART[DEFAULT];
 }
 
@@ -182,10 +170,9 @@ const cut = (s, a, b) => Array.from(s).slice(a, b).join('');
 /**
  * `shutil.get_terminal_size((80, 24)).columns`.
  *
- * `parseIntStrict` and not `parseInt`, and the corpus has a case for exactly that: Python's `int()`
- * refuses `'80x'` outright and `get_terminal_size` swallows the ValueError into the fallback,
- * where `parseInt('80x')` is a cheerful 80. A width one column off is invisible in a terminal
- * and loud in a byte comparison. `<= 0` is the reference's own guard, which is why `'0'` and
+ * `parseIntStrict` and not `parseInt`: a strict parse refuses `'80x'` outright and the
+ * fallback applies, where `parseInt('80x')` is a cheerful 80. A width one column off is
+ * invisible in a terminal and loud in a byte comparison. `<= 0` is the guard, which is why `'0'` and
  * `'-5'` fall through to the fallback rather than producing a zero-width canvas.
  */
 function terminalColumns() {
@@ -206,14 +193,14 @@ function terminalColumns() {
  * unconditional refusal would disable the animation on the only platform whose users get the
  * line wizard by default.
  */
-export function animOk() {
+function animOk() {
   if (process.env.GENESEED_NO_ANIM || process.env.GENESEED_TUI_PLAIN) return false;
   if (!process.stdout.isTTY) return false;
   const term = (process.env.TERM || '').toLowerCase();
   if (term === 'dumb' || term === '') {
     if (process.platform !== 'win32') return false;
   }
-  // The reference's `os.system("")` goes here; see the module header for why it does not.
+  // No VT-enabling call is needed; see the module header.
   return true;
 }
 
@@ -270,10 +257,9 @@ const sleep = (ms) => {
 /**
  * `theme_anim.play_line` — scroll the themed sprite, then settle on the static card.
  *
- * Never raises: the reference wraps the animation in `except Exception` and degrades to the
- * static card, and `_setup_lines` wraps the whole call again in a bare `except: pass` marked
- * "cosmetic only — never block a successful install". Both layers are kept. A failed
- * animation must not be able to fail an install that already succeeded.
+ * Never raises: the animation degrades to the static card, and the caller wraps the whole
+ * call again ("cosmetic only — never block a successful install"). Both layers are kept. A
+ * failed animation must not be able to fail an install that already succeeded.
  */
 export function playLine(theme, ok = true) {
   const art = artFor(theme);

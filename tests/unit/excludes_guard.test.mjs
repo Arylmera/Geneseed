@@ -257,6 +257,67 @@ test('git-gate DOES ask in the same tree when it is not excluded', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
+// B8: the shared list (`<machineDir>/excludes.json`). A GLOBAL install reads it beside its own
+// list; a project install never does, so a folder excluded for the global harness cannot silence
+// a project install that lives inside it.
+
+function sharedExcludes(xdg, folders) {
+  const dir = path.join(xdg, 'geneseed');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'excludes.json'),
+    JSON.stringify({ excludes: folders.map((f) => ({ path: f })) }));
+}
+/** An install dir whose own list is empty; `global` stamps the `-global` emit marker. */
+function bareInstall(tmp, name, global) {
+  const cfg = excludesCfg(path.join(tmp, name), []);
+  if (global) fs.writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+  return cfg;
+}
+
+test('sovereignBypass reads the shared list for a global install only', () => {
+  sandboxProcessHome();
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'vault');
+    fs.mkdirSync(repo, { recursive: true });
+    const xdg = process.env.XDG_CONFIG_HOME;
+    const global = bareInstall(sb.path, 'g', true);
+    const project = bareInstall(sb.path, 'p', false);
+    inDir(repo, () => {
+      assert.equal(sovereignBypass(global), false, 'an empty shared list excluded a folder');
+      sharedExcludes(xdg, [repo]);
+      assert.equal(sovereignBypass(global), true, 'the shared list did not silence the global install');
+      assert.equal(sovereignBypass(project), false, 'the shared list silenced a project install');
+      // The host's own list still works, and a corrupt shared file costs only itself.
+      fs.writeFileSync(path.join(xdg, 'geneseed', 'excludes.json'), '{not json');
+      assert.equal(sovereignBypass(global), false);
+      assert.equal(sovereignBypass(excludesCfg(path.join(sb.path, 'own'), [repo])), true);
+    });
+  } finally { sb.cleanup(); restoreProcessHome(); }
+});
+
+test('context is silent for a global install in a folder only the shared list names', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = path.join(sb.path, 'vault');
+    fs.mkdirSync(repo, { recursive: true });
+    fs.writeFileSync(path.join(repo, 'README.md'), '# v');
+    fs.writeFileSync(path.join(repo, 'context.json'), JSON.stringify({
+      context: [{ path: 'README.md', load: 'eager', description: 'the readme' }],
+    }));
+    const xdg = path.join(sb.path, 'xdg');
+    const env = { ...process.env, XDG_CONFIG_HOME: xdg };
+    const run = (root) => spawnHook(['context', '--root', root], '', { cwd: repo, env }).stdout;
+    const global = bareInstall(sb.path, 'g', true);
+    const project = bareInstall(sb.path, 'p', false);
+    assert.notEqual(run(global), '', 'control: nothing is excluded yet, so context must speak');
+    sharedExcludes(xdg, [repo]);
+    assert.equal(run(global), '', 'the shared list did not silence the global install');
+    assert.notEqual(run(project), '', 'the shared list silenced a project install');
+  } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
 // `harness exclude add|remove|list`.
 //
 // Every test below runs under its OWN sandboxed home: `excludeAdd` writes into each detected
@@ -298,6 +359,37 @@ test('exclude add and remove round-trip across every detected install', () => {
       assert.deepEqual(readJson(path.join(cfg, 'excludes.json')).excludes, []);
     }
     assert.ok(!(readJson(localPath).claudeMdExcludes || []).length);
+    assert.ok(!fs.existsSync(path.join(repo, '.bob', 'rules', 'geneseed.md')));
+  });
+});
+
+// B8: the verb writes the shared list (paths only; the `wired` receipts stay per host) and wires
+// every global install, and a remove takes the folder out of both.
+test('exclude add writes the shared list and wires every install; remove clears both', () => {
+  withExcludes(['claude', 'bob'], ({ tmp, cfgs }) => {
+    const shared = path.join(process.env.XDG_CONFIG_HOME, 'geneseed', 'excludes.json');
+    const repo = path.join(tmp, 'vault');
+    fs.mkdirSync(repo, { recursive: true });
+    assert.equal(excludeRemove(repo).ok, false);
+    assert.ok(!fs.existsSync(shared), 'a remove that found nothing created the shared file');
+
+    assert.equal(excludeAdd(repo).ok, true);
+    assert.equal(excludeAdd(repo).ok, true);   // idempotent: one shared entry
+    assert.deepEqual(readJson(shared).excludes, [{ path: asPosix(resolvePath(repo)) }]);
+    assert.ok(fs.statSync(path.join(repo, '.bob', 'rules', 'geneseed.md')).isFile(), 'bob not wired');
+    assert.ok(readJson(path.join(repo, '.claude', 'settings.local.json')).claudeMdExcludes
+      .includes(asPosix(resolvePath(path.join(cfgs.claude, 'CLAUDE.md')))), 'claude not wired');
+    assert.ok(entryFor(cfgs.claude, repo).wired.claude_md_excludes, 'the receipt stays in the host file');
+
+    // A folder only the shared list names (a fold put it there) lists, and removes.
+    const ghost = path.join(tmp, 'ghost');
+    fs.writeFileSync(shared, JSON.stringify({ excludes: [{ path: asPosix(repo) }, { path: asPosix(ghost) }] }));
+    const snap = excludesSnapshot();
+    assert.equal(snap.excludes.length, 2);
+    assert.ok(snap.excludes.some((e) => resolvePath(e.path) === resolvePath(ghost) && e.hosts.length === 0));
+    assert.equal(excludeRemove(ghost).ok, true);
+    assert.equal(excludeRemove(repo).ok, true);
+    assert.deepEqual(readJson(shared).excludes, []);
     assert.ok(!fs.existsSync(path.join(repo, '.bob', 'rules', 'geneseed.md')));
   });
 });

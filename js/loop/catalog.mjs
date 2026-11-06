@@ -16,16 +16,15 @@
  * user's file, so the int/float distinction `parseJson` preserves has nowhere to matter.
  */
 import { readdirSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { readText, isFile, isDir } from '../lib/fs.mjs';
 import { frontmatter } from '../hosts/memory-files.mjs';
 import { SRC, stripAuthorNotes } from '../build/source.mjs';
 import { checkGraph } from './graph.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
 
 export function userLoopsDir() {
-  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(base, 'geneseed');
+  return machineDir();
 }
 
 const KEBAB = /^[a-z0-9][a-z0-9-]*$/;

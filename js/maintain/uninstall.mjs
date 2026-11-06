@@ -31,7 +31,7 @@
  * the caller — `api_install_toggle` — and P6i ports it, so the pair arrives in the module
  * whose thirteen private helpers it shares (`pruneAncestors`, `settingsFile`, `claudeMdPath`,
  * `managedOf`, `ownedOf`, `installAgentEntry`, `unmergeOpencodeJson`, `rmtreeQuiet`, …),
- * exactly as `_harness_mcp.py` keeps them in one file. Deactivate is `_uninstall_global` with
+ * in one file. Deactivate is `_uninstall_global` with
  * `move` where it has `unlink`, plus an inverse; splitting them would have duplicated the
  * owned-file walk and the ancestor prune a fourth time.
  *
@@ -68,6 +68,8 @@ import {
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
+import { archiveStore } from '../hosts/memory-files.mjs';
 import { comparePaths, isAbsolutePath } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
@@ -102,7 +104,7 @@ function rmtreeQuiet(p) {
 
 /** `Path.unlink()` inside a `try: ... except OSError: pass`. */
 function unlinkQuiet(p) {
-  try { unlinkSync(p); } catch { /* as the Python's bare except OSError */ }
+  try { unlinkSync(p); } catch { /* best effort */ }
 }
 
 /**
@@ -114,7 +116,7 @@ function unlinkQuiet(p) {
  * file that could not be removed, and the whole matrix came back INCOMPLETE.
  */
 function rmdirQuiet(p) {
-  try { rmdirSync(p); } catch { /* as the Python's except OSError */ }
+  try { rmdirSync(p); } catch { /* best effort */ }
 }
 
 /** `not any(d.iterdir())` — and False for a path that is not a readable directory. */
@@ -148,7 +150,7 @@ function pruneAncestors(start, stop) {
  * The manifest's `owned` list, unlinked one by one with the ancestor prune, returning
  * `[removed, failed, kept]`.
  *
- * The third copy of this loop in `_harness_mcp.py` and the reason it is one function here:
+ * One function because three callers share this loop:
  * `_uninstall_global` (rooted at the target), `_claude_uninstall` (rooted at the cfg dir) and
  * `_opencode_project_uninstall` (rooted at `.opencode/`, and the only one that PREFIXES its
  * failure strings) differ in the root and in the label, which are the two arguments. The
@@ -225,7 +227,7 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
   '.geneseed-footprint', VERSION_MARKER];
 
 /**
- * `_harness_mcp._unmerge_opencode_json` — drop one `instructions` entry, leave every other
+ * Drop one `instructions` entry, leave every other
  * key intact.
  *
  * `denyNames`, Task 4 (O-1): the denies this install's manifest records writing
@@ -286,35 +288,7 @@ export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
   return true;
 }
 
-/**
- * `_harness_mcp._archive_store` — move a runtime store aside to a sibling
- * `archived-<name>/<timestamp>/`.
- *
- * NEVER a delete. Memory is the one thing in this system a user cannot rebuild, so the
- * destructive verb's most destructive option is still a move; `_archive_memory` is the same
- * function with `memory` hardcoded and is not ported separately because the only caller that
- * reaches it (`_uninstall_global(archive_memory=True)`) is called with `False` by
- * `_install_uninstall`, which is the CLI's only path in.
- *
- * `renameSync` rather than a copy-then-delete: the destination is a SIBLING of the source, so
- * it is the same device by construction and `shutil.move`'s cross-device fallback has nothing
- * to do. ponytail: rename, and the day a store can live on another volume this needs the
- * copy path back.
- */
-export function archiveStore(store) {
-  // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
-  // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
-  // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
-  // "YYYY-MM-DD HH:MM:SS"; stripping the punctuation and reinserting one dash reproduces
-  // the exact `YYYYMMDD-HHMMSS` shape the padStart version built by hand.
-  const stamp = new Date().toLocaleString('sv-SE').replace(/\D/g, '').replace(/^(\d{8})/, '$1-');
-  const dest = path.join(path.dirname(store), `archived-${path.basename(store)}`, stamp);
-  mkdirSync(path.dirname(dest), { recursive: true });
-  renameSync(store, dest);
-  return dest;
-}
-
-/** `_harness_mcp._claude_md_path` — where the manifest says the managed block lives. */
+/** Where the manifest says the managed block lives. */
 function claudeMdPath(cfg, managed) {
   const rel = ((managed && managed.claude_md) || {}).rel || 'CLAUDE.md';
   return resolvePath(path.join(cfg, rel));
@@ -331,7 +305,7 @@ function ownedOf(man) {
 }
 
 /**
- * `_harness_mcp._claude_uninstall` — reverse a Claude-style install at `cfg`.
+ * Reverse a Claude-style install at `cfg`.
  *
  * The survivors gate is the part worth reading twice. A locked owned file must NOT take the
  * manifest and markers with it: the manifest is this install's only qualifying signal
@@ -366,7 +340,7 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
 }
 
 /**
- * `_harness_mcp._uninstall_global` — reverse a global install at `target` via its manifest.
+ * Reverse a global install at `target` via its manifest.
  *
  * Host-aware at the top, and that dispatch is the whole reason a Claude/Bob/OpenClaude global
  * install and an OpenCode one can share one entry point: the Claude family has no
@@ -395,7 +369,7 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode', force 
 }
 
 /**
- * `_harness_mcp._install_agent_entry` — the `instructions` entry to drop.
+ * The `instructions` entry to drop.
  *
  * A global install wires the ABSOLUTE posix path; a project install wires the relative
  * `…/AGENT.md` the emit recorded, read back off the live config so a bundle sub-dir layout
@@ -428,7 +402,7 @@ export function installAgentEntryOf(instr) {
 }
 
 /**
- * `_harness_mcp._opencode_project_uninstall` — reverse a per-repo OpenCode emit.
+ * Reverse a per-repo OpenCode emit.
  *
  * Two shapes, and which one runs is decided by the manifest's PRESENCE. With one,
  * `.opencode/` is unlinked file by file so a hand-added agent or plugin under it survives;
@@ -480,7 +454,7 @@ function opencodeProjectUninstall(root, force = false) {
   return result;
 }
 
-/** `_harness_mcp._install_data_dir` — where the manifest and the runtime stores live. */
+/** Where the manifest and the runtime stores live. */
 function installDataDir(root, host = 'opencode', scope = 'global') {
   if (scope === 'project' && CLAUDE_STYLE.includes(host)) {
     return path.join(root, hostSpec(host).projectMarker);
@@ -489,7 +463,7 @@ function installDataDir(root, host = 'opencode', scope = 'global') {
 }
 
 /**
- * `_harness_mcp._owned_dirs_for` — the dirs the reversal was supposed to have emptied.
+ * The dirs the reversal was supposed to have emptied.
  *
  * EXISTENCE is the retry signal, not emptiness: the reversals only `rmdir` a directory they
  * found empty, so a survivor here means either a locked file inside it or the `rmdir` itself
@@ -508,7 +482,7 @@ export function ownedDirsFor(root, host, scope, data) {
 }
 
 /**
- * `_harness_mcp._install_uninstall` — permanently remove the install at `root`, then de-list
+ * Permanently remove the install at `root`, then de-list
  * it. Every op is best-effort and idempotent, so a partly-removed install can be retried.
  *
  * STEP 3 IS THE ONE WITH THE ARGUMENT IN IT. The ROOT markers are what the registry
@@ -670,7 +644,7 @@ function reconcileRootMarkers(root, host, scope) {
 }
 
 /**
- * `_harness_mcp._project_qualifies` — does `root` carry a REAL Geneseed project install?
+ * Does `root` carry a REAL Geneseed project install?
  *
  * The marker dir exists, is not the host's global seen from its parent (`isHostGlobalDir`, the
  * `installTargets` aliasing guard — the default `~/.claude` too, under `$CLAUDE_CONFIG_DIR`),
@@ -684,14 +658,14 @@ export function projectQualifies(root, host) {
   if (!isDir(cfg)) return false;
   try {
     if (isHostGlobalDir(host, cfg)) return false;
-  } catch { /* as the Python's bare `except Exception: pass` */ }
+  } catch { /* best effort */ }
   if (isFile(path.join(cfg, GLOBAL_MANIFEST))) return true;
   const hs = emitHostScopeOf(root);
   return Boolean(hs) && hs[0] === host && hs[1] === 'project';
 }
 
 /**
- * `_harness_mcp._uninstall_resolve` — (host, scope, root), or null.
+ * (host, scope, root), or null.
  *
  * Precedence, most-specific first, and the ORDER of the first two is the subtle one: `~/.claude`
  * is NAMED like a project marker and is the global install, never `claude:project` rooted at
@@ -740,7 +714,7 @@ export function uninstallResolve(targetArg) {
 }
 
 /**
- * `_harness_mcp._surviving_project_installs` — the PROJECT installs still on record.
+ * The PROJECT installs still on record.
  *
  * A global uninstall never cascades: each project install is self-contained, its hook
  * commands invoke the shared checkout by absolute path rather than anything under the global
@@ -752,13 +726,13 @@ function survivingProjectInstalls(removedRoot) {
   const out = [];
   for (const [host, scope, root] of registeredTargets()) {
     if (scope !== 'project') continue;
-    try { if (resolvePath(root) === rroot) continue; } catch { /* as the Python's except OSError */ }
+    try { if (resolvePath(root) === rroot) continue; } catch { /* best effort */ }
     out.push([host, scope, root]);
   }
   return out;
 }
 
-/** `_harness_mcp._print_surviving_project_inventory` — informational, never a cascade. */
+/** Informational, never a cascade. */
 function printSurvivingProjectInventory(removedRoot) {
   const survivors = survivingProjectInstalls(removedRoot);
   if (!survivors.length) return;
@@ -771,7 +745,7 @@ function printSurvivingProjectInventory(removedRoot) {
 }
 
 /**
- * `_harness_mcp._print_other_host_hits` — one message per ADDITIONAL host at the same root.
+ * One message per ADDITIONAL host at the same root.
  *
  * A repo can carry `.opencode/`, `.claude/` and `.bob/` side by side and `uninstall` only ever
  * removes the one it resolved to, so a repeat run needs to know there is more to do.
@@ -785,9 +759,18 @@ function printOtherHostHits(root, removedHost) {
   }
 }
 
+/** D8: where the tier lives, and that no uninstall touches it. Silent when there is none. */
+function printSharedTier() {
+  try {
+    const { root } = sharedPaths();
+    if (isDir(root)) {
+      printOut(`[uninstall] the shared tier at ${root} is never touched, even by the last host; `
+        + 'delete it by hand if you want it gone.\n');
+    }
+  } catch { /* no home directory: no tier to name */ }
+}
+
 /**
- * `_harness_mcp.cmd_uninstall`.
- *
  * The printing is the loud half and the deletions are the quiet one; the cells gate both. The
  * inventory at the end is informational in the strict sense — a global uninstall never
  * touches a project install, and saying so is the only thing those two branches do.
@@ -832,6 +815,7 @@ export function cmdUninstall(args) {
   }
   printOut('[uninstall] memory/ and notebook/ are kept in place (never deleted here)'
     + (stores.length ? ' — --archive-memory sets both aside.' : '.') + '\n');
+  if (scope === 'global') printSharedTier();
   if (stores.length && args.archiveMemory) {
     printOut(`[uninstall] ${stores.join(' + ')}: will be ARCHIVED to a sibling `
       + 'archived-<name>/<timestamp>/ (never deleted)\n');
@@ -887,7 +871,7 @@ export function cmdUninstall(args) {
 // directory) has no successor.
 
 /**
- * `_harness_mcp._move_tree` — move a file or dir, refusing an existing destination.
+ * Move a file or dir, refusing an existing destination.
  *
  * THE REFUSAL IS THE CONTRACT, not a safety net: the stash is what a reactivate restores
  * FROM, so silently overwriting a destination would destroy the only copy of whatever was
@@ -914,7 +898,7 @@ function moveTree(src, dst) {
 }
 
 /**
- * `_harness_mcp._stashed_kind` — which kind of install a stash holds, from its CONTENTS.
+ * Which kind of install a stash holds, from its CONTENTS.
  *
  * There is no recorded tag, on purpose. A project stash carries `.opencode/`; a global one
  * carries the moved owned files. `null` for an empty or missing stash.
@@ -927,7 +911,7 @@ function stashedKind(root) {
 }
 
 /**
- * `_harness_mcp._install_relive` — the disabled install's CONTENT was re-created live.
+ * The disabled install's CONTENT was re-created live.
  *
  * The user ran `build`/`upgrade` while disabled. The live signal is KIND-SPECIFIC and the
  * stashed kind is what picks it: a global deactivate moves AGENT.md aside (leaving the
@@ -939,7 +923,7 @@ function installRelive(root) {
   return isFile(path.join(root, 'AGENT.md'));
 }
 
-/** `_harness_mcp._install_move_list` — the rels to move aside, `ownedWithin`-guarded. */
+/** The rels to move aside, `ownedWithin`-guarded. */
 function installMoveList(root, kind) {
   let rels;
   if (kind === 'project') {
@@ -951,7 +935,7 @@ function installMoveList(root, kind) {
 }
 
 /**
- * `_harness_mcp._install_readd_entry` — put back JUST the AGENT.md `instructions` entry.
+ * Put back JUST the AGENT.md `instructions` entry.
  *
  * Deliberately a minimal inline re-add rather than the emit's own merge, whose side effects
  * (adding `permission` and `lsp: true` when absent) would clobber values the user may have
@@ -1069,7 +1053,7 @@ function restoreAll(stash, base, skip = null) {
 }
 
 /**
- * `_harness_mcp._install_deactivate` — turn an OpenCode install off without deleting a byte.
+ * Turn an OpenCode install off without deleting a byte.
  *
  * The config edit is the LAST step and the only non-move mutation, so a move failure rolls
  * back cleanly with the `instructions` entry still intact. The prune climbs from each moved
@@ -1103,7 +1087,7 @@ export function installDeactivate(root, host = 'opencode', scope = 'global') {
   return { ok: true, kind, moved: done.length };
 }
 
-/** `_harness_mcp._install_reactivate` — the inverse. */
+/** The inverse. */
 export function installReactivate(root, host = 'opencode', scope = 'global') {
   if (CLAUDE_STYLE.includes(host)) return claudeReactivate(root, scope, host);
   if (installState(root) !== 'disabled') {
@@ -1140,7 +1124,7 @@ export function installReactivate(root, host = 'opencode', scope = 'global') {
 // each independently.
 
 /**
- * `_harness_mcp._clean_host_stash` — drop this host's stash and the parent if it empties.
+ * Drop this host's stash and the parent if it empties.
  *
  * So 'disabled' never lingers as an empty marker, and a same-root other-host stash is left
  * standing.
@@ -1152,7 +1136,7 @@ function cleanHostStash(cfg, host = 'claude') {
 }
 
 /**
- * `_harness_mcp._remerge_claude_hooks` — re-merge the canonical hooks and RECORD the claims.
+ * Re-merge the canonical hooks and RECORD the claims.
  *
  * Threading the manifest's recorded claims through is what prunes stale groups; writing the
  * resulting set back is what keeps a group re-added after an interpreter or checkout move
@@ -1203,7 +1187,6 @@ function remergeClaudeHooks(cfg, root = cfg, host = 'claude') {
   }
 }
 
-/** `_harness_mcp._claude_deactivate`. */
 function claudeDeactivate(root, scope = 'global', host = 'claude') {
   const cfg = claudeCfg(root, scope, host);
   // `installState` dispatches Claude-style hosts to `claudeState(root, scope, host)`, which
@@ -1239,7 +1222,6 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   return { ok: true, kind: host, moved: done.length };
 }
 
-/** `_harness_mcp._claude_reactivate`. */
 function claudeReactivate(root, scope = 'global', host = 'claude') {
   const cfg = claudeCfg(root, scope, host);
   if (installState(root, host, scope) !== 'disabled') {

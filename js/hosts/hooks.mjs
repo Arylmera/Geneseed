@@ -23,14 +23,11 @@
  * this driver emits has no Python in its hook path at all — which is what let the interpreter
  * discovery and its exit-4 refusal be deleted rather than merely bypassed.
  *
- * Ported from `rituals/_harness_context.py` and `rituals/_harness_learn.py`, whose shared
- * primitives live in `_harness_core.py`. `rituals/harness.py` links all fourteen
- * submodules into one namespace at import time, so a Python `harness context` loads
- * ~11,600 lines and the generator behind them. This module loads none of that, and that is
- * deliberate rather than incidental: the Python originals already refuse to import `build`
- * for the marker filenames they need ("literals keep the hook dependency-free"), and
+ * This module loads none of the generator behind `build`, and that is deliberate rather
+ * than incidental: it takes the marker filenames it needs as literals to stay
+ * dependency-free, and
  * `bin/build-driver.mjs` could not be imported anyway, since its last statement runs the
- * generator. What that rule does NOT license is a second copy of a shared resolver under a
+ * generator. What that does NOT license is a second copy of a shared resolver under a
  * different name — see `./hooks-prims.mjs`, where P5d found one that had silently diverged
  * from its twin.
  *
@@ -54,10 +51,11 @@
  * and every file left behind. Absolute rather than compared is what let it survive the deletion
  * of the implementation it was once compared against.
  */
-import { readFileSync, appendFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readlinkSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
@@ -204,7 +202,7 @@ const asciiJson = (s) => JSON.stringify(s)
  * `permissionDecision` defers, and the host puts the text next to the tool result (hooks.md,
  * `additionalContext`; not seen live, no gate here runs a model turn).
  */
-export function contextNote(text) {
+function contextNote(text) {
   return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": ${asciiJson(text)}}}\n`;
 }
 
@@ -212,7 +210,6 @@ export function contextNote(text) {
  * The host reading this process's verdict — `--host` on the emitted command, `claude` when
  * absent. Module state rather than a parameter because a hook process answers exactly one
  * call: set once at the gate's entry (`guardGate`), read where the output dialect is chosen.
- * `./hooks-context.mjs` keeps its own for the same reason.
  */
 let HOST = 'claude';
 const setHost = (args) => { HOST = (args && args.host) || 'claude'; };
@@ -243,14 +240,15 @@ const confirmTail = () => (HOST === 'bob' ? 'Leave the data in place.'
  * credential in a tracked file and a history-discarding git act are wrong in every context,
  * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
- * only", see bob-code.md B3. Process 1 and process 5 are the USER's calls — a hard
- * block would make Bob unable to commit at all — so they become a warning the host
- * logs. ops-2 (Commands Must Return, the root-scan check) is a block too: a warning would let a
+ * only", see bob-code.md B3. process-1 too (owner decision, 2026-11): with no prompt, a warning
+ * let the agent write the user's rules and memory on its own say. Process 5 is the USER's call
+ * as well, but a hard block would make Bob unable to commit at all, so it stays a warning the
+ * host logs. ops-2 (Commands Must Return, the root-scan check) is a block too: a warning would let a
  * scan of every drive run for hours, and the agent loses nothing by re-targeting a directory.
  * `gate-error` is a warning too: a crashed gate that blocked every tool call would be
  * a lockout, not a safeguard, and there is no prompt through which the user could clear it.
  */
-const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5', 'ops-2']);
+const BLOCK_RULES = new Set(['law-1', 'law-4', 'rigor-5', 'ops-2', 'process-1']);
 
 /**
  * THE GATE LEDGER — one JSON line per ask, nothing per defer.
@@ -613,6 +611,27 @@ function shellWriteReason(args, command, payload) {
   return null;
 }
 
+/**
+ * A parsed shell write that lands in a rule or memory store: the reason, or null. Asked on Claude
+ * and OpenClaude, and only a warning on Bob, whose one verdict is a hard block: shell is no boundary,
+ * and command text is no ground to refuse on. Fails open, like `shellWriteReason`.
+ */
+function shellStoreReason(args, command, payload) {
+  try {
+    const base = (payload && typeof payload.cwd === 'string' && payload.cwd) || process.cwd();
+    const own = payload && payload.tool_input && payload.tool_input.cwd;
+    const cwd = typeof own === 'string' && own ? path.resolve(base, own) : base;
+    for (const t of shellWriteTargets(command, cwd)) {
+      const store = ruleGateTarget(t, args.root, cwd);
+      if (store) {
+        return `Geneseed (Persist Insight) \u2014 writing to ${store} through a shell command: a standing `
+          + 'rule, or a fact to remember? That choice is the user\'s.';
+      }
+    }
+  } catch { /* see above */ }
+  return null;
+}
+
 function gitDecide(args, payload) {
   const command = ((payload && payload.tool_input) || {}).command;
   if (typeof command !== 'string') return 0;
@@ -650,6 +669,9 @@ function gitDecide(args, payload) {
   // target cannot be replayed from a command (`bobSettingsChange`), so it blocks.
   const shellWrite = shellWriteReason(args, command, payload);
   if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite);
+  const shellStore = shellStoreReason(args, command, payload);
+  if (shellStore && HOST !== 'bob') return ask(args, 'git-gate', 'process-1', shellStore);
+  if (shellStore) err(`[geneseed] ${shellStore}\n`);
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before
   // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
@@ -670,32 +692,76 @@ export const cmdGitGate = guardGate(gitGate, 'git-gate');
  * `_rule_gate_target` — name the store a write would land in, or null for ordinary work.
  *
  * A deployed install's folder and file names are theme-INDEPENDENT by design, so this
- * matches literal names and needs no install lookup. `user-rules.md` and `MEMORY.md` are
- * Geneseed's own coinage and match anywhere; any other markdown matches only inside THIS
- * install's `<root>/memory/`.
+ * matches literal names and needs no install lookup. `user-rules.md`, `user-rules.draft.md` and
+ * `MEMORY.md` are Geneseed's own coinage and match anywhere; any other markdown matches only
+ * inside THIS install's `<root>/memory/` or the machine tier's `memory/`, or the store
+ * `$GENESEED_HARNESS` or `$GENESEED_MEMORY` names. Twin of the OpenCode guard's `ruleStoreTarget`.
+ *
+ * The test is on what the write LANDS on: as spelled, `..` and `//` folded, and with links followed,
+ * since a link from outside into a store and a store that links out are both real. On Windows a
+ * stream (`user-rules.md::$DATA`), trailing dots and spaces, a device path and this machine's admin
+ * share name the same file. A coined name matches by exact case outside a store: `docs/concepts/memory.md`
+ * is another file, on Windows too, and on Bob this is a hard block. A file that EXISTS under a coined
+ * name comes back in its true case through the link-followed form; a differently cased spelling
+ * of one that does not exist yet is not caught. `base` is the session's directory.
  */
-// The close of the process-1 text, word for word the OpenCode guard's PERSIST_ASK (tests pin
-// both). A weak model once took a refusal as leave to write the same file through a shell
-// command, so the text names the one way forward and never a switch that turns the gate off.
+// The close of the process-1 text. On Claude this is a real prompt the host shows; the OpenCode
+// guard has its own texts, because a re-issue releases nothing there. A weak model once took a
+// refusal as leave to write the same file through a shell command, so the text names the one way
+// forward and never a switch that turns the gate off.
 export const PERSIST_ASK = 'Stop and ask the user now (the rule skill). If this edit was refused, '
   + 're-issue the same edit only after they answer; never write it another way (for example '
   + 'through a shell command).';
+/** Bob's close instead: nothing there lifts the block, so nothing here may speak of re-issuing. */
+const PERSIST_BOB = 'Tell the user what you wanted to write (the rule skill).';
 
-function ruleGateTarget(p, root) {
+function ruleGateTarget(p, root, base = null) {
   if (typeof p !== 'string') return null;
+  const win = process.platform === 'win32';
   // Split on BOTH separators rather than taking a basename: a payload carrying a Windows
   // path reaches a POSIX host with its backslashes intact, and `path.basename` there
-  // returns the whole string — so the two coined names would go unrecognised exactly
+  // returns the whole string — so the coined names would go unrecognised exactly
   // where they are meant to match on whichever host reads them.
-  const name = p.split(/[\\/]/).pop().toLowerCase();
-  if (name === 'user-rules.md') return 'user-rules.md';
-  if (name === 'memory.md') return 'the memory index';
-  if (!root || !name.endsWith('.md')) return null;
+  const coined = (f) => {
+    const name = f.split(/[\\/]/).pop();
+    if (name === 'user-rules.md') return 'user-rules.md';
+    if (name === 'MEMORY.md') return 'the memory index';
+    if (name === 'user-rules.draft.md') return 'the rule draft';
+    return null;
+  };
+  const named = coined(p);
+  if (named) return named;
   try {
-    const store = normcase(resolvePath(path.join(root, 'memory')));
-    // `.parents`, so the store dir itself is not one of its own ancestors.
-    return selfAndParents(resolvePath(p)).slice(1).some((d) => normcase(d) === store)
-      ? 'memory' : null;
+    const forms = [];
+    if (p.startsWith('~')) forms.push(resolvePath(p));
+    else {
+      const spelled = !win ? p : p.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:').replace(/^[\\/]{2}[?.][\\/](?=[a-zA-Z]:)/, '')
+        .replace(/^[\\/]{2}(?:localhost|127\.0\.0\.1|\[?::1\]?)[\\/]([a-zA-Z])\$(?=[\\/]|$)/i, '$1:');
+      let abs = path.resolve(base || process.cwd(), spelled);
+      if (win) {
+        const drive = /^[a-zA-Z]:|^\\\\[^\\]+\\[^\\]+/.exec(abs)?.[0] ?? '';
+        abs = drive + abs.slice(drive.length).split('\\').map((s) => s.replace(/:.*$/, '').replace(/[. ]+$/, '')).join('\\');
+      }
+      forms.push(abs, resolvePath(abs));
+      // A dangling link has no realpath, and a write through it creates its target: follow it by
+      // hand, each hop through `resolvePath`, because a hop may pass a folder link. Links can loop.
+      for (let cur = forms[1], hop = 0; hop < 8; hop += 1) {
+        try { cur = resolvePath(path.resolve(path.dirname(cur), readlinkSync(cur))); forms.push(cur); } catch { break; }
+      }
+    }
+    const hit = forms.map(coined).find(Boolean);
+    if (hit) return hit;
+    // This install's store, the machine tier's (`~/.config/geneseed/memory`) and the two a variable
+    // points at: a path compare, each store as written and with its links followed.
+    const stores = [];
+    if (root) stores.push(path.join(root, 'memory'));
+    try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store to match */ }
+    if (process.env.GENESEED_HARNESS) stores.push(path.join(process.env.GENESEED_HARNESS, 'memory'));
+    if (process.env.GENESEED_MEMORY) stores.push(process.env.GENESEED_MEMORY);
+    const homes = stores.flatMap((s) => [path.resolve(s), resolvePath(s)]).map(normcase);
+    // `.slice(1)`, so the store dir itself is not one of its own ancestors.
+    return forms.some((f) => (win ? f.toLowerCase() : f).endsWith('.md')
+      && selfAndParents(f).slice(1).some((a) => homes.includes(normcase(a)))) ? 'memory' : null;
   } catch {
     return null;
   }
@@ -779,7 +845,8 @@ function gateConfig(p, root) {
       if (bin && t.startsWith(bin + path.sep)) return true;
       if (/^opencode\.jsonc?$/.test(path.basename(t))) return true;
       const up = [path.dirname(target), path.dirname(path.dirname(target))];
-      const homes = [...roots, ...up.filter((d) => GATE_CONFIG_MARKERS.some((m) => normcase(m) === normcase(path.basename(d))))];
+      // The machine tier is a home too, so the shared `excludes.json` is gated like a host's (a home, not a `.claude`-style marker).
+      const homes = [...roots, machineDir(), ...up.filter((d) => GATE_CONFIG_MARKERS.some((m) => normcase(m) === normcase(path.basename(d))))];
       if (homes.some((h) => GATE_CONFIG_FILES.some((f) => normcase(path.join(h, f)) === t))) return true;
     }
   } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
@@ -918,11 +985,15 @@ function diffReplaced(diff) {
   return halves.length ? halves.join('\n') : diff;
 }
 
+const RULE_PATH_KEYS = ['file_path', 'path', 'notebook_path', 'target_file', 'target', 'file', 'filename', 'destination', 'dest',
+  'new_path', 'new_name', 'old_path', 'source', 'from', 'to'];
 function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
-  // NotebookEdit names its target `notebook_path`; the settings matcher routes it here too.
-  const p = ti.file_path || ti.path || ti.notebook_path || '';
-  if (typeof p !== 'string' || !p) return 0;
+  // NotebookEdit names its target `notebook_path`; the settings matcher routes it here too. Every
+  // key is read, never the first found: Bob's move and rename tools carry two, and a harmless
+  // `path` beside the real target must not hide it from any gate below.
+  const paths = [...new Set(RULE_PATH_KEYS.map((k) => ti[k]).filter((v) => typeof v === 'string' && v))];
+  if (!paths.length) return 0;
   // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
   // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
   // MultiEdit is no longer in Claude Code's own tool table (tools-reference.md) or the
@@ -938,8 +1009,9 @@ function ruleDecide(args, payload) {
     .filter((v) => typeof v === 'string').join('\n');
   // `--no-secrets-gate`: the install switched Law I's scan off (user decision 2026-10-18). Only
   // this check stands down; the protected checks and process 1 below still run.
-  if (!args.noSecretsGate && body && !DOTENV_RE.test(p) && SECRET_RE.test(body)) {
-    return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${p} would carry a `
+  const carrier = paths.find((p) => !DOTENV_RE.test(p));
+  if (!args.noSecretsGate && body && carrier && SECRET_RE.test(body)) {
+    return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${carrier} would carry a `
       + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
       + 'tracked file.');
   }
@@ -947,9 +1019,11 @@ function ruleDecide(args, payload) {
   // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
   // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
   const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
-  const external = !bobRead && externalGate(args, p, payload);
+  const external = !bobRead && paths.map((p) => externalGate(args, p, payload)).find(Boolean);
   if (external) return ask(args, 'rule-gate', 'rigor-5', external);
-  const target = ruleGateTarget(p, args.root);
+  // A read on Bob names the store too, and that is no write to refuse.
+  const target = bobRead ? null : paths.map((p) => ruleGateTarget(p, args.root, payload && payload.cwd)).find(Boolean);
+  const p = paths[0];
   if (!target) {
     // The ownership first-write gate (./ownership-gate.mjs), last: every rule above outranks it.
     // `--no-ownership-gate`: the install switched it off (D25).
@@ -960,7 +1034,8 @@ function ruleDecide(args, payload) {
     return 0;
   }
   return ask(args, 'rule-gate', 'process-1', `Geneseed (Persist Insight) \u2014 writing to `
-    + `${target}: a standing rule, or a fact to remember? That choice is the user's. ${PERSIST_ASK}`);
+    + `${target}: a standing rule, or a fact to remember? That choice is the user's. `
+    + (HOST === 'bob' ? PERSIST_BOB : PERSIST_ASK));
 }
 export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 

@@ -199,6 +199,7 @@ export function ruleSummaries(src = SRC) {
  */
 const AUTHOR_NOTE_RE = /[ \t]*<!--[ \t]*note:[\s\S]*?-->[ \t]*\r?\n?/g;
 export function stripAuthorNotes(text) {
+  if (!text.includes('note:')) return text;   // most files: skips the blanking and the regex scan
   const masked = blankCodeSpans(text);
   const ranges = [...masked.matchAll(AUTHOR_NOTE_RE)]
     .map((m) => [m.index, m.index + m[0].length]);
@@ -554,7 +555,7 @@ export const GATE_SWITCHES = [
  */
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
-  excludeRules = [], excludeSkills = [], kits = [], ...switches
+  excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false), ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -584,6 +585,8 @@ export function makeCfg({
     excludeSkills: Array.isArray(excludeSkills) ? [...excludeSkills] : [],
     // Kits switched on for this install — off unless named, so a default build is unchanged.
     kits: Array.isArray(kits) ? [...kits] : [],
+    // The shared tier read by a PROJECT install (`--shared-tier on`); `on` from the flag, a boolean from a read-back.
+    sharedTier: sharedTier === true || sharedTier === 'on',
     // The gate switches (`GATE_SWITCHES`: `secretsGate`, `doneGate`, `deletionGate`), each armed
     // unless its `no*` arg says so in so many words: only a literal `true` disarms, so every
     // caller that never heard of a switch keeps the gate.

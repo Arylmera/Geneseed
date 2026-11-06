@@ -19,7 +19,7 @@ import { globSorted, has, isDir, isFile, srcStems } from './scan.mjs';
 import { existsSync, readdirSync } from 'node:fs';
 
 /**
- * `_harness_build._prose_mirror_problems` — the human-readable count mirrors, the ones the
+ * The human-readable count mirrors, the ones the
  * badge regex never sees.
  *
  * The README "What you get" table and the web onboarding copy each restate the law / agent /
@@ -39,7 +39,7 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
   // The README plugin count. It had drifted — the overview sentence said six while seven
   // shipped — because the project's other plugin count ({N_PLUGINS} in the web docs) reads
   // a DEPLOYED plugins dir that a markdown file in this repository never has. `plugins` is
-  // optional in `counts` (Python's `.get`, undefined here) because the corpus predates it.
+  // optional in `counts` (undefined when absent) because the corpus predates it.
   if (plugins !== undefined) {
     for (const m of readme.matchAll(/(\d+) \*{0,2}plugins/g)) {
       if (Number(m[1]) !== plugins) {
@@ -109,7 +109,7 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
     }
   }
   // N is a curated-subset size, not the total, so it is gated against the wikilinks it
-  // introduces rather than against the skill count. `[\s\S]` is Python's `re.S` dot.
+  // introduces rather than against the skill count. `[\s\S]` is a dot that crosses newlines.
   const m = /(\d+) repeatable workflows the agent can invoke by name([\s\S]*?)playbook under/
     .exec(web);
   if (m) {
@@ -140,7 +140,7 @@ export function proseMirrorProblems(readme, web, counts, skillStems, shipped = '
 const TMPL_SPEC_RE = /\{\{DIR_(AGENTS|SKILLS)\}\}\/([A-Za-z0-9_-]+)\.md/g;
 
 /**
- * `_harness_build._count_table_problems` — the hand-authored AGENT.md tables and the README
+ * The hand-authored AGENT.md tables and the README
  * badges, against `src/`.
  *
  * The tables must list EXACTLY the spec files (no dead row, no orphaned spec) and each

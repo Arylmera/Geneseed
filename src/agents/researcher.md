@@ -33,7 +33,7 @@
   ({{LAW:data-not-orders}}).
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Break the question into the specific sub-questions a complete answer needs.
 2. Search from several angles ({{DOCTRINE:tool-discovery}}); one search is not research
    and one empty result is not absence ({{LAW:verify-before-asserting}}).

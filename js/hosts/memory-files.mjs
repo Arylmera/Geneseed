@@ -9,11 +9,18 @@
  * closure (the generator now imports this file too, and its spawn ban greps for that literal)
  * and made the hook module a row in `tests/unit/hook_cli.test.mjs`'s spawn allow-list for a
  * spawn the CLI never makes. Everything here is fs-only; `hooks-learn.mjs` is the one spawner.
+ *
+ * `user-rules.md`'s parser lives here too, and the draft's format and the fold's ledger reader: the
+ * web console edits or shows through them and the fold writes through them, and the build may not
+ * import `js/web` (spec C20).
  */
-import { existsSync, mkdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
+import { isUtf8 } from 'node:buffer';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
-import { readText, writeText } from '../lib/fs.mjs';
+import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
+import { isDict } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
+import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
 
 const FRONTMATTER_RE = /^\s*---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/;
@@ -44,13 +51,24 @@ const MAP_HINT = 'Each topic file lists its facts; open the one the task needs.'
 const FACT_LINE_RE = /^- \[([^\]]*)\]\((?:\.\.\/)?([^/)]+)\.md\)(.*)$/;
 const MAP_LINE_RE = /^- \[[^\]]*\]\(topics\/[^)]+\.md\)/;
 
-/** `append_agent_lesson` — one dated bullet, capped at the newest MAX_AGENT_BULLETS. */
+/**
+ * `append_agent_lesson` — one dated bullet, capped at the newest MAX_AGENT_BULLETS.
+ *
+ * A FILE THAT IS NOT UTF-8 IS LEFT WHOLE, the fold's rule (`foldRules` in js/build/fold.mjs): the
+ * read below replaces each bad byte, so rewriting the file would change a line nobody touched.
+ * The lesson is dropped and the answer is null; the caller says so. The tier's agent files are
+ * the ones that can be hand-edited in another encoding.
+ */
 export function appendAgentLesson(memDir, agent, lesson) {
   const d = path.join(memDir, 'agents');
   mkdirSync(d, { recursive: true });
   const f = path.join(d, `${agent}.md`);
   let bullets = [];
-  if (existsSync(f)) bullets = splitLines(readText(f)).filter((l) => l.startsWith('- '));
+  if (existsSync(f)) {
+    const raw = readFileSync(f);
+    if (!isUtf8(raw)) return null;
+    bullets = splitLines(raw.toString('utf8')).filter((l) => l.startsWith('- '));
+  }
   const now = new Date();
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`
     + `${String(now.getDate()).padStart(2, '0')}`;
@@ -95,7 +113,7 @@ function globMd(dir) {
 }
 
 /** Stems that name the store's own files, never a fact — `MEMORY` is the index itself. */
-const RESERVED_STEMS = new Set(['memory', 'readme']);
+export const RESERVED_STEMS = new Set(['memory', 'readme']);
 
 /**
  * `_existing_slugs` — slugs already stored. learn never CREATES one of these; it may only
@@ -103,6 +121,16 @@ const RESERVED_STEMS = new Set(['memory', 'readme']);
  */
 export function existingSlugs(memDir) {
   return new Set(globMd(memDir).map(stem).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())));
+}
+
+/**
+ * How many facts a store holds, by the same test the console's list uses. No folder is no facts
+ * (0); a folder that cannot be listed is null, so a row says "not read" rather than "no facts".
+ * The first listing is only for that answer: `existingSlugs` reads a failure as empty.
+ */
+export function factCount(store) {
+  try { readdirSync(store); } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
+  return existingSlugs(store).size;
 }
 
 /** Lines of a text file, or null when it cannot be read. */
@@ -117,7 +145,7 @@ function readLines(p) {
 function writeIfChanged(p, text) {
   const old = readLines(p);
   if (old && `${old.join('\n')}\n` === text) return;
-  writeText(p, text);
+  writeTextAtomic(p, text);
 }
 
 /** A topic name as a file stem: `[a-z0-9-]`, any other run becomes `-`, empty becomes `misc`. */
@@ -168,6 +196,19 @@ function indexedFacts(memDir) {
 }
 
 /**
+ * What MEMORY.md holds that no index writer generated: the lines a person wrote.
+ * `generated(slug)` says whether a flat pointer to that slug counts as generated too.
+ */
+export function indexNotes(memDir, generated) {
+  return (readLines(path.join(memDir, 'MEMORY.md')) ?? []).filter((l) => {
+    const t = l.trim();
+    const flat = FACT_LINE_RE.exec(t);
+    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
+      && !(flat && generated(flat[2]));
+  });
+}
+
+/**
  * Rewrite MEMORY.md as the map: one line per topic file with its fact count.
  *
  * LINES THE MAP DID NOT GENERATE ARE CARRIED, so a note the user wrote into the index
@@ -177,11 +218,7 @@ function indexedFacts(memDir) {
  */
 function writeMap(memDir, dropFlat) {
   const idx = path.join(memDir, 'MEMORY.md');
-  const carried = (readLines(idx) ?? []).filter((l) => {
-    const t = l.trim();
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
-      && !(dropFlat && FACT_LINE_RE.test(t));
-  });
+  const carried = indexNotes(memDir, () => dropFlat);
   const tdir = path.join(memDir, TOPICS);
   const topics = globMd(tdir).map(stem).sort().map((t) => {
     const n = (readLines(path.join(tdir, `${t}.md`)) ?? [])
@@ -341,7 +378,7 @@ export function writeMemories(modelOutput, memDir, existing) {
 }
 
 /**
- * `_harness_tui_views._memory_drop_index` — remove the index line(s) naming `<name>.md`.
+ * Remove the index line(s) naming `<name>.md`.
  *
  * ITS PYTHON HOME IS THE TUI, and it is here because this is where its SIBLINGS' twins are:
  * `appendAgentLesson` writes the index lines this deletes and `consolidateMemory` rebuilds
@@ -352,7 +389,7 @@ export function writeMemories(modelOutput, memDir, existing) {
  * nothing in `js/` referenced it — which is the third time a plan's "already ported" column
  * was answered by reading rather than by trusting.
  *
- * SUBSTRING, NOT PARSE, exactly as the reference is: any line containing `(<name>.md)` goes,
+ * SUBSTRING, NOT PARSE: any line containing `(<name>.md)` goes,
  * so a hand-written index in a different shape still loses its entry. And the file is only
  * REWRITTEN when something actually changed, which keeps a delete of an unindexed fact from
  * touching the user's mtime.
@@ -377,19 +414,48 @@ export function memoryDropIndex(memDir, name) {
   }
   if (!touched) return;
   pruneTopicsDir(memDir);
-  try { writeMap(memDir, false); } catch { /* the reference swallows OSError here too */ }
+  try { writeMap(memDir, false); } catch { /* best-effort */ }
 }
 
 /** Drop every line holding `needle`; the kept lines when something went, else null. */
 function dropLines(p, needle) {
   const lines = readLines(p);
-  if (!lines) return null;        // the reference's `except OSError: return`
+  if (!lines) return null;        // unreadable: nothing to drop
   const keep = lines.filter((ln) => !ln.includes(needle));
   if (keep.length === lines.length) return null;
   try {
-    writeText(p, `${keep.join('\n')}\n`);
-  } catch { /* the reference swallows OSError here too */ }
+    writeTextAtomic(p, `${keep.join('\n')}\n`);
+  } catch { /* best-effort */ }
   return keep;
+}
+
+/**
+ * Move a runtime store aside to a sibling
+ * `archived-<name>/<timestamp>/`.
+ *
+ * NEVER a delete. Memory is the one thing in this system a user cannot rebuild, so the
+ * destructive verb's most destructive option is still a move.
+ *
+ * `renameSync` rather than a copy-then-delete: the destination is a SIBLING of the source, so
+ * it is the same device by construction and a cross-device fallback has nothing to do.
+ * shortcut: rename only, and the day a store can live on another volume this needs a copy path.
+ *
+ * `move` is `copyFileSync` for a file that must stay readable until its replacement lands.
+ */
+export function archiveStore(store, move = renameSync) {
+  // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
+  // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
+  // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
+  // "YYYY-MM-DD HH:MM:SS"; stripping the punctuation and reinserting one dash reproduces
+  // the exact `YYYYMMDD-HHMMSS` shape the padStart version built by hand.
+  const stamp = new Date().toLocaleString('sv-SE').replace(/\D/g, '').replace(/^(\d{8})/, '$1-');
+  const parent = path.join(path.dirname(store), `archived-${path.basename(store)}`);
+  // A taken name gets `-2`, …: two moves in one second must not fail the second.
+  let dest = path.join(parent, stamp);
+  for (let n = 2; existsSync(dest); n += 1) dest = path.join(parent, `${stamp}-${n}`);
+  mkdirSync(parent, { recursive: true });
+  move(store, dest);
+  return dest;
 }
 
 /**
@@ -410,4 +476,140 @@ export function consolidateMemory(memDir) {
   const added = [...facts.keys()].filter((s) => !old.has(s)).sort();
   const pruned = [...old.keys()].filter((s) => !facts.has(s)).sort();
   return { added, pruned, duplicates: dups };
+}
+
+/**
+ * `## R<n> — Title`, anchored at column 0 so a rule body's fenced code and the stub's
+ * indented format example never parse as rules.
+ *
+ * The whitespace classes are `WHITESPACE`, not `\s`: this pattern runs over a HAND-EDITED
+ * file, which is where a non-breaking space actually turns up. `\S` is its complement for
+ * the same reason.
+ *
+ * `\d` IS LEFT ASCII, and that is a declared divergence rather than an oversight, unlike
+ * `ruleFields` (`js/web/user-files.mjs`), which uses `\p{Nd}`. No theme seeds a non-ASCII rule id, no build
+ * writes one, and the web editor cannot produce one either — it writes `R<n>` itself from
+ * `max(ids) + 1`. Widening this to match would only move the gap one line down, to whatever
+ * parses the captured digits back into a number.
+ */
+const RULE_HEAD_RE = new RegExp(
+  `^##[${WHITESPACE}]+R(\\d+)[${WHITESPACE}]*[—–-]+[${WHITESPACE}]*`
+  + `([^${WHITESPACE}].*?)[${WHITESPACE}]*$`,
+);
+
+/**
+ * A line `parseRules` reads as the edge of a rule: `## ` ends the current block, and a
+ * `RULE_HEAD_RE` line opens one (a non-breaking space after `##` does the second, not the first).
+ * ONE predicate for both the parser and `ruleFields`, so a body the writer accepts can never
+ * split or forge a rule when read back.
+ */
+export const isRuleEdge = (line) => line.startsWith('## ') || RULE_HEAD_RE.test(line);
+
+const META_RE = new RegExp(`^\\((.+)\\)[${WHITESPACE}]*$`);
+
+/** `{}` when the line is body rather than metadata. */
+function parseRuleMeta(line) {
+  const m = META_RE.exec(stripWhitespace(line));
+  if (!m) return {};
+  const meta = {};
+  for (const part of m[1].split('|')) {
+    const at = part.indexOf(':');
+    if (at < 0) continue;               // `partition` with no separator — not a pair
+    const key = stripWhitespace(part.slice(0, at)).toLowerCase().replaceAll(' ', '_');
+    if (['scope', 'source', 'trial_until'].includes(key)) {
+      meta[key] = stripWhitespace(part.slice(at + 1));
+    }
+  }
+  return meta;
+}
+
+/**
+ * `user-rules.md` parsed to `[rules, warnings]`.
+ *
+ * Every rule carries its `start`/`end` LINE INDICES, which is what lets `apiRulesMutate`
+ * splice exactly one block and leave every other byte of the user's file — prose,
+ * formatting, hand-written sections — untouched.
+ * @returns {[Array<{id: number, start: number, end: number} & Record<string, any>>, string[]]}
+ */
+export function parseRules(text) {
+  const lines = splitLines(text);
+  const rules = [];
+  const warnings = [];
+  const seen = new Set();
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const m = RULE_HEAD_RE.exec(lines[idx]);
+    if (!m) continue;
+    let end = lines.length;
+    for (let j = idx + 1; j < lines.length; j += 1) {
+      if (isRuleEdge(lines[j])) { end = j; break; }
+    }
+    const rid = Number(m[1]);
+    if (seen.has(rid)) warnings.push(`duplicate rule id R${rid}`);
+    seen.add(rid);
+    let k = idx + 1;
+    while (k < end && !stripWhitespace(lines[k])) k += 1;
+    const meta = k < end ? parseRuleMeta(lines[k]) : {};
+    if (Object.keys(meta).length) k += 1;
+    rules.push({
+      id: rid,
+      title: m[2],
+      scope: Object.hasOwn(meta, 'scope') ? meta.scope : 'project',
+      source: Object.hasOwn(meta, 'source') ? meta.source : '',
+      trial_until: Object.hasOwn(meta, 'trial_until') ? meta.trial_until : '',
+      body: stripWhitespace(lines.slice(k, end).join('\n')),
+      start: idx,
+      end,
+    });
+  }
+  return [rules, warnings];
+}
+
+// The draft's block headings: the fold writes them, `parseDraft` reads them, and the rule Rite's
+// approval flow (src/skills/rule/approve.md) names them, so a change here changes that file too.
+export const draftRuleHead = (host, title) => `## Rule from ${host}: ${title}`;
+export const draftChoiceHead = (file) => `## Choose: ${file}`;
+const DRAFT_RULE_RE = /^## Rule from ([^:]+): (.+)$/;
+const DRAFT_CHOICE = draftChoiceHead('');
+
+/**
+ * The blocks of `user-rules.draft.md`, as `{title, host, key, body}`, in file order. A
+ * `## Rule from <host>: <title>` block is a pointer line, then the rule. A `## Choose: <file>` block
+ * is a question about two files, so it keeps its title alone. Every other heading (`## Renumbered`,
+ * the file's record of past decisions) ends the block before it and adds none. `key` is the
+ * pointer line's `sha256`, the block's row in the ledger.
+ */
+export function parseDraft(text) {
+  const out = [];
+  let open = null;
+  for (const line of splitLines(text)) {
+    if (line.startsWith('## ')) {
+      const rule = DRAFT_RULE_RE.exec(line);
+      open = rule ? { title: rule[2], host: rule[1], lines: [] }
+        : line.startsWith(DRAFT_CHOICE) ? { title: line.slice(3), host: null, lines: [] } : null;
+      if (open) out.push(open);
+    } else open?.lines.push(line);
+  }
+  return out.map(({ title, host, lines }) => ({
+    title, host, key: /sha256: (\w+)/.exec(lines[0] ?? '')?.[1],
+    body: host ? stripWhitespace(lines.slice(1).join('\n')) : '',
+  }));
+}
+
+/**
+ * The ledger, or an empty one. One that holds nothing counts as empty and is written whole by the
+ * next item, because a key set on `[]` never reaches the file and the item would be reported on
+ * every emit. Anything else that is no ledger throws: treating it as empty would draft every
+ * decided item again, and the failed step is what the user should see.
+ */
+export function readFoldState(shared) {
+  const blank = (v) => v === null || v === undefined || (Array.isArray(v) && !v.length);
+  if (!existsSync(shared.foldState)) return { version: 1, items: {} };
+  const text = readFileSync(shared.foldState, 'utf8');
+  const state = text.trim() ? JSON.parse(text) : null;
+  if (blank(state)) return { version: 1, items: {} };
+  if (!isDict(state) || !(blank(state.items) || isDict(state.items))) {
+    throw new Error(`${shared.foldState} is not a ledger`);
+  }
+  if (blank(state.items)) state.items = {};
+  return state;
 }

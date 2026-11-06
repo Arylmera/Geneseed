@@ -6,12 +6,11 @@
 // console's Add button and toggle, and their tests with them; the last test in this file gates
 // that the module stays without a writer.
 //
-// ⚠ THE VERB HAS NO ORACLE AND NEVER WILL. `rituals/_harness_mcp.py` is a library whose only
-// command was the uninstall path; there was no `mcp` subparser, so there is no recorded help
-// text and no acceptance cell. Every claim about `cmdMcp` below is absolute — what it prints,
+// ⚠ THE VERB HAS NO ORACLE AND NEVER WILL. It has no `mcp` subparser to record, so there is no
+// recorded help text and no acceptance cell. Every claim about `cmdMcp` below is absolute — what it prints,
 // and what it does not do — rather than a comparison.
 //
-// The `.jsonc`-preference test is a survivor of the reference's target-list tests: it is a live
+// The `.jsonc`-preference test is a survivor of the earlier target-list tests: it is a live
 // product property, and it lives under `mcpConfigFor` where the port decides it.
 import test from 'node:test';
 import assert from 'node:assert/strict';

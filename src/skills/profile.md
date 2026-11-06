@@ -7,7 +7,7 @@ the untouched stub. Phrases: "set up my profile", "create my profile", "update m
 profile". Also when an existing profile visibly contradicts how the user now works.
 
 ## Procedure
-1. Locate `PROFILE.md` beside the deployed AGENT.md and read it ({{LAW:verify-before-asserting}} — the
+1. Locate {{PROFILE_LOCATION}} and read it ({{LAW:verify-before-asserting}} — the
    real current file, not a remembered copy). The build seeds it once and never
    overwrites it; if it is genuinely absent, start from the stub's three sections
    (below) and note that a rebuild would have seeded it.
@@ -30,7 +30,7 @@ profile". Also when an existing profile visibly contradicts how the user now wor
    prose, no placeholders left standing. Keep it lean: a profile is read every
    session, and bloat dilutes the parts that matter.
 5. Show the full draft and wait for explicit consent ({{LAW:deletion-is-deliberate}}) before writing
-   `PROFILE.md`. Remind the user the file is theirs — hand-editable any time, and
+   `{{PATH_PROFILE}}`. Remind the user the file is theirs — hand-editable any time, and
    it survives updates, rebuilds, and theme switches.
 
 **Refresh flow** (on request, or when the profile has drifted): read the current

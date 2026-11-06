@@ -20,6 +20,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -30,9 +31,10 @@ import { versionVerdict, statusData, statusLines, gateSummary } from '../../js/i
 import { openclaudeDualHarnessNotes } from '../../js/inspect/doctor.mjs';
 import { NOTE, isDoctorNote } from '../../js/inspect/scan.mjs';
 import {
-  uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall, archiveStore,
+  uninstallGlobal, unmergeOpencodeJson, uninstallResolve, cmdUninstall,
   projectQualifies, installDeactivate, installReactivate, installUninstall,
 } from '../../js/maintain/uninstall.mjs';
+import { archiveStore } from '../../js/hosts/memory-files.mjs';
 import {
   emitHostScopeOf, installState, installTargets, openclaudeDualHarnessRoot,
 } from '../../js/hosts/installs.mjs';
@@ -41,6 +43,7 @@ import {
   VERSION_MARKER, GLOBAL_MANIFEST, opencodeConfigDir, opencodeShadowedInstall,
 } from '../../js/hosts/hosts.mjs';
 import { installProfile, rebuildAll, rebuildCommand } from '../../js/build/generate.mjs';
+import { RENAMED_FILES } from '../../js/build/stubs.mjs';
 import { aliasedTemp, ALIAS_SKIP } from '../helpers/alias.mjs';
 import { CONFIG, ROOT, SRC, kitMembers, loadKits, makeCfg } from '../../js/build/source.mjs';
 import {
@@ -140,7 +143,7 @@ test('the release version is read from the config, not restated', () => {
 
 test('the version verdict names all three states', () => {
   assert.match(versionVerdict(null, 'abc'), /no Geneseed install/);
-  assert.match(versionVerdict('abc', 'abc'), /up to date/);
+  assert.match(versionVerdict('abc', 'abc'), /in sync/);
   assert.match(versionVerdict('old', 'new'), /differs/);
 });
 
@@ -459,7 +462,7 @@ test('a real re-emit sweeps a stale skill deny once --exclude-skills drops it', 
     perm = JSON.parse(fs.readFileSync(target, 'utf8')).permission;
     assert.ok(!('teach' in perm.skill), 'an excluded skill kept a stale deny after a re-emit');
     // A still-wanted deny rides along unaffected.
-    assert.equal(perm.skill.quiz, 'deny', 'a still-wanted deny was swept along with the stale one');
+    assert.equal(perm.skill['learn-mode'], 'deny', 'a still-wanted deny was swept along with the stale one');
   });
 });
 
@@ -502,7 +505,7 @@ test('a deny the user wrote before the first emit is never recorded as Geneseed\
     globalReemit(d, cfg);
     const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
     assert.ok(!man.skill_denies.includes('teach'), 'a pre-existing user deny was claimed');
-    assert.ok(man.skill_denies.includes('quiz'), 'a deny Geneseed did write went unrecorded');
+    assert.ok(man.skill_denies.includes('learn-mode'), 'a deny Geneseed did write went unrecorded');
     uninstallGlobal(cfg, false);
     const skill = JSON.parse(fs.readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.skill;
     assert.deepEqual(skill, { teach: 'deny' });
@@ -848,7 +851,7 @@ function projectInstall(repo, kind, home) {
   return repo;
 }
 
-/** `os.chdir` with the reference's tearDown, which every one of these tests needs. */
+/** `os.chdir` with a restoring tearDown, which every one of these tests needs. */
 function inCwd(dir, fn) {
   const saved = process.cwd();
   process.chdir(dir);
@@ -1201,6 +1204,102 @@ test('a real registry never records a temp root, and prunes one it already holds
     else process.env.XDG_CONFIG_HOME = saved;
     fs.rmSync(cfgHome, { recursive: true, force: true });
   }
+});
+
+/** Refuse the next `times` renames, as a scanner holding the target does on Windows. */
+function withRefusedRename(times, fn) {
+  const real = fs.renameSync;
+  let left = times;
+  fs.renameSync = (...args) => {
+    if (left-- > 0) throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' });
+    return real(...args);
+  };
+  syncBuiltinESMExports();
+  try { return fn(); } finally {
+    fs.renameSync = real;
+    syncBuiltinESMExports();
+  }
+}
+
+function withRegistryIn(d, fn) {
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = path.join(d, 'config');
+  const root = path.join(d, 'install');
+  fs.mkdirSync(root);
+  fs.writeFileSync(path.join(root, '.geneseed-emit'), 'claude\n', 'utf8');
+  try { return fn(root, path.join(d, 'config', 'geneseed', 'installs.json')); } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  }
+}
+
+test('a registry write survives a rename the scanner refuses for a moment', () => {
+  // Measured on Windows: about 1 rename in 500 over a just-written file failed with EPERM under
+  // load, and the row was lost without a word. That was the flake in the prune test above.
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    withRefusedRename(2, () => registryRecord(root));
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).length, 1, 'a refused rename lost the row');
+    assert.ok(!fs.existsSync(`${file}.tmp`), 'the temp file was left behind');
+  }));
+});
+
+test('a registry write that stays refused is reported, and never breaks the build', () => {
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    const write = process.stderr.write;
+    let said = '';
+    process.stderr.write = (s) => { said += s; return true; };
+    try {
+      withRefusedRename(1000, () => registryRecord(root));
+    } finally { process.stderr.write = write; }
+    assert.match(said, /could not update the install registry/);
+    assert.ok(said.includes(file), `the report names no file: ${said}`);
+    assert.match(said, /EPERM/);
+    assert.ok(!fs.existsSync(`${file}.tmp`), 'the temp file was left behind');
+  }));
+});
+
+test('a registry that cannot be read is never overwritten', () => {
+  // Read as empty, a refused read made the next write save only its own root over every install.
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    const other = path.join(d, 'other');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.mkdirSync(other);
+    fs.writeFileSync(path.join(other, '.geneseed-emit'), 'claude\n', 'utf8');
+    const rows = `${JSON.stringify([other])}\n`;
+    fs.writeFileSync(file, rows, 'utf8');
+
+    const stderr = process.stderr.write;
+    const read = fs.readFileSync;
+    let said = '';
+    process.stderr.write = (s) => { said += s; return true; };
+    fs.readFileSync = (p, ...rest) => {
+      if (p === file) throw Object.assign(new Error('EPERM: operation not permitted, open'), { code: 'EPERM' });
+      return read(p, ...rest);
+    };
+    syncBuiltinESMExports();
+    try {
+      registryRecord(root);
+      assert.deepEqual(registryRoots(), []);
+    } finally {
+      process.stderr.write = stderr;
+      fs.readFileSync = read;
+      syncBuiltinESMExports();
+    }
+    assert.equal(fs.readFileSync(file, 'utf8'), rows, 'a refused read dropped the rows');
+    assert.match(said, /could not read the install registry/);
+
+    fs.writeFileSync(file, 'not json', 'utf8');
+    process.stderr.write = () => true;
+    try { registryRecord(root); } finally { process.stderr.write = stderr; }
+    assert.equal(fs.readFileSync(file, 'utf8'), 'not json', 'a damaged registry was overwritten');
+  }));
+});
+
+test('a missing registry is an empty one', () => {
+  withDir((d) => withRegistryIn(d, (root, file) => {
+    registryRecord(root);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).length, 1);
+  }));
 });
 
 test('--archive-memory archives a project store', () => {
@@ -2018,48 +2117,26 @@ test('a relocated CLAUDE_CONFIG_DIR never turns the default ~/.claude into a pro
   });
 });
 
-// ---------------------------------------------------------------------------------------------
-// FIX ROUND (doc-1, 4.0.0): a pre-comms carrier must be SKIPPED by `rebuild-all`, never
-// re-emitted. `doctrinesOfDir`/`excludedRulesOfDir` no longer migrate it — they read it as
-// written — so calling `driverMain` on that read-back would WRITE a fresh carrier missing
-// `comms` and still not re-addressing `process 7`/`process 8`, except now PERMANENTLY: the
-// fresh carrier carries no `process 8` text, so `legacyProcessCarrierOfDir` could never catch
-// it again. `rebuildAll` must ask before `installProfile`, not after.
-
-test('rebuild-all skips a pre-comms carrier rather than re-emitting it, and says so', () => {
+// `rebuild-all` names a wiki manifest still on its old name (M3), once, whatever else it says.
+test('rebuild-all warns about a wiki manifest still on its old name', () => {
   withDir((d) => {
     const home = path.join(d, 'home');
     const repo = projectInstall(path.join(d, 'repo'), 'claude', home);
-    const carrier = path.join(repo, 'CLAUDE.md');
-    const original = fs.readFileSync(carrier, 'utf8');
-    assert.ok(original.includes('Active packs: craft, rigor, ops, process, comms'),
-      'sanity: a fresh claude emit carries the full default pack line');
-    // Simulate an install built before the comms pack existed: `process` active with no
-    // `comms` in the marker, and the carrier's text still saying `process 8` — its old eighth
-    // rule's heading, the one signal the retired migration (and now the skip) keys on.
-    const legacy = `${original.replace('Active packs: craft, rigor, ops, process, comms',
-      'Active packs: craft, rigor, ops, process')}\n### Doctrine process 8 — One Writer Per File\n`;
-    fs.writeFileSync(carrier, legacy);
-    const before = fs.readFileSync(carrier);
-
+    const [now, olds] = Object.entries(RENAMED_FILES)[0];
+    const old = path.join(repo, olds[0]);
+    fs.writeFileSync(old, '{}');
     withHome(home, () => {
       inCwd(repo, () => {
         const [rc, out] = captured(() => rebuildAll());
-        assert.equal(rc, 0, 'skipping a legacy install is not a rebuild-all FAILURE');
-        assert.match(out, /SKIPPED/);
-        assert.match(out, /process 8/);
-        assert.match(out, /geneseed setup/);
-        assert.doesNotMatch(out, /geneseed rebuild-all/,
-          'must not point the owner at the one command guaranteed to do nothing here');
+        assert.equal(rc, 0);
+        assert.ok(out.includes(`[rebuild-all] WARN ${old} is still read under its old name; rename it to ${now}.`),
+          `no old-name warning in:
+${out}`);
       });
     }, {
       OPENCODE_CONFIG_DIR: path.join(d, 'oc-none'),
       BOB_CONFIG_DIR: path.join(d, 'bob-none'),
       OPENCLAUDE_CONFIG_DIR: path.join(d, 'openclaude-none'),
     });
-
-    const after = fs.readFileSync(carrier);
-    assert.deepEqual(after, before,
-      'rebuild-all re-emitted a pre-comms carrier instead of skipping it — permanent data loss');
   });
 });

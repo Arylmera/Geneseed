@@ -26,7 +26,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import cp, { spawnSync } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 import { makeSandbox, sandboxProcessHome, restoreProcessHome } from '../helpers/sandbox.mjs';
@@ -123,6 +124,31 @@ test('preflight reports an untracked file as READY, not dirty', () => {
   const f = path.join(CO, 'a-stray-artefact.tmp');
   fs.writeFileSync(f, 'x');
   try { assert.equal(U.preflight().code, 'ready'); } finally { fs.unlinkSync(f); }
+});
+
+test('bootstrap on a root that is no git checkout still hands off to setup', async () => {
+  // The npm install: no record can exist, so nothing is pending. Reading "no git answer" as an
+  // unknown gate stopped setup on every npm install.
+  const dotgit = path.join(CO, '.git');
+  const stashed = path.join(sb.path, 'dotgit-stashed');
+  let handedOff = false;
+  fs.renameSync(dotgit, stashed);
+  try {
+    const rc = await U.cmdBootstrap({ noSetup: false }, { handoff: () => { handedOff = true; return 0; } });
+    assert.equal(rc, 0);
+  } finally { fs.renameSync(stashed, dotgit); }
+  assert.equal(handedOff, true, 'an npm install never reached setup');
+});
+
+test('bootstrap in a git checkout where git cannot answer still refuses', async () => {
+  const saved = process.env.PATH;
+  let handedOff = false;
+  process.env.PATH = '';
+  try {
+    const rc = await U.cmdBootstrap({ noSetup: false }, { handoff: () => { handedOff = true; return 0; } });
+    assert.equal(rc, 1);
+  } finally { process.env.PATH = saved; }
+  assert.equal(handedOff, false, 'no answer from git read as nothing pending');
 });
 
 test('preflight reports a missing upstream', () => {
@@ -259,9 +285,10 @@ test('an upstream deleted on the remote and pruned by the fetch is no_upstream, 
 //
 // A SECOND fixture, because these run destructively forward through a repository's history and
 // the five above leave theirs on an orphan root. The reference mocks `_git` AND `_run_doctor`;
-// here both are real — `pullAndValidate` merges with real git and `runDoctor` spawns the copy's
-// own `bin/geneseed-cli.mjs doctor --all --no-bundle`, so the rollback is proven against a tree
-// the doctor genuinely rejects rather than against a mock told to say no.
+// here `pullAndValidate` merges with real git and `runDoctor` really spawns the copy's own
+// `bin/geneseed-cli.mjs`. The clean fast-forward meets the real `doctor --all --no-bundle`. The
+// arms after it give the gate a STAND-IN with a fixed answer: their subject is what the gate does
+// with that answer, and a full sweep costs about a minute of CPU to say nothing more about it.
 //
 // ⚠ ORDERED AND CUMULATIVE, like `MeasureUpstream` above and for a sharper reason: the collision
 // and the fast-forward are the SAME upstream commit, blocked and then allowed. That is what makes
@@ -321,13 +348,34 @@ test('a clean fast-forward passes the doctor and does not roll back', () => {
 
 test('a pulled source that fails the doctor is rolled back to the exact previous commit', () => {
   // The property the whole verb exists for: an upgrade may never leave a user on a source tree
-  // that does not validate. The fault is a REAL one the doctor really rejects — a theme missing
-  // a template key, which is the theme-parity gate — pushed upstream and pulled in.
+  // that does not validate. The fault is a REAL one — a theme missing a template key, which is
+  // the theme-parity gate — and the real doctor is shown rejecting it through `--all`, so the exit
+  // status the gate reads stays proven. The pulled tip then carries a stand-in that exits 1, so
+  // the rollback does not pay for a sweep of every theme. It records its arguments, since a
+  // passing doctor cannot show that the gate asks for every theme: a sandbox sweeps them anyway.
   const themePath = path.join(OTHER2, 'themes', 'neutral.json');
   const theme = JSON.parse(fs.readFileSync(themePath, 'utf8'));
   assert.ok('VOICE' in theme, 'neutral.json no longer has a VOICE key — this fixture is stale');
   delete theme.VOICE;
   fs.writeFileSync(themePath, `${JSON.stringify(theme, null, 2)}\n`);
+  const cli = path.join(OTHER2, 'bin', 'geneseed-cli.mjs');
+  // The gate's own argv over two themes: a sweep of all of them costs a minute.
+  const themesDir = path.join(OTHER2, 'themes');
+  for (const name of fs.readdirSync(themesDir)) {
+    if (name.endsWith('.json') && !['neutral.json', 'imperial.json', '_TEMPLATE.json'].includes(name)) {
+      fs.unlinkSync(path.join(themesDir, name));
+    }
+  }
+  const doctor = spawnSync(process.execPath, [cli, 'doctor', '--all', '--no-bundle'],
+    { encoding: 'utf8', windowsHide: true });
+  assert.equal(doctor.status, 1, `the real doctor passed a broken theme:\n${doctor.stdout}`);
+  assert.match(doctor.stdout, /missing key/);
+  git(OTHER2, 'checkout', '--', 'themes');
+  fs.writeFileSync(themePath, `${JSON.stringify(theme, null, 2)}\n`);
+  const argvFile = path.join(sb.path, 'doctor-argv.json');
+  fs.writeFileSync(cli, "import { writeFileSync } from 'node:fs';\n"
+    + `writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));\n`
+    + 'process.exit(1);\n');
   git(OTHER2, 'add', '-A');
   git(OTHER2, 'commit', '-qm', 'break theme parity');
   git(OTHER2, 'push', '-q');
@@ -338,6 +386,8 @@ test('a pulled source that fails the doctor is rolled back to the exact previous
   assert.equal(ok, false);
   assert.equal(code, 'doctor_fail');
   assert.match(msg, /rolled back/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(argvFile, 'utf8')), ['doctor', '--all', '--no-bundle'],
+    'the gate did not ask the pulled tree for a full sweep');
   // EXACT, not merely "not the broken tip": the reference asserts `reset --hard <oldsha>` and
   // the sha is the whole claim — rolling back to anything else silently moves the user.
   assert.equal(git(CO2, 'rev-parse', 'HEAD'), before, 'the rollback did not land on the old sha');
@@ -390,6 +440,53 @@ test('a rollback that would destroy an edit made during the doctor is refused, a
   }
 });
 
+test('a doctor killed at the deadline is unfinished, whatever exit code the kill left', () => {
+  // A kill on Windows can read as exit 1, which is a real failure's code, and that failure rolls
+  // back. So the deadline is judged by this process's own clock. Inside it, exit 1 is a verdict.
+  const real = cp.spawnSync;
+  cp.spawnSync = () => {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);
+    return { status: 1, stdout: '', stderr: '' };
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.equal(U2.runDoctor(CO2, 5)[0], null, 'a kill at the deadline read as a verdict');
+    assert.equal(U2.runDoctor(CO2, 60000)[0], false, 'a real exit 1 lost its verdict');
+  } finally {
+    cp.spawnSync = real;
+    syncBuiltinESMExports();
+  }
+});
+
+test('a doctor that cannot finish keeps the pull and does not call it bad', () => {
+  // A busy machine ran the gate past its deadline, and `geneseed update` rolled back a healthy
+  // pull and said it FAILS validation. A doctor that never finished has no verdict: the checkout
+  // stays on the pulled commit and the message says the source is unchecked. The stand-in
+  // outlives a short deadline, which is an argument so that this does not wait 300 s.
+  fs.writeFileSync(path.join(OTHER2, 'bin', 'geneseed-cli.mjs'), 'setTimeout(() => {}, 120000);\n');
+  git(OTHER2, 'add', '-A');
+  git(OTHER2, 'commit', '-qm', 'a doctor that never finishes');
+  git(OTHER2, 'push', '-q');
+  git(CO2, 'fetch', '-q');
+
+  const before = git(CO2, 'rev-parse', 'HEAD');
+  const logged = [];
+  try {
+    const [ok, code, msg] = U2.pullAndValidate((m) => logged.push(m), 2000);
+    assert.equal(ok, false, 'a gate with no verdict let the update go on to the rebuild');
+    assert.equal(code, 'doctor_unfinished');
+    assert.equal(git(CO2, 'rev-parse', 'HEAD'), git(CO2, 'rev-parse', 'origin/main'),
+      'a doctor that never finished rolled the pull back');
+    assert.match(msg, /did not finish/);
+    assert.match(msg, /geneseed update/, 'the message names no way to get the verdict');
+    assert.doesNotMatch(`${msg}\n${logged.join('\n')}`, /FAILS validation|problem legend/,
+      'a doctor that never finished was reported as a failed one');
+  } finally {
+    // The tests below drive the copy's CLI, which this one replaced: put the healthy tree back.
+    git(CO2, 'reset', '-q', '--hard', before);
+  }
+});
+
 // ---------------------------------------------------------------------------------------------
 // `NoCellCanReachTheNetwork` — the positive control for the ban this whole file runs under.
 
@@ -415,24 +512,18 @@ test('a real fetch over https is refused by transport, not by luck', async () =>
 });
 
 // ---------------------------------------------------------------------------------------------
-// `AliasTests` — `update`, `sync-self` and the unknown verb.
+// `AliasTests` — `update`, the removed `sync-self` and the unknown verb.
 //
-// THE REFERENCE MOCKS `upgrade` AND COUNTS CALLS; there is nothing here to mock, and there does
-// not need to be. `syncSelf` is literally `return upgrade()`, so "it delegates" is structural
-// rather than observable — but what the delegation DROPS is observable, and that is the property
-// worth having. `upgrade(ref)` opens by LOGGING that a ref is ignored, so `sync-self v1.2.3` and
-// `update v1.2.3` differ in their very first line: one warns, one has nothing to warn about
-// because the ref never reached `upgrade` at all. Both then reach the same preflight, which is
-// the delegation itself, observed rather than counted.
+// 5.0.0 REMOVED `sync-self` and the dead `ref` positional of `upgrade` (nothing machine-written
+// called them), so the tests that pinned their quirks — the warning that a ref is ignored, the
+// ref dropped before `upgrade` sees it — went with them. What stays is
+// what a user can still observe: `update` reaches the same preflight as `upgrade`, the theme is
+// the one positional, a second positional is a parse error, and `sync-self` is an unknown verb.
 //
-// DRIVEN THROUGH THE PUBLIC ENTRY, out of the copied checkout, so the CLI table's wiring is gated
-// too — `sync-self` pointing at `cmdUpgrade` instead of `cmdSyncSelf` is mutation M21 and would
-// additionally re-read the ref as a THEME. The recorded cell
-// `sync-self/the-ref-positional-is-accepted-and-never-re-read-as-a-theme` owns the theme half;
-// this owns the warning half, from a fixture where the ref is not a theme name.
+// DRIVEN THROUGH THE PUBLIC ENTRY, out of the copied checkout, so the CLI table's wiring is gated.
 //
 // THE TREE IS MADE DIRTY ON PURPOSE. `preflight` reports dirty before anything spawns or fetches,
-// so both runs stop at exit 3 having printed the lines under test — no network, no pull, no
+// so the run stops at exit 3 having printed the lines under test — no network, no pull, no
 // rebuild. A clean fixture would run a real upgrade for an assertion about its first line.
 
 /** The public entry, out of the COPY, so its `ROOT` is the copy's. */
@@ -442,34 +533,49 @@ function cli(co, ...argv) {
   return { rc: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
 }
 
-test('update warns that its ref is ignored; sync-self drops the ref before upgrade sees it', () => {
+test('update and upgrade reach the same preflight; a second positional is refused', () => {
   const f = path.join(CO2, 'README.md');
   const before = fs.readFileSync(f);
   fs.writeFileSync(f, 'a local edit, so preflight stops both runs before anything is fetched\n');
   try {
-    const up = cli(CO2, 'update', 'v1.2.3');
-    assert.equal(up.rc, 3, `update did not stop at the dirty precondition: ${up.out}`);
-    assert.match(up.out, /ref 'v1\.2\.3' is IGNORED/,
-      'update accepted a ref without saying it would be disregarded');
-
-    const ss = cli(CO2, 'sync-self', 'v1.2.3');
-    assert.equal(ss.rc, 3, `sync-self did not stop at the dirty precondition: ${ss.out}`);
-    assert.doesNotMatch(ss.out, /IGNORED/,
-      'sync-self forwarded its ref to upgrade, which then warned about a ref the reference '
-      + 'never lets it see');
-
-    // Both reached `upgrade` — without this the test above is equally satisfied by a `sync-self`
-    // that does nothing at all, which is the whole thing the reference's call count was for.
-    for (const [name, r] of [['update', up], ['sync-self', ss]]) {
-      assert.match(r.out, /update source:/, `${name} never reached upgrade`);
-      assert.match(r.out, /preflight: checking the local checkout/, `${name} never reached preflight`);
-      // WHICH precondition, because every arm of `PRE_MSG` is kind `info` and therefore exits 3.
-      // Without this, a copy that was not a git checkout at all — or had no upstream — would
-      // produce the same 3 and the same first line, and the fixture would be silently vacuous.
+    for (const verb of ['update', 'upgrade']) {
+      const r = cli(CO2, verb, 'imperial');
+      assert.equal(r.rc, 3, `${verb} did not stop at the dirty precondition: ${r.out}`);
+      assert.match(r.out, /update source:/, `${verb} never reached upgrade`);
+      assert.match(r.out, /preflight: checking the local checkout/, `${verb} never reached preflight`);
+      // WHICH precondition, because every arm of PRE_MSG is kind info and therefore exits 3.
       assert.match(r.out, /You have local changes in the Geneseed folder/,
-        `${name} exited 3 for some precondition other than the dirty tree this test planted`);
+        `${verb} exited 3 for some precondition other than the dirty tree this test planted`);
+      assert.doesNotMatch(r.out, /IGNORED/, `${verb} still has a ref to ignore`);
     }
+    // The old ref slot is gone: 'main imperial' is two positionals and the parser refuses it
+    // before anything runs (exit 2), where it used to warn and carry on.
+    const two = cli(CO2, 'upgrade', 'main', 'imperial');
+    assert.equal(two.rc, 2, `upgrade main imperial exited ${two.rc}: ${two.out}`);
+    assert.doesNotMatch(two.out, /update source:/, 'the update started before the parser refused');
   } finally { fs.writeFileSync(f, before); }
+});
+
+test('sync-self is an unknown verb since 5.0.0', () => {
+  const r = cli(CO2, 'sync-self');
+  assert.equal(r.rc, 2, `sync-self exited ${r.rc}`);
+  assert.match(r.out, /invalid choice: 'sync-self'/);
+});
+
+test('an unfinished doctor holds a direct rebuild-all and setup, as it holds upgrade', () => {
+  // The record lives under .git and `upgrade`/`bootstrap` already honour it; a direct call used to
+  // walk around it and render a source nothing had judged. A record git cannot place is the
+  // simplest one to plant, and it blocks by the same rule: nobody can say the source is checked.
+  const branch = git(CO2, 'rev-parse', '--abbrev-ref', 'HEAD');
+  const rec = path.resolve(CO2, git(CO2, 'rev-parse', '--git-path', `geneseed-doctor-pending-${branch}`));
+  fs.writeFileSync(rec, 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n');
+  try {
+    for (const verb of ['rebuild-all', 'setup']) {
+      const r = cli(CO2, verb);
+      assert.equal(r.rc, 1, `${verb} ran past an unfinished doctor: ${r.out}`);
+      assert.match(r.out, /not started: .*doctor/s, `${verb} did not say why: ${r.out}`);
+    }
+  } finally { fs.rmSync(rec, { force: true }); }
 });
 
 test('an unknown verb is rejected by the parser with exit code 2', () => {

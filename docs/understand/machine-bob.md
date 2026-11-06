@@ -10,6 +10,8 @@ Bob and the plain bundle carry the same rules, agents and skills as the other ho
 
 **Bob.** A global install writes to `~/.bob/`, or `BOB_CONFIG_DIR`. Bob does not load a global `AGENTS.md`, so the rules go into `~/.bob/rules/geneseed.md`. A per-repo install writes `AGENTS.md` instead. Hooks live in `~/.bob/settings/settings.json`. Bob runs three of them: context at session start, one combined gate before each tool call, and learn at session end. Bob has no "ask" prompt, so the gate refuses outright, and only for the checks that admit no judgement call: credentials, destructive git, a write under a project's own protected-checks list, and writes that would switch a gate off. The commit/push and memory questions become log lines. One more refusal happens only once: in an application repo whose root `AGENTS.md` has no `## Ownership` section, the session's first write is refused so the agent proposes the [ownership](../concepts/ownership.md) setup, and the same write passes after you answer. Turn it off per repo with `mode: off` in that section, for yourself in one repo with `Setup: declined <YYYY-MM-DD>` in `.geneseed/ownership.md`, or per install with `--no-ownership-gate`.
 
+**Shared by every host.** A global Bob install reads and writes the same machine-wide folder as the other hosts, `~/.config/geneseed/`: your rules, profile, memory, wiki manifest, exclude paths and notes. See [The shared tier](../concepts/shared-tier.md).
+
 **Plain bundle.** The `files` target writes `AGENT.md` and the same folders into `./Harness/` for any tool that reads `AGENT.md`. It installs no hooks and no plugins, so nothing in it is enforced.
 
 ---

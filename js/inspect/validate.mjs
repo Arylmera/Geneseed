@@ -11,7 +11,7 @@ import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs'
 import { GATE_SWITCHES } from '../build/source.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
 import {
-  doctrinesOfDir, excludedRulesOfDir, gatesOfDir, modeOfDir, postureOfDir,
+  EMIT_HOST_SCOPE, doctrinesOfDir, excludedRulesOfDir, gatesOfDir, modeOfDir, postureOfDir,
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
@@ -34,7 +34,7 @@ export const VALIDATE_USAGE = [
   'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
   '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
-  '                         [--exclude-skills SKILLS] [--kits KITS] [--no-secrets-gate]',
+  '                         [--exclude-skills SKILLS] [--kits KITS] [--shared-tier on|off] [--no-secrets-gate]',
   '                         [--no-done-gate] [--no-deletion-gate] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
@@ -44,11 +44,11 @@ export const VALIDATE_USAGE = [
 ].join('\n');
 
 /**
- * `subprocess.run(..., capture_output=True, text=True)` around an IN-PROCESS call.
+ * Capture the streams of an IN-PROCESS call.
  *
- * The reference shells to `harness.py doctor`; this calls `cmdDoctor` directly, and the
- * difference has to be undone in one place: a child's `capture_output` hands the parent
- * UNIVERSAL-NEWLINE text, so `r.stdout` holds `\n` on Windows even though the child wrote
+ * This calls `cmdDoctor` directly rather than a child, and the
+ * difference has to be undone in one place: a child's captured output is
+ * UNIVERSAL-NEWLINE text, holding `\n` on Windows even though the child wrote
  * `\r\n`. `printOut` inside `cmdDoctor` writes `\r\n`. Without the fold, the `.strip()` below
  * would leave every interior line CRLF and the re-print would double the translation.
  */
@@ -88,7 +88,7 @@ function captureStreams(fn) {
  * `buildInto` are used rather than `driverMain(['--emit', …])`: the driver writes
  * `.geneseed-emit`/`.geneseed-footprint` and records an install-registry row AFTER the
  * dispatch, so routing through it would register a temp directory that is deleted a
- * millisecond later. The reference calls the emit functions directly for the same reason.
+ * millisecond later.
  *
  * THE EMIT'S OWN STDOUT IS NOT SWALLOWED. `globalEmitProblems` above wraps its call in
  * `swallowStdout` and this deliberately does not: `_validate_only` has no `redirect_stdout`,
@@ -130,7 +130,7 @@ export function cmdValidate(args) {
     const opts = {
       theme: args.theme, footprint: args.footprint, posture: args.posture, mode: args.mode,
       trust: args.trust, doctrines: args.doctrines, excludeRules: args.excludeRules,
-      excludeSkills: args.excludeSkills, kits: args.kits,
+      excludeSkills: args.excludeSkills, kits: args.kits, sharedTier: args.sharedTier === 'on',
       ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, args[g.arg] ? false : null])),
     };
     let scanDirs;
@@ -147,16 +147,12 @@ export function cmdValidate(args) {
         scanDirs = [root];
       }
     } catch (e) {
-      // `except SystemExit as e` — a DELIBERATE refusal from the render (an unknown theme,
-      // an incomplete source), interpolated as `{e}`.
+      // A DELIBERATE refusal from the render (an unknown theme, an incomplete source).
       //
-      // THE EXIT CODE AND NOT THE MESSAGE, measured rather than assumed: the reference's
-      // render half is ALREADY this port. `_build_render.build` calls `_build_core.run_node`,
-      // which ends `raise SystemExit(res.get("exit", 1))` — an INTEGER — so every refusal
-      // that crosses the seam arrives here as `SystemExit(1)` and `str(e)` is `'1'`, not the
-      // sentence `load_theme` wrote on stderr on the way out. A port that printed `e.message`
-      // says `unknown theme 'x'` where the reference says `1`. The former Python
-      // cross-implementation corpus is what found it; nothing else could.
+      // THE EXIT CODE AND NOT THE MESSAGE: every refusal that crosses the seam arrives
+      // here as an INTEGER exit code, not the sentence `loadTheme` wrote on stderr on the
+      // way out, and the printed line is part of the verb's output. Printing `e.message`
+      // would say `unknown theme 'x'` where the output says `1`.
       if (e && e.exitCode !== undefined) {
         printOut(`[validate-only] render/emit FAILED for theme '${args.theme}' `
           + `emit '${emit}': ${e.exitCode}\n`);
@@ -172,11 +168,13 @@ export function cmdValidate(args) {
     // READ BACK OFF THE RENDER, not echoed from `args`: this line is the proof the axes reached
     // the sandbox, which an echo of the flags would print just as happily if they had not.
     const at = scanDirs[0];
-    const packs = doctrinesOfDir(at);
-    const excluded = excludedRulesOfDir(at);
-    const gates = gatesOfDir(at);
-    printOut(`[validate-only] rendered at posture=${postureOfDir(at) ?? '?'} `
-      + `mode=${modeOfDir(at) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
+    // The emit names the host whose carrier carries these lines; `files` has none to name.
+    const host = EMIT_HOST_SCOPE.get(emit)?.[0] ?? null;
+    const packs = doctrinesOfDir(at, host);
+    const excluded = excludedRulesOfDir(at, host);
+    const gates = gatesOfDir(at, host);
+    printOut(`[validate-only] rendered at posture=${postureOfDir(at, host) ?? '?'} `
+      + `mode=${modeOfDir(at, host) ?? '?'} packs=${packs ? packs.join(',') || 'none' : '?'} `
       + `excluded=${excluded.map((id) => id.replace('.', ' ')).join(', ') || 'none'}`
       // Each elided when armed, so an armed dry run prints the line it always did.
       + `${GATE_SWITCHES.filter((g) => gates[g.key] === false)
@@ -202,8 +200,8 @@ export function cmdValidate(args) {
 
   // The source-tree-wide checks (theme parity, authoring gates, AGENT.md table parity,
   // colour themes) do not depend on --out/--root/--emit at all and already live fully tested
-  // in the doctor, so they run through it rather than being re-derived. The reference SHELLS
-  // to `harness.py doctor --theme T --no-bundle`; one process is what this port has.
+  // in the doctor, so they run through it rather than being re-derived. One process: the
+  // doctor runs in-process with the theme and no bundle.
   const doctor = captureStreams(() => cmdDoctor({ theme: args.theme, noBundle: true }));
   if (stripWhitespace(doctor.out)) printOut(`${stripWhitespace(doctor.out)}\n`);
   if (stripWhitespace(doctor.err)) printErr(`${stripWhitespace(doctor.err)}\n`);

@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon.jsx'
 import { relTime } from '../lib/format.js'
 import { baseName, compact, needsYou, SessionHeader } from '../lib/activity.jsx'
 import { contextFill, detailTarget, gardenTree, treeKey } from '../lib/garden.js'
-import { PadCard, readSakura, TreeSvg } from './Activity/Bonsai.jsx'
+import { PadCard, padKeys, padLine, readSakura, TreeSvg } from './Activity/Bonsai.jsx'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -104,21 +104,34 @@ export function SessionTree({ s }) {
   const hot = pad != null ? t.pads[pad] : null
   return (
     <div className={`card pad-md act-mt gd-detail${!ended && needsYou(s) ? ' gd-needs' : ''}`}>
-      <TreeSvg
-        t={t}
-        pad={pad}
-        swaying={!ended && s.status !== 'idle'}
-        onPad={onPad}
-        px={TREE_PX}
-        label={`Bonsai of this session${ended ? ', ended' : ''}: ${legend}`}
-      />
+      {/* A group, not the image: the arrow keys walk the pads from here. */}
+      <div
+        role="group"
+        tabIndex={0}
+        aria-label="Bonsai pads, arrow keys walk them"
+        onKeyDown={(e) => padKeys(e, t.pads.length, pad, onPad)}
+      >
+        <TreeSvg
+          t={t}
+          pad={pad}
+          swaying={!ended && s.status !== 'idle'}
+          onPad={onPad}
+          px={TREE_PX}
+          label={`Bonsai of this session${ended ? ', ended' : ''}: ${legend}`}
+        />
+      </div>
       <div className="stack gap-8 act-min">
         {ended && <span className="dim act-xs">ended</span>}
         <div className="dim act-sm">{legend}</div>
+        <span className="sr-only" role="status">
+          {padLine(hot)}
+        </span>
         {hot ? (
           <PadCard pad={hot} />
         ) : (
-          <div className="dim act-xs">Hover a pad for the files it changed.</div>
+          <div className="dim act-xs">
+            Hover or tap a pad, or use the arrow keys, for its files.
+          </div>
         )}
       </div>
     </div>

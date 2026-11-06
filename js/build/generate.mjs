@@ -6,16 +6,14 @@
  * they are the last one that can be measured by a closure walk alone — `cmd_build`'s body is
  * three lines because the work is a `subprocess`, and a name walk cannot see through one.
  *
- * WHY `build` IMPORTS THE DRIVER RATHER THAN SPAWNING IT. The Python is
- * `run([sys.executable, BUILD, *extra]).returncode` — a passthrough to a second process.
- * Reproducing that shape here would mean spawning `node bin/build-driver.mjs`, and
+ * WHY `build` IMPORTS THE DRIVER RATHER THAN SPAWNING IT. Spawning would be
+ * a passthrough to a second process, and would mean spawning `node bin/build-driver.mjs`, and
  * `tests/unit/hook_cli.test.mjs`'s 'the CLI entry reaches child_process only where it is
  * declared' forbids it: the check is transitive over this entry's imports and allow-lists only
  * the modules that genuinely start processes — `web`, `upgrade`, `setup` — and P5c's argument
  * for it is that the ban should outlive them rather than be dismantled by a verb that does not.
- * It is also the wrong shape on its own terms. Python needs a second
- * process because `build.py` is a different PROGRAM; `bin/build-driver.mjs` is a module in this
- * one, and a Node CLI spawning a Node driver to do work it could do in-process is exactly
+ * It is also the wrong shape on its own terms. `bin/build-driver.mjs` is a module in this
+ * process, and a Node CLI spawning a Node driver to do work it could do in-process is exactly
  * the passthrough the whole port has been removing. So the driver's `main` is exported and
  * called directly, and the observable contract — the tree, the streams, the exit code — is
  * what the `build/*` cells of `tests/golden.mjs --cli` assert.
@@ -40,11 +38,13 @@ import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, gatesOfDir, installState, installTargets,
-  legacyProcessCarrierOfDir, modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
+  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, sharedTierOfDir, gatesOfDir, installState, installTargets,
+  modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
+import { renamedFilesIn } from './stubs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { printOut, printErr, readText, writeText, isDir } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatRepr } from '../lib/json.mjs';
 
@@ -56,8 +56,8 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
  *
  * The convention `js/build/bundle.mjs`'s `assertSourceComplete` set and `bin/geneseed-cli.mjs`
  * honours: write at the raise site, mark the throw as a DELIBERATE refusal with `exitCode`,
- * and let anything unmarked keep its stack. Python prints a traceback for an unhandled
- * exception, so dressing a crash as a one-liner would hide a bug.
+ * and let anything unmarked keep its stack, because dressing a crash as a one-liner
+ * would hide a bug.
  */
 function sysExit(msg) {
   // `printErr`, NOT a local newline translation. The first draft inlined the `\n` ->
@@ -76,8 +76,8 @@ function sysExit(msg) {
 /**
  * `_harness_build.cmd_build` — render `src/` into `./Harness`.
  *
- * `--out` defaults to the RELATIVE `"Harness"` in the generator and the Python passes no
- * `cwd=`, so the bundle lands under the invocation's directory rather than the checkout's.
+ * `--out` defaults to the RELATIVE `"Harness"` in the generator and no `cwd` is passed,
+ * so the bundle lands under the invocation's directory rather than the checkout's.
  * Calling the driver in-process keeps that: `resolveOut` resolves against `process.cwd()`
  * the same way. `build/the-bundle-follows-cwd-not-the-checkout` is the cell.
  *
@@ -95,7 +95,7 @@ function sysExit(msg) {
 const BUILD_FORWARD = [
   ['theme', '--theme'], ['emit', '--emit'], ['footprint', '--footprint'],
   ['posture', '--posture'], ['mode', '--mode'], ['trust', '--trust'], ['doctrines', '--doctrines'],
-  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['kits', '--kits'], ['out', '--out'], ['root', '--root'],
+  ['excludeRules', '--exclude-rules'], ['excludeSkills', '--exclude-skills'], ['kits', '--kits'], ['sharedTier', '--shared-tier'], ['out', '--out'], ['root', '--root'],
   ['configDir', '--config-dir'],
 ];
 
@@ -115,7 +115,7 @@ export function cmdBuild(args) {
 /**
  * `_harness_setup._setup_build_args` — the generator argv for one selection. Pure.
  *
- * The elision rules are not symmetric and the Python says why: `footprint` is ALWAYS passed,
+ * The elision rules are not symmetric: `footprint` is ALWAYS passed,
  * because omitting it when it matched the generator's default silently coupled the answer to
  * whatever that default happened to be — the moment the default moved, picking the old one
  * produced the new one. `posture`, `mode` and `trust` still elide at theirs, and none has moved.
@@ -141,7 +141,7 @@ export function cmdBuild(args) {
  */
 export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
   posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null) {
+  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null, sharedTier = false) {
   const argv = ['--theme', theme, '--emit', emit];
   if (!emit.endsWith('-global')) {
     if (out) argv.push('--out', out);
@@ -177,6 +177,8 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   // Kits elide when none is on, as skills do: no config key feeds them, so absence and `none`
   // are the same answer. Last, so an argv naming no kit is the bytes it always was.
   if (kits?.length) argv.push('--kits', [...kits].sort().join(','));
+  // The shared tier elides when off, like the kits: the default is off, so only `on` speaks.
+  if (sharedTier) argv.push('--shared-tier', 'on');
   return argv;
 }
 
@@ -240,9 +242,11 @@ export function installProfile(host, scope, root, notify = null) {
   const gates = gatesOfDir(root, host);
   // Kits on stay on (spec A3); one this checkout no longer ships drops with a notice (R2).
   const kits = kitsOfDir(root, host, notify);
+  // A project install's `Shared tier: on` stays on across a rebuild; a global install never has it.
+  const sharedTier = sharedTierOfDir(root, host);
   const out = scope === 'global' ? null : root;
   const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits);
+    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits, sharedTier);
   // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
   // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
   // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
@@ -251,7 +255,7 @@ export function installProfile(host, scope, root, notify = null) {
   return {
     host, scope, root, state: installState(root, host, scope),
     emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills,
-    kits, ...gates, argv,
+    kits, sharedTier, ...gates, argv,
   };
 }
 
@@ -269,9 +273,8 @@ export function rebuildCommand(argv) {
 /**
  * `_harness_build.cmd_rebuild_all` — re-emit every ACTIVE install in place, best-effort.
  *
- * WHY THIS IS THE VERB THAT MADE THE DRIVER'S `die` A THROW. The Python spawns one
- * `build.py` per install and reads its return code, so "continue past a failure" is what a
- * subprocess gives you for nothing. Calling `main` in-process — the route P5e established for
+ * WHY THIS IS THE VERB THAT MADE THE DRIVER'S `die` A THROW. A subprocess per install
+ * would hand back a return code, so "continue past a failure" would come for nothing. Calling `main` in-process — the route P5e established for
  * `build`, and the only one the `child_process` ban leaves — makes a `process.exit` inside
  * the generator's flag parser end the whole loop instead of one install. So `die` throws and
  * `main` converts, and `rebuild-all/one-broken-install-does-not-stop-the-rest` is the cell
@@ -283,17 +286,14 @@ export function rebuildCommand(argv) {
  * defaulted any of them would silently re-emit an install into something its owner did not
  * choose — which is the same failure mode `_footprint_of_dir`'s WARN exists to prevent, at a
  * larger scale.
- *
- * A LEGACY CARRIER IS SKIPPED, NEVER RE-EMITTED. `installProfile` (through `doctrinesOfDir`/
- * `excludedRulesOfDir`) no longer migrates a pre-comms carrier — it reads it as written. Calling
- * `driverMain` on that read-back would WRITE a fresh carrier missing `comms` and still naming
- * `process 7`/`process 8` nowhere, which deletes the one signal (`legacyProcessCarrierOfDir`)
- * that could ever have caught it again: a permanent, silent loss, and `upgrade` reaches this
- * same loop by shelling into `rebuild-all` (`js/maintain/update.mjs`'s `rebuildInstalls`), so
- * fixing it once here covers both verbs. Checked BEFORE `installProfile`, so no argv is even
- * built for it.
  */
 export async function cmdRebuildAll() {
+  // Lazy: `update.mjs` spawns git, and this module is on the static graph of the no-spawn CLI.
+  const refusal = (await import('../maintain/update.mjs')).gateRefusal();
+  if (refusal) {
+    printErr(`[rebuild-all] not started: ${refusal}\n`);
+    return 1;
+  }
   const rc = rebuildAll();
   // A console started before an upgrade keeps serving the old `index.html`; restart it — only
   // when stale, see `bounceDaemonIfRunning`. Lazy: no other verb in this module needs js/web/.
@@ -311,16 +311,8 @@ export function rebuildAll() {
     return 0;
   }
   const failures = [];
-  const skipped = [];
   for (const [host, scope, root] of targets) {
     const label = `${host}:${scope} (${root})`;
-    // Ask BEFORE `installProfile`: a legacy carrier must never reach `driverMain`, see above.
-    if (legacyProcessCarrierOfDir(root, host)) {
-      skipped.push(label);
-      printOut(`[rebuild-all] SKIPPED ${label}: pre-comms carrier (names 'process 8') — `
-        + 'run `geneseed setup` for it.\n');
-      continue;
-    }
     // The one replay that speaks when an excluded skill's name got older: status and the console
     // read the same profile on every refresh and stay silent.
     const p = installProfile(host, scope, root, (n) => printErr(`[rebuild-all] ${label}: ${n}\n`));
@@ -332,21 +324,19 @@ export function rebuildAll() {
       printErr(`[rebuild-all] FAILED ${label} (exit ${rc})\n`);
     }
   }
+  // M3: an old-name wiki manifest that survived the rebuilds (a rename failed, or the file sits
+  // where no emit looks) is named once, here, whatever else the summary says.
+  const scanned = targets.map(([, , r]) => r);
+  try { scanned.push(sharedPaths().root); } catch { /* no home dir: no tier to scan */ }
+  for (const { file, now } of renamedFilesIn(scanned)) {
+    printOut(`[rebuild-all] WARN ${file} is still read under its old name; rename it to ${now}.\n`);
+  }
   if (failures.length) {
     printErr(`[rebuild-all] ${failures.length}/${targets.length} install(s) failed: `
       + `${failures.join(', ')}\n`);
     return 1;
   }
-  const rebuilt = targets.length - skipped.length;
-  // Skipping is protective, not a failure — same convention as the install count itself
-  // already filtering to `active` targets without flagging the inactive ones. Exit 0 as long
-  // as nothing that WAS attempted failed; the per-install SKIPPED line above is the record.
-  if (skipped.length) {
-    printOut(`[rebuild-all] rebuilt ${rebuilt} install(s), skipped ${skipped.length}: `
-      + `${skipped.join(', ')}.\n`);
-  } else {
-    printOut(`[rebuild-all] rebuilt ${rebuilt} install(s).\n`);
-  }
+  printOut(`[rebuild-all] rebuilt ${targets.length} install(s).\n`);
   return 0;
 }
 
@@ -362,7 +352,7 @@ export function rebuildAll() {
  * would only cost a surrogate decode per astral character in a 400 KB document, and the
  * count is identical either way.
  */
-export function fenceFor(text) {
+function fenceFor(text) {
   let longest = 0;
   let run = 0;
   for (let i = 0; i < text.length; i += 1) {
@@ -409,8 +399,7 @@ export function buildPrompt(cfg, themeName) {
 /**
  * `_harness_build.cmd_prompt`.
  *
- * Both output paths translate newlines: the Python writes the document through
- * `sys.stdout.write` and `Path.write_text`, and BOTH are `newline=None` translators on
+ * Both output paths translate newlines, as text-mode writes do on
  * Windows. At ~10,000 newlines in a 400 KB document that is the largest byte difference this
  * port could ship, and `harness_golden` can only see half of it — the FILE half is compared
  * directly, the stdout half is folded by `subprocess`'s universal-newline decode, which is
@@ -419,7 +408,7 @@ export function buildPrompt(cfg, themeName) {
  * platform's'.
  */
 export function cmdPrompt(args) {
-  // `args.theme or "neutral"` — a literal in the Python, NOT the config's theme, so this
+  // A literal 'neutral', NOT the config's theme, so this
   // deliberately does not go through `configDefaults()`.
   const themeName = args.theme || 'neutral';
   const text = buildPrompt(makeCfg(), themeName);
@@ -509,7 +498,7 @@ function loadUserPalette(args, cfg) {
  * `_harness_build.cmd_theme` — a user colour theme in both flavours, into the live dir.
  *
  * The palette is validated BEFORE the destination is resolved and before `mkdir`, so a
- * refusal leaves no directory behind — matching the Python's statement order.
+ * refusal leaves no directory behind.
  *
  * **THAT ORDER IS NOT OBSERVABLE, and the first draft of this comment claimed it was.**
  * Swapping the two halves so a refusal creates the directory first is GREEN across all 166

@@ -1,8 +1,9 @@
 import React from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import ActivityDetail from '../pages/ActivityDetail.jsx'
+import { padKeys, padLine, TreeSvg } from '../pages/Activity/Bonsai.jsx'
 
 const okResp = (body) => ({ ok: true, json: () => Promise.resolve(body) })
 const errResp = (status) => ({
@@ -198,6 +199,73 @@ describe('ActivityDetail page', () => {
 
 // D7: a session's detail page shows its bonsai, live or ended, from the same drawing as the
 // Garden (lib/garden.js + Activity/Bonsai.jsx).
+describe('bonsai pads without a mouse', () => {
+  const walk = (key, count, pad) => {
+    const onPad = vi.fn()
+    const preventDefault = vi.fn()
+    padKeys({ key, preventDefault }, count, pad, onPad)
+    return [onPad.mock.calls, preventDefault.mock.calls.length]
+  }
+  it('the arrows walk the pads, wrapping at each end, and Escape leaves', () => {
+    expect(walk('ArrowRight', 3, null)).toEqual([[[0]], 1])
+    expect(walk('ArrowLeft', 3, null)).toEqual([[[2]], 1])
+    expect(walk('ArrowDown', 3, 2)).toEqual([[[0]], 1])
+    expect(walk('ArrowUp', 3, 0)).toEqual([[[2]], 1])
+    expect(walk('Escape', 3, 1)).toEqual([[[null]], 0])
+  })
+  it('leaves every other key to the page, and a tree with no pad alone', () => {
+    expect(walk('Tab', 3, 1)).toEqual([[], 0])
+    expect(walk('Enter', 3, 1)).toEqual([[], 0])
+    expect(walk('ArrowRight', 0, null)).toEqual([[], 0])
+  })
+  it('says the pad in words for a live region', () => {
+    expect(padLine(null)).toBe('')
+    expect(padLine({ key: null, files: [{}] })).toBe('the session: 1 file')
+    expect(padLine({ key: 'a', type: 'tester', files: [{}, {}] })).toBe('tester: 2 files')
+  })
+  it('a tap shows the pad and does not follow the link; a second tap clears it', () => {
+    const onPad = vi.fn()
+    const t = { runs: [{ p: 0, x: 0, y: 0, w: 1, c: '#000' }], pads: [{ key: null, files: [] }] }
+    const ui = (pad) => <TreeSvg t={t} pad={pad} swaying={false} onPad={onPad} px={1} />
+    const { container, rerender } = render(ui(null))
+    const g = container.querySelector('g')
+    expect(fireEvent.touchEnd(g)).toBe(false) // defaultPrevented: no click follows
+    expect(onPad).toHaveBeenLastCalledWith(0)
+    rerender(ui(0))
+    fireEvent.touchEnd(container.querySelector('g'))
+    expect(onPad).toHaveBeenLastCalledWith(null)
+  })
+
+  const tapped = () => {
+    const onPad = vi.fn()
+    const t = { runs: [{ p: 0, x: 0, y: 0, w: 1, c: '#000' }], pads: [{ key: null, files: [] }] }
+    const { container } = render(<TreeSvg t={t} pad={null} swaying={false} onPad={onPad} px={1} />)
+    return [container.querySelector('g'), onPad]
+  }
+  const at = (y) => ({ clientX: 0, clientY: y })
+
+  // A finger that travelled is a scroll: no pad, and the browser keeps the event.
+  it('ignores a touch that moved past the slop, and takes one that stayed inside it', () => {
+    const [g, onPad] = tapped()
+    fireEvent.touchStart(g, { touches: [at(0)] })
+    expect(fireEvent.touchEnd(g, { changedTouches: [at(11)] })).toBe(true)
+    expect(onPad).not.toHaveBeenCalled()
+    fireEvent.touchStart(g, { touches: [at(0)] })
+    expect(fireEvent.touchEnd(g, { changedTouches: [at(10)] })).toBe(false)
+    expect(onPad).toHaveBeenCalledWith(0)
+  })
+
+  // preventDefault on a non-cancelable event does nothing but warn in the console.
+  it('does not cancel a touchend the browser marks non-cancelable', () => {
+    const [g, onPad] = tapped()
+    const ev = createEvent.touchEnd(g, { cancelable: false })
+    ev.preventDefault = vi.fn()
+    fireEvent(g, ev)
+    expect(ev.preventDefault).not.toHaveBeenCalled()
+    expect(onPad).toHaveBeenCalledWith(0)
+  })
+})
+
 describe('ActivityDetail tree', () => {
   // A v2 session: one sub-agent running, with one file of its own, and one file by the session.
   const v2 = (over = {}) => {

@@ -15,9 +15,9 @@
  * script's own location, not from an inherited `cfg`.
  *
  * A KEY IS DELIBERATELY ABSENT FROM `cfg`, and its absence is load-bearing.
- * `js_cfg()` (_build_core.py:199) always sent `structure` and `capabilityLinkRe`, because
- * the Python originals were module-level names that TESTS MUTATE — `_OWNED` membership
- * asked one level out. This driver has no Python module to mutate, so it sends neither;
+ * The former Python driver always sent `structure` and `capabilityLinkRe`, because
+ * those were module-level names that TESTS MUTATE. This driver has no such module to
+ * mutate, so it sends neither;
  * `js/build/render.mjs:215`'s `cfg.structure ?? STRUCTURE` takes its right-hand branch for
  * that reason — a fallback that was dead code until P4, always overridden by the driver
  * that always supplies it. `capabilityLinkRe`'s equivalent fallback in
@@ -26,7 +26,7 @@
  * supplied one, so there was no longer a `cfg` left to be absent from.
  *
  * THE FOOTPRINT DEFAULT IS THE FLAG'S, NOT THE FUNCTION'S. `--footprint` defaults to
- * `lean` (build.py:354); every `emit_*`/`build` SIGNATURE defaults to `full`. A driver
+ * `lean`; every `emit_*`/`build` SIGNATURE defaults to `full`. A driver
  * that reproduced the signature default would emit a different harness in every cell while
  * every gate that calls the functions directly stayed green.
  */
@@ -45,7 +45,7 @@ import { parseJson, jsonDumpsIndent } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 // P5c moved these out of this file: `bin/geneseed-cli.mjs` needs the same four resolvers to
 // find a global install, and a resolver that decides WHERE a driver writes is the last thing
-// that should exist twice. golden.py's 259 cells are what made the move safe to attempt.
+// that should exist twice.
 import {
   GLOBAL_MANIFEST, HOSTS, resolvePath, opencodeConfigDir, claudeConfigDir, bobConfigDir,
   openclaudeConfigDir, hostCatalogsNatively,
@@ -57,7 +57,7 @@ import { seedProtectedChecks } from '../hosts/geneseed-dir.mjs';
 
 // P5d moved these out of this file for the reason P5c moved the host resolvers: `harness
 // status` renders to count, so `bin/geneseed-cli.mjs` needs the same checkout paths and the
-// same cfg. golden.py's 259 cells all build one, which is what made the move safe.
+// same cfg.
 import {
   GATE_SWITCHES, ROOT, makeCfg,
 } from './source.mjs';
@@ -99,7 +99,7 @@ export const PRIMARY_AGENT_SRC = path.join(ROOT, 'adapters', 'opencode', 'agents
  *  It is invisible on a machine whose paths are already canonical, which is every machine
  *  this ran on until GitHub's Windows runner handed it a `C:\\Users\\RUNNER~1\\...` and the
  *  two CLIs printed the same directory under two different names — a 70-byte difference in a
- *  line the former Python suite compared BYTE for byte; `tests/unit/resolve_out.test.mjs` pins
+ *  line that was once compared BYTE for byte; `tests/unit/resolve_out.test.mjs` pins
  *  it now. The
  *  argument to `resolvePath` is made absolute first so its `expanduser` cannot fire: the
  *  reference does not expand `~` here, and a bare `~` is a legal directory name. */
@@ -116,10 +116,9 @@ export function resolveOut(raw) {
  * key" no longer describes what resolves the directory; the carrier-name rule still holds.
  *
  * Computed HERE and not in the render child, and that is the inverted boundary rule doing
- * real work rather than being restated. P3b's note on the Python original: it resolves
- * through `_build_core._claude_config_dir`, an `_OWNED` name precisely because the suite
- * redirects it at a sandbox, and a redirect that stops at a subprocess half-works in
- * silence. The child must therefore never derive it — but this file is the PARENT, so
+ * real work rather than being restated. A redirect that stops at a subprocess half-works
+ * in silence, and the suite redirects the config dir at a sandbox. The child must
+ * therefore never derive it — but this file is the PARENT, so
  * deriving it is exactly this file's job, and `the host emit` receives the answer.
  *
  * POSIX spelling, per the original: `claudeMdExcludes` entries are glob patterns, where a
@@ -128,7 +127,10 @@ export function resolveOut(raw) {
 function preambleExclude(claudeMd, host) {
   if (path.basename(claudeMd) !== 'CLAUDE.md') return null;
   // OpenClaude inherited `claudeMdExcludes` from Claude Code; its global preamble is its own.
-  const globalDir = host === 'openclaude' ? openclaudeConfigDir() : claudeConfigDir();
+  let globalDir;
+  try {
+    globalDir = host === 'openclaude' ? openclaudeConfigDir() : claudeConfigDir();
+  } catch { return null; }   // no home: no global preamble to exclude, and a prior claim is kept
   return resolvePath(path.join(globalDir, 'CLAUDE.md')).split(path.sep).join('/');
 }
 
@@ -170,8 +172,7 @@ function relUnder(out, root) {
  * `_build_global._write_manifest_atomic` — temp + rename, so a torn manifest can never make
  * the next emit treat every owned file as the user's own.
  *
- * `writeText`, not `writeFileSync`: Python writes this through `Path.write_text`, so the
- * whole document is CRLF on Windows.
+ * `writeText`, not `writeFileSync`: the whole document is CRLF on Windows, as it always was.
  *
  * `jsonDumpsIndent`, not `JSON.stringify`: `json.dumps` defaults to `ensure_ascii=True` and
  * escapes every non-ASCII character, where `JSON.stringify` emits it raw. This was
@@ -297,12 +298,12 @@ function projectSurvivors(emitName) {
 }
 
 /**
- * `_build_emit.emit_opencode` — the driver body, which is what this phase actually ports.
+ * `_build_emit.emit_opencode` — the driver body.
  *
- * RENDER and WIRE already ran in Node before P4; what lived only in Python was the stage
- * either side of them: reading the previous manifest (PRE), pruning what this layer no
- * longer owns, writing the manifest atomically, and the summary line. All five stages now
- * run in one process, in the order `tests/unit/emit_phase_order.test.mjs` pins:
+ * The stage either side of RENDER and WIRE: reading the previous manifest (PRE),
+ * pruning what this layer no longer owns, writing the manifest atomically, and the
+ * summary line. All five stages run in one process, in the order
+ * `tests/unit/emit_phase_order.test.mjs` pins:
  * RENDER -> WIRE -> PRUNE -> MANIFEST -> VERIFY (opencode has no VERIFY; it writes no
  * settings file of its own).
  */
@@ -390,7 +391,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const rendered = emitOpencodeGlobalRender(
     { ...cfg, primaryAgentSrc: PRIMARY_AGENT_SRC },
     {
-      theme: args.theme, cfgDir, out,
+      theme: args.theme, cfgDir, out, sharedRoot: args.sharedRoot,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
       oldOwned, agentPath, oldDenies, oldEdit, oldHashes,
     });
@@ -415,8 +416,7 @@ function emitOpencodeGlobal(cfg, args, out) {
     + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
     + `${stats.nWorkflows} workflow file(s), AGENT.md, ${memStatus}, ${nbStatus}, `
     + `${cfgName} (no context.json)${extra}. `
-    + 'The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to '
-    + 'override.\n');
+    + 'Facts live in the shared tier, and the learn plugin finds it by itself.\n');
   return cfgDir;
 }
 
@@ -444,7 +444,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // `preambleExclude`'s own docblock). Spelling it as a call rather than a literal is what
   // makes that a measured `null` instead of an assumed one.
   const rendered = emitClaudeRender(cfg, {
-    theme: args.theme, cfgDir, claudeMd, scope, host,
+    theme: args.theme, cfgDir, claudeMd, scope, host, sharedRoot: args.sharedRoot,
     out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
@@ -475,11 +475,9 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   // external edit, a bug in the merge) is loud now instead of surfacing as hooks that
   // quietly never fire.
   //
-  // On the Python driver this stage runs in Python AFTER a Node child did the wiring, which
-  // makes it a live cross-implementation check on every build. Here both halves are Node, so
-  // that particular property is gone and only the self-check remains — worth stating,
-  // because it is a real reduction in what a Claude emit proves about itself, and the thing
-  // that replaces it is the acceptance matrix rather than anything at runtime.
+  // Both halves are Node, so this proves only the emit against itself — worth stating,
+  // because it is a limit on what a Claude emit proves about itself; the acceptance matrix
+  // covers the rest, not anything at runtime.
   //
   // SILENT ON SUCCESS, which is its own coverage hazard: a clean emit prints nothing, so
   // deleting this call is byte-identical in all 259 cells. `test_verify_reports_an_orphaned
@@ -520,8 +518,8 @@ const CLAUDE_SHAPED = {
     summary: (at, r) => `[geneseed] claude-global -> ${at}: ${r.nAgents} subagents, `
       + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
       + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
-      + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
-      + 'GENESEED_HARNESS only to relocate memory.\n',
+      + '~/.claude/plugins is never touched. Hooks call the harness by absolute path. '
+      + 'Facts live in the shared tier.\n',
   },
   // Per-repo: CLAUDE.md at the root + a `.claude/` layer.
   claude: {
@@ -585,23 +583,22 @@ const claudeShaped = (name) => (cfg, args, out) => {
 };
 
 /**
- * build.py:437-466 — the POST stage, which writes markers and records the install and
+ * The POST stage, which writes markers and records the install and
  * wires NOTHING. `tests/unit/emit_phase_order.test.mjs`'s 'the post-emit marker stage wires
  * nothing' classifies it, and that is why it stays after the dispatch.
  *
- * `writeText`, never `writeFileSync`: Python's `Path.write_text` opens in text mode with
- * `newline=None` and translates the trailing `\n` to CRLF on Windows. A marker written
- * with a bare LF differs from Python's in every cell on this platform.
+ * `writeText`, never `writeFileSync`: it translates the trailing newline to CRLF on Windows,
+ * and a marker written with a bare LF differs from every other emitted file there.
  */
 function writeMarkers(markerDir, emit, footprint) {
   try {
     mkdirSync(markerDir, { recursive: true });
     writeText(path.join(markerDir, '.geneseed-emit'), `${emit}\n`);
-    // Written for EVERY emit (build.py:443, unconditional), unlike the theme marker:
+    // Written for EVERY emit (unconditional), unlike the theme marker:
     // the claude/bob/openclaude PROJECT installs never call build(), so this is their only
     // footprint record. Read by harness._footprint_of_dir, which defaults to 'full'.
     writeText(path.join(markerDir, '.geneseed-footprint'), `${footprint}\n`);
-  } catch { /* best-effort, exactly as build.py:444-445 — a marker hiccup never fails a build */ }
+  } catch { /* best-effort: a marker hiccup never fails a build */ }
 }
 
 /**
@@ -609,9 +606,8 @@ function writeMarkers(markerDir, emit, footprint) {
  * needs, and the reason it is a named export rather than a fifth branch in `main`.
  *
  * `harness diff` renders an 'expected' copy of a deployed install into a temp dir and
- * compares it file by file. The Python spells that `HOSTS[host]["emit_global"](theme,
- * out=..., cfg=<tmp>, footprint=...)`, where `cfg` overrides the target the emit would
- * otherwise resolve. This is that call, and the override is threaded as `args.cfgDir` through
+ * compares it file by file. `cfg` overrides the target the emit would otherwise resolve;
+ * the override is threaded as `args.cfgDir` through
  * the `emit*Global` bodies. The same key is also `--config-dir` on the command line: a global
  * emit never writes to `--out` (there `out` is the legacy bundle a memory store migrates FROM,
  * and `update` passes it for exactly that), so without the flag there was no way to preview a
@@ -642,12 +638,12 @@ const GLOBAL_EMITS = {
  *
  * IT CALLS THE EMIT, NOT `main`, AND THAT IS THE WHOLE POINT OF THE EXPORT. Routing this
  * through `driverMain(['--emit', 'claude', …])` would look like less code and would run two
- * stages the Python's direct call never reaches: `writeMarkers` drops `.geneseed-emit` and
+ * stages a direct call never reaches: `writeMarkers` drops `.geneseed-emit` and
  * `.geneseed-footprint` into the sandbox, and `registryRecord` writes a row into the USER'S
  * install registry for a temp directory that is deleted a millisecond later. A validation
  * pass must not register an install.
  *
- * `footprint: 'full'` is the Python signature default that `_claude_bob_emit_problems`'s
+ * `footprint: 'full'` is the signature default that `_claude_bob_emit_problems`'s
  * three-positional call leaves in place, inherited here rather than re-decided.
  */
 const PROJECT_EMITS = {
@@ -670,12 +666,12 @@ const PROJECT_EMITS = {
  * carry straight past the parameter default.
  */
 function axesCfg({
-  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates
+  posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates
 }) {
   return makeCfg({
     ...(posture ? { posture } : {}), ...(mode ? { mode } : {}), ...(trust ? { trust } : {}),
     ...(doctrines ? { doctrines } : {}), ...(excludeRules ? { excludeRules } : {}),
-    ...(excludeSkills ? { excludeSkills } : {}), ...(kits ? { kits } : {}),
+    ...(excludeSkills ? { excludeSkills } : {}), ...(kits ? { kits } : {}), ...(sharedTier ? { sharedTier } : {}),
     // The gate switches (`GATE_SWITCHES` keys): only an explicit `false` disarms; `null` (no
     // opinion) keeps the gate.
     ...Object.fromEntries(GATE_SWITCHES.filter((g) => gates[g.key] === false).map((g) => [g.arg, true])),
@@ -684,7 +680,7 @@ function axesCfg({
 
 export function emitProjectInto(host, {
   theme, out, root, footprint = 'full', posture = null, mode = null, trust = null,
-  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, seed = true, ...gates
+  doctrines = null, excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, seed = true, ...gates
 }) {
   const emit = PROJECT_EMITS[host];
   // The axes ride the same rail into every `*Into`, and for the same reason: a drift reader
@@ -695,7 +691,7 @@ export function emitProjectInto(host, {
   // the git root, which for a temp dir inside a repo is that repo, outside the sandbox.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
     { theme, footprint, root, seed }, out,
   ));
 }
@@ -710,24 +706,24 @@ export function emitProjectInto(host, {
  */
 export function buildInto({
   theme, out, footprint = 'lean', posture = null, mode = null, trust = null, doctrines = null,
-  excludeRules = null, excludeSkills = null, kits = null, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, ...gates
 }) {
   return withPlatformNewlines(() => build(axesCfg({
-    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
+    posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
     theme, out, { footprint, nativeCatalog: false }));
 }
 
 export function emitGlobalInto(host, {
   theme, out, cfgDir, footprint, posture = null, mode = null, doctrines = null, trust = null,
-  excludeRules = null, excludeSkills = null, kits = null, ...gates
+  excludeRules = null, excludeSkills = null, kits = null, sharedTier = false, sharedRoot = undefined, ...gates
 }) {
   // `build.HOSTS.get(host, build.HOSTS["opencode"])` — an unknown host falls back rather than
   // raising, because the host comes from a marker file a user can edit.
   const emit = GLOBAL_EMITS[host] ?? GLOBAL_EMITS.opencode;
   // The same funnel `main` installs, for the same reason and not because `diff` asked: this
   // runs the whole render tree, whose ~25 print sites write raw `\n`. `diff` swallows the
-  // emit's STDOUT and lets its stderr through (the Python's `redirect_stdout` does exactly
-  // that), so an untranslated WARN from `warnBobGlobalOverProject` would reach the user's
+  // emit's STDOUT and lets its stderr through, so an untranslated WARN from
+  // `warnBobGlobalOverProject` would reach the user's
   // terminal with the wrong bytes on the one stream the caller deliberately does not hide.
   // ALL FIVE AXES TRAVEL WITH THE RENDER (see `axesCfg`). Callers that pass nothing keep the
   // reference's behaviour of rendering at `peer`/`direct`; the drift readers pass what the
@@ -736,23 +732,23 @@ export function emitGlobalInto(host, {
   // the same scar the footprint left in `diffCollect`, one axis over each time.
   return withPlatformNewlines(() => emit(
     axesCfg({
-      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, ...gates }),
-    { theme, footprint, root: null, cfgDir }, out,
+      posture, mode, trust, doctrines, excludeRules, excludeSkills, kits, sharedTier, ...gates }),
+    { theme, footprint, root: null, cfgDir, sharedRoot }, out,
   ));
 }
 
 /**
  * EXPORTED because `harness build` is a passthrough to this program.
  *
- * `_harness_build.cmd_build` is `run([sys.executable, BUILD, *extra]).returncode` — Python
- * needs a second process because `build.py` is a different PROGRAM. Here it is a module in
- * the same one, and `bin/geneseed-cli.mjs` is under a transitive `child_process` ban, so
+ * The generator is a module in the same process, and `bin/geneseed-cli.mjs` is under a
+ * transitive `child_process` ban, so
  * `js/build/generate.mjs` calls this directly. The export is what makes the auto-run below need a
  * guard: without one, importing this file to reach `main` would RUN the generator with the
  * CLI's argv.
  */
 export function main(argv) {
-  // `withPlatformNewlines` is what makes this driver's bytes Python's bytes on Windows, for every
+  // `withPlatformNewlines` makes this driver's bytes match the platform's text mode on
+  // Windows, for every
   // print site in the whole render tree at once — see its docblock for why a funnel and not
   // 25 calls to `printOut`. It wraps the `catch` as well as `run`, because `die` writes its
   // line on the way out.
@@ -763,7 +759,7 @@ export function main(argv) {
       // Every DELIBERATE refusal becomes this process's exit code — `die`'s, and equally
       // `assertSourceComplete`'s and `effectiveTheme`'s, which have already explained
       // themselves on stderr. An unmarked throw is a crash and keeps its stack, because
-      // Python prints a traceback for one and dressing it as a tidy refusal would hide a bug.
+      // dressing it as a tidy refusal would hide a bug.
       if (e && e.exitCode !== undefined) return e.exitCode;
       throw e;
     }
@@ -798,7 +794,7 @@ function run(argv) {
   // `--sync-themes` is HERE, because it needs nothing this driver may not have: it reads
   // `themes/`, rewrites the files textually, and prints. `js/build/themes.mjs` carries it.
   // Non-zero when files were CHANGED (0 == already in sync), so CI can run it as a drift
-  // check — build.py:393-397's mapping, and a refusal (exit 2) if the template is unreadable.
+  // check — and a refusal (exit 2) if the template is unreadable.
   if (args.syncThemes) return syncThemes() ? 1 : 0;
   // `--validate-only` is NOT, and cannot be: its source-tree half is the doctor, and
   // `js/inspect/checks-authoring.mjs` starts a process (`node --check` over the OpenCode plugins). This driver
@@ -822,12 +818,18 @@ function run(argv) {
     }
     args.cfgDir = resolveOut(args.cfgDir);
   }
+  // D11: the option belongs to a project install. A global install owns the tier, and a plain
+  // bundle has no host to read it with, so either would write a marker nothing honours.
+  if (args.sharedTier === 'on' && (args.emit === 'files' || args.emit.endsWith('-global'))) {
+    die(2, `argument --shared-tier: only applies to a per-repo host emit (got --emit ${args.emit}); `
+      + 'a global install already owns the shared tier');
+  }
   const cfg = makeCfg(args);
   warnDroppedKits(args, out);
 
   // The marker directory is the emit's TARGET, which for a global emit is the config dir it
   // just rendered into and not `--out` at all — so the emit returns it rather than the
-  // caller guessing (build.py:427-436 re-resolves; returning it keeps one resolution).
+  // caller guessing (returning it keeps one resolution).
   //
   // NINE ARMS, TWO TABLES ALREADY ON FILE: `GLOBAL_EMITS` and `PROJECT_EMITS` above are
   // exactly this dispatch's `-global` and per-repo halves, keyed by host rather than by
@@ -837,13 +839,12 @@ function run(argv) {
     markerDir = GLOBAL_EMITS[args.emit.slice(0, -'-global'.length)](cfg, args, out);
   } else if (args.emit !== 'files') {
     // The PROJECT emits keep their markers in `out`, not in the host config dir the emit
-    // wrote to (build.py:435-436) — `.claude/` is the layer, `out` is the install.
+    // wrote to — `.claude/` is the layer, `out` is the install.
     PROJECT_EMITS[args.emit](cfg, args, out);
   } else {
-    // The ninth choice, a plain bundle: `nativeCatalog: false` is build.py:421's
-    // three-positional-argument call reproduced — `build(args.theme, out, args.footprint)`
-    // leaves `native_catalog` at its signature default. It is the one signature default
-    // this driver DOES inherit, and it is inherited because the Python CLI inherits it too.
+    // The ninth choice, a plain bundle: `nativeCatalog: false` leaves
+    // `native_catalog` at its signature default, as `build(args.theme, out, args.footprint)`
+    // does. It is the one signature default this driver DOES inherit.
     build(cfg, args.theme, out, { footprint: args.footprint, nativeCatalog: false });
   }
 
@@ -858,7 +859,7 @@ function run(argv) {
   if (args.emit.endsWith('-global')) {
     try {
       writeText(path.join(markerDir, '.geneseed-theme'), `${args.theme}\n`);
-    } catch { /* best-effort, as build.py:449-452 */ }
+    } catch { /* best-effort */ }
   }
   // An ALLOW-LIST, not "everything that is not global": a plain `--emit files` dev build —
   // the default — must never pollute the registry, and only the four per-repo host emits

@@ -42,7 +42,7 @@
   write-capable {{AGENT}}'s spec must not contain it, or its emit is locked down.
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists in the harness, read it first —
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists in the harness, read it first —
    it holds your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Step-by-step method this {{AGENT}} follows.
 

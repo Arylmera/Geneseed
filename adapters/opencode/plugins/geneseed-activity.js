@@ -34,8 +34,10 @@
 // and docs/specs/2026-06-18-activity-v1.1-enriched-cards.md.
 
 import fs, { existsSync, statSync, readFileSync } from "node:fs"
-import os from "node:os"
+import os, { homedir } from "node:os"
 import path from "node:path"
+import { realpathSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 
 // GENESEED_ACTIVITY=off is a hard kill switch at startup; the web console's runtime
 // toggle is the .geneseed-activity flag file checked per event (see isEnabled).
@@ -233,6 +235,58 @@ function mainWorktreeOf(cwd) {
   } catch {
     return null
   }
+}
+
+// Twin of js/hosts/hosts.mjs `resolvePath`: tests/plugins/helper_parity.test.mjs holds the copies equal.
+function resolvePath(p) {
+  // Expand a leading "~" / "~/…" to the home dir — a hand-edited excludes.json entry
+  // like "~/vault" must resolve the same way here as it does for the Claude/Bob
+  // hook guard.
+  let raw = String(p)
+  if (raw === "~" || raw.startsWith("~/") || raw.startsWith("~\\")) {
+    raw = raw === "~" ? homedir() : path.join(homedir(), raw.slice(2))
+  }
+  let s = path.resolve(raw)
+  // Symlinks and junctions followed through the deepest existing ancestor (the rest appended),
+  // the rule js/hosts/hosts.mjs resolvePath applies: an exclude spelled through a link matches
+  // on every host, not only on Claude/Bob.
+  for (let cur = s, tail = []; ;) {
+    try { s = path.join(realpathSync.native(cur), ...tail); break } catch { /* walk up */ }
+    const up = path.dirname(cur)
+    if (up === cur) break
+    tail.unshift(path.basename(cur))
+    cur = up
+  }
+  return s
+}
+const norm = (p) => {
+  const s = resolvePath(p)
+  return process.platform === "win32" ? s.toLowerCase() : s
+}
+// Whether `dir` sits in an excluded folder: the rule of the other plugins' `sovereignBypass` and of
+// js/hosts/activity.mjs `recordActivity`, kept synchronous because it runs inside the event switch
+// (once per session). Read from the SESSION's directory: one `opencode serve` hosts every project.
+function excludedFolder(dir) {
+  try {
+    const cfg = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+    const listOf = (file) => {
+      try { const l = JSON.parse(readFileSync(file, "utf8")).excludes; return Array.isArray(l) ? l : [] } catch { return [] }
+    }
+    const entries = listOf(path.join(cfg, "excludes.json"))
+    const shared = listOf(path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed", "excludes.json"))
+    let global = norm(cfg) === norm(configBase())
+    try { global ||= readFileSync(path.join(cfg, ".geneseed-emit"), "utf8").trim().endsWith("-global") } catch { /* no marker */ }
+    if (global) entries.push(...shared)
+    const main = mainWorktreeOf(dir)
+    const heres = main ? [norm(dir), norm(main)] : [norm(dir)]
+    for (const e of entries) {
+      const p = typeof e === "string" ? e : e && e.path
+      if (typeof p !== "string" || !p.trim()) continue
+      const base = norm(p.trim()).replace(/[\\/]+$/, "")
+      if (heres.some((h) => h === base || h.startsWith(base + path.sep))) return true
+    }
+  } catch { /* degrade to active */ }
+  return false
 }
 
 // `top` is the git root above the SESSION's own directory (gitRootOf), or null outside any
@@ -538,6 +592,8 @@ export const GeneseedActivity = async (_input) => {
             return
           }
           if (event.type !== "session.created" && !owned.has(sid)) return
+          // An excluded repo is dormant: no card, and its sub-agents fall to the `!top` branch above.
+          if (!owned.has(sid) && info.directory && excludedFolder(info.directory)) { skipped.add(sid); return }
           const ev = { type: event.type, title: info.title ?? null, cwd: info.directory }
           if (!owned.has(sid)) Object.assign(ev, { ...rootsOf(info.directory && gitRootOf(info.directory)), agents: [], turns: 0, context: null,
             compactions: 0, compacted_at: null, context_at_compaction: null })

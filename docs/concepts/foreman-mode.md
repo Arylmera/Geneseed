@@ -5,7 +5,7 @@ title: "Foreman mode"
 kind: "concept"
 section: "Working together"
 description: "Direct or foreman: whether the session does the work or hands it to a task worker."
-link: {"hash": "#/harness", "label": "Set the mode in Harness →"}
+link: {"hash": "#/installs/hosts", "label": "Set the mode on Installs →"}
 ---
 **Mode** decides how work gets executed in a session. Two modes ship: **direct**, the default, where the agent does every task itself, and **foreman**, where the session hands each task that would block it to a background [agent](agents.md) and keeps talking to you while it works.
 
@@ -73,7 +73,7 @@ You can also start a pipeline without foreman mode: ask the agent to "run a pipe
   geneseed setup
   ```
 
-- **Web console** — the per-install **Mode** dropdown on the Harness page, then **Apply**.
+- **Web console** — the per-install **Mode** dropdown on the Installs page, then **Apply**.
 - **Command line** — with the emit target of the install you are changing; switch back with `--mode direct`:
 
   ```bash

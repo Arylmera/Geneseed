@@ -2,9 +2,8 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Personal, with the real Rules editor under it: ONE budget strip (the Rules meter is gone),
-// one threshold rule for that strip, counts that come from the folder the pane lists, and one
-// filled action per view.
+// Personal, with the real Rules editor under it: counts that come from the folder the pane lists,
+// and one filled action per view.
 
 vi.mock('../api/index.js', () => ({
   api: {
@@ -32,22 +31,21 @@ const TRIAL = {
   status: 'trial',
   overdue: false,
   body: 'Always use tabs.',
+  tokens: 12,
 }
 const rulesWith = (stats) => ({
   exists: true,
   fingerprint: 'f1',
   warnings: [],
-  stats: { rules: 2, lines: 20, tokens: 300, max_rules: 15, max_tokens: 1500, ...stats },
+  stats: { rules: 2, lines: 20, tokens: 300, ...stats },
   rules: [TRIAL],
 })
 const entries = (n) => Array.from({ length: n }, (_, i) => ({ name: `fact-${i}`, title: '' }))
-// The folder's index and README sit in the listing beside the entries.
-const FURNITURE = [{ name: 'MEMORY' }, { name: 'README' }]
 
 let memoryItems
 beforeEach(() => {
   vi.clearAllMocks()
-  memoryItems = [...FURNITURE, ...entries(3)]
+  memoryItems = entries(3)
   api.rules.mockImplementation(() => Promise.resolve(rulesWith({})))
   api.profile.mockImplementation(() =>
     Promise.resolve({ exists: true, seeded: false, fingerprint: 'p1', text: '# Me' }),
@@ -55,7 +53,7 @@ beforeEach(() => {
   api.catalog.mockImplementation((section) =>
     Promise.resolve({
       section,
-      items: section === 'memory' ? memoryItems : [{ name: 'NOTEBOOK' }, { name: 'plan' }],
+      items: section === 'memory' ? memoryItems : [{ name: 'plan' }],
     }),
   )
   api.item.mockImplementation((type, name) =>
@@ -65,86 +63,48 @@ beforeEach(() => {
 
 // `setup.facts` disagrees with the catalog on purpose: the counts must come from the catalog.
 const SETUP = { facts: 5 }
-const budget = () => screen.findByRole('region', { name: 'Rule budget' })
 const badgeOf = (tab) =>
   screen.getByRole('link', { name: new RegExp(`^${tab}`) }).querySelector('.tab-badge')
 
 describe('Personal', () => {
-  it('shows one budget strip: slots, a token bar, and no meter in the Rules editor', async () => {
-    const { container } = render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const panel = await budget()
-    await screen.findByText('Prefer tabs')
-    expect(screen.getAllByRole('region', { name: 'Rule budget' })).toHaveLength(1)
-    expect(within(panel).getByText('2 of 15')).toBeTruthy()
-    expect(within(panel).getByRole('img', { name: 'tokens: 300 of 1500' })).toBeTruthy()
-    // Below both thresholds the note is the file's size.
-    expect(within(panel).getByText('2 rules in 20 lines.')).toBeTruthy()
-    expect(container.querySelector('.rules-meter')).toBeNull()
-  })
+  const TWO = {
+    installs: [
+      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active', shared: true },
+      { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', shared: true },
+    ],
+  }
 
-  // The budget and the profile are the DEFAULT install's (the unnamed reads): with two active
-  // installs both cards name it, and the memory/notebook counts say they span every install.
-  it('names the install the rule budget and the profile come from', async () => {
-    api.installs = vi.fn(async () => ({
-      installs: [
-        { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
-        { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
-      ],
-    }))
+  // The shared scope is said once, in the page header, and only when an install reads the tier.
+  it('states the shared scope once, in the header', async () => {
+    api.installs = vi.fn(async () => TWO)
     try {
       render(<Personal tab="rules" dataRev={0} />)
-      const panel = await budget()
-      await waitFor(() => expect(within(panel).getByText('2 of 15 · claude · global')).toBeTruthy())
-      expect(
-        screen.getByText(
-          'Profile and rules of claude · global; memory and notebook across every install.',
-        ),
-      ).toBeTruthy()
+      await screen.findByText(/Global installs share one copy of the rules, profile and memory/)
+      await screen.findByText('Prefer tabs')
+      expect(document.body.textContent.match(/share one copy/g)).toHaveLength(1)
     } finally {
       delete api.installs
     }
   })
-  // Tokens alone reach 70 % (1050/1500) while the count is at 13 %: the strip reads the max.
-  it('warns at 70 % of either budget', async () => {
-    api.rules.mockImplementation(() => Promise.resolve(rulesWith({ tokens: 1050 })))
+
+  it('says nothing of sharing when no install reads the tier', async () => {
     render(<Personal tab="rules" dataRev={0} />)
-    const panel = await budget()
-    expect(within(panel).getByText('getting heavy; consider merging or pruning')).toBeTruthy()
+    await screen.findByText('Prefer tabs')
+    expect(screen.queryByText(/share one copy/)).toBeNull()
   })
 
-  it('says over budget at 100 % of either budget', async () => {
-    api.rules.mockImplementation(() => Promise.resolve(rulesWith({ rules: 15 })))
+  // The rule count has one home, the head of its file's list: no tab badge, no summary card.
+  it('prints the rule count once', async () => {
     render(<Personal tab="rules" dataRev={0} />)
-    const panel = await budget()
-    expect(
-      within(panel).getByText('over budget: a bloated rule set dilutes the rules that matter'),
-    ).toBeTruthy()
+    await screen.findByText('Prefer tabs')
+    expect(badgeOf('Rules')).toBeNull()
+    expect(document.body.textContent.match(/1 rule\b/g)).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: /knows about you/ })).toBeNull()
   })
 
-  it('counts one fact in the singular', async () => {
-    memoryItems = [...FURNITURE, ...entries(1)]
-    render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const known = await screen.findByRole('region', { name: 'What the agent knows about you' })
-    await waitFor(() => expect(within(known).getByText('1 fact')).toBeTruthy())
-  })
-
-  it('counts 237 facts in the plural', async () => {
-    memoryItems = [...FURNITURE, ...entries(237)]
-    render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const known = await screen.findByRole('region', { name: 'What the agent knows about you' })
-    await waitFor(() => expect(within(known).getByText('237 facts')).toBeTruthy())
-    expect(within(known).getByText('1 note')).toBeTruthy()
-  })
-
-  it('badges the Memory tab with the catalog entries, not its index or README', async () => {
+  it('badges the Memory tab with the catalog entries', async () => {
     render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
     await waitFor(() => expect(badgeOf('Memory')?.textContent).toBe('3'))
-  })
-
-  it('ignores the furniture names in any case', async () => {
-    memoryItems = [{ name: 'memory' }, { name: 'Readme' }, ...entries(2)]
-    render(<Personal tab="rules" dataRev={0} />)
-    await waitFor(() => expect(badgeOf('Memory')?.textContent).toBe('2'))
   })
 
   // A promote deletes the fact it turns into a rule (`delete_memory`): the Memory count must
@@ -171,7 +131,7 @@ describe('Personal', () => {
   })
 
   it('an empty memory folder shows "No facts yet" instead of the reader', async () => {
-    memoryItems = [...FURNITURE]
+    memoryItems = []
     const { container } = render(<Personal tab="memory" setup={SETUP} dataRev={0} />)
     expect(await screen.findByText('No facts yet')).toBeTruthy()
     expect(screen.getByText(/remember that…/)).toBeTruthy()
@@ -180,7 +140,7 @@ describe('Personal', () => {
 
   // First run: the empty state explains the store and links out, with no filled button.
   it('the first-run memory state links to the docs and the rule skill', async () => {
-    memoryItems = [...FURNITURE]
+    memoryItems = []
     const { container } = render(<Personal tab="memory" dataRev={0} />)
     await screen.findByText('No facts yet')
     expect(screen.getByRole('link', { name: 'How memory works' }).getAttribute('href')).toBe(
@@ -226,6 +186,20 @@ describe('Personal', () => {
     const rows = within(topics).getAllByRole('listitem')
     expect(rows.map((li) => li.textContent)).toEqual(['release2 facts', 'web1 fact'])
     expect(within(topics).getByText('2 topics')).toBeTruthy()
+  })
+
+  it('leaves the topics of the shared store untagged: the header says shared', async () => {
+    api.item.mockImplementation(() =>
+      Promise.resolve({
+        body: '- [release](topics/release.md) — 2 facts',
+        install: 'claude:global:/cl',
+        shared: true,
+        links: [],
+      }),
+    )
+    render(<Personal tab="memory" dataRev={0} />)
+    const topics = await screen.findByRole('region', { name: 'Topics' })
+    expect(topics.textContent).not.toMatch(/claude|shared/)
   })
 
   // A forget rewrites the map server-side; the panel must not keep the old count.

@@ -1,13 +1,6 @@
 /**
  * `geneseed migrate` — move a machine from the git-checkout install shape to the npm one.
  *
- * P10d, AND IT IS NOT A PORT. Every other module here reproduces a Python original byte for
- * byte; this verb is new behaviour on both sides, written twice in the same change so that
- * the former Python CLI matrix — a CROSS-IMPLEMENTATION gate — had a reference side at all. A
- * Node-only verb would have had nothing to compare against, and that suite's `test_every_entry_
- * verb_is_a_real_harness_subcommand` plus `test_the_matrix_covers_every_verb_it_claims` would
- * both have failed it.
- *
  * WHAT IT IS NOT: `rebuild-all`. That was the first answer and it was checked before being
  * discarded, because the re-emit really is the same engine and is reused rather than rewritten
  * here. Four behaviours differ, and each is a cell:
@@ -22,32 +15,25 @@
  * install must not block the rest — and for a migration it is the half-migrated machine the
  * whole verb exists to prevent.
  *
- * THE TWO TRIGGERS, AND WHY IT TAKES BOTH. Work is needed when the machine's wiring is
- * `legacy` (see `migrateShape` — and note that shapes 2 and 3 differ only inside the shim
- * body, never in the settings file) OR when the stamp does not name this ROOT. Neither alone
- * was enough: an OpenCode-only machine wires no hooks at all, so its shape is permanently
- * `none` and a shape-only trigger would re-emit it on every run forever; and reinstalling the
- * old build flipped the shape back to `legacy` while the stamp still matched, which had to
- * migrate again. With the old build gone the second case can no longer arise, but the shape
- * read stays: it is what makes the verb idempotent rather than stamp-dependent. The stamp is
- * written only on success.
+ * THE ONE TRIGGER IS THE STAMP: work is needed when `<GENESEED_HOME>/.migrated` does not name this
+ * ROOT, and the stamp is written only on success. That is what makes the verb idempotent, and it
+ * holds for an OpenCode-only machine too, which wires no hooks at all.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
-import { ROOT } from '../build/source.mjs';
-import { CLAUDE_STYLE, settingsFile } from '../hosts/hosts.mjs';
+import { foldHost, foldSummary } from '../build/fold.mjs';
+import { RETIRED_SKILL_IDS, ROOT, knownSkillIds, skillAliases } from '../build/source.mjs';
+import { CLAUDE_STYLE, isCanonical, settingsFile } from '../hosts/hosts.mjs';
 import {
   claudeCfg, claudeReadManifest, EMIT_HOST_SCOPE, installState, installTargets,
-  legacyProcessCarrierOfDir, readMaybe,
+  readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile } from '../build/generate.mjs';
-import {
-  autostartPaths, autostartStale, hookShimPath, migrateShape, shimHome,
-} from '../hosts/shim.mjs';
-import { loadJsonObject } from '../hosts/settings.mjs';
+import { autostartPaths, autostartStale, hookShimPath, shimHome } from '../hosts/shim.mjs';
 import { writeText, printOut, printErr } from '../lib/fs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 
 /** Every emit name the generator answers to — the set an unrecognised marker is NOT in. */
 const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
@@ -57,7 +43,7 @@ const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
  *
  * Only the Claude-style hosts carry hook commands. OpenCode's hooks are a PLUGIN
  * (`js/hosts/opencode.mjs` emits JS that runs in the host's own process and names neither the
- * shim nor `harness.py`), so it classifies as `none` and its whole migration is the re-emit —
+ * shim), so it has no settings file here and its whole migration is the re-emit —
  * the same re-emit, in the same change, on every host, which is what the project's
  * host-parity rule asks for.
  *
@@ -79,29 +65,6 @@ export function hookSettingsFile(root, host, scope) {
   return settingsFile(cfg, claudeReadManifest(cfg).managed);
 }
 
-/** Every hook command string in a settings file, or [] when it cannot be read or parsed. */
-function hookCommandsOf(file) {
-  // `loadJsonObject` (JSONC), NOT `JSON.parse`. A hand-edited settings.json with comments and a
-  // trailing comma is the one shape no machine in this project writes, and strict JSON rejects it —
-  // which would classify a wired install as `none` and make `migrate` skip the machine
-  // silently. `mergeClaudeSettings` already reads through comments for exactly this reason.
-  // Found by the JSONC corpus fixture; a generated fixture would have hidden it.
-  const { state, data: loaded } = loadJsonObject(file);
-  if (state !== 'ok') return [];
-  const hooks = loaded.hooks;
-  if (!hooks || typeof hooks !== 'object') return [];
-  const out = [];
-  for (const groups of Object.values(hooks)) {
-    if (!Array.isArray(groups)) continue;
-    for (const g of groups) {
-      for (const h of (g && Array.isArray(g.hooks) ? g.hooks : [])) {
-        if (h && typeof h.command === 'string') out.push(h.command);
-      }
-    }
-  }
-  return out;
-}
-
 /** `<GENESEED_HOME>/.migrated` — the ROOT the last successful migration installed from. */
 function stampPath() { return path.join(shimHome(), '.migrated'); }
 
@@ -117,7 +80,6 @@ function stashDir() { return path.join(shimHome(), '.migrate-backup'); }
  */
 function migrateSurvey() {
   const rows = [];
-  const commands = [];
   const unrecognised = [];
   for (const [host, scope, root] of installTargets()) {
     if (installState(root, host, scope) !== 'active') continue;
@@ -128,22 +90,12 @@ function migrateSurvey() {
       unrecognised.push({ host, scope, root, marker });
       continue;
     }
-    const file = hookSettingsFile(root, host, scope);
-    if (file) commands.push(...hookCommandsOf(file));
-    rows.push({ host, scope, root, marker, file });
+    rows.push({ host, scope, root, marker, file: hookSettingsFile(root, host, scope) });
   }
-  let shimBody = '';
-  try { shimBody = readFileSync(hookShimPath(), 'utf8'); } catch { /* no shim yet */ }
-  const shape = migrateShape(commands, shimBody);
-  const stamped = (readMaybe(stampPath()) || '').trim();
-  // THE TRIGGER IS THE STAMP, AND THE SHAPE IS REPORTED — the first draft had it the other
-  // way round and the ref-vs-ref self-check killed it in one run. `shape === 'legacy'` cannot
-  // be a trigger, because what "current" MEANS is "the shim body names the .mjs entry", and
-  // the Python implementation bakes python + harness.py by design (`_hook_runner_entry`). So
-  // a migration run from the reference can never reach `current`, its second run would
-  // re-emit forever, and the two implementations would diverge on idempotence by
-  // construction. The stamp is a value both sides write and read identically.
-  return { rows, unrecognised, shape, stamped, needed: stamped !== ROOT };
+  // No home and no GENESEED_HOME: no stamp to read, so nothing says this machine has migrated.
+  let stamped = '';
+  try { stamped = (readMaybe(stampPath()) || '').trim(); } catch { /* the survey only reads */ }
+  return { rows, unrecognised, needed: stamped !== ROOT };
 }
 
 /** Hand-written login entries that still name some other checkout. Reported, never rewritten. */
@@ -156,12 +108,59 @@ function autostartFindings() {
   return out;
 }
 
+/**
+ * What each global install's next emit would fold, stamped machine or not: the fold runs in every
+ * emit, so the stamp says nothing about it. Each host reads the tier as it stands, so two hosts
+ * holding the same new fact both count it here, and the second finds it a duplicate in the real run.
+ */
+function foldPreview(rows) {
+  let shared;
+  try { shared = sharedPaths(); } catch { return; }   // no home: no tier to fold into
+  for (const { host, scope, root } of rows) {
+    if (scope !== 'global' || !isCanonical(root, host)) continue;
+    const report = foldHost({ host, cfgDir: root, shared, dryRun: true });
+    const summary = foldSummary(report);
+    printOut(summary ? `[migrate] would fold ${host}: ${summary}\n` : `[migrate] ${host}: nothing to fold\n`);
+    for (const f of report.failed) printOut(`[migrate] ${host}: the fold would stop at ${f}\n`);
+  }
+}
+
+/**
+ * M5 — files no manifest owns, so no emit will ever prune them: the root `AGENT.md` and the folder
+ * of a skill that no longer ships under its own name. An earlier build likely wrote them, but an
+ * alias is a plain word and a folder under it may be the user's own, so nothing claims which.
+ * REPORTED, never moved: they go aside on the user's word.
+ *
+ * The candidate names come from what git history already settled and the source still records —
+ * `RETIRED_SKILL_IDS` and the `aliases:` markers — because the CLI may not spawn `git`. Each
+ * candidate is checked before it is listed: a live skill is never an orphan (`teach` is live,
+ * `quiz` is its alias), and a path the manifest owns is not one either — the next emit prunes it.
+ */
+export function orphanFindings(cfg, owned, { live = knownSkillIds(), aliases = skillAliases() } = {}) {
+  const owns = (rel) => owned.some((o) => o === rel || o.startsWith(`${rel}/`));
+  const names = [...new Set([...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)])].filter((n) => !live.includes(n));
+  return ['AGENT.md', ...names.map((n) => `skills/${n}`)]
+    .filter((rel) => !owns(rel) && existsSync(path.join(cfg, rel)))
+    .map((rel) => path.join(cfg, rel));
+}
+
+/** The `--dry-run` half of M5: one line per orphan on each global Claude-style install. */
+function orphanPreview(rows) {
+  for (const { host, scope, root } of rows) {
+    if (scope !== 'global' || !CLAUDE_STYLE.includes(host) || !isCanonical(root, host)) continue;
+    const owned = claudeReadManifest(root).owned;
+    for (const p of orphanFindings(root, Array.isArray(owned) ? owned : [])) {
+      printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). Nothing moves it: if it is not yours, move it by hand.\n`);
+    }
+  }
+}
+
 /** A stash key that cannot collide across drives, and is a legal file name on both platforms. */
 const stashKey = (p) => p.replace(/[\\/:]/g, '_');
 
 export function cmdMigrate(args = {}) {
   const dryRun = Boolean(args.dryRun);
-  const { rows, unrecognised, shape, needed } = migrateSurvey();
+  const { rows, unrecognised, needed } = migrateSurvey();
 
   if (unrecognised.length) {
     // Refuse the WHOLE run. A migration that skipped the row it did not understand and
@@ -180,12 +179,14 @@ export function cmdMigrate(args = {}) {
     return 0;
   }
 
+  if (dryRun) { foldPreview(rows); orphanPreview(rows); }
+
   if (!needed) {
     printOut(`[migrate] already on the npm shape (${rows.length} install(s)); nothing to do.\n`);
     return 0;
   }
 
-  printOut(`[migrate] ${rows.length} install(s), wiring shape: ${shape}\n`);
+  printOut(`[migrate] ${rows.length} install(s) to migrate.\n`);
   if (dryRun) {
     for (const r of rows) {
       printOut(`[migrate] would re-emit ${r.host}:${r.scope} (${r.root})\n`);
@@ -198,7 +199,15 @@ export function cmdMigrate(args = {}) {
   }
 
   // Step 2 — stash every file the re-emit can touch, so step 4 can put it all back.
-  const stash = stashDir();
+  // Refused before the first write: with no home and no GENESEED_HOME there is nowhere to stage it.
+  let stash;
+  try {
+    stash = stashDir();
+  } catch {
+    printErr('[migrate] REFUSED — no home directory, so there is nowhere to stage a backup.\n');
+    printErr('[migrate] Nothing was changed. Set GENESEED_HOME, then re-run.\n');
+    return 3;
+  }
   const saved = [];
   try {
     rmSync(stash, { recursive: true, force: true });
@@ -228,22 +237,8 @@ export function cmdMigrate(args = {}) {
   // `process 5` among them) and dropped `--config-dir`, so a global found through
   // `CLAUDE_CONFIG_DIR`/`OPENCODE_CONFIG_DIR` re-emitted into the DEFAULT dir instead.
   //
-  // A LEGACY CARRIER IS SKIPPED, NOT ROLLED BACK — the one exception to Step 4's ALL OR
-  // NOTHING, same reasoning as `rebuild-all` (`js/build/generate.mjs`): `installProfile` would
-  // read a pre-comms carrier exactly as written now (`comms` missing, `process 7`/`process 8`
-  // unaddressed) and `driverMain` would write that back PERMANENTLY — the fresh carrier carries
-  // no `process 8` text, so nothing could ever catch it again. Rolling back everything else on
-  // the machine over an install that merely needs `geneseed setup` would be a worse outcome
-  // than leaving it as it was found.
-  const skipped = [];
   for (const r of rows) {
     const label = `${r.host}:${r.scope} (${r.root})`;
-    if (legacyProcessCarrierOfDir(r.root, r.host)) {
-      skipped.push(label);
-      printOut(`[migrate] SKIPPED ${label}: pre-comms carrier (names 'process 8') — `
-        + 'run `geneseed setup` for it.\n');
-      continue;
-    }
     const { emit, theme, argv } = installProfile(r.host, r.scope, r.root,
       (n) => printErr(`[migrate] ${label}: ${n}\n`));
     printOut(`[migrate] re-emitting ${label}: theme=${theme} emit=${emit}\n`);
@@ -254,7 +249,8 @@ export function cmdMigrate(args = {}) {
       // must not, or the machine is left half on each shape.
       printErr(`[migrate] FAILED ${label} (exit ${rc}) — rolling back.\n`);
       restore();
-      printErr(`[migrate] rolled back ${saved.length} file(s); the install is unchanged.\n`);
+      printErr(`[migrate] rolled back ${saved.length} file(s); the wiring is as it was. `
+        + 'What an earlier row folded stays in the shared tier.\n');
       return 1;
     }
   }
@@ -265,13 +261,7 @@ export function cmdMigrate(args = {}) {
     writeText(stampPath(), `${ROOT}\n`);
   } catch { /* an unwritable stamp costs a redundant re-emit next run, never correctness */ }
 
-  const migrated = rows.length - skipped.length;
-  if (skipped.length) {
-    printOut(`[migrate] migrated ${migrated} install(s), skipped ${skipped.length}: `
-      + `${skipped.join(', ')}.\n`);
-  } else {
-    printOut(`[migrate] migrated ${rows.length} install(s).\n`);
-  }
+  printOut(`[migrate] migrated ${rows.length} install(s).\n`);
 
   // Step 5 — what could NOT be fixed automatically. Reported, never rewritten: nothing in
   // this repository has ever written an autostart entry, so migrate does not own the file.

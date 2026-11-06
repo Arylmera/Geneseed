@@ -7,7 +7,7 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
-import { pathToFileURL } from "node:url"
+import { pathToFileURL, fileURLToPath } from "node:url"
 import { opencodeEditAsks } from "../../js/hosts/settings.mjs"
 import { makeSandbox } from "../helpers/sandbox.mjs";
 import { LOSS_ROWS, makeLossWorkspace, rowCommand } from "../helpers/loss_repos.mjs"
@@ -383,7 +383,8 @@ test("SECRET_CONTENT_RE stays in parity with the Node hook's SECRET_RE (Law I tw
 test("permission.ask: the guard registers no dead permission hook", async () => {
   const hooks = await GeneseedGuard({ directory: tmp })
   assert.equal(hooks["permission.ask"], undefined)
-  assert.deepEqual(Object.keys(hooks), ["tool.execute.before"])
+  // `event` and `tool.execute.after` only listen: an "always" on an edit, and the change report.
+  assert.deepEqual(Object.keys(hooks).sort(), ["event", "tool.execute.after", "tool.execute.before"])
 })
 
 // ---- protected checks (External Gate) ------------------------------------------
@@ -817,6 +818,10 @@ async function installAt(cfgDir, keys, wireDir) {
   }
 }
 const keyPath = (root, k) => path.resolve(root, k.replace(/^\*\.\.\//, "").replace(/^\*\//, "deep/").replace(/\*/g, "x"))
+// The Persist Insight keys. The coined names walk like any key; a memory key's `*/` form spells a
+// `../` path, not a folder here, so the memory folders have rows in tests/unit/opencode_guard.test.mjs.
+const nameKey = (k) => /(?:^|\/)(?:user-rules(?:\.draft)?|MEMORY)\.md$/.test(k)
+const gateKey = (k) => !nameKey(k) && !/(?:^|\/)memory\/\*\.md$/.test(k)
 
 test("a shell write reaches every key opencodeEditAsks wires, project and global", async () => {
   const f = await gateConfigFixture("walk")
@@ -828,7 +833,8 @@ test("a shell write reaches every key opencodeEditAsks wires, project and global
       const keys = opencodeEditAsks(cfg, false, agentRel)
       assert.ok(keys.length > 20, "the walk has keys to walk")
       const refused = await installAt(cfg, keys, proj)
-      for (const k of keys) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(External Gate\)/, k)
+      for (const k of keys.filter(gateKey)) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(External Gate\)/, k)
+      for (const k of keys.filter(nameKey)) assert.match(await refused(keyPath(proj, k), proj) ?? "", /\(Persist Insight\)/, k)
       for (const p of [path.join(proj, "src", "AGENT.md"), path.join(proj, "settings.json"), path.join(proj, "src", "a.js")]) {
         assert.equal(await refused(p, proj), null, p)
       }
@@ -836,7 +842,8 @@ test("a shell write reaches every key opencodeEditAsks wires, project and global
     const cfg = path.join(tmp, "walk-home", ".config", "opencode")
     const keys = opencodeEditAsks(cfg, true)
     const refused = await installAt(cfg, keys, cfg)
-    for (const k of keys) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(External Gate\)/, k)
+    for (const k of keys.filter(gateKey)) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(External Gate\)/, k)
+    for (const k of keys.filter(nameKey)) assert.match(await refused(keyPath(path.dirname(cfg), k), cfg) ?? "", /\(Persist Insight\)/, k)
   })
 })
 
@@ -845,4 +852,27 @@ test("a home the guard cannot place costs the shim dir, never the other native-a
   await withHome("~nobody/x", async () => {
     assert.match(await denial("bash", { command: `echo x > "${path.join(f.repo, "opencode.json")}"`, workdir: f.repo }) ?? "", /\(External Gate\)/)
   })
+})
+
+// B8: the OpenCode guard denies a write to the shared exclude list (OpenCode's native ask covers only
+// this install's own files), and a global install honours the shared list while a project one does not.
+test("the shared exclude list is denied; a global install stands down in a folder it names", async () => {
+  const xdg = path.join(tmp, "shared-xdg")
+  const shared = path.join(xdg, "geneseed", "excludes.json")
+  const saved = { x: process.env.XDG_CONFIG_HOME, o: process.env.OPENCODE_CONFIG_DIR }
+  const here = process.cwd()
+  const restore = (k, v) => { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+  try {
+    process.env.XDG_CONFIG_HOME = xdg
+    await gateConfigDenied(shared)
+    await fs.mkdir(path.dirname(shared), { recursive: true })
+    await fs.writeFile(shared, JSON.stringify({ excludes: [{ path: here }] }))
+    const key = "C:\\Users\\me\\.ssh\\id_rsa"
+    assert.equal(await blocked("write", { filePath: key }), true, "a project install must not read the shared list")
+    // The host's own config dir is global: the same list now silences it.
+    process.env.OPENCODE_CONFIG_DIR = fileURLToPath(new URL("../../adapters/opencode", import.meta.url))
+    assert.equal(await blocked("write", { filePath: key }), false, "the shared list did not silence a global install")
+  } finally {
+    restore("XDG_CONFIG_HOME", saved.x); restore("OPENCODE_CONFIG_DIR", saved.o); process.chdir(here)
+  }
 })

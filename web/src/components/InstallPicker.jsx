@@ -1,14 +1,26 @@
 import React from 'react'
 import { installTag } from '../lib/hosts.js'
 
-// The install ONE entry, form or page acts on, placed beside it and labelled for it ("Write to:",
-// "Checks for:"). There is no console-wide install: each picker speaks for its own spot only.
-// With one active install there is nothing to pick, so it renders nothing.
-export default function InstallPicker({ installs, value, onChange, label, className = '' }) {
+// The install ONE page, form or popover acts on, always labelled "Install:". A page's sits right
+// above the heading of the view it acts on, by `className="page-pick"`: under the tabs on a tabbed
+// page, over the h1 on a page with none. A form or a
+// popover that acts on an install of its own holds the same control inside it. There is no
+// console-wide install: each picker speaks for its own spot only. With one active install there is
+// nothing to pick, so it renders nothing. `tagOf` names an option, for a page where an install
+// stands for something wider (the shared files). `label` is its accessible name: a popover's picker
+// opens over a page's, and two controls may not share one name.
+export default function InstallPicker({
+  installs,
+  value,
+  onChange,
+  className = '',
+  tagOf = installTag,
+  label = 'Install',
+}) {
   if (!value || !installs || installs.length < 2) return null
   return (
     <label className={`install-pick ${className}`.trim()}>
-      <span className="dim">{label}</span>
+      <span className="dim">Install:</span>
       <select
         className="sel mono"
         aria-label={label}
@@ -17,7 +29,7 @@ export default function InstallPicker({ installs, value, onChange, label, classN
       >
         {installs.map((i) => (
           <option key={i.id} value={i.id}>
-            {installTag(i)}
+            {tagOf(i)}
           </option>
         ))}
       </select>

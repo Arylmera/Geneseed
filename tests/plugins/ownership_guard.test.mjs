@@ -98,7 +98,7 @@ test("V2: the refused call is renamed to the reason and emptied; the next one is
   assert.equal(kid.tool, "write", "a child session is not refused")
   const first = ev("s1")
   await before(first)
-  assert.match(first.tool, /^\[geneseed-guard\] blocked: Geneseed \(Ownership\)/)
+  assert.match(first.tool, /^BLOCKED, not a missing tool: \[geneseed-guard\] blocked: Geneseed \(Ownership\)/)
   assert.deepEqual(first.input, {})
   const second = ev("s1")
   await before(second)

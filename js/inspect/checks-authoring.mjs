@@ -127,7 +127,7 @@ export function loopProblems() {
 }
 
 /**
- * `_harness_build._authoring_problems` — author-time gates on the source specs and plugins.
+ * Author-time gates on the source specs and plugins.
  *
  * Every agent/skill spec must carry a one-line `>` purpose blockquote as the FIRST content
  * block after its title, or its `description:` on every host either renders empty or silently
@@ -174,8 +174,8 @@ export function authoringProblems() {
       // THE ONE SPAWN. `node --check` and nothing else — see the module header, and
       // the `inspect/checks-authoring.mjs` row of the spawn allow-list in
       // `tests/unit/hook_cli.test.mjs`, which names this argv literally.
-      // `NO_WINDOW` because the reference's `run()` folds `CREATE_NO_WINDOW` into every
-      // CAPTURING spawn and this is one — and because this loop is the burst a user sees:
+      // `NO_WINDOW` because every CAPTURING spawn folds `CREATE_NO_WINDOW` in and this is
+      // one — and because this loop is the burst a user sees:
       // one console window per plugin, every time the web daemon runs the doctor.
       const r = spawnSync(node, ['--check', js], { encoding: 'utf-8', ...NO_WINDOW });
       if (r.status !== 0) {

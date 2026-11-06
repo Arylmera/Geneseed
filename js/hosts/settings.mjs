@@ -22,9 +22,8 @@
  *
  * HOOKS ARE APPEND-ONLY AND FAIL-CLOSED. Nothing here rewrites a hook group in place:
  * `mergeClaudeSettings` appends what is missing and removes only groups the manifest
- * recorded, and cleanup goes through `GENESEED_HOOK_SNIFF`, which has to keep recognising
- * BOTH the legacy interpreter+checkout form and the shim form. Dropping either spelling
- * strands live hooks in every config emitted before the change.
+ * recorded, and cleanup goes through `GENESEED_HOOK_SNIFF`, which recognises the shim form. A
+ * 1.x install, wired before the shim, must rebuild first.
  *
  * ONE KNOWN DIVERGENCE, recorded rather than reproduced. JS objects order integer-like
  * keys first, so a settings.json carrying a `"1"` or `"2"` at any level comes back from
@@ -405,9 +404,14 @@ function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = 
 export function opencodeEditAsks(cfgDir, global, agentRel = null) {
   const cfg = path.basename(cfgDir);
   const tails = ['opencode.json', 'opencode.jsonc', ...['excludes.json', GLOBAL_MANIFEST, '.geneseed-emit',
-    'plugins/geneseed-*.js', ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
+    'plugins/*', 'plugin/*', 'agents/*.md', 'agent/*.md', 'mode/*.md', 'modes/*.md', 'tool/*', 'tools/*',
+    ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
   ...['.claude', '.openclaude', '.bob'].flatMap((m) => [`${m}/settings.json`, `${m}/settings.local.json`]),
-  '.bob/settings/settings.json'];
+  '.bob/settings/settings.json',
+  // Persist Insight: the rule and memory stores, which the guard no longer releases on a re-issue.
+  // The coined names match anywhere, as the guard and Claude's rule gate match them; the memory
+  // folders by their last segments, so a project's unrelated `memory/` is never asked about.
+  'user-rules.md', 'user-rules.draft.md', 'MEMORY.md', `${cfg}/memory/*.md`, 'geneseed/memory/*.md'];
   const keys = [];
   if (agentRel) {
     const abs = path.resolve(path.dirname(cfgDir), agentRel);
@@ -415,6 +419,10 @@ export function opencodeEditAsks(cfgDir, global, agentRel = null) {
     const gitRel = git ? path.relative(git, abs).split(path.sep).join('/') : agentRel;
     keys.push(...new Set([agentRel, gitRel, `*../${agentRel}`,
       ...(agentRel.includes('/') ? [`*/${agentRel}`] : [])]));
+    // The store sits beside the carrier (`<out>/memory`, js/build/bundle.mjs), the same four shapes.
+    const beside = (rel) => path.posix.join(path.posix.dirname(rel), 'memory/*.md');
+    keys.push(...new Set([beside(agentRel), beside(gitRel), `*../${beside(agentRel)}`,
+      ...(agentRel.includes('/') ? [`*/${beside(agentRel)}`] : [])]));
   }
   try {
     const home = shimHome();
@@ -582,7 +590,7 @@ export function atomicWriteJson(p, config) {
 
 /** `_build_settings._merge_opencode_json`. Returns the resolved target path.
  *
- * Zero runtime callers — re-measured this phase and still true. `rituals/_harness_mcp.py`
+ * Zero runtime callers — re-measured this phase and still true. The MCP module
  * re-implements the inverse itself rather than inherit this one's permission/lsp side
  * effects, so the only crossings are the two emit-tree ones (`_build_emit.emit_opencode`,
  * `_build_global.emit_opencode_global`).
@@ -1138,13 +1146,10 @@ export function unwireClaudeExcludes(p, excludes) {
 }
 
 // ---- Settings integrity check -----------------------------------------------------
-// Substrings that mark a hook command as Geneseed's. An ARRAY, not one string, because two
-// shapes are in the wild and both must stay recognisable: the legacy direct form
-// (interpreter + checkout harness.py) written by every install emitted before the shim, and
-// the shim form. Dropping the legacy entry makes every not-yet-migrated install invisible
-// to the orphan scan — the one place a stranded hook can still surface — so cleanup would
-// silently leave live hooks behind in every config emitted before the shim landed.
-export const GENESEED_HOOK_SNIFF = ['harness.py', SHIM_MARK];
+// Substrings that mark a hook command as Geneseed's. Every install since the shim names it; the
+// floor is stated, not guessed at: a 1.x install, wired to an interpreter and a checkout, must
+// rebuild first, or its hooks read as the user's own.
+export const GENESEED_HOOK_SNIFF = [SHIM_MARK];
 
 /** `_build_settings._settings_hook_groups` — flatten `hooks` to [event, group] pairs. */
 function settingsHookGroups(loaded) {

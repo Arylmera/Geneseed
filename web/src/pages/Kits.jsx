@@ -11,19 +11,18 @@ import { Bar } from '../components/StackBar.jsx'
 import KitApply, { KitState, kitHint } from '../components/KitApply.jsx'
 import { Switch } from './Installs/controls.jsx'
 import { kitsLocked, kitsOf, useKitStaging } from '../hooks/useKitStaging.js'
+import { installTag } from '../lib/hosts.js'
 
 const enc = encodeURIComponent
 const words = (s) => (s || '').split(/\s+/).filter(Boolean).length
 const uniq = (a) => [...new Set(a.filter(Boolean))]
 const short = (c) => (c || '').slice(0, 7)
 
-// A member links to its Library entry only while the catalog lists it: the catalog is the
-// install the topbar views, and the Library would 404 a member it lacks. Unlinked, the chip says
-// "installed when on" only while the kit is on NOWHERE; on for other installs, it says where.
+// A member links to its Library entry only while the catalog lists it: the Library would 404 a
+// member no install has. Unlinked, the chip says "installed when on" only while the kit is on
+// NOWHERE; on elsewhere, it says where.
 const offTitle = (onN, of) =>
-  onN
-    ? `Not in the install the topbar views; on in ${onN} of ${plural(of, 'install')}`
-    : 'Installed when this kit is on'
+  onN ? `On in ${onN} of ${plural(of, 'install')}` : 'Installed when this kit is on'
 const Links = ({ type, names, listed, offNote = offTitle(0) }) =>
   names.length ? (
     <ul className="kit-links">
@@ -69,7 +68,7 @@ function KitDetail({ kit, installs, stage, listed }) {
         <ul className="kit-list kit-box" aria-label={`Installs for ${kit.name}`}>
           {installs.map((row) => {
             const locked = kitsLocked(row)
-            const who = `${row.host} · ${row.scope}`
+            const who = installTag(row)
             return (
               <li className="kit-install" key={row.id}>
                 <div className="kit-row">
@@ -160,7 +159,7 @@ function KitDetail({ kit, installs, stage, listed }) {
 }
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-const who = (row) => `${row.host} · ${row.scope}`
+const who = installTag
 
 // Where one kit stands on one install: on, off, or a switch staged against that.
 function cellState(stage, row, name) {
@@ -268,6 +267,11 @@ function KitMatrix({ kits, installs, stage }) {
           {kitsLocked(row) ? (
             <span className="kit-lock-note">{row.reason || row.error}</span>
           ) : null}
+          {Object.entries(row.keptKitFiles || {}).map(([k, files]) => (
+            <span className="mono dim" key={k}>
+              kept from inactive kit {k}: {files.join(', ')} — delete by hand
+            </span>
+          ))}
         </div>
       ),
     },
@@ -303,9 +307,7 @@ function KitMatrix({ kits, installs, stage }) {
     <section className="panel flush kit-matrix" aria-labelledby="kit-mx-h">
       <div className="kit-matrix-head">
         <h2 id="kit-mx-h">On which install</h2>
-        <span className="dim">
-          Each row describes that install, not the one selected in the topbar.
-        </span>
+        <span className="dim">Each row is one install.</span>
       </div>
       {installs.length ? (
         <DataTable
@@ -378,7 +380,7 @@ function StagedBar({ installs, stage }) {
 
 // `#/kits` is the gallery (a card per kit) over the kits × installs matrix, closed by the
 // staged-changes bar; `#/kits/<name>` is one kit's page: its rules, credits, members and one
-// switch per install. Both use the same staged-Apply flow as Installs / Kits.
+// switch per install. This page is the one home of the kit switches: both share one staged Apply.
 export default function Kits({ item, onAction, dataRev }) {
   const { data, error } = useAsync(() => api.kits(), [dataRev])
   const stage = useKitStaging(data, onAction)

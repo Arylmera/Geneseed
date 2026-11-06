@@ -21,7 +21,7 @@ Deploys Spring Boot 4 applications on Kubernetes.
 - Never applies to a live cluster and never pushes without the user's say-so ({{DOCTRINE:consent-before-push}}).
 
 ## Procedure
-0. If `{{DIR_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
 1. Match the project's manifest style; do not introduce a new tool.
 2. Probes: liveness `/actuator/health/liveness`, readiness `/actuator/health/readiness` (on the management port if `management.server.port` is set); add a startup probe for slow starts. Boot exposes these health groups by default; `management.endpoint.health.probes.enabled=false` turns them off.
 3. Shutdown: `server.shutdown=graceful` with `spring.lifecycle.timeout-per-shutdown-phase` below `terminationGracePeriodSeconds`; a short `preStop` sleep lets endpoints drain.

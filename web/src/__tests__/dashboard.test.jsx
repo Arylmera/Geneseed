@@ -49,7 +49,7 @@ const themes = [
 const setup = {
   installed_fp: 'a3f1c9e2',
   source_fp: 'a3f1c9e2',
-  version_verdict: 'up to date (0.1.0)',
+  version_verdict: 'in sync (0.1.0)',
 }
 const runs = [
   {
@@ -75,7 +75,7 @@ describe('Dashboard', () => {
     )
     await waitFor(() => expect(screen.getByText('germination')).toBeTruthy())
     // The healthy fleet has answered, so the voice line stands beside its verdict.
-    await waitFor(() => expect(screen.getByText('Harness healthy.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Installs healthy.')).toBeTruthy())
     expect(screen.getByText('The Codex in force')).toBeTruthy() // headline
     expect(screen.getByText('The Codex in force.')).toBeTruthy() // sigil (trailing period)
     expect(screen.getAllByText('16').length).toBeGreaterThan(0) // agents KPI + genome
@@ -118,7 +118,7 @@ describe('Dashboard', () => {
         onAction={() => {}}
       />,
     )
-    await waitFor(() => expect(screen.getByText('Harness needs a look.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Installs need a look.')).toBeTruthy())
     expect(screen.getByText('Deployed')).toBeTruthy()
     expect(screen.queryByText('The Codex in force')).toBeNull()
     // The ring is capped by that verdict: a warn fleet withholds the version and disk
@@ -185,8 +185,28 @@ describe('Dashboard', () => {
     )
     fireEvent.click(screen.getByText('Lineage'))
     await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
-    fireEvent.click(screen.getByText('Operator'))
+    fireEvent.click(screen.getByText('Readout'))
     await waitFor(() => expect(screen.getByText(/entries total/)).toBeTruthy())
+  })
+
+  it('goes back to the Status direction when the lens changes', async () => {
+    // Every lens branch needs the Status direction, so a lens picked under Lineage changed nothing.
+    const at = (layout) => (
+      <Dashboard
+        overview={overview}
+        themes={themes}
+        setup={setup}
+        runs={runs}
+        onAction={() => {}}
+        layout={layout}
+      />
+    )
+    const { rerender } = render(at('genome'))
+    fireEvent.click(screen.getByText('Lineage'))
+    await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
+    rerender(at('greenhouse'))
+    await waitFor(() => expect(screen.queryByText('Gene-seed lineage')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Status' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('shows a loading state without overview', () => {

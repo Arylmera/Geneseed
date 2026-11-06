@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { animate, stagger } from 'animejs'
-import { motionOK, settle } from '../lib/motion.js'
+import { DUR, EASE_OUT, motionOK, settle } from '../lib/motion.js'
 
 const MAX_RESULTS = 24
 
@@ -67,11 +67,11 @@ export default function Spotlight({ query, index, loading, error, active, onActi
     const anim = animate(rows, {
       opacity: [0, 1],
       translateY: [-4, 0],
-      duration: 220,
-      delay: stagger(18),
-      ease: 'outQuart',
+      duration: DUR[4],
+      delay: stagger(DUR[0]),
+      ease: EASE_OUT,
     })
-    return settle(anim, 220 + 18 * rows.length)
+    return settle(anim, DUR[4] + DUR[0] * rows.length)
   }, [hasRows])
 
   // Reset selection when results change so we never land on an out-of-range row.

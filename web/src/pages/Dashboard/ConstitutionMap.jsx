@@ -3,11 +3,11 @@ import { animate, createTimeline, stagger, svg, utils } from 'animejs'
 import { api } from '../../api/index.js'
 import { go } from '../../lib/router.js'
 import { packColor } from '../../lib/lawCats.js'
-import { rulesInForce } from '../../lib/format.js'
-import { motionOK, settle } from '../../lib/motion.js'
+import { ruleCount } from '../../lib/format.js'
+import { DUR, EASE_OUT, motionOK, settle } from '../../lib/motion.js'
 import { useAsync } from '../../hooks/useAsync.js'
 
-// THE CONSTITUTION, DRAWN AS WHAT IT IS: a hub of rules in force, its three tiers around
+// THE CONSTITUTION, DRAWN AS WHAT IT IS: a hub of rules, its three tiers around
 // it, and dashed lines out to the four things those rules govern. The dashboard used to
 // state the same facts as four numbers in four tiles, which is accurate and says nothing
 // about how they relate — that the invariants are never negotiable while the doctrines are
@@ -75,7 +75,7 @@ function edgePath(a, b, bow = 0) {
 // so they carry their own small stagger rather than holding the whole map hostage.
 let mapPlayed = false
 let packsPlayed = false
-const ENTRANCE_MS = 850
+const ENTRANCE_MS = DUR[8] + DUR[7]
 
 // A tappable node: the group carries the click, and a focusable rect-free <g> is not
 // keyboard-reachable, so each is a real button in the SVG's tab order.
@@ -136,13 +136,13 @@ export default function ConstitutionMap({ overview, dataRev }) {
     utils.set([...hub, ...sats, ...gov], { opacity: 0, scale: 0.7 })
     utils.set([...govEdges, ...notes], { opacity: 0 })
     utils.set(spokes, { draw: '0 0' })
-    const tl = createTimeline({ autoplay: false, defaults: { ease: 'outExpo' } })
-      .add(hub, { opacity: 1, scale: 1, duration: 450 }, 0)
-      .add(spokes, { draw: '0 1', duration: 380, delay: stagger(70) }, 140)
-      .add(sats, { opacity: 1, scale: 1, duration: 420, delay: stagger(70) }, 260)
-      .add(govEdges, { opacity: 1, duration: 300, delay: stagger(50) }, 420)
-      .add(gov, { opacity: 1, scale: 1, duration: 380, delay: stagger(50) }, 470)
-      .add(notes, { opacity: 1, duration: 300 }, 520)
+    const tl = createTimeline({ autoplay: false, defaults: { ease: EASE_OUT } })
+      .add(hub, { opacity: 1, scale: 1, duration: DUR[7] }, 0)
+      .add(spokes, { draw: '0 1', duration: DUR[7], delay: stagger(DUR[1]) }, DUR[3])
+      .add(sats, { opacity: 1, scale: 1, duration: DUR[7], delay: stagger(DUR[1]) }, DUR[5])
+      .add(govEdges, { opacity: 1, duration: DUR[6], delay: stagger(DUR[1]) }, DUR[7])
+      .add(gov, { opacity: 1, scale: 1, duration: DUR[7], delay: stagger(DUR[1]) }, DUR[8])
+      .add(notes, { opacity: 1, duration: DUR[6] }, DUR[8])
     // The map sits below the fold in the Journal lens, so an entrance on mount would play
     // to nobody. It waits until a third of the map is on screen; the settle timer starts
     // with the play, so a map nobody scrolls to simply stays waiting — unseen either way.
@@ -175,15 +175,14 @@ export default function ConstitutionMap({ overview, dataRev }) {
   }, [])
 
   const counts = overview?.counts || {}
-  const inForce = rulesInForce(counts)
-  // Packs in catalogue order, each with the count of its rules THIS INSTALL switched on —
-  // the same per-rule `active` the overview's `doctrines.rules` totals, so the pack nodes
-  // and the satellite's own number can never disagree.
+  const rules = ruleCount(counts)
+  // Packs in catalogue order, each with the rules the Constitution lists under it, so the pack
+  // nodes sum to the satellite's own number.
   const packs = []
   for (const it of (laws || []).filter((x) => x.tier === 'doctrine')) {
     let p = packs.find((q) => q.id === it.pack)
-    if (!p) packs.push((p = { id: it.pack, on: 0 }))
-    if (it.active !== false) p.on += 1
+    if (!p) packs.push((p = { id: it.pack, n: 0 }))
+    p.n += 1
   }
 
   // ---- the composition: prototype centres, computed radii ----
@@ -194,7 +193,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     r: fitRadius(
       [
         { t: 'Constitution', size: 17, dy: -12 },
-        { t: `${inForce} rules in force`, size: 10, dy: 8 },
+        { t: `${rules} rules`, size: 10, dy: 8 },
         { t: footNote, size: 8.5, dy: 24 },
       ],
       12,
@@ -256,7 +255,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     { ...governedNode(820, 126, 'Agents', counts.agents ?? 0), hash: '#/agents', from: invariants },
     {
       ...governedNode(816, 232, 'Memory', counts.memory ?? 0),
-      hash: '#/section/memory',
+      hash: '#/personal/memory',
       from: doctrines,
     },
     {
@@ -301,12 +300,12 @@ export default function ConstitutionMap({ overview, dataRev }) {
       const anim = animate(discs, {
         opacity: 1,
         scale: 1,
-        duration: 380,
+        duration: DUR[7],
         // after the doctrine satellite they orbit, when the map is entering with them
-        delay: stagger(45, { start: 420 }),
-        ease: 'outExpo',
+        delay: stagger(DUR[1], { start: DUR[7] }),
+        ease: EASE_OUT,
       })
-      stop = settle(anim, 420 + 45 * packCount + 380)
+      stop = settle(anim, DUR[7] + DUR[1] * packCount + DUR[7])
     }
     if (started.current) play()
     else pendingPacks.current = play
@@ -339,13 +338,13 @@ export default function ConstitutionMap({ overview, dataRev }) {
         <path key={`e-${g.label}`} d={edgePath(g.from, g, 0.03)} className="cm-edge-gov" />
       ))}
 
-      <Node hash="#/laws" part="hub" label={`Constitution: ${inForce} rules in force`}>
+      <Node hash="#/laws" part="hub" label={`Constitution: ${rules} rules`}>
         <circle cx={hub.x} cy={hub.y} r={hub.r} className="cm-hub-disc" />
         <text x={hub.x} y={hub.y - 12} textAnchor="middle" className="cm-hub-name">
           Constitution
         </text>
         <text x={hub.x} y={hub.y + 8} textAnchor="middle" className="cm-hub-num">
-          {inForce} rules in force
+          {rules} rules
         </text>
         <text x={hub.x} y={hub.y + 24} textAnchor="middle" className="cm-note">
           {footNote}
@@ -386,7 +385,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
       <Node
         hash="#/laws"
         part="sat"
-        label={`${doctrinesName}: ${counts.doctrines?.rules ?? 0} rules chosen at build`}
+        label={`${doctrinesName}: ${counts.doctrines?.rules ?? 0} rules`}
       >
         <circle cx={doctrines.x} cy={doctrines.y} r={doctrines.r} className="cm-sat-disc" />
         <text x={doctrines.x} y={doctrines.y - 6} textAnchor="middle" className="cm-sat-name">
@@ -400,8 +399,8 @@ export default function ConstitutionMap({ overview, dataRev }) {
           the lower-left flank and a centred caption lay straight across them. */}
       <text x={doctrines.x + 22} y={doctrines.y + doctrines.r + 20} className="cm-note">
         {counts.doctrines
-          ? `chosen at build · ${counts.doctrines.active}/${counts.doctrines.total} packs lit`
-          : 'chosen at build'}
+          ? `${counts.doctrines.active}/${counts.doctrines.total} packs built in`
+          : 'packs chosen at build'}
       </text>
 
       <g className="cm-mini">
@@ -418,7 +417,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
               {p.id}
             </text>
             <text x={p.x} y={p.y + 8} textAnchor="middle" style={{ fill: packColor(p.id) }}>
-              {p.on}
+              {p.n}
             </text>
           </g>
         ))}

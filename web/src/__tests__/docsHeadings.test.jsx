@@ -56,6 +56,30 @@ describe('Docs headings', () => {
     expect(ids).toEqual(['before', 'before-2'])
   })
 
+  // Many sources start at ###. The title is the H1, so the page must go H1 then H2, each level
+  // moved by one step: the order stays, the skip goes.
+  it('starts a page at H2 whatever level its source starts at', () => {
+    const body = '### First\n\na\n\n#### Under it\n\nb\n\n### Second'
+    const { container } = render(<MarkdownPage page={{ id: 'p', title: 'T', body }} />)
+    const heads = [...container.querySelectorAll('h1, h2, h3, h4')].map((h) => [
+      h.tagName,
+      h.textContent,
+    ])
+    expect(heads).toEqual([
+      ['H1', 'T'],
+      ['H2', 'First'],
+      ['H3', 'Under it'],
+      ['H2', 'Second'],
+    ])
+  })
+
+  it('leaves a page that starts at H2 as it is', () => {
+    const { container } = render(<MarkdownPage page={{ id: 'p', body: '## A\n\n### B' }} />)
+    expect(
+      [...container.querySelectorAll('.markdown h2, .markdown h3')].map((h) => h.tagName),
+    ).toEqual(['H2', 'H3'])
+  })
+
   // A wide table scrolls inside its own box, reachable by keyboard, instead of the page.
   it('wraps each table in a focusable scroll region', () => {
     const body = '| a | b |\n|---|---|\n| 1 | 2 |'

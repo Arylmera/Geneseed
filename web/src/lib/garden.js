@@ -14,6 +14,7 @@
 // blossoms, the yellowing, the shoots, the moss, the fallen leaves), so a new turn, file or
 // agent on the 2 s poll grows the tree instead of re-rolling it: the trunk's own stream
 // draws one bark speck per trunk pixel, and a taller trunk must not move anything else.
+import { hostInfo } from './hosts.js'
 
 export const W = 56
 export const H = 56
@@ -486,6 +487,7 @@ const tail = (p, n) =>
     .filter(Boolean)
     .slice(-n)
     .join('/')
+const hostOf = (i) => hostInfo(i.host).label
 export function installNames(installs) {
   const list = installs || []
   const count = (f) => (i) => list.filter((j) => f(j) === f(i)).length
@@ -495,10 +497,10 @@ export function installNames(installs) {
     list.map((i) => [
       i.install,
       byHost(i) < 2
-        ? i.host
+        ? hostOf(i)
         : byScope(i) < 2 || i.scope === 'global'
-          ? `${i.host} · ${i.scope}`
-          : `${i.host} · ${lastSeg(i.path)}`,
+          ? `${hostOf(i)} · ${i.scope}`
+          : `${hostOf(i)} · ${lastSeg(i.path)}`,
     ]),
   )
   const clashing = () =>
@@ -508,7 +510,7 @@ export function installNames(installs) {
       const segs = String(i.path)
         .split(/[\\/]+/)
         .filter(Boolean).length
-      out.set(i.install, `${i.host} · ${n > segs ? i.path : tail(i.path, n)}`)
+      out.set(i.install, `${hostOf(i)} · ${n > segs ? i.path : tail(i.path, n)}`)
     }
     if (n > 64) break // two installs never share a whole path; a guard, not a rule
   }
@@ -544,7 +546,7 @@ export function placeCards(sessions, installs) {
     return {
       ...s,
       host: i?.host ?? s.host,
-      chip: names.get(s.install) ?? s.host ?? null,
+      chip: names.get(s.install) ?? (s.host ? hostInfo(s.host).label : null),
       href: detailHref(s.session_id, i),
     }
   })

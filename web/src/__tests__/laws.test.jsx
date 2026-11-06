@@ -963,7 +963,7 @@ describe('Constitution page — the Ownership row and its gate', () => {
     await waitFor(() => expect(ownRow(container)).toBeTruthy())
     const entry = () => document.querySelectorAll('.gate-row')[1]
     expect(entry().querySelector('.gate-name').textContent).toBe('Ownership gate')
-    expect(entry().querySelector('.off').textContent).toBe('off · opencode global')
+    expect(entry().querySelector('.off').textContent).toBe('off · OpenCode · global')
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     expect(gateLine(container)).toBeNull()
@@ -1167,18 +1167,18 @@ describe('Constitution page — the Gate asks card', () => {
     const [first, second] = document.querySelectorAll('.gate-row')
     // The bar is the row button's sibling in the same entry (a button may not hold a div).
     const bar = (row) => row.closest('li').querySelector('[role="img"]')
-    expect(first.textContent).toContain('process.1')
+    expect(first.textContent).toContain('Process rule 1')
     expect(first.querySelector('.off')).toBeNull()
     expect(bar(first).querySelector('.tone-warn')).toBeTruthy()
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
     expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
     // The switch is one install's, inside a card of every install's asks: the badge names it.
-    expect(second.querySelector('.off').textContent).toBe('off · opencode global')
+    expect(second.querySelector('.off').textContent).toBe('off · OpenCode · global')
     expect(bar(second).querySelector('.tone-warn')).toBeNull()
     expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
     // Each bar is named by its gate, so a reader can tell them apart; the count is against the
-    // busiest gate (135 asks). process.1 has no row in this fixture, so its address names it.
-    expect(bar(first).getAttribute('aria-label')).toBe('process.1 asks: 6 of 135')
+    // busiest gate (135 asks). process.1 has no row in this fixture, so a plain name stands in.
+    expect(bar(first).getAttribute('aria-label')).toBe('Process rule 1 asks: 6 of 135')
     expect(bar(second).getAttribute('aria-label')).toBe('Deletion Is Deliberate asks: 135 of 135')
     expect(first.querySelector('[role="img"]')).toBeNull()
   })
@@ -1351,7 +1351,7 @@ describe('Constitution page — the ladder layout', () => {
     expect(pills).toEqual(['always', 'yours', 'always', '3 excluded'])
     expect([...container.querySelectorAll('.ladder-low')].map((r) => r.textContent)).toEqual([
       'RANK 5 Mode — binds how work runs',
-      'RANK 6 Profile, posture, theme — inform only; never bind',
+      'RANK 6 Profile, posture, voice — inform only; never bind',
     ])
   })
 
@@ -1372,7 +1372,7 @@ describe('Constitution page — the ladder layout', () => {
     )
     await settled(container)
     expect(container.querySelector('.page-head .eyebrow').textContent).toBe(
-      'imperial · lean footprint · opencode · global',
+      'imperial · lean footprint · OpenCode · global',
     )
   })
 })
@@ -1395,14 +1395,12 @@ describe('Constitution page — hostile or empty inputs', () => {
     }
   })
 
-  // A user-rules budget of zero is no budget: the bar stays empty instead of a NaN% width.
-  it('draws an empty Your rules bar when the budget is zero', async () => {
-    api.rules.mockImplementation(() =>
-      Promise.resolve({ stats: { rules: 0, max_rules: 0, tokens: 0, max_tokens: 0 } }),
-    )
+  // No ceiling: the tier reports the count and the tokens, and an empty file draws an empty bar.
+  it('draws an empty Your rules bar when no rule exists', async () => {
+    api.rules.mockImplementation(() => Promise.resolve({ stats: { rules: 0, tokens: 0 } }))
     try {
       const { container } = render(<Laws />)
-      await waitFor(() => expect(container.textContent).toContain('0 of 0 · 0/0 tok'))
+      await waitFor(() => expect(container.textContent).toContain('0 rules · ≈0 tok'))
       const cell = [...container.querySelectorAll('.tier')].find((t) =>
         t.textContent.includes('Your rules'),
       )
@@ -1413,7 +1411,7 @@ describe('Constitution page — hostile or empty inputs', () => {
   })
 })
 
-// The page reads and rebuilds ONE install, picked beside it ("Constitution of:"), starting on the
+// The page reads and rebuilds ONE install, picked beside it ("Install:"), starting on the
 // default (App's overview). Another pick reads that install's own overview and catalog, and a
 // gate switch then rebuilds THAT install.
 describe('Constitution page — its own install picker', () => {
@@ -1460,7 +1458,7 @@ describe('Constitution page — its own install picker', () => {
     )
     const gate = () => container.querySelector('[aria-label="Deletion gate"]')
     await waitFor(() => expect(gate()).toBeTruthy())
-    fireEvent.change(screen.getByRole('combobox', { name: 'Constitution of:' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Install' }), {
       target: { value: 'cl' },
     })
     await waitFor(() => expect(landCl).toBeTypeOf('function'))
@@ -1477,7 +1475,7 @@ describe('Constitution page — its own install picker', () => {
     const { container } = render(
       <Laws overview={{ install: { ...INSTALL, deletionGate: true } }} onAction={onAction} />,
     )
-    const pick = await screen.findByRole('combobox', { name: 'Constitution of:' })
+    const pick = await screen.findByRole('combobox', { name: 'Install' })
     expect(pick.value).toBe('oc')
     fireEvent.change(pick, { target: { value: 'cl' } })
     await waitFor(() => expect(api.overview).toHaveBeenCalledWith({ host: 'claude', path: '/cl' }))

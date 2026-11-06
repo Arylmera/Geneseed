@@ -309,19 +309,17 @@ test('every state the reference matrix required by name still has an owner', () 
   }
 });
 
-test('both hook sniff shapes stay recognisable', () => {
-  // `GENESEED_HOOK_SNIFF` carries two markers and both must stay recognisable: the legacy
-  // interpreter-and-checkout form every pre-shim install emitted, and the shim's filename.
-  // The reference asserted a CELL existed per marker; the successor drives the markers
-  // themselves against one command of each shape, which is the claim the cells stood for.
-  assert.deepEqual([...GENESEED_HOOK_SNIFF], ['harness.py', 'geneseed-hook'],
+test('the hook sniff recognises the shim, and no longer the 1.x interpreter form', () => {
+  // `GENESEED_HOOK_SNIFF` carries the shim's filename alone: the stated floor is that a 1.x
+  // install rebuilds first (F17). The legacy command must read as NOT ours, so this gate fails if
+  // the marker comes back as well as if the shim mark goes.
+  assert.deepEqual([...GENESEED_HOOK_SNIFF], ['geneseed-hook'],
     'the sniff markers changed — every install emitted under the other spelling becomes '
     + 'invisible to unlink, uninstall and the orphan scan');
   const legacy = '"C:\\Python313\\python.exe" "C:\\co\\rituals\\harness.py" git-gate';
   const shim = '"C:\\Users\\x\\.geneseed\\bin\\geneseed-hook.cmd" git-gate';
-  for (const cmd of [legacy, shim]) {
-    assert.ok(GENESEED_HOOK_SNIFF.some((m) => cmd.includes(m)), `not recognised: ${cmd}`);
-  }
+  assert.ok(GENESEED_HOOK_SNIFF.some((m) => shim.includes(m)), `not recognised: ${shim}`);
+  assert.ok(!GENESEED_HOOK_SNIFF.some((m) => legacy.includes(m)), `still recognised: ${legacy}`);
   assert.ok(!GENESEED_HOOK_SNIFF.some((m) => 'npm run build'.includes(m)),
     'a plain user hook is mistaken for Geneseed\'s');
 });

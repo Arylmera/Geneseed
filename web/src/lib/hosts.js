@@ -60,10 +60,12 @@ export const folderName = (path) =>
 export const installName = (inst) =>
   inst.scope === 'global' ? hostInfo(inst.host).label : folderName(inst.path)
 
-// The short tag an entry or a picker names its install by: `claude · global`, or a project's
-// folder then its host (`my-repo · bob`), so two projects of one host never read the same.
-export const installTag = (inst) =>
-  inst.scope === 'global' ? `${inst.host} · global` : `${folderName(inst.path)} · ${inst.host}`
+// The one tag anything names an install by: `Claude Code · global`, or a project's folder then
+// its host (`my-repo · BOB (IBM)`), so two projects of one host never read the same.
+export const installTag = (inst) => {
+  const host = hostInfo(inst.host).label
+  return inst.scope === 'global' ? `${host} · global` : `${folderName(inst.path)} · ${host}`
+}
 
 // The ACTIVE rows of /api/installs, the server's `default` row first (the install a request
 // naming none reads, so it is where every picker starts), the rest in the server's order. The

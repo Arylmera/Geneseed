@@ -4,8 +4,8 @@
 // `diffCollect` builds its `expected` tree by re-rendering `src/`, and it read the theme, the
 // emit and the footprint off the deployment precisely so that a legitimately-different install
 // would not be reported as edited. It did not read the posture or the mode: `makeCfg`'s
-// defaults are `peer`/`direct` (the reference's, inherited — `rituals/harness.py` never set
-// them either), so every install that chose any other register was diffed against a Peer/Direct
+// defaults are `peer`/`direct` (inherited, never set by
+// the caller), so every install that chose any other register was diffed against a Peer/Direct
 // AGENT.md and reported its own `## Posture` and `## Mode` sections as a local edit. The report
 // was permanent: no rebuild could clear it, because the rebuild wrote the register back.
 //
@@ -53,7 +53,9 @@ function install(d, { posture, mode, doctrines, excludeRules }) {
     cwd: ROOT,
     encoding: 'utf8',
     env: {
+      // The tier's path is rendered, so the install and `diffCollect` must share one XDG base.
       ...process.env, ...homeOverrides(path.join(d, 'home')), OPENCODE_CONFIG_DIR: gcfg,
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
     },
     maxBuffer: 1 << 26,
     windowsHide: true,
@@ -180,5 +182,31 @@ test('a file added under a non-default register is still reported', () => {
     assert.deepEqual(rels(files), []);
     fs.rmSync(path.join(gcfg, 'AGENT.md'));
     assert.deepEqual(rels(diffCollect({ target: gcfg }).files), ['AGENT.md (missing)']);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// B2: the registers are read off the HOST's own carrier. `diffCollect` passed no host to the
+// readers, so the host-agnostic walk met a stale `AGENT.md` first and answered for a Claude
+// install, whose carrier is `CLAUDE.md`.
+
+test('a stale AGENT.md beside a Claude install answers for none of its registers', () => {
+  withDir((d) => {
+    const gcfg = path.join(d, 'gcfg');
+    fs.mkdirSync(gcfg, { recursive: true });
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'),
+      '--emit', 'claude-global', '--theme', 'neutral'], {
+      cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26, windowsHide: true,
+      env: { ...process.env, ...homeOverrides(path.join(d, 'home')), CLAUDE_CONFIG_DIR: gcfg,
+        XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME },
+    });
+    assert.equal(r.status, 0, (r.stderr || r.stdout).slice(-1200));
+    assert.deepEqual(rels(diffCollect({ target: gcfg }).files), [], 'a fresh install reported drift');
+    // A leftover from an older layout: it excludes a skill, which would drop it from
+    // `expected` and report the deployed copy as a file that should not be there. It describes
+    // nothing of the install, whose carrier is CLAUDE.md.
+    fs.writeFileSync(path.join(gcfg, 'AGENT.md'), 'Excluded skills: brainstorm\n');
+    assert.deepEqual(rels(diffCollect({ target: gcfg }).files).filter((f) => f.startsWith('skills/brainstorm')), [],
+      'the stale AGENT.md answered for the install');
   });
 });

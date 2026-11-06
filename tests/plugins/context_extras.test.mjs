@@ -136,6 +136,86 @@ test("session files: the harness dir's changed files are injected, an untouched 
   assert.doesNotMatch(text, /----- memory\/MEMORY\.md -----/)
 })
 
+// The shared tier through the plugin (C6): a harness dir whose .geneseed-emit names a -global emit
+// reads the machine tier first, then its own layer. Each row: the shared and host files, relative to
+// their dir -> the heads and bodies that must and must not appear. The labels appear only when the
+// tier has a say in that file; PROFILE.md is whole; the notebook has no shared layer.
+const TIER_ROWS = [
+  { name: "rules in both layers, shared first", shared: { "user-rules.md": "shared rule" }, host: { "user-rules.md": "host rule" },
+    has: "----- user-rules.md (shared) -----\nshared rule\n\n----- user-rules.md (host: opencode) -----\nhost rule\n" },
+  { name: "a memory map in the tier alone", shared: { "memory/MEMORY.md": "shared map" },
+    has: "----- memory/MEMORY.md (shared) -----\nshared map\n" },
+  { name: "a host profile replaces the shared one", shared: { "PROFILE.md": "shared me" }, host: { "PROFILE.md": "host me" },
+    has: "----- PROFILE.md (host: opencode) -----\nhost me\n", hasNot: "shared me" },
+  { name: "the notebook has no shared layer", shared: { "notebook/NOTEBOOK.md": "never read" }, host: { "notebook/NOTEBOOK.md": "host note" },
+    has: "----- notebook/NOTEBOOK.md -----\nhost note\n", hasNot: "never read" },
+  { name: "a project install reads no tier", emit: "opencode", shared: { "user-rules.md": "shared rule" }, host: { "user-rules.md": "host rule" },
+    has: "----- user-rules.md -----\nhost rule\n", hasNot: "shared rule" },
+]
+
+/** The block a harness dir renders, with the tier moved to `xdg` and the emit marker set. */
+async function tierBlock(name, { emit = "opencode-global", shared = {}, host = {} }) {
+  const h = path.join(tmp, `tier-${name}`, "harness")
+  const xdg = path.join(tmp, `tier-${name}`, "xdg")
+  const put = async (file, text) => {
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await fs.writeFile(file, text)
+  }
+  await put(path.join(h, "AGENT.md"), "# harness\n")
+  await put(path.join(h, ".geneseed-emit"), `${emit}\n`)
+  for (const [f, t] of Object.entries(shared)) await put(path.join(xdg, "geneseed", f), t)
+  for (const [f, t] of Object.entries(host)) await put(path.join(h, f), t)
+  const plugin = await load({}, `tier-${name}`)
+  const output = { messages: [userMsg("s1")] }
+  const prev = ["GENESEED_HARNESS", "XDG_CONFIG_HOME", "GENESEED_WIKI"].map((v) => [v, process.env[v]])
+  process.env.GENESEED_HARNESS = h          // read live when the block is built
+  process.env.XDG_CONFIG_HOME = xdg
+  delete process.env.GENESEED_WIKI
+  try {
+    await plugin["experimental.chat.messages.transform"]({}, output)
+  } finally {
+    for (const [v, val] of prev) {
+      if (val === undefined) delete process.env[v]
+      else process.env[v] = val
+    }
+  }
+  return output.messages[0].parts[0].text
+}
+
+for (const [i, row] of TIER_ROWS.entries()) {
+  test(`session files, shared tier: ${row.name}`, async () => {
+    const text = await tierBlock(`row${i}`, row)
+    assert.ok(text.includes(row.has), text)
+    if (row.hasNot) assert.ok(!text.includes(row.hasNot), text)
+  })
+}
+
+test("session files, shared tier: an empty tier prints no label", async () => {
+  const text = await tierBlock("empty", { host: { "user-rules.md": "host rule" } })
+  assert.ok(text.includes("----- user-rules.md -----\nhost rule\n"), text)
+})
+
+test("the wiki: the tier's manifest stands behind a host seed, and a host manifest replaces it", async () => {
+  // Whole file, as the hook has it. The manifests name the plugin's own tmp as their root.
+  const { SESSION_SEEDS } = await import("../../js/build/stubs.mjs")
+  const manifest = (name) => JSON.stringify({ wikis: [{ name, path: tmp }] })
+  const shared = { "geneseed-wiki.jsonc": manifest("SharedWiki") }
+  const seeded = await tierBlock("wiki-seed", { shared, host: { "geneseed-wiki.jsonc": SESSION_SEEDS["geneseed-wiki.jsonc"] } })
+  assert.ok(seeded.includes("--- wiki: SharedWiki "), seeded)
+  const absent = await tierBlock("wiki-absent", { shared })
+  assert.ok(absent.includes("--- wiki: SharedWiki "), absent)
+  const own = await tierBlock("wiki-own", { shared, host: { "geneseed-wiki.jsonc": manifest("HostWiki") } })
+  assert.ok(own.includes("--- wiki: HostWiki ") && !own.includes("SharedWiki"), own)
+  const project = await tierBlock("wiki-project", { emit: "opencode", shared })
+  assert.ok(!project.includes("SharedWiki"), project)
+})
+
+// B5: the hook and this plugin read the same names; the rename's oldest is covered here.
+test("the wiki: a legacy wiki.json in the harness dir is still read", async () => {
+  const text = await tierBlock("wiki-json", { host: { "wiki.json": JSON.stringify({ wikis: [{ name: "Oldest", path: tmp }] }) } })
+  assert.ok(text.includes("--- wiki: Oldest "), text)
+})
+
 test("session files: a memory map with a misc topic carries the curation nudge", async () => {
   // The plugin's copy of the hook's rule (tests/unit/claude.test.mjs pins the text): a `misc`
   // topic, or a topic over 40 facts, appends one line asking for the memory-curator.

@@ -50,14 +50,14 @@ const cell = async () => {
   return within(table)
 }
 
-describe('Ledger hand-edits cell', () => {
+describe('Ledger local-edits cell', () => {
   it('shows only linked paths as a muted "linked" figure, with no Rebuild', async () => {
     api.fleet.mockResolvedValue({
       installs: [row({ edited: 0, added: 0, missing: 0, linked: 2 })],
     })
     render(<Ledger overview={null} onAction={() => {}} />)
     const t = await cell()
-    const linked = await t.findByText('2 linked')
+    const linked = await t.findByText('2 linked by you')
     expect(linked.className).toContain('dim')
     expect(t.queryByText(/edited/)).toBeNull()
     expect(t.queryByText(/Rebuild/)).toBeNull()
@@ -78,7 +78,7 @@ describe('Ledger hand-edits cell', () => {
     const t = await cell()
     expect(await t.findByText('3 files behind')).toBeTruthy()
     expect(t.queryByText(/edited/)).toBeNull()
-    expect(t.getByText('none')).toBeTruthy()
+    expect(t.queryByText('No edits')).toBeNull()
     expect(t.getByText('Rebuild')).toBeTruthy()
   })
 
@@ -137,7 +137,7 @@ describe('Ledger hand-edits cell', () => {
     render(<Ledger overview={null} onAction={() => {}} />)
     const t = await cell()
     expect(await t.findByText('1 edited')).toBeTruthy()
-    expect(t.queryByText('2 linked')).toBeNull()
+    expect(t.queryByText('2 linked by you')).toBeNull()
     expect(t.getByText('Rebuild')).toBeTruthy()
   })
 })

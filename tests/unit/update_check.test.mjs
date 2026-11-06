@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { apiUpdate } from '../../js/web/api.mjs';
-import { gitBehind, installKind, semverGreater, updateStatus } from '../../js/web/update-check.mjs';
+import { behindOf, fetchBehind, gitBehind, installKind, semverGreater, updateStatus } from '../../js/web/update-check.mjs';
 import { withSandbox } from '../helpers/sandbox.mjs';
 
 const HOUR = 60 * 60 * 1000;
@@ -128,6 +128,53 @@ test('a copy outside any node_modules is other, and npm is not asked for it', ()
 // - a count is kept for a day, and 0 ("up to date") is a count, not a failure;
 // - a failed measure is null and is re-asked after an hour;
 // - while a job runs (`busy`) nothing is measured, so no fetch races the update's own pull.
+
+// What the Update button rests on: only a remote that gave no answer leaves a pull worth trying.
+// Every other non-count is `upgrade` refusing, so the console must not offer it (`false`).
+test('behindOf maps each upstream verdict', () => {
+  for (const [verdict, want] of [
+    [['uptodate', 0], 0],
+    [['ready', 4], 4],
+    [['fetch_failed', 0], null],
+    [['no_upstream', 0], false],
+    [['diverged', 0], false],
+    [['unrelated', 0], false],
+  ]) assert.equal(behindOf(...verdict), want, verdict[0]);
+});
+
+// The local gate first, as `upgrade` runs them: a refused preflight must not reach the network.
+test('fetchBehind answers false on a refused preflight, with no fetch', async () => {
+  let fetched = 0;
+  const measure = async () => { fetched += 1; return ['ready', 2, '']; };
+  assert.equal(await fetchBehind({ pre: () => ({ ok: false }), measure }), false);
+  assert.equal(fetched, 0, 'a checkout that cannot pull was fetched');
+  assert.equal(await fetchBehind({ pre: () => ({ ok: true }), measure }), 2);
+  assert.equal(fetched, 1);
+});
+
+// `false` ends with a `git checkout main`, so the button must not stay gone for a day.
+test('gitBehind re-asks false after an hour, like a failure', async () => {
+  const st = {};
+  let answer = false;
+  let calls = 0;
+  const measure = async () => { calls += 1; return answer; };
+  gitBehind(st, { measure, now: 0 });
+  await settle();
+  assert.equal(gitBehind(st, { measure, now: HOUR - 1 }), false);
+  assert.equal(calls, 1, 'not retried inside the hour');
+  answer = 0;
+  gitBehind(st, { measure, now: HOUR + 1 });
+  await settle();
+  assert.equal(calls, 2, 'retried once the hour is up');
+  assert.equal(gitBehind(st, { measure, now: HOUR + 2 }), 0);
+});
+
+// A fetch can take two minutes: the page must keep asking, not settle on an unknown.
+test('apiUpdate says checking while the clone ask is out', () => {
+  const st = { _behind: { value: null, checked_at: null, inflight: true } };
+  assert.equal(apiUpdate(st).checking, true);
+  assert.equal(apiUpdate({ _behind: { value: 0, checked_at: 1, inflight: false } }).checking, false);
+});
 
 test('gitBehind answers null first, then the count, and asks once a day', async () => {
   const st = {};

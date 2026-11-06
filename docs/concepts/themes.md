@@ -35,7 +35,7 @@ The theme is stored in a `.geneseed-theme` marker in the install, so upgrades an
   geneseed setup
   ```
 
-- **Web console** — the per-install voice dropdown on the Harness page.
+- **Web console** — the per-install voice dropdown on the Installs page.
 - **Command line** — with the emit target of the install you are changing:
 
   ```bash

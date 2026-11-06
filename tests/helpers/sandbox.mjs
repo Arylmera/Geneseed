@@ -185,6 +185,9 @@ export function sandboxProcessHome() {
   // other three relocation vars are set explicitly by the tests that use them.
   saved.CLAUDE_CONFIG_DIR = envGet('CLAUDE_CONFIG_DIR');
   envDelete('CLAUDE_CONFIG_DIR');
+  // Claude Code's version as it tells its hooks: a suite run from inside it would drop AGENTS.md.
+  saved.AI_AGENT = envGet('AI_AGENT');
+  envDelete('AI_AGENT');
   PROCESS_HOMES.push([sb, saved]);
   return sb.path;
 }
@@ -239,8 +242,9 @@ export function cellEnv(home) {
     }
   };
   // `CLAUDE_PROJECT_DIR`: the hooks' stand-down judges against it, and a suite run from inside
-  // Claude Code inherits the developer's own project root.
-  for (const v of [...RELOCATION_VARS, 'NO_COLOR', 'TERM', 'CLAUDE_PROJECT_DIR']) drop(v);
+  // Claude Code inherits the developer's own project root. `AI_AGENT`: the context hook reads
+  // Claude Code's version from it, so the same run would inject a different set of docs.
+  for (const v of [...RELOCATION_VARS, 'NO_COLOR', 'TERM', 'CLAUDE_PROJECT_DIR', 'AI_AGENT']) drop(v);
   for (const k of Object.keys(env)) {
     if (k.toUpperCase().startsWith('GENESEED_') && k.toUpperCase() !== 'GENESEED_HOME') {
       delete env[k];

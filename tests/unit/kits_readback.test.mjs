@@ -115,7 +115,7 @@ test('R2: a retired or unshipped kit in the marker is dropped with a notice, and
 
 test('status shows kits in an install row only when it has some', () => {
   const base = {
-    version_verdict: 'up to date', theme: 'neutral', accent: 'x', emit: 'claude-global', agents: 1,
+    version_verdict: 'in sync', theme: 'neutral', accent: 'x', emit: 'claude-global', agents: 1,
     skills: 1, laws: 1, memory_dir: null, facts: 0, installed_fp: 'a', source_fp: 'a',
   };
   const row = { host: 'claude', scope: 'global', root: 'r', state: 'ok', theme: 'neutral',
@@ -154,7 +154,7 @@ test('R6: an edited member of a kit turned off is kept, and status names it', ()
   const p = row();
   assert.deepEqual(p.keptKitFiles, { fx: ['agents/fx-agent.md'] });
   const text = fxStatus.statusLines({
-    version_verdict: 'up to date', theme: 'neutral', accent: 'x', emit: 'claude-global', agents: 1,
+    version_verdict: 'in sync', theme: 'neutral', accent: 'x', emit: 'claude-global', agents: 1,
     skills: 1, laws: 1, memory_dir: null, facts: 0, installed_fp: 'a', source_fp: 'a', installs: [p],
   }).join('\n');
   assert.match(text, /kept from inactive kit fx: agents\/fx-agent\.md/);

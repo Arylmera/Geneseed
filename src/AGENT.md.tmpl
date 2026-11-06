@@ -44,8 +44,8 @@ it as your very first tool call — before loading context, reading files, or se
 **Session start.** The harness hook injects your session files (any still at its seed is
 skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
 `=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
-`{{AT_HARNESS}}user-rules.md`, `{{AT_HARNESS}}PROFILE.md`, `{{DIR_MEMORY}}/MEMORY.md`,
-`{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{AT_HARNESS}}geneseed-wiki.jsonc`, `{{AT_HARNESS}}context.json`.
+`{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`,
+`{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{PATH_WIKI}}`, `{{AT_HARNESS}}context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
@@ -60,7 +60,7 @@ never move.
 | 3 | The {{ONTOLOGY}} | never against a user rule |
 | 4 | The active {{DOCTRINES}} (§2) | may tighten, never repeal |
 | 5 | The mode | binds how work runs |
-| 6 | `PROFILE.md`, posture, theme | inform only; never bind |
+| 6 | `PROFILE.md`, posture, theme | inform only; never bind |{{RULE_LAYERS_LINE}}
 
 ---
 
@@ -110,7 +110,7 @@ workers get only approved decisions.{{OWNERSHIP_PROPOSAL}}
 
 <!-- INCLUDE: laws/universal.md -->
 
-**The user's own rules.** `{{AT_HARNESS}}user-rules.md` (a session file) holds the
+**The user's own rules.** `{{PATH_RULES}}` (a session file) holds the
 user's own rules: obey every rule in it with the same force as the {{LAWS}} above
 — always, in every task (its rank is in the precedence table above). That file belongs
 to the user — the build seeds it once, never overwrites it, and no update touches
@@ -121,7 +121,7 @@ append it there with the user's consent (the [rule]({{DIR_SKILLS}}/rule.md)
 add, edit, or remove a {{DOCTRINE}} rule in §2 — both are regenerated on every
 update, and an edit to either is silently lost.
 
-**The user's profile.** `{{AT_HARNESS}}PROFILE.md` (a session file) colours how you
+**The user's profile.** `{{PATH_PROFILE}}` (a session file) colours how you
 work — who the user is, how they work, the register they prefer. Unlike `user-rules.md`,
 it is *identity, not rules*: it never binds,
 it only informs. It too belongs to the user: seeded once, never overwritten. Never
@@ -192,7 +192,7 @@ contract you do not already know.
 {{AGENT}} that *writes* must return a summary of exactly what it changed. Every
 {{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
 `spec-feedback:` line, weigh it — record a real flaw (with the user's assent) in
-`{{DIR_NOTEBOOK}}/agent-notes/<name>.md` and pass it to later dispatches;
+`{{PATH_NOTES}}/agent-notes/<name>.md` and pass it to later dispatches;
 {{MEMORY}} gets a record only when it clears {{DOCTRINE:persist-insight}}'s bar.
 
 <!-- LEAN:begin -->
@@ -242,8 +242,7 @@ the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/cou
 | [document-project]({{DIR_SKILLS}}/document-project.md) | missing/drifted docs, or a PRD, design system, architecture doc or AGENTS.md; orienting to the repo, or refreshing its map after the structure changed |
 | [ingest]({{DIR_SKILLS}}/ingest.md) | a task needs content from a PDF, Office doc, or URL |
 | [research]({{DIR_SKILLS}}/research.md) | a question needs answers gathered and verified from the open web |
-| [teach]({{DIR_SKILLS}}/teach.md) | the user wants to be taught — a crash course, confusing material decoded, or a day-by-day path to a deadline |
-| [quiz]({{DIR_SKILLS}}/quiz.md) | the user wants what they know tested, not explained — a drill, an explain-it-back check, or a mastery claim probed for gaps |
+| [teach]({{DIR_SKILLS}}/teach.md) | the user wants to be taught — a crash course, confusing material decoded, or a day-by-day path to a deadline — or tested, not lectured: a drill, an explain-it-back check, or a mastery claim probed for gaps |
 | [learn-mode]({{DIR_SKILLS}}/learn-mode.md) | the user wants to learn while building — they design, you code what they approve |
 | [ownership]({{DIR_SKILLS}}/ownership.md) | the developer must own production code — they decide each part at a granularity the team sets, from the root AGENTS.md |
 | [commit]({{DIR_SKILLS}}/commit.md) | staging and writing a commit |
@@ -294,7 +293,7 @@ inventory — that list is the catalogue and it is authoritative. Each written
 procedure is in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on
 demand.
 <!-- CATALOG:end -->
-{{EXCLUDED_SKILLS_LINE}}{{KITS_LINE}}
+{{EXCLUDED_SKILLS_LINE}}{{KITS_LINE}}{{SHARED_TIER_LINE}}
 When a task repeats and no {{SKILL}} covers it, forge one through the
 [skill-forge]({{DIR_SKILLS}}/skill-forge.md) {{SKILL}}: copy
 [`{{DIR_SKILLS}}/_template.md`]({{DIR_SKILLS}}/_template.md), keep it to one coherent
@@ -309,12 +308,12 @@ the file, or to {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 *{{EPI_MEMORY}}*
 
 <!-- LEAN:begin -->
-Persistent facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/) — one fact per file, indexed by a
+Persistent facts live in {{LINK_MEMORY}} — one fact per file, indexed by a
 local `MEMORY.md`, a session file (**Session start**, above); write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
 keeping — through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with
 the user whether it is a memory or a standing rule before either is written
-({{DOCTRINE:persist-insight}}). The `{{DIR_MEMORY}}/` directory is **personal and git-ignored** — it is
+({{DOCTRINE:persist-insight}}). The `{{PATH_MEMORY}}/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
 project's `user-rules.md` (§1). When the same feedback lesson keeps recurring,
 propose promoting it into a standing rule — the [rule]({{DIR_SKILLS}}/rule.md)
@@ -325,7 +324,7 @@ evidence contradicts one, revise it rather than ignore it, and never overturn a
 the session — memory, notebook, notes, commits, docs — cite a rule by its principle
 ("Verify Before Asserting"), never its number: numbers are positional. Full convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 <!-- LEAN:else -->
-Durable facts live in [`{{DIR_MEMORY}}/`]({{DIR_MEMORY}}/), one per file, indexed by
+Durable facts live in {{LINK_MEMORY}}, one per file, indexed by
 `MEMORY.md`, a session file. Write one through the
 [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with the user whether a
 lesson is a memory or a standing rule ({{DOCTRINE:persist-insight}}). The directory is
@@ -415,7 +414,7 @@ It receives only the task's deliverables; your working files go in the {{NOTEBOO
 *{{EPI_WIKI}}*
 
 <!-- LEAN:begin -->
-{{INTRO_WIKI}} It is declared in `{{AT_HARNESS}}geneseed-wiki.jsonc`, a session file — or
+{{INTRO_WIKI}} It is declared in `{{PATH_WIKI}}`, a session file — or
 wherever `$GENESEED_WIKI` points. An empty `wikis` list means none is declared and this
 section stays dormant. (On OpenCode its `eager` entries are loaded for you.)
 
@@ -442,7 +441,7 @@ durable fact worth sharing across projects goes here via the
 [wiki]({{DIR_SKILLS}}/wiki.md) {{SKILL}}; one that matters only to you stays in
 {{MEMORY}} (§5).
 <!-- LEAN:else -->
-{{INTRO_WIKI}} Declared in `{{AT_HARNESS}}geneseed-wiki.jsonc`, a session file (or at
+{{INTRO_WIKI}} Declared in `{{PATH_WIKI}}`, a session file (or at
 `$GENESEED_WIKI`; an empty `wikis` list means dormant) — honour each wiki: load `entries` by `load` mode as in `context.json` (§9), read
 `conventions` before your first write there, drop an unplaceable note in `inbox`,
 never write inside `protected`. It is the user's: wikilinks over bare paths, every

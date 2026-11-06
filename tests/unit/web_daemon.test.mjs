@@ -72,7 +72,7 @@ const REF_WEB = {
   ints: ['--port'],
 };
 
-/** The prompt `serve()` prints when there is no built UI — measured from the reference. */
+/** The prompt `serve()` prints when there is no built UI. */
 const NPM_PROMPT = '[web] UI not built — run npm install && npm run build now? [Y/n] ';
 
 /** `if open_browser:` appeared on exactly three arms of the reference. */
