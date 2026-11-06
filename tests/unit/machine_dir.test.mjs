@@ -42,6 +42,7 @@ test('sharedPaths names every key under the machine directory', () => {
     notes: path.join(root, 'notes'),
     draft: path.join(root, 'user-rules.draft.md'),
     foldState: path.join(root, '.fold-state.json'),
+    defaultInstall: path.join(root, 'default-install.json'),
   });
 });
 

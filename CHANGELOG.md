@@ -23,6 +23,7 @@ Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.
 - **`status` and `rebuild-all` warn about a legacy wiki name.** A `wiki.jsonc` or `wiki.json` still in place is named, with what it renames to.
 - **`migrate --dry-run` lists orphans.** It names the root `AGENT.md` and the folder of a retired or merged skill that no manifest owns, and says that such a folder may be yours. It moves nothing.
 - **The 24 remaining `experimental` entries are `approved`.** The status stays valid for a new entity.
+- **You can choose the default install.** On the Installs page, *Make default* on any active install sets the install that the console's pickers start on and that a request naming no install reads. The `install` and `theme` lines of `geneseed status` follow it. The choice is machine-wide, in `default-install.json` in the shared tier. If that install is removed or disabled, the console goes back to the fixed host order.
 
 ### Removed
 - **BREAKING: `sync-self` and the dead positionals are gone.** `upgrade` takes only a theme, so `upgrade imperial` still works and `upgrade main imperial` is an error. `bootstrap` no longer takes `ref` or `extra`.

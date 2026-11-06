@@ -8,7 +8,7 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
@@ -30,7 +30,8 @@ import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops } from '../loop/registry.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
-import { isFile } from '../lib/fs.mjs';
+import { isFile, writeTextAtomic } from '../lib/fs.mjs';
+import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
   configItems, deployed, dget, memoryDir, memoryItems, notebookItems, wikiItems,
@@ -183,6 +184,34 @@ const installRowBase = (host, scope, root, state) => ({
   footprint: footprintOfDir(root),
 });
 
+/** Move the daemon's own state to the default install `def`. A pinned view keeps the one it named. */
+function followDefault(state, def) {
+  if (def && state?.selectView && !state.pinned && !samePath(def[0], state.target)) state.selectView(...def);
+}
+
+/**
+ * `POST /api/default-install`: `{host, path}` makes that install the default. Anything else is
+ * refused (the 409 arm) and the stored pick stays: there is no clearing body, because
+ * `readJsonBody` turns a malformed request into `{}`, and that must not erase a choice. The
+ * pair is the VALUE here, so this route is no `VIEW_POSTS` row. It stores the detected root, not
+ * the request's spelling of it. The daemon state moves here and not by `refresh`, which would
+ * drop every install's cached doctor for a pick that changes none of them.
+ */
+export function apiDefaultInstallSet(state, body) {
+  const { host, path: root } = body;
+  const hit = typeof root === 'string' && root
+    ? [...activeInstalls(installTargets())].find(([h, , r]) => h === host && samePath(r, root))
+    : undefined;
+  if (hit === undefined) return { ok: false, error: 'not an active install (host, path)' };
+  const file = sharedPaths().defaultInstall;
+  // The folder normally exists already, through the install registry. Created here, it also reads
+  // as a tier (`tierOf`), as it does for every other writer into it.
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeTextAtomic(file, `${JSON.stringify({ host, path: String(hit[2]) }, null, 2)}\n`);
+  followDefault(state, defaultView());
+  return { ok: true };
+}
+
 /**
  * The row `id` carries the ROOT, not only `host:scope`: two project installs of one host (two
  * repos on Bob, say) are both `bob:project`, and the console keys its selection, its React rows
@@ -196,7 +225,7 @@ export function apiInstalls(state) {
   const def = defaultView(targets);
   // The row marked `default` must be the install an unnamed request reads, so the daemon state
   // follows the marker here, where the console reads it, rather than only on a full refresh.
-  if (def && state?.selectView && !state.pinned && !samePath(def[0], state.target)) state.selectView(...def);
+  followDefault(state, def);
   for (const [host, scope, root] of targets) {
     out.push({
       ...installRowBase(host, scope, root, installState(root, host, scope)),

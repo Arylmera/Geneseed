@@ -16,6 +16,7 @@ import {
   postureOfDir, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
 import { doctorCollect } from '../inspect/doctor.mjs';
+import { emitOf, pickedInstall } from '../inspect/status.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { readText, isFile } from '../lib/fs.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
@@ -51,12 +52,14 @@ export function fleetSort(list, of) {
 }
 
 /**
- * `[target, root]` of THE DEFAULT INSTALL — the one a request that names no install reads — or
- * null when no install is active.
+ * `[target, root, emit]` of THE DEFAULT INSTALL — the one a request that names no install reads —
+ * or null when no install is active. The three are `selectView`'s arguments: the emit travels
+ * because a repo with two project installs has one root marker, the last emit's.
  *
- * It is the first ACTIVE install in the console's one install order (`fleetSort`): host order
- * (opencode, claude, bob, openclaude), then global before project, then the order
- * `installTargets` found them.
+ * It is the install the user chose (`POST /api/default-install`, `pickedInstall`) while that one is
+ * still active, else the first ACTIVE install in the console's one install order (`fleetSort`):
+ * host order (opencode, claude, bob, openclaude), then global before project, then the order
+ * `installTargets` found them. A stale pick falls through in silence: it never breaks the console.
  * There is no viewed install to pick any more (the topbar selector and `POST /api/view` are
  * gone): a page that wants another install names it on the request. The console once opened
  * on the OpenCode global dir unconditionally, and on a Bob-only machine (reported 2026-10) it
@@ -67,8 +70,8 @@ export function defaultView(targets = installTargets()) {
   const active = targets.filter(([host, scope, root]) => {
     try { return installState(root, host, scope) === 'active'; } catch { return false; }
   });
-  const pick = fleetSort(active, ([host, scope]) => [host, scope])[0];
-  return pick ? [viewCfg(...pick), pick[2]] : null;
+  const pick = pickedInstall(active) ?? fleetSort(active, ([host, scope]) => [host, scope])[0];
+  return pick ? [viewCfg(...pick), pick[2], emitOf(pick[0], pick[1])] : null;
 }
 
 /**
@@ -124,6 +127,8 @@ export function webState(theme = null, target = null) {
     // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
     // it re-renders on its own key change, so `refresh()` leaves it alone.
     renderMemo: null,
+    // The emit `selectView` was told, which outranks any marker; null reads the markers.
+    _knownEmit: null,
     // True for a per-install view (`installView` in actions.mjs): `refresh` must never re-point
     // it at another install, since the request named THIS one.
     pinned: false,
@@ -187,6 +192,7 @@ export function webState(theme = null, target = null) {
    * `installedDefaults()`.
    */
   st.detectEmit = () => {
+    if (st._knownEmit) return st._knownEmit;
     for (const d of [st.root, st.target]) {
       try {
         const em = path.join(d, '.geneseed-emit');
@@ -208,11 +214,13 @@ export function webState(theme = null, target = null) {
    * and a Diff or a Restore would then overwrite it in the wrong dialect. The theme/posture/mode
    * SIGILS are different: for claude/bob they live in the ROOT carrier (`themeOfDir` scans it);
    * for openclaude they live ONLY in the data dir's nested `.openclaude/CLAUDE.md`, since its
-   * root carrier is deliberately left untouched (host-compat B1/I1).
+   * root carrier is deliberately left untouched (host-compat B1/I1). `emit`, when the caller knows
+   * which install this is, settles the dialect; the root's marker cannot when two hosts share it.
    */
-  st.selectView = (target, root = null) => {
+  st.selectView = (target, root = null, emit = null) => {
     st.target = target;
     st.root = root || target;
+    st._knownEmit = emit;
     st.emit = st.detectEmit();
     const host = hostOf();
     st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || 'neutral';

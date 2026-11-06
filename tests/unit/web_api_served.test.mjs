@@ -8,10 +8,12 @@ import path from 'node:path';
 import { installView } from '../../js/web/actions.mjs';
 import { RULES_FILE } from '../../js/web/user-files.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { sharedPaths } from '../../js/lib/machine-dir.mjs';
+import { TMP_ROOT } from '../helpers/sandbox.mjs';
 import {
   MACHINE_GETS, POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, VIEW_POSTS,
 } from '../../js/web/routes.mjs';
-import { webFixtureTeardown } from '../helpers/web_fixture.mjs';
+import { dropSandboxTier, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 import {
   withTwoViewsServed, seedFact, readLf, samePath,
 } from '../helpers/web_api_fixture.mjs';
@@ -76,6 +78,32 @@ test('a request naming no install answers for the default install', async () => 
     st.refresh();
     assert.equal((await (await get('/api/themes')).json()).current.theme, 'imperial');
     assert.ok(samePath((await (await get('/api/setup')).json()).target, cl));
+  });
+});
+
+// The chosen default through the real route: a request naming no install follows it at once, a
+// view pinned to another install does not, and the route's refusal is the 409 arm.
+test('POST /api/default-install moves what an unnamed request reads', async () => {
+  await withTwoViewsServed(async ({ st, oc, cl, ocPair, clPair, get, post }) => {
+    const pin = installView(st, ocPair);
+    const refused = await post('/api/default-install', clPair);
+    assert.equal(refused.status, 409, 'claude has no manifest here, so it is not active');
+    assert.deepEqual(await refused.json(), { ok: false, error: 'not an active install (host, path)' });
+
+    fs.writeFileSync(path.join(cl, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    const file = sharedPaths().defaultInstall;
+    assert.ok(file.startsWith(TMP_ROOT), `the pick file is outside the sandbox: ${file}`);
+    try {
+      assert.equal((await post('/api/default-install', clPair)).status, 200);
+      assert.ok(samePath((await (await get('/api/setup')).json()).target, cl));
+      assert.equal((await (await get('/api/themes')).json()).current.theme, 'imperial');
+      assert.ok(samePath(pin.target, oc), 'the pick re-pointed a pinned view');
+      const rows = (await (await get('/api/installs')).json()).installs;
+      assert.deepEqual(rows.filter((r) => r.default).map((r) => r.host), ['claude']);
+
+      assert.equal((await post('/api/default-install', {})).status, 409, 'an empty body cleared the pick');
+      assert.ok(samePath((await (await get('/api/setup')).json()).target, cl));
+    } finally { dropSandboxTier(); } // the pick's folder would read as a tier in the next test
   });
 });
 

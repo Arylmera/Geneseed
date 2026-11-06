@@ -97,7 +97,17 @@ function SyncCell({ inst, fleet, version, onEdits }) {
 // per-project installs are named by their folder, with the host beside it, because the
 // question each table answers is different ("which tools carry the harness everywhere"
 // vs "which repos carry their own").
-function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits }) {
+function InstallTable({
+  rows,
+  project,
+  currentId,
+  onPick,
+  label,
+  fleet,
+  onEdits,
+  onDefault,
+  busyKey,
+}) {
   // Joined by id; an absent install is never in the fleet, so it reads as "—".
   const fleetRow = (inst) =>
     fleet === undefined ? undefined : fleet?.installs?.find((f) => f.id === inst.id) || null
@@ -151,6 +161,34 @@ function InstallTable({ rows, project, currentId, onPick, label, fleet, onEdits 
                 <td>{quiet ? '' : inst.footprint || ''}</td>
                 <td>
                   <span className={`tag ${tone}`}>{stateLabel}</span>
+                  {inst.default ? (
+                    <>
+                      {' '}
+                      <span
+                        className="tag"
+                        title="A page that names no install reads this one, and pickers start on it"
+                      >
+                        Default
+                      </span>
+                    </>
+                  ) : inst.state === 'active' && onDefault ? (
+                    <>
+                      {' '}
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        aria-label={`Make ${installName(inst)} the default install`}
+                        disabled={busyKey === inst.id}
+                        onClick={(e) => {
+                          // Inside a row that picks on click.
+                          e.stopPropagation()
+                          onDefault(inst)
+                        }}
+                      >
+                        Make default
+                      </button>
+                    </>
+                  ) : null}
                   {isLeftover(inst) ? (
                     <>
                       {' '}
@@ -400,6 +438,20 @@ export default function Hosts({
     }
   }
 
+  // Pickers, the sidebar and the Overview all follow from /api/installs on the next data revision.
+  const makeDefault = async (inst) => {
+    setBusyKey(inst.id)
+    setNote(null)
+    try {
+      await api.setDefaultInstall(inst.host, inst.path)
+      onMutated?.()
+    } catch (e) {
+      setNote({ text: e.message, tone: 'bad' })
+    } finally {
+      setBusyKey('')
+    }
+  }
+
   // Where an install's memory/ and notebook/ live, so the confirm names what "delete"
   // removes: a Claude-style project keeps them under its marker folder, any other install
   // in its root.
@@ -551,6 +603,8 @@ export default function Hosts({
             label="Global installs"
             fleet={fleet}
             onEdits={openEdits}
+            onDefault={onAction ? makeDefault : undefined}
+            busyKey={busyKey}
           />
         </section>
         <section className="panel flush" aria-labelledby="inst-project">
@@ -588,6 +642,8 @@ export default function Hosts({
               label="Per-project installs"
               fleet={fleet}
               onEdits={openEdits}
+              onDefault={onAction ? makeDefault : undefined}
+              busyKey={busyKey}
             />
           ) : (
             <EmptyState>

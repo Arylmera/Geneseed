@@ -48,14 +48,15 @@ import {
 // the deployed theme and footprint, and `rebuild-all` re-emits in the deployed everything, so
 // three verbs read them.
 import {
-  defaultTheme, hookShellProblems, installedDefaults, installTargets, installsReferencingShim,
-  openclaudeDualHarnessRoots, readJsonMaybe, readMaybe,
+  claudeCfg, defaultTheme, hookShellProblems, installedDefaults, installState, installTargets,
+  installsReferencingShim, openclaudeDualHarnessRoots, themeOfDir, readJsonMaybe, readMaybe,
 } from '../hosts/installs.mjs';
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { isDoctorNote } from './scan.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
-import { sharedPaths } from '../lib/machine-dir.mjs';
+import { readDefaultInstall, sharedPaths } from '../lib/machine-dir.mjs';
+import { normcase } from '../lib/paths.mjs';
 import { renamedFilesIn } from '../build/stubs.mjs';
 import { codePointLength, padEndToWidth } from '../lib/text.mjs';
 
@@ -269,9 +270,42 @@ export function keptKitFiles(host, scope, root, active) {
   return Object.keys(kept).length ? kept : null;
 }
 
+/**
+ * The `[host, scope, root]` of `targets` the user chose as the default, or null: no pick, or a pick
+ * that no longer names an ACTIVE install (removed, disabled, or not seen from here). A stale pick
+ * stays on disk and works again if that install comes back.
+ *
+ * Here and not in `js/web/state.mjs`, whose `defaultView` is the other reader: `status` may not
+ * load the web tree. `targets` is scanned only when a pick exists.
+ */
+export function pickedInstall(targets = null) {
+  const want = readDefaultInstall();
+  if (want === null) return null;
+  const folded = normcase(resolvePath(want.path));
+  return (targets ?? installTargets()).find(([host, scope, root]) => {
+    try {
+      return host === want.host && normcase(resolvePath(root)) === folded
+        && installState(root, host, scope) === 'active';
+    } catch { return false; }
+  }) ?? null;
+}
+
+/** The emit name of a `[host, scope]`, the inverse of `EMIT_HOST_SCOPE`. */
+export const emitOf = (host, scope) => (scope === 'global' ? `${host}-global` : host);
+
+/** A picked install's own voice. OpenClaude keeps a project's sigil in its data dir alone. */
+function pickedTheme([host, scope, root]) {
+  return themeOfDir(root, host)
+    || (CLAUDE_STYLE.includes(host) ? themeOfDir(claudeCfg(root, scope, host), host) : null);
+}
+
 export function statusData() {
   const inst = installedDefaults();
-  const theme = inst.theme || defaultTheme();
+  // The `install` and `theme` lines name the install the console defaults to, when one was chosen.
+  // Nothing else does: `agent_md` below is a health row, and a preference must not hide it.
+  const picked = pickedInstall();
+  const emit = picked ? emitOf(picked[0], picked[1]) : inst.emit;
+  const theme = (picked && pickedTheme(picked)) || inst.theme || defaultTheme();
   const mdir = resolveMemoryDir(null);
   // `inst.doctrines` is what the machine's carriers say — `null` when none of them does, which
   // `tuiInventory` reads as every pack, the same resolution `doctrinesForBuild` gives unknown.
@@ -303,7 +337,7 @@ export function statusData() {
   return {
     theme,
     accent: accentFor(theme),
-    emit: inst.emit || '—',
+    emit: emit || '—',
     agents: inv.agents,
     skills: inv.skills,
     laws: inv.laws,

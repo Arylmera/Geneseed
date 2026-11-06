@@ -5,15 +5,19 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { apiInstalls, apiKits } from '../../js/web/api.mjs';
+import { apiDefaultInstallSet, apiInstalls, apiKits } from '../../js/web/api.mjs';
+import { defaultView } from '../../js/web/state.mjs';
+import { statusData } from '../../js/inspect/status.mjs';
+import { sharedPaths } from '../../js/lib/machine-dir.mjs';
 import { NotFound, apiCatalog, apiItem } from '../../js/web/catalog.mjs';
 import { installView } from '../../js/web/actions.mjs';
 import { apiInstallToggle, apiInstallCmd } from '../../js/web/actions.mjs';
 import { GLOBAL_MANIFEST, VERSION_MARKER } from '../../js/hosts/hosts.mjs';
 import { pathToFileURL } from 'node:url';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
-import { webFixtureTeardown } from '../helpers/web_fixture.mjs';
+import { readJsonBody } from '../../js/web/routes.mjs';
+import { TMP_ROOT, makeSandbox } from '../helpers/sandbox.mjs';
+import { dropSandboxTier, webFixtureTeardown } from '../helpers/web_fixture.mjs';
 import {
   neutral, DISABLED, withGlobalRoot, agentEntry, seedGlobal, rowFor, withThreeInstalls, withTwoViews, samePath,
 } from '../helpers/web_api_fixture.mjs';
@@ -596,5 +600,154 @@ test('the install list marks exactly the default install', () => {
     assert.deepEqual(marked(), ['opencode']);
     fs.rmSync(path.join(oc, GLOBAL_MANIFEST));
     assert.deepEqual(marked(), ['claude'], 'the default did not move when opencode stopped being active');
+  });
+});
+
+// THE CHOSEN DEFAULT. Writing it creates the tier folder, which the console reads as a tier, so each
+// case drops the folder (dropSandboxTier): one fixture home
+// serves the whole file, and the case above expects the fleet order.
+const pickFile = () => {
+  const file = sharedPaths().defaultInstall;
+  assert.ok(file.startsWith(TMP_ROOT), `the pick file is outside the sandbox: ${file}`);
+  return file;
+};
+const markedDefault = () => apiInstalls().installs.filter((r) => r.default).map((r) => r.host);
+const withBothActive = (fn) => withTwoViews(({ st, oc, cl }) => {
+  pickFile(); // the sandbox guard, before anything can write a pick
+  for (const d of [oc, cl]) fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+  try { return fn({ st, oc, cl }); } finally { dropSandboxTier(); }
+});
+
+test('a chosen install beats the fleet order, in the console and in status', () => {
+  withBothActive(({ st, cl }) => {
+    assert.deepEqual(markedDefault(), ['opencode'], 'the control: no pick reads the fleet order');
+    assert.equal(statusData().emit, 'opencode-global');
+    assert.deepEqual(apiDefaultInstallSet(st, { host: 'claude', path: cl }), { ok: true });
+    assert.deepEqual(markedDefault(), ['claude']);
+    assert.ok(samePath(defaultView()[1], cl));
+    assert.equal(statusData().emit, 'claude-global', 'the status line kept the fleet order');
+    assert.ok(samePath(st.target, cl), 'the daemon state stayed on the old default');
+    assert.equal(st.theme, 'imperial');
+    const stored = JSON.parse(fs.readFileSync(pickFile(), 'utf8'));
+    assert.equal(stored.host, 'claude');
+    assert.ok(samePath(stored.path, cl));
+    assert.deepEqual(Object.keys(stored), ['host', 'path']);
+  });
+});
+
+test('a project install can be the default: its data dir and its root stay apart', () => {
+  withBothActive(({ st, oc }) => {
+    const proj = path.join(path.dirname(oc), 'proj');
+    fs.mkdirSync(path.join(proj, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(proj, '.claude', GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    fs.writeFileSync(path.join(proj, '.geneseed-emit'), 'claude');
+    const cwd = process.cwd();
+    process.chdir(proj);
+    try {
+      assert.deepEqual(apiDefaultInstallSet(st, { host: 'claude', path: proj }), { ok: true });
+      assert.ok(samePath(st.target, path.join(proj, '.claude')));
+      assert.ok(samePath(st.root, proj));
+      assert.equal(statusData().emit, 'claude');
+      assert.deepEqual(apiInstalls().installs.filter((r) => r.default).map((r) => r.scope), ['project']);
+    } finally { process.chdir(cwd); }
+  });
+});
+
+test('a stale or unreadable pick falls back to the fleet order, and a pick comes back with its install', () => {
+  withBothActive(({ st, cl }) => {
+    apiDefaultInstallSet(st, { host: 'claude', path: cl });
+    const manifest = path.join(cl, GLOBAL_MANIFEST);
+    fs.rmSync(manifest);
+    assert.deepEqual(markedDefault(), ['opencode'], 'a removed install stayed the default');
+    assert.equal(statusData().emit, 'opencode-global');
+    fs.writeFileSync(manifest, JSON.stringify({ owned: [] }));
+    assert.deepEqual(markedDefault(), ['claude'], 'the pick did not survive its install going away');
+    const good = fs.readFileSync(pickFile(), 'utf8');
+    for (const bad of ['{ torn', 'null', '[]', '{"host": 1, "path": 2}', '{"host": "claude"}',
+      '{"host": "claude", "path": "/no/such/install"}', '{"host": "bob", "path": "/x"}',
+      good.replace('claude', 'bob')]) {
+      fs.writeFileSync(pickFile(), bad);
+      assert.deepEqual(markedDefault(), ['opencode'], `the pick file ${bad} changed the default`);
+    }
+  });
+});
+
+test('a pair that is not an active install is refused, and the pick stays as it was', () => {
+  withThreeInstalls(({ st, oc, cl, proj }) => {
+    const refused = { ok: false, error: 'not an active install (host, path)' };
+    pickFile(); // the sandbox guard, before anything can write a pick
+    try {
+      for (const body of [
+        { host: 'opencode', path: proj }, // disabled
+        { host: 'claude', path: cl }, // absent
+        { host: 'claude', path: oc }, // an active path under another host
+        { host: 'opencode', path: '/no/such/install' },
+        { host: 'opencode' }, { path: oc }, { host: 'opencode', path: '' }, { host: 'opencode', path: 5 },
+      ]) {
+        assert.deepEqual(apiDefaultInstallSet(st, body), refused, JSON.stringify(body));
+        assert.equal(fs.existsSync(pickFile()), false, `${JSON.stringify(body)} wrote a pick`);
+      }
+      assert.deepEqual(apiDefaultInstallSet(st, { host: 'opencode', path: oc }), { ok: true });
+      const kept = fs.readFileSync(pickFile(), 'utf8');
+      assert.deepEqual(apiDefaultInstallSet(st, { host: 'opencode' }), refused);
+      assert.equal(fs.readFileSync(pickFile(), 'utf8'), kept, 'a half pair cleared the pick');
+    } finally { dropSandboxTier(); }
+  });
+});
+
+// The route has no clearing body: a malformed request reaches it as `{}` (`readJsonBody`), and a
+// broken client must not erase a choice.
+test('an empty, malformed, null or half body is refused and the pick stays', () => {
+  withBothActive(({ st, cl }) => {
+    apiDefaultInstallSet(st, { host: 'claude', path: cl });
+    const kept = fs.readFileSync(pickFile(), 'utf8');
+    for (const body of [{}, readJsonBody(Buffer.from('{ torn')), { host: null, path: null },
+      { host: 'claude' }, { path: cl }]) {
+      assert.deepEqual(apiDefaultInstallSet(st, body),
+        { ok: false, error: 'not an active install (host, path)' }, JSON.stringify(body));
+      assert.equal(fs.readFileSync(pickFile(), 'utf8'), kept, `${JSON.stringify(body)} touched the pick`);
+    }
+    assert.deepEqual(markedDefault(), ['claude']);
+    assert.ok(samePath(st.target, cl));
+  });
+});
+
+// `install` and `theme` follow the pick. `agent_md` does not: it reports whether OpenCode's carrier
+// is there, and that is still worth a row when another install is the default.
+test('status names the picked install and its voice, and keeps the agent_md health row', () => {
+  withBothActive(({ st, oc, cl }) => {
+    fs.writeFileSync(path.join(oc, '.geneseed-theme'), 'neutral');
+    const before = statusData();
+    assert.equal(before.theme, 'neutral', 'the control: no pick reads the walk');
+    assert.ok(samePath(before.agent_md, path.join(oc, 'AGENT.md')));
+    apiDefaultInstallSet(st, { host: 'claude', path: cl });
+    const after = statusData();
+    assert.equal(after.emit, 'claude-global');
+    assert.equal(after.theme, 'imperial');
+    assert.equal(after.agent_md, before.agent_md, 'a preference hid the health row');
+  });
+});
+
+// A repo's root marker is the LAST emit's, so with Claude and Bob in one repo it cannot say which
+// install was picked. `bob` here is that later emit; the pick is the other one.
+test('a project pick in a repo with two project installs reads its own dialect', () => {
+  withBothActive(({ st, oc }) => {
+    const repo = path.join(path.dirname(oc), 'two');
+    for (const marker of ['.claude', '.bob']) {
+      fs.mkdirSync(path.join(repo, marker), { recursive: true });
+      fs.writeFileSync(path.join(repo, marker, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    }
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'bob');
+    const cwd = process.cwd();
+    process.chdir(repo);
+    try {
+      assert.deepEqual(apiDefaultInstallSet(st, { host: 'claude', path: repo }), { ok: true });
+      assert.ok(samePath(st.target, path.join(repo, '.claude')));
+      assert.equal(st.emit, 'claude', 'the root marker of the other install set the dialect');
+      st.refresh({ doctor: false });
+      assert.equal(st.emit, 'claude', 'a refresh went back to the root marker');
+      assert.deepEqual(apiDefaultInstallSet(st, { host: 'bob', path: repo }), { ok: true });
+      assert.equal(st.emit, 'bob');
+    } finally { process.chdir(cwd); }
   });
 });

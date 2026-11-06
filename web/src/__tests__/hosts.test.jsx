@@ -42,6 +42,7 @@ vi.mock('../api/index.js', () => ({
       }),
     ),
     installToggle: vi.fn(() => Promise.resolve({ ok: true })),
+    setDefaultInstall: vi.fn(() => Promise.resolve({ ok: true })),
     mcp: vi.fn(() =>
       Promise.resolve({
         targets: [
@@ -104,6 +105,80 @@ describe('Installs / Hosts', () => {
       ['Claude Code', 'Not installed'],
     ])
     expect(screen.getByRole('button', { name: /rebuild all/i })).toBeTruthy()
+  })
+
+  // The server marks the default row; every other active row offers the act. An absent row offers
+  // nothing, and the click must not also pick the row into the side panel.
+  it('marks the default install and makes another active install the default', async () => {
+    const row = (id, host, extra) => ({
+      id,
+      host,
+      scope: 'global',
+      path: `C:/${host}`,
+      state: 'active',
+      ...extra,
+    })
+    api.installs.mockImplementationOnce(() =>
+      Promise.resolve({
+        installs: [
+          row('opencode:global', 'opencode', { default: true }),
+          row('claude:global', 'claude'),
+          row('bob:global', 'bob', { state: 'absent' }),
+        ],
+      }),
+    )
+    const onMutated = vi.fn()
+    render(<Hosts onAction={() => {}} onMutated={onMutated} />)
+    const make = await screen.findByRole('button', { name: 'Make Claude Code the default install' })
+    const cells = [...document.querySelectorAll('.hosts-tbl tbody tr')].map((tr) => [
+      tr.querySelector('.row-pick').textContent,
+      tr.querySelectorAll('td')[4].textContent.trim(),
+    ])
+    expect(cells).toEqual([
+      ['OpenCode', 'Active Default'],
+      ['Claude Code', 'Active Make default'],
+      ['BOB (IBM)', 'Not installed'],
+    ])
+    fireEvent.click(make)
+    await waitFor(() => expect(onMutated).toHaveBeenCalledTimes(1))
+    expect(api.setDefaultInstall).toHaveBeenCalledWith('claude', 'C:/claude')
+    expect(panel().querySelector('h2').textContent).toBe('OpenCode')
+  })
+
+  it('says why a default was refused, and asks for no refetch', async () => {
+    api.installs.mockImplementationOnce(() =>
+      Promise.resolve({
+        installs: [
+          {
+            id: 'opencode:global',
+            host: 'opencode',
+            scope: 'global',
+            path: 'C:/cfg',
+            state: 'active',
+            default: true,
+          },
+          {
+            id: 'claude:global',
+            host: 'claude',
+            scope: 'global',
+            path: 'C:/.claude',
+            state: 'active',
+          },
+        ],
+      }),
+    )
+    api.setDefaultInstall.mockImplementationOnce(() =>
+      Promise.reject(new Error('not an active install (host, path)')),
+    )
+    const onMutated = vi.fn()
+    render(<Hosts onAction={() => {}} onMutated={onMutated} />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Make Claude Code the default install' }),
+    )
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'not an active install (host, path)',
+    )
+    expect(onMutated).not.toHaveBeenCalled()
   })
 
   // Global and per-project installs are two tables, not one mixed list: a global row is

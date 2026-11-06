@@ -10,6 +10,7 @@
  * `child_process` ban. `process.env` is read at CALL time, so a sandbox that sets
  * `XDG_CONFIG_HOME` after import is honoured.
  */
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -55,5 +56,18 @@ export function sharedPaths() {
     notes: path.join(root, 'notes'),
     draft: path.join(root, 'user-rules.draft.md'),
     foldState: path.join(root, '.fold-state.json'),
+    defaultInstall: path.join(root, 'default-install.json'),
   };
+}
+
+/**
+ * The install the user chose as the default, `{host, path}`, or null: no pick, or a file that does
+ * not read as one. It only says what was chosen; `pickedInstall` (js/inspect/status.mjs) checks it
+ * against the installs there are now. A bad file must never break a console or a `status`.
+ */
+export function readDefaultInstall() {
+  try {
+    const { host, path: root } = JSON.parse(readFileSync(sharedPaths().defaultInstall, 'utf8'));
+    return typeof host === 'string' && typeof root === 'string' ? { host, path: root } : null;
+  } catch { return null; }
 }

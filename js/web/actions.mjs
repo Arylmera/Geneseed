@@ -65,6 +65,7 @@ import { memoryDelete } from '../maintain/memory.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { emitChoices, themeChoices, viewCfg } from './api.mjs';
 import { actionCommands } from './jobs.mjs';
+import { emitOf } from '../inspect/status.mjs';
 import { webState } from './state.mjs';
 import { NotFound, deployed, memoryDir } from './catalog.mjs';
 
@@ -230,7 +231,7 @@ export function targetView(base, [host, scope, root]) {
   if (v === undefined) {
     const target = viewCfg(host, scope, root);
     v = webState(null, target);
-    v.selectView(target, root);
+    v.selectView(target, root, emitOf(host, scope));
     v.pinned = true;
     // The daemon's one memo: a render is keyed on what it read, not on who asked for it.
     v.renderMemo = (base.renderMemo ??= renderMemo());

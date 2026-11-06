@@ -61,7 +61,7 @@ A request can name the install it reads or writes. A read takes two query parame
 it against the same detected-install allowlist as the install toggle. An unknown or half pair
 gets a 404 and never falls through to another install's folder. The writes that take the pair
 are `/api/activity`, `/api/memory/delete`, `/api/rules`, `/api/rules/promote`, `/api/profile`,
-and the `restore` and `build` actions. In `/api/install`, the `install` and
+and the `restore` and `build` actions. In `/api/install`, `/api/default-install`, the `install` and
 `deploy` actions, `/api/excludes` and `/api/reveal`, `host`/`path` keep their own meaning.
 
 Every `/api/*` read takes and checks the pair, with these exceptions:
@@ -87,9 +87,15 @@ it. The order is the host order (OpenCode, Claude Code, Bob, OpenClaude), then g
 project. The item's `install` field names the copy, and its `installs` field names every
 install that has the id.
 
-A request that names no install reads the **default install**: the first active one in the console's one
-install order (`fleetSort`): host order (opencode, claude, bob, openclaude), then global before
-project. `/api/installs` marks
+A request that names no install reads the **default install**: the one you chose on the Installs
+page (*Make default* on an active row), while it stays active. With no choice, it is the first
+active one in the console's one install order (`fleetSort`): host order (opencode, claude, bob,
+openclaude), then global before project. The choice is machine-wide and lives in
+`default-install.json` in the shared tier. `POST /api/default-install` with `{host, path}` sets it
+and refuses anything else with a 409, an empty or malformed body included, and the choice stays.
+The console has no way to clear it: choose another install, or delete the file. A choice that no
+longer names an active install is ignored, and it applies again if that install comes back. The
+`install` and `theme` lines of `geneseed status` follow the same choice. `/api/installs` marks
 that row `default: true`. There is no console-wide install and no `POST /api/view`: a page that
 acts on one install names it on each request, through a picker placed beside the entry or form it
 applies to (see below).

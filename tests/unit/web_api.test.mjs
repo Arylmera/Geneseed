@@ -466,8 +466,8 @@ test('a refresh during the warm-up drops its verdict', async () => {
 // onboarding form over a working ~/.bob. The default is the first ACTIVE install in the console's
 // one install order (`fleetSort`): host order first (opencode before bob, even a project before
 // a later host's global), then global before project of one host (even when the project comes
-// first); a project's view is its data dir (`<root>/.bob`) with the root beside it; nothing when
-// no install is active.
+// first); a project's view is its data dir (`<root>/.bob`) with the root and its emit beside it (the
+// emit is `<host>` for a project, `<host>-global` for a global); nothing when no install is active.
 test('the default install is the first active one in the fixed order', () => {
   const sb = makeSandbox();
   const d = sb.path;
@@ -483,19 +483,19 @@ test('the default install is the first active one in the fixed order', () => {
     manifest(path.join(proj, '.bob'));
     const projRow = ['bob', 'project', proj];
     assert.deepEqual(defaultView([['opencode', 'global', empty], projRow]),
-      [path.join(proj, '.bob'), proj]);
+      [path.join(proj, '.bob'), proj, 'bob']);
     manifest(bobGlobal);
     assert.deepEqual(defaultView([projRow, ['bob', 'global', bobGlobal]]),
-      [bobGlobal, bobGlobal]);
+      [bobGlobal, bobGlobal, 'bob-global']);
     const ocGlobal = path.join(d, 'dot-opencode');
     manifest(ocGlobal);
     assert.deepEqual(defaultView([projRow, ['bob', 'global', bobGlobal], ['opencode', 'global', ocGlobal]]),
-      [ocGlobal, ocGlobal]);
+      [ocGlobal, ocGlobal, 'opencode-global']);
     // Host order outranks scope: a claude PROJECT comes before a bob GLOBAL.
     const clProj = path.join(d, 'repo-cl');
     manifest(path.join(clProj, '.claude'));
     assert.deepEqual(defaultView([['bob', 'global', bobGlobal], ['claude', 'project', clProj]]),
-      [path.join(clProj, '.claude'), clProj]);
+      [path.join(clProj, '.claude'), clProj, 'claude']);
     assert.equal(defaultView([['opencode', 'global', empty]]), null);
   } finally { sb.cleanup(); }
 });
