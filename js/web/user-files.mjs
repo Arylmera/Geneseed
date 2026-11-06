@@ -177,7 +177,7 @@ function ruleId(v) {
  * mistake; it exists so a retire never loses the text. Like user-rules.md it is the user's: no
  * install manifest claims it, so no uninstall deletes it.
  */
-export const RETIRED_RULES_FILE = 'user-rules-retired.md';
+const RETIRED_RULES_FILE = 'user-rules-retired.md';
 const RETIRED_HEADER = '# Retired rules — not in force, never loaded into any session.\n';
 const isBlank = (line) => !stripWhitespace(line);
 

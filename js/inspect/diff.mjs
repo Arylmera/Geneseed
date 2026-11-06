@@ -359,7 +359,7 @@ export const drifted = (files) => files.filter((f) => f.status !== 'linked');
  * back-port (a rebuild updates it), so the improvements report and the export `setup` and
  * `update` fire read this set, not `drifted`.
  */
-export const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
+const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale');
 
 /** An install's notebook; a global install's loops write to the tier's `notes/` too (D6). */
 function notesRoots(dir) {

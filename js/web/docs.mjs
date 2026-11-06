@@ -124,7 +124,7 @@ export function docGroups() {
 }
 
 /** The heading a page without a `section:` is listed under, inside its part. */
-export const GENERAL_SECTION = 'General';
+const GENERAL_SECTION = 'General';
 
 /**
  * A page's `section:` frontmatter, or `General`. Anything but a non-empty string falls back
@@ -168,7 +168,7 @@ function tableCells(line) {
  * its richer view from the same rows rather than from a second copy that could drift. A row
  * with the wrong number of cells is a malformed table, so the whole answer is `null`.
  */
-export function tableRows(body, head) {
+function tableRows(body, head) {
   const lines = body.split('\n');
   for (let i = 0; i + 1 < lines.length; i += 1) {
     if (!lines[i].trim().startsWith('|')) continue;
@@ -186,7 +186,7 @@ export function tableRows(body, head) {
 }
 
 const MAP_HEAD = ['piece', 'what it does for you', 'kind', 'cost', 'turn it off'];
-export const MAP_KINDS = ['enforced', 'automatic', 'asked', 'on demand'];
+const MAP_KINDS = ['enforced', 'automatic', 'asked', 'on demand'];
 
 /** The "what lands on your machine" table as rows, or `null` when absent or malformed. */
 export function parseMapTable(body) {

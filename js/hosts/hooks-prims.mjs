@@ -80,7 +80,7 @@ export function splitLines(text) {
 }
 
 /** The first window a Stop reads from a transcript's end; real transcripts reach 50 MB. */
-export const TAIL_BYTES = 2 * 1024 * 1024;
+const TAIL_BYTES = 2 * 1024 * 1024;
 
 /**
  * A transcript reader for ONE hook invocation: `read(file, judge)` hands `judge(text, whole)`

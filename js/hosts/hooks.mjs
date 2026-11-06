@@ -205,7 +205,7 @@ const asciiJson = (s) => JSON.stringify(s)
  * `permissionDecision` defers, and the host puts the text next to the tool result (hooks.md,
  * `additionalContext`; not seen live, no gate here runs a model turn).
  */
-export function contextNote(text) {
+function contextNote(text) {
   return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": ${asciiJson(text)}}}\n`;
 }
 

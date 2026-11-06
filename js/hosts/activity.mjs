@@ -69,12 +69,12 @@ const SNAPSHOT_NAME = /^[A-Za-z0-9_.-]{1,128}\.json$/;
  * a hook writer, with no pid, this is the only one, so a session left waiting on the user for
  * longer than this moves to the archive at the next sweep and comes back on its next prompt.
  */
-export const ACTIVITY_STALE_SECONDS = 1800;
+const ACTIVITY_STALE_SECONDS = 1800;
 /** The archive keeps the newest this many ended sessions, and none older than a week. */
 export const ARCHIVE_KEEP = 50;
 export const ARCHIVE_MAX_AGE_SECONDS = 7 * 24 * 3600;
 /** One Stop reads at most this much new transcript; a longer delta keeps its newest bytes. */
-export const TRANSCRIPT_CAP = 2 * 1024 * 1024;
+const TRANSCRIPT_CAP = 2 * 1024 * 1024;
 
 // The plugin's caps, so a hook snapshot is the same size as a plugin one.
 const FILE_CAP = 8;

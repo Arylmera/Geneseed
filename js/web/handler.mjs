@@ -109,7 +109,7 @@ const GZIP_MIN = 1024;
  * a path); without a cap any web page could `no-cors` POST an arbitrary blob and this process
  * would buffer all of it before the token check refused it.
  */
-export const MAX_BODY = 1024 * 1024;
+const MAX_BODY = 1024 * 1024;
 
 const BUSY = { error: 'a job is running — wait for it to finish (or cancel it) first' };
 

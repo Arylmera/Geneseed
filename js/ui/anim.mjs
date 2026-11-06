@@ -172,7 +172,7 @@ export const DEFAULT = 'neutral';
  * this port to carry the trap — `_icon` and `_mark` were the first two — and the corpus
  * names all four inherited keys.
  */
-export function artFor(theme) {
+function artFor(theme) {
   return Object.hasOwn(ART, theme) ? ART[theme] : ART[DEFAULT];
 }
 
@@ -206,7 +206,7 @@ function terminalColumns() {
  * unconditional refusal would disable the animation on the only platform whose users get the
  * line wizard by default.
  */
-export function animOk() {
+function animOk() {
   if (process.env.GENESEED_NO_ANIM || process.env.GENESEED_TUI_PLAIN) return false;
   if (!process.stdout.isTTY) return false;
   const term = (process.env.TERM || '').toLowerCase();

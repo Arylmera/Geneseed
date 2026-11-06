@@ -109,7 +109,7 @@ export function gitBehind(state, { measure = fetchBehind, now = Date.now(), busy
 export const MANUAL_UPDATE = 'npm install -g geneseed@latest';
 
 /** `npm root -g`, or null when npm is absent or does not answer. Asked once per daemon. */
-export function npmGlobalRoot() {
+function npmGlobalRoot() {
   const npm = which('npm');
   if (!npm) return null;
   const win = process.platform === 'win32';

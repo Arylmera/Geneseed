@@ -353,7 +353,7 @@ export function rebuildAll() {
  * would only cost a surrogate decode per astral character in a 400 KB document, and the
  * count is identical either way.
  */
-export function fenceFor(text) {
+function fenceFor(text) {
   let longest = 0;
   let run = 0;
   for (let i = 0; i < text.length; i += 1) {

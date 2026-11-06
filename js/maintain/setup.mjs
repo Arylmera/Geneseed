@@ -135,12 +135,12 @@ export function themeOptions() {
 }
 
 /** `_harness_setup._posture_options`. */
-export function postureOptions() {
+function postureOptions() {
   return discoverNames('postures', 'peer').map((n) => [n, POSTURE_BLURBS[n] ?? '']);
 }
 
 /** `_harness_setup._mode_options`. */
-export function modeOptions() {
+function modeOptions() {
   return discoverNames('modes', 'direct').map((n) => [n, MODE_BLURBS[n] ?? '']);
 }
 
@@ -686,7 +686,7 @@ function listDir(dir) {
  * search covers PATH and the usual per-user places, not every folder an installer may pick.
  * `false` is the user choosing to stop.
  */
-export function toolsReport(tools = hostTools()) {
+function toolsReport(tools = hostTools()) {
   printOut('AI coding tools on this machine:\n');
   for (const [label, present, url, where] of tools) {
     if (!present) printOut(`  --  ${label} not found — install: ${url}\n`);

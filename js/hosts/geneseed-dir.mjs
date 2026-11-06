@@ -47,7 +47,7 @@ export function writeGeneseedGitignore(file) {
 }
 
 /** The seeded list, relative to the git root. */
-export const SEED_REL = '.geneseed/protected-checks.txt';
+const SEED_REL = '.geneseed/protected-checks.txt';
 
 /**
  * What a project's checks live in. A string ending `/` is a folder, any other string a file; a

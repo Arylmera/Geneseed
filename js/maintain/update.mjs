@@ -246,7 +246,7 @@ export function fetchTimeout() {
  * (`rev-list --count` prints ASCII). Reproducing the crash would be reproducing a bug; the
  * divergence is confined to input git cannot emit and is recorded rather than matched.
  */
-export function countOccurrences(s) {
+function countOccurrences(s) {
   const t = stripWhitespace(s || '');
   return /^[0-9]+$/.test(t) ? Number(t) : 0;
 }
