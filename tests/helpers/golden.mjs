@@ -22,7 +22,6 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -30,13 +29,6 @@ import { cellEnv, makeSandbox } from './sandbox.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-// A RECORDED CORPUS IS PER-PLATFORM, and that is a property of the thing under test rather than
-// a convenience: `writeText` translates "\n" to the platform's line separator, so every path in
-// a snapshot differs in sha256 AND in size between the two. Not normalised away — blanking line
-// endings inside the recorder would make the port's single most platform-specific behaviour
-// unobservable to the only gate that watches it.
-export const PLATFORM_CORPUS = os.EOL === '\r\n' ? 'crlf' : 'lf';
 
 // Six anchor cells keep their carrier file VERBATIM — one per --emit target that produces one.
 // Everything else is hashes. A corpus that can only say "a path moved" makes every regeneration
@@ -160,47 +152,6 @@ const ROTS = [
  * THROWS, naming the file, the token and the whole line — rather than letting a moving field
  * into a corpus that is about to be compared against.
  */
-// THE ONE FILE NO REPLAY COMPARES ANY MORE, and the only coverage this corpus has ever lost.
-//
-// `agent-overrides.json` carries `"_version": "<the configured release>"`, stamped into every
-// emitted bundle by `ensureAgentOverridesStub` (js/hosts/opencode.mjs). The corpus stores a sha256 of
-// that file's CONTENT, taken while the label read 1.0.0 — so EVERY bump of the version, forever,
-// reddens 224 of 259 emit cells and at least one cli cell, and no program that could take a new
-// hash still exists.
-//
-// A DESTAMP CANNOT SOLVE IT, which is worth writing down because a destamp is the obvious answer
-// and it was tried first. Normalisation runs BEFORE hashing, at record time. Blanking the version
-// on the live side yields a hash of `<REL>` to compare against a recorded hash of `1.0.0`, and a
-// hash cannot be re-normalised afterwards. A stamp table only works when BOTH sides pass through
-// it — an arrangement you can only make while a recorder exists.
-//
-// So the file is dropped from both sides. Symmetric, therefore not a way of excusing a difference:
-// nothing about this file can fail in either direction. Everything else stays asserted byte for
-// byte.
-//
-// ⚠ IT LIVES HERE, NOT IN A REPLAYER, because it is needed by two of them — the emit harness and
-// the cli harness both carry this file in their cells, and the first fix put it in only one and
-// left the cli corpus red on `migrate/a-node-baked-shim-still-migrates`. A second copy is a
-// second place to forget.
-//
-// The coverage is paid back, and made stronger, in tests/unit/agent_overrides.test.mjs: it asserts
-// the emitted `_version` is SOURCED from harness.config.json rather than a literal — a
-// relationship a frozen hash never checked. A hash only ever said "these bytes, once", and would
-// have been just as green had it recorded the wrong version.
-export const UNCOMPARED = 'agent-overrides.json';
-
-/** Drop `UNCOMPARED` from a recorded snapshot and its live counterpart, symmetrically. */
-export function dropUncompared(recorded, live) {
-  for (const k of [...live.keys()]) if (k.endsWith(UNCOMPARED)) live.delete(k);
-  for (const side of ['paths', 'sizes', 'verbatim']) {
-    if (!recorded || !recorded[side]) continue;
-    for (const k of Object.keys(recorded[side])) {
-      if (k.endsWith(UNCOMPARED)) delete recorded[side][k];
-    }
-  }
-  return live;
-}
-
 export function destamp(name, body) {
   if (!name.endsWith('.geneseed-version')) return body;
   const out = [];
@@ -275,8 +226,7 @@ function sha256Of(p) {
 const HASH_PLACEHOLDER = '<VERIFIED-HASH>';
 
 /**
- * Task 3's own instance of the `UNCOMPARED`/`agent-overrides.json` problem above: `--idempotent`
- * and `--deletion` compare TWO DIFFERENT sandboxes (`runCell` makes a fresh `makeSandbox()` per
+ * Task 3: `--idempotent` and `--deletion` compare TWO DIFFERENT sandboxes (`runCell` makes a fresh `makeSandbox()` per
  * call), and `normalise()` exists to blank each sandbox's own absolute root path out of the
  * TEXT it produced — a handful of owned files (command bricks, Bob's skill files) legitimately
  * embed their own config dir's absolute path, so their raw bytes differ by sandbox location
@@ -467,174 +417,4 @@ export function runCell(gen, cell, { repeat = 1 } = {}) {
 function decodeStream(buf) {
   if (!buf || buf.length === 0) return '';
   return buf.toString('utf8').split('\r\n').join('\n').split('\r').join('\n');
-}
-
-// ---------------------------------------------------------------------------------------
-// WHAT A RECORDED CORPUS CANNOT KEEP
-// ---------------------------------------------------------------------------------------
-//
-// Every stamp in the three harnesses exists because the two SIDES of a cell disagree. These
-// exist because two RUNS do, which is a threat that did not exist until `--record` did. A live
-// pair shares one clock and one checkout; a corpus is compared against a run made on ANOTHER
-// DAY from ANOTHER TREE. Recorded raw, ten `status/*` cells and six `version/*` cells redden on
-// any edit to `src/`, and the `build`, `learn` and `promote` cells redden at midnight — for
-// reasons that are not the port. A gate that reddens for reasons that are not the thing it
-// gates is a gate that gets switched off.
-//
-// EACH PATTERN IS ANCHORED ON THE MESSAGE THAT EMITS IT, never on the shape of the value alone:
-// `installed: deadbeef1234` and `"installed_fp": "0000000000000000"` are seeded fixtures,
-// constant across days and implementations, and stay byte-compared.
-//
-// FOUND BY SCANNING A RECORDING, not by reading for them. The first draft covered
-// `.geneseed-version` and `[version] source:`; a scan of the resulting corpus for the live
-// fingerprint turned up ten more `status/*` cells and the `promote` dates. A destamp table is a
-// claim about every caller, and only a corpus can check it.
-export const CORPUS_STAMPS = [
-  // `write_version`'s line, wherever it is quoted. The release LABEL stays verbatim here — it
-  // moves only when a human bumps it, which is a real output change a corpus SHOULD redden on,
-  // not one of the clock/checkout/machine drifts this table exists for.
-  //
-  // SCOPE, because TWO carriers of the same line treat this label differently, each on purpose.
-  // The sentence above is true of THIS table and of carrier 2 only:
-  //
-  //   1. THE FILE `.geneseed-version`: `destamp` has already run and tagged the label `<REL>`
-  //      — it owns that file whole, so a release bump does not redden 259 emit cells for a
-  //      value the live gate compares in full.
-  //   2. EVERY OTHER CARRIER keeps the label unblanked and compared, which is the claim the
-  //      first paragraph makes.
-  //
-  // A THIRD CARRIER IS GONE. The web harness kept its own `WEB_STAMPS` table, which rewrote the
-  // label to `[release <REL>]` in an HTTP body so that two web cells quoting this line through a
-  // `diff` hunk would survive a version bump the recorder was no longer alive to re-bless. That
-  // arm was deliberately kept OUT of this shared table, since moving it here would have moved the
-  // emit and cli corpora too — neither of which carries a release label (measured: their only
-  // `release` hits are prose about the release skill). The web corpus, its replayer and that
-  // table have all since been retired, so the exception has nothing left to apply to; the
-  // argument for keeping it out of here is recorded because it is the argument for any future
-  // per-carrier arm.
-  [/[0-9a-f]{6,64} \(built \d{4}-\d{2}-\d{2}\)/g, '<FP> (built <DATE>)'],
-  // `version`'s first line.
-  [/(\[version\] source: +)[0-9a-f]{6,64}/g, '$1<FP>'],
-  // The `status` panel's version row. EXACTLY twelve hex, because the fingerprint is
-  // `slice(0, 12)`, so the seeded `installed` fingerprint beside it is out of reach.
-  [/(\bsource )[0-9a-f]{12}(?![0-9a-f])/g, '$1<FP>'],
-  // The status JSON the web console's Settings page serves verbatim.
-  [/("source_fp": ")[0-9a-f]{6,64}(?=")/g, '$1<FP>'],
-  // `rules promote`'s two dates, in the JSON body and in the block it writes. The cells assert
-  // them absolutely against their own `now`; this runs after they have been adjudicated.
-  [/(, promoted )\d{4}-\d{2}-\d{2}/g, '$1<DATE>'],
-  [/("trial_until": ")\d{4}-\d{2}-\d{2}/g, '$1<DATE>'],
-  [/(trial until: )\d{4}-\d{2}-\d{2}/g, '$1<DATE>'],
-  // The pulled-commit echo, and the one entry no clock and no checkout explains: a commit id is
-  // a hash of its TREE, and the fixture's tree is built from the WORKING tree — so recording
-  // 318 cells creates 318 untracked files, which land in the fixture's commit, which changes
-  // the id the recording just wrote down. A snapshot that changes its own value cannot be
-  // replayed even once.
-  [/^ {2}[0-9a-f]{7,40} (?=\S)/gm, '  <SHA> '],
-  // THE TOOLCHAIN, a fourth class. Everything above moves because of a clock, a checkout or a
-  // fixture; these move because of the MACHINE.
-  //
-  // Node's crash banner — the last stderr line of `node --check` for a plugin that does not
-  // parse is Node's own version, and CI pins the major only. The shape is declared exactly so
-  // that a banner which stops matching keeps its bytes and reddens, rather than being quietly
-  // blanked into agreement.
-  [/Node\.js v\d+\.\d+\.\d+/g, 'Node.js v<NODE>'],
-  // Where `git` lives: a PATH lookup echoed into the fetch line, different on every machine.
-  // Anchored on the message and requiring a non-empty single-line value, so a side that stopped
-  // naming the executable leaves the line untagged and fails.
-  [/(\(git: )[^,\r\n]+(, timeout: )/g, '$1<GIT>$2'],
-  // The fingerprint of the operator's own build. Kept as a second line since the bundle walk
-  // was pinned, with the hazard stated rather than implied: twelve hex was chosen to miss the
-  // seeded fixtures, but `deadbeef1234` IS twelve hex, so a future cell that seeds it and reads
-  // it back as `installed_fp` would have its answer blanked. The pattern must not be widened
-  // while that is the only thing separating them.
-  [/("installed_fp": ")[0-9a-f]{12}(?=")/g, '$1<FP>'],
-  // THE FIFTH CLASS: A LENGTH, NOT A VALUE — invisible to diffing two recordings as text, which
-  // is why the cross-platform sweep walked past it. The `status` panel pads each row out to the
-  // box; `normalise` shrinks the row's path to `<HOME>` AFTERWARDS, so the surviving padding
-  // run is a direct readout of the recorder's home directory length. Narrow on purpose:
-  // pre-normalisation padding is a FEATURE and a port that padded the panel differently must
-  // still be caught, so this fires only on a box row that carries one of the four path tags and
-  // ends in a parenthetical. The row's whole content and its terminator stay byte-compared.
-  [/^(│ [^\n]*?<(?:HOME|SB|REPO|OUT)>[^\n]*?\)) +(?=│)/gm, '$1'],
-];
-
-// `learn`'s bullet — the one stamp that needs the FILE it sits in and not just the line it is
-// on. `src/memory/README.md` DOCUMENTS this format with a fixed example, that line is rendered
-// into the memory store of every emit, and it is a CONSTANT: blanking it costs four bytes of
-// comparison in every cell that emits a bundle and buys nothing. The lessons file always opens
-// with its own header, so that header is the anchor and the README can never match it.
-const LESSONS_FILE = /^# .+ — lessons/;
-const LESSON_BULLET = /^- \d{4}-\d{2}-\d{2}: /gm;
-
-const CLEN_HEADER = /^Content-Length: (\d+)$/gm;
-
-/**
- * One snapshot, with the values that move between RUNS tagged.
- *
- * VALUES ONLY. A KEY that carried a moving value would make the same cell report MISSING and
- * EXTRA for one file, which is louder rather than quieter.
- *
- * `destamp` RUNS HERE, on the record/replay path only — it was wired into `snapshot` until P1's
- * review found it, which meant the emit matrix compared `.geneseed-version` as `<FP> (built
- * <DATE>)` on BOTH sides, i.e. did not compare its contents at all, while the table's own
- * preamble said the live gate keeps every one of these fields. It runs BEFORE the loop so this
- * file keeps ONE owner and the recorded bytes are unchanged by the ordering: `<FP>` is not hex,
- * so no stamp below can match what it wrote.
- *
- * NON-UTF-8 BODIES PASS THROUGH UNTOUCHED, which is where this differs in shape from the
- * reference — Python applies these substitutions to raw bytes, so a pattern could in principle
- * fire inside a binary file. Every pattern here is anchored on ASCII prose that no binary
- * carrier in this corpus contains, and the 259-cell replay is what checks that claim rather
- * than this sentence.
- */
-export function corpusNormalise(snap) {
-  if (typeof snap === 'string') return snap; // an error string passes through
-  const out = new Map();
-  for (const [k, v0] of snap) {
-    const v = destamp(k, v0);
-    let text;
-    try {
-      text = new TextDecoder('utf-8', { fatal: true }).decode(v);
-    } catch {
-      out.set(k, v);
-      continue;
-    }
-    for (const [pat, repl] of CORPUS_STAMPS) text = text.replace(pat, repl);
-    if (LESSONS_FILE.test(text)) text = text.replace(LESSON_BULLET, '- <DATE>: ');
-    out.set(k, Buffer.from(text, 'utf8'));
-  }
-  recomputeDeclaredLengths(out);
-  return out;
-}
-
-/**
- * THE SIXTH CLASS, and the one no text diff could see: a recorded LENGTH.
- *
- * The web driver records the response headers verbatim and the body is normalised afterwards,
- * so a `Content-Length` in the corpus counts the RECORDER'S path lengths — 202 of 446 recorded
- * responses declare a length their own recorded body does not have, every delta exactly the
- * normaliser's shrinkage. It is a false RED on any machine whose checkout path is a different
- * length, and after the reference is deleted a red Content-Length cannot be told from a port
- * that miscounts its own body.
- *
- * The obvious objection — that making the header a function of the body makes it vacuous — was
- * CHECKED rather than answered with a second gate. Asserting in the driver that the declared
- * length equals the raw body length is a tautology: HTTP/1.1 frames on that header, so the read
- * returns exactly that many bytes. Measured instead, by planting an off-by-one in the server:
- * the cell reddens on the BODY, because a server that lies gets its body truncated by the
- * client. The number is the only thing here nothing else can check, and it is the only thing
- * this touches.
- *
- * LAST, after every stamp above, because a stamp that shrinks a body must be counted too.
- */
-export function recomputeDeclaredLengths(out) {
-  for (const k of [...out.keys()]) {
-    if (!(k.startsWith('<r') && k.endsWith(' headers>'))) continue;
-    const body = out.get(`${k.slice(0, -' headers>'.length)} body>`);
-    if (body === undefined) continue;
-    const text = out.get(k).toString('utf8')
-      .replace(CLEN_HEADER, () => `Content-Length: ${body.length}`);
-    out.set(k, Buffer.from(text, 'utf8'));
-  }
 }

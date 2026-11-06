@@ -70,8 +70,8 @@ const STAMPS = [
 
 // The build date and the live source fingerprint are NOT destamped here, deliberately: they
 // are identical on both sides of a live cell, so this gate compares them in full. They move
-// only between two RUNS, which is a threat to a recorded corpus and to nothing else — see
-// `golden.CORPUS_STAMPS`.
+// only between two RUNS, which is a threat to a recorded corpus and to nothing else — and no
+// corpus is recorded any more.
 export function destampCli(data) {
   let text;
   try {

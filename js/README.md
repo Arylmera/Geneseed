@@ -1,6 +1,6 @@
 # `js/` — the module map
 
-Every module under `js/`, in eight folders. This page is the address book: **what each one owns**, and
+Every module under `js/`, in eight folders. For how to prove a change, read the repo guide, [`AGENTS.md`](../AGENTS.md), first. This page is the address book: **what each one owns**, and
 **which file to open first** for a given task. It is not documentation of behaviour — every module
 has a docblock for that, and the docblock is the thing to read before editing.
 

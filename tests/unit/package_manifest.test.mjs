@@ -382,11 +382,11 @@ const WITHHELD = [
     + 'install never needs it and the README already carries the substance'],
   ['docs/assets/', 'README media (the animated terminal demo). `docs/*.md` ships the prose; the '
     + 'picture is for the repository page only'],
-  ['CLAUDE.md', "this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
+  ['CLAUDE.md', "a one-line `@AGENTS.md` import of this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
     + 'plus a sharper one: this tool EMITS a CLAUDE.md into a user\'s project, and shipping one in '
     + 'the tarball would put a file that talks about editing Geneseed next to the files that are '
     + 'Geneseed. It is not in `files[]`, and this row is what makes that deliberate'],
-  ['AGENTS.md', "this repository's own agent notes: a pointer to CLAUDE.md and the `## Ownership` "
+  ['AGENTS.md', "this repository's own contributor guide (CLAUDE.md imports it) and the `## Ownership` "
     + "section with `mode: off`, so the ownership gate stays silent in Geneseed's own sessions. "
     + "Withheld for the CLAUDE.md reason: this tool writes an AGENTS.md into a user's project"],
   ['eslint.config.js', 'the lint config for js/ bin/ tests/ adapters/ — a developer gate, and '

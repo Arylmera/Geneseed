@@ -78,6 +78,6 @@ Each one is enforced by a test or a doctor arm, not by convention.
 - **Footprint.** What a harness costs in context is measured in
   [`docs/token-footprint.md`](docs/token-footprint.md); the context hook keeps its whole payload
   under the host's output cap.
-- **Proving a change.** There is no `npm test`; the commands are in [`CLAUDE.md`](CLAUDE.md), and
+- **Proving a change.** There is no `npm test`; the commands are in [`AGENTS.md`](AGENTS.md), and
   CI runs the same ones.
 - **Security-critical paths** are listed in [`SECURITY.md`](SECURITY.md).

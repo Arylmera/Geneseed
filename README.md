@@ -366,7 +366,7 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 
 Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI is dependency-free and runs on every push — keep `doctor` green and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
 
-Three things that bite when you don't know them:
+Start with [`AGENTS.md`](AGENTS.md), the repo's working guide (`CLAUDE.md` imports it). Three things that bite when you don't know them:
 
 - **`js/cli-table.json` IS the CLI.** The argument parser is data, and that file is the owned document — not a generated one. `bin/geneseed-cli.mjs` cannot parse a single verb without it, `bin/geneseed-hook.mjs` renders `--help` from it, and the console's `cli` docs page is a filtered view of it. What holds it honest is `tests/unit/cli_table.test.mjs` — change a flag here and that suite is what tells you.
 - **The version has one owner: `harness.config.json`.** `package.json` mirrors it and a test fails the fork. Never `npm version` — it edits one of the two.
