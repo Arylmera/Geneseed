@@ -176,10 +176,11 @@ export function fleetVerdict(fleet) {
   const edited = act.reduce((n, i) => n + driftOf(i), 0)
   const stale = act.reduce((n, i) => n + staleOf(i), 0)
   const d = fleet?.doctor
-  const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : 'good'
+  // No verdict yet (a cold daemon's doctor still running) vouches for nothing: neither good nor bad.
+  const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : d ? 'good' : 'unknown'
   const head = {
-    // No verdict yet (a cold daemon's doctor still running) vouches for nothing.
-    good: d ? 'Harness healthy.' : 'Checking the harness.',
+    good: 'Harness healthy.',
+    unknown: 'Checking the harness.',
     warn: 'Harness needs a look.',
     bad: 'Harness has problems.',
   }[tone]

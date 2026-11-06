@@ -9,7 +9,8 @@ import { api } from '../api/index.js'
 //
 // A cold daemon answers before its doctor does: `doctor: null` is the warm-up still running on its
 // own thread. The overview is asked again until the verdict lands, then `onVerdict` fires once so
-// whatever read the pending fleet reads it again.
+// whatever read the pending fleet reads it again. A failed ask leaves `overview` as it was, so it
+// counts in `missed` to arm the next one, and says nothing: one toast per poll is noise.
 const DOCTOR_POLL_MS = 1500
 
 export function useOverview(onError, onVerdict) {
@@ -17,23 +18,24 @@ export function useOverview(onError, onVerdict) {
   const [error, setError] = useState(null)
   const [themes, setThemes] = useState([])
 
+  const [missed, setMissed] = useState(0)
+
+  const ask = () =>
+    api.overview().then((o) => {
+      setOverview(o)
+      setError(null)
+    })
   const reload = () =>
-    api
-      .overview()
-      .then((o) => {
-        setOverview(o)
-        setError(null)
-      })
-      .catch((e) => {
-        setError(e?.body?.message || e?.message || String(e))
-        onError?.(e)
-      })
+    ask().catch((e) => {
+      setError(e?.body?.message || e?.message || String(e))
+      onError?.(e)
+    })
 
   const waiting = useRef(false)
   useEffect(() => {
     if (overview?.doctor === null) {
       waiting.current = true
-      const t = setTimeout(reload, DOCTOR_POLL_MS)
+      const t = setTimeout(() => ask().catch(() => setMissed((n) => n + 1)), DOCTOR_POLL_MS)
       return () => clearTimeout(t)
     }
     if (waiting.current) {
@@ -42,7 +44,7 @@ export function useOverview(onError, onVerdict) {
     }
     return undefined
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overview])
+  }, [overview, missed])
 
   // load once on mount; reload is exposed for callers, not a dependency here
   useEffect(() => {

@@ -123,9 +123,10 @@ export default function Overview({
     )
   // Onboard only a machine with NO active install, read off the fleet. `deployed` (the default
   // install's manifest) decides until the fleet is read, so the Ledger's own fetches start now
-  // instead of queueing behind `/api/installs`; a not-deployed machine waits to know.
+  // instead of queueing behind `/api/installs`; a not-deployed machine waits to know, on the
+  // FIRST read only: a refetch must not unmount Onboarding and lose what the user has filled in.
   const live = instData ? instData.installs?.some((i) => i.state === 'active') : overview.deployed
-  if (!live) return instLoading ? <Loading /> : <Onboarding onAction={onAction} />
+  if (!live) return instLoading && !instData ? <Loading /> : <Onboarding onAction={onAction} />
 
   const banner = <NewHere harness={docsHostOf(overview.emit)} />
   const view = onLayout ? <ViewSeg layout={layout} onLayout={onLayout} /> : null

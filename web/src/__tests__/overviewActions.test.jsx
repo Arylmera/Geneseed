@@ -298,6 +298,22 @@ describe('Overview before the install list is read', () => {
   })
 })
 
+// A refetch of the install list (a finished job, or the cold verdict's `dataRev` bump) must not
+// unmount Onboarding: that loses the theme, emit and folder the user has filled in.
+describe('Onboarding across a refetch', () => {
+  it('keeps the form while the install list is read again', async () => {
+    const props = { overview: { ...overview, deployed: false }, themes: [], onAction: () => {} }
+    api.themes.mockResolvedValue({ themes: [], emits: [], current: 'neutral' })
+    api.installs.mockResolvedValueOnce({ installs: [] })
+    const { rerender } = render(<Overview {...props} dataRev={101} />)
+    const form = await screen.findByText('Deploy your harness')
+    api.installs.mockReturnValue(new Promise(() => {}))
+    rerender(<Overview {...props} dataRev={102} />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.getByText('Deploy your harness')).toBe(form)
+  })
+})
+
 const lensMarker = {
   cultivar: 'germination',
   greenhouse: 'Capability mix',

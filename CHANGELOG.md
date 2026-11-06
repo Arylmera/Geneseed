@@ -24,7 +24,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.
 
 ### Fixed
-- **A cold web console answers at once.** The doctor that warms the daemon now has its own thread, so a first Overview takes about a second where it took four or more, and the boot splash no longer stalls into Retry. Until the verdict lands the console says it is checking, then reads the fleet again.
+- **A cold web console answers at once.** The doctor that warms the daemon now has its own thread, so a first Overview takes about a second where it took four or more, and the boot splash no longer stalls into Retry. Until the verdict lands the console says it is checking, then reads the fleet again. A run that hangs is stopped after three minutes and reads as a failed doctor.
 - **A warm Overview does less.** `/api/setup` counts the inventory once per source state, consumers that mount together share one fetch, and the Ledger starts without waiting for `/api/installs`. The Library loads its Markdown and agent glyphs on demand.
 - **The console renders an install's reference once.** One memo now serves the daemon and every per-install view, `/api/diff` reads it, and installs alike in host and every axis share a render.
 - **`setup` and `rebuild-all` are no longer refused for an npm install inside a git project with no commits.** The gate now asks whether Geneseed's own root is a checkout, and a repository with no commits has no pending record to honour.

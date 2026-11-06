@@ -248,6 +248,9 @@ export function webState(theme = null, target = null) {
   return st;
 }
 
+// Several times the slowest run seen on a loaded machine: a run past this has hung.
+const WARM_DOCTOR_LIMIT_MS = 180_000;
+
 /**
  * Run the doctor once right after the server binds, ON ITS OWN THREAD. On the event loop this run
  * held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s. Until it
@@ -258,8 +261,11 @@ export function webState(theme = null, target = null) {
  * failed warm-up, like the old one, just leaves the cache cold: the next ask runs in line. The
  * `error` listener is not optional, an unheard worker error is uncaught and kills the daemon.
  * `unref`: a stopping daemon does not wait for it.
+ *
+ * A HUNG run would leave `/api/doctor` unanswered and the console polling for good, so past
+ * `limitMs` it is stopped and stamped as a FAILED verdict: unknown is never a green. Re-run clears it.
  */
-export function warmDoctor(st) {
+export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS) {
   if (st._doctor !== null || st._doctorJob !== null) return st._doctorJob;
   let worker;
   try {
@@ -268,11 +274,23 @@ export function warmDoctor(st) {
   } catch { return null; }
   worker.unref();
   const job = new Promise((done) => {
+    const limit = setTimeout(() => {
+      if (st._doctorJob === job) {
+        const said = `[doctor] the warm-up run did not finish in ${limitMs / 1000} s, so nothing was checked`;
+        st.stampDoctor([said], [], [{ check: 'warm_up', label: 'Warm-up run', problems: [said] }]);
+      }
+      worker.terminate();
+    }, limitMs);
+    limit.unref();
     worker.once('message', (r) => {
       if (st._doctorJob === job) st.stampDoctor(r.problems, r.themes, r.groups);
     });
     worker.once('error', () => { /* cold cache, computed on demand */ });
-    worker.once('exit', () => { if (st._doctorJob === job) st._doctorJob = null; done(); });
+    worker.once('exit', () => {
+      clearTimeout(limit);
+      if (st._doctorJob === job) st._doctorJob = null;
+      done();
+    });
   });
   st._doctorJob = job;
   return job;

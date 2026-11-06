@@ -112,6 +112,7 @@ const HEALTH_ICON = {
   good: 'M8 12.5l2.7 2.7L16 9.5M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
   warn: 'M12 3 22 20H2zM12 10v4M12 17v.5',
   bad: 'M9 9l6 6M15 9l-6 6M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+  unknown: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
 }
 function HealthIcon({ tone }) {
   return (

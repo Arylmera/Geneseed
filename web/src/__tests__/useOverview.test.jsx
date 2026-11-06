@@ -39,6 +39,24 @@ describe('useOverview and a pending doctor', () => {
     expect(onVerdict).toHaveBeenCalledTimes(1)
   })
 
+  it('a failed poll asks again, without a toast per try', async () => {
+    api.overview
+      .mockResolvedValueOnce({ doctor: null })
+      .mockRejectedValueOnce(new Error('gone'))
+      .mockRejectedValueOnce(new Error('gone'))
+      .mockResolvedValue({ doctor: { ok: true, problems: [] } })
+    const onError = vi.fn()
+    const onVerdict = vi.fn()
+    const { result } = renderHook(() => useOverview(onError, onVerdict))
+    await tick(0)
+    await tick(1500)
+    await tick(1500)
+    await tick(1500)
+    expect(result.current.overview.doctor.ok).toBe(true)
+    expect(onVerdict).toHaveBeenCalledTimes(1)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
   it('a verdict on the first answer asks nothing more', async () => {
     api.overview.mockResolvedValue({ doctor: { ok: false, problems: ['x'] } })
     const onVerdict = vi.fn()

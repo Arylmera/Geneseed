@@ -228,7 +228,7 @@ describe('fleetVerdict', () => {
   it('claims no health while the doctor is still running', () => {
     const v = fleetVerdict({ installs: [], doctor: null })
     expect([v.tone, v.head, v.facts[1]]).toEqual([
-      'good',
+      'unknown',
       'Checking the harness.',
       'doctor still running',
     ])

@@ -429,6 +429,22 @@ test('the warm-up fills the doctor cache without holding the event loop', async 
   } finally { clearInterval(beat); }
 });
 
+// A hung run must end: the page waiting on it gets a failed verdict that says so, never a green.
+// A limit of 1 ms stands for the hang, as no real run finishes inside it.
+test('a warm-up past its limit is stopped and reads as failed', async () => {
+  const st = neutral();
+  const beat = setInterval(() => {}, 50);
+  try {
+    warmDoctor(st, 1);
+    const { ok, problems, groups } = await STATE_ROUTES['/api/doctor'](st, '/api/doctor');
+    assert.equal(ok, false);
+    assert.match(problems[0], /did not finish/);
+    assert.equal(groups.length, 1);
+    assert.equal(st._doctorJob, null);
+    assert.equal(st.doctor.ok, false);
+  } finally { clearInterval(beat); }
+});
+
 // A mutation that lands mid-run may have changed what the run read: its verdict is dropped, and
 // the next ask runs afresh. The planted run stands for that next ask.
 test('a refresh during the warm-up drops its verdict', async () => {
