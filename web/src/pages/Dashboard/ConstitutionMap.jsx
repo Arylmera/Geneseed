@@ -255,7 +255,7 @@ export default function ConstitutionMap({ overview, dataRev }) {
     { ...governedNode(820, 126, 'Agents', counts.agents ?? 0), hash: '#/agents', from: invariants },
     {
       ...governedNode(816, 232, 'Memory', counts.memory ?? 0),
-      hash: '#/section/memory',
+      hash: '#/personal/memory',
       from: doctrines,
     },
     {

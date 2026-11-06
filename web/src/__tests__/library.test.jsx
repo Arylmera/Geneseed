@@ -53,8 +53,8 @@ const kinds = () =>
   ])
 
 describe('Library', () => {
-  // Skills, agents, memory and notebook count their fleet-wide lists (2, 2, 1, 0 here), not the
-  // one install that `overview.counts` describes (52, 18, 2, 2); the other kinds keep its counts.
+  // The kind on screen counts its fleet-wide list (2 agents here), not the one install that
+  // `overview.counts` describes (18); the other kinds keep its counts.
   it('lists every kind with its count, the routed one current', async () => {
     render(
       <Library
@@ -68,8 +68,6 @@ describe('Library', () => {
     expect(kinds()).toEqual([
       ['Skills', '52', null],
       ['Agents', '2', 'page'],
-      ['Memory', '2', null],
-      ['Notebook', '2', null],
       ['Wiki', '0', null],
       ['Setup files', '2', null],
     ])
@@ -179,7 +177,7 @@ describe('Library', () => {
   })
 
   it('forgets a memory fact via the delete control', async () => {
-    render(<Library section="memory" selected="fact-a" overview={overview({})} />)
+    render(<Library lock="memory" selected="fact-a" overview={overview({})} />)
     fireEvent.click(await screen.findByText('Forget this fact'))
     await waitFor(() => expect(api.memoryDelete).toHaveBeenCalledWith('fact-a', undefined))
   })
@@ -378,7 +376,7 @@ describe('Library', () => {
 
   it('says why a forget failed instead of swallowing it', async () => {
     api.memoryDelete.mockRejectedValueOnce(new Error('store is read-only'))
-    render(<Library section="memory" selected="fact-a" overview={overview({})} />)
+    render(<Library lock="memory" selected="fact-a" overview={overview({})} />)
     fireEvent.click(await screen.findByText('Forget this fact'))
     expect(await screen.findByText(/Could not forget "fact-a": store is read-only/)).toBeTruthy()
   })
@@ -389,15 +387,13 @@ describe('Library', () => {
     // room for a loaded parallel run.
     const LOAD = { timeout: 5000 }
     api.memoryDelete.mockRejectedValue(new Error('store is read-only'))
-    const { rerender } = render(
-      <Library section="memory" selected="fact-a" overview={overview({})} />,
-    )
+    const { rerender } = render(<Library lock="memory" selected="fact-a" overview={overview({})} />)
     fireEvent.click(await screen.findByText('Forget this fact', {}, LOAD))
     await screen.findByText(/Could not forget "fact-a"/, {}, LOAD)
-    rerender(<Library section="memory" selected="fact-b" overview={overview({})} />)
+    rerender(<Library lock="memory" selected="fact-b" overview={overview({})} />)
     expect(screen.queryByText(/Could not forget/)).toBeNull()
     // The kind half keeps `selected` unset on both sides, so only the kind change can clear it.
-    rerender(<Library section="memory" overview={overview({})} />)
+    rerender(<Library lock="memory" overview={overview({})} />)
     fireEvent.click(await screen.findByText('Forget this fact', {}, LOAD))
     await screen.findByText(/Could not forget "fact-a"/, {}, LOAD)
     rerender(<Library section="agents" overview={overview({})} />)
@@ -477,7 +473,7 @@ describe('skill classes', () => {
       ['debug', 'Build'],
       ['develop', 'Build'],
       ['commit', 'Ship'],
-      ['mine', 'Personal'],
+      ['mine', 'Custom'],
     ])
     expect(cats.map((c) => [c.key, c.n])).toEqual([
       ['design', 1],
@@ -503,7 +499,7 @@ describe('skill classes', () => {
     const list = screen.getByRole('list', { name: 'Skill types' })
     expect(nav.querySelector('a[aria-current="page"]').nextElementSibling).toBe(list.parentElement)
     expect(document.querySelectorAll('.rail-cats').length).toBe(1)
-    expect(railNames()).toEqual(['All 5', 'Design 1', 'Build 2', 'Ship 1', 'Personal 1'])
+    expect(railNames()).toEqual(['All 5', 'Design 1', 'Build 2', 'Ship 1', 'Custom 1'])
     // The share bar: one segment per class, grown by its count.
     expect([...document.querySelectorAll('.rail-mix span')].map((s) => s.style.flexGrow)).toEqual([
       '1',
@@ -515,7 +511,7 @@ describe('skill classes', () => {
       'Design',
       'Build',
       'Ship',
-      'Personal',
+      'Custom',
     ])
     fireEvent.click(screen.getByRole('button', { name: /^Build/ }))
     expect(screen.getByRole('button', { name: /^Build/ }).getAttribute('aria-pressed')).toBe('true')
@@ -543,7 +539,7 @@ describe('skill classes', () => {
         ],
       }),
     )
-    render(<Library section="memory" overview={overview({ memory: 5 })} />)
+    render(<Library lock="memory" overview={overview({ memory: 5 })} />)
     await waitFor(() => expect(document.querySelectorAll('.lib-row').length).toBe(5))
     const seq = [...document.querySelectorAll('.lib-group, .lib-row')].map((el) =>
       el.classList.contains('lib-group')
@@ -668,7 +664,7 @@ describe('Library rail', () => {
   })
 
   it('has at most one filled button', async () => {
-    render(<Library section="memory" overview={overview({})} />)
+    render(<Library lock="memory" overview={overview({})} />)
     await screen.findByText('Forget this fact')
     expect(filled()).toBeLessThanOrEqual(1)
   })
@@ -925,7 +921,7 @@ describe('Library usage', () => {
   })
 
   it('neither reads nor shows usage under memory', async () => {
-    render(<Library section="memory" selected="fact-a" overview={overview({})} />)
+    render(<Library lock="memory" selected="fact-a" overview={overview({})} />)
     await screen.findByText('Forget this fact')
     noUsageUi()
     expect(api.usage).not.toHaveBeenCalled()
@@ -1015,7 +1011,7 @@ describe('Library dossier', () => {
   })
 
   it('links each kind to the Docs page that explains it', async () => {
-    render(<Library section="memory" overview={overview({})} />)
+    render(<Library lock="memory" overview={overview({})} />)
     const link = await screen.findByRole('link', { name: 'About memory in Docs' })
     expect(link.getAttribute('href')).toBe('#/docs/memory')
   })
@@ -1084,7 +1080,7 @@ describe('Library across installs', () => {
 
   it("reads the first install's copy, and another install's on request", async () => {
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
-    const picker = await screen.findByRole('combobox', { name: /Viewing copy from/ })
+    const picker = await screen.findByRole('combobox', { name: 'Install' })
     expect(screen.getByText('opencode text')).toBeTruthy()
     expect(api.item).toHaveBeenLastCalledWith('skill', 'brainstorm')
     expect([...picker.options].map((o) => o.textContent)).toEqual([
@@ -1104,7 +1100,7 @@ describe('Library across installs', () => {
   it('offers no picker for an entry only one install has', async () => {
     render(<Library section="skills" selected="rule" overview={overview({})} />)
     await waitFor(() => expect(screen.getByText('opencode text')).toBeTruthy())
-    expect(screen.queryByRole('combobox', { name: /Viewing copy from/ })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
   })
 
   // A copy from an install the list does not name (an older server, a stale answer) has no
@@ -1122,7 +1118,7 @@ describe('Library across installs', () => {
     )
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
     await waitFor(() => expect(screen.getByText('stray')).toBeTruthy())
-    expect(screen.queryByRole('combobox', { name: /Viewing copy from/ })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
   })
 
   it('shows no install badge when the whole list is on one install', async () => {
@@ -1143,7 +1139,7 @@ describe('Library across installs', () => {
   // Two projects of one host in same-named folders read alike; the full path tells them apart.
   it('titles each badge and picker option with the install path', async () => {
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
-    const picker = await screen.findByRole('combobox', { name: /Viewing copy from/ })
+    const picker = await screen.findByRole('combobox', { name: 'Install' })
     expect([...picker.options].map((o) => o.title)).toEqual([
       'C:\\Users\\u\\.config\\opencode',
       '/home/u/.claude',

@@ -54,7 +54,7 @@ const overview = (install) => getIn('/api/overview', install)
 // The Ledger Overview's four reads: every installed harness (sync, drift, always-on cost), skill
 // and agent calls over 30 days, gate asks per rule per day, and whether a newer release exists.
 const fleet = () => get('/api/fleet')
-// Every kit this Geneseed ships, and per install which are on: the Installs / Kits tab.
+// Every kit this Geneseed ships, and per install which are on: the Kits page.
 const kits = () => get('/api/kits')
 const usage = () => get('/api/usage')
 const gates = () => get('/api/gates')

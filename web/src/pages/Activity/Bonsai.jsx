@@ -44,10 +44,26 @@ export function PadCard({ pad }) {
   )
 }
 
+// A pad's card in one line, for a live region: the card itself is only drawn.
+export const padLine = (pad) =>
+  pad ? `${who(pad)}: ${pad.files.length} file${pad.files.length === 1 ? '' : 's'}` : ''
+
+// The keyboard's way to a pad: the arrows walk them, Escape leaves. A pad cannot take focus itself:
+// in the Garden it sits inside the tree's link, and a control may not nest in a link. Its owner
+// (the link, or the detail page's group) calls this from onKeyDown.
+export function padKeys(e, count, pad, onPad) {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
+  if (e.key === 'Escape' && pad != null) onPad(null)
+  if (!step || !count) return
+  e.preventDefault()
+  onPad(pad == null ? (step > 0 ? 0 : count - 1) : (pad + step + count) % count)
+}
+
 // `t` is a gardenTree() drawing; `pad` the hovered pad's index, or null; `onPad(p)` reports a
 // pad hover (null on leave) and must be stable, or the ~400 rects are rebuilt on every render.
-// With `label` the SVG is an image with that text alternative, else it is hidden from
-// screen readers (its owner labels it).
+// A tap shows the pad too, and a second one clears it; preventDefault cancels the click, so the
+// tap does not also open the session. With `label` the SVG is an image with that text
+// alternative, else it is hidden from screen readers (its owner labels it).
 export const TreeSvg = memo(function TreeSvg({ t, pad, swaying, onPad, px, label }) {
   const groups = useMemo(() => {
     const by = new Map()
@@ -78,6 +94,14 @@ export const TreeSvg = memo(function TreeSvg({ t, pad, swaying, onPad, px, label
           }
           onMouseEnter={p >= 0 ? () => onPad(p) : undefined}
           onMouseLeave={p >= 0 ? () => onPad(null) : undefined}
+          onTouchEnd={
+            p >= 0
+              ? (e) => {
+                  e.preventDefault()
+                  onPad(p === pad ? null : p)
+                }
+              : undefined
+          }
         >
           {runs.map((r) => (
             <rect key={`${r.x},${r.y}`} x={r.x} y={r.y} width={r.w} height={1} fill={r.c} />

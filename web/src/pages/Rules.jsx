@@ -1,17 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { api } from '../api/index.js'
-import { useAsync } from '../hooks/useAsync.js'
 import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
 import { useFileEditor } from '../hooks/useFileEditor.js'
-import { useInstalls } from '../hooks/useInstalls.js'
+import { useInstallFiles } from '../hooks/useInstalls.js'
 import { installTag, pairOf } from '../lib/hosts.js'
 
 // Rules — the user's own standing rules (user-rules.md, one file shared by every global
-// install). The page is the curation surface for the file the agent obeys alongside the Laws:
+// install). The page is the curation surface for the file the agent obeys alongside the Dictates:
 // list with status/scope chips and add/edit/retire. Each rule shows what it costs and the page
 // its total, with no ceiling: a bloated rule set is ignored, not obeyed (Design decision 7), and
 // that call is the user's. Rules the fold drafted are shown, never decided: the rule Rite is the
@@ -133,9 +132,10 @@ function RuleForm({ value: f, onChange, onCancel, onSave, busy, writeTo = null }
   )
 }
 
-// `tag` names the install the rule lives in, shown once two or more installs are listed; the
-// row's verbs then name it too, since two installs each have their own R1.
-function RuleRow({ rule, tag, isOpen, onToggle, onEdit, onDelete, onGraduate }) {
+// `tag` names the install the rule lives in, once two or more are listed: the file's own head
+// shows it, and the row's verbs say it to a screen reader, since two installs each have an R1. The
+// scope chip shows only a scope that differs from the file's `usual`, which the head states.
+function RuleRow({ rule, tag, usual, isOpen, onToggle, onEdit, onDelete, onGraduate }) {
   const of = tag ? ` · ${tag}` : ''
   return (
     <div className={`rule-row ${isOpen ? 'on' : ''}`}>
@@ -147,8 +147,9 @@ function RuleRow({ rule, tag, isOpen, onToggle, onEdit, onDelete, onGraduate }) 
       >
         <span className="rule-no">R{rule.id}</span>
         <span className="rule-title">{rule.title}</span>
-        {tag ? <span className="rule-chip mono">{tag}</span> : null}
-        <span className={`rule-chip ${rule.scope === 'user' ? 'user' : ''}`}>{rule.scope}</span>
+        {formScope(rule.scope) === usual ? null : (
+          <span className={`rule-chip ${rule.scope === 'user' ? 'user' : ''}`}>{rule.scope}</span>
+        )}
         {rule.status === 'trial' && (
           <span className={`rule-chip trial ${rule.overdue ? 'overdue' : ''}`}>
             {rule.overdue ? 'review due' : `trial · ${rule.trial_until}`}
@@ -220,48 +221,15 @@ function PendingRules({ drafts }) {
   )
 }
 
-// EVERY ACTIVE INSTALL'S RULES IN ONE LIST. The page reads one file per install (client-side, one
-// request each: an install count is a handful, and a merged server read would only re-implement
-// the per-file fingerprint the 409 rests on); global installs all answer with the shared file,
-// which counts once, and a project install keeps its own. Each
+// EVERY ACTIVE INSTALL'S RULES, ONE LIST PER FILE. The page reads one file per install (client-side,
+// one request each: an install count is a handful, and a merged server read would only re-implement
+// the per-file fingerprint the 409 rests on); hooks/useInstallFiles lists a shared file once. Each
 // row carries its install; an edit, graduate or retire writes back to THAT install with THAT
-// file's fingerprint, and a new rule goes to the install its form's own picker names. With no
-// active install read, the page reads the default install, as a request naming none does.
+// file's fingerprint, and a new rule goes to the install its form's own picker names.
 export default function Rules({ onChanged, dataRev }) {
   const confirm = useConfirm()
-  const [rev, setRev] = useState(0)
-  const active = useInstalls(dataRev)
-  const targets = active === null ? null : active.length ? active : [null]
-  const ids = targets ? targets.map((i) => i?.id ?? '').join('|') : null
-  // One install's unreadable file must not blank the others: each read settles on its own, a
-  // failed one is named apart (`failed`), and only all of them failing is the page's error.
-  const { data: read, error } = useAsync(
-    () =>
-      targets
-        ? Promise.allSettled(targets.map((inst) => api.rules(pairOf(inst)))).then((rs) => {
-            if (rs.every((r) => r.status === 'rejected')) throw rs[0].reason
-            const all = rs.flatMap((r, i) =>
-              r.status === 'fulfilled' ? [{ inst: targets[i], data: r.value }] : [],
-            )
-            const paths = all.map((s) => s.data.path)
-            return {
-              // Every global install answers with the one tier file: it counts once, tagged shared.
-              sets: all
-                .filter((s, i) => paths.indexOf(s.data.path) === i)
-                .map((s) => ({
-                  ...s,
-                  shared:
-                    s.data.shared || paths.indexOf(s.data.path) !== paths.lastIndexOf(s.data.path),
-                })),
-              failed: rs.flatMap((r, i) => (r.status === 'rejected' ? [targets[i]] : [])),
-            }
-          })
-        : Promise.resolve(null),
-    [rev, ids],
-  )
-  const sets = read?.sets
+  const { targets, sets, failed, reason, reload } = useInstallFiles(api.rules, dataRev)
   const [open, setOpen] = useState(null)
-  const reload = () => setRev((v) => v + 1)
   // draft: { target: 'new' | rule key, title0: the rule's title when opened, form, to: the new
   // rule's install id }. The editor's own fingerprint is unused: each save names its file's.
   const editor = useFileEditor({ data: null, reload })
@@ -289,13 +257,12 @@ export default function Rules({ onChanged, dataRev }) {
     el?.focus()
   }, [focusTick])
 
-  if (error) return <ErrorState error={error} onRetry={reload} />
-  if (!sets || !targets) return <Loading />
+  if (sets && !sets.length && reason) return <ErrorState error={reason} onRetry={reload} />
+  if (!sets) return <Loading />
 
   const many = targets.length > 1
   const idOf = (inst) => inst?.id ?? ''
-  const tagOf = (inst) =>
-    sets.find((s) => idOf(s.inst) === idOf(inst))?.shared ? 'shared' : installTag(inst)
+  const tagOf = (inst) => (inst?.shared ? 'shared' : installTag(inst))
   // A rule's key is its install and its number: two installs each have an R1.
   const rules = sets.flatMap(({ inst, data }) =>
     (data.rules || []).map((r) => ({ ...r, inst, key: `${idOf(inst)}#${r.id}` })),
@@ -328,12 +295,11 @@ export default function Rules({ onChanged, dataRev }) {
       installs={writable}
       value={writeTo}
       onChange={(i) => editor.setDraft({ ...draft, to: i.id })}
-      label="Write to:"
       tagOf={tagOf}
     />
   ) : many && writeTo ? (
     <p className="install-pick">
-      <span className="dim">Write to:</span> <span className="mono">{tagOf(writeTo)}</span>
+      <span className="dim">Install:</span> <span className="mono">{tagOf(writeTo)}</span>
     </p>
   ) : null
 
@@ -393,35 +359,62 @@ export default function Rules({ onChanged, dataRev }) {
   const drafts = sets.flatMap(({ data }) => data.drafts || [])
   // No session loads two of these files, so each keeps its own figure: a sum would not be per turn.
   const files = sets.filter((s) => s.data.exists)
+  // The scope a file's rules have unless a row says otherwise.
+  const usualOf = (inst) => (inst?.scope === 'project' ? 'project' : 'global')
+
+  const renderRule = (r) =>
+    !gone && target === r.key ? (
+      <div className="rule-row on" key={r.key}>
+        <div className="rule-expand" style={{ paddingTop: 14 }}>
+          <RuleForm
+            value={draft.form}
+            onChange={setForm}
+            busy={busy}
+            onCancel={() => cancelThen(r.key)}
+            onSave={(f) =>
+              saveThen({ op: 'update', id: r.id, source: r.source, ...f }, r.inst, r.key)
+            }
+          />
+        </div>
+      </div>
+    ) : (
+      <RuleRow
+        key={r.key}
+        rule={r}
+        tag={many ? tagOf(r.inst) : null}
+        usual={usualOf(r.inst)}
+        isOpen={open === r.key}
+        onToggle={() => setOpen(open === r.key ? null : r.key)}
+        onEdit={() => {
+          setOpen(r.key)
+          editor.open({
+            target: r.key,
+            no: r.id,
+            // A draft whose rule is gone is saved as a new rule, to the same install.
+            to: idOf(r.inst),
+            title0: r.title,
+            form: {
+              title: r.title,
+              body: r.body,
+              scope: formScope(r.scope),
+              trial_until: r.trial_until,
+            },
+          })
+        }}
+        onDelete={() => onDelete(r)}
+        onGraduate={() => onGraduate(r)}
+      />
+    )
 
   return (
     <>
       <div className="head-row mb-16">
         <div className="head-text">
-          <div className="eyebrow">governance · yours</div>
           <h2 className="h">Rules</h2>
           <p className="sub sub-wide">
-            Your own standing rules, from <code className="mono">user-rules.md</code>.
-            {sets.some((s) => s.shared)
-              ? ' Every harness on this machine shares that one file, so a rule here binds all of them; a project install keeps its own file, tagged with its install.'
-              : ''}{' '}
-            The agent obeys them with the same force as the Laws — they may tighten a Law, never
-            repeal one — and no update ever touches the file. Keep the set small: every rule is
-            loaded every session.
+            Your standing rules, from <code className="mono">user-rules.md</code>. The agent obeys
+            them in every session, so keep the set small. <a href="#/docs/rules">Docs</a>
           </p>
-          {files.map(({ inst, data }) => (
-            <p className="sub mono" key={idOf(inst)}>
-              {files.length > 1 ? `${tagOf(inst)} · ` : ''}
-              {plural(data.rules.length, 'rule')} · {approxTokens(data.stats.tokens)} every turn
-            </p>
-          ))}
-          {exists ? (
-            <p className="sub sub-wide">
-              {files.length > 1
-                ? 'Each total counts its file’s header too.'
-                : 'The total counts the file’s header too.'}
-            </p>
-          ) : null}
         </div>
         {exists && draft === null && (
           <button
@@ -439,10 +432,10 @@ export default function Rules({ onChanged, dataRev }) {
           {notice}
         </p>
       ) : null}
-      {read.failed.length ? (
+      {failed.length ? (
         <p className="sub sub-wide rule-notice" role="status">
           Could not read user-rules.md of{' '}
-          {read.failed.map((i) => (i ? installTag(i) : 'the default install')).join(', ')}.
+          {failed.map((i) => (i ? installTag(i) : 'the default install')).join(', ')}.
         </p>
       ) : null}
       {warnings.map((w) => (
@@ -479,60 +472,34 @@ export default function Rules({ onChanged, dataRev }) {
 
       {!exists ? (
         <EmptyState title="No user-rules.md here yet">
-          The build seeds it — run a build/update from the Dashboard (or{' '}
-          <code className="mono">geneseed update</code>) and it appears, ready for your rules.
+          The build seeds it. Rebuild on the Overview, or run{' '}
+          <code className="mono">geneseed update</code>, and it appears, ready for your rules.
         </EmptyState>
       ) : rules.length === 0 && !newCard ? (
         <EmptyState title="No rules yet">
-          The file is seeded and loaded every session — it is just empty. Add your first standing
-          rule here, ask the agent for one in-session (the rule skill), or promote a recurring
-          memory fact from the Library.
+          The file is seeded and loaded every session, and it is empty. Add your first standing rule
+          here, ask the agent for one in a session (the rule skill), or promote a recurring fact
+          from Memory.
         </EmptyState>
       ) : (
-        <div className="card rules-list" ref={listRef}>
-          {rules.map((r) =>
-            !gone && target === r.key ? (
-              <div className="rule-row on" key={r.key}>
-                <div className="rule-expand" style={{ paddingTop: 14 }}>
-                  <RuleForm
-                    value={draft.form}
-                    onChange={setForm}
-                    busy={busy}
-                    onCancel={() => cancelThen(r.key)}
-                    onSave={(f) =>
-                      saveThen({ op: 'update', id: r.id, source: r.source, ...f }, r.inst, r.key)
-                    }
-                  />
-                </div>
+        <div ref={listRef}>
+          {files.map(({ inst, data }) => (
+            <section className="mb-16" key={idOf(inst)} aria-label={many ? tagOf(inst) : 'Rules'}>
+              <div className="rules-file">
+                {many ? <b className="mono">{tagOf(inst)}</b> : null}
+                {/* The total counts the file's header too, which is why it can exceed the rows'. */}
+                <span className="mono dim">
+                  {plural(data.rules.length, 'rule')} · {approxTokens(data.stats.tokens)} every turn
+                  · scope {usualOf(inst)} unless marked
+                </span>
               </div>
-            ) : (
-              <RuleRow
-                key={r.key}
-                rule={r}
-                tag={many ? tagOf(r.inst) : null}
-                isOpen={open === r.key}
-                onToggle={() => setOpen(open === r.key ? null : r.key)}
-                onEdit={() => {
-                  setOpen(r.key)
-                  editor.open({
-                    target: r.key,
-                    no: r.id,
-                    // A draft whose rule is gone is saved as a new rule, to the same install.
-                    to: idOf(r.inst),
-                    title0: r.title,
-                    form: {
-                      title: r.title,
-                      body: r.body,
-                      scope: formScope(r.scope),
-                      trial_until: r.trial_until,
-                    },
-                  })
-                }}
-                onDelete={() => onDelete(r)}
-                onGraduate={() => onGraduate(r)}
-              />
-            ),
-          )}
+              {data.rules.length ? (
+                <div className="card rules-list">
+                  {rules.filter((r) => r.inst === inst).map(renderRule)}
+                </div>
+              ) : null}
+            </section>
+          ))}
         </div>
       )}
     </>

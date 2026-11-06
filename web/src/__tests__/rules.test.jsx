@@ -92,30 +92,20 @@ describe('Rules', () => {
       (h) => h.textContent.match(/≈\d+ tokens/)?.[0],
     )
     expect(costs).toEqual(['≈21 tokens', '≈34 tokens'])
-    expect(screen.getByText('2 rules · ≈1,300 tokens every turn')).toBeTruthy()
-    expect(screen.getByText('The total counts the file’s header too.')).toBeTruthy()
+    expect(document.querySelector('.rules-file').textContent).toBe(
+      '2 rules · ≈1,300 tokens every turn · scope global unless marked',
+    )
     expect(document.body.textContent).not.toMatch(/ of 15|budget/)
   })
 
-  it('says the rules are shared across harnesses, and only when a file is shared', async () => {
-    const says = () => screen.queryByText(/Every harness on this machine shares that one file/)
-    const { unmount } = render(<Rules />)
-    await screen.findByText('No emoji in commits')
-    expect(says()).toBeNull()
-    unmount()
-    api.rules.mockImplementation(() => Promise.resolve({ ...PAYLOAD, shared: true }))
-    render(<Rules />)
-    await screen.findByText('No emoji in commits')
-    expect(says()).toBeTruthy()
-    expect(screen.queryByText(/beside the\s+deployed AGENT\.md/)).toBeNull()
-  })
-
-  it('renders the rule rows with scope and trial chips', async () => {
+  // A row shows a scope only when it differs from its file's usual one, which the file's head
+  // states. `user` is an alias of `global`, so it is the usual scope too.
+  it('renders the rule rows with trial chips, and a scope chip only where it differs', async () => {
     render(<Rules />)
     await waitFor(() => expect(screen.getByText('No emoji in commits')).toBeTruthy())
     expect(screen.getByText('Prefer tabs')).toBeTruthy()
     expect(screen.getByText('project')).toBeTruthy()
-    expect(screen.getByText('user')).toBeTruthy()
+    expect(screen.queryByText('user')).toBeNull()
     expect(screen.getByText(/trial · 2026-08-06/)).toBeTruthy()
   })
 
@@ -235,7 +225,6 @@ describe('Rules', () => {
     await waitFor(() => expect(screen.queryByLabelText('Rule title')).toBeNull())
     expect(confirm).not.toHaveBeenCalled()
     expect(api.rulesMutate).not.toHaveBeenCalled()
-    expect(screen.getByText('user')).toBeTruthy()
   })
 
   // A hand-written scope the skill does not document: the select must show it (not "project")
@@ -431,7 +420,7 @@ describe('Rules', () => {
     )
     render(<Rules />)
     await waitFor(() => expect(screen.getByText('No rules yet')).toBeTruthy())
-    expect(screen.getByText(/promote a recurring memory fact/)).toBeTruthy()
+    expect(screen.getByText(/promote a recurring fact/)).toBeTruthy()
   })
 
   it('shows the not-seeded state when user-rules.md is missing', async () => {
@@ -584,7 +573,7 @@ describe('Rules', () => {
 // EVERY ACTIVE INSTALL'S RULES IN ONE LIST (D1). Two installs, each with its own user-rules.md
 // and fingerprint: the rows of both are listed, each tagged with its install; a write on a row
 // goes back to THAT install with THAT file's fingerprint; a new rule goes where its form's own
-// "Write to:" picker says, starting on the server's default row.
+// picker says, starting on the server's default row.
 describe('Rules across installs', () => {
   const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
   const CL = {
@@ -619,16 +608,24 @@ describe('Rules across installs', () => {
 
   // Every global install answers with the one shared file: one list, one count, one write target.
   it('lists a file two installs share once, and its drafts once', async () => {
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...CL, shared: true },
+        { ...OC, shared: true },
+      ],
+    }))
     api.rules.mockImplementation(() =>
       Promise.resolve({ ...clRules, drafts: [{ title: 'Mine', host: 'bob', body: 'Be terse.' }] }),
     )
     render(<Rules />)
     expect((await screen.findAllByText('Claude only')).length).toBe(1)
     expect(screen.getAllByText('Mine').length).toBe(1)
-    expect(document.querySelector('button.rule-head').textContent).toMatch(/shared/)
+    // The file's head says shared once; its rows repeat neither that nor the usual scope.
+    expect(document.querySelector('.rules-file b').textContent).toBe('shared')
+    expect(document.querySelector('button.rule-head').textContent).not.toMatch(/shared|global/)
     fireEvent.click(screen.getByText('Add rule'))
-    expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
-    expect(document.querySelector('.rule-form .install-pick').textContent).toBe('Write to: shared')
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
+    expect(document.querySelector('.rule-form .install-pick').textContent).toBe('Install: shared')
   })
 
   // No session loads two files, so a sum would not be per turn: each file keeps its own figure.
@@ -642,33 +639,32 @@ describe('Rules across installs', () => {
     )
     render(<Rules />)
     await screen.findByText('Claude only')
-    expect(
-      screen.getByText('Claude Code · global · 1 rule · ≈1,100 tokens every turn'),
-    ).toBeTruthy()
-    expect(screen.getByText('OpenCode · global · 1 rule · ≈200 tokens every turn')).toBeTruthy()
-    expect(screen.getByText('Each total counts its file’s header too.')).toBeTruthy()
+    expect([...document.querySelectorAll('.rules-file')].map((h) => h.textContent)).toEqual([
+      'Claude Code · global1 rule · ≈1,100 tokens every turn · scope global unless marked',
+      'OpenCode · global1 rule · ≈200 tokens every turn · scope global unless marked',
+    ])
   })
 
   // One global install beside a project: the paths differ, yet the global file is still the
   // shared one, so it reads as shared, and the project keeps its install tag.
-  it('tags a lone global install shared, in the rows and in the Write to picker', async () => {
+  it('tags a lone global install shared, in its head and in the form picker', async () => {
     api.installs = vi.fn(async () => ({
-      installs: [CL, { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' }],
+      installs: [
+        { ...CL, shared: true },
+        { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' },
+      ],
     }))
     api.rules.mockImplementation((inst) =>
       Promise.resolve(
-        inst?.host === 'bob'
-          ? { ...ocRules, path: '/r/repo/user-rules.md', shared: false }
-          : { ...clRules, shared: true },
+        inst?.host === 'bob' ? { ...ocRules, path: '/r/repo/user-rules.md' } : clRules,
       ),
     )
     render(<Rules />)
     await screen.findByText('Claude only')
-    const heads = [...document.querySelectorAll('.rule-head')].map((h) => h.textContent)
-    expect(heads[0]).toMatch(/shared/)
-    expect(heads[1]).toMatch(/repo · BOB \(IBM\)/)
+    const heads = [...document.querySelectorAll('.rules-file b')].map((h) => h.textContent)
+    expect(heads).toEqual(['shared', 'repo · BOB (IBM)'])
     fireEvent.click(screen.getByText('Add rule'))
-    const picker = await screen.findByRole('combobox', { name: 'Write to:' })
+    const picker = await screen.findByRole('combobox', { name: 'Install' })
     expect([...picker.options].map((o) => o.textContent)).toEqual(['shared', 'repo · BOB (IBM)'])
   })
 
@@ -681,9 +677,9 @@ describe('Rules across installs', () => {
     )
     render(<Rules />)
     fireEvent.click(await screen.findByText('Add rule'))
-    expect(screen.queryByRole('combobox', { name: 'Write to:' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
     expect(document.querySelector('.rule-form .install-pick').textContent).toBe(
-      'Write to: Claude Code · global',
+      'Install: Claude Code · global',
     )
   })
 
@@ -697,13 +693,11 @@ describe('Rules across installs', () => {
     expect(screen.getByText('Could not read user-rules.md of OpenCode · global.')).toBeTruthy()
   })
 
-  it('lists both installs, each row tagged with its own', async () => {
+  it('lists both installs, each file under its own head', async () => {
     render(<Rules />)
     await screen.findByText('Claude only')
     expect(screen.getByText('No emoji in commits')).toBeTruthy()
-    const tags = [...document.querySelectorAll('.rule-head')].map(
-      (h) => h.querySelector('.rule-chip').textContent,
-    )
+    const tags = [...document.querySelectorAll('.rules-file b')].map((h) => h.textContent)
     // The default install's rules first, then the others in the server's order.
     expect(tags).toEqual(['Claude Code · global', 'OpenCode · global'])
   })
@@ -727,7 +721,7 @@ describe('Rules across installs', () => {
   it('adds a new rule to the install its form picks, default first', async () => {
     render(<Rules />)
     fireEvent.click(await screen.findByText('Add rule'))
-    const to = screen.getByRole('combobox', { name: 'Write to:' })
+    const to = screen.getByRole('combobox', { name: 'Install' })
     expect(to.value).toBe('cl')
     fireEvent.change(to, { target: { value: 'oc' } })
     fireEvent.change(screen.getByLabelText('Rule title'), { target: { value: 'New rule' } })

@@ -13,8 +13,6 @@ const appearance = {
   onFlavour: () => {},
   accentMode: 'curated',
   onAccentMode: () => {},
-  layout: 'board',
-  onLayout: () => {},
 }
 // Inside `.app`, as App renders it: the popover portals to the nearest `.app`.
 const mount = (route = { page: 'overview' }) =>
@@ -58,7 +56,7 @@ describe('Appearance popover', () => {
 // page: no install root, since the console has no install-wide view (each page picks its own).
 describe('Breadcrumb', () => {
   it('is an ordered list whose parent levels link back, the tab current', () => {
-    mount({ page: 'installs', tab: 'kits' })
+    mount({ page: 'installs', tab: 'doctor' })
     const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
     expect(nav.querySelector('ol')).not.toBeNull()
     expect(
@@ -66,7 +64,7 @@ describe('Breadcrumb', () => {
         .getAllByRole('link')
         .map((a) => [a.textContent, a.getAttribute('href')]),
     ).toEqual([['Installs', '#/installs']])
-    expect(nav.querySelector('[aria-current="page"]').textContent).toBe('Kits')
+    expect(nav.querySelector('[aria-current="page"]').textContent).toBe('Doctor')
   })
 
   it('a page without a tab is itself the current level, not a link', () => {
@@ -76,5 +74,20 @@ describe('Breadcrumb', () => {
     expect(nav.querySelectorAll('li')).toHaveLength(1)
 
     expect(nav.querySelector('[aria-current="page"]').textContent).toBe('Overview')
+  })
+})
+
+// The popover is the one home of the skin and the accent, and each says its pick in words: a
+// title reaches no touch screen. The lens lives on the Overview alone.
+describe('Appearance popover', () => {
+  it('holds the skin and the accent, each with its description, and no lens', () => {
+    mount()
+    fireEvent.click(trigger())
+    const pop = within(screen.getByRole('dialog', { name: 'Appearance' }))
+    expect(pop.getByRole('group', { name: 'Skin' })).toBeTruthy()
+    expect(pop.getByRole('group', { name: 'Accent' })).toBeTruthy()
+    expect(pop.queryByText('Overview view')).toBeNull()
+    expect(pop.getByText(/calm default/)).toBeTruthy()
+    expect(pop.getByText(/own signature colour/)).toBeTruthy()
   })
 })

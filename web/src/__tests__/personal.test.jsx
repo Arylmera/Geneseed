@@ -2,9 +2,8 @@ import React from 'react'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Personal, with the real Rules editor under it: ONE budget strip (the Rules meter is gone),
-// one threshold rule for that strip, counts that come from the folder the pane lists, and one
-// filled action per view.
+// Personal, with the real Rules editor under it: counts that come from the folder the pane lists,
+// and one filled action per view.
 
 vi.mock('../api/index.js', () => ({
   api: {
@@ -64,68 +63,43 @@ beforeEach(() => {
 
 // `setup.facts` disagrees with the catalog on purpose: the counts must come from the catalog.
 const SETUP = { facts: 5 }
-const known = () => screen.findByRole('region', { name: 'What the agent knows about you' })
 const badgeOf = (tab) =>
   screen.getByRole('link', { name: new RegExp(`^${tab}`) }).querySelector('.tab-badge')
 
 describe('Personal', () => {
-  // No limit anywhere: the panel counts the rules and nothing measures them against a ceiling.
-  it('counts the rules with no budget and no ceiling', async () => {
-    render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const panel = await known()
-    await screen.findByText('Prefer tabs')
-    expect(within(panel).getByText('2 rules')).toBeTruthy()
-    expect(screen.queryByRole('region', { name: 'Rule budget' })).toBeNull()
-    expect(document.querySelector('.slots')).toBeNull()
-  })
-
   const TWO = {
     installs: [
-      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
-      { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', default: true },
+      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active', shared: true },
+      { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active', shared: true },
     ],
   }
 
-  // Rules, profile and memory of a global install are the one shared tier: the summary says so
-  // and names no harness, whichever install is the default.
-  it('names no harness when the files are shared', async () => {
+  // The shared scope is said once, in the page header, and only when an install reads the tier.
+  it('states the shared scope once, in the header', async () => {
     api.installs = vi.fn(async () => TWO)
-    api.rules.mockImplementation(() => Promise.resolve({ ...rulesWith({}), shared: true }))
     try {
       render(<Personal tab="rules" dataRev={0} />)
-      const panel = await known()
-      await within(panel).findByText('3 facts')
-      expect(panel.querySelector('.panel-note')).toBeNull()
-      expect(panel.textContent).not.toMatch(/claude|opencode/i)
+      await screen.findByText(/Global installs share one copy of the rules, profile and memory/)
+      await screen.findByText('Prefer tabs')
+      expect(document.body.textContent.match(/share one copy/g)).toHaveLength(1)
     } finally {
       delete api.installs
     }
   })
 
-  // A project install as the default has files of its own, so the summary names it.
-  it('names a project install whose files are its own', async () => {
-    api.installs = vi.fn(async () => TWO)
-    try {
-      render(<Personal tab="rules" dataRev={0} />)
-      await within(await known()).findByText('Profile and rules of Claude Code · global.')
-    } finally {
-      delete api.installs
-    }
+  it('says nothing of sharing when no install reads the tier', async () => {
+    render(<Personal tab="rules" dataRev={0} />)
+    await screen.findByText('Prefer tabs')
+    expect(screen.queryByText(/share one copy/)).toBeNull()
   })
 
-  it('counts one fact in the singular', async () => {
-    memoryItems = entries(1)
-    render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const known = await screen.findByRole('region', { name: 'What the agent knows about you' })
-    await waitFor(() => expect(within(known).getByText('1 fact')).toBeTruthy())
-  })
-
-  it('counts 237 facts in the plural', async () => {
-    memoryItems = entries(237)
-    render(<Personal tab="rules" setup={SETUP} dataRev={0} />)
-    const known = await screen.findByRole('region', { name: 'What the agent knows about you' })
-    await waitFor(() => expect(within(known).getByText('237 facts')).toBeTruthy())
-    expect(within(known).getByText('1 note')).toBeTruthy()
+  // The rule count has one home, the head of its file's list: no tab badge, no summary card.
+  it('prints the rule count once', async () => {
+    render(<Personal tab="rules" dataRev={0} />)
+    await screen.findByText('Prefer tabs')
+    expect(badgeOf('Rules')).toBeNull()
+    expect(document.body.textContent.match(/1 rule\b/g)).toHaveLength(1)
+    expect(screen.queryByRole('region', { name: /knows about you/ })).toBeNull()
   })
 
   it('badges the Memory tab with the catalog entries', async () => {
@@ -214,7 +188,7 @@ describe('Personal', () => {
     expect(within(topics).getByText('2 topics')).toBeTruthy()
   })
 
-  it('tags the topics of the shared store as shared, never with a harness', async () => {
+  it('leaves the topics of the shared store untagged: the header says shared', async () => {
     api.item.mockImplementation(() =>
       Promise.resolve({
         body: '- [release](topics/release.md) — 2 facts',
@@ -225,8 +199,7 @@ describe('Personal', () => {
     )
     render(<Personal tab="memory" dataRev={0} />)
     const topics = await screen.findByRole('region', { name: 'Topics' })
-    expect(within(topics).getByText('shared')).toBeTruthy()
-    expect(topics.textContent).not.toMatch(/claude/)
+    expect(topics.textContent).not.toMatch(/claude|shared/)
   })
 
   // A forget rewrites the map server-side; the panel must not keep the old count.

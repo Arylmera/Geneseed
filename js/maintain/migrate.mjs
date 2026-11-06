@@ -112,7 +112,8 @@ function autostartFindings() {
  * holding the same new fact both count it here, and the second finds it a duplicate in the real run.
  */
 function foldPreview(rows) {
-  const shared = sharedPaths();
+  let shared;
+  try { shared = sharedPaths(); } catch { return; }   // no home: no tier to fold into
   for (const { host, scope, root } of rows) {
     if (scope !== 'global' || !isCanonical(root, host)) continue;
     const report = foldHost({ host, cfgDir: root, shared, dryRun: true });

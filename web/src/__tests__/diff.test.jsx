@@ -17,16 +17,18 @@ describe('Diff', () => {
   it('shows the not-deployed state', async () => {
     api.diff.mockResolvedValueOnce({ deployed: false, files: [] })
     render(<Diff />)
-    await waitFor(() => expect(screen.getByText('No deployed harness')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Nothing installed here')).toBeTruthy())
   })
 
   // A PROJECT install is deployed but has no drift check (diffCollect re-renders global emits
-  // only). It used to read "No deployed harness", which was false.
-  it('says a deployed install with no drift check is not diffable, not undeployed', async () => {
+  // only). It used to read "Nothing installed here", which was false.
+  it('says a deployed install with no local-edit check is not diffable, not undeployed', async () => {
     api.diff.mockResolvedValueOnce({ deployed: true, diffable: false, files: [] })
     render(<Diff />)
-    await waitFor(() => expect(screen.getByText('No drift check for this install')).toBeTruthy())
-    expect(screen.queryByText('No deployed harness')).toBeNull()
+    await waitFor(() =>
+      expect(screen.getByText('No local-edit check for this install')).toBeTruthy(),
+    )
+    expect(screen.queryByText('Nothing installed here')).toBeNull()
   })
 
   it('lists changed files with their status and a line count', async () => {
@@ -71,7 +73,7 @@ describe('Diff', () => {
     expect(screen.getByText('1 behind')).toBeTruthy()
     expect(
       screen.getByText(
-        'This install is built from older source — rebuild to bring these files up to date.',
+        'This install is built from older source. Rebuild to bring these files in sync.',
       ),
     ).toBeTruthy()
     expect(screen.queryByText(/refines its own deployed files/)).toBeNull()
@@ -158,9 +160,9 @@ describe('Diff', () => {
       api.diff.mockReset()
       api.diff.mockResolvedValue({ deployed: true, diffable: false, files: [] })
       render(<Diff />)
-      const pick = await screen.findByRole('combobox', { name: 'Local edits of:' })
+      const pick = await screen.findByRole('combobox', { name: 'Install' })
       await waitFor(() => expect(api.diff).toHaveBeenLastCalledWith({ host: 'bob', path: '/r' }))
-      await screen.findByText('No drift check for this install')
+      await screen.findByText('No local-edit check for this install')
       fireEvent.change(pick, { target: { value: 'oc' } })
       await waitFor(() =>
         expect(api.diff).toHaveBeenLastCalledWith({ host: 'opencode', path: '/oc' }),

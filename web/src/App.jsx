@@ -38,6 +38,7 @@ const Loops = lazy(() => import('./pages/Loops.jsx'))
 const Laws = lazy(() => import('./pages/Laws.jsx'))
 const Personal = lazy(() => import('./pages/Personal.jsx'))
 const Installs = lazy(() => import('./pages/Installs/index.jsx'))
+const Settings = lazy(() => import('./pages/Settings/index.jsx'))
 const Docs = lazy(() => import('./pages/Docs/index.jsx'))
 
 // App is a thin shell: it wires the hooks (overview, jobs, color mode) to the chrome
@@ -214,7 +215,7 @@ export default function App() {
       run: toggleMode,
     },
     ...FLAVOURS.filter((f) => f.id !== flavour).map((f) => ({
-      title: `Flavour: ${f.name}`,
+      title: `Skin: ${f.name}`,
       desc: f.tagline,
       run: () => switchFlavour(f.id),
     })),
@@ -225,8 +226,6 @@ export default function App() {
     onFlavour: switchFlavour,
     accentMode,
     onAccentMode: setAccentMode,
-    layout,
-    onLayout: setLayout,
   }
 
   // route.page -> its element. Keys are lib/router.js's PAGES.
@@ -283,9 +282,9 @@ export default function App() {
         onAction={runAction}
         onMutated={refresh}
         dataRev={dataRev}
-        appearance={appearance}
       />
     ),
+    settings: () => <Settings overview={overview} onAction={runAction} />,
     activity: () =>
       route.item ? <ActivityDetail key={route.item} sid={route.item} /> : <Activity />,
     docs: () => <Docs page={route.item} onAction={runAction} overview={overview} />,

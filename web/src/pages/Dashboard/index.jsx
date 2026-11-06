@@ -20,11 +20,10 @@ const OperatorHudView = lazy(() => import('./OperatorHudView.jsx'))
 const JournalView = lazy(() => import('./JournalView.jsx'))
 
 // The dashboard shell: loads the supplementary data (fleet verdict, doctor, recency) the
-// directions share, then renders the chosen direction. The Status lens is a layout
-// chosen independently of the flavour (skin) — Cultivar's hero+kpi+genome,
-// Greenhouse's ring+tiles+donut, Operator HUD's strip+modules, or the Journal's
-// rings+map — while Lineage and Operator stay one shared layout (they're optional
-// data dives, not layout variants).
+// sub-views share, then renders the chosen one. The Status sub-view is laid out by the lens,
+// chosen independently of the skin: Genome's hero+kpi+genome, Greenhouse's ring+tiles+donut,
+// the HUD's strip+modules, or the Journal's rings+map. Lineage and Readout stay one shared
+// layout (they're optional data dives, not layout variants).
 //
 // `setup` and `runs` (job history) arrive as props rather than being fetched here:
 // the rail and the console own those same copies, and App owns the one fetch of
@@ -37,7 +36,7 @@ export default function Dashboard({
   setup,
   runs: jobs,
   onAction,
-  layout = 'cultivar',
+  layout = 'genome',
   dataRev,
 }) {
   const lens = layout
@@ -51,11 +50,11 @@ export default function Dashboard({
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
   // The fleet verdict every hero shows, and the doctor run — only Greenhouse (ring + check
-  // chips) and Operator HUD (check matrix) read it, so Cultivar skips that round-trip. A
+  // chips) and the HUD (check matrix) read it, so Genome skips that round-trip. A
   // failed doctor is its own state (`lensData.doctor.state`), never a silent "still loading".
   const lensData = useLensData({
     dataRev,
-    needDoctor: lens === 'greenhouse' || lens === 'operator',
+    needDoctor: lens === 'greenhouse' || lens === 'hud',
   })
   // Recency stats every file-backed entry in the harness server-side, so it is
   // fetched by the one lens that shows it and by nothing else.
@@ -87,25 +86,6 @@ export default function Dashboard({
       </>
     )
 
-  // The Journal lens is a page, not a panel: it brings its own header (the field
-  // journal's date line and title), so the shared head-row and the
-  // direction switcher would be a second, contradictory title above it. Lineage
-  // and Operator stay reachable from the rail's Activity/Changes rows and from
-  // Settings' layout picker — the switcher returns with any other lens.
-  if (dir === 'status' && lens === 'journal')
-    return (
-      <Suspense fallback={<Loading />}>
-        {stale}
-        <JournalView
-          overview={overview}
-          recent={recent}
-          lens={lensData}
-          onDirection={setDir}
-          dataRev={dataRev}
-        />
-      </Suspense>
-    )
-
   return (
     <>
       {stale}
@@ -114,15 +94,13 @@ export default function Dashboard({
           {[
             ['status', 'Status'],
             ['lineage', 'Lineage'],
-            // The Overview's View control has an "Operator" lens too: this one is named apart.
-            ['operator', 'Operator', 'Operator data'],
-          ].map(([k, l, name]) => (
+            ['readout', 'Readout'],
+          ].map(([k, l]) => (
             <button
               key={k}
               className={dir === k ? 'on' : ''}
               onClick={() => setDir(k)}
               aria-pressed={dir === k}
-              aria-label={name}
             >
               {l}
             </button>
@@ -132,7 +110,7 @@ export default function Dashboard({
       {/* keyed by the direction, so switching tabs remounts this and replays .view-in: the
           new view settles in rather than replacing the old one in a single frame */}
       <div key={dir} className="view-in">
-        {dir === 'status' && lens === 'cultivar' && (
+        {dir === 'status' && lens === 'genome' && (
           <StatusView
             overview={overview}
             sigil={sigil}
@@ -153,9 +131,14 @@ export default function Dashboard({
             />
           </Suspense>
         )}
-        {dir === 'status' && lens === 'operator' && (
+        {dir === 'status' && lens === 'hud' && (
           <Suspense fallback={<Loading />}>
             <OperatorHudView overview={overview} jobs={jobs} lens={lensData} />
+          </Suspense>
+        )}
+        {dir === 'status' && lens === 'journal' && (
+          <Suspense fallback={<Loading />}>
+            <JournalView overview={overview} recent={recent} lens={lensData} dataRev={dataRev} />
           </Suspense>
         )}
         {dir === 'lineage' && (
@@ -167,7 +150,7 @@ export default function Dashboard({
             lens={lensData}
           />
         )}
-        {dir === 'operator' && (
+        {dir === 'readout' && (
           <OperatorView overview={overview} setup={setup} jobs={jobs} lens={lensData} />
         )}
       </div>

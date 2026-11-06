@@ -100,7 +100,7 @@ describe('Ledger health card', () => {
   it('holds "Run doctor" and the one primary, and names the source release', async () => {
     const onAction = vi.fn()
     render(<Ledger overview={null} onAction={onAction} />)
-    const health = await screen.findByRole('region', { name: 'Harness needs a look.' })
+    const health = await screen.findByRole('region', { name: 'Installs need a look.' })
     const h = within(health)
     expect(h.getByRole('button', { name: 'Rebuild all behind (1)' }).className).toBe('btn')
     fireEvent.click(h.getByRole('button', { name: 'Run doctor' }))

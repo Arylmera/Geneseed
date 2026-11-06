@@ -2,15 +2,12 @@ import React from 'react'
 import Tabs from '../../components/Tabs.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Hosts from './Hosts.jsx'
-import Kits from './Kits.jsx'
 import Diff from '../Diff.jsx'
 import Doctor from '../Doctor.jsx'
-import Settings from '../Settings/index.jsx'
 
-// Installs: where the harness lives on this machine and how each copy is kept. Five tabs:
-// Hosts (the old Harness page), Kits (which optional kits each install carries), Local edits (Changes), Doctor,
-// and Server (Settings: appearance, maintenance, server control, about). The old flat
-// routes land on their tab (lib/router.js VIEW_ALIAS).
+// Installs: where the harness lives on this machine and how each copy is kept. Three tabs: Hosts
+// (the old Harness page), Local edits (Changes) and Doctor. The old flat routes land on their tab
+// (lib/router.js VIEW_ALIAS), and the tabs that left, Kits and Server, on their pages.
 export default function Installs({
   tab = 'hosts',
   overview,
@@ -19,7 +16,6 @@ export default function Installs({
   onAction,
   onMutated,
   dataRev,
-  appearance = {},
 }) {
   return (
     <>
@@ -41,14 +37,10 @@ export default function Installs({
           onMutated={onMutated}
         />
       )}
-      {tab === 'kits' && <Kits onAction={onAction} dataRev={dataRev} />}
       {tab === 'edits' && (
         <Diff onMutated={onMutated} onAction={onAction} dataRev={dataRev} overview={overview} />
       )}
       {tab === 'doctor' && <Doctor dataRev={dataRev} />}
-      {tab === 'server' && (
-        <Settings overview={overview} onAction={onAction} dataRev={dataRev} {...appearance} />
-      )}
     </>
   )
 }

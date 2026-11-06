@@ -127,7 +127,10 @@ export function resolveOut(raw) {
 function preambleExclude(claudeMd, host) {
   if (path.basename(claudeMd) !== 'CLAUDE.md') return null;
   // OpenClaude inherited `claudeMdExcludes` from Claude Code; its global preamble is its own.
-  const globalDir = host === 'openclaude' ? openclaudeConfigDir() : claudeConfigDir();
+  let globalDir;
+  try {
+    globalDir = host === 'openclaude' ? openclaudeConfigDir() : claudeConfigDir();
+  } catch { return null; }   // no home: no global preamble to exclude, and a prior claim is kept
   return resolvePath(path.join(globalDir, 'CLAUDE.md')).split(path.sep).join('/');
 }
 

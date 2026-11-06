@@ -150,20 +150,6 @@ describe('Profile', () => {
 
 // EVERY ACTIVE INSTALL'S PROFILE (D1): one card each, tagged with its install, and a save writes
 // back to the card's own install with its own fingerprint.
-describe('Profile, the sharing sentence', () => {
-  const says = () => screen.queryByText(/Every harness on this machine shares that one file/)
-  it('appears only when a file is shared', async () => {
-    const { unmount } = render(<Profile />)
-    await screen.findByRole('heading', { name: 'Who I am' })
-    expect(says()).toBeNull()
-    unmount()
-    api.profile.mockImplementation(() => Promise.resolve({ ...FILLED, shared: true }))
-    render(<Profile />)
-    await screen.findByRole('heading', { name: 'Who I am' })
-    expect(says()).toBeTruthy()
-  })
-})
-
 describe('Profile across installs', () => {
   const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
   const CL = {
@@ -203,7 +189,13 @@ describe('Profile across installs', () => {
 
   // Every global install answers with the one shared file: one card, tagged shared, no harness.
   it('shows a file two installs share as one card, tagged shared', async () => {
-    api.profile.mockImplementation(() => Promise.resolve({ ...FILLED, shared: true }))
+    api.installs = vi.fn(async () => ({
+      installs: [
+        { ...OC, shared: true },
+        { ...CL, shared: true },
+      ],
+    }))
+    api.profile.mockImplementation(() => Promise.resolve({ ...FILLED, path: '/tier/PROFILE.md' }))
     render(<Profile />)
     await screen.findByRole('heading', { name: 'Who I am' })
     expect(screen.getAllByRole('heading', { name: 'Who I am' })).toHaveLength(1)
@@ -215,12 +207,12 @@ describe('Profile across installs', () => {
   // A project install beside the shared file keeps its own card and its install name.
   it('keeps a project install apart from the shared card', async () => {
     const REPO = { id: 'p', host: 'bob', scope: 'project', path: '/r/repo', state: 'active' }
-    api.installs = vi.fn(async () => ({ installs: [CL, REPO] }))
+    api.installs = vi.fn(async () => ({ installs: [{ ...CL, shared: true }, REPO] }))
     api.profile.mockImplementation((inst) =>
       Promise.resolve(
         inst?.host === 'bob'
-          ? { ...FILLED, path: '/r/repo/PROFILE.md', text: '# Repo me', shared: false }
-          : { ...FILLED, shared: true },
+          ? { ...FILLED, path: '/r/repo/PROFILE.md', text: '# Repo me' }
+          : { ...FILLED, path: '/tier/PROFILE.md' },
       ),
     )
     render(<Profile />)

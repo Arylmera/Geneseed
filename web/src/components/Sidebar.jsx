@@ -54,6 +54,7 @@ const NAV = [
 const FOOT = [
   { hash: '#/docs', page: 'docs', label: 'Docs', icon: 'docs' },
   { hash: '#/activity', page: 'activity', label: 'Activity', icon: 'activity' },
+  { hash: '#/settings', page: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
 function NavLink({ n, lit, count, onNavigate }) {
@@ -77,8 +78,8 @@ function NavLink({ n, lit, count, onNavigate }) {
   )
 }
 
-// The harness's pulse, on every page: whether the doctor is happy, how far the install
-// has drifted from its source, and when it was built. Three facts that decide whether
+// The harness's pulse, on every page: whether the doctor is happy, how many local edits the
+// install holds, and when it was built. Three facts that decide whether
 // anything else on screen can be trusted. The voice sits under them as a button, because
 // switching it is the one rebuild the sidebar offers. A named card (a region), so a
 // landmark list reaches it by name. Its facts are ONE install's (the default's overview): once
@@ -102,7 +103,7 @@ function Vitals({ overview, onOpenVoice, tag }) {
         </b>
       </div>
       <div>
-        <span>drift</span>
+        <span>local edits</span>
         <b className={drift ? 'warn' : ''}>{overview.diff ? drift : 'n/a'}</b>
       </div>
       <div>
@@ -156,7 +157,7 @@ export default function Sidebar({ route, overview, installs, onOpenVoice, onNavi
           </span>
         </span>
       </button>
-      {/* One list of every page, Docs and Activity last: the spacer sits under it, so the
+      {/* One list of every page, the FOOT entries last: the spacer sits under it, so the
           vitals card is what the rail's foot holds. */}
       <ul className="sb-list">
         {[...NAV, ...FOOT].map((n) => (

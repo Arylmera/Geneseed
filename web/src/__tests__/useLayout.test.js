@@ -4,19 +4,27 @@ import { FLAVOURS, resolveFlavour } from '../hooks/useFlavour.js'
 
 describe('resolveLayout', () => {
   it('offers the new Overview first, then the four older dashboards', () => {
-    expect(LAYOUTS.map((l) => l.id)).toEqual([
-      'overview',
-      'cultivar',
-      'greenhouse',
-      'operator',
-      'journal',
-    ])
+    expect(LAYOUTS.map((l) => l.id)).toEqual(['overview', 'genome', 'greenhouse', 'hud', 'journal'])
   })
 
   it('keeps an explicit choice, whatever the skin', () => {
-    // The view is independent of the flavour: Operator's HUD under the Atlas skin is fine.
-    for (const id of ['overview', 'cultivar', 'greenhouse', 'operator', 'journal'])
+    // The view is independent of the skin: the HUD under the Atlas skin is fine.
+    for (const id of ['overview', 'genome', 'greenhouse', 'hud', 'journal'])
       expect(resolveLayout(id)).toBe(id)
+  })
+
+  // Two lenses wore skin names until 5.0.0. A browser that stored one keeps the lens it had.
+  it('lands a stored old lens id on its new id', () => {
+    expect(resolveLayout('cultivar')).toBe('genome')
+    expect(resolveLayout('operator')).toBe('hud')
+  })
+
+  it('shares no id or name with a skin', () => {
+    const skins = FLAVOURS.flatMap((f) => [f.id, f.short])
+    for (const l of LAYOUTS) {
+      expect(skins).not.toContain(l.id)
+      expect(skins).not.toContain(l.short)
+    }
   })
 
   // 'auto' used to mean "the lens this skin was drawn around", and useLocalStorage used to

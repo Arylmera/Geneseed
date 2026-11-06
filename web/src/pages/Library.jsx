@@ -407,7 +407,7 @@ export default function Library({
       setActionErr(`Could not forget "${name}": ${e.message}`)
       return
     }
-    go(base || '#/section/memory')
+    go(base || '#/personal/memory')
     reloadCatalog()
     onCountsChanged?.()
   }
@@ -684,9 +684,10 @@ export default function Library({
                 )}
               {item?.installs?.length > 1 && item.installs.includes(item.install) ? (
                 <label className="row gap-8 lib-copy">
-                  <span className="dim">Viewing copy from:</span>
+                  <span className="dim">Install:</span>
                   <select
                     className="sel"
+                    aria-label="Install"
                     value={pick || item.install}
                     onChange={(e) => setCopyFrom({ sec, name: activeName, key: e.target.value })}
                   >

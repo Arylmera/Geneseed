@@ -112,16 +112,18 @@ The left rail has one flat list, and two entries at its foot:
 | --- | --- |
 | **Overview** (`#/`) | The fleet: every install on one Ledger, and *Needs you* |
 | **Constitution** (`#/laws`) | Ethos, Rules and doctrines |
-| **Library** (`#/library`) | Skills, agents and the rest of the catalogue |
+| **Library** (`#/library`) | Skills, agents, the wiki and the setup files |
 | **Kits** (`#/kits`) | The kit catalogue |
 | **Loops** (`#/loops`) | Tabs: Templates · Bricks · Active |
 | **Personal** (`#/personal`) | Tabs: Rules · Profile · Memory · Notebook |
-| **Installs** (`#/installs`) | Tabs: Hosts · Kits · Local edits · Doctor · Server |
-| **Docs**, **Activity** (foot) | The documentation, and the agent sessions on this machine |
+| **Installs** (`#/installs`) | Tabs: Hosts · Local edits · Doctor |
+| **Docs**, **Activity**, **Settings** (foot) | The documentation, the agent sessions on this machine, and this copy of Geneseed with its server |
 
 The old flat routes still resolve to their tab (`VIEW_ALIAS`, `web/src/lib/router.js`): `#/rules`,
-`#/profile`, `#/harness`, `#/harnesses`, `#/themes`, `#/diff`, `#/doctor`, `#/settings`, `#/about`.
-The view notes below keep those older names and their old grouping.
+`#/profile`, `#/harness`, `#/harnesses`, `#/themes`, `#/diff`, `#/doctor`, `#/about`. Addresses of
+what moved open its one home: `#/installs/kits` the Kits page, `#/installs/server` Settings, and
+`#/section/memory`, `#/section/notebook`, `#/item/memory/<name>` and `#/item/notebook/<name>` the
+Personal tabs. The view notes below keep those older names and their old grouping.
 
 **A rail badge equals what its page lists.** Every count covers every install, deduped by name, and
 `/api/overview` `counts` is the size of the same lists the pages show (`fleetCounts`,
@@ -138,21 +140,24 @@ first read is out, a sentence when it failed, and what it found when it is empty
 before its data. The Constitution waits for the picked install's own overview too: a gate read
 before it would read as armed.
 
-At the foot of the rail sits a **vitals** card — the doctor's verdict, drift, how long ago the
+At the foot of the rail sits a **vitals** card — the doctor's verdict, local edits, how long ago the
 harness was built, and a Voice button — so those facts are on screen from every page. It is
 hidden where the rail collapses to icons (≤960px) and returns with the phone drawer. The topbar's
 breadcrumb starts at the page: it names no install.
 
-**Install pickers.** The console has no install switch. Where a page acts on one install, an
-`InstallPicker` sits beside what it applies to, labelled for it (*Write to:*, *Doctor for:*), and
-starts on the default install; with one active install it is not shown. The Personal page names
-no harness for what the harnesses share: every global install reads one set of rules, one profile
-and one memory store in the shared tier (`~/.config/geneseed`), so Rules, Profile and Memory list
-each once, tagged `shared`, and a project install keeps its own, tagged with its install. A write
-goes back to the file an entry came from. Notebook stays per install, and its Forget acts on the
-install of the copy on screen. Doctor, Local edits, Server, the Constitution (*Constitution of:*,
-for its gate switches and doctrine Apply), Loops (*Templates and bricks of:*) and the rail's Voice
-popover (*Rebuild:*) each keep their own pick (in the browser's localStorage). The Overview is
+**Install pickers.** The console has no install switch. Where a page acts on one install, one
+`InstallPicker`, always labelled *Install:*, sits right above the heading of the view it acts on
+(under the tabs on a tabbed page, over the h1 on a page with none), and starts on the default install; with one active install it is not shown. A form or popover that
+acts on its own install holds the same control: the new-rule form, the rail's Voice popover, and a
+Library entry with several copies. The Personal page names no harness for what the harnesses share:
+every global install reads one set of rules, one profile and one memory store in the shared tier
+(`~/.config/geneseed`), so Rules, Profile and Memory list each once. Its header states that scope
+once, a list head or profile card says `shared`, and a project install keeps its own, named by its
+install. Each `/api/installs` and `/api/fleet` row carries `shared`, which the pages read from
+`useInstalls`; `sharedTier` is only a project install's switch. A write goes back to the file an
+entry came from. Notebook stays per install, and its Forget acts on the install of the copy on
+screen. Doctor, Local edits, the Constitution (for its gate switches and doctrine Apply), Loops and
+the rail's Voice popover each keep their own pick (in the browser's localStorage). The Overview is
 fleet-wide: each install's own facts (voice, footprint, posture, mode, drift) sit on
 its row, and a figure still read off a project install set as the default (a suggestion, an older
 Overview view, Personal's summary) names that install once two or more are active. A *Needs you*
@@ -175,10 +180,14 @@ streams the output of background jobs and keeps their history across reloads.
 
 ### Dashboard
 
-- **Dashboard** (`#/`) — a live readout of what's deployed. Three lenses: **Status**
-  (readiness ring, a KPI band, a genome grid, recent activity), **Lineage** (the
-  source → render → deployed timeline and the genome-by-volume strand chart), and
-  **Operator** (a searchable table of every deployed capability). Every lens hero carries the
+- **Overview** (`#/`) — the header's **View** control is the one home of the lens: **Overview** (the
+  Ledger), **Genome**, **Greenhouse**, **HUD** and **Journal**. A lens never takes a skin's name, and
+  a browser that stored the old `cultivar` or `operator` keeps its lens (`resolveLayout`). All five
+  views share one header: the title, the install count, the version chip and the View control.
+  Beside the Ledger, a lens has a row with the facts it reads and *Run doctor* and *Rebuild*, then
+  three sub-views: **Status** (laid out by the lens), **Lineage** (the source → render → deployed
+  timeline and the genome-by-volume strand chart), and **Readout** (a searchable table of every
+  deployed capability). Every lens hero carries the
   fleet verdict badge (the Ledger's `fleetVerdict`). The headline speaks the theme's voice only
   while that verdict is good or still loading; a warn, bad or unreachable fleet reads plain
   *Deployed*. Recent-run previews read `verb · scope · result · duration`, and the raw command
@@ -188,7 +197,7 @@ streams the output of background jobs and keeps their history across reloads.
   labelled *Dictates* (the name AGENT.md gives the laws) and not *Constitution* on purpose: its value is the law count
   alone, and calling it the constitution would under-report the ontology and the doctrine
   packs. The two Status *layouts* that have room for it add the missing half: Greenhouse
-  puts an active-packs fraction under the tile (`3/4 packs · N rules`), and the Operator HUD
+  puts an active-packs fraction under the tile (`3/4 packs · N rules`), and the HUD
   gives it its own cell (`PACKS 3/4`). That is what makes a narrowed install *look* different
   from a full one at a glance.
 
@@ -196,14 +205,15 @@ streams the output of background jobs and keeps their history across reloads.
 
 - **Rules** (`#/rules`) — your own standing rules, read from and written to the
   `user-rules.md` (the seed-once file no update ever touches): the shared file every global
-  install reads, listed once and tagged `shared`, beside each project install's own, tagged with
-  its install. An edit, graduate or retire writes back to the rule's own file, and a new rule goes
-  to the file its form's *Write to:* picker names. List with scope (project/global — a hand-written `user` opens as global — or any other scope written by hand, which a
+  install reads, listed once under a `shared` head, beside each project install's own, under its
+  install's name. An edit, graduate or retire writes back to the rule's own file, and a new rule goes
+  to the file its form's *Install:* picker names. List with scope (project/global — a hand-written `user` opens as global — or any other scope written by hand, which a
   save keeps as written) and trial chips, add/edit/retire forms (retire moves the rule to `user-rules-retired.md`, which is never loaded; its id is never reused) (a body line starting
   `## ` is refused: the file would read it as a new rule heading), a
   **Graduate** action that adopts a trial rule for good. Each rule row shows its token cost
-  (code points / 4 of its own block), and each listed file shows one total, such as
-  `4 rules · ≈1,055 tokens every turn`, which counts the file's header too. There is no ceiling.
+  (code points / 4 of its own block), and each list's head shows the one rule count and total, such
+  as `4 rules · ≈1,055 tokens every turn · scope global unless marked`, which counts the file's
+  header too. A row shows a scope only when it differs from that. There is no ceiling.
   A **Pending** section lists what waits undecided in `user-rules.draft.md`: read-only, because
   the rule skill alone decides a draft, and a pending rule still binds on its host. Every write carries the fingerprint of the
   content the page last read — if an agent session edited the file meanwhile, the save
@@ -231,9 +241,9 @@ streams the output of background jobs and keeps their history across reloads.
   shapes that cannot collide, because a slug carries a colon no numeral has, a doctrine
   address carries a dot, and `ownership`, which opens the Ownership row at its gate, is a word
   no rule uses.
-- **Library** (`#/library`) — browse the content that has no tab of its own: **Memory ·
-  Notebook · Knowledge** (the wiki chip, which also carries the two setup manifests).
-  Constitution has its own rail entry, and Memory and Notebook are also tabs of Personal. Drill into a section, then an item, to read its
+- **Library** (`#/library`) — browse the catalogue: **Skills · Agents · Wiki · Setup files**.
+  Constitution has its own rail entry, and Memory and Notebook are Personal's tabs, their one home:
+  the same reader, locked to one kind, with one empty state each. Drill into a section, then an item, to read its
   rendered markdown body and follow its cross-links. On a memory fact, a **Forget this
   fact** control deletes it (token-gated; bare-slug guarded server-side), and a
   **Promote to rule** control turns a recurring lesson into a trial rule in
@@ -242,7 +252,12 @@ streams the output of background jobs and keeps their history across reloads.
 - **Kits** (`#/kits`, `#/kits/<kit>`) — a card per shipped kit over a kits × installs matrix of
   switches; a staged-changes bar applies one install at a time (the server runs one job at a
   time). `#/kits/<kit>` is the kit's page: rules, word budget, banned APIs, upstream credits,
-  members and one switch per install.
+  members and one switch per install. This page is the one home of the kit switches. Toggling only
+  stages the set; **Apply** asks first, then rebuilds that install with exactly that set as a console
+  job. Staged switches are held for the whole console: they survive leaving the page. A refetch drops
+  a row's staging only when that install's kits changed. A failed rebuild keeps it and says so, and
+  a reload asks first while anything is staged. Files you edited in a kit that is now off are kept,
+  and the matrix lists them under their install.
   `GET /api/kits` carries `rules`, `rulesWordBudget`, `banned` and `credits` per kit; the
   catalog and item endpoints for skills and agents carry `kit` (the owning kit or `null`),
   which the Library shows as a `kit:` badge.
@@ -263,7 +278,7 @@ streams the output of background jobs and keeps their history across reloads.
   for *mutate*, *human gate*, what they override and *unavailable*; the reader shows the
   frontmatter facts (outcomes as pills, availability with its reason), then the body rendered as
   markdown, with a **View source** toggle for the file as parsed, frontmatter and all. Templates and
-  Bricks read `GET /api/loops` for the install the page's *Templates and bricks of:* picker
+  Bricks read `GET /api/loops` for the install the page's *Install:* picker
   names (its own remembered pick, starting on the default; hidden with one install and on
   Active), resolved from that install's root, so a project install shows its `.geneseed/` bricks
   and templates. **Active** is every loop
@@ -282,17 +297,18 @@ streams the output of background jobs and keeps their history across reloads.
   installed harness, each entry with its purpose line and full spec. Each row is one skill or
   agent; when more than one install is active, it carries a badge for each install that has it
   (`opencode · global`; a project install by its folder). The reader shows the first install's copy. When more installs have the entry,
-  a **Viewing copy from** picker beside the copy opens another install's version, for that
-  entry only. While Skills is selected, its skill types sit nested
+  an *Install:* picker beside the copy opens another install's version, for that entry only. While Skills is selected, its skill types sit nested
   under it in the rail, each with its count, above a thin bar of their shares; pick one to
-  narrow the list.
+  narrow the list. A skill the registry does not know sits under *Custom*.
 - **Docs** (`#/docs`) — rendered documentation: markdown pages, concept pages, a CLI
   reference (generated from the harness argument parser), and a glossary, in a reader: one
   nav column holding the parts (Understand / Guides / Concepts / Reference) with their page
   counts, the open part's sections (pick one to narrow the list) and the part's pages with a
   filter; then the page, with its breadcrumb, section and reading time, a Copy button on each
   code block, an outline that marks the heading being read, and Previous / Next within the
-  section. Filtered for one host (OpenCode, Claude
+  section. On a phone the page comes first and the parts and pages follow, in the DOM as on screen.
+  A page's title is its H1 and its first heading an H2, whatever level the source starts at.
+  Filtered for one host (OpenCode, Claude
   Code, Bob or OpenClaude; Claude-family pages show to all three Claude-engine hosts, a page
   tagged with a list of hosts only to those); with no
   choice stored it follows the deployed install.
@@ -325,28 +341,29 @@ streams the output of background jobs and keeps their history across reloads.
   are tied together in red (same worktree) or dashed amber (two worktrees of the repo): tangled
   roots in the moss when they stand side by side, a thread under the pots when they do not.
   Hover a tree for its model, turns, context and compactions, or a pad for its author's files;
-  click it to open the session. Past ten trees, quiet shelves (no session working or waiting on
+  click it to open the session. With no mouse, tap a pad to show its files (a second tap clears them,
+  and neither opens the session), or focus the tree and walk its pads with the arrow keys; Escape leaves. Past ten trees, quiet shelves (no session working or waiting on
   you) fold into chips, the largest first; the last standing shelf never folds. **Pink blossom** repaints the crowns pink, nothing more.
   A session's detail page shows its tree too, live or ended, with the same pad hovers and a
   legend of its turns, context, compactions and sub-agents; an ended session's tree stands still, without the `!`.
-- **Changes** (`#/diff`) — the diff between the install its *Local edits of:* picker names and the source: edited /
+- **Local edits** (`#/diff`) — the diff between the install its *Install:* picker names and the source: edited /
   added / missing files, and files only behind the source (unedited; a rebuild updates them)
   listed apart under **Behind source**, with per-file expansion and coloured unified-diff lines. Select
   files to **export an `improvements.md`** back-port, or **restore** them to source.
   Restore acts only on files the diff lists, and never on your own files (`user-rules.md`,
   `PROFILE.md`, `memory/`, `notebook/`). An added file is moved into
   `archived-restore/<date-time>/` in the install, not deleted.
-- **Doctor** (`#/doctor`) — runs, for the install its *Doctor for:* picker names, the same health engine as the `doctor` command (that
-  install's theme, parity, links, authoring gates, drift), grouping any problems per check. It shows
+- **Doctor** (`#/doctor`) — runs, for the install its *Install:* picker names, the same health engine as the `doctor` command (that
+  install's voice, parity, links, authoring gates, local edits), grouping any problems per check. It shows
   the server's last run for that install — warmed at start, redone after a job or an install
-  toggle — and **Re-run checks** runs every check again on demand.
+  toggle — and **Run doctor** runs every check again on demand.
 
 ### 🎨 Setup
 
 - **Hosts** (`#/installs/hosts`; `#/harness` resolves here) — this machine's own install first (path, voice, footprint,
   and when it was built), then the **Voice** reference, then every detected install. A
   **Sync with source** column says whether each install is behind the source (and by how many
-  files), in sync or not checked, shows hand edits apart from stale files, and links to Local edits.
+  files), in sync or not checked, shows local edits apart from stale files, and links to Local edits.
   `#/harnesses` and `#/themes` both still resolve here, so old links and bookmarks keep
   working. *Make default* on an active row sets the default install (above), and a per-repo
   install's panel has the **Shared tier** switch, with its benefit and cost beside it.
@@ -359,7 +376,8 @@ streams the output of background jobs and keeps their history across reloads.
   - **Every install** lists each detected install (host × scope), one row each. An
     ACTIVE row carries per-row **Voice**, **Footprint**, **Posture** and **Mode**
     pickers plus **Apply**, an on/off switch, and remove; a host that is NOT installed
-    yet shows a single **Install…** that discloses the same four choices as steps.
+    yet shows a single **Install…** that discloses the same four choices as steps. The panel is the
+    footprint's one home: a line under the pickers says what the chosen footprint does.
     **Posture** is the relationship register (peer/mentor/expert/assistant/artisan —
     default **peer**); **Mode** is the operating register (direct/foreman — default
     **direct**; foreman triages tasks into isolated pipelines instead of working every
@@ -369,21 +387,17 @@ streams the output of background jobs and keeps their history across reloads.
     card (shown once a global install exists) manages sovereign repos — folders where every
     global harness goes dormant (hooks stay silent, the global preamble never loads);
     add or remove one here, the web mirror of `harness exclude add|remove|list`.
-- **Kits** (`#/installs/kits`) — every install (disabled ones read-only) as a panel with one switch per kit.
-  Toggling only stages the set; **Apply** asks first, then rebuilds that install with
-  exactly that set as a console job. Staged switches are held for the whole console: they
-  survive leaving the page, and the Kits page and Installs › Kits share them. A refetch drops a
-  row's staging only when that install's kits changed. A failed rebuild keeps it and says so,
-  and a reload asks first while anything is staged. Files you edited in a kit that is now off are kept,
-  and the row lists them.
-- **Server** (`#/installs/server`; `#/settings` and `#/about` resolve here) — a settings sheet
-  with a section index. **Appearance**: skin, accent (a skin change resets it to the skin's own), Overview view. **Machine**:
+- **Settings** (`#/settings`; `#/about` and `#/installs/server` resolve here) — a rail entry of its
+  own, about the tool and never one install: a sheet with a section index. **Machine**:
   version + Update (labelled by how this copy updates: git pull, npm install -g, or the command
-  to run by hand; on the Overview the button shows only when the pull can run), Add to PATH, the footprint of the install the head's *Footprint of:* picker names (read-only, links to Hosts). **Server**: running · port ·
+  to run by hand; on the Overview the button shows only when the pull can run), Add to PATH. **Server**: running · port ·
   pid · uptime, whether the code matches the disk (with Restart), start-at-login state (read
   only), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
   **Danger zone**: Stop server, Remove from PATH, and a pointer to each install's own
   Uninstall in Hosts.
+- **Appearance** (the topbar's popover, on every page) — the one home of the skin and the accent (a
+  skin change resets it to the skin's own), each with a line that says what it does. Both are this
+  browser's alone, and nothing here rebuilds.
 
 ## Rebuilding the UI
 

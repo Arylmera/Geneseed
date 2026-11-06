@@ -14,7 +14,7 @@
  *     value: an unrecognised marker makes it WARN on stderr, and stderr is a compared
  *     column. Pruning by what the caller consumes would drop a function whose whole
  *     contribution is a side effect.
- *   * `memoryFactCount` counts the memory facts; `frontmatter` stays where it is.
+ *   * `factCount` counts the memory facts; `frontmatter` stays where it is.
  *
  * `themeOfDir`, `footprintOfDir`, `installedDefaults`, `manifestIsClaude` and the configured
  * defaults live in `js/hosts/installs.mjs`, shared with `diff` and `rebuild-all`.
@@ -54,6 +54,7 @@ import {
 import { installProfile, rebuildCommand } from '../build/generate.mjs';
 import { isDoctorNote } from './scan.mjs';
 import { pendingDrafts } from '../hosts/hooks-context.mjs';
+import { factCount } from '../hosts/memory-files.mjs';
 import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printOut } from '../lib/fs.mjs';
@@ -134,25 +135,6 @@ export function inventoryCounts(themeName, doctrines = null, cfg = makeCfg()) {
   };
   generation.counts.set(key, counts);
   return counts;
-}
-
-/**
- * The memory facts, reduced to their count.
- *
- * A path `glob("*.md")` matches but `read_text` cannot read — a DIRECTORY called `notes.md`
- * is the reachable case — is skipped, not counted and not fatal.
- */
-export function memoryFactCount(mdir) {
-  let names;
-  try { names = readdirSync(mdir); } catch { return 0; }
-  let n = 0;
-  for (const name of names.filter((x) => x.endsWith('.md')).sort()) {
-    const stem = name.slice(0, -3);
-    if (['memory', 'readme'].includes(stem.toLowerCase())) continue;
-    if (readMaybe(path.join(mdir, name)) === null) continue;
-    n += 1;
-  }
-  return n;
 }
 
 /**
@@ -352,7 +334,7 @@ export function statusData() {
     packs_total: inv.packsTotal,
     doctrine_rules: inv.doctrineRules,
     memory_dir: mdir ? String(mdir) : null,
-    facts: mdir ? memoryFactCount(mdir) : 0,
+    facts: mdir ? factCount(mdir) ?? 0 : 0,
     ...(leftover.length ? { anamnesis_leftover: leftover } : {}),
     ...(renamed.length ? { renamed_files: renamed } : {}),
     source_fp: sourceFp,

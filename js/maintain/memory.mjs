@@ -36,22 +36,16 @@
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { RESERVED_STEMS, archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
-
-/**
- * The two names the store owns rather than holds: the index the agent reads at session
- * start, and the file that documents the store. `api_memory_delete` refuses both.
- */
-const RESERVED = ['memory', 'readme'];
 
 /** Whether `name` is a fact this verb may act on — the endpoint's rule, plus the case fold. */
 export function isFactName(name) {
   return Boolean(name) && !name.includes('/') && !name.includes('\\')
     && ![...name].some((c) => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)
-    && !RESERVED.includes(name.toLowerCase());
+    && !RESERVED_STEMS.has(name.toLowerCase());
 }
 
 /**

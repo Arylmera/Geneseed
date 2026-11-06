@@ -13,7 +13,7 @@ import {
   W,
   H,
 } from '../../lib/garden.js'
-import { PadCard, readSakura, SAKURA_KEY, TreeSvg } from './Bonsai.jsx'
+import { PadCard, padKeys, padLine, readSakura, SAKURA_KEY, TreeSvg } from './Bonsai.jsx'
 
 // The Garden view of Activity: every live session as a pixel bonsai, one shelf per repo
 // (D11), the trees of a repo side by side as a grove (D13). The drawing is lib/garden.js;
@@ -115,6 +115,7 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
       onMouseLeave={() => onHover(null, null)}
       onFocus={(e) => onHover(sid, null, xOf(e.currentTarget))}
       onBlur={() => onHover(null, null)}
+      onKeyDown={(e) => padKeys(e, t.pads.length, pad, onPad)}
     >
       <div className="gd-label">
         <div className="act-ell">
@@ -209,7 +210,7 @@ export default function Garden({ sessions, collisions }) {
         <span className="dim act-sm">
           {sessions.length} tree{sessions.length === 1 ? '' : 's'} · {shelves.length}{' '}
           {shelves.length === 1 ? 'shelf' : 'shelves'} · a tree opens its session; hover or focus
-          shows its details
+          shows its details, and a tap or the arrow keys walk its pads
         </span>
         <button
           type="button"
@@ -274,6 +275,9 @@ function Shelf({ sh, sakura, cols, mineOf }) {
         ))}
         <Threads pairs={shelfPairs(sh.trees, cols)} count={sh.trees.length} />
       </div>
+      <span className="sr-only" role="status">
+        {padLine(hot)}
+      </span>
       {/* An overlay under the hovered tree, drawn only while something is hovered: it takes
           no room in the layout, so a hover never moves the page. */}
       {cur && (

@@ -88,15 +88,13 @@ describe('a rail badge equals what its page lists', () => {
     expect(container.querySelector('.lib-list-head .mono').textContent).toBe(String(rows.length))
     // Every kind's rail figure, the ones not on screen included, is its list's size.
     const rail = [...container.querySelectorAll('.kind-list > a')].map((a) => a.textContent)
-    expect(rail).toEqual(
-      ['Skills3', 'Agents1', 'Memory2', 'Notebook1', 'Wiki3', 'Setup files1'].map((x) => x),
-    )
+    expect(rail).toEqual(['Skills3', 'Agents1', 'Wiki3', 'Setup files1'].map((x) => x))
   })
 
   it('Library: the Sidebar badge sums the kinds the page lists', () => {
-    const listed = Object.values(LISTS).reduce((n, l) => n + l.length, 0)
-    expect(listed).toBe(11)
-    expect(badge('Library')).toBe('11')
+    const listed = LIBRARY_ORDER.reduce((n, k) => n + LISTS[k].length, 0)
+    expect(listed).toBe(8)
+    expect(badge('Library')).toBe('8')
   })
 
   it('Constitution: the Sidebar badge, the All tab and the listed rule rows', async () => {

@@ -10,12 +10,15 @@
  * and made the hook module a row in `tests/unit/hook_cli.test.mjs`'s spawn allow-list for a
  * spawn the CLI never makes. Everything here is fs-only; `hooks-learn.mjs` is the one spawner.
  *
- * `user-rules.md`'s parser lives here too: the web console edits through it and the fold merges
- * through it, and the build may not import `js/web` (spec C20).
+ * `user-rules.md`'s parser lives here too, and the draft's format and the fold's ledger reader: the
+ * web console edits or shows through them and the fold writes through them, and the build may not
+ * import `js/web` (spec C20).
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
+import { isUtf8 } from 'node:buffer';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { readText, writeText, writeTextAtomic } from '../lib/fs.mjs';
+import { isDict } from '../lib/json.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { WHITESPACE, stripWhitespace } from '../lib/text.mjs';
 import { isFile, listDir, sortPaths, splitLines, splitWords } from './hooks-prims.mjs';
@@ -63,8 +66,8 @@ export function appendAgentLesson(memDir, agent, lesson) {
   let bullets = [];
   if (existsSync(f)) {
     const raw = readFileSync(f);
-    if (!raw.equals(Buffer.from(raw.toString('utf8')))) return null;
-    bullets = splitLines(readText(f)).filter((l) => l.startsWith('- '));
+    if (!isUtf8(raw)) return null;
+    bullets = splitLines(raw.toString('utf8')).filter((l) => l.startsWith('- '));
   }
   const now = new Date();
   const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`
@@ -118,6 +121,16 @@ export const RESERVED_STEMS = new Set(['memory', 'readme']);
  */
 export function existingSlugs(memDir) {
   return new Set(globMd(memDir).map(stem).filter((s) => !RESERVED_STEMS.has(s.toLowerCase())));
+}
+
+/**
+ * How many facts a store holds, by the same test the console's list uses. No folder is no facts
+ * (0); a folder that cannot be listed is null, so a row says "not read" rather than "no facts".
+ * The first listing is only for that answer: `existingSlugs` reads a failure as empty.
+ */
+export function factCount(store) {
+  try { readdirSync(store); } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
+  return existingSlugs(store).size;
 }
 
 /** Lines of a text file, or null when it cannot be read. */
@@ -549,4 +562,54 @@ export function parseRules(text) {
     });
   }
   return [rules, warnings];
+}
+
+// The draft's block headings: the fold writes them, `parseDraft` reads them, and the rule Rite's
+// approval flow (src/skills/rule/approve.md) names them, so a change here changes that file too.
+export const draftRuleHead = (host, title) => `## Rule from ${host}: ${title}`;
+export const draftChoiceHead = (file) => `## Choose: ${file}`;
+const DRAFT_RULE_RE = /^## Rule from ([^:]+): (.+)$/;
+const DRAFT_CHOICE = draftChoiceHead('');
+
+/**
+ * The blocks of `user-rules.draft.md`, as `{title, host, key, body}`, in file order. A
+ * `## Rule from <host>: <title>` block is a pointer line, then the rule. A `## Choose: <file>` block
+ * is a question about two files, so it keeps its title alone. Every other heading (`## Renumbered`,
+ * the file's record of past decisions) ends the block before it and adds none. `key` is the
+ * pointer line's `sha256`, the block's row in the ledger.
+ */
+export function parseDraft(text) {
+  const out = [];
+  let open = null;
+  for (const line of splitLines(text)) {
+    if (line.startsWith('## ')) {
+      const rule = DRAFT_RULE_RE.exec(line);
+      open = rule ? { title: rule[2], host: rule[1], lines: [] }
+        : line.startsWith(DRAFT_CHOICE) ? { title: line.slice(3), host: null, lines: [] } : null;
+      if (open) out.push(open);
+    } else open?.lines.push(line);
+  }
+  return out.map(({ title, host, lines }) => ({
+    title, host, key: /sha256: (\w+)/.exec(lines[0] ?? '')?.[1],
+    body: host ? stripWhitespace(lines.slice(1).join('\n')) : '',
+  }));
+}
+
+/**
+ * The ledger, or an empty one. One that holds nothing counts as empty and is written whole by the
+ * next item, because a key set on `[]` never reaches the file and the item would be reported on
+ * every emit. Anything else that is no ledger throws: treating it as empty would draft every
+ * decided item again, and the failed step is what the user should see.
+ */
+export function readFoldState(shared) {
+  const blank = (v) => v === null || v === undefined || (Array.isArray(v) && !v.length);
+  if (!existsSync(shared.foldState)) return { version: 1, items: {} };
+  const text = readFileSync(shared.foldState, 'utf8');
+  const state = text.trim() ? JSON.parse(text) : null;
+  if (blank(state)) return { version: 1, items: {} };
+  if (!isDict(state) || !(blank(state.items) || isDict(state.items))) {
+    throw new Error(`${shared.foldState} is not a ledger`);
+  }
+  if (blank(state.items)) state.items = {};
+  return state;
 }

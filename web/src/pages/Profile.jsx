@@ -7,13 +7,12 @@ import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Markdown from '../components/Markdown.jsx'
 import Seg from '../components/Seg.jsx'
-import { useInstalls } from '../hooks/useInstalls.js'
+import { useInstallFiles } from '../hooks/useInstalls.js'
 import { installTag, pairOf } from '../lib/hosts.js'
 
 // Profile — the user's identity (PROFILE.md, one file shared by every global install). Sibling
 // to Rules: Rules are what the agent must do, the Profile is who you are — role,
-// habits, register preferences. It never binds (precedence is Laws, then user-rules,
-// then this). A set-up profile opens as a rendered document; Edit switches to a
+// habits, register preferences. It never binds. A set-up profile opens as a rendered document; Edit switches to a
 // whole-file editor — no per-block structure. The draft, the fingerprint, the 409 and
 // the leave-guard are useFileEditor's: a refused save reloads the disk copy into the
 // VIEW and keeps the draft in the editor.
@@ -22,47 +21,26 @@ const CONFLICT =
   'PROFILE.md changed on disk since you opened it — reloaded the fresh copy. ' +
   'Your draft is kept — Save again.'
 
-// ONE CARD PER PROFILE FILE (D1): every global install answers with the shared file, which gets
-// one card tagged shared, and a project install keeps its own card, tagged with its install. The
-// paths come from a first read, as on Rules; an install whose read failed keeps a card of its own,
-// which says so. With no active install read, the one card reads the default install, as a request
-// naming none does.
+// ONE CARD PER PROFILE FILE: the installs on the shared tier share one, tagged shared, and a project
+// install keeps its own, tagged with its install. An install whose read failed keeps a card of its
+// own, which says so. Personal's header states the shared scope; a card only says which it is.
 export default function Profile({ onChanged, dataRev }) {
-  const active = useInstalls(dataRev)
-  const targets = active === null ? null : active.length ? active : [null]
-  const ids = targets ? targets.map((i) => i?.id ?? '').join('|') : null
-  const { data: reads } = useAsync(
-    () =>
-      targets
-        ? Promise.allSettled(targets.map((i) => api.profile(pairOf(i))))
-        : Promise.resolve(null),
-    [ids],
-  )
-  if (!reads || !targets) return <Loading />
-  const many = targets.length > 1
-  // `?.`: the install list can land before the reads of its new row.
-  const pathOf = (i) => reads[i]?.value?.path
-  const cards = targets.flatMap((install, i) => {
-    const p = pathOf(i)
-    if (p && targets.findIndex((_, j) => pathOf(j) === p) !== i) return []
-    const shared = reads[i]?.value?.shared || targets.some((_, j) => j !== i && pathOf(j) === p)
-    return [{ install, tag: !many ? null : p && shared ? 'shared' : installTag(install) }]
-  })
+  const { targets, sets, failed } = useInstallFiles(api.profile, dataRev)
+  if (!sets) return <Loading />
+  const listed = new Set([...sets.map((s) => s.inst), ...failed])
+  const cards = targets
+    .filter((i) => listed.has(i))
+    .map((install) => ({
+      install,
+      tag: targets.length < 2 ? null : install?.shared ? 'shared' : installTag(install),
+    }))
   return (
     <>
       <div className="mb-16">
-        <div className="eyebrow">identity · yours</div>
         <h2 className="h">Profile</h2>
         <p className="sub sub-wide">
-          Who you are and how you like to work, from <code className="mono">PROFILE.md</code>.
-          {reads.some((r) => r.value?.shared)
-            ? ' Every harness on this machine shares that one file; a project install keeps its own.'
-            : ''}{' '}
-          Unlike <code className="mono">user-rules.md</code>, it is identity, not rules — it colours
-          how the agent works but never binds (precedence is Laws, then rules, then this). Seeded
-          once, never overwritten by an update. Prefer not to write it by hand? Ask the agent to run
-          the <code className="mono">profile</code> skill — it interviews you and drafts this file
-          with your consent.
+          Who you are and how you like to work, from <code className="mono">PROFILE.md</code>. It
+          guides the agent and never binds it. <a href="#/docs/rules">Docs</a>
         </p>
       </div>
       {cards.map(({ install, tag }) => (

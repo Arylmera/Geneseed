@@ -74,7 +74,7 @@ function VersionChip({ update, onAction, canFill = true }) {
           </span>
         </span>
       ) : (
-        <span className="mono dim ver-chip">{update.current ?? ''} · up to date</span>
+        <span className="mono dim ver-chip">{update.current ?? ''} · latest</span>
       )
     ) : update.latest === null || asking ? (
       <span className="mono dim ver-chip">
@@ -109,7 +109,7 @@ function VersionChip({ update, onAction, canFill = true }) {
   const title =
     install === 'git'
       ? behind === 0
-        ? 'Nothing to pull: up to date with upstream. Pulls and rebuilds every install anyway.'
+        ? 'Nothing to pull: this is the latest. Pulls and rebuilds every install anyway.'
         : 'git pull, then rebuild every install'
       : 'npm install -g geneseed@latest, then rebuild every install'
   return (
@@ -401,7 +401,7 @@ const COLS = 6
 function SyncCell({ i }) {
   if (!i.diffable) {
     return (
-      <span className="dim" title="Drift is only checked for global installs">
+      <span className="dim" title="Local edits are only checked for global installs">
         not checkable
       </span>
     )
@@ -417,7 +417,7 @@ function SyncCell({ i }) {
           <StackBar
             parts={[
               { key: 'stale', label: 'Behind source', n: stale, tone: 'warn' },
-              { key: 'edited', label: 'Edited by hand', n: drift, tone: 'bad' },
+              { key: 'edited', label: 'Local edits', n: drift, tone: 'bad' },
             ]}
             label={`Sync with source, ${labelOf(i)}`}
             legend={false}
@@ -446,7 +446,7 @@ function SyncCell({ i }) {
 
 // What differs from the source, in words, for the details row.
 function differs(i) {
-  if (!i.diffable) return 'Not checkable: drift is only checked for global installs.'
+  if (!i.diffable) return 'Not checkable: local edits are only checked for global installs.'
   const d = i.drift || {}
   const parts = [
     d.stale ? `${d.stale} behind` : null,
@@ -473,7 +473,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
             className={`ldg-glyph ${driftTotal(i.drift) ? 'bad' : 'warn'}`}
             viewBox="0 0 10 10"
             role="img"
-            aria-label={driftTotal(i.drift) ? 'edited by hand' : 'needs a rebuild'}
+            aria-label={driftTotal(i.drift) ? 'local edits' : 'needs a rebuild'}
           >
             <path d="M5 1 9 9H1z" fill="currentColor" />
           </svg>
@@ -515,7 +515,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
     )
   }
   const sync = {
-    synced: <span className="pill good">in step</span>,
+    synced: <span className="pill good">in sync</span>,
     behind: <span className="pill warn">behind source</span>,
     unknown: <span className="pill off">not checked</span>,
   }[i.verdict]
@@ -787,19 +787,10 @@ function WhatFires({ usage, pending }) {
   )
 }
 
-// `view` is the Overview's View control, handed down so both arms carry the same one.
-export default function Ledger({ overview, setup, runs, onAction, dataRev, banner, view }) {
-  const confirm = useConfirm()
-  // job id → the row ids its rebuild names; a row shows the sweep while that run is running.
-  const [rebuilding, setRebuilding] = useState({})
-  // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
-  // last good answer on a failed reload, so a blip shows the old table under an error line.
-  const fleetRead = useAsync(() => api.fleet(), [dataRev])
-  const { data: fleet, error: fleetError, reload: reloadFleet } = fleetRead
-  const usageRead = useAsync(() => soft(api.usage()), [dataRev])
-  const gatesRead = useAsync(() => soft(api.gates()), [dataRev])
-  const { data: usage } = usageRead
-  const { data: gates } = gatesRead
+// The Overview's one header, under every view: the title, how many installs (`count`, null until
+// read), the version chip, and the View control. Owns the update read, so a lens gets the chip too.
+// `canFill` false keeps Update a ghost button: the page already has its one filled action.
+export function OverviewHead({ count, canFill, onAction, view, dataRev }) {
   // A failed re-poll (the daemon restarting under it) keeps the last answer rather than hiding
   // the chip and the button until the next good one. It is no longer "checking" then: the page
   // could not learn more, so it stops the early re-ask and says "unavailable" until the next poll.
@@ -831,6 +822,33 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
     const timer = setTimeout(reloadUpdate, UPDATE_RETRY_MS)
     return () => clearTimeout(timer)
   }, [checking, update, reloadUpdate])
+  return (
+    <PageHeader
+      title="Overview"
+      sub={count === null ? null : `${count} install${count === 1 ? '' : 's'} on this machine`}
+      actions={
+        <>
+          <VersionChip update={update} onAction={onAction} canFill={canFill} />
+          {view}
+        </>
+      }
+    />
+  )
+}
+
+// `view` is the Overview's View control, handed down so both arms carry the same one.
+export default function Ledger({ overview, setup, runs, onAction, dataRev, banner, view }) {
+  const confirm = useConfirm()
+  // job id → the row ids its rebuild names; a row shows the sweep while that run is running.
+  const [rebuilding, setRebuilding] = useState({})
+  // Not soft: a failed fleet read must be told apart from an empty one. useAsync keeps the
+  // last good answer on a failed reload, so a blip shows the old table under an error line.
+  const fleetRead = useAsync(() => api.fleet(), [dataRev])
+  const { data: fleet, error: fleetError, reload: reloadFleet } = fleetRead
+  const usageRead = useAsync(() => soft(api.usage()), [dataRev])
+  const gatesRead = useAsync(() => soft(api.gates()), [dataRev])
+  const { data: usage } = usageRead
+  const { data: gates } = gatesRead
   const rulesRead = useRules(dataRev)
   const activityRead = useAsync(() => soft(api.activity()), [dataRev])
   const profileRead = useAsync(() => soft(api.profile()), [dataRev])
@@ -905,19 +923,12 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
 
   return (
     <>
-      <PageHeader
-        eyebrow={
-          fleet
-            ? `${installs.length} harness${installs.length === 1 ? '' : 'es'} installed on this machine`
-            : null
-        }
-        title="Overview"
-        actions={
-          <>
-            <VersionChip update={update} onAction={onAction} canFill={!behind.length} />
-            {view}
-          </>
-        }
+      <OverviewHead
+        count={fleet ? installs.length : null}
+        canFill={!behind.length}
+        onAction={onAction}
+        view={view}
+        dataRev={dataRev}
       />
       {banner}
       <div className="ov-stack ldg">
@@ -939,7 +950,7 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
         </div>
         <section className="panel" aria-labelledby="ldg-fleet">
           <div className="panel-head panel-head-rule">
-            <h2 id="ldg-fleet">Installed harnesses</h2>
+            <h2 id="ldg-fleet">Installs</h2>
             {fleet?.source_fp ? <span className="mono dim">source {fleet.source_fp}</span> : null}
           </div>
           {fleetError && fleet ? (

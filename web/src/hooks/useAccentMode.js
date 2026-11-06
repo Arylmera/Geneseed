@@ -12,7 +12,7 @@ const ACCENT_KEY = 'geneseed-accent'
 // There was an 'auto' mode that followed the deployed voice; it was dropped because it
 // only ever showed a colour the fixed picks already offer. A stored 'auto' reads as curated.
 export const ACCENT_MODES = [
-  { id: 'curated', short: 'Curated', tagline: "Each theme's own signature colour." },
+  { id: 'curated', short: 'Curated', tagline: "Each skin's own signature colour." },
 ]
 
 // The fixed picks reuse the voice accent palette (lib/accents.js), which already carries

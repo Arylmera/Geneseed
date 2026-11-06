@@ -76,7 +76,7 @@ export function sovereignBypass(root) {
   // install that lives inside it. The tier test runs only when the shared list has entries.
   try {
     const shared = listOf(path.join(machineDir(), EXCLUDES_FILE));
-    if (shared.length && isHostGlobalDir(null, root)) entries.push(...shared);
+    if (shared.length && isGlobalInstall(null, root)) entries.push(...shared);
   } catch { /* no home dir, or an unresolvable config dir: the host list alone */ }
   // Nothing to match, so no reason to pay for the cwd and `.git` reads below on every hook call.
   if (!entries.length) return false;
@@ -267,7 +267,7 @@ export const DISABLED_STASH = '.geneseed-disabled';
  *     only against `configDir()` made `rebuild-all` re-emit it as a PROJECT rooted at `$HOME`;
  *   * its own `.geneseed-emit` names a `-global` emit (`<host>-global` when `host` is given).
  * Case-folded on Windows. A `configDir()` that throws propagates: each caller already has the
- * catch that says what "cannot tell" means for it (the hook stays loud).
+ * catch that says what "cannot tell" means for it (`isGlobalInstall` is the one most share).
  */
 export function isHostGlobalDir(host, dir) {
   const emit = emitMarkerOf(dir);
@@ -276,6 +276,15 @@ export function isHostGlobalDir(host, dir) {
   return HOSTS.some((h) => (host === null || h.host === host)
     && (normcase(h.configDir()) === c || (h.family === 'claude'
       && normcase(resolvePath(path.join(os.homedir(), h.projectMarker))) === c)));
+}
+
+/**
+ * `isHostGlobalDir` for the callers that read "cannot tell" as "not global": whatever reads the
+ * machine tier stays on its own layer then, and no refusal printed on the way reaches stderr. A
+ * caller whose "cannot tell" must fail the other way (`holdsInstall`'s) keeps its own catch.
+ */
+export function isGlobalInstall(host, dir) {
+  try { return withDiscardableStderr(() => isHostGlobalDir(host, dir)); } catch { return false; }
 }
 
 /**

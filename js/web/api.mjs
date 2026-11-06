@@ -20,6 +20,7 @@ import { diffCollect, renderMemo } from '../inspect/diff.mjs';
 import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { sessionStartSize } from '../hosts/hooks-context.mjs';
 import { CLAUDE_STYLE, VERSION_MARKER } from '../hosts/hosts.mjs';
+import { factCount } from '../hosts/memory-files.mjs';
 import { autostartPaths } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir,
@@ -35,7 +36,7 @@ import { isFile, writeTextAtomic } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
-  configItems, deployed, dget, fleetCounts, isFurniture, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
+  configItems, deployed, dget, fleetCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
 import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
@@ -162,19 +163,6 @@ const driftCounts = (files) => ({
 });
 
 /**
- * How many memory facts a store holds: the `.md` files of `store` (`memoryDir`, where
- * `memoryItems` reads them), minus its furniture.
- * No folder is no facts (0); a folder that cannot be listed is null, so a row says "not read"
- * rather than "no facts".
- */
-export function memoryFactCount(store) {
-  try {
-    return readdirSync(store)
-      .filter((f) => /\.md$/i.test(f) && !isFurniture(f, 'memory')).length;
-  } catch (e) { return e?.code === 'ENOENT' ? 0 : null; }
-}
-
-/**
  * The fields every install row opens with, in this order. Theme is narrowed to this row's own
  * host (host-compat B1): a shared repo otherwise answers every row with whichever host's
  * carrier the host-agnostic scan favours.
@@ -183,6 +171,9 @@ const installRowBase = (host, scope, root, state) => ({
   id: `${host}:${scope}:${root}`, host, scope, path: root, state,
   theme: themeOfDir(root, host),
   footprint: footprintOfDir(root),
+  // Reads the machine's shared tier: its rules, profile and memory are the same on every row that
+  // says so. The one field the console asks; `sharedTier` is only a project install's switch.
+  shared: tierOf({ target: viewCfg(host, scope, root) }) !== null,
 });
 
 /** Move the daemon's own state to the default install `def`. A pinned view keeps the one it named. */
@@ -298,6 +289,7 @@ export function apiFleet(state, { now = Date.now() } = {}) {
     let built = null;
     try { built = Math.floor(statSync(path.join(dir, VERSION_MARKER)).mtimeMs / 1000); } catch { /* never built */ }
     const { cost, sessionStart } = reads(host, scope, st, root, dir);
+    const tier = tierOf({ target: dir });
     installs.push({
       ...installRowBase(host, scope, root, st),
       installed_fp: fp,
@@ -310,10 +302,8 @@ export function apiFleet(state, { now = Date.now() } = {}) {
       // Each install's own settings, on its row: the Overview has no viewed install to read them off.
       posture: postureOfDir(root, host),
       mode: modeOfDir(root, host),
-      // Its memory facts: one directory listing (`memoryFactCount`), no file read.
-      facts: memoryFactCount(memoryDir({ target: dir })),
-      // Those facts are the machine's shared store, the same on every row that says so.
-      shared: tierOf({ target: dir }) !== null,
+      // Its memory facts: directory listings (`factCount`), no file read.
+      facts: factCount(memoryDir({ target: dir }, tier)),
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
       cost,

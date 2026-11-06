@@ -50,7 +50,7 @@ const cell = async () => {
   return within(table)
 }
 
-describe('Ledger hand-edits cell', () => {
+describe('Ledger local-edits cell', () => {
   it('shows only linked paths as a muted "linked" figure, with no Rebuild', async () => {
     api.fleet.mockResolvedValue({
       installs: [row({ edited: 0, added: 0, missing: 0, linked: 2 })],

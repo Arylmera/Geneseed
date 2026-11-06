@@ -13,7 +13,7 @@ export function kitHint(row, stage) {
 }
 
 // The staged-changes hint and the Apply action closing one install's kit switches, the same
-// footer on Installs / Kits and on a kit's page. While this row's rebuild runs it says so and
+// footer on a kit's page. While this row's rebuild runs it says so and
 // Apply waits; while any other job runs Apply waits too, titled why; after a failed one the
 // staged set is still there, and the hint says why.
 export default function KitApply({ row, stage }) {

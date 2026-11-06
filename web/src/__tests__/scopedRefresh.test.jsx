@@ -40,21 +40,29 @@ vi.mock('../api/index.js', () => ({
 }))
 
 // The two editors stand in as one button each that performs the write the real editor
-// performs, then calls `onChanged` exactly as Rules.jsx / Profile.jsx do after a write.
+// performs, then calls `onChanged` exactly as Rules.jsx / Profile.jsx do after a write. The rules
+// stand-in also prints the shared read Personal reloads: what the Overview and Constitution paint.
 vi.mock('../pages/Rules.jsx', async () => {
   const { api } = await import('../api/index.js')
+  const { useRules } = await import('../hooks/useRules.js')
   return {
-    default: ({ onChanged }) => (
-      <button
-        type="button"
-        onClick={async () => {
-          await api.rulesMutate({ action: 'retire', id: 1 })
-          onChanged?.()
-        }}
-      >
-        retire a rule
-      </button>
-    ),
+    default: function RulesStandIn({ onChanged }) {
+      const n = useRules(0).data?.stats?.rules
+      return (
+        <>
+          <button
+            type="button"
+            onClick={async () => {
+              await api.rulesMutate({ action: 'retire', id: 1 })
+              onChanged?.()
+            }}
+          >
+            retire a rule
+          </button>
+          {n == null ? null : <p>{`${n} rule${n === 1 ? '' : 's'}`}</p>}
+        </>
+      )
+    },
   }
 })
 vi.mock('../pages/Profile.jsx', async () => {
@@ -114,7 +122,7 @@ beforeEach(() => {
   }
 })
 
-// Personal's summary card reads `<n> rules`.
+// The stand-in's line reads `<n> rules`.
 const rulesRow = (n) => `${n} rule${n === 1 ? '' : 's'}`
 const slots = (n) => screen.findByText(rulesRow(n))
 

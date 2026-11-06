@@ -30,13 +30,7 @@ export default function Diff(props) {
   const [install, pick] = useInstallPick('edits', active)
   return (
     <>
-      <InstallPicker
-        className="page-pick"
-        installs={active}
-        value={install}
-        onChange={pick}
-        label="Local edits of:"
-      />
+      <InstallPicker className="page-pick" installs={active} value={install} onChange={pick} />
       {active === null ? (
         <Loading />
       ) : (
@@ -111,15 +105,15 @@ function DiffOf({ install, onMutated, onAction, dataRev, overview }) {
   if (error) return <ErrorState error={error} onRetry={reload} />
   if (!data) return <Loading />
   if (!data.deployed)
-    return <EmptyState title="No deployed harness">Nothing to diff against.</EmptyState>
+    return <EmptyState title="Nothing installed here">Nothing to compare.</EmptyState>
 
   if (!data.diffable)
     return (
       <EmptyState
-        title="No drift check for this install"
+        title="No local-edit check for this install"
         docs={{ href: '#/installs/hosts', label: 'See every install in Hosts' }}
       >
-        The drift check covers global installs only. Pick a global install above.
+        Local edits are only checked for global installs. Pick a global install above.
       </EmptyState>
     )
 
@@ -187,7 +181,7 @@ function DiffOf({ install, onMutated, onAction, dataRev, overview }) {
       ) : null}
 
       {files.length === 0 && stale.length === 0 ? (
-        <EmptyState title="In sync">Deployed harness matches source.</EmptyState>
+        <EmptyState title="In sync">This install matches its source.</EmptyState>
       ) : (
         <>
           <div className="row between mb-14">
@@ -239,7 +233,7 @@ function DiffOf({ install, onMutated, onAction, dataRev, overview }) {
               <h3>Behind source</h3>
               <div className="row between">
                 <p className="sub">
-                  This install is built from older source — rebuild to bring these files up to date.
+                  This install is built from older source. Rebuild to bring these files in sync.
                 </p>
                 <button
                   className="btn ghost"

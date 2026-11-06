@@ -1,4 +1,4 @@
-import { GATE_SWITCH, gateAddress } from '../../lib/constitution.js'
+import { gateAddress, gateFallback } from '../../lib/constitution.js'
 import { installTag } from '../../lib/hosts.js'
 import { Bar } from '../../components/StackBar.jsx'
 
@@ -32,7 +32,7 @@ export default function GateAsks({
         <ul className="gate-list">
           {asks.map(([gate, n, off]) => {
             const addr = gateAddress(gate)
-            const name = byAddr[addr]?.name || GATE_SWITCH[addr]?.label || addr
+            const name = byAddr[addr]?.name || gateFallback(addr)
             return (
               <li key={gate}>
                 {/* The entry's text is the control: it takes you to the rule in the table. The
@@ -41,7 +41,6 @@ export default function GateAsks({
                 <button type="button" className="gate-row" onClick={() => onJump(addr)}>
                   <span className="gate-top">
                     <span className={`gate-name${off ? ' dim' : ''}`}>{name}</span>
-                    <span className="mono dim">{addr}</span>
                     {off && <span className="mono off">{offText}</span>}
                     <span className="mono gate-n">{n}</span>
                   </span>

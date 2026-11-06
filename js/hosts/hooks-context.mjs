@@ -12,7 +12,7 @@ import { LEGACY_WIKI_SEED, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mj
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import {
-  SHARED_TIER_RE, carriersFor, globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolvePath, sovereignBypass,
+  SHARED_TIER_RE, carriersFor, globalHookStandingDown, hookProjectDir, isGlobalInstall, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 import { gitRootOf } from './gitref.mjs';
@@ -132,7 +132,7 @@ function claudeLoadsAgents(root) {
 // Priority inside the budget: session files (the user's own), then eager docs (whole, or
 // listed lazy), then the lazy listing, folded per directory and cut with a count. Session files
 // spend in `SESSION_FILES` order, so what the budget cuts first is what comes last.
-const OUTPUT_BUDGET = 9000;
+export const OUTPUT_BUDGET = 9000;
 // Kept back from the eager docs so the lazy listing always has room to say what exists.
 const LAZY_RESERVE = 1500;
 // A directory with this many undescribed lazy files is listed once, with its count.
@@ -252,9 +252,7 @@ export const emittedHost = (host) => (host === 'claude' ? null : host);
  * `--host` names none (null), and then any host's global qualifies. One that cannot tell stays on
  * its own layer.
  */
-function readsTier(hookRoot, host) {
-  try { return withDiscardableStderr(() => isHostGlobalDir(host, hookRoot)); } catch { return false; }
-}
+const readsTier = (hookRoot, host) => isGlobalInstall(host, hookRoot);
 
 /**
  * Does this PROJECT install read the machine tier? Its carrier says `Shared tier: on`, and no

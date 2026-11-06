@@ -28,7 +28,7 @@ import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { statusLines } from '../../js/inspect/status.mjs';
 import { SHARED_TIER_BENEFIT, alwaysOnCost, sharedTierCost, sharedTierFigure } from '../../js/inspect/cost.mjs';
-import { cmdContext, sessionFiles, sessionStartSize } from '../../js/hosts/hooks-context.mjs';
+import { OUTPUT_BUDGET, cmdContext, sessionFiles, sessionStartSize } from '../../js/hosts/hooks-context.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { appendAgentLesson } from '../../js/hosts/memory-files.mjs';
 import { sharedTierOfDir } from '../../js/hosts/installs.mjs';
@@ -372,6 +372,12 @@ test('--help, the console and the docs quote the trade sentences cost.mjs writes
   const doc = fs.readFileSync(path.join(root, 'docs', 'concepts', 'rules.md'), 'utf8');
   assert.ok(doc.includes(`**Benefit:** ${SHARED_TIER_BENEFIT}`), 'the docs lost the benefit sentence');
   assert.ok(doc.includes(`**Cost:** ${sharedTierCost()}`), 'the docs lost the cost sentence');
+});
+
+// The sentence writes the budget out for people; the hook spends the constant. One can move alone.
+test('the cost sentence names the budget the hook spends', () => {
+  const spelled = String(OUTPUT_BUDGET).replace(/\B(?=(\d{3})+$)/g, ' ');
+  assert.ok(sharedTierCost().includes(`fixed at ${spelled} characters`), sharedTierCost());
 });
 
 test('the token figure: characters over four, rounded to 100, with a space before the thousands; empty says null', () => {

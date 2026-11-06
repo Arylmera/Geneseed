@@ -14,7 +14,7 @@ decisions are in the root [`DESIGN.md`](../DESIGN.md), and console behaviour in
 ## Principles
 
 - **A developer terminal, not a marketing page.** Deep ink surfaces, mono chrome, one accent (`styles.css:1-5`).
-- **Skins, not themes.** Four flavours (`cultivar`, `operator`, `matrix`, `atlas`, `web/src/hooks/useFlavour.js`) redefine the same tokens on `.app`, each in dark and light. The accent follows the deployed theme.
+- **Skins, not themes.** Four skins (`cultivar`, `operator`, `matrix`, `atlas`, `web/src/hooks/useFlavour.js`) redefine the same tokens on `.app`, each in dark and light. The accent follows the deployed theme.
 - **Offline first.** Fonts are self-hosted through `@fontsource`; nothing loads from a CDN (`styles.css:19-22`).
 - **Motion defers to the user.** Every JS animation passes `motionOK()` (`web/src/lib/motion.js`) and keeps its `settle()`, and CSS motion stops under `prefers-reduced-motion`.
 <!-- geneseed:doc:end -->
@@ -124,7 +124,7 @@ Shared primitives in `web/src/components/`.
 | `Tabs.jsx` | Sub-pages of a rail entry | Active tab | tabs |
 | `DataTable.jsx` | Sortable data | Empty | columns, rows |
 | `Stat.jsx`, `StatusBadge.jsx` | Figures and verdicts | good, warn, bad | value, label |
-| `InstallPicker.jsx` | Names the install an action applies to | Hidden with one active install | label, value |
+| `InstallPicker.jsx` | Names the install an action applies to, always as *Install:* | Hidden with one active install | installs, value, onChange |
 | `EmptyState.jsx`, `ErrorState.jsx`, `Loading.jsx` | The three non-data states | Retry on error | message |
 | `ConfirmDialog.jsx`, `Popover.jsx`, `Toast.jsx` | Overlays | Open, closed | children |
 | `Spotlight.jsx`, `Search.jsx` | Jump to anything | `/`, Ctrl or ⌘ + K | — |
@@ -138,11 +138,38 @@ Shared primitives in `web/src/components/`.
 
 - **Do** use a surface and text token, so a flavour can restyle the page. **Do not** add a colour outside a flavour block; `contrast.test.js` reads the blocks.
 - **Do** reuse one of the three breakpoints. **Do not** add a fourth.
-- **Do** put an `InstallPicker` beside what it acts on. **Do not** add a console-wide install switch.
-- **Do** tag what the harnesses share as `shared` and name no harness. A project install's entry names its install.
+- **Do** give a page's `InstallPicker` `className="page-pick"`: right above the heading of the view it acts on, labelled *Install:*: under the tabs on a tabbed page, over the h1 on a page with none. A form or popover that acts on its own install holds the same control inside it. **Do not** add a console-wide install switch, and **do not** write another label.
+- **Do** read whether an install is on the shared tier from its `shared` field (`useInstalls`). State the shared scope once, in the page header, and tag a list head, not its rows. A project install's entry names its install.
+- **Do** give each control one home. Skin and accent live in the Appearance popover, the lens in the Overview header, a kit's switches on the Kits page, a footprint in the Hosts panel. **Do not** add a second place that sets them.
 - **Do** pass a JS animation through `motionOK()` and give it a settled end state.
 - **Do** take a duration and a curve from the motion tokens. **Do not** write a literal one; pick the nearest step.
 - **Do** show `Loading.jsx` while a first read is out, and print no count before its data. **Do not** let a pending read say it failed or found nothing.
 - **Do** name an install with `installTag` and a host with `hostInfo().label`, and only where it differs.
 - **Do** rebuild and commit `web/dist/` with every change under `web/src/`.
 <!-- geneseed:doc:end -->
+
+## Words
+
+One word per concept. Every visible string uses the word in the middle column, and never one from
+the right column. API fields, ids and CSS classes keep their own names: this table is about what a
+person reads.
+
+| Concept | Word | Never |
+|---|---|---|
+| A build against its source | *in sync*, *behind source*, *not checked* | in step, up to date |
+| Geneseed against its release | *latest*, *N commits to pull*, *X available* | up to date |
+| Files changed by hand in an install | *local edits*; a count reads *N edited* or *N local edits* | drift, drifted, hand edits, hand-edited, edited by hand, edits to graft |
+| One copy of the harness on a host | *install* | harness (for a copy), deployed harness |
+| What Geneseed makes, as a whole | *harness* | — |
+| The tool an install lives in | *host*; its name is `hostInfo().label` | harness, in the Docs host switch |
+| The agent's way of speaking | *voice* | theme |
+| The console's look | *skin* | flavour, theme, direction |
+| A way to lay out the Overview | *lens*: Overview, Genome, Greenhouse, HUD, Journal | a skin's name |
+| A dive inside a lens | *sub-view*: Status, Lineage, Readout | a lens's or a skin's name |
+| The numbered laws | the theme's noun `nouns.laws`, with *Dictates* as its fallback | Laws, in fixed prose |
+| A rule named by the gate ledger | its principle; with no catalog entry, *Rule IV* or *Process rule 5* | `law-4`, `process.5` |
+| Running the checks | *Run doctor*, on every button | Re-run checks |
+| The tier's files | *shared* | global, on a row |
+
+Keep the themed nouns the theme tokens own: a word that comes from `nouns` or a catalog title is
+the voice's own and this table does not rule it.

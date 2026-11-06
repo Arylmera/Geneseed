@@ -12,11 +12,11 @@ import path from 'node:path';
 
 import { PROFILE_STUB } from '../build/stubs.mjs';
 import { readMaybe } from '../hosts/installs.mjs';
-import { frontmatter, isRuleEdge, parseRules } from '../hosts/memory-files.mjs';
+import { splitLines } from '../hosts/hooks-prims.mjs';
+import { frontmatter, isRuleEdge, parseDraft, parseRules, readFoldState } from '../hosts/memory-files.mjs';
 import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isTruthy } from '../lib/json.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
-import { splitLines } from '../lib/udiff.mjs';
 import { isFactName } from '../maintain/memory.mjs';
 import { apiMemoryDelete, bget, strOr } from './actions.mjs';
 import { BadRequest, NotFound, memoryDir, tierOf } from './catalog.mjs';
@@ -60,39 +60,26 @@ const fpMatches = (got, want) => typeof got === 'string' && got === want;
 
 export const RULES_FILE = 'user-rules.md';
 /** The folder of the two hand-written files: the tier for a global install, else the bundle. */
-const userDir = (state) => tierOf(state)?.root ?? state.target;
-const rulesPath = (state) => path.join(userDir(state), RULES_FILE);
+const userDir = (state, tier = tierOf(state)) => tier?.root ?? state.target;
+const rulesPath = (state, tier) => path.join(userDir(state, tier), RULES_FILE);
 
 /**
  * The blocks the fold left in `<tier>/user-rules.draft.md`, as `{title, host, body}`, in file
- * order. The console only SHOWS them: the rule Rite is the only draft writer (C15), so no verb
- * here decides one. A `## Rule from <host>: <title>` block is a pointer line, then the rule. A
- * `## Choose: <file>` block is a question about two files, so it keeps its title alone. Every
- * other heading (`## Renumbered`, the file's record of past decisions) ends the block before it
- * and adds none. A block the ledger already holds as decided is left over from a stopped Rite
- * write, so it is not pending; a block with no row, or a ledger that does not parse, still shows.
- * Empty for a project install and for a missing draft.
+ * order (`parseDraft` reads the format). The console only SHOWS them: the rule Rite is the only
+ * draft writer (C15), so no verb here decides one. A block the ledger already holds as decided is
+ * left over from a stopped Rite write, so it is not pending; a block with no row, or a ledger that
+ * does not parse, still shows. Empty for a project install and for a missing draft.
  */
-function ruleDrafts(state) {
-  const tier = tierOf(state);
-  const out = [];
-  let open = null;
-  for (const line of splitLines((tier && readMaybe(tier.draft)) ?? '')) {
-    if (line.startsWith('## ')) {
-      const rule = /^## Rule from ([^:]+): (.+)$/.exec(line);
-      open = rule ? { title: rule[2], host: rule[1], lines: [] }
-        : line.startsWith('## Choose: ') ? { title: line.slice(3), host: null, lines: [] } : null;
-      if (open) out.push(open);
-    } else open?.lines.push(line);
-  }
+function ruleDrafts(tier) {
+  if (tier === null) return [];
   let ledger = {};
-  try { ledger = JSON.parse((tier && readMaybe(tier.foldState)) ?? '{}').items ?? {}; } catch { /* shows all */ }
-  const decided = ({ lines }) => {
-    const row = ledger[/sha256: (\w+)/.exec(lines[0] ?? '')?.[1]];
+  try { ledger = readFoldState(tier).items; } catch { /* shows all */ }
+  const decided = ({ key }) => {
+    const row = ledger[key];
     return row != null && row.state !== 'pending';
   };
-  return out.filter((d) => !decided(d)).map(({ title, host, lines }) => (
-    { title, host, body: host ? stripWhitespace(lines.slice(1).join('\n')) : '' }));
+  return parseDraft(readMaybe(tier.draft) ?? '').filter((d) => !decided(d))
+    .map(({ title, host, body }) => ({ title, host, body }));
 }
 
 /**
@@ -102,10 +89,12 @@ function ruleDrafts(state) {
 const tokensOf = (text) => Math.floor(codePointLength(text) / 4);
 
 export function apiRules(state) {
-  const p = rulesPath(state);
+  const tier = tierOf(state);
+  const p = rulesPath(state, tier);
+  const shared = tier !== null;
+  const drafts = ruleDrafts(tier);
   if (!isFile(p)) {
-    return { exists: false, path: p, rules: [], warnings: [], fingerprint: '',
-      shared: tierOf(state) !== null, drafts: ruleDrafts(state),
+    return { exists: false, path: p, rules: [], warnings: [], fingerprint: '', shared, drafts,
       stats: { rules: 0, lines: 0, tokens: 0 } };
   }
   const text = readMaybe(p) ?? '';
@@ -121,14 +110,13 @@ export function apiRules(state) {
     // The rule's whole block, heading and metadata too: that is what the agent reads.
     tokens: tokensOf(stripWhitespace(lines.slice(r.start, r.end).join('\n'))),
   }));
-  return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text),
-    shared: tierOf(state) !== null, drafts: ruleDrafts(state),
+  return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text), shared, drafts,
     // The whole file, so it holds its header too: more than the rules' own tokens added up.
     stats: { rules: rules.length, lines: lines.length, tokens: tokensOf(text) } };
 }
 
-function rulesRead(state) {
-  const p = rulesPath(state);
+function rulesRead(state, tier) {
+  const p = rulesPath(state, tier);
   return [p, isFile(p) ? (readMaybe(p) ?? '') : ''];
 }
 
@@ -217,14 +205,15 @@ export function apiRulesMutate(state, body) {
   if (op !== 'add' && op !== 'update' && op !== 'delete') {
     throw new NotFound(`rules op ${formatRepr(op)}`);
   }
-  const [p, original] = rulesRead(state);
+  const tier = tierOf(state);
+  const [p, original] = rulesRead(state, tier);
   let text = original;
   if (!fpMatches(bget(body, 'fingerprint', ''), fingerprint(text))) {
     return { ok: false, error: 'conflict',
       detail: 'user-rules.md changed since you loaded it — reloading' };
   }
   const [rules] = parseRules(text);
-  const retiredPath = path.join(userDir(state), RETIRED_RULES_FILE);
+  const retiredPath = path.join(userDir(state, tier), RETIRED_RULES_FILE);
   let rid;
   let next;
   if (op === 'add') {
@@ -304,11 +293,12 @@ export function apiRulesPromote(state, body) {
 
 /** In `userDir`: the tier for a global install, else beside the deployed AGENT.md. */
 export const PROFILE_FILE = 'PROFILE.md';
-const profilePath = (state) => path.join(userDir(state), PROFILE_FILE);
+const profilePath = (state, tier) => path.join(userDir(state, tier), PROFILE_FILE);
 
 export function apiProfile(state) {
-  const p = profilePath(state);
-  const shared = tierOf(state) !== null;
+  const tier = tierOf(state);
+  const p = profilePath(state, tier);
+  const shared = tier !== null;
   if (!isFile(p)) return { exists: false, path: p, text: '', fingerprint: '', shared };
   const text = readMaybe(p) ?? '';
   // `seeded`: the file is still the template the build wrote once and never touched since.

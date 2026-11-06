@@ -54,6 +54,6 @@ export const SKILL_CATS = {
   understand: { label: 'Understand', c: CAT_HUES.verify },
   learn: { label: 'Learn', c: CAT_HUES.comms },
   harness: { label: 'Harness', c: 'oklch(0.76 0.07 250)' },
-  personal: { label: 'Personal', c: 'oklch(0.72 0.025 250)' },
+  personal: { label: 'Custom', c: 'oklch(0.72 0.025 250)' },
 }
 export const SKILL_CAT_ORDER = Object.keys(SKILL_CATS)

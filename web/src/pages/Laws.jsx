@@ -100,13 +100,7 @@ export default function Laws(props) {
   const [install, pick] = useInstallPick('laws', active)
   return (
     <>
-      <InstallPicker
-        className="page-pick"
-        installs={active}
-        value={install}
-        onChange={pick}
-        label="Constitution of:"
-      />
+      <InstallPicker className="page-pick" installs={active} value={install} onChange={pick} />
       {/* Keyed on the pick, so its read starts as pending and no other pick's answer shows. */}
       <LawsFor key={install?.id ?? 'none'} {...props} install={install} listed={active !== null} />
     </>

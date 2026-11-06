@@ -36,7 +36,7 @@ import { rglobFiles } from '../build/emit-common.mjs';
 import { CONFIG, makeCfg } from '../build/source.mjs';
 import { sourceFingerprint } from '../build/version.mjs';
 import {
-  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir, resolvePath,
+  GLOBAL_MANIFEST, VERSION_MARKER, expanduser, isGlobalInstall, opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
   EMIT_HOST_SCOPE, defaultTheme, doctrinesForBuild, excludedRulesOfDir,
@@ -351,7 +351,7 @@ const localChanges = (files) => drifted(files).filter((f) => f.status !== 'stale
 /** An install's notebook; a global install's loops write to the tier's `notes/` too (D6). */
 function notesRoots(dir) {
   const roots = [[path.join(dir, 'notebook'), 'notebook']];
-  try { if (isHostGlobalDir(null, dir)) roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
+  try { if (isGlobalInstall(null, dir)) roots.push([sharedPaths().notes, 'notes']); } catch { /* no home: no tier */ }
   return roots;
 }
 

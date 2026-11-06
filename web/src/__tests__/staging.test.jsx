@@ -16,7 +16,6 @@ vi.mock('../api/index.js', () => ({
   },
 }))
 
-import InstallKits from '../pages/Installs/Kits.jsx'
 import KitsPage from '../pages/Kits.jsx'
 import Laws from '../pages/Laws.jsx'
 import { StagingProvider } from '../hooks/useStaging.jsx'
@@ -90,10 +89,11 @@ const mountShell = async (page) => {
     })
   return { confirm, onAction, update }
 }
-const installsPage = (onAction, rev) => <InstallKits onAction={onAction} dataRev={rev} />
+// A kit's own page: one switch and one Apply per install.
+const installsPage = (onAction, rev) => <KitsPage item="k1" onAction={onAction} dataRev={rev} />
 const GLOBAL = 'Claude Code · global'
 const PROJECT = 'b · Claude Code'
-const panel = (who) => within(screen.getByRole('region', { name: who }))
+const panel = (who) => within(screen.getByText(who, { selector: 'b' }).closest('.kit-install'))
 const hint = (who) => panel(who).getByRole('status').textContent
 const sw = (kitName, who) => screen.getByRole('switch', { name: `${kitName} for ${who}` })
 const applyBtn = (who) => screen.getByRole('button', { name: `Apply kits for ${who}` })
@@ -110,7 +110,6 @@ describe('StagingProvider — kits', () => {
     await update({ rev: 1 })
     expect(hint(GLOBAL)).toBe('No staged changes')
     expect(sw('k1', GLOBAL).getAttribute('aria-checked')).toBe('false')
-    expect(sw('k2', GLOBAL).getAttribute('aria-checked')).toBe('true')
     expect(hint(PROJECT)).toBe('turn on k1')
   })
 
@@ -160,7 +159,6 @@ describe('StagingProvider — kits', () => {
     await update({ activeId: 'job-1' })
     expect(hint(GLOBAL)).toBe('Rebuilding…')
     expect(sw('k1', GLOBAL).disabled).toBe(true)
-    expect(sw('k2', GLOBAL).disabled).toBe(true)
     expect(applyBtn(GLOBAL).disabled).toBe(true)
     expect(sw('k1', PROJECT).disabled).toBe(false)
     expect(applyBtn(PROJECT).disabled).toBe(true)

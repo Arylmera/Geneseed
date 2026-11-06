@@ -10,7 +10,7 @@ import { readText, isDir, printOut as out, printErr as err } from '../lib/fs.mjs
 import { toPlatformPath } from '../lib/paths.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
 import {
-  globalHookStandingDown, hookProjectDir, isHostGlobalDir, resolveMemoryDir, sovereignBypass,
+  globalHookStandingDown, hookProjectDir, isGlobalInstall, resolveMemoryDir, sovereignBypass,
 } from './hosts.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { readStdin, splitLines, splitWords, tailReader } from './hooks-prims.mjs';
@@ -291,7 +291,7 @@ function sharedStoreFor(install, args) {
   if (!install) return args.memory;
   try {
     const shared = sharedPaths().memory;
-    return isDir(shared) && isHostGlobalDir(args.host ?? null, install) ? shared : args.memory;
+    return isDir(shared) && isGlobalInstall(args.host ?? null, install) ? shared : args.memory;
   } catch { return args.memory; }
 }
 

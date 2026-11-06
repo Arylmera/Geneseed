@@ -800,6 +800,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
    above (animations collapse to .01ms), so no dedicated media query here. */
 .loading { color: var(--text-3); font-family: var(--font-mono); font-size: 12.5px;
   padding: 40px 0; }
+.lib-list .loading { padding-inline: var(--sp-4); }
 .skel { display: grid; gap: 10px; margin-top: 16px; max-width: 560px; }
 .skel-bar { height: 13px; border-radius: var(--r-sm);
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
@@ -973,11 +974,10 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   .docs-margin { position: sticky; order: 0; }
   .docs-gloss { display: grid; }
 }
-/* On a phone the page comes first and the parts and page list follow it: stacked in source
-   order, a cross-link or search hit opened on the nav, with the article below the fold.
-   Visual order then differs from Tab order (nav first), which a reader of a page accepts. */
+/* On a phone the page comes first and the parts and page list follow it, in the DOM too
+   (Docs/index.jsx), so reading order and Tab order agree. */
 @media (max-width: 720px) {
-  .library.docs-lib .lib-reader { order: -1; border-top: 0; border-bottom: 1px solid var(--line); }
+  .library.docs-lib .lib-reader { border-top: 0; border-bottom: 1px solid var(--line); }
 }
 
 /* The Understand track's progress line, and the prev/next bar under every page. */
@@ -1422,7 +1422,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
 }
 
 /* ---- Settings: the status line under each Appearance control ---- */
-.dir-layout-note { font-size: 12px; }
 
 /* ============================================================================
    PER-FLAVOUR LAYOUT TWEAKS — beyond palette/radius, each direction reshapes
@@ -1969,6 +1968,7 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
    under Laws in the rail) but stay their own classes: this list is editable and
    chip-driven, not a fixed four-column ledger. */
 .rules-list { overflow: hidden; }
+.rules-file { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-2); font-size: var(--fs-xs); }
 .rule-row { border-bottom: 1px solid var(--line); }
 .rule-row:last-child { border-bottom: 0; }
 .rule-head {
@@ -2050,8 +2050,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
 
 /* ---- Dashboard · the Journal lens ---- */
 .jr-head { margin-bottom: 14px; }
-/* The fleet verdict badge under the journal's title (VerdictBadge.jsx). */
-.jr-head .badge { margin-top: 8px; }
 .jr-row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px; margin-bottom: 14px; }
 .jr-card { padding-top: 14px; padding-bottom: 14px; }
@@ -2085,7 +2083,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
 .jr-go:hover { text-decoration: underline; }
 .jr-go.right { margin-left: auto; }
 .jr-map { border-color: var(--accent-line); }
-.jr-others { margin: 14px 0 0; font-size: 11.5px; }
 
 /* ---- the constitution map ---- */
 .cmap { display: block; width: 100%; height: auto; min-height: 300px; }
@@ -2153,8 +2150,8 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
    moment it is not. Where `:has()` is unsupported the page simply stays capped, which is
    the old layout rather than a broken one.
 
-   Only the OTHER dashboards are excluded; this deliberately does not widen Cultivar,
-   Greenhouse or Operator, each of which was composed against the 1180 cap. */
+   Only the OTHER dashboards are excluded; this deliberately does not widen Genome,
+   Greenhouse or the HUD, each of which was composed against the 1180 cap. */
 /* ⚠ THE WHOLE CHAIN NEEDS A DEFINITE HEIGHT, and this is the line that supplies it.
    `.col` ships `min-height: 100vh`, which is a FLOOR, not a height — so the column's
    height stays content-driven, `.page`'s `flex: 1` has no free space to distribute, and
@@ -2162,10 +2159,12 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
    theoretical: without this the map grew to its natural 566px at full width and pushed
    the page 213px past the viewport, turning "use the space" into a scrollbar.
    Scoped to the journal with `:has()` so no other page's scrolling changes. */
-.col:has(.pad > .jr-head) { height: 100vh; }
+.col:has(.pad .jr-head) { height: 100vh; }
 /* The scroll container becomes a column so the pad can take a share of it. */
-.page:has(> .pad > .jr-head) { display: flex; flex-direction: column; }
-.pad:has(> .jr-head) {
+.page:has(> .pad .jr-head) { display: flex; flex-direction: column; }
+/* The shell's sub-view wrapper passes the leftover height down to the map. */
+.pad:has(.jr-head) .view-in { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pad:has(.jr-head) {
   max-width: none;
   /* `flex: 1` and NOT `min-height: 100%`. The percentage was the obvious spelling and it
      was wrong: `.page`'s own height is content-driven, so the percentage resolved against
@@ -2192,13 +2191,13 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
    that pushed the page 213px past the viewport. So the floor is the map's 240px plus
    what surrounds it in the card: 44px of `.pad-lg` padding, a ~22px head line, its 16px
    margin, and 2px of border. Under it, the page scrolls. */
-.pad:has(> .jr-head) .jr-map {
+.pad:has(.jr-head) .jr-map {
   flex: 1;
   min-height: 324px;
   display: flex;
   flex-direction: column;
 }
-.pad:has(> .jr-head) .jr-map .card-head { flex: none; }
+.pad:has(.jr-head) .jr-map .card-head { flex: none; }
 /* The SVG keeps its 940×330 viewBox and its default `xMidYMid meet`, so growing the box
    SCALES the drawing rather than stretching it — the composition is preserved and simply
    gets bigger. `min-height` keeps it legible when the window is short. */
@@ -2206,12 +2205,11 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
    height), and that is what lets the SVG SHRINK inside the card. The floor is a legibility
    limit for short windows; the card's floor above keeps the card around it, and past
    both the page scrolls, which is the right answer rather than an unreadable sliver. */
-.pad:has(> .jr-head) .cmap { flex: 1; min-height: 240px; height: auto; }
-.pad:has(> .jr-head) .jr-others { flex: none; }
+.pad:has(.jr-head) .cmap { flex: 1; min-height: 240px; height: auto; }
 /* On a phone the map is drawn at its own width (see .cmap above): its height follows that
    width, or `meet` would shrink the drawing back inside the wide box. */
 @media (max-width: 720px) {
-  .pad:has(> .jr-head) .cmap { flex: none; height: auto; }
+  .pad:has(.jr-head) .cmap { flex: none; height: auto; }
 }
 
 /* ============================ MOTION (lib/motion.js) ================== */
@@ -2401,6 +2399,7 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
   border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
 .ap-group { display: flex; flex-direction: column; gap: 6px; } /* off-scale: between steps */
 .ap-label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-2); }
+.ap-note { font-size: var(--fs-xs); color: var(--text-2); }
 /* Accent: Curated, the fixed colours as round swatches, then the colour picker. */
 .accent-picker { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .accent-src { padding: 5px var(--sp-3); border-radius: 999px; border: 1px solid var(--line-2); /* off-scale: 5px sets the chip height */
@@ -2447,6 +2446,10 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
   .sw-toggle::before, .btn.sm::before, .iconbtn::before { content: ''; position: absolute;
     top: 50%; left: 50%; width: max(100%, 44px); height: max(100%, 44px);
     transform: translate(-50%, -50%); }
+  /* What sits in a row or a list of its own grows to the target: the overlay above would only
+     stack up on its neighbours here. */
+  .btn:not(.sm), .sel, .seg button, .tabs a, .kind-list a, .sb-item, .lib-filter, .lib-row,
+  .sheet-index button, .row-pick, .sb-voice, .tabbar a, .rule-head, .newhere-x { min-height: 44px; }
 }
 
 /* ---- shared primitives (components/PageHeader, EmptyState, ErrorState, DataTable, Stat,
@@ -2994,7 +2997,6 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .inst-head h2 { margin: 0; font-size: 15px; font-weight: 700; } /* off-scale: heading above body size */
 .inst-head p { margin: 2px 0 0; font-size: var(--fs-sm); } /* off-scale: 2px, under the 4px floor */
 .inst-deploy { padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--line); }
-.inst-empty { padding: var(--sp-5); font-size: var(--fs-sm); color: var(--text-3); }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   flex-wrap: wrap; font-size: var(--fs-sm); }
 .tbl-scroll { position: relative; overflow-x: auto; } /* relative: holds the .sr-only cells, or they widen the page */
@@ -3059,8 +3061,7 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: var(--fs-xs);
 .sheet .sheet-index .sheet-dot.warn { background: var(--warn); }
 .sheet .sheet-sec.sheet-live { border-color: var(--accent-line); }
 
-/* ---- Kits: Installs / Kits panels and the Kits page share these rows ---- */
-.kits-tab { display: flex; flex-direction: column; gap: var(--sp-4); }
+/* ---- Kits: the rows of a kit's page ---- */
 .kit-list { margin: 0; padding: 0; list-style: none; }
 .kit-list.kit-box { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .kit-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-5);
@@ -3071,10 +3072,9 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: var(--fs-xs);
 a.kit-name:hover { color: var(--accent-text); }
 .kit-main .mono { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 .kit-desc { font-size: var(--fs-sm); color: var(--text-2); }
-.kit-lock, .kit-kept { margin: 0; padding: 10px var(--sp-5); font-size: var(--fs-sm); /* off-scale: 10px, 2px from a step */
+.kit-lock { margin: 0; padding: 10px var(--sp-5); font-size: var(--fs-sm); /* off-scale: 10px, 2px from a step */
   border-bottom: 1px solid var(--line); }
 .kit-lock { color: var(--warn-text); background: color-mix(in srgb, var(--warn) 8%, transparent); }
-.kit-kept { font-size: var(--fs-xs); }
 .kit-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   padding: 10px var(--sp-5); background: var(--surface-2); } /* off-scale: 10px, 2px from a step */
 .kit-install:not(:last-child) { border-bottom: 1px solid var(--line); }

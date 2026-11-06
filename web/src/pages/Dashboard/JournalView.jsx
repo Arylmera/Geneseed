@@ -7,25 +7,9 @@ import VerdictBadge from './VerdictBadge.jsx'
 
 // THE FIELD JOURNAL — the fourth Status lens, and the one that answers "what is this
 // harness, today" instead of "is it healthy". The health readout is still one click away
-// (the rail's vitals card carries the germination ring on every page, and Run doctor is in
-// the Overview header above this lens); what this lens leads with is the shape of the thing: how much
-// has grown in each section, what grew most recently, and the constitution that governs
-// all of it, drawn rather than tallied.
-//
-// It brings its own date line and title (an h2: the Overview header above holds the page's
-// h1 and its actions) because it is a page, not a panel — Dashboard's shell hands it the
-// whole pane. The other two directions are a quiet line at the bottom rather than a
-// segmented control at the top: they are data dives, and the journal's own subject is the
-// harness, not the choice of view.
-
-// Today's date in the same ISO-ish shape the harness stamps everything else with. Local
-// time, deliberately: this line names the user's day, not UTC's.
-function today() {
-  const d = new Date()
-  const p2 = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
-}
-
+// (the rail's vitals card on every page, and Run doctor in the lens row above); what this lens
+// leads with is the shape of the thing: how much has grown in each section, what grew most
+// recently, and the constitution that governs all of it, drawn rather than tallied.
 // One proportional bar per content section. The denominator is the largest count on show,
 // so the bars compare the harness against itself — there is no target number of skills.
 function GrowthRings({ counts }) {
@@ -34,8 +18,8 @@ function GrowthRings({ counts }) {
     // The rail's Constitution figure, under the same word as the map's hub below.
     { label: 'Rules', n: ruleCount(counts), hash: '#/laws' },
     { label: SECTIONS.agents.label, n: counts.agents ?? 0, hash: '#/agents' },
-    { label: SECTIONS.memory.label, n: counts.memory ?? 0, hash: '#/section/memory' },
-    { label: SECTIONS.notebook.label, n: counts.notebook ?? 0, hash: '#/section/notebook' },
+    { label: SECTIONS.memory.label, n: counts.memory ?? 0, hash: '#/personal/memory' },
+    { label: SECTIONS.notebook.label, n: counts.notebook ?? 0, hash: '#/personal/notebook' },
     { label: SECTIONS.wiki.label, n: counts.wiki ?? 0, hash: '#/section/wiki' },
     { label: SECTIONS.config.label, n: counts.config ?? 0, hash: '#/section/config' },
   ]
@@ -105,16 +89,12 @@ function FreshlyGrown({ recent, buildEpoch }) {
   )
 }
 
-export default function JournalView({ overview, recent, lens, onDirection, dataRev }) {
+export default function JournalView({ overview, recent, lens, dataRev }) {
   const counts = overview?.counts || {}
   return (
     <>
-      <div className="head-row jr-head">
-        <div>
-          <div className="eyebrow">Field journal · {today()}</div>
-          <h2 className="h">Today in this harness</h2>
-          <VerdictBadge verdict={lens?.verdict} />
-        </div>
+      <div className="jr-head">
+        <VerdictBadge verdict={lens?.verdict} />
       </div>
 
       <div className="jr-row2">
@@ -131,20 +111,6 @@ export default function JournalView({ overview, recent, lens, onDirection, dataR
         </div>
         <ConstitutionMap overview={overview} dataRev={dataRev} />
       </div>
-
-      {/* The other two directions, kept reachable. They were a segmented control beside a
-          "Harness console" title this lens replaces; demoting them to a line is what buys
-          the journal its own header. */}
-      <p className="sub jr-others">
-        Other views:{' '}
-        <button className="jr-go" onClick={() => onDirection?.('lineage')}>
-          Lineage
-        </button>{' '}
-        ·{' '}
-        <button className="jr-go" onClick={() => onDirection?.('operator')}>
-          Operator
-        </button>
-      </p>
     </>
   )
 }

@@ -15,7 +15,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-import { GLOBAL_MANIFEST, isHostGlobalDir, resolvePath } from '../hosts/hosts.mjs';
+import { GLOBAL_MANIFEST, isGlobalInstall, resolvePath } from '../hosts/hosts.mjs';
 import { doctrinesForBuild, excludedRulesOfDir, readMaybe } from '../hosts/installs.mjs';
 import { frontmatter, readFacts } from '../hosts/memory-files.mjs';
 import {
@@ -172,7 +172,7 @@ export function inventoryFor(state) {
  */
 export function tierOf(state) {
   try {
-    if (!withDiscardableStderr(() => isHostGlobalDir(null, state.target))) return null;
+    if (!isGlobalInstall(null, state.target)) return null;
     const tier = sharedPaths();
     return isDir(tier.memory) || [tier.rules, tier.profile, tier.wiki].some(isFile) ? tier : null;
   } catch { return null; }
@@ -182,7 +182,7 @@ export function tierOf(state) {
  * Always `<target>/memory` (a global install: the tier's) — never the CWD-scanning resolver. The ONE
  * copy: `actions.mjs` and `user-files.mjs` delete and promote facts in the same directory this lists.
  */
-export const memoryDir = (state) => tierOf(state)?.memory ?? path.join(state.target, 'memory');
+export const memoryDir = (state, tier = tierOf(state)) => tier?.memory ?? path.join(state.target, 'memory');
 const notebookDir = (state) => path.join(state.target, 'notebook');
 
 /**
@@ -253,9 +253,7 @@ const WIKI_META = ['Wiki manifest', 'your machine-wide knowledge base(s)'];
 /** The two setup manifests, in listing order (the wiki under either of its names). */
 const CONFIG_META = {
   'context.json': ['Project context', 'what the agent loads for this project'],
-  'geneseed-wiki.jsonc': WIKI_META,
-  'wiki.jsonc': WIKI_META,
-  'wiki.json': WIKI_META,
+  ...Object.fromEntries(WIKI_NAMES.map((n) => [n, WIKI_META])),
 };
 
 /**

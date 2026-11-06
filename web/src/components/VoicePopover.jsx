@@ -8,7 +8,7 @@ import { installTag } from '../lib/hosts.js'
 // confirmed first (no danger tone: the rebuild is in place and destroys nothing). Each
 // voice is a real toggle button in a dialog, not a menu: it has no menu keyboard model.
 // Not the shared Popover: `.popover` is position:absolute, and this one is fixed (`.pop`).
-// It rebuilds ONE install: the `install` its own "Rebuild:" picker names (hidden with one
+// It rebuilds ONE install: the `install` its own picker names (hidden with one
 // install), and the confirm names it too. `ready` false (the install list not read yet) disables
 // every voice: a pick then would rebuild the default install, ignoring the remembered pick.
 export default function VoicePopover({
@@ -47,7 +47,7 @@ export default function VoicePopover({
       <div className="tick" style={{ padding: '4px 10px 8px' }}>
         Switch voice
       </div>
-      <InstallPicker installs={installs} value={install} onChange={onInstall} label="Rebuild:" />
+      <InstallPicker installs={installs} value={install} onChange={onInstall} />
       {themes.map((t) => (
         <button
           type="button"
@@ -59,7 +59,7 @@ export default function VoicePopover({
             onClose()
             if (
               await confirm(
-                `Rebuild ${install ? installTag(install) : 'the deployed harness'} in the “${t.name}” voice? It rebuilds in place, non-destructive.`,
+                `Rebuild ${install ? installTag(install) : 'the default install'} in the “${t.name}” voice? It rebuilds in place, non-destructive.`,
                 { title: 'Switch voice?', confirmLabel: 'Rebuild' },
               )
             )

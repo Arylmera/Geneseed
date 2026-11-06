@@ -12,7 +12,7 @@ export default function About({ page, overview }) {
     // The source's release label from /api/overview; null (unreadable config) shows a dash,
     // and no overview at all shows no row.
     ...(overview ? [['Version', overview.version]] : []),
-    ['Theme', page.theme],
+    ['Voice', page.theme],
     ['Install mode', page.emit],
     ['Deployed', page.deployed ? 'yes' : 'no'],
     ['Target', <code key="t">{page.target}</code>],

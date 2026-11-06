@@ -25,7 +25,7 @@ describe('Doctor', () => {
   it('renders summary card with validated themes and overall badge', async () => {
     render(<Doctor />)
     // summary line: lowercase mono "validated N themes"
-    await waitFor(() => expect(screen.getByText(/validated 2 themes/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/validated 2 voices/)).toBeTruthy())
     // badge per theme — raw lowercase (CSS textTransform: capitalize handles display)
     expect(screen.getByText('neutral')).toBeTruthy()
     expect(screen.getByText('imperial')).toBeTruthy()
@@ -67,10 +67,10 @@ describe('Doctor', () => {
   it('mounts on the cached verdict and re-runs fresh', async () => {
     api.doctor.mockClear()
     render(<Doctor />)
-    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Run doctor/)).toBeTruthy())
     expect(api.doctor).toHaveBeenCalledTimes(1)
     expect(api.doctor).toHaveBeenLastCalledWith(false, undefined)
-    fireEvent.click(screen.getByText(/Re-run checks/))
+    fireEvent.click(screen.getByText(/Run doctor/))
     await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(2))
     expect(api.doctor).toHaveBeenLastCalledWith(true, undefined)
   })
@@ -131,7 +131,7 @@ describe('Doctor', () => {
   // A finished job bumps dataRev; the page re-reads the cached verdict, never a fresh run.
   it('re-reads the cached verdict when dataRev changes', async () => {
     const { rerender } = render(<Doctor dataRev={1} />)
-    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Run doctor/)).toBeTruthy())
     api.doctor.mockClear()
     rerender(<Doctor dataRev={2} />)
     await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(1))
@@ -141,11 +141,11 @@ describe('Doctor', () => {
   // Re-run spends the fresh flag: the next dataRev read after it is the cached one again.
   it('reads cached after a fresh re-run when dataRev changes', async () => {
     const { rerender } = render(<Doctor dataRev={1} />)
-    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Run doctor/)).toBeTruthy())
     api.doctor.mockClear()
-    fireEvent.click(screen.getByText(/Re-run checks/))
+    fireEvent.click(screen.getByText(/Run doctor/))
     await waitFor(() => expect(api.doctor).toHaveBeenLastCalledWith(true, undefined))
-    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Run doctor/)).toBeTruthy())
     rerender(<Doctor dataRev={2} />)
     await waitFor(() => expect(api.doctor).toHaveBeenCalledTimes(2))
     expect(api.doctor).toHaveBeenLastCalledWith(false, undefined)
@@ -170,7 +170,7 @@ describe('Doctor', () => {
     try {
       api.doctor.mockClear()
       render(<Doctor />)
-      const pick = await screen.findByRole('combobox', { name: 'Doctor for:' })
+      const pick = await screen.findByRole('combobox', { name: 'Install' })
       expect([...pick.options].map((o) => o.textContent)).toEqual([
         'Claude Code · global',
         'OpenCode · global',
@@ -197,7 +197,7 @@ describe('Doctor', () => {
       api.doctor.mockClear()
       render(<Doctor />)
       await waitFor(() => expect(api.doctor).toHaveBeenLastCalledWith(false, undefined))
-      expect(await screen.findByText(/Re-run checks/)).toBeTruthy()
+      expect(await screen.findByText(/Run doctor/)).toBeTruthy()
     } finally {
       delete api.installs
     }
@@ -226,11 +226,11 @@ describe('Doctor', () => {
     }
   })
 
-  it('holds exactly one filled button, Re-run checks, once loaded', async () => {
+  it('holds exactly one filled button, Run doctor, once loaded', async () => {
     const { container } = render(<Doctor />)
-    await waitFor(() => expect(screen.getByText(/Re-run checks/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Run doctor/)).toBeTruthy())
     const filled = container.querySelectorAll('.btn:not(.ghost)')
     expect(filled).toHaveLength(1)
-    expect(filled[0].textContent).toMatch(/Re-run checks/)
+    expect(filled[0].textContent).toMatch(/Run doctor/)
   })
 })

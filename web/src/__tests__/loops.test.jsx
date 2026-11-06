@@ -860,7 +860,7 @@ describe('Loops — its own install picker', () => {
       ],
     }))
     const { rerender } = render(<Loops tab="templates" />)
-    const pick = await screen.findByRole('combobox', { name: 'Templates and bricks of:' })
+    const pick = await screen.findByRole('combobox', { name: 'Install' })
     await waitFor(() =>
       expect(api.loops).toHaveBeenLastCalledWith({ host: 'claude', path: '/repo' }),
     )
@@ -869,6 +869,6 @@ describe('Loops — its own install picker', () => {
       expect(api.loops).toHaveBeenLastCalledWith({ host: 'opencode', path: '/oc' }),
     )
     rerender(<Loops tab="active" />)
-    expect(screen.queryByRole('combobox', { name: 'Templates and bricks of:' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Install' })).toBeNull()
   })
 })

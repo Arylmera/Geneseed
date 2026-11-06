@@ -267,6 +267,11 @@ function KitMatrix({ kits, installs, stage }) {
           {kitsLocked(row) ? (
             <span className="kit-lock-note">{row.reason || row.error}</span>
           ) : null}
+          {Object.entries(row.keptKitFiles || {}).map(([k, files]) => (
+            <span className="mono dim" key={k}>
+              kept from inactive kit {k}: {files.join(', ')} — delete by hand
+            </span>
+          ))}
         </div>
       ),
     },
@@ -375,7 +380,7 @@ function StagedBar({ installs, stage }) {
 
 // `#/kits` is the gallery (a card per kit) over the kits × installs matrix, closed by the
 // staged-changes bar; `#/kits/<name>` is one kit's page: its rules, credits, members and one
-// switch per install. Both use the same staged-Apply flow as Installs / Kits.
+// switch per install. This page is the one home of the kit switches: both share one staged Apply.
 export default function Kits({ item, onAction, dataRev }) {
   const { data, error } = useAsync(() => api.kits(), [dataRev])
   const stage = useKitStaging(data, onAction)

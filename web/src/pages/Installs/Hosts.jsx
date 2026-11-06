@@ -62,13 +62,13 @@ function SyncCell({ inst, fleet, version, onEdits }) {
           label={`Sync with source of ${installName(inst)}`}
           parts={[
             { key: 'stale', label: 'behind source', n: stale, tone: 'warn' },
-            { key: 'edited', label: 'edited by hand', n: edits, tone: 'bad' },
+            { key: 'edited', label: 'local edits', n: edits, tone: 'bad' },
           ]}
         />
       ) : null}
       <span className="dim">{syncLine(fleet, version)}</span>
       {!fleet.diffable ? (
-        <span className="dim" title="Drift is only checked for global installs">
+        <span className="dim" title="Local edits are only checked for global installs">
           {' '}
           · not checkable
         </span>
@@ -244,7 +244,9 @@ function Checkout({ setup, overview }) {
     <section className="panel" aria-labelledby="checkout-h">
       <div className="panel-head">
         <h2 id="checkout-h">This checkout</h2>
-        <span className={`mono ${synced ? 't-good' : 't-warn'}`}>{setup.version_verdict}</span>
+        <span className={`mono ${synced ? 't-good' : 't-warn'}`}>
+          {synced ? 'in sync' : setup.version_verdict}
+        </span>
       </div>
       <dl className="kv-grid">
         <dt>Source</dt>
@@ -477,7 +479,7 @@ export default function Hosts({
       `Uninstall ${hostInfo(inst.host).label} · ${inst.scope}? It deletes ` +
         `${removeLayer(inst.host, inst.scope)}${where}${mem}. This can’t be undone.`,
       {
-        title: inst.scope === 'project' ? 'Remove this harness?' : 'Remove the global install?',
+        title: inst.scope === 'project' ? 'Remove this install?' : 'Remove the global install?',
         confirmLabel: memory === 'delete' ? 'Remove and delete memory' : 'Remove',
         tone: 'danger',
       },
@@ -604,7 +606,7 @@ export default function Hosts({
             <div>
               <h2 id="inst-project">Per-project installs</h2>
               <p className="dim">
-                A repo with its own harness. Inside it, only that harness loads.
+                A repo with its own install. Inside it, only that install loads.
               </p>
             </div>
             {onAction ? (
@@ -639,7 +641,7 @@ export default function Hosts({
             />
           ) : (
             <EmptyState>
-              No repo has its own harness yet. Deploy one to give a project its own rules and voice.
+              No repo has its own install yet. Deploy one to give a project its own rules and voice.
             </EmptyState>
           )}
         </section>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useSyncExternalStore } from 'react'
 import { api } from '../../api/index.js'
 import { useAsync } from '../../hooks/useAsync.js'
 import { useHarness, HARNESSES, docsHostOf } from '../../hooks/useHarness.js'
@@ -106,7 +106,21 @@ export function docRows(part) {
 // in the margin and Previous / Next within its section. The address is still `#/docs/<id>`,
 // so every cross-link, search hit and bookmark lands where it always did; a part is opened
 // through its first page.
+// The phone tier (styles.css, 720px), whose pane order differs. No matchMedia (jsdom): not a phone.
+const PHONE = '(max-width: 720px)'
+function usePhone() {
+  return useSyncExternalStore(
+    (notify) => {
+      const m = window.matchMedia?.(PHONE)
+      m?.addEventListener('change', notify)
+      return () => m?.removeEventListener('change', notify)
+    },
+    () => !!window.matchMedia?.(PHONE).matches,
+  )
+}
+
 export default function Docs({ page, overview, onAction }) {
+  const phone = usePhone()
   const [chosen, setHarness] = useHarness(docsHostOf(overview?.emit))
   // Every host's pages: the switch is shown only where it changes something, so a filter it set
   // elsewhere would hide a page with no way back to it.
@@ -183,123 +197,137 @@ export default function Docs({ page, overview, onAction }) {
 
   if (error) return <ErrorState error={error} />
 
+  const kindsPane = (
+    <aside key="kinds" className="lib-kinds" aria-label="Docs parts">
+      <div className="lib-title">
+        <p className="h">Docs</p>
+        <span className="dim">How it works, and how to use it</span>
+      </div>
+      {/* Host selector — filters the menu and per-page config to the chosen host (one
+        button per host in lib/hosts.js). Persists across reloads. Shown only on a page the
+        host changes (`varies`, js/web/docs.mjs): elsewhere it would switch nothing. */}
+      {place.page?.varies && offered.length > 1 ? (
+        <Seg aria-label="Host">
+          {offered.map((h) => (
+            <button
+              key={h.id}
+              className={harness === h.id ? 'on' : ''}
+              onClick={() => setHarness(h.id)}
+              aria-pressed={harness === h.id}
+            >
+              {h.label}
+            </button>
+          ))}
+        </Seg>
+      ) : null}
+      <nav className="kind-list" aria-label="Parts">
+        {(menu?.groups || []).map((g) => (
+          <React.Fragment key={g.id}>
+            <a
+              href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
+              className={part?.id === g.id ? 'on' : ''}
+              aria-current={part?.id === g.id ? 'page' : undefined}
+            >
+              {g.label}
+              <span className="mono dim">{g.pages.length}</span>
+            </a>
+            {/* The open part's sections, nested under it: they cut this part's list. */}
+            {part?.id === g.id && (
+              <RailCats
+                label="Sections"
+                total={rows.length}
+                cats={cats}
+                cat={sec}
+                onChange={setSec}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </nav>
+    </aside>
+  )
+  const listPane = (
+    <LibList
+      key="list"
+      label={part?.label || 'Docs'}
+      count={q.trim() ? `${shown.length} of ${pool.length}` : pool.length || ''}
+      extra={onTrack && <TrackProgress pages={part.pages} seen={seen} />}
+      q={q}
+      onQ={setQ}
+      matched={shown.length}
+      inView={[part?.id, pageId]}
+    >
+      {!menu ? (
+        <Loading label="Loading docs…" />
+      ) : (
+        <GroupedRows
+          rows={shown}
+          activeName={pageId}
+          hrefOf={(r) => docHref(r.name)}
+          pills={
+            onTrack
+              ? (r) =>
+                  seen.includes(r.name) && r.name !== pageId ? (
+                    // role="img" names the mark ", read" inside the row link's name: an
+                    // absolute .sr-only here escapes the list's overflow and stretches
+                    // the document.
+                    <span className="docs-read-mark" role="img" aria-label=", read">
+                      ✓
+                    </span>
+                  ) : null
+              : undefined
+          }
+        />
+      )}
+    </LibList>
+  )
+  // Folded above the article on a phone, first in the DOM too, like the reader before the nav.
+  const margin = !pageLoading && <Margin page={pageData} glossaryRows={glossary?.rows} />
+  const readerPane = (
+    // Named after the page, so the region does not announce "Page" on every page (DC-19).
+    <article
+      key="reader"
+      className="lib-reader docs-reader"
+      aria-label={place.page?.title || 'Page'}
+    >
+      <ReadProgress />
+      {place.page && (
+        <nav className="docs-crumbs mono" aria-label="Breadcrumb">
+          <a href={docHref(place.part.pages[0].id)}>{place.part.label}</a>
+          <span aria-hidden="true">›</span>
+          <a
+            href={docHref(
+              place.part.pages.find((p) => (p.section || 'General') === place.section).id,
+            )}
+          >
+            {place.section}
+          </a>
+          <span aria-hidden="true">›</span>
+          <span aria-current="page">{place.page.title}</span>
+        </nav>
+      )}
+      <div className="docs-read">
+        {phone ? margin : null}
+        <div className="docs-article">
+          <PageView
+            key={`${pageId}|${harness}`}
+            data={pageLoading ? null : pageData}
+            error={pageError}
+            overview={overview}
+            onAction={onAction}
+            place={place}
+          />
+          {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
+        </div>
+        {phone ? null : margin}
+      </div>
+    </article>
+  )
   return (
     <div className="docs-wrap">
       <div className="library docs-lib">
-        <aside className="lib-kinds" aria-label="Docs parts">
-          <div className="lib-title">
-            <p className="h">Docs</p>
-            <span className="dim">How it works, and how to use it</span>
-          </div>
-          {/* Host selector — filters the menu and per-page config to the chosen host (one
-            button per host in lib/hosts.js). Persists across reloads. Shown only on a page the
-            host changes (`varies`, js/web/docs.mjs): elsewhere it would switch nothing. */}
-          {place.page?.varies && offered.length > 1 ? (
-            <Seg aria-label="Harness">
-              {offered.map((h) => (
-                <button
-                  key={h.id}
-                  className={harness === h.id ? 'on' : ''}
-                  onClick={() => setHarness(h.id)}
-                  aria-pressed={harness === h.id}
-                >
-                  {h.label}
-                </button>
-              ))}
-            </Seg>
-          ) : null}
-          <nav className="kind-list" aria-label="Parts">
-            {(menu?.groups || []).map((g) => (
-              <React.Fragment key={g.id}>
-                <a
-                  href={g.pages[0] ? docHref(g.pages[0].id) : '#/docs'}
-                  className={part?.id === g.id ? 'on' : ''}
-                  aria-current={part?.id === g.id ? 'page' : undefined}
-                >
-                  {g.label}
-                  <span className="mono dim">{g.pages.length}</span>
-                </a>
-                {/* The open part's sections, nested under it: they cut this part's list. */}
-                {part?.id === g.id && (
-                  <RailCats
-                    label="Sections"
-                    total={rows.length}
-                    cats={cats}
-                    cat={sec}
-                    onChange={setSec}
-                  />
-                )}
-              </React.Fragment>
-            ))}
-          </nav>
-        </aside>
-
-        <LibList
-          label={part?.label || 'Docs'}
-          count={q.trim() ? `${shown.length} of ${pool.length}` : pool.length || ''}
-          extra={onTrack && <TrackProgress pages={part.pages} seen={seen} />}
-          q={q}
-          onQ={setQ}
-          matched={shown.length}
-          inView={[part?.id, pageId]}
-        >
-          {!menu ? (
-            <Loading label="Loading docs…" />
-          ) : (
-            <GroupedRows
-              rows={shown}
-              activeName={pageId}
-              hrefOf={(r) => docHref(r.name)}
-              pills={
-                onTrack
-                  ? (r) =>
-                      seen.includes(r.name) && r.name !== pageId ? (
-                        // role="img" names the mark ", read" inside the row link's name: an
-                        // absolute .sr-only here escapes the list's overflow and stretches
-                        // the document.
-                        <span className="docs-read-mark" role="img" aria-label=", read">
-                          ✓
-                        </span>
-                      ) : null
-                  : undefined
-              }
-            />
-          )}
-        </LibList>
-
-        {/* Named after the page, so the region does not announce "Page" on every page (DC-19). */}
-        <article className="lib-reader docs-reader" aria-label={place.page?.title || 'Page'}>
-          <ReadProgress />
-          {place.page && (
-            <nav className="docs-crumbs mono" aria-label="Breadcrumb">
-              <a href={docHref(place.part.pages[0].id)}>{place.part.label}</a>
-              <span aria-hidden="true">›</span>
-              <a
-                href={docHref(
-                  place.part.pages.find((p) => (p.section || 'General') === place.section).id,
-                )}
-              >
-                {place.section}
-              </a>
-              <span aria-hidden="true">›</span>
-              <span aria-current="page">{place.page.title}</span>
-            </nav>
-          )}
-          <div className="docs-read">
-            <div className="docs-article">
-              <PageView
-                key={`${pageId}|${harness}`}
-                data={pageLoading ? null : pageData}
-                error={pageError}
-                overview={overview}
-                onAction={onAction}
-                place={place}
-              />
-              {!pageLoading && <PageBar menu={menu} pageId={pageId} />}
-            </div>
-            {!pageLoading && <Margin page={pageData} glossaryRows={glossary?.rows} />}
-          </div>
-        </article>
+        {/* The panes are keyed, so a width change moves them and remounts nothing. */}
+        {phone ? [readerPane, kindsPane, listPane] : [kindsPane, listPane, readerPane]}
       </div>
     </div>
   )

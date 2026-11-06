@@ -217,7 +217,7 @@ describe('Installs / Hosts', () => {
 
   it('says so when no repo has its own harness', async () => {
     render(<Hosts onAction={() => {}} />)
-    expect(await screen.findByText(/No repo has its own harness yet/)).toBeTruthy()
+    expect(await screen.findByText(/No repo has its own install yet/)).toBeTruthy()
     expect(screen.queryByRole('table', { name: 'Per-project installs' })).toBeNull()
   })
 
@@ -305,6 +305,11 @@ describe('Installs / Hosts', () => {
     const fp = screen.getByLabelText('footprint for Claude Code · global')
     expect(fp.value).toBe('lean')
     expect([...fp.options].map((o) => o.value)).toEqual(['lean', 'full'])
+    // The panel is the footprint's one home: it says what the choice does, and follows it.
+    expect(within(panel()).getByText(/^Lean footprint/)).toBeTruthy()
+    fireEvent.change(fp, { target: { value: 'full' } })
+    expect(within(panel()).getByText(/^Full footprint/)).toBeTruthy()
+    fireEvent.change(fp, { target: { value: 'lean' } })
     fireEvent.click(screen.getByRole('button', { name: 'Install' }))
     await answered()
     // The table-row install's seven fields, plus the loop trust preset at its default.
@@ -462,7 +467,7 @@ describe('Installs / Hosts', () => {
     render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
     fireEvent.click(await screen.findByRole('button', { name: /deploy to a repo/i }))
     // Default host: the active install's (opencode here), and its note says what it adds.
-    const host = screen.getByLabelText('host for the new harness')
+    const host = screen.getByLabelText('host for the new install')
     expect(host.value).toBe('opencode')
     expect(document.querySelector('.dp-note code').textContent).toBe('.opencode/ + AGENT.md')
     fireEvent.change(host, { target: { value: 'claude' } })
@@ -489,7 +494,7 @@ describe('Installs / Hosts', () => {
     const onAction = vi.fn(async () => 'job-1')
     render(<Hosts onAction={onAction} currentTheme="imperial" themes={[{ name: 'imperial' }]} />)
     fireEvent.click(await screen.findByRole('button', { name: /deploy to a repo/i }))
-    const fp = screen.getByLabelText('footprint for the new harness')
+    const fp = screen.getByLabelText('footprint for the new install')
     expect(fp.value).toBe('lean')
     expect([...fp.options].map((o) => o.value)).toEqual(['lean', 'full'])
     fireEvent.change(fp, { target: { value: 'full' } })
@@ -905,7 +910,7 @@ describe('Installs / Hosts', () => {
   })
 
   // "Sync with source", from /api/fleet joined by id. The verdict gives the headline: behind
-  // names the source release and the stale files (one file is singular), in step is "In sync",
+  // names the source release and the stale files (one file is singular), synced is "In sync",
   // no marker is "Not checked". Hand edits (edited + added) are counted apart and never summed
   // into the stale count; a row with no drift check says "not checkable"; a row the fleet does not
   // list (not installed) says "—". A null release label reads "Behind source".
@@ -931,7 +936,7 @@ describe('Installs / Hosts', () => {
       return copy.textContent
     }
 
-    it('names each verdict in words, with hand edits apart from stale files', async () => {
+    it('names each verdict in words, with local edits apart from stale files', async () => {
       api.installs.mockResolvedValueOnce({
         installs: [
           ...four,
@@ -959,7 +964,7 @@ describe('Installs / Hosts', () => {
         screen
           .getByRole('img', { name: /Sync with source of OpenCode/ })
           .getAttribute('aria-label'),
-      ).toBe('Sync with source of OpenCode: behind source: 3 of 5, edited by hand: 2 of 5')
+      ).toBe('Sync with source of OpenCode: behind source: 3 of 5, local edits: 2 of 5')
     })
 
     it('a behind row with no drift figure and no release label still says it is behind', async () => {

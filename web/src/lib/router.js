@@ -14,6 +14,7 @@ export const PAGES = {
   installs: 'Installs',
   docs: 'Docs',
   activity: 'Activity',
+  settings: 'Settings',
 }
 
 // The pages that carry tabs, and their tab ids in display order. The first id is the
@@ -21,7 +22,7 @@ export const PAGES = {
 export const TABS = {
   loops: ['templates', 'bricks', 'active'],
   personal: ['rules', 'profile', 'memory', 'notebook'],
-  installs: ['hosts', 'kits', 'edits', 'doctor', 'server'],
+  installs: ['hosts', 'edits', 'doctor'],
 }
 export const TAB_LABELS = {
   templates: 'Templates',
@@ -32,10 +33,8 @@ export const TAB_LABELS = {
   memory: 'Memory',
   notebook: 'Notebook',
   hosts: 'Hosts',
-  kits: 'Kits',
   edits: 'Local edits',
   doctor: 'Doctor',
-  server: 'Server',
 }
 
 // Retired route names -> the [page, tab] that absorbed them. The console had fourteen flat
@@ -59,9 +58,11 @@ export const VIEW_ALIAS = {
   themes: ['installs', 'hosts'],
   diff: ['installs', 'edits'],
   doctor: ['installs', 'doctor'],
-  settings: ['installs', 'server'],
-  about: ['installs', 'server'],
+  about: ['settings'],
 }
+
+// Tabs of Installs that became pages: a link to one opens the page, not the first tab.
+const MOVED_TAB = { kits: 'kits', server: 'settings' }
 
 // The lookup tables are plain objects, and a hash is user input: `#/item/constructor/x`
 // must not resolve through Object.prototype.
@@ -93,6 +94,9 @@ export function resolveRoute(hash) {
   if (head === 'section' || head === 'item') {
     const section = head === 'item' && own(TYPE_TO_SECTION, a) ? TYPE_TO_SECTION[a] : a
     const item = head === 'item' ? dec(b) : undefined
+    // Memory and Notebook are Personal's tabs: every old Library address opens them there.
+    if (section === 'memory' || section === 'notebook')
+      return item ? { page: 'personal', tab: section, item } : { page: 'personal', tab: section }
     return { page: section === 'laws' ? 'laws' : 'library', section, item }
   }
   if (head === 'docs') return { page: 'docs', item: dec(parts.slice(1).join('/')) }
@@ -100,6 +104,7 @@ export function resolveRoute(hash) {
   if (head === 'activity' && a) return { page: 'activity', item: dec(a) }
   // Skills and Agents were pages of their own; each is now a kind in the Library.
   if (head === 'skills' || head === 'agents') return { page: 'library', section: head }
+  if (head === 'installs' && own(MOVED_TAB, a)) return { page: MOVED_TAB[a] }
   if (own(TABS, head)) {
     const tab = tabOf(head, a)
     return b && tab === a ? { page: head, tab, item: dec(b) } : { page: head, tab }

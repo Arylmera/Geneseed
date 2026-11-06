@@ -1167,7 +1167,7 @@ describe('Constitution page — the Gate asks card', () => {
     const [first, second] = document.querySelectorAll('.gate-row')
     // The bar is the row button's sibling in the same entry (a button may not hold a div).
     const bar = (row) => row.closest('li').querySelector('[role="img"]')
-    expect(first.textContent).toContain('process.1')
+    expect(first.textContent).toContain('Process rule 1')
     expect(first.querySelector('.off')).toBeNull()
     expect(bar(first).querySelector('.tone-warn')).toBeTruthy()
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
@@ -1177,8 +1177,8 @@ describe('Constitution page — the Gate asks card', () => {
     expect(bar(second).querySelector('.tone-warn')).toBeNull()
     expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
     // Each bar is named by its gate, so a reader can tell them apart; the count is against the
-    // busiest gate (135 asks). process.1 has no row in this fixture, so its address names it.
-    expect(bar(first).getAttribute('aria-label')).toBe('process.1 asks: 6 of 135')
+    // busiest gate (135 asks). process.1 has no row in this fixture, so a plain name stands in.
+    expect(bar(first).getAttribute('aria-label')).toBe('Process rule 1 asks: 6 of 135')
     expect(bar(second).getAttribute('aria-label')).toBe('Deletion Is Deliberate asks: 135 of 135')
     expect(first.querySelector('[role="img"]')).toBeNull()
   })
@@ -1351,7 +1351,7 @@ describe('Constitution page — the ladder layout', () => {
     expect(pills).toEqual(['always', 'yours', 'always', '3 excluded'])
     expect([...container.querySelectorAll('.ladder-low')].map((r) => r.textContent)).toEqual([
       'RANK 5 Mode — binds how work runs',
-      'RANK 6 Profile, posture, theme — inform only; never bind',
+      'RANK 6 Profile, posture, voice — inform only; never bind',
     ])
   })
 
@@ -1411,7 +1411,7 @@ describe('Constitution page — hostile or empty inputs', () => {
   })
 })
 
-// The page reads and rebuilds ONE install, picked beside it ("Constitution of:"), starting on the
+// The page reads and rebuilds ONE install, picked beside it ("Install:"), starting on the
 // default (App's overview). Another pick reads that install's own overview and catalog, and a
 // gate switch then rebuilds THAT install.
 describe('Constitution page — its own install picker', () => {
@@ -1458,7 +1458,7 @@ describe('Constitution page — its own install picker', () => {
     )
     const gate = () => container.querySelector('[aria-label="Deletion gate"]')
     await waitFor(() => expect(gate()).toBeTruthy())
-    fireEvent.change(screen.getByRole('combobox', { name: 'Constitution of:' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Install' }), {
       target: { value: 'cl' },
     })
     await waitFor(() => expect(landCl).toBeTypeOf('function'))
@@ -1475,7 +1475,7 @@ describe('Constitution page — its own install picker', () => {
     const { container } = render(
       <Laws overview={{ install: { ...INSTALL, deletionGate: true } }} onAction={onAction} />,
     )
-    const pick = await screen.findByRole('combobox', { name: 'Constitution of:' })
+    const pick = await screen.findByRole('combobox', { name: 'Install' })
     expect(pick.value).toBe('oc')
     fireEvent.change(pick, { target: { value: 'cl' } })
     await waitFor(() => expect(api.overview).toHaveBeenCalledWith({ host: 'claude', path: '/cl' }))

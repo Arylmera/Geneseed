@@ -75,7 +75,7 @@ describe('Dashboard', () => {
     )
     await waitFor(() => expect(screen.getByText('germination')).toBeTruthy())
     // The healthy fleet has answered, so the voice line stands beside its verdict.
-    await waitFor(() => expect(screen.getByText('Harness healthy.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Installs healthy.')).toBeTruthy())
     expect(screen.getByText('The Codex in force')).toBeTruthy() // headline
     expect(screen.getByText('The Codex in force.')).toBeTruthy() // sigil (trailing period)
     expect(screen.getAllByText('16').length).toBeGreaterThan(0) // agents KPI + genome
@@ -118,7 +118,7 @@ describe('Dashboard', () => {
         onAction={() => {}}
       />,
     )
-    await waitFor(() => expect(screen.getByText('Harness needs a look.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Installs need a look.')).toBeTruthy())
     expect(screen.getByText('Deployed')).toBeTruthy()
     expect(screen.queryByText('The Codex in force')).toBeNull()
     // The ring is capped by that verdict: a warn fleet withholds the version and disk
@@ -185,7 +185,7 @@ describe('Dashboard', () => {
     )
     fireEvent.click(screen.getByText('Lineage'))
     await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
-    fireEvent.click(screen.getByText('Operator'))
+    fireEvent.click(screen.getByText('Readout'))
     await waitFor(() => expect(screen.getByText(/entries total/)).toBeTruthy())
   })
 
@@ -201,7 +201,7 @@ describe('Dashboard', () => {
         layout={layout}
       />
     )
-    const { rerender } = render(at('cultivar'))
+    const { rerender } = render(at('genome'))
     fireEvent.click(screen.getByText('Lineage'))
     await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
     rerender(at('greenhouse'))

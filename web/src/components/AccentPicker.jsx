@@ -1,7 +1,7 @@
 import React from 'react'
 import { ACCENT_MODES, CUSTOM_ACCENTS, pickedHex } from '../hooks/useAccentMode.js'
 
-// The accent choice, shared by the Appearance popover and Installs / Server: Curated (the
+// The accent choice, in the Appearance popover: Curated (the
 // skin's own colour), the five fixed colours as swatches, and last a colour picker whose
 // swatch shows the picked colour once there is one.
 export default function AccentPicker({ value, onChange, labelledBy }) {

@@ -42,9 +42,11 @@ const TABLE = [
   ['#/personal/profile', { page: 'personal', tab: 'profile' }],
   ['#/personal/bogus', { page: 'personal', tab: 'rules' }],
   ['#/installs', { page: 'installs', tab: 'hosts' }],
-  ['#/installs/kits', { page: 'installs', tab: 'kits' }],
+  // Two tabs became pages: an old link opens the page, not the first tab.
+  ['#/installs/kits', { page: 'kits' }],
+  ['#/installs/kits/x', { page: 'kits' }],
   ['#/installs/edits', { page: 'installs', tab: 'edits' }],
-  ['#/installs/server', { page: 'installs', tab: 'server' }],
+  ['#/installs/server', { page: 'settings' }],
   // Personal's Memory and Notebook tabs carry an entry of their own, URI-decoded.
   ['#/personal/memory/a%20b', { page: 'personal', tab: 'memory', item: 'a b' }],
   // ...but an item under an unknown tab is dropped with the tab, not attached to rules.
@@ -61,13 +63,15 @@ const TABLE = [
   ['#/themes', { page: 'installs', tab: 'hosts' }],
   ['#/diff', { page: 'installs', tab: 'edits' }],
   ['#/doctor', { page: 'installs', tab: 'doctor' }],
-  ['#/settings', { page: 'installs', tab: 'server' }],
-  ['#/about', { page: 'installs', tab: 'server' }],
+  ['#/settings', { page: 'settings' }],
+  ['#/about', { page: 'settings' }],
   // Sections: the constitution has its own page; every other section is a Library kind.
   ['#/section/laws', { page: 'laws', section: 'laws' }],
   ['#/section/skills', { page: 'library', section: 'skills' }],
   ['#/section/agents', { page: 'library', section: 'agents' }],
-  ['#/section/memory', { page: 'library', section: 'memory' }],
+  // Memory and Notebook are Personal's tabs: an old Library address opens them there.
+  ['#/section/memory', { page: 'personal', tab: 'memory' }],
+  ['#/section/notebook', { page: 'personal', tab: 'notebook' }],
   ['#/section', { page: 'library' }],
   // Setup files are a kind of their own now; they no longer fold into the wiki.
   ['#/section/config', { page: 'library', section: 'config' }],
@@ -76,7 +80,8 @@ const TABLE = [
   ['#/item/law/process.5', { page: 'laws', section: 'laws', item: 'process.5' }],
   ['#/item/skill/tdd', { page: 'library', section: 'skills', item: 'tdd' }],
   ['#/item/agent/advocate', { page: 'library', section: 'agents', item: 'advocate' }],
-  ['#/item/memory/a%20b', { page: 'library', section: 'memory', item: 'a b' }],
+  ['#/item/memory/a%20b', { page: 'personal', tab: 'memory', item: 'a b' }],
+  ['#/item/notebook/n', { page: 'personal', tab: 'notebook', item: 'n' }],
   ['#/item/config/geneseed.jsonc', { page: 'library', section: 'config', item: 'geneseed.jsonc' }],
   ['#/item/wiki/x%2Fy', { page: 'library', section: 'wiki', item: 'x/y' }],
   // An unknown type still lands on Library (which falls back to its first kind).
@@ -118,7 +123,7 @@ describe('resolveRoute', () => {
 describe('PAGES', () => {
   // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
   // its route stays #/laws.
-  it('names the nine pages', () => {
+  it('names the ten pages', () => {
     expect(PAGES).toEqual({
       overview: 'Overview',
       laws: 'Constitution',
@@ -129,6 +134,7 @@ describe('PAGES', () => {
       installs: 'Installs',
       docs: 'Docs',
       activity: 'Activity',
+      settings: 'Settings',
     })
   })
 })

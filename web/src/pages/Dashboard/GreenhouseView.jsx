@@ -210,11 +210,7 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
                   : 'Checking…'}
             </h3>
             {doctorState === 'failed' && (
-              <button
-                className="btn ghost b-hero-retry"
-                aria-label="Run doctor again"
-                onClick={() => onAction('doctor')}
-              >
+              <button className="btn ghost b-hero-retry" onClick={() => onAction('doctor')}>
                 <Icon name="doctor" />
                 Run doctor
               </button>
@@ -283,7 +279,7 @@ export default function GreenhouseView({ overview, sigil, jobs, lens, onAction }
             color={B_CATS[2]}
             icon="law"
           />
-          <BTile label="Edits" value={edits} sub="to graft" color={B_CATS[3]} icon="changes" />
+          <BTile label="Local edits" value={edits} sub="files" color={B_CATS[3]} icon="changes" />
         </div>
       </div>
 

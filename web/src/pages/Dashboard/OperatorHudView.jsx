@@ -136,7 +136,7 @@ export default function OperatorHudView({ overview, jobs, lens }) {
     <div className="c-root">
       <div className="c-titlebar">
         <div>
-          <h2 className="c-h1">HARNESS // STATUS READOUT</h2>
+          <h2 className="c-h1">HARNESS // STATUS</h2>
           <div className="c-sub">{overview.target} · rendered from src/ · inherited everywhere</div>
           <VerdictBadge verdict={lens?.verdict} />
         </div>

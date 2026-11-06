@@ -113,6 +113,12 @@ export default function InstallPanel({
       {(active || absent) && canAct ? (
         <div className="ip-picks">
           <PickSelects value={choice} options={options} onChange={onPick} who={who} />
+          <p className="sub">
+            {choice.footprint === 'lean'
+              ? 'Lean footprint: terse rule lines and a pointer to the full file, about 40% smaller.'
+              : 'Full footprint: every rule’s complete text inline, the largest context.'}{' '}
+            Every rule stays in force. <a href="#/docs/footprint">Learn more →</a>
+          </p>
         </div>
       ) : null}
       {(active || absent) && canAct && inst.scope !== 'global' ? (

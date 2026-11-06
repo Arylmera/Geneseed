@@ -5,7 +5,7 @@
 import { driftTotal, relTime } from './format.js'
 import { hostInfo, installTag } from './hosts.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
-import { GATE_SWITCH, gateAddress, parseRuleTitle } from './constitution.js'
+import { gateFallback, gateAddress, parseRuleTitle } from './constitution.js'
 
 // Skills per class, split by lifecycle stage. `experimental` is the one stage the chart
 // calls out; every other status (approved, a personal skill with none) counts as settled.
@@ -54,9 +54,9 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
   if (drift) {
     out.push({
       id: 'drift',
-      tag: 'Drift',
+      tag: 'Local edits',
       tone: 'warn',
-      title: `${plural(drift, 'file')} drifted from the source`,
+      title: plural(drift, 'local edit'),
       detail: `${diff.edited} edited, ${diff.added} added, ${diff.missing} missing`,
       where: 'installs/edits',
       verb: 'Review',
@@ -93,14 +93,14 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
     const [gate, n] = asks[0]
     const addr = gateAddress(gate)
     const hit = (laws?.items || []).find((i) => i.name === addr)
-    const name = hit ? parseRuleTitle(hit.title).name : GATE_SWITCH[addr]?.label || addr
+    const name = hit ? parseRuleTitle(hit.title).name : gateFallback(addr)
     out.push({
       id: 'gates',
       tag: 'Gates',
       tone: '',
       title: `${name} asked ${plural(n, 'time')}`,
       detail: `${n} of ${setup.gates.total} gate asks`,
-      where: addr,
+      where: 'constitution',
       verb: 'Review',
       href: `#/item/law/${encodeURIComponent(addr)}`,
     })
@@ -133,7 +133,7 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
       detail: 'MEMORY.md is an empty index',
       where: 'library/memory',
       verb: 'Open',
-      href: '#/section/memory',
+      href: '#/personal/memory',
     })
   }
   if (activity && activity.enabled === false) {
@@ -180,10 +180,10 @@ export function fleetVerdict(fleet) {
   // No verdict yet (a cold daemon's doctor still running) vouches for nothing: neither good nor bad.
   const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : d ? 'good' : 'unknown'
   const head = {
-    good: 'Harness healthy.',
-    unknown: 'Checking the harness.',
-    warn: 'Harness needs a look.',
-    bad: 'Harness has problems.',
+    good: 'Installs healthy.',
+    unknown: 'Checking the installs.',
+    warn: 'Installs need a look.',
+    bad: 'Installs have problems.',
   }[tone]
   const facts = [
     plural(act.length, 'active install') + (disabled ? `, ${disabled} disabled` : ''),
@@ -192,8 +192,8 @@ export function fleetVerdict(fleet) {
       : d.ok
         ? 'doctor clean'
         : `doctor found ${plural(d.problems.length, 'problem')}`,
-    behind ? `${plural(behind, 'install')} behind source` : 'all in step with source',
-    edited ? `${plural(edited, 'file')} hand-edited` : 'no hand edits',
+    behind ? `${plural(behind, 'install')} behind source` : 'all in sync with source',
+    edited ? plural(edited, 'local edit') : 'no local edits',
   ]
   // Its own fact, only when there is one, so a fleet with nothing stale reads as before.
   if (stale) facts.push(`${plural(stale, 'file')} behind source`)
@@ -296,9 +296,9 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
     if (n) {
       out.push({
         id: `drift:${i.id}`,
-        tag: 'Drift',
+        tag: 'Local edits',
         tone: 'warn',
-        title: `${installLabel(i)}: ${plural(n, 'file')} edited by hand`,
+        title: `${installLabel(i)}: ${plural(n, 'local edit')}`,
         detail: `${i.drift.edited} edited, ${i.drift.added} added, ${i.drift.missing} missing`,
         where: 'installs/edits',
         verb: 'Review',
@@ -398,7 +398,7 @@ export function gateRows(gates, laws) {
         ? parseRuleTitle(hit.title).name
         : r.rule === 'wiki'
           ? 'Wiki guard'
-          : GATE_SWITCH[addr]?.label || addr,
+          : gateFallback(addr),
     }
   })
 }

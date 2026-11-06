@@ -11,7 +11,7 @@ import Settings from '../pages/Settings/index.jsx'
 import { api } from '../api/index.js'
 import { ConfirmContext } from '../hooks/useConfirm.jsx'
 
-// Sections are h3 under the page's one h2 (which is also "Server", the tab's name).
+// Sections are h3 under the page's one h1.
 const section = (name) => screen.getByRole('heading', { level: 3, name }).closest('section')
 
 describe('Settings', () => {
@@ -106,16 +106,16 @@ describe('Settings', () => {
 
   // The sheet's index lists the five sections in page order, and each entry is a button that
   // scrolls: a bare href="#server" would be read by the hash router as a page.
-  it('indexes its five sections with buttons, not hash links', () => {
+  it('indexes its four sections with buttons, not hash links', () => {
     render(<Settings onAction={() => {}} />)
     const nav = screen.getByRole('navigation', { name: 'On this page' })
     expect(
       within(nav)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Appearance', 'Machine', 'Server', 'About', 'Danger zone'])
+    ).toEqual(['Machine', 'Server', 'About', 'Danger zone'])
     expect(within(nav).queryAllByRole('link')).toEqual([])
-    for (const name of ['Appearance', 'Machine', 'Server', 'About', 'Danger zone'])
+    for (const name of ['Machine', 'Server', 'About', 'Danger zone'])
       expect(section(name)).toBeTruthy()
     const scrolled = vi.fn()
     section('Server').scrollIntoView = scrolled
@@ -140,33 +140,15 @@ describe('Settings', () => {
     expect(within(section('Machine')).queryByRole('button', { name: /Stop|Remove/ })).toBeNull()
   })
 
-  // The footprint is changed in ONE place, the install's own panel on Hosts (beside posture and
-  // mode, one confirm). Settings shows the PICKED install's footprint (its /api/installs row) and
-  // links there; it used to carry a second lean/full dial that rebuilt the same install.
-  const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' }
-  const CL = { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active' }
-  const withInstalls = (rows) => {
-    api.installs = vi.fn(async () => ({ installs: rows }))
-  }
-  it('shows the footprint read-only and links to Hosts to change it', async () => {
-    withInstalls([{ ...OC, default: true, footprint: 'full' }])
-    render(<Settings onAction={() => {}} />)
-    const row = (await screen.findByText('Harness footprint')).closest('.sheet-row')
-    expect(within(row).queryByRole('button')).toBeNull()
-    expect(row.textContent).toContain('full')
-    expect(
-      within(row)
-        .getByRole('link', { name: /Change it on Hosts/ })
-        .getAttribute('href'),
-    ).toBe('#/installs/hosts')
-  })
-
   const claudeOverview = { install: { host: 'claude', scope: 'global' }, footprint: 'lean' }
 
-  // The page is the Server tab (router.js TAB_LABELS.server), so its heading says so.
-  it('titles the view by its tab label, Server', () => {
+  // A rail page of its own (router.js PAGES.settings), so its one h1 says so.
+  it('titles the page Settings, and holds neither appearance nor an install picker', () => {
     render(<Settings onAction={() => {}} overview={claudeOverview} />)
-    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Server')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Settings')
+    expect(screen.queryByRole('group', { name: 'Skin' })).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByText(/footprint/i)).toBeNull()
   })
 
   it('holds exactly one filled button, Update', () => {
@@ -181,35 +163,6 @@ describe('Settings', () => {
     expect(
       screen.getByRole('button', { name: /Stop server/ }).classList.contains('danger-line'),
     ).toBe(true)
-  })
-
-  // The footprint row names the install's tool as the rest of the console does.
-  it('names the footprint install by its host label', async () => {
-    withInstalls([{ ...CL, default: true, footprint: 'lean' }])
-    render(<Settings onAction={() => {}} overview={claudeOverview} />)
-    const row = (await screen.findByText('Harness footprint')).closest('.sheet-row')
-    expect(row.textContent).toContain('Claude Code')
-    expect(row.textContent).not.toMatch(/\bclaude ·/)
-  })
-
-  // Two active installs: the head carries this tab's own picker, starting on the default, and
-  // the footprint row follows the pick (each row's own footprint), remembered for the tab.
-  it('picks the install the footprint row describes', async () => {
-    localStorage.clear()
-    withInstalls([
-      { ...OC, footprint: 'full' },
-      { ...CL, default: true, footprint: 'lean' },
-    ])
-    render(<Settings onAction={() => {}} />)
-    const pick = await screen.findByRole('combobox', { name: 'Footprint of:' })
-    const row = () => screen.getByText('Harness footprint').closest('.sheet-row')
-    expect(pick.value).toBe('cl')
-    expect(row().textContent).toContain('lean')
-    fireEvent.change(pick, { target: { value: 'oc' } })
-    expect(row().textContent).toContain('full')
-    expect(row().textContent).toContain('OpenCode')
-    expect(localStorage.getItem('geneseed-install-server')).toBe('oc')
-    localStorage.clear()
   })
 
   // The Server header names the process from /api/overview's `server`: its pid and how long it
@@ -253,26 +206,6 @@ describe('Settings', () => {
       'cross-site GET refused',
     ])
     expect(pills.every((p) => p.classList.contains('good'))).toBe(true)
-  })
-
-  // The skin is a segmented control like the Overview view: one button per FLAVOURS entry, in
-  // order, the active one pressed; the old preview tiles are gone.
-  it('picks the skin from a segmented control, one button per flavour', () => {
-    const onFlavour = vi.fn()
-    const { container } = render(
-      <Settings onAction={() => {}} flavour="cultivar" onFlavour={onFlavour} />,
-    )
-    const buttons = within(screen.getByRole('group', { name: 'Skin' })).getAllByRole('button')
-    expect(buttons.map((b) => b.textContent)).toEqual(['Cultivar', 'Operator', 'Matrix', 'Atlas'])
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual([
-      'true',
-      'false',
-      'false',
-      'false',
-    ])
-    fireEvent.click(buttons[2])
-    expect(onFlavour).toHaveBeenCalledWith('matrix')
-    expect(container.querySelector('.dir-tile')).toBeNull()
   })
 
   // The index shows the server's live state beside its entry: a good dot while the code matches

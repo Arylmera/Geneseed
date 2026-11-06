@@ -54,7 +54,7 @@ describe('skillsByStage', () => {
       rows: [
         { key: 'design', label: 'Design', ok: 1, exp: 0, n: 1 },
         { key: 'build', label: 'Build', ok: 1, exp: 2, n: 3 },
-        { key: 'personal', label: 'Personal', ok: 1, exp: 0, n: 1 },
+        { key: 'personal', label: 'Custom', ok: 1, exp: 0, n: 1 },
       ],
       total: 5,
       experimental: 2,
@@ -94,13 +94,7 @@ describe('needsAttention', () => {
         '[global] AGENT.md missing',
         '#/installs/doctor',
       ],
-      [
-        'Drift',
-        'warn',
-        '3 files drifted from the source',
-        '2 edited, 1 added, 0 missing',
-        '#/installs/edits',
-      ],
+      ['Local edits', 'warn', '3 local edits', '2 edited, 1 added, 0 missing', '#/installs/edits'],
       [
         'Profile',
         'warn',
@@ -125,7 +119,7 @@ describe('needsAttention', () => {
       ],
       // Most experimental class first: build 2, then harness 1.
       ['Skills', '', '3 skills still experimental', 'build 2, harness 1', '#/skills'],
-      ['Memory', '', 'Memory holds no facts', 'MEMORY.md is an empty index', '#/section/memory'],
+      ['Memory', '', 'Memory holds no facts', 'MEMORY.md is an empty index', '#/personal/memory'],
       ['Activity', '', 'Session tracking is off', 'no per-session trace is kept', '#/activity'],
     ])
   })
@@ -148,7 +142,7 @@ describe('needsAttention', () => {
   it('claims nothing it has not read', () => {
     expect(needsAttention({})).toEqual([])
     expect(needsAttention({ ...ALL, laws: null }).find((r) => r.tag === 'Gates').title).toBe(
-      'process.5 asked 4 times',
+      'Process rule 5 asked 4 times',
     )
   })
 
@@ -168,8 +162,8 @@ describe('needsAttention', () => {
 })
 
 // ---- the Ledger (/api/fleet, /api/usage, /api/gates) ----
-// One fleet that raises every per-install problem: opencode is behind and has 3 hand-edited
-// files, claude is in step and clean, a bob project cannot be drift-checked (drift null), and
+// One fleet that raises every per-install problem: opencode is behind and has 3 local
+// edits, claude is in sync and clean, a bob project cannot be drift-checked (drift null), and
 // openclaude is disabled. The clock is pinned so "built 6d ago" is a written-out value.
 const NOW = Date.parse('2026-10-13T12:00:00Z')
 const FLEET = {
@@ -215,15 +209,15 @@ const FLEET = {
 }
 
 describe('fleetVerdict', () => {
-  it('warns on a behind or hand-edited install and counts what it read', () => {
+  it('warns on a behind install or local edits and counts what it read', () => {
     expect(fleetVerdict(FLEET)).toEqual({
       tone: 'warn',
-      head: 'Harness needs a look.',
+      head: 'Installs need a look.',
       facts: [
         '3 active installs, 1 disabled',
         'doctor clean',
         '1 install behind source',
-        '3 files hand-edited',
+        '3 local edits',
       ],
     })
   })
@@ -236,13 +230,13 @@ describe('fleetVerdict', () => {
     const v = fleetVerdict({ installs: [], doctor: null })
     expect([v.tone, v.head, v.facts[1]]).toEqual([
       'unknown',
-      'Checking the harness.',
+      'Checking the installs.',
       'doctor still running',
     ])
   })
   // `stale` files are unedited ones the install's source has moved past: a rebuild updates
-  // them, so they read as "behind", never as hand edits.
-  it('says behind, not hand-edited, for an install whose only drift is stale', () => {
+  // them, so they read as "behind", never as local edits.
+  it('says behind, not local edits, for an install whose only drift is stale', () => {
     const one = {
       doctor: { ok: true, problems: [] },
       installs: [
@@ -251,12 +245,12 @@ describe('fleetVerdict', () => {
     }
     expect(fleetVerdict(one)).toEqual({
       tone: 'warn',
-      head: 'Harness needs a look.',
+      head: 'Installs need a look.',
       facts: [
         '1 active install',
         'doctor clean',
         '1 install behind source',
-        'no hand edits',
+        'no local edits',
         '4 files behind source',
       ],
     })
@@ -268,8 +262,8 @@ describe('fleetVerdict', () => {
     }
     expect(fleetVerdict(one)).toEqual({
       tone: 'good',
-      head: 'Harness healthy.',
-      facts: ['1 active install', 'doctor clean', 'all in step with source', 'no hand edits'],
+      head: 'Installs healthy.',
+      facts: ['1 active install', 'doctor clean', 'all in sync with source', 'no local edits'],
     })
   })
 })
@@ -454,9 +448,9 @@ describe('ledgerNeeds', () => {
       },
       {
         id: 'drift:oc',
-        tag: 'Drift',
+        tag: 'Local edits',
         tone: 'warn',
-        title: 'OpenCode · global: 3 files edited by hand',
+        title: 'OpenCode · global: 3 local edits',
         detail: '2 edited, 1 added, 0 missing',
         where: 'installs/edits',
         verb: 'Review',
@@ -468,7 +462,7 @@ describe('ledgerNeeds', () => {
     expect(rows.map((r) => r.id)).not.toContain('drift')
     expect(rows.slice(2).every((r) => r.sugg)).toBe(true)
   })
-  it('names stale files on the behind row and raises no hand-edit row for them', () => {
+  it('names stale files on the behind row and raises no local-edits row for them', () => {
     const fleet = {
       installs: [
         { ...FLEET.installs[0], drift: { edited: 0, added: 0, missing: 0, linked: 0, stale: 4 } },

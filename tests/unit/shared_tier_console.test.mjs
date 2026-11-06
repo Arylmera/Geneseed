@@ -12,6 +12,7 @@ import { cmdUninstall, installUninstall } from '../../js/maintain/uninstall.mjs'
 import { apiMemoryDelete } from '../../js/web/actions.mjs';
 import { apiFleet } from '../../js/web/api.mjs';
 import { apiCatalog, apiItem, configItems, memoryDir, memoryItems, tierOf } from '../../js/web/catalog.mjs';
+import { draftChoiceHead, draftRuleHead, parseDraft } from '../../js/hosts/memory-files.mjs';
 import { apiDocsPage } from '../../js/web/docs.mjs';
 import { webState } from '../../js/web/state.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
@@ -124,7 +125,19 @@ test('apiRules leaves out a draft block the ledger already decided', async () =>
     assert.deepEqual(titles(), ['Mine', 'Theirs: with a colon']);
     fs.writeFileSync(ledger, 'not json');
     assert.deepEqual(titles(), ['Mine', 'Choose: PROFILE.md', 'Theirs: with a colon']);
+    // Parsed but no ledger: the fold's reader refuses it, and the console shows every block.
+    fs.writeFileSync(ledger, '{"items": "x"}');
+    assert.deepEqual(titles(), ['Mine', 'Choose: PROFILE.md', 'Theirs: with a colon']);
   });
+});
+
+// The writer's headings and the reader share one home, so what the fold writes is what reads back.
+test('parseDraft reads the headings the fold writes', () => {
+  const text = `${draftRuleHead('bob', 'A: b')}\n(sha256: aa)\nStay.\n\n${draftChoiceHead('PROFILE.md')}\n(sha256: bb)\nWhich?\n`;
+  assert.deepEqual(parseDraft(text), [
+    { title: 'A: b', host: 'bob', key: 'aa', body: 'Stay.' },
+    { title: 'Choose: PROFILE.md', host: null, key: 'bb', body: '' },
+  ]);
 });
 
 // Each rule's cost is its own block, code points / 4; the file's total also holds the header. The

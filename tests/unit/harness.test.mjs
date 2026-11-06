@@ -23,7 +23,7 @@ import {
 } from '../../js/hosts/hooks-learn.mjs';
 import { tailReader } from '../../js/hosts/hooks-prims.mjs';
 import {
-  frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
+  factCount, frontmatter, existingSlugs, writeMemories, memoryDropIndex, appendAgentLesson, consolidateMemory,
   migrateMemoryIndex, readFacts,
 } from '../../js/hosts/memory-files.mjs';
 import { discoverContext, resolveContextSets } from '../../js/hosts/hooks-context.mjs';
@@ -34,7 +34,6 @@ import { themeParityProblems, renderedProblems, descriptionProblems } from '../.
 import {
   themesToCheck, globalEmitProblems, claudeBobEmitProblems,
 } from '../../js/inspect/doctor.mjs';
-import { memoryFactCount } from '../../js/inspect/status.mjs';
 import { stripSkillBodyLinks, agentDescription } from '../../js/hosts/native.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
@@ -1508,7 +1507,7 @@ test('a credit to an unknown upstream is flagged through the authoring gate', ()
 //
 // `_memory_facts` HAS NO SINGLE SUCCESSOR, and that is a split rather than a loss. It built one
 // record per fact — name, description, body — for the TUI's memory screen, and the port kept the
-// half each surviving caller needs: `memoryFactCount` (status, the number) and
+// half each surviving caller needs: `factCount` (status and the console, the number) and
 // `js/web/api.mjs`'s `memoryItems` (the console's list, gated by the 114 web cells). What is
 // asserted here is the part with no other owner: that the index really tracks the store.
 
@@ -1522,12 +1521,25 @@ test('the fact count sees the facts and skips the index and the readme', () => {
     fs.writeFileSync(path.join(d, 'b.md'),
       '---\nname: b\ndescription: beta\n---\nbody B', 'utf8');
     // Two facts — MEMORY.md and README.md are the store's furniture, not entries in it.
-    assert.equal(memoryFactCount(d), 2);
+    assert.equal(factCount(d), 2);
 
     memoryDropIndex(d, 'b');
     const index = fs.readFileSync(path.join(d, 'MEMORY.md'), 'utf8');
     assert.ok(!index.includes('(b.md)'), index);
     assert.ok(index.includes('(a.md)'), 'dropping one pointer removed the other too');
+  });
+});
+
+test('the fact count tells no folder from a folder it cannot list, and counts what the list shows', () => {
+  withDir((d) => {
+    // No store is no facts. A store path that is a file cannot be listed: that is "not read".
+    assert.equal(factCount(path.join(d, 'absent')), 0);
+    fs.writeFileSync(path.join(d, 'file'), 'x', 'utf8');
+    assert.equal(factCount(path.join(d, 'file')), null);
+    // A directory with a fact's name is no entry in the console's list, so it is none here.
+    fs.mkdirSync(path.join(d, 'notes.md'));
+    fs.writeFileSync(path.join(d, 'a.md'), 'a', 'utf8');
+    assert.equal(factCount(d), 1);
   });
 });
 
@@ -2061,17 +2073,18 @@ test('status survives a home directory it cannot read', () => {
   });
 });
 
-test('rebuild-all survives a home directory it cannot read', () => {
-  // B2's twin: the same bare `sharedPaths()`, reached after every install is rebuilt. It takes a
-  // real project install to get there: with no target the verb returns first.
+// B2's twin: the same bare `sharedPaths()`, reached after every install is rebuilt. It takes a real
+// project install to get there: with no target the verb returns first. A Claude-family project also
+// resolves the host's own config dir for `preambleExclude`, which asks the home directory too.
+for (const host of ['opencode', 'claude', 'openclaude']) test(`rebuild-all survives a home directory it cannot read: ${host}`, () => {
   withDir((d) => {
     const repo = path.join(d, 'repo');
     fs.mkdirSync(repo);
     const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
-    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', host,
       '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
     assert.equal(emit.status, 0, emit.stderr);
-    delete env.XDG_CONFIG_HOME;
+    for (const name of ['XDG_CONFIG_HOME', 'CLAUDE_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR']) delete env[name];
     const url = pathToFileURL(path.join(ROOT, 'js', 'build', 'generate.mjs')).href;
     const r = spawnSync(process.execPath, ['--input-type=module', '-e',
       `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
@@ -2080,6 +2093,31 @@ test('rebuild-all survives a home directory it cannot read', () => {
     { cwd: repo, encoding: 'utf8', env, windowsHide: true, maxBuffer: 1 << 26 });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /rebuilt 1 install/);
+  });
+});
+
+test('the migrate dry-run fold preview survives a home directory it cannot read', () => {
+  // The fold preview runs for a real install only, so it takes one to reach the bare `sharedPaths()`.
+  // The stamp ends the verb right after it: this pins the preview, not the rest of the dry run.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    env.GENESEED_HOME = path.join(d, 'stamp');
+    fs.mkdirSync(env.GENESEED_HOME);
+    fs.writeFileSync(path.join(env.GENESEED_HOME, '.migrated'), `${ROOT}\n`, 'utf8');
+    const url = pathToFileURL(path.join(ROOT, 'js', 'maintain', 'migrate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdMigrate } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = cmdMigrate({ dryRun: true });'],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /already on the npm shape/);
   });
 });
 

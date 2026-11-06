@@ -3,7 +3,7 @@ import { useConfirm } from './useConfirm.jsx'
 import { sortedKey, useStaging } from './useStaging.jsx'
 import { installTag } from '../lib/hosts.js'
 
-// The kits payload's rows, shared by Installs / Kits and the Kits page: toggling a kit only
+// The kits payload's rows, on the Kits page and a kit's own page: toggling a kit only
 // STAGES a set per install; apply() confirms, then rebuilds that install with exactly that
 // set (replace, not replay) through the 'install' job, so the result streams in the console
 // and the next fetch (dataRev) shows the row as it now is, kept-edited files included.

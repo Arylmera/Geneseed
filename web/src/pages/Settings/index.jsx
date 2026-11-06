@@ -1,17 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon.jsx'
 import { api } from '../../api/index.js'
-import { FLAVOURS } from '../../hooks/useFlavour.js'
-import { accentTagline } from '../../hooks/useAccentMode.js'
-import AccentPicker from '../../components/AccentPicker.jsx'
-import { LAYOUTS } from '../../hooks/useLayout.js'
 import { RestartServer, StopServer } from './ServerControl.jsx'
-import Seg from '../../components/Seg.jsx'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
-import { TAB_LABELS } from '../../lib/router.js'
-import { hostInfo, installName } from '../../lib/hosts.js'
-import InstallPicker from '../../components/InstallPicker.jsx'
-import { useInstallPick, useInstalls } from '../../hooks/useInstalls.js'
+import { installName } from '../../lib/hosts.js'
+import PageHeader from '../../components/PageHeader.jsx'
 import { relTime } from '../../lib/format.js'
 import { motionOK } from '../../lib/motion.js'
 
@@ -23,7 +16,6 @@ const CREATOR_URL = 'https://github.com/Arylmera'
 
 // The sheet's sections, in page order: the index is built from this, so the two never differ.
 const SECTIONS = [
-  ['appearance', 'Appearance'],
   ['machine', 'Machine'],
   ['server', 'Server'],
   ['about', 'About'],
@@ -61,7 +53,7 @@ function Section({ id, title, head, className = '', children }) {
 }
 
 // The index scrolls instead of linking: a bare href="#server" would be read by the hash router
-// as a page and leave the Installs view.
+// as a page and leave Settings.
 function SheetIndex({ stale }) {
   const go = (id) =>
     document
@@ -182,26 +174,12 @@ function AboutSection({ version }) {
   )
 }
 
-// The Server tab as a settings sheet: a section index beside rows of label | value | control.
-// Appearance is client-only and live; Machine acts on this copy and the install picked in the head; Server
-// describes the process answering the page; Danger zone holds what takes something away.
-// Per-install detail and building live on the Hosts tab and the Overview.
-export default function Settings({
-  overview,
-  onAction,
-  flavour,
-  onFlavour,
-  accentMode,
-  onAccentMode,
-  layout,
-  onLayout,
-  dataRev,
-}) {
+// The rail's Settings page, a sheet: a section index beside rows of label | value | control. It is
+// about the tool, never one install: Machine acts on this copy, Server describes the process
+// answering the page, Danger zone holds what takes something away. Skin and accent have their one
+// home in the topbar's Appearance popover; each install's detail and building live on Hosts.
+export default function Settings({ overview, onAction }) {
   const confirm = useConfirm()
-  // The install the footprint row describes: this tab's own pick, remembered (no console-wide one).
-  const active = useInstalls(dataRev)
-  const [install, pickInstall] = useInstallPick('server', active)
-  const footprint = install?.footprint
   const server = overview?.server
   const stale = overview?.daemon_stale
 
@@ -249,86 +227,11 @@ export default function Settings({
 
   return (
     <div className="narrow-lg">
-      <div className="head-row mb-18">
-        <div>
-          <h2 className="h">{TAB_LABELS.server}</h2>
-          <p className="sub">
-            Console appearance, this copy of Geneseed, the local server, and about. Each install is
-            managed on the Hosts tab.
-          </p>
-        </div>
-        <InstallPicker
-          installs={active}
-          value={install}
-          onChange={pickInstall}
-          label="Footprint of:"
-        />
-      </div>
+      <PageHeader title="Settings" sub="This copy of Geneseed and the local server." />
 
       <div className="sheet">
         <SheetIndex stale={stale} />
         <div className="sheet-body">
-          <Section id="appearance" title="Appearance">
-            {flavour && onFlavour && (
-              <Row
-                k={<span id="dir-skin-label">Skin</span>}
-                help="Colours and fonts of the console"
-              >
-                <Seg aria-labelledby="dir-skin-label">
-                  {FLAVOURS.map((f) => (
-                    <button
-                      key={f.id}
-                      className={flavour === f.id ? 'on' : ''}
-                      onClick={() => onFlavour(f.id)}
-                      aria-pressed={flavour === f.id}
-                      title={f.tagline}
-                    >
-                      {f.short}
-                    </button>
-                  ))}
-                </Seg>
-                <span className="dir-layout-note sub" role="status" aria-live="polite">
-                  {FLAVOURS.find((f) => f.id === flavour)?.tagline ?? ''}
-                </span>
-              </Row>
-            )}
-            {accentMode && onAccentMode && (
-              <Row k={<span id="dir-accent-label">Accent</span>} help="Live, saved in this browser">
-                <AccentPicker
-                  value={accentMode}
-                  onChange={onAccentMode}
-                  labelledBy="dir-accent-label"
-                />
-                <span className="dir-layout-note sub" role="status" aria-live="polite">
-                  {accentTagline(accentMode)}
-                </span>
-              </Row>
-            )}
-            {layout && onLayout && (
-              <Row
-                k={<span id="dir-layout-label">Overview view</span>}
-                help="The Overview, or one of the older dashboards"
-              >
-                <Seg aria-labelledby="dir-layout-label">
-                  {LAYOUTS.map((l) => (
-                    <button
-                      key={l.id}
-                      className={layout === l.id ? 'on' : ''}
-                      onClick={() => onLayout(l.id)}
-                      aria-pressed={layout === l.id}
-                      title={l.tagline}
-                    >
-                      {l.short}
-                    </button>
-                  ))}
-                </Seg>
-                <span className="dir-layout-note sub" role="status" aria-live="polite">
-                  {LAYOUTS.find((l) => l.id === layout)?.tagline ?? ''}
-                </span>
-              </Row>
-            )}
-          </Section>
-
           <Section id="machine" title="Machine">
             <Row
               k="Geneseed"
@@ -362,28 +265,6 @@ export default function Settings({
                 </button>
               }
             />
-            {/* How much of the Rules AGENT.md carries inline for the picked install. Read-only:
-                it is changed on the install's own panel in Hosts, the one footprint control
-                (a second dial here rebuilt the same install through a second confirm). */}
-            {install && footprint && (
-              <Row
-                k="Harness footprint"
-                help={
-                  <>
-                    For {hostInfo(install.host).label} · {install.scope}; every Rule stays in force.{' '}
-                    <a href="#/docs/footprint">Learn more →</a>
-                  </>
-                }
-                control={<a href="#/installs/hosts">Change it on Hosts →</a>}
-              >
-                <span className="mono">{footprint}</span>
-                <span className="dir-layout-note sub">
-                  {footprint === 'lean'
-                    ? 'Lean: terse rule lines + a pointer to the full law file (~40% smaller, lighter context per turn).'
-                    : 'Full: every Rule’s complete text and rationale inlined (maximum guidance, largest context).'}
-                </span>
-              </Row>
-            )}
           </Section>
 
           <Section
@@ -442,7 +323,7 @@ export default function Settings({
                 </button>
               }
             />
-            <Row k="Uninstall a harness">
+            <Row k="Uninstall">
               <span className="sub">
                 Each install has its own Uninstall in <a href="#/installs/hosts">Hosts</a>, bound to
                 its host and path.

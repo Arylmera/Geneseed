@@ -278,6 +278,25 @@ describe('Kits page', () => {
     })
   })
 
+  it('names "none" in the confirm when the last kit is switched off', async () => {
+    const { confirm } = await mount(
+      { kits: [kit('spring-boot')], installs: [row({ kits: ['spring-boot'] })] },
+      'spring-boot',
+    )
+    fireEvent.click(screen.getByRole('switch'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Apply kits for / })))
+    expect(confirm.mock.calls[0][0]).toContain('with kits: none?')
+  })
+
+  // The matrix is the kits' one home, so it carries what an inactive kit left behind.
+  it('names the files an inactive kit left, under their install', async () => {
+    await mount({
+      kits: [kit('spring-boot')],
+      installs: [row({ keptKitFiles: { 'spring-boot': ['agents/y.md'] } })],
+    })
+    expect(screen.getByText(/kept from inactive kit spring-boot: agents\/y\.md/)).toBeTruthy()
+  })
+
   it('a locked install cannot be switched and says why', async () => {
     await mount(
       {

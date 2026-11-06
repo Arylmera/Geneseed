@@ -5,7 +5,7 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { apiDefaultInstallSet, apiInstalls, apiKits } from '../../js/web/api.mjs';
+import { apiDefaultInstallSet, apiFleet, apiInstalls, apiKits } from '../../js/web/api.mjs';
 import { defaultView } from '../../js/web/state.mjs';
 import { statusData } from '../../js/inspect/status.mjs';
 import { sharedPaths } from '../../js/lib/machine-dir.mjs';
@@ -616,6 +616,21 @@ const withBothActive = (fn) => withTwoViews(({ st, oc, cl }) => {
   pickFile(); // the sandbox guard, before anything can write a pick
   for (const d of [oc, cl]) fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
   try { return fn({ st, oc, cl }); } finally { dropSandboxTier(); }
+});
+
+// C6: `shared` is on every install row, read off the tier. A global install reads it only once the
+// tier holds something; the fleet row says the same, because both spread one row base.
+test('an install row says whether it reads the shared tier, and a fleet row agrees', () => {
+  withBothActive(({ st }) => {
+    const rows = () => apiInstalls().installs.filter((r) => r.state === 'active');
+    assert.deepEqual(rows().map((r) => r.shared), [false, false], 'the control: no tier yet');
+    const { rules } = sharedPaths();
+    assert.ok(rules.startsWith(TMP_ROOT), `the tier is outside the sandbox: ${rules}`);
+    fs.mkdirSync(path.dirname(rules), { recursive: true });
+    fs.writeFileSync(rules, '# rules\n');
+    assert.deepEqual(rows().map((r) => r.shared), [true, true]);
+    assert.deepEqual(apiFleet(st).installs.map((r) => r.shared), [true, true]);
+  });
 });
 
 test('a chosen install beats the fleet order, in the console and in status', () => {

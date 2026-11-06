@@ -135,7 +135,7 @@ describe('Ledger: one primary action, every control named once', () => {
   })
 })
 
-// Two behind, one in step: every rebuild control must send exactly the installs it names.
+// Two behind, one in sync: every rebuild control must send exactly the installs it names.
 const MIXED = {
   installs: [install('claude', 'behind'), install('bob', 'synced'), install('opencode', 'behind')],
 }
@@ -258,7 +258,7 @@ describe('Overview: onboarding only for an empty fleet', () => {
     api.installs.mockResolvedValue({ installs: [row('disabled'), { ...row('active'), id: 'o' }] })
     api.fleet.mockResolvedValue(SYNCED)
     render(<Overview overview={notHere} themes={[]} onAction={() => {}} />)
-    await screen.findByRole('heading', { name: 'Installed harnesses' })
+    await screen.findByRole('heading', { name: 'Installs' })
     expect(screen.queryByText('Deploy your harness')).toBeNull()
   })
 
@@ -315,10 +315,10 @@ describe('Onboarding across a refetch', () => {
 })
 
 const lensMarker = {
-  cultivar: 'germination',
+  genome: 'germination',
   greenhouse: 'Capability mix',
-  operator: 'HARNESS // STATUS READOUT',
-  journal: 'Today in this harness',
+  hud: 'HARNESS // STATUS',
+  journal: 'Growth rings',
 }
 
 describe('Overview lenses: one h1, one primary action', () => {
@@ -336,10 +336,56 @@ describe('Overview lenses: one h1, one primary action', () => {
       await screen.findByText(/^Start$/)
       expect(document.querySelectorAll('h1').length).toBe(1)
       expect(filled().map(nameOf)).toEqual(['Rebuild'])
-      // `.pad:has(> .jr-head)` (styles.css) sizes the Journal page: the head stays a direct
-      // child of the page's own box, with the Overview header beside it, not around it.
+      // `.pad:has(.jr-head) .view-in` (styles.css) sizes the Journal page: the height runs from
+      // the page's own box through the sub-view wrapper to the head's map.
       if (lens === 'journal')
-        expect(container.querySelector('.jr-head').parentElement).toBe(container)
+        expect(container.querySelector('.jr-head').closest('.view-in').parentElement).toBe(
+          container,
+        )
+    })
+  }
+})
+
+// One header across the five views: the same title, the same count line, the same View control in
+// the same place. Every lens also keeps the three sub-views, the Journal included.
+describe('Overview: one stable header', () => {
+  // One disabled and one absent row: the line counts what is installed, on or off, as the rail
+  // does, whichever read feeds it (the Ledger the fleet, a lens the install list).
+  const OFF = { ...SYNCED.installs[0], id: 'off', state: 'disabled' }
+  const HEAD_LINE = `${SYNCED.installs.length + 1} installs on this machine`
+  const head = () => {
+    const h = document.querySelector('.page-head')
+    return [
+      h.querySelector('h1').textContent,
+      h.querySelector('.sub').textContent,
+      h.querySelector('[aria-label="View"]') !== null,
+    ]
+  }
+  for (const lens of ['overview', ...Object.keys(lensMarker)]) {
+    it(`${lens}`, async () => {
+      const fleet = { ...SYNCED, installs: [...SYNCED.installs, OFF] }
+      api.fleet.mockResolvedValue(fleet)
+      api.installs.mockResolvedValue({
+        installs: [...fleet.installs, { ...OFF, id: 'none', state: 'absent' }],
+      })
+      render(
+        <Overview
+          overview={overview}
+          themes={[]}
+          layout={lens}
+          onLayout={() => {}}
+          onAction={() => {}}
+        />,
+      )
+      await waitFor(() => expect(head()).toEqual(['Overview', HEAD_LINE, true]))
+      if (lens === 'overview') return
+      await screen.findByText(lensMarker[lens])
+      const subViews = within(screen.getByRole('group', { name: 'Dashboard view' }))
+      expect(subViews.getAllByRole('button').map((b) => b.textContent)).toEqual([
+        'Status',
+        'Lineage',
+        'Readout',
+      ])
     })
   }
 })

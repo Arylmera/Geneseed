@@ -53,7 +53,7 @@ const JOBS = Array.from({ length: 20 }, (_, i) => ({
   started: BASE + i * 60,
 }))
 
-const good = { tone: 'good', head: 'Harness healthy.', facts: [] }
+const good = { tone: 'good', head: 'Installs healthy.', facts: [] }
 const ok = (groups) => ({ state: 'ok', data: { groups } })
 const clean = (n) => Array.from({ length: n }, (_, i) => ({ label: `check ${i}`, problems: [] }))
 
@@ -189,11 +189,11 @@ describe('GreenhouseView', () => {
 
   it('shows the fleet verdict beside the headline', () => {
     greenhouse({
-      verdict: { tone: 'bad', head: 'Harness has problems.', facts: [] },
+      verdict: { tone: 'bad', head: 'Installs have problems.', facts: [] },
       tone: 'bad', // useLensData's headline tone, the verdict's here
       doctor: ok([]),
     })
-    expect(screen.getByText('Harness has problems.')).toBeTruthy()
+    expect(screen.getByText('Installs have problems.')).toBeTruthy()
     expect(screen.getByText('Deployed')).toBeTruthy()
   })
 })
@@ -216,7 +216,7 @@ describe('OperatorHudView', () => {
     expect(chip.textContent).toContain('3 s')
     expect(document.body.textContent).not.toContain('$ C:')
     expect([...document.querySelectorAll('[title]')].some((e) => e.title === CMD)).toBe(true)
-    expect(screen.getByText('Harness healthy.')).toBeTruthy()
+    expect(screen.getByText('Installs healthy.')).toBeTruthy()
   })
 
   it('names a doctor that did not answer', () => {
@@ -238,12 +238,12 @@ describe('JournalView', () => {
       <JournalView
         overview={overview}
         recent={null}
-        lens={{ verdict: { tone: 'warn', head: 'Harness needs a look.', facts: [] } }}
+        lens={{ verdict: { tone: 'warn', head: 'Installs need a look.', facts: [] } }}
         onAction={() => {}}
         dataRev={0}
       />,
     )
-    await waitFor(() => expect(screen.getByText('Harness needs a look.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Installs need a look.')).toBeTruthy())
   })
 
   const journal = () =>

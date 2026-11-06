@@ -16,6 +16,7 @@
  * else stays there, in force, until the user decides. A host `user-rules.draft.md` is not the
  * fold's at all (C18). Spawn-free, and it reaches neither `js/maintain` nor `js/web` (C20).
  */
+import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import {
   constants, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync,
@@ -26,12 +27,13 @@ import path from 'node:path';
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { LINE_BREAK, listDir, splitLines } from '../hosts/hooks-prims.mjs';
 import {
-  archiveStore, consolidateMemory, existingSlugs, indexNotes, MEMORY_SEED, parseRules,
+  archiveStore, consolidateMemory, draftChoiceHead, draftRuleHead, existingSlugs, indexNotes, MEMORY_SEED, parseRules,
+  readFoldState,
 } from '../hosts/memory-files.mjs';
 import { foldExcludes } from '../inspect/excludes.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { isDir, isFile, printErr, printOut, readText, writeTextAtomic } from '../lib/fs.mjs';
-import { isDict, jsonDumpsIndent } from '../lib/json.mjs';
+import { jsonDumpsIndent } from '../lib/json.mjs';
 import { LEGACY_WIKI_SEED, NOTES_DIRS, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase } from '../lib/paths.mjs';
 import {
@@ -295,25 +297,6 @@ function foldNotes(cfgDir, ctx) {
   }
 }
 
-/**
- * The ledger, or an empty one. One that holds nothing counts as empty and is written whole by the
- * next item, because a key set on `[]` never reaches the file and the item would be reported on
- * every emit. Anything else that is no ledger throws: treating it as empty would draft every
- * decided item again, and the failed step is what the user should see.
- */
-function readFoldState(shared) {
-  const blank = (v) => v === null || v === undefined || (Array.isArray(v) && !v.length);
-  if (!existsSync(shared.foldState)) return { version: 1, items: {} };
-  const text = readFileSync(shared.foldState, 'utf8');
-  const state = text.trim() ? JSON.parse(text) : null;
-  if (blank(state)) return { version: 1, items: {} };
-  if (!isDict(state) || !(blank(state.items) || isDict(state.items))) {
-    throw new Error(`${shared.foldState} is not a ledger`);
-  }
-  if (blank(state.items)) state.items = {};
-  return state;
-}
-
 const itemKey = (kind, host, bytes) => createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
 
 /**
@@ -335,7 +318,7 @@ function draftItem(kind, key, block, tally, { host, shared, dryRun, report }) {
 /** A pointer in the draft, never a copy (C9): each host's differing file gets its own decision. */
 function draftChoice(kind, hostFile, sharedFile, bytes, ctx) {
   const key = itemKey(kind, ctx.host, bytes);
-  draftItem(kind, key, `## Choose: ${path.basename(sharedFile)}\n`
+  draftItem(kind, key, `${draftChoiceHead(path.basename(sharedFile))}\n`
     + `(hosts: shared, ${ctx.host} | paths: ${sharedFile}, ${hostFile} | sha256: ${key})\n`
     + 'Which one becomes the shared file?\n', 'pending', ctx);
 }
@@ -427,7 +410,7 @@ function foldRules(cfgDir, ctx) {
   const { items } = readFoldState(shared);
   const raw = readFileSync(file);
   const text = raw.toString('utf8');
-  if (!raw.equals(Buffer.from(text))) {
+  if (!isUtf8(raw)) {
     report.notices.push(`${file} is not UTF-8, so its rules stay there and bind; save it as UTF-8 to fold them`);
     return;
   }
@@ -442,7 +425,7 @@ function foldRules(cfgDir, ctx) {
     if (live.has(key)) continue;
     live.add(key);
     const own = lines.slice(r.start + 1, r.end).join('\n').trim();
-    draftItem('rule', key, `## Rule from ${host}: ${r.title}\n(source: ${file} | old: R${r.id} | sha256: ${key})\n${own}\n`,
+    draftItem('rule', key, `${draftRuleHead(host, r.title)}\n(source: ${file} | old: R${r.id} | sha256: ${key})\n${own}\n`,
       'rules', ctx);
   }
   settleRules(live, ctx);

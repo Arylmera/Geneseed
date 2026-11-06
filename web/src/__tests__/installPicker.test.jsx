@@ -8,9 +8,9 @@ const OC = { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'a
 const R = { id: 'r', host: 'bob', scope: 'project', path: '/x/repo', state: 'active' }
 
 describe('InstallPicker', () => {
-  it('names each install by its tag, under its own label', () => {
-    render(<InstallPicker installs={[OC, R]} value={R} onChange={() => {}} label="Write to:" />)
-    const pick = screen.getByRole('combobox', { name: 'Write to:' })
+  it('names each install by its tag, under the one label', () => {
+    render(<InstallPicker installs={[OC, R]} value={R} onChange={() => {}} />)
+    const pick = screen.getByRole('combobox', { name: 'Install' })
     expect([pick.value, [...pick.options].map((o) => o.textContent)]).toEqual([
       'r',
       ['OpenCode · global', 'repo · BOB (IBM)'],
@@ -18,9 +18,7 @@ describe('InstallPicker', () => {
   })
 
   it('shows nothing with one install', () => {
-    const { container } = render(
-      <InstallPicker installs={[OC]} value={OC} onChange={() => {}} label="Write to:" />,
-    )
+    const { container } = render(<InstallPicker installs={[OC]} value={OC} onChange={() => {}} />)
     expect(container.innerHTML).toBe('')
   })
 })
