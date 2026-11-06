@@ -1,6 +1,6 @@
 import React from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeAll, describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The Overview's actions: exactly ONE filled (primary) button or link per loaded view, and on
 // the Ledger no two controls share an accessible name, so a screen reader hears "Rebuild
@@ -279,6 +279,25 @@ describe('Overview: onboarding only for an empty fleet', () => {
   })
 })
 
+// A deployed default install opens the Ledger at once, so its fetches do not queue behind
+// `/api/installs`; only a machine with nothing deployed waits to know it should onboard.
+describe('Overview before the install list is read', () => {
+  const never = new Promise(() => {})
+  it('a deployed install starts the Ledger', async () => {
+    api.installs.mockReturnValue(never)
+    api.fleet.mockResolvedValue(SYNCED)
+    render(<Overview overview={{ ...overview, deployed: true }} themes={[]} onAction={() => {}} />)
+    await waitFor(() => expect(api.fleet).toHaveBeenCalled())
+  })
+  it('an undeployed one waits, and does not onboard early', async () => {
+    api.installs.mockReturnValue(never)
+    render(<Overview overview={{ ...overview, deployed: false }} themes={[]} onAction={() => {}} />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(api.fleet).not.toHaveBeenCalled()
+    expect(screen.queryByText('Deploy your harness')).toBeNull()
+  })
+})
+
 const lensMarker = {
   cultivar: 'germination',
   greenhouse: 'Capability mix',
@@ -287,6 +306,10 @@ const lensMarker = {
 }
 
 describe('Overview lenses: one h1, one primary action', () => {
+  // The lenses are a lazy chunk. Loaded here, so the first case's 1 s `findByText` does not also
+  // pay for a cold import, which took longer than that under load.
+  beforeAll(() => import('../pages/Dashboard/index.jsx'))
+
   for (const lens of Object.keys(lensMarker)) {
     it(`${lens}`, async () => {
       api.fleet.mockResolvedValue(SYNCED)

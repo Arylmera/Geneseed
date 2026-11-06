@@ -58,6 +58,8 @@ jobs:
       # EVERY STEP AFTER `npm ci` RUNS ON `!cancelled()`, not the default `success()`: a lint
       # failure used to hide the typecheck, doctor and test verdicts behind it, so one red push
       # showed one finding and the next push showed the next. The job is still red.
+      # Lint and tsc stay COLD here: their caches live in node_modules/.cache, which CI never
+      # restores, so the flags in package.json speed up only a local run.
       - name: lint
         if: ${{ !cancelled() }}
         run: npm run lint

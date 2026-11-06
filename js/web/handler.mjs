@@ -208,7 +208,17 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     const st = (path.startsWith('/api/') && path !== '/api/ping' && !path.startsWith('/api/jobs')
       && !MACHINE_GETS.has(path)) ? installView(state, installParams(req.url)) : state;
     const route = STATE_ROUTES[path];
-    if (route !== undefined) return sendJson(res, route(st, req.url), 200, ae);
+    if (route !== undefined) {
+      const answer = route(st, req.url);
+      // Only `/api/doctor`, during the warm-up. A rejection here is past the handler's own catch.
+      if (answer instanceof Promise) {
+        return answer.then((a) => sendJson(res, a, 200, ae)).catch((e) => {
+          logFault(req, path, e);
+          sendJson(res, SERVER_FAULT, 500, ae);
+        });
+      }
+      return sendJson(res, answer, 200, ae);
+    }
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
     if (path === '/api/ping') {

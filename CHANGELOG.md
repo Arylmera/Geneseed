@@ -14,7 +14,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 - **The fold moves existing stores into the shared tier.** Each global emit in a host's own config directory copies facts, agent lessons, self-improvement notes and exclude paths into the tier, and moves a profile or wiki manifest there when the tier holds only a seed. It prints one line per host and nothing on a second run. A differing profile or wiki stays in force, with a pointer in `user-rules.draft.md`. A host rule with the same title and body as a shared rule merges; any other goes to the draft and stays in the host file, still binding, until the `rule` skill records your decision. Approve moves it to the shared file under a new number, reject keeps it on that host. Nothing is deleted: after every copy is read back, the old store moves to `archived-memory/<stamp>/`, and a failed copy keeps it readable until the next emit retries. A host installed after an `exclude add` now gets the repo-side wiring on its emit. A downgrade is not automatic: restore the archived store by hand.
 
-- **`migrate --dry-run` lists orphans.** It names the root `AGENT.md` and the folder of a retired or merged skill that an earlier build wrote and no manifest owns. It moves nothing.
+- **`migrate --dry-run` lists orphans.** It names the root `AGENT.md` and the folder of a retired or merged skill that no manifest owns, and says that such a folder may be yours. It moves nothing.
 - **The 24 remaining `experimental` entries are `approved`.** The status stays valid for a new entity.
 
 ### Removed
@@ -24,6 +24,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.
 
 ### Fixed
+- **A cold web console answers at once.** The doctor that warms the daemon now has its own thread, so a first Overview takes about a second where it took four or more, and the boot splash no longer stalls into Retry. Until the verdict lands the console says it is checking, then reads the fleet again.
+- **A warm Overview does less.** `/api/setup` counts the inventory once per source state, consumers that mount together share one fetch, and the Ledger starts without waiting for `/api/installs`. The Library loads its Markdown and agent glyphs on demand.
+- **The console renders an install's reference once.** One memo now serves the daemon and every per-install view, `/api/diff` reads it, and installs alike in host and every axis share a render.
 - **`setup` and `rebuild-all` are no longer refused for an npm install inside a git project with no commits.** The gate now asks whether Geneseed's own root is a checkout, and a repository with no commits has no pending record to honour.
 - **`geneseed migrate --dry-run` reports on a migrated machine.** It stopped at the stamp and printed nothing about what the next emit would do. It now prints the fold report for each global install.
 - **The web console finds a `wiki.json` manifest.** It stopped at `wiki.jsonc`, while the plugin and the guard also read the older name.

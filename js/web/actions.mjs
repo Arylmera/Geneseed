@@ -37,7 +37,7 @@ import { emitGlobalInto } from '../build/driver.mjs';
 import {
   ROOT, discoverNames, knownRuleIds, loadKits, PACK_ORDER,
 } from '../build/source.mjs';
-import { diffCollect, drifted, withStdoutSwallowed } from '../inspect/diff.mjs';
+import { diffCollect, drifted, renderMemo, withStdoutSwallowed } from '../inspect/diff.mjs';
 import { SESSION_FILES } from '../hosts/hooks-context.mjs';
 import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { installProfile, setupBuildArgs } from '../build/generate.mjs';
@@ -232,6 +232,8 @@ export function targetView(base, [host, scope, root]) {
     v = webState(null, target);
     v.selectView(target, root);
     v.pinned = true;
+    // The daemon's one memo: a render is keyed on what it read, not on who asked for it.
+    v.renderMemo = (base.renderMemo ??= renderMemo());
     v.refresh = base.refresh;
     v.daemonStale = () => base.daemonStale?.();
     v.jobBusy = () => base.jobBusy?.();

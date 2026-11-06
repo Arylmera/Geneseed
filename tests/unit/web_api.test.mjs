@@ -398,15 +398,51 @@ test('the doctor endpoint serves the cache, and re-runs only when fresh', () => 
   assert.deepEqual(st.doctor.problems, fresh.problems, 'the fresh run was not cached');
 });
 
-// `serve()` calls `warmDoctor` once it is listening; the run lands on the NEXT turn of the event
-// loop, never inside the call, so binding and the ready line are not held up by it.
-test('the warm-up fills the doctor cache after the current turn', async () => {
+// `serve()` calls `warmDoctor` once it is listening. The run is on its own thread, so the event
+// loop keeps turning for the whole of it and a cold daemon answers at once. Until it lands the
+// verdict is null (pending), never a guess; `/api/doctor`, which needs the groups, waits for it.
+// The interval is also what holds the loop open: the worker is unref'd.
+test('the warm-up fills the doctor cache without holding the event loop', async () => {
   const st = neutral();
-  warmDoctor(st);
-  assert.equal(st._doctor, null, 'the warm-up ran synchronously, inside the call');
-  await new Promise((r) => { setImmediate(r); });
-  assert.ok(st._doctor && Array.isArray(st._doctor.problems), 'the warm-up left the cache cold');
-  assert.ok(Array.isArray(st._doctorRun.groups) && st._doctorRun.groups.length > 0);
+  const start = performance.now();
+  const longest = { gap: 0, at: start };
+  const beat = setInterval(() => {
+    const now = performance.now();
+    longest.gap = Math.max(longest.gap, now - longest.at);
+    longest.at = now;
+  }, 20);
+  try {
+    const job = warmDoctor(st);
+    assert.equal(st.doctor, null, 'a pending verdict must read as pending');
+    assert.equal(warmDoctor(st), job, 'a second warm-up started another run');
+    const page = STATE_ROUTES['/api/doctor'](st, '/api/doctor');
+    assert.ok(page instanceof Promise, '/api/doctor answered without the run it needs');
+    const { groups, ok } = await page;
+    assert.ok(Array.isArray(groups) && groups.length > 0);
+    assert.equal(ok, st.doctor.ok);
+    assert.ok(Array.isArray(st._doctor.problems), 'the warm-up left the cache cold');
+    assert.equal(st._doctorJob, null);
+    // Relative, so a loaded machine cannot redden it: a loop the run held shows one gap as long
+    // as the whole run.
+    const took = performance.now() - start;
+    assert.ok(longest.gap < took / 2, `the event loop stalled ${longest.gap} ms of ${took}`);
+  } finally { clearInterval(beat); }
+});
+
+// A mutation that lands mid-run may have changed what the run read: its verdict is dropped, and
+// the next ask runs afresh. The planted run stands for that next ask.
+test('a refresh during the warm-up drops its verdict', async () => {
+  const st = neutral();
+  const beat = setInterval(() => {}, 50);
+  try {
+    const job = warmDoctor(st);
+    st.refresh();
+    assert.equal(st._doctorJob, null);
+    await job;
+    assert.equal(st._doctor, null, 'a run older than the mutation stamped its verdict');
+    st.runDoctor = () => st.stampDoctor(['planted']);
+    assert.deepEqual(st.doctor.problems, ['planted']);
+  } finally { clearInterval(beat); }
 });
 
 // THE DEFAULT INSTALL, e.g. ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The

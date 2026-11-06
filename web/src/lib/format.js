@@ -59,7 +59,8 @@ const READINESS_CAP = {
 // version in sync 20%, nothing missing on disk 15%.
 export function readiness(ov, setup, tone) {
   if (!ov) return 0
-  const problems = ov.doctor?.problems?.length ?? 99
+  // A null doctor is the warm-up still running: unknown, never a failed run.
+  const problems = ov.doctor?.problems?.length ?? (ov.doctor === null ? 0 : 99)
   const doctorScore = ov.doctor?.ok
     ? READINESS.doctorClean
     : problems <= READINESS.doctorMinorMax

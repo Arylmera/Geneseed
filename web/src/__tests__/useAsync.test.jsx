@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect } from 'vitest'
 
-import { useAsync } from '../hooks/useAsync.js'
+import { clearAsyncCache, dropAsyncKey, useAsync } from '../hooks/useAsync.js'
 
 // A promise the test settles by hand, so two fetches can land in either order.
 const deferred = () => {
@@ -30,6 +30,60 @@ const setup = (key = null) => {
   )
   return { ...hook, pending }
 }
+
+// Consumers that mount together (App, a page and its hooks all read `installs`) share one fetch;
+// only a mount joins, so `reload` still hits the network, and a write's `dropAsyncKey` leaves
+// nothing for the next mount to join.
+describe('useAsync, one fetch per key', () => {
+  beforeEach(clearAsyncCache)
+  const consumer = (fetches) =>
+    renderHook(() =>
+      useAsync(
+        () => {
+          const d = deferred()
+          fetches.push(d)
+          return d.promise
+        },
+        [],
+        'shared',
+      ),
+    )
+
+  it('two mounts share a fetch and both get its answer', async () => {
+    const fetches = []
+    const a = consumer(fetches)
+    const b = consumer(fetches)
+    expect(fetches.length).toBe(1)
+    await act(async () => fetches[0].resolve('answer'))
+    await waitFor(() => expect(a.result.current.data).toBe('answer'))
+    expect(b.result.current.data).toBe('answer')
+  })
+
+  it('a reload never joins the fetch under way', async () => {
+    const fetches = []
+    const a = consumer(fetches)
+    act(() => {
+      a.result.current.reload()
+    })
+    expect(fetches.length).toBe(2)
+  })
+
+  it('a dropped key leaves no fetch to join', () => {
+    const fetches = []
+    consumer(fetches)
+    dropAsyncKey('shared')
+    consumer(fetches)
+    expect(fetches.length).toBe(2)
+  })
+
+  it('a failed fetch is not joined by the next mount', async () => {
+    const fetches = []
+    consumer(fetches)
+    await act(async () => fetches[0].reject(new Error('no')))
+    consumer(fetches)
+    expect(fetches.length).toBe(2)
+  })
+})
 
 describe('useAsync', () => {
   // The deps moved from a to b; a's slow answer lands last and must not replace b's.

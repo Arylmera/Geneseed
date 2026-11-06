@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { lazy, Suspense, useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
 import { installTag } from '../lib/hosts.js'
@@ -8,7 +8,6 @@ import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from '../lib/lawCats.js'
 import { useAsync } from '../hooks/useAsync.js'
 import { dropRules } from '../hooks/useRules.js'
-import Markdown from '../components/Markdown.jsx'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
 import { GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
@@ -16,9 +15,12 @@ import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { useConfirm } from '../hooks/useConfirm.jsx'
-import AgentGlyph from '../components/AgentGlyph.jsx'
 import Seg from '../components/Seg.jsx'
 import Stat from '../components/Stat.jsx'
+
+// Lazy, each with its own boundary: marked waits for an opened item, the glyphs for an agent.
+const Markdown = lazy(() => import('../components/Markdown.jsx'))
+const AgentGlyph = lazy(() => import('../components/AgentGlyph.jsx'))
 
 // The usage ledger's kind for a Library section; only these two are counted.
 const USE_KIND = { skills: 'skill', agents: 'agent' }
@@ -656,7 +658,11 @@ export default function Library({
               <div className="reader-head">
                 <h2 className="reader-title">{title}</h2>
                 {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
-                {sec === 'agents' ? <AgentGlyph name={activeItem.name} /> : null}
+                {sec === 'agents' ? (
+                  <Suspense fallback={null}>
+                    <AgentGlyph name={activeItem.name} />
+                  </Suspense>
+                ) : null}
               </div>
               {/* The usage tiles sit beside the lede where the reader is wide enough, under it
                   where it is not (a container query on .lib-reader). The user asked for this
@@ -726,7 +732,9 @@ export default function Library({
                 )
               ) : item?.body ? (
                 <div className="lib-doc detail-doc">
-                  <Markdown body={head.body} links={item.links || []} />
+                  <Suspense fallback={null}>
+                    <Markdown body={head.body} links={item.links || []} />
+                  </Suspense>
                 </div>
               ) : item === null && activeName ? (
                 <p className="sub">Loading…</p>

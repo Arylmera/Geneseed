@@ -103,7 +103,7 @@ function Vitals({ overview, onOpenVoice, tag }) {
       <div>
         <span>doctor</span>
         <b className={!d ? '' : d.ok ? 'good' : 'bad'}>
-          {!d ? 'not run' : d.ok ? 'clean' : `${d.problems.length} to fix`}
+          {!d ? 'checking' : d.ok ? 'clean' : `${d.problems.length} to fix`}
         </b>
       </div>
       <div>

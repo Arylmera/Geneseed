@@ -13,9 +13,10 @@ import { reloadPage } from '../hooks/reloadPage.js'
 // than half a second, and App skips it entirely on warm same-session loads.
 //
 // The floor applies to the FIRST boot on this machine only. After that the
-// overview fetch is the only thing worth waiting for — it now returns well
-// under 550ms, so keeping the floor would be pure added latency on every fresh
-// tab, several times a day. The splash still plays; it just stops waiting on a
+// overview fetch is the only thing worth waiting for — it returns well under
+// 550ms warm and in about 2s cold (the daemon's warm-up doctor has its own thread),
+// so keeping the floor would be pure added latency on every fresh tab, several
+// times a day. The splash still plays; it just stops waiting on a
 // timer once it has introduced itself.
 const MIN_DISPLAY_MS = 550
 const SEEN_KEY = 'gs-splash-seen'

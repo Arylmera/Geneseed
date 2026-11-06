@@ -7,6 +7,7 @@
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
 import { CLAUDE_STYLE, HOSTS, opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -118,6 +119,8 @@ export function webState(theme = null, target = null) {
     // beside it rather than inside so `/api/overview` (fetched after every mutation) does not
     // carry every group.
     _doctorRun: null,
+    // The warm-up run still in flight, a promise settled when its thread ends (`warmDoctor`).
+    _doctorJob: null,
     // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
     // it re-renders on its own key change, so `refresh()` leaves it alone.
     renderMemo: null,
@@ -157,8 +160,10 @@ export function webState(theme = null, target = null) {
     },
   });
   Object.defineProperty(st, 'doctor', {
+    // NULL WHILE THE WARM-UP RUNS, and only then: a pending verdict, which the console draws as
+    // "checking" and asks again for. Blocking here would put the run back on the event loop.
     get() {
-      if (st._doctor === null) st.runDoctor();
+      if (st._doctor === null && st._doctorJob === null) st.runDoctor();
       return st._doctor;
     },
   });
@@ -169,6 +174,7 @@ export function webState(theme = null, target = null) {
     st.stampDoctor(problems, themes, groups);
   };
   st.stampDoctor = (problems, themes = [], groups = []) => {
+    st._doctorJob = null; // a run still in flight started earlier: this verdict is the newer one
     st._doctor = { ok: !problems.length, problems, checked_at: stampMinute(Date.now()) };
     st._doctorRun = { themes, groups };
   };
@@ -213,6 +219,7 @@ export function webState(theme = null, target = null) {
     readMarkers(host);
     st._inv = null;
     st._doctor = null;
+    st._doctorJob = null;
   };
   /** This state alone. `refresh` below is what callers use: it also reaches every view. */
   st.refreshOwn = ({ doctor = true } = {}) => {
@@ -223,7 +230,8 @@ export function webState(theme = null, target = null) {
     const def = doctor && !st.pinned ? defaultView() : null;
     if (def && !samePath(def[0], st.target)) { st.selectView(...def); return; }
     st._inv = null;
-    if (doctor) st._doctor = null;
+    // The job goes too: what it read may be what this mutation changed, so its answer is dropped.
+    if (doctor) { st._doctor = null; st._doctorJob = null; }
     st.emit = st.detectEmit() || st.emit;
     const host = hostOf();
     st.theme = themeOfDir(st.root, host) || themeOfDir(st.target, host) || st.theme;
@@ -241,14 +249,31 @@ export function webState(theme = null, target = null) {
 }
 
 /**
- * Run the doctor once in the background, right after the server binds, so the first
- * `/api/overview` finds a verdict instead of paying the ~3.6 s itself. Still synchronous once it
- * starts — the event loop is blocked for that run — so a request landing mid-run waits for it,
- * no longer than it would have. The catch is not optional: a throw inside `setImmediate` is
- * uncaught and would kill the daemon; a failed warm-up just leaves the cache cold.
+ * Run the doctor once right after the server binds, ON ITS OWN THREAD. On the event loop this run
+ * held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s. Until it
+ * lands `st.doctor` is null and `/api/doctor` waits on the promise this returns.
+ *
+ * A verdict is stamped only while its job is still the current one: `refresh`, `selectView` and a
+ * newer run all clear `_doctorJob`, and the daemon must not serve what a mutation made stale. A
+ * failed warm-up, like the old one, just leaves the cache cold: the next ask runs in line. The
+ * `error` listener is not optional, an unheard worker error is uncaught and kills the daemon.
+ * `unref`: a stopping daemon does not wait for it.
  */
 export function warmDoctor(st) {
-  setImmediate(() => {
-    try { if (st._doctor === null) st.runDoctor(); } catch { /* cold cache, computed on demand */ }
+  if (st._doctor !== null || st._doctorJob !== null) return st._doctorJob;
+  let worker;
+  try {
+    worker = new Worker(new URL('./doctor-worker.mjs', import.meta.url),
+      { workerData: { theme: st.theme } });
+  } catch { return null; }
+  worker.unref();
+  const job = new Promise((done) => {
+    worker.once('message', (r) => {
+      if (st._doctorJob === job) st.stampDoctor(r.problems, r.themes, r.groups);
+    });
+    worker.once('error', () => { /* cold cache, computed on demand */ });
+    worker.once('exit', () => { if (st._doctorJob === job) st._doctorJob = null; done(); });
   });
+  st._doctorJob = job;
+  return job;
 }

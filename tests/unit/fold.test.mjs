@@ -1176,6 +1176,8 @@ test('M5: migrate --dry-run lists an unowned AGENT.md and a retired skill folder
   assert.equal(lines.length, 2, r.stdout);
   assert.ok(lines.some((l) => l.includes(path.join(cfg, 'AGENT.md'))), r.stdout);
   assert.ok(lines.some((l) => l.includes(path.join(cfg, 'skills', 'tickets'))), r.stdout);
+  // An alias is a plain word: the folder may be the user's, so the report never says who wrote it.
+  for (const l of lines) assert.match(l, /may have written it, or it may be yours/);
   assert.equal(read(cfg, 'AGENT.md'), 'an old carrier\n', 'the report moved a file');
 }));
 

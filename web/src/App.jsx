@@ -108,8 +108,13 @@ export default function App() {
 
   const onError = (e) =>
     setToast({ kind: e?.body?.kind || 'err', msg: e?.body?.message || e.message })
-  const { overview, error: overviewError, themes, reload } = useOverview(onError)
   const [dataRev, setDataRev] = useState(0)
+  const {
+    overview,
+    error: overviewError,
+    themes,
+    reload,
+  } = useOverview(onError, () => setDataRev((v) => v + 1))
   // Soft refresh after a mutation: refetch the overview and bump a revision every panel
   // depends on. No full page reload, so nothing flashes.
   const refresh = () => {

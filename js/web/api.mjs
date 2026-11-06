@@ -89,15 +89,21 @@ const DOCTOR_COOLDOWN_MS = 3_000;
  * A fresh ask within `DOCTOR_COOLDOWN_MS` of the last one THIS PATH ran reuses that run, so a
  * page looping on `?fresh=1` cannot pin the event loop. `_doctorFreshAt` is written here only: a
  * verdict planted any other way still re-runs. No single-flight promise — `runDoctor` is
- * synchronous, so two fresh runs cannot overlap (revisit if it ever goes async).
+ * synchronous, so two fresh runs cannot overlap; only the warm-up is not (`warmDoctor`).
+ *
+ * This page needs the groups, so during the warm-up it answers with a promise of the verdict
+ * rather than a pending one: the request waits, the event loop does not.
  */
 export function apiDoctor(state, fresh = false) {
   if (fresh && Date.now() - (state._doctorFreshAt ?? 0) >= DOCTOR_COOLDOWN_MS) {
     state.runDoctor();
     state._doctorFreshAt = Date.now();
   }
-  const { ok, problems, checked_at } = state.doctor;
-  return { ...state._doctorRun, ok, problems, checked_at };
+  const answer = () => {
+    const { ok, problems, checked_at } = state.doctor;
+    return { ...state._doctorRun, ok, problems, checked_at };
+  };
+  return state._doctorJob === null ? answer() : state._doctorJob.then(answer);
 }
 
 /**
@@ -109,7 +115,7 @@ export function apiDoctor(state, fresh = false) {
  */
 export function apiDiff(state) {
   const { target, theme, files } = diffCollect({
-    target: state.target, theme: state.theme, emit: state.emit });
+    target: state.target, theme: state.theme, emit: state.emit, memo: memoOf(state) });
   return { deployed: deployed(state), diffable: files !== null, target, theme,
     files: files || [] };
 }

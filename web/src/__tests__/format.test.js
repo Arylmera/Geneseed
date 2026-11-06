@@ -35,6 +35,10 @@ describe('promptPath', () => {
 })
 
 describe('readiness', () => {
+  it('scores a doctor still running above a missing one', () => {
+    const ov = (doctor) => ({ deployed: true, doctor })
+    expect(readiness(ov(null))).toBeGreaterThan(readiness(ov(undefined)))
+  })
   it('is 0 without an overview', () => {
     expect(readiness(null)).toBe(0)
   })

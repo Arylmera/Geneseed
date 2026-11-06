@@ -178,14 +178,15 @@ export function fleetVerdict(fleet) {
   const d = fleet?.doctor
   const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : 'good'
   const head = {
-    good: 'Harness healthy.',
+    // No verdict yet (a cold daemon's doctor still running) vouches for nothing.
+    good: d ? 'Harness healthy.' : 'Checking the harness.',
     warn: 'Harness needs a look.',
     bad: 'Harness has problems.',
   }[tone]
   const facts = [
     plural(act.length, 'active install') + (disabled ? `, ${disabled} disabled` : ''),
     !d
-      ? 'doctor not run yet'
+      ? 'doctor still running'
       : d.ok
         ? 'doctor clean'
         : `doctor found ${plural(d.problems.length, 'problem')}`,

@@ -2761,6 +2761,43 @@ test('an edit in any of the four source roots reaches the fingerprint', () => {
   });
 });
 
+test('the inventory counts are shared until an input moves: the source, the theme, the doctrines, the config', () => {
+  // In a child on a COPY: the counts read the checkout they are imported from, and this test edits
+  // it. Identity is the proof of a hit, a count the proof of a miss. The copy is settled first, or
+  // no generation is shared and the first row would hold only by luck.
+  withDir((d) => {
+    copyCheckout(d);
+    settle(d);
+    const script = `
+      import fs from 'node:fs';
+      import path from 'node:path';
+      import { pathToFileURL } from 'node:url';
+      const root = process.argv[1];
+      const { inventoryCounts } = await import(pathToFileURL(path.join(root, 'js/inspect/status.mjs')).href);
+      const first = inventoryCounts('neutral');
+      const again = inventoryCounts('neutral');
+      const narrowed = inventoryCounts('neutral', ['craft']);
+      const other = inventoryCounts('imperial');
+      const config = path.join(root, 'harness.config.json');
+      fs.appendFileSync(config, '\\n');
+      const reconfigured = inventoryCounts('neutral');
+      fs.copyFileSync(path.join(root, 'src/agents/reviewer.md'), path.join(root, 'src/agents/zz-added.md'));
+      const edited = inventoryCounts('neutral');
+      console.log(JSON.stringify({ hit: first === again, packs: [first.packs, narrowed.packs],
+        themed: other !== first, reconfigured: reconfigured !== first, agents: [first.agents, edited.agents] }));
+    `;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', script, d],
+      { encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    const got = JSON.parse(r.stdout);
+    assert.equal(got.hit, true, 'an unchanged source counted again');
+    assert.ok(got.packs[1] < got.packs[0], 'the doctrines are not in the key');
+    assert.equal(got.themed, true, 'the theme is not in the key');
+    assert.equal(got.reconfigured, true, 'harness.config.json is not in the key');
+    assert.equal(got.agents[1], got.agents[0] + 1, 'a source edit served the old count');
+  });
+});
+
 test('a file deleted between the walk and its stat does not break the stamp', () => {
   // The web daemon stamps a live tree, and an editor's save can delete a file the walk just listed.
   withDir((d) => {

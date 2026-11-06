@@ -133,30 +133,19 @@ const posixRel = (rel) => rel.split('\\').join('/');
 /**
  * Render the `expected` tree for `host` at `axes` into a temp dir and SNAPSHOT it — every file,
  * not only the owned ones, because a rel the DEPLOYED manifest claims is looked up here too and
- * its presence decides "edited" against "added". The temp dir is gone before this returns.
- *
- * The one place a render depends on WHERE it is installed: a global Bob emit writes each
- * folder skill's absolute directory into its SKILL.md (see `writeNativeLayer`), so the
- * reference render names the temp tree. Mapped back to the deployed dir here, or every such
- * skill reads as edited. A deployment that has since MOVED still differs, and that is real
- * drift — its skills point at a directory that is no longer theirs. A side-file pointer (and a
- * global OpenCode command's) spells the same directory `/`-separated, so that spelling is
- * mapped too.
+ * its presence decides "edited" against "added". The temp dir is gone before this returns; `dir`
+ * is its name, which the texts still spell (`locatedAt`).
  */
-function renderExpected(host, axes, deployedDir) {
+function renderExpected(host, axes) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'geneseed-diff-'));
   try {
     const expected = path.join(tmp, 'expected');
     withStdoutSwallowed(() => emitGlobalInto(host, {
       ...axes, out: path.join(tmp, 'bundle'), cfgDir: expected,
     }));
-    const posix = (p) => p.split(path.sep).join('/');
     const texts = new Map();
-    for (const p of rglobFiles(expected)) {
-      texts.set(relPosix(expected, p), readText(p).split(expected).join(deployedDir)
-        .split(posix(expected)).join(posix(deployedDir)));
-    }
-    return { owned: ownedSet(expected), texts };
+    for (const p of rglobFiles(expected)) texts.set(relPosix(expected, p), readText(p));
+    return { dir: expected, owned: ownedSet(expected), texts };
   } finally {
     // `tempfile.TemporaryDirectory()`'s cleanup, which runs on the exception path too.
     rmSync(tmp, { recursive: true, force: true });
@@ -164,40 +153,60 @@ function renderExpected(host, axes, deployedDir) {
 }
 
 /**
+ * A render, as it reads at `deployedDir`. The one place a render depends on WHERE it is installed:
+ * a global Bob emit writes each folder skill's absolute directory into its SKILL.md (see
+ * `writeNativeLayer`), so the reference render names the temp tree. Mapped back to the deployed
+ * dir here, or every such skill reads as edited. A deployment that has since MOVED still differs,
+ * and that is real drift — its skills point at a directory that is no longer theirs. A side-file
+ * pointer (and a global OpenCode command's) spells the same directory `/`-separated, so that
+ * spelling is mapped too. Apart from the render, so one render serves every install it fits.
+ */
+function locatedAt({ dir, owned, texts }, deployedDir) {
+  const posix = (p) => p.split(path.sep).join('/');
+  const located = new Map();
+  for (const [rel, text] of texts) {
+    located.set(rel, text.split(dir).join(deployedDir).split(posix(dir)).join(posix(deployedDir)));
+  }
+  return { owned, texts: located };
+}
+
+/**
  * A memo for `diffCollect`'s `expected` render — opt-in, so `geneseed diff` and every other
- * caller still renders afresh. The web console passes one: `/api/overview` and `/api/fleet`
- * both diff the selected install on every refresh, and the render is ~0.6 s of each.
+ * caller still renders afresh. The web console passes one: `/api/overview`, `/api/fleet` and
+ * `/api/diff` all diff an install, and the render is ~0.6 s of each. One memo serves the daemon's
+ * state and every per-install view.
  *
  * ONLY THE RENDER IS MEMOISED, NEVER THE RESULT: the compare against the deployed tree runs on
  * every call, because catching a hand edit there is the whole point of the drift figure.
- * One entry per deployed dir, at most `cap` of them (least recently used goes first); `renders`
- * counts real renders, for the tests.
+ * One entry per key, so installs alike in host and every axis share a render; at most `cap` of
+ * them (least recently used goes first), above one global install per host with room for a
+ * `--config-dir` or two; `renders` counts real renders, for the tests.
  */
-export function renderMemo(cap = 4) {
+export function renderMemo(cap = 8) {
   return { cap, renders: 0, entries: new Map() };
 }
 
 /**
  * The memoised `renderExpected`. The key is everything the render reads: the source
  * fingerprint, the two render inputs it does not hash (`harness.config.json` and the
- * orchestrator agent), the host and every axis. A deployed dir whose key changed is
- * re-rendered in place, and a fingerprint change drops every entry from the old source.
+ * orchestrator agent), the host and every axis, and never the deployed dir: `renderExpected` is
+ * not told it. A fingerprint change drops every entry from the old source.
  */
-function memoExpected(memo, host, axes, deployedDir, sourceFp) {
+function memoExpected(memo, host, axes, sourceFp) {
   const fp = sourceFp ?? sourceFingerprint(makeCfg());
   const extra = createHash('sha256');
   for (const p of [CONFIG, PRIMARY_AGENT_SRC]) extra.update(`${readMaybe(p) ?? ''}\0`);
   const key = JSON.stringify([fp, extra.digest('hex'), host, axes]);
-  const hit = memo.entries.get(deployedDir);
-  memo.entries.delete(deployedDir);
-  if (hit && hit.key === key) {
-    memo.entries.set(deployedDir, hit);
+  const hit = memo.entries.get(key);
+  if (hit) {
+    memo.entries.delete(key);
+    memo.entries.set(key, hit);
     return hit.exp;
   }
-  for (const [d, e] of memo.entries) if (e.fp !== fp) memo.entries.delete(d);
-  const exp = renderExpected(host, axes, deployedDir);
+  for (const [k, e] of memo.entries) if (e.fp !== fp) memo.entries.delete(k);
+  const exp = renderExpected(host, axes);
   memo.renders += 1;
-  memo.entries.set(deployedDir, { key, fp, exp });
+  memo.entries.set(key, { fp, exp });
   while (memo.entries.size > memo.cap) memo.entries.delete(memo.entries.keys().next().value);
   return exp;
 }
@@ -276,9 +285,8 @@ export function diffCollect({
     sharedRoot: renderedTier(dir, host).root,
   };
   const deployedDir = resolvePath(dir);
-  const exp = memo
-    ? memoExpected(memo, host, axes, deployedDir, sourceFp)
-    : renderExpected(host, axes, deployedDir);
+  const exp = locatedAt(memo ? memoExpected(memo, host, axes, sourceFp) : renderExpected(host, axes),
+    deployedDir);
 
   // The deployed manifest, read once: its `owned` and its `hashes` both classify below.
   const manifest = readJsonMaybe(path.join(dir, GLOBAL_MANIFEST));

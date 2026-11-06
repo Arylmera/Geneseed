@@ -224,6 +224,15 @@ describe('fleetVerdict', () => {
     const v = fleetVerdict({ ...FLEET, doctor: { ok: false, problems: ['x', 'y'] } })
     expect([v.tone, v.facts[1]]).toEqual(['bad', 'doctor found 2 problems'])
   })
+  // A cold daemon's fleet answers before its doctor: nothing vouches for the harness yet.
+  it('claims no health while the doctor is still running', () => {
+    const v = fleetVerdict({ installs: [], doctor: null })
+    expect([v.tone, v.head, v.facts[1]]).toEqual([
+      'good',
+      'Checking the harness.',
+      'doctor still running',
+    ])
+  })
   // `stale` files are unedited ones the install's source has moved past: a rebuild updates
   // them, so they read as "behind", never as hand edits.
   it('says behind, not hand-edited, for an install whose only drift is stale', () => {

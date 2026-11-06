@@ -60,6 +60,7 @@ import path from 'node:path';
 
 import { GATE_SWITCHES, THEMES, ROOT, loadKits, makeCfg } from '../build/source.mjs';
 import { tuiInventory } from './inventory.mjs';
+import { sourceGeneration } from '../build/render.mjs';
 import { readVersion, sourceFingerprint } from '../build/version.mjs';
 import {
   claudeConfigDir, bobConfigDir, openclaudeConfigDir, opencodeConfigDir, opencodeShadowedInstall,
@@ -130,10 +131,18 @@ export function cmdVersion(args) {
  * it, and the eleven `status` cells and the catalog cells now gate the same classifier
  * from opposite ends.
  */
-export function inventoryCounts(themeName, doctrines = null) {
+export function inventoryCounts(themeName, doctrines = null, cfg = makeCfg()) {
+  // Counted once per source generation (render.mjs says how the stamp sees an edit), because the
+  // console's `/api/setup` asks after every page load. The key is every other input of the count;
+  // `harness.config.json` is rendered from and sits outside the stamp.
+  const generation = sourceGeneration(cfg);
+  generation.counts ??= new Map();
+  const key = JSON.stringify([themeName, doctrines, readMaybe(cfg.config)]);
+  const known = generation.counts.get(key);
+  if (known) return known;
   const inv = tuiInventory(themeName, doctrines);
   const on = inv.doctrines.filter((p) => p.active);
-  return {
+  const counts = {
     agents: inv.agents.length,
     skills: inv.skills.length,
     laws: inv.laws.length,
@@ -148,6 +157,8 @@ export function inventoryCounts(themeName, doctrines = null) {
     packsTotal: inv.doctrines.length,
     doctrineRules: on.reduce((n, p) => n + p.rules.length, 0),
   };
+  generation.counts.set(key, counts);
+  return counts;
 }
 
 /**
@@ -294,10 +305,11 @@ export function statusData() {
   // `inst.doctrines` is what the machine's carriers say — `null` when none of them does, which
   // `tuiInventory` reads as every pack, the same resolution `doctrinesForBuild` gives unknown.
   // This is a DISPLAY read: nothing here decides what a build emits.
-  const inv = inventoryCounts(theme, inst.doctrines);
+  const cfg = makeCfg();
+  const inv = inventoryCounts(theme, inst.doctrines, cfg);
   let cfgDir = null;
   try { cfgDir = opencodeConfigDir(); } catch { cfgDir = null; }
-  const sourceFp = sourceFingerprint(makeCfg());
+  const sourceFp = sourceFingerprint(cfg);
   let installedFp = null;
   let verTarget = null;
   const otherCfg = [];

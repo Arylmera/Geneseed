@@ -123,9 +123,10 @@ function foldPreview(rows) {
 }
 
 /**
- * M5 — files an earlier build wrote that no manifest owns, so no emit will ever prune them: the
- * root `AGENT.md` and the folder of a skill that no longer ships under its own name. REPORTED,
- * never moved: they go aside on the user's word.
+ * M5 — files no manifest owns, so no emit will ever prune them: the root `AGENT.md` and the folder
+ * of a skill that no longer ships under its own name. An earlier build likely wrote them, but an
+ * alias is a plain word and a folder under it may be the user's own, so nothing claims which.
+ * REPORTED, never moved: they go aside on the user's word.
  *
  * The candidate names come from what git history already settled and the source still records —
  * `RETIRED_SKILL_IDS` and the `aliases:` markers — because the CLI may not spawn `git`. Each
@@ -146,7 +147,7 @@ function orphanPreview(rows) {
     if (scope !== 'global' || !CLAUDE_STYLE.includes(host) || !isCanonical(root, host)) continue;
     const owned = claudeReadManifest(root).owned;
     for (const p of orphanFindings(root, Array.isArray(owned) ? owned : [])) {
-      printOut(`[migrate] orphan: ${p} (an earlier build wrote it; no manifest owns it). It moves aside on your word.\n`);
+      printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). It moves aside on your word.\n`);
     }
   }
 }
