@@ -203,7 +203,7 @@ export const STATE_ROUTES = {
   '/api/doctor': (state, url) => apiDoctor(state,
     new URL(url || '', 'http://x').searchParams.has('fresh')),
   '/api/installs': apiInstalls,
-  '/api/fleet': apiFleet,
+  '/api/fleet': (state) => apiFleet(state),
   '/api/kits': apiKits,
   '/api/update': apiUpdate,
   '/api/usage': apiUsage,

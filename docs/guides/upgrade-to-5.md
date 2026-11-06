@@ -54,13 +54,19 @@ geneseed rebuild-all     # from npm
 geneseed upgrade         # from a clone
 ```
 
+Between the install and the end of the rebuild:
+
+- Hooks and running sessions stay safe. They read the host files until the rebuild moves them.
+- Do not use the web console until the rebuild ends.
+- The first `geneseed upgrade` from 4.x still runs the old doctor gate, which can take up to 300 seconds. Wait for it.
+
 Each global install in its host's own config directory prints what it moved, once:
 
 ```
 [shared] claude: 1 fact folded, 1 note, 1 rule to approve, old store moved aside
 ```
 
-The next rebuild prints nothing, because nothing is left to move. A fact with the same name and other text counts as a `collision` and lands as `<name>-<host>.md`. The `memory-curator` agent can merge those later. A failed copy prints `fold stopped at …`: the old store stays readable, and the next rebuild retries.
+The next rebuild prints nothing, because nothing is left to move. A hand-written line in a host `MEMORY.md` is named on that line as `memory/MEMORY.md`, with the archive path: it stops loading, so copy it into a fact or a rule. A fact with the same name and other text counts as a `collision` and lands as `<name>-<host>.md`. The `memory-curator` agent can merge those later. A failed copy prints `fold stopped at …`: the old store stays readable, and the next rebuild retries.
 
 | What you had | Where it is now |
 |---|---|

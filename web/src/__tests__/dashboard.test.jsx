@@ -189,6 +189,26 @@ describe('Dashboard', () => {
     await waitFor(() => expect(screen.getByText(/entries total/)).toBeTruthy())
   })
 
+  it('goes back to the Status direction when the lens changes', async () => {
+    // Every lens branch needs the Status direction, so a lens picked under Lineage changed nothing.
+    const at = (layout) => (
+      <Dashboard
+        overview={overview}
+        themes={themes}
+        setup={setup}
+        runs={runs}
+        onAction={() => {}}
+        layout={layout}
+      />
+    )
+    const { rerender } = render(at('cultivar'))
+    fireEvent.click(screen.getByText('Lineage'))
+    await waitFor(() => expect(screen.getByText('Gene-seed lineage')).toBeTruthy())
+    rerender(at('greenhouse'))
+    await waitFor(() => expect(screen.queryByText('Gene-seed lineage')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Status' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('shows a loading state without overview', () => {
     render(<Dashboard overview={null} themes={[]} onAction={() => {}} />)
     expect(screen.getByText(/Loading/)).toBeTruthy()

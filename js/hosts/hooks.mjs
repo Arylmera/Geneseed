@@ -210,7 +210,6 @@ function contextNote(text) {
  * The host reading this process's verdict — `--host` on the emitted command, `claude` when
  * absent. Module state rather than a parameter because a hook process answers exactly one
  * call: set once at the gate's entry (`guardGate`), read where the output dialect is chosen.
- * `./hooks-context.mjs` keeps its own for the same reason.
  */
 let HOST = 'claude';
 const setHost = (args) => { HOST = (args && args.host) || 'claude'; };

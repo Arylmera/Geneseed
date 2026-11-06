@@ -806,12 +806,58 @@ test('review 1: what is no fact is named when it stays in the archive', () => wo
   assert.deepEqual(fold().stayed, [], 'reported twice');
 }));
 
+test('a hand-written line in the old index is named, with where the archive is', () => world(({ cfg, fold }) => {
+  // I6: the rebuilt index holds the tier's facts only, so a note of the user's stops loading. The
+  // archive keeps it; only this report says so.
+  const store = path.join(cfg, 'memory');
+  fact(store, 'x.md', FACT);
+  fact(store, 'MEMORY.md', '# Memory Index\n\n- [x](x.md) — a pointer\n\nAsk Pat before touching the deploy.\n');
+  assert.deepEqual(fold({ dryRun: true }).stayed, ['memory/MEMORY.md']);
+  const r = fold();
+  assert.deepEqual(r.stayed, ['memory/MEMORY.md']);
+  assert.ok(foldSummary(r).includes(`1 file left in the archive: memory/MEMORY.md (${r.archived})`), foldSummary(r));
+  assert.match(read(r.archived, 'MEMORY.md'), /Ask Pat/);
+}));
+
+test('an index of the seed and generated pointers alone is not worth a line', () => world(({ cfg, fold }) => {
+  const store = path.join(cfg, 'memory');
+  fact(store, 'x.md', FACT);
+  fact(store, 'MEMORY.md', '# Memory Index\r\n\r\nEach topic file lists its facts; open the one the task needs.\r\n\r\n'
+    + '- [misc](topics/misc.md) — 1 fact\r\n- [x](x.md) — a pointer\r\n');
+  assert.deepEqual(fold().stayed, []);
+}));
+
+test('a hand-written pointer to a missing file is a note, and a pointer to a fact is not', () => world(({ cfg, fold }) => {
+  const store = path.join(cfg, 'memory');
+  fact(store, 'x.md', FACT);
+  fact(store, 'MEMORY.md', '# Memory Index\n\n- [x](x.md) — a pointer\n- [runbook](runbook.md) — see the wiki\n');
+  assert.deepEqual(fold().stayed, ['memory/MEMORY.md']);
+}));
+
+test('each stayed file names its own archive, and a dry run names none', () => world(({ cfg, fold }) => {
+  const store = path.join(cfg, 'memory');
+  const notes = path.join(cfg, 'notebook', 'skill-notes');
+  fact(store, 'x.md', FACT);
+  fact(store, 'data.json', '{}\n');
+  fact(notes, 'n.md', 'note\n');
+  fact(notes, 'trace.log', 'log\n');
+  const dry = foldSummary(fold({ dryRun: true }));
+  assert.match(dry, /2 files left in the archive: memory\/data\.json, notebook\/skill-notes\/trace\.log/);
+  assert.doesNotMatch(dry, /\(/, 'a dry run named a path that does not exist yet');
+  const r = fold();
+  const words = foldSummary(r);
+  assert.ok(words.includes(`memory/data.json (${r.archived})`), words);
+  const at = /notebook\/skill-notes\/trace\.log \((.+?)\)/.exec(words)?.[1];
+  assert.ok(at && at !== r.archived, words);
+  assert.equal(read(at, 'trace.log'), 'log\n');
+}));
+
 test('review 1: a long list is cut in the line and whole in the report', () => world(({ cfg, fold }) => {
   const store = path.join(cfg, 'memory');
   for (const n of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) fact(store, n + '.txt', 'x\n');
   const r = fold();
   assert.equal(r.stayed.length, 7);
-  assert.match(foldSummary(r), /7 files left in the archive: memory\/a\.txt, memory\/b\.txt, memory\/c\.txt, memory\/d\.txt, memory\/e\.txt and 2 more/);
+  assert.match(foldSummary(r), /7 files left in the archive: memory\/a\.txt, memory\/b\.txt, memory\/c\.txt, memory\/d\.txt, memory\/e\.txt \(.+\) and 2 more/);
 }));
 
 test('review 1: what a notes folder holds beside its notes is named too', () => world(({ cfg, fold }) => {

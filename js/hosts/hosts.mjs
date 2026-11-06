@@ -560,14 +560,40 @@ export function hostCatalogsNatively(host) {
   return HOSTS.find((h) => h.host === host)?.catalog || false;
 }
 
+/** Did an emit make `base`? Every one leaves the version marker there and the index in `memory/`. */
+function holdsInstall(base) {
+  if (!isFile(path.join(base, VERSION_MARKER)) || !isFile(path.join(base, 'memory', 'MEMORY.md'))) return false;
+  try { return !withDiscardableStderr(() => isHostGlobalDir(null, base)); } catch { return false; /* no home: cannot tell, so a destructive path fails closed */ }
+}
+
+/**
+ * The stores of the project install or bundle rooted at `root`, the marker's own first, so a repo
+ * that two hosts share answers with the host that emitted last. A Claude-family project keeps its
+ * data under its layer; OpenCode and the bundle at the root. A marker is only a claim: a stale or
+ * hand-written one over a repo's own folder must not make that folder deletable (I4).
+ */
+function projectStores(root) {
+  const emit = emitMarkerOf(root);
+  if (emit !== 'files' && !HOSTS.some((h) => h.host === emit)) return [];
+  const layers = HOSTS.filter((h) => h.family === 'claude').map((h) => h.projectMarker);
+  const own = HOSTS.find((h) => h.host === emit && h.family === 'claude')?.projectMarker ?? '';
+  return [...new Set([own, ...layers, ''])].map((l) => path.join(root, l)).filter(holdsInstall)
+    .map((base) => path.join(base, 'memory'));
+}
+
 /**
  * Where `learn` dedups and indexes, and what
  * `status` reports on its memory row.
  *
- * Precedence: `--memory` > `$GENESEED_MEMORY` > a `memory/` beside cwd or under `./Harness` >
- * `$GENESEED_HARNESS/memory` > the shared store (`<machine dir>/memory`) > the OpenCode GLOBAL
- * config dir's store. Each counts only when it exists, so a machine without the shared tier
- * falls through. null => stdout-only.
+ * Precedence: `--memory` > `$GENESEED_MEMORY` > `$GENESEED_HARNESS/memory` > the store of a project
+ * install in the cwd or `./Harness` > the shared store (`<machine dir>/memory`) > the OpenCode
+ * GLOBAL config dir's store. Each counts only when it exists, so a machine without the shared
+ * tier falls through. null => stdout-only. The learn plugin knows its own install and ends in a
+ * bare `./memory`: it only ever writes. This resolver also serves `memory rm --purge`.
+ *
+ * A FOLDER NAMED `memory` IS NOT A STORE (I4). `memory rm --purge` deleted a repo's own
+ * `memory/design-notes.md` when the mere name was enough, so only an install makes the folder
+ * count (`projectStores`). Without one it is reached through `--memory`.
  *
  * ONLY `memory` NAMES A STORE. The imperial theme's `anamnesis` alias matched Terra's
  * `Anamnesis/` vault by Windows case folding (B3) and `learn` wrote facts into it. The alias is
@@ -586,8 +612,7 @@ export function resolveMemoryDir(explicit) {
   }
   const env = process.env.GENESEED_MEMORY;
   if (env && isDir(env)) return toPlatformPath(env);
-  const cwd = process.cwd();
-  const bases = [cwd, path.join(cwd, 'Harness')];
+  const stores = [];
   const gh = process.env.GENESEED_HARNESS;
   if (gh) {
     // PER BASE, and the walk continues. `$GENESEED_HARNESS` is the FOURTH user-controlled
@@ -600,9 +625,10 @@ export function resolveMemoryDir(explicit) {
     // which is what an unset variable already does. `withDiscardableStderr` because the
     // refusal prints at the RAISE SITE and both callers byte-compare stderr, and nothing
     // may print here.
-    try { bases.push(withDiscardableStderr(() => expanduser(gh))); } catch { /* skip it */ }
+    try { stores.push(path.join(withDiscardableStderr(() => expanduser(gh)), 'memory')); } catch { /* skip it */ }
   }
-  const stores = bases.map((b) => path.join(b, 'memory'));
+  const cwd = process.cwd();
+  stores.push(...[cwd, path.join(cwd, 'Harness')].flatMap(projectStores));
   try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store */ }
   try { stores.push(path.join(opencodeConfigDir(), 'memory')); } catch { /* best-effort */ }
   return stores.find(isDir) ?? null;

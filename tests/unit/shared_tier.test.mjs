@@ -104,6 +104,17 @@ test('isCanonical accepts only the directory the host resolves to', async () => 
 
 // ---- Creation -----------------------------------------------------------------------------------
 
+test('a global emit says where memory is, and no longer that it stays in the config dir', async () => {
+  // I7: both lines print on every global emit, and both described the store as 4.x had it.
+  await withDir(async (home) => {
+    for (const emit of ['claude-global', 'opencode-global']) {
+      const { stdout } = driver(home, emit);
+      assert.match(stdout, /Facts live in the shared tier/, emit);
+      assert.doesNotMatch(stdout, /<cfg>\/memory|relocate memory/, emit);
+    }
+  });
+});
+
 test('a canonical global emit creates the tier, renders it, and grants no directory', async () => {
   await withDir(async (home) => {
     driver(home, 'claude-global');

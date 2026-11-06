@@ -1,4 +1,6 @@
 import React from 'react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import DataTable from '../components/DataTable.jsx'
@@ -11,6 +13,15 @@ const rows = [
   { id: 'a', host: 'claude', n: 3 },
   { id: 'b', host: 'opencode', n: 5 },
 ]
+
+// The `.sr-only` cells of a table are absolutely positioned. Only a positioned wrapper holds them:
+// without it they escape the scroll box and widen the whole page on a phone (702 px, measured).
+describe('.tbl-scroll', () => {
+  it('is the containing block of what is absolutely positioned inside it', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+    expect(css.match(/\.tbl-scroll\s*\{([^}]*)\}/)?.[1]).toMatch(/position:\s*relative/)
+  })
+})
 
 // A real table: named by its caption, headers scoped to columns, wrapped to scroll sideways.
 describe('DataTable', () => {

@@ -321,17 +321,16 @@ export function statusData() {
   for (const fn of [claudeConfigDir, bobConfigDir, openclaudeConfigDir]) {
     try { otherCfg.push(fn()); } catch { /* a missing host dir must not sink status */ }
   }
+  const hostDirs = [...(cfgDir ? [cfgDir] : []), ...otherCfg, path.join(process.cwd(), 'Harness')];
   // Same walk as `cmdVersion`'s fallback, and cwd-relative for the same reason.
-  const candidates = [...(cfgDir ? [cfgDir] : []), ...otherCfg,
-    path.join(process.cwd(), 'Harness'), process.cwd()];
-  for (const base of candidates) {
+  for (const base of [...hostDirs, process.cwd()]) {
     const v = readVersion(base);
     if (v) { installedFp = v; verTarget = base; break; }
   }
-  const leftover = anamnesisLeftovers([...(cfgDir ? [cfgDir] : []), ...otherCfg,
-    path.join(process.cwd(), 'Harness'), sharedPaths().root]);
-  const renamed = renamedFilesIn([...(cfgDir ? [cfgDir] : []), ...otherCfg,
-    path.join(process.cwd(), 'Harness'), sharedPaths().root]);
+  const scanned = [...hostDirs];
+  try { scanned.push(sharedPaths().root); } catch { /* no home dir: no tier to scan */ }
+  const leftover = anamnesisLeftovers(scanned);
+  const renamed = renamedFilesIn(scanned);
   const agentMd = (inst.emit === 'opencode-global' && cfgDir)
     ? path.join(cfgDir, 'AGENT.md') : null;
   return {

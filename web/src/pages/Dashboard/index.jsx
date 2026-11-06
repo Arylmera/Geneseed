@@ -42,6 +42,12 @@ export default function Dashboard({
 }) {
   const lens = layout
   const [dir, setDir] = useState('status')
+  // A lens lays out the Status direction alone, so choosing one from Lineage must land on it.
+  const [seenLens, setSeenLens] = useState(lens)
+  if (seenLens !== lens) {
+    setSeenLens(lens)
+    setDir('status')
+  }
   const sigil = overview ? themes.find((t) => t.name === overview.theme)?.sigil || '' : ''
 
   // The fleet verdict every hero shows, and the doctor run — only Greenhouse (ring + check

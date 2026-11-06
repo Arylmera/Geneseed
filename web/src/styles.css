@@ -2968,7 +2968,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .inst-empty { padding: var(--sp-5); font-size: var(--fs-sm); color: var(--text-3); }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   flex-wrap: wrap; font-size: var(--fs-sm); }
-.tbl-scroll { overflow-x: auto; }
+.tbl-scroll { position: relative; overflow-x: auto; } /* relative: holds the .sr-only cells, or they widen the page */
 .hosts-tbl th { padding: var(--sp-3) 14px 10px; font-family: var(--font-ui); font-size: var(--fs-xs); /* off-scale: 14px and 10px, 2px from a step */
   font-weight: 600; letter-spacing: 0; text-transform: none; }
 .hosts-tbl th:first-child, .hosts-tbl td:first-child { padding-left: var(--sp-5); }

@@ -2120,7 +2120,7 @@
       "expect_files": [
         "repo/memory/alpha-fact.md"
       ],
-      "id": "learn/memory-beside-cwd",
+      "id": "learn/a-bundle-in-the-cwd",
       "steps": [
         {
           "argv": [
@@ -2132,6 +2132,9 @@
       ],
       "world": {
         "reply/out.md": "---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact. Links to [[beta-fact]].\n",
+        "repo/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/memory/MEMORY.md": "# Memory Index\n",
+        "repo/.geneseed-emit": "files\n",
         "repo/memory/.keep": ""
       }
     },
@@ -2147,7 +2150,7 @@
       "expect_files": [
         "repo/Harness/memory/alpha-fact.md"
       ],
-      "id": "learn/memory-under-harness",
+      "id": "learn/a-bundle-under-harness",
       "steps": [
         {
           "argv": [
@@ -2159,7 +2162,40 @@
       ],
       "world": {
         "reply/out.md": "---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact. Links to [[beta-fact]].\n",
+        "repo/Harness/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/Harness/memory/MEMORY.md": "# Memory Index\n",
+        "repo/Harness/.geneseed-emit": "files\n",
         "repo/Harness/memory/.keep": ""
+      }
+    },
+    {
+      "env": {
+        "FAKE_LLM_ECHO": "{sb}/echo/prompt.txt",
+        "FAKE_LLM_OUT": "{sb}/reply/out.md",
+        "GENESEED_LLM": "{py} {llm}"
+      },
+      "expect": [
+        "alpha-fact"
+      ],
+      "expect_absent": [
+        "wrote 1 memory file"
+      ],
+      "expect_absent_files": [
+        "repo/memory/alpha-fact.md"
+      ],
+      "id": "learn/a-bare-repo-memory-is-no-store",
+      "steps": [
+        {
+          "argv": [
+            "learn"
+          ],
+          "cwd": "repo",
+          "stdin": "notes: the build fails on windows\n"
+        }
+      ],
+      "world": {
+        "reply/out.md": "---\nname: alpha-fact\ndescription: the first canned fact\nmetadata:\n  type: project\n---\n\nBody of the first fact. Links to [[beta-fact]].\n",
+        "repo/memory/.keep": ""
       }
     },
     {
@@ -3238,13 +3274,13 @@
         }
       ],
       "world": {
+        "home/.config/geneseed/memory/one.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
+        "home/.config/geneseed/memory/two.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
         "home/.config/opencode/.geneseed-emit": "opencode-global\n",
         "home/.config/opencode/.geneseed-theme": "imperial\n",
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "home/.config/opencode/AGENT.md": "# deployed\n",
-        "repo/.keep": "",
-        "repo/memory/one.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n",
-        "repo/memory/two.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"
+        "repo/.keep": ""
       }
     },
     {
@@ -3456,6 +3492,9 @@
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "home/.config/opencode/AGENT.md": "# deployed\n",
         "repo/.keep": "",
+        "repo/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/memory/MEMORY.md": "# Memory Index\n",
+        "repo/.geneseed-emit": "files\n",
         "repo/memory/notes.md/inner.txt": "not a fact\n",
         "repo/memory/real.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"
       }
@@ -3483,6 +3522,8 @@
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "home/.config/opencode/AGENT.md": "# deployed\n",
         "repo/.keep": "",
+        "repo/.geneseed-version": "abc (built 2026-01-01)\n",
+        "repo/.geneseed-emit": "files\n",
         "repo/memory/MEMORY.md": "# index\n",
         "repo/memory/README.md": "# readme\n",
         "repo/memory/real.md": "---\nname: a-fact\ndescription: one fact\n---\n\nbody\n"

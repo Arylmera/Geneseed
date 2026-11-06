@@ -163,13 +163,17 @@ export function inventoryFor(state) {
  * layers beneath the shared file would change nothing the agent sees. A project install, or an
  * account with no home directory, stays on its own files. THE ONE PREDICATE: memory, rules,
  * profile and the wiki manifest all ask here.
+ *
+ * THE TIER IS WHAT IT HOLDS, never the folder around it: a 4.x machine has that folder for
+ * `installs.json`, `bricks/` and `loops/`, and `default-install.json` can create it. `memory/` is
+ * `sharedStoreFor`'s test (js/hosts/hooks-learn.mjs); a session file counts too, because the context
+ * hook reads each one that exists, and rules with no `memory/` still bind.
  */
 export function tierOf(state) {
   try {
     if (!withDiscardableStderr(() => isHostGlobalDir(null, state.target))) return null;
     const tier = sharedPaths();
-    // The tier exists when its folder does, the hook's test: a tier with rules and no memory/ is still one.
-    return isDir(tier.root) ? tier : null;
+    return isDir(tier.memory) || [tier.rules, tier.profile, tier.wiki].some(isFile) ? tier : null;
   } catch { return null; }
 }
 

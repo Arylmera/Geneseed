@@ -183,6 +183,19 @@ function indexedFacts(memDir) {
 }
 
 /**
+ * What MEMORY.md holds that no index writer generated: the lines a person wrote.
+ * `generated(slug)` says whether a flat pointer to that slug counts as generated too.
+ */
+export function indexNotes(memDir, generated) {
+  return (readLines(path.join(memDir, 'MEMORY.md')) ?? []).filter((l) => {
+    const t = l.trim();
+    const flat = FACT_LINE_RE.exec(t);
+    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
+      && !(flat && generated(flat[2]));
+  });
+}
+
+/**
  * Rewrite MEMORY.md as the map: one line per topic file with its fact count.
  *
  * LINES THE MAP DID NOT GENERATE ARE CARRIED, so a note the user wrote into the index
@@ -192,11 +205,7 @@ function indexedFacts(memDir) {
  */
 function writeMap(memDir, dropFlat) {
   const idx = path.join(memDir, 'MEMORY.md');
-  const carried = (readLines(idx) ?? []).filter((l) => {
-    const t = l.trim();
-    return t && t !== MEMORY_SEED.trim() && t !== MAP_HINT && !MAP_LINE_RE.test(t)
-      && !(dropFlat && FACT_LINE_RE.test(t));
-  });
+  const carried = indexNotes(memDir, () => dropFlat);
   const tdir = path.join(memDir, TOPICS);
   const topics = globMd(tdir).map(stem).sort().map((t) => {
     const n = (readLines(path.join(tdir, `${t}.md`)) ?? [])

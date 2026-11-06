@@ -228,6 +228,37 @@ test('the fleet measures session start on an active global hook install only', (
   });
 });
 
+// An eager wiki walks a whole vault, and both the cost and the session-start measure render it, so a
+// poll serves them from one memo. Rows: inside the 30 s window it is served as it was, at 30 s it is
+// read again, whatever no `refresh` reported. A refresh clears it inside the window, by both ways out:
+// `refreshOwn`, and `selectView` (a refresh that follows the default install ends there). Hand count,
+// `[session start, context]`: `ab\ncd` is 136 and 5; each added line adds 4 and 3.
+const AB = 'ab\ncd\n';
+test('the fleet serves its session-file reads from a memo for 30 s, and until a refresh', () => {
+  withTwoViews(({ st, cl }) => {
+    fs.writeFileSync(path.join(cl, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), 'a carrier\n');
+    const rules = path.join(cl, 'user-rules.md');
+    const at = (now) => {
+      const row = apiFleet(st, { now }).installs.find((r) => r.host === 'claude');
+      return [row.session_start.chars, row.cost.context];
+    };
+    const T = 1_000_000;
+    fs.writeFileSync(rules, AB);
+    assert.deepEqual(at(T), [136, 5]);
+    fs.writeFileSync(rules, `${AB}ef\n`);
+    assert.deepEqual(at(T + 29_999), [136, 5]);
+    assert.deepEqual(at(T + 30_000), [140, 8]);
+    fs.writeFileSync(rules, `${AB}ef\ngh\n`);
+    assert.deepEqual(at(T + 30_001), [140, 8]);
+    st.refresh({ doctor: false });
+    assert.deepEqual(at(T + 30_001), [144, 11]);
+    fs.writeFileSync(rules, `${AB}ef\ngh\nij\n`);
+    st.selectView(st.target, st.root);
+    assert.deepEqual(at(T + 30_001), [148, 14]);
+  });
+});
+
 // GET /api/fleet — every INSTALLED harness, each judged by its OWN version marker. Three seeded
 // hosts cover the three verdicts: bob's marker carries the source fingerprint (synced),
 // opencode's an older one (behind), openclaude has none (unknown — never "synced" by default).

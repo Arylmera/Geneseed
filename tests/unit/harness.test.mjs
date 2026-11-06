@@ -417,9 +417,8 @@ const baseEnv = (home) => {
   for (const k of ['GENESEED_LLM', 'GENESEED_LEARN_CHILD', 'CLAUDE_PROJECT_DIR']) delete env[k];
   return env;
 };
-// `cwd` is the sandbox, not the checkout: `resolveMemoryDir(null)` falls back to a `memory/`
-// directory under `process.cwd()`, and running from the repo's own checkout would pick up
-// whatever is actually there.
+// `cwd` is the sandbox, not the checkout: `resolveMemoryDir(null)` reads a project install in
+// `process.cwd()`, and running from the repo's own checkout would pick up whatever is there.
 const runLearn = (extra, stdin, env, cwd) => spawnSync(process.execPath,
   [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'learn', ...extra],
   { encoding: 'utf8', windowsHide: true, input: stdin, env, cwd });
@@ -2045,11 +2044,51 @@ test('the write resolver survives a home directory it cannot read', () => {
   });
 });
 
+test('status survives a home directory it cannot read', () => {
+  // B2: `statusData` called `sharedPaths()` bare, for two scans of the tier. No `$XDG_CONFIG_HOME`
+  // and an account with no home is the one way that throws, and it took the whole verb down.
+  withDir((d) => {
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    delete env.XDG_CONFIG_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'inspect', 'status.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdStatus } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = cmdStatus({});'],
+    { cwd: d, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /memory/);
+  });
+});
+
+test('rebuild-all survives a home directory it cannot read', () => {
+  // B2's twin: the same bare `sharedPaths()`, reached after every install is rebuilt. It takes a
+  // real project install to get there: with no target the verb returns first.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo);
+    const env = { ...process.env, ...homeOverrides(path.join(d, 'home')) };
+    const emit = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', 'opencode',
+      '--theme', 'neutral', '--footprint', 'lean', '--out', repo], { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    assert.equal(emit.status, 0, emit.stderr);
+    delete env.XDG_CONFIG_HOME;
+    const url = pathToFileURL(path.join(ROOT, 'js', 'build', 'generate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { rebuildAll } = await import(${JSON.stringify(url)});`
+      + 'process.exitCode = rebuildAll();'],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true, maxBuffer: 1 << 26 });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /rebuilt 1 install/);
+  });
+});
+
 test('the write resolver takes the spec order, and the shared store counts only when it exists', () => {
-  // `--memory` and `$GENESEED_MEMORY` are first and need no row here. Below them: a store beside
-  // cwd, then `$GENESEED_HARNESS/memory`, then the shared store, then the OpenCode config store.
-  // The shared store is `<machine dir>/memory`; a machine dir without it is no store, and the
-  // answer is `null`, not a path that was never made.
+  // `--memory` and `$GENESEED_MEMORY` are first and need no row here. Below them:
+  // `$GENESEED_HARNESS/memory`, a project install in the cwd, the shared store, the OpenCode config
+  // store. The shared store is `<machine dir>/memory`; a machine dir without it is no store, and
+  // the answer is `null`, not a path that was never made. A `memory/` beside the cwd with no
+  // install there is a repo's own folder, and no row at all (I4).
   withDir((d) => {
     const home = path.join(d, 'home');
     const shared = path.join(home, '.config', 'geneseed', 'memory');
@@ -2063,7 +2102,12 @@ test('the write resolver takes the spec order, and the shared store counts only 
     fs.mkdirSync(path.join(harness, 'memory'), { recursive: true });
     assert.equal(ask(harness), `0 ${path.join(harness, 'memory')}`, '$GENESEED_HARNESS beats shared');
     fs.mkdirSync(path.join(work, 'memory'));
-    assert.equal(ask(harness), `0 ${path.join(work, 'memory')}`, 'a store beside cwd beats both');
+    assert.equal(ask(path.join(d, 'no-store')), `0 ${shared}`, 'a bare memory/ beside cwd counts for nothing');
+    fs.writeFileSync(path.join(work, '.geneseed-emit'), 'files\n');
+    fs.writeFileSync(path.join(work, '.geneseed-version'), 'abc\n');
+    fs.writeFileSync(path.join(work, 'memory', 'MEMORY.md'), '# Memory Index\n');
+    assert.equal(ask(path.join(d, 'no-store')), `0 ${path.join(work, 'memory')}`, 'a project install beats shared');
+    assert.equal(ask(harness), `0 ${path.join(harness, 'memory')}`, '$GENESEED_HARNESS beats a project install');
   });
 });
 

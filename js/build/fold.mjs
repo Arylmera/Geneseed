@@ -26,7 +26,7 @@ import path from 'node:path';
 import { EXCLUDES_FILE, isCanonical } from '../hosts/hosts.mjs';
 import { LINE_BREAK, listDir, splitLines } from '../hosts/hooks-prims.mjs';
 import {
-  archiveStore, consolidateMemory, existingSlugs, MEMORY_SEED, parseRules,
+  archiveStore, consolidateMemory, existingSlugs, indexNotes, MEMORY_SEED, parseRules,
 } from '../hosts/memory-files.mjs';
 import { foldExcludes } from '../inspect/excludes.mjs';
 import { isDir, isFile, printErr, printOut, readText, writeTextAtomic } from '../lib/fs.mjs';
@@ -235,7 +235,11 @@ function leftBehind(dir, label, carried, rel = '') {
 
 const factNames = (store) => [...existingSlugs(store)].map((s) => `${s}.md`).sort();
 
-/** Fold steps 1 and 6. `topics/`, `MEMORY.md`, `archive/` are not copied: the archive keeps them. */
+/**
+ * Fold steps 1 and 6. `topics/`, `MEMORY.md`, `archive/` are not copied: the archive keeps them.
+ * The tier rebuilds its index from facts, so an index with a line of the user's counts as left
+ * behind. A pointer is the user's too when no fact stands behind it.
+ */
 function foldMemory(cfgDir, ctx) {
   const { shared, dryRun, report } = ctx;
   const store = path.join(cfgDir, 'memory');
@@ -243,8 +247,9 @@ function foldMemory(cfgDir, ctx) {
   const names = factNames(store);
   const facts = copyFiles(names, store, shared.memory, ctx, 'facts');
   const lessons = foldLessons(store, shared.memory, ctx);
-  const carried = new Set([...STORE_KEEPS, 'MEMORY.md', 'topics', ...names, ...lessons.map(([src]) => `agents/${path.basename(src)}`)]
-    .map(normcase));
+  const noted = indexNotes(store, (slug) => names.includes(`${slug}.md`)).length > 0;
+  const carried = new Set([...STORE_KEEPS, ...(noted ? [] : ['MEMORY.md']), 'topics', ...names,
+    ...lessons.map(([src]) => `agents/${path.basename(src)}`)].map(normcase));
   const stayed = leftBehind(store, 'memory', (r) => carried.has(normcase(r)));
   if (dryRun) {
     report.stayed.push(...stayed);
@@ -257,6 +262,7 @@ function foldMemory(cfgDir, ctx) {
   if (factNames(store).join('\n') !== names.join('\n')) throw new Error(`${store} changed during the fold`);
   consolidateMemory(shared.memory);
   report.archived = archiveStore(store);
+  report.stayedIn.memory = report.archived;
   report.stayed.push(...stayed);
   mkdirSync(store, { recursive: true });
   for (const keep of STORE_KEEPS) {
@@ -278,10 +284,11 @@ function foldNotes(cfgDir, ctx) {
     const names = listDir(src).filter((n) => n.endsWith('.md') && isFile(path.join(src, n))).sort();
     if (!names.length || sharesTier(src, shared)) continue;
     const pairs = copyFiles(names, src, path.join(shared.notes, sub), ctx, 'notes');
-    const stayed = leftBehind(src, `notebook/${sub}`, (r) => names.includes(r));
+    const label = `notebook/${sub}`;
+    const stayed = leftBehind(src, label, (r) => names.includes(r));
     if (!dryRun) {
       verifyCopies(pairs);
-      archiveStore(src);
+      report.stayedIn[label] = archiveStore(src);
     }
     report.stayed.push(...stayed);
   }
@@ -451,7 +458,7 @@ function foldRules(cfgDir, ctx) {
 export function foldHost({ host, cfgDir, shared, dryRun = false }) {
   const report = {
     host, facts: 0, lessons: 0, notes: 0, excludes: 0, wired: 0, collisions: 0, pending: 0, rules: 0,
-    moved: [], archived: null, stayed: [], wiredPaths: [], notices: [], failed: [],
+    moved: [], archived: null, stayed: [], stayedIn: {}, wiredPaths: [], notices: [], failed: [],
   };
   const step = (name, fn) => {
     try { fn(); } catch (e) { report.failed.push(`${name}: ${e.message}`); }
@@ -475,11 +482,20 @@ export function foldHost({ host, cfgDir, shared, dryRun = false }) {
 const counted = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
 const STAYED_SHOWN = 5;
 
-/** The files only the archive holds now. The line stays one line, and `report.stayed` keeps them all. */
-function stayedWords(stayed) {
+/**
+ * The files only the archive holds now, each run of them followed by its own archive (`stayedIn`,
+ * by label). A dry run has moved nothing, so it has no archive to name. The line stays one line,
+ * and `report.stayed` keeps them all.
+ */
+function stayedWords(stayed, stayedIn) {
   const more = stayed.length - STAYED_SHOWN;
-  return `${counted(stayed.length, 'file')} left in the archive: ${stayed.slice(0, STAYED_SHOWN).join(', ')}`
-    + `${more > 0 ? ` and ${more} more` : ''}`;
+  const groups = new Map();
+  for (const s of stayed.slice(0, STAYED_SHOWN)) {
+    const label = Object.keys(stayedIn).find((l) => s.startsWith(`${l}/`));
+    groups.set(label, [...(groups.get(label) ?? []), s]);
+  }
+  const named = [...groups].map(([label, files]) => `${files.join(', ')}${label ? ` (${stayedIn[label]})` : ''}`);
+  return `${counted(stayed.length, 'file')} left in the archive: ${named.join(', ')}${more > 0 ? ` and ${more} more` : ''}`;
 }
 
 /** A report as the words after `<host>: `, or '' when it did nothing (C7: nothing is reported twice). */
@@ -495,7 +511,7 @@ export function foldSummary(r) {
     r.rules && `${counted(r.rules, 'rule')} to approve`,
     r.pending && `${r.pending} to approve`,
     r.archived && 'old store moved aside',
-    r.stayed.length && stayedWords(r.stayed),
+    r.stayed.length && stayedWords(r.stayed, r.stayedIn),
   ].filter(Boolean).join(', ');
 }
 

@@ -78,13 +78,6 @@ function fnTranslate(pat) {
   return new RegExp(`^(?:${out})$`);
 }
 
-/**
- * The host whose own root file counts as native — `--host` on the emitted command, `claude`
- * when absent. Module state for the reason `./hooks.mjs`'s gates keep theirs: a hook process
- * answers exactly one call, so it is set once at `cmdContext`'s entry.
- */
-let HOST = 'claude';
-
 // Kept in step with adapters/opencode/plugins/geneseed-context.js.
 const EAGER_ROOT = ['AGENTS.md', 'AGENT.md', 'CLAUDE.md', '.cursorrules',
   'README.md', 'README.adoc', 'CONTRIBUTING.md', 'CONTRIBUTING.adoc', 'user-rules.md', 'PROFILE.md'];
@@ -248,13 +241,19 @@ function tierFile(rel) {
 }
 
 /**
+ * The `host` a caller outside the hook passes for an install of `host`: what its emitted command
+ * says, and Claude's carries no `--host` (`claudeHookGroups`).
+ */
+export const emittedHost = (host) => (host === 'claude' ? null : host);
+
+/**
  * Only a global install of THIS host reads the tier, as the OpenCode plugin's `readsTier` has it
  * (it answers for OpenCode alone). The host is the one the emitted hook passed: an emit from before
- * `--host` names none, and then any host's global qualifies. One that cannot tell stays on its own layer.
+ * `--host` names none (null), and then any host's global qualifies. One that cannot tell stays on
+ * its own layer.
  */
-let RAW_HOST = null;
-function readsTier(hookRoot) {
-  try { return withDiscardableStderr(() => isHostGlobalDir(RAW_HOST, hookRoot)); } catch { return false; }
+function readsTier(hookRoot, host) {
+  try { return withDiscardableStderr(() => isHostGlobalDir(host, hookRoot)); } catch { return false; }
 }
 
 /** `Shared tier: on` as the build writes it (`--shared-tier on`); the OpenCode context plugin reads the same line. */
@@ -265,11 +264,11 @@ const SHARED_TIER_ON = /^Shared tier:[ \t]*on[ \t]*\r?$/m;
  * global hook is already injecting it: under `$GENESEED_STACK_GLOBAL` the global hook does not
  * stand down (`globalHookStandingDown`), so a second tier here would be a double. Without the
  * flag the global hook stands down for a wired project, and this hook is the only injector.
- * A project with the option off reads no tier, as before.
+ * A project with the option off reads no tier, as before. `carrier` is `installCarrier`'s text.
  */
-function projectReadsTier(hookRoot) {
+function projectReadsTier(carrier) {
   if (process.env.GENESEED_STACK_GLOBAL) return false;
-  return SHARED_TIER_ON.test(installCarrier(hookRoot));
+  return SHARED_TIER_ON.test(carrier);
 }
 
 /**
@@ -396,9 +395,10 @@ function sessionEntry(rel, abs, text, label) {
  * `{ rel, abs, text, label }` per layer. A global install reads the machine tier first, then its
  * own host layer. `$GENESEED_WIKI` overrides the wiki declaration on both, as it does on OpenCode.
  * A missing or unreadable file is simply absent — this is best-effort context, never a gate.
+ * `host` is what the emitted hook passes (`emittedHost`), null for none, which reads as claude.
  */
-export function sessionFiles(hookRoot) {
-  const tier = readsTier(hookRoot) || projectReadsTier(hookRoot);
+export function sessionFiles(hookRoot, host = null, carrier = installCarrier(hookRoot, host)) {
+  const tier = readsTier(hookRoot, host) || projectReadsTier(carrier);
   const found = [];
   for (const rel of SESSION_FILES) {
     const wiki = rel === 'geneseed-wiki.jsonc';
@@ -406,13 +406,13 @@ export function sessionFiles(hookRoot) {
     const hostAbs = pinned ? process.env.GENESEED_WIKI
       : wiki ? WIKI_NAMES.map((n) => path.join(hookRoot, n)).find(isFile) ?? path.join(hookRoot, rel)
         : path.join(hookRoot, rel);
-    const host = sessionText(hostAbs);
+    const own = sessionText(hostAbs);
     const sharedAbs = tier && !pinned ? tierFile(rel) : null;
     const shared = sharedAbs ? sessionText(sharedAbs) : null;
-    if (shared !== null && !(host !== null && WHOLE_FILES.has(rel))) {
+    if (shared !== null && !(own !== null && WHOLE_FILES.has(rel))) {
       found.push(sessionEntry(rel, sharedAbs, shared, 'shared'));
     }
-    if (host !== null) found.push(sessionEntry(rel, hostAbs, host, shared === null ? '' : `host: ${HOST}`));
+    if (own !== null) found.push(sessionEntry(rel, hostAbs, own, shared === null ? '' : `host: ${host || 'claude'}`));
   }
   return found.filter(Boolean);
 }
@@ -443,7 +443,7 @@ function rglobDocs(dir, acc = []) {
  * Root entry docs are eager; other root docs (.md or .adoc), the doc trees and monorepo package
  * READMEs are lazy.
  */
-export function discoverContext(root, host = HOST) {
+export function discoverContext(root, host = 'claude') {
   const eager = new Map();
   const lazy = new Map();
   const native = host === 'openclaude' && isFile(path.join(root, 'AGENTS.md'))
@@ -490,7 +490,7 @@ export function discoverContext(root, host = HOST) {
  * these keys are absolute paths whose iteration order becomes the printed order.
  * @returns {[Array<{path: string, description: string}>, Array<{path: string, description: string}>, string]}
  */
-export function resolveContextSets(root, hookRoot = null) {
+export function resolveContextSets(root, hookRoot = null, host = 'claude') {
   let manifest = null;
   const env = process.env.GENESEED_CONTEXT;
   if (env && isFile(env)) {
@@ -506,7 +506,7 @@ export function resolveContextSets(root, hookRoot = null) {
   }
 
   if (manifest === null) {
-    const [e, l] = discoverContext(root);
+    const [e, l] = discoverContext(root, host);
     return [e, l, `auto-discovery [${root}]`];
   }
 
@@ -539,7 +539,7 @@ export function resolveContextSets(root, hookRoot = null) {
   }
 
   if (!entries.length && !extend) {
-    const [e, l] = discoverContext(root);
+    const [e, l] = discoverContext(root, host);
     return [e, l, `auto-discovery [${root}] (empty ${path.basename(manifest)})`];
   }
 
@@ -550,7 +550,7 @@ export function resolveContextSets(root, hookRoot = null) {
   };
 
   if (extend) {
-    const [de, dl] = discoverContext(root);
+    const [de, dl] = discoverContext(root, host);
     for (const x of de) put(x.path, 'eager', '');
     for (const x of dl) put(x.path, 'lazy', '');
   }
@@ -645,10 +645,10 @@ function fitLines(lines, room, tailOf) {
  * a project install keeps it in the repo, one level above the harness dir. The first candidate
  * that exists answers, as `firstCarrier` does.
  */
-function installCarrier(hookRoot) {
-  const base = readsTier(hookRoot) ? hookRoot : path.dirname(hookRoot);
+function installCarrier(hookRoot, host) {
+  const base = readsTier(hookRoot, host) ? hookRoot : path.dirname(hookRoot);
   // Last, a plain bundle or git-clone harness dir keeps its AGENT.md in the dir itself.
-  const found = [...carriersFor(HOST).map((rel) => path.join(base, rel)), path.join(hookRoot, 'AGENT.md')];
+  const found = [...carriersFor(host || 'claude').map((rel) => path.join(base, rel)), path.join(hookRoot, 'AGENT.md')];
   for (const file of found) {
     try { return readFileSync(file, 'utf8'); } catch { /* next candidate */ }
   }
@@ -746,23 +746,17 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
  * budget's own unit (`cost`), so on Windows it is the output's length in characters. `cut` is told
  * apart from `chars` because session files stop near 83% of the budget: a size cannot show it.
  *
- * `HOST` and `RAW_HOST` take what the emitted command passes: Claude's carries no `--host`
- * (`claudeHookGroups`). They go back after, because a daemon shares this module's state with
- * `alwaysOnCost`, where a hook process answers one call. Reads files, writes nothing.
+ * The figure ignores `sovereignBypass`: the hook prints nothing in an excluded folder, but the
+ * exclusion depends on the session's cwd, and the console has no session. Reads files, writes nothing.
  */
 export function sessionStartSize(hookRoot, host) {
-  const was = [HOST, RAW_HOST];
-  [HOST, RAW_HOST] = [host, host === 'claude' ? null : host];
-  try {
-    const payload = { heads: [], session: sessionFiles(hookRoot), eager: [], lazy: [], source: '', root: hookRoot };
-    const { spent, cut } = renderPayload(payload);
-    return { chars: spent, budget: OUTPUT_BUDGET, cut };
-  } finally { [HOST, RAW_HOST] = was; }
+  const session = sessionFiles(hookRoot, emittedHost(host));
+  const { spent, cut } = renderPayload({ heads: [], session, eager: [], lazy: [], source: '', root: hookRoot });
+  return { chars: spent, budget: OUTPUT_BUDGET, cut };
 }
 
 export function cmdContext(args) {
-  HOST = (args && args.host) || 'claude';
-  RAW_HOST = (args && args.host) || null;
+  const host = (args && args.host) || null;
   // Discovery (and the stand-down) runs against the SESSION's project root, not the harness
   // package dir: `$CLAUDE_PROJECT_DIR` when the host sets it (`hookProjectDir`), because
   // SessionStart also fires on resume/compact/clear, after the agent may have `cd`'d away.
@@ -782,16 +776,17 @@ export function cmdContext(args) {
     return 0;
   }
   if (hookRoot && sovereignBypass(hookRoot)) return 0;
-  // The RAW `args.host`, not `HOST`: `HOST` defaults to claude, which would key an older
+  // The RAW `args.host`, never defaulted to claude, which would key an older
   // OpenClaude emit's `~/.openclaude` (no `--host`) on `.claude` instead of its folder name.
   if (globalHookStandingDown(hookRoot, root, args.host, 'context')) return 0;
-  const session = hookRoot ? sessionFiles(hookRoot) : [];
+  const carrier = hookRoot ? installCarrier(hookRoot, host) : '';
+  const session = hookRoot ? sessionFiles(hookRoot, host, carrier) : [];
   // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
   // install whose harness dir IS the repo root) is injected once, in the session block.
   const seen = new Set(session.map((s) => normcase(path.resolve(s.abs))));
   const fresh = (e) => !seen.has(normcase(path.resolve(path.isAbsolute(e.path)
     ? e.path : path.join(root, e.path))));
-  let [eager, lazy, source] = resolveContextSets(root, hookRoot);
+  let [eager, lazy, source] = resolveContextSets(root, hookRoot, host || 'claude');
   eager = eager.filter(fresh);
   lazy = lazy.filter(fresh);
   // The done gate's checks for this repo, and where they come from (`./hooks-done.mjs`). No git
@@ -799,10 +794,9 @@ export function cmdContext(args) {
   // `--no-done-gate` carries `Done gate: off` in its AGENT.md and gets no line — the OpenCode
   // context plugin's `doneGateOff` reads the same marker with the same pattern.
   const gitRoot = gitRootOf(root);
-  const carrier = hookRoot ? installCarrier(hookRoot) : '';
   const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, 'm').test(carrier);
   // Bob's Stop carries no transcript, so the gate never judges a turn there (`hooks-done.mjs`).
-  const done = gitRoot && !gateOff('Done gate') ? doneLine(gitRoot, HOST !== 'bob') : null;
+  const done = gitRoot && !gateOff('Done gate') ? doneLine(gitRoot, host !== 'bob') : null;
   // The ownership decline reminder (`./ownership-gate.mjs`), under the same contract: an install
   // built `--no-ownership-gate` carries `Ownership gate: off` and gets no line.
   const owned = gitRoot && !gateOff('Ownership gate') ? ownershipLine(gitRoot) : null;

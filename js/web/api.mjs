@@ -205,8 +205,8 @@ export function apiDefaultInstallSet(state, body) {
     : undefined;
   if (hit === undefined) return { ok: false, error: 'not an active install (host, path)' };
   const file = sharedPaths().defaultInstall;
-  // The folder normally exists already, through the install registry. Created here, it also reads
-  // as a tier (`tierOf`), as it does for every other writer into it.
+  // The folder normally exists already, through the install registry. Created here, it does not
+  // read as a tier: `tierOf` tests for the tier's memory store or a tier file, not the folder.
   mkdirSync(path.dirname(file), { recursive: true });
   writeTextAtomic(file, `${JSON.stringify({ host, path: String(hit[2]) }, null, 2)}\n`);
   followDefault(state, defaultView());
@@ -244,6 +244,10 @@ export function apiInstalls(state) {
 }
 
 
+// How long a poll may serve `apiFleet`'s memo: a rule or profile write and a session's memory write
+// call no `refresh`, so this is how late they show.
+const FLEET_READS_MS = 30_000;
+
 /**
  * EVERY INSTALLED HARNESS ON THE MACHINE, EACH JUDGED ON ITS OWN — the Overview's fleet table.
  *
@@ -260,11 +264,22 @@ export function apiInstalls(state) {
  * a fixed walk finds, which describes the wrong install as soon as two hosts are deployed.
  * Every unknown stays `null` — `verdict: 'unknown'`, `drift: null` — never a reassuring zero.
  */
-export function apiFleet(state) {
-  // ~5 ms per install, measured 2026-11, like `alwaysOnCost` beside it, so it is not cached.
-  const sessionStart = (host, scope, st, dir) => {
-    if (st !== 'active' || scope !== 'global' || !CLAUDE_STYLE.includes(host)) return null;
-    try { return sessionStartSize(dir, host); } catch { return null; }
+export function apiFleet(state, { now = Date.now() } = {}) {
+  // Both reads render the session files, and an eager wiki walks a whole vault each time, so a poll
+  // serves them from a memo. `refresh` clears it; `FLEET_READS_MS` bounds what no `refresh` reports.
+  // `st` is in the key: an install switched off stops being measured at once.
+  const reads = (host, scope, st, root, dir) => {
+    const memo = (state._fleetReads ??= new Map());
+    const key = JSON.stringify([host, scope, st, String(root)]);
+    const hit = memo.get(key);
+    if (hit && now - hit.at < FLEET_READS_MS) return hit;
+    let sessionStart = null;
+    if (st === 'active' && scope === 'global' && CLAUDE_STYLE.includes(host)) {
+      try { sessionStart = sessionStartSize(dir, host); } catch { /* not measured, this round */ }
+    }
+    const fresh = { at: now, sessionStart, cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }) };
+    memo.set(key, fresh);
+    return fresh;
   };
   const sourceFp = sourceFingerprint(makeCfg());
   const installs = [];
@@ -282,6 +297,7 @@ export function apiFleet(state) {
     }
     let built = null;
     try { built = Math.floor(statSync(path.join(dir, VERSION_MARKER)).mtimeMs / 1000); } catch { /* never built */ }
+    const { cost, sessionStart } = reads(host, scope, st, root, dir);
     installs.push({
       ...installRowBase(host, scope, root, st),
       installed_fp: fp,
@@ -300,10 +316,10 @@ export function apiFleet(state) {
       shared: tierOf({ target: dir }) !== null,
       // What this install injects every session, by part (characters); null when its carrier
       // is missing, so the console says "not measured" rather than drawing an empty bar.
-      cost: alwaysOnCost({ host, root, dir, footprint: footprintOfDir(root) }),
+      cost,
       // Its session-start hook against the budget. Global hook hosts only: the console has no
       // repo to add, a project install's size is that repo's, and OpenCode has no stdout cap.
-      session_start: sessionStart(host, scope, st, dir),
+      session_start: sessionStart,
     });
   }
   // `version` is the source's release label, the "Behind 4.19.0" a behind row names; the same

@@ -11,7 +11,7 @@ import { ROOT } from '../../js/build/source.mjs';
 import { cmdUninstall, installUninstall } from '../../js/maintain/uninstall.mjs';
 import { apiMemoryDelete } from '../../js/web/actions.mjs';
 import { apiFleet } from '../../js/web/api.mjs';
-import { apiCatalog, apiItem, configItems, memoryItems } from '../../js/web/catalog.mjs';
+import { apiCatalog, apiItem, configItems, memoryDir, memoryItems, tierOf } from '../../js/web/catalog.mjs';
 import { webState } from '../../js/web/state.mjs';
 import { apiProfile, apiProfileSave, apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
@@ -153,6 +153,29 @@ test('apiProfile says whether it answers with the shared file', async () => {
 
 // Two global installs read one store: one row, under the first, and a project install's own store
 // beside it. The list says which installs share, so the console can name none of them.
+test('a machine dir with no tier in it leaves the console on the host files', async () => {
+  // I3: a 4.x machine already has this folder, for what is no tier at all. `default-install.json`
+  // is the one console write that can make it. Neither is a tier: the hook reads the host files
+  // there, and the console must edit what the hook reads.
+  await withTier(async ({ cfg, tier }) => {
+    fs.rmSync(tier, { recursive: true });
+    fs.mkdirSync(path.join(tier, 'bricks'), { recursive: true });
+    fs.mkdirSync(path.join(tier, 'loops'));
+    fs.writeFileSync(path.join(tier, 'installs.json'), '{"roots": []}\n');
+    const state = webState('neutral', cfg);
+    assert.equal(tierOf(state), null, 'installs.json made a tier');
+    assert.equal(memoryDir(state), path.join(cfg, 'memory'));
+    assert.ok(memoryItems(state).some((i) => i.name === 'host-fact'), 'the host fact is not listed');
+    assert.equal(apiProfileSave(state, { text: 'host self', fingerprint: apiProfile(state).fingerprint }).ok, true);
+    assert.match(fs.readFileSync(path.join(cfg, 'PROFILE.md'), 'utf8'), /^host self/);
+    assert.ok(!fs.existsSync(path.join(tier, 'PROFILE.md')), 'the console wrote into the machine dir');
+    fs.writeFileSync(path.join(tier, 'default-install.json'), '{"host": "claude", "path": "x"}\n');
+    assert.equal(tierOf(state), null, 'default-install.json made a tier');
+    fs.mkdirSync(path.join(tier, 'memory'));
+    assert.equal(tierOf(state)?.root, tier, 'the tier itself no longer counts');
+  });
+});
+
 test('the memory list folds the installs that read the tier into one', async () => {
   await withTier(({ home, cfg, tier }) => {
     const bob = path.join(home, '.bob');

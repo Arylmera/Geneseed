@@ -42,7 +42,7 @@
     },
     {
       "name": "bootstrap",
-      "help": "update everything (sync + upgrade) with a progress UI, then run setup",
+      "help": "update everything (upgrade) with a progress UI, then run setup",
       "description": "",
       "positionals": [],
       "options": [
@@ -596,7 +596,7 @@
     },
     {
       "name": "exclude",
-      "help": "manage sovereign-repo exclusions: folders where the GLOBAL installs go dormant (hooks silent, preamble suppressed); stored in each install's excludes.json",
+      "help": "manage sovereign-repo exclusions: folders where the GLOBAL installs go dormant (hooks silent, preamble suppressed); stored in the shared tier's excludes.json, with the repo-side wiring per host",
       "description": "",
       "positionals": [
         {
@@ -736,7 +736,7 @@
           ],
           "dest": "memory",
           "metavar": null,
-          "help": "bundle memory dir to dedup against and index into (default: $GENESEED_MEMORY, else ./memory or ./Harness/memory)",
+          "help": "memory dir to dedup against and index into (default: $GENESEED_MEMORY, else $GENESEED_HARNESS/memory, else a project install in the cwd or ./Harness, else the shared tier, else the OpenCode config store); the only way to a memory/ no install owns",
           "choices": null,
           "default": null,
           "required": false,
@@ -1056,7 +1056,7 @@
     },
     {
       "name": "memory",
-      "help": "manage the memory store: list the facts the agent reads, or remove one by name (archived into memory/archive/; --purge deletes)",
+      "help": "manage the memory store: list the facts the agent reads, or remove one by name (archived into memory/archive/; --purge deletes). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
       "description": "",
       "positionals": [
         {
@@ -1148,7 +1148,7 @@
     },
     {
       "name": "migrate",
-      "help": "move this machine from the git-checkout install shape to the npm one: re-emit every registered install, re-bake the hook shim, and report what must be fixed by hand",
+      "help": "move this machine from the git-checkout install shape to the npm one: re-emit every registered install, repoint the hook shim at the npm package, and report what must be fixed by hand. Use --dry-run alone to preview the shared-tier fold",
       "description": "",
       "positionals": [],
       "options": [
@@ -1158,7 +1158,7 @@
           ],
           "dest": "dry_run",
           "metavar": null,
-          "help": "survey and print the plan; write nothing",
+          "help": "survey and print the plan, with the fold each global install would run and any orphan; write nothing",
           "choices": null,
           "default": false,
           "required": false,
@@ -1597,7 +1597,7 @@
     },
     {
       "name": "uninstall",
-      "help": "remove a global or project-scoped Geneseed install (manifest-tracked); memory/notebook are never deleted (--archive-memory moves them aside)",
+      "help": "remove a global or project-scoped Geneseed install (manifest-tracked); memory/notebook are never deleted (--archive-memory moves them aside), and the shared tier, ~/.config/geneseed, is left alone",
       "description": "",
       "positionals": [],
       "options": [

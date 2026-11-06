@@ -326,7 +326,9 @@ export function rebuildAll() {
   }
   // M3: an old-name wiki manifest that survived the rebuilds (a rename failed, or the file sits
   // where no emit looks) is named once, here, whatever else the summary says.
-  for (const { file, now } of renamedFilesIn([...targets.map(([, , r]) => r), sharedPaths().root])) {
+  const scanned = targets.map(([, , r]) => r);
+  try { scanned.push(sharedPaths().root); } catch { /* no home dir: no tier to scan */ }
+  for (const { file, now } of renamedFilesIn(scanned)) {
     printOut(`[rebuild-all] WARN ${file} is still read under its old name; rename it to ${now}.\n`);
   }
   if (failures.length) {

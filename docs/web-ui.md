@@ -143,6 +143,11 @@ its row, and a figure still read off a project install set as the default (a sug
 Overview view, Personal's summary) names that install once two or more are active. A *Needs you*
 suggestion about a shared file or the shared memory store appears once and names no harness.
 
+The Loaded every turn card also shows the session-start hook output against its 9 000-character
+budget, measured without project context, for the install whose content was cut, else the
+largest. It turns amber at 85% of the budget or whenever content was cut, and Needs you adds one
+suggestion at the same point.
+
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type
 to jump to any agent, skill, doc, MCP server, or constitutional rule — the `laws`

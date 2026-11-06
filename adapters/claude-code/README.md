@@ -86,9 +86,9 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   a harmless no-op — it returns immediately rather than reading the transcript for
   nothing; running `learn` by hand with notes piped in still prints the prompt it
   would have sent. Geneseed never embeds an API key.
-  A global install writes to the shared store, `~/.config/geneseed/memory/`. A bundle
-  whose `memory/` is not at `./memory` or `./Harness/memory` needs it named:
-  `GENESEED_MEMORY=/abs/path/to/memory`.
+  A global install writes to the shared store, `~/.config/geneseed/memory/`. A hand-run
+  `learn` finds a project install or bundle in the cwd or `./Harness`. Any other `memory/` is not a store until it is named:
+  `--memory <dir>` or `GENESEED_MEMORY=/abs/path/to/memory`.
 
 Adjust the paths if your harness bundle is not at the repository root. On Windows
 the commands are identical (`node bin/geneseed-hook.mjs …`).

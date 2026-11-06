@@ -40,8 +40,8 @@ let SAVED_RELOCATION = null;
 /**
  * THE WEB TESTS OVER A HOST'S OWN FILES. An emit seeds the shared tier in the sandboxed home, and a
  * global install now edits the tier instead (`tierOf`); the tier's own cases live in
- * `shared_tier_console.test.mjs`. Dropping the tier folder is what `tierOf` reads as "no tier": it asks
- * the hook's question, whether the folder exists, so a tier with no `memory/` is still one.
+ * `shared_tier_console.test.mjs`. Dropping the tier folder takes what `tierOf` asks about: its `memory/`
+ * and session files.
  * Guarded: the temp root is the only place this may delete.
  */
 export function dropSandboxTier() {

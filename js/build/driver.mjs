@@ -413,8 +413,7 @@ function emitOpencodeGlobal(cfg, args, out) {
     + `${stats.nSkills} skills, ${stats.nPlugins} plugin(s), `
     + `${stats.nWorkflows} workflow file(s), AGENT.md, ${memStatus}, ${nbStatus}, `
     + `${cfgName} (no context.json)${extra}. `
-    + 'The learn plugin now finds <cfg>/memory automatically; set GENESEED_HARNESS only to '
-    + 'override.\n');
+    + 'Facts live in the shared tier, and the learn plugin finds it by itself.\n');
   return cfgDir;
 }
 
@@ -516,8 +515,8 @@ const CLAUDE_SHAPED = {
     summary: (at, r) => `[geneseed] claude-global -> ${at}: ${r.nAgents} subagents, `
       + `${r.nSkills} skills, CLAUDE.md, ${r.nHooks} hook group(s), settings.json, `
       + `${r.memStatus}, ${r.nbStatus}. No plugins/workflows/themes (no Claude analogue); `
-      + '~/.claude/plugins is never touched. Hooks call the harness by absolute path; set '
-      + 'GENESEED_HARNESS only to relocate memory.\n',
+      + '~/.claude/plugins is never touched. Hooks call the harness by absolute path. '
+      + 'Facts live in the shared tier.\n',
   },
   // Per-repo: CLAUDE.md at the root + a `.claude/` layer.
   claude: {

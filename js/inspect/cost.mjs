@@ -21,7 +21,7 @@
  */
 import path from 'node:path';
 
-import { sessionFiles, tierSessionChars } from '../hosts/hooks-context.mjs';
+import { emittedHost, sessionFiles, tierSessionChars } from '../hosts/hooks-context.mjs';
 import { carriersFor } from '../hosts/installs.mjs';
 import { frontmatter } from '../hosts/memory-files.mjs';
 import { listDir } from '../hosts/hooks-prims.mjs';
@@ -130,7 +130,7 @@ export function alwaysOnCost({ host, root, dir, footprint }) {
     }
   }
   let context = 0;
-  try { for (const s of sessionFiles(dir)) context += s.text.length; } catch { /* none */ }
+  try { for (const s of sessionFiles(dir, emittedHost(host))) context += s.text.length; } catch { /* none */ }
 
   return { carrier, skills, agents, context, ceiling: CARRIER_CEILING[footprint] ?? null };
 }

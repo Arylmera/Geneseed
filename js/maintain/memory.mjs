@@ -13,8 +13,10 @@
  *
  *   * THE STORE IS RESOLVED, NOT CONFIGURED. The endpoint is always `<target>/memory`,
  *     because a server has a target. A CLI has a cwd, so this takes the resolver every other
- *     terminal-side reader of the store already uses — `$GENESEED_MEMORY`, then a store
- *     beside the cwd, then the global config dir — with `--memory` as the explicit override.
+ *     terminal-side reader of the store already uses — `$GENESEED_MEMORY`, then
+ *     `$GENESEED_HARNESS`, then a project install in the cwd, then the shared tier, then the
+ *     OpenCode config store — with
+ *     `--memory` as the explicit override, and the only way to a `memory/` no install owns.
  *     `status` prints the answer of that same resolver, so the two agree about which store
  *     is "the" store.
  *   * THE RESERVED-NAME CHECK IS CASE-INSENSITIVE, and the web endpoints use this one. On a
@@ -96,7 +98,7 @@ export function cmdMemory(args) {
     // The resolver answers null for "no store anywhere on the chain", which is also what an
     // explicit `--memory` that is not a directory gives — so the message names both.
     printErr('[memory] no memory store found. Pass --memory <dir>, set $GENESEED_MEMORY, '
-      + 'or run this from a directory with a memory/ store.\n');
+      + 'or run this from a project install.\n');
     return 1;
   }
   const where = args.archived ? path.join(dir, 'archive') : dir;
@@ -128,6 +130,7 @@ export function cmdMemory(args) {
     printErr(`[memory] no such fact '${args.name}' in ${where}.\n`);
     return 1;
   }
+  printOut(`[memory] ${where}\n`);
   printOut(done ? `[memory] archived ${args.name} -> ${done}\n` : `[memory] deleted ${args.name}.\n`);
   return 0;
 }

@@ -47,7 +47,8 @@ export function isScratchRoot(root, registryFile) {
  * registry: read as `[]`, a refused read made the next save write one root over every install.
  */
 function registryLoad() {
-  const file = registryPath();
+  let file;
+  try { file = registryPath(); } catch { return null; }   // no home dir: nothing to read or to save over
   try {
     const data = parseJson(readFileSync(file, 'utf8'));
     if (Array.isArray(data)) return data.map(String);

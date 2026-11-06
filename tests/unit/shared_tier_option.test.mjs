@@ -27,7 +27,7 @@ import { main as driverMain, emitGlobalInto } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
 import { diffCollect } from '../../js/inspect/diff.mjs';
 import { statusLines } from '../../js/inspect/status.mjs';
-import { SHARED_TIER_BENEFIT, sharedTierCost, sharedTierFigure } from '../../js/inspect/cost.mjs';
+import { SHARED_TIER_BENEFIT, alwaysOnCost, sharedTierCost, sharedTierFigure } from '../../js/inspect/cost.mjs';
 import { cmdContext, sessionFiles, sessionStartSize } from '../../js/hosts/hooks-context.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { appendAgentLesson } from '../../js/hosts/memory-files.mjs';
@@ -416,6 +416,24 @@ test('the console finds a tier that has rules and no memory folder', () => {
   });
 });
 
+test('each session file the hook reads makes a tier, and what it does not read makes none', () => {
+  // The hook reads every tier file that exists, so the console must edit that one. A row that is
+  // not a session file stays no tier: it is what a 4.x machine holds.
+  const rows = [['rules', true], ['profile', true], ['wiki', true], ['defaultInstall', false], ['foldState', false]];
+  for (const [key, isTier] of rows) {
+    const d = sandbox('gsst-arm-');
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg);
+    fs.writeFileSync(path.join(cfg, '.geneseed-emit'), 'claude-global\n');
+    withEnv({ XDG_CONFIG_HOME: path.join(d, 'xdg') }, () => {
+      const tier = sharedPaths();
+      fs.mkdirSync(tier.root, { recursive: true });
+      fs.writeFileSync(tier[key], 'x\n');
+      assert.equal(tierOf({ target: cfg })?.root ?? null, isTier ? tier.root : null, key);
+    });
+  }
+});
+
 test('an agent lesson file that is not UTF-8 is left as it is; a sound one gains the bullet', () => {
   const d = sandbox('gsst-les-');
   const file = path.join(d, 'agents', 'reviewer.md');
@@ -505,5 +523,47 @@ test('a hook that names its host reads the tier only for a global of that host',
     assert.ok(names('bob').includes(TIER_HEAD), 'a bob hook on a bob global must read the tier');
     assert.ok(!names('claude').includes('TIER-RULE'), 'a claude hook on a bob global must not');
     assert.ok(capture(() => cmdContext({ root: w.gcfg })).out.includes(TIER_HEAD), 'a hook from before --host keeps reading any global');
+  } finally { w.restore(); }
+});
+
+// The console reads a project's session files in-process, and must read the carrier of the install's
+// own host, as that host's hook does: Bob's is AGENTS.md, OpenClaude's the nested .openclaude/CLAUDE.md.
+// A marker in another host's root file opts nothing in. `on` is the file saying `Shared tier: on`, `off`
+// a carrier without it. Hand count of `context`: the 31-character tier rule + `mine` = 35, `mine` alone 4.
+const NESTED = path.join('.openclaude', 'CLAUDE.md');
+const OWN_CARRIER = [
+  { name: 'a Bob project opted in by AGENTS.md', host: 'bob', on: 'AGENTS.md', off: 'CLAUDE.md', tier: true },
+  { name: 'a Bob project with the marker in CLAUDE.md only', host: 'bob', on: 'CLAUDE.md', off: 'AGENTS.md', tier: false },
+  { name: 'an OpenClaude project opted in by its nested carrier', host: 'openclaude', on: NESTED, off: 'CLAUDE.md', tier: true },
+  { name: 'an OpenClaude project with the marker in the root CLAUDE.md only', host: 'openclaude', on: 'CLAUDE.md', off: NESTED, tier: false },
+];
+for (const { name, host, on, off, tier } of OWN_CARRIER) {
+  test(`the in-process read answers as the host's hook: ${name}`, () => {
+    const w = world(false);
+    try {
+      fs.rmSync(w.pcfg, { recursive: true, force: true });
+      const cfg = path.join(w.repo, `.${host}`);
+      fs.mkdirSync(cfg, { recursive: true });
+      fs.writeFileSync(path.join(cfg, 'user-rules.md'), 'mine\n');
+      fs.writeFileSync(path.join(w.repo, on), 'Shared tier: on\n');
+      fs.writeFileSync(path.join(w.repo, off), 'a carrier\n');
+      assert.deepEqual(sessionFiles(cfg, host).map((s) => s.label), tier ? ['shared', `host: ${host}`] : ['']);
+      assert.equal(alwaysOnCost({ host, root: w.repo, dir: cfg, footprint: 'full' }).context, tier ? 35 : 4);
+      assert.equal(capture(() => cmdContext({ root: cfg, host })).out.includes(TIER_HEAD), tier);
+    } finally { w.restore(); }
+  });
+}
+
+// Claude's emitted hook names no host, so it reads any host's global: the console's figure for a
+// claude row must take the same branch, not the stricter one `--host claude` would.
+test('the always-on cost of a claude row reads the tier as its host-less hook does', () => {
+  const w = world(false);
+  try {
+    fs.rmSync(w.pcfg, { recursive: true, force: true });
+    fs.writeFileSync(path.join(w.gcfg, '.geneseed-emit'), 'bob-global\n');
+    fs.writeFileSync(path.join(w.gcfg, 'CLAUDE.md'), 'a carrier\n');
+    fs.writeFileSync(path.join(w.gcfg, 'user-rules.md'), 'mine\n');
+    assert.ok(w.ctx(w.gcfg).includes(TIER_HEAD));
+    assert.equal(alwaysOnCost({ host: 'claude', root: w.gcfg, dir: w.gcfg, footprint: 'full' }).context, 35);
   } finally { w.restore(); }
 });
