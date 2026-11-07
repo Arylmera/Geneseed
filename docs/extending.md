@@ -706,7 +706,9 @@ Two gates hold it: `tests/unit/hook_form.test.mjs` pins the rule (including the 
 reachable because `ephemeralCheckout` takes the temp root as a parameter), and
 `tests/shim_intact.mjs` — a step in `ci.yml` and `publish.yml`, *after* `node --test`, because
 each test file runs in its own process and the file that causes this is not the file that would
-notice — fails if the suite left the shim naming anything that is not there.
+notice — fails if the suite left the shim naming anything that is not there. The same step fails
+if a test touched the machine tier: a change report naming test fixtures or the temp root, or, behind
+CI's `.suite-fence`, any file in the tier.
 
 This is not hypothetical — it happened while this file was being written. Several agents were
 verifying gates out of copied checkouts (the `copyCheckout` fixture pattern

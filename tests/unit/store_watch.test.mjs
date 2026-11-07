@@ -1,7 +1,9 @@
 // The change report, through the real hook entry and the real guard. Expected lines are written out.
 // A baseline at SessionStart, a compare at Stop: what is said, to whom, and what is excused.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +31,34 @@ const LINE = (n, names) => `Geneseed change report: ${n} rule or memory file${n 
 const message = (r) => (r.stdout.trim() ? JSON.parse(r.stdout).systemMessage : null);
 const tool = (id, name, file) => JSON.stringify({ message: { content: [{ type: 'tool_use', id, name, input: { file_path: file } }] } });
 const result = (id, isError) => JSON.stringify({ message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: isError }] } });
+
+// The post-suite gate, against a sandboxed tier: the leak's own shape goes red, a real report stays green.
+test('shim_intact: the machine tier fails on a test fixture, and passes a real report', () => {
+  const sb = makeSandbox('sw-tier-');
+  try {
+    const tier = path.join(sb.path, '.config', 'geneseed');
+    fs.mkdirSync(tier, { recursive: true });
+    const run = () => spawnSync(process.execPath, ['tests/shim_intact.mjs'], { env: { ...process.env, ...homeOverrides(sb.path) }, encoding: 'utf8' });
+    const report = (f) => fs.writeFileSync(path.join(tier, '.store-report.json'), JSON.stringify({ files: [f] }));
+    assert.equal(run().status, 0, 'an empty tier');
+    report(path.resolve('adapters/opencode/memory/w2g-report.md'));
+    const inCheckout = run();
+    assert.equal(inCheckout.status, 1);
+    assert.match(inCheckout.stderr, /w2g-report\.md/);
+    report(path.join(os.tmpdir(), 'gs-x', 'memory', 'a.md'));
+    assert.equal(run().status, 1, 'a path in the temp root');
+    report(path.join(path.parse(process.cwd()).root, 'home-of-a-real-install', 'user-rules.md'));
+    assert.equal(run().status, 0, 'a real store');
+    report(path.resolve('Harness/memory/a.md'));
+    assert.equal(run().status, 0, 'the project install a checkout may hold is a real store too');
+    fs.writeFileSync(path.join(tier, '.suite-fence'), '');
+    const fenced = run();
+    assert.equal(fenced.status, 1, 'behind the fence, any file is a leak');
+    assert.match(fenced.stderr, /\.store-report\.json/);
+    fs.rmSync(path.join(tier, '.store-report.json'));
+    assert.equal(run().status, 0, 'the fence alone');
+  } finally { sb.cleanup(); }
+});
 
 test('nothing changed: Stop prints nothing, and SessionStart wrote no tracked file', () => {
   const w = world('sw-quiet-');

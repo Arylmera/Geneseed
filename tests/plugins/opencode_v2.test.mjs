@@ -10,7 +10,7 @@ import assert from "node:assert/strict"
 import { promises as fs, existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { makeSandbox } from "../helpers/sandbox.mjs"
+import { makeSandbox, restoreProcessHome, sandboxProcessHome } from "../helpers/sandbox.mjs"
 import { spawnHook } from "../helpers/hook_run.mjs"
 
 const PLUGINS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../adapters/opencode/plugins")
@@ -29,6 +29,9 @@ export default async function run(rt) { return rt.agent("say hi", { label: "hi",
 `)
 const saved = Object.fromEntries(["OPENCODE_CONFIG_DIR", "GENESEED_MEMORY", "GENESEED_LEARN_DEBOUNCE_MS",
   "GENESEED_WORKFLOWS_DIR", "GENESEED_PONYTAIL"].map((k) => [k, process.env[k]]))
+// The guard's change report reads and writes the machine tier, so the home moves too: without this,
+// the report test below wrote its fixture's path into the real `.store-report.json`.
+sandboxProcessHome()
 process.env.OPENCODE_CONFIG_DIR = cfgDir
 process.env.GENESEED_MEMORY = memDir
 process.env.GENESEED_LEARN_DEBOUNCE_MS = "0"
@@ -36,6 +39,7 @@ process.env.GENESEED_WORKFLOWS_DIR = wfDir
 delete process.env.GENESEED_PONYTAIL
 after(async () => {
   for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+  restoreProcessHome()
   await fs.rm(tmp, { recursive: true, force: true })
 })
 
@@ -181,6 +185,12 @@ test("guard: a parsed shell write to a store becomes a real prompt, by call id",
   await hooks.tool["execute.before"](plain)
   const p = ev("c3"); await hooks.permission.evaluate(p)
   assert.equal(p.effect, "allow")
+  // The live miss on 2.2.5, through the home: a tier file, so no coined name can answer for it.
+  const cmdlet = { tool: "shell", id: "c4", input: { command: "Add-Content -Path \"$HOME\\.config\\geneseed\\memory\\x.md\" -Value \"test gate\"" } }
+  await hooks.tool["execute.before"](cmdlet)
+  assert.equal(cmdlet.tool, "shell", "the host asks; nothing is refused here")
+  const c = ev("c4"); await hooks.permission.evaluate(c)
+  assert.equal(c.effect, "ask")
 })
 
 // The change report on V2: baseline at the turn's start, compare at its end, approval from execute.after.

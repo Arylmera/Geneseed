@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.0.2] — 2026-11-07
+
+PowerShell write cmdlets are parsed like their Unix forms, and a suite can no longer write the real tier unseen.
+
+### Added
+- **PowerShell writes are parsed forms on every host.** On Windows PowerShell is the normal shell, and a live `Add-Content -Path "$HOME\.config\geneseed\user-rules.md" -Value "..."` on OpenCode 2.2.5 reached the store with no prompt. `shellWriteTargets` and its guard twin now read `Add-Content`, `Set-Content`, `Out-File`, `Clear-Content`, `Remove-Item`, `Copy-Item`, `Move-Item`, `New-Item` and `Rename-Item`, the aliases `ac`, `sc`, `del`, `copy`, `move`, `ni` and `ren`, and `rm`, `cp` and `mv` with a named parameter, in any case. A pipe into one counts. The outcomes are those of the other parsed forms: ask where the host can ask, refuse on OpenCode 1, warn on Bob. The protected-check and gate-configuration checks see these forms too. It is a parser, not a text scan: `Get-Content MEMORY.md` and a commit message naming the file stay free, and what it cannot read it leaves out. `pwsh -c` stays unread, as `bash -c` does. Shell is still not a boundary.
+- **A path that opens with the home is read, in every parsed form:** `~`, `$HOME`, `${HOME}`, `$env:HOME` and `$env:USERPROFILE`, so `echo x >> "$HOME/user-rules.md"` is seen as well.
+
+### Fixed
+- **A PowerShell here-string is data to the shell-write reader.** An apostrophe in a commit message could unpair the quotes and read a following line as a command. This holds only with a PowerShell cue, the tool's name or a `Verb-Noun` word outside the here-string: to bash `@'` is a plain quote, and what follows it is read.
+- **The test suite no longer writes the real machine tier.** The OpenCode 2 change-report test ran with the real home, so its fixture's path landed in `~/.config/geneseed/.store-report.json`. The test now has its own home. `tests/shim_intact.mjs` fails if the report names a path in the checkout's `adapters/` or `tests/` or in the temp root, and CI runs the suite against a fenced, empty tier that must stay empty.
+
 ## [5.0.1] — 2026-11-06
 
 The migration can finish in the console: a preview, and Approve and Reject on pending rules.

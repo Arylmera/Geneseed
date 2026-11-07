@@ -1591,13 +1591,56 @@ function nativeAskFile(p) {
 // to the END marker verbatim, with `export ` dropped (tests/plugins/guard.test.mjs diffs the two).
 
 // The cheap prefilter, a superset of what the parse acts on: a `>`, or one of the programs as a word.
-const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
+const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm|add-content|set-content|out-file|clear-content|remove-item|copy-item|move-item|new-item|rename-item|ac|sc|del|copy|move|ni|ren)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
 // One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
 // fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
 // too, so that their words never read as operands. A backslash is no escape here, as in
 // `SCAN_SPLIT_RE`: `echo "say \"hi > f\""` closes its quote early, reads a target, and asks (on Bob, blocks).
 const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
 const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+// What says the shell is PowerShell when the caller cannot: a `Verb-Noun` word outside any here-string.
+const PS_CUE_RE = /(?:^|[\s;|&(])(?:add|clear|copy|export|foreach|get|import|invoke|move|new|out|remove|rename|select|set|start|stop|test|where|write)-[a-z]+/i;
+// The home a shell expands, spelled for `writePath` as `~/…`, the one form that keeps the two readings.
+const HOME_WORD_RE = /^(?:~|\$\{?(?:env:)?(?:home|userprofile)\}?)(?=[\\/]|$)/i;
+// PowerShell's writers, each as the POSIX form that writes the same paths. `ren` is `mv` with a sibling.
+const PS_WRITERS = new Map(Object.entries({
+  'add-content': 'rm', ac: 'rm', 'set-content': 'rm', sc: 'rm', 'out-file': 'rm', 'clear-content': 'rm', 'remove-item': 'rm',
+  del: 'rm', 'new-item': 'rm', ni: 'rm', 'copy-item': 'cp', copy: 'cp', 'move-item': 'mv', move: 'mv', 'rename-item': 'ren', ren: 'ren',
+}));
+// `rm`, `cp` and `mv` are aliases too, but only a parameter spelled out in full tells them from the
+// POSIX programs: `-lp` and `-pat` are also POSIX flag clusters.
+const PS_NAMED_RE = /^-(?:path|literalpath|destination)(?::|$)/i;
+const PS_PATH_RE = /^-(?:path|literalpath|lp|pspath|filepath)$/i;
+const PS_SWITCH_RE = /^-(?:force|recurse|append|nonewline|noclobber|whatif|confirm|passthru|verbose|debug|container)$/i;
+const PS_VALUE_RE = /^-(?:value|encoding|itemtype|type|filter|include|exclude|inputobject|stream|width|target|erroraction|ea)$/i;
+// `(…)`, `$(…)`, `@(…)`, `{…}`, `@{…}`: an argument whose words cannot be counted. `${x}` is a variable.
+const PS_OPAQUE_RE = /^(?:[$@]?\(|@?\{)/;
+
+/**
+ * `s` with each here-string body cut. The body is data, as a heredoc's is: without this, an apostrophe
+ * in a PowerShell commit message unpairs the quotes, and a line that opens with `Move` reads as a
+ * command. One pass: a quote kind with no closer is searched for once, so many openers stay linear.
+ */
+function hereStringsCut(s) {
+  const re = /@(["'])\r?\n/g;
+  const dead = new Set();
+  let out = ''; let at = 0; let m;
+  while ((m = re.exec(s))) {
+    if (dead.has(m[1])) continue;
+    const end = s.indexOf(`\n${m[1]}@`, re.lastIndex - 1);
+    if (end < 0) { dead.add(m[1]); continue; }
+    out += `${s.slice(at, m.index)}''`;
+    at = end + 3;
+    re.lastIndex = at;
+  }
+  return out + s.slice(at);
+}
+
+/** `t` without its quotes, a home spelled `~/…`. Single quotes expand nothing, so `$` stays and hides the path. */
+function shellWord(t) {
+  const w = t.replace(/["']/g, '');
+  return t[0] !== "'" && HOME_WORD_RE.test(w) ? `~${w.replace(HOME_WORD_RE, '').replace(/\\/g, '/')}` : w;
+}
 
 /** `t` as an absolute path from `dir`, `~/…` as it stands, or null for what the shell rewrites. */
 function writePath(dir, t) {
@@ -1606,7 +1649,47 @@ function writePath(dir, t) {
   // A Git Bash `/c/…` path, as `resolveIn` reads it.
   const q = process.platform === 'win32' ? t.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:') : t;
   if (path.isAbsolute(q)) return path.resolve(q);
+  if (dir && dir[0] === '~') return `${dir}/${q}`;
   return dir ? path.resolve(dir, q) : null;
+}
+
+/**
+ * The operands of a PowerShell writer, in the order the POSIX branches read them, `/`-separated (a
+ * cmdlet takes `\` on every platform). Only the first positional is a path, and for `cp`, `mv` and
+ * `ren` the next is the destination: the next one of `Add-Content a b` is its value and of
+ * `Remove-Item a b` its filter. Named paths are read wherever they stand; a parameter this does
+ * not know, or a `(…)` or `{…}` argument, ends the positionals, because its words cannot be counted.
+ */
+function psOperands(toks, form) {
+  const paths = []; const dest = []; const pos = [];
+  let name = ''; let open = true;
+  const list = (t) => (t.match(/"[^"]*"?|'[^']*'?|[^,"']+/g) || []).map(shellWord).filter(Boolean);
+  for (let i = 0; i < toks.length; i += 1) {
+    // An array argument spans tokens: `a, b`.
+    const value = (t) => { let v = t; while (v.endsWith(',') && i + 1 < toks.length) { i += 1; v += toks[i]; } return v; };
+    const m = /^(-[a-z]+)(?::(.+))?$/is.exec(toks[i]);
+    if (!m) {
+      const t = value(toks[i]);
+      if (PS_OPAQUE_RE.test(t)) open = false;
+      else if (open && !/^\/[a-z]$/i.test(t)) pos.push(t); // `/y`: `copy` and `del` are cmd.exe's too
+    } else if (!PS_SWITCH_RE.test(m[1])) {
+      const into = PS_PATH_RE.test(m[1]) ? paths : /^-destination$/i.test(m[1]) ? dest : null;
+      const naming = /^-(?:new)?name$/i.test(m[1]);
+      if (!into && !naming && !PS_VALUE_RE.test(m[1])) { open = false; continue; }
+      if (m[2] === undefined) i += 1;
+      const t = value(m[2] ?? toks[i] ?? '');
+      if (PS_OPAQUE_RE.test(t)) open = false;
+      else if (into) into.push(...list(t));
+      else if (naming) name = shellWord(t);
+    }
+  }
+  if (!paths.length && pos.length) paths.push(...list(pos.shift()));
+  if (form === 'rm') return name ? (paths.length ? paths : ['.']).map((p) => `${p}/${name}`) : paths;
+  if (form === 'ren') {
+    const to = name || shellWord(pos[0] ?? '');
+    return to && paths.length ? [paths[0], paths[0].replace(/[^\\/]*$/, '') + to] : paths;
+  }
+  return [...paths, ...(dest.length ? dest : list(pos[0] ?? '')).slice(0, 1)];
 }
 
 /** The files `sed` edits in place: none without `-i`; else its operands, past the script if inline. */
@@ -1629,38 +1712,55 @@ function sedFiles(args) {
 /**
  * The files `command` would write, as absolute paths: redirect targets (`>`, `>>`, `&>`), `tee`
  * and `rm` operands, `sed -i` files, the destination of `cp` and `mv`, and the sources of `mv`, which
- * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. Read like
- * `rootScan`: quotes, comments and heredoc bodies are data. A `cd` is followed; one it cannot read
- * leaves later relative paths unseen. What it cannot read, it leaves out: this reader fails OPEN.
+ * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. PowerShell's
+ * writers read the same way (`PS_WRITERS`, `psOperands`), case-insensitively, and a pipe into one needs
+ * nothing more: `| Out-File x` is a segment of its own. Read like `rootScan`: quotes, comments and
+ * heredoc bodies are data. So is a here-string body, but only in PowerShell, which `ps` says when the
+ * caller knows the tool and `PS_CUE_RE` otherwise: to bash the opener is a plain quote, so a closed
+ * "here-string" can wrap a real `rm` (the row in tests/unit/hook_gates.test.mjs). With no cue, a
+ * PowerShell here-string reads as bash would read it. A home variable is read as `~`. A `cd` is followed; one it cannot read leaves later relative paths unseen.
+ * What it cannot read, it leaves out: this reader fails OPEN.
  *
  * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
- * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
- * variable, glob or brace in it, a wrapper with flags (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`,
- * `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >& file` (read as a dup), a `popd` (not followed, so
- * relative paths after a `pushd`/`popd` pair resolve from the wrong folder), `cp -t`, any other writer
- * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
- * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
- * boundary that holds against those.
+ * `bash -c`, `pwsh -c`, `powershell -Command`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or
+ * subshell trick, `>|`, a path with any other variable, a glob or a brace in it, a wrapper with flags
+ * (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`, `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >&
+ * file` (read as a dup), a `popd` (not followed, so relative paths after a `pushd`/`popd` pair resolve
+ * from the wrong folder), `cp -t`, any other writer (`dd`, `ln`, `install`, `git mv`, `git checkout`,
+ * `Tee-Object`, `[IO.File]::WriteAllText`, an alias outside `PS_WRITERS` such as `ri`), a cmdlet behind
+ * a PowerShell assignment, `if` or script block (`$null = New-Item x`, `% { Remove-Item x }`), one
+ * continued over lines with a backtick, a parameter abbreviated or unknown before a positional path (so
+ * `Set-Content -Enc utf8 x`), a comma list after a POSIX-read `rm`, `cp` or `mv`, and a folder removed
+ * above a listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is
+ * the boundary that holds against those.
  */
-function shellWriteTargets(command, cwd) {
+function shellWriteTargets(command, cwd, ps = false) {
   if (!SHELL_WRITE_RE.test(command)) return [];
   const found = new Set();
   let dir = cwd;
   const add = (t) => { const p = writePath(dir, t); if (p) found.add(p); };
   const bare = (t) => t.replace(/["']/g, '');
-  for (const seg of scanSegments(command)) {
+  const cut = hereStringsCut(command);
+  for (const seg of scanSegments(ps || PS_CUE_RE.test(cut) ? cut : command)) {
     const outs = [];
     const body = seg.replace(REDIRECT_RE, (m, op, dup, target) => {
       if (op === undefined) return m;
-      if (op[0] === '>' && !dup && target) outs.push(bare(target));
+      if (op[0] === '>' && !dup && target) outs.push(shellWord(target));
       return ' ';
     });
     let toks = stripStructure(body.match(SCAN_TOKEN_RE) || []);
     while (toks.length && (/^\w+=/.test(toks[0]) || SCAN_WRAPPERS.has(bare(toks[0])))) toks = toks.slice(1);
-    const prog = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '') : '';
-    const args = toks.slice(1).map(bare);
+    const word = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase() : '';
+    let prog = word.replace(/\.exe$/, '');
+    const args = toks.slice(1).map(shellWord);
     const dashes = args.indexOf('--');
-    const ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    let ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    // `word`, not `prog`: `sc.exe` is the service tool, never the Set-Content alias.
+    const form = PS_WRITERS.get(word) ?? (/^(?:rm|cp|mv)$/.test(prog) && toks.some((t) => PS_NAMED_RE.test(t)) ? prog : null);
+    if (form) {
+      prog = form === 'ren' ? 'mv' : form;
+      ops = psOperands(toks.slice(1), form).map((t) => t.replace(/\\/g, '/'));
+    }
     if (SHELL_CD.has(prog)) {
       const to = ops.find((a) => !/^\/d$/i.test(a));
       dir = to && to !== '-' ? writePath(dir, to) : null;
@@ -2027,7 +2127,7 @@ export const GeneseedGuard = async (ctx) => {
           }
           // External Gate over a shell write: the same paths as a write tool, no content scan. A
           // throw fails open through the catch below, as the twin's `shellWriteReason` does.
-          for (const p of c ? shellWriteTargets(c, wd) : []) {
+          for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
             const sensor = protectedCheck(p)
             if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
             if (gateConfig(p) || nativeAskFile(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }

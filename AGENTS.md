@@ -43,7 +43,7 @@ Windows it buys nothing (spawning is CPU-bound there), so CI leaves Windows at t
 node tests/shim_intact.mjs
 ```
 
-Right after the suite: the only check that no test left the machine-wide hook shim pointing at a
+Right after the suite: the only check that no test touched the machine tier (`~/.config/geneseed`) or left the machine-wide hook shim pointing at a
 deleted temp directory (which silently kills every hook on the machine).
 
 ```bash

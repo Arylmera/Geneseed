@@ -219,14 +219,26 @@ test("V1: every agent's own ruleset must leave the prompt in place", async () =>
 // V1 cannot ask, so a parsed form that lands in a store is refused. Everything else is the host's
 // command permission's business, and these rows hold that the guard stays out of it.
 const SHELL_PARSED = ["echo x > user-rules.md", "echo x >> MEMORY.md", "tee -a user-rules.md < a", "cp a user-rules.md", "mv a MEMORY.md",
-  "sed -i s/a/b/ user-rules.md", "rm user-rules.md", "echo x > %M/x.md", "cd %M && echo x > f.md"]
+  "sed -i s/a/b/ user-rules.md", "rm user-rules.md", "echo x > %M/x.md", "cd %M && echo x > f.md",
+  // The live miss (OpenCode 2.2.5). The tier row names no coined file, so only the home expansion can reach it.
+  "Add-Content -Path \"$HOME\\.config\\geneseed\\user-rules.md\" -Value \"test gate\"", "Add-Content -Path \"$HOME\\.config\\geneseed\\memory\\x.md\" -Value x",
+  "x | Out-File %M/x.md", "Remove-Item user-rules.md", "Move-Item a MEMORY.md", "ren a.md MEMORY.md", "New-Item -Path %M -Name x.md",
+  // Bash reads `@'` as a plain quote, so this `rm` is real.
+  "echo @'\n'; rm user-rules.md; echo '\n'@"]
 const SHELL_PASS = ["git commit -m 'note MEMORY.md'", "sort MEMORY.md", "echo 'see MEMORY.md' > notes.txt", "cat MEMORY.md", "git add MEMORY.md",
-  "grep x MEMORY.md > out.txt", "gh pr create --body MEMORY.md", "npm test", "bash -c 'echo x > MEMORY.md'", "node -e \"require('fs').writeFileSync('MEMORY.md','x')\""]
+  "grep x MEMORY.md > out.txt", "gh pr create --body MEMORY.md", "npm test", "bash -c 'echo x > MEMORY.md'", "node -e \"require('fs').writeFileSync('MEMORY.md','x')\"",
+  "Get-Content MEMORY.md", "Set-Content notes.txt 'see MEMORY.md'", "pwsh -c 'Add-Content MEMORY.md x'",
+  "Set-Content notes.txt @'\nDon't lose it.\nMove MEMORY.md away\n'@"]
+const HERE_STRING = "echo @'\nDon't lose it.\nMove MEMORY.md away\n'@"
 test("shell, V1: a parsed form landing in a store is refused", async () => {
   for (const c of SHELL_PARSED) assert.equal(await verdict(hookOf, "bash", { command: c.replaceAll("%M", mem), workdir: proj }), "refused", c)
 })
 test("shell: a command is judged by what it parses to, never by the names it mentions", async () => {
   for (const c of SHELL_PASS) assert.equal(await verdict(hookOf, "bash", { command: c, workdir: proj }), "pass", c)
+})
+test("shell: a tool named PowerShell is the cue for a here-string; a bash tool has none", async () => {
+  assert.equal(await verdict(hookOf, "powershell", { command: HERE_STRING, workdir: proj }), "pass")
+  assert.equal(await verdict(hookOf, "bash", { command: HERE_STRING, workdir: proj }), "refused")
 })
 test("shell: the files the host asks about are refused by key", async () => {
   for (const f of [path.join(cfg, "agents", "x.md"), path.join(cfg, "agents", "sub", "a.md"), path.join(cfg, "agent", "x.md"), path.join(cfg, "mode", "x.md"),
@@ -266,6 +278,18 @@ test("hook hosts: a parsed shell write to a store asks on Claude and only warns 
   assert.equal(gate("bob", "execute_command", { command: "echo x >> MEMORY.md" }), "pass")
   assert.equal(gate(null, "Bash", { command: "git commit -m 'note MEMORY.md'" }), "ask", "the commit ask, nothing about the store")
   assert.equal(gate("bob", "execute_command", { command: "sort MEMORY.md" }), "pass")
+  const cmdlet = "Add-Content -Path \"$HOME\\.config\\geneseed\\memory\\x.md\" -Value x"
+  assert.equal(gate(null, "PowerShell", { command: cmdlet }), "ask")
+  assert.equal(gate("openclaude", "PowerShell", { command: cmdlet }), "ask")
+  const bobRun = (command) => spawnHook(["tool-gate", "--root", root, "--host", "bob"],
+    JSON.stringify({ event: "PreToolUse", session_id: "s", cwd: proj, tool: "execute_command", input: { command } }), { env: hookEnv, cwd: proj })
+  const warned = bobRun(cmdlet)
+  assert.equal(warned.status, 0, "a warning, never a block")
+  assert.match(warned.stderr, /Persist Insight/)
+  assert.doesNotMatch(bobRun("Get-Content MEMORY.md").stderr, /Persist Insight/)
+  assert.equal(gate(null, "PowerShell", { command: "Get-Content MEMORY.md" }), "pass")
+  assert.equal(gate(null, "PowerShell", { command: HERE_STRING }), "pass", "the tool is the cue")
+  assert.equal(gate(null, "Bash", { command: HERE_STRING }), "ask", "no cue: the lines are bash's")
 })
 test("hook hosts: Bob reads every path key, and counts a move and a delete as writes", () => {
   assert.equal(gate("bob", "write_to_file", { path: "notes.txt", file_path: rules, content: "a" }), "block", "a decoy path")

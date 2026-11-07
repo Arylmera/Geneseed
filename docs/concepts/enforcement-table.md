@@ -35,6 +35,16 @@ Never a silent pass; Bob runs every gate above through one fused command, `tool-
 on the payload shape rather than on separate matchers. OpenCode enforces through two separate
 mechanisms: its own permission prompt (`opencode.json`, static globs) and the guard plugin
 (`tool.execute.before`, pattern matching); a rule can use either or both.
+
+`persist-insight` and `external-gate` also read a shell command's parsed forms on every host: a
+redirect, `tee`, `sed -i`, `cp`, `mv`, `rm`, and the PowerShell writers `Add-Content`, `Set-Content`,
+`Out-File`, `Clear-Content`, `Remove-Item`, `Copy-Item`, `Move-Item`, `New-Item`, `Rename-Item` with
+the aliases `ac`, `sc`, `del`, `copy`, `move`, `ni` and `ren`. A parsed write to a store asks on
+Claude Code, OpenClaude and OpenCode 2, is refused on OpenCode 1, and only warns on Bob. **Shell is
+not a boundary:** `bash -c`, `pwsh -c`, an interpreter and a variable stay unread, so the host's own
+command permission is the backstop, and the [change report](hooks.md#the-change-report) tells you
+afterwards.
+
 See [ADR 0008](../adr/0008-host-parity-ceiling-of-the-weakest-host.md) for why a gate that only
 one host can run still ships for every host it can.
 

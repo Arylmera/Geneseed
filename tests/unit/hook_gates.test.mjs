@@ -1719,17 +1719,122 @@ const SHELL_WRITE_ROWS = [
   ['cd $X && rm y', []],
 ];
 
+// PowerShell's writers are parsed forms like the rest: a named parameter wherever it stands, one
+// positional path, and for a copy, move or rename a second. The rows after the first block are the
+// ones a text scan would get wrong: a name that is a value, a read, a message, what cannot be counted.
+const PS_WRITE_ROWS = [
+  ['Add-Content -Path notes.txt -Value "hi"', ['notes.txt']],
+  ['add-content notes.txt hi', ['notes.txt']],
+  ['AC -Value hi notes.txt', ['notes.txt']],
+  ['Set-Content -LiteralPath "q r.txt" -Value x', ['q r.txt']],
+  ['Set-Content -Path:a.txt -Value:b', ['a.txt']],
+  ['sc -Encoding utf8 a.txt -Value b', ['a.txt']],
+  ['Out-File -FilePath a.txt -Append', ['a.txt']],
+  ['Clear-Content a.txt', ['a.txt']],
+  ['Add-Content .\\sub\\a.txt x', ['sub/a.txt']],
+  ['Get-Content a | Out-File b', ['b']],
+  ['"x" | Set-Content b', ['b']],
+  ['Get-Content a | Add-Content -Path b', ['b']],
+  ['(Get-Content f) -replace "a","b" | Set-Content f', ['f']],
+  ['Remove-Item -Recurse -Force a', ['a']],
+  ['Remove-Item a, b', ['a', 'b']],
+  ['Remove-Item a,"b c" -Force', ['a', 'b c']],
+  ['Microsoft.PowerShell.Management\\Remove-Item a', ['a']],
+  ['del a', ['a']],
+  ['rm -Path a,b', ['a', 'b']],
+  ['rm -Force -LiteralPath a', ['a']],
+  ['Copy-Item a b', ['b', 'b/a']],
+  ['copy a b', ['b', 'b/a']],
+  ['copy /y a b', ['b', 'b/a']],
+  ['Copy-Item -Path a -Destination b', ['b', 'b/a']],
+  ['Copy-Item -Destination b a', ['b', 'b/a']],
+  ['cp -Path a -Destination b', ['b', 'b/a']],
+  ['Move-Item a b', ['b', 'b/a', 'a']],
+  ['move a b', ['b', 'b/a', 'a']],
+  ['mv -Path a -Destination b', ['b', 'b/a', 'a']],
+  ['New-Item a.txt -ItemType File', ['a.txt']],
+  ['ni -Path d -Name a.txt', ['d/a.txt']],
+  ['New-Item -Name a.txt -Value x', ['a.txt']],
+  ['Rename-Item d/a b', ['d/b', 'd/b/a', 'd/a']],
+  ['Rename-Item -Path d\\a -NewName b', ['d/b', 'd/b/a', 'd/a']],
+  ['ren a b', ['b', 'b/a', 'a']],
+  ['Set-Location sub; Remove-Item x', ['sub/x']],
+  // The second positional of a content cmdlet is its value, of Remove-Item its filter.
+  ['sc notes.txt MEMORY.md', ['notes.txt']],
+  ["Set-Content notes.txt 'see MEMORY.md'", ['notes.txt']],
+  ['Remove-Item a MEMORY.md', ['a']],
+  ["Remove-Item 'a,b'", ['a,b']],
+  // A read, a message and a here-string body name a file and write nothing.
+  ['sort MEMORY.md', []],
+  ['Get-Content MEMORY.md', []],
+  ['Select-String x MEMORY.md', []],
+  ['git commit -m "Remove-Item MEMORY.md"', []],
+  ['git commit -m "copy MEMORY.md b; del MEMORY.md"', []],
+  ["echo 'see MEMORY.md' > notes.txt", ['notes.txt']],
+  ["git commit -m @'\nDon't lose it.\nMove MEMORY.md away\n'@", [], true],
+  ["Set-Content a.txt @'\nRemove-Item MEMORY.md\n'@", ['a.txt']],
+  // To bash `@'` is a plain quote, so with no PowerShell cue outside the body the `rm` is a real one.
+  ["echo @'\n'; rm tests/a.js; echo '\n'@", ['tests/a.js']],
+  ["echo @'\nRemove-Item x\n'; rm tests/a.js; echo '\n'@", ['tests/a.js']],
+  ["git commit -m @'\nDon't lose it.\nMove MEMORY.md away\n'@", ['away', 'away/MEMORY.md', 'MEMORY.md']],
+  ['sc.exe stop svc', []],
+  // What cannot be read fails open: a variable, a subexpression, an unknown parameter, an inner command.
+  ['Add-Content $p x', []],
+  ['Add-Content $env:TEMP\\x y', []],
+  ["Add-Content '$HOME/x' y", []],
+  ['Set-Content -Value (Get-Content y) x', []],
+  ['Add-Content (Join-Path a b) x', []],
+  ['Set-Content -Foo bar x', []],
+  ['pwsh -c "Add-Content x y"', []],
+  ['powershell -Command "Remove-Item x"', []],
+  ['Add-Content', []],
+  ['Remove-Item -Force', []],
+  ['Copy-Item a', []],
+];
+
+// Every spelling of the home lands on the one `~/…` form, whichever slash or shell it was written in.
+const HOME_WRITE_ROWS = [
+  ['Add-Content -Path "$HOME\\.config\\geneseed\\user-rules.md" -Value "test gate"', '~/.config/geneseed/user-rules.md'],
+  ['Set-Content $env:USERPROFILE\\m.md x', '~/m.md'],
+  ['Set-Content "$Env:UserProfile/m.md" x', '~/m.md'],
+  ['Set-Content "$env:HOME/m.md" x', '~/m.md'],
+  ['Set-Content ${HOME}/m.md x', '~/m.md'],
+  ['Set-Content ~\\m.md x', '~/m.md'],
+  ['echo x >> "$HOME\\m.md"', '~/m.md'],
+  ['rm $HOME/m.md', '~/m.md'],
+  ['cd $HOME\\d; Add-Content m.md x', '~/d/m.md'],
+];
+
 test('shellWriteTargets: what each command form writes, and what it does not', async () => {
   const { shellWriteTargets } = await import('../../js/hosts/hooks.mjs');
   const cwd = path.resolve('/proj');
-  for (const [command, want] of SHELL_WRITE_ROWS) {
-    const got = shellWriteTargets(command, cwd).map((p) => path.relative(cwd, p).replace(/\\/g, '/'));
+  for (const [command, want, ps] of [...SHELL_WRITE_ROWS, ...PS_WRITE_ROWS]) {
+    const got = shellWriteTargets(command, cwd, ps).map((p) => path.relative(cwd, p).replace(/\\/g, '/'));
     assert.deepEqual(got, want, command);
   }
+  for (const [command, want] of HOME_WRITE_ROWS) assert.deepEqual(shellWriteTargets(command, cwd), [want], command);
   assert.deepEqual(shellWriteTargets('rm ~/x', cwd), ['~/x'], 'a home path stays for the two readings');
   if (process.platform === 'win32') {
     assert.deepEqual(shellWriteTargets('rm /c/x/y', cwd), [path.resolve('c:/x/y')], 'a Git Bash path maps');
   }
+});
+
+// The bound, with no clock: a quote kind with no closer is searched for once, at any input length.
+// A regex here searched once per opener, and 120 KB of openers took 1.8 s on the hook path.
+test('shellWriteTargets: closer searches do not grow with the openers', async () => {
+  const { shellWriteTargets } = await import('../../js/hosts/hooks.mjs');
+  const searches = (n) => {
+    const { indexOf } = String.prototype;
+    let count = 0;
+    String.prototype.indexOf = function counted(needle, from) {
+      if (/^\n["']@$/.test(needle)) count += 1;
+      return indexOf.call(this, needle, from);
+    };
+    try { shellWriteTargets(`Set-Content a ${'@\'\n@"\n'.repeat(n)}`, path.resolve('/proj')); } finally { String.prototype.indexOf = indexOf; }
+    return count;
+  };
+  assert.equal(searches(10), 2);
+  assert.equal(searches(10000), 2);
 });
 
 const shellPayload = (command, cwd) => JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd });
@@ -1742,16 +1847,21 @@ test('a shell write to a protected check asks like a write tool; reads and near 
     for (const command of ['echo x > tests/a.test.js', 'echo x >> ci/verify.sh', 'echo x | tee tests/a.js',
       'sed -i s/a/b/ ci/verify.sh', 'cp evil.js tests/a.test.js', 'cp evil.js tests/', 'mv tests/a.js /elsewhere/a.js',
       'mv evil.js ci/verify.sh', 'rm tests/a.js', 'rm -f ci/verify.sh', 'cd tests && rm a.js',
-      'echo x > .geneseed/protected-checks.txt', 'echo x > .geneseed/done-checks.txt']) {
+      'echo x > .geneseed/protected-checks.txt', 'echo x > .geneseed/done-checks.txt',
+      'Remove-Item tests\\a.js', 'Set-Content ci/verify.sh x', 'Copy-Item evil.js tests/a.test.js', 'x | Out-File tests/a.js']) {
       const r = hookRun('git-gate', { stdin: shellPayload(command, repo), extra: ['--no-deletion-gate'] });
       const dec = askDecision(r, command);
       assert.match(dec.permissionDecisionReason, /External Gate/, command);
     }
     for (const command of ['cat tests/a.js > /tmp/y', 'cat tests/a.js', 'cp tests/a.js /tmp/y', 'npm test 2>&1',
       'node x.js > /dev/null', 'echo "x > tests/a.js"', 'sed -n p ci/verify.sh', 'echo x > src/a.js',
-      'rm $X', 'node -e "write(1)"']) {
+      'rm $X', 'node -e "write(1)"', 'Get-Content tests/a.js', 'Copy-Item tests/a.js /tmp/y', 'Set-Content src/a.js tests/a.js']) {
       assertDefers(hookRun('git-gate', { stdin: shellPayload(command, repo), extra: ['--no-deletion-gate'] }), command);
     }
+    // The tool is the here-string cue on this path too: the body is data to PowerShell, a command to bash.
+    const here = "echo @'\nDon't lose it.\nrm tests/a.js\n'@";
+    assertDefers(hookRun('git-gate', { stdin: JSON.stringify({ tool_name: 'PowerShell', tool_input: { command: here }, cwd: repo }), extra: ['--no-deletion-gate'] }), 'PowerShell');
+    assert.match(askDecision(hookRun('git-gate', { stdin: shellPayload(here, repo), extra: ['--no-deletion-gate'] }), 'bash').permissionDecisionReason, /External Gate/);
   } finally { sb.cleanup(); }
 });
 
@@ -1780,6 +1890,10 @@ test('a shell write to a gate\'s own configuration asks; Bob blocks it, opencode
     const blocked = bob(path.join(f.root, 'excludes.json'));
     assert.equal(blocked.rc, 2, blocked.err);
     assert.match(blocked.err, /BLOCKED: Geneseed \(External Gate\)/);
+    const cmdlet = hookRun('tool-gate', {
+      root: f.root, host: 'bob', env, stdin: bobPayload('execute_command', { command: `Set-Content -Path "${path.join(f.root, 'excludes.json')}" -Value x`, cwd: f.repo }),
+    });
+    assert.equal(cmdlet.rc, 2, cmdlet.err);
     // A hook-settings file cannot be replayed from a command line, so Bob fails closed on it.
     const settings = bob(path.join(f.repo, '.bob', 'settings.json'));
     assert.equal(settings.rc, 2, settings.err);
@@ -1792,7 +1906,8 @@ test('a shell write to a gate\'s own configuration asks; Bob blocks it, opencode
 });
 
 test('a shell command the reader chokes on defers, never a gate-error ask', () => {
-  for (const command of ['> ', '>', '>>> <<<', 'cp', 'rm', 'rm \0', '"> ', 'tee "', "sed -i '"]) {
+  for (const command of ['> ', '>', '>>> <<<', 'cp', 'rm', 'rm \0', '"> ', 'tee "', "sed -i '",
+    'Add-Content', 'Add-Content -Path', 'ni -Name', 'ren a', 'Remove-Item ,', 'copy -Destination', "del @'\n"]) {
     assertDefers(hookRun('git-gate', { stdin: shellPayload(command, process.cwd()), extra: ['--no-deletion-gate'] }), command);
   }
 });
