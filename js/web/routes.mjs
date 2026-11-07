@@ -27,7 +27,8 @@ import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem } from './catalog.mjs';
 import { apiUsage } from './usage-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
-import { apiProfile, apiProfileSave, apiRules, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
+import { migratePreview } from '../maintain/migrate.mjs';
+import { apiProfile, apiProfileSave, apiRules, apiRulesDecide, apiRulesMutate, apiRulesPromote } from './user-files.mjs';
 
 /**
  * The POSTs this daemon answers — and this table IS the dispatch, not a declaration beside
@@ -55,6 +56,7 @@ export const POST_ROUTES = new Map([
     [(state, b) => apiMemoryDelete(state, isTruthy(b.name) ? formatValue(b.name) : ''), false]],
   ['/api/rules', [apiRulesMutate, true]],
   ['/api/rules/promote', [apiRulesPromote, true]],
+  ['/api/rules/decide', [apiRulesDecide, true]],
   ['/api/profile', [apiProfileSave, true]],
   // No `ok: false` arm: success returns `{ok: true, loop}`, and both refusals (unknown root,
   // unknown preset) throw `NotFound`, which `doPost`'s catch answers 404 before this column is
@@ -70,7 +72,7 @@ export const POST_ROUTES = new Map([
  * are the only actions that read the request's install.
  */
 export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/rules',
-  '/api/rules/promote', '/api/profile', '/api/actions/restore', '/api/actions/build']);
+  '/api/rules/promote', '/api/rules/decide', '/api/profile', '/api/actions/restore', '/api/actions/build']);
 
 /**
  * The GETs that answer for the whole machine, not one install: they IGNORE a `?host=&path=`
@@ -86,7 +88,7 @@ export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/
  * active install (`fleetOf`), which caches one view per install on the daemon state; the laws
  * section, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
  */
-export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/kits',
+export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/migrate/preview', '/api/kits',
   '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/activity',
   '/api/catalog/skills', '/api/catalog/agents', '/api/catalog/memory', '/api/catalog/notebook',
   '/api/catalog/wiki', '/api/catalog/config']);
@@ -203,6 +205,8 @@ export const STATE_ROUTES = {
     new URL(url || '', 'http://x').searchParams.has('fresh')),
   '/api/installs': apiInstalls,
   '/api/fleet': (state) => apiFleet(state),
+  // Reads every global install, and writes nothing: the console's view of `migrate --dry-run`.
+  '/api/migrate/preview': () => migratePreview(),
   '/api/kits': apiKits,
   '/api/update': apiUpdate,
   '/api/usage': apiUsage,

@@ -41,6 +41,12 @@ vi.mock('../api/index.js', () => ({
         ],
       }),
     ),
+    migratePreview: vi.fn(() =>
+      Promise.resolve({
+        folds: [{ host: 'claude', summary: '1 rule to approve', failed: ['rules: a bad file'] }],
+        orphans: ['C:/.claude/AGENT.md'],
+      }),
+    ),
     installToggle: vi.fn(() => Promise.resolve({ ok: true })),
     setDefaultInstall: vi.fn(() => Promise.resolve({ ok: true })),
     mcp: vi.fn(() =>
@@ -85,6 +91,40 @@ const pick = async (label) =>
 const panel = () => document.querySelector('.install-panel')
 
 describe('Installs / Hosts', () => {
+  // The preview reads and never acts: nothing here may reach a confirm or an action.
+  it('shows the next rebuild inline, with the orphans, and acts on nothing', async () => {
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Preview next rebuild' }))
+    const panel = await screen.findByRole('region', { name: 'Next rebuild' })
+    await within(panel).findByText('1 rule to approve', { exact: false })
+    expect(panel.textContent).toMatch(/The fold would stop at rules: a bad file/)
+    expect(panel.textContent).toMatch(/C:\/\.claude\/AGENT\.md/)
+    expect(panel.textContent).toMatch(/move it by hand/)
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  it('says so when the preview fails, and retries', async () => {
+    api.migratePreview.mockImplementationOnce(() => Promise.reject(new Error('the read failed')))
+    render(<Hosts onAction={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Preview next rebuild' }))
+    const panel = await screen.findByRole('region', { name: 'Next rebuild' })
+    await within(panel).findByText(/the read failed/)
+    fireEvent.click(within(panel).getByRole('button', { name: /retry/i }))
+    await within(panel).findByText('1 rule to approve', { exact: false })
+  })
+
+  it('shows a loading state until the preview answers', async () => {
+    let answer
+    api.migratePreview.mockImplementationOnce(() => new Promise((r) => (answer = r)))
+    render(<Hosts onAction={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Preview next rebuild' }))
+    const panel = await screen.findByRole('region', { name: 'Next rebuild' })
+    expect(within(panel).queryByText('No global install to fold.')).toBeNull()
+    await act(async () => answer({ folds: [], orphans: [] }))
+    await within(panel).findByText('No global install to fold.')
+  })
+
   // A confirm message may be a React node; its words are read off a detached render.
   const textOf = (node) => {
     const box = document.createElement('div')

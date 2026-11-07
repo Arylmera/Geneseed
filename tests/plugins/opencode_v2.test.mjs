@@ -197,7 +197,7 @@ test("guard: the change report tells the user of an unapproved change, once", as
     await fs.writeFile(fact, "planted")
     await turn("session.execution.succeeded")
     assert.equal(said().length, 1)
-    assert.equal(said()[0].text, "Geneseed change report: 1 rule or memory file changed outside this session's approved writes (another session may have made it): memory/w2g-report.md. This detects a change; it prevented nothing.")
+    assert.equal(said()[0].text, "Geneseed change report: 1 rule or memory file changed outside this session's approved writes (another session, or a decision of yours in the web console, may have made it): memory/w2g-report.md. This detects a change; it prevented nothing.")
     assert.equal(said()[0].sessionID, "r1")
     await turn("session.execution.succeeded")
     assert.equal(said().length, 1, "said once")
@@ -246,7 +246,7 @@ test("context: pending fold items add one line, the hook's; none add nothing", a
     await fs.writeFile(ledger, JSON.stringify({ version: 1, items: { a: { kind: "rule", host: "claude", state: "pending" },
       b: { kind: "rule", host: "claude", state: "pending" }, c: { kind: "rule", host: "claude", state: "approved" } } }))
     const twin = line.exec(hookOut())?.[0]
-    assert.equal(twin, "[drafts] 2 drafted items in user-rules.draft.md wait for the user's decision (the rule skill).")
+    assert.equal(twin, "[drafts] 2 drafted items in user-rules.draft.md wait for the user's decision (the rule skill or the web console).")
     assert.equal(line.exec(await pluginOut())?.[0], twin)
     await fs.writeFile(ledger, JSON.stringify({ version: 1, items: { c: { kind: "rule", state: "approved" } } }))
     assert.doesNotMatch(hookOut(), line)

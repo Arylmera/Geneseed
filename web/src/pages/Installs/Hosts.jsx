@@ -10,6 +10,7 @@ import { storeInstallPick, takeInstallPick } from '../../hooks/useInstalls.js'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
+import MigrationPreview from './MigrationPreview.jsx'
 import StackBar from '../../components/StackBar.jsx'
 import { hostInfo, installName, removeLayer } from '../../lib/hosts.js'
 import { editCount } from '../../lib/format.js'
@@ -291,6 +292,7 @@ export default function Hosts({
   // key present only once the user has picked it (choiceFor fills the rest).
   const [picks, setPicks] = useState({})
   const [deploying, setDeploying] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   // What Uninstall does to memory + notebook, bound to the install it was chosen on: the
   // panel's fallback install can change under a toggle or refresh without a pick, and a
   // "delete" must never follow it there.
@@ -566,14 +568,23 @@ export default function Hosts({
           <span className="dim">
             {installs.filter((i) => i.state !== 'absent').length} installed.
           </span>
-          {onAction ? (
-            <div className="row gap-8">
+          <div className="row gap-8">
+            <button
+              type="button"
+              className="btn ghost"
+              aria-expanded={previewing}
+              onClick={() => setPreviewing((p) => !p)}
+            >
+              Preview next rebuild
+            </button>
+            {onAction ? (
               <button type="button" className="btn ghost" onClick={rebuildAll}>
                 <Icon name="refresh" /> Rebuild all
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
+        {previewing ? <MigrationPreview dataRev={dataRev} /> : null}
         {note?.tone === 'bad' ? (
           <p className="tag bad note" role="alert">
             {note.text}

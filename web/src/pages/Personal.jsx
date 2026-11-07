@@ -85,7 +85,7 @@ const EMPTY = {
 // Personal: the files that are yours alone and survive every update, reinstall and voice
 // change. Rules and Profile are editors; Memory and Notebook are the Library reader
 // locked to one kind, so an entry opened here keeps its address on this page.
-export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged }) {
+export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged, onAction }) {
   const soft = (p) => Promise.resolve(p).catch(() => null)
   const active = useInstalls(dataRev)
   // Each editor reloads only its own file after a write: the rules for the Overview and the
@@ -134,7 +134,7 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
         }
       />
       <Tabs page="personal" current={tab} badges={badges} label="Personal files" />
-      {tab === 'rules' && <Rules onChanged={reloadRules} dataRev={dataRev} />}
+      {tab === 'rules' && <Rules onChanged={reloadRules} dataRev={dataRev} onAction={onAction} />}
       {tab === 'profile' && <Profile onChanged={reloadProfile} dataRev={dataRev} />}
       {folder && counts[tab] === 0 && !item ? (
         <EmptyState title={EMPTY[tab].title} action={EMPTY[tab].action}>

@@ -7,15 +7,19 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { foldHost } from '../../js/build/fold.mjs';
 import { ROOT } from '../../js/build/source.mjs';
+import { sharedPaths } from '../../js/lib/machine-dir.mjs';
 import { cmdUninstall, installUninstall } from '../../js/maintain/uninstall.mjs';
 import { apiMemoryDelete } from '../../js/web/actions.mjs';
-import { apiFleet } from '../../js/web/api.mjs';
-import { apiCatalog, apiItem, configItems, memoryDir, memoryItems, tierOf } from '../../js/web/catalog.mjs';
+import { VERSION_MARKER } from '../../js/hosts/hosts.mjs';
+import { apiFleet, apiOverview } from '../../js/web/api.mjs';
+import { BadRequest, NotFound, apiCatalog, apiItem, configItems, memoryDir, memoryItems, tierOf } from '../../js/web/catalog.mjs';
 import { draftChoiceHead, draftRuleHead, parseDraft } from '../../js/hosts/memory-files.mjs';
 import { apiDocsPage } from '../../js/web/docs.mjs';
 import { webState } from '../../js/web/state.mjs';
-import { apiProfile, apiProfileSave, apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
+import { STATE_ROUTES } from '../../js/web/routes.mjs';
+import { apiProfile, apiProfileSave, apiRules, apiRulesDecide, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 
 const ENV_KEYS = ['OPENCODE_CONFIG_DIR', 'BOB_CONFIG_DIR', 'OPENCLAUDE_CONFIG_DIR', 'CLAUDE_CONFIG_DIR',
@@ -85,7 +89,7 @@ test('a global install reads the tier: rules, profile, memory and wiki (legacy n
 
 // The draft as the fold writes it (fold.test.mjs pins those bytes): a header, then blocks. The
 // rule Rite's record in `## Renumbered` is no draft, and a `Choose` block is a question, not a rule.
-const DRAFT = '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n\n'
+const DRAFT = '# User rules — draft\n\nNot active. The rule Rite or the console applies decisions.\n\n'
   + '## Rule from claude: Mine\n(source: /h/user-rules.md | old: R2 | sha256: aa)\n'
   + '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.\n\n'
   + '## Renumbered\n- bob R3 -> R4: Done\n\n'
@@ -93,15 +97,17 @@ const DRAFT = '# User rules — draft\n\nNot active. The rule Rite applies decis
   + 'Which one becomes the shared file?\n\n'
   + '## Rule from bob: Theirs: with a colon\n(source: /b/user-rules.md | old: R1 | sha256: cc)\nStay.\n';
 
-test('apiRules lists the draft blocks: rule text, a Choose by title, and no Renumbered record', async () => {
+// Each block also says what may decide it. These keys are written by hand and no ledger holds
+// them, so nothing may decide them: rule_decide.test.mjs has the blocks a real fold wrote.
+test('apiRules lists the draft blocks: rule text, a Choose with its files, and no Renumbered record', async () => {
   await withTier(({ cfg, tier }) => {
     const state = { target: cfg, refresh() {} };
     assert.deepEqual(apiRules(state).drafts, [], 'no draft file is no drafts');
     fs.writeFileSync(path.join(tier, 'user-rules.draft.md'), DRAFT);
     assert.deepEqual(apiRules(state).drafts, [
-      { title: 'Mine', host: 'claude', body: '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.' },
-      { title: 'Choose: PROFILE.md', host: null, body: '' },
-      { title: 'Theirs: with a colon', host: 'bob', body: 'Stay.' },
+      { title: 'Mine', host: 'claude', body: '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.', key: 'aa', decisions: [] },
+      { title: 'Choose: PROFILE.md', host: null, body: '', key: 'bb', decisions: [] },
+      { title: 'Theirs: with a colon', host: 'bob', body: 'Stay.', key: 'cc', decisions: [] },
     ]);
     fs.rmSync(path.join(tier, 'user-rules.md'));
     assert.equal(apiRules(state).drafts.length, 3, 'a draft outlives a missing rule file');
@@ -245,6 +251,80 @@ test('the Overview counts the facts the tier holds, not the host store', async (
     const row = apiFleet(webState()).installs.find((i) => i.host === 'claude' && i.scope === 'global');
     assert.equal(row?.facts, 2);
     assert.equal(row?.shared, true, 'the row must say its facts are the shared store');
+  });
+});
+
+// A Claude-family install has no root `AGENT.md`: the sidebar said "built never" over a live one.
+// The marker's mtime, pinned so the expected value is written here, is what both reads must answer.
+test('the Overview and the fleet read one built time, off the version marker', async () => {
+  await withTier(({ cfg }) => {
+    assert.ok(!fs.existsSync(path.join(cfg, 'AGENT.md')), 'the fixture must lack what the old read stat-ed');
+    fs.utimesSync(path.join(cfg, VERSION_MARKER), 1_700_000_000, 1_700_000_000);
+    const overview = apiOverview(webState('neutral', cfg));
+    assert.equal(overview.build_epoch, 1_700_000_000);
+    assert.ok(overview.build_time);
+    const row = apiFleet(webState()).installs.find((i) => i.host === 'claude' && i.scope === 'global');
+    assert.equal(row.built_epoch, 1_700_000_000);
+  });
+});
+
+// The fixture holds one of each thing a fold acts on, and a dead registry row, because that row is
+// what an ordinary read of the install list prunes: without it "wrote nothing" would pass on any read.
+test('the migration preview answers what the next rebuild does, and writes nothing', async () => {
+  await withTier(({ home, cfg, tier }) => {
+    fs.writeFileSync(path.join(cfg, 'user-rules.md'), '# User rules\n\n## R2 — Host rule\n(scope: global)\nStay.\n');
+    fs.writeFileSync(path.join(cfg, 'PROFILE.md'), 'a host profile\n');
+    fs.writeFileSync(path.join(cfg, 'AGENT.md'), 'an old carrier\n');
+    fs.writeFileSync(path.join(tier, 'installs.json'), `${JSON.stringify([path.join(home, 'gone')])}\n`);
+    const before = snapshot(home);
+    assert.deepEqual(STATE_ROUTES['/api/migrate/preview'](), {
+      folds: [{ host: 'claude', summary: '1 fact folded, 1 rule to approve, 1 to approve, old store moved aside', failed: [] }],
+      orphans: [path.join(cfg, 'AGENT.md')],
+    });
+    assert.deepEqual(snapshot(home), before);
+  });
+});
+
+// The fingerprint covers what the page showed. A stale one writes nothing, and the page reloads.
+test('apiRulesDecide decides on a fresh fingerprint and refuses a stale one', async () => {
+  await withTier(({ cfg, tier }) => {
+    const state = { target: cfg, refresh() {} };
+    fs.writeFileSync(path.join(cfg, 'user-rules.md'), '# User rules\n\n## R2 — Mine\n(scope: global)\nBe terse.\n');
+    foldHost({ host: 'claude', cfgDir: cfg, shared: sharedPaths() });
+    const { key } = apiRules(state).drafts[0];
+    const fp = apiRules(state).draft_fingerprint;
+    assert.match(fp, /^[0-9a-f]{16}$/);
+    const before = snapshot(tier);
+    assert.deepEqual(apiRulesDecide(state, { key, decision: 'reject', fingerprint: 'stale' }),
+      { ok: false, error: 'conflict', detail: 'The draft changed since you loaded it.' });
+    assert.deepEqual(apiRulesDecide(state, { key, decision: 'reject', fingerprint: 0 }).ok, false);
+    assert.deepEqual(snapshot(tier), before);
+    assert.throws(() => apiRulesDecide(state, { key, decision: 'maybe', fingerprint: fp }), BadRequest);
+    // An edit of the shared rules moves the fingerprint too: the number was read from them.
+    fs.appendFileSync(path.join(tier, 'user-rules.md'), '\n## R5 — Later\nNew.\n');
+    assert.equal(apiRulesDecide(state, { key, decision: 'reject', fingerprint: fp }).ok, false);
+    const fresh = apiRules(state).draft_fingerprint;
+    const res = apiRulesDecide(state, { key, decision: 'approve', fingerprint: fresh });
+    assert.deepEqual([res.ok, res.id, res.rebuild], [true, 6, true]);
+    assert.deepEqual(apiRules(state).drafts, []);
+  });
+});
+
+// `constructor` is an own-property trap for any plain-object lookup: the page must still answer.
+test('a draft block with a hostile name leaves GET /api/rules working', async () => {
+  await withTier(({ cfg, tier }) => {
+    const state = { target: cfg, refresh() {} };
+    fs.writeFileSync(path.join(tier, 'user-rules.draft.md'),
+      '# d\n\n## Choose: constructor\n(hosts: shared, claude | paths: a, b | sha256: constructor)\nq\n');
+    const res = apiRules(state);
+    assert.deepEqual(res.drafts, [{ title: 'Choose: constructor', host: null, body: '', key: 'constructor', decisions: [] }]);
+    assert.deepEqual(res.rules.map((r) => r.title), ['Shared rule']);
+  });
+});
+
+test('apiRulesDecide has nothing to decide on a project install', async () => {
+  await withTier(({ home }) => {
+    assert.throws(() => apiRulesDecide({ target: path.join(home, 'repo'), refresh() {} }, { decision: 'reject' }), NotFound);
   });
 });
 

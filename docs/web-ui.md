@@ -44,6 +44,8 @@ so other sites can't trigger builds, deletes, or shutdown. Mutating actions (bui
 update, export, restore, memory-delete, uninstall) run in the background and report back
 as toasts (fire-and-notify). Read-only browsing needs no token.
 
+**The token stops other sites, not other programs.** Anything on this machine that can read it, from the served page or `.geneseed-web.json`, can call the console API. So the console is no boundary against an agent with a shell, the same as the shell itself. That includes a rule decision: the [change report](concepts/hooks.md#the-change-report) still lists it, for this reason.
+
 Every request passes one guard first: the `Host` must be `127.0.0.1`, `localhost` or `[::1]`
 **at the server's own port** (DNS rebinding, other local servers), `/api/*` refuses a
 `Sec-Fetch-Site` of `cross-site`/`same-site` or a foreign `Origin` (so another site cannot read
@@ -60,13 +62,13 @@ A request can name the install it reads or writes. A read takes two query parame
 `host` and `path` in its JSON body. The pair is a row of `/api/installs`, and the server checks
 it against the same detected-install allowlist as the install toggle. An unknown or half pair
 gets a 404 and never falls through to another install's folder. The writes that take the pair
-are `/api/activity`, `/api/memory/delete`, `/api/rules`, `/api/rules/promote`, `/api/profile`,
+are `/api/activity`, `/api/memory/delete`, `/api/rules`, `/api/rules/promote`, `/api/rules/decide`, `/api/profile`,
 and the `restore` and `build` actions. In `/api/install`, `/api/default-install`, the `install` and
 `deploy` actions, `/api/excludes` and `/api/reveal`, `host`/`path` keep their own meaning.
 
 Every `/api/*` read takes and checks the pair, with these exceptions:
 - `/api/ping` and `/api/jobs` ignore it.
-- The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`,
+- The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`, `/api/migrate/preview`,
   `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active`,
   `/api/activity`, and the Library's skill, agent, memory and notebook lists,
   `/api/catalog/skills`, `/api/catalog/agents`, `/api/catalog/memory` and
@@ -214,8 +216,13 @@ streams the output of background jobs and keeps their history across reloads.
   (code points / 4 of its own block), and each list's head shows the one rule count and total, such
   as `4 rules · ≈1,055 tokens every turn · scope global unless marked`, which counts the file's
   header too. A row shows a scope only when it differs from that. There is no ceiling.
-  A **Pending** section lists what waits undecided in `user-rules.draft.md`: read-only, because
-  the rule skill alone decides a draft, and a pending rule still binds on its host. Every write carries the fingerprint of the
+  A **Pending** section lists what waits undecided in `user-rules.draft.md`, and a pending rule still
+  binds on its host. *Approve* and *Reject* decide a rule; a profile or wiki pointer shows both files,
+  with *Use the host file*, *Use the shared file* and *Keep both*. These apply the rule skill's own
+  steps (`js/build/rule-decide.mjs`), and a decision that moves a file offers *Rebuild all*. No decision
+  applies while a job runs. The [change report](concepts/hooks.md#the-change-report) lists a decision like
+  any other console write, and says it may be yours.
+  Every write carries the fingerprint of the
   content the page last read — if an agent session edited the file meanwhile, the save
   409s and the page reloads instead of clobbering it.
 - **Constitution** (`#/laws`) — the whole governance surface on one page, in three bands:

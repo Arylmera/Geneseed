@@ -280,7 +280,7 @@ async function draftLine() {
   try {
     const { items } = JSON.parse(await fs.readFile(path.join(machineDir(), ".fold-state.json"), "utf8"))
     const n = Object.values(items ?? {}).filter((i) => i?.state === "pending").length
-    return n ? `[drafts] ${n} drafted item${n === 1 ? "" : "s"} in user-rules.draft.md wait${n === 1 ? "s" : ""} for the user's decision (the rule skill).` : null
+    return n ? `[drafts] ${n} drafted item${n === 1 ? "" : "s"} in user-rules.draft.md wait${n === 1 ? "s" : ""} for the user's decision (the rule skill or the web console).` : null
   } catch { return null }
 }
 

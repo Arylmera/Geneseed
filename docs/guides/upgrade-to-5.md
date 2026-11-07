@@ -41,9 +41,11 @@ It writes nothing. It prints one line for each global install, read against the 
 [migrate] --dry-run: nothing was written.
 ```
 
-**Use only the `--dry-run` form here.** The `would re-emit` lines are the plan of `geneseed migrate` itself, which moves a clone install to [the npm shape](migrate.md). That is not a 5.0 step.
+**Use only the `--dry-run` form here.** The `would re-emit` lines are the plan of `geneseed migrate` itself, which moves a clone install to [the npm shape](migrate.md). That is not a 5.0 step. From a clone those lines do not appear: the preview ends by saying a real run would refuse, and a real `migrate` there exits 3 and changes nothing.
 
 It also lists orphans: a root `AGENT.md`, or the folder of a retired skill, that no manifest owns. Such a folder may be yours. Geneseed never moves it, so move it by hand if it is not.
+
+**In the console.** With no terminal, there is no preview before the first fold: *Update* on a clone pulls and rebuilds in one job, so the fold runs in that click, and a 4.x console has no preview. Nothing is deleted, as step 3 shows. After that, *Preview next rebuild* on the Installs page, beside *Rebuild all*, shows the same fold lines and orphans for any later rebuild, without the `would re-emit` lines, and writes nothing.
 
 ## 3. Upgrade
 
@@ -57,7 +59,7 @@ geneseed upgrade         # from a clone
 Between the install and the end of the rebuild:
 
 - Hooks and running sessions stay safe. They read the host files until the rebuild moves them.
-- Do not use the web console until the rebuild ends.
+- Do not change anything in the web console until the rebuild ends. *Rebuild all* on its Installs page is the same rebuild as `geneseed rebuild-all`.
 - The first `geneseed upgrade` from 4.x still runs the old doctor gate, which can take up to 300 seconds. Wait for it.
 
 Each global install in its host's own config directory prints what it moved, once:
@@ -85,14 +87,14 @@ A host installed after an `exclude add` also gets the repo-side wiring on this r
 
 `user-rules.draft.md` in the tier lists what the fold could not decide for you. It is never loaded: a drafted rule goes on binding from its host file until you decide.
 
-Ask the agent to review the pending rules. The `rule` skill is the only thing that writes a decision. It takes each item in turn:
+Ask the agent to review the pending rules, or open **Pending** on the console's Personal page. The `rule` skill and that section are the only things that write a decision, and they take the same steps:
 
 - **Approve** moves the rule to the shared file under a new number. The next rebuild of that host removes the host copy.
 - **Reject** keeps the rule on that host only, and it is never drafted again.
 - **Later** leaves it pending.
 - For a profile or wiki pointer, you choose which file becomes the shared one.
 
-The console's Personal page shows the same items under **Pending**, read-only.
+In the console, an item you leave alone stays pending. After a decision that moves a file, the page offers *Rebuild all*, which removes the host copy. If another session changed the draft, the page reloads and applies nothing.
 
 ## 5. Project installs
 

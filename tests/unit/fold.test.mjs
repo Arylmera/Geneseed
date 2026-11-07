@@ -456,7 +456,7 @@ test('a differing profile stays in force, gets one pointer and one ledger row, h
   assert.deepEqual(JSON.parse(read(shared.foldState)),
     { version: 1, items: { [key]: { kind: 'profile', host: 'claude', state: 'pending' } } });
   assert.equal(read(shared.draft).replaceAll('\r\n', '\n'), '# User rules — draft\n\n'
-    + 'Not active. The rule Rite applies decisions.\n\n'
+    + 'Not active. The rule Rite or the console applies decisions.\n\n'
     + '## Choose: PROFILE.md\n'
     + `(hosts: shared, claude | paths: ${shared.profile}, ${path.join(cfg, 'PROFILE.md')} | sha256: ${key})\n`
     + 'Which one becomes the shared file?\n');
@@ -580,7 +580,7 @@ test('conflict stays in force: the rule is drafted with its host and old number,
   const key = ruleKey('claude', 'Mine', 'Be terse.\nAlways.');
   assert.deepEqual(JSON.parse(read(shared.foldState)),
     { version: 1, items: { [key]: { kind: 'rule', host: 'claude', state: 'pending' } } });
-  assert.equal(lf(read(shared.draft)), '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n\n'
+  assert.equal(lf(read(shared.draft)), '# User rules — draft\n\nNot active. The rule Rite or the console applies decisions.\n\n'
     + '## Rule from claude: Mine\n'
     + `(source: ${path.join(cfg, 'user-rules.md')} | old: R2 | sha256: ${key})\n`
     + '(scope: global | trial until: 2026-12-01)\nBe terse.\nAlways.\n');

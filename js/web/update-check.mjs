@@ -24,7 +24,7 @@ import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
 import { measureUpstream, preflight } from '../maintain/update.mjs';
-import { normcase, which } from '../lib/paths.mjs';
+import { inNodeModules, normcase, which } from '../lib/paths.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A failed ask is retried sooner than a good answer is refreshed: a proxy hiccup is not a day. */
@@ -162,7 +162,7 @@ export function installKind({ root = ROOT, npmRoot = npmGlobalRoot } = {}) {
   let kind = 'other';
   let unanswered = false;
   if (existsSync(path.join(root, '.git'))) kind = 'git';
-  else if (path.basename(path.dirname(root)).toLowerCase() === 'node_modules') {
+  else if (inNodeModules(root)) {
     const g = npmRoot();
     unanswered = !g;
     if (g && real(g) === real(path.dirname(root))) kind = 'npm-global';

@@ -309,6 +309,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       apiPickFolder((result) => sendJson(res, result, 200, ae));
       return;
     }
+    // A rebuild's fold writes the same draft and ledger, so a decision waits for it.
+    if (path === '/api/rules/decide' && jm.busy) return sendJson(res, BUSY, 409, ae);
     // The install a body `{host, path}` names, on the routes that read one (`VIEW_POSTS`).
     // An action is looked up on the SAME segment `doAction` dispatches on (the last), so
     // `/api/actions/x/restore` cannot run a restore on the daemon's install instead.

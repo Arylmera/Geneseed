@@ -2137,7 +2137,7 @@ test('the migrate dry run reaches its end with no home directory', () => {
     const r = spawnSync(process.execPath, ['--input-type=module', '-e',
       `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
       + `const { cmdMigrate } = await import(${JSON.stringify(url)});`
-      + 'process.exitCode = cmdMigrate({ dryRun: true });'],
+      + `process.exitCode = cmdMigrate({ dryRun: true }, { root: ${JSON.stringify(path.join(d, 'node_modules', 'geneseed'))} });`],
     { cwd: repo, encoding: 'utf8', env, windowsHide: true });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /--dry-run: nothing was written/);
@@ -2157,9 +2157,13 @@ test('a real migrate with no home directory refuses cleanly and changes nothing'
     delete env.XDG_CONFIG_HOME;
     delete env.GENESEED_HOME;
     const before = fs.readdirSync(repo, { recursive: true }).sort();
-    const noHome = 'data:text/javascript,import os from "node:os"; os.homedir = () => { throw new Error("no home"); };';
-    const r = spawnSync(process.execPath, ['--import', noHome, path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'migrate'],
-      { cwd: repo, encoding: 'utf8', env, windowsHide: true });
+    // In process, with the npm package's root: from this checkout the verb refuses before it looks.
+    const url = pathToFileURL(path.join(ROOT, 'js', 'maintain', 'migrate.mjs')).href;
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `import os from 'node:os'; os.homedir = () => { throw new Error('no home'); };`
+      + `const { cmdMigrate } = await import(${JSON.stringify(url)});`
+      + `process.exitCode = cmdMigrate({}, { root: ${JSON.stringify(path.join(d, 'node_modules', 'geneseed'))} });`],
+    { cwd: repo, encoding: 'utf8', env, windowsHide: true });
     assert.equal(r.status, 3, r.stderr);
     assert.match(r.stderr, /REFUSED — no home directory/);
     assert.match(r.stderr, /Nothing was changed\. Set GENESEED_HOME/);

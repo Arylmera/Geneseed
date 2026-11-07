@@ -158,8 +158,10 @@ export function registryRecord(dir) {
  * different registries. The snapshot is taken once on purpose: comparing `kept` against a SECOND
  * read could clobber a root a concurrent `record()` appended between the two. So the write takes
  * the lock and adds what that second read holds and the snapshot did not.
+ *
+ * `prune: false` reads the same rows and writes nothing, for a preview that promises as much.
  */
-export function registryRoots() {
+export function registryRoots({ prune = true } = {}) {
   const original = registryLoad();
   if (!original) return [];
   const file = registryPath();
@@ -189,7 +191,7 @@ export function registryRoots() {
       out.push(root);
     }
   }
-  if (kept.length !== original.length || kept.some((v, i) => v !== original[i])) {
+  if (prune && (kept.length !== original.length || kept.some((v, i) => v !== original[i]))) {
     try {
       withRegistryLock(() => {
         registrySave([...kept, ...(registryLoad() ?? []).filter((r) => !original.includes(r))]);

@@ -83,7 +83,7 @@ sequenceDiagram
 | FR-005 | OpenCode gets the same behaviour through plugins, on both plugin APIs. | The host loads every plugin | ✅ | `adapters/opencode/plugins/`, `tests/host_canary.mjs` |
 | FR-006 | Global installs share memory, rules, profile, wiki manifest, exclude paths and notes. | Every global install reads the tier; project over host over shared | ✅ | `js/lib/machine-dir.mjs`, `js/hosts/hooks-context.mjs` |
 | FR-007 | A global emit folds existing stores into the tier. | Copies read back before the old store moves; a second run writes nothing | ✅ | `js/build/fold.mjs` |
-| FR-008 | A rule, profile or wiki that needs a decision waits in a draft. | A drafted rule stays in force on its host; only the `rule` skill decides | ✅ | `js/build/fold.mjs`, `src/skills/rule/approve.md` |
+| FR-008 | A rule, profile or wiki that needs a decision waits in a draft. | A drafted rule stays in force on its host; only the `rule` skill or the console's Pending section decides | ✅ | `js/build/fold.mjs`, `js/build/rule-decide.mjs`, `src/skills/rule/approve.md` |
 | FR-009 | A project install may opt in to read the tier. | Off by default; read-only and labelled; cost stated | ✅ | `js/inspect/cost.mjs`, `js/hosts/hooks-context.mjs` |
 | FR-010 | The agent's memory is one fact per file, with a two-level index. | `geneseed memory list`, `rm` archive; `learn` updates and does not duplicate | ✅ | `js/hosts/memory-files.mjs`, `js/maintain/memory.mjs` |
 | FR-011 | A folder can silence every global install. | `geneseed exclude add`; effect on the next tool call | ✅ | `js/inspect/excludes.mjs` |

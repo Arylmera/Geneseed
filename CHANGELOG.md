@@ -8,6 +8,22 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.0.1] — 2026-11-06
+
+The migration can finish in the console: a preview, and Approve and Reject on pending rules.
+
+### Added
+- **The console finishes the 5.0 migration with no terminal.** *Preview next rebuild* on the Installs page shows what each global install would fold, and any orphans, and writes nothing. It is the fold and orphan half of `geneseed migrate --dry-run`, through one new function (`migratePreview`) and one read-only route.
+- **Approve and Reject on the Rules page.** The *Pending* section now decides what the fold drafted: *Approve* and *Reject* on a rule, and for a profile or wiki pointer the two files with *Use the host file*, *Use the shared file* and *Keep both*. The steps are the rule skill's own, in one module (`js/build/rule-decide.mjs`): target file, ledger row, draft, so a failed step leaves the rule in force. A stale page reloads and applies nothing. A decision that moves a file offers *Rebuild all*, and none applies while a job runs. Only what the fold drafted is decidable. The change report lists a decision like any other console write, and its line now says one may be yours: the console's token is readable by anything on the machine, so the console is no boundary against an agent with a shell.
+
+### Changed
+- **A real `geneseed migrate` runs only from the npm package.** From a git clone or a bundle it refuses with exit 3 before any write, and says to use `geneseed update`: the rebuild there would point the hook shim back at the same copy. An npx cache counts as outside the package. `--dry-run` works from anywhere, and there it says a real run would refuse instead of listing re-emits. A run from the npm package does not change. The guides and `migrate --help` now say that the rebuild, not `migrate`, rewrites the shim, and that it names whichever Geneseed ran it.
+- **The rule skill's approval flow names the console as a second decider**, and reads the retired files of each host's config directory: `installs.json` holds project roots only, so the old wording found none.
+
+### Fixed
+- **The sidebar no longer says `built never` on a live Claude-family install.** The Overview read the mtime of `AGENT.md`, which such an install lacks. It now reads the version marker, as the fleet does.
+- **`geneseed migrate --dry-run` writes nothing, as it says.** It used to prune dead rows from `installs.json` while it listed the installs.
+
 ## [5.0.0] — 2026-11-06
 
 Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.config/geneseed`, and existing stores fold into it on the next global emit. Breaking: see Removed.

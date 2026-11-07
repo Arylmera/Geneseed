@@ -7,6 +7,7 @@ vi.mock('../api/index.js', () => ({
     rules: vi.fn(),
     rulesMutate: vi.fn(() => Promise.resolve({ ok: true, fingerprint: 'f2' })),
     rulesPromote: vi.fn(() => Promise.resolve({ ok: true })),
+    rulesDecide: vi.fn(() => Promise.resolve({ ok: true, rebuild: true, cleared: [] })),
   },
 }))
 
@@ -56,25 +57,127 @@ beforeEach(() => {
 })
 
 describe('Rules', () => {
-  // Read-only: the rule Rite is the draft's one writer, so the section offers no control.
-  it('lists pending drafts read-only, with the host they bind on', async () => {
+  const RULE_DRAFT = {
+    title: 'Mine',
+    host: 'claude',
+    body: '(scope: global)\nBe terse.',
+    key: 'aa',
+    decisions: ['approve', 'reject'],
+  }
+  const CHOICE_DRAFT = {
+    title: 'Choose: PROFILE.md',
+    host: null,
+    body: '',
+    key: 'bb',
+    decisions: ['host', 'shared', 'both'],
+    choice: {
+      file: 'PROFILE.md',
+      host: 'bob',
+      shared_path: '/t/PROFILE.md',
+      host_path: '/b/PROFILE.md',
+      shared_text: 'the shared text',
+      host_text: 'the host text',
+    },
+  }
+  const withDrafts = (...drafts) =>
     api.rules.mockImplementation(() =>
-      Promise.resolve({
-        ...PAYLOAD,
-        drafts: [
-          { title: 'Mine', host: 'claude', body: '(scope: global)\nBe terse.' },
-          { title: 'Choose: PROFILE.md', host: null, body: '' },
-        ],
-      }),
+      Promise.resolve({ ...PAYLOAD, drafts, draft_fingerprint: 'df1' }),
     )
-    render(<Rules />)
-    const pending = await screen.findByRole('region', { name: 'Pending' })
+  // Every test here answers a confirm through this; the questions are read off its calls.
+  const yes = vi.fn(async () => true)
+  const renderPage = (props) =>
+    render(
+      <ConfirmContext.Provider value={yes}>
+        <Rules {...props} />
+      </ConfirmContext.Provider>,
+    )
+  const pendingRegion = () => screen.findByRole('region', { name: 'Pending' })
+
+  it('lists pending drafts with the host they bind on, and both files of a Choose', async () => {
+    withDrafts(RULE_DRAFT, CHOICE_DRAFT)
+    renderPage()
+    const pending = await pendingRegion()
     expect(within(pending).getByText('Mine')).toBeTruthy()
     expect(within(pending).getByText('binds on claude')).toBeTruthy()
     expect(within(pending).getByText(/Be terse\./)).toBeTruthy()
     expect(within(pending).getByText('Choose: PROFILE.md')).toBeTruthy()
+    expect(within(pending).getByText('the shared text')).toBeTruthy()
+    expect(within(pending).getByText('the host text')).toBeTruthy()
     expect(pending.textContent).toMatch(/still binds on its host/)
-    expect(pending.textContent).toMatch(/rule Rite decides each one/)
+    expect(
+      within(pending)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Approve', 'Reject', 'Use the bob file', 'Use the shared file', 'Keep both'])
+  })
+
+  // Approve asks, because only the user can make the Rite's legality check here. The decision
+  // carries the draft's fingerprint, and the page then offers the rebuild that removes the copy.
+  it('approves after a confirm, then offers Rebuild all', async () => {
+    withDrafts(RULE_DRAFT)
+    const onAction = vi.fn()
+    renderPage({ onAction })
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve · Mine' }))
+    await waitFor(() => expect(api.rulesDecide).toHaveBeenCalledTimes(1))
+    expect(yes.mock.calls.at(-1)[0]).toMatch(/binds every host.*never repeal one/)
+    expect(api.rulesDecide.mock.calls[0][0]).toEqual({
+      key: 'aa',
+      decision: 'approve',
+      fingerprint: 'df1',
+    })
+    const status = await screen.findByText(/A rebuild removes the host copy\./)
+    fireEvent.click(within(status).getByRole('button', { name: 'Rebuild all' }))
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith('build-all'))
+  })
+
+  it('sends nothing when a confirm is refused', async () => {
+    withDrafts(CHOICE_DRAFT)
+    yes.mockImplementationOnce(async () => false)
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /^Use the bob file/ }))
+    await waitFor(() => expect(yes).toHaveBeenCalled())
+    expect(yes.mock.calls.at(-1)[1].tone).toBe('danger')
+    expect(api.rulesDecide).not.toHaveBeenCalled()
+  })
+
+  // Reject and Keep both leave every file as it is: no question, and no rebuild to offer.
+  it('rejects with no confirm and no rebuild offer', async () => {
+    withDrafts(RULE_DRAFT)
+    api.rulesDecide.mockImplementationOnce(() =>
+      Promise.resolve({ ok: true, rebuild: false, cleared: [] }),
+    )
+    renderPage({ onAction: vi.fn() })
+    yes.mockClear()
+    fireEvent.click(await screen.findByRole('button', { name: 'Reject · Mine' }))
+    await screen.findByText(/The host file stays as it is\./)
+    expect(yes).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Rebuild all' })).toBeNull()
+  })
+
+  it('a conflict says why and reloads', async () => {
+    withDrafts(RULE_DRAFT)
+    api.rulesDecide.mockImplementationOnce(() =>
+      Promise.reject(
+        Object.assign(new Error('conflict'), {
+          status: 409,
+          body: { detail: 'The draft changed since you loaded it.' },
+        }),
+      ),
+    )
+    renderPage()
+    const button = await screen.findByRole('button', { name: 'Reject · Mine' })
+    const before = api.rules.mock.calls.length
+    fireEvent.click(button)
+    await screen.findByText(/The draft changed since you loaded it\. Reloaded the fresh copy\./)
+    await waitFor(() => expect(api.rules.mock.calls.length).toBeGreaterThan(before))
+    expect(screen.queryByText(/Decided\./)).toBeNull()
+  })
+
+  it('offers no decision on a rule the shared file already holds', async () => {
+    withDrafts({ ...RULE_DRAFT, decisions: [], held: true })
+    renderPage()
+    const pending = await pendingRegion()
+    expect(pending.textContent).toMatch(/already holds this rule/)
     expect(within(pending).queryByRole('button')).toBeNull()
   })
 

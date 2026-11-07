@@ -270,6 +270,7 @@ export default function App() {
         item={route.item}
         setup={setup}
         dataRev={dataRev}
+        onAction={runAction}
         onCountsChanged={reload}
       />
     ),

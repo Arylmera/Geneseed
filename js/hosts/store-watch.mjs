@@ -15,8 +15,10 @@
  * GENESEED'S OWN WRITES. `learn`, a memory removal and the fold run inside `recordOwnWrites`, which
  * snapshots the store around the run and logs what moved to `memory/.own-writes.json`, as an exact
  * size and mtime. A change matching the log is not reported. Limits: a write by anything else during
- * that window is excused too, and the log is a plain file an agent could edit. The web console's
- * edits are not logged, so one made during a session is reported.
+ * that window is excused too, and the log is a plain file an agent could edit. Nothing the web
+ * console writes is logged, its decisions on the draft included: its token is readable by anything
+ * on the machine, so a POST proves no click, and logging one would let an agent hide a write. So a
+ * real click reads as a change, and the line says that may be what it is.
  *
  * WHAT IT CANNOT TELL. Approval is per session, and the tier is shared: another session's approved
  * write reads as a change here, so the line says so rather than call it unapproved. A Claude
@@ -146,7 +148,7 @@ export function storeLine(files) {
   const shown = files.slice(0, NAMES_SHOWN).map((f) => f.split(/[\\/]/).slice(-2).join('/')).join(', ');
   const more = files.length > NAMES_SHOWN ? ` (+${files.length - NAMES_SHOWN} more)` : '';
   return `Geneseed change report: ${files.length} rule or memory file${files.length === 1 ? '' : 's'} `
-    + `changed outside this session's approved writes (another session may have made it): ${shown}${more}. `
+    + `changed outside this session's approved writes (another session, or a decision of yours in the web console, may have made it): ${shown}${more}. `
     + 'This detects a change; it prevented nothing.';
 }
 
