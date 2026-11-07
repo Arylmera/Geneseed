@@ -297,7 +297,7 @@ test('the rule gate survives a home directory it cannot read, and still guards t
       input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file, content: 'x' } }) });
     const inStore = gate(path.join(root, 'memory', 'fact.md'));
     assert.equal(inStore.status, 0, inStore.stderr);
-    assert.match(inStore.stdout, /writing to memory/, 'the install store still asks');
+    assert.match(inStore.stdout, /This edit changes a memory file/, 'the install store still asks');
     const outside = gate(path.join(d, 'elsewhere.md'));
     assert.equal(`${outside.status} ${outside.stdout}`, '0 ');
   });

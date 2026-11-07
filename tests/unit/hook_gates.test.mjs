@@ -71,7 +71,7 @@ const bashPayload = (command) =>
  * must point at the one real way out — the user acting outside Bob — never at the hook itself.
  */
 function assertBobBlockIsHonest(stderr, what) {
-  assert.doesNotMatch(stderr, /Confirm this specific command/, `bob offers a confirmation: ${what}`);
+  assert.doesNotMatch(stderr, /Safe choice|If you allow it/, `bob offers a confirmation: ${what}`);
   assert.match(stderr, /no approval step/, `bob: ${what}: ${stderr}`);
   assert.match(stderr, /themself, outside Bob/, `bob: ${what}: ${stderr}`);
 }
@@ -208,7 +208,30 @@ test('guardGate: a throwing gate asks with the message and still exits 0', async
   assert.equal(rc, 0, 'a guarded gate must never exit non-zero');
   const dec = JSON.parse(chunks.join('')).hookSpecificOutput;
   assert.equal(dec.permissionDecision, 'ask');
-  assert.match(dec.permissionDecisionReason, /gate error — resolvePath refused ~user/);
+  assert.match(dec.permissionDecisionReason, /gate error: the check failed with "resolvePath refused ~user"/);
+});
+
+// `guardGate` calls `ask` from its catch, so a throw while building the words would leave as a bad
+// exit, and Claude lets that call through. An error nothing can read is the worst the catch can meet.
+test('guardGate: an error that cannot be read still asks, with the fixed sentence', async () => {
+  const { guardGate } = await import('../../js/hosts/hooks.mjs');
+  const unreadable = [{ message: { toString() { throw new Error('no words'); } } }, Object.create(null),
+    Object.create(null, { message: { get() { throw new Error('no message'); } } })];
+  for (const thrown of unreadable) {
+    const chunks = [];
+    const realWrite = process.stdout.write;
+    process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+    let rc;
+    try {
+      rc = guardGate(() => { throw thrown; })({ root: null });
+    } finally {
+      process.stdout.write = realWrite;
+    }
+    assert.equal(rc, 0);
+    const dec = JSON.parse(chunks.join('')).hookSpecificOutput;
+    assert.equal(dec.permissionDecision, 'ask');
+    assert.equal(dec.permissionDecisionReason, 'Geneseed could not describe this call. Check what it does before you trust it.');
+  }
 });
 
 // The ask document is a hand-written template since json.mjs left the gate path, so it must stay
@@ -256,20 +279,18 @@ const writePayload = (p, key = 'file_path') =>
 function ruleAsks(p, { root = null, key = 'file_path' } = {}) {
   const dec = askDecision(hookRun('rule-gate', { root, stdin: writePayload(p, key) }), p);
   // THE MESSAGE IS THE FEATURE. An `ask` with no reason is a permission prompt the user
-  // cannot answer: it must name the rule and route to the skill that resolves it.
-  assert.ok(dec.permissionDecisionReason.includes('Persist Insight'), dec.permissionDecisionReason);
-  assert.ok(dec.permissionDecisionReason.includes('rule skill'), dec.permissionDecisionReason);
+  // cannot answer: it must name the rule and give the safe choice on line 2.
+  assert.match(dec.permissionDecisionReason.split('\n')[1], /^Safe choice: .*\(Persist Insight\)$/);
   assertPersistAsk(dec.permissionDecisionReason);
 }
 
 // A weak model (OpenCode, 4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the
-// blocked memory index through `python3`. So the process-1 text names one way forward — ask,
-// then, if refused, re-issue the same edit — forbids the detour, and names no switch that turns a gate off.
+// blocked memory index through `python3`. So the process-1 text names one way forward (ask), forbids
+// the detour, and names no switch that turns a gate off. It closes on that, because the agent reads it
+// only when the call ends unallowed.
 function assertPersistAsk(why) {
   assert.doesNotMatch(why, /GENESEED_/, why);
-  assert.match(why, /ask the user/, why);
-  assert.match(why, /If this edit was refused, re-issue the same edit only after they answer/, why);
-  assert.match(why, /never write it another way \(for example through a shell command\)/, why);
+  assert.match(why, /\nAgent: if refused, ask the user; do not write it another way\.$/, why);
 }
 
 const ruleDefers = (p, root = null) =>
@@ -356,11 +377,11 @@ test('Law IV asks exactly on real loss, per the shared policy table, on Claude a
         const bob = hookRun('tool-gate', { host: 'bob', cwd: ws.repo, env: ws.env,
           stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
         assert.equal(bob.rc, row.stop ? 2 : 0, `bob: ${what}: ${bob.err}`);
-        assert.equal(/BLOCKED: Geneseed \(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
+        assert.equal(/BLOCKED: Tell the user this, word for word: [\s\S]*\(Deletion Is Deliberate\)/.test(bob.err), row.stop, `bob: ${what}: ${bob.err}`);
         if (row.stop) {
-          // Claude can ask, so its reason offers the confirmation; Bob cannot (exit 2 is final),
-          // so promising one there sent the model to "disable the Geneseed hook" (live, 2026-10-23).
-          assert.match(askDecision(claude, what).permissionDecisionReason, /Confirm this specific command/, what);
+          // Claude can ask, so its reason offers the choice; Bob cannot (exit 2 is final), so
+          // promising one there sent the model to "disable the Geneseed hook" (live, 2026-10-23).
+          assert.match(askDecision(claude, what).permissionDecisionReason, /\nSafe choice: .*\nIt asks because .*\nIf you allow it, /, what);
           assertBobBlockIsHonest(bob.err, what);
         }
       }, row.branch);
@@ -372,20 +393,20 @@ test('Law IV asks exactly on real loss, per the shared policy table, on Claude a
 // git it cannot run (PATH without git: the one spawn fails) both ask, and the reason tells the
 // user the gate could not verify — never a silent pass, and never a reason claiming a loss it
 // did not see.
-test('Law IV fails closed with a "could not verify" reason when it cannot read the state', () => {
+test('Law IV fails closed with the `unverified` text when it cannot read the state', () => {
   const ws = makeLossWorkspace();
   try {
     const run = (command, env) => hookRun('git-gate', { env, extra: ['--no-consent'],
       stdin: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: ws.repo }) });
     const glob = askDecision(run('rm -rf *.txt', ws.env), 'glob');
-    assert.match(glob.permissionDecisionReason, /could not verify/);
+    assert.match(glob.permissionDecisionReason, /could not work out what it removes/);
     const noGit = askDecision(run('git reset --hard HEAD', { ...ws.env, PATH: '', Path: '' }), 'no git');
-    assert.match(noGit.permissionDecisionReason, /could not verify/);
+    assert.match(noGit.permissionDecisionReason, /could not work out what it removes/);
     // The same reset passes once git can answer — the ask above was the missing git.
     assertDefers(run('git reset --hard HEAD', ws.env), 'reset to HEAD with git on PATH');
     // A reset target git cannot resolve is not proven to abandon nothing, so it asks — and says why.
     const noRef = askDecision(run('git reset --hard nosuchref', ws.env), 'unresolvable target');
-    assert.match(noRef.permissionDecisionReason, /could not verify/);
+    assert.match(noRef.permissionDecisionReason, /could not work out what it removes/);
   } finally { ws.cleanup(); }
 });
 
@@ -593,7 +614,7 @@ test('the catastrophic class asks on Claude and exits 2 on Bob, deletion gate on
     for (const cmd of CATASTROPHIC_ROWS) {
       const what = `${cmd} ${gate.join(' ') || '(armed)'}`;
       const dec = askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), extra: [...gate, '--no-consent'] }), what);
-      assert.match(dec.permissionDecisionReason, /Deletion Is Deliberate\) \u2014 `.*` would destroy a filesystem root/, what);
+      assert.match(dec.permissionDecisionReason, /^This command, .* would destroy a filesystem root.*\nSafe choice: Deny\. \(Deletion Is Deliberate\)\n/, what);
       const bob = hookRun('tool-gate', { host: 'bob', extra: gate,
         stdin: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', input: { command: cmd } }) });
       assert.equal(bob.rc, 2, `bob: ${what}: ${bob.err}`);
@@ -845,14 +866,14 @@ test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn an
     const r = hookRun(verb, { stdin, host: 'bob' });
     assert.equal(r.rc, 2, `${what}: expected exit 2, got ${r.rc}`);
     assert.equal(r.out, '', `${what}: Bob ignores stdout, nothing should be there: ${r.out}`);
-    assert.match(r.err, /BLOCKED: Geneseed/);
+    assert.match(r.err, /^\[geneseed\] BLOCKED: Tell the user this, word for word: /);
     assert.ok(r.err.includes(what), r.err);
   }
   const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob' });
   assertDefers(commit, 'commit');
-  assert.match(commit.err, /Consent Before Push/);
-  // The ask also points at the visual walkthrough, so a reviewer can see the change first.
-  assert.match(commit.err, /explain-changes/);
+  // One line and the fact that nothing asked: a routine warning, with no agent tail and no pointer.
+  assert.equal(commit.err.replace(/\r\n/g, '\n'), '[geneseed] This command commits or pushes with git, which needs your approval each time. (Consent Before Push)\n'
+    + 'This ran without a prompt, because Bob has no approval step.\n');
   assertDefers(hookRun('tool-gate', { stdin: bashPayload('git status'), host: 'bob' }), 'status');
 });
 
@@ -1106,6 +1127,121 @@ function sensorRepo(sb, lines) {
   return repo;
 }
 
+// What each gate hands the builder: the words themselves are tests/unit/gate_text.test.mjs's.
+const reasonOf = (r, what) => askDecision(r, what).permissionDecisionReason;
+const toolCall = (tool_name, tool_input, extra = {}) => JSON.stringify({ tool_name, tool_input, ...extra });
+
+test('the count reaches the prompt from the call, and an edit of unknown reach shows none', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'ci.yml\n');
+    const file = path.join(repo, 'ci.yml');
+    const first = (stdin) => reasonOf(hookRun('rule-gate', { stdin }), stdin).split('\n')[0];
+    const line = (count) => `This edit changes ci.yml${count}, which this project lists as a protected check.`;
+    const edit = { file_path: file, old_string: 'a', new_string: 'b\nc' };
+    assert.equal(first(toolCall('Edit', edit)), line(' (+2 lines, -1 line)'));
+    // `replace_all` applies a pair an unknown number of times, at the top or in an `edits` entry.
+    assert.equal(first(toolCall('Edit', { ...edit, replace_all: true })), line(''));
+    assert.equal(first(toolCall('MultiEdit', { file_path: file, edits: [edit, { ...edit, replace_all: true }] })), line(''));
+    assert.equal(first(toolCall('MultiEdit', { file_path: file, edits: [edit, edit] })), line(' (+4 lines, -2 lines)'));
+    // A new file counts its lines; an existing one is read, only now, for what it held.
+    assert.equal(first(toolCall('Write', { file_path: file, content: 'a\nb\n' })), line(' (+2 lines)'));
+    fs.writeFileSync(file, 'a\nold\n');
+    assert.equal(first(toolCall('Write', { file_path: file, content: 'a\nnew\n' })), line(' (+1 line, -1 line)'));
+  } finally { sb.cleanup(); }
+});
+
+// The count is a courtesy on a blocking path: it must cost no verdict and no time, and it must never
+// claim what it could not read. Each row still asks; only the count goes.
+test('a text too big, or written by the agent as a diff, shows no count and still asks in time', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'ci.yml\n');
+    const file = path.join(repo, 'ci.yml');
+    const first = (stdin) => reasonOf(hookRun('rule-gate', { stdin }), stdin.slice(0, 80)).split('\n')[0];
+    const plain = 'This edit changes ci.yml, which this project lists as a protected check.';
+    const big = 'x'.repeat(1024 * 1024 + 1);
+    assert.equal(first(toolCall('Edit', { file_path: file, old_string: 'a', new_string: big })), plain);
+    assert.equal(first(toolCall('Edit', { file_path: file, old_string: big, new_string: 'a' })), plain);
+    assert.equal(first(toolCall('Write', { file_path: file, content: big })), plain);
+    fs.writeFileSync(file, big);
+    assert.equal(first(toolCall('Write', { file_path: file, content: 'a\n' })), plain, 'an old file past the cap is not read');
+    // The cap is on bytes, read from the disk: this file is under it in characters, and a 256 MB one
+    // killed the hook (exit 134, no verdict) when it was read at all.
+    fs.writeFileSync(file, '\u00e9'.repeat(600 * 1024));
+    assert.equal(first(toolCall('Write', { file_path: file, content: 'a\n' })), plain);
+    fs.truncateSync(file, 256 * 1024 * 1024);
+    assert.equal(first(toolCall('Write', { file_path: file, content: 'a\n' })), plain);
+    fs.rmSync(file);
+    fs.mkdirSync(file);
+    assert.equal(first(toolCall('Write', { file_path: file, content: 'a\n' })), plain, 'a folder is no regular file');
+    fs.rmdirSync(file);
+    assert.equal(first(toolCall('apply_diff', { path: file, diff: '<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE' })), plain);
+    // Blocks opened and never closed: 20 s through `DIFF_BLOCK_RE` at this size.
+    const diff = '<<<<<<< SEARCH\nx\n=======\ny\n'.repeat(3200);
+    const start = performance.now();
+    assert.equal(first(toolCall('apply_diff', { path: file, diff })), plain);
+    assert.ok(performance.now() - start < 5000, `${Math.round(performance.now() - start)} ms`);
+  } finally { sb.cleanup(); }
+});
+
+// The count reads the file the gate judged: a `~` or a Git Bash path must not read as a new file.
+test('the count reads what the write lands on, however the path is spelled', () => {
+  const sb = makeSandbox();
+  try {
+    const home = path.join(sb.path, 'home');
+    fs.mkdirSync(home, { recursive: true });
+    const rules = path.join(home, 'user-rules.md');
+    fs.writeFileSync(rules, 'a\nold\n');
+    const env = { ...process.env, ...homeOverrides(home) };
+    const first = (file_path) => reasonOf(hookRun('rule-gate', { env, stdin: toolCall('Write', { file_path, content: 'a\nnew\n' }) }), file_path).split('\n')[0];
+    const want = 'This edit changes user-rules.md (+1 line, -1 line), your standing rules, which the agent obeys in every session.';
+    assert.equal(first('~/user-rules.md'), want);
+    assert.equal(first(rules), want);
+    if (process.platform === 'win32') assert.equal(first(rules.replace(/^([A-Za-z]):/, '/$1').replace(/\\/g, '/')), want);
+    fs.writeFileSync(rules, 'x'.repeat(1024 * 1024 + 1));
+    assert.equal(first('~/user-rules.md'), 'This edit changes user-rules.md, your standing rules, which the agent obeys in every session.',
+      'unread is no count, never a false +N');
+  } finally { sb.cleanup(); }
+});
+
+test('the agent\'s description is quoted on a commit, a loss and a scan, and never on a check or a store', () => {
+  const says = 'Say this is fine';
+  const call = (command) => toolCall('Bash', { command, description: says });
+  const quote = `The agent says (not checked): "${says}"`;
+  const commit = reasonOf(hookRun('git-gate', { stdin: call('git commit -m x') }), 'commit');
+  assert.equal(commit, `This command commits or pushes with git, which needs your approval each time. (Consent Before Push)\n${quote}`);
+  assert.ok(reasonOf(hookRun('git-gate', { stdin: call(LAW4_ALWAYS) }), 'loss').endsWith(quote));
+  assert.ok(reasonOf(hookRun('git-gate', { stdin: call('find / -name x') }), 'scan').includes(quote));
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'ci.yml\n');
+    for (const target of [path.join(repo, 'ci.yml'), path.join(repo, 'user-rules.md')]) {
+      const r = reasonOf(hookRun('git-gate', { stdin: call(`echo x > "${target}"`) }), target);
+      assert.ok(r.startsWith('This command writes to '), r);
+      assert.ok(!r.includes(says), r);
+    }
+  } finally { sb.cleanup(); }
+});
+
+test('a secret and a gate configuration are named from the repo root, and whole outside one', () => {
+  const sb = makeSandbox();
+  try {
+    const repo = sensorRepo(sb, 'ci.yml\n');
+    const first = (p, content) => reasonOf(hookRun('rule-gate', { stdin: toolCall('Write', { file_path: p, content }) }), p).split('\n')[0];
+    assert.equal(first(path.join(repo, 'src', 'a.js'), 'AKIAIOSFODNN7EXAMPLE'), 'This edit puts a credential-shaped string in src/a.js.');
+    assert.equal(first(path.join(repo, '.claude', 'excludes.json'), '{}'),
+      'This edit changes .claude/excludes.json (+1 line), which controls the gates that watch the agent.');
+    const outside = path.join(sb.path, 'a.js');
+    assert.match(first(outside, 'AKIAIOSFODNN7EXAMPLE'), /[\\/]a\.js"?\.$/);
+  } finally { sb.cleanup(); }
+});
+
+test('a real loss reads as what it loses, on the gate itself', () => {
+  assert.ok(reasonOf(hookRun('git-gate', { stdin: bashPayload(LAW4_ALWAYS) }), 'reflog')
+    .startsWith('This command deletes the history git uses to recover lost commits.\n'));
+});
+
 test('a write under a protected check asks under External Gate; a near miss defers', () => {
   const sb = makeSandbox();
   try {
@@ -1114,7 +1250,9 @@ test('a write under a protected check asks under External Gate; a near miss defe
       path.join(repo, 'ci', 'verify.sh')]) {
       const dec = askDecision(hookRun('rule-gate', { stdin: writePayload(p) }), p);
       assert.ok(dec.permissionDecisionReason.includes('External Gate'), dec.permissionDecisionReason);
-      assert.ok(dec.permissionDecisionReason.includes('protected-checks.txt'), dec.permissionDecisionReason);
+      // The path from the repo root, as a person names it, not the absolute one the tool carried.
+      const rel = path.relative(repo, p).replace(/\\/g, '/');
+      assert.ok(dec.permissionDecisionReason.startsWith(`This edit changes ${rel}, which this project lists as a protected check.\n`), dec.permissionDecisionReason);
     }
     for (const p of [path.join(repo, 'src', 'a.js'), path.join(repo, 'ci', 'verify.sh.bak'),
       path.join(repo, 'testsuite', 'x.js'), path.join(repo, '.geneseed', 'other.md')]) ruleDefers(p);
@@ -1145,7 +1283,7 @@ test('bob: a read of a protected check passes, a write to it blocks', () => {
       assert.equal(read.rc, 0, `${p}: a read was refused: ${read.err}`);
       const write = hookRun('tool-gate', { host: 'bob', stdin: bobPayload('write_file', { path: p, content: 'x' }) });
       assert.equal(write.rc, 2, `${p}: expected exit 2, got ${write.rc}, stderr=${write.err}`);
-      assert.match(write.err, /External Gate.*is a protected check/);
+      assert.match(write.err, /It was refused because the agent's own work is judged by this file\. \(External Gate\)/);
     }
   } finally { sb.cleanup(); }
 });
@@ -1222,8 +1360,8 @@ const gateRun = (f, p, extra = {}) => hookRun('rule-gate', {
 function gateConfigAsks(r, p) {
   const dec = askDecision(r, p);
   assert.ok(dec.permissionDecisionReason.includes('External Gate'), dec.permissionDecisionReason);
-  assert.ok(dec.permissionDecisionReason.includes("is a gate's own configuration"), dec.permissionDecisionReason);
-  assert.ok(dec.permissionDecisionReason.includes('never write it another way'), dec.permissionDecisionReason);
+  assert.ok(dec.permissionDecisionReason.includes('which controls the gates that watch the agent'), dec.permissionDecisionReason);
+  assert.ok(dec.permissionDecisionReason.includes('do not write this file another way'), dec.permissionDecisionReason);
   assert.doesNotMatch(dec.permissionDecisionReason, /GENESEED_|--no-/, 'the reason never names an off switch');
 }
 
@@ -1279,7 +1417,7 @@ test("a write to the shared exclude list asks on Claude and is blocked on Bob; a
       stdin: bobPayload('execute_command', { command: `echo x > "${shared}"`, cwd: f.repo }),
     });
     assert.equal(bob.rc, 2, bob.err);
-    assert.match(bob.err, /BLOCKED: Geneseed \(External Gate\)/);
+    assert.match(bob.err, /BLOCKED: Tell the user this, word for word: [\s\S]*\(External Gate\)/);
     const near = path.join(xdg, 'geneseed', 'notes', 'skill-notes', 'x.md');
     assertDefers(gateRun(f, near, { env }), near);
   } finally { sb.cleanup(); }
@@ -1338,7 +1476,7 @@ test('bob: a hook-settings write is blocked only when it changes Geneseed\'s wir
       for (const [label, tool, input, exit] of BOB_SETTINGS_ROWS) {
         const r = withSettings(s, (i) => bobGate(f, tool, i))(input);
         assert.equal(r.rc, exit, `${s}: ${label}: expected exit ${exit}, got ${r.rc}, stderr=${r.err}`);
-        if (exit) assert.match(r.err, /External Gate.*is a gate's own configuration.*On Bob this write is refused because/);
+        if (exit) assert.match(r.err, /controls the gates that watch the agent[\s\S]*\(External Gate\)[\s\S]*On Bob this write is refused because/);
       }
     }
     // A new settings file (none on disk yet) holding only an MCP server passes.
@@ -1355,7 +1493,7 @@ test("bob: a Geneseed-only gate-config file stays blocked outright", () => {
       path.join(f.home, 'bin', 'geneseed-hook')]) {
       const r = bobGate(f, 'write_file', { path: p, content: '{}' });
       assert.equal(r.rc, 2, `${p}: expected exit 2, got ${r.rc}, stderr=${r.err}`);
-      assert.match(r.err, /External Gate.*is a gate's own configuration/);
+      assert.match(r.err, /controls the gates that watch the agent[\s\S]*\(External Gate\)/);
       assert.doesNotMatch(r.err, /On Bob this write is refused because/);
     }
     assert.equal(bobGate(f, 'write_file', { path: path.join(f.repo, 'src', 'a.js'), content: 'x' }).rc, 0);
@@ -1654,7 +1792,7 @@ test('a root scan is ledgered as ops-2, and Bob blocks it (exit 2) on either pay
     bobPayload('execute_command', { command: 'find / -name x' })]) {
     const r = hookRun('tool-gate', { stdin, host: 'bob' });
     assert.equal(r.rc, 2, `bob root scan: expected exit 2, got ${r.rc}, stderr=${r.err}`);
-    assert.match(r.err, /BLOCKED: Geneseed \(Commands Must Return\)/);
+    assert.match(r.err, /BLOCKED: Tell the user this, word for word: [\s\S]*\(Commands Must Return\)/);
   }
 });
 
@@ -1889,7 +2027,7 @@ test('a shell write to a gate\'s own configuration asks; Bob blocks it, opencode
     });
     const blocked = bob(path.join(f.root, 'excludes.json'));
     assert.equal(blocked.rc, 2, blocked.err);
-    assert.match(blocked.err, /BLOCKED: Geneseed \(External Gate\)/);
+    assert.match(blocked.err, /BLOCKED: Tell the user this, word for word: [\s\S]*\(External Gate\)/);
     const cmdlet = hookRun('tool-gate', {
       root: f.root, host: 'bob', env, stdin: bobPayload('execute_command', { command: `Set-Content -Path "${path.join(f.root, 'excludes.json')}" -Value x`, cwd: f.repo }),
     });

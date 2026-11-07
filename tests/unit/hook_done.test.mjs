@@ -227,7 +227,7 @@ test('rule-gate: the done list protects itself, its neighbours do not', () => {
     assert.equal(guarded.status, 0, guarded.stderr);
     const dec = JSON.parse(guarded.stdout).hookSpecificOutput;
     assert.equal(dec.permissionDecision, 'ask');
-    assert.match(dec.permissionDecisionReason, /External Gate.*the done gate list itself/);
+    assert.match(dec.permissionDecisionReason, /^This edit changes \.geneseed\/done-checks\.txt.*, which lists the checks that must pass[\s\S]*\(External Gate\)/);
     const free = write('.geneseed/notes.txt');
     assert.equal(free.status, 0);
     assert.equal(free.stdout, '', 'a neighbour of the done list must pass untouched');

@@ -29,7 +29,24 @@ There is no DYNAMIC loop/* exemption on OpenCode — OpenCode 1 declares a `perm
 
 **When it runs.** Before every tool call (`tool.execute.before`).
 
-**What you see.** A refused tool call: `[geneseed-guard] blocked: <reason>`. OpenCode 2 refuses by renaming the call and prints `No tool named "<name>"`, so there the name opens `BLOCKED, not a missing tool: `. The reason never names the switches below: the agent reads it, and a switch named there reads as leave to get round the block. The *Persist Insight* reason tells the agent to ask you and that a re-issue changes nothing — never to write the file another way (through a shell command, say). Warnings go to stderr.
+**What you see.**
+- **A refused call** reads `[geneseed-guard] blocked: Tell the user this, word for word: <what changes>`, then why it was refused, what you can do yourself, and a last line for the agent. Nothing can be allowed here, so you depend on the model to relay this text. That is best effort. The [change report](../concepts/hooks.md#the-change-report) reaches you directly. OpenCode 2 refuses by renaming the call and prints `No tool named "<name>"`, so there the name opens `BLOCKED, not a missing tool: `, and the model receives the whole text (seen on 2.2.6). The one exception is the ownership reminder above: it is an instruction to the agent, not text for you, so it keeps its own words.
+- **A prompt** comes from OpenCode, and its dialog shows no plugin text. So for its two asks, a rule or memory write that reaches a host prompt and a gate configuration file, the guard posts the reason just before the dialog, inside a delimiter:
+
+  ```text
+  ──── Geneseed · about the next permission request ────
+  This edit changes user-rules.md, your standing rules, which the agent obeys in every session.
+  Safe choice: Deny, unless you asked for this rule. (Persist Insight)
+  It asks because what becomes a rule is your decision.
+  If you allow it, the text binds every later session until you remove it.
+  ──── The dialog below is for this change ────
+  ```
+
+  OpenCode 2 shows it as a message in the session. The model gets one short line instead of this text. OpenCode 1 shows it as a toast, which can expire while the dialog is still open. `opencode run` and `mini` do not show the OpenCode 2 message. An unattended OpenCode 2 session posts the note and then denies the call. A failed post changes nothing: the prompt still asks. The note shows no line count.
+
+[What a prompt says](../concepts/hooks.md#what-a-prompt-says) lists what this text can and cannot tell you.
+
+The guard's reasons are the same words as the hooks'. The reason never names the switches below: the agent reads it, and a switch named there reads as leave to get round the block. The *Persist Insight* reason tells the agent to ask you and that a re-issue changes nothing — never to write the file another way (through a shell command, say). Warnings go to stderr.
 
 **Switches.**
 - `GENESEED_GUARD=warn` — log every block, allow the call.

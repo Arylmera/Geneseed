@@ -85,7 +85,7 @@ test('a re-issued write is refused too: the agent cannot release itself', () => 
 
 // A weak model (4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the blocked
 // memory index through `python3`. The refusal names one way forward, forbids the detour and names
-// no switch. It no longer closes with the hook's PERSIST_ASK: "re-issue after they answer" is the
+// no switch. It never says "re-issue after they answer": that is the
 // release this gate gave up, and Claude's text is a real prompt the user reads.
 test('the refusal tells the model to ask and that a re-issue changes nothing', () => {
   assert.equal(messages.length, 5, messages.join('\n'));
@@ -160,12 +160,56 @@ test('V1: after an "always" on an edit the host will not ask, so the write is re
   await assert.doesNotReject(asks.event({}), 'an empty event is nothing');
 });
 
+// V1 calls no plugin hook on an ask, so the note is a toast from this hook, shown with the dialog.
+const toasted = (extra = {}) => {
+  const shown = [];
+  return { shown, client: { config: { get: async () => ({ data: { permission: { edit: wired() } } }) }, app: { agents: async () => ({ data: [] }) },
+    tui: { showToast: async (t) => { shown.push(t); return true; } }, ...extra } };
+};
+test('V1: a write that reaches the host prompt shows its explanation; a refusal and a plain write show none', async () => {
+  const { shown, client } = toasted();
+  const asks = await factory({ client, directory: CFG, worktree: CFG });
+  assert.equal(await verdict(asks, 'write', { filePath: RULES, content: 'x' }), 'allowed');
+  assert.equal(shown.length, 1);
+  assert.deepEqual(shown[0].query, { directory: CFG });
+  const { title, variant, duration, message } = shown[0].body;
+  assert.deepEqual([title, variant, duration], ['Geneseed', 'warning', 120000]);
+  assert.equal(message, [
+    '──── Geneseed · about the next permission request ────',
+    'This edit changes user-rules.md, your standing rules, which the agent obeys in every session.',
+    'Safe choice: Deny, unless you asked for this rule. (Persist Insight)',
+    'It asks because what becomes a rule is your decision.',
+    'If you allow it, the text binds every later session until you remove it.',
+    '──── The dialog below is for this change ────'].join('\n'));
+  shown.length = 0;
+  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'notes.txt'), content: 'x' }), 'allowed');
+  assert.match(await verdict(asks, 'bash', { command: `echo x > "${RULES}"`, workdir: CFG }), /Persist Insight/);
+  // Passes the store gate, then the content scan refuses it: no dialog follows, so no note.
+  assert.match(await verdict(asks, 'write', { filePath: RULES, content: 'k = "AKIAIOSFODNN7EXAMPLE"' }), /Sealed Secrets/);
+  assert.deepEqual(shown, []);
+});
+
+test('V1: a gate configuration file the host asks about shows its explanation too', async () => {
+  const { shown, client } = toasted();
+  const asks = await factory({ client, directory: CFG, worktree: CFG });
+  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'opencode.json'), content: '{}' }), 'allowed');
+  assert.equal(shown.length, 1);
+  assert.match(shown[0].body.message, /opencode\.json, which controls the gates that watch the agent\.\nSafe choice: /);
+  assert.doesNotMatch(shown[0].body.message, /Agent:/);
+});
+
+test('V1: a toast that fails changes nothing', async () => {
+  const { client } = toasted({ tui: { showToast: async () => { throw new Error('no TUI'); } } });
+  const asks = await factory({ client, directory: CFG, worktree: CFG });
+  assert.equal(await verdict(asks, 'write', { filePath: RULES, content: 'x' }), 'allowed');
+});
+
 test('V1: a shell or foreign tool never reaches the prompt, so it is refused with the config wired', async () => {
   const asks = await v1With(wired());
   const cmds = [`echo x >> "${MEMORY}"`, `tee "${RULES}"`, `rm "${MEMORY}"`, `mv a.md "${MEMORY}"`];
   for (const command of cmds) {
     for (let i = 0; i < 2; i += 1) {
-      assert.match(await verdict(asks, 'bash', { command, workdir: CFG }), /through a shell command .*\(Persist Insight\)/, command);
+      assert.match(await verdict(asks, 'bash', { command, workdir: CFG }), /This command writes to [\s\S]*\(Persist Insight\)/, command);
     }
   }
   assert.match(await verdict(asks, 'mcp_fs_write_file', { path: MEMORY }), /Only the host's own edit tool/);

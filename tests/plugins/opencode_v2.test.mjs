@@ -107,21 +107,21 @@ test("guard: a denied call is renamed to the reason and emptied; an allowed one 
   const before = hooks.tool["execute.before"]
   const secret = { tool: "write", input: { path: "/home/u/.ssh/id_rsa", content: "k" } }
   await before(secret)
-  assert.match(secret.tool, new RegExp(`${REFUSED}write to secret/key file`))
+  assert.match(secret.tool, new RegExp(`${REFUSED}Tell the user this, word for word: This edit writes to `))
   assert.deepEqual(secret.input, {})
   const rm = { tool: "shell", input: { command: "rm -rf /" } }
   await before(rm)
-  assert.match(rm.tool, new RegExp(`${REFUSED}catastrophic command`))
+  assert.match(rm.tool, new RegExp(`${REFUSED}Tell the user this, word for word: This command, "rm -rf /", would destroy`))
   // The rename reason is what the model reads: it never names a switch that turns the guard off
   // (a weak model took "set GENESEED_GUARD=off to allow" as leave to write through a shell).
   const memo = { tool: "shell", input: { command: `echo x > "${path.join(tmp, "user-rules.md")}"` } }
   await before(memo)
-  assert.match(memo.tool, new RegExp(`${REFUSED}.*\\(Persist Insight\\).* re-issuing this call changes nothing, and never write it another way`))
+  assert.match(memo.tool, new RegExp(`${REFUSED}[\\s\\S]*\\(Persist Insight\\)[\\s\\S]* re-issuing this call changes nothing, and never write it another way`))
   // The gates' own configuration (External Gate): another host's exclusion list, renamed the same way.
   // (Hook settings and OpenCode's own files are asked natively through permission.edit, not refused here.)
   const excl = { tool: "write", input: { path: path.join(tmp, ".claude", "excludes.json"), content: "{}" } }
   await before(excl)
-  assert.match(excl.tool, new RegExp(`${REFUSED}.* is a gate's own configuration .*\\(External Gate\\)$`))
+  assert.match(excl.tool, new RegExp(`${REFUSED}[\\s\\S]*controls the gates that watch the agent[\\s\\S]*\\(External Gate\\)`))
   assert.deepEqual(excl.input, {})
   for (const why of [secret.tool, rm.tool, memo.tool, excl.tool]) assert.doesNotMatch(why, /GENESEED_/, why)
   const ok = { tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "hello" } }
@@ -172,14 +172,19 @@ test("guard: a parsed shell write to a store becomes a real prompt, by call id",
   assert.equal(other.effect, "allow", "another call in the same session")
   const mine = ev("c1"); await hooks.permission.evaluate(mine)
   assert.equal(mine.effect, "ask")
-  assert.match(mine.message, /Persist Insight/)
+  // The store the tool hook saw reaches the prompt, which sees only the call id.
+  assert.equal(mine.message, "This command writes to user-rules.md, your standing rules, which the agent obeys in every session.\n"
+    + "Safe choice: Deny, unless you asked for this rule. (Persist Insight)\n"
+    + "It asks because what becomes a rule is your decision.\n"
+    + "If you allow it, the text binds every later session until you remove it.\n"
+    + "Agent: if refused, ask the user; do not write it another way.")
   const again = ev("c1"); await hooks.permission.evaluate(again)
   assert.equal(again.effect, "allow", "one ask per call")
   // No program word: the host's parser finds no command, asserts nothing, and so never asks.
   for (const command of [`> "${store}"`, `A=1 > "${store}"`, `ls; > "${store}"`]) {
     const bare = { tool: "shell", id: "c9", input: { command } }
     await hooks.tool["execute.before"](bare)
-    assert.match(bare.tool, new RegExp(`${REFUSED}writing to user-rules\\.md through a shell command`), command)
+    assert.match(bare.tool, new RegExp(`${REFUSED}Tell the user this, word for word: This command writes to user-rules\\.md`), command)
   }
   const plain = { tool: "shell", id: "c3", input: { command: "echo 'see MEMORY.md' > notes.txt" } }
   await hooks.tool["execute.before"](plain)
@@ -191,6 +196,52 @@ test("guard: a parsed shell write to a store becomes a real prompt, by call id",
   assert.equal(cmdlet.tool, "shell", "the host asks; nothing is refused here")
   const c = ev("c4"); await hooks.permission.evaluate(c)
   assert.equal(c.effect, "ask")
+})
+
+// The dialog shows no plugin text, so an ask posts its reason first. The TUI renders `description`, the
+// model gets `text`, which must read true whichever way the user answers.
+const NOTE_TEXT = "Geneseed showed the user why the next permission request asks."
+const NOTE = (...body) => ["──── Geneseed · about the next permission request ────", ...body, "──── The dialog below is for this change ────"].join("\n")
+const notes = (calls) => calls.filter(([name]) => name === "synthetic").map(([, input]) => input)
+test("guard: an ask posts its explanation first, with no agent line; the ask stands if the post fails", async () => {
+  const store = path.join(tmp, "user-rules.md")
+  const edit = () => ({ sessionID: "s", action: "edit", resources: [store], effect: "allow" })
+  const { ctx, hooks, calls } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const ask = edit()
+  await hooks.permission.evaluate(ask)
+  assert.equal(ask.effect, "ask")
+  assert.deepEqual(notes(calls), [{ sessionID: "s", text: NOTE_TEXT, resume: false, description: NOTE(
+    "This edit changes user-rules.md, your standing rules, which the agent obeys in every session.",
+    "Safe choice: Deny, unless you asked for this rule. (Persist Insight)",
+    "It asks because what becomes a rule is your decision.",
+    "If you allow it, the text binds every later session until you remove it.") }])
+  assert.match(ask.message, /\nAgent: if refused/, "the message keeps its tail: an upstream render would light up as it is")
+  const failing = fakeCtx({ session: { synthetic: async () => { throw new Error("409") } } })
+  await (await load("guard")).setup(failing.ctx)
+  const still = edit()
+  await failing.hooks.permission.evaluate(still)
+  assert.equal(still.effect, "ask", "a note that cannot post changes nothing")
+  assert.match(still.message, /Persist Insight/)
+})
+
+test("guard: a shell ask posts its note too, and a refusal or a plain call posts none", async () => {
+  const { ctx, hooks, calls } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const store = path.join(tmp, "user-rules.md")
+  const before = hooks.tool["execute.before"]
+  await before({ tool: "write", input: { path: path.join(tmp, ".claude", "excludes.json"), content: "{}" } })
+  await before({ tool: "shell", id: "n1", input: { command: `> "${store}"` } })
+  await before({ tool: "write", input: { path: path.join(tmp, "notes.txt"), content: "x" } })
+  await hooks.permission.evaluate({ sessionID: "s", action: "edit", resources: [path.join(tmp, "notes.txt")], effect: "allow" })
+  await hooks.permission.evaluate({ sessionID: "s", action: "edit", resources: [store], effect: "deny" })
+  assert.deepEqual(notes(calls), [])
+  await before({ tool: "shell", id: "n2", input: { command: `echo x > "${store}"` } })
+  await hooks.permission.evaluate({ sessionID: "s", action: "shell", resources: ["echo x"], effect: "allow", source: { type: "tool", messageID: "m", id: "n2" } })
+  const [one, ...rest] = notes(calls)
+  assert.deepEqual(rest, [])
+  assert.match(one.description, /^──── Geneseed[^\n]*\nThis command writes to user-rules\.md/)
+  assert.doesNotMatch(one.description, /Agent:/)
 })
 
 // The change report on V2: baseline at the turn's start, compare at its end, approval from execute.after.
@@ -224,7 +275,7 @@ test("guard: a V2 with no permission domain has no prompt, so the write is refus
   for (let i = 0; i < 2; i += 1) {
     const call = { tool: "write", input: { path: path.join(tmp, "user-rules.md"), content: "x" } }
     await hooks.tool["execute.before"](call)
-    assert.match(call.tool, new RegExp(`${REFUSED}.*host has no prompt wired`))
+    assert.match(call.tool, new RegExp(`${REFUSED}[\\s\\S]*host has no prompt wired`))
     assert.deepEqual(call.input, {})
   }
 })

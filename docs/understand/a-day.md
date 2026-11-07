@@ -20,17 +20,21 @@ You ask the agent to clean up history and it decides to force-push `main`. A gat
 
 ```text
 ● Bash(git push --force origin main)
-  Geneseed (Deletion Is Deliberate) — `git push` would force-push the protected
-  branch main. Confirm this specific command, or leave the data in place.
+  This command force-pushes the protected branch main on the remote.
+  Safe choice: Deny, then push without --force. (Deletion Is Deliberate)
+  It asks because a force push replaces the remote history.
+  If you allow it, commits that exist only on the remote can be lost for everyone.
   Do you want to proceed?  Yes / No
 ```
 
-An ordinary `git commit` or `git push` gets a milder question when the **process** pack is on: *"Geneseed (Consent Before Push) — every git commit/push needs explicit approval; to see the change first, use the explain-changes skill"*. If you answer no, the command does not run, however the model phrased its reasoning.
+An ordinary `git commit` or `git push` gets a milder question when the **process** pack is on: *"This command commits or pushes with git, which needs your approval each time. (Consent Before Push)"*. If you answer no, the command does not run, however the model phrased its reasoning.
 
-Bob has no prompt, so the same force-push is refused outright:
+Bob has no prompt, so the same force-push is refused outright, and the model is told to relay why:
 
 ```text
-[geneseed] BLOCKED: Geneseed (Deletion Is Deliberate) — `git push` would force-push the protected branch main. Confirm this specific command, or leave the data in place.
+[geneseed] BLOCKED: Tell the user this, word for word: This command force-pushes the protected branch main on the remote.
+It was refused because a force push replaces the remote history. (Deletion Is Deliberate)
+You can push without --force, or run this command yourself.
 ```
 
 OpenCode has no prompt a plugin can raise, so Geneseed's guard plugin refuses it the same way. Every catch goes into a log, and `geneseed status` counts the catches by rule.

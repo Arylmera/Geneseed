@@ -85,6 +85,45 @@ export GENESEED_LLM="claude -p"
 
 Unset, `learn` does nothing useful: on a real Stop/SubagentStop/PreCompact call it returns immediately rather than reading the transcript for nothing, and on a manual run it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
 
+## What a prompt says
+
+When a gate stops a call, Geneseed writes the reason. An agent cannot change this fixed text. Each prompt is plain English, one sentence per line, and it puts the decision first:
+
+```text
+This edit changes .github/workflows/ci.yml (+3 lines, -1 line), which defines the checks that run on every push.
+Safe choice: Deny, unless you asked for this change. (External Gate)
+It asks because the agent's own work is judged by this file.
+If you allow it, those checks can get weaker or stop running, and a failure could go unseen.
+Agent: if refused, do not write this file another way.
+```
+
+The first line says what changes and what the file is, with the path from the repository root. The second gives the safe choice and names the rule. The last line is for the agent. A commit or a push is routine, so it gets one line.
+
+On *Deletion Is Deliberate*, *Commands Must Return* and *Consent Before Push*, the prompt can also quote the `description` that the agent gave the command: `The agent says (not checked): "..."`. It never quotes the agent on *Sealed Secrets*, *External Gate* or *Persist Insight*, because there the agent's opinion is the conflict of interest.
+
+If a loss command uses `--git-dir` or `--work-tree`, the prompt adds a line: the command runs on another repository, which the gate did not read.
+
+Each host carries this text differently:
+
+| Host | What you get |
+| --- | --- |
+| Claude Code, OpenClaude | The reason in the permission prompt |
+| OpenCode | A note just before the dialog, for its two asks only ([guard](../reference/plugin-guard.md)). A refusal goes to the model |
+| Bob | No prompt. A block tells the model to relay the text to you. A warning says the call ran without a prompt |
+
+Know these limits:
+
+- The text says what a file is and what is at risk. On a write or an edit, it cannot say why the agent wants the change.
+- Claude's own title and prefix stay. Geneseed controls only the reason.
+- The desktop card shows about 3 lines. Past those, you must scroll.
+- OpenCode's note sits beside the dialog, not in it, and exists only for its two asks: a rule or memory write that reaches a host prompt, and a gate configuration file.
+- OpenCode 1's note is a toast, which can expire while the dialog is open.
+- An unattended OpenCode 2 session posts the note, then denies the call.
+- On Bob and on an OpenCode refusal, you depend on the model to relay the text. This is best effort. The change report below is the direct channel.
+- The line count overstates a change with several regions. Shell writes show no count, and neither does a `replace_all`, a search-and-replace, a diff, a notebook cell, a text or an old file past 1 MB, or anything on OpenCode.
+- A loss prompt names the kind of loss, not the files.
+- The text is in English only.
+
 ## Verify
 
 Open a session in a repo and ask the agent what it knows about the project — it should answer from the repo's docs without reading them first. Ask it to commit something: you should get a prompt before the commit runs.

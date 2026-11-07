@@ -1482,7 +1482,7 @@
     {
       "expect": [
         "permissionDecision",
-        "writing to user-rules.md"
+        "This edit changes user-rules.md"
       ],
       "id": "rule-gate/drive-relative-path-has-no-separator",
       "steps": [
@@ -1501,7 +1501,7 @@
     {
       "expect": [
         "permissionDecision",
-        "writing to user-rules.md"
+        "This edit changes user-rules.md"
       ],
       "id": "rule-gate/trailing-separator-leaves-no-name",
       "steps": [
@@ -1520,7 +1520,7 @@
     {
       "expect": [
         "permissionDecision",
-        "writing to memory"
+        "This edit changes a memory file"
       ],
       "id": "rule-gate/memory-file-under-root",
       "steps": [

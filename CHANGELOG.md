@@ -8,6 +8,16 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.0.3] — 2026-11-07
+
+### Changed
+
+- **A gate prompt now says what will change, the safe choice, why it asks and what happens if allowed.** The text is fixed per gate and file class, in plain English, with a repo-relative path and a line count. An agent-supplied name is cleaned, clipped and quoted, and the agent's own description is quoted only on the deletion, root-scan and commit asks, labelled as not checked. No gate decision changed: `tests/unit/gate_verdicts.test.mjs` pins them.
+- **A refusal on Bob or OpenCode asks the model to relay the text word for word,** and a Bob warning says the call ran without a prompt.
+- **OpenCode shows the explanation before the dialog,** on the two asks it has: a note on V2, a toast on V1.
+- **The commit and push ask is one line,** because it is routine.
+- **The web console's Gate asks panel shows a dot and a legend** in place of the long install badge, in the Library's colour.
+
 ## [5.0.2] — 2026-11-07
 
 PowerShell write cmdlets are parsed like their Unix forms, and a suite can no longer write the real tier unseen.

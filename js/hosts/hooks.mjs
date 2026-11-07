@@ -51,7 +51,7 @@
  * and every file left behind. Absolute rather than compared is what let it survive the deletion
  * of the implementation it was once compared against.
  */
-import { readFileSync, readlinkSync, appendFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readlinkSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -64,6 +64,7 @@ import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
   selfAndParents, readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
+  gateLoss, gateSafe,
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
@@ -231,10 +232,6 @@ const BOB_FINAL = ' Bob has no approval step for this gate: neither a confirmati
   + 'nor a retry in another form lifts it. Leave it, or ask the user to do it themself, outside '
   + 'Bob. Never suggest disabling the Geneseed hook.';
 
-/** Law IV's real-loss tail, where the host can ask. Bob's is `BOB_FINAL`, appended by `ask`. */
-const confirmTail = () => (HOST === 'bob' ? 'Leave the data in place.'
-  : 'Confirm this specific command, or leave the data in place.');
-
 /**
  * On Bob, which has no ask tier, which rules are worth a hard block. Laws I and IV: a
  * credential in a tracked file and a history-discarding git act are wrong in every context,
@@ -289,22 +286,26 @@ function ledger(root, verb, rule) {
 /**
  * Ask, and record that we asked. Every ask site goes through here so none can skip the
  * ledger. On `--host bob` the ask becomes a block or a warning (see `BLOCK_RULES`); the
- * ledger records the block, never the warning — a warning asked nothing of anyone.
+ * ledger records the block, never the warning — a warning asked nothing of anyone. `id` and
+ * `facts` are `gateText`'s, and the words are built here, last, through `gateSafe`: this runs
+ * from `guardGate`'s catch, where a throw is a bad exit, and Claude lets that call through. The
+ * host and the rule pick the mode. `facts.bobWhy` says why Bob refused a settings write.
  */
-function ask(args, verb, rule, reason) {
+function ask(args, verb, rule, id, facts) {
   if (HOST === 'bob') {
     if (!BLOCK_RULES.has(rule)) {
       // No ask tier; a stderr line is the nudge, and the call goes through.
-      err(`[geneseed] ${reason}\n`);
+      err(`[geneseed] ${gateSafe(id, 'warned', facts)}\n`);
       return 0;
     }
     ledger(args && args.root, verb, rule);
+    const why = facts && facts.bobWhy ? ` On Bob this write is refused because ${facts.bobWhy}.` : '';
     // stdout is not read on Bob's PreToolUse; the reason goes where Bob's hook log looks.
-    err(`[geneseed] BLOCKED: ${reason}${BOB_FINAL}\n`);
+    err(`[geneseed] BLOCKED: ${gateSafe(id, 'refused', facts)}${why}${BOB_FINAL}\n`);
     return BOB_DENY_EXIT;
   }
   ledger(args && args.root, verb, rule);
-  out(askDecision(reason));
+  out(askDecision(gateSafe(id, 'ask', facts)));
   return 0;
 }
 
@@ -344,9 +345,10 @@ export function guardGate(fn, verb = 'gate') {
     try {
       return fn(args);
     } catch (e) {
-      const why = e && e.message ? e.message : String(e);
-      return ask(args, verb, 'gate-error', `Geneseed gate error — ${why}. The gate could `
-        + 'not evaluate this call, so it does not defer.');
+      // A thrown value can be anything, and this catch has nothing behind it: reading it must not throw.
+      let name = e;
+      try { name = e.message || e; } catch { /* `gateSafe` meets `e` as it is */ }
+      return ask(args, verb, 'gate-error', 'gate-error', { name });
     }
   };
 }
@@ -694,7 +696,7 @@ export function shellWriteTargets(command, cwd, ps = false) {
 
 /**
  * External Gate over a shell command: the first write target that `externalGate` refuses, as the
- * reason to ask, or null. Path check only, no secret scan of the command. Any throw is a pass, not
+ * `gateText` facts to ask with, or null. Path check only, no secret scan of the command. Any throw is a pass, not
  * `guardGate`'s `gate-error` ask: this reader fails open, and a hand-mangled path is not a gate failure.
  */
 function shellWriteReason(args, command, payload) {
@@ -704,15 +706,15 @@ function shellWriteReason(args, command, payload) {
     const own = payload && payload.tool_input && payload.tool_input.cwd;
     const cwd = typeof own === 'string' && own ? path.resolve(base, own) : base;
     for (const t of shellWriteTargets(command, cwd, payload?.tool_name === 'PowerShell')) {
-      const why = externalGate(args, t, payload);
-      if (why) return why;
+      const hit = externalGate(args, t, payload);
+      if (hit) return { ...hit, shell: true };
     }
   } catch { /* see above */ }
   return null;
 }
 
 /**
- * A parsed shell write that lands in a rule or memory store: the reason, or null. Asked on Claude
+ * A parsed shell write that lands in a rule or memory store: which store, or null. Asked on Claude
  * and OpenClaude, and only a warning on Bob, whose one verdict is a hard block: shell is no boundary,
  * and command text is no ground to refuse on. Fails open, like `shellWriteReason`.
  */
@@ -723,27 +725,23 @@ function shellStoreReason(args, command, payload) {
     const cwd = typeof own === 'string' && own ? path.resolve(base, own) : base;
     for (const t of shellWriteTargets(command, cwd, payload?.tool_name === 'PowerShell')) {
       const store = ruleGateTarget(t, args.root, cwd);
-      if (store) {
-        return `Geneseed (Persist Insight) \u2014 writing to ${store} through a shell command: a standing `
-          + 'rule, or a fact to remember? That choice is the user\'s.';
-      }
+      if (store) return store;
     }
   } catch { /* see above */ }
   return null;
 }
 
 function gitDecide(args, payload) {
-  const command = ((payload && payload.tool_input) || {}).command;
+  const ti = (payload && payload.tool_input) || {};
+  const { command } = ti;
   if (typeof command !== 'string') return 0;
+  // The agent's own words, for the asks where they are no conflict of interest (`gateText`'s `quote`).
+  const says = typeof ti.description === 'string' ? ti.description : '';
   // Law IV's catastrophic class (a root, a drive, the home dir, a disk): no state makes it safe,
   // so it runs BEFORE the switch below and whatever it says (user decision, 2026-10-18). On
   // Claude an ask is the strongest verdict the hook has; on Bob, `law-4` exits 2.
   const doomed = catastrophic(command, lossSegments);
-  if (doomed) {
-    return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 \`${doomed.slice(0, 80)}\` `
-      + 'would destroy a filesystem root, a drive, the home directory or a whole disk, which nothing '
-      + 'could restore. This check stands even with the deletion gate off.');
-  }
+  if (doomed) return ask(args, 'git-gate', 'law-4', 'catastrophic', { name: doomed, says });
   // `--no-deletion-gate`: the install switched Law IV's real-loss boundary off (user decision,
   // 2026-10-17). Only this check stands down — the catastrophic class above, ops 2 and process 5
   // below still run.
@@ -753,25 +751,21 @@ function gitDecide(args, payload) {
     const loss = lossReason(lossSegments(command), (payload && payload.cwd) || process.cwd(),
       { split: lossSegments });
     if (loss) {
-      return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 ${loss}. `
-        + confirmTail());
+      const facts = gateLoss(loss);
+      return ask(args, 'git-gate', 'law-4', facts.id, { ...facts, says });
     }
   }
   // Before `--no-consent`: that flag drops the process pack's rule, not this one.
   const scan = rootScan(command);
-  if (scan) {
-    return ask(args, 'git-gate', 'ops-2', `Geneseed (Commands Must Return) \u2014 \`${scan.slice(0, 80)}\` `
-      + 'recursively scans a whole filesystem root (in Git Bash, / spans every drive and mounted '
-      + 'share, for hours; | head stops nothing). Search a specific directory instead: the '
-      + 'project, node_modules, ~/.npm, %APPDATA%.');
-  }
+  if (scan) return ask(args, 'git-gate', 'ops-2', 'root-scan', { name: scan, says });
   // Also before `--no-consent`: rigor-5 is no part of the process pack. On Bob a hook-settings
   // target cannot be replayed from a command (`bobSettingsChange`), so it blocks.
   const shellWrite = shellWriteReason(args, command, payload);
-  if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite);
+  if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite.id, shellWrite);
   const shellStore = shellStoreReason(args, command, payload);
-  if (shellStore && HOST !== 'bob') return ask(args, 'git-gate', 'process-1', shellStore);
-  if (shellStore) err(`[geneseed] ${shellStore}\n`);
+  const storeFacts = { name: shellStore, shell: true };
+  if (shellStore && HOST !== 'bob') return ask(args, 'git-gate', 'process-1', 'store', storeFacts);
+  if (shellStore) err(`[geneseed] ${gateSafe('store', 'warned', storeFacts)}\n`);
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before
   // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
@@ -779,14 +773,39 @@ function gitDecide(args, payload) {
   // Consent Before Push: a loop launched on its own `loop/*` branch is a named batch for a
   // fixed set of commit/push forms on that branch only — never a merge into anything shared.
   if (loopExempt(command, (payload && payload.cwd) || process.cwd())) return 0;
-  return ask(args, 'git-gate', 'process-5', 'Geneseed (Consent Before Push) \u2014 every git '
-    + 'commit/push needs explicit approval; to see the change first, use the explain-changes skill');
+  return ask(args, 'git-gate', 'process-5', 'commit', { says });
 }
 export const cmdGitGate = guardGate(gitGate, 'git-gate');
 
 // ======================================================================================
 // rule-gate — Doctrine process 1's tool-boundary backstop
 // ======================================================================================
+
+/**
+ * What `p` lands on, as `ruleGateTarget`'s docblock says: as spelled from `base`, then with links
+ * followed, so the last form is the file a write reaches. May throw on a form the home cannot read.
+ */
+function landsOn(p, base) {
+  const win = process.platform === 'win32';
+  const forms = [];
+  if (p.startsWith('~')) forms.push(resolvePath(p));
+  else {
+    const spelled = !win ? p : p.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:').replace(/^[\\/]{2}[?.][\\/](?=[a-zA-Z]:)/, '')
+      .replace(/^[\\/]{2}(?:localhost|127\.0\.0\.1|\[?::1\]?)[\\/]([a-zA-Z])\$(?=[\\/]|$)/i, '$1:');
+    let abs = path.resolve(base || process.cwd(), spelled);
+    if (win) {
+      const drive = /^[a-zA-Z]:|^\\\\[^\\]+\\[^\\]+/.exec(abs)?.[0] ?? '';
+      abs = drive + abs.slice(drive.length).split('\\').map((s) => s.replace(/:.*$/, '').replace(/[. ]+$/, '')).join('\\');
+    }
+    forms.push(abs, resolvePath(abs));
+    // A dangling link has no realpath, and a write through it creates its target: follow it by
+    // hand, each hop through `resolvePath`, because a hop may pass a folder link. Links can loop.
+    for (let cur = forms[1], hop = 0; hop < 8; hop += 1) {
+      try { cur = resolvePath(path.resolve(path.dirname(cur), readlinkSync(cur))); forms.push(cur); } catch { break; }
+    }
+  }
+  return forms;
+}
 
 /**
  * `_rule_gate_target` — name the store a write would land in, or null for ordinary work.
@@ -805,16 +824,6 @@ export const cmdGitGate = guardGate(gitGate, 'git-gate');
  * name comes back in its true case through the link-followed form; a differently cased spelling
  * of one that does not exist yet is not caught. `base` is the session's directory.
  */
-// The close of the process-1 text. On Claude this is a real prompt the host shows; the OpenCode
-// guard has its own texts, because a re-issue releases nothing there. A weak model once took a
-// refusal as leave to write the same file through a shell command, so the text names the one way
-// forward and never a switch that turns the gate off.
-export const PERSIST_ASK = 'Stop and ask the user now (the rule skill). If this edit was refused, '
-  + 're-issue the same edit only after they answer; never write it another way (for example '
-  + 'through a shell command).';
-/** Bob's close instead: nothing there lifts the block, so nothing here may speak of re-issuing. */
-const PERSIST_BOB = 'Tell the user what you wanted to write (the rule skill).';
-
 function ruleGateTarget(p, root, base = null) {
   if (typeof p !== 'string') return null;
   const win = process.platform === 'win32';
@@ -832,23 +841,7 @@ function ruleGateTarget(p, root, base = null) {
   const named = coined(p);
   if (named) return named;
   try {
-    const forms = [];
-    if (p.startsWith('~')) forms.push(resolvePath(p));
-    else {
-      const spelled = !win ? p : p.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:').replace(/^[\\/]{2}[?.][\\/](?=[a-zA-Z]:)/, '')
-        .replace(/^[\\/]{2}(?:localhost|127\.0\.0\.1|\[?::1\]?)[\\/]([a-zA-Z])\$(?=[\\/]|$)/i, '$1:');
-      let abs = path.resolve(base || process.cwd(), spelled);
-      if (win) {
-        const drive = /^[a-zA-Z]:|^\\\\[^\\]+\\[^\\]+/.exec(abs)?.[0] ?? '';
-        abs = drive + abs.slice(drive.length).split('\\').map((s) => s.replace(/:.*$/, '').replace(/[. ]+$/, '')).join('\\');
-      }
-      forms.push(abs, resolvePath(abs));
-      // A dangling link has no realpath, and a write through it creates its target: follow it by
-      // hand, each hop through `resolvePath`, because a hop may pass a folder link. Links can loop.
-      for (let cur = forms[1], hop = 0; hop < 8; hop += 1) {
-        try { cur = resolvePath(path.resolve(path.dirname(cur), readlinkSync(cur))); forms.push(cur); } catch { break; }
-      }
-    }
+    const forms = landsOn(p, base);
     const hit = forms.map(coined).find(Boolean);
     if (hit) return hit;
     // This install's store, the machine tier's (`~/.config/geneseed/memory`) and the two a variable
@@ -879,8 +872,8 @@ export const SENSOR_LIST = '.geneseed/protected-checks.txt';
  * edit, or a failing check is one edit away from a passing one. A project opts in by listing
  * them, one repo-relative path per line (`#` comments), in `.geneseed/protected-checks.txt` at
  * its git root — found by walking up from the WRITE TARGET, not the cwd, so a session in one repo
- * writing into another reads that other repo's list. The list protects itself. Returns the entry
- * the path falls under, or null. A write tool's path reaches this through `ruleDecide`, a shell
+ * writing into another reads that other repo's list. The list protects itself. Returns the path from
+ * its git root, as a person reads it, or null. A write tool's path reaches this through `ruleDecide`, a shell
  * command's write targets through `shellWriteTargets`, whose docblock names what stays unseen.
  */
 function protectedCheck(p) {
@@ -893,14 +886,15 @@ function protectedIn(target) {
   try {
     const root = gitRootOf(path.dirname(target));
     if (!root) return null;
-    if (normcase(path.relative(root, target)) === normcase(DONE_LIST)) return DONE_LIST;
+    const shown = path.relative(root, target);
+    if (normcase(shown) === normcase(DONE_LIST)) return shown;
     const text = readFileSync(path.join(root, SENSOR_LIST), 'utf8');
     // `normcase` folds case AND slashes on Windows, so both sides go through it, the trailing
     // separator of the prefix included.
-    const rel = normcase(path.relative(root, target));
+    const rel = normcase(shown);
     const entries = [SENSOR_LIST, ...text.split(/\r?\n/).map((l) => l.trim().replace(/[\\/]+$/, ''))
       .filter((l) => l && !l.startsWith('#'))];
-    return entries.find((e) => rel === normcase(e) || rel.startsWith(normcase(`${e}/`))) ?? null;
+    return entries.some((e) => rel === normcase(e) || rel.startsWith(normcase(`${e}/`))) ? shown : null;
   } catch {
     return null;   // no list (the common case) or an unreadable one: nothing is protected
   }
@@ -932,7 +926,6 @@ function protectedIn(target) {
  */
 const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
 const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
-export const GATE_CONFIG_ASK = 'is a gate\'s own configuration (the hook wiring, the exclusion list, a gate switch or the hook shim). Editing it could switch a check off: fix the code, not the gate, unless the user asks for this edit. Stop and ask the user now; never write it another way (for example through a shell command).';
 function gateConfig(p, root) {
   let bin = null;
   try {
@@ -1027,24 +1020,57 @@ function bobSettingsChange(p, payload) {
   return geneseedWiring(a) === geneseedWiring(b) ? null : 'it changes Geneseed\'s own hook entries';
 }
 
+/** `p` from its git root, or as written outside any repository. Fails to `p`: it only names the file. */
+function repoRel(p, payload) {
+  try {
+    const abs = path.resolve(typeof payload?.cwd === 'string' ? payload.cwd : '.', p);
+    const root = gitRootOf(path.dirname(abs));
+    return root ? path.relative(root, abs) : p;
+  } catch { return p; }
+}
+
+// The largest text a line count reads. This is a blocking path, and the count is only a courtesy.
+const ASK_COUNT_MAX = 1024 * 1024;
+
 /**
- * External Gate on one write target, by tool or by shell: why it must be asked about, or null.
+ * The `editPairs` of a write the gate will ask about, for the line count, or undefined for none. Run
+ * only then, because `Write`'s old text is a file read. A pair says nothing of how often it applies,
+ * so a `replace_all` and a `search_and_replace` count nothing, and a notebook cell names no old text.
+ * A `diff` counts nothing either: the agent writes it, and `DIFF_BLOCK_RE` took 20 s on 80 KB of
+ * opened blocks. A count must cost no verdict, so whatever is not a small regular file, or cannot be
+ * read, counts nothing. Only a file that is truly absent is a new file.
+ */
+function askPairs(payload, p) {
+  const ti = payload.tool_input;
+  const many = Array.isArray(ti.edits) && ti.edits.some((e) => e && e.replace_all);
+  if (many || ti.replace_all || ti.diff !== undefined || typeof ti.search === 'string'
+    || typeof ti.new_source === 'string') return undefined;
+  try {
+    let whole = '';
+    if (/write/i.test(String(payload.tool_name))) {
+      const file = landsOn(p, typeof payload.cwd === 'string' ? payload.cwd : null).at(-1);
+      const stat = statSync(file, { throwIfNoEntry: false });
+      if (stat && (!stat.isFile() || stat.size > ASK_COUNT_MAX)) return undefined;
+      if (stat) whole = readFileSync(file, 'utf8');
+    }
+    const pairs = editPairs(ti, whole);
+    return pairs.flat().some((t) => t.length > ASK_COUNT_MAX) ? undefined : pairs;
+  } catch { return undefined; }
+}
+
+/**
+ * External Gate on one write target, by tool or by shell: the `gateText` id and facts to ask with, or null.
  * On Bob a hook-settings file is the user's shared host config, refused only when the write
  * touches Geneseed's wiring (`bobSettingsChange`), and it never reads `opencode.json(c)`.
  */
 function externalGate(args, p, payload) {
   const sensor = protectedCheck(p);
-  if (sensor) {
-    return `Geneseed (External Gate) — ${p} is a protected check (${sensor === DONE_LIST
-      ? 'the done gate list itself' : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can `
-      + 'edit is not a check: fix the code, not the check, unless the user asks for this edit.';
-  }
+  if (sensor) return { id: 'check', name: sensor };
   if (HOST === 'bob' && /^opencode\.jsonc?$/i.test(path.basename(p))) return null;
   if (!gateConfig(p, args.root)) return null;
   const why = HOST === 'bob' && SETTINGS_RE.test(p) ? bobSettingsChange(p, payload) : '';
   if (why === null) return null;
-  return `Geneseed (External Gate) — ${p} ${GATE_CONFIG_ASK}`
-    + (why ? ` On Bob this write is refused because ${why}.` : '');
+  return { id: 'config', name: repoRel(p, payload), bobWhy: why };
 }
 
 /**
@@ -1111,20 +1137,20 @@ function ruleDecide(args, payload) {
   // this check stands down; the protected checks and process 1 below still run.
   const carrier = paths.find((p) => !DOTENV_RE.test(p));
   if (!args.noSecretsGate && body && carrier && SECRET_RE.test(body)) {
-    return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${carrier} would carry a `
-      + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
-      + 'tracked file.');
+    return ask(args, 'rule-gate', 'law-1', 'secret', { name: repoRel(carrier, payload) });
   }
   // Bob routes reads here too (`read_file` carries a path): only a write is External Gate's business.
   // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
   // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
   const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
-  const external = !bobRead && paths.map((p) => externalGate(args, p, payload)).find(Boolean);
-  if (external) return ask(args, 'rule-gate', 'rigor-5', external);
+  for (const q of bobRead ? [] : paths) {
+    const hit = externalGate(args, q, payload);
+    if (hit) return ask(args, 'rule-gate', 'rigor-5', hit.id, { ...hit, pairs: askPairs(payload, q) });
+  }
   // A read on Bob names the store too, and that is no write to refuse.
-  const target = bobRead ? null : paths.map((p) => ruleGateTarget(p, args.root, payload && payload.cwd)).find(Boolean);
+  const stored = bobRead ? null : paths.find((q) => ruleGateTarget(q, args.root, payload && payload.cwd));
   const p = paths[0];
-  if (!target) {
+  if (!stored) {
     // The ownership first-write gate (./ownership-gate.mjs), last: every rule above outranks it.
     // `--no-ownership-gate`: the install switched it off (D25).
     const why = args.noOwnershipGate ? null : ownershipBlock(p, payload, body, args.root);
@@ -1133,9 +1159,8 @@ function ruleDecide(args, payload) {
     if (!bobRead) testWeakenedNote(p, payload);
     return 0;
   }
-  return ask(args, 'rule-gate', 'process-1', `Geneseed (Persist Insight) \u2014 writing to `
-    + `${target}: a standing rule, or a fact to remember? That choice is the user's. `
-    + (HOST === 'bob' ? PERSIST_BOB : PERSIST_ASK));
+  return ask(args, 'rule-gate', 'process-1', 'store',
+    { name: ruleGateTarget(stored, args.root, payload && payload.cwd), pairs: askPairs(payload, stored) });
 }
 export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 
