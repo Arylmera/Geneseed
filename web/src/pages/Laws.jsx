@@ -28,7 +28,7 @@ import GateAsks from './Laws/GateAsks.jsx'
 import PackPanel from './Laws/PackPanel.jsx'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
-import { installTag, pairOf } from '../lib/hosts.js'
+import { fleetSlots, installTag, pairOf } from '../lib/hosts.js'
 
 // THE FILENAME AND THE ROUTE STAY `laws`: a rename buys nothing and costs a redirect. Only what
 // a reader sees says "Constitution".
@@ -102,7 +102,13 @@ export default function Laws(props) {
     <>
       <InstallPicker className="page-pick" installs={active} value={install} onChange={pick} />
       {/* Keyed on the pick, so its read starts as pending and no other pick's answer shows. */}
-      <LawsFor key={install?.id ?? 'none'} {...props} install={install} listed={active !== null} />
+      <LawsFor
+        key={install?.id ?? 'none'}
+        {...props}
+        install={install}
+        listed={active !== null}
+        installSlot={fleetSlots((active || []).map((i) => i.id)).indexOf(install?.id)}
+      />
     </>
   )
 }
@@ -113,7 +119,7 @@ const isInstall = (o, i) => o?.install?.host === i.host && o.install.path === i.
 // The gates and the Enforced-by column read it, and a missing switch reads as armed, so until it
 // lands the page shows no verdict. `loading` ends the wait: a finished read that names another
 // install, or none, is unread and says so, and never hangs.
-function LawsFor({ install, listed, ...props }) {
+function LawsFor({ install, listed, installSlot, ...props }) {
   const held = install && isInstall(props.overview, install) ? props.overview : null
   const {
     data: own,
@@ -141,12 +147,23 @@ function LawsFor({ install, listed, ...props }) {
         onAction={listed && (!install || mine !== null) ? props.onAction : undefined}
         pending={!listed || Boolean(install && !mine && loading)}
         gatesUnread={unread}
+        installSlot={installSlot}
       />
     </>
   )
 }
 
-function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, gatesUnread }) {
+function LawsOf({
+  selected,
+  overview,
+  setup,
+  onAction,
+  dataRev,
+  pair,
+  pending,
+  gatesUnread,
+  installSlot,
+}) {
   const confirm = useConfirm()
   // The default install's catalog shares the Overview's cached read; another install's is its own.
   const { data, error } = useAsync(
@@ -742,6 +759,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
             onJump={jumpToRule}
             disarmed={(addr) => Boolean(GATE_SWITCH[addr]) && !armed(addr)}
             install={overview?.install}
+            slot={installSlot}
           />
         </aside>
       </div>

@@ -3409,7 +3409,7 @@ html { scrollbar-gutter: stable; }
 /* A pack with only some rules on: the knob sits mid-track. */
 .sw-toggle.on.mixed { background: var(--surface-3); border-color: var(--accent-line); }
 .sw-toggle.on.mixed::after { transform: translateX(8px); background: var(--accent); }
-.gate-top .off { font-size: 11px; color: var(--text-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.gate-top .off { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-3); }
 .tier-rule { font-style: italic; }
 /* Wide markdown tables scroll inside their own box instead of being clipped. */
 .detail-doc .markdown .table-scroll { overflow-x: auto; max-width: 100%; margin: 0 0 14px; }

@@ -67,6 +67,17 @@ export const installTag = (inst) => {
   return inst.scope === 'global' ? `${host} · global` : `${folderName(inst.path)} · ${host}`
 }
 
+// One colour per install, named once in a legend: a tag per install on every row pushed the rows
+// past the pane. shortcut: seven --cat hues, so an eighth install repeats a colour; the legend
+// still names each. Every second hue: neighbours look alike at 8px.
+export const dotColour = (i) => ({ '--cc': `var(--cat-${(i * 2) % 7})` })
+
+// The install keys that hold a dot slot, in order: the Library's list and the Constitution's gate
+// asks both index it, so one install gets one colour. The exception is the Library's memory and wiki
+// kinds: `merged` are installs folded under another there, and they hold no slot, so the installs
+// after them move up and can differ from the Constitution's. A key absent from it has no colour.
+export const fleetSlots = (ids, merged = []) => [...new Set(ids)].filter((k) => !merged.includes(k))
+
 // The ACTIVE rows of /api/installs, the server's `default` row first (the install a request
 // naming none reads, so it is where every picker starts), the rest in the server's order. The
 // order rule lives on the server alone (`defaultView`, js/web/state.mjs).

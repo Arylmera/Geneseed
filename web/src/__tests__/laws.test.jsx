@@ -20,6 +20,7 @@ vi.mock('../hooks/useConfirm.jsx', () => ({ useConfirm: () => askConfirm }))
 const answered = () => act(async () => {})
 
 import Laws from '../pages/Laws.jsx'
+import GateAsks from '../pages/Laws/GateAsks.jsx'
 import { api } from '../api/index.js'
 import { clearAsyncCache } from '../hooks/useAsync.js'
 
@@ -964,6 +965,8 @@ describe('Constitution page — the Ownership row and its gate', () => {
     const entry = () => document.querySelectorAll('.gate-row')[1]
     expect(entry().querySelector('.gate-name').textContent).toBe('Ownership gate')
     expect(entry().querySelector('.off').textContent).toBe('off · OpenCode · global')
+    // No install list is read here, so the pick has no slot and no colour.
+    expect(entry().querySelector('.off .lr-dot')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     expect(gateLine(container)).toBeNull()
@@ -1172,8 +1175,10 @@ describe('Constitution page — the Gate asks card', () => {
     expect(bar(first).querySelector('.tone-warn')).toBeTruthy()
     expect(second.querySelector('.gate-name').textContent).toBe('Deletion Is Deliberate')
     expect(second.querySelector('.gate-name').classList.contains('dim')).toBe(true)
-    // The switch is one install's, inside a card of every install's asks: the badge names it.
+    // The switch is one install's, inside a card of every install's asks: a sr-only name says which,
+    // and one legend in the panel names it once.
     expect(second.querySelector('.off').textContent).toBe('off · OpenCode · global')
+    expect(document.querySelector('.lib-legend').textContent).toBe('OpenCode · global')
     expect(bar(second).querySelector('.tone-warn')).toBeNull()
     expect(bar(second).querySelector('.tone-accent')).toBeTruthy()
     // Each bar is named by its gate, so a reader can tell them apart; the count is against the
@@ -1438,6 +1443,45 @@ describe('Constitution page — its own install picker', () => {
     delete api.installs
     delete api.overview
     localStorage.clear()
+  })
+
+  // The gate-asks dot is the Library's colour for that install: its slot in the install list,
+  // so the second install gets --cat-2, not the first's --cat-0.
+  it('colours the gate-asks dot by the install slot, as the Library does', async () => {
+    api.overview = vi.fn(async () => ({ install: { ...CL, ownershipGate: false } }))
+    render(
+      <Laws
+        overview={{ install: { host: 'opencode', scope: 'global', path: '/oc' } }}
+        setup={{ gates: { asks: { ownership: 2 }, total: 2, standing_down: [] } }}
+        onAction={() => {}}
+      />,
+    )
+    await waitFor(() => screen.getByRole('combobox', { name: 'Install' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Install' }), {
+      target: { value: 'cl' },
+    })
+    await waitFor(() => expect(document.querySelector('.gate-row .off .lr-dot')).toBeTruthy())
+    expect(document.querySelector('.gate-row .off .lr-dot').style.getPropertyValue('--cc')).toBe(
+      'var(--cat-2)',
+    )
+  })
+
+  // A pick that is not in the install list has no slot, so no colour: no dot, rather than
+  // another install's. The legend still names it and the row keeps "off".
+  it('shows no dot for an install with no slot', () => {
+    render(
+      <GateAsks
+        gates={{ asks: { ownership: 2 }, total: 2 }}
+        byAddr={{}}
+        onJump={() => {}}
+        disarmed={() => true}
+        install={{ host: 'claude', scope: 'global' }}
+        slot={-1}
+      />,
+    )
+    expect(document.querySelector('.lr-dot')).toBeNull()
+    expect(document.querySelector('.lib-legend').textContent).toBe('Claude Code · global')
+    expect(document.querySelector('.gate-row .off').textContent).toContain('off')
   })
 
   // A re-pick must never write through the previous install's read: until the new pick's own
