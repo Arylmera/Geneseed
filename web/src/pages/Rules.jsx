@@ -13,9 +13,9 @@ import { installTag, pairOf } from '../lib/hosts.js'
 // install). The page is the curation surface for the file the agent obeys alongside the Dictates:
 // list with status/scope chips and add/edit/retire. Each rule shows what it costs and the page
 // its total, with no ceiling: a bloated rule set is ignored, not obeyed (Design decision 7), and
-// that call is the user's. Rules the fold drafted are shown, never decided: the rule Rite is the
-// draft's only writer. Every mutation carries the fingerprint of the
-// content we last read; a 409 means an agent session edited the file first,
+// that call is the user's. Rules the fold drafted wait in Pending, decided here or by the rule
+// Rite: the server applies the same steps (js/build/rule-decide.mjs). Every mutation carries the
+// fingerprint of the content we last read; a 409 means an agent session edited the file first,
 // and we reload instead of clobbering its write. The open form is a useFileEditor
 // draft, so a reload never wipes it and leaving with it unsaved asks first.
 
@@ -189,8 +189,37 @@ function RuleRow({ rule, tag, usual, isOpen, onToggle, onEdit, onDelete, onGradu
   )
 }
 
-// What the fold drafted and nobody decided yet. Read-only: the rule Rite decides each one.
-function PendingRules({ drafts }) {
+// Each decision's button, by the word the server takes. `d.decisions` says which apply: none for a
+// rule the shared file already holds, which the next rebuild clears.
+const decisionLabel = (d, decision) =>
+  ({
+    approve: 'Approve',
+    reject: 'Reject',
+    host: `Use the ${d.choice?.host} file`,
+    shared: 'Use the shared file',
+    both: 'Keep both',
+  })[decision]
+
+// The two files of a Choose, side by side: the decision is between their texts.
+function ChoiceFiles({ choice }) {
+  const side = (name, path, text) => (
+    <div>
+      <div className="rule-src" title={path}>
+        {name}
+      </div>
+      <pre className="mono">{text ?? '(absent)'}</pre>
+    </div>
+  )
+  return (
+    <div className="rule-choice">
+      {side('Shared file', choice.shared_path, choice.shared_text)}
+      {side(`${choice.host} file`, choice.host_path, choice.host_text)}
+    </div>
+  )
+}
+
+// What the fold drafted and nobody decided yet.
+function PendingRules({ drafts, deciding, onDecide }) {
   if (!drafts.length) return null
   return (
     <section className="mb-16" aria-labelledby="rules-pending">
@@ -200,20 +229,39 @@ function PendingRules({ drafts }) {
       </div>
       <p className="sub sub-wide">
         Waiting in <code className="mono">user-rules.draft.md</code>. A pending rule still binds on
-        its host, and only there. The agent’s rule Rite decides each one: ask the agent to run it.
+        its host, and only there. Decide each one here, or ask the agent to run its rule Rite.
       </p>
       <div className="card rules-list">
         {drafts.map((d, i) => (
-          <div className="rule-row" key={i}>
+          <div className="rule-row" key={d.key ?? i}>
             <div className="rule-head static">
               <span className="rule-title">{d.title}</span>
               {d.host ? <span className="rule-chip mono">binds on {d.host}</span> : null}
             </div>
-            {d.body ? (
-              <div className="rule-expand">
-                <p>{d.body}</p>
-              </div>
-            ) : null}
+            <div className="rule-expand">
+              {d.body ? <p>{d.body}</p> : null}
+              {d.choice ? <ChoiceFiles choice={d.choice} /> : null}
+              {d.held ? (
+                <p className="rule-src">
+                  The shared file already holds this rule. The next rebuild clears it.
+                </p>
+              ) : null}
+              {d.decisions?.length ? (
+                <div className="row gap-8" style={{ marginTop: 10 }}>
+                  {d.decisions.map((decision) => (
+                    <button
+                      key={decision}
+                      className="btn ghost sm"
+                      disabled={deciding !== ''}
+                      aria-label={`${decisionLabel(d, decision)} · ${d.title}`}
+                      onClick={() => onDecide(d, decision)}
+                    >
+                      {decisionLabel(d, decision)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
@@ -226,7 +274,7 @@ function PendingRules({ drafts }) {
 // the per-file fingerprint the 409 rests on); hooks/useInstallFiles lists a shared file once. Each
 // row carries its install; an edit, graduate or retire writes back to THAT install with THAT
 // file's fingerprint, and a new rule goes to the install its form's own picker names.
-export default function Rules({ onChanged, dataRev }) {
+export default function Rules({ onChanged, dataRev, onAction }) {
   const confirm = useConfirm()
   const { targets, sets, failed, reason, reload } = useInstallFiles(api.rules, dataRev)
   const [open, setOpen] = useState(null)
@@ -234,6 +282,8 @@ export default function Rules({ onChanged, dataRev }) {
   // rule's install id }. The editor's own fingerprint is unused: each save names its file's.
   const editor = useFileEditor({ data: null, reload })
   const { draft, busy, notice } = editor
+  const [deciding, setDeciding] = useState('') // the drafted item whose decision is in flight
+  const [decided, setDecided] = useState(null) // { rebuild, cleared } of the last decision
   // Where focus goes once the act has re-rendered: 'add' (the Add rule button) or a rule id
   // (that rule's row head). A closed form unmounts the element that had focus, which would
   // drop it on <body>; the target exists only after the render, hence the effect. The target
@@ -352,11 +402,74 @@ export default function Rules({ onChanged, dataRev }) {
     )
     if (res) setFocusTo(r.key)
   }
+  // What a decision asks first. Approve carries the Rite's legality check, which only the user can
+  // make here. Each Choose that replaces a file names where the old one goes. Reject and Keep both
+  // leave every file as it is, so they ask nothing.
+  const askDecision = (d, decision) => {
+    const file = d.choice?.file
+    if (decision === 'approve') {
+      return confirm(
+        `Approve “${d.title}”? It moves to the shared file under a new number and binds every host ` +
+          'on this machine. A rule may tighten a law, never repeal one: check that it does not.',
+        { title: 'Approve this rule?', confirmLabel: 'Approve' },
+      )
+    }
+    if (decision === 'host') {
+      return confirm(
+        `Make the ${d.choice.host} file the shared ${file}? The current shared file is replaced, ` +
+          `and a copy goes to archived-${file}/ beside it.`,
+        { title: 'Replace the shared file?', confirmLabel: 'Replace', tone: 'danger' },
+      )
+    }
+    if (decision === 'shared') {
+      return confirm(
+        `Keep the shared ${file}? The ${d.choice.host} file moves to archived-${file}/ beside it, ` +
+          'and that host returns to its seed at the next rebuild.',
+        { title: 'Move the host file aside?', confirmLabel: 'Move aside', tone: 'danger' },
+      )
+    }
+    return true
+  }
+  const onDecide = async (d, decision) => {
+    if (!(await askDecision(d, decision))) return
+    setDeciding(d.key)
+    setDecided(null)
+    editor.setNotice('')
+    try {
+      const res = await api.rulesDecide(
+        { key: d.key, decision, fingerprint: d.fingerprint },
+        pairOf(d.inst),
+      )
+      setDecided({ rebuild: res.rebuild, cleared: res.cleared ?? [] })
+    } catch (e) {
+      const cleared = e.body?.cleared?.length ? ` Cleared: ${e.body.cleared.join(', ')}.` : ''
+      editor.setNotice(
+        e.status === 409
+          ? `${e.body?.detail ?? e.message}${cleared} Reloaded the fresh copy.`
+          : e.message,
+      )
+    } finally {
+      setDeciding('')
+      reload()
+      onChanged?.()
+    }
+  }
+  const rebuildAll = async () => {
+    const ok = await confirm(
+      'Rebuild every active install? Each is rebuilt in place from source with its own settings; ' +
+        'files you edited are kept.',
+      { title: 'Rebuild all active installs?', confirmLabel: 'Rebuild all' },
+    )
+    if (ok) onAction('build-all')
+  }
+
   const warnings = sets.flatMap(({ inst, data }) =>
     (data.warnings || []).map((w) => (many ? `${tagOf(inst)}: ${w}` : w)),
   )
 
-  const drafts = sets.flatMap(({ data }) => data.drafts || [])
+  const drafts = sets.flatMap(({ inst, data }) =>
+    (data.drafts || []).map((d) => ({ ...d, inst, fingerprint: data.draft_fingerprint })),
+  )
   // No session loads two of these files, so each keeps its own figure: a sum would not be per turn.
   const files = sets.filter((s) => s.data.exists)
   // The scope a file's rules have unless a row says otherwise.
@@ -444,7 +557,19 @@ export default function Rules({ onChanged, dataRev }) {
         </p>
       ))}
 
-      <PendingRules drafts={drafts} />
+      {decided ? (
+        <p className="sub sub-wide" role="status">
+          Decided.{' '}
+          {decided.rebuild ? 'A rebuild removes the host copy.' : 'The host file stays as it is.'}
+          {decided.cleared.length ? ` Cleared: ${decided.cleared.join(', ')}.` : ''}{' '}
+          {decided.rebuild && onAction ? (
+            <button className="btn ghost sm" onClick={rebuildAll}>
+              Rebuild all
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+      <PendingRules drafts={drafts} deciding={deciding} onDecide={onDecide} />
 
       {newCard && (
         <div className="card pad-lg mb-16">

@@ -1148,7 +1148,7 @@
     },
     {
       "name": "migrate",
-      "help": "move this machine from the git-checkout install shape to the npm one: re-emit every registered install, repoint the hook shim at the npm package, and report what must be fixed by hand. Use --dry-run alone to preview the shared-tier fold",
+      "help": "move this machine from the git-checkout install shape to the npm one: run from the npm package, it re-emits every registered install, which points the hook shim at that package, and reports what must be fixed by hand. A git clone or a bundle is refused with exit 3. Use --dry-run alone, from anywhere, to preview the shared-tier fold",
       "description": "",
       "positionals": [],
       "options": [

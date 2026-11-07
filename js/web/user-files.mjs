@@ -10,10 +10,11 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
+import { RETIRED_RULES_FILE, decideItem, decisionState, draftItems, CHOICE_DECISIONS, RULE_DECISIONS } from '../build/rule-decide.mjs';
 import { PROFILE_STUB } from '../build/stubs.mjs';
 import { readMaybe } from '../hosts/installs.mjs';
 import { splitLines } from '../hosts/hooks-prims.mjs';
-import { frontmatter, isRuleEdge, parseDraft, parseRules, readFoldState } from '../hosts/memory-files.mjs';
+import { frontmatter, isRuleEdge, parseRules, readFoldState } from '../hosts/memory-files.mjs';
 import { writeText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isTruthy } from '../lib/json.mjs';
 import { WHITESPACE, codePointLength, stripWhitespace } from '../lib/text.mjs';
@@ -64,22 +65,30 @@ const userDir = (state, tier = tierOf(state)) => tier?.root ?? state.target;
 const rulesPath = (state, tier) => path.join(userDir(state, tier), RULES_FILE);
 
 /**
- * The blocks the fold left in `<tier>/user-rules.draft.md`, as `{title, host, body}`, in file
- * order (`parseDraft` reads the format). The console only SHOWS them: the rule Rite is the only
- * draft writer (C15), so no verb here decides one. A block the ledger already holds as decided is
- * left over from a stopped Rite write, so it is not pending; a block with no row, or a ledger that
- * does not parse, still shows. Empty for a project install and for a missing draft.
+ * The blocks the fold left in `<tier>/user-rules.draft.md`, in file order (`draftItems`). A block
+ * the ledger already holds as decided is left over from a stopped write, so it is not pending; a
+ * block with no row, or a ledger that does not parse, still shows. Empty for a project install and
+ * for a missing draft. `apiRulesDecide` below decides one.
  */
 function ruleDrafts(tier) {
   if (tier === null) return [];
   let ledger = {};
   try { ledger = readFoldState(tier).items; } catch { /* shows all */ }
   const decided = ({ key }) => {
-    const row = ledger[key];
+    const row = Object.hasOwn(ledger, key ?? '') ? ledger[key] : null;
     return row != null && row.state !== 'pending';
   };
-  return parseDraft(readMaybe(tier.draft) ?? '').filter((d) => !decided(d))
-    .map(({ title, host, body }) => ({ title, host, body }));
+  // A bad draft is one row on the page, never a failed page: the rules below it still edit.
+  try {
+    return draftItems(tier).filter((d) => !decided(d));
+  } catch (e) {
+    return [{ title: 'The draft could not be read', host: null, body: String(e?.message ?? e), decisions: [] }];
+  }
+}
+
+/** The fingerprint a decision must send back: `''` where there is no tier, or no draft to read. */
+function draftFingerprint(tier) {
+  try { return tier === null ? '' : fingerprint(decisionState(tier)); } catch { return ''; }
 }
 
 /**
@@ -95,7 +104,7 @@ export function apiRules(state) {
   const drafts = ruleDrafts(tier);
   if (!isFile(p)) {
     return { exists: false, path: p, rules: [], warnings: [], fingerprint: '', shared, drafts,
-      stats: { rules: 0, lines: 0, tokens: 0 } };
+      draft_fingerprint: draftFingerprint(tier), stats: { rules: 0, lines: 0, tokens: 0 } };
   }
   const text = readMaybe(p) ?? '';
   const [rules, warnings] = parseRules(text);
@@ -111,6 +120,7 @@ export function apiRules(state) {
     tokens: tokensOf(stripWhitespace(lines.slice(r.start, r.end).join('\n'))),
   }));
   return { exists: true, path: p, rules: out, warnings, fingerprint: fingerprint(text), shared, drafts,
+    draft_fingerprint: draftFingerprint(tier),
     // The whole file, so it holds its header too: more than the rules' own tokens added up.
     stats: { rules: rules.length, lines: lines.length, tokens: tokensOf(text) } };
 }
@@ -186,7 +196,6 @@ function ruleId(v) {
  * mistake; it exists so a retire never loses the text. Like user-rules.md it is the user's: no
  * install manifest claims it, so no uninstall deletes it.
  */
-const RETIRED_RULES_FILE = 'user-rules-retired.md';
 const RETIRED_HEADER = '# Retired rules — not in force, never loaded into any session.\n';
 const isBlank = (line) => !stripWhitespace(line);
 
@@ -252,6 +261,24 @@ export function apiRulesMutate(state, body) {
   }
   writeText(p, next);
   return { ok: true, op, id: rid, fingerprint: fingerprint(next) };
+}
+
+/**
+ * One decision on a drafted item (`decideItem`). The fingerprint covers the draft, the shared rules
+ * and both files of each `Choose` block, so a click on what the page showed never lands on what an
+ * agent session or a fold wrote since: `ok: false`, 409, and the page reloads.
+ */
+export function apiRulesDecide(state, body) {
+  const decision = bget(body, 'decision');
+  if (![...RULE_DECISIONS, ...CHOICE_DECISIONS].includes(decision)) {
+    throw new BadRequest(`unknown decision ${formatRepr(decision)}`);
+  }
+  const tier = tierOf(state);
+  if (tier === null) throw new NotFound('shared tier');
+  if (!fpMatches(bget(body, 'fingerprint', ''), draftFingerprint(tier))) {
+    return { ok: false, error: 'conflict', detail: 'The draft changed since you loaded it.' };
+  }
+  return decideItem(tier, strOr(bget(body, 'key')), decision);
 }
 
 /**

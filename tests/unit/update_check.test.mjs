@@ -110,6 +110,7 @@ test('the package under npm root -g is npm-global; any other node_modules is oth
   fs.mkdirSync(path.join(g, 'geneseed'), { recursive: true });
   fs.mkdirSync(path.join(proj, 'geneseed'), { recursive: true });
   assert.equal(installKind({ root: path.join(g, 'geneseed'), npmRoot: () => g }), 'npm-global');
+  assert.equal(installKind({ root: path.join(g, 'gs-alias'), npmRoot: () => g }), 'npm-global');
   assert.equal(installKind({ root: path.join(proj, 'geneseed'), npmRoot: () => g }), 'other');
   assert.equal(installKind({ root: path.join(g, 'geneseed'), npmRoot: () => null }), 'other');
 }));

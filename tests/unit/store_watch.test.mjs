@@ -25,7 +25,7 @@ function world(prefix) {
     JSON.stringify({ hook_event_name: 'Stop', session_id: 's1', cwd: sb.path, ...extra }), { env, cwd: sb.path });
   return { sb, root, env, start, stop };
 }
-const LINE = (n, names) => `Geneseed change report: ${n} rule or memory file${n === 1 ? '' : 's'} changed outside this session's approved writes (another session may have made it): ${names}. This detects a change; it prevented nothing.`;
+const LINE = (n, names) => `Geneseed change report: ${n} rule or memory file${n === 1 ? '' : 's'} changed outside this session's approved writes (another session, or a decision of yours in the web console, may have made it): ${names}. This detects a change; it prevented nothing.`;
 const message = (r) => (r.stdout.trim() ? JSON.parse(r.stdout).systemMessage : null);
 const tool = (id, name, file) => JSON.stringify({ message: { content: [{ type: 'tool_use', id, name, input: { file_path: file } }] } });
 const result = (id, isError) => JSON.stringify({ message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: isError }] } });
@@ -119,7 +119,7 @@ test('an unwritable status file does not swallow the report', () => {
 
 test('the line names five files and counts the rest', () => {
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((n) => path.join('x', 'memory', `${n}.md`));
-  assert.equal(storeLine(files), "Geneseed change report: 7 rule or memory files changed outside this session's approved writes (another session may have made it): "
+  assert.equal(storeLine(files), "Geneseed change report: 7 rule or memory files changed outside this session's approved writes (another session, or a decision of yours in the web console, may have made it): "
     + 'memory/a.md, memory/b.md, memory/c.md, memory/d.md, memory/e.md (+2 more). This detects a change; it prevented nothing.');
 });
 

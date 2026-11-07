@@ -16,7 +16,8 @@ contradictory or stale entries (a file, flag or command that no longer exists), 
 a release or large refactor, or when the user says "clean up memory", "consolidate",
 "what do you actually remember". The user's wiki is the [wiki {{SKILL}}](wiki.md)'s.
 Run the **approval flow**, not the fork, when an emit reports items `to approve`, when
-`user-rules.draft.md` holds pending items, or when the user asks to review them.
+`user-rules.draft.md` holds pending items, or when the user asks to review them. The console's
+Pending section decides the same items by the same steps; a user who decides there needs no flow here.
 
 ## Procedure
 

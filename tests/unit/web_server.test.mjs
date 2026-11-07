@@ -53,19 +53,20 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 27. Trailing `/` marks a prefix route. */
+/** Every GET path the daemon answers — 28. Trailing `/` marks a prefix route. */
 const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/fleet', '/api/installs', '/api/item/',
-  '/api/jobs', '/api/jobs/', '/api/kits', '/api/loops', '/api/loops/active', '/api/mcp', '/api/overview',
+  '/api/jobs', '/api/jobs/', '/api/kits', '/api/loops', '/api/loops/active', '/api/mcp', '/api/migrate/preview',
+  '/api/overview',
   '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 15. `/api/mcp` left it when MCP became read-only, and
+/** Every POST path the daemon answers — 16. `/api/mcp` left it when MCP became read-only, and
  * `/api/view` when the console's install selector was retired (each page names its install). */
 const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/default-install', '/api/excludes',
   '/api/install',
   '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
-  '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/promote',
+  '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/decide', '/api/rules/promote',
   '/api/shutdown'];
 
 /**
@@ -77,7 +78,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/default-install', 
  * raise — so the column has to be checked as a column, below.
  */
 const EXPECT_409 = ['/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
-  '/api/rules/promote'];
+  '/api/rules/decide', '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */
 const EXPECT_KINDS = ['about', 'cli', 'concept', 'glossary', 'map', 'markdown'];
@@ -609,6 +610,8 @@ test('the declared surface is the one the dispatcher uses', async () => {
       '/api/shutdown accepted while a job runs');
     assert.equal(await hit('POST', '/api/restart', 'tok'), 409,
       '/api/restart accepted while a job runs');
+    assert.equal(await hit('POST', '/api/rules/decide', 'tok'), 409,
+      '/api/rules/decide accepted while a job runs');
     jm._busy = false;
     // LAST, always: this one stops the server, and every probe after it would fail with an
     // ECONNRESET that reads like a routing bug.

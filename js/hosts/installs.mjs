@@ -617,9 +617,9 @@ export function openclaudeDualHarnessRoots() {
 }
 
 /** (host, scope, root) for every registered root. */
-export function registeredTargets() {
+export function registeredTargets(opts) {
   const out = [];
-  for (const root of registryRoots()) {
+  for (const root of registryRoots(opts)) {
     const hs = emitHostScopeOf(root);
     if (hs) out.push([hs[0], hs[1], root]);
   }
@@ -637,7 +637,7 @@ export function registeredTargets() {
  * `Path.resolve()` returns the filesystem's own casing — on Windows two spellings of the same
  * directory differ as strings and not as installs, and this Set is keyed by string.
  */
-export function installTargets() {
+export function installTargets(opts) {
   const out = [];
   const seen = new Set();
 
@@ -664,7 +664,7 @@ export function installTargets() {
   for (const { host, configDir } of HOSTS) {
     try { add(host, 'global', configDir()); } catch { /* a missing host dir is not fatal */ }
   }
-  for (const [host, scope, root] of registeredTargets()) add(host, scope, root);
+  for (const [host, scope, root] of registeredTargets(opts)) add(host, scope, root);
   return out;
 }
 

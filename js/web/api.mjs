@@ -32,7 +32,7 @@ import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops } from '../loop/registry.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
-import { isFile, writeTextAtomic } from '../lib/fs.mjs';
+import { writeTextAtomic } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import {
@@ -286,8 +286,8 @@ export function apiFleet(state, { now = Date.now() } = {}) {
         if (files !== null) drift = driftCounts(files);
       } catch { /* an install that cannot be re-rendered reports no drift figure, not zero */ }
     }
-    let built = null;
-    try { built = Math.floor(statSync(path.join(dir, VERSION_MARKER)).mtimeMs / 1000); } catch { /* never built */ }
+    const builtMs = builtAt(dir);
+    const built = builtMs === null ? null : Math.floor(builtMs / 1000);
     const { cost, sessionStart } = reads(host, scope, st, root, dir);
     const tier = tierOf({ target: dir });
     installs.push({
@@ -315,6 +315,14 @@ export function apiFleet(state, { now = Date.now() } = {}) {
   // `version` is the source's release label, the "Behind 4.19.0" a behind row names; the same
   // reader `/api/overview` uses, so the two never name different releases.
   return { installs, source_fp: sourceFp, doctor: state.doctor, version: releaseLabel() };
+}
+
+/**
+ * When an install was built: its version marker's mtime in ms, or null. ONE rule for the Overview
+ * and the fleet: every emit writes the marker, and a Claude-family install has no root `AGENT.md`.
+ */
+function builtAt(dir) {
+  try { return statSync(path.join(dir, VERSION_MARKER)).mtimeMs; } catch { return null; }
 }
 
 /**
@@ -441,9 +449,8 @@ export function apiOverview(state, counts = machineCounts(state, [{ install: nul
   // engine-dependent — a plausible-but-wrong "2h" is the exact failure a second field costs
   // nothing to prevent.
   let buildEpoch = null;
-  const agentMd = path.join(state.target, 'AGENT.md');
-  if (isFile(agentMd)) {
-    const ms = statSync(agentMd).mtimeMs;
+  const ms = builtAt(state.target);
+  if (ms !== null) {
     buildTime = stampMinute(ms);
     buildEpoch = Math.floor(ms / 1000);
   }

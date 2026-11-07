@@ -9,13 +9,18 @@ binds from there, so no step here may take a rule out of force. The ledger is `.
 in that folder: the `sha256` of a block is the key of its row under `items`. Writes here pass the
 rule gate; that prompt is expected.
 
+The console's Pending section (`js/build/rule-decide.mjs`) applies these same steps, so the user can
+decide an item while you work. Read the draft and the ledger again before each decision: a block
+that is gone was decided.
+
 1. **Read the draft and the ledger.** If the draft holds no block and no row is `pending`, say so
    and stop.
 2. **Clear what is stale, and finish what a stop left.** Name each item to the user.
    - A block whose row is not `pending` is already decided. For an `approved` rule, add its
      `## Renumbered` line if that line is missing. Then delete the block and keep the row.
    - Delete the block and the row of a `Choose` block whose host file is absent, is now its seed,
-     or now matches the shared file.
+     or now matches the shared file, or whose shared file is absent or is its seed: the next fold
+     moves the host file up.
    - Delete the block and the row of a `Choose` block whose `sha256` is not the host file's key
      now: the host file changed, and the next fold asks about the current text. Order proves
      nothing, because a host file can return to earlier text. Get the key from the row's `kind`
@@ -33,9 +38,10 @@ The lines under the pointer are the rule as it stands, with its own metadata lin
 - **Approve** moves it to the shared file:
   1. Apply steps 4 and 8 of Branch B: the shared file binds every host on the machine.
   2. Read the shared file and each `user-rules-retired.md` ({{LAW:verify-before-asserting}}): the one
-     beside the shared file, the one beside each block's `source`, and the one in each global
-     install that `installs.json` in that folder lists. A host keeps its own retired rules, and a
-     retired number is never reused. The new number is one above the highest in all these files.
+     beside the shared file, and the one in each host's own config directory, where each block's
+     `source` sits (`installs.json` holds project roots only). A host keeps its own retired rules,
+     and a retired number is never reused. The new number is one above the highest in all these
+     files.
   3. Append to the shared file `## R<new> — <title>`, then the lines under the pointer, unchanged. The next fold
      finds the host copy by its title and body, so never reword here. Other wording is a new
      rule: reject this item and take the text through Branch B.
@@ -66,4 +72,4 @@ Delete the block in each case.
 
 ### Close
 Tell the user that a host file changes at the next global emit of that host, and that
-`geneseed rebuild-all` runs one for every host.
+`geneseed rebuild-all`, or *Rebuild all* in the console, runs one for every host.

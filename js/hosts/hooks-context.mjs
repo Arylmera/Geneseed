@@ -281,7 +281,7 @@ export function pendingDrafts() {
 /** The session's reminder of them, or null. The OpenCode context plugin's `draftLine` is its twin. */
 function draftLine() {
   const n = pendingDrafts();
-  return n ? `[drafts] ${n} drafted item${n === 1 ? '' : 's'} in user-rules.draft.md wait${n === 1 ? 's' : ''} for the user's decision (the rule skill).` : null;
+  return n ? `[drafts] ${n} drafted item${n === 1 ? '' : 's'} in user-rules.draft.md wait${n === 1 ? 's' : ''} for the user's decision (the rule skill or the web console).` : null;
 }
 
 /**

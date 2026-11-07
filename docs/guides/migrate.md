@@ -14,14 +14,16 @@ Claude Code, Bob and OpenClaude call Geneseed's hooks through one small file, th
 
 ## Run it
 
-Install the package first (`npm install -g geneseed`, or prefix each command with `npx`), then:
+Install the package first (`npm install -g geneseed`), then run these from it:
 
 ```
 geneseed migrate --dry-run     # survey every install, print the plan and the fold report; writes nothing
 geneseed migrate               # do it
 ```
 
-`migrate` rebuilds every registered install **with its own theme, host, footprint, posture and mode**. Nothing is reset to a default. It then rewrites the hook shim to point at the npm package, and reports anything it is not allowed to fix for you. A second run prints `already on the npm shape` and writes nothing.
+`migrate` rebuilds every registered install **with its own theme, host, footprint, posture and mode**. Nothing is reset to a default. Each rebuild of a Claude Code, Bob or OpenClaude install rewrites the hook shim to name the Geneseed that runs the rebuild, so it now names the npm package. `migrate` does not write the shim itself, and OpenCode has none. It then reports anything it is not allowed to fix for you. A second run prints `already on the npm shape` and writes nothing.
+
+**It runs only from the npm package.** From a git clone or a bundle, a real run has nothing to move: the rebuild would point the shim back at that same copy. So it refuses with exit 3 before it writes anything, and says to use `geneseed update`. An `npx` run refuses too: npm prunes that cache, and the shim would die with it. `--dry-run` works from anywhere. Outside the package it previews the fold, then says a real run would refuse.
 
 `--dry-run` also previews [the fold](../concepts/shared-tier.md#the-fold) for each global install, even on a machine that has already migrated, because the fold runs in every global emit. Each host is read against the shared tier as it stands, so two hosts that hold the same new fact both count it.
 

@@ -15,6 +15,11 @@
  * install must not block the rest — and for a migration it is the half-migrated machine the
  * whole verb exists to prevent.
  *
+ * IT RUNS FROM THE NPM PACKAGE OR NOT AT ALL. The re-emit bakes the ROOT of whatever Geneseed runs
+ * it into the shim, so a run from a clone or a bundle moves nothing and only writes the stamp. That
+ * refusal comes before the survey, because the survey's registry read can prune `installs.json`.
+ * `--dry-run` writes nothing and answers from anywhere.
+ *
  * THE ONE TRIGGER IS THE STAMP: work is needed when `<GENESEED_HOME>/.migrated` does not name this
  * ROOT, and the stamp is written only on success. That is what makes the verb idempotent, and it
  * holds for an OpenCode-only machine too, which wires no hooks at all.
@@ -34,6 +39,7 @@ import { installProfile } from '../build/generate.mjs';
 import { autostartPaths, autostartStale, hookShimPath, shimHome } from '../hosts/shim.mjs';
 import { writeText, printOut, printErr } from '../lib/fs.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
+import { isNpmPackageDir } from '../lib/paths.mjs';
 
 /** Every emit name the generator answers to — the set an unrecognised marker is NOT in. */
 const KNOWN_EMITS = new Set(EMIT_HOST_SCOPE.keys());
@@ -78,10 +84,10 @@ function stashDir() { return path.join(shimHome(), '.migrate-backup'); }
  * no rollback. That ordering is the cheapest atomicity there is and it is why the survey is a
  * separate pass rather than a check inside the loop.
  */
-function migrateSurvey() {
+function migrateSurvey({ prune = true } = {}) {
   const rows = [];
   const unrecognised = [];
-  for (const [host, scope, root] of installTargets()) {
+  for (const [host, scope, root] of installTargets({ prune })) {
     if (installState(root, host, scope) !== 'active') continue;
     const raw = readMaybe(path.join(root, '.geneseed-emit'));
     const marker = raw === null ? '' : raw.trim();
@@ -115,14 +121,12 @@ function autostartFindings() {
  */
 function foldPreview(rows) {
   let shared;
-  try { shared = sharedPaths(); } catch { return; }   // no home: no tier to fold into
-  for (const { host, scope, root } of rows) {
-    if (scope !== 'global' || !isCanonical(root, host)) continue;
-    const report = foldHost({ host, cfgDir: root, shared, dryRun: true });
-    const summary = foldSummary(report);
-    printOut(summary ? `[migrate] would fold ${host}: ${summary}\n` : `[migrate] ${host}: nothing to fold\n`);
-    for (const f of report.failed) printOut(`[migrate] ${host}: the fold would stop at ${f}\n`);
-  }
+  try { shared = sharedPaths(); } catch { return []; }   // no home: no tier to fold into
+  return rows.filter(({ host, scope, root }) => scope === 'global' && isCanonical(root, host))
+    .map(({ host, root }) => {
+      const report = foldHost({ host, cfgDir: root, shared, dryRun: true });
+      return { host, summary: foldSummary(report), failed: report.failed };
+    });
 }
 
 /**
@@ -144,23 +148,51 @@ export function orphanFindings(cfg, owned, { live = knownSkillIds(), aliases = s
     .map((rel) => path.join(cfg, rel));
 }
 
-/** The `--dry-run` half of M5: one line per orphan on each global Claude-style install. */
+/** The `--dry-run` half of M5: the orphans of each global Claude-style install. */
 function orphanPreview(rows) {
-  for (const { host, scope, root } of rows) {
-    if (scope !== 'global' || !CLAUDE_STYLE.includes(host) || !isCanonical(root, host)) continue;
-    const owned = claudeReadManifest(root).owned;
-    for (const p of orphanFindings(root, Array.isArray(owned) ? owned : [])) {
-      printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). Nothing moves it: if it is not yours, move it by hand.\n`);
-    }
+  return rows.filter(({ host, scope, root }) => scope === 'global' && CLAUDE_STYLE.includes(host) && isCanonical(root, host))
+    .flatMap(({ root }) => {
+      const owned = claudeReadManifest(root).owned;
+      return orphanFindings(root, Array.isArray(owned) ? owned : []);
+    });
+}
+
+/** The fold and orphan half of `--dry-run`, as the CLI prints it. */
+function printPreview(rows) {
+  for (const { host, summary, failed } of foldPreview(rows)) {
+    printOut(summary ? `[migrate] would fold ${host}: ${summary}\n` : `[migrate] ${host}: nothing to fold\n`);
+    for (const f of failed) printOut(`[migrate] ${host}: the fold would stop at ${f}\n`);
   }
+  for (const p of orphanPreview(rows)) {
+    printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). Nothing moves it: if it is not yours, move it by hand.\n`);
+  }
+}
+
+/**
+ * What the next rebuild would do, for the console: `{folds: [{host, summary, failed}], orphans}`.
+ * Writes nothing. A marker `migrate` refuses is in here too: `rebuild-all` coerces it, so that
+ * install still folds. No `would re-emit` plan: that is this verb's, and a clone has none to run.
+ */
+export function migratePreview() {
+  const { rows, unrecognised } = migrateSurvey({ prune: false });
+  const all = [...rows, ...unrecognised];
+  return { folds: foldPreview(all), orphans: orphanPreview(all) };
 }
 
 /** A stash key that cannot collide across drives, and is a legal file name on both platforms. */
 const stashKey = (p) => p.replace(/[\\/:]/g, '_');
 
-export function cmdMigrate(args = {}) {
+export function cmdMigrate(args = {}, { root = ROOT } = {}) {
   const dryRun = Boolean(args.dryRun);
-  const { rows, unrecognised, needed } = migrateSurvey();
+  const isClone = existsSync(path.join(root, '.git'));
+  const outside = isClone || !isNpmPackageDir(root);
+  const shape = isClone ? 'a git clone' : 'a bundle';
+  if (!dryRun && outside) {
+    printErr(`[migrate] REFUSED — this Geneseed runs from ${shape}, so there is nothing to migrate. Use geneseed update.\n`);
+    printErr('[migrate] Nothing was changed.\n');
+    return 3;
+  }
+  const { rows, unrecognised, needed } = migrateSurvey({ prune: !dryRun });
 
   if (unrecognised.length) {
     // Refuse the WHOLE run. A migration that skipped the row it did not understand and
@@ -179,10 +211,16 @@ export function cmdMigrate(args = {}) {
     return 0;
   }
 
-  if (dryRun) { foldPreview(rows); orphanPreview(rows); }
+  if (dryRun) printPreview(rows);
 
   if (!needed) {
     printOut(`[migrate] already on the npm shape (${rows.length} install(s)); nothing to do.\n`);
+    return 0;
+  }
+
+  if (dryRun && outside) {
+    printOut(`[migrate] this Geneseed runs from ${shape}, so a real run would refuse. Use geneseed update.\n`);
+    printOut('[migrate] --dry-run: nothing was written.\n');
     return 0;
   }
 

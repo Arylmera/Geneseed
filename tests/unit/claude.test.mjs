@@ -1138,7 +1138,7 @@ test('migrate keeps the excluded rules of an install excluded', () => {
       const ocCfg = opencodeConfigDir();
       assert.deepEqual(excludedRulesOfDir(ocCfg), ['process.5'], 'the emit did not exclude');
 
-      const [rc, out, err] = capturedOut(() => cmdMigrate({}));
+      const [rc, out, err] = capturedOut(() => cmdMigrate({}, { root: path.join(d, 'node_modules', 'geneseed') }));
 
       assert.equal(rc, 0, `migrate failed:
 ${out}
@@ -1177,7 +1177,7 @@ test('migrate tells the owner when an excluded skill was merged', () => {
       // An install made before the merge: its marker still names the old skill.
       fs.writeFileSync(carrier, text.replace('Excluded skills: dependencies', 'Excluded skills: deps-audit'));
 
-      const [rc, out, err] = capturedOut(() => cmdMigrate({}));
+      const [rc, out, err] = capturedOut(() => cmdMigrate({}, { root: path.join(d, 'node_modules', 'geneseed') }));
 
       assert.equal(rc, 0, `migrate failed:
 ${out}

@@ -1457,7 +1457,7 @@ const storeLine = (files) => {
   const shown = files.slice(0, 5).map((f) => f.split(/[\\/]/).slice(-2).join("/")).join(", ")
   const more = files.length > 5 ? ` (+${files.length - 5} more)` : ""
   return `Geneseed change report: ${files.length} rule or memory file${files.length === 1 ? "" : "s"} ` +
-    `changed outside this session's approved writes (another session may have made it): ${shown}${more}. This detects a change; it prevented nothing.`
+    `changed outside this session's approved writes (another session, or a decision of yours in the web console, may have made it): ${shown}${more}. This detects a change; it prevented nothing.`
 }
 function noteForStatus(files) {
   try {

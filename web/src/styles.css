@@ -2000,6 +2000,9 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
 .rule-expand p { color: var(--text-2); font-size: var(--fs-md); line-height: 1.66; white-space: pre-wrap; }
 .rule-src { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3); margin-top: var(--sp-2); }
 .rule-notice { color: var(--warn-text); margin: 0 0 var(--sp-3); }
+.rule-choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-3); }
+.rule-choice pre { max-height: 240px; overflow: auto; white-space: pre-wrap; font-size: var(--fs-2xs); }
+.preview-list { margin: 0 0 var(--sp-3); padding-left: var(--sp-4); overflow-wrap: anywhere; }
 
 /* add/edit form */
 .rule-form { display: flex; flex-direction: column; gap: 10px; } /* off-scale: 10px, 2px from a step */

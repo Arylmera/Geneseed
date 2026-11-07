@@ -42,7 +42,7 @@ layers. These pairs import each other (relative imports between folders, measure
 | build ↔ web | 1 / 9 | `build/generate.mjs` lazily imports `web/daemon.mjs` to restart a stale console after `rebuild-all` |
 | hosts ↔ inspect | 1 / 36 | `hosts/installs.mjs` reads `inspect/registry.mjs`'s deploy roots |
 | ui ↔ web | 1 / 1 | `ui/menu.mjs` starts the daemon; `web/docs.mjs` renders `ui/cli.mjs`'s CLI reference |
-| maintain ↔ web | 1 / 6 | `maintain/update.mjs` lazily imports `web/daemon.mjs` for the same restart |
+| maintain ↔ web | 1 / 7 | `maintain/update.mjs` lazily imports `web/daemon.mjs` for the same restart |
 
 The only gates over the import graph are the transitive closure walks in
 `tests/unit/hook_cli.test.mjs`. They pin which modules the generator and CLI entries may pull
@@ -65,6 +65,7 @@ as a per-host install at project or global scope.
 | `emit-opencode.mjs` | The OpenCode emits — a project's `.opencode/` and the global config dir. Deliberate twin of the above |
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
 | `fold.mjs` | The fold: moves a global install's stores into the shared tier, in the emit. Moves aside, never deletes; a second run writes nothing |
+| `rule-decide.mjs` | The decisions on the draft: the approval flow of `src/skills/rule/approve.md`, as the console applies it. Write order: target, ledger, draft |
 | `stubs.mjs` | Write-once seed files: context, wiki, rules, excludes, profile, `.gitignore`, memory/notebook indexes |
 | `version.mjs` | The release marker: fingerprint the sources, read/compare/write an install's version, warn on downgrade |
 | `driver.mjs` | The generator driver: the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |

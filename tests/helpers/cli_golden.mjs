@@ -406,6 +406,8 @@ export function repoint(cli, checkout) {
 export function runCell(cli, cell) {
   const faults = cell.checkout;
   const gitstate = cell.git;
+  // `package`: a copy in the shape npm leaves it, for a verb that runs from nowhere else.
+  const pkg = cell.package === true;
   const sb = makeSandbox();
   const ctd = makeSandbox();
   try {
@@ -413,8 +415,9 @@ export function runCell(cli, cell) {
     const repo = path.join(sb.path, 'repo');
     const cfg = path.join(sb.path, 'cfg');
     for (const d of [home, repo, cfg]) fs.mkdirSync(d, { recursive: true });
-    const own = faults !== undefined || gitstate !== undefined;
-    const checkout = own ? path.join(ctd.path, 'checkout') : ROOT;
+    const own = faults !== undefined || gitstate !== undefined || pkg;
+    const checkout = pkg ? path.join(ctd.path, 'node_modules', 'geneseed')
+      : own ? path.join(ctd.path, 'checkout') : ROOT;
 
     // `{py}` IS THE BARE NAME `node`, not `process.execPath`. The verb splits `$GENESEED_LLM`
     // on whitespace, and `process.execPath` on Windows is `C:\Program Files\nodejs\node.exe`.
@@ -435,8 +438,8 @@ export function runCell(cli, cell) {
 
     if (gitstate !== undefined) {
       cloneCheckout(checkout, subst(gitstate, repl), subst(faults || {}, repl));
-    } else if (faults !== undefined) {
-      copyCheckout(checkout, subst(faults, repl));
+    } else if (own) {
+      copyCheckout(checkout, subst(faults || {}, repl));
     }
     const argv0 = own ? repoint(cli, checkout) : cli;
     seed(sb.path, cell.world, repl);

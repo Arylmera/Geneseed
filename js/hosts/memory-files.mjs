@@ -564,8 +564,8 @@ export function parseRules(text) {
   return [rules, warnings];
 }
 
-// The draft's block headings: the fold writes them, `parseDraft` reads them, and the rule Rite's
-// approval flow (src/skills/rule/approve.md) names them, so a change here changes that file too.
+// The draft's block headings: the fold writes them, `parseDraft` reads them, and the approval flow
+// (src/skills/rule/approve.md, js/build/rule-decide.mjs) names them, so a change here changes both.
 export const draftRuleHead = (host, title) => `## Rule from ${host}: ${title}`;
 export const draftChoiceHead = (file) => `## Choose: ${file}`;
 const DRAFT_RULE_RE = /^## Rule from ([^:]+): (.+)$/;

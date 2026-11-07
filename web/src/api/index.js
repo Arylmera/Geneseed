@@ -54,6 +54,8 @@ const overview = (install) => getIn('/api/overview', install)
 // The Ledger Overview's four reads: every installed harness (sync, drift, always-on cost), skill
 // and agent calls over 30 days, gate asks per rule per day, and whether a newer release exists.
 const fleet = () => get('/api/fleet')
+// What the next rebuild would fold, and the orphans: read-only, machine-wide.
+const migratePreview = () => get('/api/migrate/preview')
 // Every kit this Geneseed ships, and per install which are on: the Kits page.
 const kits = () => get('/api/kits')
 const usage = () => get('/api/usage')
@@ -196,6 +198,8 @@ const docsPage = (id, harness, install) =>
 const rules = (install) => getIn('/api/rules', install)
 const rulesMutate = (body, install) => postIn('/api/rules', body, install)
 const rulesPromote = (body, install) => postIn('/api/rules/promote', body, install)
+// One decision on a drafted item. Its fingerprint is `draft_fingerprint` from the read above.
+const rulesDecide = (body, install) => postIn('/api/rules/decide', body, install)
 
 // ── Profile ─────────────────────────────────────────────────────────────────
 // User profile (PROFILE.md) — the Profile page. The read returns the raw markdown
@@ -216,6 +220,7 @@ const excludeMutate = (action, path) => post('/api/excludes', { action, path })
 
 export const api = {
   fleet,
+  migratePreview,
   kits,
   usage,
   gates,
@@ -254,6 +259,7 @@ export const api = {
   docsPage,
   rules,
   rulesMutate,
+  rulesDecide,
   rulesPromote,
   profile,
   profileSave,

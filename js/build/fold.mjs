@@ -45,11 +45,11 @@ const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 const seedHash = (bytes) => sha256(bytes.toString('utf8').replaceAll('\r\n', '\n'));
 const WHOLE_FILE_SEEDS = new Set([sha256(SESSION_SEEDS['PROFILE.md']), sha256(SESSION_SEEDS[WIKI_FILE]),
   LEGACY_WIKI_SEED]);
-const isWholeFileSeed = (bytes) => WHOLE_FILE_SEEDS.has(seedHash(bytes));
+export const isWholeFileSeed = (bytes) => WHOLE_FILE_SEEDS.has(seedHash(bytes));
 
 /** A folded store keeps these: the re-seed restores them, and their text never says "not folded". */
 const STORE_KEEPS = ['README.md', '.gitignore', '.own-writes.json'];
-const DRAFT_HEAD = '# User rules — draft\n\nNot active. The rule Rite applies decisions.\n';
+const DRAFT_HEAD = '# User rules — draft\n\nNot active. The rule Rite or the console applies decisions.\n';
 
 /**
  * Claim `dest` with the finished bytes, or throw EEXIST: a rename would replace a file another
@@ -70,7 +70,7 @@ function claimFile(tmp, dest) {
  * `bytes` at `dest`, or nothing there: a short write fails on its temp name, never on `dest`.
  * `exclusive` is for a name the caller found free; without it the file is meant to be replaced.
  */
-function landFile(dest, bytes, { exclusive = false } = {}) {
+export function landFile(dest, bytes, { exclusive = false } = {}) {
   mkdirSync(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.${process.pid}.fold-tmp`;
   try {
@@ -297,7 +297,7 @@ function foldNotes(cfgDir, ctx) {
   }
 }
 
-const itemKey = (kind, host, bytes) => createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
+export const itemKey = (kind, host, bytes) => createHash('sha256').update(`${kind}\0${host}\0`).update(bytes).digest('hex');
 
 /**
  * A block in the draft and a C7 record. The key names the host too, so two hosts holding the same
@@ -351,7 +351,7 @@ function foldWholeFile(kind, hostFiles, sharedFile, reseed, ctx) {
 }
 
 /** What makes two rules one (fold step 5): metadata and number do not. Line endings are already gone. */
-const ruleText = (r) => `${r.title}\n${r.body}`;
+export const ruleText = (r) => `${r.title}\n${r.body}`;
 
 /**
  * A pending rule this host no longer holds waits for nothing: it merged, because another host's
@@ -392,8 +392,8 @@ function withoutRules(text, merged) {
 /**
  * Fold step 5. A rule the shared file holds word for word leaves the host file: it binds from
  * there. Any other goes to the draft and stays, so nothing stops binding before the user decides
- * (C8), and an approval needs no code here: the rule Rite puts it in the shared file, and the next
- * fold finds a duplicate. A rejected rule is the exception to the merge, because "keep it on this
+ * (C8), and an approval needs no code here: the rule Rite or the console (`rule-decide.mjs`) puts it
+ * in the shared file, and the next fold finds a duplicate. A rejected rule is the exception to the merge, because "keep it on this
  * host" holds even if the shared file later says the same.
  *
  * The old file is copied aside, not moved: the host file must exist at every moment, because the
