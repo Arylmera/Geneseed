@@ -46,7 +46,8 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   ownership setup now, skip this session, or skip in this repo until asked; the next write
   passes, and sub-agents defer. Off per repo with `mode: off` in that section, for one developer
   in one repo with `Setup: declined <YYYY-MM-DD>` in their personal `.geneseed/ownership.md`,
-  per install with `--no-ownership-gate`. Ordinary edits pass.
+  per install with `--no-ownership-gate`. `--no-external-gate` and `--no-test-note` stop the protected-check and
+  gate-configuration asks and the weakened-test note. Ordinary edits pass.
   (`MultiEdit` is not a Claude Code tool and is not in the matcher; the gate reads
   `edits[].new_string` as a cheap guard regardless.)
 - on **SessionStart**, every source (`startup`, `resume`, `clear`, `compact`, `fork`), runs

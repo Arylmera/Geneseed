@@ -2579,7 +2579,8 @@ for (const row of CARRIER_ROWS) {
       fs.mkdirSync(path.dirname(carrier), { recursive: true });
       fs.writeFileSync(carrier, '# carrier\n');
       assert.match(run(), /Done gate:/, 'the fixture did not arm the gate');
-      fs.writeFileSync(carrier, '# carrier\n\nDone gate: off\n');
+      // In the block, as the emit writes it: a CLAUDE.md or AGENTS.md counts nowhere else.
+      fs.writeFileSync(carrier, '# carrier\n\n<!-- BEGIN GENESEED -->\nDone gate: off\n<!-- END GENESEED -->\n');
       assert.doesNotMatch(run(), /Done gate:/, 'Done gate: off was ignored');
     } finally {
       for (const [v, val] of prev) {

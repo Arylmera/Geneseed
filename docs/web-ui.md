@@ -229,10 +229,14 @@ streams the output of background jobs and keeps their history across reloads.
   the **Ethos** (five prose sections), the **Dictates** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
-  this install). Rules I, III and IV each carry a switch for the install's hook gate — the
-  secrets gate, the done gate and the deletion gate (`--no-secrets-gate`, `--no-done-gate`,
-  `--no-deletion-gate`; *Enforced by* reads *Gate off* while one is off) — flipping one asks,
-  then rebuilds the install once; the other Rules read *no gate*. The ownership gate belongs
+  this install). Rules I, III, IV and VIII each carry a switch for the install's hook — the
+  secrets gate, the done gate, the deletion gate and the test note (`--no-secrets-gate`,
+  `--no-done-gate`, `--no-deletion-gate`, `--no-test-note`; *Enforced by* reads *Gate off* while
+  one is off) — flipping one asks, then rebuilds the install once; the other Rules read *no
+  gate*. Doctrine rigor 5 keeps its rule switch on the row, which stages like any doctrine
+  change. Its hook has a second switch (`--no-external-gate`), on a gate line inside the opened
+  row, which rebuilds at once. The two are independent: an excluded rule still asks, and a gate
+  switched off leaves the rule's text in place. The ownership gate belongs
   to no Rule, so its switch (`--no-ownership-gate`) sits inside the Ethos band's *Ownership*
   row and works the same way. Closed, the row reads *Always* (the section's text binds whatever
   the gate does) and *Hook gate* or *Gate off*. Open, it shows the text, then a gate line with

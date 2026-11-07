@@ -35,7 +35,7 @@ export const VALIDATE_USAGE = [
   '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
   '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
   '                         [--exclude-skills SKILLS] [--kits KITS] [--shared-tier on|off] [--no-secrets-gate]',
-  '                         [--no-done-gate] [--no-deletion-gate] [-v]',
+  '                         [--no-done-gate] [--no-deletion-gate] [--no-external-gate] [--no-test-note] [-v]',
   '',
   "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
   "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",

@@ -777,7 +777,8 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
   gates = {}) {
   // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
-  const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true } = gates ?? {};
+  const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true,
+    externalGate = true, testNote = true } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -818,6 +819,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     const dn = doneGate === false ? ' --no-done-gate' : '';
     // The ownership first-write gate (js/hosts/ownership-gate.mjs), the same contract.
     const og = ownershipGate === false ? ' --no-ownership-gate' : '';
+    // External Gate's hook and the weakened-test note, the same contract.
+    const eg = externalGate === false ? ' --no-external-gate' : '';
+    const tn = testNote === false ? ' --no-test-note' : '';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
@@ -826,13 +830,13 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `--no-deletion-gate`), and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
       // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}${eg}${tn}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
       // if Bob ever starts sending one, learning on Bob starts working with no emit change —
       // dropping the group would need a second one re-added later for the same reason.
-      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b}${dn} || exit 0` }] }],
+      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b}${dn}${tn} || exit 0` }] }],
       // The activity view's turn start (js/hosts/activity.mjs). Bob has no SessionEnd, so a Bob
       // session leaves the live list by staleness alone.
       UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${run} activity --root "${cfg}"${b} || exit 0` }] }],
@@ -847,15 +851,20 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
-    + (deletionGate === false ? ' --no-deletion-gate' : '');
+    + (deletionGate === false ? ' --no-deletion-gate' : '')
+    + (externalGate === false ? ' --no-external-gate' : '');
   // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
   // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
   // `--no-ownership-gate` (the ownership first-write gate) rides rule-gate only, never the
-  // `Skill|Agent|Task` tool-gate below, which judges no write.
+  // `Skill|Agent|Task` tool-gate below, which judges no write. `--no-external-gate` rides git-gate
+  // and rule-gate, its two paths; `--no-test-note` rule-gate (edit time) and learn (turn end).
   const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`
-    + (ownershipGate === false ? ' --no-ownership-gate' : '');
-  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''} || exit 0`;
+    + (ownershipGate === false ? ' --no-ownership-gate' : '')
+    + (externalGate === false ? ' --no-external-gate' : '')
+    + (testNote === false ? ' --no-test-note' : '');
+  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
+    + `${testNote === false ? ' --no-test-note' : ''} || exit 0`;
   const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
   // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now

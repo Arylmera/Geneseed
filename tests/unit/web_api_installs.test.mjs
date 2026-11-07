@@ -530,7 +530,7 @@ test('the deletion gate switch reaches the install command only as a boolean, el
     assert.ok(!argv({}).includes('--no-deletion-gate'), 'an armed install lost its gate on a plain rebuild');
     // A disarmed install: its carrier says so, and a body that says nothing keeps it off.
     fs.mkdirSync(cl, { recursive: true });
-    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: craft\nDeletion gate: off\n');
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\nActive packs: craft\nDeletion gate: off\n<!-- END GENESEED -->\n');
     assert.equal(argv({}).at(-1), '--no-deletion-gate', 'a plain rebuild re-armed a disarmed install');
     assert.equal(argv({ deletionGate: 'true' }).at(-1), '--no-deletion-gate', 'a string re-armed it');
     assert.ok(!argv({ deletionGate: true }).includes('--no-deletion-gate'), 'true did not re-arm');
@@ -543,13 +543,16 @@ test('the deletion gate switch reaches the install command only as a boolean, el
 test('the secrets and done gate switches each reach the install command only as a boolean', () => {
   withThreeInstalls(({ st, cl }) => {
     const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
-    const flags = (a) => a.filter((t) => /^--no-(secrets|done|deletion)-gate$/.test(t));
+    const flags = (a) => a.filter((t) => /^--no-(secrets-gate|done-gate|deletion-gate|external-gate|test-note)$/.test(t));
     // The sandboxed ~/.claude outlives one cell (the deletion cell above leaves a carrier there),
     // so this one starts from an armed carrier of its own.
     fs.mkdirSync(cl, { recursive: true });
     fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: craft\n');
     assert.deepEqual(flags(argv({})), [], 'an armed install grew a gate flag on a plain rebuild');
     assert.deepEqual(flags(argv({ secretsGate: false })), ['--no-secrets-gate'], 'secrets: false');
+    assert.deepEqual(flags(argv({ externalGate: false })), ['--no-external-gate'], 'external: false');
+    assert.deepEqual(flags(argv({ testNote: false })), ['--no-test-note'], 'note: false');
+    assert.deepEqual(flags(argv({ externalGate: 'false', testNote: 0 })), [], 'a non-boolean disarmed a switch');
     assert.deepEqual(flags(argv({ doneGate: false })), ['--no-done-gate'], 'done: false');
     assert.deepEqual(flags(argv({ secretsGate: false, doneGate: false, deletionGate: false })),
       ['--no-secrets-gate', '--no-done-gate', '--no-deletion-gate'], 'all three, in law order');
@@ -558,7 +561,7 @@ test('the secrets and done gate switches each reach the install command only as 
         `a non-boolean ${JSON.stringify(bad)} disarmed a gate`);
     }
     // A carrier with Law I off: a body naming only the done gate keeps Law I off.
-    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: craft\nSecrets gate: off\n');
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\nActive packs: craft\nSecrets gate: off\n<!-- END GENESEED -->\n');
     assert.deepEqual(flags(argv({ doneGate: false })), ['--no-secrets-gate', '--no-done-gate']);
     assert.deepEqual(flags(argv({ secretsGate: 'true' })), ['--no-secrets-gate'], 'a string re-armed it');
     assert.deepEqual(flags(argv({ secretsGate: true })), [], 'true did not re-arm');

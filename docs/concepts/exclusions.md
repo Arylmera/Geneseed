@@ -97,13 +97,49 @@ geneseed build --emit claude-global --no-secrets-gate   # Sealed Secrets
 geneseed build --emit claude-global --no-done-gate      # Verify Before Asserting
 ```
 
-The console's Constitution page has a switch on Rule I's and Rule III's rows too (*Enforced by* reads **Gate off** while one is off); the other Rules show *no gate*, because only their text enforces them. The install records `Secrets gate: off` / `Done gate: off` beside `Deletion gate:`, written only when off; rebuilds, upgrades and `geneseed status` carry them like Law IV's.
+The console's Constitution page has a switch on Rule I's and Rule III's rows too (*Enforced by* reads **Gate off** while one is off); Rule VIII has one for the [test note](#external-gate-and-the-test-note--on-or-off), and the other Rules show *no gate*, because only their text enforces them. The install records `Secrets gate: off` / `Done gate: off` beside `Deletion gate:`, written only when off; rebuilds, upgrades and `geneseed status` carry them like Law IV's.
 
 What stops, per host:
 - **`--no-secrets-gate`**: the credential scan of `rule-gate` (Claude Code, OpenClaude) and of `tool-gate` (Bob, which then no longer exits 2 for it), and on OpenCode the guard plugin's *Sealed Secrets* block — both the key/credential file path block and the content scan. *External Gate*, *Persist Insight*, the deletion gate and the root-scan check stay.
 - **`--no-done-gate`**: the done check `learn` runs on Stop, listed or inferred (Claude Code, OpenClaude; on Bob, the "turn not judged" log line), and on OpenCode the context plugin's reminder (OpenCode 1), its one-line notice (OpenCode 2), and on every host the `Done gate:` line at session start. Learning itself still runs, and `.geneseed/done-checks.txt` stays protected by *External Gate*.
 
 Limits: OpenCode reads both switches from the install's `AGENT.md` when it starts, so restart it after flipping one. A global install beside a project install: `rule-gate` and Bob's `tool-gate` do not stand down for a project install on any host, and neither does the OpenCode guard, so an armed global install still asks about (or blocks) a credential write inside a project whose own install has the secrets gate off. `learn` does stand down on Claude Code and OpenClaude, so there the project's done gate switch decides. And the older-shim limit above is sharper for the done gate: its flag rides on `learn`, so while the shim points at an older checkout an install with the done gate off **loses learning too**, not only the gate. Run `geneseed rebuild-all` before switching either gate off.
+
+### External Gate and the test note — on or off
+
+Two more switches. Both are armed by default and written only when off, so an armed install does not change.
+
+```bash
+geneseed build --emit claude-global --no-external-gate   # protected checks, gate configuration
+geneseed build --emit claude-global --no-test-note       # the weakened-test note
+```
+
+The install records `External gate: off` / `Test note: off` beside the other gate markers. Rebuilds, upgrades and `geneseed status` carry them. Any other value reads as armed. `doctor --probe` is unaffected: it sends a shell command that neither switch judges.
+
+**Run `geneseed rebuild-all` before you switch either one off.** The flags are new. While the machine's shared hook shim points at an older checkout, that checkout refuses the flag, and the gate verb then lets every call through: every gate on that verb is silent, not only this one.
+
+What stops, per host:
+- **`--no-external-gate`**: the protected-check and gate-configuration asks of `rule-gate` and of the shell path in `git-gate` (Claude Code, OpenClaude), the same blocks in `tool-gate` (Bob, which then no longer exits 2 for them), the OpenCode guard's refusals on its write and shell paths, and the `evaluate` ask over a gate's own file on OpenCode 2. Every other gate keeps running: secrets, real loss, root scans, the rule-store check, the wiki check and commit/push consent. The guard also keeps refusing an NTFS stream path, because that check protects every path gate.
+- **`--no-test-note`**: the "this edit weakens a test" note at edit time (`rule-gate`, Bob's `tool-gate`), the `[done-gate] advisory` line at turn end (`learn`), and the OpenCode context plugin's reminder on both OpenCode versions. The done checks do not change. `--no-done-gate` still silences the turn-end line and the OpenCode reminder by itself, and it leaves the edit-time note on the hook hosts.
+
+**What stays on OpenCode.** The `permission.edit` "ask" keys in `opencode.json` are host configuration, so `--no-external-gate` does not remove them. OpenCode keeps asking before an edit tool writes those files, and you remove the keys by hand if you want that gone. The guard no longer refuses them after an "always" answer, and no longer refuses a shell write to them.
+
+**What this switch costs.** External Gate is what stops an agent from editing the gates' own wiring. With it off, the agent can write hook settings, the `AGENT.md` gate markers and `.geneseed/done-checks.txt` without an ask, so every other gate holds only while the agent leaves that wiring alone. Switch it off only where you accept that.
+
+**The doctrine and the switch are two axes.** `--exclude-rules rigor.5` takes the rule's text out of the carrier. `--no-external-gate` stops the hook. Neither moves the other:
+
+| Rule text (`--exclude-rules`) | Hook (`--no-external-gate`) | Result |
+| --- | --- | --- |
+| In | Armed | The agent is told, and the write asks |
+| Excluded | Armed | The agent is not told, and the write still asks |
+| In | Off | The agent is told, and nothing asks |
+| Excluded | Off | Neither |
+
+The console's Constitution page shows both on the same doctrine row: the row's own switch is the rule, and the *External gate* line inside the opened row is the hook. The test note's switch sits on Rule VIII's row, which reads *Hook gate* or **Gate off**. Each gate switch rebuilds at once; the rule switch stages with the other doctrine changes.
+
+**Where a marker counts.** In a `CLAUDE.md` or `AGENTS.md`, which are your files, every gate marker counts only inside the `<!-- BEGIN GENESEED -->` block. A marker line outside it reads as armed, and a rebuild does not carry it. A generated `AGENT.md` or `rules/geneseed.md` counts whole, and External Gate protects both. Under External Gate, a write tool aimed at a `CLAUDE.md` or `AGENTS.md` is replayed, and the first block is compared before and after. Any difference asks (on Bob it blocks, and the OpenCode guard refuses). So does a call that cannot be replayed, an unreadable file, or a file over 1 MB. An edit wholly outside the block stays silent, so your own notes there are not interrupted. The name is normalized first, so `CLAUDE.md::$DATA` and `CLAUDE.md.` count as `CLAUDE.md`. A shell edit inside the block does not ask, and neither does a shell edit that puts a fake block before the real one, because only the first block is read. That is a limit: the hook has no replay for a shell write.
+
+Limits, as for the gates above: OpenCode reads both markers from `AGENT.md` when it starts, so restart it after a rebuild. `rule-gate` and Bob's `tool-gate` do not stand down for a project install on any host, so an armed global install still asks inside a project built with the switch off. Only `git-gate` stands down, on Claude Code and OpenClaude.
 
 ### Ownership gate — on or off
 

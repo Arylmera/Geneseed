@@ -339,6 +339,36 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--no-external-gate"
+          ],
+          "dest": "no_external_gate",
+          "metavar": null,
+          "help": "switch External Gate's hook off for this install: protected checks and the gates' own configuration stop asking, on every host (the doctrine's text still binds unless excluded; OpenCode's own permission.edit keys stay); written to the carrier as 'External gate: off' and replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-test-note"
+          ],
+          "dest": "no_test_note",
+          "metavar": null,
+          "help": "switch the weakened-test note off for this install, at edit time and at turn end (Cure the Cause's text still binds; the done checks still run); written to the carrier as 'Test note: off' and replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -698,6 +728,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--no-external-gate"
+          ],
+          "dest": "no_external_gate",
+          "metavar": null,
+          "help": "skip the External Gate protected-check and gate-configuration asks (set by the emit when the install was built --no-external-gate); the deletion, root-scan, store and consent asks still run",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -767,6 +812,21 @@
           "dest": "no_done_gate",
           "metavar": null,
           "help": "skip the done gate on Stop (set by the emit when the install was built --no-done-gate); learning still runs",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-test-note"
+          ],
+          "dest": "no_test_note",
+          "metavar": null,
+          "help": "skip the weakened-test note (set by the emit when the install was built --no-test-note); the done checks and learning still run",
           "choices": null,
           "default": false,
           "required": false,
@@ -1282,6 +1342,36 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--no-external-gate"
+          ],
+          "dest": "no_external_gate",
+          "metavar": null,
+          "help": "skip the External Gate protected-check and gate-configuration asks (set by the emit when the install was built --no-external-gate); every other check still runs",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-test-note"
+          ],
+          "dest": "no_test_note",
+          "metavar": null,
+          "help": "skip the weakened-test note (set by the emit when the install was built --no-test-note); every other check still runs",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -1560,6 +1650,36 @@
           "dest": "no_ownership_gate",
           "metavar": null,
           "help": "skip the ownership first-write gate (set by the emit when the install was built --no-ownership-gate); every other check still runs",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-external-gate"
+          ],
+          "dest": "no_external_gate",
+          "metavar": null,
+          "help": "skip the External Gate protected-check and gate-configuration asks (set by the emit when the install was built --no-external-gate); every other check still runs",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--no-test-note"
+          ],
+          "dest": "no_test_note",
+          "metavar": null,
+          "help": "skip the weakened-test note (set by the emit when the install was built --no-test-note); every other check still runs",
           "choices": null,
           "default": false,
           "required": false,

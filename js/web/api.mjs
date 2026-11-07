@@ -460,8 +460,9 @@ export function apiOverview(state, counts = machineCounts(state, [{ install: nul
   for (const [host, scope, root] of installTargets()) {
     try {
       if (samePath(viewCfg(host, scope, root), state.target)) {
-        // `deletionGate`/`secretsGate`/`doneGate`/`ownershipGate`: the gate switches, for the
-        // Constitution page's toggles on rows IV, I, III and inside the Credo's Ownership row.
+        // `deletionGate`/`secretsGate`/`doneGate`/`testNote`/`ownershipGate`/`externalGate`: the gate
+        // switches, for the Constitution page's toggles on rows IV, I, III, VIII, inside the Credo's
+        // Ownership row and inside doctrine rigor 5's row.
         install = { host, scope, path: root, footprint: footprintOfDir(root),
           ...gatesOfDir(root, host) };
         break;

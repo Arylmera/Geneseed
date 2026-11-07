@@ -58,7 +58,8 @@ import { normcase } from '../lib/paths.mjs';
 import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
-  GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
+  GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
+  resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
@@ -907,7 +908,9 @@ function protectedIn(target) {
  *   * the install root (`--root`): the hook wiring (`settings.json`, `settings.local.json`, Bob
  *     global's `settings/settings.json` — `claudeWire`), `excludes.json` (`sovereignBypass`), the
  *     `AGENT.md` gate markers (`Done gate: off`, read by `cmdContext`; every marker is read back
- *     by a rebuild), and `.geneseed-manifest.json` / `.geneseed-emit` (`globalHookStandingDown`);
+ *     by a rebuild; in a `CLAUDE.md` or `AGENTS.md` only the managed block counts, those two are the
+ *     user's and are not listed here, and `carrierBlockChange` covers a write tool there), Bob global's
+ *     `rules/geneseed.md` (its whole carrier), and `.geneseed-manifest.json` / `.geneseed-emit` (`globalHookStandingDown`);
  *   * any host project dir the target sits in (`<dir>/.claude/settings.json` and kin, found by
  *     the parent's — or for `settings/settings.json` the grandparent's — folder name, so a
  *     monorepo subpackage or a dir with no `.git` is covered): Claude reads project settings
@@ -924,7 +927,7 @@ function protectedIn(target) {
  * (`geneseed exclude`, an emit) writes these with `fs`, never through a write tool, so it is
  * not gated. Reached from a shell command too, with the same limit as `protectedCheck`.
  */
-const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
+const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'rules/geneseed.md', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
 const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
 function gateConfig(p, root) {
   let bin = null;
@@ -960,6 +963,8 @@ function gateConfig(p, root) {
  * @returns {string | null} why the write is refused, or null when Geneseed's wiring is untouched
  */
 const SETTINGS_RE = /(^|[\\/])(settings\.json|settings\.local\.json)$/i;
+const replaceOnce = (text, search, replace) => (typeof search === 'string' && search && typeof replace === 'string'
+  && text.split(search).length === 2 ? text.replace(search, () => replace) : null);
 function settingsAfter(before, payload) {
   const ti = payload.tool_input || {};
   const tool = payload.tool_name;
@@ -972,16 +977,14 @@ function settingsAfter(before, payload) {
     lines.splice(line === 0 ? lines.length : line - 1, 0, ...ti.content.split('\n'));
     return lines.join('\n');
   }
-  const once = (text, search, replace) => (typeof search === 'string' && search && typeof replace === 'string'
-    && text.split(search).length === 2 ? text.replace(search, () => replace) : null);
   if (tool === 'search_and_replace') {
     const ranged = ti.use_regex || ti.ignore_case || ti.start_line != null || ti.end_line != null;
-    return ranged ? null : once(before, ti.search, ti.replace);
+    return ranged ? null : replaceOnce(before, ti.search, ti.replace);
   }
   if (tool === 'apply_diff' && typeof ti.diff === 'string') {
     const blocks = [...ti.diff.matchAll(DIFF_BLOCK_RE)];
     let text = before;
-    for (const [, search, replace] of blocks) if ((text = once(text, search, replace)) === null) return null;
+    for (const [, search, replace] of blocks) if ((text = replaceOnce(text, search, replace)) === null) return null;
     // One block only: with several, Bob may apply some and refuse others (its start-line window).
     return blocks.length === 1 ? text : null;
   }
@@ -1058,12 +1061,48 @@ function askPairs(payload, p) {
   } catch { return undefined; }
 }
 
+/** Past this a carrier is not replayed: it asks. */
+const CARRIER_REPLAY_CAP = 1024 * 1024;
+/** The file after a write tool's call, as `settingsAfter` rebuilds it, plus Claude's Edit. */
+function carrierAfter(before, payload) {
+  const ti = payload.tool_input || {};
+  if (payload.tool_name !== 'Edit') return settingsAfter(before, payload);
+  if (ti.replace_all !== true) return replaceOnce(before, ti.old_string, ti.new_string);
+  const { old_string: old, new_string: now } = ti;
+  return typeof old === 'string' && old && typeof now === 'string' && before.includes(old)
+    ? before.split(old).join(now) : null;
+}
+
+/**
+ * External Gate on a write tool aimed at a shared carrier: true when the call changes the managed
+ * block as `gateCarrierText` reads it, or cannot be shown not to. Structural, not a match on marker
+ * lines, which a two-step edit, a lone CR or a fake block all beat. An edit outside the block
+ * is the user's own and stays silent. shortcut: a shell write has no replay here, so a shell edit
+ * inside or before the block passes; docs/concepts/exclusions.md states the limit.
+ */
+function carrierBlockChange(p, payload) {
+  const abs = path.resolve(typeof payload.cwd === 'string' ? payload.cwd : '.', carrierName(p));
+  if (!isSharedCarrier(abs) && !isSharedCarrier(resolvePath(abs))) return false;
+  let before = '';
+  try {
+    if (statSync(abs).size > CARRIER_REPLAY_CAP) return true;
+    before = readFileSync(abs, 'utf8');
+  } catch (e) {
+    if (e?.code !== 'ENOENT') return true;
+  }
+  const after = carrierAfter(before, payload);
+  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlock(after) !== carrierBlock(before);
+}
+
 /**
  * External Gate on one write target, by tool or by shell: the `gateText` id and facts to ask with, or null.
  * On Bob a hook-settings file is the user's shared host config, refused only when the write
  * touches Geneseed's wiring (`bobSettingsChange`), and it never reads `opencode.json(c)`.
  */
 function externalGate(args, p, payload) {
+  // `--no-external-gate`: the install switched this hook off. Both callers end here, so the write
+  // tools, the shell path and Bob stand down at once; the store, secret and loss checks do not.
+  if (args.noExternalGate) return null;
   const sensor = protectedCheck(p);
   if (sensor) return { id: 'check', name: sensor };
   if (HOST === 'bob' && /^opencode\.jsonc?$/i.test(path.basename(p))) return null;
@@ -1144,7 +1183,9 @@ function ruleDecide(args, payload) {
   // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
   const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
   for (const q of bobRead ? [] : paths) {
-    const hit = externalGate(args, q, payload);
+    // The carrier rule is a write tool's alone: a shell call reaches `externalGate` with nothing to replay.
+    const hit = externalGate(args, q, payload)
+      ?? (!args.noExternalGate && carrierBlockChange(q, payload) ? { id: 'config', name: repoRel(q, payload), bobWhy: '' } : null);
     if (hit) return ask(args, 'rule-gate', 'rigor-5', hit.id, { ...hit, pairs: askPairs(payload, q) });
   }
   // A read on Bob names the store too, and that is no write to refuse.
@@ -1156,7 +1197,7 @@ function ruleDecide(args, payload) {
     const why = args.noOwnershipGate ? null : ownershipBlock(p, payload, body, args.root);
     if (why) return deny(args, 'rule-gate', 'ownership', why);
     // Only here: stdout carries one document, and an ask or a deny above already holds it.
-    if (!bobRead) testWeakenedNote(p, payload);
+    if (!bobRead && !args.noTestNote) testWeakenedNote(p, payload);
     return 0;
   }
   return ask(args, 'rule-gate', 'process-1', 'store',

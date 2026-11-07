@@ -529,14 +529,15 @@ test("the AGENT.md under $GENESEED_HARNESS is gate configuration", async () => {
 })
 
 // The guard's lists are hooks.mjs's minus exactly what L1's native ask covers: the hook settings and
-// opencode.json(c) names, and the `.opencode` marker.
+// opencode.json(c) names, and the `.opencode` marker. `rules/geneseed.md` is Bob's, two levels under
+// a marker, which the guard's one-level match cannot name.
 test("the guard's gate-config lists are js/hosts/hooks.mjs's minus OpenCode's own", async () => {
   const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
   const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
   const pick = (src, name) => src.match(new RegExp(`const ${name} = (.*?);?\\r?\\n`))?.[1]
   const list = (src, name) => JSON.parse(pick(src, name).replace(/'/g, '"'))
   assert.deepEqual(list(guardSrc, "GATE_CONFIG_FILES"),
-    list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode/.test(f)))
+    list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode|rules\//.test(f)))
   assert.deepEqual(list(guardSrc, "GATE_CONFIG_MARKERS"), list(hookSrc, "GATE_CONFIG_MARKERS").filter((m) => m !== ".opencode"))
   // The hook's markers are every host's project dir, as js/hosts/hosts.mjs names them.
   const { HOSTS } = await import("../../js/hosts/hosts.mjs")

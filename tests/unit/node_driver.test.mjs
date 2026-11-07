@@ -108,8 +108,10 @@ const BARE_FLAGS = [
   ['--no-secrets-gate', 'noSecretsGate'],
   ['--no-done-gate', 'noDoneGate'],
   ['--no-deletion-gate', 'noDeletionGate'],
-  // Then the ownership gate, which has no law (`law: null`).
+  // Then the rows no law owns (`law: null`).
   ['--no-ownership-gate', 'noOwnershipGate'],
+  ['--no-external-gate', 'noExternalGate'],
+  ['--no-test-note', 'noTestNote'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

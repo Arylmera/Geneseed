@@ -517,6 +517,28 @@ export const CARRIERS = [
   path.join('rules', 'geneseed.md'), 'AGENTS.md',
 ];
 
+// `managedBlockWrite`'s delimiters (./settings.mjs, which this module may not import). First block
+// only, as that writer reads it.
+const CARRIER_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/;
+const SHARED_CARRIER_RE = /(?:^|[\\/])(?:CLAUDE|AGENTS)\.md$/i;
+/** The managed block as a reader sees it, `''` with none. */
+export const carrierBlock = (text) => CARRIER_BLOCK_RE.exec(text)?.[0] ?? '';
+/** The file a Windows write lands on: `CLAUDE.md::$DATA` and `CLAUDE.md.` both write `CLAUDE.md`. */
+export function carrierName(file) {
+  const s = String(file);
+  const at = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\')) + 1;
+  return s.slice(0, at) + s.slice(at).split(':')[0].replace(/[. ]+$/, '');
+}
+/** `file` is a carrier the user shares with Geneseed: only its managed block is Geneseed's. */
+export const isSharedCarrier = (file) => SHARED_CARRIER_RE.test(file);
+
+/**
+ * The part of a carrier a gate switch may be read from. `CLAUDE.md` and `AGENTS.md` are the user's
+ * files and no gate-config name, so a line there outside the block is prose and can disarm nothing:
+ * with no block, nothing counts. A generated `AGENT.md` or `rules/geneseed.md` stays whole.
+ */
+export const gateCarrierText = (file, text) => (isSharedCarrier(file) ? carrierBlock(text) : text);
+
 /**
  * `host`'s own carrier path(s), narrowed off the single `HOSTS` table — `carrierInLayer` and
  * `projectMarker`/`agentFile` — rather than a second hand-rolled host→carrier map.

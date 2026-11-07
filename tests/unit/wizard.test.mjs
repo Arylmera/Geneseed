@@ -110,8 +110,8 @@ const EXCLUDED_INSTALL = {
  */
 const GATED_INSTALL = {
   ...WIZARD_INSTALL,
-  '.claude/CLAUDE.md': '# deployed\n\nActive packs: craft, rigor, ops, process, comms\n'
-    + 'Done gate: off\nDeletion gate: off\n',
+  '.claude/CLAUDE.md': '<!-- BEGIN GENESEED -->\n# deployed\n\nActive packs: craft, rigor, ops, process, comms\n'
+    + 'Done gate: off\nDeletion gate: off\n<!-- END GENESEED -->\n',
 };
 
 /**
@@ -513,7 +513,7 @@ test('a re-run keeps the GATES an install switched off, without asking about the
   assert.deepEqual(gated.results, [{
     theme: 'pirate', posture: 'artisan', mode: 'foreman',
     doctrines: ['craft', 'rigor', 'ops', 'process', 'comms'], excludeRules: null,
-    gates: { secretsGate: true, doneGate: false, deletionGate: false, ownershipGate: true },
+    gates: { secretsGate: true, doneGate: false, deletionGate: false, ownershipGate: true, externalGate: true, testNote: true },
     emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over an install with switched-off gates did not carry them back');
   // ...and into the plan line, in law order, Law I still armed.
@@ -523,7 +523,7 @@ test('a re-run keeps the GATES an install switched off, without asking about the
   // THE MATCHED HALF: an all-armed install carries no `gates` key and spells no flag.
   const plain = runs()['wizard-eof'];
   assert.equal('gates' in plain.results[0], false);
-  assert.ok(!/-gate\b/.test(plain.text.split('About to run:')[1] ?? ''),
+  assert.ok(!/-gate\b|--no-test-note/.test(plain.text.split('About to run:')[1] ?? ''),
     `an armed install spelled a gate flag:\n${plain.text}`);
 });
 

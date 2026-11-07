@@ -525,9 +525,9 @@ export function resolveSkillNames(names, {
 }
 
 /**
- * The hook gates an install can switch off (the laws', in law order, then the ownership gate,
- * which has no law: `law: null`): the cfg/profile key, the
- * build flag, the carrier marker (`<marker>: off`, written only when off) and the law. ONE
+ * The hook gates an install can switch off (the laws', in law order, then the rows no law owns:
+ * `law: null`, appended so an existing install's argv and marker order never move): the
+ * cfg/profile key, the build flag, the carrier marker (`<marker>: off`, written only when off) and the law. ONE
  * table, so the flag, the marker, the rebuild argv, the read-back and `status` cannot drift
  * apart. Every gate is ARMED by default and the law's text binds either way. The deletion row
  * is #319's, unchanged: existing installs carry its flag and marker.
@@ -539,6 +539,12 @@ export const GATE_SWITCHES = [
   // Not a law's gate (`law: null`): the ownership first-write gate (js/hosts/ownership-gate.mjs,
   // ruling D25). Its off switch is this flag, never `harness.config.json` (args.mjs says why).
   { key: 'ownershipGate', flag: '--no-ownership-gate', arg: 'noOwnershipGate', marker: 'Ownership gate', law: null },
+  // Rigor 5's hook, so a doctrine's and no law's: protected checks and the gates' own configuration
+  // stop asking. Excluding the doctrine is the other axis: it drops the text, never this hook.
+  { key: 'externalGate', flag: '--no-external-gate', arg: 'noExternalGate', marker: 'External gate', law: null },
+  // Cure the Cause's weakened-test note, edit time and turn end. Advisory, so no gate the doctor
+  // pins (`HOOK_PINNED`; ledger key `cure-the-cause`): `law: null`, though the console shows it on Rule VIII.
+  { key: 'testNote', flag: '--no-test-note', arg: 'noTestNote', marker: 'Test note', law: null },
 ];
 
 /**

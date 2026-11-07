@@ -156,7 +156,7 @@ function bodySharedTier(body, root, host) {
 
 /**
  * The gate switches across the trust boundary (`deletionGate`, `secretsGate`, `doneGate`,
- * `ownershipGate`), each on its own: only a real JSON boolean counts. Anything else — a string
+ * `ownershipGate`, `externalGate`, `testNote`), each on its own: only a real JSON boolean counts. Anything else — a string
  * `"false"`, a number, absence — falls back to the install's own answer for THAT gate, so a
  * malformed or partial body can never disarm (or re-arm) a gate it did not name.
  */

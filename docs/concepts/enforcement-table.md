@@ -57,6 +57,15 @@ and the next write passes. Off per repo with `mode: off`, for one developer with
 `Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md`, per install with
 `--no-ownership-gate` ([Exclusions](exclusions.md)).
 
+### Switches on two rows above
+
+`--no-external-gate` stops every ask and refusal in the `external-gate` row, on every host, except
+OpenCode's own `permission.edit` keys, which are host configuration and keep asking. It does not
+touch the rule's text: `--exclude-rules rigor.5` does that, and leaves the hook asking.
+`--no-test-note` stops the advisory weakened-test note that *Cure the Cause* carries at edit time
+and at turn end, on every host. That note asks nothing and blocks nothing, so the rule stays
+outside the hook-pinned ids. See [Exclusions](exclusions.md).
+
 | Gate | Claude Code | OpenClaude | OpenCode | Bob |
 |---|---|---|---|---|
 | ownership | deny once: rule-gate (`Write`/`Edit`/`NotebookEdit`; sub-agents defer) | same as Claude Code | block once: guard plugin (a child session defers) | block once (exit 2): tool-gate (sub-agent deferral unverified) |

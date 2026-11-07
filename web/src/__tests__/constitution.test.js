@@ -7,7 +7,7 @@ const { GATE_SWITCH, HOOK_GATED, enforcedBy, gateAddress, parseRuleTitle } = C
 // closure is relative and `node:` modules only (no bare specifier, so web's own `npm ci` is
 // enough) and loads cleanly under vitest's jsdom environment.
 import { HOOK_PINNED } from '../../../js/inspect/checks-constitution.mjs'
-import { GATE_SWITCHES } from '../../../js/build/source.mjs'
+import { GATE_SWITCHES, ruleCanon } from '../../../js/build/source.mjs'
 
 // A catalog title -> { latin, name, retired }. The prefix (`Rule IV — `, `Doctrine craft 1 — `)
 // is the address, which the table prints in its own column; the Latin half is the voice's,
@@ -72,6 +72,10 @@ describe('HOOK_GATED', () => {
   it('reads the ownership gate by its switch, not by the set', () => {
     expect(enforcedBy('ownership')).toBe('Hook gate')
     expect(enforcedBy('ownership', { ownershipGate: false })).toBe('Gate off')
+    // Rule VIII has a hook only by its switch; rigor 5's switch overrides its place in the set.
+    expect(enforcedBy('VIII')).toBe('Hook gate')
+    expect(enforcedBy('VIII', { testNote: false })).toBe('Gate off')
+    expect(enforcedBy('rigor.5', { externalGate: false })).toBe('Gate off')
   })
 
   // The set is transcribed from the doctor's HOOK_PINNED, the one list of every hook-gated
@@ -100,6 +104,10 @@ describe('HOOK_GATED', () => {
       expect(GATE_SWITCH[g.law].key).toBe(g.key)
     }
     expect(GATE_SWITCH[gateAddress('ownership')].key).toBe('ownershipGate')
+    // The two `law: null` rows that sit on a rule's row: the advisory note, and rigor 5's hook.
+    // VIII is no HOOK_PINNED address, so this is what a renumber of Cure the Cause reddens.
+    expect(GATE_SWITCH[ruleCanon().byId.get('cure-the-cause').label].key).toBe('testNote')
+    expect(GATE_SWITCH[gateAddress('rigor-5')].key).toBe('externalGate')
     // A switch on a law no hook gates would toggle nothing.
     for (const g of GATE_SWITCHES.filter((row) => row.law)) {
       expect(HOOK_GATED.has(g.law)).toBe(true)

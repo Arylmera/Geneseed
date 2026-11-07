@@ -163,6 +163,9 @@ const DELETION_GATE_OFF = gateOff("Deletion gate")
 const SECRETS_GATE_OFF = gateOff("Secrets gate")
 // `--no-ownership-gate` (ruling D25): the ownership first-write gate below stands down.
 const OWNERSHIP_GATE_OFF = gateOff("Ownership gate")
+// `--no-external-gate`: `protectedCheck`, `gateConfig` and `nativeAskFile` below all answer no, so the
+// refusals and V2's `evaluate` ask stand down. The static `permission.edit` keys are host config: they stay.
+const EXTERNAL_GATE_OFF = gateOff("External gate")
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
 // writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
@@ -1770,6 +1773,7 @@ const SENSOR_LIST = ".geneseed/protected-checks.txt"
 // without a protected-checks list: emptying it would disarm the gate. Twin of js/hosts/hooks.mjs.
 const DONE_LIST = ".geneseed/done-checks.txt"
 function protectedCheck(p) {
+  if (EXTERNAL_GATE_OFF) return null
   return protectedIn(path.resolve(p)) ?? protectedIn(resolvePath(p))
 }
 function protectedIn(target) {
@@ -1810,6 +1814,7 @@ function repoRel(p) {
 const GATE_CONFIG_FILES = ['excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit'];
 const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob'];
 function gateConfig(p) {
+  if (EXTERNAL_GATE_OFF) return false
   try {
     const fold = (s) => nocase(path.resolve(s))
     const cfg = path.dirname(PLUGIN_DIR)
@@ -1825,6 +1830,42 @@ function gateConfig(p) {
     }
   } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
   return false
+}
+
+// Twin of js/hosts/hooks.mjs's `carrierBlockChange`, for another host's carrier: a hook host reads a
+// `CLAUDE.md` or `AGENTS.md` by its managed block, so a write tool that moves that block, or that this
+// cannot replay, is refused. An edit outside the block passes. A patch is not replayed: it passes only
+// when neither the file nor the patch holds the opening delimiter, since a line patch cannot form one.
+const CARRIER_BEGIN = "<!-- BEGIN GENESEED -->"
+const CARRIER_REPLAY_CAP = 1024 * 1024
+const carrierBlockOf = (text) => /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/.exec(text)?.[0] ?? ""
+function carrierName(file) {
+  const s = String(file)
+  const at = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1
+  return s.slice(0, at) + s.slice(at).split(":")[0].replace(/[. ]+$/, "")
+}
+function carrierBlockChange(file, tool, args) {
+  if (EXTERNAL_GATE_OFF) return false
+  const target = carrierName(file)
+  const shared = (f) => /(?:^|[\\/])(?:CLAUDE|AGENTS)\.md$/i.test(f)
+  if (!shared(target) && !shared(resolvePath(target))) return false
+  let before = ""
+  try {
+    if (statSync(target).size > CARRIER_REPLAY_CAP) return true
+    before = readFileSync(target, "utf8")
+  } catch (err) {
+    if (err?.code !== "ENOENT") return true
+  }
+  if (typeof args?.patchText === "string") {
+    return before.includes(CARRIER_BEGIN) || args.patchText.includes(CARRIER_BEGIN) || /^\*\*\* Move to:/m.test(args.patchText)
+  }
+  let after = null
+  if (tool === "write" && typeof args?.content === "string") after = args.content
+  else if (tool === "edit" && typeof args?.oldString === "string" && args.oldString && typeof args?.newString === "string") {
+    const parts = before.split(args.oldString)
+    if (parts.length === 2 || (args.replaceAll === true && parts.length > 2)) after = parts.join(args.newString)
+  }
+  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlockOf(after) !== carrierBlockOf(before)
 }
 
 // The files `gateConfig` leaves to OpenCode's native `permission.edit` ask (`opencodeEditAsks` in
@@ -1848,6 +1889,7 @@ function agentAskTails(cfg) {
   return tails
 }
 function nativeAskFile(p) {
+  if (EXTERNAL_GATE_OFF) return false
   try {
     const cfg = path.dirname(PLUGIN_DIR)
     const name = path.basename(cfg)
@@ -2344,6 +2386,7 @@ export const GeneseedGuard = async (ctx) => {
             const sensor = protectedCheck(p)
             if (sensor) { await deny(refused("check", { name: sensor }), "rigor-5"); return }
             if (gateConfig(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+            if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
             // V1 after an "always": the `permission.edit` ask on these files is gone too.
             if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
             const store = ruleStoreTarget(raw, cwd)

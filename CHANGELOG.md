@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+
+- **`--no-external-gate` stops the protected-check and gate-configuration asks** on every host: `rule-gate`, the shell path in `git-gate`, Bob's `tool-gate`, the OpenCode guard and OpenCode 2's `evaluate` ask. Other gates keep running, and OpenCode's own `permission.edit` keys stay. With it off the agent can edit the other gates' wiring unasked.
+- **`--no-test-note` stops the weakened-test note,** at edit time, at turn end and in the OpenCode context plugin. The done checks do not change, and `--no-done-gate` still silences the turn-end line.
+- **The Constitution page has both switches.** Rule VIII carries the test note and now reads *Hook gate* or *Gate off*. Doctrine rigor 5 keeps its rule switch on the row and gets a gate line inside the opened row. Excluding the rule and switching off the gate are independent.
+
+### Fixed
+
+- **A gate marker outside the managed block no longer disarms a gate.** In a `CLAUDE.md` or `AGENTS.md`, every gate marker now counts only inside the `<!-- BEGIN GENESEED -->` block. Before, an appended line passed unasked and the next rebuild emitted the flag. A write tool that changes that block asks under External Gate, and an edit outside it stays silent. Bob global's `rules/geneseed.md` is now protected. A shell edit inside the block, or one that puts a fake block before it, stays a limit.
+
+Run `geneseed rebuild-all` before you switch either one off: an older hook shim refuses the new flag, and the gate verb then lets every call through.
+
 ## [5.0.3] — 2026-11-07
 
 ### Changed

@@ -64,15 +64,19 @@ export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', '
 // The hook gates an install can switch off, by catalog address: the key the overview's `install`
 // reports it under, and the switch's name. Transcribed from the server's GATE_SWITCHES
 // (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`,
-// `--no-ownership-gate`). The ownership gate has no law, so its address is its ledger key, and
-// its switch sits inside the Credo's Ownership row, on a line that exists only in the console:
-// the catalog has no such item.
+// `--no-test-note`, `--no-ownership-gate`, `--no-external-gate`). The ownership gate has no law, so
+// its address is its ledger key, and its switch sits inside the Credo's Ownership row, on a line
+// that exists only in the console: the catalog has no such item. External Gate's row already holds
+// the doctrine's switch, so its gate switch sits on such a line too, inside the opened row. The
+// test note is advisory, so VIII is in no HOOK_GATED, yet its row has a hook to switch.
 // __tests__/constitution.test.js imports that table and fails when the two drift apart.
 export const GATE_SWITCH = {
   I: { key: 'secretsGate', label: 'Secrets gate' },
   III: { key: 'doneGate', label: 'Done gate' },
   IV: { key: 'deletionGate', label: 'Deletion gate' },
+  VIII: { key: 'testNote', label: 'Test note' },
   ownership: { key: 'ownershipGate', label: 'Ownership gate' },
+  'rigor.5': { key: 'externalGate', label: 'External gate' },
 }
 
 // What each switch's confirm says it does, by the same address: `arm` when it re-arms, `off`
@@ -103,6 +107,14 @@ export const GATE_COPY = {
       'unpushed branch, removing untracked files — stop asking. Rule IV’s text still binds ' +
       'the agent; secrets, root-wide scans and commit/push consent stay gated.',
   },
+  VIII: {
+    arm: 'A write that weakens a test gets a note again, when it happens and when the turn ends.',
+    off:
+      'A write that adds a skip marker or drops an assertion gets no note, when it happens or ' +
+      'when the turn ends. Rule VIII’s text still binds the agent; the done checks and every ' +
+      'other gate stay. Run geneseed rebuild-all first: an older hook shim refuses the new ' +
+      'flag, and every gate on that hook goes silent.',
+  },
   ownership: {
     desc: 'Stops the first write in an undecided application, once per session.',
     arm: 'The first write in an undecided application stops once again.',
@@ -110,6 +122,20 @@ export const GATE_COPY = {
       'The first write in an undecided application is no longer stopped, the setup proposal ' +
       'leaves the install’s AGENT.md, and no decline reminder prints. A repo with mode: on ' +
       'still runs its checkpoints, and the Credo section still binds.',
+  },
+  'rigor.5': {
+    desc:
+      'Asks before a protected check or a gate’s own configuration is written. The rule’s ' +
+      'switch keeps or drops its text; this one keeps or drops the asking. They differ freely: ' +
+      'rule off with this on still asks, rule on with this off only instructs.',
+    arm: 'Writes to a protected check or a gate’s own configuration ask again.',
+    off:
+      'Writes to a protected check or a gate’s own configuration stop asking. The agent can ' +
+      'then edit hook settings and AGENT.md gate markers unasked, so every other gate holds ' +
+      'only while it leaves its wiring alone. OpenCode’s own permission.edit keys still ask. ' +
+      'The rule’s text is not touched: excluding it is the rule’s own switch. Run geneseed ' +
+      'rebuild-all first: an older hook shim refuses the new flag, and every gate on that ' +
+      'hook goes silent.',
   },
 }
 

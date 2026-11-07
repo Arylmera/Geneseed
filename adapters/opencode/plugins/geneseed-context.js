@@ -1026,7 +1026,7 @@ function testEditPairs(tool, args, before) {
 }
 async function noteWeakened(root, sid, tool, args) {
   try {
-    if (!sid || !args) return
+    if (!sid || !args || await testNoteOff()) return
     const file = typeof args.filePath === "string" ? path.resolve(root, args.filePath) : null
     let before = ""
     if (file && String(tool).toLowerCase() === "write" && isTestPath(path.relative(root, file))) {
@@ -1076,6 +1076,17 @@ function doneGateOff() {
     return /^Done gate:[ \t]*off[ \t]*\r?$/m.test(text)
   })().catch(() => false)
   return doneGateOffOnce
+}
+// `--no-test-note`, the same contract: `Test note: off` stops the weakened-test reminder and only it.
+let testNoteOffOnce = null
+function testNoteOff() {
+  testNoteOffOnce ??= (async () => {
+    const dir = await harnessDir()
+    if (!dir) return false
+    const text = await fs.readFile(path.join(dir, "AGENT.md"), "utf8")
+    return /^Test note:[ \t]*off[ \t]*\r?$/m.test(text)
+  })().catch(() => false)
+  return testNoteOffOnce
 }
 
 // null when the project has no list (or it is unreadable): then the checks are inferred.

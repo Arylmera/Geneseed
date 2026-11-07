@@ -1008,6 +1008,114 @@ describe('Constitution page — the Ownership row and its gate', () => {
 
 const lawRow = (c, addr) => c.querySelector(`[data-addr="${addr}"]`)
 
+// Doctrine rigor 5 holds two switches that must not be confused: the row's own keeps the rule's
+// text, the gate line's keeps the hook. Each moves its own thing and never the other.
+describe('Constitution page — the External Gate switch', () => {
+  const RIGOR5 = {
+    ...DOC[0],
+    name: 'rigor.5',
+    title: 'Doctrine rigor 5 — External Gate',
+    pack: 'rigor',
+    packTitle: 'Rigor',
+    klass: 'rigor',
+    active: true,
+    packActive: true,
+  }
+  const page = (install, onAction = () => {}) => (
+    <Laws selected="rigor.5" overview={{ install }} onAction={onAction} />
+  )
+  const rigorRow = (c) => c.querySelector('[data-addr="rigor.5"]')
+  beforeEach(() => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, ...DOC, RIGOR5] })
+  })
+
+  it('the open row shows the gate line beside the rule switch, under two names', async () => {
+    const { container } = render(page({ ...INSTALL }))
+    await waitFor(() => expect(container.querySelector('.law-gate')).toBeTruthy())
+    expect(rigorRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+    const line = container.querySelector('.law-gate')
+    const gate = line.querySelector('[role="switch"]')
+    expect(gate.getAttribute('aria-label')).toBe('External gate')
+    expect(gate.getAttribute('aria-checked')).toBe('true')
+    expect(line.textContent).toMatch(/rule off with this on still asks/)
+    expect(sw(container, 'External Gate')).toBeTruthy()
+    expect(sw(container, 'External Gate')).not.toBe(gate)
+  })
+
+  it('reads Gate off and drops out of the Gated view when the switch is off', async () => {
+    const { container } = render(page({ ...INSTALL, externalGate: false }))
+    await waitFor(() => expect(rigorRow(container)).toBeTruthy())
+    await settled(container)
+    expect(rigorRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
+    fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
+    await waitFor(() => expect(rigorRow(container)).toBeNull())
+  })
+
+  it('the gate switch rebuilds with that key alone; the rule switch only stages', async () => {
+    const onAction = vi.fn()
+    const { container } = render(page({ ...INSTALL }, onAction))
+    await waitFor(() => expect(container.querySelector('.law-gate')).toBeTruthy())
+    await settled(container)
+    fireEvent.click(sw(container, 'External Gate'))
+    expect(onAction).not.toHaveBeenCalled()
+    fireEvent.click(container.querySelector('.law-gate [role="switch"]'))
+    await waitFor(() => expect(onAction).toHaveBeenCalled())
+    expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, externalGate: false }]])
+  })
+
+  // The doctrines pill warns for its one gate, beside the exclusions, and only then.
+  it('the doctrines pill names the gate that is off', async () => {
+    const armed = render(page({ ...INSTALL }))
+    await waitFor(() => expect(rigorRow(armed.container)).toBeTruthy())
+    expect(armed.container.querySelector('.ladder').textContent).not.toMatch(/gate off/)
+    armed.unmount()
+    const off = render(page({ ...INSTALL, externalGate: false }))
+    await waitFor(() => expect(rigorRow(off.container)).toBeTruthy())
+    await settled(off.container)
+    expect(off.container.querySelector('.ladder').textContent).toMatch(/excluded · 1 gate off/)
+  })
+
+  it('the pill warns with nothing excluded, where it would read all on', async () => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, RIGOR5] })
+    const { container } = render(page({ ...INSTALL, externalGate: false }))
+    await waitFor(() => expect(rigorRow(container)).toBeTruthy())
+    await settled(container)
+    expect(container.querySelector('.ladder').textContent).toMatch(/1 gate off/)
+    expect(container.querySelector('.ladder').textContent).not.toMatch(/all on/)
+  })
+
+  // Excluding the rule drops its text, and the hook still asks, so it stays Gated.
+  it('an excluded rule with an armed gate stays in the Gated view', async () => {
+    api.catalog.mockResolvedValue({
+      section: 'laws',
+      items: [...INV, ...DOC, { ...RIGOR5, active: false }],
+    })
+    const { container } = render(page({ ...INSTALL }))
+    await waitFor(() => expect(rigorRow(container)).toBeTruthy())
+    await settled(container)
+    expect(rigorRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+    fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
+    await waitFor(() => expect(container.querySelector('[data-addr="process.5"]')).toBeTruthy())
+    expect(rigorRow(container)).toBeTruthy()
+  })
+
+  it('the confirm names the stale-shim rule', async () => {
+    askConfirm.mockClear()
+    const { container } = render(page({ ...INSTALL }))
+    await waitFor(() => expect(container.querySelector('.law-gate')).toBeTruthy())
+    await settled(container)
+    fireEvent.click(container.querySelector('.law-gate [role="switch"]'))
+    await waitFor(() => expect(askConfirm).toHaveBeenCalled())
+    expect(askConfirm.mock.calls[0][0]).toMatch(/geneseed rebuild-all first/)
+  })
+
+  it('shows no gate line while it cannot act', async () => {
+    const { container } = render(<Laws selected="rigor.5" />)
+    await waitFor(() => expect(rigorRow(container)).toBeTruthy())
+    expect(container.querySelector('.law-gate')).toBeNull()
+  })
+})
+
 describe('Constitution page — the secrets and done gate switches', () => {
   beforeEach(() => {
     api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
@@ -1029,6 +1137,30 @@ describe('Constitution page — the secrets and done gate switches', () => {
     expect(lawRow(container, 'II').querySelector('[role="switch"]')).toBeNull()
     expect(lawRow(container, 'II').querySelector('.no-gate').textContent).toBe('no gate')
     expect(lawRow(container, 'II').querySelector('.law-enf').textContent).toBe('Instruction')
+  })
+
+  // Rule VIII's switch is the test note, by the owner's ask: the row reads Hook gate or Gate off.
+  it('Rule VIII carries the test note switch and rebuilds with that key alone', async () => {
+    const LAW8 = { ...LAW4, name: 'VIII', title: 'Rule VIII — Radix Sananda · Cure the Cause' }
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW8, ...DOC] })
+    const onAction = vi.fn()
+    const { container } = render(gatePage({ ...INSTALL }, onAction))
+    await waitFor(() => expect(lawRow(container, 'VIII')).toBeTruthy())
+    expect(lawRow(container, 'VIII').querySelector('.no-gate')).toBeNull()
+    expect(lawRow(container, 'VIII').querySelector('.law-enf').textContent).toBe('Hook gate')
+    const s = lawRow(container, 'VIII').querySelector('[role="switch"]')
+    expect(s.getAttribute('aria-label')).toBe('Test note')
+    fireEvent.click(s)
+    await waitFor(() => expect(onAction).toHaveBeenCalled())
+    expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, testNote: false }]])
+  })
+
+  it('Rule VIII reads Gate off when the test note is off', async () => {
+    const LAW8 = { ...LAW4, name: 'VIII', title: 'Rule VIII — Radix Sananda · Cure the Cause' }
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW8, ...DOC] })
+    const { container } = render(gatePage({ ...INSTALL, testNote: false }))
+    await waitFor(() => expect(lawRow(container, 'VIII')).toBeTruthy())
+    expect(lawRow(container, 'VIII').querySelector('.law-enf').textContent).toBe('Gate off')
   })
 
   it('a law whose gate is off reads Gate off; its neighbours stay armed', async () => {

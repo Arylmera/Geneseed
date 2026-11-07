@@ -15,6 +15,7 @@
  *   exit2  Bob: exit code 2. Bob has no ask tier, so a rule that would ask elsewhere blocks there.
  *   warn   Bob: exit 0, stdout empty, a `[geneseed]` line on stderr. The call runs.
  *   pass   exit 0, nothing on stdout, nothing on stderr: the gate defers.
+ *   note   Claude/OpenClaude: exit 0 and `additionalContext` on stdout: the call runs, the agent is told.
  *   ask    OpenCode V2, after the tool hook passes: the `evaluate` hook raises the host's own prompt.
  *
  * THE HOSTS. `claude` and `openclaude` share one expectation: OpenClaude speaks Claude's dialect
@@ -51,6 +52,15 @@ mk('proj', '.git');
 mk('proj', 'src');
 mk('proj', '.geneseed');
 fs.writeFileSync(path.join(proj, '.geneseed', 'protected-checks.txt'), 'ci.yml\n');
+const BLOCK_OF = (body) => `<!-- BEGIN GENESEED -->\n${body}\n<!-- END GENESEED -->`;
+mk('proj', 'pkg');                         // a shared carrier: the user's notes around a managed block
+const CARRIER = path.join(proj, 'pkg', 'CLAUDE.md');
+const CARRIER_TEXT = `# notes\n${BLOCK_OF('Done gate: off\nExternal gate: on')}\n# tail\n`;
+fs.writeFileSync(CARRIER, CARRIER_TEXT);
+mk('proj', 'big');
+// Over the cap in bytes, under it in characters: only the size on disk can catch it.
+fs.writeFileSync(path.join(proj, 'big', 'CLAUDE.md'), `# one\n${'\u00e9'.repeat(600 * 1024)}\n`);
+mk('proj', 'dir', 'CLAUDE.md');
 const app = mk('app');                     // an application repo: a build manifest, no AGENTS.md
 mk('app', '.git');
 fs.writeFileSync(path.join(app, 'package.json'), '{}');
@@ -86,7 +96,7 @@ const { GeneseedGuard } = await import(pathToFileURL(path.resolve('adapters/open
 const SECRET = 'AKIAIOSFODNN7EXAMPLE';   // AWS's published example key: shaped like a credential, grants nothing
 
 // ---- the table -----------------------------------------------------------------------------
-// kind: `shell` (a command), `write` (a path and content), `read` (a path), `raw` (stdin as is).
+// kind: `shell` (a command), `write` (a path and content), `edit` (a path, `old` and `now`), `read` (a path), `raw` (stdin as is).
 // `at` is the working directory; `ws` runs in the loss workspace's repository.
 // `session` adds a session id (only the ownership gate reads one). `extra` is hook argv. `ps` names
 // the PowerShell tool rather than Bash: only that says a here-string is one when no cmdlet does.
@@ -254,6 +264,102 @@ const ROWS = [
   { id: 'gate error: a payload that is not JSON', kind: 'raw', stdin: 'not json',
     rule: 'A gate that cannot read its input asks on Claude and warns on Bob; it never defers silently. The guard has no stdin.',
     claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // ---- the two switches, each row beside its armed twin. The plugin columns are null: the guard
+  // reads its switch from the carrier at load, so tests/unit/gate_switches.test.mjs proves them.
+  { id: 'switch: a protected check, armed', kind: 'write', path: () => path.join(proj, 'ci.yml'), content: 'x',
+    rule: 'The armed twin: a write to a listed check asks on Claude and blocks on Bob.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'switch: a protected check, gate off', kind: 'write', path: () => path.join(proj, 'ci.yml'), content: 'x',
+    extra: ['--no-external-gate'], rule: '--no-external-gate stops the protected-check ask on the write path.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'switch: a shell write to a protected check, armed', kind: 'shell', cmd: () => 'echo x > ci.yml',
+    rule: 'The armed twin: a parsed shell write to a listed check asks on Claude and blocks on Bob.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'switch: a shell write to a protected check, gate off', kind: 'shell', cmd: () => 'echo x > ci.yml',
+    extra: ['--no-external-gate'], rule: '--no-external-gate stops the same ask on the shell path.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'switch: gate configuration, armed', kind: 'write', path: () => path.join(install, 'AGENT.md'), content: 'x',
+    rule: 'The armed twin: a write to the install carrier asks on Claude and blocks on Bob.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'switch: gate configuration, gate off', kind: 'write', path: () => path.join(install, 'AGENT.md'), content: 'x',
+    extra: ['--no-external-gate'], rule: '--no-external-gate stops the gate-configuration ask too.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'switch: other gates under --no-external-gate, a secret', kind: 'write', path: () => path.join(proj, 'src', 'a.js'),
+    content: `k = "${SECRET}"`, extra: ['--no-external-gate'], rule: 'The switch leaves Sealed Secrets alone.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'switch: other gates under --no-external-gate, a store', kind: 'shell',
+    cmd: () => `echo x > "${path.join(install, 'memory', 'a.md')}"`, extra: ['--no-external-gate'],
+    rule: 'The switch leaves the store check alone: a shell write to the memory store still asks, and warns on Bob.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'switch: other gates under --no-external-gate, a loss', kind: 'shell', ws: true, cmd: () => 'git branch -D main',
+    extra: ['--no-external-gate'], rule: 'The switch leaves the real-loss check alone.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'switch: a weakened test, armed', kind: 'write', path: () => path.join(proj, 'src', 'a.test.js'),
+    content: 'it.skip("x", () => {})', rule: 'The armed twin: a write adding a skip marker runs, and the agent is told: a note on Claude, a stderr line on Bob.',
+    claude: 'note', bob: 'warn', v1: null, v2: null },
+  { id: 'switch: a weakened test, note off', kind: 'write', path: () => path.join(proj, 'src', 'a.test.js'),
+    content: 'it.skip("x", () => {})', extra: ['--no-test-note'], rule: '--no-test-note silences the edit-time note on every hook host.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'switch: other gates under --no-test-note, a secret', kind: 'write', path: () => path.join(proj, 'src', 'a.test.js'),
+    content: `k = "${SECRET}"`, extra: ['--no-test-note'], rule: 'The note switch judges nothing else: a secret in a test file still asks.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  // ---- a write tool aimed at a shared carrier: replayed, and judged by the first block alone.
+  ...[
+    ['a line added inside the block, the first of two steps', 'Done gate: off', 'Done gate: off\nExternal gate: on'],
+    ['on turned to off, the second step', 'External gate: on', 'External gate: off'],
+    ['a line behind a lone CR', 'Done gate: off', 'Done gate: off\rExternal gate: off'],
+    ['a line behind U+2028', 'Done gate: off', 'Done gate: off\u2028External gate: off'],
+    ['a fake block before the real one', '# notes', `${BLOCK_OF('External gate: off')}\n# notes`],
+    ['an opening delimiter alone before the block', '# notes', '<!-- BEGIN GENESEED -->\n# notes'],
+  ].map(([what, old, now]) => ({ id: `carrier: ${what}`, kind: 'edit', path: () => CARRIER, old, now,
+    rule: 'An edit that changes the first block as the reader reads it asks, whatever its text.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' })),
+  { id: 'carrier: a stream name', kind: 'write', path: () => `${CARRIER}::$DATA`, content: 'x',
+    rule: 'CLAUDE.md::$DATA writes CLAUDE.md, so the name is normalized first.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'carrier: a trailing dot', kind: 'write', path: () => `${CARRIER}.`, content: 'x',
+    rule: 'CLAUDE.md. writes CLAUDE.md too.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'carrier: an edit outside the block', kind: 'edit', path: () => CARRIER, old: '# tail', now: '# my tail\nExternal gate: off',
+    rule: 'The user\'s own notes are silent, even naming a marker: the reader does not read them.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'carrier: a whole write that keeps the block', kind: 'write', path: () => CARRIER, content: `# other\n${CARRIER_TEXT.slice(8)}`,
+    rule: 'A whole write is replayed too: the same block, so it passes.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'carrier: a new file with no block', kind: 'write', path: () => path.join(proj, 'AGENTS.md'), content: 'External gate: off\n',
+    rule: 'No block before or after, so nothing a reader reads has moved.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'carrier: an edit it cannot replay', kind: 'edit', path: () => CARRIER, old: 'no such text', now: 'x',
+    rule: 'An edit whose old text is not found once cannot be replayed, so it asks.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'carrier: a tool it cannot replay', kind: 'raw',
+    stdin: JSON.stringify({ tool_name: 'NotebookEdit', tool_input: { notebook_path: path.join(proj, 'CLAUDE.md'), new_source: 'x' }, cwd: proj }),
+    rule: 'A write shape with no replay asks, even with no block in sight.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'carrier: a patch touching a block', kind: 'tool', tool: 'apply_patch', args: () => ({ patchText: `*** Begin Patch\n*** Update File: ${CARRIER}\n@@\n-# tail\n+# my tail\n*** End Patch` }),
+    rule: 'The guard does not replay a patch, so one on a file with a block is refused.',
+    claude: null, bob: null, v1: 'deny', v2: 'deny' },
+  { id: 'carrier: a patch with no delimiter in sight', kind: 'tool', tool: 'apply_patch', args: () => ({ patchText: `*** Begin Patch\n*** Update File: ${path.join(proj, 'AGENTS.md')}\n@@\n+# note\n*** End Patch` }),
+    rule: 'A line patch cannot form a block neither side holds the opening of, so it passes.',
+    claude: null, bob: null, v1: 'pass', v2: 'pass' },
+  { id: 'carrier: over the cap', kind: 'edit', path: () => path.join(proj, 'big', 'CLAUDE.md'), old: '# one', now: '# two',
+    rule: 'A carrier over 1 MB is not replayed, so it asks.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'carrier: an unreadable target', kind: 'write', path: () => path.join(proj, 'dir', 'CLAUDE.md'), content: 'x',
+    rule: 'A target that cannot be read asks: here a folder named CLAUDE.md.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'carrier: gate off', kind: 'edit', path: () => CARRIER, old: 'External gate: on', now: 'External gate: off', extra: ['--no-external-gate'],
+    rule: 'This ask is External Gate\'s, so its switch stops it.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'carrier: another file', kind: 'write', path: () => path.join(proj, 'src', 'notes.md'), content: 'External gate: off\n',
+    rule: 'No reader reads a marker there, so it passes.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'carrier: Bob global rules file', kind: 'write', path: () => path.join(install, 'rules', 'geneseed.md'), content: 'x',
+    rule: 'Bob global\'s whole carrier is gate configuration, as AGENT.md is.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'switch: a valued flag disarms nothing', kind: 'write', path: () => path.join(proj, 'ci.yml'), content: 'x',
+    extra: ['--no-external-gate=false'], rule: 'Only the bare flag sets a switch, so this spelling leaves the gate armed.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
   { id: 'a well-formed absence', kind: 'raw', stdin: '{}',
     rule: 'An empty object has nothing to judge, so it passes: asking would teach the user to allow-list the gate.',
     claude: 'pass', bob: 'pass', v1: null, v2: null },
@@ -266,6 +372,11 @@ function payloadFor(row, host) {
   if (row.kind === 'raw') return row.stdin;
   const cwd = cwdOf(row);
   const session = row.session ? { session_id: randomUUID() } : {};
+  if (row.kind === 'edit') {
+    return JSON.stringify(host === 'bob'
+      ? { event: 'PreToolUse', tool: 'search_and_replace', input: { path: row.path(), search: row.old, replace: row.now }, cwd, ...session }
+      : { tool_name: 'Edit', tool_input: { file_path: row.path(), old_string: row.old, new_string: row.now }, cwd, ...session });
+  }
   if (host === 'bob') {
     const input = row.kind === 'shell' ? { command: row.cmd() }
       : row.kind === 'read' ? { path: row.path() } : { path: row.path(), content: row.content };
@@ -280,7 +391,10 @@ function payloadFor(row, host) {
 function verdictOf(r, what) {
   if (r.status === 2) return 'exit2';
   assert.equal(r.status, 0, `${what}: exit ${r.status}, stderr: ${r.stderr}`);
-  if (r.stdout.trim()) return JSON.parse(r.stdout).hookSpecificOutput.permissionDecision ?? 'pass';
+  if (r.stdout.trim()) {
+    const said = JSON.parse(r.stdout).hookSpecificOutput;
+    return said.permissionDecision ?? (said.additionalContext ? 'note' : 'pass');
+  }
   return r.stderr.includes('[geneseed]') ? 'warn' : 'pass';
 }
 
@@ -334,8 +448,8 @@ async function v2Hooks(dir) {
   return v2Guards.get(dir);
 }
 
-const guardTool = (row) => (row.kind === 'tool' ? row.tool : row.ps ? 'powershell' : row.kind === 'shell' ? 'bash' : row.kind === 'read' ? 'read' : 'write');
-const guardArgs = (row) => (row.kind === 'tool' ? row.args() : row.kind === 'shell' ? { command: row.cmd() }
+const guardTool = (row) => (row.kind === 'tool' ? row.tool : row.kind === 'edit' ? 'edit' : row.ps ? 'powershell' : row.kind === 'shell' ? 'bash' : row.kind === 'read' ? 'read' : 'write');
+const guardArgs = (row) => (row.kind === 'tool' ? row.args() : row.kind === 'edit' ? { filePath: row.path(), oldString: row.old, newString: row.now } : row.kind === 'shell' ? { command: row.cmd() }
   : row.kind === 'read' ? { filePath: row.path() } : { filePath: row.path(), content: row.content });
 
 async function runGuardV1(row) {
@@ -373,7 +487,7 @@ test('the table covers every verdict and every host column', () => {
   assert.ok(ROWS.length >= 29, `only ${ROWS.length} rows`);
   const seen = new Set();
   for (const r of ROWS) for (const k of ['claude', 'bob', 'v1', 'v2']) seen.add(`${k}:${r[k]}`);
-  for (const want of ['claude:ask', 'claude:deny', 'claude:pass', 'bob:exit2', 'bob:warn', 'bob:pass',
+  for (const want of ['claude:ask', 'claude:deny', 'claude:pass', 'claude:note', 'bob:exit2', 'bob:warn', 'bob:pass',
     'v1:deny', 'v1:pass', 'v2:deny', 'v2:ask', 'v2:pass']) assert.ok(seen.has(want), `no row expects ${want}`);
   assert.equal(new Set(ROWS.map((r) => r.id)).size, ROWS.length, 'row ids are unique');
 });
