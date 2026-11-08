@@ -676,7 +676,12 @@ const installCarrier = (hookRoot, host) => installCarrierFile(hookRoot, host)[1]
  * instead of injected; a lazy listing shortened is not, since it only names files. `heads` are the
  * lines above the session block; `root` places `eager` and `lazy`. Reads, never prints.
  */
-function renderPayload({ heads, session, eager, lazy, source, root }) {
+const SESSION_TITLE = '=== SESSION FILES — your harness files, injected at session start '
+  + '(untouched seeds skipped) ===';
+// The sub-agent's banner (`subagentRules`): the user's rules alone, under their own title.
+export const USER_RULES_TITLE = '=== USER RULES — the user\'s standing rules; obey them as you obey the Dictates ===';
+
+function renderPayload({ heads, session, eager, lazy, source, root, title = SESSION_TITLE }) {
   const lines = [];
   // `spent` counts every character pushed, headers included: the budget is the host's cap on
   // the whole payload, not on the file bodies alone.
@@ -685,8 +690,7 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
   const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
   if (heads.length) push(...heads, '');
   if (session.length) {
-    push('=== SESSION FILES \u2014 your harness files, injected at session start '
-      + '(untouched seeds skipped) ===', '');
+    push(title, '');
     // Rules answer only to their own size: the lines above them never push one out, so they are
     // capped when their layers together pass the share, and everything after them spends `spent`.
     let rulesSpent = 0;
@@ -769,6 +773,40 @@ export function sessionStartSize(hookRoot, host) {
   return { chars: spent, budget: OUTPUT_BUDGET, cut };
 }
 
+/**
+ * The user-rules layers a sub-agent gets, in SessionStart's order and under its labels: the tier
+ * and the install (`session`), then the project root's own `user-rules.md` where discovery or the
+ * manifest names it eager, each file once. `agentLoadout` (js/inspect/cost.mjs) reads the same list.
+ */
+export function userRuleLayers(session, root, hookRoot, host) {
+  const rules = session.filter((s) => s.rel === 'user-rules.md');
+  const seen = new Set(rules.map((s) => normcase(path.resolve(s.abs))));
+  for (const e of root ? resolveContextSets(root, hookRoot, host || 'claude')[0] : []) {
+    const abs = path.isAbsolute(e.path) ? e.path : path.join(root, e.path);
+    const key = normcase(path.resolve(abs));
+    if (path.basename(abs) !== 'user-rules.md' || seen.has(key)) continue;
+    seen.add(key);
+    const text = sessionText(abs);
+    if (text !== null) rules.push({ rel: disp(abs, root), abs, label: '', text });
+  }
+  return rules;
+}
+
+/**
+ * A sub-agent's start (`SubagentStart`): no host hands a sub-agent the SessionStart output, so the
+ * user's rules reach it here, and nothing else (spec 2026-11-08, D4): not the profile, not the
+ * project context, which the root file already brings. Same renderer, same budget, same cut.
+ * Claude Code documents only the JSON form for this event, so the payload is ONE JSON object on
+ * stdout. No rule anywhere prints nothing, as an empty SessionStart does.
+ */
+function subagentRules(session, root, hookRoot, host) {
+  const rules = userRuleLayers(session, root, hookRoot, host);
+  if (!rules.length) return 0;
+  const { text } = renderPayload({ heads: [], session: rules, eager: [], lazy: [], source: '', root, title: USER_RULES_TITLE });
+  out(`${JSON.stringify({ hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: text } })}\n`);
+  return 0;
+}
+
 export function cmdContext(args) {
   const host = (args && args.host) || null;
   // Discovery (and the stand-down) runs against the SESSION's project root, not the harness
@@ -795,6 +833,7 @@ export function cmdContext(args) {
   if (globalHookStandingDown(hookRoot, root, args.host, 'context')) return 0;
   const [carrierFile, carrier] = hookRoot ? installCarrierFile(hookRoot, host) : ['', ''];
   const session = hookRoot ? sessionFiles(hookRoot, host, carrier) : [];
+  if (args.event === 'SubagentStart') return subagentRules(session, root, hookRoot, host);
   // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
   // install whose harness dir IS the repo root) is injected once, in the session block.
   const seen = new Set(session.map((s) => normcase(path.resolve(s.abs))));

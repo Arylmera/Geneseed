@@ -24,7 +24,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | `PreCompact` | before auto-compaction | `geneseed-hook learn` | captures memory before the transcript is summarised | needs `GENESEED_LLM` |
 | `UserPromptSubmit` | you send a message | `geneseed-hook activity` | records the turn's start for the web console's Activity view; prints nothing | off with `GENESEED_ACTIVITY=off` |
 | `SessionEnd` | the session closes | `geneseed-hook activity` | marks the session ended and archives it | off with `GENESEED_ACTIVITY=off` |
-| `SubagentStart` | a subagent starts | `geneseed-hook activity` | records the subagent as a branch of its session, even one that only reads | off with `GENESEED_ACTIVITY=off` |
+| `SubagentStart` | a subagent starts | `geneseed-hook context` | injects your `user-rules.md` layers into the subagent (as JSON `additionalContext`, under the same 9 000-character budget), and records the subagent as a branch of its session | the Activity record only, with `GENESEED_ACTIVITY=off` |
 
 Every hook above also feeds the [Activity view](../reference/plugin-activity.md) after it has decided, unless tracking is off: one file per session under `activity/` beside the install. The gates' verdicts never wait on it.
 

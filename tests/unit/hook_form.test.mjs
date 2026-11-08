@@ -676,8 +676,8 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
       // on UserPromptSubmit a block would erase the user's prompt.
       UserPromptSubmit: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
       SessionEnd: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
-      // The garden's sub-agent branch at launch rides the same verb and tail.
-      SubagentStart: [h(`& ${run} activity --root "${cfg}"; exit 0`)],
+      // A sub-agent's start runs `context` (the user's rules, spec 2026-11-08), same tail.
+      SubagentStart: [h(context)],
     });
     // With Git Bash: today's bytes, no `shell` key, the `|| exit 0` form.
     assert.equal(bash.SessionStart[0].hooks[0].command, `${run} context --root "${cfg}" || exit 0`);

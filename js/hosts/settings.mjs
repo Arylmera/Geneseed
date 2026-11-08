@@ -952,10 +952,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // user's prompt, and the `activity` verb decides nothing.
     UserPromptSubmit: [{ hooks: [{ type: 'command', command: activity }] }],
     SessionEnd: [{ hooks: [{ type: 'command', command: activity }] }],
-    // A sub-agent's branch at launch (the Activity garden): a read-only sub-agent fires no gated
-    // hook, so without this it would never appear. Never on Bob (the early return above): Bob's
-    // hook schema is strict, and one unknown event key drops its whole hooks block.
-    SubagentStart: [{ hooks: [{ type: 'command', command: activity }] }],
+    // A sub-agent's start: `context` reads the event name and injects the user's rules, which no
+    // sub-agent gets from SessionStart (spec 2026-11-08, agent loadout). The Activity garden's
+    // branch at launch still records, since `trackActivity` runs after every verb. Never on Bob
+    // (the early return above): its schema is strict, one unknown event key drops the whole block.
+    SubagentStart: [{ hooks: [{ type: 'command', command: context }] }],
   };
   // Claude Code only: OpenClaude always runs Git Bash on Windows (its `findGitBashPath` exits
   // without one), and Bob takes the early return above.
