@@ -31,6 +31,23 @@ describe('useConfirm', () => {
     expect(answers).toEqual([true])
   })
 
+  // A question with one checkbox resolves `{ checked }` on Confirm, starting from the default it
+  // was given, and still false on Cancel.
+  it('a check option resolves { checked } on confirm, from its default, and false on cancel', async () => {
+    const opts = { confirmLabel: 'Go', check: { label: 'Also re-arm', checked: true } }
+    const answers = setup({ opts })
+    fireEvent.click(screen.getByText('ask'))
+    const box = screen.getByLabelText('Also re-arm')
+    expect(box.checked).toBe(true)
+    await act(async () => fireEvent.click(screen.getByText('Go')))
+    fireEvent.click(screen.getByText('ask'))
+    fireEvent.click(screen.getByLabelText('Also re-arm'))
+    await act(async () => fireEvent.click(screen.getByText('Go')))
+    fireEvent.click(screen.getByText('ask'))
+    await act(async () => fireEvent.click(screen.getByText('Cancel')))
+    expect(answers).toEqual([{ checked: true }, { checked: false }, false])
+  })
+
   it('resolves false on cancel', async () => {
     const answers = setup()
     fireEvent.click(screen.getByText('ask'))

@@ -199,7 +199,7 @@ describe('StagingProvider — doctrine rules', () => {
     const lawsPage = (onAction, rev) => (
       <Laws overview={{ install }} onAction={onAction} dataRev={rev} />
     )
-    const rule = () => document.querySelector('[aria-label="English Configuration rule"]')
+    const rule = () => document.querySelector('[aria-label="English Configuration rule text"]')
     const settled = () =>
       waitFor(() => expect(document.querySelector('.pack-wrap:not(.pack-off)')).toBeTruthy())
     const { update } = await mountShell(lawsPage)

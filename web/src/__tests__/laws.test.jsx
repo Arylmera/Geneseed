@@ -380,7 +380,7 @@ const INSTALL = { host: 'opencode', scope: 'global' }
 const settled = (c) =>
   waitFor(() => expect(c.querySelector('.pack-wrap:not(.pack-off)')).toBeTruthy())
 
-const sw = (c, name) => c.querySelector(`[aria-label="${name} rule"]`)
+const sw = (c, name) => c.querySelector(`[aria-label="${name} rule text"]`)
 const applyBtn = () => screen.getByText(/^Apply/).closest('button')
 const withInstall = (onAction = () => {}) => (
   <Laws overview={{ install: INSTALL }} onAction={onAction} />
@@ -625,11 +625,11 @@ describe('Constitution page — the deletion gate switch', () => {
     const { container } = render(gatePage({ ...INSTALL, deletionGate: true }))
     await waitFor(() => expect(law4Row(container)).toBeTruthy())
     expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
-    const gate = container.querySelector('[aria-label="Deletion gate"]')
+    const gate = container.querySelector('[aria-label^="Deletion gate:"]')
     expect(gate.getAttribute('aria-checked')).toBe('true')
     // One switch per gate: the Deletion gate's label names row IV's alone.
     expect(
-      container.querySelectorAll('.law-row.has-toggle [aria-label="Deletion gate"]').length,
+      container.querySelectorAll('.law-row.has-toggle [aria-label^="Deletion gate:"]').length,
     ).toBe(1)
   })
 
@@ -640,7 +640,7 @@ describe('Constitution page — the deletion gate switch', () => {
     expect(enf.textContent).toBe('Gate off')
     expect(enf.classList.contains('hook')).toBe(false)
     expect(
-      container.querySelector('[aria-label="Deletion gate"]').getAttribute('aria-checked'),
+      container.querySelector('[aria-label^="Deletion gate:"]').getAttribute('aria-checked'),
     ).toBe('false')
   })
 
@@ -654,9 +654,9 @@ describe('Constitution page — the deletion gate switch', () => {
     const onAction = vi.fn()
     const { container } = render(gatePage({ ...INSTALL, deletionGate: true }, onAction))
     await waitFor(() =>
-      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+      expect(container.querySelector('[aria-label^="Deletion gate:"]')).toBeTruthy(),
     )
-    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    fireEvent.click(container.querySelector('[aria-label^="Deletion gate:"]'))
     await answered()
     expect(askConfirm).toHaveBeenCalledTimes(1)
     expect(askConfirm.mock.calls[0][0]).toMatch(/deletion gate off/)
@@ -669,9 +669,9 @@ describe('Constitution page — the deletion gate switch', () => {
     const onAction = vi.fn()
     const { container } = render(gatePage({ ...INSTALL, deletionGate: false }, onAction))
     await waitFor(() =>
-      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+      expect(container.querySelector('[aria-label^="Deletion gate:"]')).toBeTruthy(),
     )
-    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    fireEvent.click(container.querySelector('[aria-label^="Deletion gate:"]'))
     await answered()
     expect(onAction).not.toHaveBeenCalled()
   })
@@ -679,7 +679,7 @@ describe('Constitution page — the deletion gate switch', () => {
   it('shows no switch without an install to rebuild', async () => {
     const { container } = render(gatePage(null, undefined))
     await waitFor(() => expect(law4Row(container)).toBeTruthy())
-    expect(container.querySelector('[aria-label="Deletion gate"]')).toBeNull()
+    expect(container.querySelector('[aria-label^="Deletion gate:"]')).toBeNull()
     expect(law4Row(container).querySelector('.law-enf').textContent).toBe('Hook gate')
   })
 
@@ -689,7 +689,7 @@ describe('Constitution page — the deletion gate switch', () => {
     const STAYS = 'Your staged doctrine changes are not part of this rebuild; they stay staged.'
     const { container } = render(gatePage({ ...INSTALL, deletionGate: true }))
     await settled(container)
-    const gate = () => container.querySelector('[aria-label="Deletion gate"]')
+    const gate = () => container.querySelector('[aria-label^="Deletion gate:"]')
     fireEvent.click(gate())
     await answered()
     expect(askConfirm.mock.calls[0][0]).not.toContain(STAYS)
@@ -897,7 +897,8 @@ describe('Constitution page — the Ownership row and its gate', () => {
   })
 
   // The Ethos band sits above the tabs, so every tab shows the row, and Gated counts the gate on
-  // each: the Dictates tab adds laws I and III to it, the Doctrines tab process.5.
+  // each: the Dictates tab adds laws I and III to it, the Doctrines tab process.5 and ops.2 (its
+  // root-scan hook is wired in every build, so it counts with its pack not built in).
   it('shows under every tab, and counts in Gated on each', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
     await waitFor(() => expect(ownRow(container)).toBeTruthy())
@@ -906,15 +907,15 @@ describe('Constitution page — the Ownership row and its gate', () => {
     expect(screen.getByRole('button', { name: 'Gated 3' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     expect(ownRow(container)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Gated 2' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Gated 3' })).toBeTruthy()
   })
 
-  // Off, a hook enforces nothing, so Gated stops counting it: Dictates I and III, and process.5.
+  // Off, a hook enforces nothing, so Gated stops counting it: Dictates I and III, process.5, ops.2.
   // The row stays, as the sections around it do, and says Gate off.
   it('leaves the Gated count while off, and the row stays', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
     await waitFor(() => expect(ownRow(container)).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: 'Gated 3' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gated 4' }))
     expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
   })
 
@@ -1003,13 +1004,16 @@ describe('Constitution page — the Ownership row and its gate', () => {
 
 // ---------------------------------------------------------------------------------------------
 // Laws I and III get the same switch (`--no-secrets-gate`, `--no-done-gate`, user decision
-// 2026-10-18), read off `overview.install.secretsGate` / `doneGate`. Every other active law's
-// toggle column says "no gate": its text is all there is, so there is nothing to switch off.
+// 2026-10-18), read off `overview.install.secretsGate` / `doneGate`. Every row has two toggle
+// columns, Rule text and Hook gate. A Dictate's text cannot be excluded, so its Rule text cell is
+// locked, and a law with no hook leaves the Hook gate cell empty: there is nothing to switch.
 
 const lawRow = (c, addr) => c.querySelector(`[data-addr="${addr}"]`)
 
-// Doctrine rigor 5 holds two switches that must not be confused: the row's own keeps the rule's
-// text, the gate line's keeps the hook. Each moves its own thing and never the other.
+// Doctrine rigor 5 holds two switches that must not be confused, one per column: Rule text keeps
+// the rule's text (it stages), Hook gate keeps the hook (it rebuilds at once). Owner rule 2026-11:
+// excluding the text switches the gate off in the same Apply, and including it again offers,
+// checked by default, to re-arm the gate. The hooked rules with no switch show a locked cell.
 describe('Constitution page — the External Gate switch', () => {
   const RIGOR5 = {
     ...DOC[0],
@@ -1025,21 +1029,21 @@ describe('Constitution page — the External Gate switch', () => {
     <Laws selected="rigor.5" overview={{ install }} onAction={onAction} />
   )
   const rigorRow = (c) => c.querySelector('[data-addr="rigor.5"]')
+  const hookSw = (c) => c.querySelector('[aria-label="External gate: hook gate of External Gate"]')
+  const note = (c, addr) => c.querySelector(`[data-addr="${addr}"] .law-note`)
   beforeEach(() => {
     api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, ...DOC, RIGOR5] })
   })
 
-  it('the open row shows the gate line beside the rule switch, under two names', async () => {
+  it('the row carries both switches, labelled apart, and the open row no gate line', async () => {
     const { container } = render(page({ ...INSTALL }))
-    await waitFor(() => expect(container.querySelector('.law-gate')).toBeTruthy())
+    await waitFor(() => expect(hookSw(container)).toBeTruthy())
     expect(rigorRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
-    const line = container.querySelector('.law-gate')
-    const gate = line.querySelector('[role="switch"]')
-    expect(gate.getAttribute('aria-label')).toBe('External gate')
-    expect(gate.getAttribute('aria-checked')).toBe('true')
-    expect(line.textContent).toMatch(/rule off with this on still asks/)
-    expect(sw(container, 'External Gate')).toBeTruthy()
-    expect(sw(container, 'External Gate')).not.toBe(gate)
+    const cells = rigorRow(container).querySelectorAll('.toggle-cell')
+    expect(cells[0].querySelector('[role="switch"]')).toBe(sw(container, 'External Gate'))
+    expect(cells[1].querySelector('[role="switch"]')).toBe(hookSw(container))
+    expect(hookSw(container).getAttribute('aria-checked')).toBe('true')
+    expect(container.querySelector('.law-gate')).toBeNull()
   })
 
   it('reads Gate off and drops out of the Gated view when the switch is off', async () => {
@@ -1051,41 +1055,84 @@ describe('Constitution page — the External Gate switch', () => {
     await waitFor(() => expect(rigorRow(container)).toBeNull())
   })
 
-  it('the gate switch rebuilds with that key alone; the rule switch only stages', async () => {
+  it('the hook switch rebuilds with that key alone; the text switch only stages', async () => {
     const onAction = vi.fn()
     const { container } = render(page({ ...INSTALL }, onAction))
-    await waitFor(() => expect(container.querySelector('.law-gate')).toBeTruthy())
+    await waitFor(() => expect(hookSw(container)).toBeTruthy())
     await settled(container)
     fireEvent.click(sw(container, 'External Gate'))
     expect(onAction).not.toHaveBeenCalled()
-    fireEvent.click(container.querySelector('.law-gate [role="switch"]'))
+    fireEvent.click(hookSw(container))
     await waitFor(() => expect(onAction).toHaveBeenCalled())
     expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, externalGate: false }]])
   })
 
-  // The doctrines pill warns for its one gate, beside the exclusions, and only then.
-  it('the doctrines pill names the gate that is off', async () => {
-    const armed = render(page({ ...INSTALL }))
-    await waitFor(() => expect(rigorRow(armed.container)).toBeTruthy())
-    expect(armed.container.querySelector('.ladder').textContent).not.toMatch(/gate off/)
-    armed.unmount()
-    const off = render(page({ ...INSTALL, externalGate: false }))
-    await waitFor(() => expect(rigorRow(off.container)).toBeTruthy())
-    await settled(off.container)
-    expect(off.container.querySelector('.ladder').textContent).toMatch(/excluded · 1 gate off/)
-  })
-
-  it('the pill warns with nothing excluded, where it would read all on', async () => {
-    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, RIGOR5] })
-    const { container } = render(page({ ...INSTALL, externalGate: false }))
-    await waitFor(() => expect(rigorRow(container)).toBeTruthy())
+  it('excluding the text switches the gate off in the same rebuild, and the confirm says both', async () => {
+    askConfirm.mockClear()
+    const onAction = vi.fn()
+    const { container } = render(page({ ...INSTALL }, onAction))
+    await waitFor(() => expect(hookSw(container)).toBeTruthy())
     await settled(container)
-    expect(container.querySelector('.ladder').textContent).toMatch(/1 gate off/)
-    expect(container.querySelector('.ladder').textContent).not.toMatch(/all on/)
+    fireEvent.click(sw(container, 'External Gate'))
+    // Staged off with the gate armed: Apply turns the gate off too, so no "still asks" note.
+    expect(note(container, 'rigor.5')).toBeNull()
+    fireEvent.click(applyBtn())
+    await answered()
+    expect(askConfirm.mock.calls[0][0]).toMatch(
+      /Excluding External Gate also switches the external gate off: its text goes, and its hook stops asking/,
+    )
+    expect(askConfirm.mock.calls[0][1].check).toBeUndefined()
+    expect(onAction).toHaveBeenCalledTimes(1)
+    const [, body] = onAction.mock.calls[0]
+    expect(body.externalGate).toBe(false)
+    // rigor 5 is its pack's only rule here, so the pack drops out of the build with it.
+    expect(body.doctrines).not.toContain('rigor')
   })
 
-  // Excluding the rule drops its text, and the hook still asks, so it stays Gated.
-  it('an excluded rule with an armed gate stays in the Gated view', async () => {
+  // Deployed excluded, gate off: including the text offers to re-arm, checked by default.
+  const excludedOff = () => {
+    api.catalog.mockResolvedValue({
+      section: 'laws',
+      items: [...INV, ...DOC, { ...RIGOR5, active: false }],
+    })
+  }
+  it('including the text again offers to re-arm the gate, checked, and re-arms on yes', async () => {
+    excludedOff()
+    askConfirm.mockClear()
+    const onAction = vi.fn()
+    const { container } = render(page({ ...INSTALL, externalGate: false }, onAction))
+    await waitFor(() => expect(hookSw(container)).toBeTruthy())
+    await settled(container)
+    fireEvent.click(sw(container, 'External Gate'))
+    fireEvent.click(applyBtn())
+    await answered()
+    expect(askConfirm.mock.calls[0][1].check).toEqual({
+      label: 'Also turn the external gate back on',
+      checked: true,
+    })
+    expect(askConfirm.mock.calls[0][0]).toMatch(/stays off unless you tick the box/)
+    expect(onAction.mock.calls[0][1].externalGate).toBe(true)
+  })
+
+  it('an unticked re-arm box brings the text back and leaves the gate off', async () => {
+    excludedOff()
+    askConfirm.mockClear()
+    askConfirm.mockResolvedValueOnce({ checked: false })
+    const onAction = vi.fn()
+    const { container } = render(page({ ...INSTALL, externalGate: false }, onAction))
+    await waitFor(() => expect(hookSw(container)).toBeTruthy())
+    await settled(container)
+    fireEvent.click(sw(container, 'External Gate'))
+    fireEvent.click(applyBtn())
+    await answered()
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0][1].externalGate).toBe(false)
+    expect(onAction.mock.calls[0][1].doctrines).toContain('rigor')
+  })
+
+  // Excluding the rule drops its text; with the gate re-armed by hand the hook still asks, so it
+  // stays Gated and says so on the row. With the gate off the note would be false, and is absent.
+  it('a deployed exclusion with an armed gate stays Gated and notes that the hook still asks', async () => {
     api.catalog.mockResolvedValue({
       section: 'laws',
       items: [...INV, ...DOC, { ...RIGOR5, active: false }],
@@ -1094,25 +1141,77 @@ describe('Constitution page — the External Gate switch', () => {
     await waitFor(() => expect(rigorRow(container)).toBeTruthy())
     await settled(container)
     expect(rigorRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+    expect(note(container, 'rigor.5').textContent).toBe('Text excluded; the hook still asks.')
     fireEvent.click(screen.getByRole('button', { name: /^Gated/ }))
     await waitFor(() => expect(container.querySelector('[data-addr="process.5"]')).toBeTruthy())
     expect(rigorRow(container)).toBeTruthy()
   })
 
+  it('no note on a deployed exclusion whose gate is off', async () => {
+    excludedOff()
+    const { container } = render(page({ ...INSTALL, externalGate: false }))
+    await waitFor(() => expect(rigorRow(container)).toBeTruthy())
+    await settled(container)
+    expect(note(container, 'rigor.5')).toBeNull()
+  })
+
   it('the confirm names the stale-shim rule', async () => {
     askConfirm.mockClear()
     const { container } = render(page({ ...INSTALL }))
-    await waitFor(() => expect(container.querySelector('.law-gate')).toBeTruthy())
+    await waitFor(() => expect(hookSw(container)).toBeTruthy())
     await settled(container)
-    fireEvent.click(container.querySelector('.law-gate [role="switch"]'))
+    fireEvent.click(hookSw(container))
     await waitFor(() => expect(askConfirm).toHaveBeenCalled())
     expect(askConfirm.mock.calls[0][0]).toMatch(/geneseed rebuild-all first/)
   })
 
-  it('shows no gate line while it cannot act', async () => {
+  it('shows no switch while it cannot act', async () => {
     const { container } = render(<Laws selected="rigor.5" />)
     await waitFor(() => expect(rigorRow(container)).toBeTruthy())
-    expect(container.querySelector('.law-gate')).toBeNull()
+    expect(hookSw(container)).toBeNull()
+    expect(rigorRow(container).querySelector('.toggle-cell')).toBeNull()
+  })
+
+  // A hook with no switch shows a locked cell, never a toggle. Consent Before Push's hook goes
+  // with its text (`--no-consent`), so it reads "with text" and never "still asks"; Bob's
+  // tool-gate never gets that flag, so the reason says Bob still logs its warning. Commands Must
+  // Return keeps asking with its text out: ops.2 is excluded here (its pack is not built in), so
+  // its row says so. Craft rules have no hook, and their Hook gate cell is empty.
+  it('locked cells for hooks with no switch, the still-asks note only where true, and empty cells for no hook', async () => {
+    const { container } = render(page({ ...INSTALL }))
+    await settled(container)
+    const hookCellOf = (addr) => container.querySelectorAll(`[data-addr="${addr}"] .toggle-cell`)[1]
+    expect(hookCellOf('process.5').querySelector('[role="switch"]')).toBeNull()
+    expect(hookCellOf('process.5').textContent).toMatch(/^with text: No switch of its own/)
+    expect(hookCellOf('process.5').textContent).toMatch(/\(Bob still logs its warning\)\.$/)
+    expect(hookCellOf('ops.2').textContent).toMatch(/^always on: No switch yet/)
+    expect(hookCellOf('craft.1').textContent).toBe('')
+    expect(note(container, 'ops.2').textContent).toBe('Text excluded; the hook still asks.')
+    expect(note(container, 'process.5')).toBeNull()
+    expect(note(container, 'craft.3')).toBeNull()
+    fireEvent.click(sw(container, 'Consent Before Push'))
+    expect(note(container, 'process.5')).toBeNull()
+  })
+
+  it('excluding a rule whose hook has no switch says the hook still asks', async () => {
+    askConfirm.mockClear()
+    api.catalog.mockResolvedValue({
+      section: 'laws',
+      items: [
+        ...INV,
+        ...DOC.map((d) => (d.pack === 'ops' ? { ...d, active: true, packActive: true } : d)),
+      ],
+    })
+    const { container } = render(page({ ...INSTALL }))
+    await settled(container)
+    expect(note(container, 'ops.2')).toBeNull()
+    fireEvent.click(sw(container, 'Commands Must Return'))
+    expect(note(container, 'ops.2').textContent).toBe('Text excluded; the hook still asks.')
+    fireEvent.click(applyBtn())
+    await answered()
+    expect(askConfirm.mock.calls[0][0]).toMatch(
+      /Excluding Commands Must Return drops its text; its hook still asks \(it has no switch yet\)\./,
+    )
   })
 })
 
@@ -1121,7 +1220,7 @@ describe('Constitution page — the secrets and done gate switches', () => {
     api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
   })
 
-  it('an armed install shows a switch on I, III and IV, and "no gate" on II', async () => {
+  it('an armed install shows a hook switch on I, III and IV, a locked text cell on each law, and no hook cell on II', async () => {
     const { container } = render(gatePage({ ...INSTALL }))
     await waitFor(() => expect(lawRow(container, 'IV')).toBeTruthy())
     for (const [addr, label] of [
@@ -1130,12 +1229,18 @@ describe('Constitution page — the secrets and done gate switches', () => {
       ['IV', 'Deletion gate'],
     ]) {
       const s = lawRow(container, addr).querySelector('[role="switch"]')
-      expect(s.getAttribute('aria-label')).toBe(label)
+      expect(s.getAttribute('aria-label')).toMatch(new RegExp(`^${label}: hook gate of `))
       expect(s.getAttribute('aria-checked')).toBe('true')
       expect(lawRow(container, addr).querySelector('.law-enf').textContent).toBe('Hook gate')
     }
     expect(lawRow(container, 'II').querySelector('[role="switch"]')).toBeNull()
-    expect(lawRow(container, 'II').querySelector('.no-gate').textContent).toBe('no gate')
+    const cells = [...lawRow(container, 'II').querySelectorAll('.toggle-cell')]
+    expect(cells.length).toBe(2)
+    expect(cells[0].textContent).toMatch(/^locked: A Dictate cannot be excluded/)
+    expect(cells[1].textContent).toBe('')
+    expect(
+      [...container.querySelectorAll('.law-rowhead span')].slice(-2).map((e) => e.textContent),
+    ).toEqual(['Rule text', 'Hook gate'])
     expect(lawRow(container, 'II').querySelector('.law-enf').textContent).toBe('Instruction')
   })
 
@@ -1146,10 +1251,9 @@ describe('Constitution page — the secrets and done gate switches', () => {
     const onAction = vi.fn()
     const { container } = render(gatePage({ ...INSTALL }, onAction))
     await waitFor(() => expect(lawRow(container, 'VIII')).toBeTruthy())
-    expect(lawRow(container, 'VIII').querySelector('.no-gate')).toBeNull()
     expect(lawRow(container, 'VIII').querySelector('.law-enf').textContent).toBe('Hook gate')
     const s = lawRow(container, 'VIII').querySelector('[role="switch"]')
-    expect(s.getAttribute('aria-label')).toBe('Test note')
+    expect(s.getAttribute('aria-label')).toBe('Test note: hook gate of Cure the Cause')
     fireEvent.click(s)
     await waitFor(() => expect(onAction).toHaveBeenCalled())
     expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, testNote: false }]])
@@ -1168,7 +1272,7 @@ describe('Constitution page — the secrets and done gate switches', () => {
     await waitFor(() => expect(lawRow(container, 'I')).toBeTruthy())
     expect(lawRow(container, 'I').querySelector('.law-enf').textContent).toBe('Gate off')
     expect(
-      container.querySelector('[aria-label="Secrets gate"]').getAttribute('aria-checked'),
+      container.querySelector('[aria-label^="Secrets gate:"]').getAttribute('aria-checked'),
     ).toBe('false')
     expect(lawRow(container, 'III').querySelector('.law-enf').textContent).toBe('Hook gate')
     expect(lawRow(container, 'IV').querySelector('.law-enf').textContent).toBe('Hook gate')
@@ -1177,8 +1281,8 @@ describe('Constitution page — the secrets and done gate switches', () => {
   it('flipping the done gate asks, then rebuilds once with that one key flipped', async () => {
     const onAction = vi.fn()
     const { container } = render(gatePage({ ...INSTALL, doneGate: true }, onAction))
-    await waitFor(() => expect(container.querySelector('[aria-label="Done gate"]')).toBeTruthy())
-    fireEvent.click(container.querySelector('[aria-label="Done gate"]'))
+    await waitFor(() => expect(container.querySelector('[aria-label^="Done gate:"]')).toBeTruthy())
+    fireEvent.click(container.querySelector('[aria-label^="Done gate:"]'))
     await answered()
     expect(askConfirm).toHaveBeenCalledTimes(1)
     expect(askConfirm.mock.calls[0][0]).toMatch(/done gate off/)
@@ -1189,8 +1293,10 @@ describe('Constitution page — the secrets and done gate switches', () => {
   it('re-arming the secrets gate asks to re-arm', async () => {
     const onAction = vi.fn()
     const { container } = render(gatePage({ ...INSTALL, secretsGate: false }, onAction))
-    await waitFor(() => expect(container.querySelector('[aria-label="Secrets gate"]')).toBeTruthy())
-    fireEvent.click(container.querySelector('[aria-label="Secrets gate"]'))
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label^="Secrets gate:"]')).toBeTruthy(),
+    )
+    fireEvent.click(container.querySelector('[aria-label^="Secrets gate:"]'))
     await answered()
     expect(askConfirm.mock.calls[0][0]).toMatch(/Re-arm the secrets gate/)
     expect(onAction.mock.calls).toEqual([['install', { ...INSTALL, secretsGate: true }]])
@@ -1279,6 +1385,34 @@ describe('Constitution page — an opened rule', () => {
     expect(document.getElementById(id)).toBe(container.querySelector('.law-expand'))
     // An ethos section has no number: its name opens the label.
     expect(screen.getByRole('button', { name: 'Telos, Always, Instruction' })).toBeTruthy()
+  })
+
+  // A rule a hook gates explains that hook in its opened row, folded, after the rule text, with
+  // or without an install to act on: Rule I and process 5 (no switch) both show it. A text-only
+  // rule, Rule II, shows nothing new.
+  it('a hooked rule folds "What the hook does" after its text; a text-only rule has none', async () => {
+    const hook = (c) => c.querySelector('.law-expand details.law-hook')
+    const { container, rerender } = render(<Laws selected="I" />)
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    expect(hook(container).querySelector('summary').textContent).toBe('What the hook does')
+    expect(hook(container).open).toBe(false)
+    expect([...hook(container).querySelectorAll('dt')].map((e) => e.textContent)).toEqual([
+      'Triggers on',
+      'Per host',
+      'Does not see',
+      'If switched off',
+    ])
+    expect(hook(container).textContent).toContain('Bob refuses the write')
+    expect(
+      screen.getByText(/The canonical text/).compareDocumentPosition(hook(container)) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    rerender(<Laws selected="process.5" />)
+    await waitFor(() => expect(hook(container)).toBeTruthy())
+    expect(hook(container).textContent).toContain('then commit or push')
+    rerender(<Laws selected="II" />)
+    await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
+    expect(container.querySelector('.law-hook')).toBeNull()
   })
 })
 
@@ -1378,20 +1512,20 @@ describe('Constitution page — themed tier nouns', () => {
 // the bar that holds every staged change with its Review / Revert / Apply.
 
 describe('Constitution page — the ladder layout', () => {
-  // Gated: a hook enforces the row now. In the fixture that is laws I and III, process.5 and the
-  // ownership gate; law II is text-only, no craft rule has a hook, and ops.2's root-scan
-  // hook goes with its pack, which this install does not build in.
+  // Gated: a hook enforces the row now. In the fixture that is laws I and III, process.5, ops.2
+  // and the ownership gate; law II is text-only and no craft rule has a hook. ops.2's pack is not
+  // built in, but its root-scan hook rides git-gate in every build, so it still asks.
   it('narrows to the hook-gated rules, and back with a second click', async () => {
     const { container } = render(withInstall())
     await settled(container)
-    const gated = screen.getByRole('button', { name: 'Gated 4' })
+    const gated = screen.getByRole('button', { name: 'Gated 5' })
     fireEvent.click(gated)
     expect(gated.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByText('Sealed Secrets')).toBeTruthy()
     expect(screen.getByText('Consent Before Push')).toBeTruthy()
     expect(screen.queryByText('One Intent, One Act')).toBeNull()
     expect(screen.queryByText('Automate Repetition')).toBeNull()
-    expect(screen.queryByText('Commands Must Return')).toBeNull()
+    expect(screen.getByText('Commands Must Return')).toBeTruthy()
     fireEvent.click(gated)
     expect(gated.getAttribute('aria-pressed')).toBe('false')
     expect(screen.getByText('Automate Repetition')).toBeTruthy()
@@ -1632,7 +1766,7 @@ describe('Constitution page — its own install picker', () => {
     const { container } = render(
       <Laws overview={{ install: { ...INSTALL } }} onAction={onAction} />,
     )
-    const gate = () => container.querySelector('[aria-label="Deletion gate"]')
+    const gate = () => container.querySelector('[aria-label^="Deletion gate:"]')
     await waitFor(() => expect(gate()).toBeTruthy())
     fireEvent.change(screen.getByRole('combobox', { name: 'Install' }), {
       target: { value: 'cl' },
@@ -1659,9 +1793,9 @@ describe('Constitution page — its own install picker', () => {
       expect(api.catalog).toHaveBeenLastCalledWith('laws', { host: 'claude', path: '/cl' }),
     )
     await waitFor(() =>
-      expect(container.querySelector('[aria-label="Deletion gate"]')).toBeTruthy(),
+      expect(container.querySelector('[aria-label^="Deletion gate:"]')).toBeTruthy(),
     )
-    fireEvent.click(container.querySelector('[aria-label="Deletion gate"]'))
+    fireEvent.click(container.querySelector('[aria-label^="Deletion gate:"]'))
     await answered()
     expect(onAction.mock.calls).toEqual([['install', { ...CL, deletionGate: false }]])
   })

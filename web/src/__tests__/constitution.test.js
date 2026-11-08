@@ -115,6 +115,31 @@ describe('HOOK_GATED', () => {
     // A switch with no confirm copy would throw on the click.
     expect(Object.keys(C.GATE_COPY)).toEqual(Object.keys(GATE_SWITCH))
   })
+
+  // The hooked doctrine rules that keep asking with their text excluded are the ones with no
+  // switch, less process 5, whose hook goes with its text (`--no-consent`): today process 1 and
+  // ops 2. A switch added for either one moves it out of this set and onto a Hook gate toggle.
+  it('ALWAYS_ASKS is process 1 and ops 2', () => {
+    expect([...C.ALWAYS_ASKS].sort()).toEqual(['ops.2', 'process.1'])
+  })
+
+  // Every rule a hook gates, and every switchable gate, explains what its hook does, and no row
+  // without a hook does. The set is read from the server's own tables (HOOK_PINNED, GATE_SWITCHES),
+  // not from GATE_HOOK, so a hook added there fails here until its row has the four lines.
+  it('GATE_HOOK covers exactly the hooked rows, each with four non-empty lines', () => {
+    const pinned = Object.values(HOOK_PINNED).map((l) => l.replace(' ', '.'))
+    const switched = GATE_SWITCHES.map((g) =>
+      g.law ? g.law : Object.keys(GATE_SWITCH).find((a) => GATE_SWITCH[a].key === g.key),
+    )
+    const hooked = [...new Set([...pinned, ...switched])].sort()
+    expect(hooked).toContain('VIII')
+    expect(hooked).toContain('ownership')
+    expect(Object.keys(C.GATE_HOOK).sort()).toEqual(hooked)
+    for (const h of Object.values(C.GATE_HOOK)) {
+      expect(Object.keys(h).sort()).toEqual(['blind', 'hosts', 'off', 'on'])
+      for (const line of Object.values(h)) expect(line.trim().length).toBeGreaterThan(0)
+    }
+  })
 })
 
 // The Constitution's tier strip ranks the tiers. The rank is not the page's to choose: it is the

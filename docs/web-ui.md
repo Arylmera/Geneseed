@@ -229,14 +229,22 @@ streams the output of background jobs and keeps their history across reloads.
   the **Ethos** (five prose sections), the **Dictates** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
-  this install). Rules I, III, IV and VIII each carry a switch for the install's hook — the
-  secrets gate, the done gate, the deletion gate and the test note (`--no-secrets-gate`,
-  `--no-done-gate`, `--no-deletion-gate`, `--no-test-note`; *Enforced by* reads *Gate off* while
-  one is off) — flipping one asks, then rebuilds the install once; the other Rules read *no
-  gate*. Doctrine rigor 5 keeps its rule switch on the row, which stages like any doctrine
-  change. Its hook has a second switch (`--no-external-gate`), on a gate line inside the opened
-  row, which rebuilds at once. The two are independent: an excluded rule still asks, and a gate
-  switched off leaves the rule's text in place. The ownership gate belongs
+  this install). Where an install can be rebuilt, each Rule and doctrine row has two toggle
+  columns, headed *Rule text* and *Hook gate*. *Rule text* is the doctrine switch, which stages
+  like any doctrine change; a Dictate cannot be excluded, so its cell is locked, with the reason.
+  *Hook gate* is the hook's switch: Rules I, III, IV and VIII (the secrets gate, the done gate,
+  the deletion gate and the test note: `--no-secrets-gate`, `--no-done-gate`,
+  `--no-deletion-gate`, `--no-test-note`) and doctrine rigor 5 (`--no-external-gate`). Flipping
+  one asks, then rebuilds the install once; *Enforced by* reads *Gate off* while one is off. A
+  hook with no switch shows a locked cell: process 5 reads *with text*, because excluding it
+  drops its commit/push ask (`--no-consent`); process 1 and ops 2 read *always on*, because their
+  hooks ask in every build. A row with no hook leaves the cell empty. Each switch's accessible
+  name names its rule (`Deletion gate: hook gate of Deletion Is Deliberate`, `External Gate rule
+  text`). Excluding rigor 5's text also switches its gate off in the same Apply, and the confirm
+  says so; including it again offers *Also turn the external gate back on*, checked by default.
+  A row whose text is excluded while its hook will still ask reads *Text excluded; the hook still
+  asks.*: process 1 and ops 2 always, rigor 5 only once its exclusion is deployed with the gate
+  armed. The ownership gate belongs
   to no Rule, so its switch (`--no-ownership-gate`) sits inside the Ethos band's *Ownership*
   row and works the same way. Closed, the row reads *Always* (the section's text binds whatever
   the gate does) and *Hook gate* or *Gate off*. Open, it shows the text, then a gate line with
@@ -244,6 +252,11 @@ streams the output of background jobs and keeps their history across reloads.
   can be rebuilt: with no install the row reads *Instruction*. The gate counts in *Gated* but
   not as a Rule or a section, and the Ethos rank's pill counts it while it is off. Every tab,
   view and filter shows the row, like the sections around it.
+  Every opened row that a hook gates (Rules I, III, IV and VIII, doctrines process 1, process 5,
+  rigor 5 and ops 2, and the Ownership section) folds a *What the hook does* block after the rule
+  text and before any gate line: what it triggers on, what each host does, what it does not see,
+  and what still holds with the gate off. It shows with or without an install to rebuild. The
+  text has one home, `GATE_HOOK` in `web/src/lib/constitution.js`; a text-only rule shows none.
   A precedence ladder heads the page (a state pill per rank; ranks 5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes
   collect in a sticky *Unapplied changes* bar that holds Revert and the page's one Apply.
   Every row expands to its full body, lazily fetched. The rail

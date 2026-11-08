@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useConfirm } from './useConfirm.jsx'
 import { sortedKey, useStaging } from './useStaging.jsx'
 import { installTag } from '../lib/hosts.js'
+import { ALWAYS_ASKS, GATE_SWITCH } from '../lib/constitution.js'
 
 // The Constitution's doctrine selection: which rules the switches have STAGED, against what the
 // deployed install carries, and the one Apply that rebuilds with the whole set. `items` is the
@@ -86,17 +87,63 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
           ? '(Real data loss stays gated: that is Rule IV’s, not the pack’s.)'
           : '(Rule IV’s deletion gate is off on this install, so real data loss is not asked about either.)')
       : ''
+    // A doctrine rule with a gate switch of its own (rigor 5's External gate, owner rule
+    // 2026-11): excluding its text switches its gate off in this same rebuild, and including it
+    // again offers, checked by default, to re-arm the gate. Never a silent re-arm.
+    const gateOff = {}
+    const reArm = []
+    const lines = []
+    for (const [addr, { key, label }] of Object.entries(GATE_SWITCH)) {
+      if (!addr.includes('.')) continue
+      const name = packs.flatMap((p) => p.rules).find((r) => r.addr === addr)?.name || addr
+      const was = deployedRules.includes(addr)
+      const armedNow = install?.[key] !== false
+      if (was && !isOn(addr) && armedNow) {
+        gateOff[key] = false
+        lines.push(
+          `Excluding ${name} also switches the ${label.toLowerCase()} off: its text goes, ` +
+            'and its hook stops asking.',
+        )
+      }
+      if (!was && isOn(addr) && !armedNow) {
+        reArm.push({ key, label })
+        lines.push(
+          `Including ${name} brings its text back; the ${label.toLowerCase()} stays off unless you tick the box.`,
+        )
+      }
+    }
+    // A hook with no switch keeps asking: say so, so "excluded" never reads as "unguarded".
+    for (const addr of ALWAYS_ASKS) {
+      if (!deployedRules.includes(addr) || isOn(addr)) continue
+      const name = packs.flatMap((p) => p.rules).find((r) => r.addr === addr)?.name || addr
+      lines.push(`Excluding ${name} drops its text; its hook still asks (it has no switch yet).`)
+    }
     const what = pickedRules.length
       ? `${pickedRules.length} of ${allRules.length} doctrine rules`
       : 'no doctrine rules'
+    const both = lines.length ? `\n\n${lines.join('\n')}` : ''
+    const check = reArm.length
+      ? {
+          label: `Also turn the ${reArm.map((g) => g.label.toLowerCase()).join(' and ')} back on`,
+          checked: true,
+        }
+      : undefined
     const ok = await confirm(
       `Rebuild ${installTag(install)} with ${what}? ` +
-        `It rebuilds in place, non-destructive.${warn}`,
-      { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild' },
+        `It rebuilds in place, non-destructive.${warn}${both}`,
+      { title: 'Rebuild with these rules?', confirmLabel: 'Rebuild', check },
     )
     if (!ok) return
+    // `ok.checked` is the re-arm box; a plain `true` (no box shown, or a stub) keeps its default.
+    const gates = { ...gateOff }
+    if (ok?.checked !== false) for (const g of reArm) gates[g.key] = true
     // runAction resolves to the job id, or undefined when the server refused it.
-    const job = await onAction('install', { ...install, doctrines: keptPacks, excludeRules })
+    const job = await onAction('install', {
+      ...install,
+      doctrines: keptPacks,
+      excludeRules,
+      ...gates,
+    })
     if (job) store.startApply('rules', key)
   }
   const revert = () => store.drop('rules', key)
