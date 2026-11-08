@@ -32,6 +32,7 @@ const ActivityDetail = lazy(() => import('./pages/ActivityDetail.jsx'))
 const Library = lazy(() => import('./pages/Library.jsx'))
 const Kits = lazy(() => import('./pages/Kits.jsx'))
 const Loops = lazy(() => import('./pages/Loops.jsx'))
+const Factories = lazy(() => import('./pages/Factories.jsx'))
 const Laws = lazy(() => import('./pages/Laws.jsx'))
 const Personal = lazy(() => import('./pages/Personal.jsx'))
 const Installs = lazy(() => import('./pages/Installs/index.jsx'))
@@ -256,6 +257,7 @@ export default function App() {
     ),
     kits: () => <Kits item={route.item} onAction={runAction} dataRev={dataRev} />,
     loops: () => <Loops tab={route.tab} item={route.item} dataRev={dataRev} />,
+    factories: () => <Factories tab={route.tab} item={route.item} dataRev={dataRev} />,
     personal: () => (
       <Personal
         tab={route.tab}
@@ -338,7 +340,9 @@ export default function App() {
           <main className="page" id="main" tabIndex={-1}>
             <div
               className={
-                ['library', 'kits', 'loops', 'docs'].includes(route.page) ? 'pad pad-wide' : 'pad'
+                ['library', 'kits', 'loops', 'factories', 'docs'].includes(route.page)
+                  ? 'pad pad-wide'
+                  : 'pad'
               }
             >
               {/* Staged kit and doctrine switches, held ABOVE the per-page boundary so they

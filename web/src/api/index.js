@@ -137,6 +137,12 @@ const loops = (install) => getIn('/api/loops', install)
 const activeLoops = () => get('/api/loops/active')
 const setLoopPreset = (root, preset) => post('/api/loops/preset', { root, preset })
 
+// ── Factories ────────────────────────────────────────────────────────────────
+// The factory catalogue for one install (factories, the bricks and loop graphs they draw with),
+// and every run `geneseed factory init` registered on the machine, FACTORY.md re-read per call.
+const factories = (install) => getIn('/api/factories/catalog', install)
+const activeFactories = () => get('/api/factories/active')
+
 // ── MCP ─────────────────────────────────────────────────────────────────────
 // MCP server wiring, read-only: each active install's config and the servers it holds.
 
@@ -232,6 +238,8 @@ export const api = {
   update,
   loops,
   activeLoops,
+  factories,
+  activeFactories,
   setLoopPreset,
   overview,
   recent,

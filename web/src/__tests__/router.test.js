@@ -123,13 +123,14 @@ describe('resolveRoute', () => {
 describe('PAGES', () => {
   // The breadcrumb and the sidebar print these; the laws page reads "Constitution" while
   // its route stays #/laws.
-  it('names the ten pages', () => {
+  it('names the eleven pages', () => {
     expect(PAGES).toEqual({
       overview: 'Overview',
       laws: 'Constitution',
       library: 'Library',
       kits: 'Kits',
       loops: 'Loops',
+      factories: 'Factories',
       personal: 'Personal',
       installs: 'Installs',
       docs: 'Docs',

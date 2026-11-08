@@ -2,8 +2,8 @@ import React from 'react'
 import { ENTRY_TO, layoutLoop } from '../lib/loopRing.js'
 
 // A `gate: human` brick's marker: a small person badge (not the validate gate's filled ⛨
-// shield), centred at (x, y), its title saying when the user is asked.
-function HumanBadge({ x, y, label }) {
+// shield), centred at (x, y), its title saying when the user is asked. FactoryGraph wears it too.
+export function HumanBadge({ x, y, label }) {
   return (
     <g className="lr-human">
       <title>{label}</title>

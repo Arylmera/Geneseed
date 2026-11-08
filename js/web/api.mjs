@@ -29,7 +29,9 @@ import {
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
-import { activeLoops } from '../loop/registry.mjs';
+import { activeLoops, runningLoops, sameRoot } from '../loop/registry.mjs';
+import { activeFactories } from '../factory/registry.mjs';
+import { factoryCatalogProblems, loopOf } from '../factory/graph.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
 import { writeTextAtomic } from '../lib/fs.mjs';
@@ -610,6 +612,49 @@ export function apiLoops(state) {
  */
 export function apiLoopsActive() {
   return { loops: activeLoops() };
+}
+
+/**
+ * The Factories page's catalogue: every factory the install ROOT resolves (shipped, global,
+ * project, as `geneseed factory check` reads them), with the whole brick list — the graph draws a
+ * brick's `gate: human` badge and the mini ring places its ⛨ gate from `effect` — and the graph
+ * of every loop template a factory names (a `loop:<t>` stage, or its `loops` allowlist), so a
+ * `loop:` block can draw its ring. Read-only, like `apiLoops`.
+ */
+export function apiFactoriesCatalog(state) {
+  const catalog = loadCatalog({ projectRoot: state.root });
+  /** @type {(x: [string, any], y: [string, any]) => number} */
+  const byName = ([a], [b]) => (a < b ? -1 : 1);
+  const factories = [...catalog.factories].sort(byName).map(([name, { origin, ...factory }]) => ({
+    name, description: factory.description || '', origin, factory,
+  }));
+  const named = new Set(factories.flatMap(({ factory: f }) => [
+    ...(Array.isArray(f.stages) ? f.stages : []).map(loopOf).filter((t) => t && t !== '$triaged'),
+    ...(Array.isArray(f.loops) ? f.loops : []),
+  ]));
+  return {
+    factories,
+    bricks: [...catalog.bricks].sort(byName).map(([, b]) => ({ reason: null, ...b })),
+    loops: [...catalog.templates].filter(([n]) => named.has(n)).sort(byName)
+      .map(([name, { origin, ...graph }]) => ({ name, origin, graph })),
+    problems: factoryCatalogProblems(catalog),
+  };
+}
+
+/**
+ * The Factories › Active read: every run `geneseed factory init` registered (machine-wide, like
+ * `apiLoopsActive`), each with the loop running in its worktree as `loop` (the root is the join
+ * key, `js/factory/registry.mjs`), or null. `runningLoops`, not `activeLoops`: it is read-only,
+ * so this poll never prunes or stamps `loops.json` behind the Loops page's back.
+ */
+export function apiFactoriesActive() {
+  const loops = runningLoops();
+  return {
+    factories: activeFactories().map((run) => {
+      const l = loops.find((x) => sameRoot(x.root, run.root));
+      return { ...run, loop: l ? { title: l.title, status: l.status, node: l.node, iteration: l.iteration, graph: l.graph } : null };
+    }),
+  };
 }
 
 /**

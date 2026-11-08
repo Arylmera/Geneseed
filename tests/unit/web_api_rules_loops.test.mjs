@@ -5,17 +5,19 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { apiLoops, apiLoopsActive } from '../../js/web/api.mjs';
+import { apiLoops, apiLoopsActive, apiFactoriesCatalog, apiFactoriesActive } from '../../js/web/api.mjs';
 import { NotFound, wikiItems } from '../../js/web/catalog.mjs';
 import { apiRules, apiRulesMutate, apiRulesPromote } from '../../js/web/user-files.mjs';
 import { apiLoopsPresetMutate } from '../../js/web/actions.mjs';
 import { POST_ROUTES, POST_ROUTES_CONVENTION, STATE_ROUTES } from '../../js/web/routes.mjs';
 import { recordLoop } from '../../js/loop/registry.mjs';
+import { recordFactory } from '../../js/factory/registry.mjs';
+import { initFactory, renderFactoryFile } from '../../js/factory/state.mjs';
 import { PRESETS } from '../../js/loop/score.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { webFixtureTeardown } from '../helpers/web_fixture.mjs';
 import {
-  withRules, readLf, withLoopsXdg, makeLoopWorktree, webState, emitInto,
+  withRules, readLf, withLoopsXdg, makeLoopWorktree, webState, emitInto, ACTIVE_TAB_GRAPH,
 } from '../helpers/web_api_fixture.mjs';
 
 after(webFixtureTeardown);
@@ -391,4 +393,60 @@ test('POST /api/loops/preset is wired through POST_ROUTES with the handler\'s No
   assert.equal(POST_ROUTES.get('/api/loops/preset')[0], apiLoopsPresetMutate);
   assert.equal(POST_ROUTES_CONVENTION['/api/loops/preset'], false,
     'this route never returns {ok: false} — both refusals throw NotFound instead');
+});
+
+// The Factories page's catalogue: the shipped `bug-report-to-fix` exactly as its file reads (the
+// file is the reference, read here, not a copy), every brick (the graph badges `gate: human`),
+// the graph of the one loop it names, and a project factory that fails the graph rules listed
+// AND reported, prefixed as `factory check` prints it.
+test('GET /api/factories/catalog: factories, bricks, the loops they name, and graph problems', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const shipped = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../../src/factories/bug-report-to-fix.json'), 'utf8'));
+      const dir = path.join(sb.path, '.geneseed', 'factories');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'team.json'), JSON.stringify({
+        ...shipped, name: 'team', edges: [...shipped.edges, { from: 'retro', on: 'fail', to: 'nowhere' }],
+      }));
+      const { factories, bricks, loops, problems } = apiFactoriesCatalog(webState('neutral', sb.path));
+      const { description, ...graph } = shipped;
+      assert.deepEqual(factories.find((f) => f.name === 'bug-report-to-fix'),
+        { name: 'bug-report-to-fix', description, origin: 'shipped', factory: { ...graph, description } });
+      assert.equal(factories.find((f) => f.name === 'team').origin, 'project');
+      assert.deepEqual(bricks.find((b) => b.name === 'merge-gate').outcomes, ['pass', 'fail', 'none']);
+      assert.ok(loops.some((l) => l.name === 'bugfix' && l.graph.name === 'bugfix'), 'loop:bugfix has no graph to draw');
+      assert.ok(!loops.some((l) => l.name === 'feature'), 'a loop no factory names is not sent');
+      assert.deepEqual(problems.filter((p) => /^factories\/(team|bug-report-to-fix):/.test(p)),
+        ['factories/team: edge retro --fail--> nowhere: nowhere is not a stage, $close or $stop']);
+      assert.equal(STATE_ROUTES['/api/factories/catalog'], apiFactoriesCatalog);
+    });
+  } finally { sb.cleanup(); }
+});
+
+// Factories › Active: each registered run read off its FACTORY.md, its graph included, and the
+// loop running in the same worktree joined in by root; a run with no live LOOP.md has none.
+test('GET /api/factories/active joins each run to the loop running in its worktree', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const factory = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../fixtures/factories/fixture-fix.json'), 'utf8'));
+      const withLoop = makeLoopWorktree(sb, 'with-loop');
+      const bare = path.join(sb.path, 'bare');
+      fs.mkdirSync(bare, { recursive: true });
+      for (const root of [withLoop, bare]) {
+        fs.writeFileSync(path.join(root, 'FACTORY.md'), renderFactoryFile(initFactory({ title: 'T', requirement: 'R', factory })));
+        recordFactory({ root, branch: 'loop/factory-x', factory: 'fixture-fix', title: 'Run', now: new Date('2026-11-01T00:00:00Z') });
+      }
+      recordLoop({ root: withLoop, branch: 'loop/factory-x', title: 'Child loop', factory: 'x' });
+      const { factories } = apiFactoriesActive();
+      assert.equal(factories.length, 2);
+      const run = factories.find((r) => r.root === withLoop);
+      assert.equal(run.stage, 'plan');
+      assert.deepEqual(run.graph, factory);
+      assert.deepEqual(run.loop, { title: 'Child loop', status: 'running', node: 'a', iteration: 1, graph: ACTIVE_TAB_GRAPH });
+      assert.equal(factories.find((r) => r.root === bare).loop, null);
+      assert.equal(STATE_ROUTES['/api/factories/active'], apiFactoriesActive);
+    });
+  } finally { sb.cleanup(); }
 });

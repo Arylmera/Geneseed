@@ -20,7 +20,7 @@ import { percentDecode } from '../lib/text.mjs';
 import { apiAutostart, apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, targetView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
-  apiDefaultInstallSet, apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview, memoCounts,
+  apiDefaultInstallSet, apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiFactoriesCatalog, apiFactoriesActive, apiOverview, memoCounts,
   apiRecent, apiSetup, apiThemes, activeInstalls, apiUpdate,
 } from './api.mjs';
 import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem, apiLoadout } from './catalog.mjs';
@@ -90,7 +90,7 @@ export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/
  * section, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
  */
 export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/migrate/preview', '/api/kits',
-  '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/activity',
+  '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/factories/active', '/api/activity',
   '/api/catalog/skills', '/api/catalog/agents', '/api/catalog/memory', '/api/catalog/notebook',
   '/api/catalog/wiki', '/api/catalog/config']);
 
@@ -227,4 +227,7 @@ export const STATE_ROUTES = {
   '/api/mcp': apiMcp,
   '/api/loops': apiLoops,
   '/api/loops/active': apiLoopsActive,
+  // The spec's names (C11): the catalogue is install-scoped like `/api/loops`, runs machine-wide.
+  '/api/factories/catalog': apiFactoriesCatalog,
+  '/api/factories/active': apiFactoriesActive,
 };
