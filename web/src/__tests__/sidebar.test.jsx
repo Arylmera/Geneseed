@@ -1,10 +1,8 @@
 import React from 'react'
-import { render, screen, fireEvent, within, act } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import Sidebar, { TabBar } from '../components/Sidebar.jsx'
-import VoicePopover from '../components/VoicePopover.jsx'
-import { ConfirmContext } from '../hooks/useConfirm.jsx'
 
 const overview = {
   counts: {
@@ -33,19 +31,19 @@ const installs = [
 const row = (label) => screen.getByText(label).closest('a')
 
 describe('Sidebar', () => {
-  it('lists the seven pages in order, then Docs, Activity and Settings', () => {
+  it('lists the pages in group order', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
     expect([...document.querySelectorAll('a.sb-item .sb-label')].map((n) => n.textContent)).toEqual(
       [
         'Overview',
         'Constitution',
+        'Personal',
         'Library',
         'Kits',
         'Loops',
-        'Personal',
         'Installs',
-        'Docs',
         'Activity',
+        'Docs',
         'Settings',
       ],
     )
@@ -73,173 +71,82 @@ describe('Sidebar', () => {
     expect(document.querySelectorAll('a.sb-item.on')).toHaveLength(1)
   })
 
-  // The vitals: doctor verdict, local edits (edited + added + missing = 1 + 0 + 1), the voice.
-  it('shows the vitals from the overview', () => {
-    render(<Sidebar route={{ page: 'overview' }} overview={overview} />)
-    const v = document.querySelector('.sb-vitals')
-    expect(v.textContent).toContain('clean')
-    expect(v.querySelector('div:nth-child(2) b').textContent).toBe('2')
-    expect(
-      within(document.querySelector('.sb-vitals')).getByRole('button', {
-        name: /switch voice|imperial/i,
-      }),
-    ).toBeTruthy()
-  })
-
-  // One list of ten pages, the foot's included: a screen reader announces "list, 10 items", and the spacer sits under the list, above the vitals card, not inside it.
-  it('is one list of every page', () => {
+  // The groups, each a named region: the Overview alone, then Govern, Build, Run and Help,
+  // with the pages the owner placed in each.
+  it('groups the pages under Govern, Build, Run and Help', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
-    const lists = screen.getByRole('navigation', { name: 'Console' }).querySelectorAll('ul')
-    expect(lists).toHaveLength(1)
-    expect(within(lists[0]).getAllByRole('listitem')).toHaveLength(10)
+    const nav = screen.getByRole('navigation', { name: 'Console' })
+    const names = (g) =>
+      within(g)
+        .getAllByRole('link')
+        .map((a) => a.querySelector('.sb-label').textContent)
+    expect(names(within(nav).getByRole('group', { name: 'Overview' }))).toEqual(['Overview'])
+    expect(names(within(nav).getByRole('group', { name: 'Govern' }))).toEqual([
+      'Constitution',
+      'Personal',
+    ])
+    expect(names(within(nav).getByRole('group', { name: 'Build' }))).toEqual([
+      'Library',
+      'Kits',
+      'Loops',
+    ])
+    expect(names(within(nav).getByRole('group', { name: 'Run' }))).toEqual(['Installs', 'Activity'])
+    expect(names(within(nav).getByRole('group', { name: 'Help' }))).toEqual(['Docs', 'Settings'])
+    expect(nav.querySelectorAll('a.sb-item')).toHaveLength(10)
   })
 
-  // The vitals are a card a landmark list can reach by name; the voice button opens the
-  // voice dialog, which it announces.
-  it('puts the vitals in a named card whose voice button opens a dialog', () => {
+  // Voice is switched on Installs, per install; the rail offers no switch at any width.
+  it('offers no voice switch', () => {
     render(<Sidebar route={{ page: 'overview' }} overview={overview} />)
-    const card = screen.getByRole('region', { name: 'Install vitals' })
-    expect(card.classList.contains('sb-vitals')).toBe(true)
-    expect(
-      within(card)
-        .getByRole('button', { name: /voice · imperial/i })
-        .getAttribute('aria-haspopup'),
-    ).toBe('dialog')
+    expect(screen.queryByRole('button', { name: /voice/i })).toBeNull()
   })
 
-  // The vitals are the default install's: with two installs active, the card names it, once. Its
-  // voice button and the brand line stay short, because a third copy only ran out of width there.
-  it('names the install its vitals describe once two are active', () => {
-    const two = [
-      { id: 'cl', host: 'claude', scope: 'global', path: '/cl', state: 'active' },
-      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
-    ]
-    const ov = { ...overview, install: { host: 'claude', scope: 'global', path: '/cl' } }
-    render(<Sidebar route={{ page: 'overview' }} overview={ov} installs={two} />)
-    const card = screen.getByRole('region', { name: 'Install vitals, Claude Code · global' })
-    expect(within(card).getByText('Claude Code · global')).toBeTruthy()
-    expect(within(card).getByRole('button', { name: 'Voice · imperial' })).toBeTruthy()
-    expect(document.querySelector('.sb-ver').textContent).toMatch(/imperial$/)
+  it('carries no vitals card', () => {
+    render(<Sidebar route={{ page: 'overview' }} overview={overview} />)
+    expect(document.querySelector('.sb-vitals')).toBeNull()
+    expect(screen.queryByRole('region', { name: /vitals/i })).toBeNull()
   })
 
-  // At tablet width (721-960px) the rail is icons only and hides the vitals, voice button
-  // included: this icon button is the voice switch there. CSS shows it in that tier only.
-  it('carries an icon voice button outside the vitals, naming the current voice', () => {
-    const onOpenVoice = vi.fn()
-    render(<Sidebar route={{ page: 'overview' }} overview={overview} onOpenVoice={onOpenVoice} />)
-    const btn = screen.getByRole('button', { name: 'Switch voice, now imperial' })
-    expect(btn.closest('.sb-vitals')).toBeNull()
-    fireEvent.click(btn)
-    expect(onOpenVoice).toHaveBeenCalledTimes(1)
-  })
-})
-
-// A voice switch rebuilds the deployed harness, so the pick is confirmed first; the list is
-// a dialog of toggle buttons, not a menu (it has no menu keyboard model).
-describe('VoicePopover', () => {
-  const themes = [
-    { name: 'imperial', accent: 'gold' },
-    { name: 'plain', accent: 'blue' },
-  ]
-  const mount = (answer) => {
-    const ask = vi.fn(async () => answer)
-    const onPick = vi.fn()
-    render(
-      <ConfirmContext.Provider value={ask}>
-        <VoicePopover themes={themes} current="imperial" onPick={onPick} onClose={() => {}} />
-      </ConfirmContext.Provider>,
-    )
-    return { ask, onPick }
-  }
-
-  it('asks before rebuilding, and a No rebuilds nothing', async () => {
-    const { ask, onPick } = mount(false)
-    await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
-    expect(ask).toHaveBeenCalledTimes(1)
-    expect(onPick).not.toHaveBeenCalled()
+  it('marks the active entry with aria-current and the raised class, and no other', () => {
+    render(<Sidebar route={{ page: 'kits' }} overview={overview} installs={installs} />)
+    const on = document.querySelectorAll('a.sb-item[aria-current="page"]')
+    expect(on).toHaveLength(1)
+    expect(on[0].classList.contains('on')).toBe(true)
+    expect(on[0].textContent).toContain('Kits')
   })
 
-  it('a Yes picks the voice', async () => {
-    const { onPick } = mount(true)
-    await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
-    expect(onPick).toHaveBeenCalledWith('plain')
-  })
+  // Collapsing is the viewer's: the rail keeps chips only, every link names itself for a screen
+  // reader and a tooltip, the choice is stored, and expanding undoes it.
+  describe('collapse', () => {
+    beforeEach(() => localStorage.clear())
 
-  // Before the install list is read, a pick would rebuild the default install whatever the
-  // remembered pick says: every voice is disabled until the list lands.
-  it('offers no voice before the install list is read', async () => {
-    const ask = vi.fn(async () => true)
-    const onPick = vi.fn()
-    render(
-      <ConfirmContext.Provider value={ask}>
-        <VoicePopover
-          themes={themes}
-          current="imperial"
-          onPick={onPick}
-          onClose={() => {}}
-          ready={false}
-        />
-      </ConfirmContext.Provider>,
-    )
-    const plain = screen.getByText('plain').closest('button')
-    expect(plain.disabled).toBe(true)
-    await act(async () => fireEvent.click(plain))
-    expect(ask).not.toHaveBeenCalled()
-    expect(onPick).not.toHaveBeenCalled()
-  })
-
-  // The switch rebuilds ONE install: with two active, the popover's own picker names
-  // it, a change of pick goes to the caller, and the confirm names the install it rebuilds.
-  it('names and picks the install it rebuilds', async () => {
-    const ask = vi.fn(async () => true)
-    const onInstall = vi.fn()
-    const two = [
-      { id: 'oc', host: 'opencode', scope: 'global', path: '/oc', state: 'active' },
-      { id: 'r', host: 'bob', scope: 'project', path: '/x/repo', state: 'active' },
-    ]
-    render(
-      <ConfirmContext.Provider value={ask}>
-        <VoicePopover
-          themes={themes}
-          current="imperial"
-          onPick={() => {}}
-          onClose={() => {}}
-          installs={two}
-          install={two[1]}
-          onInstall={onInstall}
-        />
-      </ConfirmContext.Provider>,
-    )
-    // Not plain "Install": the popover opens over a page whose own picker holds that name.
-    const pick = screen.getByRole('combobox', { name: 'Install to switch voice' })
-    expect(pick.value).toBe('r')
-    fireEvent.change(pick, { target: { value: 'oc' } })
-    expect(onInstall).toHaveBeenCalledWith(two[0])
-    await act(async () => fireEvent.click(screen.getByText('plain').closest('button')))
-    expect(ask.mock.calls[0][0]).toBe(
-      'Rebuild repo · BOB (IBM) in the “plain” voice? It rebuilds in place, non-destructive.',
-    )
-  })
-
-  // The accent is the skin's own (or the reader's pick), never the voice's: every skin has a
-  // curated colour, so a dot in the voice's colour promised a tint that never arrived.
-  it('paints no accent dot beside a voice', () => {
-    mount(true)
-    expect(screen.getByRole('dialog').querySelector('.po')).toBeNull()
-  })
-
-  it('is a labelled dialog of pressed buttons, not a menu', () => {
-    mount(true)
-    expect(screen.queryByRole('menu')).toBeNull()
-    const dlg = screen.getByRole('dialog', { name: 'Switch voice' })
-    expect(within(dlg).getByRole('button', { name: 'imperial' }).getAttribute('aria-pressed')).toBe(
-      'true',
-    )
+    it('collapses to chips with named links, remembers it, and expands again', () => {
+      const { unmount } = render(
+        <Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />,
+      )
+      const nav = screen.getByRole('navigation', { name: 'Console' })
+      expect(nav.classList.contains('collapsed')).toBe(false)
+      expect(row('Library').getAttribute('aria-label')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Collapse the sidebar' }))
+      expect(nav.classList.contains('collapsed')).toBe(true)
+      expect(row('Library').getAttribute('aria-label')).toBe('Library, 72')
+      expect(row('Library').getAttribute('title')).toBe('Library')
+      expect(row('Overview').getAttribute('aria-label')).toBe('Overview')
+      expect(localStorage.getItem('geneseed-rail')).toBe('collapsed')
+      unmount()
+      render(<Sidebar route={{ page: 'overview' }} overview={overview} installs={installs} />)
+      expect(
+        screen.getByRole('navigation', { name: 'Console' }).classList.contains('collapsed'),
+      ).toBe(true)
+      fireEvent.click(screen.getByRole('button', { name: 'Expand the sidebar' }))
+      expect(
+        screen.getByRole('navigation', { name: 'Console' }).classList.contains('collapsed'),
+      ).toBe(false)
+      expect(localStorage.getItem('geneseed-rail')).toBe('open')
+    })
   })
 })
 
-// The phone bar: five cells, so each holds its full label at 360px (~72px a cell). The four
-// pages a visit starts from, then More, which opens the drawer holding every page.
 describe('TabBar', () => {
   it('carries four pages with their full names, then More', () => {
     render(<TabBar route={{ page: 'library' }} />)

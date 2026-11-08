@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:web/dist/assets/Tabs-DYojnJex.js
-import"./rolldown-runtime-XKyaHtl9.js";import{i as e,t}from"./react-C1iE8mnY.js";import{Tt as n,wt as r}from"./index-DQOXLXna.js";e();var i=t();function a({page:e,current:t,badges:a={},label:o}){return(0,i.jsx)(`nav`,{className:`tabs`,"aria-label":o,children:r[e].map(r=>(0,i.jsxs)(`a`,{href:`#/${e}/${r}`,className:t===r?`on`:``,"aria-current":t===r?`page`:void 0,children:[n[r],a[r]==null?null:(0,i.jsx)(`span`,{className:`tab-badge`,children:a[r]})]},r))})}export{a as t};
-========
-import"./rolldown-runtime-XKyaHtl9.js";import{i as e,t}from"./react-C1iE8mnY.js";import{Dt as n,Et as r}from"./index-B32OmYFj.js";e();var i=t();function a({page:e,current:t,badges:a={},label:o}){return(0,i.jsx)(`nav`,{className:`tabs`,"aria-label":o,children:r[e].map(r=>(0,i.jsxs)(`a`,{href:`#/${e}/${r}`,className:t===r?`on`:``,"aria-current":t===r?`page`:void 0,children:[n[r],a[r]==null?null:(0,i.jsx)(`span`,{className:`tab-badge`,children:a[r]})]},r))})}export{a as t};
->>>>>>>> feat/gate-explain:web/dist/assets/Tabs-BDkyGQYr.js

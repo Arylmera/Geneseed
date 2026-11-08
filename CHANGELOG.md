@@ -25,6 +25,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **A memory phrased as an instruction to later sessions is a standing rule.** The doctrine and the `rule` skill say so: "always…", "never…" or `force: constraint` goes through the rule branch, with consent.
 - **The change report watches the rule draft and the project layer's rule files,** at the session's git root, on every host.
 
+### Changed
+
+- **The web console's left rail no longer ends in a status card.** The install, doctor, local edits, build age and Voice button live on Installs, Doctor, Diff and Overview. The voice switch leaves the rail with it: a voice is set per install on Installs, which already rebuilds in place.
+- **The web console's rail is regrouped.** Pages sit under Govern, Build, Run and Help headers, each icon in a chip tinted by its group (light mode has its own pastel pair), and a header button collapses the rail to a 64 px strip of chips. The choice is kept per browser.
+
 ### Fixed
 
 - **A gate marker outside the managed block no longer disarms a gate.** In a `CLAUDE.md` or `AGENTS.md`, every gate marker now counts only inside the `<!-- BEGIN GENESEED -->` block. Before, an appended line passed unasked and the next rebuild emitted the flag. A write tool that changes that block asks under External Gate, and an edit outside it stays silent. Bob global's `rules/geneseed.md` is now protected. A shell edit inside the block, or one that puts a fake block before it, stays a limit.
