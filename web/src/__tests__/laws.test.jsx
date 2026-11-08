@@ -171,6 +171,12 @@ describe('Constitution page — columns that fold into the rule cell', () => {
           const toggles = r.querySelectorAll('.toggle-col > .toggle-cell').length
           expect(h.children.length).toBe(5 + toggles)
           if (toggles) expect(lastCells(r)).toEqual(['switch', 'enf', 'switch'])
+          // Enforced by is a grid item of the row itself (`.toggle-col` is display: contents), so
+          // the wrap's `grid-column: -3` pin reaches it in rows with and without switches. Outside
+          // the disclosure button it is hidden from assistive tech: the button's label reads it.
+          const enf = r.querySelector('[data-col="enf"]')
+          expect(enf.parentElement === r || enf.parentElement.matches('.toggle-col')).toBe(true)
+          expect(enf.getAttribute('aria-hidden')).toBe(toggles ? 'true' : null)
         }
         r = r.nextElementSibling
       }

@@ -232,7 +232,7 @@ export default function Loadout({ loadout, base, error, install }) {
             aria-expanded={all}
             onClick={() => setAll((v) => !v)}
           >
-            {all ? 'Show fewer' : `Show all ${rules.length} rules`}
+            {all ? 'Show fewer' : `Show all ${rules.length}${lost ? ' listed' : ''} rules`}
           </button>
         ) : null}
         {all
@@ -248,9 +248,16 @@ export default function Loadout({ loadout, base, error, install }) {
                   <ul>
                     {rs.map((r) => (
                       <li key={ruleKey(r)}>
-                        <a href={ruleHref(r)}>
-                          <span className="mono">{r.id}</span> {r.title}
-                        </a>
+                        {/* An undelivered rule is listed, not followed: plain text, no link. */}
+                        {muted ? (
+                          <span>
+                            <span className="mono">{r.id}</span> {r.title}
+                          </span>
+                        ) : (
+                          <a href={ruleHref(r)}>
+                            <span className="mono">{r.id}</span> {r.title}
+                          </a>
+                        )}
                         {r.layer && r.layer !== 'install' ? (
                           <span className="dim"> ({r.layer})</span>
                         ) : null}

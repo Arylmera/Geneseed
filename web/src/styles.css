@@ -2843,6 +2843,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-rowhead, .law-row { --law-gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ --law-tog: 76px; /* off-scale: fits "HOOK GATE" on one line */
   --law-4: 92px minmax(220px, 1.4fr) minmax(140px, 1fr) 96px; --law-enf: 104px; --law-cols: var(--law-4) var(--law-enf); }
 .law-wrap.with-toggle .law-rowhead, .law-wrap.with-toggle .law-row { --law-cols: var(--law-4) var(--law-tog) var(--law-enf) var(--law-tog); }
+/* A row or header with no switch cells (the Ethos band, a retired Dictate) has five cells under
+   this seven-track template: pinned, its Enforced by keeps Enforced by's track, second from the end. */
+.law-wrap.with-toggle [data-col="enf"] { grid-column: -3; }
 .law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: var(--law-gap);
   align-items: center; padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--line); }
 .law-rowhead { padding-top: var(--sp-1); padding-bottom: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-2xs);

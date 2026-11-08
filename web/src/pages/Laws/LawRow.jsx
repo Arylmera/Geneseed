@@ -12,9 +12,15 @@ export default function LawRow({ law, isOpen, onToggle, rev, toggleCol = null, a
   // the rule cell as a `law-fold` line: decorative there, the row's label already reads it.
   // With switches (`toggleCol` = [Rule text, Hook gate] cells), Enforced by leaves the disclosure
   // button and sits between them: a switch cannot live inside a button, and the columns read
-  // Status, Rule text, Enforced by, Hook gate.
+  // Status, Rule text, Enforced by, Hook gate. There it is hidden from assistive tech: the button's
+  // label already reads it.
   const enf = (
-    <span key="enf" className={`law-enf${enfTone}`} data-col="enf">
+    <span
+      key="enf"
+      className={`law-enf${enfTone}`}
+      data-col="enf"
+      aria-hidden={toggleCol ? 'true' : undefined}
+    >
       {law.enf}
     </span>
   )

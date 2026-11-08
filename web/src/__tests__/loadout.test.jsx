@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import Loadout from '../components/Loadout.jsx'
 
@@ -57,6 +57,18 @@ describe('Loadout rules and delivery', () => {
     expect(within(sec).getByText('User rules').closest('a')).toBeNull()
   })
 
+  // The full list keeps the undelivered rules on view, as plain text, and its button says the
+  // list is longer than the count line ("listed", not "followed").
+  it('lists undelivered user rules as plain text behind "Show all 7 listed rules"', () => {
+    render(<Loadout loadout={adept('no-event')} />)
+    const sec = rulesSection()
+    fireEvent.click(within(sec).getByRole('button', { name: 'Show all 7 listed rules' }))
+    expect(within(sec).getByText('User rule R1').closest('a')).toBeNull()
+    expect(
+      within(sec).getByText('Smallest Viable Diff', { exact: false }).closest('a'),
+    ).toBeTruthy()
+  })
+
   it('says to re-emit when the install predates the wiring', () => {
     render(<Loadout loadout={adept('not-wired')} />)
     const sec = rulesSection()
@@ -70,6 +82,10 @@ describe('Loadout rules and delivery', () => {
     expect(within(sec).getByText('Rules it follows · 7')).toBeTruthy()
     expect(within(sec).queryByText(/not delivered|re-emit/)).toBeNull()
     expect(within(sec).getByText('User rules').closest('a').getAttribute('href')).toBe(
+      '#/personal/rules',
+    )
+    fireEvent.click(within(sec).getByRole('button', { name: 'Show all 7 rules' }))
+    expect(within(sec).getByText('User rule R1').closest('a').getAttribute('href')).toBe(
       '#/personal/rules',
     )
   })
