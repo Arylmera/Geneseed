@@ -70,7 +70,7 @@ The console's **Factories** page (in the Build group, after Loops) draws each fa
 graph: its stages left to right, a `loop:` stage as a block that holds its loop's ring, each
 route back as an arc above the row with its cycle and `max`, and `close` and `stop` as end caps.
 Its **Active** tab lists every registered run, with the current stage lit, the laps spent on
-each cycle and the child loop's current step. The page only reads; you answer a run in the
+each cycle and the child loop's current step. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
 agent's session.
 
 ## Your own factories
