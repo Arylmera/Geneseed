@@ -282,6 +282,12 @@ const FOOTPRINTS = ['full', 'lean'];
  * each other; section 5 points to Persist Insight instead of restating it. Measured `files`
  * carrier before, at 04b3b435: full 66_356, lean 41_591. After: full 65_741, lean 40_663. Both
  * ceilings stay where they are until O2 (one-line lean halves) lands, then lean is re-measured.
+ *
+ * LEAN LOWERED 2026-11-08, FULL UNTOUCHED, O2 (situational rules): ops 3, ops 5, ops 6, ops 7
+ * and rigor 5 keep one trigger sentence in their LEAN:else half; the full halves did not change.
+ * Measured over all nine modes: lean largest `files` 39_445, smallest `opencode` 30_258 (above
+ * the half-ceiling floor); full largest `files` 65_741, the same as after O1. `lean` moves
+ * 41_612 -> 40_234, the measured maximum plus 2 % (user decision C2), rounded up.
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
