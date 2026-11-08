@@ -21,6 +21,7 @@ js/hosts/     where it stops being a renderer and touches the machine
 js/inspect/   the read-only half: doctor, status, diff, validate, catalog
 js/lib/       primitives, every one a deliberate divergence from the Node default
 js/loop/      `geneseed loop` — the state machine over LOOP.md, and what it steps through
+js/factory/   `geneseed factory` — the state machine over FACTORY.md, one level above loops
 js/maintain/  lifecycle verbs that change an install that already exists
 js/ui/        what it prints at a terminal
 js/web/       the `geneseed web` console
@@ -103,7 +104,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `usage.mjs` | The usage counter `tool-gate` runs: one `{day, kind, name}` line per Skill or subagent call into `notebook/usage.jsonl`. Hook path: builtins only, silent, never throws |
 | `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate — the `user-rules.md` parser, the draft's format and the fold's ledger reader. No spawn: the CLI, web console and fold import it |
 | `geneseed-dir.mjs` | The Node writers into a project's `<git root>/.geneseed/`: the personal-by-default `.gitignore` (`GENESEED_GITIGNORE`, pinned to the two OpenCode copies), and the protected-checks seed every project emit runs (`seedProtectedChecks`: seed once when absent, then the user's — never recorded, rewritten or uninstalled). Never throws, never writes through a link. Spawn-free |
-| `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `gitCommonDirOf`, `currentBranch`, `protectedBranches`, `stashExists`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate, `loss.mjs` and `js/loop/cli.mjs`'s commit-message writer |
+| `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `gitCommonDirOf`, `currentBranch`, `protectedBranches`, `stashExists`, `loopLaunched`, `headCommit` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate, `loss.mjs` and `js/loop/cli.mjs`'s commit-message writer; `headCommit` by `js/factory/cli.mjs` (R2) |
 | `loss.mjs` | Law IV calibrated to real loss: `lossReason` decides whether a command would really lose data (protected branch, unpushed branch, dirty tree, stash, reflog, files git cannot restore) and fails closed. The gate path's one `git` spawn, reached only after `LOSS_CANDIDATE_RE` matched. Twin: the OpenCode guard plugin |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
 | `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`; and the web console's login launcher (`autostartState`/`autostartInstall`/`autostartRemove`). Kept cheap to import |
@@ -185,7 +186,7 @@ transition, score and stop is computed here.
 |---|---|
 | `graph.mjs` | `checkGraph` — the rules a loop graph must satisfy before a node runs: nodes name real bricks, edges cover every outcome, `$close` is reachable, every cycle is inside a declared loop |
 | `score.mjs` | The risk arithmetic: `WEIGHTS`, `PRESETS`, `declaredRisk`/`actualRisk`/`decide`, `parseNumstat`. Pure — no import but node builtins |
-| `catalog.mjs` | `loadCatalog` — bricks and loop templates from shipped/global/project origins, later overrides earlier BY NAME |
+| `catalog.mjs` | `loadCatalog` — bricks, loop templates and factories from shipped/global/project origins, later overrides earlier BY NAME |
 | `state.mjs` | The engine itself: `initState`, `nextStep`, `scoreDeclared`/`scoreDiff`, `recordOutcome`, `decideAwaiting`, `renderLoopFile`/`parseLoopFile` |
 | `cli.mjs` | `geneseed loop check\|init\|next\|score\|record\|decide` — the only face either a model or a human reaches this engine through |
 | `registry.mjs` | `loops.json` under XDG — the launched-loop identity list `loop init` records into and the Active tab's `activeLoops`/`setLoopPreset` read and rewrite |
@@ -202,6 +203,22 @@ read — but `setLoopPreset` does not: a preset change the caller asked for must
 fails. `activeLoops` saves the registry back only when the kept set actually changed (a pruned
 root, a loop newly seen finished or seen running again) — a routine poll from the Active tab must
 never be a write.
+
+## `js/factory/` — the factory engine
+
+`geneseed factory` — the loop engine one level up: a state machine over a graph of stages (a
+brick, a whole loop, or the loop `triage` chose), persisted as a JSON block in `FACTORY.md` beside
+`LOOP.md`. A child loop runs through `js/loop/` unchanged.
+
+| module | owns |
+|---|---|
+| `graph.mjs` | `checkFactory` — the rules a factory must satisfy before a stage runs: stages exist, edges cover every outcome, `$close` is reachable, every cycle is declared (the loop engine's `undeclaredCycles`), the triaged loop has an allowlist behind a `triage` stage |
+| `state.mjs` | The engine itself: `initFactory`, `nextStage`, `recordStage`, `decideFactory`, `renderFactoryFile`/`parseFactoryFile`, `validateFactoryState`, `countSpecTasks` |
+| `cli.mjs` | `geneseed factory check\|list\|init\|next\|record\|decide` — the only face of this engine |
+
+**Before editing:** `FACTORY.md` is in `js/loop/state.mjs`'s `ENGINE_FILES`, so a child loop never
+scores it; the clean-tree check after a stage outside a loop filters with that same list. `cli.mjs`
+may not spawn, and refuses `next`/`record` while a `LOOP.md` exists at the root.
 
 ## `js/maintain/` — lifecycle
 

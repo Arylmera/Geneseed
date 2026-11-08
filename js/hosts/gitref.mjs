@@ -97,6 +97,27 @@ export function currentBranch(cwd) {
 }
 
 /**
+ * The commit HEAD names in `root`, read without spawning git: a detached sha as it stands, else
+ * the branch ref — loose in the SHARED gitdir (a linked worktree's private gitdir holds only its
+ * HEAD), then `packed-refs`. null on anything else: an unborn branch, a reftable repository, no
+ * repo. The factory engine compares it before and after a child loop (`js/factory/state.mjs`, R2).
+ */
+export function headCommit(root) {
+  try {
+    const head = readFileSync(path.join(gitDirOf(root), 'HEAD'), 'utf8').trim();
+    if (/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(head)) return head;
+    const ref = /^ref:\s*(refs\/heads\/\S+)$/.exec(head)?.[1];
+    if (!ref) return null;
+    const common = gitCommonDirOf(root);
+    try { return readFileSync(path.join(common, ref), 'utf8').trim(); } catch { /* packed, or unborn */ }
+    const packed = readFileSync(path.join(common, 'packed-refs'), 'utf8');
+    return packed.split(/\r?\n/).map((l) => l.split(' ')).find(([, name]) => name === ref)?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The SHARED `.git` directory for `root`: the gitdir itself in a main worktree, the one its
  * `commondir` names in a linked worktree. Refs under `refs/remotes/`, `refs/stash` and
  * `packed-refs` live there, not in a worktree's private gitdir. Throws like `gitDirOf`.

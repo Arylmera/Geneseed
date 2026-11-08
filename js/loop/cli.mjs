@@ -122,7 +122,7 @@ const ACTIONS = {
     if (problems.length) return { error: 'the graph does not pass loop check', problems };
     const state = initState({
       title: args.title, requirement: args.requirement, graph, preset: args.preset || DEFAULT_PRESET,
-      contracts: list(args.contracts) ?? [],
+      contracts: list(args.contracts) ?? [], notes: args.note ? [args.note] : [],
     });
     writeLoopFile(file, state);
     // Best-effort: the registry is how the Active tab discovers this loop, but a registry

@@ -176,6 +176,18 @@ test('init --contracts appends globs after the template\'s own contracts', () =>
   } finally { sb.cleanup(); }
 });
 
+// init --note: the note a loop starts with — a factory re-entering a loop after a failure hands
+// its carry here, so the first brick reads why (D16).
+test('init --note starts LOOP.md notes with the note', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    const r = run(sb.path, ['init', '--title', 't', '--requirement', 'r', '--graph', 'bugfix', '--note', 'review: totals still off by one cent']);
+    assert.equal(r.code, 0);
+    assert.match(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'), /"notes": \[\s*"review: totals still off by one cent"\s*\]/);
+  } finally { sb.cleanup(); }
+});
+
 test('every state action refuses outside a git repository', () => {
   const sb = makeSandbox('loopcli-');
   try {

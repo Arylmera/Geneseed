@@ -53,6 +53,18 @@ function components(nodes, edges) {
   return out;
 }
 
+/**
+ * Rule 4 on its own: every cycle (strongly connected component) whose nodes no single declared
+ * `loops` entry holds, each as its sorted node names joined by `, `. Exported for the factory
+ * graph (`js/factory/graph.mjs`), whose `cycles` follow the same rule; each caller words the
+ * problem itself, so a loop's message stays byte-identical.
+ */
+export function undeclaredCycles(nodes, edges, loops) {
+  return components(nodes, edges)
+    .filter((comp) => !loops.some((l) => comp.every((n) => (l.nodes ?? []).includes(n))))
+    .map((comp) => comp.join(', '));
+}
+
 export function checkGraph(graph, bricks) {
   const problems = [];
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
@@ -112,10 +124,7 @@ export function checkGraph(graph, bricks) {
   const iterations = loops.filter((l) => l.iteration === true).length;
   if (iterations !== 1) problems.push(`${iterations} loops are marked iteration; exactly one must be`);
   // rule 4 — every cycle is inside a declared loop
-  for (const comp of components(nodes, edges)) {
-    const covered = loops.some((l) => comp.every((n) => (l.nodes ?? []).includes(n)));
-    if (!covered) problems.push(`cycle ${comp.join(', ')} has no declared loop around it`);
-  }
+  for (const cycle of undeclaredCycles(nodes, edges, loops)) problems.push(`cycle ${cycle} has no declared loop around it`);
   // rule 4b — a cycle that never reaches the iteration head needs its own non-iteration loop
   const iterationLoops = loops.filter((l) => l.iteration === true);
   if (iterationLoops.length === 1) {

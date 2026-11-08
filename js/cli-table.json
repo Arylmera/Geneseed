@@ -664,6 +664,170 @@
       "mutex": []
     },
     {
+      "name": "factory",
+      "help": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide)",
+      "description": "",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "action",
+          "metavar": null,
+          "help": "",
+          "choices": [
+            "check",
+            "list",
+            "init",
+            "next",
+            "record",
+            "decide"
+          ],
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": ["--factory"],
+          "dest": "factory",
+          "metavar": null,
+          "help": "a factory name or a .json factory file (check, init)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--title"],
+          "dest": "title",
+          "metavar": null,
+          "help": "the run's title, written into FACTORY.md",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--requirement"],
+          "dest": "requirement",
+          "metavar": null,
+          "help": "the work item the run exists to carry to a PR",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--input"],
+          "dest": "input",
+          "metavar": null,
+          "help": "where the work item came from: an issue URL, a file path or pasted text (init)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--outcome"],
+          "dest": "outcome",
+          "metavar": null,
+          "help": "the stage's reported outcome, one of its declared outcomes",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--loop"],
+          "dest": "loop",
+          "metavar": null,
+          "help": "the loop the triage stage chose, one of the factory's loops (record)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--spec"],
+          "dest": "spec",
+          "metavar": null,
+          "help": "the spec a stage wrote; its ordered tasks replay the next loop stage once each (record)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--carry"],
+          "dest": "carry",
+          "metavar": null,
+          "help": "the reason the next stage must hear, such as why CI failed; a re-entered loop starts with it as a note (record)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--verdict"],
+          "dest": "verdict",
+          "metavar": null,
+          "help": "the user's answer to a held gate",
+          "choices": [
+            "ok",
+            "no",
+            "amend"
+          ],
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--note"],
+          "dest": "note",
+          "metavar": null,
+          "help": "a note attached to a decide verdict; an amend hands it to the re-run stage",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "git-gate",
       "help": "PreToolUse hook: ASK before a history-discarding git act (Deletion Is Deliberate), a recursive scan of a whole filesystem (Commands Must Return) and every git commit/push (Consent Before Push backstop)",
       "description": "",
@@ -1081,7 +1245,7 @@
           "names": ["--note"],
           "dest": "note",
           "metavar": null,
-          "help": "a note attached to a record or a decide verdict, written into LOOP.md so it survives the unit",
+          "help": "a note attached to a record or a decide verdict, written into LOOP.md so it survives the unit; on init, the note the loop starts with",
           "choices": null,
           "default": null,
           "required": false,

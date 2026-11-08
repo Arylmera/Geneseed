@@ -143,6 +143,9 @@ const VERBS = {
   // Task 5. A fourth native verb: a state machine with
   // no recorded cell to compare against, only the absolute gates named beside it in `NATIVE`.
   loop: () => import('../js/loop/cli.mjs').then((m) => m.cmdLoop),
+  // The factory engine, the loop engine one level up: native like `loop`, gated absolutely by
+  // tests/unit/factory_cli.test.mjs.
+  factory: () => import('../js/factory/cli.mjs').then((m) => m.cmdFactory),
   // A fifth native verb, and a port rather than an invention: the AI Harness Scorecard
   // (upstream Python, pinned in the module's docblock). There is no recorded cell — its absolute gate is
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.

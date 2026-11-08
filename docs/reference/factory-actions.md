@@ -1,0 +1,22 @@
+---
+group: reference
+order: 2
+title: "Factory actions"
+kind: "concept"
+section: "CLI & environment"
+description: "The geneseed factory actions, one line each."
+---
+The actions of `geneseed factory`, the state machine that carries one work item through a graph of stages to an open PR. A stage is a brick, a whole loop (`loop:<template>`), or the loop the `triage` stage chose (`loop:$triaged`). The run state lives in `FACTORY.md` at the worktree root, beside the child loop's `LOOP.md` ([Loop actions](loop-actions.md)). Each action prints one JSON object and exits 1 on a refusal.
+
+| action | what it does |
+|---|---|
+| `check` | checks every factory in the catalogue, or one factory (`--factory <name or .json file>`): the factory has a name and no stage twice, every stage exists, every outcome has one edge, `$close` is reachable, every cycle is declared with a `max` from 1 to 5, each cycle is entered only at its first stage, and every route back targets the first stage of a cycle that holds its source |
+| `list` | lists the factories of the three origins (shipped, global, project), with description, category and origin |
+| `init` | writes a fresh `FACTORY.md` from a factory, under a title, a requirement and an optional `--input` (an issue URL, a file path or pasted text). A factory that fails `check` is refused before any stage runs |
+| `next` | returns the next thing to do: run a brick stage, run a loop (with `notes` to start it with, and the `task` when a spec set tasks), answer an `awaiting` gate, or a terminal. Refused while a `LOOP.md` exists that is not `done` or `stopped` (an unreadable one counts as running): the child loop finishes first. On a loop stage, refused while any `LOOP.md` is left: `git rm -f LOOP.md` and commit that removal before `geneseed loop init`. On a loop stage, `next` also records the launch in `FACTORY.md`: the loop template and the HEAD commit |
+| `record` | records the current stage's outcome and follows its edge. A loop stage reports `pass` (its loop closed) or `fail` (it stopped), and only after `next` launched it. While its `LOOP.md` is still there, that file must name the stage's template, a `stopped` one admits only `fail`, and a `done` one only `pass`. With no `LOOP.md` left, `pass` and `fail` both need a HEAD that moved since `next`: the loop's close commit, or the commit that removes a stopped loop's `LOOP.md`. `--carry` hands a reason to the next stage; a re-entered loop starts with it as a note. `--loop` (triage only) names the chosen loop from the factory's `loops`, and is required on any outcome whose route reaches `loop:$triaged`. `--spec <path>` records a spec inside the worktree: the first loop stage recorded after it runs once per numbered item under its first `Tasks` heading, 20 at most. The count is frozen at the first `--spec`: a later one may keep or lower it, never raise it. After a stage outside a loop, pipe `git status --porcelain --untracked-files=all` on stdin. Plain `--porcelain` shows a new directory as one line (`?? specs/`), so a new spec is refused. The tree must be clean, with two exceptions: engine files, and the run's spec at `specs/<slug>/spec.md` (the one recorded now, else the one on record). No stdin at all (a terminal) is refused. An empty pipe reads as a clean tree. Refused, as `next` is, while a child loop owns the worktree. Every state action also refuses a `FACTORY.md` that does not parse, that holds counters that are not non-negative integers or a run-wide ceiling above 600, or whose factory no longer passes `check` |
+| `decide` | answers a held `gate: human` stage: `ok` follows the edge, `no` stops, `amend` re-runs the stage with the `--note` as its carry (three times at most) |
+
+A route back into a cycle spends the cycle whose first stage is the route's target; past its `max` the run stops. A run stops too after 30 stage transitions, counted again for each spec task the run reaches for the first time, and after 30 transitions per task of the first recorded spec (30 without a spec) over the whole run. That run-wide ceiling is set once and never changes.
+
+Run `geneseed factory --help` for the full flag list.

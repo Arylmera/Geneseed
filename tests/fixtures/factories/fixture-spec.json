@@ -1,0 +1,15 @@
+{
+  "name": "fixture-spec",
+  "description": "Test fixture: a gated spec, then the feature loop once per spec task, then lint.",
+  "stages": ["spec", "loop:feature", "lint"],
+  "start": "spec",
+  "edges": [
+    { "from": "spec", "on": "pass", "to": "loop:feature" },
+    { "from": "spec", "on": "fail", "to": "$stop" },
+    { "from": "loop:feature", "on": "pass", "to": "lint" },
+    { "from": "loop:feature", "on": "fail", "to": "$stop" },
+    { "from": "lint", "on": "pass", "to": "$close" },
+    { "from": "lint", "on": "fail", "to": "loop:feature" }
+  ],
+  "cycles": [{ "name": "ci", "nodes": ["loop:feature", "lint"], "max": 1 }]
+}

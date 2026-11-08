@@ -192,7 +192,9 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // gate — parity with that tool, written out — is tests/unit/scorecard.test.mjs.
 // `activity` is the second native hook verb, born for the activity view (UserPromptSubmit and
 // SessionEnd) long after the reference: its absolute gate is tests/unit/activity_writer.test.mjs.
-const NATIVE = ['activity', 'catalog', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
+// `factory` is the loop engine one level up, with no Python original either: its absolute gate
+// is tests/unit/factory_cli.test.mjs.
+const NATIVE = ['activity', 'catalog', 'factory', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

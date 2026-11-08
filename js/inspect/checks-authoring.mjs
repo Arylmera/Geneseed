@@ -26,7 +26,8 @@ import {
 } from './checks-repo.mjs';
 import { constitutionProblems, leanBlockProblems } from './checks-constitution.mjs';
 import { countTableProblems, kitProblems } from './checks-counts.mjs';
-import { catalogProblems } from '../loop/catalog.mjs';
+import { catalogProblems, loadCatalog } from '../loop/catalog.mjs';
+import { factoryCatalogProblems } from '../factory/graph.mjs';
 import { globSorted, isDir, isFile, rglob } from './scan.mjs';
 import { spawnSync } from 'node:child_process';
 
@@ -124,6 +125,15 @@ export { countTableProblems, kitProblems, proseMirrorProblems } from './checks-c
  */
 export function loopProblems() {
   return catalogProblems({ projectRoot: null, globalLevel: false });
+}
+
+/**
+ * The shipped factories parse and pass `checkFactory` against the shipped bricks and loops —
+ * `loopProblems`' twin, same scope. `opts` reaches `loadCatalog`, so a test can point the gate
+ * at a fixture `srcRoot` and see it redden while no factory ships yet.
+ */
+export function factoryProblems(opts = {}) {
+  return factoryCatalogProblems(loadCatalog({ projectRoot: null, globalLevel: false, ...opts }));
 }
 
 /**
