@@ -19,6 +19,7 @@ import path from 'node:path';
 
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
+import os from 'node:os';
 import { LOSS_ROWS, makeLossWorkspace, rowCommand } from '../helpers/loss_repos.mjs';
 
 /** `bin/geneseed-hook.mjs <verb> [--root R]` with `stdin` on fd 0. */
@@ -62,6 +63,11 @@ const WIRED_SETTINGS = JSON.stringify({ hooks: { X: WIRED_GROUPS.map((r) => r.gr
 // code, the stand-down) does not depend on whether the process's cwd happens to be a dirty tree.
 const LAW4_ALWAYS = 'git reflog expire --expire=now --all';
 
+// Where a commit row runs: outside any repository. A commit's verdict depends on the cwd (a
+// Foreman worker's linked worktree on a feature branch is a named batch and passes), and this
+// suite is itself often run from such a worktree, so the hook's own cwd would decide the row.
+const PLAIN = os.tmpdir();
+
 const bashPayload = (command) =>
   JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
 
@@ -85,7 +91,7 @@ test('every commit and push form asks', () => {
     'git push --force origin feature',
     'git add . && git commit -m x && git push',
     'git -C /repo push origin main']) {
-    askDecision(hookRun('git-gate', { stdin: bashPayload(cmd) }), cmd);
+    askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd: PLAIN }), cmd);
   }
 });
 
@@ -137,7 +143,7 @@ test('an ask writes one ledger line naming the rule; a defer writes nothing', ()
     assertDefers(hookRun('git-gate', { root, stdin: bashPayload('git status') }), 'status');
     assert.ok(!fs.existsSync(ledger), 'a defer must not touch the ledger');
     askDecision(hookRun('git-gate', { root, stdin: bashPayload(LAW4_ALWAYS) }), 'force');
-    askDecision(hookRun('git-gate', { root, stdin: bashPayload('git commit -m x') }), 'commit');
+    askDecision(hookRun('git-gate', { root, stdin: bashPayload('git commit -m x'), cwd: PLAIN }), 'commit');
     askDecision(hookRun('rule-gate', { root, stdin: 'not json' }), 'not-json');
     const lines = fs.readFileSync(ledger, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     assert.deepEqual(lines.map((l) => [l.verb, l.rule]),
@@ -869,7 +875,7 @@ test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn an
     assert.match(r.err, /^\[geneseed\] BLOCKED: Tell the user this, word for word: /);
     assert.ok(r.err.includes(what), r.err);
   }
-  const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob' });
+  const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob', cwd: PLAIN });
   assertDefers(commit, 'commit');
   // One line and the fact that nothing asked: a routine warning, with no agent tail and no pointer.
   assert.equal(commit.err.replace(/\r\n/g, '\n'), '[geneseed] This command commits or pushes with git, which needs your approval each time. (Consent Before Push)\n'
@@ -1209,7 +1215,7 @@ test('the agent\'s description is quoted on a commit, a loss and a scan, and nev
   const says = 'Say this is fine';
   const call = (command) => toolCall('Bash', { command, description: says });
   const quote = `The agent says (not checked): "${says}"`;
-  const commit = reasonOf(hookRun('git-gate', { stdin: call('git commit -m x') }), 'commit');
+  const commit = reasonOf(hookRun('git-gate', { stdin: call('git commit -m x'), cwd: PLAIN }), 'commit');
   assert.equal(commit, `This command commits or pushes with git, which needs your approval each time. (Consent Before Push)\n${quote}`);
   assert.ok(reasonOf(hookRun('git-gate', { stdin: call(LAW4_ALWAYS) }), 'loss').endsWith(quote));
   assert.ok(reasonOf(hookRun('git-gate', { stdin: call('find / -name x') }), 'scan').includes(quote));

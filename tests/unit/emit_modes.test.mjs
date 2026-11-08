@@ -159,6 +159,8 @@ test('the opencode project emit writes the native layer and the config', () => {
     const cfg = readJson(d, 'opencode.json');
     assert.ok(JSON.stringify(cfg.instructions ?? '').includes('AGENT.md'));
     assert.equal(cfg.lsp, true, 'code intelligence is no longer enabled');
+    // Foreman's depth, main → worker → sub-worker, through OpenCode's own top-level key.
+    assert.equal(cfg.subagent_depth, 2, 'the subagent depth cap is not armed');
     // AGENT.md keeps its prose, and the per-row spec links are de-linked to names.
     //
     // ASKED OF THE PRODUCT'S OWN STRIPPER, not of a transcribed regex. `CAPABILITY_LINK_RE` is a

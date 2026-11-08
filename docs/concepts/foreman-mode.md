@@ -30,9 +30,24 @@ When the session is unsure, it delegates. The test is still a count, because "su
 
 A task worker is one `developer` agent in its own git worktree. It explores, implements and tests in a single context, loading skills as it needs them, so nothing it read is lost in a hand-off. After two repair rounds on its own failing tests it returns with its findings instead of looping.
 
+A worker can lead a small team inside its own worktree. It can start read-only helpers (`explorer`, `researcher`) at any time. It can also start writing **sub-workers**, each in its own worktree branched from the worker's branch. The worker commits and merges their branches into its own branch, locally, and re-runs the proof after each merge. *Consent Before Push* names this as a batch. The git gate lets a commit or merge through without a prompt only when all of these hold: the host marks the call as a sub-agent's (Claude Code's `agent_id`), the directory is a linked worktree, and its branch is not shared (`main`, `master`, `develop`, `development`, `release/*`, `hotfix/*`, a remote's default, or the branch the main checkout has, in any letter case). The command may hold only adds, read-only git commands and plain commit or merge arguments with one quoted message, after at most one `cd`; anything that can run a second command (`(`, `@`, `$`, `{`, a backtick) asks. A session that only runs in a worktree, as the desktop app's do, still asks. A push still asks everywhere. Bob sends no sub-agent field, so Bob still logs its warning. On OpenCode the static `git commit*` permission still asks, because a permission glob sees only the command, not the worktree. The gate reads the command, not git's own hooks: a `post-commit` hook or a `core.hooksPath` can push on commit, on any branch, as it always could. Nesting stops at two levels below the session: session → worker → sub-worker. A sub-worker starts nothing. A lead holds every member's result before it ends. The blind reviewer is still the session's, never the worker's.
+
+| Host | What caps the depth |
+| --- | --- |
+| Claude Code | the install writes `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"` into its settings file, only when the key is absent (Claude Code allows three levels by default) |
+| OpenCode | the install writes a top-level `"subagent_depth": 2` into `opencode.json`, only when the key is absent |
+| OpenClaude | nothing in the host: its source has no such cap (checked on 0.31). The rule text is the only bound |
+| Bob | nothing documented. The rule text is the only bound |
+
+A value you set yourself is kept. The value 2 is read as session → worker → sub-worker; that reading is the design's, not yet observed live on either host.
+
 When a worker returns green with a diff that touches two or more files or changes logic, the session sends a `reviewer` only your request and the diff — never the worker's reasoning — for a blind check. A failing verdict goes back to the same worker.
 
 The session keeps a ledger in its notebook (`notebook/foreman-ledger.md`), one line per task: the task, the agent id, the worktree and the state. A correction, a follow-up or a reviewer finding goes back to **the same worker**, which resumes with everything it already knows. A new worker starts only when the old one cannot be resumed, and it receives a note of the ask, the diff so far and what was tried. A worker serves one task and retires once that task is merged or dropped.
+
+### Status lines
+
+A worker reports one line at start and on each change: `T<n> · <task> · files: <write set> · <state>`. On Claude Code it sends that line to the session with `SendMessage`; OpenClaude can do the same only in its agent-teams mode. OpenCode and Bob have no channel back to the session, so there the worker writes the line to its own file, `notebook/foreman/<task>.status`, which no other agent writes. The session reads all status files with one command, and only at two moments: before it starts a worker near the same files, and when a worker returns. When two write sets overlap, the session decides: one worker waits, or one worker owns the file. It records that decision in the ledger.
 
 > **Why not a crew by default?** Splitting a task by role — one agent reads, the next builds, the next tests — passes each result on as a summary, and the next agent reads the code again. Anthropic's guide [When to fold subagents into your main agent loop](https://claude.com/resources/articles/building-agents-when-to-fold-subagents-into-your-main-agent-loop) found one loop with skills usually beats that, and keeps separate agents for verification, parallel work and context that would overflow. The blind reviewer is that kind of split.
 
@@ -53,15 +68,15 @@ The crew works in its own git worktree and branch. When worktrees are unavailabl
 
 Inside the crew, the developer implements and the tester runs the tests and lint. Failures go back to the developer for at most two repair rounds, then to one fresh developer carrying the tester's findings; if that fails too, the crew stops and reports the failure, leaving the branch for you to inspect.
 
-### Neither commits nor merges
+### Nothing lands beyond the worker's branch
 
-When a worker or a crew is done, it hands back its worktree **uncommitted**, with the raw test and lint output and the list of files it changed. Then the session:
+When a crew is done, it hands back its worktree **uncommitted**. A worker hands back its branch: the local commits from its own sub-workers' merges, and any uncommitted work. Each comes with the raw test and lint output and the list of files it changed. Then the session:
 
 1. re-runs the tests and lint itself — its log is its own account, not proof;
-2. shows you the diff and the green output;
+2. shows you the diff from the base it recorded, and the green output;
 3. commits and merges **only once you accept**.
 
-Commit, push and merge belong to the session alone, under *Consent Before Push* ([Rules](rules.md)). A worker or crew that cannot get to green reports back instead of landing broken work.
+Push, and every merge beyond a worker's own branch, belong to the session alone, under *Consent Before Push* ([Rules](rules.md)). A worker or crew that cannot get to green reports back instead of landing broken work.
 
 You can also start a pipeline without foreman mode: ask the agent to "run a pipeline" for a task, and the `pipeline` [skill](skills.md) takes it from there.
 
