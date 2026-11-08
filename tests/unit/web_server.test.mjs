@@ -61,9 +61,10 @@ const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/d
   '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
-/** Every POST path the daemon answers — 16. `/api/mcp` left it when MCP became read-only, and
- * `/api/view` when the console's install selector was retired (each page names its install). */
-const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/default-install', '/api/excludes',
+/** Every POST path the daemon answers — 17. `/api/mcp` left it when MCP became read-only, and
+ * `/api/view` when the console's install selector was retired (each page names its install).
+ * `/api/autostart` joined it when Settings began to write the login launcher (2026-11-08). */
+const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/autostart', '/api/default-install', '/api/excludes',
   '/api/install',
   '/api/jobs/', '/api/loops/preset', '/api/memory/delete', '/api/pick-folder',
   '/api/profile', '/api/restart', '/api/reveal', '/api/rules', '/api/rules/decide', '/api/rules/promote',
@@ -77,7 +78,7 @@ const POST_SURFACE = ['/api/actions/', '/api/activity', '/api/default-install', 
  * toggle a behavioural test can perform SUCCEEDS, and the failing arm needs the flag write to
  * raise — so the column has to be checked as a column, below.
  */
-const EXPECT_409 = ['/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
+const EXPECT_409 = ['/api/autostart', '/api/default-install', '/api/excludes', '/api/install', '/api/profile', '/api/rules',
   '/api/rules/decide', '/api/rules/promote'];
 
 /** Every kind `apiDocsPage` dispatches on — 6. */
@@ -551,6 +552,9 @@ test('the declared surface is the one the dispatcher uses', async () => {
     assert.equal(await hit('POST', '/api/loops/preset', 'tok'), 404,
       'POST /api/loops/preset: an empty body names no preset, so it must reach '
       + 'apiLoopsPresetMutate and raise NotFound');
+    // Only the refusal: an empty body names no action, so nothing is written.
+    assert.equal(await hit('POST', '/api/autostart', 'tok'), 409,
+      'POST /api/autostart must reach apiAutostart and refuse a body with no action');
     assert.equal(await hit('POST', '/api/excludes', 'tok'), 409,
       'a table POST must answer, and an empty body is the 409 arm of the convention — the '
       + 'control for the refusals below');

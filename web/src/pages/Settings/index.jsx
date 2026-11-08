@@ -7,6 +7,7 @@ import { installName } from '../../lib/hosts.js'
 import PageHeader from '../../components/PageHeader.jsx'
 import { relTime } from '../../lib/format.js'
 import { motionOK } from '../../lib/motion.js'
+import ErrorState from '../../components/ErrorState.jsx'
 
 // The repo the install actually updates from (its git origin). Falls back to the canonical
 // upstream when the About payload can't be fetched. The github-shaped deep links (/issues,
@@ -178,6 +179,81 @@ function AboutSection({ version }) {
   )
 }
 
+// What each launcher state reads as. `hand` is a file Geneseed did not write: no button, only
+// the guide, because the server refuses to touch it.
+const LOGIN_STATE = {
+  absent: 'Off',
+  ours: 'On · written by Geneseed',
+  stale: 'On · points at another copy or Node',
+  hand: 'On · set up by hand',
+}
+
+// Start at login: write the launcher when absent, update it when stale, remove it when ours.
+// The server picks the file (POST /api/autostart takes only the action), and each click confirms
+// with that file's path. A refusal or an OS error shows the server's own text.
+function StartAtLogin({ initial }) {
+  const confirm = useConfirm()
+  const [cur, setCur] = useState(undefined)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const at = cur === undefined ? initial : cur
+  const run = async (action) => {
+    const write = action === 'install'
+    const ok = await confirm(
+      write
+        ? `Write ${at.file}? It starts the web console from ${at.root} at each login (hidden, no browser).` +
+            (at.file.endsWith('.plist') ? ' It loads at your next login.' : '') +
+            (at.transient
+              ? ' Warning: that copy is an agent worktree or an npx cache, which can be deleted; the login item then fails.'
+              : '')
+        : `Delete ${at.file}? The console no longer starts at login.`,
+      write
+        ? { title: 'Start at login?', confirmLabel: at.state === 'stale' ? 'Update' : 'Write file' }
+        : { title: 'Stop starting at login?', confirmLabel: 'Delete file', tone: 'danger' },
+    )
+    if (!ok) return
+    setBusy(true)
+    setError(null)
+    try {
+      setCur((await api.autostart(action)).autostart)
+    } catch (e) {
+      setError(e.message)
+      if (e.body?.autostart) setCur(e.body.autostart)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const state = at?.state
+  const control =
+    state === 'absent' || state === 'stale' ? (
+      <button className="btn ghost" disabled={busy} onClick={() => run('install')}>
+        {state === 'stale' ? 'Update' : 'Turn on'}
+      </button>
+    ) : state === 'ours' ? (
+      <button className="btn ghost" disabled={busy} onClick={() => run('remove')}>
+        Remove
+      </button>
+    ) : state === 'hand' ? (
+      <a href="#/docs/autostart">Install guide →</a>
+    ) : null
+  return (
+    <Row
+      k="Start at login"
+      help={at ? at.file : at === null ? 'No login launcher on this system' : 'A login launcher'}
+      control={
+        <>
+          <ErrorState error={error} />
+          {control}
+        </>
+      }
+    >
+      <span className="sub">
+        {at === null ? 'not available' : (LOGIN_STATE[state] ?? 'unknown')}
+      </span>
+    </Row>
+  )
+}
+
 // The rail's Settings page, a sheet: a section index beside rows of label | value | control. It is
 // about the tool, never one install: Machine acts on this copy, Server describes the process
 // answering the page, Danger zone holds what takes something away. Skin and accent have their one
@@ -222,12 +298,6 @@ export default function Settings({ overview, onAction }) {
     )
     if (ok) onAction('update')
   }
-  const autostart =
-    server?.autostart === true
-      ? 'On · login script'
-      : server?.autostart === false
-        ? 'Off'
-        : 'unknown'
 
   return (
     <div>
@@ -301,9 +371,7 @@ export default function Settings({ overview, onAction }) {
                 <span className="pill good">matches disk</span>
               )}
             </Row>
-            <Row k="Start at login" help="A login script you set up by hand (install guide)">
-              <span className="sub">{autostart}</span>
-            </Row>
+            <StartAtLogin initial={server?.autostart} />
             <Row k="Guards" help="What stops another page from driving the console">
               <span className="row wrap gap-8">
                 {GUARDS.map((g) => (

@@ -301,8 +301,8 @@ export function cmdMigrate(args = {}, { root = ROOT } = {}) {
 
   printOut(`[migrate] migrated ${rows.length} install(s).\n`);
 
-  // Step 5 — what could NOT be fixed automatically. Reported, never rewritten: nothing in
-  // this repository has ever written an autostart entry, so migrate does not own the file.
+  // Step 5 — what could NOT be fixed automatically. Reported, never rewritten: the file may be
+  // the user's own, and the one Settings writes is updated from Settings, not by migrate.
   // The `start` ACTION is load-bearing, not decoration: bare `web` runs `serve()` in the
   // FOREGROUND with `daemon=false`, which never writes the daemon record, so `web stop`,
   // `web restart` and `web status` stay blind to the server this note just told someone to

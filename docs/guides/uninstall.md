@@ -53,4 +53,4 @@ npm uninstall -g geneseed     # installed from npm
 
 From a clone, `geneseed unlink` removes the launcher that `geneseed link` put on your `PATH` (see [Run geneseed from anywhere](run-anywhere.md)). Then delete the clone folder.
 
-If you set the web console to start at login, delete that login item too. It is a file you created, and Geneseed never removes it (see [Start the web console at login](autostart.md)).
+If the web console starts at login, remove that login item too. Do this before you delete the clone. If Settings wrote it, use **Remove** on the **Start at login** row. If you wrote it yourself, delete the file. Uninstall never removes it (see [Start the web console at login](autostart.md)).
