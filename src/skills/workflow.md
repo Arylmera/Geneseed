@@ -64,7 +64,8 @@ carries the script API — load it before writing one).
    `parallel()`. Pass `isolation: 'worktree'` to each agent that edits in parallel — both
    runtimes take it; read-only agents need none. After the fan-out, compare the changed
    files in plain script code (OpenCode hands them to you as `overlaps()`) — a file two
-   agents touched goes to one merge agent, never to whoever wrote last.
+   agents touched goes to one merge agent, never to whoever wrote last. Agents that call one
+   rationed resource run in sequence, never in one `parallel()` ({{DOCTRINE:serialize-against-a-rationed-resource}}).
 5. **Pass the task as `args`, never baked in** — target paths, the motion, the question,
    any timestamp. Scripts stay deterministic: no wall clock, no randomness, nothing
    read from the environment that the next run would see differently, so a run is a

@@ -97,7 +97,7 @@ follow them, not because a tool call was ever inspected.
 `prove-the-gate`.
 
 **Doctrine: comms** — `codes-that-persist` · `structure-beside-prose` · `declare-the-judgment-calls` ·
-`simplified-technical-english` · `mark-the-ask`.
+`simplified-technical-english`.
 
 ---
 

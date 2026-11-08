@@ -2970,6 +2970,25 @@ test('--config-dir on a per-repo emit is refused, not ignored', () => {
   });
 });
 
+test('a retired rule address is dropped with a WARN; an unknown one is still refused', () => {
+  // `comms 5` (Mark the Ask) merged into comms 1 on 2026-11-08. An install that excluded it
+  // replays `--exclude-rules comms.5` on every rebuild, so refusing it would break that rebuild
+  // forever. It warns, excludes nothing, and the live exclusion beside it still binds. An
+  // address that never named a rule (`comms 9`) is a typo, and stays a refusal.
+  withDir((d) => {
+    const ok = driver(d, ['--emit', 'files', '--theme', 'neutral', '--out', path.join(d, 'b'),
+      '--exclude-rules', 'comms 1,comms 5']);
+    assert.equal(ok.status, 0, (ok.stderr || '').slice(-1200));
+    assert.match(ok.stderr, /--exclude-rules: 'comms 5' was retired \(merged into comms 1, Codes and Markers\)/);
+    assert.match(agentText(path.join(d, 'b')), /^Excluded rules: comms 1$/m,
+      'the marker did not carry exactly the live exclusion');
+    const bad = driver(d, ['--emit', 'files', '--theme', 'neutral', '--out', path.join(d, 'c'),
+      '--exclude-rules', 'comms 9']);
+    assert.equal(bad.status, 2);
+    assert.match(bad.stderr, /invalid choice: 'comms 9'/);
+  });
+});
+
 test('a plain files emit ships neither upstreams.json nor licenses/', () => {
   // Both are provenance the build reads, not product an agent reads: `.json` and `.txt` are in
   // TEXT_SUFFIXES, so without the skip set in `renderAll` both would ride into every bundle.

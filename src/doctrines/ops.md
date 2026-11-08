@@ -54,9 +54,7 @@ applied, yet did not endure. Before altering any configuration, ask which layer 
 authoritative and write there alone. Persistence lives at the source, not the
 surface.
 <!-- LEAN:else -->
-Where a system renders live state from a source layer — a database the UI re-reads, a
-compose file regenerated from stored config — edit the source, never the rendered artifact.
-Before altering any configuration, ask which layer is authoritative and write there alone.
+Edit the authoritative layer, never the rendered artifact.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:complete-the-teardown}} Complete the Teardown
@@ -85,9 +83,7 @@ citing it, this governs what to record in the first place: not the volatile valu
 but the means to derive it — the probe, the query, the live computation. Record
 how to check, and check at the hour of need.
 <!-- LEAN:else -->
-A fact that renews itself — a rotating certificate — is never inscribed as a snapshot.
-Record not the volatile value but the means to derive it — the probe, the query — and check
-at the hour of need ({{LAW:verify-before-asserting}}).
+Record how to derive a volatile fact, never its value.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:restart-is-not-reload}} Restart Is Not Reload
@@ -103,10 +99,7 @@ recreate, down-and-up, reload, or full restart — perform it, then confirm the 
 value in the *running* system, not the file ({{LAW:verify-before-asserting}}). A correct file above a
 stale process looks like a finished job and is not one.
 <!-- LEAN:else -->
-A running process holds the config it read at start. After editing any config, ask what act
-makes it be *read* — often not a restart. Establish which — recreate, down-and-up, reload,
-full restart — perform it, then confirm the new value in the *running* system, not the file
-({{LAW:verify-before-asserting}}).
+After a config edit, confirm the new value in the running process, not the file.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:serialize-against-a-rationed-resource}} Serialize Against a Rationed Resource
@@ -124,9 +117,5 @@ unchanged on retry is a hard limit, not transient backpressure: stop and report 
 batches independent calls, this names the calls that are not independent — they draw on
 one allowance. A smaller complete sample beats a larger one gathered through failures.
 <!-- LEAN:else -->
-A shared resource that rations its answers — a rate-limited API, a quota, a single
-gateway — is called in sequence, never fanned out. Before any parallelism, divide the
-quota by its callers; if one share cannot finish the work, do not parallelise. Back off on
-each refusal, within a retry cap set first. A refusal repeating unchanged is a hard limit:
-stop and report it ({{LAW:surface-failures}}), never re-send the batch.
+Call a rationed resource in sequence; a repeated refusal is a hard limit — stop and report.
 <!-- LEAN:end -->

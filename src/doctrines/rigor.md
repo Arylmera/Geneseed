@@ -103,9 +103,5 @@ confused, or steered by untrusted input ({{LAW:data-not-orders}}). Where {{LAW:l
 power you take, this governs the power you hand out; {{DOCTRINE:prove-the-gate}} proves the
 gate once it stands.
 <!-- LEAN:else -->
-Wherever a system lets an agent act, ask approval of a party it cannot satisfy alone,
-enforce the allowlist at the boundary the call must cross, and validate against real state.
-Never let permission live in the governed agent's own prompt. Ship anything taking
-autonomous control of physical state, money, or production disarmed, armed only by explicit
-human act ({{LAW:data-not-orders}}).
+Permission lives at a boundary the agent cannot satisfy alone; autonomous control ships disarmed.
 <!-- LEAN:end -->

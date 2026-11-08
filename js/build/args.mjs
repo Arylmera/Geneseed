@@ -12,7 +12,7 @@ import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
   CONFIG, discoverNames, GATE_SWITCHES, PACK_ORDER, SRC, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits,
-  resolveSkillNames, skillAliases,
+  resolveSkillNames, retiredRuleAddresses, skillAliases,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
@@ -67,8 +67,12 @@ export function configDefaults() {
           // as a flag, and `parseExcludeRules` dies on it — every rebuild of that install,
           // forever. Unknown ids are dropped with a WARN; the known ones still bind.
           const known = knownRuleIds();
+          const retired = retiredRuleAddresses(known);
           const ids = data.excludeRules.map((x) => x.trim().replace(/[ \t]+/, '.'));
-          const unknown = ids.filter((id) => !known.includes(id));
+          for (const id of ids.filter((x) => retired.has(x))) {
+            warnRetiredRule(id, retired, `${path.basename(CONFIG)} "excludeRules"`);
+          }
+          const unknown = ids.filter((id) => !known.includes(id) && !retired.has(id));
           if (unknown.length) {
             process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" names `
               + `unknown rule(s) ${unknown.map((id) => `'${id.replace('.', ' ')}'`).join(', ')}`
@@ -174,9 +178,11 @@ function parseExcludeRules(value) {
   const s = value.trim();
   if (s === 'none' || s === '') return [];
   const known = knownRuleIds();
+  const retired = retiredRuleAddresses(known);
   const out = [];
   for (const raw of s.split(',').map((x) => x.trim()).filter(Boolean)) {
     const id = raw.replace(/[ \t]+/, '.');
+    if (retired.has(id)) { warnRetiredRule(id, retired, '--exclude-rules'); continue; }
     if (!known.includes(id)) {
       die(2, `argument --exclude-rules: invalid choice: '${raw}' (choose from `
         + `${known.map((c) => `'${c.replace('.', ' ')}'`).join(', ')}, or 'none')`);
@@ -184,6 +190,12 @@ function parseExcludeRules(value) {
     out.push(id);
   }
   return [...new Set(out)].sort();
+}
+
+/** One stderr line for a retired address: it excludes nothing now, and the build goes on. */
+function warnRetiredRule(id, retired, where) {
+  process.stderr.write(`[geneseed] WARN: ${where}: '${id.replace('.', ' ')}' was retired `
+    + `(${retired.get(id)}) — ignoring it.\n`);
 }
 
 /**

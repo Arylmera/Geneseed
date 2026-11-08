@@ -1399,8 +1399,8 @@ const plant = (text, find, put) => {
 test('every rule carries one summary, and the reader hands back the shipped text', () => {
   assert.deepEqual(ruleSummaryProblems(), []);
   const said = ruleSummaries();
-  // 9 laws and 31 doctrine rules — 31 since comms 5 (mark the ask) was appended on 2026-10-23.
-  assert.equal(said.size, 40, `${said.size} summaries read — expected 40`);
+  // 9 laws and 30 doctrine rules — 30 since comms 5 (mark the ask) merged into comms 1 on 2026-11-08.
+  assert.equal(said.size, 39, `${said.size} summaries read — expected 39`);
   assert.equal(said.get('sealed-secrets'), 'Secrets never touch tracked files; only .env or a manager.');
   // ⚠ THE EMITS MUST NOT CHANGE. The strip takes the whole line, newline included, so the heading
   // still sits directly on its LEAN block — a leftover blank line would move every install's bytes.
@@ -1464,7 +1464,7 @@ test('the summary gate ends a rule at any heading, not only a rule heading', () 
 test('the summary gate flags a doctrine summary moved off its heading', () => {
   // `ruleSummaries` reads only the line under the heading, so one line lower is a blank Principle.
   const text = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
-  const line = '<!-- note: summary: If it repeats, make it a script or skill; reuse first. -->\n';
+  const line = '<!-- note: summary: If it repeats, automate it: script, skill or code, by the task. -->\n';
   const moved = plant(text, `${line}<!-- LEAN:begin -->\n`, `<!-- LEAN:begin -->\n${line}`);
   const problems = withFault({ [CRAFT_MD]: moved }, (root) => gate(root, 'm.ruleSummaryProblems()'));
   assert.ok(problems.some((x) => x.includes("rule craft 1 'automate-repetition' summary is not "

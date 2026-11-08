@@ -1,7 +1,7 @@
 **{{PACK_CRAFT}}** — how code is written.
 
 ### {{DOCTRINE:automate-repetition}} Automate Repetition
-<!-- note: summary: If it repeats, make it a script or skill; reuse first. -->
+<!-- note: summary: If it repeats, automate it: script, skill or code, by the task. -->
 <!-- LEAN:begin -->
 When an action repeats, automate it — and choose the vessel by the nature of the task,
 not by how many similar steps one session needs. Do not
@@ -14,18 +14,13 @@ perform by hand what the machine can perform a thousand times.
 - a recurring, deterministic, exact operation (parsing, counting, API calls, anything
   run unattended or where a model would err) → kept, versioned code.
 Markdown is the default for what recurs; code is kept only where exactness or unattended
-automation demands it. When you build a {{SKILL}}, make it a vessel for one coherent
-domain — not a single command and not a grab-bag: seek an existing {{SKILL}} whose domain
-already covers the need and extend it before forging a new one, and name {{SKILLS}} by
-domain. Reuse before creating.
+automation demands it.
 <!-- LEAN:else -->
 When an action repeats, automate it — choosing the vessel by the task, not the step
 count: a one-off batch gets a throwaway {{SCRIPT}} outside the repository, never kept; a
 recurring judgement procedure gets a markdown rule in the domain {{SKILL}} or {{AGENT}}
 spec; a recurring exact or unattended operation gets kept, versioned code. Markdown is
-the default for what recurs. Before forging a new {{SKILL}}, seek an existing one whose
-domain covers the need and extend it; build each {{SKILL}} for one coherent domain — not
-a single command, not a grab-bag — and name {{SKILLS}} by domain. Reuse before creating.
+the default for what recurs.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:english-configuration}} English Configuration
@@ -58,11 +53,9 @@ drifts from the code is a defect, not a deferred task.
 <!-- LEAN:begin -->
 Before adding a file, module, function, or abstraction, confirm an equivalent
 does not already exist; prefer extending what is there. Duplication is a defect.
-({{DOCTRINE:automate-repetition}} applies this to {{SKILLS}}; here it binds all code.)
 <!-- LEAN:else -->
 Before adding a file, module, function, or abstraction, confirm an equivalent does not
 already exist; prefer extending what is there. Duplication is a defect.
-({{DOCTRINE:automate-repetition}} applies this to {{SKILLS}}; here it binds all code.)
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:respect-conventions}} Respect Conventions

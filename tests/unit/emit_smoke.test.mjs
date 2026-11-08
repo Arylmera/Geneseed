@@ -276,6 +276,19 @@ const FOOTPRINTS = ['full', 'lean'];
  * (D6), and is 128 chars lighter than before. Measured `files` carrier before (after the adhd
  * raise): full 66_205, lean 41_385. After: full 66_432, lean 41_612. Each ceiling raised by
  * exactly the overrun (227 / 227), not rounded.
+ *
+ * NOT LOWERED 2026-11-08, O1 (doctrine merges): comms 5 (mark the ask) merged into comms 1
+ * (Codes and Markers) and its id retired; craft 1 and craft 4 lost the sentences that repeated
+ * each other; section 5 points to Persist Insight instead of restating it. Measured `files`
+ * carrier before, at 04b3b435: full 66_356, lean 41_591. After: full 65_741, lean 40_663. Both
+ * ceilings stay where they are until O2 (one-line lean halves) lands, then lean is re-measured.
+ *
+ * LEAN LOWERED 2026-11-08, FULL UNTOUCHED, O2 (situational rules): ops 3, ops 5, ops 6, ops 7
+ * and rigor 5 keep one trigger sentence in their LEAN:else half; the full halves did not change.
+ * Measured over all nine modes: lean largest `files` 39_521, smallest `opencode` 30_316 (above
+ * the half-ceiling floor); full largest `files` 65_818, smallest `opencode` 56_595. `lean`
+ * moves 41_612 -> 40_312, the measured maximum plus 2 % (user decision C2), rounded up. The
+ * figures include the review fixes (section 5 keeps one clause on how memory is written).
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -547,8 +560,8 @@ test('the carrier carries every doctrine rule and every ontology section', () =>
       rules.push({ pack, n: String(i + 1), key: idKey('DOC', m[1]) });
     });
   }
-  assert.equal(rules.length, 31,
-    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 31 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09; comms 4 joined 2026-10-22; comms 5 joined 2026-10-23); either the `
+  assert.equal(rules.length, 30,
+    `${rules.length} doctrine rules parsed out of src/doctrines/ — expected 30 (rigor 5 is retired Law IX; one writer per file joined process 2026-09; craft 7 and ops 7 joined 2026-09-23; the comms pack took process 7 as comms 1 and added comms 2 on 2026-09-27; comms 3 joined 2026-10-09; comms 4 joined 2026-10-22; comms 5 joined 2026-10-23 and merged into comms 1 on 2026-11-08); either the `
     + 'declaration shape moved and this test asserts almost nothing, or a pack changed size without '
     + 'the rest of the tree being told');
   // The ontology source carries every heading TWICE since the LEAN block landed — once in
@@ -629,14 +642,14 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (33_102 / 20_692) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 56_926 / 32_124 on 2026-10-29) and far above any plausible stub.
+      // the ceiling (33_216 / 20_156) is below the SMALLEST measured carrier (`opencode`,
+      // 56_595 / 30_316 on 2026-11-08) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
-      // Re-derive both whenever the constant above moves; both moved on 2026-10-29 and these
+      // Re-derive both whenever the constant above moves; lean moved on 2026-11-08 and these
       // figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `

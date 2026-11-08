@@ -327,7 +327,9 @@ render — no citation moves, because none names a number. Then:
 1. `RETIRED_RULE_IDS` in `js/build/source.mjs` — add the id with what it was and where its text
    went. `constitutionProblems` refuses a retired id declared again, so an id that meant one rule in
    someone's notes can never come back meaning another. `liveAs` names the one tier that may still
-   declare it (Law IX's `external-gate` lives on as a rigor rule).
+   declare it (Law IX's `external-gate` lives on as a rigor rule). For a doctrine rule, write `was`
+   as its address, `<pack> <n>` (`mark-the-ask` was `comms 5`): `retiredRuleAddresses` reads it, so
+   an install that still excludes that address gets a WARN and a rebuild, not a refusal.
 2. Every citation of the removed id — the doctor names each one; point it at the rule that now
    carries the text.
 3. Its `LEX_<ID>`/`DOC_<ID>` key in all fifteen theme files (the equality arm names each).
