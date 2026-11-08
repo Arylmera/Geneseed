@@ -38,6 +38,9 @@ import { pathToFileURL } from 'node:url';
 import { HOME_VARS, RELOCATION_VARS, cellEnv, homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
 import { makeLossWorkspace } from '../helpers/loss_repos.mjs';
+import { claudeHookGroups } from '../../js/hosts/settings.mjs';
+import { doctrinesOfDir, excludedRulesOfDir } from '../../js/hosts/installs.mjs';
+import { PACK_ORDER } from '../../js/build/source.mjs';
 
 // ---- the fixture: every path lives in one sandbox ------------------------------------------
 const sb = makeSandbox('gsverdict-');
@@ -147,6 +150,19 @@ const guardModule = (await import(pathToFileURL(path.resolve('adapters/opencode/
 const { GeneseedGuard } = await import(pathToFileURL(path.resolve('adapters/opencode/plugins/geneseed-guard.js')).href);
 
 const SECRET = 'AKIAIOSFODNN7EXAMPLE';   // AWS's published example key: shaped like a credential, grants nothing
+// The builds the exclusion rows run under, and the carrier each one renders: the two marker lines,
+// spelled as js/build/render.mjs writes them (a test below reads them back with the build's own readers).
+const BUILDS = {
+  p1: { excluded: ['process.1'] },
+  o2: { excluded: ['ops.2'] },
+  packs: { doctrines: ['craft', 'rigor', 'comms'] },
+};
+const carrierDir = (build) => path.join(sb.path, 'carriers', build);
+for (const [name, { doctrines = PACK_ORDER, excluded = [] }] of Object.entries(BUILDS)) {
+  fs.mkdirSync(carrierDir(name), { recursive: true });
+  fs.writeFileSync(path.join(carrierDir(name), 'AGENT.md'), `# AGENT.md\n\nActive packs: ${doctrines.join(', ')}\n`
+    + (excluded.length ? `Excluded rules: ${excluded.map((id) => id.replace('.', ' ')).join(', ')}\n` : ''));
+}
 
 // ---- the table -----------------------------------------------------------------------------
 // kind: `shell` (a command), `write` (a path and content), `edit` (a path, `old` and `now`), `read` (a path), `raw` (stdin as is).
@@ -231,6 +247,18 @@ const ROWS = [
   { id: 'rigor-5 hook settings after an "always"', kind: 'write', path: () => path.join(proj, '.claude', 'settings.json'), content: '{"theme":"x"}',
     v1as: 'always', rule: 'Once the user answered "always" to an edit prompt (OpenCode V1), the host ask on hook settings is gone, so the guard refuses what it would otherwise pass.',
     claude: 'ask', bob: 'pass', v1: 'deny', v2: 'ask' },
+  // The guard reads `<cfg>/AGENT.md` before a project's own carrier, so a file planted there would set
+  // its gate markers and rule exclusions: it is the guard's gate configuration. Here `<cfg>` is the
+  // plugin dir's parent, adapters/opencode. Only OpenCode reads it, so the hooks pass it.
+  { id: 'rigor-5 the guard\'s own-dir AGENT.md, by tool', kind: 'write', path: () => path.resolve('adapters', 'opencode', 'AGENT.md'), content: 'Excluded rules: process 1',
+    rule: 'OpenCode asks natively (the emit writes a permission.edit key, V2 raises the ask); the hooks never read it.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'ask' },
+  { id: 'rigor-5 the guard\'s own-dir AGENT.md after an "always"', kind: 'write', path: () => path.resolve('adapters', 'opencode', 'AGENT.md'), content: 'Excluded rules: process 1',
+    v1as: 'always', rule: 'Once the user answered "always" to an edit prompt (OpenCode V1), the guard refuses it, as it refuses the other gate files.',
+    claude: 'pass', bob: 'pass', v1: 'deny', v2: 'ask' },
+  { id: 'rigor-5 the guard\'s own-dir AGENT.md, by shell', kind: 'shell', cmd: () => `echo x > "${path.resolve('adapters', 'opencode', 'AGENT.md')}"`,
+    rule: 'A shell write to it reaches no edit prompt, so the guard refuses it on both OpenCode versions.',
+    claude: 'pass', bob: 'pass', v1: 'deny', v2: 'deny' },
   { id: 'rigor-5 NTFS stream', kind: 'write', path: () => path.join(proj, 'src', 'a.js:stream'), content: 'x',
     rule: 'A stream name writes through to its file on Windows, where the guard refuses it; elsewhere a colon is an ordinary file name. The hooks fold the stream and judge the file, an ordinary source file.',
     claude: 'pass', bob: 'pass', v1: process.platform === 'win32' ? 'deny' : 'pass', v2: process.platform === 'win32' ? 'deny' : 'pass' },
@@ -390,6 +418,52 @@ const ROWS = [
   { id: 'process-5 with consent off', kind: 'shell', cmd: () => 'git commit -m x', extra: ['--no-consent'],
     rule: '--no-consent drops the commit and push ask on the hooks.',
     claude: 'pass', bob: 'pass', v1: null, v2: null },
+  // ---- a rule excluded drops its hook (owner decision, 2026-11-08), each row beside its included
+  // twin above. `build` names the install's selection: the hook argv is what `claudeHookGroups` emits
+  // for it, and the guard reads the same selection off a carrier's `Active packs:` / `Excluded rules:`
+  // lines (`BUILDS`), so removing the derivation, the flag or the guard's reading turns a row red.
+  { id: 'process-1 excluded: rule store, by tool', build: 'p1', kind: 'write', path: () => path.join(sb.path, 'user-rules.md'), content: 'a rule',
+    rule: 'With process 1 excluded a write to a rule store is ordinary work: every host passes it.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 excluded: rule store, by shell', build: 'p1', kind: 'shell', cmd: () => `echo x > "${path.join(sb.path, 'user-rules.md')}"`,
+    rule: 'The shell twin passes too, with no warning on Bob.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 excluded: rule draft, by shell', build: 'p1', kind: 'shell', cmd: () => `echo x > "${path.join(sb.path, 'user-rules.draft.md')}"`,
+    rule: 'The rule draft follows the rule store: a shell write to it passes on every host.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 excluded: a memory file hard-linked to a rule store, by tool', build: 'p1', kind: 'write', path: () => HARD, content: 'a rule',
+    rule: 'The hard-link check goes with the rule: every host passes the write.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 excluded: a rule store through a non-edit tool', build: 'p1', kind: 'tool', tool: 'mcp_notes_store', args: () => ({ target: path.join(sb.path, 'user-rules.md') }),
+    rule: 'A foreign tool naming a rule store is no longer refused. Guard only.',
+    claude: null, bob: null, v1: 'pass', v2: 'pass' },
+  { id: 'process-1 excluded: a tool whose arguments nest too deep', build: 'p1', kind: 'tool', tool: 'mcp_notes_store', args: () => (() => { let o = { target: 'x' }; for (let i = 0; i < 40; i += 1) o = { nest: o }; return o; })(),
+    rule: 'The depth bound guards only the rule-store search, so it stands down with the rule. Guard only.',
+    claude: null, bob: null, v1: 'pass', v2: 'pass' },
+  { id: 'process-1 excluded: a root scan still', build: 'p1', kind: 'shell', cmd: () => 'find / -name x',
+    rule: 'Excluding process 1 leaves Commands Must Return armed.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'process-1 excluded: a secret still', build: 'p1', kind: 'write', path: () => path.join(proj, 'src', 'a.js'), content: `k = "${SECRET}"`,
+    rule: 'Excluding process 1 leaves Sealed Secrets armed.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'process-1 excluded: a protected check still', build: 'p1', kind: 'write', path: () => path.join(proj, 'ci.yml'), content: 'on: push',
+    rule: 'Excluding process 1 leaves External Gate armed.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'process-1 pack off: rule store, by tool', build: 'packs', kind: 'write', path: () => path.join(sb.path, 'user-rules.md'), content: 'a rule',
+    rule: 'With the whole process pack off, as for process 5, the rule-store check goes too: every host passes.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'ops-2 excluded: root scan', build: 'o2', kind: 'shell', cmd: () => 'find / -name x',
+    rule: 'With ops 2 excluded a recursive scan of a filesystem root is the host\'s business: every host passes it.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'ops-2 excluded: a catastrophic command still', build: 'o2', kind: 'shell', cmd: () => 'rm -rf /',
+    rule: 'Excluding ops 2 leaves Law IV armed.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'deny' },
+  { id: 'ops-2 excluded: rule store still', build: 'o2', kind: 'write', path: () => path.join(sb.path, 'user-rules.md'), content: 'a rule',
+    rule: 'Excluding ops 2 leaves Persist Insight armed.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'ask' },
+  { id: 'ops-2 pack off: root scan', build: 'packs', kind: 'shell', cmd: () => 'find / -name x',
+    rule: 'With the whole ops pack off the root-scan check goes too: every host passes.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
   // ---- the ownership first-write gate
   { id: 'ownership first write', kind: 'write', session: true, path: () => path.join(app, 'src', 'x.js'), content: 'x',
     rule: 'The first write of a session into an application repo with no ownership decision is DENIED (an instruction to the agent, not a prompt); Bob blocks (exit 2) and the guard refuses.',
@@ -541,9 +615,19 @@ function verdictOf(r, what) {
   return r.stderr.includes('[geneseed]') ? 'warn' : 'pass';
 }
 
+// The switches the emit gives `verb` on `host` for a row's `build`, read off the real hook command.
+function derivedFlags(row, host, verb) {
+  if (!row.build) return [];
+  const { doctrines = null, excluded = [] } = BUILDS[row.build];
+  const cmds = Object.values(claudeHookGroups(install, { runner: 'node', entry: 'x' }, doctrines, excluded, host))
+    .flatMap((groups) => groups.flatMap((g) => g.hooks.map((h) => h.command)));
+  return cmds.find((c) => c.includes(` ${verb} --root `)).split(/\s+/).filter((t) => /^--no-/.test(t));
+}
+
 function runHook(row, host) {
   const verb = host === 'bob' ? 'tool-gate' : row.kind === 'shell' ? 'git-gate' : 'rule-gate';
-  const argv = [verb, '--root', install, ...(host === 'bob' ? ['--host', 'bob'] : host === 'openclaude' ? ['--host', 'openclaude'] : []), ...(row.extra || [])];
+  const argv = [verb, '--root', install, ...(host === 'bob' ? ['--host', 'bob'] : host === 'openclaude' ? ['--host', 'openclaude'] : []),
+    ...(row.extra || []), ...derivedFlags(row, host, verb)];
   const env = row.ws ? { ...base, ...Object.fromEntries(Object.entries(ws.env).filter(([k]) => k.startsWith('GIT_'))) } : base;
   const r = spawnHook(argv, payloadFor(row, host), { cwd: cwdOf(row), env });
   return verdictOf(r, `${row.id} [${host}]`);
@@ -558,16 +642,33 @@ async function withGitEnv(row, fn) {
   try { return await fn(); } finally { for (const [k, v] of saved) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
 }
 
+// A row with a `build` runs a guard loaded from that build's carrier. The guard reads it once at
+// import, so each carrier is its own module instance (a query string), with $GENESEED_HARNESS set
+// only for the import.
+const guardUrl = pathToFileURL(path.resolve('adapters/opencode/plugins/geneseed-guard.js')).href;
+const guards = new Map();
+async function guardOf(build) {
+  if (!build) return { GeneseedGuard, default: guardModule };
+  if (!guards.has(build)) {
+    const saved = process.env.GENESEED_HARNESS;
+    process.env.GENESEED_HARNESS = carrierDir(build);
+    try { guards.set(build, await import(`${guardUrl}?build=${build}`)); } finally {
+      if (saved === undefined) delete process.env.GENESEED_HARNESS; else process.env.GENESEED_HARNESS = saved;
+    }
+  }
+  return guards.get(build);
+}
+
 const v1Guards = new Map();
 const v2Guards = new Map();
 // `variant`: plain (no host prompt known), `always` (the user answered "always" to an edit prompt, so
 // the host's ask is gone) or `prompted` (the merged config asks for every edit, so the host will).
-async function v1Hook(dir, variant = 'plain') {
-  const key = `${dir}|${variant}`;
+async function v1Hook(dir, variant = 'plain', build = '') {
+  const key = `${dir}|${variant}|${build}`;
   if (!v1Guards.has(key)) {
     const client = variant === 'plain' ? undefined
       : { config: { get: async () => ({ data: { permission: { edit: { '*': 'ask' } } } }) }, app: { agents: async () => ({ data: [] }) } };
-    const g = await GeneseedGuard({ directory: dir, worktree: dir, client });
+    const g = await (await guardOf(build)).GeneseedGuard({ directory: dir, worktree: dir, client });
     if (variant === 'always') {
       await g.event({ event: { type: 'permission.asked', properties: { id: 'p', permission: 'edit' } } });
       await g.event({ event: { type: 'permission.replied', properties: { requestID: 'p', reply: 'always' } } });
@@ -576,8 +677,9 @@ async function v1Hook(dir, variant = 'plain') {
   }
   return v1Guards.get(key);
 }
-async function v2Hooks(dir) {
-  if (!v2Guards.has(dir)) {
+async function v2Hooks(dir, build = '') {
+  const key = `${dir}|${build}`;
+  if (!v2Guards.has(key)) {
     const hooks = { tool: {}, permission: {} };
     const ctx = {
       location: { directory: dir, project: { directory: dir } },
@@ -585,10 +687,10 @@ async function v2Hooks(dir) {
       tool: { hook: async (n, cb) => { hooks.tool[n] = cb; return { dispose: async () => {} }; } },
       permission: { hook: async (n, cb) => { hooks.permission[n] = cb; return { dispose: async () => {} }; } },
     };
-    await guardModule.setup(ctx);
-    v2Guards.set(dir, hooks);
+    await (await guardOf(build)).default.setup(ctx);
+    v2Guards.set(key, hooks);
   }
-  return v2Guards.get(dir);
+  return v2Guards.get(key);
 }
 
 const guardTool = (row) => (row.kind === 'tool' ? row.tool : row.kind === 'edit' ? 'edit' : row.ps ? 'powershell' : row.kind === 'shell' ? 'bash' : row.kind === 'read' ? 'read' : 'write');
@@ -596,7 +698,7 @@ const guardArgs = (row) => (row.kind === 'tool' ? row.args() : row.kind === 'edi
   : row.kind === 'read' ? { filePath: row.path() } : { filePath: row.path(), content: row.content });
 
 async function runGuardV1(row) {
-  const hook = await v1Hook(cwdOf(row), row.v1as);
+  const hook = await v1Hook(cwdOf(row), row.v1as, row.build);
   return withGitEnv(row, async () => {
     try {
       await hook({ tool: guardTool(row), args: guardArgs(row), sessionID: randomUUID() }, {});
@@ -609,7 +711,7 @@ async function runGuardV1(row) {
 }
 
 async function runGuardV2(row) {
-  const hooks = await v2Hooks(cwdOf(row));
+  const hooks = await v2Hooks(cwdOf(row), row.build);
   return withGitEnv(row, async () => {
     const id = randomUUID();
     const event = { tool: guardTool(row), id, sessionID: randomUUID(), input: guardArgs(row) };
@@ -633,6 +735,14 @@ test('the table covers every verdict and every host column', () => {
   for (const want of ['claude:ask', 'claude:deny', 'claude:pass', 'claude:note', 'bob:exit2', 'bob:warn', 'bob:pass',
     'v1:deny', 'v1:pass', 'v2:deny', 'v2:ask', 'v2:pass']) assert.ok(seen.has(want), `no row expects ${want}`);
   assert.equal(new Set(ROWS.map((r) => r.id)).size, ROWS.length, 'row ids are unique');
+});
+
+test('each exclusion build\'s carrier reads back as that build', () => {
+  // The guard columns read these carriers, so the build's own readers must agree with them.
+  for (const [name, { doctrines = PACK_ORDER, excluded = [] }] of Object.entries(BUILDS)) {
+    assert.deepEqual(doctrinesOfDir(carrierDir(name)), doctrines, name);
+    assert.deepEqual(excludedRulesOfDir(carrierDir(name)), excluded, name);
+  }
 });
 
 for (const row of ROWS) {

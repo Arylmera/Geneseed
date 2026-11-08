@@ -17,7 +17,8 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 - on **PreToolUse** (matcher `Bash|PowerShell`), runs `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
-  wired with `--no-consent`: commits and pushes pass without asking, while the
+  wired with `--no-consent`: commits and pushes pass without asking (excluding process 1 or ops 2,
+  or their pack, adds `--no-rule-store` / `--no-root-scan` the same way), while the
   Law IV refusals (asked only on real data loss: a force-push to `main`, a `reset --hard`
   that abandons unpushed commits, an `rm` git cannot undo) stay in every build unless the install is
   built `--no-deletion-gate`, which appends that flag and stands the real-loss check down

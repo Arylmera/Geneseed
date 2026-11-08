@@ -79,7 +79,10 @@ const VERBS = {
     load: gates,
     fn: 'cmdGitGate',
     flags: HOSTED,
-    switches: { '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate', '--no-external-gate': 'noExternalGate' },
+    switches: {
+      '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate', '--no-external-gate': 'noExternalGate',
+      '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
+    },
   },
   'rule-gate': {
     load: gates,
@@ -87,7 +90,7 @@ const VERBS = {
     flags: HOSTED,
     switches: {
       '--no-secrets-gate': 'noSecretsGate', '--no-ownership-gate': 'noOwnershipGate',
-      '--no-external-gate': 'noExternalGate', '--no-test-note': 'noTestNote',
+      '--no-external-gate': 'noExternalGate', '--no-test-note': 'noTestNote', '--no-rule-store': 'noRuleStore',
     },
   },
   'tool-gate': {
@@ -97,7 +100,7 @@ const VERBS = {
     switches: {
       '--no-deletion-gate': 'noDeletionGate', '--no-secrets-gate': 'noSecretsGate',
       '--no-ownership-gate': 'noOwnershipGate', '--no-external-gate': 'noExternalGate',
-      '--no-test-note': 'noTestNote',
+      '--no-test-note': 'noTestNote', '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
     },
   },
   learn: {
@@ -105,7 +108,10 @@ const VERBS = {
     fn: 'cmdLearn',
     // `--host` only keys the global stand-down's marker (js/hosts/hosts.mjs); learn has no dialect.
     flags: { '--memory': 'memory', '--host': 'host' },
-    switches: { '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate', '--no-test-note': 'noTestNote' },
+    switches: {
+      '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate', '--no-test-note': 'noTestNote',
+      '--no-rule-store': 'noRuleStore',
+    },
     positional: 'file',
   },
   // UserPromptSubmit and SessionEnd: no verb runs there, and the activity view needs both.
@@ -171,7 +177,7 @@ function parse(spec, argv) {
   const args = {
     root: null, host: null, memory: null, consolidate: false, noConsent: false,
     noDeletionGate: false, noSecretsGate: false, noDoneGate: false, noOwnershipGate: false,
-    noExternalGate: false, noTestNote: false, file: null,
+    noExternalGate: false, noTestNote: false, noRuleStore: false, noRootScan: false, file: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];

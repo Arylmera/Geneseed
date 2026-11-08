@@ -14,6 +14,7 @@ import {
   GATE_HOOK,
   GATE_SWITCH,
   ALWAYS_ASKS,
+  WITH_TEXT,
   PRECEDENCE,
   PRECEDENCE_INFORM,
   enforcedBy,
@@ -405,6 +406,11 @@ function LawsOf({
         'with text',
         `No switch of its own: excluding ${r.name} drops its commit and push ask in the same rebuild (Bob still logs its warning).`,
       )
+    if (WITH_TEXT.has(r.addr))
+      return locked(
+        'with text',
+        `No switch of its own: excluding ${r.name}, or its pack, drops its hook in the same rebuild.`,
+      )
     if (ALWAYS_ASKS.has(r.addr))
       return locked(
         'always on',
@@ -415,7 +421,7 @@ function LawsOf({
 
   // Gated: a hook enforces it now. A switched-off gate reads "Gate off", so it is not counted. A
   // rule with a gate switch follows that switch alone: excluding rigor 5 drops its text and the
-  // hook still asks. Any other excluded doctrine rule is left out (process 5's hook goes with it).
+  // hook still asks. Any other excluded doctrine rule is left out (a WITH_TEXT hook goes with it).
   // Changed: a doctrine rule whose staged switch differs from the install; a law never is, its
   // gate switch rebuilds at once.
   const isChanged = (r) =>

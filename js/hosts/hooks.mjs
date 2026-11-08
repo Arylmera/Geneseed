@@ -826,14 +826,16 @@ function gitDecide(args, payload) {
       return ask(args, 'git-gate', 'law-4', facts.id, { ...facts, says });
     }
   }
-  // Before `--no-consent`: that flag drops the process pack's rule, not this one.
-  const scan = rootScan(command);
+  // Before `--no-consent`: that flag drops process 5, not this one. `--no-root-scan`: ops 2 is
+  // excluded (or its pack off), so its check goes with its text (owner decision, 2026-11-08).
+  const scan = args.noRootScan ? null : rootScan(command);
   if (scan) return ask(args, 'git-gate', 'ops-2', 'root-scan', { name: scan, says });
   // Also before `--no-consent`: rigor-5 is no part of the process pack. On Bob a hook-settings
   // target cannot be replayed from a command (`bobSettingsChange`), so it blocks.
   const shellWrite = shellWriteReason(args, command, payload);
   if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite.id, shellWrite);
-  const shellStore = shellStoreReason(args, command, payload);
+  // `--no-rule-store`: process 1 is excluded (or its pack off), so neither the ask nor Bob's warning runs.
+  const shellStore = args.noRuleStore ? null : shellStoreReason(args, command, payload);
   const storeFacts = { name: shellStore, shell: true };
   if (shellStore && HOST !== 'bob') return ask(args, 'git-gate', 'process-1', 'store', storeFacts);
   if (shellStore) err(`[geneseed] ${gateSafe('store', 'warned', storeFacts)}\n`);
@@ -1277,8 +1279,9 @@ function ruleDecide(args, payload) {
       ?? (!args.noExternalGate && carrierBlockChange(q, payload) ? { id: 'config', name: repoRel(q, payload), bobWhy: '' } : null);
     if (hit) return ask(args, 'rule-gate', 'rigor-5', hit.id, { ...hit, pairs: askPairs(payload, q) });
   }
-  // A read on Bob names the store too, and that is no write to refuse.
-  const stored = bobRead ? null : paths.find((q) => ruleGateTarget(q, args.root, payload && payload.cwd));
+  // A read on Bob names the store too, and that is no write to refuse. `--no-rule-store`: process 1
+  // is excluded (or its pack off), so a rule write is ordinary work and the gates below still judge it.
+  const stored = bobRead || args.noRuleStore ? null : paths.find((q) => ruleGateTarget(q, args.root, payload && payload.cwd));
   const p = paths[0];
   if (!stored) {
     // The ownership first-write gate (./ownership-gate.mjs), last: every rule above outranks it.

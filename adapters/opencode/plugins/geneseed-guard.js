@@ -167,6 +167,25 @@ const OWNERSHIP_GATE_OFF = gateOff("Ownership gate")
 // `--no-external-gate`: `protectedCheck`, `gateConfig` and `nativeAskFile` below all answer no, so the
 // refusals and V2's `evaluate` ask stand down. The static `permission.edit` keys are host config: they stay.
 const EXTERNAL_GATE_OFF = gateOff("External gate")
+// A rule whose hook goes with its text (owner decision, 2026-11-08), read off the same carrier's
+// `Active packs:` and `Excluded rules:` lines, the state the hook hosts get as `--no-rule-store` /
+// `--no-root-scan` (`ruleOn`, js/hosts/settings.mjs). Twin of `doctrinesOfDir` / `excludedRulesOfDir`
+// (js/hosts/installs.mjs), fail closed both ways: a missing or unreadable pack line is every pack, a
+// malformed exclusion line excludes nothing. `PACKS` is js/build/source.mjs's PACK_ORDER.
+const PACKS = ["craft", "rigor", "ops", "process", "comms"]
+function ruleOff(pack, n) {
+  const packs = /^Active packs:[ \t]*(.+?)[ \t]*$/m.exec(CARRIER_TEXT)?.[1]?.trim()
+  const named = packs === "none" ? [] : packs?.split(",").map((s) => s.trim())
+  if (named && named.every((p) => PACKS.includes(p)) && !named.includes(pack)) return true
+  const ex = /^Excluded rules:[ \t]*(.+?)[ \t]*$/m.exec(CARRIER_TEXT)?.[1]?.split(",").map((s) => s.trim()) ?? []
+  return ex.every((e) => /^[a-z]+[ \t]+\d+$/.test(e) && PACKS.includes(e.split(/[ \t]+/)[0]))
+    && ex.some((e) => e.split(/[ \t]+/)[0] === pack && Number(e.split(/[ \t]+/)[1]) === n)
+}
+// Persist Insight off: `ruleTarget` answers no, so every rule-store refusal and V2's `evaluate` ask
+// stand down; the change report still reports a rule-file change (`tool.execute.after` excuses none).
+const RULE_STORE_OFF = ruleOff("process", 1)
+// Commands Must Return off: the root-scan refusal stands down.
+const ROOT_SCAN_OFF = ruleOff("ops", 2)
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
 // writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
@@ -1792,6 +1811,7 @@ function sameAsRule(f, rules) {
 // The rule files a session loads, under each home: the install, the machine tier, the project layer.
 const ruleFilesUnder = (homes) => homes.filter(Boolean).flatMap((h) => ['user-rules.md', 'user-rules.draft.md'].map((n) => path.join(h, n)));
 function ruleTarget(p, base) {
+  if (RULE_STORE_OFF) return null
   const forms = landsOn(p, base)
   for (const abs of forms) {
     const hit = coined(path.basename(abs))
@@ -2377,7 +2397,9 @@ export const GeneseedGuard = async (ctx) => {
         if (!watched.size || !NATIVE_EDIT_TOOLS.has(tool)) return
         const cwd = ctx?.directory || process.cwd()
         for (const raw of pickPath(input?.args ?? {}, cwd)) {
-          if (!ruleStoreTarget(raw, cwd)) continue
+          // With Persist Insight off no prompt ran, so a rule file is not excused: the report shows it.
+          const hit = ruleStoreTarget(raw, cwd)
+          if (!hit || (RULE_STORE_OFF && hit !== "memory")) continue
           // Only keys the scan itself names: a link's other spellings would read as files gone.
           const now = scanAllStores(root())
           for (const f of landsOn(raw, cwd)) {
@@ -2469,7 +2491,7 @@ export const GeneseedGuard = async (ctx) => {
         }
         // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
         // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
-        if (!NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
+        if (!RULE_STORE_OFF && !NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
           const named = argPaths(args)
           if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
           for (const v of named) {
@@ -2496,7 +2518,7 @@ export const GeneseedGuard = async (ctx) => {
           const c = pickCommand(args)
           const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
           if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
-          const scan = c && rootScan(c)
+          const scan = c && !ROOT_SCAN_OFF && rootScan(c)
           if (scan) {
             await deny(refused("root-scan", { name: scan }), "ops-2")
             return

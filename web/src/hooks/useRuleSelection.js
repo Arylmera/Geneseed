@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useConfirm } from './useConfirm.jsx'
 import { sortedKey, useStaging } from './useStaging.jsx'
 import { installTag } from '../lib/hosts.js'
-import { ALWAYS_ASKS, GATE_SWITCH } from '../lib/constitution.js'
+import { ALWAYS_ASKS, GATE_SWITCH, WITH_TEXT } from '../lib/constitution.js'
 
 // The Constitution's doctrine selection: which rules the switches have STAGED, against what the
 // deployed install carries, and the one Apply that rebuilds with the whole set. `items` is the
@@ -111,6 +111,13 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
           `Including ${name} brings its text back; the ${label.toLowerCase()} stays off unless you tick the box.`,
         )
       }
+    }
+    // A hook that goes with its text (process 5 has its own warning above): say it goes, so
+    // "excluded" reads as what it is.
+    for (const addr of WITH_TEXT) {
+      if (addr === CONSENT || !deployedRules.includes(addr) || isOn(addr)) continue
+      const name = packs.flatMap((p) => p.rules).find((r) => r.addr === addr)?.name || addr
+      lines.push(`Excluding ${name} also drops its hook: it stops asking on every host.`)
     }
     // A hook with no switch keeps asking: say so, so "excluded" never reads as "unguarded".
     for (const addr of ALWAYS_ASKS) {
