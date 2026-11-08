@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // entry from the URL, the lifecycle badges) is pinned here, beside what the Library always
 // did (forget a memory fact, never fetch across kinds).
 vi.mock('../api/index.js', () => ({
-  api: { catalog: vi.fn(), item: vi.fn(), memoryDelete: vi.fn(), usage: vi.fn() },
+  api: { catalog: vi.fn(), item: vi.fn(), memoryDelete: vi.fn(), usage: vi.fn(), loadout: vi.fn() },
 }))
 
 // Every confirm answers yes (hooks/useConfirm.jsx; its own dialog is tested elsewhere).
@@ -42,7 +42,61 @@ beforeEach(() => {
   )
   api.memoryDelete.mockImplementation(() => Promise.resolve({ deleted: 'fact-a' }))
   api.usage.mockImplementation(() => Promise.resolve(null))
+  api.loadout.mockImplementation((agent) => Promise.resolve(agent ? ADEPT_LOAD : PRIMARY_LOAD))
 })
+
+// GET /api/loadout and /api/loadout/<agent>: the primary loads its session files, an Adept the
+// user rules and its spec instead; both inherit the root file and the catalogues.
+const ROOT_BLOCK = {
+  id: 'root:preamble',
+  label: 'Preamble',
+  chars: 30000,
+  source: 'root',
+  loadedBy: 'host',
+}
+const PRIMARY_LOAD = {
+  agent: 'primary',
+  noun: 'Servant',
+  notCounted: ['host system prompt and tools'],
+  blocks: [
+    ROOT_BLOCK,
+    {
+      id: 'session-files',
+      label: 'session files (project context not counted)',
+      chars: 5100,
+      source: 'session',
+      loadedBy: 'session-hook',
+    },
+  ],
+  rules: [{ kind: 'dictate', id: 'I', title: 'Arcana · Sealed Secrets', citedBySpec: false }],
+}
+const ADEPT_LOAD = {
+  agent: 'reviewer',
+  noun: 'Servant',
+  notCounted: ['host system prompt and tools'],
+  blocks: [
+    ROOT_BLOCK,
+    {
+      id: 'user-rules',
+      label: 'user rules',
+      delivery: 'wired',
+      chars: 3900,
+      source: 'user-rules',
+      loadedBy: 'subagent-hook',
+    },
+    { id: 'spec', label: 'reviewer spec', chars: 3500, source: 'spec', loadedBy: 'host' },
+  ],
+  rules: [
+    { kind: 'doctrine', id: 'craft.6', title: 'Ictus · Smallest Viable Diff', citedBySpec: true },
+    {
+      kind: 'user',
+      id: 'R1',
+      title: 'Seal only your worktree',
+      layer: 'install',
+      citedBySpec: false,
+    },
+  ],
+}
 afterEach(() => vi.clearAllMocks())
 
 const kinds = () =>
@@ -167,12 +221,43 @@ describe('Library', () => {
   it('auto-selects the first entry, and each row links to its own address', async () => {
     render(<Library section="agents" overview={overview({})} />)
     await waitFor(() => expect(screen.getAllByText('Reviewer').length).toBeGreaterThan(1))
+    // The primary agent is pinned first, but the first catalogue entry is still the one opened.
     expect([...document.querySelectorAll('a.lib-row')].map((a) => a.getAttribute('href'))).toEqual([
+      '#/item/agent/%3Aprimary',
       '#/item/agent/reviewer',
       '#/item/agent/tester',
     ])
     expect(document.querySelector('a.lib-row.on').getAttribute('href')).toBe(
       '#/item/agent/reviewer',
+    )
+  })
+
+  it('pins the primary agent first, under its theme noun, with the base pill', async () => {
+    render(<Library section="agents" selected=":primary" overview={overview({})} />)
+    const row = await waitFor(() => {
+      const r = document.querySelector('a.lib-row[data-pinned]')
+      expect(r?.dataset.title).toBe('Servant')
+      return r
+    })
+    expect(within(row).getByText('base')).toBeTruthy()
+    // The primary is no catalogue item: never read through /api/item/, only its loadout.
+    await screen.findByText('session files (project context not counted)')
+    expect(api.item).not.toHaveBeenCalled()
+    expect(api.loadout).toHaveBeenCalledWith()
+  })
+
+  it("shows an Adept's loadout: the delta against the primary, the blocks, the rules it cites", async () => {
+    render(<Library section="agents" selected="reviewer" overview={overview({})} />)
+    expect(
+      await screen.findByText('+ user rules 3.9k, + spec 3.5k, − session files 5.1k'),
+    ).toBeTruthy()
+    expect(screen.getByText('Not counted: host system prompt and tools.')).toBeTruthy()
+    expect(screen.getByText('cited by spec')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Seal only your worktree/ }).getAttribute('href')).toBe(
+      '#/personal/rules',
+    )
+    expect(screen.getByRole('link', { name: /Smallest Viable Diff/ }).getAttribute('href')).toBe(
+      '#/item/law/craft.6',
     )
   })
 

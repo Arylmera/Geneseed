@@ -3883,3 +3883,10 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
   .gd-sway, .gd-needs .gd-svg { animation: none !important; }
   .gd-needs .gd-svg { filter: drop-shadow(0 0 4px var(--warn)); }
 }
+/* The Library's Loadout panel (components/Loadout.jsx): the blocks one per line, then the rules. */
+.loadout { margin: var(--sp-3) 0; display: grid; gap: var(--sp-2); }
+.loadout p { margin: 0; }
+.loadout-blocks, .loadout-rules ul { list-style: none; margin: 0; padding: 0; font-size: var(--fs-xs); display: grid; gap: var(--sp-1); }
+.loadout-blocks li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
+.loadout-blocks i { width: 8px; height: 8px; border-radius: 2px; background: var(--tone, var(--text-3)); }
+.loadout-rules li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }

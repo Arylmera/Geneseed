@@ -86,6 +86,9 @@ const catalog = (section, install) => getIn(`/api/catalog/${section}`, install)
 const item = (type, name, install) =>
   getIn(`/api/item/${type}/${encodeURIComponent(name)}`, install)
 const memoryDelete = (name, install) => postIn('/api/memory/delete', { name }, install)
+// What one agent loads, and the rules it follows: the primary agent by default, else an Adept.
+const loadout = (agent, install) =>
+  getIn(agent ? `/api/loadout/${encodeURIComponent(agent)}` : '/api/loadout', install)
 
 // ── Diff ────────────────────────────────────────────────────────────────────
 // Drift from source: read the deployed-vs-source diff, and restore (discard
@@ -240,6 +243,7 @@ export const api = {
   themes,
   catalog,
   item,
+  loadout,
   memoryDelete,
   diff,
   restore,

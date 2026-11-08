@@ -9,6 +9,13 @@ export const KitBadge = ({ name }) => (
   </span>
 )
 
+// The primary agent's pill, styled as KitBadge: every agent inherits from it.
+export const BaseBadge = () => (
+  <span className="tag acc" title="Every agent inherits this agent's root file">
+    base
+  </span>
+)
+
 // The list pane, shared by the Library, the Loops page and the Docs (all three-pane: a rail
 // of sections, this list, a reader): the pane itself (LibList), its rows, and the filter.
 
@@ -100,11 +107,13 @@ export function LibRow({ item, isOpen, href, children }) {
       href={href}
       aria-current={isOpen ? 'true' : undefined}
       data-title={item.title || item.name}
+      data-pinned={item.base ? 'true' : undefined}
     >
       <span className="lr-name">
         {item.title || item.name}
         <StatusBadge status={item.status} compact />
         {item.kit ? <KitBadge name={item.kit} /> : null}
+        {item.base ? <BaseBadge /> : null}
         {children}
       </span>
       {item.desc ? <span className="lr-desc">{item.desc}</span> : null}
