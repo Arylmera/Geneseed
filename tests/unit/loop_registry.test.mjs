@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { registryPath, recordLoop, activeLoops, setLoopPreset } from '../../js/loop/registry.mjs';
+import { registryPath, recordLoop, activeLoops, setLoopPreset, loopInitAt } from '../../js/loop/registry.mjs';
 import { initState, renderLoopFile, parseLoopFile } from '../../js/loop/state.mjs';
 import { PRESETS } from '../../js/loop/score.mjs';
 
@@ -75,6 +75,27 @@ test('recordLoop on an already-registered root updates branch/title but keeps st
       assert.equal(raw.loops[0].started, '2026-10-01T00:00:00.000Z');
       assert.equal(raw.loops[0].branch, 'loop/y');
       assert.equal(raw.loops[0].title, 'Second');
+    });
+  } finally { sb.cleanup(); }
+});
+
+// `initAt` is the factory's R2 evidence that a loop was launched after `factory next`: unlike
+// `started`, every `recordLoop` moves it (each `loop init` starts a fresh loop), and `loopInitAt`
+// reads it back — under any spelling of the root — without writing the registry.
+test('recordLoop moves initAt on every call; loopInitAt reads it back read-only', () => {
+  const sb = makeSandbox('loopreg-');
+  try {
+    withXdg(sb, () => {
+      const { root } = makeLoopRoot(sb, 'proj');
+      assert.equal(loopInitAt(root), null, 'no registry, no row');
+      recordLoop({ root, branch: 'loop/x', title: 'First', now: new Date('2026-10-01T00:00:00Z') });
+      assert.equal(loopInitAt(root), '2026-10-01T00:00:00.000Z');
+      recordLoop({ root, branch: 'loop/y', title: 'Second', now: new Date('2026-10-02T00:00:00Z') });
+      const before = readFileSync(registryPath(), 'utf8');
+      assert.equal(loopInitAt(path.join(root, '.')), '2026-10-02T00:00:00.000Z');
+      assert.equal(rawRegistry().loops[0].started, '2026-10-01T00:00:00.000Z');
+      assert.equal(readFileSync(registryPath(), 'utf8'), before, 'a read never writes');
+      assert.equal(loopInitAt(path.join(sb.path, 'elsewhere')), null);
     });
   } finally { sb.cleanup(); }
 });

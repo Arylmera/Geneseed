@@ -82,6 +82,23 @@ function resolveGraph(spec, catalog) {
   return graph;
 }
 
+/**
+ * The note of `init` or `record`: `--note`, or `--note-file`'s content. A note too long for a
+ * shell argument, or one that mentions `git … commit`/`push` (and would otherwise sit inside the
+ * command line GIT_GATE_RE matches whole), goes through a file instead — never through the shell
+ * at all. CRLF-folded and trimmed the same way the porcelain stdin is, so a Windows-authored file
+ * round-trips identically.
+ */
+function noteOf(args, action) {
+  if (args.note && args.noteFile) throw new Error(`${action} takes --note or --note-file, not both`);
+  if (!args.noteFile) return args.note ?? '';
+  let raw;
+  try { raw = readText(path.resolve(args.noteFile)); } catch (e) {
+    throw new Error(`cannot read --note-file ${args.noteFile}: ${e.message}`, { cause: e });
+  }
+  return raw.replace(/\r\n/g, '\n').trimEnd();
+}
+
 const ACTIONS = {
   check(args) {
     // The project level of the catalogue is `<git root>/.geneseed/`, as for `init` and `next`,
@@ -116,13 +133,14 @@ const ACTIONS = {
     const file = path.join(root, LOOP_FILE);
     if (isFile(file)) throw new Error(`${file} already exists — a loop is already running here`);
     if (!args.title || !args.requirement || !args.graph) throw new Error('init needs --title, --requirement and --graph');
+    const note = noteOf(args, 'init');
     const catalog = loadCatalog({ projectRoot: root });
     const graph = resolveGraph(args.graph, catalog);
     const problems = checkGraph(graph, catalog.bricks);
     if (problems.length) return { error: 'the graph does not pass loop check', problems };
     const state = initState({
       title: args.title, requirement: args.requirement, graph, preset: args.preset || DEFAULT_PRESET,
-      contracts: list(args.contracts) ?? [], notes: args.note ? [args.note] : [],
+      contracts: list(args.contracts) ?? [], notes: note ? [note] : [],
     });
     writeLoopFile(file, state);
     // Best-effort: the registry is how the Active tab discovers this loop, but a registry
@@ -146,19 +164,7 @@ const ACTIONS = {
   },
   record(args) {
     if (!args.outcome) throw new Error('record needs --outcome');
-    if (args.note && args.noteFile) throw new Error('record takes --note or --note-file, not both');
-    let note = args.note ?? '';
-    if (args.noteFile) {
-      // A note too long for a shell argument, or one that mentions `git … commit`/`push` (and
-      // would otherwise sit inside the command line GIT_GATE_RE matches whole), goes through a
-      // file instead — never through the shell at all. CRLF-folded and trimmed the same way the
-      // porcelain stdin below is, so a Windows-authored file round-trips identically.
-      let raw;
-      try { raw = readText(path.resolve(args.noteFile)); } catch (e) {
-        throw new Error(`cannot read --note-file ${args.noteFile}: ${e.message}`, { cause: e });
-      }
-      note = raw.replace(/\r\n/g, '\n').trimEnd();
-    }
+    const note = noteOf(args, 'record');
     let card = null;
     if (args.card) {
       try { card = JSON.parse(args.card); } catch (e) {

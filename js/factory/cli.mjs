@@ -13,7 +13,9 @@
  * LOOP.md in place, so without that read R2 could never be recorded. A LOOP.md that does not parse
  * counts as running: refusing is the safe side, and `loop` itself refuses it too. Its graph name
  * (`loopTemplate`) and the HEAD commit (`headCommit`, read off disk) go along: `next` on a loop
- * stage stores the launch in FACTORY.md, so `next` writes, and `record` checks the loop against it.
+ * stage stores the launch in FACTORY.md with the time now, so `next` writes, and `record` checks
+ * the loop against it — with the loop registry's last `loop init` time for this root
+ * (`loopInitAt`, a read of `loops.json`, no write), which a `pass` with no LOOP.md left needs.
  *
  * THE PORCELAIN IS TRUSTED AS PIPED. A TTY stdin is `null` and the engine refuses it after a
  * stage outside a loop (J5); an empty pipe (or a null device) reads as a clean tree, and nothing
@@ -30,6 +32,7 @@ import { readText, isFile, printOut } from '../lib/fs.mjs';
 import { gitRootOf, headCommit } from '../hosts/gitref.mjs';
 import { loadCatalog } from '../loop/catalog.mjs';
 import { LOOP_FILE, parseLoopFile } from '../loop/state.mjs';
+import { loopInitAt } from '../loop/registry.mjs';
 import { checkFactory, factoryCatalogProblems } from './graph.mjs';
 import {
   FACTORY_FILE, initFactory, nextStage, recordStage, decideFactory, writeFactoryFile, parseFactoryFile,
@@ -113,7 +116,7 @@ const ACTIONS = {
     writeFactoryFile(file, state);
     return { file, factory: factory.name, stage: state.stage, status: state.status };
   },
-  next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head })),
+  next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head, now: new Date().toISOString() })),
   record(args) {
     if (!args.outcome) throw new Error('record needs --outcome');
     const porcelain = stdin();
@@ -131,6 +134,7 @@ const ACTIONS = {
       return recordStage(s, c, args.outcome, {
         porcelain: porcelain === null ? null : porcelain.replace(/\r\n/g, '\n').trimEnd(),
         chosenLoop: args.loop ?? null, specPath, taskCount, carry: args.carry ?? null, loopStatus, loopTemplate, head,
+        loopInitAt: loopInitAt(root),
       });
     });
   },

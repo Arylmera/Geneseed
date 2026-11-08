@@ -173,6 +173,28 @@ test('every page section, where present, is a non-empty string', () => {
   }
 });
 
+// Two pages of one section with the same `order:` fall back to filename order (the server's
+// stable sort), so the author's order is lost without a sign. `sharedOrders` names each such pair,
+// keyed by group and section (no section is General).
+const sharedOrders = (list) => {
+  const seen = new Map(); const bad = [];
+  for (const { rel, text } of list) {
+    const order = front(text, 'order');
+    if (order === undefined) continue;
+    const key = `${front(text, 'group')}/${front(text, 'section') ?? 'General'}/${order}`;
+    if (seen.has(key)) bad.push(`${seen.get(key)} and ${rel} share ${key}`);
+    else seen.set(key, rel);
+  }
+  return bad;
+};
+
+test('no two pages of one section share an order', () => {
+  const page = (rel, order, section = 'S') => ({ rel, text: `---\ngroup: g\norder: ${order}\nsection: "${section}"\n---\nx` });
+  assert.deepEqual(sharedOrders([page('a.md', 2), page('b.md', 2)]), ['a.md and b.md share g/S/2']);
+  assert.deepEqual(sharedOrders([page('a.md', 2), page('b.md', 2.5), page('c.md', 2, 'T')]), []);
+  assert.deepEqual(sharedOrders(pages()), []);
+});
+
 // Section order is the smallest `order:` among a section's pages; a page with no section is
 // filed under General; inside a section the pages keep their order. Pages arrive sorted by
 // order, so: Install (order 1) leads, General (order 2) next, Loops (order 3) last, and

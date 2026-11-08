@@ -36,6 +36,16 @@ const repo = (factories = ['fixture-fix', 'fixture-spec', 'fixture-broken']) => 
   for (const f of factories) copyFileSync(path.join(FIXTURES, `${f}.json`), path.join(dir, `${f}.json`));
   return sb;
 };
+// R2: a loop stage passes with no LOOP.md left only when the loop registry saw a `loop init` here
+// after `factory next`. `loopRan` is that loop, end to end: the real `geneseed loop init` (its
+// registry row lands in the sandbox's XDG_CONFIG_HOME), then its close removing LOOP.md.
+const loopRan = (sb, graph) => {
+  const r = spawnSync(process.execPath, [CLI, 'loop', 'init', '--title', 't', '--requirement', 'r', '--graph', graph], {
+    cwd: sb.path, encoding: 'utf8', windowsHide: true, env: { ...process.env, XDG_CONFIG_HOME: path.join(sb.path, 'xdg') },
+  });
+  assert.equal(r.status, 0, `fixture: loop init ${graph} -> ${r.stdout}${r.stderr}`);
+  rmSync(path.join(sb.path, 'LOOP.md'));
+};
 const INIT = ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--input', 'issue #12'];
 
 test('check: the catalogue, one factory, and a broken one', () => {
@@ -114,9 +124,12 @@ test('init -> next -> record through a brick stage, a loop stage and a back-rout
     assert.equal(run(sb.path, ['record', '--outcome', 'pass']).code, 1);
     rmSync(path.join(sb.path, 'LOOP.md'));
 
-    // R2: no LOOP.md left, so only the loop's close commit (HEAD moved since `next`) lets it pass.
+    // R2: no LOOP.md left, so only the loop's close commit (HEAD moved since `next`) lets it record,
+    // and pass also needs the registry's `loop init` after `next`: a HEAD move alone is fail only.
     assert.match(run(sb.path, ['record', '--outcome', 'pass']).out.error, /^loop:bugfix cannot report pass: no LOOP\.md is left and HEAD has not moved/);
     setHead(sb, 1);
+    assert.match(run(sb.path, ['record', '--outcome', 'pass']).out.error, /^loop:bugfix cannot report pass on a HEAD move alone: no LOOP\.md is left, and the loop registry records no/);
+    loopRan(sb, 'bugfix');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'review' } });
     // J5: a brick stage outside a loop that left the tree dirty is refused, FACTORY.md untouched.
     const before = readFileSync(file, 'utf8');
@@ -171,7 +184,7 @@ test('R3: next on a loop stage refuses a leftover LOOP.md and names its removal'
   try {
     run(sb.path, [...INIT, '--factory', 'fixture-fix']);
     run(sb.path, ['record', '--outcome', 'pass']);
-    run(sb.path, ['next']); setHead(sb, 1);
+    run(sb.path, ['next']); loopRan(sb, 'bugfix'); setHead(sb, 1);
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'review' } });
     writeFileSync(path.join(sb.path, 'LOOP.md'), loopMd('done'));
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail']), { code: 0, out: { stage: 'loop:bugfix' } });
@@ -212,10 +225,10 @@ test('record --spec counts the tasks; the gate holds until decide; next names th
     assert.deepEqual(run(sb.path, ['decide', '--verdict', 'ok']), { code: 0, out: { stage: 'loop:feature' } });
     assert.deepEqual(run(sb.path, ['next']).out,
       { stage: 'loop:feature', loop: 'feature', notes: [], task: { path: 'specs/r/spec.md', count: 2, index: 1 } });
-    setHead(sb, 1);
+    loopRan(sb, 'feature'); setHead(sb, 1);
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']),
       { code: 0, out: { stage: 'loop:feature', task: { path: 'specs/r/spec.md', count: 2, index: 2 } } });
-    run(sb.path, ['next']); setHead(sb, 2);
+    run(sb.path, ['next']); loopRan(sb, 'feature'); setHead(sb, 2);
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'lint' } });
   } finally { sb.cleanup(); }
 });
@@ -259,6 +272,13 @@ test('R4: a FACTORY.md edited past the engine\'s bounds is refused and left as i
       assert.deepEqual(run(sb.path, argv), { code: 1, out: { error: 'FACTORY.md is unreadable: runCeiling must be 600 at most' } }, argv.join(' '));
     }
     assert.equal(readFileSync(file, 'utf8'), before);
+    // a `cycles` edited into an object: refused as unreadable, never a TypeError out of `transition`
+    const lf = before.replace(/\r\n/g, '\n');
+    const state = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(lf)[1]);
+    state.runCeiling = 30; state.stage = 'review'; state.factory.cycles = {};
+    writeFileSync(file, lf.replace(/```json\n[\s\S]*?\n```/, `\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\``));
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail'], ''),
+      { code: 1, out: { error: 'FACTORY.md is unreadable: factory.cycles must be a list' } });
   } finally { sb.cleanup(); }
 });
 

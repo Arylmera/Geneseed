@@ -1,8 +1,8 @@
 /**
  * The loop registry — `<userLoopsDir()>/loops.json` — the list of worktrees `geneseed loop init`
  * has launched a loop in. `LOOP.md` stays the only source of loop STATE; this file stores
- * identity only (root, branch, title, started, finishedAt), so the Active tab can discover a
- * loop without scanning every worktree on the machine.
+ * identity only (root, branch, title, started, initAt, finishedAt), so the Active tab can discover
+ * a loop without scanning every worktree on the machine.
  *
  * WRITER CONVENTIONS, mirrored from `js/inspect/registry.mjs` (`installs.json`'s own registry)
  * on purpose rather than invented fresh: `jsonDumpsIndent` because these rows are absolute
@@ -89,7 +89,9 @@ function runningRow(entry, state) {
 
 /**
  * Upsert `root`'s identity row. Called by `geneseed loop init` right after `LOOP.md` is
- * written — `started` is set once, on insert, and never moved by a later call. An update never
+ * written — `started` is set once, on insert, and never moved by a later call. `initAt` is set on
+ * EVERY call: `init` refuses while a LOOP.md exists, so each call starts a fresh loop, and
+ * `initAt` is the time of the latest one (`loopInitAt`, the factory's R2 evidence). An update never
  * touches `finishedAt` either way: `activeLoops` is the only writer of that field, and it will
  * clear it on the very next poll once it sees LOOP.md present again. Never throws: an `init`
  * must succeed even when the registry itself cannot be written.
@@ -99,15 +101,27 @@ export function recordLoop({ root, branch, title, now = new Date() }) {
     const key = normalize(root);
     const loops = load();
     const idx = loops.findIndex((l) => sameRoot(l.root, key));
+    const initAt = now.toISOString();
     if (idx >= 0) {
-      loops[idx] = { ...loops[idx], root: key, branch, title };
+      loops[idx] = { ...loops[idx], root: key, branch, title, initAt };
     } else {
-      loops.push({ root: key, branch, title, started: now.toISOString() });
+      loops.push({ root: key, branch, title, started: initAt, initAt });
     }
     save(loops);
   } catch {
     /* a registry hiccup must never fail loop init */
   }
+}
+
+/**
+ * The `initAt` of `root`'s row, or null (no row, a row from before the field, an unreadable
+ * registry). READ-ONLY, unlike `activeLoops`: `geneseed factory record` calls it, and a record
+ * must not prune or stamp rows.
+ */
+export function loopInitAt(root) {
+  const key = normalize(root);
+  const row = load().find((l) => sameRoot(l.root, key));
+  return typeof row?.initAt === 'string' ? row.initAt : null;
 }
 
 /**

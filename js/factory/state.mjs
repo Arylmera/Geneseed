@@ -27,15 +27,24 @@
  * as a clean tree, so the engine trusts whoever pipes it.
  *
  * A LOOP STAGE REPORTS WHAT ITS LOOP DID (R2). `next` on a loop stage stores the launch
- * (`launched`: the stage, its template and the HEAD commit then). `record` on it then needs
- * evidence: a LOOP.md of that template whose status matches the outcome (stopped is fail, done is
- * pass), or no LOOP.md and a HEAD that moved since the launch — the loop's close commit, or the
- * commit that removed a stopped loop's LOOP.md. Known limit: with no LOOP.md, any HEAD move accepts either outcome, so this is evidence, not proof.
+ * (`launched`: the stage, its template, the HEAD commit and the time then). `record` on it then
+ * needs evidence. With a LOOP.md left, the evidence is that file: its template must be the stage's,
+ * and its status must match the outcome (stopped is fail, done is pass). With no LOOP.md left, HEAD
+ * must have moved since the launch (the loop's close commit, or the commit that removed a stopped
+ * loop's LOOP.md), and `fail` needs nothing more. `pass` also needs the loop registry
+ * (`js/loop/registry.mjs`): its row for this worktree must carry an `initAt` later than the launch,
+ * so a `geneseed loop init` ran here after `next`, and with no LOOP.md left that loop has ended.
+ * What this does NOT prove: that the ended loop closed rather than stopped (the registry keeps no
+ * status), or that it ran the stage's template. A stopped loop whose LOOP.md was removed by hand
+ * can still pass. The registry row's `started` cannot serve: it is set once per worktree, so a
+ * re-entered loop would never pass.
  *
  * R4 COVERS WHAT A HAND CAN EDIT. FACTORY.md is a file; `validateFactoryState` refuses counters
- * that are not non-negative integers, a ceiling above 600, a task block out of its bounds, and a
- * factory that no longer passes `checkFactory` — the termination argument below holds only for
- * a state this engine could have written.
+ * that are not non-negative integers, a ceiling above 600, a task block out of its bounds, a gate
+ * amend count above 3, a `chosenLoop` outside the factory's `loops`, a status the engine does not
+ * write, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
+ * `checkFactory` — the termination argument below holds only for a state this engine could have
+ * written.
  *
  * TASKS (D9). A stage that writes a spec records its path and task count (`tasks`). The first
  * `loop:` stage recorded after it owns the tasks (`tasks.stage`) and alone is replayed once per
@@ -63,6 +72,7 @@ export const FACTORY_FILE = 'FACTORY.md';
 export const FACTORY_MAX_TRANSITIONS = 30;
 export const FACTORY_MAX_TASKS = 20;
 const GATE_MAX_AMENDS = 3;
+const STATUSES = ['running', 'awaiting', 'done', 'stopped'];
 const PORCELAIN = 'git status --porcelain --untracked-files=all';
 const slash = (p) => String(p).replaceAll('\\', '/');
 
@@ -114,9 +124,22 @@ export function validateFactoryState(state, catalog) {
     bad('tasks must be null or a spec path with 1 <= index <= count <= taskCount');
   }
   if (launched != null && !(plainObject(launched) && typeof launched.stage === 'string'
-    && typeof launched.template === 'string' && (launched.head === null || typeof launched.head === 'string'))) {
-    bad('launched must be null or a stage, a template and a head');
+    && typeof launched.template === 'string' && (launched.head === null || typeof launched.head === 'string')
+    && (launched.at == null || typeof launched.at === 'string'))) {
+    bad('launched must be null or a stage, a template, a head and a time');
   }
+  if (!STATUSES.includes(state.status)) bad(`status must be one of ${STATUSES.join(', ')}`);
+  if (!Array.isArray(state.history)) bad('history must be a list');
+  if (!plainObject(state.gateAmends) || !Object.values(state.gateAmends).every((n) => count(n) && n <= GATE_MAX_AMENDS)) {
+    bad(`gateAmends must map each gate to an integer from 0 to ${GATE_MAX_AMENDS}`);
+  }
+  // `cycles` may be absent (`transition` reads it `?? []`), never another shape: `checkFactory`
+  // reads a non-list as no cycles, and `transition` would then throw iterating it.
+  if (plainObject(state.factory) && state.factory.cycles !== undefined && !Array.isArray(state.factory.cycles)) {
+    bad('factory.cycles must be a list');
+  }
+  const loops = Array.isArray(state.factory?.loops) ? state.factory.loops : [];
+  if (state.chosenLoop !== null && !loops.includes(state.chosenLoop)) bad('chosenLoop must be null or one of the factory\'s loops');
   const problems = checkFactory(state.factory, catalog);
   if (problems.length) bad(`its factory no longer passes factory check: ${problems.join('; ')}`);
 }
@@ -189,10 +212,11 @@ const rulesOf = (state) => (state.factory.rules?.length ? { rules: state.factory
  * `loopStatus`: the status in the LOOP.md at the worktree root, or null (the CLI looks; this stays
  * pure). A loop stage refuses ANY LOOP.md: `loop init` refuses to overwrite one, and a stopped
  * loop leaves its own behind, tracked, so the error names the removal. On a loop stage it stores
- * the launch with `head` (the HEAD commit, null when unreadable) — once per stage visit, so a
- * second `next` after the loop committed does not move the baseline `record` compares with.
+ * the launch with `head` (the HEAD commit, null when unreadable) and `at` (`now`, an ISO time the
+ * CLI passes; null leaves `pass` with no LOOP.md unprovable) — once per stage visit, so a second
+ * `next` after the loop committed does not move the baseline `record` compares with.
  */
-export function nextStage(state, { bricks }, { loopStatus = null, head = null } = {}) {
+export function nextStage(state, { bricks }, { loopStatus = null, head = null, now = null } = {}) {
   if (state.status === 'awaiting') return { awaiting: state.awaiting };
   if (state.status === 'done') return { terminal: '$close', summary: summary(state) };
   if (state.status === 'stopped') return { terminal: '$stop', reason: state.reason, summary: summary(state) };
@@ -207,7 +231,7 @@ export function nextStage(state, { bricks }, { loopStatus = null, head = null } 
     const template = loop === '$triaged' ? state.chosenLoop : loop;
     if (!template) throw new Error(`${TRIAGED}: no loop was triaged — the triage stage records one with --loop`);
     const owned = state.tasks && (state.tasks.stage === null || state.tasks.stage === stage);
-    if (state.launched?.stage !== stage) state.launched = { stage, template, head };
+    if (state.launched?.stage !== stage) state.launched = { stage, template, head, at: now };
     return {
       stage, loop: template, notes: state.carry ? [state.carry] : [],
       ...(owned ? { task: taskOut(state.tasks) } : {}), ...rulesOf(state),
@@ -225,6 +249,11 @@ export function nextStage(state, { bricks }, { loopStatus = null, head = null } 
 // J5: the porcelain after a stage outside a loop, minus engine files and the run's spec — at the
 // `spec` brick's own path only (one slug segment, never `.` or `..`).
 const SPEC_PATH = /^specs\/(?!\.\.?\/)[^/]+\/spec\.md$/;
+// R2: a loop init strictly after the launch; an absent or unparsable time on either side proves nothing.
+const initedSince = (initAt, launchAt) => {
+  const a = Date.parse(initAt ?? ''); const b = Date.parse(launchAt ?? '');
+  return Number.isFinite(a) && Number.isFinite(b) && a > b;
+};
 function dirtyLines(porcelain, specPath) {
   const exempt = specPath !== null && SPEC_PATH.test(specPath) ? specPath : null;
   return filterPorcelain(porcelain).split('\n').filter((l) => l && slash(l.slice(3).replace(/^"|"$/g, '')) !== exempt);
@@ -234,11 +263,12 @@ function dirtyLines(porcelain, specPath) {
  * Record the current stage's outcome and follow its edge. `chosenLoop` (triage only), `specPath`
  * with `taskCount` (a stage that wrote a spec), `carry` (the reason the next stage — above all a
  * re-entered loop — must hear). `loopTemplate` is the graph name in the LOOP.md the CLI read,
- * `head` the HEAD commit now (R2). Every refusal throws before the state changes.
+ * `head` the HEAD commit now, `loopInitAt` the registry row's last `loop init` time for this
+ * worktree, or null (R2). Every refusal throws before the state changes.
  */
 export function recordStage(state, { bricks }, outcome, {
   porcelain = null, chosenLoop = null, specPath = null, taskCount = null, carry = null, loopStatus = null,
-  loopTemplate = null, head = null,
+  loopTemplate = null, head = null, loopInitAt = null,
 } = {}) {
   assertRunning(state);
   assertNoLoop(loopStatus);
@@ -266,6 +296,10 @@ export function recordStage(state, { bricks }, outcome, {
       // shortcut: "moved" is "differs", not "descends from"; an fs-only reader cannot walk ancestry.
       throw new Error(`${from} cannot report ${outcome}: no LOOP.md is left and HEAD has not moved since \`factory next\` — `
         + 'record after the loop\'s close commit, or after the commit that removes a stopped loop\'s LOOP.md');
+    } else if (outcome === 'pass' && !initedSince(loopInitAt, launch.at)) {
+      throw new Error(`${from} cannot report pass on a HEAD move alone: no LOOP.md is left, and the loop registry `
+        + 'records no `geneseed loop init` in this worktree since `factory next` — report fail, or record pass '
+        + 'while the done LOOP.md is still at the root');
     }
   } else {
     if (porcelain === null) {
@@ -368,8 +402,10 @@ export function decideFactory(state, _catalog, verdict, note = '') {
   if (verdict === 'no') return stop(state, `gate rejected at ${stage}${note ? `: ${note}` : ''}`);
   if (verdict === 'amend') {
     const key = `${stage}@${taskNo(state)}`;
-    state.gateAmends = { ...state.gateAmends, [key]: (state.gateAmends?.[key] ?? 0) + 1 };
-    if (state.gateAmends[key] > GATE_MAX_AMENDS) return stop(state, `gate amended ${GATE_MAX_AMENDS} times at ${stage}`);
+    // Checked before the count moves, so a stored count never passes the cap R4 holds it to.
+    const spent = state.gateAmends?.[key] ?? 0;
+    if (spent >= GATE_MAX_AMENDS) return stop(state, `gate amended ${GATE_MAX_AMENDS} times at ${stage}`);
+    state.gateAmends = { ...state.gateAmends, [key]: spent + 1 };
     state.stage = stage; state.carry = note || null;
     return { resumed: true };
   }
