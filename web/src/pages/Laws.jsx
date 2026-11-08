@@ -573,6 +573,24 @@ function LawsOf({
       <span className="mono dim">{src}</span>
     </div>
   )
+  // One compact header row under every open band. Decorative for assistive tech: the rows are
+  // buttons, not table rows, so `columnheader` would be orphaned, and each row's label already
+  // reads number, name, status and enforcement. Seven times over it would only be noise.
+  const colHead = (withToggle) => (
+    <div className="law-rowhead" aria-hidden="true">
+      <span>No.</span>
+      <span>Rule</span>
+      <span>Latin name</span>
+      <span>Status</span>
+      <span>Enforced by</span>
+      {withToggle && (
+        <>
+          <span>Rule text</span>
+          <span>Hook gate</span>
+        </>
+      )}
+    </div>
+  )
   const invRows = laws.filter(match)
   // What the tabs and the filter reach, so not the Ethos band above them. The gate counts only as
   // a match: "Nothing matches" must not sit under its row, but it fills no empty tier.
@@ -669,6 +687,7 @@ function LawsOf({
           {ontology.length > 0 && (
             <>
               {bandHead(nouns.ontology, 'ontology/universal.md')}
+              {colHead(false)}
               {ontology.map((s) => (
                 <LawRow
                   key={s.addr}
@@ -717,22 +736,10 @@ function LawsOf({
               ))}
             </Seg>
           </div>
-          <div className="law-rowhead">
-            <span>No.</span>
-            <span>Rule</span>
-            <span>Latin name</span>
-            <span>Status</span>
-            <span>Enforced by</span>
-            {canApply && (
-              <>
-                <span>Rule text</span>
-                <span>Hook gate</span>
-              </>
-            )}
-          </div>
           {showInv && invRows.length > 0 && (
             <>
               {bandHead(nouns.laws, 'laws/universal.md')}
+              {colHead(canApply)}
               {invRows.map((l) => (
                 <LawRow
                   key={l.addr}
@@ -802,6 +809,7 @@ function LawsOf({
                         ` --exclude-rules ${deployedExcluded.join(',')}`}
                     </div>
                   )}
+                  {!shut && colHead(canApply)}
                   {!shut &&
                     rows.map((r) => (
                       <LawRow

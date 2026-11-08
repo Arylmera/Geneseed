@@ -256,7 +256,7 @@ screen the run list stacks above the detail.
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
   this install). Where an install can be rebuilt, each Rule and doctrine row has two toggle
-  columns, headed *Rule text* and *Hook gate*. *Rule text* is the doctrine switch, which stages
+  columns, headed *Rule text* and *Hook gate*. Each open band (Ethos, Dictates, every pack) repeats a compact column header under its title, and a folded pack shows none. Screen readers skip it: each row's label already reads its columns. *Rule text* is the doctrine switch, which stages
   like any doctrine change; a Dictate cannot be excluded, so its cell is locked, with the reason.
   *Hook gate* is the hook's switch: Rules I, III, IV and VIII (the secrets gate, the done gate,
   the deletion gate and the test note: `--no-secrets-gate`, `--no-done-gate`,
