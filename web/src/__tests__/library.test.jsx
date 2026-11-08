@@ -246,14 +246,17 @@ describe('Library', () => {
     expect(api.loadout).toHaveBeenCalledWith()
   })
 
+  // The delta against the primary is one pill per block (loadoutDelta's string split on ", "),
+  // the rules its spec cites come first, the user rules sit behind their pack pill, and what is
+  // not counted is the footnote.
   it("shows an Adept's loadout: the delta against the primary, the blocks, the rules it cites", async () => {
     render(<Library section="agents" selected="reviewer" overview={overview({})} />)
-    expect(
-      await screen.findByText('+ user rules 3.9k, + spec 3.5k, − session files 5.1k'),
-    ).toBeTruthy()
-    expect(screen.getByText('Not counted: host system prompt and tools.')).toBeTruthy()
-    expect(screen.getByText('cited by spec')).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Seal only your worktree/ }).getAttribute('href')).toBe(
+    expect(await screen.findByText('+ user rules 3.9k')).toBeTruthy()
+    expect(screen.getByText('+ spec 3.5k')).toBeTruthy()
+    expect(screen.getByText('− session files 5.1k')).toBeTruthy()
+    expect(screen.getByText(/^Not counted: host system prompt and tools\./)).toBeTruthy()
+    expect(screen.getByText('Cited by its spec')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /User rules/ }).getAttribute('href')).toBe(
       '#/personal/rules',
     )
     expect(screen.getByRole('link', { name: /Smallest Viable Diff/ }).getAttribute('href')).toBe(

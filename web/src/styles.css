@@ -2828,9 +2828,11 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-filter:focus { border-color: var(--accent-line); }
 /* The rule table sizes itself to the room it has, not to the viewport: beside the right panels a
    1274px window leaves it ~600px. The tracks live on each row and header (an @container rule can
-   restyle only the container's descendants, and --law-cols must resolve where --law-5 is set).
+   restyle only the container's descendants, and --law-cols must resolve where --law-4 is set).
    Columns drop in this order, the header following through its matching `data-col` cells:
-     >= 960  all seven: No. · Rule · Latin name · Status · Enforced by · Rule text · Hook gate
+     >= 960  all seven: No. · Rule · Latin name · Status · Rule text · Enforced by · Hook gate
+             (with switches, Enforced by sits between them, outside the row's disclosure button,
+             so it has a track of its own: --law-enf)
      <  960  Latin name: a translation, the column least needed to read or switch a rule;
              it moves under the rule name
      <  760  Status and Enforced by: short words, kept as two chips under the rule name
@@ -2839,8 +2841,11 @@ a.tier .tier-bar > span { background: var(--line-3); }
    reads "Rule text" / "Hook gate" at 76px and its last word ("Text" / "Gate") once narrower. */
 .law-wrap { container: laws / inline-size; }
 .law-rowhead, .law-row { --law-gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ --law-tog: 76px; /* off-scale: fits "HOOK GATE" on one line */
-  --law-5: 92px minmax(220px, 1.4fr) minmax(140px, 1fr) 96px 104px; --law-cols: var(--law-5); }
-.law-wrap.with-toggle .law-rowhead, .law-wrap.with-toggle .law-row { --law-cols: var(--law-5) var(--law-tog) var(--law-tog); }
+  --law-4: 92px minmax(220px, 1.4fr) minmax(140px, 1fr) 96px; --law-enf: 104px; --law-cols: var(--law-4) var(--law-enf); }
+.law-wrap.with-toggle .law-rowhead, .law-wrap.with-toggle .law-row { --law-cols: var(--law-4) var(--law-tog) var(--law-enf) var(--law-tog); }
+/* A row or header with no switch cells (the Ethos band, a retired Dictate) has five cells under
+   this seven-track template: pinned, its Enforced by keeps Enforced by's track, second from the end. */
+.law-wrap.with-toggle [data-col="enf"] { grid-column: -3; }
 .law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: var(--law-gap);
   align-items: center; padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--line); }
 .law-rowhead { padding-top: var(--sp-1); padding-bottom: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-2xs);
@@ -2848,8 +2853,8 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-row { width: 100%; padding: 10px var(--sp-5); /* off-scale: 10px between --sp-2 and --sp-3 */ border-top: 0; border-left: 0; border-right: 0;
   background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
   transition: background var(--dur-2); }
-.law-row.has-toggle { grid-template-columns: minmax(0, 1fr) var(--law-tog) var(--law-tog); padding-top: 0; padding-bottom: 0; }
-.law-disclosure { display: grid; grid-template-columns: var(--law-5); gap: var(--law-gap); align-items: center;
+.law-row.has-toggle { grid-template-columns: minmax(0, 1fr) var(--law-tog) var(--law-enf) var(--law-tog); padding-top: 0; padding-bottom: 0; }
+.law-disclosure { display: grid; grid-template-columns: var(--law-4); gap: var(--law-gap); align-items: center;
   min-width: 0; padding: 10px 0; /* off-scale: 10px between --sp-2 and --sp-3 */ border: 0; background: transparent; color: inherit; font: inherit;
   text-align: left; cursor: pointer; }
 .law-disclosure:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
@@ -2885,17 +2890,20 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-fold-chips { flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin-top: 2px; /* off-scale: 2px hairline */ font-weight: 400; }
 .law-fold-chips .law-chip-enf { font-size: var(--fs-xs); }
 @container laws (max-width: 959px) {
-  .law-rowhead, .law-row { --law-5: 92px minmax(220px, 1fr) 96px 104px; --law-tog: 64px; }
+  .law-rowhead, .law-row { --law-4: 92px minmax(220px, 1fr) 96px; --law-tog: 64px; }
   .law-wrap [data-col="latin"], .law-wrap .rh-cut { display: none; }
   .law-fold-latin { display: block; }
 }
 @container laws (max-width: 759px) {
-  .law-rowhead, .law-row { --law-5: 92px minmax(220px, 1fr); }
+  .law-rowhead, .law-row { --law-4: 92px minmax(220px, 1fr); --law-cols: var(--law-4); }
+  /* Enforced by's track goes with it, between the switches too. */
+  .law-wrap.with-toggle .law-rowhead, .law-wrap.with-toggle .law-row { --law-cols: var(--law-4) var(--law-tog) var(--law-tog); }
+  .law-row.has-toggle { grid-template-columns: minmax(0, 1fr) var(--law-tog) var(--law-tog); }
   .law-wrap [data-col="status"], .law-wrap [data-col="enf"] { display: none; }
   .law-fold-chips { display: flex; }
 }
 @container laws (max-width: 539px) {
-  .law-rowhead, .law-row { --law-5: minmax(0, 1fr); --law-tog: 44px; --law-gap: var(--sp-2);
+  .law-rowhead, .law-row { --law-4: minmax(0, 1fr); --law-tog: 44px; --law-gap: var(--sp-2);
     padding-left: var(--sp-3); padding-right: var(--sp-3); }
   .law-wrap [data-col="no"] { display: none; }
   /* "always on" is wider than 44px: the two-word lock label stacks, centred, instead of spilling. */
@@ -3883,10 +3891,49 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
   .gd-sway, .gd-needs .gd-svg { animation: none !important; }
   .gd-needs .gd-svg { filter: drop-shadow(0 0 4px var(--warn)); }
 }
-/* The Library's Loadout panel (components/Loadout.jsx): the blocks one per line, then the rules. */
-.loadout { margin: var(--sp-3) 0; display: grid; gap: var(--sp-2); }
+/* The Library's Loadout panel (components/Loadout.jsx, spec 2026-11-08 direction A): the total,
+   three groups on one bar, a card per group, the rules, the not-counted footnote. Tokens only,
+   so every theme and flavour paints it. */
+.loadout { margin: var(--sp-3) 0; display: grid; gap: var(--sp-5); }
 .loadout p { margin: 0; }
-.loadout-blocks, .loadout-rules ul { list-style: none; margin: 0; padding: 0; font-size: var(--fs-xs); display: grid; gap: var(--sp-1); }
-.loadout-blocks li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
-.loadout-blocks i { width: 8px; height: 8px; border-radius: 2px; background: var(--tone, var(--text-3)); }
-.loadout-rules li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.loadout ul { list-style: none; margin: 0; padding: 0; }
+.loadout-eyebrow { margin: 0; font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase; color: var(--text-2); font-weight: 500; }
+.loadout-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--sp-4); }
+.loadout-head > div:first-child { display: grid; gap: var(--sp-1); }
+.loadout-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); }
+.loadout-total strong { font-size: var(--fs-2xl); font-weight: 600; letter-spacing: -.02em; }
+.loadout-delta { display: grid; justify-items: end; gap: var(--sp-1); font-size: var(--fs-xs); }
+.loadout-delta ul { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.loadout-pill { display: inline-block; padding: 2px var(--sp-2); border-radius: 999px; font-size: var(--fs-xs);
+  background: var(--surface-3); color: var(--text-2); }
+.loadout-pill.is-plus { color: var(--warn-text); background: color-mix(in srgb, var(--warn) 9%, transparent); }
+.loadout-bar { display: grid; gap: var(--sp-2); }
+.loadout-groups { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-xs); }
+.loadout-groups li { flex: 1 1 0; min-width: max-content; }
+.loadout-card { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-2); min-width: 0; }
+.loadout-card.is-own { border-color: color-mix(in srgb, var(--warn) 36%, transparent); background: color-mix(in srgb, var(--warn) 5%, transparent); }
+.loadout-card > summary, .loadout-card-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); cursor: default; }
+.loadout-card > summary { cursor: pointer; }
+.loadout-card i { width: 10px; height: 10px; border-radius: 3px; background: var(--tone, var(--text-3)); }
+.loadout-sum { margin-left: auto; font-size: var(--fs-xs); }
+.loadout-root { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); column-gap: var(--sp-7); row-gap: 2px; }
+.loadout-root li, .loadout-list li { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) 0; font-size: var(--fs-sm); }
+.loadout-root li > span:first-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loadout-root li > .mono, .loadout-list li > .mono { font-size: var(--fs-xs); color: var(--text-2); min-width: 40px; text-align: right; }
+.loadout-list li { color: var(--text-2); }
+.loadout-list li > span:first-child { margin-right: auto; }
+.loadout-mini { width: 70px; height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; flex: none; }
+.loadout-mini > span { display: block; height: 100%; background: var(--accent); }
+.loadout-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-4); }
+.loadout-note, .loadout-foot { font-size: var(--fs-xs); }
+.loadout-rules { display: grid; gap: var(--sp-3); }
+.loadout-rules-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--sp-2); font-size: var(--fs-xs); }
+.loadout-cited { display: grid; gap: var(--sp-1); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); background: var(--surface-2); font-size: var(--fs-sm); }
+.loadout-cited-h { font-size: var(--fs-xs); font-weight: 500; color: var(--warn-text); }
+.loadout-packs { display: flex; flex-wrap: wrap; gap: var(--sp-2); font-size: var(--fs-sm); }
+.loadout-packs li > a, .loadout-packs li.is-muted { display: inline-flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--text); }
+.loadout-packs li.is-muted, .loadout-rules .is-muted { color: var(--text-3); border-style: dashed; }
+.loadout-rules .btn { justify-self: start; }
+.loadout-rules div > ul { display: grid; gap: var(--sp-1); font-size: var(--fs-xs); }
+.loadout-rules div > ul li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.loadout-foot { border-top: 1px solid var(--line); padding-top: var(--sp-3); }
