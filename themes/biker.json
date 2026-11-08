@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Send several riders on independent runs at once, then bring in what they gather.",
   "DESC_PIPELINE": "Send a small crew of riders — scout, wrench, test rider — to work a job in their own lane, rolling it into the pack only once the road-test comes back clean.",
   "DESC_LOOP": "Ride a requirement in short, scored laps on its own loop/* lane, the loop engine calling every turn.",
+  "DESC_FACTORY": "Ride one work item from the call-out to an open PR with green CI, the factory engine marking every stop. The merge stays yours.",
   "DESC_BRICK_FORGE": "Build or re-tune a loop brick, then run it past geneseed loop check.",
   "DESC_DEVELOP": "Push a change through the run — the smallest turn of the wrench, a test written to cover it, the touched trials green, sealed slice by slice.",
   "DESC_TEACH": "Get a rider road-ready, or test what they've got — a crash course, a manual decoded, a day-by-day route; or a drill, a talk-through, a bluff called.",

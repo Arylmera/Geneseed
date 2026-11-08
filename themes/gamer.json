@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Send the party on independent objectives at once, then regroup the loot.",
   "DESC_PIPELINE": "Send a small party — scout, builder, tester — into their own instance, and only merge the run once the clear is verified.",
   "DESC_LOOP": "Grind a requirement in small, scored rounds on a loop/* branch, the loop engine running the turns.",
+  "DESC_FACTORY": "Run one work item through the factory, stage by stage, to an open PR with green CI. The merge stays yours.",
   "DESC_BRICK_FORGE": "Craft or tune a loop brick, then verify it with geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written for it, the affected run green, committed slice by slice.",
   "DESC_TEACH": "Level the player up, or test them — a crash course, a mechanic decoded, a day-by-day grind; or a drill, an explain-it-back, a claimed mastery stress-tested.",

@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Fan independent subtasks out to concurrent subagents, then converge the results.",
   "DESC_PIPELINE": "Spawn a small crew — analyst, developer, tester — to work a substantial task in its own worktree, merging only once the tests and lint pass.",
   "DESC_LOOP": "Work a requirement in small, scored iterations on a loop/* branch, stepping the geneseed loop engine.",
+  "DESC_FACTORY": "Carry one work item through a factory of bricks and loops to an open PR with green CI, stepping the geneseed factory engine. The merge stays yours.",
   "DESC_BRICK_FORGE": "Author or adapt a loop brick, then check it with geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — smallest change, tests written for it, the affected suite green, committed slice by slice.",
   "DESC_TEACH": "Teach the user toward a result, or test what they know — a crash course, a decode, a day-by-day path; or a drill, an explain-it-back check, a gap check.",

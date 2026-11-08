@@ -87,7 +87,7 @@ export const LAW_CLASSES = ['security', 'process', 'verify', 'craft', 'context',
 export const SKILL_CLASS = {
   brainstorm: 'design', plan: 'design', council: 'design',
   workflow: 'design', 'parallel-agents': 'design', pipeline: 'design',
-  loop: 'design', 'brick-forge': 'design',
+  loop: 'design', factory: 'design', 'brick-forge': 'design',
   'codebase-design': 'design', wayfinder: 'design',
   develop: 'build', refactor: 'build', debug: 'build', dependencies: 'build',
   'frontend-design': 'build', prototype: 'build', deck: 'build',

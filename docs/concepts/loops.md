@@ -78,6 +78,7 @@ evidence was never wired — no verdict is not a failure to repair.
 - [Contracts and ignored deletions](loop-contracts.md): the globs that raise or ignore risk.
 - [LOOP.md, trailers and the loop branch](loop-branch.md): the state file, the commit trailers, and why merging always asks.
 - [Loop actions](../reference/loop-actions.md): the `geneseed loop` commands.
+- [Factories](factories.md): one work item carried through bricks and whole loops to an open PR.
 
 ## Not foreman mode
 

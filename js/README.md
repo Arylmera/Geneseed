@@ -215,6 +215,7 @@ brick, a whole loop, or the loop `triage` chose), persisted as a JSON block in `
 | `graph.mjs` | `checkFactory` — the rules a factory must satisfy before a stage runs: stages exist, edges cover every outcome, `$close` is reachable, every cycle is declared (the loop engine's `undeclaredCycles`), the triaged loop has an allowlist behind a `triage` stage |
 | `state.mjs` | The engine itself: `initFactory`, `nextStage`, `recordStage`, `decideFactory`, `renderFactoryFile`/`parseFactoryFile`, `validateFactoryState`, `countSpecTasks` |
 | `cli.mjs` | `geneseed factory check\|list\|init\|next\|record\|decide` — the only face of this engine |
+| `registry.mjs` | `factories.json` beside `loops.json`: `recordFactory` (called by `factory init`) and `activeFactories`, on the loop registry's own `loadRows`/`saveRows`/`sweepRows`. A run and its child loop share a root, which is how a reader groups them |
 
 **Before editing:** `FACTORY.md` is in `js/loop/state.mjs`'s `ENGINE_FILES`, so a child loop never
 scores it; the clean-tree check after a stage outside a loop filters with that same list. `cli.mjs`

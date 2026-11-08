@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Deploy independent tasks to concurrent units, then consolidate the results.",
   "DESC_PIPELINE": "Deploy a small fire team — scout, builder, verifier — into their own sector, cleared to merge only once the after-action report comes back green.",
   "DESC_LOOP": "Execute a requirement in small, scored sorties on a loop/* branch, the loop engine issuing every order.",
+  "DESC_FACTORY": "Move one work item through the factory, stage by stage, to an open PR with green CI, the engine issuing every order. The merge stays yours.",
   "DESC_BRICK_FORGE": "Draft or adapt a loop brick, then clear it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written to cover it, affected suite green, committed slice by slice.",
   "DESC_TEACH": "Train the recruit, or test them — a crash course, a manual decoded, a day-by-day programme; or a drill, an explain-back debrief, a proficiency stress-tested.",

@@ -82,6 +82,23 @@ test('recordLoop on an already-registered root updates branch/title but keeps st
 // `initAt` is the factory's R2 evidence that a loop was launched after `factory next`: unlike
 // `started`, every `recordLoop` moves it (each `loop init` starts a fresh loop), and `loopInitAt`
 // reads it back — under any spelling of the root — without writing the registry.
+// J9: a loop that is a factory stage (`loop init --factory <slug>`) carries the run's slug on its
+// row; a later plain init in the same worktree is a stage of no run, so the field goes.
+test('recordLoop stores factory when given and drops it on a later init without one', () => {
+  const sb = makeSandbox('loopreg-');
+  try {
+    withXdg(sb, () => {
+      const { root } = makeLoopRoot(sb, 'proj');
+      recordLoop({ root, branch: 'loop/factory-x', title: 'A', factory: 'x', now: new Date('2026-10-01T00:00:00Z') });
+      assert.equal(rawRegistry().loops[0].factory, 'x');
+      recordLoop({ root, branch: 'loop/factory-x', title: 'B', now: new Date('2026-10-02T00:00:00Z') });
+      assert.deepEqual(rawRegistry().loops, [{
+        root, branch: 'loop/factory-x', title: 'B', started: '2026-10-01T00:00:00.000Z', initAt: '2026-10-02T00:00:00.000Z',
+      }]);
+    });
+  } finally { sb.cleanup(); }
+});
+
 test('recordLoop moves initAt on every call; loopInitAt reads it back read-only', () => {
   const sb = makeSandbox('loopreg-');
   try {

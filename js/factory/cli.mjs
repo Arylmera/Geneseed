@@ -29,10 +29,11 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { readText, isFile, printOut } from '../lib/fs.mjs';
-import { gitRootOf, headCommit } from '../hosts/gitref.mjs';
+import { gitRootOf, headCommit, currentBranch } from '../hosts/gitref.mjs';
 import { loadCatalog } from '../loop/catalog.mjs';
 import { LOOP_FILE, parseLoopFile } from '../loop/state.mjs';
 import { loopInitAt } from '../loop/registry.mjs';
+import { recordFactory } from './registry.mjs';
 import { checkFactory, factoryCatalogProblems } from './graph.mjs';
 import {
   FACTORY_FILE, initFactory, nextStage, recordStage, decideFactory, writeFactoryFile, parseFactoryFile,
@@ -114,6 +115,8 @@ const ACTIONS = {
     if (problems.length) return { error: 'the factory does not pass factory check', problems };
     const state = initFactory({ title: args.title, requirement: args.requirement, factory, input: args.input ?? null });
     writeFactoryFile(file, state);
+    // Best-effort, as `loop init`'s `recordLoop`: the registry is how the console finds the run.
+    recordFactory({ root, branch: currentBranch(root), factory: factory.name, title: args.title });
     return { file, factory: factory.name, stage: state.stage, status: state.status };
   },
   next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head, now: new Date().toISOString() })),

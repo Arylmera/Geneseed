@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Send several drivers out on independent stints at once, then bring in what they gather.",
   "DESC_PIPELINE": "Send a small crew — scout, mechanic, test driver — out on their own stint, and only wave them into the results once the timing sheet comes back clean.",
   "DESC_LOOP": "Run a requirement in short, scored laps on a loop/* branch, the loop engine calling every move.",
+  "DESC_FACTORY": "Take one work item from kick-off to an open PR with green CI, the factory engine calling every stage. The merge stays yours.",
   "DESC_BRICK_FORGE": "Build or adapt a loop brick, then put it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change through cover-and-verify — the smallest setup tweak, a trial written to time it, the affected laps green, sealed corner by corner.",
   "DESC_TEACH": "Bring a rookie up to speed, or test them — a crash course, a regulation decoded, a day-by-day programme; or a drill, a debrief, a claim stress-tested.",

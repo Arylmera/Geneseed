@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Send several players on independent plays at once, then regroup the results.",
   "DESC_PIPELINE": "Send a small squad — scout, builder, tester — onto their own field, and only bring the play into the game once the film comes back clean.",
   "DESC_LOOP": "Work a requirement in short, scored drills on a loop/* branch, the loop engine calling every play.",
+  "DESC_FACTORY": "Carry one work item through the factory, play by play, to an open PR with green CI. The merge stays yours.",
   "DESC_BRICK_FORGE": "Draw up or adapt a loop brick, then run it through geneseed loop check.",
   "DESC_DEVELOP": "Drive it in on cover-and-verify — smallest gain, a test set on the new ground, the affected drills green, and log it snap by snap.",
   "DESC_TEACH": "Coach the player toward a result, or test them — a crash course, a playbook decoded, a training plan; or a drill, a film-session explain-back, a mastery stress-tested.",
