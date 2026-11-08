@@ -64,6 +64,7 @@
   "DESC_LOOP": "Ride a requirement in short, scored laps on its own loop/* lane, the loop engine calling every turn.",
   "DESC_FACTORY": "Ride one work item from the call-out to an open PR with green CI, the factory engine marking every stop. The merge stays yours.",
   "DESC_BRICK_FORGE": "Build or re-tune a loop brick, then run it past geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Build a factory from bricks and loops, run it past geneseed factory check, and call in brick-forge when a part is missing.",
   "DESC_DEVELOP": "Push a change through the run — the smallest turn of the wrench, a test written to cover it, the touched trials green, sealed slice by slice.",
   "DESC_TEACH": "Get a rider road-ready, or test what they've got — a crash course, a manual decoded, a day-by-day route; or a drill, a talk-through, a bluff called.",
   "DESC_ADHD": "Ride every reply for a reader with ADHD — next move first, numbered stops, the route restated each turn, side roads held back, real time estimates. On until \"stop adhd mode\".",

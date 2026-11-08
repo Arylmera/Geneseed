@@ -64,6 +64,7 @@
   "DESC_LOOP": "Work a requirement in small, scored iterations on a loop/* branch, stepping the geneseed loop engine.",
   "DESC_FACTORY": "Carry one work item through a factory of bricks and loops to an open PR with green CI, stepping the geneseed factory engine. The merge stays yours.",
   "DESC_BRICK_FORGE": "Author or adapt a loop brick, then check it with geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Compose bricks and loops into a factory, check it with geneseed factory check, and offer brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — smallest change, tests written for it, the affected suite green, committed slice by slice.",
   "DESC_TEACH": "Teach the user toward a result, or test what they know — a crash course, a decode, a day-by-day path; or a drill, an explain-it-back check, a gap check.",
   "DESC_ADHD": "Shape every reply for a reader with ADHD — next action first, numbered steps, state restated each turn, tangents held back, concrete time estimates. On until \"stop adhd mode\".",

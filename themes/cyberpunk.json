@@ -64,6 +64,7 @@
   "DESC_LOOP": "Run a requirement in small, scored cycles on a loop/* fork, the loop engine driving every jump.",
   "DESC_FACTORY": "Route one work item through the factory to an open PR with green CI, the engine switching every stage. The merge stays yours.",
   "DESC_BRICK_FORGE": "Compile or patch a loop brick, then run it through geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Wire bricks and loops into a factory, run it through geneseed factory check, and patch in brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Drive the change through the loop — smallest edit, a test written to cover it, the touched rigs run green, committed slice by slice.",
   "DESC_TEACH": "Bring a user online, or probe what they know — a crash course, data decoded, a day-by-day route; or a drill, a run-back, a claimed mastery stress-tested.",
   "DESC_ADHD": "Format every reply for a reader with ADHD — next action first, numbered steps, state re-synced each turn, side quests held back, hard time estimates. On until \"stop adhd mode\".",

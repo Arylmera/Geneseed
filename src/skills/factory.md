@@ -24,7 +24,7 @@ any brief, prompt, note or `--carry` you hand on, and never read it on a develop
    working directory with its own command. Every later command runs there as written below: no
    `cd` prefix, no `git -C`. Several runs may share a repo, each in its own worktree.
 2. Use the factory the user names, else `geneseed factory list` and pick the one whose
-   description fits; confirm the pick with the user when two fit.
+   description fits; confirm the pick with the user when two fit. None fits → the `factory-forge` {{SKILL}}.
 3. `geneseed factory init --title "<title>" --requirement "<the user's ask, in their words>" --factory <name> --input "<issue URL, file path or pasted text>"`.
    A refused factory prints `problems`: report them, never edit the graph to get past them.
 

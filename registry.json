@@ -309,6 +309,13 @@
       "added": "2026-11-08",
       "last_verified": ""
     },
+    "skills/factory-forge": {
+      "status": "experimental",
+      "version": "0.1.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-11-08",
+      "last_verified": ""
+    },
     "skills/forge-mcp": {
       "status": "approved",
       "version": "1.0.0",

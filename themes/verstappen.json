@@ -64,6 +64,7 @@
   "DESC_LOOP": "Work a requirement in short, scored stints on a loop/* branch, the loop engine calling every lap.",
   "DESC_FACTORY": "Take one work item through the factory, stint by stint, to an open PR with green CI. The merge stays yours.",
   "DESC_BRICK_FORGE": "Build or tune a loop brick, then run it through geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Build a factory from bricks and loops, run it through geneseed factory check, and pit in with brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Drive the change home — smallest move, a test written to cover it, the affected trials green, and sealed commit by commit.",
   "DESC_TEACH": "Get the user up to speed, or test them — a crash course, a decode, a day-by-day programme; or a drill, a debrief, a gap check. No wasted laps.",
   "DESC_ADHD": "Race every reply for a reader with ADHD — next action first, numbered steps, the gap restated each lap, tangents held back, real time estimates. On until \"stop adhd mode\".",

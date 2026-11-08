@@ -81,6 +81,11 @@ Factories load from three levels, as bricks and loop templates do, and a later l
 an earlier one by name: shipped, global (`~/.config/geneseed/factories/`), and project
 (`<repo>/.geneseed/factories/`).
 
+To compose or change one, use the `factory-forge` skill — ask it. It interviews you for the
+stages, the routes back and their `max`, writes the file at project or global level and runs
+`geneseed factory check` until it passes. When a stage needs a brick that does not exist, it
+offers the `brick-forge` skill: that skill alone writes bricks.
+
 ## Read on
 
 - [Run a factory](../guides/run-a-factory.md): how to start one, and what it asks you.

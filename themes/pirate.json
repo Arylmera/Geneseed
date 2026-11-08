@@ -64,6 +64,7 @@
   "DESC_LOOP": "Work a requirement in short, scored legs on a loop/* branch, the loop engine at the helm.",
   "DESC_FACTORY": "Sail one work item through the factory to an open PR with green CI, the engine at the helm. The merge stays yours.",
   "DESC_BRICK_FORGE": "Forge or refit a loop brick, then pass it through geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Fit out a factory from bricks and loops, pass it through geneseed factory check, and call on brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Sail a change through the cover-and-verify tack — the smallest move, trials rigged to cover it, the touched trials run clean, sealed one cargo at a time.",
   "DESC_TEACH": "Get a landlubber seaworthy, or test the crew — a crash course, a chart decoded, a day-by-day course; or a drill, a recital, a claimed mastery bluff-called.",
   "DESC_ADHD": "Chart every reply for a reader with ADHD — next order first, numbered steps, the heading restated each turn, side voyages held back, true time estimates. On until \"stop adhd mode\".",
