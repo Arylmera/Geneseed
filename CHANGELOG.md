@@ -13,6 +13,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`--no-external-gate` stops the protected-check and gate-configuration asks** on every host: `rule-gate`, the shell path in `git-gate`, Bob's `tool-gate`, the OpenCode guard and OpenCode 2's `evaluate` ask. Other gates keep running, and OpenCode's own `permission.edit` keys stay. With it off the agent can edit the other gates' wiring unasked.
 - **`--no-test-note` stops the weakened-test note,** at edit time, at turn end and in the OpenCode context plugin. The done checks do not change, and `--no-done-gate` still silences the turn-end line.
 - **The Constitution page has both switches.** Rule VIII carries the test note and now reads *Hook gate* or *Gate off*. Doctrine rigor 5 keeps its rule switch on the row and gets a gate line inside the opened row. Excluding the rule and switching off the gate are independent.
+- **The web console's Terminal drawer shows each run as a phase timeline.** The runs are listed on the left with a status dot, a short detail and the duration. The picked run shows numbered phases (*Update the source*, one *Rebuild* per install) with their state, warnings in an amber box, refused links as grey notices and a failure's error line in red. **Full log** still shows the raw output, and a line the reader does not know stays visible in its phase.
 
 ### Fixed
 
