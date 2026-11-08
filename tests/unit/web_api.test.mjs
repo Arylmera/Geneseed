@@ -16,6 +16,7 @@ import { apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 import { apiInstallToggle, apiMemoryDelete } from '../../js/web/actions.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { autostartFile } from '../../js/hosts/shim.mjs';
 import { makeCfg } from '../../js/build/source.mjs';
 import { sourceFingerprint } from '../../js/build/version.mjs';
 import { STATE_ROUTES } from '../../js/web/routes.mjs';
@@ -60,8 +61,8 @@ test('the overview says whether the server is running code older than the files 
 });
 
 // The Server tab's header reads the process answering it: this test process is that process, so
-// its pid is the expected value, and its start lies at or before now. `autostart` reads the real
-// home's login launcher, so only its type is pinned. The daemon record beside the target holds
+// its pid is the expected value, and its start lies at or before now. `autostart` reads the home's
+// login launcher, so only its shape is pinned: this platform's file and one of the four states. The daemon record beside the target holds
 // the write token, and a GET must never carry it: the fields are built one by one, and a record
 // spread into them would put `secret-xyz` in the JSON.
 test('the overview names the server process and never the daemon record token', () => {
@@ -73,7 +74,12 @@ test('the overview names the server process and never the daemon record token', 
     assert.equal(ov.server.pid, process.pid);
     assert.ok(ov.server.started <= Math.floor(Date.now() / 1000), 'a start in the future');
     assert.ok(ov.server.started > 1, 'the start came from the daemon record, not the process');
-    assert.ok(ov.server.autostart === null || typeof ov.server.autostart === 'boolean');
+    const file = autostartFile();
+    if (file === null) assert.equal(ov.server.autostart, null);
+    else {
+      assert.equal(ov.server.autostart.file, file);
+      assert.ok(['absent', 'ours', 'stale', 'hand'].includes(ov.server.autostart.state));
+    }
     assert.ok(!JSON.stringify(ov).includes('secret-xyz'), 'the write token reached a GET');
   } finally { sb.cleanup(); }
 });

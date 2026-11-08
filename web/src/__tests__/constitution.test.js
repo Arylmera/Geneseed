@@ -7,7 +7,7 @@ const { GATE_SWITCH, HOOK_GATED, enforcedBy, gateAddress, parseRuleTitle } = C
 // closure is relative and `node:` modules only (no bare specifier, so web's own `npm ci` is
 // enough) and loads cleanly under vitest's jsdom environment.
 import { HOOK_PINNED } from '../../../js/inspect/checks-constitution.mjs'
-import { GATE_SWITCHES } from '../../../js/build/source.mjs'
+import { GATE_SWITCHES, ruleCanon } from '../../../js/build/source.mjs'
 
 // A catalog title -> { latin, name, retired }. The prefix (`Rule IV — `, `Doctrine craft 1 — `)
 // is the address, which the table prints in its own column; the Latin half is the voice's,
@@ -72,6 +72,10 @@ describe('HOOK_GATED', () => {
   it('reads the ownership gate by its switch, not by the set', () => {
     expect(enforcedBy('ownership')).toBe('Hook gate')
     expect(enforcedBy('ownership', { ownershipGate: false })).toBe('Gate off')
+    // Rule VIII has a hook only by its switch; rigor 5's switch overrides its place in the set.
+    expect(enforcedBy('VIII')).toBe('Hook gate')
+    expect(enforcedBy('VIII', { testNote: false })).toBe('Gate off')
+    expect(enforcedBy('rigor.5', { externalGate: false })).toBe('Gate off')
   })
 
   // The set is transcribed from the doctor's HOOK_PINNED, the one list of every hook-gated
@@ -100,12 +104,42 @@ describe('HOOK_GATED', () => {
       expect(GATE_SWITCH[g.law].key).toBe(g.key)
     }
     expect(GATE_SWITCH[gateAddress('ownership')].key).toBe('ownershipGate')
+    // The two `law: null` rows that sit on a rule's row: the advisory note, and rigor 5's hook.
+    // VIII is no HOOK_PINNED address, so this is what a renumber of Cure the Cause reddens.
+    expect(GATE_SWITCH[ruleCanon().byId.get('cure-the-cause').label].key).toBe('testNote')
+    expect(GATE_SWITCH[gateAddress('rigor-5')].key).toBe('externalGate')
     // A switch on a law no hook gates would toggle nothing.
     for (const g of GATE_SWITCHES.filter((row) => row.law)) {
       expect(HOOK_GATED.has(g.law)).toBe(true)
     }
     // A switch with no confirm copy would throw on the click.
     expect(Object.keys(C.GATE_COPY)).toEqual(Object.keys(GATE_SWITCH))
+  })
+
+  // The hooked doctrine rules with no switch all have their hook go with their text (owner
+  // decision 2026-11-08): process 1, process 5 and ops 2. So no hook keeps asking with its text
+  // excluded; a hooked rule added with neither a switch nor that wiring would land in ALWAYS_ASKS.
+  it('WITH_TEXT is every switchless hooked rule, and ALWAYS_ASKS is empty', () => {
+    expect([...C.WITH_TEXT].sort()).toEqual(['ops.2', 'process.1', 'process.5'])
+    expect([...C.ALWAYS_ASKS]).toEqual([])
+  })
+
+  // Every rule a hook gates, and every switchable gate, explains what its hook does, and no row
+  // without a hook does. The set is read from the server's own tables (HOOK_PINNED, GATE_SWITCHES),
+  // not from GATE_HOOK, so a hook added there fails here until its row has the four lines.
+  it('GATE_HOOK covers exactly the hooked rows, each with four non-empty lines', () => {
+    const pinned = Object.values(HOOK_PINNED).map((l) => l.replace(' ', '.'))
+    const switched = GATE_SWITCHES.map((g) =>
+      g.law ? g.law : Object.keys(GATE_SWITCH).find((a) => GATE_SWITCH[a].key === g.key),
+    )
+    const hooked = [...new Set([...pinned, ...switched])].sort()
+    expect(hooked).toContain('VIII')
+    expect(hooked).toContain('ownership')
+    expect(Object.keys(C.GATE_HOOK).sort()).toEqual(hooked)
+    for (const h of Object.values(C.GATE_HOOK)) {
+      expect(Object.keys(h).sort()).toEqual(['blind', 'hosts', 'off', 'on'])
+      for (const line of Object.values(h)) expect(line.trim().length).toBeGreaterThan(0)
+    }
   })
 })
 

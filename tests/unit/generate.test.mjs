@@ -1076,14 +1076,40 @@ test('a merge warns about and refuses to rewrite a commented .jsonc', () => {
 test('an already-wired commented .jsonc is a silent no-op', () => {
   // The refusal above is a warning the user is expected to ACT on. Repeating it on a file that
   // already carries everything the merge would add is how a warning gets trained away.
+  // "Everything" includes the subagent depth cap, the last top-level key the merge adds.
   withDir((d) => {
     const j = path.join(d, 'opencode.json');
     const jc = path.join(d, 'opencode.jsonc');
     const original = '// notes\n{\n  "instructions": ["AGENT.md"],\n'
-      + '  "permission": {"bash": "allow"},\n  "lsp": true\n}\n';
+      + '  "permission": {"bash": "allow"},\n  "lsp": true,\n  "subagent_depth": 2\n}\n';
     fs.writeFileSync(jc, original);
     const [, out] = captured(() => mergeOpencodeJson(j, 'AGENT.md'));
     assert.equal(out, '', `expected silence, got ${JSON.stringify(out)}`);
+    assert.equal(fs.readFileSync(jc, 'utf8'), original);
+  });
+});
+
+test("the subagent depth cap is added when absent and the user's own value is kept", () => {
+  // Key by key, as `lsp` is: no `subagent_depth` ⇒ 2 (main → worker → sub-worker); any value
+  // the user wrote, even a looser one, stays exactly as written.
+  withDir((d) => {
+    const j = path.join(d, 'opencode.json');
+    captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.equal(JSON.parse(fs.readFileSync(j, 'utf8')).subagent_depth, 2);
+    fs.writeFileSync(j, JSON.stringify({ instructions: [], subagent_depth: 5 }));
+    captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.equal(JSON.parse(fs.readFileSync(j, 'utf8')).subagent_depth, 5);
+  });
+});
+
+test('a commented .jsonc missing only the depth cap is told to add it by hand', () => {
+  withDir((d) => {
+    const jc = path.join(d, 'opencode.jsonc');
+    const original = '// notes\n{\n  "instructions": ["AGENT.md"],\n'
+      + '  "permission": {"bash": "allow"},\n  "lsp": true\n}\n';
+    fs.writeFileSync(jc, original);
+    const [, out] = captured(() => mergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md'));
+    assert.match(out, /a top-level "subagent_depth": 2/);
     assert.equal(fs.readFileSync(jc, 'utf8'), original);
   });
 });
@@ -1721,24 +1747,24 @@ test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows
     const tails = ['opencode.json', 'opencode.jsonc', '.opencode/excludes.json',
       '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/*', '.opencode/plugin/*',
       '.opencode/agents/*.md', '.opencode/agent/*.md', '.opencode/mode/*.md', '.opencode/modes/*.md', '.opencode/tool/*', '.opencode/tools/*',
+      // The guard reads `.opencode/AGENT.md` before the project's carrier, so a project install asks on it too.
+      '.opencode/AGENT.md',
       '.claude/settings.json', '.claude/settings.local.json', '.openclaude/settings.json',
       '.openclaude/settings.local.json', '.bob/settings.json', '.bob/settings.local.json',
       '.bob/settings/settings.json',
-      // Persist Insight: the coined names anywhere, the memory folders by their last segments.
-      'user-rules.md', 'user-rules.draft.md', 'MEMORY.md', '.opencode/memory/*.md', 'geneseed/memory/*.md',
+      // Persist Insight: the two coined rule names anywhere. Memory is written freely (2026-11-08), so no memory key.
+      'user-rules.md', 'user-rules.draft.md',
       '.geneseed/bin/*'];
     // A project AGENT.md never gets `*/AGENT.md`, which would ask about every AGENT.md in the repo:
     // install-root-relative, git-root-relative (1.x, a subpackage install) and `*../` (2.x subdir session).
     withDir((d) => {
       fs.mkdirSync(path.join(d, '.git'));
       assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'AGENT.md'),
-        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md', 'memory/*.md', '*../memory/*.md']);
-      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-6),
-        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md', 'memory/*.md', 'pkg/memory/*.md', '*../memory/*.md']);
-      // The store sits beside the carrier: the default project install's is Harness/memory.
-      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-6),
-        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md',
-          'Harness/memory/*.md', '*../Harness/memory/*.md', '*/Harness/memory/*.md']);
+        [...tails.flatMap((t) => [t, `*/${t}`]), 'AGENT.md', '*../AGENT.md']);
+      assert.deepEqual(opencodeEditAsks(path.join(d, 'pkg', '.opencode'), false, 'AGENT.md').slice(-3),
+        ['AGENT.md', 'pkg/AGENT.md', '*../AGENT.md']);
+      assert.deepEqual(opencodeEditAsks(path.join(d, '.opencode'), false, 'Harness/AGENT.md').slice(-3),
+        ['Harness/AGENT.md', '*../Harness/AGENT.md', '*/Harness/AGENT.md']);
     });
     const global = opencodeEditAsks(path.join('home', '.config', 'opencode'), true);
     for (const k of ['opencode/config.json', '*/opencode/config.json', '*/opencode/AGENT.md', '*/opencode/excludes.json']) {
@@ -1753,18 +1779,20 @@ test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows
   });
 });
 
-test('OpenCode asks for gate config, the stores and what can load code, at the root, below it and outside it', () => {
+test('OpenCode asks for gate config, the rule stores and what can load code, at the root, below it and outside it', () => {
   withShimHome(path.join(os.tmpdir(), '.geneseed'), () => {
     const edit = { '*': 'allow', ...Object.fromEntries(opencodeEditAsks('/r/.opencode', false, 'AGENT.md').map((k) => [k, 'ask'])) };
     // 1.x: relative to the worktree; 2.x: relative to the session dir, absolute outside it.
     for (const rel of ['opencode.json', 'pkg/opencode.jsonc', '../opencode.json', '.opencode/excludes.json',
       'AGENT.md', '../AGENT.md', '../../AGENT.md', '.opencode/plugins/geneseed-guard.js', '.opencode/plugins/my-plugin.js',
-      '.opencode/agents/x.md', '.opencode/tool/x.js', 'memory/fact.md', '../.opencode/.geneseed-manifest.json',
+      '.opencode/agents/x.md', '.opencode/tool/x.js', 'user-rules.md', 'pkg/user-rules.draft.md', '../.opencode/.geneseed-manifest.json',
       '.claude/settings.json', 'pkg/.bob/settings.json', 'C:/Users/u/.bob/settings/settings.json',
       '../../.geneseed/bin/geneseed-hook.cmd', 'C:/Users/u/.geneseed/bin/geneseed-hook',
       'C:\\r\\.opencode\\excludes.json']) assert.equal(ocDecide(edit, rel), 'ask', rel);
     for (const rel of ['src/app.js', 'docs/AGENT.md', '.claude/agents/x.md',
-      'opencode.json.bak', 'excludes.json', 'config/settings.json', 'src/memory/notes.md']) {
+      'opencode.json.bak', 'excludes.json', 'config/settings.json', 'src/memory/notes.md',
+      // Memory is written freely (owner decision, 2026-11-08): the index and a fact file get no ask.
+      'memory/fact.md', 'memory/MEMORY.md']) {
       assert.equal(ocDecide(edit, rel), 'allow', rel);
     }
     if (process.platform === 'win32') assert.equal(ocDecide(edit, '.OpenCode/EXCLUDES.JSON'), 'ask');

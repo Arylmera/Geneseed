@@ -4,6 +4,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 
 import Activity from '../pages/Activity.jsx'
 import { compact } from '../lib/activity.jsx'
+import { perRow } from '../pages/Activity/Garden.jsx'
 
 const okResp = (body) => ({ ok: true, json: () => Promise.resolve(body) })
 
@@ -580,6 +581,17 @@ describe('Activity page: ended sessions', () => {
     expect(screen.getAllByText('still going')).toHaveLength(1)
     expect(screen.queryByRole('heading', { name: 'Recently ended' })).toBeNull()
   })
+
+  // The garden shows live trees only: no ended section, and no host from an ended session.
+  it('lists no ended session in the garden', async () => {
+    window.history.replaceState(null, '', '#/activity')
+    global.fetch = vi.fn(() => Promise.resolve(okResp(body(one))))
+    render(<Activity />)
+    await screen.findByRole('link', { name: /^still going/ })
+    expect(heading()).toBeNull()
+    expect(screen.queryByText('finished')).toBeNull()
+    expect([...screen.getByLabelText('Host').options].map((o) => o.value)).toEqual([''])
+  })
 })
 
 describe('Activity garden switch', () => {
@@ -651,6 +663,98 @@ describe('Activity garden switch', () => {
     render(<Activity />)
     expect(await screen.findByRole('link', { name: /^other host, BOB \(IBM\), idle/ })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /^grow it/ })).toBeNull()
+  })
+
+  // One plank per project shelf, under a brass plate naming it; every tree keeps its accessible
+  // name, and its caption says the title, the install, the status word, turns and context.
+  const three = [
+    ...live,
+    { session_id: 'g3', host: 'claude', title: 'asks you', status: 'waiting-input', cwd: '/x/lib' },
+    { session_id: 'g4', host: 'claude', title: 'stuck', status: 'blocked', cwd: '/x/lib' },
+  ]
+  const plates = () => [...document.querySelectorAll('.gd-plate')].map((p) => p.textContent)
+
+  it('stands each shelf on one plank with a plate, and captions every tree', async () => {
+    global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: three })))
+    render(<Activity />)
+    const tree = await screen.findByRole('link', { name: /^grow it, Claude Code, working/ })
+    expect(document.querySelectorAll('.gd-plank')).toHaveLength(2)
+    expect(plates()).toEqual(['app · 2 sessions', 'lib · 2 sessions'])
+    expect(screen.getByRole('heading', { name: 'app · 2 sessions' })).toBeTruthy()
+    // The caption: the full title also as its tooltip, the install chip, the green status pill,
+    // and "<turns> turns · <context>%" (50 000 of 200 000 is 25 %).
+    expect(within(tree).getByText('grow it').getAttribute('title')).toBe('grow it')
+    expect(within(tree).getByTitle('The install this session runs in').textContent).toBe(
+      'Claude Code',
+    )
+    expect(within(tree).getByText('working').className).toBe('badge ok')
+    expect(within(tree).getByText('12 turns · 25%')).toBeTruthy()
+    // Needs you is amber, idle grey; an unknown context leaves only the turns.
+    const asks = screen.getByRole('link', { name: /^asks you, Claude Code, your move/ })
+    expect(within(asks).getByText('your move').className).toBe('badge warn')
+    const stuck = screen.getByRole('link', { name: /^stuck, Claude Code, blocked/ })
+    expect(within(stuck).getByText('blocked').className).toBe('badge bad')
+    const idle = screen.getByRole('link', { name: /^other host, BOB \(IBM\), idle/ })
+    expect(within(idle).getByText('idle').className).toBe('badge ')
+    expect(within(idle).getByText('0 turns')).toBeTruthy()
+    // The old floating label is gone.
+    expect(document.querySelector('.gd-label')).toBeNull()
+  })
+
+  // A plank holds as many 224 px trees (24 px apart, 16 px padding) as the shelf's width allows;
+  // unmeasured, the whole shelf stands on one plank.
+  it('fits the trees a shelf width allows on each plank', () => {
+    expect(perRow(0, 5)).toBe(5)
+    expect(perRow(375, 3)).toBe(1)
+    expect(perRow(520, 3)).toBe(2)
+    expect(perRow(1000, 9)).toBe(4)
+  })
+
+  // Folding the rail changes the shelf's width with no window resize: the observer re-counts.
+  it('re-counts the planks when the observer reports a new width', async () => {
+    // One observer per shelf: the width change reaches each.
+    const fired = []
+    const RO = vi.fn(function (cb) {
+      fired.push(cb)
+      this.observe = vi.fn()
+      this.disconnect = vi.fn()
+    })
+    vi.stubGlobal('ResizeObserver', RO)
+    let w = 1200
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => w,
+    })
+    try {
+      global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: three })))
+      render(<Activity />)
+      await screen.findByRole('link', { name: /^grow it/ })
+      expect(document.querySelectorAll('.gd-plank')).toHaveLength(2)
+      w = 343
+      act(() => fired.forEach((cb) => cb([])))
+      expect(document.querySelectorAll('.gd-plank')).toHaveLength(4)
+    } finally {
+      delete HTMLElement.prototype.clientWidth
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('stacks the planks of a narrow shelf, the plate on the first only', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 343,
+    })
+    try {
+      global.fetch = vi.fn(() => Promise.resolve(okResp({ enabled: true, activity: three })))
+      render(<Activity />)
+      await screen.findByRole('link', { name: /^grow it/ })
+      expect(document.querySelectorAll('.gd-plank')).toHaveLength(4)
+      expect(plates()).toEqual(['app · 2 sessions', 'lib · 2 sessions'])
+      const app = screen.getByRole('region', { name: 'app shelf' })
+      expect(app.querySelectorAll('.gd-row')).toHaveLength(2)
+    } finally {
+      delete HTMLElement.prototype.clientWidth
+    }
   })
 })
 

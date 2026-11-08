@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HOSTS, hostInfo, removeLayer } from '../lib/hosts.js'
+import { HOSTS, fleetSlots, hostInfo, removeLayer } from '../lib/hosts.js'
 import { HARNESSES, docsHostOf } from '../hooks/useHarness.js'
 
 // lib/hosts.js replaced four ternary chains over host ids. These rows are the chains'
@@ -72,5 +72,16 @@ describe('docs host', () => {
     [undefined, 'opencode'],
   ])('emit %s reads the %s docs', (emit, docs) => {
     expect(docsHostOf(emit)).toBe(docs)
+  })
+})
+
+// The Library and the Constitution's gate asks index the same list, so one install gets one colour.
+// A merged install holds no slot: the ones after it move up, and it has none itself.
+describe('fleetSlots', () => {
+  it('drops merged installs before indexing, dedupes, and gives a missing key no slot', () => {
+    const slots = fleetSlots(['a', 'm', 'b', 'a'], ['m'])
+    expect(slots).toEqual(['a', 'b'])
+    expect(slots.indexOf('b')).toBe(1)
+    expect(slots.indexOf('m')).toBe(-1)
   })
 })

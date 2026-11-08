@@ -189,19 +189,16 @@ contract you do not already know.
 <!-- CATALOG:end -->
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
-{{AGENT}} that *writes* must return a summary of exactly what it changed. Every
-{{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
-`spec-feedback:` line, weigh it — record a real flaw (with the user's assent) in
-`{{PATH_NOTES}}/agent-notes/<name>.md` and pass it to later dispatches;
-{{MEMORY}} gets a record only when it clears {{DOCTRINE:persist-insight}}'s bar.
+{{AGENT}} that *writes* must return a summary of exactly what it changed. Weigh any
+`spec-feedback:` line an {{AGENT}}'s report carries, as its spec's self-improvement loop says.
 
 <!-- LEAN:begin -->
 **Dispatching a multi-part goal.** When a goal spans several capabilities,
 decompose it into independent subtasks, route each to the single owning {{AGENT}}
 above, and converge the results yourself. Every handoff carries an **envelope** —
 the subtask goal, the inputs the {{AGENT}} needs, and its output contract — and the
-constraints travel with it: dispatched {{AGENTS}} never commit or push ({{DOCTRINE:consent-before-push}}
-stays with you), and an unfulfilled contract returns as a stated gap, never invented
+constraints travel with it: dispatched {{AGENTS}} never push, and commit only in their own
+worktree ({{DOCTRINE:consent-before-push}} stays with you), and an unfulfilled contract returns as a stated gap, never invented
 content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
 workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
 the same shape model-driven via the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md).
@@ -212,8 +209,8 @@ Ten of them — `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`,
 dispatched alone; the [council {{SKILL}}]({{DIR_SKILLS}}/council.md) convenes the
 subset that productively clashes on a given motion.
 <!-- LEAN:else -->
-Dispatched {{AGENTS}} never commit or push ({{DOCTRINE:consent-before-push}} stays with
-you), and an unfulfilled contract returns as a stated gap, never invented content. A
+Dispatched {{AGENTS}} commit only in their worktree, never push
+({{DOCTRINE:consent-before-push}} stays with you), and an unfulfilled contract returns as a stated gap, never invented content. A
 multi-part goal goes through the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md)
 (or the [workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md) where the host has a workflow tool);
 the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/council.md).
@@ -311,8 +308,8 @@ the file, or to {{MEMORY}} ({{DOCTRINE:persist-insight}}).
 Persistent facts live in {{LINK_MEMORY}} — one fact per file, indexed by a
 local `MEMORY.md`, a session file (**Session start**, above); write a new memory
 whenever the conversation yields a durable fact, a correction, or a decision worth
-keeping — through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with
-the user whether it is a memory or a standing rule before either is written
+keeping — on your own; the user sees each memory later in the web console. A standing
+rule goes to the user, through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}
 ({{DOCTRINE:persist-insight}}). The `{{PATH_MEMORY}}/` directory is **personal and git-ignored** — it is
 never committed or shared; to share knowledge, put it in code, docs, or the
 project's `user-rules.md` (§1). When the same feedback lesson keeps recurring,
@@ -325,9 +322,9 @@ the session — memory, notebook, notes, commits, docs — cite a rule by its pr
 ("Verify Before Asserting"), never its number: numbers are positional. Full convention: [`{{DIR_MEMORY}}/README.md`]({{DIR_MEMORY}}/README.md).
 <!-- LEAN:else -->
 Durable facts live in {{LINK_MEMORY}}, one per file, indexed by
-`MEMORY.md`, a session file. Write one through the
-[rule]({{DIR_SKILLS}}/rule.md) {{SKILL}}, which settles with the user whether a
-lesson is a memory or a standing rule ({{DOCTRINE:persist-insight}}). The directory is
+`MEMORY.md`, a session file. Write one on your own; the user sees it in the web
+console. A standing rule goes through the
+[rule]({{DIR_SKILLS}}/rule.md) {{SKILL}} ({{DOCTRINE:persist-insight}}). The directory is
 **personal and git-ignored**; shared knowledge goes in code, docs, or `user-rules.md`
 (§1). In anything that outlives the session, cite a rule by its principle ("Verify Before
 Asserting"), never its number — numbers change. Convention, incl. `force`:
@@ -355,8 +352,8 @@ own benefit — a scratch script, an analysis dump, a draft, an experiment, a
 tool you build for yourself — belongs in `{{DIR_NOTEBOOK}}/`, never in the host
 tree. `NOTEBOOK.md`, a session file, recalls what you keep here; keep the space referable across sessions — the seeded index
 is one way; replace it with whatever scheme serves you better. When a note
-hardens into a durable fact worth recalling verbatim, propose it for {{MEMORY}}
-through the rule {{SKILL}} (§5, {{DOCTRINE:persist-insight}}). Keep the two stores distinct by *role*, not just by
+hardens into a durable fact worth recalling verbatim, write it to {{MEMORY}}
+(§5, {{DOCTRINE:persist-insight}}). Keep the two stores distinct by *role*, not just by
 format: {{MEMORY}} holds durable insight for future sessions, the {{NOTEBOOK}}
 holds your working artifacts. The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
 git-ignored** — never committed or shared, and the `.gitignore` that guarantees
@@ -365,8 +362,7 @@ it is not yours to lift.
 Your own working space, [`{{DIR_NOTEBOOK}}/`]({{DIR_NOTEBOOK}}/): any file you make
 for your own benefit — scratch code, drafts, datasets, experiments — goes here, never
 in the host tree, in whatever format serves; its index `NOTEBOOK.md` is a session
-file. A note that hardens into a durable fact is proposed for {{MEMORY}} through
-the rule {{SKILL}} (§5).
+file. A note that hardens into a durable fact goes to {{MEMORY}} (§5).
 The charter [`{{DIR_NOTEBOOK}}/README.md`]({{DIR_NOTEBOOK}}/README.md) is yours to
 rewrite; the one fixed law is that the folder is **personal and git-ignored**, and
 that `.gitignore` is not yours to lift.
@@ -385,8 +381,8 @@ configs, documents, prior work. All of it is context you may use.
 
 After reading this file, take stock of what surrounds it. That non-harness
 content is knowledge to **read and learn from**, not scaffolding to reorganise.
-When you find a durable fact there worth keeping, propose it for {{MEMORY}} through
-the rule {{SKILL}} (§5) so it outlives the session.
+When you find a durable fact there worth keeping, write it to {{MEMORY}} (§5) so it
+outlives the session.
 
 Because the folder is shared, two cautions hold:
 - **You do not own it.** Files you did not create are not yours to move, rename,
@@ -400,7 +396,7 @@ scratch scripts, analysis dumps, drafts, experiments — are made in the
 <!-- LEAN:else -->
 {{INTRO_WORKSPACE}} Whatever sits beside the harness files — notes, data, configs,
 prior work — is knowledge to read and learn from, not scaffolding to reorganise;
-propose a durable fact from it for {{MEMORY}} through the rule {{SKILL}} (§5). You do not own the folder: files
+write a durable fact from it to {{MEMORY}} (§5). You do not own the folder: files
 you did not create are not yours to move or delete unless the task requires it
 ({{LAW:deletion-is-deliberate}}), and a file is verified before it is treated as disposable ({{LAW:verify-before-asserting}}).
 It receives only the task's deliverables; your working files go in the {{NOTEBOOK}}

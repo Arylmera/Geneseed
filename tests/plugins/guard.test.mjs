@@ -110,7 +110,7 @@ for (const command of [
   "rd /s/q C:\\", "bash <<'EOF'\nrm -rf C:\\\nEOF",
 ]) {
   test(`rm root/home guard: ${JSON.stringify(command)} -> blocked as catastrophic`, async () => {
-    assert.match(await denial("bash", { command }), /catastrophic command/)
+    assert.match(await denial("bash", { command }), /would destroy a filesystem root/)
   })
 }
 // A narrower target is not SHELL_BLOCK_RE's business: whatever this guard says about it comes
@@ -119,7 +119,7 @@ for (const command of [
 for (const command of ["rm -rf ./build", "rm -rf /tmp/x", "rm -rf ~/projects/old", "rm -rf build/*", "rm -f /",
   "cat <<'EOF'\nrm -rf C:\\\nEOF"]) {
   test(`rm root/home guard: ${JSON.stringify(command)} is not catastrophic`, async () => {
-    assert.doesNotMatch(String(await denial("bash", { command })), /catastrophic command/)
+    assert.doesNotMatch(String(await denial("bash", { command })), /would destroy a filesystem root/)
   })
 }
 
@@ -219,7 +219,7 @@ test("Law IV blocks exactly on real loss, per the shared policy table", async ()
       }, row.branch)
       const want = row.stop && !row.always
       assert.equal(why !== null, want, `${command} [${row.state}, ${row.branch || "main"}]: ${why}`)
-      if (want) assert.match(why, /^\[geneseed-guard\] blocked: .*\(Deletion Is Deliberate\)/, command)
+      if (want) assert.match(why, /^\[geneseed-guard\] blocked: Tell the user this, word for word: [\s\S]*\(Deletion Is Deliberate\)/, command)
     }
   } finally {
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]
@@ -259,6 +259,18 @@ test("the loss twin block is byte-identical to js/hosts/loss.mjs", async () => {
   const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/loss.mjs"), "utf8")
   const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
   assert.equal(cut(guardSrc), cut(hookSrc), "the guard's loss block drifted from js/hosts/loss.mjs")
+})
+
+// The words a person reads must not differ by host, and the plugin cannot import them either.
+test("the gate text twin block is byte-identical to js/hosts/hooks-prims.mjs", async () => {
+  const cut = (s) => {
+    const b = s.indexOf("// ---- gate text twin: BEGIN"), e = s.indexOf("// ---- gate text twin: END")
+    assert.ok(b >= 0 && e > b, "twin markers missing")
+    return s.slice(b, e).replace(/^export /gm, "")
+  }
+  const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks-prims.mjs"), "utf8")
+  const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
+  assert.equal(cut(guardSrc), cut(hookSrc), "the guard's gate text block drifted from js/hosts/hooks-prims.mjs")
 })
 
 // The guard's fs-only git readers are twins of js/hosts/gitref.mjs (the plugin cannot import it).
@@ -453,7 +465,7 @@ async function withHome(home, fn) {
 const gateConfigDenied = async (p) => {
   const why = await denial("write", { filePath: p, content: "{}" })
   assert.ok(why, `${p}: expected a block`)
-  assert.match(why, /is a gate's own configuration.*never write it another way.*\(External Gate\)/, why)
+  assert.match(why, /controls the gates that watch the agent[\s\S]*\(External Gate\)[\s\S]*do not write this file another way/, why)
   assert.doesNotMatch(why, /GENESEED_|--no-/, why)
 }
 
@@ -509,7 +521,7 @@ test("the AGENT.md under $GENESEED_HARNESS is gate configuration", async () => {
     const fresh = await import("../../adapters/opencode/plugins/geneseed-guard.js?gatecfg-harness")
     const h = (await fresh.GeneseedGuard())["tool.execute.before"]
     await assert.rejects(h({ tool: "write", args: { filePath: path.join(harness, "AGENT.md") } }, {}),
-      /is a gate's own configuration/)
+      /controls the gates that watch the agent/)
     await h({ tool: "write", args: { filePath: path.join(harness, "README.md") } }, {})
   } finally {
     if (prev === undefined) delete process.env.GENESEED_HARNESS; else process.env.GENESEED_HARNESS = prev
@@ -517,15 +529,15 @@ test("the AGENT.md under $GENESEED_HARNESS is gate configuration", async () => {
 })
 
 // The guard's lists are hooks.mjs's minus exactly what L1's native ask covers: the hook settings and
-// opencode.json(c) names, and the `.opencode` marker. The reason is the same sentence on every host.
+// opencode.json(c) names, and the `.opencode` marker. `rules/geneseed.md` is Bob's, two levels under
+// a marker, which the guard's one-level match cannot name.
 test("the guard's gate-config lists are js/hosts/hooks.mjs's minus OpenCode's own", async () => {
   const guardSrc = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
   const hookSrc = await fs.readFile(path.join(process.cwd(), "js/hosts/hooks.mjs"), "utf8")
   const pick = (src, name) => src.match(new RegExp(`const ${name} = (.*?);?\\r?\\n`))?.[1]
   const list = (src, name) => JSON.parse(pick(src, name).replace(/'/g, '"'))
-  assert.equal(pick(guardSrc, "GATE_CONFIG_ASK"), pick(hookSrc, "GATE_CONFIG_ASK"), "GATE_CONFIG_ASK drifted")
   assert.deepEqual(list(guardSrc, "GATE_CONFIG_FILES"),
-    list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode/.test(f)))
+    list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode|rules\//.test(f)))
   assert.deepEqual(list(guardSrc, "GATE_CONFIG_MARKERS"), list(hookSrc, "GATE_CONFIG_MARKERS").filter((m) => m !== ".opencode"))
   // The hook's markers are every host's project dir, as js/hosts/hosts.mjs names them.
   const { HOSTS } = await import("../../js/hosts/hosts.mjs")
@@ -711,7 +723,7 @@ test("a lone & or a subshell does not hide a root scan", async () => {
 
 test("a root-scan block names Commands Must Return and a directory to search instead", async () => {
   await assert.rejects(hook({ tool: "bash", args: { command: "find / -name x" } }, {}),
-    /Commands Must Return.*specific directory/)
+    /\(Commands Must Return\)[\s\S]*search one named directory/)
 })
 
 test("the root-scan constants stay in parity with js/hosts/hooks.mjs's rootScan", async () => {
@@ -749,7 +761,23 @@ test("with a V1 client, guard messages go to client.app.log, not stderr", async 
   assert.equal(logged.length, 1)
   assert.equal(logged[0].service, "geneseed-guard")
   assert.equal(logged[0].level, "warn")
-  assert.match(logged[0].message, /^BLOCKED: catastrophic command/)
+  assert.match(logged[0].message, /^BLOCKED: Tell the user this, word for word: This command, "rm -rf \/", would destroy/)
+})
+
+// A deny carries the same builder text as the hooks, with the path from the repo root and no count:
+// the guard has no `editPairs`, and the model reads this to relay it.
+test("a refusal is the builder's text, whole", async () => {
+  const repo = path.join(tmp, "refusal-text")
+  await fs.mkdir(path.join(repo, ".git"), { recursive: true })
+  await fs.mkdir(path.join(repo, ".geneseed"), { recursive: true })
+  await fs.writeFile(path.join(repo, ".geneseed", "protected-checks.txt"), "tsconfig.json\n")
+  const why = await denial("write", { filePath: path.join(repo, "tsconfig.json"), content: "{}" })
+  assert.equal(why, "[geneseed-guard] blocked: Tell the user this, word for word: This edit changes tsconfig.json, which sets how strictly types are checked.\n"
+    + "It was refused because the agent's own work is judged by this file. (External Gate)\n"
+    + "You can make this change yourself, outside the agent.\n"
+    + "Agent: do not write this file another way.")
+  const key = await denial("write", { filePath: path.join(repo, ".ssh", "id_rsa"), content: "k" })
+  assert.match(key, /This edit writes to \.ssh\/id_rsa, a file that holds a secret or key\.\n[\s\S]*\(Sealed Secrets\)/)
 })
 
 // C2 on OpenCode. The reader is a byte twin of the hook's, and hook_gates.test.mjs holds its table;
@@ -773,7 +801,7 @@ test("a shell write to a protected check is refused; a read of it passes", async
   const run = (command) => denial("bash", { command, workdir: repo })
   for (const c of ["echo x > ci/verify.sh", "echo x | tee ci/verify.sh", "sed -i s/a/b/ ci/verify.sh",
     "cp evil ci/verify.sh", "mv ci/verify.sh /elsewhere/x", "echo x >> .geneseed/done-checks.txt"]) {
-    assert.match(await run(c) ?? "", /protected check.*\(External Gate\)/, c)
+    assert.match(await run(c) ?? "", /This command writes to [\s\S]*\(External Gate\)/, c)
   }
   for (const c of ["cat ci/verify.sh > /tmp/y", "cat ci/verify.sh", "npm test 2>&1", "echo 'x > ci/verify.sh'", "node x > /dev/null"]) {
     assert.equal(await run(c), null, c)
@@ -788,7 +816,7 @@ test("a shell write reaches what permission.edit asks about, since no ask covers
       path.join(f.repo, ".claude", "settings.json"), path.join(f.repo, ".claude", "settings.local.json"),
       path.join(f.repo, ".bob", "settings", "settings.json"), path.join(f.repo, ".claude", "excludes.json"),
       path.join(f.home, "bin", "geneseed-hook"), path.join(CFG, "plugins", "geneseed-guard.js"), path.join(CFG, "excludes.json")]) {
-      assert.match(await run(p) ?? "", /is a gate's own configuration.*\(External Gate\)/, p)
+      assert.match(await run(p) ?? "", /controls the gates that watch the agent[\s\S]*\(External Gate\)/, p)
     }
     // The same files through an edit tool stay OpenCode's native ask, and a near miss is no hit.
     assert.equal(await denial("write", { filePath: path.join(f.repo, "opencode.json"), content: "{}" }), null)

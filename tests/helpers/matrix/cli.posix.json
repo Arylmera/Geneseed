@@ -1425,10 +1425,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision",
-        "the memory index"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/memory-index",
       "steps": [
         {
@@ -1444,9 +1441,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/memory-index-anywhere",
       "steps": [
         {
@@ -1512,10 +1507,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision",
-        "writing to memory"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/memory-file-under-root",
       "steps": [
         {
@@ -1534,9 +1526,7 @@
       }
     },
     {
-      "expect": [
-        "permissionDecision"
-      ],
+      "expect_silent": true,
       "id": "rule-gate/memory-file-nested-under-root",
       "steps": [
         {

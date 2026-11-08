@@ -1,16 +1,17 @@
 import React from 'react'
 import { go } from '../lib/router.js'
-import { driftTotal, libraryCount, relTime, ruleCount } from '../lib/format.js'
+import { libraryCount, ruleCount } from '../lib/format.js'
 import { Icon, Sprout } from './Icon.jsx'
-import { activeInstalls, installTag } from '../lib/hosts.js'
+import { useLocalStorage } from '../hooks/useLocalStorage.js'
 
-// The seven pages, in the order a visit reads them: how the harness is doing, what it
-// obeys, what it knows, how it iterates, what is yours, and where it is installed. A badge is what
+// The pages, in the order a visit reads them. The rail groups them (GROUPS below): the Overview
+// alone, then what governs, what is built, what runs, and help. A badge is what
 // its page lists, across every install, deduped (`overview.counts`; __tests__/railCounts.test.jsx
 // holds each one to its page); a page with no honest single number carries none.
 const NAV = [
-  { hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
+  { group: 'core', hash: '#/', page: 'overview', label: 'Overview', icon: 'dashboard' },
   {
+    group: 'govern',
     hash: '#/laws',
     page: 'laws',
     label: 'Constitution',
@@ -18,6 +19,7 @@ const NAV = [
     count: (o) => (o?.counts ? ruleCount(o.counts) : null),
   },
   {
+    group: 'build',
     hash: '#/library',
     page: 'library',
     label: 'Library',
@@ -25,6 +27,7 @@ const NAV = [
     count: (o) => (o?.counts ? libraryCount(o.counts) : null),
   },
   {
+    group: 'build',
     hash: '#/kits',
     page: 'kits',
     label: 'Kits',
@@ -32,6 +35,7 @@ const NAV = [
   },
   // Templates only: a brick is a part, the template is what a person runs.
   {
+    group: 'build',
     hash: '#/loops',
     page: 'loops',
     label: 'Loops',
@@ -40,8 +44,9 @@ const NAV = [
     countTitle: 'Templates across every install',
     count: (o) => o?.counts?.loops ?? null,
   },
-  { hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
+  { group: 'govern', hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
   {
+    group: 'run',
     hash: '#/installs',
     page: 'installs',
     label: 'Installs',
@@ -52,21 +57,37 @@ const NAV = [
 ]
 
 const FOOT = [
-  { hash: '#/docs', page: 'docs', label: 'Docs', icon: 'docs' },
-  { hash: '#/activity', page: 'activity', label: 'Activity', icon: 'activity' },
-  { hash: '#/settings', page: 'settings', label: 'Settings', icon: 'settings' },
+  { group: 'help', hash: '#/docs', page: 'docs', label: 'Docs', icon: 'docs' },
+  { group: 'run', hash: '#/activity', page: 'activity', label: 'Activity', icon: 'activity' },
+  { group: 'help', hash: '#/settings', page: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
-function NavLink({ n, lit, count, onNavigate }) {
+// The rail's groups, in order. `tint` names the --sb-<tint>-bg / -ink pair in styles.css; the
+// Overview stands alone, so it has no header. Every page belongs to exactly one group.
+const GROUPS = [
+  { id: 'core', title: null },
+  { id: 'govern', title: 'Govern' },
+  { id: 'build', title: 'Build' },
+  { id: 'run', title: 'Run' },
+  { id: 'help', title: 'Help' },
+]
+const ALL = [...NAV, ...FOOT]
+const COLLAPSE_KEY = 'geneseed-rail'
+
+function NavLink({ n, lit, count, collapsed, onNavigate }) {
   return (
     <li>
       <a
         className={`sb-item${lit ? ' on' : ''}`}
         href={n.hash}
         aria-current={lit ? 'page' : undefined}
+        title={collapsed ? n.label : undefined}
+        aria-label={collapsed ? (count != null ? `${n.label}, ${count}` : n.label) : undefined}
         onClick={() => onNavigate?.()}
       >
-        <Icon name={n.icon} />
+        <span className="sb-chip" aria-hidden="true">
+          <Icon name={n.icon} />
+        </span>
         <span className="sb-label">{n.label}</span>
         {count != null ? (
           <span className="sb-count" title={n.countTitle}>
@@ -78,113 +99,85 @@ function NavLink({ n, lit, count, onNavigate }) {
   )
 }
 
-// The harness's pulse, on every page: whether the doctor is happy, how many local edits the
-// install holds, and when it was built. Three facts that decide whether
-// anything else on screen can be trusted. The voice sits under them as a button, because
-// switching it is the one rebuild the sidebar offers. A named card (a region), so a
-// landmark list reaches it by name. Its facts are ONE install's (the default's overview): once
-// two installs are active, `tag` names it, on the card and in its name.
-function Vitals({ overview, onOpenVoice, tag }) {
-  if (!overview) return null
-  const d = overview.doctor
-  const drift = driftTotal(overview.diff)
-  return (
-    <section className="sb-vitals" aria-label={tag ? `Install vitals, ${tag}` : 'Install vitals'}>
-      {tag ? (
-        <div>
-          <span>install</span>
-          <b className="mono">{tag}</b>
-        </div>
-      ) : null}
-      <div>
-        <span>doctor</span>
-        <b className={!d ? '' : d.ok ? 'good' : 'bad'}>
-          {!d ? 'checking' : d.ok ? 'clean' : `${d.problems.length} to fix`}
-        </b>
-      </div>
-      <div>
-        <span>local edits</span>
-        <b className={drift ? 'warn' : ''}>{overview.diff ? drift : 'n/a'}</b>
-      </div>
-      <div>
-        <span>built</span>
-        <b title={overview.build_time || undefined}>
-          {overview.build_epoch ? `${relTime(overview.build_epoch)} ago` : 'never'}
-        </b>
-      </div>
-      <button
-        type="button"
-        className="sb-voice"
-        onClick={onOpenVoice}
-        title="Switch voice"
-        aria-haspopup="dialog"
-      >
-        <span className="sb-voice-name">
-          <i className="sb-voice-swatch" aria-hidden="true" />
-          Voice · {overview.theme || 'none'}
-        </span>
-        <Icon name="chevron" />
-      </button>
-    </section>
+export default function Sidebar({ route, overview, installs, onNavigate }) {
+  // Per viewer. Only the desktop rail honours it: the tablet tier is always chips, and the phone
+  // drawer always full (styles.css), so the toggle is hidden there.
+  const [rail, setRail] = useLocalStorage(COLLAPSE_KEY, (v) =>
+    v === 'collapsed' ? 'collapsed' : 'open',
   )
-}
-
-export default function Sidebar({ route, overview, installs, onOpenVoice, onNavigate }) {
-  const tag =
-    activeInstalls(installs).length > 1 && overview?.install ? installTag(overview.install) : null
+  const collapsed = rail === 'collapsed'
+  const toggle = () => setRail(collapsed ? 'open' : 'collapsed')
+  const toggleLabel = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
   return (
     // A <nav> landmark: this IS the app's primary navigation, and tabIndex -1 lets the
     // phone drawer's focus management in App.jsx move focus here.
-    <nav className="sidebar" id="rail-nav" aria-label="Console" tabIndex={-1}>
-      <button
-        type="button"
-        className="sb-brand"
-        onClick={() => {
-          go('#/')
-          onNavigate?.()
-        }}
-        aria-label="Geneseed, go to the overview"
-      >
-        <span className="sb-mark">
-          <Sprout />
-        </span>
-        <span className="sb-brand-text">
-          <span className="sb-name">Geneseed</span>
-          <span className="sb-ver">
-            {[overview?.version && `v${overview.version}`, overview?.theme]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-        </span>
-      </button>
-      {/* One list of every page, the FOOT entries last: the spacer sits under it, so the
-          vitals card is what the rail's foot holds. */}
-      <ul className="sb-list">
-        {[...NAV, ...FOOT].map((n) => (
-          <NavLink
-            key={n.page}
-            n={n}
-            lit={route.page === n.page}
-            count={n.count?.(overview, installs)}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </ul>
-      <div className="sb-spacer" />
-      {/* The tablet rail (721-960px) is icons only and hides the vitals, voice included;
-          this icon is the voice switch there. CSS shows it in that tier only. */}
-      {overview ? (
+    <nav
+      className={`sidebar${collapsed ? ' collapsed' : ''}`}
+      id="rail-nav"
+      aria-label="Console"
+      tabIndex={-1}
+    >
+      <div className="sb-head">
         <button
           type="button"
-          className="sb-voice-rail"
-          aria-label={`Switch voice, now ${overview.theme || 'none'}`}
-          title="Switch voice"
-          onClick={onOpenVoice}
+          className="sb-collapse"
+          onClick={toggle}
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          aria-expanded={!collapsed}
         >
-          <Icon name="spark" />
+          <Icon name="chevron" />
         </button>
-      ) : null}
-      <Vitals overview={overview} onOpenVoice={onOpenVoice} tag={tag} />
+        <button
+          type="button"
+          className="sb-brand"
+          onClick={() => {
+            go('#/')
+            onNavigate?.()
+          }}
+          aria-label="Geneseed, go to the overview"
+        >
+          <span className="sb-mark">
+            <Sprout />
+          </span>
+          <span className="sb-brand-text">
+            <span className="sb-name">Geneseed</span>
+            <span className="sb-ver">
+              {[overview?.version && `v${overview.version}`, overview?.theme]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          </span>
+        </button>
+      </div>
+      {GROUPS.map((g) => (
+        <div
+          key={g.id}
+          className={`sb-group sb-${g.id}`}
+          role="group"
+          aria-labelledby={g.title ? `sb-g-${g.id}` : undefined}
+          aria-label={g.title ? undefined : 'Overview'}
+        >
+          {g.title ? (
+            <div className="sb-group-title" id={`sb-g-${g.id}`}>
+              <i aria-hidden="true" />
+              {g.title}
+            </div>
+          ) : null}
+          <ul className="sb-list">
+            {ALL.filter((n) => n.group === g.id).map((n) => (
+              <NavLink
+                key={n.page}
+                n={n}
+                lit={route.page === n.page}
+                count={n.count?.(overview, installs)}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
     </nav>
   )
 }
@@ -194,7 +187,7 @@ const TABBED = ['overview', 'laws', 'library', 'installs']
 
 // The phone layout's bottom bar: the four pages a visit starts from, at their full names
 // (five cells fit "Constitution" at 360px; eight did not), and More, which opens the drawer
-// holding every page, Docs, Activity and the vitals. More is lit on a page only it reaches.
+// holding every page, Docs and Activity. More is lit on a page only it reaches.
 export function TabBar({ route, navOpen, onMore }) {
   return (
     <nav className="tabbar" aria-label="Console pages">

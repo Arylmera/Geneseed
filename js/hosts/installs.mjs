@@ -38,7 +38,7 @@ import {
   CONFIG, GATE_SWITCHES, PACK_ORDER, RETIRED_KIT_IDS, THEMES, discoverNames, loadKits, resolveSkillNames,
 } from '../build/source.mjs';
 import {
-  CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, isHostGlobalDir,
+  CARRIERS, CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, SHARED_TIER_RE, carriersFor, gateCarrierText, isHostGlobalDir,
   liveRecordedHooks, resolvePath,
 } from './hosts.mjs';
 import { registryRoots } from '../inspect/registry.mjs';
@@ -345,7 +345,9 @@ export function doctrinesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
-    const m = ACTIVE_PACKS_RE.exec(text);
+    // Only the managed block of a shared CLAUDE.md/AGENTS.md, as `gateOfDir` reads: a line the agent
+    // appended outside it would otherwise drop packs, and their hooks, at the next rebuild.
+    const m = ACTIVE_PACKS_RE.exec(gateCarrierText(carrierPath, text));
     if (!m) return undefined;
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
@@ -401,7 +403,8 @@ export function excludedRulesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
-    const m = EXCLUDED_RULES_RE.exec(text);
+    // The managed block only, as above: an exclusion drops a rule's hook too.
+    const m = EXCLUDED_RULES_RE.exec(gateCarrierText(carrierPath, text));
     if (!m) return undefined;
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
@@ -493,14 +496,15 @@ export function sharedTierOfDir(d, host = null) {
  * Read back so `upgrade`, `rebuild-all`, `diff` and the console re-render the same switch.
  * FAILS CLOSED: a missing line, a missing carrier, or any value but exactly `off` reads as
  * armed, because the line is only ever written when the gate is off and a gate is the thing a
- * misread must never take away.
+ * misread must never take away. Read through `gateCarrierText`: in a `CLAUDE.md` or `AGENTS.md`,
+ * only the managed block counts, or an unasked append to the user's file would disarm the next rebuild.
  */
 function gateOfDir(d, marker, host = null) {
   const re = new RegExp(`^${marker}:[ \\t]*(.+?)[ \\t]*$`, 'm');
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
-    const m = re.exec(text);
+    const m = re.exec(gateCarrierText(carrierPath, text));
     if (!m) return undefined;
     return m[1] !== 'off';
   }, true, host);

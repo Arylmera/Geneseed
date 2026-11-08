@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import {
   GENESEED_HOOK_SNIFF, loadJsonObject, mergeClaudeSettings, readJsonc, unwireClaudeSettings,
-  wireClaudeExcludes,
+  unwireClaudeEnv, wireClaudeEnv, wireClaudeExcludes,
 } from '../../js/hosts/settings.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 import { jsonDumpsCompact } from '../../js/lib/json.mjs';
@@ -323,3 +323,86 @@ test('the hook sniff recognises the shim, and no longer the 1.x interpreter form
   assert.ok(!GENESEED_HOOK_SNIFF.some((m) => 'npm run build'.includes(m)),
     'a plain user hook is mistaken for Geneseed\'s');
 });
+
+// THE SUBAGENT DEPTH CAP, `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"`, merged key by key.
+// The wire adds a key only where the file has none, so a value the user set, any value, is kept;
+// it answers the pairs it wrote, and the manifest records those. The unwire removes a recorded
+// key only while it still holds the recorded value, and drops `env` once it is empty. A commented
+// file is never rewritten: the wire says what to add by hand, the unwire stays silent.
+const ENV_ROWS = [
+  { name: 'absent file', seed: null, wrote: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' },
+    after: { env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' } },
+    unwired: {} },
+  { name: 'other env keys', seed: '{"env": {"FOO": "1"}}',
+    wrote: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' },
+    after: { env: { FOO: '1', CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' } },
+    unwired: { env: { FOO: '1' } } },
+  { name: "the user's own value", seed: '{"env": {"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "3"}}',
+    wrote: {}, after: { env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '3' } },
+    unwired: { env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '3' } } },
+];
+
+for (const row of ENV_ROWS) {
+  test(`the depth cap, ${row.name}: added only when absent, removed only as recorded`, () => {
+    const sb = makeSandbox('jsonc-env-');
+    try {
+      const p = path.join(sb.path, 'settings.json');
+      if (row.seed !== null) writeFileSync(p, row.seed, 'utf8');
+      const wrote = wireClaudeEnv(p);
+      assert.deepEqual(wrote, row.wrote);
+      assert.deepEqual(JSON.parse(readFileSync(p, 'utf8')), row.after);
+      // Uninstall hands back the manifest's record: what this install wrote, nothing else.
+      unwireClaudeEnv(p, wrote);
+      assert.deepEqual(JSON.parse(readFileSync(p, 'utf8')), row.unwired);
+    } finally {
+      sb.cleanup();
+    }
+  });
+}
+
+test('the depth cap: a recorded key the user has since changed stays theirs', () => {
+  const sb = makeSandbox('jsonc-env-');
+  try {
+    const p = path.join(sb.path, 'settings.json');
+    writeFileSync(p, '{"env": {"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "4"}}', 'utf8');
+    unwireClaudeEnv(p, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+    assert.deepEqual(JSON.parse(readFileSync(p, 'utf8')),
+      { env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '4' } });
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('the depth cap: a commented settings file is not rewritten, and the wire says what to add', () => {
+  const sb = makeSandbox('jsonc-env-');
+  try {
+    const p = path.join(sb.path, 'settings.json');
+    const seed = '// mine\n{"hooks": {}}';
+    writeFileSync(p, seed, 'utf8');
+    const [wrote, err] = stderrOf(() => wireClaudeEnv(p));
+    assert.deepEqual(wrote, {});
+    assert.equal(readFileSync(p, 'utf8'), seed);
+    assert.match(err, /has comments .*"env" object by hand: \{"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2"\}/);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+// An `env` that exists but is not an object (a string, a list, null) is the user's mistake to
+// fix, never Geneseed's to replace: the wire leaves the file byte for byte and says why.
+for (const bad of ['"x"', '[]', 'null', '3']) {
+  test(`the depth cap: an "env" of ${bad} is refused, not overwritten`, () => {
+    const sb = makeSandbox('jsonc-env-');
+    try {
+      const p = path.join(sb.path, 'settings.json');
+      const seed = `{"env": ${bad}}`;
+      writeFileSync(p, seed, 'utf8');
+      const [wrote, err] = stderrOf(() => wireClaudeEnv(p));
+      assert.deepEqual(wrote, {});
+      assert.equal(readFileSync(p, 'utf8'), seed);
+      assert.match(err, /"env" in settings\.json is not an object — NOT rewriting it/);
+    } finally {
+      sb.cleanup();
+    }
+  });
+}

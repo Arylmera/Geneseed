@@ -64,7 +64,7 @@ import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes,
-  unwireClaudeSettings,
+  unwireClaudeSettings, wireClaudeEnv, unwireClaudeEnv,
 } from '../hosts/settings.mjs';
 import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } from '../lib/fs.mjs';
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
@@ -323,6 +323,7 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
   const sf = settingsFile(cfg, managed);
   const unwired = unwireClaudeSettings(sf, hooks);
   unwireClaudeExcludes(sf, managed.settings_excludes || []);
+  unwireClaudeEnv(sf, managed.settings_env);
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
   // supposedly-uninstalled repo could keep firing Geneseed's hooks. Loud, never fatal.
   settingsIntegrityCheck(sf, managed, 'absent');
@@ -1206,6 +1207,7 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
   }
   unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || []);
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
+  unwireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
   // The same integrity check the uninstall path runs: a deactivate that silently failed to
   // unwire would leave hooks firing in a repo the user believes is off.
   settingsIntegrityCheck(settingsFile(cfg, managed), managed, 'absent');
@@ -1262,6 +1264,8 @@ function claudeReactivate(root, scope = 'global', host = 'claude') {
   }
   remergeClaudeHooks(cfg, root, host);
   wireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
+  // Only what the manifest records: a reactivate restores this install's own keys, never new ones.
+  if (isDict(managed.settings_env)) wireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
   cleanHostStash(cfg, host);
   return { ok: true, kind: host, moved };
 }

@@ -11,6 +11,7 @@ Builds small, safe container images for Spring Boot 4 applications.
 
 ## When NOT to dispatch
 - Cluster manifests — use [kubernetes-specialist](kubernetes-specialist.md). Pipelines — use [devops-engineer](devops-engineer.md).
+- Operating a Compose stack (updates, rollback, limits, logs, networks) — the docker kit's `compose-ops` skill, when that kit is on.
 
 ## Inputs
 - The build tool (Maven or Gradle), the Java version and any registry or base-image policy.

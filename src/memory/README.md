@@ -8,10 +8,11 @@
 
 Durable knowledge that must survive across sessions lives here as **one fact per
 file**. An agent reads `MEMORY.md` (the local index map) at the start of a session,
-and opens the topic file a task needs (see *The index* below). A new fact is written through the rule {{SKILL}}, which settles with the user
-whether it is a fact for here or a standing rule ({{DOCTRINE:persist-insight}}) — never on the
-agent's own initiative. The one automatic writer is the `learn` hook, where the host
-runs it: a distiller the user opted into at install, not an agent's judgement call.
+and opens the topic file a task needs (see *The index* below). The agent writes a new fact
+here on its own, with no prompt, following Branch A of the rule {{SKILL}}; the user sees every
+memory afterwards in the web console ({{DOCTRINE:persist-insight}}). A standing rule is different:
+it goes to the user first, through the same {{SKILL}}. The `learn` hook writes here too, where the
+host runs it: a distiller the user opted into at install.
 
 This store is for **curated facts**, written for recall. For freeform working space
 the agent shapes for itself — plans, scratch designs, working theories, with no

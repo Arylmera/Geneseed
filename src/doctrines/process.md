@@ -1,18 +1,20 @@
 **{{PACK_PROCESS}}** — how a task is run.
 
 ### {{DOCTRINE:persist-insight}} Persist Insight
-<!-- note: summary: Durable decisions are recorded before the session ends — and rule or memory is the user's call. -->
+<!-- note: summary: Durable insight is recorded before the session ends — memory on your own, a standing rule only with the user. -->
 <!-- LEAN:begin -->
 When a session yields a durable decision, correction, non-obvious discovery, or
-architectural stance, record it before the session ends — through the rule {{SKILL}},
-which settles with the user whether it belongs in {{MEMORY}} or as a standing rule,
-never on your own initiative. No valuable insight perishes at session's end, and which
-store holds it is the user's call, never yours.
+architectural stance, record it before the session ends. A durable fact goes into
+{{MEMORY}} on your own, with no prompt: the user sees every memory later in the web
+console. A standing rule binds every later session, so it is the user's call: take it to
+them through the rule {{SKILL}}. A memory phrased as an instruction to later sessions
+("always…", "never…", `force: constraint`) is a standing rule.
 <!-- LEAN:else -->
 When a session yields a durable decision, correction, non-obvious discovery, or
-architectural stance, record it before it ends — through the rule {{SKILL}}, which settles
-with the user whether it belongs in {{MEMORY}} or a standing rule, never on your own
-initiative.
+architectural stance, record it before it ends: a durable fact into {{MEMORY}} on your
+own (the user sees it in the web console); a standing rule, which includes
+any instruction to later sessions ("always…", "never…", `force: constraint`), only through
+the rule {{SKILL}}, with the user's consent.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:plan-before-acting}} Plan Before Acting
@@ -92,9 +94,10 @@ stands for commits on that branch until the session ends or the scope changes; a
 new session, a new branch, or a widened scope re-asks. Push earns no such default
 and stays per-ask unless granted in the same named form. A launched loop's batch
 covers commit and push on its own `loop/*` branch; merging that branch into a
-shared one never is. Before each, present in
-order (1) a plain-language summary of what changed and why and (2) the exact
-commit message you intend to use, then wait. Never push on your own initiative.
+shared one never is. A Foreman worker's batch covers commit and merge in its own
+worktree, off any shared branch. Before each, present in order (1) a plain-language
+summary of what changed and why and (2) the exact commit message you intend to use,
+then wait. Never push on your own initiative.
 On a **shared branch** — `main`, `master`, `develop`, `development`, a
 `release`/`hotfix` branch, or anything that is not a dedicated feature branch —
 the same gate applies with extra care; when unsure, treat the branch as shared.
@@ -104,14 +107,16 @@ through the git-history {{SKILL}} behind a backup. The host gates commit and pus
 the tool boundary too, so this consent cannot be lost to a sticky allowlist.
 <!-- LEAN:else -->
 Recording and sharing code is consented, never unilateral: **every** `git commit` and
-`git push` needs **explicit acceptance**, every branch, every time; one-time approval is
-not standing consent. A named batch ("commit as you go") stands until the session ends or
-scope changes; push earns no default. A launched loop's batch covers commit and push on
-its own `loop/*` branch only; merging it never. Show the plain summary and the exact
-commit message before each, then wait. Shared branches — `main`, `master`, `develop`,
-`development`, `release`/`hotfix`, any unsure — take the same gate. Never force-push,
-hard-reset, or rebase one: undo with a revert commit (git-history {{SKILL}} for a
-legitimate rewrite). The host gates both at the tool boundary.
+`git push` needs **explicit acceptance**, every branch, every time — a personal feature
+branch included; one-time approval is not standing consent. A named batch ("commit as
+you go") stands until the session ends or scope changes; push earns no default. Never
+push on your own initiative. A launched loop's batch covers commit and push on its own
+`loop/*` branch only; merging it never. A Foreman worker's covers commit and merge in its
+own worktree, off any shared branch. Show the plain summary and the exact commit message
+before each, then wait. Shared branches — `main`, `master`, `develop`, `development`,
+`release`/`hotfix`, any unsure — take the same gate. Never force-push, hard-reset, or
+rebase one: undo with a revert commit (git-history {{SKILL}} for a legitimate rewrite).
+The host gates both at the tool boundary.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:bound-the-loop}} Bound the Loop

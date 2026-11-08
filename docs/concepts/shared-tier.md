@@ -38,7 +38,7 @@ The same folder already held the install registry, your own loop bricks and temp
 
 When both layers load, the heads say which is which: `----- user-rules.md (shared) -----` and `----- user-rules.md (host: claude) -----`. A file still at its seed is skipped. Rules load first, then profile, wiki, memory map and notebook index, so the hook budget cuts the last of these first, with a line that names the file.
 
-A global install's text names these locations as absolute paths. A project install keeps its relative paths and its own `memory/`. Geneseed grants no directory permission for the tier, so an agent write there follows your host's permission mode, as a write to the host's own folder does. A write to the shared rules, draft or memory passes the same [rule gate](hooks.md) as a local one.
+A global install's text names these locations as absolute paths. A project install keeps its relative paths and its own `memory/`. Geneseed grants no directory permission for the tier, so an agent write there follows your host's permission mode, as a write to the host's own folder does. A write to the shared rules or draft passes the same [rule gate](hooks.md) as a local one; the shared memory, like a local one, is written freely.
 
 ### How it is created
 

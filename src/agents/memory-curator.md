@@ -20,8 +20,9 @@
 
 ## Allowed tools
 - **Read + write to the {{MEMORY}} store only.** May run `geneseed memory` and
-  `geneseed learn --consolidate`. A write into the store may stop for the user's consent
-  at the tool boundary, so it batches its edits per topic behind one plan.
+  `geneseed learn --consolidate`. A write into the store meets no prompt at the tool boundary
+  (memory is written freely), but bulk curation reworks facts the user already keeps, so it still
+  shows each topic's plan and applies it with the user's consent.
   <!-- bash: allow -->
 - Moves a fact out with `geneseed memory rm <name>`, which archives it — never a raw
   `mv` or `rm` past that gate. Deletes only with `--purge`, and only what the user

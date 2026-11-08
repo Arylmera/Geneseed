@@ -17,7 +17,8 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 - on **PreToolUse** (matcher `Bash|PowerShell`), runs `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
-  wired with `--no-consent`: commits and pushes pass without asking, while the
+  wired with `--no-consent`: commits and pushes pass without asking (excluding process 1 or ops 2,
+  or their pack, adds `--no-rule-store` / `--no-root-scan` the same way), while the
   Law IV refusals (asked only on real data loss: a force-push to `main`, a `reset --hard`
   that abandons unpushed commits, an `rm` git cannot undo) stay in every build unless the install is
   built `--no-deletion-gate`, which appends that flag and stands the real-loss check down
@@ -39,14 +40,15 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   over-matching the tool surface is harmless.
 - on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
   `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
-  file, and asks first on the first write to `user-rules.md` or a memory file (whether
-  something you want kept is a rule or a fact is your call). In an application repo (a git
+  file, and asks first on a write to `user-rules.md` or the rule draft (a standing rule is
+  your call; memory is written freely, and you see it afterwards in the web console). In an application repo (a git
   root holding a build manifest) whose root `AGENTS.md` has no `## Ownership` section, it also
   denies the session's first write once, with a reason addressed to the agent: propose the
   ownership setup now, skip this session, or skip in this repo until asked; the next write
   passes, and sub-agents defer. Off per repo with `mode: off` in that section, for one developer
   in one repo with `Setup: declined <YYYY-MM-DD>` in their personal `.geneseed/ownership.md`,
-  per install with `--no-ownership-gate`. Ordinary edits pass.
+  per install with `--no-ownership-gate`. `--no-external-gate` and `--no-test-note` stop the protected-check and
+  gate-configuration asks and the weakened-test note. Ordinary edits pass.
   (`MultiEdit` is not a Claude Code tool and is not in the matcher; the gate reads
   `edits[].new_string` as a cheap guard regardless.)
 - on **SessionStart**, every source (`startup`, `resume`, `clear`, `compact`, `fork`), runs

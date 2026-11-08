@@ -80,6 +80,24 @@ const consentRuleOn = (d, excluded = []) =>
   processPackOn(d) && !(Array.isArray(excluded) && excluded.includes(CONSENT_RULE));
 
 /**
+ * The same test for any rule whose hook goes with its text (owner decision, 2026-11-08): the rule's
+ * pack is on (unknown counts as on, like `processPackOn`) and the rule is not excluded. So excluding
+ * the rule, or its whole pack, drops its hook, as it drops process 5's. Process 1 (Persist Insight)
+ * is the rule-store ask; ops 2 (Commands Must Return) the root-scan check. Each flag is emitted only
+ * when its rule is off, so a build that keeps both is byte-identical to one from before.
+ */
+const STORE_RULE = 'process.1';
+const ROOT_SCAN_RULE = 'ops.2';
+const ruleOn = (id, d, excluded = []) => (!Array.isArray(d) || d.includes(id.split('.')[0]))
+  && !(Array.isArray(excluded) && excluded.includes(id));
+/** The derived hook flags of `ruleOn`, in emit order. `verb` keeps each flag to the verbs that read it. */
+function ruleFlags(verb, d, excluded) {
+  const store = ['git-gate', 'rule-gate', 'tool-gate', 'learn'].includes(verb) && !ruleOn(STORE_RULE, d, excluded);
+  const scan = ['git-gate', 'tool-gate'].includes(verb) && !ruleOn(ROOT_SCAN_RULE, d, excluded);
+  return `${store ? ' --no-rule-store' : ''}${scan ? ' --no-root-scan' : ''}`;
+}
+
+/**
  * `_build_settings._default_permission`.
  *
  * WHAT THE PACK TOGGLE REACHES AND WHAT IT MUST NOT. `git commit*` and `git push*` are the
@@ -401,17 +419,20 @@ function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = 
  * inside the project is relative to the session dir there, `file-access.ts` `resolve`). Never the
  * absolute path: a project opencode.json is often committed, and teammates do not share it.
  */
-export function opencodeEditAsks(cfgDir, global, agentRel = null) {
+export function opencodeEditAsks(cfgDir, global, agentRel = null, doctrines = null, excluded = []) {
   const cfg = path.basename(cfgDir);
   const tails = ['opencode.json', 'opencode.jsonc', ...['excludes.json', GLOBAL_MANIFEST, '.geneseed-emit',
     'plugins/*', 'plugin/*', 'agents/*.md', 'agent/*.md', 'mode/*.md', 'modes/*.md', 'tool/*', 'tools/*',
-    ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
+    // `<cfg>/AGENT.md` in a project install too: the guard reads it BEFORE the project's own carrier
+    // (`CARRIER_DIRS`), so a file planted there would set its gate markers and rule exclusions.
+    'AGENT.md', ...(global ? ['config.json'] : [])].map((f) => `${cfg}/${f}`),
   ...['.claude', '.openclaude', '.bob'].flatMap((m) => [`${m}/settings.json`, `${m}/settings.local.json`]),
   '.bob/settings/settings.json',
-  // Persist Insight: the rule and memory stores, which the guard no longer releases on a re-issue.
-  // The coined names match anywhere, as the guard and Claude's rule gate match them; the memory
-  // folders by their last segments, so a project's unrelated `memory/` is never asked about.
-  'user-rules.md', 'user-rules.draft.md', 'MEMORY.md', `${cfg}/memory/*.md`, 'geneseed/memory/*.md'];
+  // Persist Insight: the rule stores, which the guard no longer releases on a re-issue. The coined
+  // names match anywhere, as the guard and Claude's rule gate match them. Memory is written freely
+  // (owner decision, 2026-11-08), so its keys are gone; a re-emit sweeps the ones an install recorded.
+  // With process 1 excluded (or its pack off) the rule files lose their ask too, and a re-emit sweeps it.
+  ...(ruleOn(STORE_RULE, doctrines, excluded) ? ['user-rules.md', 'user-rules.draft.md'] : [])];
   const keys = [];
   if (agentRel) {
     const abs = path.resolve(path.dirname(cfgDir), agentRel);
@@ -419,10 +440,6 @@ export function opencodeEditAsks(cfgDir, global, agentRel = null) {
     const gitRel = git ? path.relative(git, abs).split(path.sep).join('/') : agentRel;
     keys.push(...new Set([agentRel, gitRel, `*../${agentRel}`,
       ...(agentRel.includes('/') ? [`*/${agentRel}`] : [])]));
-    // The store sits beside the carrier (`<out>/memory`, js/build/bundle.mjs), the same four shapes.
-    const beside = (rel) => path.posix.join(path.posix.dirname(rel), 'memory/*.md');
-    keys.push(...new Set([beside(agentRel), beside(gitRel), `*../${beside(agentRel)}`,
-      ...(agentRel.includes('/') ? [`*/${beside(agentRel)}`] : [])]));
   }
   try {
     const home = shimHome();
@@ -533,7 +550,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  */
 function warnCommentedJsonc(target, agentPath, permission,
   includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = [],
-  deletionGate = true, editAsks = []) {
+  deletionGate = true, editAsks = [], includeDepth = false) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -563,6 +580,10 @@ function warnCommentedJsonc(target, agentPath, permission,
   if (includeLsp) {
     process.stdout.write(`[${prefix}] and, to enable code intelligence, a top-level `
       + '"lsp": true\n');
+  }
+  if (includeDepth) {
+    process.stdout.write(`[${prefix}] and, to cap subagent nesting at two levels, a top-level `
+      + '"subagent_depth": 2\n');
   }
 }
 
@@ -702,7 +723,11 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   }
   const addLsp = !has(config, 'lsp');
   if (addLsp) config.lsp = true;
-  if (!addInstr && !permChanged && !addLsp) {
+  // Foreman's depth, main → worker → sub-worker, as OpenCode's own cap: absent ⇒ written,
+  // present ⇒ the user's. Left at uninstall, as `lsp` is.
+  const addDepth = !has(config, 'subagent_depth');
+  if (addDepth) config.subagent_depth = 2;
+  if (!addInstr && !permChanged && !addLsp && !addDepth) {
     result.skillsAdded = added;
     result.editRecord = edit;
     return target;
@@ -720,7 +745,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate, editAsks);
+      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate, editAsks, addDepth);
     return target;
   }
   try {
@@ -770,14 +795,18 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * prose layer for no gain in safety. Asymmetric risk, asymmetric answer — the BOUNDARY follows
  * the pack, the ASKING does not have to.
  *
- * The `rule-gate` group stays in every build. Its subject is which durable store a write
- * belongs in — the user's call — not how work is run, so it is not the process pack's to
- * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
+ * The `rule-gate` group stays in every build: it carries Law I, External Gate and the ownership
+ * gate, none of them the process pack's. Its process-1 branch (the rule-store ask) follows that
+ * rule like process 5 follows its own (owner decision, 2026-11-08): `--no-rule-store` when process 1
+ * or its pack is off, on `rule-gate`, `git-gate` (the shell path) and `learn` (the change report);
+ * ops 2's root-scan check gets `--no-root-scan` on `git-gate` the same way (`ruleFlags`).
+ * `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
   gates = {}) {
   // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
-  const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true } = gates ?? {};
+  const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true,
+    externalGate = true, testNote = true } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -818,6 +847,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     const dn = doneGate === false ? ' --no-done-gate' : '';
     // The ownership first-write gate (js/hosts/ownership-gate.mjs), the same contract.
     const og = ownershipGate === false ? ' --no-ownership-gate' : '';
+    // External Gate's hook and the weakened-test note, the same contract.
+    const eg = externalGate === false ? ' --no-external-gate' : '';
+    const tn = testNote === false ? ' --no-test-note' : '';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
@@ -826,13 +858,13 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `--no-deletion-gate`), and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
       // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}${eg}${tn}${ruleFlags('tool-gate', doctrines, excluded)}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
       // if Bob ever starts sending one, learning on Bob starts working with no emit change —
       // dropping the group would need a second one re-added later for the same reason.
-      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b}${dn} || exit 0` }] }],
+      Stop: [{ hooks: [{ type: 'command', command: `${run} learn ${mem}${b}${dn}${tn} || exit 0` }] }],
       // The activity view's turn start (js/hosts/activity.mjs). Bob has no SessionEnd, so a Bob
       // session leaves the live list by staleness alone.
       UserPromptSubmit: [{ hooks: [{ type: 'command', command: `${run} activity --root "${cfg}"${b} || exit 0` }] }],
@@ -847,15 +879,22 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
-    + (deletionGate === false ? ' --no-deletion-gate' : '');
+    + (deletionGate === false ? ' --no-deletion-gate' : '')
+    + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded);
   // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
   // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
   // `--no-ownership-gate` (the ownership first-write gate) rides rule-gate only, never the
-  // `Skill|Agent|Task` tool-gate below, which judges no write.
+  // `Skill|Agent|Task` tool-gate below, which judges no write. `--no-external-gate` rides git-gate
+  // and rule-gate, its two paths; `--no-test-note` rule-gate (edit time) and learn (turn end).
   const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`
-    + (ownershipGate === false ? ' --no-ownership-gate' : '');
-  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''} || exit 0`;
+    + (ownershipGate === false ? ' --no-ownership-gate' : '')
+    + (externalGate === false ? ' --no-external-gate' : '')
+    + (testNote === false ? ' --no-test-note' : '') + ruleFlags('rule-gate', doctrines, excluded);
+  // `--no-rule-store` on learn: with process 1 off a rule write runs with no prompt, so the change
+  // report must not count it as approved (`storeReport`). Bob's learn reports every change already.
+  const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
+    + `${testNote === false ? ' --no-test-note' : ''}${ruleFlags('learn', doctrines, excluded)} || exit 0`;
   const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
   // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now
@@ -1123,6 +1162,67 @@ export function wireClaudeExcludes(p, excludes) {
     return [];
   }
   return added;
+}
+
+/**
+ * The `env` keys a Claude Code install arms. Foreman mode allows main → worker → sub-worker and
+ * no deeper; Claude Code's own default is three layers, so the cap is written, not assumed.
+ * Claude only: OpenClaude has no such cap in its source (checked on 0.31) and Bob documents none.
+ */
+export const CLAUDE_ENV = Object.freeze({ CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+
+/**
+ * Add-if-absent into `env`, the `wireClaudeExcludes` shape: a key the user already set, to any
+ * value, is theirs and stays. Returns the `{key: value}` pairs actually written, which the
+ * manifest records so uninstall removes only those.
+ */
+export function wireClaudeEnv(p, want = CLAUDE_ENV) {
+  const loaded = readSettingsForMerge(p, 'Its "env" keys were not wired.');
+  if (!loaded) return {};
+  const [config, hadComments] = loaded;
+  // An `env` that is there but is not an object is the user's, however wrong: never replaced.
+  if (has(config, 'env') && !isDict(config.env)) {
+    process.stderr.write(`[geneseed] WARN: "env" in ${path.basename(p)} is not an object — `
+      + `NOT rewriting it. Add to it by hand once it is one: ${jsonDumpsCompact(want)}\n`);
+    return {};
+  }
+  const env = has(config, 'env') ? config.env : {};
+  const added = Object.fromEntries(Object.entries(want || {}).filter(([k]) => !has(env, k)));
+  if (!Object.keys(added).length) return {};
+  if (hadComments) {
+    process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
+      + '(your edits are kept). Add to its "env" object by hand: '
+      + `${jsonDumpsCompact(added)}\n`);
+    return {};
+  }
+  config.env = { ...env, ...added };
+  try {
+    atomicWriteJson(p, config);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    process.stderr.write(`[geneseed] WARN: could not write ${p} (${e.message}) — `
+      + `its "env" keys were not wired. Add to its "env" object by hand: ${jsonDumpsCompact(added)}\n`);
+    return {};
+  }
+  return added;
+}
+
+/** Remove each recorded `env` key while it still holds the recorded value; drop an empty `env`. */
+export function unwireClaudeEnv(p, recorded) {
+  if (!isDict(recorded) || !Object.keys(recorded).length) return;
+  const { state, data: loaded, hadComments } = loadJsonObject(p);
+  if (state !== 'ok' || hadComments) return;
+  const env = get(loaded, 'env');
+  if (!isDict(env)) return;
+  const gone = Object.keys(recorded).filter((k) => has(env, k) && env[k] === recorded[k]);
+  if (!gone.length) return;
+  for (const k of gone) delete env[k];
+  if (!Object.keys(env).length) delete loaded.env;
+  try {
+    atomicWriteJson(p, loaded);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+  }
 }
 
 /** `_build_settings._unwire_claude_excludes`. */

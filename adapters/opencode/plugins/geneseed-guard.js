@@ -9,8 +9,9 @@
 //   - Deletion Is Deliberate:  block catastrophic shell commands, and every command that would
 //     really lose data, judged against the repository's state (`lossReason`, below).
 //   - Commands Must Return:  block a recursive scan rooted at a whole filesystem (find /).
-//   - Persist Insight (rule vs memory):  a write to user-rules.md or a memory file needs the
+//   - Persist Insight (standing rules):  a write to user-rules.md or the rule draft needs the
 //     HOST's own prompt (`permission.edit`; on V2 the `evaluate` hook too); with none, it is refused.
+//     Memory is written freely (owner decision, 2026-11-08); the change report still sees it.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
 //   - Ownership:  in an application repo whose root AGENTS.md has no `## Ownership` section,
@@ -163,6 +164,28 @@ const DELETION_GATE_OFF = gateOff("Deletion gate")
 const SECRETS_GATE_OFF = gateOff("Secrets gate")
 // `--no-ownership-gate` (ruling D25): the ownership first-write gate below stands down.
 const OWNERSHIP_GATE_OFF = gateOff("Ownership gate")
+// `--no-external-gate`: `protectedCheck`, `gateConfig` and `nativeAskFile` below all answer no, so the
+// refusals and V2's `evaluate` ask stand down. The static `permission.edit` keys are host config: they stay.
+const EXTERNAL_GATE_OFF = gateOff("External gate")
+// A rule whose hook goes with its text (owner decision, 2026-11-08), read off the same carrier's
+// `Active packs:` and `Excluded rules:` lines, the state the hook hosts get as `--no-rule-store` /
+// `--no-root-scan` (`ruleOn`, js/hosts/settings.mjs). Twin of `doctrinesOfDir` / `excludedRulesOfDir`
+// (js/hosts/installs.mjs), fail closed both ways: a missing or unreadable pack line is every pack, a
+// malformed exclusion line excludes nothing. `PACKS` is js/build/source.mjs's PACK_ORDER.
+const PACKS = ["craft", "rigor", "ops", "process", "comms"]
+function ruleOff(pack, n) {
+  const packs = /^Active packs:[ \t]*(.+?)[ \t]*$/m.exec(CARRIER_TEXT)?.[1]?.trim()
+  const named = packs === "none" ? [] : packs?.split(",").map((s) => s.trim())
+  if (named && named.every((p) => PACKS.includes(p)) && !named.includes(pack)) return true
+  const ex = /^Excluded rules:[ \t]*(.+?)[ \t]*$/m.exec(CARRIER_TEXT)?.[1]?.split(",").map((s) => s.trim()) ?? []
+  return ex.every((e) => /^[a-z]+[ \t]+\d+$/.test(e) && PACKS.includes(e.split(/[ \t]+/)[0]))
+    && ex.some((e) => e.split(/[ \t]+/)[0] === pack && Number(e.split(/[ \t]+/)[1]) === n)
+}
+// Persist Insight off: `ruleTarget` answers no, so every rule-store refusal and V2's `evaluate` ask
+// stand down; the change report still reports a rule-file change (`tool.execute.after` excuses none).
+const RULE_STORE_OFF = ruleOff("process", 1)
+// Commands Must Return off: the root-scan refusal stands down.
+const ROOT_SCAN_OFF = ruleOff("ops", 2)
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
 // writes to the log file instead. The V1 entry sets LOG_CLIENT; V2 and tests have no
@@ -1014,6 +1037,276 @@ function catastrophic(command, split, depth = 0) {
 }
 // ---- loss twin: END
 
+// ---- gate text twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything down to
+// the END marker verbatim, with `export ` dropped (tests/plugins/guard.test.mjs diffs the two).
+
+/**
+ * What each protected check is, for a person who has not read the diff: the files, what they are,
+ * what an edit can do. Fixed text, so the governed agent cannot write its own case. A file is written
+ * as `CANDIDATES` (`./geneseed-dir.mjs`) writes it, so tests/unit/gate_text.test.mjs compares the
+ * two entry by entry, both ways: a string ending `/` is a folder, any other string a file, a regex
+ * a file name.
+ * @type {[(string | RegExp)[], string, string][]}
+ */
+const GATE_FILES = [
+  [['.github/workflows/', '.gitlab-ci.yml', 'Jenkinsfile', 'azure-pipelines.yml', '.circleci/'],
+    'which defines the checks that run on every push',
+    'those checks can get weaker or stop running, and a failure could go unseen'],
+  [[/^eslint\.config\./, /^\.eslintrc/, 'biome.json', 'biome.jsonc', 'ruff.toml', '.golangci.yml', 'checkstyle.xml'],
+    'which sets the rules the linter enforces',
+    'those rules can get weaker, and bad code could pass unseen'],
+  [['tsconfig.json'],
+    'which sets how strictly types are checked',
+    'the type checks can get weaker, and a type error could pass unseen'],
+  [[/^jest\.config\./, /^vitest\.config\./, 'pytest.ini'],
+    'which decides how the tests run',
+    'tests can be skipped or loosened, and a failure could go unseen'],
+  [['package.json', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'pyproject.toml', 'Cargo.toml', 'go.mod'],
+    'which names the commands that test this project',
+    'those commands can change, and a failing test could read as a pass'],
+];
+/**
+ * Protected by being the lists themselves, so they are in no seed and stay outside `GATE_FILES`. Read
+ * at the repo root only: a `packages/a/.geneseed/done-checks.txt` someone listed feeds no gate.
+ * @type {[string, string, string][]}
+ */
+const GATE_LISTS = [
+  ['.geneseed/protected-checks.txt', 'which lists the files this gate protects',
+    'a check can lose its protection, and nothing would tell you'],
+  ['.geneseed/done-checks.txt', 'which lists the checks that must pass before work counts as done',
+    'work could count as done without passing a check'],
+];
+// Matches at any depth: a user may list `packages/a/tsconfig.json`, and it is still a tsconfig.
+const gateIs = (rel, file) => {
+  if (typeof file !== 'string') return file.test(rel.slice(rel.lastIndexOf('/') + 1));
+  return file.endsWith('/') ? `/${rel}`.includes(`/${file}`) : `/${rel}`.endsWith(`/${file}`);
+};
+const GATE_FILE_OTHER = [null, 'which this project lists as a protected check',
+  'that check can get weaker or stop running, and a failure could go unseen'];
+
+// `ruleGateTarget`'s answers: name, what it is, what the safe line calls it, whose call it is, impact.
+// Memory has none: it is written freely (owner decision, 2026-11-08).
+const GATE_RULE = ['this rule', 'what becomes a rule'];
+const GATE_STORES = {
+  'user-rules.md': ['user-rules.md', 'your standing rules, which the agent obeys in every session', ...GATE_RULE,
+    'the text binds every later session until you remove it'],
+  'the rule draft': ['the rule draft', 'which can become one of your standing rules', ...GATE_RULE,
+    'the text can become a rule that binds every later session'],
+  'a hard link': ['a second name of a rule file', 'which writes to your standing rules or the rule draft', ...GATE_RULE,
+    'the text can bind every later session until you remove it'],
+};
+
+// Bidi and zero-width marks too (`\p{C}`): they make a name read as something it is not. A double
+// quote of any shape turns to `'`, or a name could seem to close its own quotes.
+const gateStrip = (v) => String(v ?? '').replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '').replace(/["\u201C-\u201F\uFF02]/g, "'").trim();
+
+/**
+ * An agent-supplied value in the human part. Clipped in the middle, because the end of a path names
+ * the file. Quotes mark a name; they do not stop one reading like a sentence. `...` is ASCII so that
+ * clipping alone does not force the quotes.
+ */
+function gateName(value) {
+  const c = [...gateStrip(value)];
+  const text = c.length > 60 ? `${c.slice(0, 20).join('')}...${c.slice(-37).join('')}` : c.join('');
+  return /^[A-Za-z0-9._/-]+$/.test(text) ? text : `"${text}"`;
+}
+
+const gatePath = (p) => String(p ?? '').replace(/\\/g, '/');
+// Every line end a viewer may honour: a line break that this missed would hide a line from the count.
+const gateLines = (text) => {
+  const lines = text.split(/\r\n|[\r\n\u2028\u2029]/);
+  if (lines[lines.length - 1] === '') lines.pop();
+  return lines;
+};
+
+/**
+ * ` (+3 lines, -1 line)` from `editPairs`, or nothing when no line differs. Each pair loses its common
+ * leading and trailing lines. Exact for one changed region; with several it overstates, and it
+ * never hides a change. A pair says nothing of how often it applies, so a caller whose input has
+ * `replace_all`, at the top or in an `edits` entry, passes no pairs and no count shows: the agent sets
+ * that flag, and a 40-place edit must not read as `+1 line, -1 line`.
+ */
+function gateCount(pairs) {
+  let added = 0;
+  let removed = 0;
+  for (const [before, after] of pairs) {
+    const a = gateLines(before);
+    const b = gateLines(after);
+    const most = Math.min(a.length, b.length);
+    let head = 0;
+    while (head < most && a[head] === b[head]) head += 1;
+    let tail = 0;
+    while (tail < most - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail += 1;
+    removed += a.length - head - tail;
+    added += b.length - head - tail;
+  }
+  const n = (sign, v) => `${sign}${v} line${v === 1 ? '' : 's'}`;
+  const parts = [...(added ? [n('+', added)] : []), ...(removed ? [n('-', removed)] : [])];
+  return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
+const gateEdit = (f, shown, what) => `${f.shell ? 'This command writes to' : 'This edit changes'} ${shown}`
+  + `${f.pairs ? gateCount(f.pairs) : ''}, ${what}.`;
+
+const GATE_ELSEWHERE = 'This command runs on another repository, through --git-dir or --work-tree, which the gate did not read.';
+const GATE_DO_IT = 'You can make this change yourself, outside the agent.';
+const GATE_RUN_IT = 'You can run this command yourself, outside the agent.';
+const GATE_EXTERNAL = { rule: 'External Gate', safe: 'Deny, unless you asked for this change.',
+  tail: 'do not write this file another way', can: GATE_DO_IT };
+const GATE_LOSS = { rule: 'Deletion Is Deliberate', quote: true, can: GATE_RUN_IT };
+
+// `quote` marks the only asks that may carry the agent's words. External Gate, Sealed Secrets and
+// Persist Insight never do: there the agent's opinion is the conflict of interest.
+const GATE_ASKS = {
+  check: (f) => {
+    const rel = gatePath(f.name);
+    const [, what, impact] = GATE_LISTS.find(([list]) => list === rel)
+      ?? GATE_FILES.find(([files]) => files.some((n) => gateIs(rel, n))) ?? GATE_FILE_OTHER;
+    return { ...GATE_EXTERNAL, line: gateEdit(f, gateName(rel), what), impact,
+      why: 'the agent\'s own work is judged by this file' };
+  },
+  config: (f) => ({ ...GATE_EXTERNAL, line: gateEdit(f, gateName(gatePath(f.name)), 'which controls the gates that watch the agent'),
+    why: 'a gate the agent can edit is a gate it can switch off',
+    impact: 'a gate can stop working, and nothing would tell you' }),
+  store: (f) => {
+    const [name, what, label, owner, impact] = GATE_STORES[f.name] ?? GATE_STORES['user-rules.md'];
+    return { rule: 'Persist Insight', line: gateEdit(f, name, what), safe: `Deny, unless you asked for ${label}.`,
+      why: `${owner} is your decision`, impact, tail: 'ask the user; do not write it another way', can: GATE_DO_IT };
+  },
+  secret: (f) => ({ rule: 'Sealed Secrets', line: `This edit puts a credential-shaped string in ${gateName(gatePath(f.name))}.`,
+    safe: 'Deny, then keep the value in .env or a secret manager.',
+    why: 'a secret in a tracked file reaches everyone who can read the repository',
+    impact: 'the secret can land in a commit, and then it must be rotated',
+    tail: 'keep the value in .env; do not write it another way',
+    can: 'You can put the value in .env or a secret manager yourself.' }),
+  'force-push': (f) => ({ ...GATE_LOSS, line: `This command force-pushes the protected branch ${gateName(f.name)} on the remote.`,
+    safe: 'Deny, then push without --force.', why: 'a force push replaces the remote history',
+    impact: 'commits that exist only on the remote can be lost for everyone',
+    can: 'You can push without --force, or run this command yourself.' }),
+  'branch-delete': (f) => ({ ...GATE_LOSS, line: `This command deletes the protected branch ${gateName(f.name)}.`,
+    safe: 'Deny, unless you mean to remove this branch.', why: 'the project depends on a protected branch',
+    impact: 'commits that only this branch holds can be lost for everyone' }),
+  'remote-branches': () => ({ ...GATE_LOSS, line: 'This command rewrites or deletes many remote branches, protected ones included.',
+    safe: 'Deny, then push one named branch.', why: 'it makes the remote match this repository, branch by branch',
+    impact: 'branches and commits that exist only on the remote can be lost for everyone' }),
+  'discard-work': () => ({ ...GATE_LOSS, line: 'This command discards uncommitted changes that git cannot bring back.',
+    safe: 'Deny, then commit or stash the work first.', why: 'uncommitted work exists nowhere else',
+    impact: 'those changes are gone for good' }),
+  'lose-commits': () => ({ ...GATE_LOSS, line: 'This command drops commits that no remote and no other branch holds.',
+    safe: 'Deny, then keep them on a branch first.', why: 'those commits exist only here',
+    impact: 'only the reflog can bring them back, and only for a while' }),
+  // Git's safety net itself, so `lose-commits`' reflog line would be false here.
+  'drop-recovery': () => ({ ...GATE_LOSS, line: 'This command deletes the history git uses to recover lost commits.',
+    safe: 'Deny, unless you mean to give up that recovery.', why: 'it is the last copy of work lost earlier',
+    impact: 'commits lost earlier can never come back' }),
+  'delete-files': () => ({ ...GATE_LOSS, line: 'This command deletes files that git cannot restore.',
+    safe: 'Deny, unless you know these files can go.', why: 'git holds no copy of them',
+    impact: 'those files are gone for good' }),
+  unverified: () => ({ ...GATE_LOSS, line: 'This command may lose data, and the gate could not work out what it removes.',
+    safe: 'Deny, unless you have checked the command yourself.', why: 'the gate cannot read what this command touches',
+    impact: 'data that nothing else holds could be lost' }),
+  catastrophic: (f) => ({ ...GATE_LOSS,
+    line: `This command, ${gateName(f.name)}, would destroy a filesystem root, a drive, the home directory or a whole disk.`,
+    safe: 'Deny.', why: 'nothing could restore what it removes', impact: 'everything under that path is gone for good',
+    can: 'You can check what this command was meant to remove.' }),
+  'root-scan': (f) => ({ rule: 'Commands Must Return', quote: true, line: `This command, ${gateName(f.name)}, scans a whole filesystem root.`,
+    safe: 'Deny, then search a specific directory.', why: 'a whole root spans every drive',
+    impact: 'the scan can run for hours', tail: 'search one named directory',
+    can: 'You can name the directory to search.' }),
+  // Routine and frequent, so one line: three more would train the user to stop reading all of them.
+  commit: () => ({ rule: 'Consent Before Push', quote: true, short: true,
+    line: 'This command commits or pushes with git, which needs your approval each time.',
+    why: 'every commit and push is your decision', can: GATE_RUN_IT }),
+  // The next four are the OpenCode guard's alone: no hook reads a key path, a stream, a wiki manifest
+  // or an unknown tool's arguments, and the guard only refuses them. `wiki` has no rule to name.
+  'secret-file': (f) => ({ rule: 'Sealed Secrets', line: `This edit writes to ${gateName(gatePath(f.name))}, a file that holds a secret or key.`,
+    safe: 'Deny, then change this file yourself.', why: 'a secret or key file is never for the agent to write',
+    impact: 'the agent can replace a key that grants access', tail: 'leave this file alone', can: GATE_DO_IT }),
+  stream: (f) => ({ ...GATE_EXTERNAL, line: `This edit names ${gateName(gatePath(f.name))}, an NTFS stream that writes through to the file it hangs on.`,
+    safe: 'Deny, then have the agent name the file itself.', why: 'a stream hides which file really changes',
+    impact: 'a file can change with no gate seeing its name', tail: 'name the file itself' }),
+  wiki: (f) => ({ line: `This edit changes the protected wiki folder ${gateName(f.name)}.`,
+    safe: 'Deny, unless you asked for this change.', why: 'you marked this folder as closed to the agent',
+    impact: 'notes you protected can change', tail: 'leave this folder alone', can: GATE_DO_IT }),
+  'deep-args': (f) => ({ rule: 'Persist Insight', line: `The arguments of ${gateName(f.name)} nest too deep to read, so a write to your rules cannot be ruled out.`,
+    safe: 'Deny, unless you know what this call writes.', why: 'what the gate cannot read, it cannot clear',
+    impact: 'the call can write to your rules unseen', tail: 'ask the user; do not write it another way', can: GATE_DO_IT }),
+  // It reports a crash, not a change, so it has no rule to name.
+  'gate-error': (f) => ({ line: `Geneseed gate error: the check failed with ${gateName(f.name)}, so nothing judged this call.`,
+    safe: 'Deny, then run geneseed doctor.', why: 'a gate that crashed cannot say this call is safe',
+    impact: 'this call runs with no check at all', can: 'You can run geneseed doctor to find the fault.' }),
+};
+
+/**
+ * The text a gate shows, one sentence per line, so it reads the same if a host folds the newlines.
+ * `mode` is `ask` (a person can answer), `refused` (nothing can be allowed and the model is the only
+ * reader, so it must relay the words) or `warned` (the call runs anyway). `facts` is `name` (the path,
+ * branch, command excerpt, error or `ruleGateTarget` answer), `pairs` (`editPairs`, for the count),
+ * `shell` (reached through a command, which has no count), `says` (the call's own `description`) and
+ * `redirected` (`gateLoss`'s: the loss the text names was read from a repository the command leaves).
+ * The safe choice is line 2, so it stays in the part of a dialog that shows without scrolling. The
+ * caller adds the host's wrapping: Bob's `[geneseed]` prefix and `BOB_FINAL` are not here.
+ */
+function gateText(id, mode, facts = {}) {
+  const a = GATE_ASKS[id](facts);
+  const tag = a.rule ? ` (${a.rule})` : '';
+  // After the safe choice, so that it keeps its place in the part of a dialog that shows.
+  const far = facts.redirected ? [GATE_ELSEWHERE] : [];
+  if (mode === 'warned') return `${a.line}${tag}\nThis ran without a prompt, because Bob has no approval step.`;
+  if (mode === 'refused') {
+    return [`Tell the user this, word for word: ${a.line}`, ...far, `It was refused because ${a.why}.${tag}`, a.can,
+      ...(a.tail ? [`Agent: ${a.tail}.`] : [])].join('\n');
+  }
+  const c = [...(a.quote ? gateStrip(facts.says) : '')];
+  return [...(a.short ? [`${a.line}${tag}`]
+    : [a.line, `Safe choice: ${a.safe}${tag}`, ...far, `It asks because ${a.why}.`, `If you allow it, ${a.impact}.`]),
+  ...(c.length ? [`The agent says (not checked): "${c.length > 100 ? `${c.slice(0, 97).join('')}...` : c.join('')}"`] : []),
+  ...(a.tail ? [`Agent: if refused, ${a.tail}.`] : [])].join('\n');
+}
+
+// Said when `gateText` itself fails. It fits every mode, so nothing about it can fail.
+const GATE_UNSAID = 'Geneseed could not describe this call. Check what it does before you trust it.';
+
+/**
+ * `gateText` that cannot throw, and the only way a gate reaches it. Every catch around a gate is a
+ * pass or a lesser verdict (`guardGate`, a shell reader, the guard's own), so a bug in the words would
+ * otherwise change what the gate decides.
+ */
+function gateSafe(id, mode, facts) {
+  try { return gateText(id, mode, facts); } catch { return GATE_UNSAID; }
+}
+
+// `lossReason`'s sentences, by their fixed parts only: the rest is the agent's command, so a pattern
+// anchored there could be steered. Order matters: `git clean` ends in an agent's path.
+/** @type {[RegExp, string][]} */
+const GATE_LOSS_REASONS = [
+  [/^the gate could not verify /, 'unverified'],
+  [/^`git push --(?:mirror|prune)` |^a forced `git push --all` /, 'remote-branches'],
+  [/^`git push` would force-push the protected branch (.+)$/, 'force-push'],
+  [/^`git (?:push|branch -D)\b.* (?:would delete|deletes) the protected branch (.+)$/, 'branch-delete'],
+  [/^`git clean` would delete untracked files | which (?:nothing could|git cannot) restore$| deletes git's own data$| deletes a whole repository or worktree$/, 'delete-files'],
+  [/ would discard uncommitted changes \(.*\)$| deletes stashed work$/, 'discard-work'],
+  [/ recovery depends on$/, 'drop-recovery'],
+  [/ holds$/, 'lose-commits'],
+];
+
+/**
+ * The `gateText` id, branch and `redirected` flag for a `lossReason` sentence. One this table does not
+ * know reads as `unverified`, the most cautious text; tests/unit/gate_text.test.mjs holds every
+ * sentence to an id.
+ */
+function gateLoss(reason) {
+  const direct = reason.replace(/ \(and --git-dir\/--work-tree points it at a repository the gate did not read\)$/, '');
+  const redirected = direct !== reason;
+  const text = direct.replace(/ on the protected branch \S*$/, '');
+  for (const [re, id] of GATE_LOSS_REASONS) {
+    const m = re.exec(text);
+    if (m) return { id, name: m[1], redirected };
+  }
+  return { id: 'unverified', redirected };
+}
+// ---- gate text twin: END
+
 // A recursive scan rooted at a whole filesystem (Commands Must Return) → BLOCK. Twin of
 // js/hosts/hooks.mjs's `rootScan` — keep in step; tests/plugins/guard.test.mjs diffs the
 // constants below against it. In Git Bash `/` mounts every drive and share: on 2026-10-10 a
@@ -1329,10 +1622,11 @@ async function protectedPrefixes() {
   return prefixes
 }
 
-// ---- the rule / memory stores (Persist Insight) --------------------------------
-// Whether something the user wants kept is a standing rule or a durable fact is THEIR call, and
-// the HOST asks it, never the agent (External Gate). This was a speed bump: the first write was
-// refused and any re-issue passed, so an agent could release itself by claiming the user's
+// ---- the rule stores (Persist Insight) -------------------------------------------
+// A standing rule is the user's call, and the HOST asks it, never the agent (External Gate). A
+// durable fact is not: memory is written freely and shown afterwards (owner decision, 2026-11-08),
+// so only `ruleTarget` gates; `ruleStoreTarget` still names memory for the change report.
+// This was a speed bump: the first write was refused and any re-issue passed, so an agent could release itself by claiming the user's
 // authorization, and one did (2026-11). `tool.execute.before` can only allow or throw, so the
 // prompt comes from what runs AFTER it, inside the host's own edit tools:
 //   - V1: `permission.edit` "ask" keys (`opencodeEditAsks`, js/hosts/settings.mjs). V1 calls no
@@ -1346,9 +1640,9 @@ async function protectedPrefixes() {
 // everything else in a command is the host's own command permission's business.
 //
 // Install folder and file names are theme-independent by design, so the match is on
-// literal names. `user-rules.md` / `MEMORY.md` are Geneseed's own coinage and match
-// anywhere; other markdown matches only inside this install's own memory/ dir, so a
-// project's unrelated memory/ folder is never caught.
+// literal names. `user-rules.md` / `user-rules.draft.md` / `MEMORY.md` are Geneseed's own
+// coinage and match anywhere; for the change report, other markdown matches only inside this
+// install's own memory/ dir, so a project's unrelated memory/ folder is never caught.
 const nocase = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
 // The host's own edit tools, the only ones its `edit` permission covers (V1 `edit`, `write`,
 // `apply_patch`; V2 `patch`). The guard's WRITE_TOOLS is a wider substring class, which also
@@ -1362,6 +1656,10 @@ const PERSIST_EDIT_TOOL = "Stop and ask the user now (the rule skill). Only the 
 const PERSIST_NO_PROMPT = "Stop and ask the user now (the rule skill). The host has no prompt wired for " +
   "this file, so this write stays refused and re-issuing it changes nothing: leave it for the user " +
   "to write themself, and never write it another way (for example through a shell command)."
+// What the user reads beside an OpenCode prompt, whose dialog shows no plugin text: the ask's text inside a
+// delimiter that ties it to the dialog. Without the `Agent:` line, which is no business of the user's.
+const gateNote = (text) => ["──── Geneseed · about the next permission request ────",
+  ...text.split("\n").filter((l) => !l.startsWith("Agent:")), "──── The dialog below is for this change ────"].join("\n")
 // Whether the merged `permission.edit` makes V1 ask about `rel`, a path from the worktree: its own
 // evaluation, the LAST matching rule, with `Wildcard.match`'s pattern (util/wildcard.ts, 1.19.5).
 function editRuleAsks(edit, rel) {
@@ -1434,7 +1732,7 @@ function storeScan(home, found = {}) {
   const stamp = (f) => {
     try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}` } catch { /* absent */ }
   }
-  for (const n of ["user-rules.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
+  for (const n of ["user-rules.md", "user-rules.draft.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
   const walk = (dir) => {
     let items = []
     try { items = readdirSync(dir, { withFileTypes: true }) } catch { return }
@@ -1449,7 +1747,18 @@ function storeScan(home, found = {}) {
 
 // ---- the change report (twin of js/hosts/store-watch.mjs, whose header says why) ---------------
 // It detects; it prevents nothing. Here the baseline lives in memory, for as long as the plugin does.
-const scanAllStores = () => storeHomes().reduce((found, h) => storeScan(h, found), {})
+// Plus the project layer's two rule files, at the session's git root (else its directory): the twin
+// of js/hosts/store-watch.mjs's `projectRules`. A repo's own memory/ folder is no store.
+const scanAllStores = (dir = null) => {
+  const found = storeHomes().reduce((acc, h) => storeScan(h, acc), {})
+  if (!dir) return found
+  const top = gitRootOf(dir) ?? path.resolve(dir)
+  for (const n of ["user-rules.md", "user-rules.draft.md"]) {
+    const p = path.join(top, n)
+    try { const st = statSync(p); if (st.isFile()) found[p] = `${st.size}:${Math.trunc(st.mtimeMs)}` } catch { /* absent */ }
+  }
+  return found
+}
 const ownWrites = () => storeHomes().reduce((log, h) => {
   try { return { ...log, ...JSON.parse(readFileSync(path.join(h, "memory", ".own-writes.json"), "utf8")) } } catch { return log }
 }, {})
@@ -1465,8 +1774,9 @@ function noteForStatus(files) {
   } catch { /* a status line never fails a turn */ }
 }
 
-// The store a write would land in, or null. `base` is the session's directory: a relative path is
-// the tool's, never this process's.
+// The rule or memory store a write would land in, or null: what the change report excuses after an
+// approved native edit. `base` is the session's directory: a relative path is the tool's, never
+// this process's.
 function ruleStoreTarget(p, base) {
   const stores = storeDirs()
   for (const abs of landsOn(p, base)) {
@@ -1476,6 +1786,45 @@ function ruleStoreTarget(p, base) {
     if (nocase(t).endsWith(".md") && stores.some((d) => t.startsWith(`${d}/`))) return "memory"
   }
   return null
+}
+// The rule store a write would land in, or null: the gate's question. Every form a write lands on is
+// read, so a memory file linked to user-rules.md is still a rule write. Twin of js/hosts/hooks.mjs's
+// `ruleGateTarget`, `sameAsRule` included.
+const RULE_NAMES = new Set(["user-rules.md", "the rule draft"])
+/**
+ * Whether `f` is one of `rules` under a second name: an existing file with more than one name whose
+ * device and inode match a known rule file's. A hard link has no target to follow, so this is the only
+ * way to see one. bigint stat, because a 64-bit NTFS file id does not fit a double. Only a file that
+ * has a second name is compared, and only there does a rule file whose stat fails for any reason but
+ * absence count as a match (fail closed). Twin of js/hosts/hooks.mjs's, byte for byte.
+ */
+function sameAsRule(f, rules) {
+  let s;
+  try { s = statSync(f, { bigint: true }); } catch { return false; }
+  if (!s.isFile() || s.nlink < 2n) return false;
+  return rules.some((r) => {
+    try { const t = statSync(r, { bigint: true }); return t.dev === s.dev && t.ino === s.ino; } catch (e) {
+      return !['ENOENT', 'ENOTDIR'].includes(e?.code);
+    }
+  });
+}
+// The rule files a session loads, under each home: the install, the machine tier, the project layer.
+const ruleFilesUnder = (homes) => homes.filter(Boolean).flatMap((h) => ['user-rules.md', 'user-rules.draft.md'].map((n) => path.join(h, n)));
+function ruleTarget(p, base) {
+  if (RULE_STORE_OFF) return null
+  const forms = landsOn(p, base)
+  for (const abs of forms) {
+    const hit = coined(path.basename(abs))
+    if (RULE_NAMES.has(hit)) return hit
+  }
+  // This install's homes, the machine tier and `$GENESEED_HARNESS` (`storeHomes`), the home of the store
+  // `$GENESEED_MEMORY` names, and the project layer at the session's git root.
+  // No session directory: this process's, as the hook twin falls back to its own.
+  const at = base || process.cwd()
+  const project = gitRootOf(at) ?? path.resolve(at)
+  const pinned = process.env.GENESEED_MEMORY ? path.dirname(path.resolve(process.env.GENESEED_MEMORY)) : null
+  const rules = ruleFilesUnder([...storeHomes(), project, pinned])
+  return forms.some((f) => sameAsRule(f, rules)) ? "a hard link" : null
 }
 // Whether the merged `permission.edit`'s pattern `k` matches `rel`: V1's `Wildcard.match` (1.19.5).
 const wildMatch = (k, s) => new RegExp(`^${k.replace(/\\/g, "/").replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -1494,6 +1843,7 @@ const SENSOR_LIST = ".geneseed/protected-checks.txt"
 // without a protected-checks list: emptying it would disarm the gate. Twin of js/hosts/hooks.mjs.
 const DONE_LIST = ".geneseed/done-checks.txt"
 function protectedCheck(p) {
+  if (EXTERNAL_GATE_OFF) return null
   return protectedIn(path.resolve(p)) ?? protectedIn(resolvePath(p))
 }
 function protectedIn(target) {
@@ -1501,15 +1851,23 @@ function protectedIn(target) {
     const root = gitRootOf(path.dirname(target))
     if (!root) return null
     const fold = (s) => nocase(s.replace(/\\/g, "/"))
-    const rel = fold(path.relative(root, target))
-    if (rel === fold(DONE_LIST)) return DONE_LIST
+    const shown = path.relative(root, target)
+    const rel = fold(shown)
+    if (rel === fold(DONE_LIST)) return shown
     const text = readFileSync(path.join(root, SENSOR_LIST), "utf8")
     const entries = [SENSOR_LIST, ...text.split(/\r?\n/).map((l) => l.trim().replace(/[\\/]+$/, ""))
       .filter((l) => l && !l.startsWith("#"))]
-    return entries.find((e) => rel === fold(e) || rel.startsWith(fold(e) + "/")) ?? null
+    return entries.some((e) => rel === fold(e) || rel.startsWith(fold(e) + "/")) ? shown : null
   } catch {
     return null // no list (the common case) or an unreadable one: nothing is protected
   }
+}
+// `p` from its git root, or as given outside any repository. Twin of js/hosts/hooks.mjs's `repoRel`.
+function repoRel(p) {
+  try {
+    const root = gitRootOf(path.dirname(p))
+    return root ? path.relative(root, p) : p
+  } catch { return p }
 }
 
 // ---- the gates' own configuration (External Gate) ------------------------------
@@ -1525,8 +1883,8 @@ function protectedIn(target) {
 // under `$GENESEED_HARNESS`, a carrier the emit cannot name.
 const GATE_CONFIG_FILES = ['excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit'];
 const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob'];
-const GATE_CONFIG_ASK = 'is a gate\'s own configuration (the hook wiring, the exclusion list, a gate switch or the hook shim). Editing it could switch a check off: fix the code, not the gate, unless the user asks for this edit. Stop and ask the user now; never write it another way (for example through a shell command).';
 function gateConfig(p) {
+  if (EXTERNAL_GATE_OFF) return false
   try {
     const fold = (s) => nocase(path.resolve(s))
     const cfg = path.dirname(PLUGIN_DIR)
@@ -1542,6 +1900,42 @@ function gateConfig(p) {
     }
   } catch { /* an unresolvable path is no hit, like `protectedIn` */ }
   return false
+}
+
+// Twin of js/hosts/hooks.mjs's `carrierBlockChange`, for another host's carrier: a hook host reads a
+// `CLAUDE.md` or `AGENTS.md` by its managed block, so a write tool that moves that block, or that this
+// cannot replay, is refused. An edit outside the block passes. A patch is not replayed: it passes only
+// when neither the file nor the patch holds the opening delimiter, since a line patch cannot form one.
+const CARRIER_BEGIN = "<!-- BEGIN GENESEED -->"
+const CARRIER_REPLAY_CAP = 1024 * 1024
+const carrierBlockOf = (text) => /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/.exec(text)?.[0] ?? ""
+function carrierName(file) {
+  const s = String(file)
+  const at = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1
+  return s.slice(0, at) + s.slice(at).split(":")[0].replace(/[. ]+$/, "")
+}
+function carrierBlockChange(file, tool, args) {
+  if (EXTERNAL_GATE_OFF) return false
+  const target = carrierName(file)
+  const shared = (f) => /(?:^|[\\/])(?:CLAUDE|AGENTS)\.md$/i.test(f)
+  if (!shared(target) && !shared(resolvePath(target))) return false
+  let before = ""
+  try {
+    if (statSync(target).size > CARRIER_REPLAY_CAP) return true
+    before = readFileSync(target, "utf8")
+  } catch (err) {
+    if (err?.code !== "ENOENT") return true
+  }
+  if (typeof args?.patchText === "string") {
+    return before.includes(CARRIER_BEGIN) || args.patchText.includes(CARRIER_BEGIN) || /^\*\*\* Move to:/m.test(args.patchText)
+  }
+  let after = null
+  if (tool === "write" && typeof args?.content === "string") after = args.content
+  else if (tool === "edit" && typeof args?.oldString === "string" && args.oldString && typeof args?.newString === "string") {
+    const parts = before.split(args.oldString)
+    if (parts.length === 2 || (args.replaceAll === true && parts.length > 2)) after = parts.join(args.newString)
+  }
+  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlockOf(after) !== carrierBlockOf(before)
 }
 
 // The files `gateConfig` leaves to OpenCode's native `permission.edit` ask (`opencodeEditAsks` in
@@ -1565,6 +1959,7 @@ function agentAskTails(cfg) {
   return tails
 }
 function nativeAskFile(p) {
+  if (EXTERNAL_GATE_OFF) return false
   try {
     const cfg = path.dirname(PLUGIN_DIR)
     const name = path.basename(cfg)
@@ -1591,13 +1986,56 @@ function nativeAskFile(p) {
 // to the END marker verbatim, with `export ` dropped (tests/plugins/guard.test.mjs diffs the two).
 
 // The cheap prefilter, a superset of what the parse acts on: a `>`, or one of the programs as a word.
-const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
+const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm|add-content|set-content|out-file|clear-content|remove-item|copy-item|move-item|new-item|rename-item|ac|sc|del|copy|move|ni|ren)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
 // One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
 // fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
 // too, so that their words never read as operands. A backslash is no escape here, as in
 // `SCAN_SPLIT_RE`: `echo "say \"hi > f\""` closes its quote early, reads a target, and asks (on Bob, blocks).
 const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
 const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+// What says the shell is PowerShell when the caller cannot: a `Verb-Noun` word outside any here-string.
+const PS_CUE_RE = /(?:^|[\s;|&(])(?:add|clear|copy|export|foreach|get|import|invoke|move|new|out|remove|rename|select|set|start|stop|test|where|write)-[a-z]+/i;
+// The home a shell expands, spelled for `writePath` as `~/…`, the one form that keeps the two readings.
+const HOME_WORD_RE = /^(?:~|\$\{?(?:env:)?(?:home|userprofile)\}?)(?=[\\/]|$)/i;
+// PowerShell's writers, each as the POSIX form that writes the same paths. `ren` is `mv` with a sibling.
+const PS_WRITERS = new Map(Object.entries({
+  'add-content': 'rm', ac: 'rm', 'set-content': 'rm', sc: 'rm', 'out-file': 'rm', 'clear-content': 'rm', 'remove-item': 'rm',
+  del: 'rm', 'new-item': 'rm', ni: 'rm', 'copy-item': 'cp', copy: 'cp', 'move-item': 'mv', move: 'mv', 'rename-item': 'ren', ren: 'ren',
+}));
+// `rm`, `cp` and `mv` are aliases too, but only a parameter spelled out in full tells them from the
+// POSIX programs: `-lp` and `-pat` are also POSIX flag clusters.
+const PS_NAMED_RE = /^-(?:path|literalpath|destination)(?::|$)/i;
+const PS_PATH_RE = /^-(?:path|literalpath|lp|pspath|filepath)$/i;
+const PS_SWITCH_RE = /^-(?:force|recurse|append|nonewline|noclobber|whatif|confirm|passthru|verbose|debug|container)$/i;
+const PS_VALUE_RE = /^-(?:value|encoding|itemtype|type|filter|include|exclude|inputobject|stream|width|target|erroraction|ea)$/i;
+// `(…)`, `$(…)`, `@(…)`, `{…}`, `@{…}`: an argument whose words cannot be counted. `${x}` is a variable.
+const PS_OPAQUE_RE = /^(?:[$@]?\(|@?\{)/;
+
+/**
+ * `s` with each here-string body cut. The body is data, as a heredoc's is: without this, an apostrophe
+ * in a PowerShell commit message unpairs the quotes, and a line that opens with `Move` reads as a
+ * command. One pass: a quote kind with no closer is searched for once, so many openers stay linear.
+ */
+function hereStringsCut(s) {
+  const re = /@(["'])\r?\n/g;
+  const dead = new Set();
+  let out = ''; let at = 0; let m;
+  while ((m = re.exec(s))) {
+    if (dead.has(m[1])) continue;
+    const end = s.indexOf(`\n${m[1]}@`, re.lastIndex - 1);
+    if (end < 0) { dead.add(m[1]); continue; }
+    out += `${s.slice(at, m.index)}''`;
+    at = end + 3;
+    re.lastIndex = at;
+  }
+  return out + s.slice(at);
+}
+
+/** `t` without its quotes, a home spelled `~/…`. Single quotes expand nothing, so `$` stays and hides the path. */
+function shellWord(t) {
+  const w = t.replace(/["']/g, '');
+  return t[0] !== "'" && HOME_WORD_RE.test(w) ? `~${w.replace(HOME_WORD_RE, '').replace(/\\/g, '/')}` : w;
+}
 
 /** `t` as an absolute path from `dir`, `~/…` as it stands, or null for what the shell rewrites. */
 function writePath(dir, t) {
@@ -1606,7 +2044,47 @@ function writePath(dir, t) {
   // A Git Bash `/c/…` path, as `resolveIn` reads it.
   const q = process.platform === 'win32' ? t.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:') : t;
   if (path.isAbsolute(q)) return path.resolve(q);
+  if (dir && dir[0] === '~') return `${dir}/${q}`;
   return dir ? path.resolve(dir, q) : null;
+}
+
+/**
+ * The operands of a PowerShell writer, in the order the POSIX branches read them, `/`-separated (a
+ * cmdlet takes `\` on every platform). Only the first positional is a path, and for `cp`, `mv` and
+ * `ren` the next is the destination: the next one of `Add-Content a b` is its value and of
+ * `Remove-Item a b` its filter. Named paths are read wherever they stand; a parameter this does
+ * not know, or a `(…)` or `{…}` argument, ends the positionals, because its words cannot be counted.
+ */
+function psOperands(toks, form) {
+  const paths = []; const dest = []; const pos = [];
+  let name = ''; let open = true;
+  const list = (t) => (t.match(/"[^"]*"?|'[^']*'?|[^,"']+/g) || []).map(shellWord).filter(Boolean);
+  for (let i = 0; i < toks.length; i += 1) {
+    // An array argument spans tokens: `a, b`.
+    const value = (t) => { let v = t; while (v.endsWith(',') && i + 1 < toks.length) { i += 1; v += toks[i]; } return v; };
+    const m = /^(-[a-z]+)(?::(.+))?$/is.exec(toks[i]);
+    if (!m) {
+      const t = value(toks[i]);
+      if (PS_OPAQUE_RE.test(t)) open = false;
+      else if (open && !/^\/[a-z]$/i.test(t)) pos.push(t); // `/y`: `copy` and `del` are cmd.exe's too
+    } else if (!PS_SWITCH_RE.test(m[1])) {
+      const into = PS_PATH_RE.test(m[1]) ? paths : /^-destination$/i.test(m[1]) ? dest : null;
+      const naming = /^-(?:new)?name$/i.test(m[1]);
+      if (!into && !naming && !PS_VALUE_RE.test(m[1])) { open = false; continue; }
+      if (m[2] === undefined) i += 1;
+      const t = value(m[2] ?? toks[i] ?? '');
+      if (PS_OPAQUE_RE.test(t)) open = false;
+      else if (into) into.push(...list(t));
+      else if (naming) name = shellWord(t);
+    }
+  }
+  if (!paths.length && pos.length) paths.push(...list(pos.shift()));
+  if (form === 'rm') return name ? (paths.length ? paths : ['.']).map((p) => `${p}/${name}`) : paths;
+  if (form === 'ren') {
+    const to = name || shellWord(pos[0] ?? '');
+    return to && paths.length ? [paths[0], paths[0].replace(/[^\\/]*$/, '') + to] : paths;
+  }
+  return [...paths, ...(dest.length ? dest : list(pos[0] ?? '')).slice(0, 1)];
 }
 
 /** The files `sed` edits in place: none without `-i`; else its operands, past the script if inline. */
@@ -1629,38 +2107,55 @@ function sedFiles(args) {
 /**
  * The files `command` would write, as absolute paths: redirect targets (`>`, `>>`, `&>`), `tee`
  * and `rm` operands, `sed -i` files, the destination of `cp` and `mv`, and the sources of `mv`, which
- * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. Read like
- * `rootScan`: quotes, comments and heredoc bodies are data. A `cd` is followed; one it cannot read
- * leaves later relative paths unseen. What it cannot read, it leaves out: this reader fails OPEN.
+ * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. PowerShell's
+ * writers read the same way (`PS_WRITERS`, `psOperands`), case-insensitively, and a pipe into one needs
+ * nothing more: `| Out-File x` is a segment of its own. Read like `rootScan`: quotes, comments and
+ * heredoc bodies are data. So is a here-string body, but only in PowerShell, which `ps` says when the
+ * caller knows the tool and `PS_CUE_RE` otherwise: to bash the opener is a plain quote, so a closed
+ * "here-string" can wrap a real `rm` (the row in tests/unit/hook_gates.test.mjs). With no cue, a
+ * PowerShell here-string reads as bash would read it. A home variable is read as `~`. A `cd` is followed; one it cannot read leaves later relative paths unseen.
+ * What it cannot read, it leaves out: this reader fails OPEN.
  *
  * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
- * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
- * variable, glob or brace in it, a wrapper with flags (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`,
- * `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >& file` (read as a dup), a `popd` (not followed, so
- * relative paths after a `pushd`/`popd` pair resolve from the wrong folder), `cp -t`, any other writer
- * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
- * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
- * boundary that holds against those.
+ * `bash -c`, `pwsh -c`, `powershell -Command`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or
+ * subshell trick, `>|`, a path with any other variable, a glob or a brace in it, a wrapper with flags
+ * (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`, `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >&
+ * file` (read as a dup), a `popd` (not followed, so relative paths after a `pushd`/`popd` pair resolve
+ * from the wrong folder), `cp -t`, any other writer (`dd`, `ln`, `install`, `git mv`, `git checkout`,
+ * `Tee-Object`, `[IO.File]::WriteAllText`, an alias outside `PS_WRITERS` such as `ri`), a cmdlet behind
+ * a PowerShell assignment, `if` or script block (`$null = New-Item x`, `% { Remove-Item x }`), one
+ * continued over lines with a backtick, a parameter abbreviated or unknown before a positional path (so
+ * `Set-Content -Enc utf8 x`), a comma list after a POSIX-read `rm`, `cp` or `mv`, and a folder removed
+ * above a listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is
+ * the boundary that holds against those.
  */
-function shellWriteTargets(command, cwd) {
+function shellWriteTargets(command, cwd, ps = false) {
   if (!SHELL_WRITE_RE.test(command)) return [];
   const found = new Set();
   let dir = cwd;
   const add = (t) => { const p = writePath(dir, t); if (p) found.add(p); };
   const bare = (t) => t.replace(/["']/g, '');
-  for (const seg of scanSegments(command)) {
+  const cut = hereStringsCut(command);
+  for (const seg of scanSegments(ps || PS_CUE_RE.test(cut) ? cut : command)) {
     const outs = [];
     const body = seg.replace(REDIRECT_RE, (m, op, dup, target) => {
       if (op === undefined) return m;
-      if (op[0] === '>' && !dup && target) outs.push(bare(target));
+      if (op[0] === '>' && !dup && target) outs.push(shellWord(target));
       return ' ';
     });
     let toks = stripStructure(body.match(SCAN_TOKEN_RE) || []);
     while (toks.length && (/^\w+=/.test(toks[0]) || SCAN_WRAPPERS.has(bare(toks[0])))) toks = toks.slice(1);
-    const prog = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '') : '';
-    const args = toks.slice(1).map(bare);
+    const word = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase() : '';
+    let prog = word.replace(/\.exe$/, '');
+    const args = toks.slice(1).map(shellWord);
     const dashes = args.indexOf('--');
-    const ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    let ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    // `word`, not `prog`: `sc.exe` is the service tool, never the Set-Content alias.
+    const form = PS_WRITERS.get(word) ?? (/^(?:rm|cp|mv)$/.test(prog) && toks.some((t) => PS_NAMED_RE.test(t)) ? prog : null);
+    if (form) {
+      prog = form === 'ren' ? 'mv' : form;
+      ops = psOperands(toks.slice(1), form).map((t) => t.replace(/\\/g, '/'));
+    }
     if (SHELL_CD.has(prog)) {
       const to = ops.find((a) => !/^\/d$/i.test(a));
       dir = to && to !== '-' ? writePath(dir, to) : null;
@@ -1863,12 +2358,12 @@ export const GeneseedGuard = async (ctx) => {
   const watch = async (sid) => {
     if (OFF || !sid || watched.has(sid) || unwatched.has(sid)) return
     if (await sovereignBypass(root()) || await isChildSession(sid)) { unwatched.add(sid); return }
-    watched.set(sid, scanAllStores())
+    watched.set(sid, scanAllStores(root()))
   }
   const compare = async (sid) => {
     const before = watched.get(sid)
     if (!before) return
-    const now = scanAllStores()
+    const now = scanAllStores(root())
     watched.set(sid, now)
     const changed = [...new Set([...Object.keys(before), ...Object.keys(now)])].filter((f) => before[f] !== now[f]).sort()
     if (!changed.length) return
@@ -1902,9 +2397,11 @@ export const GeneseedGuard = async (ctx) => {
         if (!watched.size || !NATIVE_EDIT_TOOLS.has(tool)) return
         const cwd = ctx?.directory || process.cwd()
         for (const raw of pickPath(input?.args ?? {}, cwd)) {
-          if (!ruleStoreTarget(raw, cwd)) continue
+          // With Persist Insight off no prompt ran, so a rule file is not excused: the report shows it.
+          const hit = ruleStoreTarget(raw, cwd)
+          if (!hit || (RULE_STORE_OFF && hit !== "memory")) continue
           // Only keys the scan itself names: a link's other spellings would read as files gone.
-          const now = scanAllStores()
+          const now = scanAllStores(root())
           for (const f of landsOn(raw, cwd)) {
             for (const base of watched.values()) { if (f in now) base[f] = now[f]; else delete base[f] }
           }
@@ -1926,6 +2423,12 @@ export const GeneseedGuard = async (ctx) => {
       // `law-4`, `process-1`) plus `wiki`, so status counts one vocabulary across hosts.
       // The model reads this text. It never names the GENESEED_GUARD switch: a weak model read
       // "set GENESEED_GUARD=off to allow" as leave to route the write through a shell (4.27.1).
+      // A refusal's words, through `gateSafe` (the ownership reason is the agent's, so it keeps its own): the catch below lets a call through on any error
+      // but a deny. No count: no `editPairs` here, and the line reads whole without one.
+      const refused = (id, facts) => gateSafe(id, "refused", facts)
+      // V1's explanations, held to the end of this hook: a later gate may still refuse the call, and a
+      // note about a dialog that never comes is a false one. V2 posts from `evaluate` instead.
+      const notes = []
       const deny = async (why, rule) => {
         if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
         log(`BLOCKED: ${why}`)
@@ -1946,21 +2449,23 @@ export const GeneseedGuard = async (ctx) => {
           // blocks the whole call (see `pickPath` for why this is not a single path).
           const paths = pickPath(args, cwd)
           for (const raw of paths) {
-            if (namesStream(raw)) { await deny(`${raw} names an NTFS stream, which writes through to the file it hangs on — name the file itself (External Gate)`, "rigor-5"); return }
+            if (namesStream(raw)) { await deny(refused("stream", { name: repoRel(path.resolve(cwd, raw)) }), "rigor-5"); return }
             // Once, here: under `opencode serve` this process's cwd is not the session's directory, and
             // every gate below resolves a relative path against it.
             const p = landsOn(raw, cwd)[0].replace(/\\/g, "/")
-            if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(`write to secret/key file ${p} (Sealed Secrets)`, "law-1"); return }
+            if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(refused("secret-file", { name: repoRel(p) }), "law-1"); return }
             if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
             const sensor = protectedCheck(p)
-            if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
-            if (gateConfig(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
+            if (sensor) { await deny(refused("check", { name: sensor }), "rigor-5"); return }
+            if (gateConfig(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+            if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
             // V1 after an "always": the `permission.edit` ask on these files is gone too.
-            if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
-            const store = ruleStoreTarget(raw, cwd)
-            if (store && !(await hostPrompts(tool, raw, cwd))) {
-              await deny(`writing to ${store} — a standing rule, or a fact to remember? That ` +
-                   `choice is the user's (Persist Insight). ${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
+            if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+            const store = ruleTarget(raw, cwd)
+            const prompted = (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
+            if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
+            if (store && !prompted) {
+              await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
               return
             }
           }
@@ -1971,8 +2476,7 @@ export const GeneseedGuard = async (ctx) => {
           for (const { path: cp, content } of SECRETS_GATE_OFF ? [] : pickAddedContentByPath(args, cwd)) {
             if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
             if (SECRET_CONTENT_RE.test(content)) {
-              await deny(`${cp} would carry a credential-shaped string (Sealed Secrets) — secrets `
-                + "live in .env or a secret manager, never in a tracked file", "law-1")
+              await deny(refused("secret", { name: repoRel(path.resolve(cwd, cp)) }), "law-1")
               return
             }
           }
@@ -1987,14 +2491,13 @@ export const GeneseedGuard = async (ctx) => {
         }
         // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
         // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
-        if (!NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
+        if (!RULE_STORE_OFF && !NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
           const named = argPaths(args)
-          if (named.overflow) { await deny(`${tool}'s arguments nest too deep to read, so a rule or memory write cannot be ruled out (Persist Insight)`, "process-1"); return }
+          if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
           for (const v of named) {
-            const store = ruleStoreTarget(v, cwd)
+            const store = ruleTarget(v, cwd)
             if (store) {
-              await deny(`writing to ${store} through ${tool} — a standing rule, or a fact to remember? That ` +
-                `choice is the user's (Persist Insight). ${PERSIST_EDIT_TOOL}`, "process-1")
+              await deny(`${refused("store", { name: store })}\n${PERSIST_EDIT_TOOL}`, "process-1")
               return
             }
           }
@@ -2004,7 +2507,7 @@ export const GeneseedGuard = async (ctx) => {
             const abs = landsOn(p, cwd)[0].replace(/\\/g, "/").toLowerCase()
             const hit = (await protectedPrefixes()).find(
               (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
-            if (hit) { await deny(`mutation in protected wiki folder — ${hit.label} (AGENT.md §8)`, "wiki"); return }
+            if (hit) { await deny(refused("wiki", { name: hit.label }), "wiki"); return }
           }
         }
         // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
@@ -2014,33 +2517,37 @@ export const GeneseedGuard = async (ctx) => {
           const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
           const c = pickCommand(args)
           const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
-          if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(`catastrophic command (Deletion Is Deliberate): ${c.slice(0, 80)}`, "law-4"); return }
-          const scan = c && rootScan(c)
+          if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
+          const scan = c && !ROOT_SCAN_OFF && rootScan(c)
           if (scan) {
-            await deny(`\`${scan.slice(0, 80)}\` recursively scans a whole filesystem root (Commands Must Return) — ` +
-              "search a specific directory instead: the project, node_modules, ~/.npm, %APPDATA%", "ops-2")
+            await deny(refused("root-scan", { name: scan }), "ops-2")
             return
           }
           if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
             const loss = lossReason(cut(c), wd, { always: false, split: cut })
-            if (loss) { await deny(`${loss} (Deletion Is Deliberate) — confirm with the user first`, "law-4"); return }
+            if (loss) { const facts = gateLoss(loss); await deny(refused(facts.id, facts), "law-4"); return }
           }
           // External Gate over a shell write: the same paths as a write tool, no content scan. A
           // throw fails open through the catch below, as the twin's `shellWriteReason` does.
-          for (const p of c ? shellWriteTargets(c, wd) : []) {
+          for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
             const sensor = protectedCheck(p)
-            if (sensor) { await deny(`${p} is a protected check (${sensor === DONE_LIST ? "the done gate list itself" : `${sensor}, listed in ${SENSOR_LIST}`}) — a check the agent can edit is not a check (External Gate)`, "rigor-5"); return }
-            if (gateConfig(p) || nativeAskFile(p)) { await deny(`${p} ${GATE_CONFIG_ASK} (External Gate)`, "rigor-5"); return }
+            if (sensor) { await deny(refused("check", { name: sensor, shell: true }), "rigor-5"); return }
+            if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
             // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
             // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
-            const store = ruleStoreTarget(p, wd)
-            if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.add(input.callID); continue }
+            const store = ruleTarget(p, wd)
+            if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
             if (store) {
-              await deny(`writing to ${store} through a shell command — a standing rule, or a fact to ` +
-                `remember? That choice is the user's (Persist Insight). ${PERSIST_EDIT_TOOL}`, "process-1")
+              await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
               return
             }
           }
+        }
+        for (const note of notes) {
+          // No count here, as in a refusal. 120 s, because the dialog stays until it is answered.
+          try {
+            await ctx?.client?.tui?.showToast?.({ body: { title: "Geneseed", message: gateNote(note), variant: "warning", duration: 120000 }, query: { directory: cwd } })
+          } catch (err) { log(`note not shown: ${err?.message ?? err}`) }
         }
       } catch (err) {
         // Our own deny must propagate; any inspection error must never break a tool call.
@@ -2072,8 +2579,18 @@ export const GeneseedGuard = async (ctx) => {
 // and any saved "always" say (core/src/permission.ts, 2.2.5). A configured deny never reaches it,
 // and an unattended session turns the ask into a deny. A V2 without the domain has no `hostAsks`,
 // so the guard refuses those writes.
+//
+// The dialog shows no plugin text, so each ask posts a note first. The TUI renders a synthetic item's
+// `description` and the model gets its `text`, so the block goes in the first and the second must read
+// true whether the user allows or denies (spec 2026-11-07-gate-prompts-5.0.3, S0 result).
 async function askOnRuleStore(ctx, shellAsks) {
   const dir = ctx?.location?.directory || process.cwd()
+  const note = async (event) => {
+    try {
+      await ctx.session.synthetic({ sessionID: event.sessionID, text: "Geneseed showed the user why the next permission request asks.",
+        description: gateNote(event.message), resume: false })
+    } catch (err) { log(`note not posted: ${err?.message ?? err}`) }
+  }
   try {
     await ctx.permission.hook("evaluate", async (event) => {
       try {
@@ -2081,21 +2598,24 @@ async function askOnRuleStore(ctx, shellAsks) {
         if (event.action === "shell") {
           // The shell tool's assert: action `shell`, one resource per parsed command, `source.id` the
           // call the tool hook marked. A command the host's parser finds no command in asserts nothing.
+          const shellStore = shellAsks.get(event.source?.id)
           if (!shellAsks.delete(event.source?.id)) return
-          if (WARN_ONLY) { log("WARN (would ask): a shell write to a rule or memory file (Persist Insight)"); return }
+          if (WARN_ONLY) { log("WARN (would ask): a shell write to a rule file (Persist Insight)"); return }
           event.effect = "ask"
-          event.message = "Geneseed (Persist Insight): this command writes a rule or memory file. A standing rule, or a fact to remember? That choice is yours."
+          event.message = gateSafe("store", "ask", { name: shellStore, shell: true })
+          await note(event)
           return
         }
         if (event.action !== "edit") return
-        const store = event.resources.map((r) => ruleStoreTarget(r, dir)).find(Boolean)
+        const store = event.resources.map((r) => ruleTarget(r, dir)).find(Boolean)
         // The gate's own files have a static ask a saved "always" can outvote, so they are raised too.
-        const gate = !store && event.resources.some((r) => nativeAskFile(path.resolve(dir, r)))
+        const gate = !store && event.resources.find((r) => nativeAskFile(path.resolve(dir, r)))
         if ((!store && !gate) || await sovereignBypass(ctx?.location?.project?.directory || dir)) return
         if (WARN_ONLY) { log(`WARN (would ask): writing to ${store || "a gate's configuration"} (Persist Insight)`); return }
         event.effect = "ask"
-        event.message = store ? `Geneseed (Persist Insight): writing to ${store}. A standing rule, or a fact to remember? That choice is yours.`
-          : "Geneseed (External Gate): this file is a gate's own configuration. Editing it could switch a check off."
+        event.message = store ? gateSafe("store", "ask", { name: store })
+          : gateSafe("config", "ask", { name: repoRel(path.resolve(dir, gate)) })
+        await note(event)
       } catch {
         // An event this hook cannot read is asked about. A V2 callback never throws.
         try { if (event?.action === "edit") event.effect = "ask" } catch { /* a frozen event: the static key still asks */ }
@@ -2106,7 +2626,8 @@ async function askOnRuleStore(ctx, shellAsks) {
 }
 
 async function setupV2(ctx) {
-  const shellAsks = new Set()
+  // Call id to the store it writes, for the prompt's text.
+  const shellAsks = new Map()
   const hostAsks = await askOnRuleStore(ctx, shellAsks)
   const hooks = await GeneseedGuard({
     worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory,

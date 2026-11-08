@@ -1,6 +1,6 @@
 /**
  * The machine-wide HOOK SHIM — where it lives, what it says, whether it still resolves — and
- * the shim-shaped reader `migrate` needs (the autostart scan).
+ * the web console's login launcher (read by `migrate`, written by Settings).
  *
  * SPLIT OUT OF `js/hosts/settings.mjs` (2026-10) for its cheapest caller. Every CLI run asks
  * `shimDead()` (the dead-shim warning in `bin/geneseed-cli.mjs`), and that used to load the
@@ -14,7 +14,8 @@
  * being cheap to load is its whole reason to exist.
  */
 import {
-  chmodSync, existsSync, mkdirSync, realpathSync, renameSync, statSync, writeFileSync,
+  chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync,
+  unlinkSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -362,12 +363,12 @@ export function hookRunnerEntry() {
 }
 
 /**
- * `_build_settings._autostart_paths` — where a hand-written web-daemon autostart entry lives.
+ * `_build_settings._autostart_paths` — where the web-daemon login launcher lives.
  *
- * NOTHING IN THIS REPOSITORY HAS EVER WRITTEN ONE — the install guide tells the user to create them
- * by hand, and no .py/.mjs/.sh/.cmd in the tree contains `vbs`, `LaunchAgents` or `plist`. So
- * `migrate` REPORTS a stale one and never rewrites it, on the rule `settingsIntegrityCheck`
- * already states: an entry the manifest does not claim is "possibly user-authored; left alone".
+ * Two writers, told apart by `AUTOSTART_MARKER`: the Settings page writes one (decided
+ * 2026-11-08, `autostartInstall` below), and the install guide still shows how to write one by
+ * hand. `migrate` only REPORTS a stale one and never rewrites it, on the rule
+ * `settingsIntegrityCheck` already states: a file the tool may not own is left alone.
  *
  * Both platforms' paths on both platforms, deliberately — the scan is a read that misses
  * harmlessly, and returning only the host platform's would make the macOS arm unreachable
@@ -395,4 +396,151 @@ export function autostartPaths() {
 export function autostartStale(text, root) {
   if (!text.toLowerCase().includes('geneseed')) return false;
   return !text.includes(root) && !text.includes(root.replaceAll('\\', '/'));
+}
+
+/**
+ * The line that names Geneseed as the writer of a login launcher. Only a file that carries it is
+ * rewritten or deleted. The guide's hand-written templates leave it out on purpose, so a copied
+ * template stays the user's.
+ */
+export const AUTOSTART_MARKER = 'GENESEED_AUTOSTART';
+const MARKER_NOTE = 'written by Geneseed (Settings, Start at login), which may update or remove it.';
+
+/**
+ * The marker line and the line it must sit on: line 2 of the VBS, line 3 of the plist (after
+ * the XML declaration and the DOCTYPE). The marker anywhere else does not make a file ours.
+ */
+const MARKER_LINE = { win32: `' ${AUTOSTART_MARKER}: ${MARKER_NOTE}`, darwin: `<!-- ${AUTOSTART_MARKER}: ${MARKER_NOTE} -->` };
+const MARKER_INDEX = { win32: 1, darwin: 2 };
+const CLI_ENTRY = path.join(ROOT, 'bin', 'geneseed-cli.mjs');
+
+/**
+ * Is `root` a copy that may soon disappear: an agent worktree (`.claude/worktrees/…`) or the npx
+ * cache (`_npx/…`)? A login item pointing there stops working when the folder goes.
+ */
+export function transientRoot(root) {
+  return /[\\/]\.claude[\\/]worktrees[\\/]|[\\/]_npx[\\/]/i.test(root);
+}
+
+/** This platform's launcher path from `autostartPaths`, or null where there is none. */
+export function autostartFile(platform = process.platform) {
+  const [vbs, plist] = autostartPaths();
+  return { win32: vbs, darwin: plist }[platform] ?? null;
+}
+
+/**
+ * The exact text `autostartInstall` writes for `platform`, or null where there is none.
+ *
+ * It runs what the daemon launcher runs (`spawnDetached`, `js/web/daemon.mjs`): the running Node
+ * by absolute path and this checkout's `bin/geneseed-cli.mjs`, then `web start --no-browser`. A
+ * login item does not see the shell's PATH, so the `geneseed` front doors, which call a bare
+ * `node`, could fail there. The VBS calls Node directly, with no `cmd /c`, so a `&` in a path
+ * stays literal. `WshShell.Run` still expands `%VAR%`, so `autostartInstall` refuses a path with
+ * a `%`. No date or other varying part: the same install writes the same bytes, which is what
+ * makes "differs from this text" the stale test.
+ */
+export function autostartText(platform = process.platform, exe = process.execPath, entry = CLI_ENTRY) {
+  if (platform === 'win32') {
+    const q = (s) => s.replaceAll('"', '""');
+    return ["' geneseed-web.vbs: start the Geneseed web console at login (hidden, no browser).",
+      MARKER_LINE.win32,
+      `CreateObject("WScript.Shell").Run """${q(exe)}"" ""${q(entry)}"" web start --no-browser", 0, False`,
+      ''].join('\r\n');
+  }
+  if (platform === 'darwin') {
+    const x = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    return ['<?xml version="1.0" encoding="UTF-8"?>',
+      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+      MARKER_LINE.darwin,
+      '<plist version="1.0">', '<dict>',
+      '  <key>Label</key>', '  <string>dev.geneseed.web</string>',
+      '  <key>ProgramArguments</key>', '  <array>',
+      ...[exe, entry, 'web', 'start', '--no-browser'].map((a) => `    <string>${x(a)}</string>`),
+      '  </array>', '  <key>RunAtLoad</key>', '  <true/>', '</dict>', '</plist>', ''].join('\n');
+  }
+  return null;
+}
+
+/**
+ * The launcher's state for the Settings row, or null where this platform has none.
+ *
+ * `absent`; `ours` (the marker line in its place, and exactly what an install would write now);
+ * `stale` (the marker line in its place, and different: another checkout, which `autostartStale`
+ * names, or another Node, which it does not); `hand` (anything else, the marker elsewhere and a
+ * symlink included: never written through, never deleted). `root` is the checkout the launcher
+ * runs, and `transient` says it may soon disappear (`transientRoot`), so the confirm can say both.
+ */
+export function autostartState(platform = process.platform) {
+  const file = autostartFile(platform);
+  if (!file) return null;
+  const at = (state) => ({ file, state, root: ROOT, transient: transientRoot(ROOT) });
+  let st;
+  try { st = lstatSync(file); } catch { return at('absent'); }
+  let text = '';
+  try { text = st.isFile() ? readFileSync(file, 'utf8') : ''; } catch { /* unreadable: not ours */ }
+  if (text.split(/\r?\n/)[MARKER_INDEX[platform]] !== MARKER_LINE[platform]) return at('hand');
+  return at(text === autostartText(platform) ? 'ours' : 'stale');
+}
+
+const osText = (e) => (e && e.code ? `${e.code}: ${e.message}` : String(e));
+const notOurs = (cur) => ({ ok: false, autostart: cur,
+  error: `${cur.file} was not written by Geneseed, so it is left alone` });
+const NO_LAUNCHER = { ok: false, error: 'this platform has no login launcher Geneseed can write' };
+
+/**
+ * Why `exe` or `entry` cannot go into the launcher, or null. Checked on the two paths, not on the
+ * whole text. A control character (CR, LF and the rest) would end a line or a string early. On
+ * Windows, a `%` would be expanded by `WshShell.Run`, and a character outside ASCII would be
+ * misread: WSH reads a `.vbs` with no BOM in the ANSI code page.
+ */
+export function autostartPathProblem(platform, exe, entry) {
+  for (const p of [exe, entry]) {
+    if (/[\x00-\x1f\x7f]/.test(p)) return `the path ${JSON.stringify(p)} has a control character`;
+    if (platform !== 'win32') continue;
+    if (p.includes('%')) return `the path ${p} has a %, which the login script would expand`;
+    if (/[^ -~]/.test(p)) return `the path ${p} has non-ASCII characters, which a .vbs cannot hold`;
+  }
+  return null;
+}
+
+/**
+ * Write the launcher. Rewrites our own file (`ours`, `stale`), refuses a hand-written one and a
+ * path `autostartPathProblem` names. The text goes to a temp file in the same folder first and is
+ * renamed over the target, so the file is never half-written, and a symlink planted after the
+ * state check is replaced, not written through. `exe` and `entry` are parameters only so a test can
+ * reach the refusals; the route never passes them.
+ */
+export function autostartInstall(platform = process.platform, exe = process.execPath, entry = CLI_ENTRY) {
+  const cur = autostartState(platform);
+  if (!cur) return NO_LAUNCHER;
+  if (cur.state === 'hand') return notOurs(cur);
+  const problem = autostartPathProblem(platform, exe, entry);
+  if (problem) {
+    return { ok: false, autostart: cur,
+      error: `${problem}: set it up by hand (see Start the web console at login)` };
+  }
+  const tmp = `${cur.file}.${process.pid}.tmp`;
+  try {
+    mkdirSync(path.dirname(cur.file), { recursive: true });
+    writeFileSync(tmp, autostartText(platform, exe, entry), { flag: 'wx' });
+    renameSync(tmp, cur.file);
+  } catch (e) {
+    try { unlinkSync(tmp); } catch { /* never created, or already renamed */ }
+    return { ok: false, autostart: autostartState(platform),
+      error: `could not write ${cur.file} (${osText(e)})` };
+  }
+  return { ok: true, autostart: autostartState(platform) };
+}
+
+/** Delete the launcher, only when its marker line is in place. A hand-written file is refused. */
+export function autostartRemove(platform = process.platform) {
+  const cur = autostartState(platform);
+  if (!cur) return NO_LAUNCHER;
+  if (cur.state === 'absent') return { ok: false, autostart: cur, error: `no login launcher at ${cur.file}` };
+  if (cur.state === 'hand') return notOurs(cur);
+  try { unlinkSync(cur.file); } catch (e) {
+    return { ok: false, autostart: autostartState(platform),
+      error: `could not delete ${cur.file} (${osText(e)})` };
+  }
+  return { ok: true, autostart: autostartState(platform) };
 }

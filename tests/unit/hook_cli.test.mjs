@@ -26,6 +26,7 @@ import {
   existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -990,7 +991,9 @@ function decision(argv, payload) {
 }
 
 for (const [verb, payload, cite] of [
-  ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } },
+  // `cwd` outside any repository: from a Foreman worker's worktree (where this suite often runs)
+  // a commit is a named batch and passes, so the hook's own cwd must not decide this row.
+  ['git-gate', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, cwd: os.tmpdir() },
     'Consent Before Push'],
   ['rule-gate', { tool_name: 'Write', tool_input: { file_path: '/x/user-rules.md' } },
     'Persist Insight'],

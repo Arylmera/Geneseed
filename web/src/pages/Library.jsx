@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useMemo, useState } from 'react'
 import { api } from '../api/index.js'
 import { go } from '../lib/router.js'
-import { installTag } from '../lib/hosts.js'
+import { dotColour, fleetSlots, installTag } from '../lib/hosts.js'
 import { useInstalls } from '../hooks/useInstalls.js'
 import { Icon } from '../components/Icon.jsx'
 import { SECTIONS, LIBRARY_ORDER } from '../lib/sections.js'
@@ -37,10 +37,6 @@ export const installOfKey = (key) => {
 }
 // An install key's tag, the console's one install name (lib/hosts.js installTag).
 export const installLabel = (key) => installTag(installOfKey(key))
-// One colour per install, named once in the list head's legend: a tag per install on every row
-// pushed the rows past the pane. shortcut: seven --cat hues, so an eighth install repeats a colour;
-// the dot's slot and its title still tell them apart. Every second hue: neighbours look alike at 8px.
-const dotColour = (i) => ({ '--cc': `var(--cat-${(i * 2) % 7})` })
 
 // The on-disk source path for a given (section, name), for the reader's source line when
 // the item payload carries none. Informational only; it drives no fetch.
@@ -331,12 +327,10 @@ export default function Library({
   // Install badges only say something when the list spans two installs or more.
   const fleetWide = new Set(items.flatMap((it) => it.installs || [])).size > 1
   // Every install's dot slot, in the install list's order, so a colour holds across the kinds.
-  const fleetKeys = [
-    ...new Set([
-      ...(activeInsts || []).map((i) => i.id),
-      ...items.flatMap((it) => it.installs || []),
-    ]),
-  ].filter((k) => !merged.includes(k))
+  const fleetKeys = fleetSlots(
+    [...(activeInsts || []).map((i) => i.id), ...items.flatMap((it) => it.installs || [])],
+    merged,
+  )
 
   // Skills are divided by class, as the old Skills page did: listed class by class under a
   // header, with a category per class under Skills in the rail to narrow to one. A skill the

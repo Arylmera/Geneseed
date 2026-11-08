@@ -79,13 +79,19 @@ const VERBS = {
     load: gates,
     fn: 'cmdGitGate',
     flags: HOSTED,
-    switches: { '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate' },
+    switches: {
+      '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate', '--no-external-gate': 'noExternalGate',
+      '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
+    },
   },
   'rule-gate': {
     load: gates,
     fn: 'cmdRuleGate',
     flags: HOSTED,
-    switches: { '--no-secrets-gate': 'noSecretsGate', '--no-ownership-gate': 'noOwnershipGate' },
+    switches: {
+      '--no-secrets-gate': 'noSecretsGate', '--no-ownership-gate': 'noOwnershipGate',
+      '--no-external-gate': 'noExternalGate', '--no-test-note': 'noTestNote', '--no-rule-store': 'noRuleStore',
+    },
   },
   'tool-gate': {
     load: gates,
@@ -93,7 +99,8 @@ const VERBS = {
     flags: HOSTED,
     switches: {
       '--no-deletion-gate': 'noDeletionGate', '--no-secrets-gate': 'noSecretsGate',
-      '--no-ownership-gate': 'noOwnershipGate',
+      '--no-ownership-gate': 'noOwnershipGate', '--no-external-gate': 'noExternalGate',
+      '--no-test-note': 'noTestNote', '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
     },
   },
   learn: {
@@ -101,7 +108,10 @@ const VERBS = {
     fn: 'cmdLearn',
     // `--host` only keys the global stand-down's marker (js/hosts/hosts.mjs); learn has no dialect.
     flags: { '--memory': 'memory', '--host': 'host' },
-    switches: { '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate' },
+    switches: {
+      '--consolidate': 'consolidate', '--no-done-gate': 'noDoneGate', '--no-test-note': 'noTestNote',
+      '--no-rule-store': 'noRuleStore',
+    },
     positional: 'file',
   },
   // UserPromptSubmit and SessionEnd: no verb runs there, and the activity view needs both.
@@ -119,7 +129,8 @@ async function baselineStores(verb, args) {
     const raw = readStdin();
     if (!raw.includes('session_id')) return;
     const { writeBaseline } = await import('../js/hosts/store-watch.mjs');
-    writeBaseline(args.root, JSON.parse(raw).session_id);
+    const { session_id: sid, cwd } = JSON.parse(raw);
+    writeBaseline(args.root, sid, cwd);
   } catch { /* see above */ }
 }
 
@@ -165,13 +176,16 @@ function die(code, msg) {
 function parse(spec, argv) {
   const args = {
     root: null, host: null, memory: null, consolidate: false, noConsent: false,
-    noDeletionGate: false, noSecretsGate: false, noDoneGate: false, noOwnershipGate: false, file: null,
+    noDeletionGate: false, noSecretsGate: false, noDoneGate: false, noOwnershipGate: false,
+    noExternalGate: false, noTestNote: false, noRuleStore: false, noRootScan: false, file: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const tok = argv[i];
     const eq = tok.indexOf('=');
     const name = tok.startsWith('--') && eq > 0 ? tok.slice(0, eq) : tok;
-    if ((spec.switches || {})[name]) { args[spec.switches[name]] = true; continue; }
+    // Only the bare spelling sets a switch, and only that is emitted. `--no-external-gate=false` must
+    // not disarm a gate, and an argv error here would silence the whole verb, so it just does nothing.
+    if ((spec.switches || {})[name]) { if (tok === name) args[spec.switches[name]] = true; continue; }
     if ((spec.flags || {})[name]) {
       const value = eq > 0 && tok.startsWith('--') ? tok.slice(eq + 1) : argv[++i];
       if (value === undefined) return { error: `argument ${name}: expected one argument` };

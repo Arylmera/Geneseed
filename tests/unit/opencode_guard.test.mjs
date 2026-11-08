@@ -1,5 +1,6 @@
 /**
- * The OpenCode guard plugin's rule/memory gate (Doctrine process 1).
+ * The OpenCode guard plugin's rule gate (Doctrine process 1). Memory is written freely (owner
+ * decision, 2026-11-08), so a memory write passes here and only a rule write meets the gate.
  *
  * A CHANGE OF RUNNER AND NOTHING ELSE. The subject is an emitted artefact,
  * `adapters/opencode/plugins/geneseed-guard.js`, and the reference already drove it by writing a
@@ -71,24 +72,28 @@ const result = {
   foreign_memory: await attempt(path.join(CFG, 'src', 'memory', 'notes.md')),
 };
 
-test('with no host prompt, a rule or memory write is refused', () => {
-  for (const key of ['memory_first', 'nested_memory', 'rules_first']) {
-    assert.equal(result[key], 'blocked', `${key}: ${result[key]}`);
+test('with no host prompt, a rule write is refused', () => {
+  assert.equal(result.rules_first, 'blocked', result.rules_first);
+});
+
+test('memory is written freely, with no host prompt, first time and again', () => {
+  for (const key of ['memory_first', 'memory_reissued', 'nested_memory']) {
+    assert.equal(result[key], 'allowed', `${key}: ${result[key]}`);
   }
 });
 
 test('a re-issued write is refused too: the agent cannot release itself', () => {
-  for (const key of ['memory_reissued', 'rules_reissued']) {
+  for (const key of ['rules_reissued']) {
     assert.equal(result[key], 'blocked', `${key}: ${result[key]}`);
   }
 });
 
 // A weak model (4.27.0) read "set GENESEED_GUARD=off to allow" as leave and wrote the blocked
 // memory index through `python3`. The refusal names one way forward, forbids the detour and names
-// no switch. It no longer closes with the hook's PERSIST_ASK: "re-issue after they answer" is the
+// no switch. It never says "re-issue after they answer": that is the
 // release this gate gave up, and Claude's text is a real prompt the user reads.
 test('the refusal tells the model to ask and that a re-issue changes nothing', () => {
-  assert.equal(messages.length, 5, messages.join('\n'));
+  assert.equal(messages.length, 2, messages.join('\n'));
   for (const m of messages) {
     assert.doesNotMatch(m, /GENESEED_/, m);
     assert.match(m, /\(Persist Insight\)/, m);
@@ -118,7 +123,7 @@ test('V1: a native edit passes to the host prompt only where the merged config a
     assert.equal(await verdict(asks, tool, { filePath: MEMORY }), 'allowed', tool);
     assert.equal(await verdict(asks, tool, { filePath: RULES }), 'allowed', tool);
   }
-  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'src', 'MEMORY.md') }), 'allowed',
+  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'src', 'user-rules.draft.md') }), 'allowed',
     'the coined name asks anywhere, as Claude\'s rule gate does');
 });
 
@@ -126,19 +131,20 @@ test('V1: a config that does not make the host ask leaves the write refused, re-
   const rows = [
     ['no key at all', {}],
     ['a blanket allow', 'allow'],
-    ['the user answered our key with allow', { ...wired(), [`${path.basename(CFG)}/memory/*.md`]: 'allow' }],
+    ['the user answered our key with allow', { ...wired(), '*/user-rules.md': 'allow' }],
     ['a later rule wins, as the host\'s findLast does', { ...wired(), '*': 'allow' }],
   ];
   for (const [why, edit] of rows) {
     const hooksFor = await v1With(edit);
     for (let i = 0; i < 2; i += 1) {
-      assert.match(await verdict(hooksFor, 'write', { filePath: MEMORY }), /host has no prompt wired/, why);
+      assert.match(await verdict(hooksFor, 'write', { filePath: RULES }), /host has no prompt wired/, why);
     }
   }
   const broken = await factory({ worktree: CFG, directory: CFG,
     client: { config: { get: async () => { throw new Error('down'); } } } });
-  assert.match(await verdict(broken, 'write', { filePath: MEMORY }), /host has no prompt wired/, 'a failed read proves no prompt');
-  assert.equal(await verdict(await v1With('ask'), 'write', { filePath: MEMORY }), 'allowed', 'a blanket ask covers it');
+  assert.match(await verdict(broken, 'write', { filePath: RULES }), /host has no prompt wired/, 'a failed read proves no prompt');
+  assert.equal(await verdict(await v1With('ask'), 'write', { filePath: RULES }), 'allowed', 'a blanket ask covers it');
+  assert.equal(await verdict(await v1With({}), 'write', { filePath: MEMORY }), 'allowed', 'memory needs no prompt');
 });
 
 // V1's edit tools ask with `always: ["*"]`, so that answer ends every later prompt in this instance.
@@ -149,10 +155,11 @@ test('V1: after an "always" on an edit the host will not ask, so the write is re
   await fire(asks, 'permission.replied', { requestID: 'p1', reply: 'always' });
   await fire(asks, 'permission.asked', { id: 'p2', permission: 'edit' });
   await fire(asks, 'permission.replied', { requestID: 'p2', reply: 'once' });
-  assert.equal(await verdict(asks, 'write', { filePath: MEMORY }), 'allowed', 'a bash "always" or an edit "once" changes nothing');
+  assert.equal(await verdict(asks, 'write', { filePath: RULES }), 'allowed', 'a bash "always" or an edit "once" changes nothing');
   await fire(asks, 'permission.asked', { id: 'p3', permission: 'edit' });
   await fire(asks, 'permission.replied', { requestID: 'p3', reply: 'always' });
-  assert.match(await verdict(asks, 'write', { filePath: MEMORY }), /host has no prompt wired/);
+  assert.match(await verdict(asks, 'write', { filePath: RULES }), /host has no prompt wired/);
+  assert.equal(await verdict(asks, 'write', { filePath: MEMORY }), 'allowed', 'memory after an "always" is still free');
   const older = await v1With(wired());
   await fire(older, 'permission.updated', { id: 'p4', type: 'edit' });
   await fire(older, 'permission.replied', { permissionID: 'p4', response: 'always' });
@@ -160,15 +167,65 @@ test('V1: after an "always" on an edit the host will not ask, so the write is re
   await assert.doesNotReject(asks.event({}), 'an empty event is nothing');
 });
 
+// V1 calls no plugin hook on an ask, so the note is a toast from this hook, shown with the dialog.
+const toasted = (extra = {}) => {
+  const shown = [];
+  return { shown, client: { config: { get: async () => ({ data: { permission: { edit: wired() } } }) }, app: { agents: async () => ({ data: [] }) },
+    tui: { showToast: async (t) => { shown.push(t); return true; } }, ...extra } };
+};
+test('V1: a write that reaches the host prompt shows its explanation; a refusal and a plain write show none', async () => {
+  const { shown, client } = toasted();
+  const asks = await factory({ client, directory: CFG, worktree: CFG });
+  assert.equal(await verdict(asks, 'write', { filePath: RULES, content: 'x' }), 'allowed');
+  assert.equal(shown.length, 1);
+  assert.deepEqual(shown[0].query, { directory: CFG });
+  const { title, variant, duration, message } = shown[0].body;
+  assert.deepEqual([title, variant, duration], ['Geneseed', 'warning', 120000]);
+  assert.equal(message, [
+    '──── Geneseed · about the next permission request ────',
+    'This edit changes user-rules.md, your standing rules, which the agent obeys in every session.',
+    'Safe choice: Deny, unless you asked for this rule. (Persist Insight)',
+    'It asks because what becomes a rule is your decision.',
+    'If you allow it, the text binds every later session until you remove it.',
+    '──── The dialog below is for this change ────'].join('\n'));
+  shown.length = 0;
+  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'notes.txt'), content: 'x' }), 'allowed');
+  assert.match(await verdict(asks, 'bash', { command: `echo x > "${RULES}"`, workdir: CFG }), /Persist Insight/);
+  // Passes the store gate, then the content scan refuses it: no dialog follows, so no note.
+  assert.match(await verdict(asks, 'write', { filePath: RULES, content: 'k = "AKIAIOSFODNN7EXAMPLE"' }), /Sealed Secrets/);
+  assert.deepEqual(shown, []);
+});
+
+test('V1: a gate configuration file the host asks about shows its explanation too', async () => {
+  const { shown, client } = toasted();
+  const asks = await factory({ client, directory: CFG, worktree: CFG });
+  assert.equal(await verdict(asks, 'write', { filePath: path.join(CFG, 'opencode.json'), content: '{}' }), 'allowed');
+  assert.equal(shown.length, 1);
+  assert.match(shown[0].body.message, /opencode\.json, which controls the gates that watch the agent\.\nSafe choice: /);
+  assert.doesNotMatch(shown[0].body.message, /Agent:/);
+});
+
+test('V1: a toast that fails changes nothing', async () => {
+  const { client } = toasted({ tui: { showToast: async () => { throw new Error('no TUI'); } } });
+  const asks = await factory({ client, directory: CFG, worktree: CFG });
+  assert.equal(await verdict(asks, 'write', { filePath: RULES, content: 'x' }), 'allowed');
+});
+
 test('V1: a shell or foreign tool never reaches the prompt, so it is refused with the config wired', async () => {
   const asks = await v1With(wired());
-  const cmds = [`echo x >> "${MEMORY}"`, `tee "${RULES}"`, `rm "${MEMORY}"`, `mv a.md "${MEMORY}"`];
+  const DRAFT = path.join(CFG, 'user-rules.draft.md');
+  const cmds = [`echo x >> "${RULES}"`, `tee "${RULES}"`, `rm "${DRAFT}"`, `mv a.md "${DRAFT}"`];
   for (const command of cmds) {
     for (let i = 0; i < 2; i += 1) {
-      assert.match(await verdict(asks, 'bash', { command, workdir: CFG }), /through a shell command .*\(Persist Insight\)/, command);
+      assert.match(await verdict(asks, 'bash', { command, workdir: CFG }), /This command writes to [\s\S]*\(Persist Insight\)/, command);
     }
   }
-  assert.match(await verdict(asks, 'mcp_fs_write_file', { path: MEMORY }), /Only the host's own edit tool/);
+  assert.match(await verdict(asks, 'mcp_fs_write_file', { path: RULES }), /Only the host's own edit tool/);
+  // Memory is written freely, by any tool.
+  for (const command of [`echo x >> "${MEMORY}"`, `rm "${MEMORY}"`, `mv a.md "${MEMORY}"`]) {
+    assert.equal(await verdict(asks, 'bash', { command, workdir: CFG }), 'allowed', command);
+  }
+  assert.equal(await verdict(asks, 'mcp_fs_write_file', { path: MEMORY }), 'allowed');
   assert.equal(await verdict(asks, 'bash', { command: 'echo x > notes.txt', workdir: CFG }), 'allowed');
 });
 
@@ -198,8 +255,10 @@ async function withEnv(env, fn) {
 
 const SHARED_ROWS = [
   // [path under S (or absolute when it starts with /elsewhere), asks?, why]
-  ['memory/fact.md', true, 'a fact in the shared store'],
-  ['memory/agents/reviewer.md', true, 'a nested file in the shared store'],
+  // Memory is written freely (owner decision, 2026-11-08): the shared store's facts defer on both.
+  ['memory/fact.md', false, 'a fact in the shared store'],
+  ['memory/agents/reviewer.md', false, 'a nested file in the shared store'],
+  ['user-rules.md', true, 'the shared rule store'],
   ['user-rules.draft.md', true, 'the rule draft'],
   ['/elsewhere/user-rules.draft.md', true, 'the draft by name, anywhere'],
   ['memory/scratch.txt', false, 'not markdown'],

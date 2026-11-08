@@ -92,12 +92,15 @@ changed for each plugin:
 | throwaway session + `prompt` to distil | `ctx.generate.text({ prompt, model })`: one stateless call |
 | a hook throws to block a tool | a throw is a **defect that fails the whole step**. The guard renames the call instead (see `geneseed-guard.js`) |
 | `permission.ask` is declared and never called; only a static `permission.edit` rule asks | `permission.hook("evaluate")` runs for every `permission.assert`, after the rules, and may raise the effect to `ask`: `edit` per file, and `shell` per parsed command with `source.id` naming the call. The guard uses both for rule-store writes |
+| `Permission.ask` calls no plugin hook, so the guard's note before a prompt is `client.tui.showToast` from `tool.execute.before` (`duration: 120000`, `query: { directory }`). It shows with the dialog, keeps newlines and expires under it. `data: true` does not prove a TUI saw it | `ctx.session.synthetic` from `evaluate`, which carries `sessionID`, with `resume: false`. The TUI renders `description` and the model gets `text`, so the block goes in the first and one short line in the second. `opencode run` and `mini` drop it. An unattended session posts it, then denies |
 | `@opencode-ai/plugin` `tool()` helper | `@opencode/plugin`; a plain JSON-schema `input` needs no helper |
 | `todo.updated` | no V2 event. The activity cards show no todos on V2 |
 | user-message `summary.diffs` (files touched) | `session.step.ended` / `step.failed` `files`: paths only, so the activity cards show files with no line counts, and a revert never removes one |
 | `session.compacted` | `session.compaction.ended` |
 | tool part carries its name | `session.tool.called` has no name; it rides on `session.tool.input.started` |
 | tools `bash`, `apply_patch`, `task` | renamed `shell`, `patch`, `subagent` (the old ids are aliases). The guard's substring classes cover both spellings; its usage counter takes `subagent` (type under `agent`) beside `task`, since the hook sees the name before alias resolution |
+
+The note exists only for the two asks the guard hands to the host: a rule write that reaches a host prompt, and a gate configuration file. Every other outcome here is a refusal, and a refusal goes to the model. A V2 refusal is the renamed tool, and core quotes that name in its `No tool named` error. The history keeps the original tool name, so several lines of text there reach no provider as a name (seen on 2.2.6 with a fake model, through `opencode run`).
 
 None of this is checked by a mock alone: `node tests/host_canary.mjs` starts the real V1 and V2
 and fails on the host's own `failed to load plugin` log line.

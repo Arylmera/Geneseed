@@ -516,7 +516,7 @@ function storeScan(home, found = {}) {
   const stamp = (f) => {
     try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}` } catch { /* absent */ }
   }
-  for (const n of ["user-rules.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
+  for (const n of ["user-rules.md", "user-rules.draft.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
   const walk = (dir) => {
     let items = []
     try { items = readdirSync(dir, { withFileTypes: true }) } catch { return }

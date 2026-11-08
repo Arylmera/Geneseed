@@ -77,6 +77,16 @@ jobs:
       - name: doctor (every theme + parity + authoring gates)
         if: ${{ !cancelled() }}
         run: node bin/geneseed-cli.mjs doctor --all
+      # THE FENCE AROUND THE MACHINE TIER. The change report writes only to a tier that exists, so
+      # on a fresh runner a test running with the real home leaves no trace: the leak that reached
+      # a developer's `.store-report.json` was invisible here. An empty tier with this marker
+      # makes any file in it a failure of the post-suite step, `tests/shim_intact.mjs`.
+      - name: fence the machine tier for the suite
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; import { machineDir } from './js/lib/machine-dir.mjs';
+            fs.mkdirSync(machineDir(), { recursive: true }); fs.writeFileSync(path.join(machineDir(), '.suite-fence'), '');"
       # Auto-discover every tests/**/*.test.mjs — node
       # expands the glob itself, so a new test file is picked up without editing this
       # workflow. Needs Node >= 21.
@@ -131,7 +141,7 @@ jobs:
       #
       # AFTER the suite and not inside it: `node --test` runs each file in its own process with no
       # ordering, so an `after()` hook can only ever speak for its own file — and the file that
-      # causes this is not the file that would notice.
+      # causes this is not the file that would notice. The same step reads the fenced machine tier.
       - name: the suite left the machine-wide hook shim intact
         if: ${{ !cancelled() }}
         run: node tests/shim_intact.mjs

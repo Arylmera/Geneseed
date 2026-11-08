@@ -62,6 +62,7 @@ import { NO_WINDOW } from '../lib/proc.mjs';
 import { normcase, which, within } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 import { memoryDelete } from '../maintain/memory.mjs';
+import { autostartInstall, autostartRemove } from '../hosts/shim.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
 import { emitChoices, themeChoices, viewCfg } from './api.mjs';
 import { actionCommands } from './jobs.mjs';
@@ -156,7 +157,7 @@ function bodySharedTier(body, root, host) {
 
 /**
  * The gate switches across the trust boundary (`deletionGate`, `secretsGate`, `doneGate`,
- * `ownershipGate`), each on its own: only a real JSON boolean counts. Anything else — a string
+ * `ownershipGate`, `externalGate`, `testNote`), each on its own: only a real JSON boolean counts. Anything else — a string
  * `"false"`, a number, absence — falls back to the install's own answer for THAT gate, so a
  * malformed or partial body can never disarm (or re-arm) a gate it did not name.
  */
@@ -419,6 +420,21 @@ export function apiExcludesMutate(state, body) {
       messages: ['body must be {action: add|remove, path: <folder>}'] };
   }
   return action === 'add' ? excludeAdd(p) : excludeRemove(p);
+}
+
+// ---- login launcher -------------------------------------------------------------------------
+
+/**
+ * Settings' Start at login: `{action: install|remove}` and nothing else. The file is always this
+ * platform's `autostartFile`; no field of the body names a path, so a client cannot aim the write.
+ * The refusals (a hand-written file, nothing to remove, an OS error) come back as `ok: false`
+ * with `error`, which the client shows as the reason (409).
+ */
+export function apiAutostart(state, body) {
+  const action = bget(body, 'action');
+  if (action === 'install') return autostartInstall();
+  if (action === 'remove') return autostartRemove();
+  return { ok: false, error: 'body must be {action: install|remove}' };
 }
 
 // ---- loop preset picker ---------------------------------------------------------------------

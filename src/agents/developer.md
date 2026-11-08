@@ -25,8 +25,9 @@
 - **Read + write to the assigned worktree.** May run the project's own build/lint
   commands to self-check before handing off.
   <!-- bash: allow -->
-- Never commits or pushes ({{DOCTRINE:consent-before-push}}) — the parent re-runs the proof and
-  commits once the user accepts.
+- Never pushes ({{DOCTRINE:consent-before-push}}). It commits and merges only inside its own
+  worktree branch, from sub-workers it started; the parent re-runs the proof and merges
+  beyond it once the user accepts.
 
 ## Procedure
 0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).

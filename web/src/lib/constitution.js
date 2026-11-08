@@ -64,16 +64,34 @@ export const HOOK_GATED = new Set(['I', 'III', 'IV', 'process.1', 'process.5', '
 // The hook gates an install can switch off, by catalog address: the key the overview's `install`
 // reports it under, and the switch's name. Transcribed from the server's GATE_SWITCHES
 // (js/build/source.mjs: `--no-secrets-gate`, `--no-done-gate`, `--no-deletion-gate`,
-// `--no-ownership-gate`). The ownership gate has no law, so its address is its ledger key, and
-// its switch sits inside the Credo's Ownership row, on a line that exists only in the console:
-// the catalog has no such item.
+// `--no-test-note`, `--no-ownership-gate`, `--no-external-gate`). The ownership gate has no law, so
+// its address is its ledger key, and its switch sits inside the Credo's Ownership row, on a line
+// that exists only in the console: the catalog has no such item. External Gate's row holds two
+// switches, one per column: Rule text (the doctrine's) and Hook gate (this one). The
+// test note is advisory, so VIII is in no HOOK_GATED, yet its row has a hook to switch.
 // __tests__/constitution.test.js imports that table and fails when the two drift apart.
 export const GATE_SWITCH = {
   I: { key: 'secretsGate', label: 'Secrets gate' },
   III: { key: 'doneGate', label: 'Done gate' },
   IV: { key: 'deletionGate', label: 'Deletion gate' },
+  VIII: { key: 'testNote', label: 'Test note' },
   ownership: { key: 'ownershipGate', label: 'Ownership gate' },
+  'rigor.5': { key: 'externalGate', label: 'External gate' },
 }
+
+// The hooked doctrine rules with no switch of their own whose hook goes with their text: excluding
+// the rule, or its pack, drops the hook in the same rebuild (`ruleOn`, js/hosts/settings.mjs; owner
+// decision 2026-11-08). Process 5 wires git-gate `--no-consent` (Bob's `tool-gate` never gets it,
+// so Bob keeps its commit/push warning line); process 1 `--no-rule-store` and ops 2 `--no-root-scan`
+// reach every host, the OpenCode guard through the carrier's `Excluded rules:` line.
+export const WITH_TEXT = new Set(['process.1', 'process.5', 'ops.2'])
+
+// The hooked doctrine rules with no switch that would keep asking with their text excluded: none
+// today. A hooked rule added to HOOK_GATED without a switch or a WITH_TEXT wiring lands here, and
+// the page then says its hook still asks.
+export const ALWAYS_ASKS = new Set(
+  [...HOOK_GATED].filter((a) => a.includes('.') && !WITH_TEXT.has(a) && !GATE_SWITCH[a]),
+)
 
 // What each switch's confirm says it does, by the same address: `arm` when it re-arms, `off`
 // when it switches off. `desc` is the standing line beside a switch with no rule text to explain
@@ -103,6 +121,14 @@ export const GATE_COPY = {
       'unpushed branch, removing untracked files — stop asking. Rule IV’s text still binds ' +
       'the agent; secrets, root-wide scans and commit/push consent stay gated.',
   },
+  VIII: {
+    arm: 'A write that weakens a test gets a note again, when it happens and when the turn ends.',
+    off:
+      'A write that adds a skip marker or drops an assertion gets no note, when it happens or ' +
+      'when the turn ends. Rule VIII’s text still binds the agent; the done checks and every ' +
+      'other gate stay. Run geneseed rebuild-all first: an older hook shim refuses the new ' +
+      'flag, and every gate on that hook goes silent.',
+  },
   ownership: {
     desc: 'Stops the first write in an undecided application, once per session.',
     arm: 'The first write in an undecided application stops once again.',
@@ -110,6 +136,159 @@ export const GATE_COPY = {
       'The first write in an undecided application is no longer stopped, the setup proposal ' +
       'leaves the install’s AGENT.md, and no decline reminder prints. A repo with mode: on ' +
       'still runs its checkpoints, and the Credo section still binds.',
+  },
+  'rigor.5': {
+    arm: 'Writes to a protected check or a gate’s own configuration ask again.',
+    off:
+      'Writes to a protected check or a gate’s own configuration stop asking. The agent can ' +
+      'then edit hook settings and AGENT.md gate markers unasked, so every other gate holds ' +
+      'only while it leaves its wiring alone. OpenCode’s own permission.edit keys still ask. ' +
+      'The rule’s text is not touched: excluding it is the rule’s own switch. Run geneseed ' +
+      'rebuild-all first: an older hook shim refuses the new flag, and every gate on that ' +
+      'hook goes silent.',
+  },
+}
+
+// What each hook does, by the same addresses: every HOOK_GATED rule and every switch, so the
+// rows with a hook and only those. The opened row folds it under "What the hook does". `on` is
+// what it reads, `hosts` what each host does, `blind` what it cannot see, `off` what holds with
+// the gate off (or why there is no switch). Every line is taken from the code: js/hosts/hooks.mjs
+// (`gitDecide`, `ruleDecide`, `BLOCK_RULES`), hooks-done.mjs, ownership-gate.mjs, and the
+// OpenCode guard and context plugins; docs/concepts/hooks.md is the long form. Not GATE_COPY:
+// that table is the switches' confirm copy, and process 1, process 5 and ops 2 have no switch:
+// their hook goes with their text (WITH_TEXT).
+export const GATE_HOOK = {
+  I: {
+    on:
+      'A file write (Write, Edit, NotebookEdit) whose new text holds a credential-shaped ' +
+      'string: an AWS access key, a GitHub, Anthropic or Slack token, a private-key block. ' +
+      'Files named .env* are exempt.',
+    hosts:
+      'Claude Code and OpenClaude ask you. Bob refuses the write. OpenCode refuses it, and ' +
+      'also refuses a write to a key file, such as *.pem, *.key, id_rsa, .ssh/ or .npmrc; ' +
+      'on .env* it only warns.',
+    blind: 'Text written by a shell command is not scanned, and other token formats pass.',
+    off: 'The scan stops on every host, OpenCode’s key-file block too. Rule I’s text still binds.',
+  },
+  III: {
+    on:
+      'The end of a turn that edited files under the git root with a file-write tool. It reads ' +
+      'the turn’s shell calls in the transcript and never runs a check itself.',
+    hosts:
+      'Claude Code and OpenClaude: with checks listed in .geneseed/done-checks.txt, the turn ' +
+      'cannot end until each one ran unpiped and passed after the last edit (one block per ' +
+      'turn). With no list, checks are inferred from the manifests and only warn. OpenCode 1: ' +
+      'a reminder on the next request. OpenCode 2 and Bob: not judged.',
+    blind:
+      'A shell edit (sed -i, a redirect) is no edit here. A check that is piped, masked ' +
+      '(|| true) or spelled another way (npx vitest) reads as not run.',
+    off:
+      'No check at turn end, no done-gate line at start, and no weakened-test line at turn ' +
+      'end; learning still runs. Rule III’s text still binds.',
+  },
+  IV: {
+    on:
+      'A shell command that would lose data nothing else holds, judged against the repo’s ' +
+      'state: a protected branch deleted or force-pushed, an unpushed branch deleted, ' +
+      'reset --hard over unpushed commits, uncommitted work discarded, a stash dropped, the ' +
+      'reflog pruned, files git cannot restore removed. Also rm -rf of /, a drive or ~, ' +
+      'mkfs, dd over a disk, format, a fork bomb.',
+    hosts:
+      'Claude Code and OpenClaude ask you. Bob and OpenCode’s guard refuse. OpenCode’s own ' +
+      'prompt also asks on git reflog expire, git gc --prune, and a force push or delete of ' +
+      'main or master.',
+    blind:
+      'It reads git, the rm family, find -delete, mkfs, dd and format: a script that deletes ' +
+      'files itself passes. When it ' +
+      'cannot tell (a glob, a $variable, sh -c, xargs), it asks rather than passes.',
+    off:
+      'The real-loss check and OpenCode’s Rule IV prompt keys stop. The rm -rf / class still ' +
+      'asks (refused on Bob and OpenCode). Rule IV’s text still binds.',
+  },
+  VIII: {
+    on:
+      'A file write to a test file that adds a skip marker (.skip(, xit(, xfail, @Disabled, ' +
+      '@Ignore, pytest.mark.skip, t.Skip() or removes an assertion line and adds no other.',
+    hosts:
+      'Advisory on every host: it asks nothing and blocks nothing. Claude Code and OpenClaude: ' +
+      'a note to the agent at the edit, and a line to you at turn end. Bob: a hook-log line. ' +
+      'OpenCode: one reminder on the next request, which the done gate’s switch also silences.',
+    blind: 'Shell edits, and an assertion that is loosened in place rather than removed.',
+    off: 'No note at the edit or at turn end. Rule VIII’s text still binds; the done checks stay.',
+  },
+  ownership: {
+    on:
+      'The first file write of a session in an application repo (a git root with a build ' +
+      'manifest) whose root AGENTS.md has no ## Ownership section. Writes to AGENTS.md or ' +
+      '.geneseed/ pass.',
+    hosts:
+      'Every host refuses that write once and gives the reason to the agent, which asks you to ' +
+      'set ownership up or skip; the next write passes. Bob uses exit 2. On Claude Code, ' +
+      'OpenClaude and OpenCode a sub-agent never triggers it.',
+    blind: 'Shell writes.',
+    off:
+      'No first-write stop and no setup proposal. A repo with mode: on still runs its ' +
+      'checkpoints, and the Credo section still binds.',
+  },
+  'process.1': {
+    on:
+      'A write to a rule store, user-rules.md or user-rules.draft.md, by a file tool or a ' +
+      'parsed shell write. A hardlinked file always asks. Memory writes (MEMORY.md, memory/) ' +
+      'pass.',
+    hosts:
+      'Claude Code and OpenClaude ask you. Bob refuses a file-tool write and only warns on a ' +
+      'shell write. OpenCode asks with its own prompt; the guard refuses what the host cannot ' +
+      'prompt for, and OpenCode 1 refuses a parsed shell write.',
+    blind:
+      'bash -c, interpreters, scripts and variables. The change report at turn end still lists ' +
+      'store changes made outside an approved write, memory writes included.',
+    off:
+      'Excluding this rule, or the process pack, is the switch: its hook goes with its text on ' +
+      'every host, OpenCode’s permission.edit keys on the rule files too. The change report ' +
+      'still lists rule-file changes.',
+  },
+  'process.5': {
+    on:
+      'A shell command whose text holds git, then commit or push (so git log --grep push ' +
+      'asks too).',
+    hosts:
+      'Claude Code and OpenClaude ask you; a loop’s own commits and pushes on its loop/* ' +
+      'branch pass. OpenCode asks with its own prompt, and allows a push of HEAD to loop/*. Bob only ' +
+      'logs a warning; the command runs.',
+    blind: 'A commit or push made by another program, a script or an alias.',
+    off:
+      'Excluding this rule, or the process pack, is the switch: commits and pushes stop ' +
+      'asking (Bob still logs its warning). The data-loss checks stay.',
+  },
+  'rigor.5': {
+    on:
+      'A write to a path in the project’s .geneseed/protected-checks.txt, to ' +
+      '.geneseed/done-checks.txt, or to a gate’s own configuration: hook settings, ' +
+      'excludes.json, AGENT.md gate markers, the manifest, any opencode.json(c), the hook ' +
+      'shim. Parsed shell writes too (>, tee, sed -i, cp, mv, rm, the PowerShell writers).',
+    hosts:
+      'Claude Code and OpenClaude ask you. Bob refuses the write; a hook settings.json only ' +
+      'when it changes Geneseed’s own entries. OpenCode asks through its permission.edit ' +
+      'keys; its guard refuses a protected check, the other hosts’ Geneseed files, and a ' +
+      'shell write to any of them.',
+    blind:
+      'bash -c, pwsh -c, interpreters, scripts, variables and globs: run the same checks in CI.',
+    off:
+      'Every ask and refusal above stops, except OpenCode’s own permission.edit keys. Excluding ' +
+      'the text on this page switches this gate off too; --exclude-rules rigor.5 alone leaves ' +
+      'the hook asking.',
+  },
+  'ops.2': {
+    on:
+      'A recursive scan rooted at a filesystem root: find /, du /, grep -r or rg at /, /c or ' +
+      'C:\\, Get-ChildItem C:\\ -Recurse.',
+    hosts: 'Claude Code and OpenClaude ask you. Bob and OpenCode refuse it.',
+    blind:
+      'A deeper path, ls / without -R, a quoted argument, the remote half of ssh, and a scan ' +
+      'made by any other program.',
+    off:
+      'Excluding this rule, or the ops pack, is the switch: a root scan stops asking on every ' +
+      'host. The data-loss checks stay.',
   },
 }
 

@@ -17,7 +17,7 @@
 import { installTargets } from '../hosts/installs.mjs';
 import { formatValue, isTruthy, parseJson } from '../lib/json.mjs';
 import { percentDecode } from '../lib/text.mjs';
-import { apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, targetView } from './actions.mjs';
+import { apiAutostart, apiExcludesMutate, apiInstallToggle, apiLoopsPresetMutate, apiMcp, apiMemoryDelete, targetView } from './actions.mjs';
 import { apiActivity, apiActivityDetail, apiActivityToggle } from './activity.mjs';
 import {
   apiDefaultInstallSet, apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview, memoCounts,
@@ -62,6 +62,7 @@ export const POST_ROUTES = new Map([
   // unknown preset) throw `NotFound`, which `doPost`'s catch answers 404 before this column is
   // ever consulted — the same shape as `/api/memory/delete` and `/api/activity` above.
   ['/api/loops/preset', [apiLoopsPresetMutate, false]],
+  ['/api/autostart', [apiAutostart, true]],
 ]);
 
 /**

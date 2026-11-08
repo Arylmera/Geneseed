@@ -53,7 +53,7 @@ const SEED_REL = '.geneseed/protected-checks.txt';
  * What a project's checks live in. A string ending `/` is a folder, any other string a file; a
  * regex matches file names at the root. Lockfiles are not listed: they move on every install.
  */
-const CANDIDATES = [
+export const CANDIDATES = [
   '.github/workflows/', '.gitlab-ci.yml', 'Jenkinsfile', 'azure-pipelines.yml', '.circleci/',
   /^eslint\.config\./, /^\.eslintrc/, 'biome.json', 'biome.jsonc', 'tsconfig.json',
   /^jest\.config\./, /^vitest\.config\./, 'pytest.ini', 'ruff.toml', '.golangci.yml', 'checkstyle.xml',

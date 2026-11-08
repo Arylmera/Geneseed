@@ -8,7 +8,7 @@
  * bind paths to these functions are `routes.mjs`. This file imports none of its route siblings,
  * which is what keeps the old `api ↔ actions` and `api ↔ activity` cycles from coming back.
  */
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { CONFIG, CREDIT_RE, ROOT, SRC, THEMES, discoverNames, loadKits, makeCfg, upstreamOf } from '../build/source.mjs';
@@ -21,7 +21,7 @@ import { excludesSnapshot } from '../inspect/excludes.mjs';
 import { sessionStartSize } from '../hosts/hooks-context.mjs';
 import { CLAUDE_STYLE, VERSION_MARKER } from '../hosts/hosts.mjs';
 import { factCount } from '../hosts/memory-files.mjs';
-import { autostartPaths } from '../hosts/shim.mjs';
+import { autostartState } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir,
   trustOfDir, sharedTierOfDir,
@@ -329,17 +329,15 @@ function builtAt(dir) {
  * What Settings' Server panel says about the process answering it — built FIELD BY FIELD, never from the
  * daemon record, which holds the write token: a GET is readable by anything that passes the Host
  * check, and the token is the only guard on a POST. `started` is the process's own start (the
- * server is the process), in epoch seconds. `autostart` is whether the hand-written login
- * launcher the install guide describes (`autostartPaths`) is on disk for THIS platform; null
- * where that guide names none.
+ * server is the process), in epoch seconds. `autostart` is THIS platform's login launcher,
+ * `{file, state}` with state `absent`, `ours`, `stale` or `hand` (`autostartState`), so the row
+ * can name the file its confirmation writes; null where the platform has none.
  */
 function serverFacts() {
-  const [vbs, plist] = autostartPaths();
-  const launcher = { win32: vbs, darwin: plist }[process.platform];
   return {
     pid: process.pid,
     started: Math.floor(Date.now() / 1000 - process.uptime()),
-    autostart: launcher ? existsSync(launcher) : null,
+    autostart: autostartState(),
   };
 }
 
@@ -460,8 +458,9 @@ export function apiOverview(state, counts = machineCounts(state, [{ install: nul
   for (const [host, scope, root] of installTargets()) {
     try {
       if (samePath(viewCfg(host, scope, root), state.target)) {
-        // `deletionGate`/`secretsGate`/`doneGate`/`ownershipGate`: the gate switches, for the
-        // Constitution page's toggles on rows IV, I, III and inside the Credo's Ownership row.
+        // `deletionGate`/`secretsGate`/`doneGate`/`testNote`/`ownershipGate`/`externalGate`: the gate
+        // switches, for the Constitution page's toggles on rows IV, I, III, VIII, inside the Credo's
+        // Ownership row and inside doctrine rigor 5's row.
         install = { host, scope, path: root, footprint: footprintOfDir(root),
           ...gatesOfDir(root, host) };
         break;

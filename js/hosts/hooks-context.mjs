@@ -12,7 +12,7 @@ import { LEGACY_WIKI_SEED, WIKI_NAMES, sharedPaths } from '../lib/machine-dir.mj
 import { normcase, toPlatformPath } from '../lib/paths.mjs';
 import { relPosix } from '../lib/text.mjs';
 import {
-  SHARED_TIER_RE, carriersFor, globalHookStandingDown, hookProjectDir, isGlobalInstall, resolvePath, sovereignBypass,
+  SHARED_TIER_RE, carriersFor, gateCarrierText, globalHookStandingDown, hookProjectDir, isGlobalInstall, resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import { isFile, isDir, sortPaths, listDir } from './hooks-prims.mjs';
 import { gitRootOf } from './gitref.mjs';
@@ -658,15 +658,16 @@ function fitLines(lines, room, tailOf) {
  * a project install keeps it in the repo, one level above the harness dir. The first candidate
  * that exists answers, as `firstCarrier` does.
  */
-function installCarrier(hookRoot, host) {
+function installCarrierFile(hookRoot, host) {
   const base = readsTier(hookRoot, host) ? hookRoot : path.dirname(hookRoot);
   // Last, a plain bundle or git-clone harness dir keeps its AGENT.md in the dir itself.
   const found = [...carriersFor(host || 'claude').map((rel) => path.join(base, rel)), path.join(hookRoot, 'AGENT.md')];
   for (const file of found) {
-    try { return readFileSync(file, 'utf8'); } catch { /* next candidate */ }
+    try { return [file, readFileSync(file, 'utf8')]; } catch { /* next candidate */ }
   }
-  return '';
+  return ['', ''];
 }
+const installCarrier = (hookRoot, host) => installCarrierFile(hookRoot, host)[1];
 
 /**
  * The payload, what it spent against `OUTPUT_BUDGET`, and whether the budget `cut` content from it:
@@ -792,7 +793,7 @@ export function cmdContext(args) {
   // The RAW `args.host`, never defaulted to claude, which would key an older
   // OpenClaude emit's `~/.openclaude` (no `--host`) on `.claude` instead of its folder name.
   if (globalHookStandingDown(hookRoot, root, args.host, 'context')) return 0;
-  const carrier = hookRoot ? installCarrier(hookRoot, host) : '';
+  const [carrierFile, carrier] = hookRoot ? installCarrierFile(hookRoot, host) : ['', ''];
   const session = hookRoot ? sessionFiles(hookRoot, host, carrier) : [];
   // A session file discovery would also pick up (a `user-rules.md` at the repo root of an
   // install whose harness dir IS the repo root) is injected once, in the session block.
@@ -807,7 +808,8 @@ export function cmdContext(args) {
   // `--no-done-gate` carries `Done gate: off` in its AGENT.md and gets no line — the OpenCode
   // context plugin's `doneGateOff` reads the same marker with the same pattern.
   const gitRoot = gitRootOf(root);
-  const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, 'm').test(carrier);
+  const gateOff = (marker) => new RegExp(`^${marker}:[ \\t]*off[ \\t]*\\r?$`, 'm')
+    .test(gateCarrierText(carrierFile, carrier));
   // Bob's Stop carries no transcript, so the gate never judges a turn there (`hooks-done.mjs`).
   const done = gitRoot && !gateOff('Done gate') ? doneLine(gitRoot, host !== 'bob') : null;
   // The ownership decline reminder (`./ownership-gate.mjs`), under the same contract: an install

@@ -51,19 +51,23 @@
  * and every file left behind. Absolute rather than compared is what let it survive the deletion
  * of the implementation it was once compared against.
  */
-import { readFileSync, readlinkSync, appendFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readlinkSync, realpathSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
-  GATE_LEDGER, globalHookStandingDown, hookProjectDir, resolvePath, sovereignBypass,
+  GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
+  resolvePath, sovereignBypass,
 } from './hosts.mjs';
-import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
+import {
+  currentBranch, gitCommonDirOf, gitRootOf, loopLaunched, mainWorktreeOf, protectedBranches,
+} from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
-  selfAndParents, readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
+  readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
+  gateLoss, gateSafe,
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
@@ -169,6 +173,73 @@ export function loopExempt(command, cwd) {
     || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch));
 }
 
+// A Foreman worker's local commit or merge: `git commit`/`git merge` with no global option
+// (`-C`, `-c`, `--git-dir`, `--work-tree` could aim it at another tree), its arguments plain
+// `ARG_RE` tokens plus at most one quoted message (`-m`, `-am`, `--message`). Nothing else is
+// quoted, so a quoted separator only splits the command into a segment that fails.
+const SEG_LOCAL_RE = new RegExp(`^git\\s+(?:commit|merge)(?:\\s+${ARG_RE})*`
+  + `(?:\\s+(?:-[a-zA-Z]*m|--message)\\s+(?:"[^"]*"|'[^']*'))?(?:\\s+${ARG_RE})*$`);
+const SEG_CD_RE = new RegExp(`^cd\\s+(${ARG_RE})$`);
+// What a shell can run inside an argument: PowerShell's `(...)`, `@(...)`, `$(...)`, `$var`,
+// `{...}` blocks and backtick escapes; bash's `$(...)`, `${...}` and backticks. Refused anywhere,
+// quoted or not, so a message can never carry a second command.
+const SUBSHELL_CHARS_RE = /[()@${}`]/;
+// The doctrine's shared branches, by name: never a worker's branch, whatever the repo says.
+const SHARED_BRANCH_RE = /^(?:main|master|develop|development|(?:release|hotfix)(?:\/.*)?)$/i;
+
+/**
+ * Consent Before Push's worktree exemption (user decision 2026-11-08): a commit or merge that a
+ * dispatched sub-agent runs inside a LINKED worktree, on a branch that is not shared, is the
+ * Foreman worker's own named batch. Every clause must hold, or the ask stands:
+ * - `agentId`: the host says the call comes from a sub-agent (Claude Code's `agent_id`, which it
+ *   sets on tool events inside a subagent or in-process teammate). A session that merely runs in
+ *   a worktree, as the desktop app's do, has none and asks. A host that sends none asks always.
+ * - The command: none of `UNSAFE_CHARS_RE` or `SUBSHELL_CHARS_RE`, no `push` word anywhere (a mixed
+ *   command asks), every segment an add, a read-only look, or `SEG_LOCAL_RE`, after at most one
+ *   leading `cd <path>` (an agent's shell starts in the parent's checkout). The `cd` target and
+ *   `cwd` are resolved with `realpathSync`, git's physical path; `cd -`, `~` or a path that does
+ *   not resolve asks.
+ * - The tree: `cwd` a linked worktree (`mainWorktreeOf`, read off disk, no spawn), its branch
+ *   known and, compared case-insensitively, neither a `SHARED_BRANCH_RE` name, a remote's HEAD
+ *   (`protectedBranches`), nor the branch checked out in the main worktree; and the branch is not
+ *   itself a symref to another one.
+ */
+export function worktreeExempt(command, cwd, agentId) {
+  if (typeof agentId !== 'string' || !agentId) return false;
+  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command) || SUBSHELL_CHARS_RE.test(command)
+    || /\bpush\b/i.test(command)) return false;
+  const segments = command.split(/&&|\|\||[;|]/).map((x) => x.trim()).filter(Boolean);
+  try {
+    let dir = realpathSync(cwd);
+    const cd = segments.length ? SEG_CD_RE.exec(segments[0]) : null;
+    if (cd) {
+      if (cd[1] === '-' || cd[1].startsWith('~')) return false;
+      dir = realpathSync(path.resolve(dir, cd[1]));
+      segments.shift();
+    }
+    if (!segments.length || !segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg)
+      || SEG_LOCAL_RE.test(seg))) return false;
+    const main = mainWorktreeOf(dir);
+    const branch = main && currentBranch(dir);
+    if (!branch || branch.includes('..') || SHARED_BRANCH_RE.test(branch)) return false;
+    // HEAD names the branch, but the branch may itself be a symref (`git symbolic-ref
+    // refs/heads/sym refs/heads/develop`), and a commit then moves its target. Packed refs hold no
+    // symrefs, so only the loose file can alias: one that starts with `ref:` asks, however long
+    // the chain behind it. An absent file is a packed or unborn branch, which aliases nothing.
+    let loose = '';
+    try {
+      loose = readFileSync(path.join(gitCommonDirOf(gitRootOf(dir)), 'refs', 'heads', ...branch.split('/')), 'utf8');
+    } catch (e) {
+      if (e.code !== 'ENOENT') return false;
+    }
+    if (/^\s*ref:/.test(loose)) return false;
+    const taken = [...protectedBranches(gitRootOf(dir)), currentBranch(main)].filter(Boolean);
+    return !taken.some((b) => b.toLowerCase() === branch.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling: `, ` and
  * `: ` separators, and `ensure_ascii` — every code unit past `~` as a lowercase `\uXXXX`, which is
@@ -231,17 +302,14 @@ const BOB_FINAL = ' Bob has no approval step for this gate: neither a confirmati
   + 'nor a retry in another form lifts it. Leave it, or ask the user to do it themself, outside '
   + 'Bob. Never suggest disabling the Geneseed hook.';
 
-/** Law IV's real-loss tail, where the host can ask. Bob's is `BOB_FINAL`, appended by `ask`. */
-const confirmTail = () => (HOST === 'bob' ? 'Leave the data in place.'
-  : 'Confirm this specific command, or leave the data in place.');
-
 /**
  * On Bob, which has no ask tier, which rules are worth a hard block. Laws I and IV: a
  * credential in a tracked file and a history-discarding git act are wrong in every context,
  * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
  * only", see bob-code.md B3. process-1 too (owner decision, 2026-11): with no prompt, a warning
- * let the agent write the user's rules and memory on its own say. Process 5 is the USER's call
+ * let the agent write the user's rules on its own say. Memory is written freely (owner decision,
+ * 2026-11-08), so a memory write reaches no rule here. Process 5 is the USER's call
  * as well, but a hard block would make Bob unable to commit at all, so it stays a warning the
  * host logs. ops-2 (Commands Must Return, the root-scan check) is a block too: a warning would let a
  * scan of every drive run for hours, and the agent loses nothing by re-targeting a directory.
@@ -289,22 +357,26 @@ function ledger(root, verb, rule) {
 /**
  * Ask, and record that we asked. Every ask site goes through here so none can skip the
  * ledger. On `--host bob` the ask becomes a block or a warning (see `BLOCK_RULES`); the
- * ledger records the block, never the warning — a warning asked nothing of anyone.
+ * ledger records the block, never the warning — a warning asked nothing of anyone. `id` and
+ * `facts` are `gateText`'s, and the words are built here, last, through `gateSafe`: this runs
+ * from `guardGate`'s catch, where a throw is a bad exit, and Claude lets that call through. The
+ * host and the rule pick the mode. `facts.bobWhy` says why Bob refused a settings write.
  */
-function ask(args, verb, rule, reason) {
+function ask(args, verb, rule, id, facts) {
   if (HOST === 'bob') {
     if (!BLOCK_RULES.has(rule)) {
       // No ask tier; a stderr line is the nudge, and the call goes through.
-      err(`[geneseed] ${reason}\n`);
+      err(`[geneseed] ${gateSafe(id, 'warned', facts)}\n`);
       return 0;
     }
     ledger(args && args.root, verb, rule);
+    const why = facts && facts.bobWhy ? ` On Bob this write is refused because ${facts.bobWhy}.` : '';
     // stdout is not read on Bob's PreToolUse; the reason goes where Bob's hook log looks.
-    err(`[geneseed] BLOCKED: ${reason}${BOB_FINAL}\n`);
+    err(`[geneseed] BLOCKED: ${gateSafe(id, 'refused', facts)}${why}${BOB_FINAL}\n`);
     return BOB_DENY_EXIT;
   }
   ledger(args && args.root, verb, rule);
-  out(askDecision(reason));
+  out(askDecision(gateSafe(id, 'ask', facts)));
   return 0;
 }
 
@@ -344,9 +416,10 @@ export function guardGate(fn, verb = 'gate') {
     try {
       return fn(args);
     } catch (e) {
-      const why = e && e.message ? e.message : String(e);
-      return ask(args, verb, 'gate-error', `Geneseed gate error — ${why}. The gate could `
-        + 'not evaluate this call, so it does not defer.');
+      // A thrown value can be anything, and this catch has nothing behind it: reading it must not throw.
+      let name = e;
+      try { name = e.message || e; } catch { /* `gateSafe` meets `e` as it is */ }
+      return ask(args, verb, 'gate-error', 'gate-error', { name });
     }
   };
 }
@@ -502,13 +575,56 @@ const rootArg = (t) => !/^["']/.test(t) && FS_ROOT_RE.test(t);
 // to the END marker verbatim, with `export ` dropped (tests/plugins/guard.test.mjs diffs the two).
 
 // The cheap prefilter, a superset of what the parse acts on: a `>`, or one of the programs as a word.
-const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
+const SHELL_WRITE_RE = />|(?:^|[\s;&|("'`\\/])(?:tee|sed|cp|mv|rm|add-content|set-content|out-file|clear-content|remove-item|copy-item|move-item|new-item|rename-item|ac|sc|del|copy|move|ni|ren)(?:\.exe)?(?=[\s;&|)"'`]|$)/im;
 // One pass over a segment: a quoted run (kept: its `>` is data), or a redirection with its optional
 // fd, operator, `&` (a dup such as `2>&1`, which writes no file) and target word. `<` forms match
 // too, so that their words never read as operands. A backslash is no escape here, as in
 // `SCAN_SPLIT_RE`: `echo "say \"hi > f\""` closes its quote early, reads a target, and asks (on Bob, blocks).
 const REDIRECT_RE = /"[^"]*"?|'[^']*'?|(?:(?<!\S)\d+|&)?(<<?<?-?|>>?)[ \t]*(&?)((?:[^\s"';|&<>()]|"[^"]*"?|'[^']*'?)*)/g;
 const SHELL_CD = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+// What says the shell is PowerShell when the caller cannot: a `Verb-Noun` word outside any here-string.
+const PS_CUE_RE = /(?:^|[\s;|&(])(?:add|clear|copy|export|foreach|get|import|invoke|move|new|out|remove|rename|select|set|start|stop|test|where|write)-[a-z]+/i;
+// The home a shell expands, spelled for `writePath` as `~/…`, the one form that keeps the two readings.
+const HOME_WORD_RE = /^(?:~|\$\{?(?:env:)?(?:home|userprofile)\}?)(?=[\\/]|$)/i;
+// PowerShell's writers, each as the POSIX form that writes the same paths. `ren` is `mv` with a sibling.
+const PS_WRITERS = new Map(Object.entries({
+  'add-content': 'rm', ac: 'rm', 'set-content': 'rm', sc: 'rm', 'out-file': 'rm', 'clear-content': 'rm', 'remove-item': 'rm',
+  del: 'rm', 'new-item': 'rm', ni: 'rm', 'copy-item': 'cp', copy: 'cp', 'move-item': 'mv', move: 'mv', 'rename-item': 'ren', ren: 'ren',
+}));
+// `rm`, `cp` and `mv` are aliases too, but only a parameter spelled out in full tells them from the
+// POSIX programs: `-lp` and `-pat` are also POSIX flag clusters.
+const PS_NAMED_RE = /^-(?:path|literalpath|destination)(?::|$)/i;
+const PS_PATH_RE = /^-(?:path|literalpath|lp|pspath|filepath)$/i;
+const PS_SWITCH_RE = /^-(?:force|recurse|append|nonewline|noclobber|whatif|confirm|passthru|verbose|debug|container)$/i;
+const PS_VALUE_RE = /^-(?:value|encoding|itemtype|type|filter|include|exclude|inputobject|stream|width|target|erroraction|ea)$/i;
+// `(…)`, `$(…)`, `@(…)`, `{…}`, `@{…}`: an argument whose words cannot be counted. `${x}` is a variable.
+const PS_OPAQUE_RE = /^(?:[$@]?\(|@?\{)/;
+
+/**
+ * `s` with each here-string body cut. The body is data, as a heredoc's is: without this, an apostrophe
+ * in a PowerShell commit message unpairs the quotes, and a line that opens with `Move` reads as a
+ * command. One pass: a quote kind with no closer is searched for once, so many openers stay linear.
+ */
+function hereStringsCut(s) {
+  const re = /@(["'])\r?\n/g;
+  const dead = new Set();
+  let out = ''; let at = 0; let m;
+  while ((m = re.exec(s))) {
+    if (dead.has(m[1])) continue;
+    const end = s.indexOf(`\n${m[1]}@`, re.lastIndex - 1);
+    if (end < 0) { dead.add(m[1]); continue; }
+    out += `${s.slice(at, m.index)}''`;
+    at = end + 3;
+    re.lastIndex = at;
+  }
+  return out + s.slice(at);
+}
+
+/** `t` without its quotes, a home spelled `~/…`. Single quotes expand nothing, so `$` stays and hides the path. */
+function shellWord(t) {
+  const w = t.replace(/["']/g, '');
+  return t[0] !== "'" && HOME_WORD_RE.test(w) ? `~${w.replace(HOME_WORD_RE, '').replace(/\\/g, '/')}` : w;
+}
 
 /** `t` as an absolute path from `dir`, `~/…` as it stands, or null for what the shell rewrites. */
 function writePath(dir, t) {
@@ -517,7 +633,47 @@ function writePath(dir, t) {
   // A Git Bash `/c/…` path, as `resolveIn` reads it.
   const q = process.platform === 'win32' ? t.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:') : t;
   if (path.isAbsolute(q)) return path.resolve(q);
+  if (dir && dir[0] === '~') return `${dir}/${q}`;
   return dir ? path.resolve(dir, q) : null;
+}
+
+/**
+ * The operands of a PowerShell writer, in the order the POSIX branches read them, `/`-separated (a
+ * cmdlet takes `\` on every platform). Only the first positional is a path, and for `cp`, `mv` and
+ * `ren` the next is the destination: the next one of `Add-Content a b` is its value and of
+ * `Remove-Item a b` its filter. Named paths are read wherever they stand; a parameter this does
+ * not know, or a `(…)` or `{…}` argument, ends the positionals, because its words cannot be counted.
+ */
+function psOperands(toks, form) {
+  const paths = []; const dest = []; const pos = [];
+  let name = ''; let open = true;
+  const list = (t) => (t.match(/"[^"]*"?|'[^']*'?|[^,"']+/g) || []).map(shellWord).filter(Boolean);
+  for (let i = 0; i < toks.length; i += 1) {
+    // An array argument spans tokens: `a, b`.
+    const value = (t) => { let v = t; while (v.endsWith(',') && i + 1 < toks.length) { i += 1; v += toks[i]; } return v; };
+    const m = /^(-[a-z]+)(?::(.+))?$/is.exec(toks[i]);
+    if (!m) {
+      const t = value(toks[i]);
+      if (PS_OPAQUE_RE.test(t)) open = false;
+      else if (open && !/^\/[a-z]$/i.test(t)) pos.push(t); // `/y`: `copy` and `del` are cmd.exe's too
+    } else if (!PS_SWITCH_RE.test(m[1])) {
+      const into = PS_PATH_RE.test(m[1]) ? paths : /^-destination$/i.test(m[1]) ? dest : null;
+      const naming = /^-(?:new)?name$/i.test(m[1]);
+      if (!into && !naming && !PS_VALUE_RE.test(m[1])) { open = false; continue; }
+      if (m[2] === undefined) i += 1;
+      const t = value(m[2] ?? toks[i] ?? '');
+      if (PS_OPAQUE_RE.test(t)) open = false;
+      else if (into) into.push(...list(t));
+      else if (naming) name = shellWord(t);
+    }
+  }
+  if (!paths.length && pos.length) paths.push(...list(pos.shift()));
+  if (form === 'rm') return name ? (paths.length ? paths : ['.']).map((p) => `${p}/${name}`) : paths;
+  if (form === 'ren') {
+    const to = name || shellWord(pos[0] ?? '');
+    return to && paths.length ? [paths[0], paths[0].replace(/[^\\/]*$/, '') + to] : paths;
+  }
+  return [...paths, ...(dest.length ? dest : list(pos[0] ?? '')).slice(0, 1)];
 }
 
 /** The files `sed` edits in place: none without `-i`; else its operands, past the script if inline. */
@@ -540,38 +696,55 @@ function sedFiles(args) {
 /**
  * The files `command` would write, as absolute paths: redirect targets (`>`, `>>`, `&>`), `tee`
  * and `rm` operands, `sed -i` files, the destination of `cp` and `mv`, and the sources of `mv`, which
- * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. Read like
- * `rootScan`: quotes, comments and heredoc bodies are data. A `cd` is followed; one it cannot read
- * leaves later relative paths unseen. What it cannot read, it leaves out: this reader fails OPEN.
+ * it removes. A destination may be a folder, so `cp a tests/` also names `tests/a`. PowerShell's
+ * writers read the same way (`PS_WRITERS`, `psOperands`), case-insensitively, and a pipe into one needs
+ * nothing more: `| Out-File x` is a segment of its own. Read like `rootScan`: quotes, comments and
+ * heredoc bodies are data. So is a here-string body, but only in PowerShell, which `ps` says when the
+ * caller knows the tool and `PS_CUE_RE` otherwise: to bash the opener is a plain quote, so a closed
+ * "here-string" can wrap a real `rm` (the row in tests/unit/hook_gates.test.mjs). With no cue, a
+ * PowerShell here-string reads as bash would read it. A home variable is read as `~`. A `cd` is followed; one it cannot read leaves later relative paths unseen.
+ * What it cannot read, it leaves out: this reader fails OPEN.
  *
  * shortcut: KNOWN UNSEEN FORMS, all of them still a write. An interpreter (inline code,
- * `bash -c`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or subshell trick, `>|`, a path with a
- * variable, glob or brace in it, a wrapper with flags (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`,
- * `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >& file` (read as a dup), a `popd` (not followed, so
- * relative paths after a `pushd`/`popd` pair resolve from the wrong folder), `cp -t`, any other writer
- * (`dd`, `ln`, `install`, `git mv`, `git checkout`, `Set-Content`), and a folder removed above a
- * listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is the
- * boundary that holds against those.
+ * `bash -c`, `pwsh -c`, `powershell -Command`, `eval`, `xargs`), a script or `npm run`, a `$(…)` or
+ * subshell trick, `>|`, a path with any other variable, a glob or a brace in it, a wrapper with flags
+ * (`sudo -u x`) or outside `SCAN_WRAPPERS` (`env rm`, `nohup rm`, `timeout 5 rm`, `exec rm`), `echo x >&
+ * file` (read as a dup), a `popd` (not followed, so relative paths after a `pushd`/`popd` pair resolve
+ * from the wrong folder), `cp -t`, any other writer (`dd`, `ln`, `install`, `git mv`, `git checkout`,
+ * `Tee-Object`, `[IO.File]::WriteAllText`, an alias outside `PS_WRITERS` such as `ri`), a cmdlet behind
+ * a PowerShell assignment, `if` or script block (`$null = New-Item x`, `% { Remove-Item x }`), one
+ * continued over lines with a backtick, a parameter abbreviated or unknown before a positional path (so
+ * `Set-Content -Enc utf8 x`), a comma list after a POSIX-read `rm`, `cp` or `mv`, and a folder removed
+ * above a listed file (`rm -r tests` when only `tests/a.test.js` is listed). CI running the checks is
+ * the boundary that holds against those.
  */
-export function shellWriteTargets(command, cwd) {
+export function shellWriteTargets(command, cwd, ps = false) {
   if (!SHELL_WRITE_RE.test(command)) return [];
   const found = new Set();
   let dir = cwd;
   const add = (t) => { const p = writePath(dir, t); if (p) found.add(p); };
   const bare = (t) => t.replace(/["']/g, '');
-  for (const seg of scanSegments(command)) {
+  const cut = hereStringsCut(command);
+  for (const seg of scanSegments(ps || PS_CUE_RE.test(cut) ? cut : command)) {
     const outs = [];
     const body = seg.replace(REDIRECT_RE, (m, op, dup, target) => {
       if (op === undefined) return m;
-      if (op[0] === '>' && !dup && target) outs.push(bare(target));
+      if (op[0] === '>' && !dup && target) outs.push(shellWord(target));
       return ' ';
     });
     let toks = stripStructure(body.match(SCAN_TOKEN_RE) || []);
     while (toks.length && (/^\w+=/.test(toks[0]) || SCAN_WRAPPERS.has(bare(toks[0])))) toks = toks.slice(1);
-    const prog = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase().replace(/\.exe$/, '') : '';
-    const args = toks.slice(1).map(bare);
+    const word = toks.length ? bare(toks[0]).split(/[\\/]/).pop().toLowerCase() : '';
+    let prog = word.replace(/\.exe$/, '');
+    const args = toks.slice(1).map(shellWord);
     const dashes = args.indexOf('--');
-    const ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    let ops = args.filter((a, i) => a && (a === '-' || !a.startsWith('-') || (dashes >= 0 && i > dashes)));
+    // `word`, not `prog`: `sc.exe` is the service tool, never the Set-Content alias.
+    const form = PS_WRITERS.get(word) ?? (/^(?:rm|cp|mv)$/.test(prog) && toks.some((t) => PS_NAMED_RE.test(t)) ? prog : null);
+    if (form) {
+      prog = form === 'ren' ? 'mv' : form;
+      ops = psOperands(toks.slice(1), form).map((t) => t.replace(/\\/g, '/'));
+    }
     if (SHELL_CD.has(prog)) {
       const to = ops.find((a) => !/^\/d$/i.test(a));
       dir = to && to !== '-' ? writePath(dir, to) : null;
@@ -594,7 +767,7 @@ export function shellWriteTargets(command, cwd) {
 
 /**
  * External Gate over a shell command: the first write target that `externalGate` refuses, as the
- * reason to ask, or null. Path check only, no secret scan of the command. Any throw is a pass, not
+ * `gateText` facts to ask with, or null. Path check only, no secret scan of the command. Any throw is a pass, not
  * `guardGate`'s `gate-error` ask: this reader fails open, and a hand-mangled path is not a gate failure.
  */
 function shellWriteReason(args, command, payload) {
@@ -603,16 +776,16 @@ function shellWriteReason(args, command, payload) {
     // A Roo-lineage shell tool may name its own directory, as OpenCode's `workdir` does.
     const own = payload && payload.tool_input && payload.tool_input.cwd;
     const cwd = typeof own === 'string' && own ? path.resolve(base, own) : base;
-    for (const t of shellWriteTargets(command, cwd)) {
-      const why = externalGate(args, t, payload);
-      if (why) return why;
+    for (const t of shellWriteTargets(command, cwd, payload?.tool_name === 'PowerShell')) {
+      const hit = externalGate(args, t, payload);
+      if (hit) return { ...hit, shell: true };
     }
   } catch { /* see above */ }
   return null;
 }
 
 /**
- * A parsed shell write that lands in a rule or memory store: the reason, or null. Asked on Claude
+ * A parsed shell write that lands in a rule store: which one, or null. Asked on Claude
  * and OpenClaude, and only a warning on Bob, whose one verdict is a hard block: shell is no boundary,
  * and command text is no ground to refuse on. Fails open, like `shellWriteReason`.
  */
@@ -621,29 +794,25 @@ function shellStoreReason(args, command, payload) {
     const base = (payload && typeof payload.cwd === 'string' && payload.cwd) || process.cwd();
     const own = payload && payload.tool_input && payload.tool_input.cwd;
     const cwd = typeof own === 'string' && own ? path.resolve(base, own) : base;
-    for (const t of shellWriteTargets(command, cwd)) {
+    for (const t of shellWriteTargets(command, cwd, payload?.tool_name === 'PowerShell')) {
       const store = ruleGateTarget(t, args.root, cwd);
-      if (store) {
-        return `Geneseed (Persist Insight) \u2014 writing to ${store} through a shell command: a standing `
-          + 'rule, or a fact to remember? That choice is the user\'s.';
-      }
+      if (store) return store;
     }
   } catch { /* see above */ }
   return null;
 }
 
 function gitDecide(args, payload) {
-  const command = ((payload && payload.tool_input) || {}).command;
+  const ti = (payload && payload.tool_input) || {};
+  const { command } = ti;
   if (typeof command !== 'string') return 0;
+  // The agent's own words, for the asks where they are no conflict of interest (`gateText`'s `quote`).
+  const says = typeof ti.description === 'string' ? ti.description : '';
   // Law IV's catastrophic class (a root, a drive, the home dir, a disk): no state makes it safe,
   // so it runs BEFORE the switch below and whatever it says (user decision, 2026-10-18). On
   // Claude an ask is the strongest verdict the hook has; on Bob, `law-4` exits 2.
   const doomed = catastrophic(command, lossSegments);
-  if (doomed) {
-    return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 \`${doomed.slice(0, 80)}\` `
-      + 'would destroy a filesystem root, a drive, the home directory or a whole disk, which nothing '
-      + 'could restore. This check stands even with the deletion gate off.');
-  }
+  if (doomed) return ask(args, 'git-gate', 'law-4', 'catastrophic', { name: doomed, says });
   // `--no-deletion-gate`: the install switched Law IV's real-loss boundary off (user decision,
   // 2026-10-17). Only this check stands down — the catastrophic class above, ops 2 and process 5
   // below still run.
@@ -653,25 +822,23 @@ function gitDecide(args, payload) {
     const loss = lossReason(lossSegments(command), (payload && payload.cwd) || process.cwd(),
       { split: lossSegments });
     if (loss) {
-      return ask(args, 'git-gate', 'law-4', `Geneseed (Deletion Is Deliberate) \u2014 ${loss}. `
-        + confirmTail());
+      const facts = gateLoss(loss);
+      return ask(args, 'git-gate', 'law-4', facts.id, { ...facts, says });
     }
   }
-  // Before `--no-consent`: that flag drops the process pack's rule, not this one.
-  const scan = rootScan(command);
-  if (scan) {
-    return ask(args, 'git-gate', 'ops-2', `Geneseed (Commands Must Return) \u2014 \`${scan.slice(0, 80)}\` `
-      + 'recursively scans a whole filesystem root (in Git Bash, / spans every drive and mounted '
-      + 'share, for hours; | head stops nothing). Search a specific directory instead: the '
-      + 'project, node_modules, ~/.npm, %APPDATA%.');
-  }
+  // Before `--no-consent`: that flag drops process 5, not this one. `--no-root-scan`: ops 2 is
+  // excluded (or its pack off), so its check goes with its text (owner decision, 2026-11-08).
+  const scan = args.noRootScan ? null : rootScan(command);
+  if (scan) return ask(args, 'git-gate', 'ops-2', 'root-scan', { name: scan, says });
   // Also before `--no-consent`: rigor-5 is no part of the process pack. On Bob a hook-settings
   // target cannot be replayed from a command (`bobSettingsChange`), so it blocks.
   const shellWrite = shellWriteReason(args, command, payload);
-  if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite);
-  const shellStore = shellStoreReason(args, command, payload);
-  if (shellStore && HOST !== 'bob') return ask(args, 'git-gate', 'process-1', shellStore);
-  if (shellStore) err(`[geneseed] ${shellStore}\n`);
+  if (shellWrite) return ask(args, 'git-gate', 'rigor-5', shellWrite.id, shellWrite);
+  // `--no-rule-store`: process 1 is excluded (or its pack off), so neither the ask nor Bob's warning runs.
+  const shellStore = args.noRuleStore ? null : shellStoreReason(args, command, payload);
+  const storeFacts = { name: shellStore, shell: true };
+  if (shellStore && HOST !== 'bob') return ask(args, 'git-gate', 'process-1', 'store', storeFacts);
+  if (shellStore) err(`[geneseed] ${gateSafe('store', 'warned', storeFacts)}\n`);
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before
   // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
@@ -679,8 +846,9 @@ function gitDecide(args, payload) {
   // Consent Before Push: a loop launched on its own `loop/*` branch is a named batch for a
   // fixed set of commit/push forms on that branch only — never a merge into anything shared.
   if (loopExempt(command, (payload && payload.cwd) || process.cwd())) return 0;
-  return ask(args, 'git-gate', 'process-5', 'Geneseed (Consent Before Push) \u2014 every git '
-    + 'commit/push needs explicit approval; to see the change first, use the explain-changes skill');
+  // A worker's own worktree branch is a named batch for local commits and merges, never a push.
+  if (worktreeExempt(command, (payload && payload.cwd) || process.cwd(), payload && payload.agent_id)) return 0;
+  return ask(args, 'git-gate', 'process-5', 'commit', { says });
 }
 export const cmdGitGate = guardGate(gitGate, 'git-gate');
 
@@ -689,35 +857,53 @@ export const cmdGitGate = guardGate(gitGate, 'git-gate');
 // ======================================================================================
 
 /**
- * `_rule_gate_target` — name the store a write would land in, or null for ordinary work.
+ * What `p` lands on, as `ruleGateTarget`'s docblock says: as spelled from `base`, then with links
+ * followed, so the last form is the file a write reaches. May throw on a form the home cannot read.
+ */
+function landsOn(p, base) {
+  const win = process.platform === 'win32';
+  const forms = [];
+  if (p.startsWith('~')) forms.push(resolvePath(p));
+  else {
+    const spelled = !win ? p : p.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:').replace(/^[\\/]{2}[?.][\\/](?=[a-zA-Z]:)/, '')
+      .replace(/^[\\/]{2}(?:localhost|127\.0\.0\.1|\[?::1\]?)[\\/]([a-zA-Z])\$(?=[\\/]|$)/i, '$1:');
+    let abs = path.resolve(base || process.cwd(), spelled);
+    if (win) {
+      const drive = /^[a-zA-Z]:|^\\\\[^\\]+\\[^\\]+/.exec(abs)?.[0] ?? '';
+      abs = drive + abs.slice(drive.length).split('\\').map((s) => s.replace(/:.*$/, '').replace(/[. ]+$/, '')).join('\\');
+    }
+    forms.push(abs, resolvePath(abs));
+    // A dangling link has no realpath, and a write through it creates its target: follow it by
+    // hand, each hop through `resolvePath`, because a hop may pass a folder link. Links can loop.
+    for (let cur = forms[1], hop = 0; hop < 8; hop += 1) {
+      try { cur = resolvePath(path.resolve(path.dirname(cur), readlinkSync(cur))); forms.push(cur); } catch { break; }
+    }
+  }
+  return forms;
+}
+
+/**
+ * `_rule_gate_target` — name the rule store a write would land in, or null for ordinary work.
  *
- * A deployed install's folder and file names are theme-INDEPENDENT by design, so this
- * matches literal names and needs no install lookup. `user-rules.md`, `user-rules.draft.md` and
- * `MEMORY.md` are Geneseed's own coinage and match anywhere; any other markdown matches only
- * inside THIS install's `<root>/memory/` or the machine tier's `memory/`, or the store
- * `$GENESEED_HARNESS` or `$GENESEED_MEMORY` names. Twin of the OpenCode guard's `ruleStoreTarget`.
+ * Only the user's standing rules are gated: `user-rules.md` and the rule draft
+ * `user-rules.draft.md`, Geneseed's own coinage, matched anywhere by literal name (a deployed
+ * install's file names are theme-INDEPENDENT by design, so this needs no install lookup). Memory
+ * is written freely, with no prompt (owner decision, 2026-11-08): the change report
+ * (`./store-watch.mjs`) and the web console show it afterwards. Twin of the OpenCode guard's
+ * `ruleTarget`.
  *
  * The test is on what the write LANDS on: as spelled, `..` and `//` folded, and with links followed,
- * since a link from outside into a store and a store that links out are both real. On Windows a
- * stream (`user-rules.md::$DATA`), trailing dots and spaces, a device path and this machine's admin
- * share name the same file. A coined name matches by exact case outside a store: `docs/concepts/memory.md`
- * is another file, on Windows too, and on Bob this is a hard block. A file that EXISTS under a coined
+ * since a link from a memory file or any other path to a rule store is a write to that store. On
+ * Windows a stream (`user-rules.md::$DATA`), trailing dots and spaces, a device path and this
+ * machine's admin share name the same file. A coined name matches by exact case: `User-Rules.md` is
+ * another file, on Windows too, and on Bob this is a hard block. A file that EXISTS under a coined
  * name comes back in its true case through the link-followed form; a differently cased spelling
- * of one that does not exist yet is not caught. `base` is the session's directory.
+ * of one that does not exist yet is not caught. A hard link has no target to follow, so a file that is
+ * a known rule file under a second name answers `a hard link` (`sameAsRule`): this install's, the
+ * machine tier's, or the project layer's at the session's git root. `base` is the session's directory.
  */
-// The close of the process-1 text. On Claude this is a real prompt the host shows; the OpenCode
-// guard has its own texts, because a re-issue releases nothing there. A weak model once took a
-// refusal as leave to write the same file through a shell command, so the text names the one way
-// forward and never a switch that turns the gate off.
-export const PERSIST_ASK = 'Stop and ask the user now (the rule skill). If this edit was refused, '
-  + 're-issue the same edit only after they answer; never write it another way (for example '
-  + 'through a shell command).';
-/** Bob's close instead: nothing there lifts the block, so nothing here may speak of re-issuing. */
-const PERSIST_BOB = 'Tell the user what you wanted to write (the rule skill).';
-
-function ruleGateTarget(p, root, base = null) {
+function ruleGateTarget(p, root = null, base = null) {
   if (typeof p !== 'string') return null;
-  const win = process.platform === 'win32';
   // Split on BOTH separators rather than taking a basename: a payload carrying a Windows
   // path reaches a POSIX host with its backslashes intact, and `path.basename` there
   // returns the whole string — so the coined names would go unrecognised exactly
@@ -725,47 +911,46 @@ function ruleGateTarget(p, root, base = null) {
   const coined = (f) => {
     const name = f.split(/[\\/]/).pop();
     if (name === 'user-rules.md') return 'user-rules.md';
-    if (name === 'MEMORY.md') return 'the memory index';
     if (name === 'user-rules.draft.md') return 'the rule draft';
     return null;
   };
   const named = coined(p);
   if (named) return named;
   try {
-    const forms = [];
-    if (p.startsWith('~')) forms.push(resolvePath(p));
-    else {
-      const spelled = !win ? p : p.replace(/^\/([a-zA-Z])(?=\/|$)/, '$1:').replace(/^[\\/]{2}[?.][\\/](?=[a-zA-Z]:)/, '')
-        .replace(/^[\\/]{2}(?:localhost|127\.0\.0\.1|\[?::1\]?)[\\/]([a-zA-Z])\$(?=[\\/]|$)/i, '$1:');
-      let abs = path.resolve(base || process.cwd(), spelled);
-      if (win) {
-        const drive = /^[a-zA-Z]:|^\\\\[^\\]+\\[^\\]+/.exec(abs)?.[0] ?? '';
-        abs = drive + abs.slice(drive.length).split('\\').map((s) => s.replace(/:.*$/, '').replace(/[. ]+$/, '')).join('\\');
-      }
-      forms.push(abs, resolvePath(abs));
-      // A dangling link has no realpath, and a write through it creates its target: follow it by
-      // hand, each hop through `resolvePath`, because a hop may pass a folder link. Links can loop.
-      for (let cur = forms[1], hop = 0; hop < 8; hop += 1) {
-        try { cur = resolvePath(path.resolve(path.dirname(cur), readlinkSync(cur))); forms.push(cur); } catch { break; }
-      }
-    }
+    const forms = landsOn(p, base);
     const hit = forms.map(coined).find(Boolean);
     if (hit) return hit;
-    // This install's store, the machine tier's (`~/.config/geneseed/memory`) and the two a variable
-    // points at: a path compare, each store as written and with its links followed.
-    const stores = [];
-    if (root) stores.push(path.join(root, 'memory'));
-    try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store to match */ }
-    if (process.env.GENESEED_HARNESS) stores.push(path.join(process.env.GENESEED_HARNESS, 'memory'));
-    if (process.env.GENESEED_MEMORY) stores.push(process.env.GENESEED_MEMORY);
-    const homes = stores.flatMap((s) => [path.resolve(s), resolvePath(s)]).map(normcase);
-    // `.slice(1)`, so the store dir itself is not one of its own ancestors.
-    return forms.some((f) => (win ? f.toLowerCase() : f).endsWith('.md')
-      && selfAndParents(f).slice(1).some((a) => homes.includes(normcase(a)))) ? 'memory' : null;
+    // No `cwd` in the payload: the hook runs in the session's directory, so that is the project.
+    const at = base || process.cwd();
+    const project = gitRootOf(at) ?? path.resolve(at);
+    // The install, the machine tier, the project layer, and the homes the two variables name.
+    const pinned = process.env.GENESEED_MEMORY ? path.dirname(path.resolve(process.env.GENESEED_MEMORY)) : null;
+    const rules = ruleFilesUnder([root, machineDir(), project, process.env.GENESEED_HARNESS, pinned]);
+    return forms.some((f) => sameAsRule(f, rules)) ? 'a hard link' : null;
   } catch {
     return null;
   }
 }
+
+/**
+ * Whether `f` is one of `rules` under a second name: an existing file with more than one name whose
+ * device and inode match a known rule file's. A hard link has no target to follow, so this is the only
+ * way to see one. bigint stat, because a 64-bit NTFS file id does not fit a double. Only a file that
+ * has a second name is compared, and only there does a rule file whose stat fails for any reason but
+ * absence count as a match (fail closed). Twin of the guard's, byte for byte.
+ */
+function sameAsRule(f, rules) {
+  let s;
+  try { s = statSync(f, { bigint: true }); } catch { return false; }
+  if (!s.isFile() || s.nlink < 2n) return false;
+  return rules.some((r) => {
+    try { const t = statSync(r, { bigint: true }); return t.dev === s.dev && t.ino === s.ino; } catch (e) {
+      return !['ENOENT', 'ENOTDIR'].includes(e?.code);
+    }
+  });
+}
+// The rule files a session loads, under each home: the install, the machine tier, the project layer.
+const ruleFilesUnder = (homes) => homes.filter(Boolean).flatMap((h) => ['user-rules.md', 'user-rules.draft.md'].map((n) => path.join(h, n)));
 
 // Law I's boundary half is `SECRET_RE` (`./hooks-prims.mjs`, where the activity writer reads it
 // too). `.env*` is exempt because Law I names it as the place a secret may live.
@@ -779,8 +964,8 @@ export const SENSOR_LIST = '.geneseed/protected-checks.txt';
  * edit, or a failing check is one edit away from a passing one. A project opts in by listing
  * them, one repo-relative path per line (`#` comments), in `.geneseed/protected-checks.txt` at
  * its git root — found by walking up from the WRITE TARGET, not the cwd, so a session in one repo
- * writing into another reads that other repo's list. The list protects itself. Returns the entry
- * the path falls under, or null. A write tool's path reaches this through `ruleDecide`, a shell
+ * writing into another reads that other repo's list. The list protects itself. Returns the path from
+ * its git root, as a person reads it, or null. A write tool's path reaches this through `ruleDecide`, a shell
  * command's write targets through `shellWriteTargets`, whose docblock names what stays unseen.
  */
 function protectedCheck(p) {
@@ -793,14 +978,15 @@ function protectedIn(target) {
   try {
     const root = gitRootOf(path.dirname(target));
     if (!root) return null;
-    if (normcase(path.relative(root, target)) === normcase(DONE_LIST)) return DONE_LIST;
+    const shown = path.relative(root, target);
+    if (normcase(shown) === normcase(DONE_LIST)) return shown;
     const text = readFileSync(path.join(root, SENSOR_LIST), 'utf8');
     // `normcase` folds case AND slashes on Windows, so both sides go through it, the trailing
     // separator of the prefix included.
-    const rel = normcase(path.relative(root, target));
+    const rel = normcase(shown);
     const entries = [SENSOR_LIST, ...text.split(/\r?\n/).map((l) => l.trim().replace(/[\\/]+$/, ''))
       .filter((l) => l && !l.startsWith('#'))];
-    return entries.find((e) => rel === normcase(e) || rel.startsWith(normcase(`${e}/`))) ?? null;
+    return entries.some((e) => rel === normcase(e) || rel.startsWith(normcase(`${e}/`))) ? shown : null;
   } catch {
     return null;   // no list (the common case) or an unreadable one: nothing is protected
   }
@@ -813,7 +999,9 @@ function protectedIn(target) {
  *   * the install root (`--root`): the hook wiring (`settings.json`, `settings.local.json`, Bob
  *     global's `settings/settings.json` — `claudeWire`), `excludes.json` (`sovereignBypass`), the
  *     `AGENT.md` gate markers (`Done gate: off`, read by `cmdContext`; every marker is read back
- *     by a rebuild), and `.geneseed-manifest.json` / `.geneseed-emit` (`globalHookStandingDown`);
+ *     by a rebuild; in a `CLAUDE.md` or `AGENTS.md` only the managed block counts, those two are the
+ *     user's and are not listed here, and `carrierBlockChange` covers a write tool there), Bob global's
+ *     `rules/geneseed.md` (its whole carrier), and `.geneseed-manifest.json` / `.geneseed-emit` (`globalHookStandingDown`);
  *   * any host project dir the target sits in (`<dir>/.claude/settings.json` and kin, found by
  *     the parent's — or for `settings/settings.json` the grandparent's — folder name, so a
  *     monorepo subpackage or a dir with no `.git` is covered): Claude reads project settings
@@ -830,9 +1018,8 @@ function protectedIn(target) {
  * (`geneseed exclude`, an emit) writes these with `fs`, never through a write tool, so it is
  * not gated. Reached from a shell command too, with the same limit as `protectedCheck`.
  */
-const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
+const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'rules/geneseed.md', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
 const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
-export const GATE_CONFIG_ASK = 'is a gate\'s own configuration (the hook wiring, the exclusion list, a gate switch or the hook shim). Editing it could switch a check off: fix the code, not the gate, unless the user asks for this edit. Stop and ask the user now; never write it another way (for example through a shell command).';
 function gateConfig(p, root) {
   let bin = null;
   try {
@@ -867,6 +1054,8 @@ function gateConfig(p, root) {
  * @returns {string | null} why the write is refused, or null when Geneseed's wiring is untouched
  */
 const SETTINGS_RE = /(^|[\\/])(settings\.json|settings\.local\.json)$/i;
+const replaceOnce = (text, search, replace) => (typeof search === 'string' && search && typeof replace === 'string'
+  && text.split(search).length === 2 ? text.replace(search, () => replace) : null);
 function settingsAfter(before, payload) {
   const ti = payload.tool_input || {};
   const tool = payload.tool_name;
@@ -879,16 +1068,14 @@ function settingsAfter(before, payload) {
     lines.splice(line === 0 ? lines.length : line - 1, 0, ...ti.content.split('\n'));
     return lines.join('\n');
   }
-  const once = (text, search, replace) => (typeof search === 'string' && search && typeof replace === 'string'
-    && text.split(search).length === 2 ? text.replace(search, () => replace) : null);
   if (tool === 'search_and_replace') {
     const ranged = ti.use_regex || ti.ignore_case || ti.start_line != null || ti.end_line != null;
-    return ranged ? null : once(before, ti.search, ti.replace);
+    return ranged ? null : replaceOnce(before, ti.search, ti.replace);
   }
   if (tool === 'apply_diff' && typeof ti.diff === 'string') {
     const blocks = [...ti.diff.matchAll(DIFF_BLOCK_RE)];
     let text = before;
-    for (const [, search, replace] of blocks) if ((text = once(text, search, replace)) === null) return null;
+    for (const [, search, replace] of blocks) if ((text = replaceOnce(text, search, replace)) === null) return null;
     // One block only: with several, Bob may apply some and refuse others (its start-line window).
     return blocks.length === 1 ? text : null;
   }
@@ -927,24 +1114,93 @@ function bobSettingsChange(p, payload) {
   return geneseedWiring(a) === geneseedWiring(b) ? null : 'it changes Geneseed\'s own hook entries';
 }
 
+/** `p` from its git root, or as written outside any repository. Fails to `p`: it only names the file. */
+function repoRel(p, payload) {
+  try {
+    const abs = path.resolve(typeof payload?.cwd === 'string' ? payload.cwd : '.', p);
+    const root = gitRootOf(path.dirname(abs));
+    return root ? path.relative(root, abs) : p;
+  } catch { return p; }
+}
+
+// The largest text a line count reads. This is a blocking path, and the count is only a courtesy.
+const ASK_COUNT_MAX = 1024 * 1024;
+
 /**
- * External Gate on one write target, by tool or by shell: why it must be asked about, or null.
+ * The `editPairs` of a write the gate will ask about, for the line count, or undefined for none. Run
+ * only then, because `Write`'s old text is a file read. A pair says nothing of how often it applies,
+ * so a `replace_all` and a `search_and_replace` count nothing, and a notebook cell names no old text.
+ * A `diff` counts nothing either: the agent writes it, and `DIFF_BLOCK_RE` took 20 s on 80 KB of
+ * opened blocks. A count must cost no verdict, so whatever is not a small regular file, or cannot be
+ * read, counts nothing. Only a file that is truly absent is a new file.
+ */
+function askPairs(payload, p) {
+  const ti = payload.tool_input;
+  const many = Array.isArray(ti.edits) && ti.edits.some((e) => e && e.replace_all);
+  if (many || ti.replace_all || ti.diff !== undefined || typeof ti.search === 'string'
+    || typeof ti.new_source === 'string') return undefined;
+  try {
+    let whole = '';
+    if (/write/i.test(String(payload.tool_name))) {
+      const file = landsOn(p, typeof payload.cwd === 'string' ? payload.cwd : null).at(-1);
+      const stat = statSync(file, { throwIfNoEntry: false });
+      if (stat && (!stat.isFile() || stat.size > ASK_COUNT_MAX)) return undefined;
+      if (stat) whole = readFileSync(file, 'utf8');
+    }
+    const pairs = editPairs(ti, whole);
+    return pairs.flat().some((t) => t.length > ASK_COUNT_MAX) ? undefined : pairs;
+  } catch { return undefined; }
+}
+
+/** Past this a carrier is not replayed: it asks. */
+const CARRIER_REPLAY_CAP = 1024 * 1024;
+/** The file after a write tool's call, as `settingsAfter` rebuilds it, plus Claude's Edit. */
+function carrierAfter(before, payload) {
+  const ti = payload.tool_input || {};
+  if (payload.tool_name !== 'Edit') return settingsAfter(before, payload);
+  if (ti.replace_all !== true) return replaceOnce(before, ti.old_string, ti.new_string);
+  const { old_string: old, new_string: now } = ti;
+  return typeof old === 'string' && old && typeof now === 'string' && before.includes(old)
+    ? before.split(old).join(now) : null;
+}
+
+/**
+ * External Gate on a write tool aimed at a shared carrier: true when the call changes the managed
+ * block as `gateCarrierText` reads it, or cannot be shown not to. Structural, not a match on marker
+ * lines, which a two-step edit, a lone CR or a fake block all beat. An edit outside the block
+ * is the user's own and stays silent. shortcut: a shell write has no replay here, so a shell edit
+ * inside or before the block passes; docs/concepts/exclusions.md states the limit.
+ */
+function carrierBlockChange(p, payload) {
+  const abs = path.resolve(typeof payload.cwd === 'string' ? payload.cwd : '.', carrierName(p));
+  if (!isSharedCarrier(abs) && !isSharedCarrier(resolvePath(abs))) return false;
+  let before = '';
+  try {
+    if (statSync(abs).size > CARRIER_REPLAY_CAP) return true;
+    before = readFileSync(abs, 'utf8');
+  } catch (e) {
+    if (e?.code !== 'ENOENT') return true;
+  }
+  const after = carrierAfter(before, payload);
+  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlock(after) !== carrierBlock(before);
+}
+
+/**
+ * External Gate on one write target, by tool or by shell: the `gateText` id and facts to ask with, or null.
  * On Bob a hook-settings file is the user's shared host config, refused only when the write
  * touches Geneseed's wiring (`bobSettingsChange`), and it never reads `opencode.json(c)`.
  */
 function externalGate(args, p, payload) {
+  // `--no-external-gate`: the install switched this hook off. Both callers end here, so the write
+  // tools, the shell path and Bob stand down at once; the store, secret and loss checks do not.
+  if (args.noExternalGate) return null;
   const sensor = protectedCheck(p);
-  if (sensor) {
-    return `Geneseed (External Gate) — ${p} is a protected check (${sensor === DONE_LIST
-      ? 'the done gate list itself' : `${sensor}, listed in ${SENSOR_LIST}`}). A check the agent can `
-      + 'edit is not a check: fix the code, not the check, unless the user asks for this edit.';
-  }
+  if (sensor) return { id: 'check', name: sensor };
   if (HOST === 'bob' && /^opencode\.jsonc?$/i.test(path.basename(p))) return null;
   if (!gateConfig(p, args.root)) return null;
   const why = HOST === 'bob' && SETTINGS_RE.test(p) ? bobSettingsChange(p, payload) : '';
   if (why === null) return null;
-  return `Geneseed (External Gate) — ${p} ${GATE_CONFIG_ASK}`
-    + (why ? ` On Bob this write is refused because ${why}.` : '');
+  return { id: 'config', name: repoRel(p, payload), bobWhy: why };
 }
 
 /**
@@ -1011,31 +1267,33 @@ function ruleDecide(args, payload) {
   // this check stands down; the protected checks and process 1 below still run.
   const carrier = paths.find((p) => !DOTENV_RE.test(p));
   if (!args.noSecretsGate && body && carrier && SECRET_RE.test(body)) {
-    return ask(args, 'rule-gate', 'law-1', `Geneseed (Sealed Secrets) — ${carrier} would carry a `
-      + 'credential-shaped string. Secrets live in .env or a secret manager, never in a '
-      + 'tracked file.');
+    return ask(args, 'rule-gate', 'law-1', 'secret', { name: repoRel(carrier, payload) });
   }
   // Bob routes reads here too (`read_file` carries a path): only a write is External Gate's business.
   // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
   // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
   const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
-  const external = !bobRead && paths.map((p) => externalGate(args, p, payload)).find(Boolean);
-  if (external) return ask(args, 'rule-gate', 'rigor-5', external);
-  // A read on Bob names the store too, and that is no write to refuse.
-  const target = bobRead ? null : paths.map((p) => ruleGateTarget(p, args.root, payload && payload.cwd)).find(Boolean);
+  for (const q of bobRead ? [] : paths) {
+    // The carrier rule is a write tool's alone: a shell call reaches `externalGate` with nothing to replay.
+    const hit = externalGate(args, q, payload)
+      ?? (!args.noExternalGate && carrierBlockChange(q, payload) ? { id: 'config', name: repoRel(q, payload), bobWhy: '' } : null);
+    if (hit) return ask(args, 'rule-gate', 'rigor-5', hit.id, { ...hit, pairs: askPairs(payload, q) });
+  }
+  // A read on Bob names the store too, and that is no write to refuse. `--no-rule-store`: process 1
+  // is excluded (or its pack off), so a rule write is ordinary work and the gates below still judge it.
+  const stored = bobRead || args.noRuleStore ? null : paths.find((q) => ruleGateTarget(q, args.root, payload && payload.cwd));
   const p = paths[0];
-  if (!target) {
+  if (!stored) {
     // The ownership first-write gate (./ownership-gate.mjs), last: every rule above outranks it.
     // `--no-ownership-gate`: the install switched it off (D25).
     const why = args.noOwnershipGate ? null : ownershipBlock(p, payload, body, args.root);
     if (why) return deny(args, 'rule-gate', 'ownership', why);
     // Only here: stdout carries one document, and an ask or a deny above already holds it.
-    if (!bobRead) testWeakenedNote(p, payload);
+    if (!bobRead && !args.noTestNote) testWeakenedNote(p, payload);
     return 0;
   }
-  return ask(args, 'rule-gate', 'process-1', `Geneseed (Persist Insight) \u2014 writing to `
-    + `${target}: a standing rule, or a fact to remember? That choice is the user's. `
-    + (HOST === 'bob' ? PERSIST_BOB : PERSIST_ASK));
+  return ask(args, 'rule-gate', 'process-1', 'store',
+    { name: ruleGateTarget(stored, args.root, payload && payload.cwd), pairs: askPairs(payload, stored) });
 }
 export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 

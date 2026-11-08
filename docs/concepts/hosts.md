@@ -18,7 +18,7 @@ Each host has a **global** install (in its config directory, active in every rep
 
 ## Two engines
 
-- **OpenCode** runs its own engine: Geneseed installs JavaScript **plugins** that OpenCode loads, plus permission entries in `opencode.json`. It also gets OpenCode-only extras: colour themes, [language servers](lsp.md), a workflow runner, a primary agent and `/`-commands.
+- **OpenCode** runs its own engine: Geneseed installs JavaScript **plugins** that OpenCode loads, plus permission entries in `opencode.json`. The install also caps subagent nesting at two levels there (`subagent_depth`), as it does on Claude Code (`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`); OpenClaude and Bob have no such cap ([Foreman mode](foreman-mode.md)). It also gets OpenCode-only extras: colour themes, [language servers](lsp.md), a workflow runner, a primary agent and `/`-commands.
 - **Claude Code**, **Bob** and **OpenClaude** share one Claude-shaped engine: Geneseed wires **hooks** into the host's `settings.json`, each calling `geneseed-hook <verb>`. See [Hooks](hooks.md).
 
 ## Where to go next

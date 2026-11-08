@@ -11,7 +11,10 @@ import EmptyState from '../components/EmptyState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
 import {
   GATE_COPY,
+  GATE_HOOK,
   GATE_SWITCH,
+  ALWAYS_ASKS,
+  WITH_TEXT,
   PRECEDENCE,
   PRECEDENCE_INFORM,
   enforcedBy,
@@ -28,7 +31,7 @@ import GateAsks from './Laws/GateAsks.jsx'
 import PackPanel from './Laws/PackPanel.jsx'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
-import { installTag, pairOf } from '../lib/hosts.js'
+import { fleetSlots, installTag, pairOf } from '../lib/hosts.js'
 
 // THE FILENAME AND THE ROUTE STAY `laws`: a rename buys nothing and costs a redirect. Only what
 // a reader sees says "Constitution".
@@ -46,11 +49,12 @@ import { installTag, pairOf } from '../lib/hosts.js'
 // links keep the switch's own address, `ownership`, so a link to the gate opens this row.
 const OWNERSHIP_ROW = 'ont:ownership'
 const rowOf = (addr) => (addr === 'ownership' ? OWNERSHIP_ROW : addr)
+const CONSENT = 'process.5'
 
 // The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
 // order, not alphabetical). Every pack is here whether or not it is built in. Pure over the
 // catalog items, so the page can build it before its early returns and hand it to the selection.
-function doctrinePacks(items) {
+function doctrinePacks(items, gates) {
   const packs = []
   for (const it of items) {
     if (it.tier !== 'doctrine') continue
@@ -74,7 +78,7 @@ function doctrinePacks(items) {
       name: t.name,
       latin: t.latin,
       ess: it.summary || '',
-      enf: enforcedBy(it.name),
+      enf: enforcedBy(it.name, gates),
       c: PACK_CATS[it.pack] || 'var(--text-3)',
       src: `doctrines/${it.pack}.md`,
     })
@@ -102,7 +106,13 @@ export default function Laws(props) {
     <>
       <InstallPicker className="page-pick" installs={active} value={install} onChange={pick} />
       {/* Keyed on the pick, so its read starts as pending and no other pick's answer shows. */}
-      <LawsFor key={install?.id ?? 'none'} {...props} install={install} listed={active !== null} />
+      <LawsFor
+        key={install?.id ?? 'none'}
+        {...props}
+        install={install}
+        listed={active !== null}
+        installSlot={fleetSlots((active || []).map((i) => i.id)).indexOf(install?.id)}
+      />
     </>
   )
 }
@@ -113,7 +123,7 @@ const isInstall = (o, i) => o?.install?.host === i.host && o.install.path === i.
 // The gates and the Enforced-by column read it, and a missing switch reads as armed, so until it
 // lands the page shows no verdict. `loading` ends the wait: a finished read that names another
 // install, or none, is unread and says so, and never hangs.
-function LawsFor({ install, listed, ...props }) {
+function LawsFor({ install, listed, installSlot, ...props }) {
   const held = install && isInstall(props.overview, install) ? props.overview : null
   const {
     data: own,
@@ -141,12 +151,23 @@ function LawsFor({ install, listed, ...props }) {
         onAction={listed && (!install || mine !== null) ? props.onAction : undefined}
         pending={!listed || Boolean(install && !mine && loading)}
         gatesUnread={unread}
+        installSlot={installSlot}
       />
     </>
   )
 }
 
-function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, gatesUnread }) {
+function LawsOf({
+  selected,
+  overview,
+  setup,
+  onAction,
+  dataRev,
+  pair,
+  pending,
+  gatesUnread,
+  installSlot,
+}) {
   const confirm = useConfirm()
   // The default install's catalog shares the Overview's cached read; another install's is its own.
   const { data, error } = useAsync(
@@ -202,11 +223,11 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
   // React see a different number of hooks between the loading render and the loaded one
   // and throw, taking the whole page down rather than just the control.
   const items = data?.items || []
-  const packs = doctrinePacks(items)
-  // The gate switches (Laws I, III, IV and the one in the Ownership row), as the deployed
-  // install reports them (`overview.install.secretsGate` / `doneGate` / `deletionGate` /
-  // `ownershipGate`). Anything but an explicit `false` — an older daemon, no install — reads as
-  // armed.
+  const packs = doctrinePacks(items, overview?.install)
+  // The gate switches (Laws I, III, IV, VIII and the ones in the Ownership and rigor 5 rows), as
+  // the deployed install reports them (`overview.install.secretsGate` / `doneGate` /
+  // `deletionGate` / `testNote` / `ownershipGate` / `externalGate`). Anything but an explicit
+  // `false` — an older daemon, no install — reads as armed.
   const armed = (addr) => overview?.install?.[GATE_SWITCH[addr].key] !== false
   const gateArmed = armed('IV')
   const sel = useRuleSelection({ items, packs, install, canApply, onAction, gateArmed })
@@ -292,6 +313,15 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
       ]
     : []
 
+  // Text excluded (staged or deployed) while its hook will still ask after Apply. A switched rule
+  // (rigor 5) counts only once its exclusion is deployed: Apply switches its gate off with it.
+  const stillAsks = (addr) => {
+    if (isOn(addr)) return false
+    if (ALWAYS_ASKS.has(addr)) return true
+    if (!GATE_SWITCH[addr] || gatesUnread) return false
+    return armed(addr) && !deployedRules.includes(addr)
+  }
+
   // A doctrine row's status is the STAGED switch against what is deployed: a rule the
   // install carries reads Active, one it excludes reads Off, and a rule whose switch was
   // flipped but not applied says so rather than reporting the staged state as fact.
@@ -302,6 +332,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
     return {
       ...r,
       enf: gatesUnread && GATE_SWITCH[r.addr] && r.enf === 'Hook gate' ? 'Unknown' : r.enf,
+      note: stillAsks(r.addr) ? 'Text excluded; the hook still asks.' : '',
       off: !on,
       status,
       statusTone: on ? 'ok' : on === live ? '' : 'warn',
@@ -339,19 +370,58 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
     )
     if (ok) onAction('install', { ...install, [key]: next })
   }
-  const gateSwitch = (addr) => (
+  // `rule` names the row's rule in the label, so a reader hears which hook this is; the ownership
+  // gate has none, and keeps its own name.
+  const gateSwitch = (addr, rule) => (
     <button
       type="button"
       className={`sw-toggle${armed(addr) ? ' on' : ''}`}
       role="switch"
       aria-checked={armed(addr)}
-      aria-label={GATE_SWITCH[addr].label}
+      aria-label={
+        rule ? `${GATE_SWITCH[addr].label}: hook gate of ${rule}` : GATE_SWITCH[addr].label
+      }
       onClick={() => toggleGate(addr)}
     />
   )
+  // A cell that cannot switch: its visible word, and why, for the pointer and the screen reader.
+  const locked = (word, why) => (
+    <span className="no-gate" title={why}>
+      {word}
+      <span className="sr-only">: {why}</span>
+    </span>
+  )
+  // The two toggle columns, Rule text then Hook gate, each a cell of its own.
+  const cells = (text, gate) => (
+    <>
+      <span className="toggle-cell">{text}</span>
+      <span className="toggle-cell">{gate}</span>
+    </>
+  )
+  // The Hook gate cell: a switch, a locked state for a hook with no switch, or nothing.
+  const hookCell = (r) => {
+    if (GATE_SWITCH[r.addr]) return gateSwitch(r.addr, r.name)
+    if (r.addr === CONSENT)
+      return locked(
+        'with text',
+        `No switch of its own: excluding ${r.name} drops its commit and push ask in the same rebuild (Bob still logs its warning).`,
+      )
+    if (WITH_TEXT.has(r.addr))
+      return locked(
+        'with text',
+        `No switch of its own: excluding ${r.name}, or its pack, drops its hook in the same rebuild.`,
+      )
+    if (ALWAYS_ASKS.has(r.addr))
+      return locked(
+        'always on',
+        `No switch yet: the hook asks even with ${r.name}'s text excluded.`,
+      )
+    return null
+  }
 
-  // Gated: a hook enforces it now (a switched-off gate reads "Gate off", and an excluded
-  // doctrine rule takes its hook with it, so neither is counted).
+  // Gated: a hook enforces it now. A switched-off gate reads "Gate off", so it is not counted. A
+  // rule with a gate switch follows that switch alone: excluding rigor 5 drops its text and the
+  // hook still asks. Any other excluded doctrine rule is left out (a WITH_TEXT hook goes with it).
   // Changed: a doctrine rule whose staged switch differs from the install; a law never is, its
   // gate switch rebuilds at once.
   const isChanged = (r) =>
@@ -359,7 +429,11 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
   const inView = (r, v = view) =>
     v === 'all' ||
     (v === 'gated'
-      ? r.enf === 'Hook gate' && (!String(r.addr).includes('.') || deployedRules.includes(r.addr))
+      ? r.enf === 'Hook gate' &&
+        (GATE_SWITCH[r.addr] ||
+          ALWAYS_ASKS.has(r.addr) ||
+          !String(r.addr).includes('.') ||
+          deployedRules.includes(r.addr))
       : isChanged(r))
   // Substring narrowing over address, name, Latin name and principle; display-only, so the
   // staged selection above keeps operating on the full rule set.
@@ -397,6 +471,12 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
     return off ? [`${off} gate${off === 1 ? '' : 's'} off`, 'warn'] : ['always', 'ok']
   }
   const excludedDoc = allRules.length - activeDoc
+  // Rigor 5's gate is the one switch in this band, and it never counts as an exclusion.
+  const docWarns = [
+    excludedDoc > 0 && `${excludedDoc} excluded`,
+    !gatesUnread && !armed('rigor.5') && '1 gate off',
+  ].filter(Boolean)
+  const docPill = docWarns.length ? [docWarns.join(' · '), 'warn'] : ['all on', 'ok']
   const stats = rulesData?.stats
   const tierOf = {
     ethos: {
@@ -421,7 +501,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
       n: allRules.length,
       fill: allRules.length ? activeDoc / allRules.length : 0,
       sub: `${packs.length} packs`,
-      pill: excludedDoc > 0 ? [`${excludedDoc} excluded`, 'warn'] : ['all on', 'ok'],
+      pill: docPill,
     },
     yours: {
       name: 'Your rules',
@@ -499,6 +579,30 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
       <span className="mono dim">{src}</span>
     </div>
   )
+  // One compact header row under every open band, its `data-col` cells the twins of LawRow's, so
+  // the container queries in styles.css drop a column from header and rows alike. Decorative for assistive tech: the rows are
+  // buttons, not table rows, so `columnheader` would be orphaned, and each row's label already
+  // reads number, name, status and enforcement. Seven times over it would only be noise.
+  const colHead = (withToggle) => (
+    <div className="law-rowhead" aria-hidden="true">
+      <span data-col="no">No.</span>
+      <span>Rule</span>
+      <span data-col="latin">Latin name</span>
+      <span data-col="status">Status</span>
+      <span data-col="enf">Enforced by</span>
+      {/* Below the widest layout the switch columns narrow and each label keeps its last word. */}
+      {withToggle && (
+        <>
+          <span>
+            <span className="rh-cut">Rule </span>text
+          </span>
+          <span>
+            <span className="rh-cut">Hook </span>gate
+          </span>
+        </>
+      )}
+    </div>
+  )
   const invRows = laws.filter(match)
   // What the tabs and the filter reach, so not the Ethos band above them. The gate counts only as
   // a match: "Nothing matches" must not sit under its row, but it fills no empty tier.
@@ -507,18 +611,40 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
   // The switch inside the open Ownership row, where a switch can act. It sits outside the row's
-  // disclosure button, so a click on it never folds the row.
+  // disclosure button, so a click on it never folds the row. Rigor 5's switch is on its row.
   const gateAsks = withAsks(gateRows[0] || {}).asks
-  const gateLine = gateRows.length > 0 && (
-    <div className="law-gate">
-      <span className="law-name">
-        <span>{GATE_SWITCH.ownership.label}</span>
-        {gateAsks ? <span className="law-asks mono">{gateAsks}</span> : null}
-        <span className="law-princ">{GATE_COPY.ownership.desc}</span>
-      </span>
-      {gateSwitch('ownership')}
-    </div>
-  )
+  const gateLine = (addr, asks) =>
+    canApply ? (
+      <div className="law-gate">
+        <span className="law-name">
+          <span>{GATE_SWITCH[addr].label}</span>
+          {asks ? <span className="law-asks mono">{asks}</span> : null}
+          <span className="law-princ">{GATE_COPY[addr].desc}</span>
+        </span>
+        {gateSwitch(addr)}
+      </div>
+    ) : null
+  // What the hook does, folded, in any row a hook gates. Shown with or without an install to act
+  // on: it explains, it switches nothing. The switch line, where there is one, stays last.
+  const hookNote = (addr) => {
+    const h = GATE_HOOK[addr]
+    if (!h) return null
+    return (
+      <details className="law-hook">
+        <summary>What the hook does</summary>
+        <dl>
+          <dt>Triggers on</dt>
+          <dd>{h.on}</dd>
+          <dt>Per host</dt>
+          <dd>{h.hosts}</dd>
+          <dt>Does not see</dt>
+          <dd>{h.blind}</dd>
+          <dt>If switched off</dt>
+          <dd>{h.off}</dd>
+        </dl>
+      </details>
+    )
+  }
 
   return (
     <>
@@ -573,6 +699,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
           {ontology.length > 0 && (
             <>
               {bandHead(nouns.ontology, 'ontology/universal.md')}
+              {colHead(false)}
               {ontology.map((s) => (
                 <LawRow
                   key={s.addr}
@@ -580,7 +707,14 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
                   rev={dataRev}
                   isOpen={open === s.addr}
                   onToggle={() => toggle(s.addr)}
-                  after={s.addr === OWNERSHIP_ROW ? gateLine : null}
+                  after={
+                    s.addr === OWNERSHIP_ROW ? (
+                      <>
+                        {hookNote('ownership')}
+                        {gateLine('ownership', gateAsks)}
+                      </>
+                    ) : null
+                  }
                 />
               ))}
             </>
@@ -614,16 +748,10 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
               ))}
             </Seg>
           </div>
-          <div className="law-rowhead">
-            <span>No.</span>
-            <span>Rule</span>
-            <span>Latin name</span>
-            <span>Status</span>
-            <span>Enforced by</span>
-          </div>
           {showInv && invRows.length > 0 && (
             <>
               {bandHead(nouns.laws, 'laws/universal.md')}
+              {colHead(canApply)}
               {invRows.map((l) => (
                 <LawRow
                   key={l.addr}
@@ -631,15 +759,18 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
                   rev={dataRev}
                   isOpen={open === l.addr}
                   onToggle={() => toggle(l.addr)}
+                  after={hookNote(l.addr)}
                   toggleCol={
-                    !canApply || l.retired ? null : GATE_SWITCH[l.addr] ? (
-                      gateSwitch(l.addr)
-                    ) : (
-                      // A text-only law: nothing at the tool boundary to switch off.
-                      <span className="no-gate" title="Enforced by its text alone: no hook gate">
-                        no gate
-                      </span>
-                    )
+                    !canApply || l.retired
+                      ? null
+                      : cells(
+                          // A Dictate's text cannot be excluded: a locked cell, not a switch.
+                          locked(
+                            'locked',
+                            `A ${nouns.law} cannot be excluded: its text always binds.`,
+                          ),
+                          GATE_SWITCH[l.addr] ? gateSwitch(l.addr, l.name) : null,
+                        )
                   }
                 />
               ))}
@@ -690,6 +821,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
                         ` --exclude-rules ${deployedExcluded.join(',')}`}
                     </div>
                   )}
+                  {!shut && colHead(canApply)}
                   {!shut &&
                     rows.map((r) => (
                       <LawRow
@@ -698,17 +830,21 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
                         rev={dataRev}
                         isOpen={open === r.addr}
                         onToggle={() => toggle(r.addr)}
+                        after={hookNote(r.addr)}
                         toggleCol={
-                          canApply ? (
-                            <button
-                              type="button"
-                              className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                              role="switch"
-                              aria-checked={isOn(r.addr)}
-                              aria-label={`${r.name} rule`}
-                              onClick={() => toggleRule(r.addr)}
-                            />
-                          ) : null
+                          canApply
+                            ? cells(
+                                <button
+                                  type="button"
+                                  className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                                  role="switch"
+                                  aria-checked={isOn(r.addr)}
+                                  aria-label={`${r.name} rule text`}
+                                  onClick={() => toggleRule(r.addr)}
+                                />,
+                                hookCell(r),
+                              )
+                            : null
                         }
                       />
                     ))}
@@ -742,6 +878,7 @@ function LawsOf({ selected, overview, setup, onAction, dataRev, pair, pending, g
             onJump={jumpToRule}
             disarmed={(addr) => Boolean(GATE_SWITCH[addr]) && !armed(addr)}
             install={overview?.install}
+            slot={installSlot}
           />
         </aside>
       </div>

@@ -42,6 +42,6 @@ If an install's `.geneseed-emit` marker names something this version does not re
 `migrate` reports these instead of rewriting them:
 
 - **Hooks it did not write.** Your own hooks and any third-party hooks stay exactly as they are. A rebuild only replaces the hook groups that Geneseed's manifest says it owns.
-- **Login items.** If you set the web console to [start at login](autostart.md), you wrote that file yourself. If it still names your old clone, `migrate` prints its path and the command to put in it. You edit the file yourself.
+- **Login items.** If the web console [starts at login](autostart.md) and its login item still names your old clone, `migrate` prints its path and the command to put in it. If Settings wrote that file, use **Update** on the **Start at login** row. If you wrote it yourself, edit it yourself.
 
 Your clone keeps working in the meantime, so you can migrate when it suits you.

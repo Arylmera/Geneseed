@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { baseName, needsYou, STATUS } from '../../lib/activity.jsx'
 import {
   cardKey,
@@ -26,6 +26,18 @@ const CELL = W * PX
 const GAP = 24
 const MOSS_Y = 41 * PX + 1
 const POT_Y = 47 * PX
+// The plank's inner padding on each side of its trees (= .gd-row's padding in styles.css).
+const PAD = 16
+
+// How many trees one plank holds in `w` CSS pixels of shelf. Unmeasured (0, as in jsdom), the
+// whole shelf stands on one plank.
+export const perRow = (w, n) =>
+  w > 0 ? Math.max(1, Math.floor((w - 2 * PAD + GAP) / (CELL + GAP))) : Math.max(1, n)
+
+// The garden's status pill: working green, blocked red, your move amber, idle grey. STATUS keeps
+// the word; the list keeps its own classes (cyan working).
+const pillCls = (s) =>
+  s.status === 'blocked' ? 'bad' : needsYou(s) ? 'warn' : s.status === 'busy' ? 'ok' : ''
 
 const pct = (s) => {
   const f = contextFill(s)
@@ -103,6 +115,8 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
   const loop = Array.isArray(s.loops) ? s.loops[0] : null
   const swaying = s.status !== 'idle'
   const sid = cardKey(s)
+  const title = s.title || baseName(s.cwd) || s.session_id
+  const c = pct(s)
   // Stable, so the tree's ~400 rects are rebuilt only when its drawing or its hover changes. It
   // reports the x too: a tap has no mouseenter before it to report one.
   const link = useRef(null)
@@ -120,15 +134,16 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
       onBlur={() => onHover(null, null)}
       onKeyDown={(e) => padKeys(e, t.pads.length, pad, onPad)}
     >
-      <div className="gd-label">
-        <div className="act-ell">
+      <TreeSvg t={t} pad={pad} swaying={swaying} onPad={onPad} px={PX} />
+      <div className="gd-cap">
+        <div className="gd-title" title={title}>
+          {title}
+        </div>
+        <div className="row wrap gd-pills">
           <span className="badge mono" title="The install this session runs in">
             {s.chip || s.host || '?'}
-          </span>{' '}
-          {s.title || baseName(s.cwd) || s.session_id}
-        </div>
-        <div className="row gap-8 gd-sub">
-          <span className={`badge ${st.cls}`}>{st.label}</span>
+          </span>
+          <span className={`badge ${pillCls(s)}`}>{st.label}</span>
           {worktree && <span className="badge mono">⎇ {worktree}</span>}
           {loop && (
             <span className="badge">
@@ -141,10 +156,11 @@ function Tree({ s, worktree, sakura, mine, pad, onHover }) {
               no attrib.
             </span>
           )}
-          {s.phase && <span className="dim act-ell">{s.phase}</span>}
+        </div>
+        <div className="mono gd-meta">
+          {s.turns || 0} turns{c == null ? '' : ` · ${c}%`}
         </div>
       </div>
-      <TreeSvg t={t} pad={pad} swaying={swaying} onPad={onPad} px={PX} />
     </a>
   )
 }
@@ -188,8 +204,8 @@ function Threads({ pairs, count }) {
   )
 }
 
-// Where the hovered tree stands in its shelf, after the row's sideways scroll.
-const xOf = (el) => el.offsetLeft - (el.parentElement?.scrollLeft || 0)
+// Where the hovered tree stands on its plank.
+const xOf = (el) => el.offsetLeft
 
 export default function Garden({ sessions, collisions }) {
   const [sakura, setSakura] = useState(readSakura)
@@ -255,39 +271,79 @@ function Shelf({ sh, sakura, cols, mineOf }) {
     (sid, pad, x) => setHover((h) => ({ sid, pad, x: x ?? (h.sid === sid ? h.x : 0) })),
     [],
   )
-  const cur = sh.trees.find((x) => cardKey(x.s) === hover.sid)?.s
+  // The shelf's width decides how many trees share a plank; a narrow screen stacks planks.
+  const box = useRef(null)
+  const [width, setWidth] = useState(0)
+  useLayoutEffect(() => {
+    const el = box.current
+    const measure = () => setWidth(el.clientWidth)
+    measure()
+    // The rail folding changes the width with no window resize; the window event is the fallback.
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const per = perRow(width, sh.trees.length)
+  const pairs = shelfPairs(sh.trees, cols)
+  const rows = []
+  for (let i = 0; i < sh.trees.length; i += per) rows.push(i)
+  const at = sh.trees.findIndex((x) => cardKey(x.s) === hover.sid)
+  const cur = at < 0 ? null : sh.trees[at].s
   // The hovered tree only: one more draw per hover, never per poll.
   const t = cur ? gardenTree(cur, { sakura }) : null
   const hot = t && hover.pad != null ? t.pads[hover.pad] : null
+  const n = sh.trees.length
   return (
-    <section className="gd-shelf" aria-label={`${sh.name} shelf`}>
-      <h3 className="act-lbl gd-shelf-h">
-        {sh.name} <span className="dim">· {sh.trees.length}</span>
-      </h3>
-      <div className="gd-row">
-        {sh.trees.map(({ s, worktree }) => (
-          <Tree
-            key={cardKey(s)}
-            s={s}
-            worktree={worktree}
-            sakura={sakura}
-            mine={mineOf(cardKey(s))}
-            pad={cardKey(s) === hover.sid ? hover.pad : null}
-            onHover={onHover}
-          />
-        ))}
-        <Threads pairs={shelfPairs(sh.trees, cols)} count={sh.trees.length} />
-      </div>
+    <section className="gd-shelf" aria-label={`${sh.name} shelf`} ref={box}>
+      {rows.map((start) => {
+        const trees = sh.trees.slice(start, start + per)
+        const end = start + trees.length
+        // A thread ties two trees on one plank; a pair split across planks keeps its hover line.
+        const own = pairs
+          .filter((p) => p.a >= start && p.a < end && p.b >= start && p.b < end)
+          .map((p) => ({ ...p, a: p.a - start, b: p.b - start }))
+        return (
+          <div className="gd-row" key={start}>
+            <div className="gd-plank">
+              {start === 0 && (
+                <h3 className="gd-plate">
+                  {sh.name} · {n} session{n === 1 ? '' : 's'}
+                </h3>
+              )}
+            </div>
+            {trees.map(({ s, worktree }) => (
+              <Tree
+                key={cardKey(s)}
+                s={s}
+                worktree={worktree}
+                sakura={sakura}
+                mine={mineOf(cardKey(s))}
+                pad={cardKey(s) === hover.sid ? hover.pad : null}
+                onHover={onHover}
+              />
+            ))}
+            <Threads pairs={own} count={trees.length} />
+            {/* An overlay under the hovered tree, drawn only while something is hovered: it
+                takes no room in the layout, so a hover never moves the page. */}
+            {cur && at >= start && at < end && (
+              <div className="gd-info" aria-hidden="true" style={{ left: Math.max(0, hover.x) }}>
+                {hot ? (
+                  <PadCard pad={hot} />
+                ) : (
+                  <TreeCard s={cur} t={t} mine={mineOf(cardKey(cur))} />
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
       <span className="sr-only" role="status">
         {padLine(hot)}
       </span>
-      {/* An overlay under the hovered tree, drawn only while something is hovered: it takes
-          no room in the layout, so a hover never moves the page. */}
-      {cur && (
-        <div className="gd-info" aria-hidden="true" style={{ left: Math.max(0, hover.x) }}>
-          {hot ? <PadCard pad={hot} /> : <TreeCard s={cur} t={t} mine={mineOf(cardKey(cur))} />}
-        </div>
-      )}
     </section>
   )
 }

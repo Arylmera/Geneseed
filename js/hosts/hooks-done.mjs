@@ -269,7 +269,9 @@ export function doneGate(meta, args, install, read = tailReader()) {
       if (checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
       return null;
     }
-    const { missing, weakened } = verdict;
+    const { missing } = verdict;
+    // `--no-test-note`: the line goes, the done checks do not.
+    const weakened = args.noTestNote ? [] : verdict.weakened;
     // One JSON document on stdout, whatever the advisories: Stop reads no second one.
     const advise = (...said) => {
       if (weakened.length) {

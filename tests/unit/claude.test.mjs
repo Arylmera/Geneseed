@@ -139,6 +139,12 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     assert.ok(!gen.some((c) => c.includes(String(ROOT))),
       `emitted hooks still name the checkout: ${gen}`);
 
+    // Foreman's depth, main → worker → sub-worker, is armed in Claude Code's own setting, and
+    // the manifest records the pair so uninstall can take exactly that back.
+    assert.deepEqual(s.env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+    assert.deepEqual(readJson(cfg, GLOBAL_MANIFEST).managed.settings_env,
+      { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+
     // No `cat AGENT.md` at global scope, and the plugins dir is never written.
     assert.ok(!hookCmds(s).some((c) => c.includes('cat AGENT.md')));
     assert.ok(!fs.existsSync(path.join(cfg, 'plugins')));
@@ -481,9 +487,27 @@ test('the uninstall removes only what it owned, and leaves every user artefact',
     assert.equal(s.model, 'opus');
     assert.ok(hookCmds(s).includes('echo mine'));
     assert.deepEqual(geneseedCmds(s), [], 'Geneseed hooks were not unwired');
+    // The depth cap the emit wrote goes with it; the user's own keys stay.
+    assert.ok(!('env' in s), `the depth cap was left behind: ${JSON.stringify(s.env)}`);
 
     assert.ok(!fs.existsSync(path.join(cfg, 'agents', 'reviewer.md')));
     assert.ok(!fs.existsSync(path.join(cfg, GLOBAL_MANIFEST)));
+  });
+});
+
+test("a depth cap the user set is theirs: the emit keeps it and the uninstall leaves it", () => {
+  // Key by key: Geneseed writes `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` only where the file has
+  // none, so it records nothing here, and an uninstall has nothing of its own to take back.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotclaude');
+    fs.mkdirSync(cfg);
+    fs.writeFileSync(path.join(cfg, 'settings.json'),
+      JSON.stringify({ env: { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' } }));
+    globalEmit('claude', path.join(d, 'bundle'), cfg);
+    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' });
+    assert.ok(!('settings_env' in readJson(cfg, GLOBAL_MANIFEST).managed));
+    captured(() => uninstallGlobal(cfg, false, 'claude'));
+    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '5' });
   });
 });
 
@@ -555,6 +579,8 @@ test('deactivate then reactivate round-trips, and the user prose never moves', (
     assert.ok(!cm.includes('<!-- BEGIN GENESEED -->'), 'the managed block survived the deactivate');
     assert.ok(cm.includes('keep'), "the user's prose was stashed along with the block");
     assert.deepEqual(geneseedCmds(readJson(cfg, 'settings.json')), [], 'hooks are still wired');
+    // The depth cap goes with the hooks, and comes back with them below.
+    assert.ok(!('env' in readJson(cfg, 'settings.json')), 'the depth cap is still wired');
     // The markers stay: a disabled install is still an install, and `status` must find it.
     assert.ok(fs.existsSync(path.join(cfg, VERSION_MARKER)));
 
@@ -566,6 +592,8 @@ test('deactivate then reactivate round-trips, and the user prose never moves', (
     assert.ok(cm.includes('<!-- BEGIN GENESEED -->'));
     assert.ok(cm.includes('keep'));
     assert.ok(geneseedCmds(readJson(cfg, 'settings.json')).length > 0, 'hooks were not re-wired');
+    assert.deepEqual(readJson(cfg, 'settings.json').env, { CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' },
+      'the depth cap was not re-wired');
     assert.ok(!fs.existsSync(path.join(cfg, '.geneseed-disabled')), 'the stash was not cleaned up');
   });
 });
@@ -599,7 +627,8 @@ test('a PROJECT reactivate reads the pack selection off the repo root, not the c
     assert.ok(back.length > 0, 'the reactivate wired no hooks at all');
     assert.deepEqual(back.filter(consentGate), [],
       'the reactivate put the consent gate back into an install whose owner had removed it');
-    assert.ok(back.some((c) => c.includes('git-gate --root') && c.endsWith(' --no-consent')),
+    // `includes`, not `endsWith`: with `craft` alone the ops pack is off too, so `--no-root-scan` follows.
+    assert.ok(back.some((c) => c.includes('git-gate --root') && c.includes(' --no-consent')),
       `the reactivate dropped Law IV's git gate along with the consent: ${back.join(' | ')}`);
   });
 });
@@ -961,11 +990,13 @@ test('the process pack off drops the consent half of the git gate and keeps Law 
     assert.ok(on.some(consentGate), 'the consent gate is missing with the pack ON');
     assert.ok(!off.some(consentGate),
       `the consent gate survived --doctrines craft: ${off.join(' | ')}`);
-    assert.ok(off.some((c) => c.includes('git-gate') && c.endsWith(' --no-consent')),
+    // `includes`, not `endsWith`: process 1 and ops 2 go with their packs too (owner decision
+    // 2026-11-08), so the same command also carries `--no-rule-store --no-root-scan`.
+    assert.ok(off.some((c) => c.includes('git-gate') && c.includes(' --no-consent')),
       `Law IV's git gate went with the process pack: ${off.join(' | ')}`);
-    // NOT a blanket removal. The rule gate answers "standing rule or durable fact?", which is the
-    // user's call rather than a way of running work, and the two SessionStart/learn pairs are not
-    // the process pack's either. Asserting the survivors is what stops this from going green on a
+    // NOT a blanket removal. The rule gate also carries Law I and External Gate, which are not the
+    // process pack's: only its process-1 branch stands down (`--no-rule-store`). The two
+    // SessionStart/learn pairs are not the pack's either. Asserting the survivors is what stops this from going green on a
     // change that simply emptied the table.
     for (const verb of ['rule-gate', 'context', 'learn']) {
       assert.ok(off.some((c) => c.includes(verb)), `${verb} went with the process pack: ${off}`);
@@ -992,7 +1023,10 @@ test('an install with NO Active packs: marker keeps the consent gate (B6, fail c
 
 test('an install whose marker reads `none` loses the consent gate (B6, the other arm)', () => {
   withDir((d) => {
-    fs.writeFileSync(path.join(d, 'CLAUDE.md'), '# Geneseed\n\nActive packs: none\n');
+    // Inside the managed block, where a real install writes it: in a shared CLAUDE.md a marker
+    // outside the block is the user's prose and counts for nothing (`gateCarrierText`).
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'),
+      '# my notes\n<!-- BEGIN GENESEED -->\n# Geneseed\n\nActive packs: none\n<!-- END GENESEED -->\n');
     assert.deepEqual(doctrinesOfDir(d), [],
       '`none` is a real configuration and must read as the empty selection, not as unknown');
 
@@ -1327,6 +1361,8 @@ test('an OpenClaude project emit keeps the repo root clean and excludes ITS glob
     const want = path.resolve(path.join(openclaudeConfigDir(), 'CLAUDE.md'))
       .split(path.sep).join('/');
     assert.deepEqual(s.claudeMdExcludes, [want]);
+    // No depth cap: OpenClaude's source has no such variable (checked on 0.31).
+    assert.ok(!('env' in s), JSON.stringify(s.env));
 
     const ctx = hookCmds(s).filter((c) => c.includes(' context '));
     assert.ok(ctx.length > 0 && ctx.every((c) => c.includes('--host openclaude')),
@@ -1398,6 +1434,8 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     assert.ok(!fs.existsSync(path.join(cfg, 'settings.json')), 'the flat settings.json is the OLD path');
     const settings = readJson(cfg, 'settings', 'settings.json');
     assert.ok(!('claudeMdExcludes' in settings));
+    // No depth cap: Bob documents none, and its settings schema is strict.
+    assert.ok(!('env' in settings));
     assert.deepEqual(Object.keys(settings.hooks).sort(),
       ['PreToolUse', 'SessionStart', 'Stop', 'UserPromptSubmit']);
     assert.equal(settings.hooks.PreToolUse.length, 1);
@@ -2579,7 +2617,8 @@ for (const row of CARRIER_ROWS) {
       fs.mkdirSync(path.dirname(carrier), { recursive: true });
       fs.writeFileSync(carrier, '# carrier\n');
       assert.match(run(), /Done gate:/, 'the fixture did not arm the gate');
-      fs.writeFileSync(carrier, '# carrier\n\nDone gate: off\n');
+      // In the block, as the emit writes it: a CLAUDE.md or AGENTS.md counts nowhere else.
+      fs.writeFileSync(carrier, '# carrier\n\n<!-- BEGIN GENESEED -->\nDone gate: off\n<!-- END GENESEED -->\n');
       assert.doesNotMatch(run(), /Done gate:/, 'Done gate: off was ignored');
     } finally {
       for (const [v, val] of prev) {

@@ -3,6 +3,8 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx'
 
 // `const confirm = useConfirm(); if (await confirm(msg, { title, confirmLabel, tone })) …`
 // `tone: 'danger'` when Confirm destroys something (see ConfirmDialog).
+// `check: { label, checked }` adds one checkbox: Confirm then resolves `{ checked }` (truthy, so
+// a caller's `if (ok)` still reads it) and Cancel still resolves false.
 //
 // The themed replacement for `window.confirm`, whose browser chrome broke the console's
 // look and froze the page's JS while it was open. App mounts ONE provider, inside the
@@ -22,7 +24,8 @@ export function useConfirm() {
 }
 
 export function ConfirmProvider({ children }) {
-  const [ask, setAsk] = useState(null) // { msg, title, confirmLabel, tone } while a question is open
+  const [ask, setAsk] = useState(null) // { msg, title, confirmLabel, tone, check } while open
+  const [checked, setChecked] = useState(false)
   // The pending promise's resolver lives in a ref, not in state: the dialog's `close`
   // event fires after an answer has already settled it, and must find nothing to settle.
   const resolveRef = useRef(null)
@@ -37,6 +40,7 @@ export function ConfirmProvider({ children }) {
       new Promise((resolve) => {
         resolveRef.current?.(false) // a second question supersedes an unanswered one
         resolveRef.current = resolve
+        setChecked(Boolean(opts.check?.checked))
         setAsk({ msg, ...opts })
       }),
     [],
@@ -49,10 +53,20 @@ export function ConfirmProvider({ children }) {
         title={ask?.title || 'Are you sure?'}
         confirmLabel={ask?.confirmLabel}
         tone={ask?.tone}
-        onConfirm={() => answer(true)}
+        onConfirm={() => answer(ask?.check ? { checked } : true)}
         onClose={() => answer(false)}
       >
         {ask?.msg}
+        {ask?.check ? (
+          <label className="confirm-check">
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => setChecked(e.target.checked)}
+            />
+            {ask.check.label}
+          </label>
+        ) : null}
       </ConfirmDialog>
     </ConfirmContext.Provider>
   )

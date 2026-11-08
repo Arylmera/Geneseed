@@ -7,10 +7,14 @@
  * `context` has answered, once per session, and `learn` compares on Stop. Both are stats, no reads.
  *
  * WHAT COUNTS AS APPROVED, per host. Claude and OpenClaude: a Write, Edit or NotebookEdit the
- * transcript shows ran, because a gated tool runs only past the host's prompt. The transcript is read
- * only when a file changed, which keeps the common Stop to the stats. Bob has no transcript and no
- * file-tool write passes its gate, so every change there is reported. OpenCode has this logic in
- * the guard plugin, with the baseline in memory and approval from `tool.execute.after`.
+ * transcript shows ran: a rule write runs only past the host's prompt, and a memory write is the
+ * agent's own to make (owner decision, 2026-11-08). The transcript is read only when a file changed,
+ * which keeps the common Stop to the stats. Bob has no transcript, so every change there is
+ * reported, a free memory write included. With process 1 excluded (`ruleStore: false`, the hook's
+ * `--no-rule-store`) a rule write runs with no prompt, so a rule file is never counted as approved and
+ * the report still shows it; memory keeps its excuse. OpenCode has this logic in the guard plugin, with the
+ * baseline in memory and approval from `tool.execute.after`. A memory write by shell is reported on
+ * every host: that, and the web console, is how the user sees what the agent chose to remember.
  *
  * GENESEED'S OWN WRITES. `learn`, a memory removal and the fold run inside `recordOwnWrites`, which
  * snapshots the store around the run and logs what moved to `memory/.own-writes.json`, as an exact
@@ -36,6 +40,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import path from 'node:path';
 
 import { machineDir } from '../lib/machine-dir.mjs';
+import { gitRootOf } from './gitref.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { sovereignBypass } from './hosts.mjs';
 
@@ -44,13 +49,15 @@ const OWN_LOG = '.own-writes.json';
 const OWN_LOG_CAP = 2000;
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const NAMES_SHOWN = 5;
+// The coined rule-file names, at the end of a `normcase`d path (lower case on Windows).
+const RULE_FILE_RE = /[\\/]user-rules(?:\.draft)?\.md$/i;
 
 /** The store files under one home, as `path -> "size:mtime"`. The guard's `storeScan` is its twin. */
 export function storeScan(home, found = {}) {
   const stamp = (f) => {
     try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}`; } catch { /* absent */ }
   };
-  for (const n of ['user-rules.md', 'PROFILE.md', 'geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json']) stamp(path.join(home, n));
+  for (const n of ['user-rules.md', 'user-rules.draft.md', 'PROFILE.md', 'geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json']) stamp(path.join(home, n));
   const walk = (dir) => {
     let items = [];
     try { items = readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -64,7 +71,21 @@ export function storeScan(home, found = {}) {
 }
 
 const homesOf = (root) => [...new Set([root, machineDir()])];
-const scanAll = (root) => homesOf(root).reduce((found, h) => storeScan(h, found), {});
+const stampOf = (f, found) => {
+  try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}`; } catch { /* absent */ }
+  return found;
+};
+/**
+ * The project layer's rule files, which the context hook loads from the session's repository: its git
+ * root, else `cwd`. Only the two rule names: a repo's own `memory/` folder is not a store.
+ */
+function projectRules(cwd, found) {
+  if (typeof cwd !== 'string' || !cwd) return found;
+  const top = gitRootOf(cwd) ?? path.resolve(cwd);
+  for (const n of ['user-rules.md', 'user-rules.draft.md']) stampOf(path.join(top, n), found);
+  return found;
+}
+const scanAll = (root, cwd = null) => projectRules(cwd, homesOf(root).reduce((found, h) => storeScan(h, found), {}));
 const stateFile = (root, sid) => path.join(root, STATE_DIR, `${String(sid).replace(/[^\w.-]/g, '_').slice(0, 120)}.json`);
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
 
@@ -78,12 +99,12 @@ function saveBaseline(root, sid, stamps) {
  * The session's baseline, written once. SessionStart fires again on resume and compact: keeping the
  * first one means those cannot launder a change made before them. Old sessions' files are dropped.
  */
-export function writeBaseline(root, sid) {
+export function writeBaseline(root, sid, cwd = null) {
   try {
     if (typeof sid !== 'string' || !sid || sovereignBypass(root)) return;
     const f = stateFile(root, sid);
     if (existsSync(f)) return;
-    saveBaseline(root, sid, scanAll(root));
+    saveBaseline(root, sid, scanAll(root, cwd));
     const dir = path.dirname(f);
     for (const n of readdirSync(dir)) {
       const old = path.join(dir, n);
@@ -171,18 +192,22 @@ export function lastStoreReport() {
 /**
  * Compare at a turn's end: the line to show, or null. Rolls the baseline, so a change is said once,
  * and a session with no baseline (installed mid-session) starts one here. `transcript` is null on Bob.
+ * `ruleStore: false`: process 1 is off, so no rule write passed a prompt (the header says why).
  */
-export function storeReport(root, sid, { transcript = null, cwd = null, host = 'claude' } = {}) {
+export function storeReport(root, sid, { transcript = null, cwd = null, host = 'claude', ruleStore = true } = {}) {
   try {
     if (typeof sid !== 'string' || !sid) return null;
     const before = readJson(stateFile(root, sid));
-    if (!before) { writeBaseline(root, sid); return null; }
-    const now = scanAll(root);
+    if (!before) { writeBaseline(root, sid, cwd); return null; }
+    // Every file the baseline names is stamped again, so a session whose cwd moved still compares
+    // the project files it started with.
+    const now = Object.keys(before).reduce((found, p) => stampOf(p, found), scanAll(root, cwd));
     const changed = changedFiles(before, now);
     if (!changed.length) return null;
     saveBaseline(root, sid, now);
     const own = homesOf(root).reduce((log, h) => ({ ...log, ...readJson(path.join(h, 'memory', OWN_LOG)) }), {});
     const approved = typeof transcript === 'string' ? approvedInTranscript(transcript, cwd) : new Set();
+    if (!ruleStore) for (const f of approved) if (RULE_FILE_RE.test(f)) approved.delete(f);
     const files = changed.filter((f) => own[f] !== (now[f] ?? 'gone') && !approved.has(normcase(f)));
     if (!files.length) return null;
     noteForStatus(files, host);

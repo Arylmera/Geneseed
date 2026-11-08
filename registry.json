@@ -574,6 +574,27 @@
       "owner": "Guillaume Lemer",
       "added": "2026-09-06",
       "last_verified": "2026-10-13"
+    },
+    "skills/compose-ops": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-11-08",
+      "last_verified": ""
+    },
+    "skills/gitlab-ci": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-11-08",
+      "last_verified": ""
+    },
+    "skills/jenkins-pipeline": {
+      "status": "experimental",
+      "version": "1.0.0",
+      "owner": "Guillaume Lemer",
+      "added": "2026-11-08",
+      "last_verified": ""
     }
   }
 }

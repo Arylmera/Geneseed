@@ -357,7 +357,7 @@ export function cmdLearn(args) {
   if (hookEvent === 'Stop' && !args.file && install) {
     const said = storeReport(install, meta.session_id, {
       transcript: typeof meta.transcript_path === 'string' ? meta.transcript_path : null,
-      cwd: meta.cwd, host: args.host || 'claude',
+      cwd: meta.cwd, host: args.host || 'claude', ruleStore: !args.noRuleStore,
     });
     if (said && (verdict === 'advisory' || args.host === 'bob')) err(`[geneseed] ${said}\n`);
     else if (said) out(`${JSON.stringify({ systemMessage: said })}\n`);

@@ -382,7 +382,11 @@ export default function Activity() {
   // Already newest first and capped by the server, which also lets the live copy win a
   // duplicate; the key check is only a second guard, so one session never shows twice.
   const liveIds = new Set(sessions.map(cardKey))
-  const endedAll = placeCards(data?.ended, installs).filter((s) => !liveIds.has(cardKey(s)))
+  // The list view keeps the ended sessions; the garden shows live trees only.
+  const endedAll =
+    view.v === 'list'
+      ? placeCards(data?.ended, installs).filter((s) => !liveIds.has(cardKey(s)))
+      : []
 
   // Host and project options come only from values the data carries. Runs and gate asks
   // carry neither, so narrowing by one hides them and says so, rather than showing them as

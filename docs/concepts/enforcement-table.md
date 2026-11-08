@@ -23,11 +23,11 @@ silently guarding the wrong rule after a renumber. See [ADR 0005](../adr/0005-st
 |---|---|---|---|---|---|
 | `sealed-secrets` | law | ask: rule-gate (credential-shaped content outside `.env*`). Switchable per install with `--no-secrets-gate` (see [Exclusions](exclusions.md)): this scan stands down on every host, the guard plugin's path block included | same as Claude Code | block: guard plugin (key/credential file path, or vendor-prefixed secret content); warns only on `.env*` | block (exit 2) |
 | `deletion-is-deliberate` | law | ask: git-gate, only on real data loss judged against the repository's state (the list in [Hooks](hooks.md): a protected branch deleted or force-pushed, an unpushed unmerged branch deleted, unpushed commits abandoned by `reset --hard`, uncommitted work discarded other than by `reset --hard`, a stash dropped, the reflog pruned, files git cannot restore removed); asks when it cannot verify. Switchable per install with `--no-deletion-gate` (see [Exclusions](exclusions.md)): the real-loss check and the Law IV `permission.bash` keys stand down, everything else in this table stays **+** ask: git-gate, catastrophic shell (`rm -rf` of `/`, a drive root or `~`, `mkfs`, `dd` over a raw disk, `format`, fork bomb), whatever the state and even with the switch off | same as Claude Code | ask: permission prompt (`git reflog expire*`, `git gc --prune*`, a force push or delete of `main`/`master` by name) **+** block: guard plugin (catastrophic shell, the hook's check plus its own stricter text match: `rm -rf` of `/`, a drive root or `~`, fork bomb, `format`, `dd` over a raw disk) **+** block: guard plugin (every other real-loss case, the same state-aware decisions as the hook) | block (exit 2) |
-| `persist-insight` | process | ask: rule-gate (a write to `user-rules.md`, `user-rules.draft.md` or a memory store, shared one included) | same as Claude Code | ask: OpenCode's own prompt (`permission.edit`, and `evaluate` on OpenCode 2); the guard plugin refuses a file-tool write the host cannot prompt for | block a file-tool write: exit 2, no ask tier; a parsed shell write only warns |
-| `consent-before-push` | process | ask: git-gate (every `git commit`/`git push`). Togglable: build without the process pack, or drop this rule alone with `--exclude-rules` (see [Exclusions](exclusions.md)). Only this question drops; the `deletion-is-deliberate` gate stays. | same as Claude Code | ask: permission prompt (`git commit*`/`git push*`), wired only when the process pack is on; a `loop/*` push is statically allowed | log only |
+| `persist-insight` | process | ask: rule-gate (a write to `user-rules.md` or `user-rules.draft.md`; memory is written freely, and the [change report](hooks.md#the-change-report) and the web console show it). Togglable: build without the process pack, or drop this rule alone with `--exclude-rules`: the hook goes on every host (`--no-rule-store`), OpenCode's `permission.edit` keys on the rule files too. The change report still lists rule-file changes | same as Claude Code | ask: OpenCode's own prompt (`permission.edit`, and `evaluate` on OpenCode 2); the guard plugin refuses a file-tool write the host cannot prompt for | block a file-tool write: exit 2, no ask tier; a parsed shell write only warns |
+| `consent-before-push` | process | ask: git-gate (every `git commit`/`git push`). A sub-agent's commit or merge (`agent_id` in the payload) in a linked worktree, on a branch that is not shared, passes: a Foreman worker's own batch ([Foreman mode](foreman-mode.md) has the exact conditions). A git hook or `core.hooksPath` that pushes on commit is not seen. A push, or a command that mixes one in, still asks. Togglable: build without the process pack, or drop this rule alone with `--exclude-rules` (see [Exclusions](exclusions.md)). Only this question drops; the `deletion-is-deliberate` gate stays. | same as Claude Code | ask: permission prompt (`git commit*`/`git push*`), wired only when the process pack is on; a `loop/*` push is statically allowed. A glob sees only the command, never the worktree, so a worker's commit still asks | log only |
 | `external-gate` | rigor | ask: rule-gate (a write under a project's `.geneseed/protected-checks.txt` list, or to a gate's own configuration: hook settings, `excludes.json`, `AGENT.md` gate markers, the hook shim) | same as Claude Code | ask: OpenCode's own `permission.edit` rules, written by the emit (every `opencode.json(c)`, the hook settings, the install's `AGENT.md`, `excludes.json`, manifest, plugins, the hook shim); block: guard plugin (the protected-checks list, and the other hosts' Geneseed-only files) | block (exit 2), writes only; a hook `settings.json` only when the edit changes Geneseed's own hook entries |
 | `verify-before-asserting` | law | block at Stop, once per turn: the done gate in `learn` (a turn that edited files, while a check in the project's `.geneseed/done-checks.txt` has not passed since the last edit). Without that file, the checks are inferred from the git root's manifests and only warn (a `systemMessage` at Stop, never a block); switchable per install with `--no-done-gate` (see [Exclusions](exclusions.md)) | same as Claude Code (**unverified live**: a frozen fork, and no check runs a model turn) | remind: context plugin, on the next request (OpenCode 1 only; OpenCode 2 is not judged, and logs so) | not judged: Stop carries no transcript (log line) |
-| `commands-must-return` | ops | ask: git-gate (a recursive scan rooted at a filesystem root: `find /`, `du`, `grep -r`, `rg`, `Get-ChildItem -Recurse` at `/`, `/c`, `C:\`) | same as Claude Code | block: guard plugin (same root-scan pattern) | block (exit 2) |
+| `commands-must-return` | ops | ask: git-gate (a recursive scan rooted at a filesystem root: `find /`, `du`, `grep -r`, `rg`, `Get-ChildItem -Recurse` at `/`, `/c`, `C:\`). Togglable: build without the ops pack, or drop this rule alone with `--exclude-rules`: the check goes on every host (`--no-root-scan`) | same as Claude Code | block: guard plugin (same root-scan pattern) | block (exit 2) |
 
 Bob has no "ask" tier (see [ADR 0007](../adr/0007-gates-fail-closed-per-host-ceiling.md)), so a
 rule the other hosts only ask about either blocks outright on Bob or degrades to a log line.
@@ -35,6 +35,16 @@ Never a silent pass; Bob runs every gate above through one fused command, `tool-
 on the payload shape rather than on separate matchers. OpenCode enforces through two separate
 mechanisms: its own permission prompt (`opencode.json`, static globs) and the guard plugin
 (`tool.execute.before`, pattern matching); a rule can use either or both.
+
+`persist-insight` and `external-gate` also read a shell command's parsed forms on every host: a
+redirect, `tee`, `sed -i`, `cp`, `mv`, `rm`, and the PowerShell writers `Add-Content`, `Set-Content`,
+`Out-File`, `Clear-Content`, `Remove-Item`, `Copy-Item`, `Move-Item`, `New-Item`, `Rename-Item` with
+the aliases `ac`, `sc`, `del`, `copy`, `move`, `ni` and `ren`. A parsed write to a store asks on
+Claude Code, OpenClaude and OpenCode 2, is refused on OpenCode 1, and only warns on Bob. **Shell is
+not a boundary:** `bash -c`, `pwsh -c`, an interpreter and a variable stay unread, so the host's own
+command permission is the backstop, and the [change report](hooks.md#the-change-report) tells you
+afterwards.
+
 See [ADR 0008](../adr/0008-host-parity-ceiling-of-the-weakest-host.md) for why a gate that only
 one host can run still ships for every host it can.
 
@@ -46,6 +56,15 @@ or doctrine rule, so it has no id above. In an application repo whose root `AGEN
 and the next write passes. Off per repo with `mode: off`, for one developer with a personal
 `Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md`, per install with
 `--no-ownership-gate` ([Exclusions](exclusions.md)).
+
+### Switches on two rows above
+
+`--no-external-gate` stops every ask and refusal in the `external-gate` row, on every host, except
+OpenCode's own `permission.edit` keys, which are host configuration and keep asking. It does not
+touch the rule's text: `--exclude-rules rigor.5` does that, and leaves the hook asking.
+`--no-test-note` stops the advisory weakened-test note that *Cure the Cause* carries at edit time
+and at turn end, on every host. That note asks nothing and blocks nothing, so the rule stays
+outside the hook-pinned ids. See [Exclusions](exclusions.md).
 
 | Gate | Claude Code | OpenClaude | OpenCode | Bob |
 |---|---|---|---|---|

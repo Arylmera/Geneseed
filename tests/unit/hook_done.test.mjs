@@ -227,7 +227,7 @@ test('rule-gate: the done list protects itself, its neighbours do not', () => {
     assert.equal(guarded.status, 0, guarded.stderr);
     const dec = JSON.parse(guarded.stdout).hookSpecificOutput;
     assert.equal(dec.permissionDecision, 'ask');
-    assert.match(dec.permissionDecisionReason, /External Gate.*the done gate list itself/);
+    assert.match(dec.permissionDecisionReason, /^This edit changes \.geneseed\/done-checks\.txt.*, which lists the checks that must pass[\s\S]*\(External Gate\)/);
     const free = write('.geneseed/notes.txt');
     assert.equal(free.status, 0);
     assert.equal(free.stdout, '', 'a neighbour of the done list must pass untouched');
@@ -643,6 +643,23 @@ test('learn on Stop: the weakened-test line shares the one JSON document with wh
   assert.equal(last.decision, undefined);
   assert.ok(last.systemMessage.startsWith(LINE), last.systemMessage);
   assert.match(capped.err, /cap reached/);
+});
+
+// `--no-test-note` takes the line and nothing else: `--no-done-gate` takes the checks and, with them, the line.
+test('learn --no-test-note: the line goes, the done checks stay', () => {
+  const extra = ['--no-test-note'];
+  const quiet = project({ checks: null, extra, transcriptRows: [prompt(), weakenIn] });
+  assert.equal(quiet.out, '', 'the line outlived the switch');
+  assert.doesNotMatch(quiet.err, /test weakened/);
+  assert.doesNotMatch(quiet.ledger, /cure-the-cause/);
+  // A listed check still blocks, and the cap still ends the turn with nothing to say.
+  assert.equal(JSON.parse(project({ extra, transcriptRows: [prompt(), weakenIn] }).out).decision, 'block');
+  assert.equal(project({ active: true, extra, transcriptRows: [prompt(), weakenIn] }).out, '');
+  // An inferred check still advises, without the line.
+  const inferred = JSON.parse(project({ checks: null, extra, files: { 'package.json': '{"scripts":{"test":"x"}}' },
+    transcriptRows: [prompt(), weakenIn] }).out);
+  assert.match(inferred.systemMessage, /inferred from package\.json/);
+  assert.ok(!inferred.systemMessage.includes(LINE), inferred.systemMessage);
 });
 
 test('learn on Stop: no weakened test prints nothing; --no-done-gate and Bob say nothing either', () => {

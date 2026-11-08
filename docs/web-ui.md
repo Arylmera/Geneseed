@@ -142,15 +142,22 @@ first read is out, a sentence when it failed, and what it found when it is empty
 before its data. The Constitution waits for the picked install's own overview too: a gate read
 before it would read as armed.
 
-At the foot of the rail sits a **vitals** card — the doctor's verdict, local edits, how long ago the
-harness was built, and a Voice button — so those facts are on screen from every page. It is
-hidden where the rail collapses to icons (≤960px) and returns with the phone drawer. The topbar's
+The rail groups its pages under small mono headers, each with a square in the group's tint: the
+Overview alone, then **Govern** (Constitution, Personal), **Build** (Library, Kits, Loops), **Run**
+(Installs, Activity) and **Help** (Docs, Settings). Each icon sits in a 28 px chip tinted by its group
+(`--sb-<group>-bg` and `-ink` in `styles.css`; light mode has pastel chips with deep ink, 5.3:1 or
+better). The lit page gets a raised row and `aria-current="page"`; a count badge is muted mono on the
+right. The chevron in the header collapses the rail to 64 px of chips (44 px targets, each link with an
+`aria-label` and a tooltip, an expand button on top); the choice is kept per browser under
+`geneseed-rail`. Below 960px the rail is always chips and the toggle is hidden; the phone drawer is
+always full. The rail holds navigation only: the doctor's verdict, local edits and build age live on Doctor, Diff
+and Overview, and the voice gallery on Installs. The topbar's
 breadcrumb starts at the page: it names no install.
 
 **Install pickers.** The console has no install switch. Where a page acts on one install, one
 `InstallPicker`, always labelled *Install:*, sits right above the heading of the view it acts on
 (under the tabs on a tabbed page, over the h1 on a page with none), and starts on the default install; with one active install it is not shown. A form or popover that
-acts on its own install holds the same control: the new-rule form, the rail's Voice popover, and a
+acts on its own install holds the same control: the new-rule form and a
 Library entry with several copies. The Personal page names no harness for what the harnesses share:
 every global install reads one set of rules, one profile and one memory store in the shared tier
 (`~/.config/geneseed`), so Rules, Profile and Memory list each once. Its header states that scope
@@ -158,8 +165,8 @@ once, a list head or profile card says `shared`, and a project install keeps its
 install. Each `/api/installs` and `/api/fleet` row carries `shared`, which the pages read from
 `useInstalls`; `sharedTier` is only a project install's switch. A write goes back to the file an
 entry came from. Notebook stays per install, and its Forget acts on the install of the copy on
-screen. Doctor, Local edits, the Constitution (for its gate switches and doctrine Apply), Loops and
-the rail's Voice popover each keep their own pick (in the browser's localStorage). The Overview is
+screen. Doctor, Local edits, the Constitution (for its gate switches and doctrine Apply), and Loops
+each keep their own pick (in the browser's localStorage). The Overview is
 fleet-wide: each install's own facts (voice, footprint, posture, mode, local edits) sit on
 its row, and a figure still read off a project install set as the default (a suggestion, a lens)
 names that install once two or more are active. A *Needs you*
@@ -177,6 +184,25 @@ catalog it indexes is the whole constitution, so an ontology section, an invaria
 doctrine rule are all reachable by name; <kbd>↑</kbd>/<kbd>↓</kbd> to
 move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to clear. A bottom **Console** drawer
 streams the output of background jobs and keeps their history across reloads.
+
+**The Console drawer is a phase timeline.** The left column lists the runs, newest last. Each
+row has a status dot (green done, amber done with warnings, red failed, pulsing while it runs),
+the action, a short detail (the install, the commits pulled, the installs rebuilt) and the
+duration, with `✗` (failed), `⚠` (warnings) or `running` written beside it. A run whose output
+holds a failure line reads failed even when the job exited 0. The newest run is picked, and a new run takes the pick back from a click. The right
+column shows the picked run: its status pill, a `<duration> · N warnings · N notices` line and
+its numbered phases. A phase is one step the job ran (`$ <argv>`) or one install a `rebuild-all`
+rebuilt (`[rebuild-all] <host>:<scope>`), so an upgrade reads *Update the source*, then one
+*Rebuild* per install. Each phase states *Done*, *N warnings*, *N skipped*, *Failed* or
+*Running*. A warning (`[geneseed] WARN`) is an amber box: a short title, one sentence, and its
+full text under **Full text**. The `[rebuild-all] WARN` printed once after the last install is
+about the whole run, so it shows under **Run warnings**, not under that install. A refused link is a grey notice and counts as skipped. A failure
+line is red in its phase, and a failed job with no failure line marks its last phase failed
+with the last line it printed. A line the reader does not know stays in its phase as printed;
+lines before the first phase (the history keeps only an output's tail) go under **Other
+output**. **Full log** shows the raw output unchanged, for the picked run only. The one reader is
+`web/src/lib/runPhases.js`, and the prefixes it knows are listed at its top. On a narrow
+screen the run list stacks above the detail.
 
 ## Views
 
@@ -229,10 +255,22 @@ streams the output of background jobs and keeps their history across reloads.
   the **Ethos** (five prose sections), the **Dictates** (the nine numbered Rules, with
   a class facet — only non-empty classes render, and two of the six have had no invariant
   since the split), and the **Doctrines** (one group per pack, each marked active or not for
-  this install). Rules I, III and IV each carry a switch for the install's hook gate — the
-  secrets gate, the done gate and the deletion gate (`--no-secrets-gate`, `--no-done-gate`,
-  `--no-deletion-gate`; *Enforced by* reads *Gate off* while one is off) — flipping one asks,
-  then rebuilds the install once; the other Rules read *no gate*. The ownership gate belongs
+  this install). Where an install can be rebuilt, each Rule and doctrine row has two toggle
+  columns, headed *Rule text* and *Hook gate*. Each open band (Ethos, Dictates, every pack) repeats a compact column header under its title, and a folded pack shows none. Screen readers skip it: each row's label already reads its columns. The table sizes itself to the room it has, not to the window (beside the side panels a 1274 px window leaves it about 600 px): below 960 px of table the *Latin name* column folds under the rule name, below 760 px *Status* and *Enforced by* become two chips under it, and below 540 px *No.* moves above the name and the switch columns narrow to 44 px. Rule keeps at least 220 px down to that last step; the switches never drop, and each header drops exactly the columns its rows drop. *Rule text* is the doctrine switch, which stages
+  like any doctrine change; a Dictate cannot be excluded, so its cell is locked, with the reason.
+  *Hook gate* is the hook's switch: Rules I, III, IV and VIII (the secrets gate, the done gate,
+  the deletion gate and the test note: `--no-secrets-gate`, `--no-done-gate`,
+  `--no-deletion-gate`, `--no-test-note`) and doctrine rigor 5 (`--no-external-gate`). Flipping
+  one asks, then rebuilds the install once; *Enforced by* reads *Gate off* while one is off. A
+  hook with no switch shows a locked cell: process 5 reads *with text*, because excluding it
+  drops its commit/push ask (`--no-consent`), and so do process 1 (`--no-rule-store`) and ops 2
+  (`--no-root-scan`): excluding the rule, or its pack, drops its hook in the same rebuild. A row with no hook leaves the cell empty. Each switch's accessible
+  name names its rule (`Deletion gate: hook gate of Deletion Is Deliberate`, `External Gate rule
+  text`). Excluding rigor 5's text also switches its gate off in the same Apply, and the confirm
+  says so; including it again offers *Also turn the external gate back on*, checked by default.
+  A row whose text is excluded while its hook will still ask reads *Text excluded; the hook still
+  asks.*: rigor 5 only, once its exclusion is deployed with the gate armed. Excluding process 1
+  or ops 2 says in the confirm that its hook goes too. The ownership gate belongs
   to no Rule, so its switch (`--no-ownership-gate`) sits inside the Ethos band's *Ownership*
   row and works the same way. Closed, the row reads *Always* (the section's text binds whatever
   the gate does) and *Hook gate* or *Gate off*. Open, it shows the text, then a gate line with
@@ -240,6 +278,11 @@ streams the output of background jobs and keeps their history across reloads.
   can be rebuilt: with no install the row reads *Instruction*. The gate counts in *Gated* but
   not as a Rule or a section, and the Ethos rank's pill counts it while it is off. Every tab,
   view and filter shows the row, like the sections around it.
+  Every opened row that a hook gates (Rules I, III, IV and VIII, doctrines process 1, process 5,
+  rigor 5 and ops 2, and the Ownership section) folds a *What the hook does* block after the rule
+  text and before any gate line: what it triggers on, what each host does, what it does not see,
+  and what still holds with the gate off. It shows with or without an install to rebuild. The
+  text has one home, `GATE_HOOK` in `web/src/lib/constitution.js`; a text-only rule shows none.
   A precedence ladder heads the page (a state pill per rank; ranks 5–6 below). *Gated* and *Changed* narrow the rows; packs fold; staged doctrine changes
   collect in a sticky *Unapplied changes* bar that holds Revert and the page's one Apply.
   Every row expands to its full body, lazily fetched. The rail
@@ -332,12 +375,16 @@ streams the output of background jobs and keeps their history across reloads.
   between polls. Tracking is on or off per install: the tracking
   card has one switch per install, and each switch changes only that install. OpenCode project
   installs have no switch: their sessions appear under, and follow, the OpenCode global switch. Sessions that ended in the last 7 days are listed under
-  **Recently ended**, below the live ones. Every host records it:
+  **Recently ended**, below the live ones, in the list view only; the Garden shows live sessions only. Every host records activity:
   the OpenCode plugin, and `geneseed-hook activity` on Claude Code, OpenClaude and Bob.
   The live sessions open in the **Garden** by default; a **List | Garden** switch (kept in the
   URL with the filters, which apply to both) shows them as a list of cards instead. The Garden
-  shows them as pixel bonsai: one shelf per repository (worktrees stand on their
-  repo's shelf, tagged ⎇), one tree per session. The pot's glaze is the host (clay Claude Code,
+  shows them as pixel bonsai: one wooden shelf per repository (worktrees stand on their
+  repo's shelf, tagged ⎇), one tree per session, its pot on the plank. A brass plate on the
+  plank names the repository and its session count. Under each pot a caption gives the session
+  title (two lines at most; the full title is the tooltip and the link's name), the install and
+  status pills (working green, your move amber, blocked red, idle grey) and `<turns> turns · <context>%`. A
+  narrow screen stacks a shelf's trees onto several planks, the plate on the first. The pot's glaze is the host (clay Claude Code,
   blue Bob, grey OpenCode, violet OpenClaude); the tree grows taller with turns, its crown
   with context fill, and the tips yellow past 80 %. A compaction cuts the crown flat (it
   regrows as context refills) and leaves a notch on the rim. A running sub-agent is a thick
@@ -346,7 +393,9 @@ streams the output of background jobs and keeps their history across reloads.
   cannot tell, so all its blossoms sit on the crown). An amber `!` means the session needs
   you, a red `x` an error, a grey tree an idle session. Two sessions changing the same file
   are tied together in red (same worktree) or dashed amber (two worktrees of the repo): tangled
-  roots in the moss when they stand side by side, a thread under the pots when they do not.
+  roots in the moss when they stand side by side, a thread across the plank when they do not.
+  Two trees on different planks get no thread; the hover card and the link's name still list
+  the shared files.
   Hover a tree for its model, turns, context and compactions, or a pad for its author's files;
   click it to open the session. With no mouse, tap a pad to show its files (a second tap clears them,
   and neither opens the session), or focus the tree and walk its pads with the arrow keys; Escape leaves. Past ten trees, quiet shelves (no session working or waiting on
@@ -398,8 +447,10 @@ streams the output of background jobs and keeps their history across reloads.
   own, about the tool and never one install: a sheet with a section index. **Machine**:
   version + Update (labelled by how this copy updates: git pull, npm install -g, or the command
   to run by hand; on the Overview the button shows only when the pull can run), Add to PATH. **Server**: running · port ·
-  pid · uptime, whether the code matches the disk (with Restart), start-at-login state (read
-  only), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
+  pid · uptime, whether the code matches the disk (with Restart), Start at login (the
+  login launcher's state; it writes the file when absent, updates it when stale and removes it when
+  Geneseed wrote it, each after a confirm that names the file; a hand-written one gets only a
+  link to the guide), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
   **Danger zone**: Stop server, Remove from PATH, and a pointer to each install's own
   Uninstall in Hosts.
 - **Appearance** (the topbar's popover, on every page) — the one home of the skin and the accent (a
