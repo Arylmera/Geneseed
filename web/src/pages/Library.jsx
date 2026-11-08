@@ -373,6 +373,9 @@ export default function Library({
   // The kind on screen counts its own list, so a forget moves the badge with the row.
   const railCount = (k) => (k === sec && listed ? items.length : (overview?.counts?.[k] ?? ''))
   const activeInsts = useInstalls(dataRev)
+  // The install the Loadout panel read: the copy's, else the default (the list's first row).
+  const loadKey = loadInst || activeInsts?.[0]?.id
+  const loadName = loadKey ? installLabel(loadKey) : undefined
   // Install badges only say something when the list spans two installs or more.
   const fleetWide = new Set(items.flatMap((it) => it.installs || [])).size > 1
   // Every install's dot slot, in the install list's order, so a colour holds across the kinds.
@@ -746,7 +749,9 @@ export default function Library({
                 </label>
               ) : null}
               <hr className="hr" />
-              {isAgents ? <Loadout loadout={load?.own} base={load?.base} error={loadErr} /> : null}
+              {isAgents ? (
+                <Loadout loadout={load?.own} base={load?.base} error={loadErr} install={loadName} />
+              ) : null}
               {/* A failed read (a stale bookmark, a retired skill) ends here, not on "Loading…" forever. */}
               {isPrimary ? null : itemErr ? (
                 <p className="sub">
