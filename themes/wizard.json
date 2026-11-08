@@ -38,7 +38,7 @@
   "DESC_SPRING_REVIEWER": "Scries a Spring Boot change with knowledge of the framework — layering, transactions, JPA, configuration, test slices — before it is sealed.",
   "DESC_SPRING_SECURITY": "Wards the Spring Security circle — filter chain, method security, OAuth2/JWT, CORS/CSRF — and audits any working that touches it.",
   "DESC_KUBERNETES_SPECIALIST": "Inscribes and scries the Kubernetes manifests of a Spring Boot service — probes, resources, rollout — so the ward holds.",
-  "DESC_DOCKER_EXPERT": "Binds the Docker image of a Spring Boot service, layered or native, into a lean vessel.",
+  "DESC_DOCKER_EXPERT": "Binds the Docker image of a Spring Boot service, layered or native, into a lean vessel. Image and dev Compose file only; operating a Compose stack is the docker kit's compose-ops.",
   "DESC_DEVOPS_ENGINEER": "Tends the build and delivery pipeline of a Spring Boot service, upon whatever CI the circle already keeps.",
   "DESC_REACT_ENGINEER": "Conjures a React feature in a Vite or webpack app, TypeScript or JavaScript, or makes a broken build or Jest run green.",
   "DESC_REACT_REVIEWER": "Scries a React change with knowledge of the framework — hooks, state, data fetching, accessibility, React security, tests — before it is sealed.",
@@ -160,6 +160,9 @@
   "DESC_SPRING_TESTING": "Cast and mend Spring Boot trials — slices, MockMvc, Testcontainers with service connections, mocked beans.",
   "DESC_REACT": "Conjure or reshape React components in a Vite or webpack app — hooks, state, data fetching, env and build config, accessibility.",
   "DESC_REACT_TESTING": "Cast and mend React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite or webpack.",
+  "DESC_JENKINS_PIPELINE": "Cast and mend a declarative Jenkinsfile or shared library — stages, when, parallel, credentials, CPS and @NonCPS, sandbox approval, JenkinsPipelineUnit.",
+  "DESC_GITLAB_CI": "Cast and mend .gitlab-ci.yml — rules, needs DAG, include and extends, cache and artifacts, protected and masked variables, environments, CI lint.",
+  "DESC_COMPOSE_OPS": "Conjure, inspect and tend a Compose stack of any kind — healthchecks, volumes, pinned images, secrets, limits, logs, networks, safe update and rollback. Not a Spring Boot image build (docker-expert).",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

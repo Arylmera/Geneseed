@@ -1,0 +1,14 @@
+{
+  "description": "CI pipelines on Jenkins (declarative Jenkinsfile, shared libraries) and GitLab CI (.gitlab-ci.yml): job conditions, stage order, reuse, credentials, caching, testing the pipeline itself.",
+  "skills": ["jenkins-pipeline", "gitlab-ci"],
+  "agents": [],
+  "rules": "kits/ci-pipelines/rules.md",
+  "rulesWordBudget": 300,
+  "banned": ["only:", "except:"],
+  "catalogue": {
+    "skills": [
+      "| [jenkins-pipeline]({{DIR_SKILLS}}/jenkins-pipeline.md) | writing or fixing a declarative Jenkinsfile or a shared library: stages, when, parallel, credentials, CPS and @NonCPS, sandbox approval, JenkinsPipelineUnit tests |",
+      "| [gitlab-ci]({{DIR_SKILLS}}/gitlab-ci.md) | writing or fixing .gitlab-ci.yml: rules, needs, include and extends, cache and artifacts, protected and masked variables, environments, CI lint |"
+    ]
+  }
+}

@@ -38,7 +38,7 @@
   "DESC_SPRING_REVIEWER": "<one-line description: reviews a Spring Boot change with framework knowledge — layering, transactions, JPA, configuration, test slices>",
   "DESC_SPRING_SECURITY": "<one-line description: security pass over a Spring Security change — filter chain, method security, OAuth2/JWT, CORS/CSRF>",
   "DESC_KUBERNETES_SPECIALIST": "<one-line description: writes or reviews Kubernetes manifests, probes, resources and rollout for a Spring Boot service>",
-  "DESC_DOCKER_EXPERT": "<one-line description: writes or reviews the Dockerfile and image build (layered or native) of a Spring Boot service>",
+  "DESC_DOCKER_EXPERT": "<one-line description: writes or reviews the Dockerfile and image build (layered or native) of a Spring Boot service; image and dev Compose file only, operating a Compose stack is the docker kit's compose-ops>",
   "DESC_DEVOPS_ENGINEER": "<one-line description: reviews or improves the build and delivery pipeline of a Spring Boot service on the CI already in use>",
   "DESC_REACT_ENGINEER": "<one-line description: implements a React feature in a Vite or webpack app, TypeScript or JavaScript, or makes a broken build or Jest run green>",
   "DESC_REACT_REVIEWER": "<one-line description: reviews a React change with framework knowledge — hooks, state, data fetching, accessibility, React security, tests>",
@@ -160,6 +160,9 @@
   "DESC_SPRING_TESTING": "<one-line description: write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocking beans>",
   "DESC_REACT": "<one-line description: build or change React components in a Vite or webpack app — hooks, state, data fetching, env and build config, accessibility>",
   "DESC_REACT_TESTING": "<one-line description: write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite or webpack>",
+  "DESC_JENKINS_PIPELINE": "<one-line description: write or fix a declarative Jenkinsfile or shared library — stages, when, parallel, credentials, CPS and @NonCPS, sandbox approval, JenkinsPipelineUnit>",
+  "DESC_GITLAB_CI": "<one-line description: write or fix .gitlab-ci.yml — rules, needs DAG, include and extends, cache and artifacts, protected and masked variables, environments, CI lint>",
+  "DESC_COMPOSE_OPS": "<one-line description: write, review or run any Compose stack — healthchecks, volumes, pinned images, secrets, limits, logs, networks, safe update and rollback; not a Spring Boot image build (docker-expert)>",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

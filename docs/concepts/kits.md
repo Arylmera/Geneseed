@@ -37,11 +37,29 @@ The second kit is `react`, for React 18 or 19 apps built with Vite or webpack, i
 
 It is adapted from [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT), rewritten and condensed for Vite and Jest; the webpack side file is first-party. It has no Server Components material: a client-rendered app has no server render.
 
+The third kit is `ci-pipelines`, for CI pipelines on Jenkins and GitLab CI. It adds two skills and no agent:
+
+| Member | Kind | What it is for |
+|---|---|---|
+| `jenkins-pipeline` | skill | Declarative `Jenkinsfile`, shared-library layout (`vars/`, `src/`, `resources/`), CPS and `@NonCPS`, sandbox and script approval, credentials binding, `parallel` and `when`, tests with JenkinsPipelineUnit |
+| `gitlab-ci` | skill | `.gitlab-ci.yml`: `rules:`, the `needs:` DAG, `include:` and `extends:`, caching and artifacts, protected and masked variables, environments, CI lint |
+
+Its rules keep the pipeline in one source of truth, take secrets only from the CI's own store, pin images and tool versions, and run fast feedback first. Its `banned` list refuses GitLab's older job-condition keywords, which GitLab no longer actively develops, in its files. It is first-party.
+
+The fourth kit is `docker`, for Docker and Compose operations on any stack. It adds one skill:
+
+| Member | Kind | What it is for |
+|---|---|---|
+| `compose-ops` | skill | Health-ordered startup (`depends_on` with `condition: service_healthy`), named volumes against bind mounts, pinned tags or digests, `.env` and secrets, restart policies, resource limits, logging, networks, minimal non-root multi-stage images, and safe updates: pull, recreate, roll back |
+
+It does not overlap the spring-boot kit's `docker-expert` agent: that agent builds a Spring Boot service's own image (Buildpacks, layered or native) and its local-dev Compose file, and `compose-ops` operates any Compose stack. Either kit works without the other. `compose-ops` is adapted in part from the `docker-patterns` skill of [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT), rewritten for operations; its skill folder ships `LICENSE-everything-claude-code.txt`.
+
 ### Switching kits on and off
 
 ```bash
 geneseed build --emit claude-global --kits spring-boot
 geneseed build --emit claude-global --kits react,spring-boot
+geneseed build --emit claude-global --kits ci-pipelines,docker
 geneseed build --emit claude-global --kits none
 ```
 

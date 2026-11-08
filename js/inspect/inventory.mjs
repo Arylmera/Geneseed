@@ -94,6 +94,7 @@ export const SKILL_CLASS = {
   'forge-mcp': 'build', bruno: 'build', worktree: 'build', ownership: 'build',
   'spring-boot': 'build', 'spring-data-jpa': 'build', 'spring-testing': 'build',
   react: 'build', 'react-testing': 'build',
+  'jenkins-pipeline': 'build', 'gitlab-ci': 'build', 'compose-ops': 'build',
   'geneseed-code-review': 'review', 'fresh-eyes': 'review', 'security-audit': 'review',
   'roast-me': 'review', 'review-response': 'review', ponytail: 'review',
   commit: 'ship', ship: 'ship', release: 'ship', handoff: 'ship',
