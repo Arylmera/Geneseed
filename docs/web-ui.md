@@ -91,6 +91,15 @@ it. The order is the host order (OpenCode, Claude Code, Bob, OpenClaude), then g
 project. The item's `install` field names the copy, and its `installs` field names every
 install that has the id.
 
+Agents opens on a pinned row for the **primary agent** (the theme's `PRIMARY_AGENT` noun), with a
+**base** pill: every agent inherits its root file. Each agent's detail, the primary's included,
+shows a **Loadout** panel: what the agent loads, block by block (the root file by section, the
+session files or, for a sub-agent, your user rules, both catalogues, the Adept's spec), and the
+rules it follows, marked where its spec cites them. `GET /api/loadout` (the primary) and
+`/api/loadout/<agent>` serve it, install-scoped like `/api/item/`; the figures are the same
+measurements as the Overview's always-on cost. The project root's own `user-rules.md` is not
+counted, because it depends on the session's working directory.
+
 A request that names no install reads the **default install**: the one you chose on the Installs
 page (*Make default* on an active row), while it stays active. With no choice, it is the first
 active one in the console's one install order (`fleetSort`): host order (opencode, claude, bob,
