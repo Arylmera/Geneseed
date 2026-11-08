@@ -112,6 +112,31 @@ beforeEach(() => {
   api.item.mockResolvedValue({ body: 'The canonical text of this entry.' })
 })
 
+describe('Constitution page — a header row under every open band', () => {
+  const heads = (band) =>
+    [...band.querySelectorAll('.law-rowhead > span')].map((e) => e.textContent)
+  const FIVE = ['No.', 'Rule', 'Latin name', 'Status', 'Enforced by']
+
+  it('heads the Ethos, the Dictates and each open pack; a folded pack has none', async () => {
+    const { container } = render(<Laws />)
+    await waitFor(() => expect(container.querySelector('.band-head')).toBeTruthy())
+    // Each header is the next sibling of its band head, and decorative (rows are buttons).
+    const bands = [...container.querySelectorAll('.band-head')]
+    expect(bands.length).toBe(5)
+    for (const b of bands) {
+      let h = b.nextElementSibling
+      if (h.className === 'pack-enable') h = h.nextElementSibling // the install hint sits between
+      expect(h.className).toBe('law-rowhead')
+      expect(h.getAttribute('aria-hidden')).toBe('true')
+      expect(heads(h.parentElement).slice(0, 5)).toEqual(FIVE)
+    }
+    expect(container.querySelectorAll('.law-rowhead').length).toBe(5)
+    fireEvent.click(screen.getByRole('button', { name: 'Craft' }))
+    expect(container.querySelectorAll('.law-rowhead').length).toBe(4)
+    expect(container.querySelector('.pack-wrap .law-rowhead')).toBeTruthy()
+  })
+})
+
 describe('Constitution page', () => {
   it('renders every tier as a band in reading order, and ranks them by precedence', async () => {
     // Queried by the band HEADINGS: the order is the claim, since this page is read top to
@@ -1239,7 +1264,9 @@ describe('Constitution page — the secrets and done gate switches', () => {
     expect(cells[0].textContent).toMatch(/^locked: A Dictate cannot be excluded/)
     expect(cells[1].textContent).toBe('')
     expect(
-      [...container.querySelectorAll('.law-rowhead span')].slice(-2).map((e) => e.textContent),
+      [...container.querySelectorAll('.law-rowhead')[1].querySelectorAll('span')]
+        .slice(-2)
+        .map((e) => e.textContent),
     ).toEqual(['Rule text', 'Hook gate'])
     expect(lawRow(container, 'II').querySelector('.law-enf').textContent).toBe('Instruction')
   })
