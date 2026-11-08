@@ -36,6 +36,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Fixed
 
+- **The Constitution table no longer crushes its Rule column.** It folds by the width it has (a container query), not the window: Latin name first, under the rule name; then Status and Enforced by, as chips under it; at phone width No. moves above the name. Rule keeps 220 px, the two switch columns stay at 44 px or more, and every band's header drops the same columns as its rows. At a 1274 px window, beside the side panels, rule names and "10 asks" no longer wrap word by word and the Latin name no longer overlaps the Status pill.
 - **A gate marker outside the managed block no longer disarms a gate.** In a `CLAUDE.md` or `AGENTS.md`, every gate marker now counts only inside the `<!-- BEGIN GENESEED -->` block. Before, an appended line passed unasked and the next rebuild emitted the flag. A write tool that changes that block asks under External Gate, and an edit outside it stays silent. Bob global's `rules/geneseed.md` is now protected. A shell edit inside the block, or one that puts a fake block before it, stays a limit.
 
 Run `geneseed rebuild-all` before you switch either one off: an older hook shim refuses the new flag, and the gate verb then lets every call through.

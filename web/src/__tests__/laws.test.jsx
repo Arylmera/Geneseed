@@ -137,6 +137,66 @@ describe('Constitution page — a header row under every open band', () => {
   })
 })
 
+// The table folds its columns by container query (styles.css, `@container laws`), which jsdom
+// cannot evaluate. What it can pin is the DOM those queries act on: every header cell that can
+// drop has a row twin of the same `data-col`, in the same order, and every row already carries
+// the lines a dropped column's content moves to (No., Latin name, Status and Enforced by), with
+// the same words as the column it stands in for. The show/hide itself was checked in a browser.
+describe('Constitution page — columns that fold into the rule cell', () => {
+  const cols = (el) => [...el.querySelectorAll('[data-col]')].map((e) => e.dataset.col)
+  const ownCols = (row) =>
+    cols(row.classList.contains('has-toggle') ? row.querySelector('.law-disclosure') : row)
+
+  it('each band header names the same droppable columns as its rows, in order', async () => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...ONT, ...INV, LAW4, ...DOC] })
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: true }))
+    await waitFor(() => expect(container.querySelector('[data-addr="IV"]')).toBeTruthy())
+    const heads = [...container.querySelectorAll('.law-rowhead')]
+    expect(heads.length).toBeGreaterThan(2)
+    let rows = 0
+    for (const h of heads) {
+      expect(cols(h)).toEqual(['no', 'latin', 'status', 'enf'])
+      // The switch columns never drop: a band with switches heads exactly two more cells.
+      for (let r = h.nextElementSibling; r && !r.matches('.law-rowhead, .band-head');) {
+        if (r.classList.contains('law-row')) {
+          rows++
+          expect(ownCols(r)).toEqual(cols(h))
+          const toggles = r.querySelectorAll('.toggle-col > .toggle-cell').length
+          expect(h.children.length).toBe(5 + toggles)
+        }
+        r = r.nextElementSibling
+      }
+    }
+    expect(rows).toBeGreaterThan(5)
+    // Rows with switches sit under a seven-cell header, the Ethos under a five-cell one.
+    expect(container.querySelector('[data-addr="IV"].has-toggle')).toBeTruthy()
+  })
+
+  it('the rule cell holds the folded No., Latin name, Status and Enforced by', async () => {
+    api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, LAW4, ...DOC] })
+    const { container } = render(gatePage({ ...INSTALL, deletionGate: false }))
+    await waitFor(() => expect(container.querySelector('[data-addr="IV"]')).toBeTruthy())
+    const row = container.querySelector('[data-addr="IV"]')
+    const cell = row.querySelector('.law-name')
+    // The name stays the cell's first child: the dimmed-row rules select it that way.
+    expect(cell.firstElementChild.textContent).toBe('Deletion Is Deliberate')
+    expect(cell.querySelector('.law-fold-no').textContent.replace('›', '')).toBe('IV')
+    expect(cell.querySelector('.law-fold-latin').textContent).toBe('Deletio Deliberata')
+    expect(row.querySelector('[data-col="latin"]').textContent).toBe('Deletio Deliberata')
+    const chips = cell.querySelector('.law-fold-chips')
+    expect(chips.querySelector('.law-chip-status').textContent).toBe(
+      row.querySelector('[data-col="status"]').textContent,
+    )
+    expect(chips.querySelector('.law-chip-enf').textContent).toBe('Gate off')
+    expect(chips.querySelector('.law-chip-enf').className).toContain('gate-off')
+    // Decorative copies: the disclosure's label already reads status and enforcement.
+    for (const f of cell.querySelectorAll('.law-fold'))
+      expect(f.getAttribute('aria-hidden')).toBe('true')
+    // A rule with no Latin name gets no empty line for it.
+    expect(container.querySelector('[data-addr="I"] .law-fold-latin')).toBeNull()
+  })
+})
+
 describe('Constitution page', () => {
   it('renders every tier as a band in reading order, and ranks them by precedence', async () => {
     // Queried by the band HEADINGS: the order is the claim, since this page is read top to
@@ -762,7 +822,7 @@ describe('Constitution page — the Ownership row and its gate', () => {
       'ont:ownership',
       'I',
     ])
-    expect(ownRow(container).querySelector('.law-name').textContent).toBe('Ownership')
+    expect(ownRow(container).querySelector('.law-name > span').textContent).toBe('Ownership')
     expect(ownRow(container).querySelector('.law-no .x')).toBeTruthy()
     expect(ownRow(container).querySelector('.law-status').textContent).toBe('Always')
     expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
@@ -1264,7 +1324,7 @@ describe('Constitution page — the secrets and done gate switches', () => {
     expect(cells[0].textContent).toMatch(/^locked: A Dictate cannot be excluded/)
     expect(cells[1].textContent).toBe('')
     expect(
-      [...container.querySelectorAll('.law-rowhead')[1].querySelectorAll('span')]
+      [...container.querySelectorAll('.law-rowhead')[1].querySelectorAll(':scope > span')]
         .slice(-2)
         .map((e) => e.textContent),
     ).toEqual(['Rule text', 'Hook gate'])
