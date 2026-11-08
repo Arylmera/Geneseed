@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 
 import { USER_RULES_TITLE, cmdContext } from '../../js/hosts/hooks-context.mjs';
 import { SESSION_SEEDS } from '../../js/build/stubs.mjs';
@@ -128,5 +129,48 @@ test('the hook entry reads the event off stdin and prints the JSON', () => {
     });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout.replace(/\r\n/g, '\n'), json(`${USER_RULES_TITLE}\n\n----- user-rules.md -----\n# Rules\n\n`));
+  } finally { sb.cleanup(); }
+});
+
+test('SubagentStart: the budget holds for the JSON line, not only the text inside it', () => {
+  // JSON escaping adds one character per `"` and `\`, so rules made of them overran the budget
+  // twice over (14 530 stdout chars, review F1) although their text fit. The line itself, with its
+  // line end counted as two, stays within 9 000; the cut still ends on the pointer line.
+  withRepo((repo, cfg) => {
+    fs.writeFileSync(path.join(cfg, 'user-rules.md'), `${Array(400).fill('"\\\\"\\\\"\\\\"\\\\"\\\\"\\\\"').join('\n')}\n`, 'utf8');
+    const [rc, out] = run({ root: cfg, event: 'SubagentStart' });
+    assert.equal(rc, 0);
+    assert.ok(out.length + 1 <= 9000, `the JSON line is ${out.length} chars`);
+    // The re-render scales the whole budget, the lazy reserve it keeps back included, so it lands a
+    // little under the cap, never far: 7 939 chars on this fixture.
+    assert.ok(out.length > 7500, `${out.length} chars: the cut left too much room unused`);
+    const ctx = JSON.parse(out).hookSpecificOutput.additionalContext;
+    assert.ok(ctx.endsWith(` \u2014 read ${path.join(cfg, 'user-rules.md')} on demand\n\n`), ctx.slice(-200));
+  });
+});
+
+test('SubagentStart: a throw prints nothing, exits 0, and the Activity record still runs', () => {
+  // The failure table of spec 2026-11-08: the sub-agent starts without its rules, not without its
+  // branch in the garden. A preload makes `path.resolve` throw on the rules path, which only the
+  // SubagentStart branch resolves, so the throw lands inside it.
+  const sb = makeSandbox('gs-subrules-throw-');
+  try {
+    const repo = path.join(sb.path, 'repo');
+    const cfg = path.join(repo, '.claude');
+    fs.mkdirSync(cfg, { recursive: true });
+    fs.writeFileSync(path.join(cfg, 'user-rules.md'), '# Rules\n', 'utf8');
+    const preload = path.join(sb.path, 'throw.mjs');
+    fs.writeFileSync(preload, "import path from 'node:path';\nconst r = path.resolve;\n"
+      + "path.resolve = (...a) => { if (a.some((x) => String(x).endsWith('user-rules.md'))) throw new Error('forced'); return r(...a); };\n");
+    const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')), GENESEED_ROOT: repo };
+    delete env.GENESEED_ACTIVITY;
+    delete env.GENESEED_LEARN_CHILD;
+    const r = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'context', '--root', cfg], {
+      env, encoding: 'utf8',
+      input: JSON.stringify({ hook_event_name: 'SubagentStart', session_id: 'sx', agent_id: 'a9', agent_type: 'explorer' }),
+    });
+    assert.deepEqual([r.status, r.stdout], [0, ''], r.stderr);
+    const snap = JSON.parse(fs.readFileSync(path.join(cfg, 'activity', 'sx.json'), 'utf8'));
+    assert.deepEqual(snap.agents.map((a) => a.id), ['a9']);
   } finally { sb.cleanup(); }
 });
