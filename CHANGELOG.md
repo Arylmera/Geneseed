@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **The factory engine and `geneseed factory`.** A factory carries one work item through a graph of stages, each a brick or a whole loop (`loop:<name>`, or the loop a `triage` stage picked from an allowlist). A failure may route back to an earlier stage, but only through a declared cycle with its `max` (5 at most). The state lives in `FACTORY.md` beside the child loop's `LOOP.md`. Every run ends by construction: 30 stage transitions per task, and a run-wide ceiling fixed at the first spec record (20 tasks at most). The CLI has the actions `check`, `list`, `init`, `next`, `record` and `decide`. It refuses an outcome that contradicts the child loop's `LOOP.md`, a dirty tree after a stage outside a loop, and a hand-edited `FACTORY.md` past the engine's bounds. The shipped factories, their bricks, the `factory` Rite and the console page come in later releases. See `docs/reference/factory-actions.md`.
+- **`geneseed loop init --note <text>`** starts the new loop's notes with that text, so a factory can hand on the reason a stage failed.
+
+### Changed
+- **The loop engine ignores `FACTORY.md`** in its scoring and porcelain checks, as it ignores `LOOP.md`. Loop behaviour is otherwise unchanged.
+
 ## [5.0.3] — 2026-11-08
 
 ### Added
