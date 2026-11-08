@@ -74,6 +74,12 @@ describe('Loadout rules and delivery', () => {
     )
   })
 
+  // D1: the header names the install the figures were read from, so a screenshot says which.
+  it('names the install in its header', () => {
+    render(<Loadout loadout={adept('wired')} install="Claude Code · global" />)
+    expect(screen.getByRole('heading', { name: 'Loadout · Claude Code · global' })).toBeTruthy()
+  })
+
   it("counts the primary's user rules: they come with the session files", () => {
     const primary = {
       agent: 'primary',
