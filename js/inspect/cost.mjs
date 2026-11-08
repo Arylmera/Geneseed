@@ -199,6 +199,7 @@ export function agentLoadout({ host, root, dir, agent = 'primary' }) {
     if (host === 'bob' || !isFile(f)) return null;
     spec = frontmatter(readText(f))[1];
   }
+  /** @type {Array<{ id: string, label: string, chars: number, source: string, loadedBy: string, delivery?: string }>} */
   const blocks = rootSections(readText(carrierPath));
   const session = sessionLayers(dir, host);
   const sum = (list) => list.reduce((n, s) => n + s.text.length, 0);
