@@ -50,7 +50,7 @@ The agent then:
 | `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. |
 | The close commit | The last commit removes `FACTORY.md`, and it asks. Its push runs CI again: the agent reads the checks once more and reports the final state. |
 
-Red CI does not stop for you: it sends the work back to the `bugfix` loop with the failing checks as its first note, twice at most. A third red result stops the run.
+Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the one `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run.
 
 ## When it ends
 
