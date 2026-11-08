@@ -1,0 +1,12 @@
+{
+  "description": "Docker and Compose operations for any stack: health-ordered startup, volumes, pinned images, env and secrets, restart, limits, logging, networks, lean non-root images, safe updates and rollback.",
+  "skills": ["compose-ops"],
+  "agents": [],
+  "rules": "kits/docker/rules.md",
+  "rulesWordBudget": 300,
+  "catalogue": {
+    "skills": [
+      "| [compose-ops]({{DIR_SKILLS}}/compose-ops.md) | writing, reviewing or operating a Compose stack or a generic Dockerfile: healthchecks, volumes, image pins, secrets, limits, logs, networks, safe update and rollback |"
+    ]
+  }
+}

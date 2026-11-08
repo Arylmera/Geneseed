@@ -38,7 +38,7 @@
   "DESC_SPRING_REVIEWER": "Walks a Spring Boot change over like a bike before a ride — layering, transactions, JPA, configuration, test slices.",
   "DESC_SPRING_SECURITY": "Goes over Spring Security changes bolt by bolt — filter chain, method security, OAuth2/JWT, CORS/CSRF.",
   "DESC_KUBERNETES_SPECIALIST": "Sets up the Kubernetes manifests for a Spring Boot service — probes, resources, rollout — so it holds on the highway.",
-  "DESC_DOCKER_EXPERT": "Packs the Docker image of a Spring Boot service lean, layered or native, ready to roll.",
+  "DESC_DOCKER_EXPERT": "Packs the Docker image of a Spring Boot service lean, layered or native, ready to roll. Image and dev Compose file only; operating a Compose stack is the docker kit's compose-ops.",
   "DESC_DEVOPS_ENGINEER": "Tunes the build and delivery pipeline of a Spring Boot service, on whatever CI the shop already runs.",
   "DESC_REACT_ENGINEER": "Builds a React feature in a Vite or webpack app, TypeScript or JavaScript, or makes a broken build or Jest run green, frame to finish.",
   "DESC_REACT_REVIEWER": "Walks a React change over like a bike before a ride — hooks, state, data fetching, accessibility, React security, tests.",
@@ -160,6 +160,9 @@
   "DESC_SPRING_TESTING": "Write or fix Spring Boot tests — slices, MockMvc, Testcontainers with service connections, mocked beans — before the ride.",
   "DESC_REACT": "Build or change React components in a Vite or webpack app — hooks, state, data fetching, env and build config, accessibility — and keep it on the road.",
   "DESC_REACT_TESTING": "Write or fix React tests — Jest, Testing Library, userEvent, MSW network mocks, jest-axe, Jest under Vite or webpack — before the ride.",
+  "DESC_JENKINS_PIPELINE": "Write or fix a declarative Jenkinsfile or shared library — stages, when, parallel, credentials, CPS and @NonCPS, sandbox approval, JenkinsPipelineUnit — before the ride.",
+  "DESC_GITLAB_CI": "Write or fix .gitlab-ci.yml — rules, needs DAG, include and extends, cache and artifacts, protected and masked variables, environments, CI lint — before the ride.",
+  "DESC_COMPOSE_OPS": "Write, review or run any Compose stack — healthchecks, volumes, pinned images, secrets, limits, logs, networks, safe update and rollback — before the ride. Not a Spring Boot image build (docker-expert).",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",
