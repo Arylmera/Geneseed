@@ -260,6 +260,28 @@ test('a read-brick porcelain that only touches LOOP.md.tmp does not stop the loo
   assert.deepEqual(recordOutcome(s, BRICKS, 'more', { card, porcelain: '?? LOOP.md.tmp' }), { node: 'apply' });
 });
 
+// A factory run keeps FACTORY.md beside LOOP.md in the same worktree and rewrites it on every
+// `geneseed factory` action: to a child loop it is engine bookkeeping like LOOP.md, so neither a
+// read brick's porcelain check nor the scored diff sees it.
+test('FACTORY.md and FACTORY.md.tmp are engine files: filtered from porcelain and from the scored diff', () => {
+  const s = start(); s.node = 'identify'; s.iteration = 1; s.snapshot = '';
+  assert.deepEqual(recordOutcome(s, BRICKS, 'more', { card, porcelain: ' M FACTORY.md\n?? FACTORY.md.tmp' }), { node: 'apply' });
+  scoreDeclared(s);
+  recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass'); recordOutcome(s, BRICKS, 'pass');
+  assert.deepEqual(scoreDiff(s, [file('FACTORY.md'), file('FACTORY.md.tmp')]), { empty: true, commit: false });
+});
+
+// `initState`'s `notes` seed a loop a factory re-enters after a failure (its carry, D16); the
+// default stays the empty list every existing loop starts with.
+test('initState starts with the notes it is given, and none by default', () => {
+  assert.deepEqual(start().notes, []);
+  const seeded = ['carried: CI red on test/a.test.js'];
+  const s = initState({ title: 't', requirement: 'r', graph: bugfix(), notes: seeded });
+  assert.deepEqual(s.notes, ['carried: CI red on test/a.test.js']);
+  s.notes.push('x');
+  assert.deepEqual(seeded, ['carried: CI red on test/a.test.js'], 'the caller\'s list is copied, not shared');
+});
+
 // F3: rejecting the setup unit (iteration 0, start outside the iteration loop) stops the loop —
 // there is no "back to the head" to reset into.
 test('F3: rejecting the setup unit stops the loop instead of resetting it', () => {

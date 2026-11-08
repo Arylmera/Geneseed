@@ -1,5 +1,5 @@
 /**
- * Where bricks and loop templates come from, and which one wins.
+ * Where bricks, loop templates and factories come from, and which one wins.
  *
  * THREE ORIGINS, ONE LADDER. Shipped (this package's own `src/`), global (the user's, beside
  * `installs.json` under XDG) and project (`<repo>/.geneseed/`, committed, shared with a team).
@@ -86,17 +86,16 @@ function availability(brick, srcRoot) {
 export function loadCatalog({
   projectRoot = process.cwd(), srcRoot = SRC, globalLevel = true,
 } = {}) {
-  const levels = [
-    ['shipped', path.join(srcRoot, 'bricks'), path.join(srcRoot, 'loops')],
-  ];
-  if (globalLevel) {
-    levels.push(['global', path.join(userLoopsDir(), 'bricks'), path.join(userLoopsDir(), 'loops')]);
-  }
-  if (projectRoot) {
-    levels.push(['project', path.join(projectRoot, '.geneseed', 'bricks'), path.join(projectRoot, '.geneseed', 'loops')]);
-  }
+  const levels = [['shipped', srcRoot]];
+  if (globalLevel) levels.push(['global', userLoopsDir()]);
+  if (projectRoot) levels.push(['project', path.join(projectRoot, '.geneseed')]);
   const bricks = new Map(); const templates = new Map(); const problems = []; const overridden = [];
-  for (const [origin, brickDir, loopDir] of levels) {
+  // Factories (`js/factory/`) are a third directory per level, same stem rule. Their parse
+  // problems stay apart from `problems`: that list is `catalogProblems`' and so `loop check`'s,
+  // and a broken factory file must not fail a loop.
+  const factories = new Map(); const factoryProblems = [];
+  for (const [origin, dir] of levels) {
+    const brickDir = path.join(dir, 'bricks'); const loopDir = path.join(dir, 'loops');
     for (const f of listFiles(brickDir, '.md')) {
       const { brick, problems: p } = parseBrick(readText(path.join(brickDir, f)), origin);
       problems.push(...p.map((x) => `bricks/${f} (${origin}): ${x}`));
@@ -117,8 +116,21 @@ export function loadCatalog({
       }
       templates.set(stem, { ...graph, origin });
     }
+    const factoryDir = path.join(dir, 'factories');
+    for (const f of listFiles(factoryDir, '.json')) {
+      let factory;
+      try { factory = JSON.parse(readText(path.join(factoryDir, f))); } catch {
+        factoryProblems.push(`factories/${f}: not JSON`); continue;
+      }
+      const stem = f.slice(0, -'.json'.length);
+      if (factory?.name !== stem) {
+        factoryProblems.push(`factories/${f}: name ${JSON.stringify(factory?.name)} does not match the file name`);
+        continue;
+      }
+      factories.set(stem, { ...factory, origin });
+    }
   }
-  return { bricks, templates, problems, overridden: overridden.sort() };
+  return { bricks, templates, problems, overridden: overridden.sort(), factories, factoryProblems };
 }
 
 /** `catalog`: an already-loaded `loadCatalog(opts)`, for a caller that needs the catalogue

@@ -1,0 +1,13 @@
+{
+  "name": "fixture-broken",
+  "description": "Test fixture: an unknown loop and a cycle nothing declares.",
+  "stages": ["plan", "loop:nope", "review"],
+  "start": "plan",
+  "edges": [
+    { "from": "plan", "on": "pass", "to": "loop:nope" },
+    { "from": "loop:nope", "on": "pass", "to": "review" },
+    { "from": "loop:nope", "on": "fail", "to": "$stop" },
+    { "from": "review", "on": "pass", "to": "$close" },
+    { "from": "review", "on": "fail", "to": "loop:nope" }
+  ]
+}

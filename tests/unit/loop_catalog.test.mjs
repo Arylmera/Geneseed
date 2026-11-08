@@ -122,6 +122,28 @@ test('catalogProblems runs checkGraph over every template and prefixes it', () =
   ]);
 });
 
+// Factories are a third directory per level with the loops' stem rule, project over global over
+// shipped by name. Their parse problems land in `factoryProblems`, never in `problems`, so a
+// broken factory file leaves `catalogProblems` (and so `geneseed loop check`) untouched.
+test('factories load per level by stem, and their problems stay out of catalogProblems', () => {
+  const src = path.join(tmp, 'src3');
+  put(path.join(src, 'factories', 'ship.json'), JSON.stringify({ name: 'ship', stages: ['a'] }));
+  put(path.join(src, 'factories', '_draft.json'), JSON.stringify({ name: '_draft' }));   // skipped
+  put(path.join(src, 'factories', 'broken.json'), '{ nope');
+  put(path.join(src, 'factories', 'misnamed.json'), JSON.stringify({ name: 'other' }));
+  const repo = path.join(tmp, 'repo3');
+  put(path.join(repo, '.geneseed', 'factories', 'ship.json'), JSON.stringify({ name: 'ship', stages: ['b'] }));
+  const cat = loadCatalog({ projectRoot: repo, srcRoot: src, globalLevel: false });
+  assert.deepEqual([...cat.factories.keys()], ['ship']);
+  assert.deepEqual(cat.factories.get('ship'), { name: 'ship', stages: ['b'], origin: 'project' });
+  assert.deepEqual(cat.factoryProblems, [
+    'factories/broken.json: not JSON',
+    'factories/misnamed.json: name "other" does not match the file name',
+  ]);
+  assert.deepEqual(cat.problems, []);
+  assert.deepEqual(catalogProblems({ srcRoot: src, projectRoot: repo, globalLevel: false }), []);
+});
+
 // ---------------------------------------------------------------------------------------------
 // The shipped catalogue — the real `src/bricks` and `src/loops` this package ships.
 

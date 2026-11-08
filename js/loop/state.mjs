@@ -35,6 +35,12 @@
  * that window is the one case it lingers), and `LOOP_FILE_TMP` joins `LOOP_FILE` in both
  * `filterPorcelain` and `scoreDiff`'s exclusion below for exactly that case: a lingering
  * `LOOP.md.tmp` is the engine's own bookkeeping too, never scored work.
+ *
+ * `ENGINE_FILES` is that exclusion, one list for both filters, and it holds `FACTORY.md` (and its
+ * `.tmp`) too: a factory run keeps its own state file beside LOOP.md in the same worktree
+ * (`js/factory/state.mjs`), rewritten by every `geneseed factory` action, so to a child loop it is
+ * bookkeeping exactly as LOOP.md is: scoring it would charge every loop unit for the factory's
+ * transitions, and a read brick would "write" whenever the factory moved.
  */
 import { renameSync, unlinkSync } from 'node:fs';
 import { writeText } from '../lib/fs.mjs';
@@ -46,6 +52,7 @@ const END = '<!-- loop-state:end -->';
 const VERIFY_COMMAND = 'git add -A && git diff --cached --numstat | geneseed loop score --diff';
 export const LOOP_FILE = 'LOOP.md';
 const LOOP_FILE_TMP = `${LOOP_FILE}.tmp`;
+export const ENGINE_FILES = new Set([LOOP_FILE, LOOP_FILE_TMP, 'FACTORY.md', 'FACTORY.md.tmp']);
 const slash = (p) => String(p).replaceAll('\\', '/');
 
 export function renderLoopFile(state) {
@@ -104,9 +111,10 @@ const fmt = (n) => Number(n).toFixed(1);
 /**
  * `contracts`: extra globs (`loop init --contracts`), appended after the graph's own. Every
  * field the engine ever writes is listed here, `gateAmends` included (`decideGate` still reads
- * it with `?.`, for a LOOP.md written before it was listed).
+ * it with `?.`, for a LOOP.md written before it was listed). `notes`: the notes the loop starts
+ * with, for a loop a factory re-enters after a failure (its `carry`, D16) — empty otherwise.
  */
-export function initState({ title, requirement, graph, preset = DEFAULT_PRESET, contracts = [] }) {
+export function initState({ title, requirement, graph, preset = DEFAULT_PRESET, contracts = [], notes = [] }) {
   if (!Object.hasOwn(PRESETS, preset)) throw new Error(`unknown preset ${JSON.stringify(preset)}`);
   const loop = iterationLoop(graph);
   const state = {
@@ -115,7 +123,7 @@ export function initState({ title, requirement, graph, preset = DEFAULT_PRESET, 
     iteration: loop.nodes.includes(graph.start) ? 1 : 0,
     card: null, validated: false, pendingVerify: false, closing: false, counters: {},
     resplit: false, emptyStreak: 0, snapshot: '', visited: [], tests: 'n/a', current: {},
-    notes: [], history: [], gateAmends: {},
+    notes: [...notes], history: [], gateAmends: {},
   };
   if (preset === 'prudent') { state.status = 'awaiting'; state.awaiting = { kind: 'launch' }; }
   return state;
@@ -237,7 +245,7 @@ export function scoreDiff(state, files) {
   if (!Array.isArray(state.contracts) || state.contracts.some((c) => typeof c !== 'string')) {
     throw new Error('LOOP.md: contracts must be a list of file paths or globs');
   }
-  const scored = files.filter((f) => slash(f.file) !== LOOP_FILE && slash(f.file) !== LOOP_FILE_TMP);
+  const scored = files.filter((f) => !ENGINE_FILES.has(slash(f.file)));
   if (!scored.length) {
     // A closing unit (reached $close with a mutate already visited) finishes as done even
     // when this is its second empty diff in a row: there is nothing left to retry into.
@@ -305,13 +313,15 @@ function repairRing(graph, from, to) {
 }
 
 // Porcelain lines are `XY <path>`; strip the 2-char status + space, slash-normalise, drop
-// LOOP.md rows (the engine rewrites it on every action — it is never part of the scored work)
-// and a lingering LOOP.md.tmp (the atomic writer's own sibling — see `writeLoopFile`'s docblock).
-function filterPorcelain(porcelain) {
+// the `ENGINE_FILES` rows: LOOP.md (the engine rewrites it on every action — it is never part of
+// the scored work), a lingering LOOP.md.tmp (the atomic writer's own sibling — see
+// `writeLoopFile`'s docblock) and the factory's FACTORY.md pair. Exported: the factory engine's
+// clean-tree check (J5) filters with this same list, never a copy of it.
+export function filterPorcelain(porcelain) {
   const lines = porcelain.split(/\r?\n/).filter((line) => {
     if (!line) return false;
     const path = line.slice(3).replace(/^"|"$/g, '');
-    return slash(path) !== LOOP_FILE && slash(path) !== LOOP_FILE_TMP;
+    return !ENGINE_FILES.has(slash(path));
   });
   return lines.join('\n').trimEnd();
 }

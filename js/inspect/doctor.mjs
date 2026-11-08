@@ -39,7 +39,7 @@ import {
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut } from '../lib/fs.mjs';
-import { authoringProblems, loopProblems } from './checks-authoring.mjs';
+import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
   checkBuild, colorThemeProblems, renderedPathNotes, renderedProblems, themeParityProblems,
@@ -239,6 +239,7 @@ export function doctorCollect({
   problems = problems.concat(ran('colors', 'Colour themes', colorThemeProblems()));
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
+  problems = problems.concat(ran('factories', 'Factory catalogue', factoryProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
   // Windows: a Claude install's hooks emitted for Git Bash on a machine that no longer has it
   // misbehave under PowerShell — context/learn fail open, and the two gates fail CLOSED
