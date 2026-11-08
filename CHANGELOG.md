@@ -27,6 +27,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 
+- **The Activity Garden stands each repository's trees on a wooden shelf.** A brass plate on the plank names the repository and its session count, replacing the shelf heading. Under each pot a caption shows the session title on two lines at most, the install and status pills (working green, your move amber, blocked red, idle grey) and the turns and context; the floating label above the tree is gone. On a narrow screen a shelf's trees stack onto several planks. The plank and plate have light-mode colours. The plate asks for Fraunces and falls back to the system serif, since no font package is added.
+- **The Activity Garden no longer shows Recently ended sessions.** The list view keeps the section, its fold and the hosts and projects it adds to the filters; in the Garden view only live sessions show and the filters offer only their hosts and projects.
 - **The web console's left rail no longer ends in a status card.** The install, doctor, local edits, build age and Voice button live on Installs, Doctor, Diff and Overview. The voice switch leaves the rail with it: a voice is set per install on Installs, which already rebuilds in place.
 - **The web console's rail is regrouped.** Pages sit under Govern, Build, Run and Help headers, each icon in a chip tinted by its group (light mode has its own pastel pair), and a header button collapses the rail to a 64 px strip of chips. The choice is kept per browser.
 

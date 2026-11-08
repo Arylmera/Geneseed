@@ -3765,29 +3765,64 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 
 /* ---- Activity garden (pages/Activity/Garden.jsx, lib/garden.js) ----
    Each tree is a fixed-width cell (56 tree pixels x 4), so a shelf's collision threads are
-   placed by index. The pixel colours live in garden.js; this block only lays out and moves. */
+   placed by index. The pixel colours live in garden.js; this block only lays out and moves.
+   Each row of trees stands on a wooden plank with a brass name plate; the wood and brass are
+   tokens here, with light twins, and the plate's ink holds 4.5:1 on its brass in both. */
+.app {
+  --gd-plank-top: #6A4429; --gd-plank-bot: #4C2F1C; --gd-plank-hi: #8A6040; --gd-plank-lip: #33200F;
+  --gd-plank-shadow: rgba(0, 0, 0, .55); --gd-bracket-a: #8C939B; --gd-bracket-b: #4E555C;
+  /* Ink on brass, measured (WCAG relative luminance): #241A0C on #C9A35C 7.23:1, on #B48E4B
+     5.63:1; light twin on #E2C27E 9.98:1, on #BE9A55 6.47:1. Every stop holds 5.5:1, so no glyph
+     row of the plate falls under AA. The spec's #9C7A3E gave 4.29:1 and was lightened. */
+  --gd-plate-a: #C9A35C; --gd-plate-b: #B48E4B; --gd-plate-ink: #241A0C;
+  /* Fraunces is not bundled (no new dependency): the plate falls back to the system serif. */
+  --gd-plate-font: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+}
+.app.light {
+  --gd-plank-top: #A9774C; --gd-plank-bot: #85582F; --gd-plank-hi: #C99A6E; --gd-plank-lip: #5E3C1E;
+  --gd-plank-shadow: rgba(60, 35, 10, .28); --gd-bracket-a: #A7AEB5; --gd-bracket-b: #6B737B;
+  --gd-plate-a: #E2C27E; --gd-plate-b: #BE9A55; --gd-plate-ink: #241A0C;
+}
 .gd { margin-bottom: var(--sp-4); }
 .gd-head { align-items: center; margin-bottom: var(--sp-3); }
 .gd-chips { margin-bottom: var(--sp-3); }
 .gd-shelf { position: relative; margin-bottom: var(--sp-4); }
-.gd-shelf-h { margin-bottom: var(--sp-2); }
-.gd-row { position: relative; display: flex; gap: 24px; overflow-x: auto; padding-bottom: 28px; /* off-scale: 24px = GAP in Garden.jsx; 28px holds the far threads */
-  border-bottom: 3px solid var(--line-2); }
+.gd-row { position: relative; display: flex; gap: 24px; width: max-content; max-width: 100%; padding: 0 16px; } /* off-scale: 24px = GAP, 16px = PAD in Garden.jsx */
+.gd-row + .gd-row { margin-top: var(--sp-4); }
+/* The plank: its top meets the pot's foot (tree row 47 x 4 px), a highlight on its top edge, a
+   darker lip and a soft shadow below, and two brackets under it. */
+.gd-plank { position: absolute; left: 0; right: 0; top: 188px; height: 18px; border-radius: 2px; /* off-scale: 188px = row 47 x PX; 18px plank */
+  background: linear-gradient(var(--gd-plank-top), var(--gd-plank-bot));
+  box-shadow: inset 0 1px 0 var(--gd-plank-hi), 0 3px 0 var(--gd-plank-lip), 0 10px 14px -4px var(--gd-plank-shadow); }
+.gd-plank::before, .gd-plank::after { content: ''; position: absolute; top: 21px; width: 12px; height: 14px; /* off-scale: under the 3px lip; bracket size */
+  background: linear-gradient(var(--gd-bracket-a), var(--gd-bracket-b)); }
+.gd-plank::before { left: 12%; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.gd-plank::after { right: 12%; clip-path: polygon(0 0, 100% 0, 100% 100%); }
+/* Two classes deep: each flavour styles its h3 (.fl-operator uppercases it in mono). The plate
+   sits above the threads that cross the plank. */
+.gd-plank .gd-plate { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; max-width: calc(100% - 16px);
+  padding: 2px 10px; border-radius: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; /* off-scale: plate inset */
+  font: 600 12px/16px var(--gd-plate-font); letter-spacing: .02em; text-transform: none; color: var(--gd-plate-ink); /* off-scale: 12px on an 18px plank */
+  background: linear-gradient(var(--gd-plate-a), var(--gd-plate-b));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 1px 2px rgba(0, 0, 0, .45); }
 .gd-tree { position: relative; flex: 0 0 224px; width: 224px; /* = W x PX in Garden.jsx */ color: inherit; text-decoration: none; border-radius: var(--r-sm); }
 .gd-tree:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.gd-label { height: 44px; overflow: hidden; font-size: var(--fs-sm); } /* off-scale: 44px = the threads' top */
-.gd-sub { flex-wrap: nowrap; overflow: hidden; margin-top: 2px; font-size: var(--fs-xs); } /* off-scale: 2px hairline */
+/* The caption under the pot: the title on two lines at most, the pills, then turns and context. */
+.gd-cap { margin-top: var(--sp-2); font-size: var(--fs-sm); }
+.gd-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  overflow-wrap: anywhere; color: var(--text); font-weight: 500; }
+.gd-pills { gap: var(--sp-1); margin-top: var(--sp-1); font-size: var(--fs-xs); }
+.gd-meta { margin-top: var(--sp-1); color: var(--text-2); font-size: var(--fs-xs); }
 .gd-svg { display: block; }
 .gd-svg > g { transition: opacity var(--dur-3); }
 .gd-dimming > g:not(.gd-hot) { opacity: .3; }
-.gd-threads { position: absolute; left: 0; top: 44px; pointer-events: none; overflow: visible; }
+.gd-threads { position: absolute; z-index: 1; left: 16px; top: 0; pointer-events: none; overflow: visible; } /* off-scale: 16px = PAD */
 .gd-thread path { fill: none; stroke-width: 2.5; }
 .gd-thread.red path { stroke: var(--bad); }
 .gd-thread.amber path { stroke: var(--warn); stroke-dasharray: 5 4; }
-/* The hover card overlays the space under the shelf, beneath the hovered tree. It lives outside
-   the row because the row scrolls sideways and would clip it, and it takes no layout room, so
-   a hover never moves the page. It never takes the pointer, so it cannot steal the hover. */
-.gd-info { position: absolute; top: 100%; z-index: 5; margin-top: calc(-1 * var(--sp-3)); pointer-events: none; }
+/* The hover card overlays the space under the hovered tree's plank. It takes no layout room, so
+   a hover never moves the page, and it never takes the pointer, so it cannot steal the hover. */
+.gd-info { position: absolute; top: 100%; z-index: 5; margin-top: var(--sp-1); pointer-events: none; }
 .gd-card { width: 320px; max-width: calc(100vw - 32px); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-sm);
   background: var(--surface); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
 .gd-files { list-style: none; margin: var(--sp-1) 0 0; padding: 0; }
