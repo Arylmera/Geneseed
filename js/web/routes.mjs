@@ -23,7 +23,7 @@ import {
   apiDefaultInstallSet, apiDiff, apiDoctor, apiExcludes, apiFleet, apiInstalls, apiKits, apiLoops, apiLoopsActive, apiOverview, memoCounts,
   apiRecent, apiSetup, apiThemes, activeInstalls, apiUpdate,
 } from './api.mjs';
-import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem } from './catalog.mjs';
+import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem, apiLoadout } from './catalog.mjs';
 import { apiUsage } from './usage-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
@@ -184,6 +184,9 @@ export const PREFIX_ROUTES = [
     const fleet = m[1] !== 'law' ? fleetOf(base) : undefined;
     return apiItem(state, m[1], percentDecode(m[2]), fleet);
   }],
+  // /api/loadout/<agent> — one Adept's loadout in the named install (`apiLoadout`); the primary
+  // is the bare `/api/loadout`, since it is no catalogue item.
+  ['/api/loadout/', (state, p) => apiLoadout(state, percentDecode(p.slice('/api/loadout/'.length)) || 'primary')],
   // The sid is passed through unquoted — `apiActivityDetail`'s safe-name scheme is what
   // makes the lookup safe, rather than a check out here.
   ['/api/activity/', (state, p) => apiActivityDetail(
@@ -220,6 +223,7 @@ export const STATE_ROUTES = {
   // line indices, and the fingerprint every mutation must send back is what this GET
   // answers — a daemon whose POST worked and whose GET 501'd would have no way to obtain one.
   '/api/rules': apiRules,
+  '/api/loadout': (state) => apiLoadout(state),
   '/api/mcp': apiMcp,
   '/api/loops': apiLoops,
   '/api/loops/active': apiLoopsActive,

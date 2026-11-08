@@ -137,6 +137,7 @@
   "DOCTRINES": "Instructions",
   "AGENT": "Engineer",
   "AGENTS": "Engineers",
+  "PRIMARY_AGENT": "Race Driver",
   "SKILL": "Setup",
   "SKILLS": "Setups",
   "MEMORY": "Debrief",

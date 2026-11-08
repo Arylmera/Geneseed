@@ -137,6 +137,7 @@
   "DOCTRINES": "Directives",
   "AGENT": "Driver",
   "AGENTS": "Drivers",
+  "PRIMARY_AGENT": "Lead Driver",
   "SKILL": "Manoeuvre",
   "SKILLS": "Manoeuvres",
   "MEMORY": "Telemetry",

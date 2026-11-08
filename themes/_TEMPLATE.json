@@ -137,6 +137,7 @@
   "DOCTRINES": "<plural of DOCTRINE — the tier/section noun>",
   "AGENT": "<singular noun for an agent in this theme, e.g. Agent / Adept>",
   "AGENTS": "<plural of AGENT>",
+  "PRIMARY_AGENT": "<the main agent, the one every agent inherits from>",
   "SKILL": "<singular noun for a skill in this theme, e.g. Skill / Rite>",
   "SKILLS": "<plural of SKILL>",
   "MEMORY": "<noun for the memory store in this theme, e.g. Memory>",

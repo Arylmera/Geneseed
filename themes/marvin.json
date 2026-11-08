@@ -137,6 +137,7 @@
   "DOCTRINES": "Guidelines",
   "AGENT": "Subroutine",
   "AGENTS": "Subroutines",
+  "PRIMARY_AGENT": "Main Brain",
   "SKILL": "Routine",
   "SKILLS": "Routines",
   "MEMORY": "Memory Bank",

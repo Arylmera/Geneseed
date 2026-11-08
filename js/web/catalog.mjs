@@ -16,8 +16,10 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { GLOBAL_MANIFEST, isGlobalInstall, resolvePath } from '../hosts/hosts.mjs';
-import { doctrinesForBuild, excludedRulesOfDir, readMaybe } from '../hosts/installs.mjs';
-import { frontmatter, readFacts } from '../hosts/memory-files.mjs';
+import { EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, readMaybe } from '../hosts/installs.mjs';
+import { frontmatter, parseRules, readFacts } from '../hosts/memory-files.mjs';
+import { emittedHost, sessionFiles } from '../hosts/hooks-context.mjs';
+import { agentLoadout } from '../inspect/cost.mjs';
 import {
   SKILL_CLASS, entityStatus, loadRegistry, tuiInventory,
 } from '../inspect/inventory.mjs';
@@ -800,4 +802,36 @@ export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
       install: from.install, installs: has.map((v) => v.install).filter((k) => k !== null) };
   }
   throw new NotFound(type);
+}
+
+/**
+ * `GET /api/loadout` (the primary) and `/api/loadout/<agent>`: what one agent of the named install
+ * loads, and the rules it follows (spec 2026-11-08, agent loadout). The blocks are `agentLoadout`'s,
+ * the one writer of those figures (js/inspect/cost.mjs); this adds what only the install's
+ * inventory knows. `rules`: the Dictates, the doctrine rules built in (pack on, rule not excluded),
+ * and each user-rules layer's rules by their `R<n>` ids, as `/api/rules` parses them. An Adept's
+ * `citedBySpec` marks a rule its rendered spec cites: the render writes a citation as `*<Principle>*`,
+ * matched against this install's own rule names, so an unmatched name marks nothing. `noun` is the
+ * theme's name for the primary agent. An agent the install lacks, or no carrier, is a 404.
+ */
+export function apiLoadout(state, agent = 'primary') {
+  const [host] = EMIT_HOST_SCOPE.get(state.emit || '') ?? ['opencode'];
+  const loadout = agentLoadout({ host, root: state.root ?? state.target, dir: state.target, agent });
+  if (!loadout) throw new NotFound(agent);
+  const inv = state.inventory;
+  const body = agent === 'primary' ? '' : (inv.agents.find((a) => a.name === agent)?.body ?? '');
+  const cited = (title) => Boolean(body) && body.includes(`*${title.split(' \u00b7 ').pop()}*`);
+  const rules = [
+    ...inv.laws.map((l) => ({ kind: 'dictate', id: l.num, title: l.title, citedBySpec: cited(l.title) })),
+    ...(inv.doctrines ?? []).filter((p) => p.active).flatMap((p) => p.rules.filter((r) => r.active !== false)
+      .map((r) => ({ kind: 'doctrine', id: `${r.pack}.${r.n}`, title: r.title, citedBySpec: cited(r.title) }))),
+  ];
+  let layers = [];
+  try { layers = sessionFiles(state.target, emittedHost(host)).filter((s) => s.rel === 'user-rules.md'); } catch { /* none */ }
+  for (const s of layers) {
+    for (const r of parseRules(s.text)[0]) {
+      rules.push({ kind: 'user', id: `R${r.id}`, title: r.title, layer: s.label || 'install', citedBySpec: false });
+    }
+  }
+  return { ...loadout, rules, noun: loadTheme(makeCfg(), state.theme).PRIMARY_AGENT ?? 'Primary agent' };
 }

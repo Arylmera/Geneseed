@@ -100,3 +100,29 @@ test('one measurement: the loadout\'s parts add up to alwaysOnCost\'s', () => wi
     { carrier: cost.carrier, context: cost.context, skills: cost.skills, agents: cost.agents });
   assert.deepEqual([cost.carrier, cost.context], [27, 12], 'the fixture itself moved');
 }));
+
+test('the console adds the rules: Dictates, built-in doctrine rules, user rules, and what a spec cites', async () => {
+  // `apiLoadout` (js/web/catalog.mjs) over a hand-made inventory. A rule counts only when built in:
+  // its pack on and the rule not excluded. A spec cites a rule as `*<Principle>*`, the English half
+  // of its title; the Dictate it does not name stays unmarked. The user rule comes from the
+  // install's `user-rules.md` (`R1`, as /api/rules parses it), and imperial names the primary.
+  const { NotFound, apiLoadout } = await import('../../js/web/catalog.mjs');
+  withInstall(CTX, (d) => {
+    fs.writeFileSync(path.join(d, 'user-rules.md'), '# Rules\n\n## R1 \u2014 Seal only your worktree\n\nBody.\n');
+    const state = { emit: 'claude-global', root: d, target: d, theme: 'imperial', inventory: {
+      laws: [{ num: 'I', title: 'Arcana Sigillata \u00b7 Sealed Secrets' }],
+      doctrines: [
+        { active: true, rules: [{ pack: 'craft', n: 6, title: 'Ictus Minimus \u00b7 Smallest Viable Diff' },
+          { pack: 'craft', n: 7, title: 'Unus \u00b7 One Writer Per Value', active: false }] },
+        { active: false, rules: [{ pack: 'ops', n: 1, title: 'Arma \u00b7 Tool Discovery' }] }],
+      agents: [{ name: 'rev', body: 'Keep the diff small (*Smallest Viable Diff*).' }] } };
+    const got = apiLoadout(state, 'rev');
+    assert.equal(got.noun, 'Servant');
+    assert.deepEqual(got.rules, [
+      { kind: 'dictate', id: 'I', title: 'Arcana Sigillata \u00b7 Sealed Secrets', citedBySpec: false },
+      { kind: 'doctrine', id: 'craft.6', title: 'Ictus Minimus \u00b7 Smallest Viable Diff', citedBySpec: true },
+      { kind: 'user', id: 'R1', title: 'Seal only your worktree', layer: 'install', citedBySpec: false },
+    ]);
+    assert.throws(() => apiLoadout(state, 'nobody'), NotFound);
+  });
+});
