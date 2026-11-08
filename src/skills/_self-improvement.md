@@ -9,12 +9,14 @@ write, and no rebuild touches them.
 Close each run with one beat of reflection on the {{SKILL}} itself:
 - A step misled, a needed step was missing, or the trigger fired wrongly — that
   is a flaw in this file. Write the exact correction (trigger, procedure, or
-  done-when) into the notes file, with the user's assent ({{LAW:one-intent-one-act}}), as one line:
-  `- [skill|general] <correction> — seen: <what happened, against what you expected> (<date>)`.
-  `seen:` is the evidence the correction is later judged by; `general` marks one
-  that would fix other {{SKILLS}} too. Never
+  done-when) into the notes file on your own, with no prompt, as one line:
+  `- [skill|general] <correction> [— situation: <when it applies>] — seen: <what happened, against what you expected> (<date>)`.
+  `situation:` bounds where the correction holds; `seen:` is the evidence it is
+  later judged by; `general` marks one that would fix other {{SKILLS}} too. Never
   edit this file: it is a rendered copy, a rebuild overwrites it, and the doctor
-  reports the edit as drift. `geneseed diff` carries the notes back to the source.
+  reports the edit as drift. `geneseed diff` carries the notes back to the source;
+  folding a note into the source is the user's call, through the skill-forge
+  {{SKILL}} ({{LAW:one-intent-one-act}}).
 - Keep the notes sharp: amend or delete a line before adding one — a line with no
   `seen:`, or whose `seen:` no longer happens, goes first — and prune past about
   twenty lines.
@@ -26,10 +28,11 @@ Close each run with one beat of reflection on the {{SKILL}} itself:
   runs end here.
 <!-- LEAN:else -->
 One beat of reflection on this {{SKILL}}: a step that misled, a missing step, or a
-wrong trigger is a flaw in this file — write the exact correction, with the user's
-assent ({{LAW:one-intent-one-act}}), into `{{PATH_NOTES}}/skill-notes/<name>.md` (`<name>` is this {{SKILL}}'s
-name) as `- [skill|general] <correction> — seen: <what happened vs expected> (<date>)`,
-never into this rendered file, which a rebuild overwrites. Read that notes
+wrong trigger is a flaw in this file — write the exact correction on your own, with no
+prompt, into `{{PATH_NOTES}}/skill-notes/<name>.md` (`<name>` is this {{SKILL}}'s
+name) as `- [skill|general] <correction> [— situation: <when it applies>] — seen: <what happened vs expected> (<date>)`,
+never into this rendered file, which a rebuild overwrites. Folding a note into the
+source is the user's call ({{LAW:one-intent-one-act}}). Read that notes
 file before the first step when it exists; it wins where it disagrees. Keep it short.
 A lesson that is not about this file goes to {{MEMORY}} only if it clears
 {{DOCTRINE:persist-insight}}'s bar. Nothing learned — move on.

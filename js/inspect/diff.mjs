@@ -420,7 +420,8 @@ export function improvementsMd(target, theme, allFiles, when, notes = []) {
   if (notes.length) {
     lines.push('# Self-improvement notes', '',
       'Corrections the agent recorded against a skill or agent instead of editing it.',
-      'Fold each one into the matching file under `src/`, then clear the note. Judge it by',
+      'Folding one into the matching file under `src/` is the user\'s call: run the skill-forge',
+      'probe first (unless it is a trivial wording fix), then clear the note. Judge it by',
       'its `seen:` evidence — a line without one is a claim, not a lesson — and weigh a',
       '`[general]` line as a law, doctrine or memory rather than an edit to that one file.', '');
     for (const n of notes) {
