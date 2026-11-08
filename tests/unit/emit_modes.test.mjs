@@ -463,7 +463,7 @@ test('the rendered learn-mode carries every checkpoint rule its shared include h
     'When you write into `.geneseed/` and `.geneseed/.gitignore` is absent, create it in the same step with exactly the content below, and show it.',
     // A file holding only `*` is Geneseed's former output, so it is upgraded; nothing else is.
     'If it holds only `*`, replace it with the block below. Never overwrite any other content, and never touch the root `.gitignore` for it.',
-    '```gitignore /* !/.gitignore !/bricks/ !/loops/ !/protected-checks.txt !/done-checks.txt ```',
+    '```gitignore /* !/.gitignore !/bricks/ !/loops/ !/factories/ !/protected-checks.txt !/done-checks.txt ```',
     'The open checkpoint lives in the conversation, not the file.',
     'A restart or a compaction is never an approval: after one, re-ask any step not approved in the visible conversation.',
     '`## Preferences` holds general rules phrased as rules, never dated events;',

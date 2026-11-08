@@ -45,19 +45,21 @@ that is not a loop never changes the worktree, and `factory record` refuses a di
 one. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
 names the run it belongs to.
 
-## The shipped factory
+## The shipped factories
 
 | Factory | Stages |
 | --- | --- |
 | `bug-report-to-fix` | `intake` → `loop:bugfix` → `pr-open` → `merge-gate` → `retro` → `$close`. A red `merge-gate` sends the fix back to `loop:bugfix`, twice at most (cycle `ci`) |
+| `issue-to-pr` | `intake` → `triage` → `loop:$triaged` → `pr-open` → `merge-gate` → `retro` → `$close`. `triage` picks the loop from the factory's `loops`: `bugfix`, `feature`, `deps-upgrade` or `refactor`. A red `merge-gate` sends the work back to that same loop, twice at most (cycle `ci`) |
 
-The four bricks it adds:
+The bricks they add:
 
 | Brick | Does | Outcomes |
 | --- | --- | --- |
 | `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria | `pass`, `fail` |
+| `triage` | Reads the work item and picks one loop from the factory's `loops`, with its reason. The engine refuses a loop outside that list. `fail` when none fits | `pass`, `fail` |
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
-| `merge-gate` | Waits for the PR's CI, 30 minutes at most. A repo with no CI reports `none`, and you decide | `pass`, `fail`, `none` |
+| `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide | `pass`, `fail`, `none` |
 | `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, and keeps only a lasting lesson in memory | `pass` |
 
 The run report is git-ignored by the `.geneseed/.gitignore` Geneseed seeds. Where no such file is

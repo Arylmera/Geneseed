@@ -43,7 +43,7 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
       'ci-triage', 'compat-check', 'deps-audit', 'docs-update', 'done-check', 'fitness-define',
       'flake-check', 'flake-repro', 'identify', 'intake', 'lint', 'merge-gate', 'migration-plan',
       'mutation-check', 'plan', 'pr-open', 'red-test', 'reproduce', 'retro', 'review', 'security-scan',
-      'spec', 'test', 'upgrade-scout',
+      'spec', 'test', 'triage', 'upgrade-scout',
     ]);
     assert.deepEqual(r.out.bricks[2], {
       name: 'apply', description: "Implement the current card's intent, touching only its declared write set.",

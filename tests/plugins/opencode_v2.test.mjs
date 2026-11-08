@@ -509,7 +509,7 @@ test("workflow: the first trace write creates .geneseed/.gitignore, personal by 
   const res = await runDemoIn(dir)
   assert.match(res, /workflow "demo" complete/)
   assert.equal(readFileSync(path.join(dir, ".geneseed", ".gitignore"), "utf8"),
-    "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n")
+    "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n")
 })
 test("workflow: an existing .geneseed/.gitignore is left byte-identical", async () => {
   const dir = path.join(tmp, "gi-present")
@@ -523,9 +523,9 @@ test("workflow: an existing .geneseed/.gitignore is left byte-identical", async 
 // the allowlist, and it hid team bricks — so it is upgraded. `*` plus anything else is a
 // user's edit and stays byte-identical.
 for (const [label, before, after] of [
-  ["'*\\n' is upgraded", "*\n", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"],
-  ["'*\\r\\n' is upgraded", "*\r\n", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"],
-  ["'*' with no newline is upgraded", "*", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"],
+  ["'*\\n' is upgraded", "*\n", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n"],
+  ["'*\\r\\n' is upgraded", "*\r\n", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n"],
+  ["'*' with no newline is upgraded", "*", "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n"],
   ["'*' plus a user line is left byte-identical", "*\n# mine\n", "*\n# mine\n"],
 ]) {
   test(`workflow: an old .geneseed/.gitignore — ${label}`, async () => {

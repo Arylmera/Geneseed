@@ -59,6 +59,7 @@ The setup writes no personal state; it only removes your `Setup: declined` line,
 !/.gitignore
 !/bricks/
 !/loops/
+!/factories/
 !/protected-checks.txt
 !/done-checks.txt
 ```
