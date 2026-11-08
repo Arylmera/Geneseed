@@ -17,7 +17,23 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    a trigger phrase, a done-when), not a new file — in an installed harness, a
    shipped {{SKILL}} takes that edit in its notes file, since a rebuild overwrites it.
    Name the skill by its domain, not the situation that prompted it.
-2. **Write the trigger first, then the procedure.** Start from
+2. **Probe a note before folding it** (a skill note or an agent note). Notes are
+   written freely, so a note is a claim until a contrasted run supports it. Pick one
+   past task in the note's `situation:` (or, without one, the circumstance its `seen:`
+   names) whose original ask text still exists: an issue, or a request in a transcript.
+   Run it as two dispatched {{AGENTS}} (two sessions where the host has none), each
+   from the pre-fix revision in its own throwaway worktree, which isolates only the
+   code. The brief states each arm's note state: A gets the rendered file and the order
+   to read no notes file; B gets the rendered file with that one note inlined. Never
+   move or edit the notes file. Then run the [fresh-eyes {{SKILL}}](fresh-eyes.md) on
+   the verbatim ask, with the note withheld. It derives and freezes ONE rubric
+   (its step 4), and one validator rules both deliverables, labelled X and Y in random
+   order; two validators need the same frozen list. B wins when it passes a criterion A
+   fails, or shows a stated process gain on that rubric (fewer steps, no wrong turn).
+   Fold only on a win, and state the observation. On a tie or a loss, the user decides
+   to keep or delete the note. The cost is two runs and a validator per note. Skip the
+   probe for a trivial wording fix: the user decides it directly.
+3. **Write the trigger first, then the procedure.** Start from
    `{{DIR_SKILLS}}/_template.md`. The purpose line says *what*; the **Trigger** line
    says *when*, in the words a user would actually say and the situations the model
    would actually meet — the emitted `description:` is purpose + trigger, and it is
@@ -33,12 +49,12 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    text, and the quoting skill silently drops out of the model's catalogue.
    A name the host already owns as a built-in command (Claude Code ships
    `security-review`, `code-review`, `simplify`, `init`) is shadowed — pick another.
-3. **Test the trigger against its neighbours.** For three real asks the skill should
+4. **Test the trigger against its neighbours.** For three real asks the skill should
    catch and two it should not, decide from the descriptions alone which skill fires.
    A wrong pick is a trigger to sharpen — or a sign two skills should be one. A trigger
    that needs a "not this, use that" clause to be safe is a trigger with a fuzzy edge;
    fix the edge rather than adding the clause.
-4. **Register it where the host expects.** In an *installed* harness: the file under
+5. **Register it where the host expects.** In an *installed* harness: the file under
    `{{DIR_SKILLS}}/`, one row in AGENT.md §4's table, then `geneseed doctor` — it fails
    if the table and the files disagree. In the *Geneseed source repo* the cost is the
    full satellite set (`docs/extending.md` §3): the file, the §4 row, `DESC_<NAME>` in
@@ -46,14 +62,14 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    `doctor --all` and the suites. A skill that bundles a script or several files is a
    folder skill (`<name>/SKILL.md` + `VENDOR.md`), listed in `VENDORED_SKILL_DIRS`.
    Text adapted from outside gets a `src/upstreams.json` entry and a `CREDIT` token (docs/extending.md §3, in the Geneseed source repo).
-5. **Merge or retire honestly.** When two skills fold into one: keep the best steps of
+6. **Merge or retire honestly.** When two skills fold into one: keep the best steps of
    each, rewrite the exit so the survivor routes to what the retired one led to, and
    remove the retired file and *every* reference to it (table row, sibling links, theme
    tokens, registry, README) — a dangling link is a build failure, a dangling trigger
    phrase is a silent miss. Retirement is deletion; get consent ({{LAW:deletion-is-deliberate}}).
-6. **Verify by rendering.** Build or re-emit, open the emitted `SKILL.md`, read the
+7. **Verify by rendering.** Build or re-emit, open the emitted `SKILL.md`, read the
    frontmatter description as the host will, and confirm the body carries no
-   unresolved token or dead link (`doctor`, or `geneseed-build --validate-only`).
+   unresolved token or dead link (`doctor`, or `geneseed validate`).
    Show the user the diff and the emitted description before it lands ({{LAW:one-intent-one-act}}).
 
 ## Done when
@@ -61,5 +77,7 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
   domain; the emitted description names both purpose and trigger and wins its five
   test asks against the neighbours; every satellite the host or the repo demands is in
   place, `doctor` is green, and the user saw and accepted the change.
+- A folded note won its contrasted probe with a stated observation, or was a
+  trivial wording fix the user accepted directly.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

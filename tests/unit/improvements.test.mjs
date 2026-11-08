@@ -192,6 +192,9 @@ test('the self-improvement notes are collected and carried into the report', () 
     assert.ok(md.includes('## `notebook/skill-notes/debug.md`'), md);
     assert.ok(md.includes('- step 3: run the failing test alone first'), md);
     assert.equal((md.match(/```markdown/g) ?? []).length, 2);
+    // Notes are written freely, so the report must not tell the reader to fold them blind: it
+    // names the user's call and the skill-forge probe (2026-11, notes written with no prompt).
+    assert.ok(md.includes("is the user's call: run the skill-forge\nprobe first (unless it is a trivial wording fix)"), md);
   });
   // No notebook at all is no notes, not a throw — most installs have never written one.
   withDir((d) => assert.deepEqual(collectNotes(d), []));
