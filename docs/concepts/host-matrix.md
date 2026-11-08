@@ -21,6 +21,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 | Standing-rule write needs your call | 🔒 ask³ | 🪝 ask | 🪝 block¹ | 🪝 ask² |
 | User-only skills hidden from the model | 🔒 `permission.skill` deny | ✅ `disable-model-invocation` | ✅ `/`-command, no skill | ✅ `disable-model-invocation` |
 | Sovereign-repo exclusions⁵ | ⚙️ plugins stand down | ✅ `claudeMdExcludes` | ✅ rules shadow stub | ✅ `claudeMdExcludes` |
+| Subagent depth capped at two ([Foreman mode](foreman-mode.md)) | ✅ `subagent_depth` | ✅ `env` setting | ➖ undocumented | ➖ no cap in the host |
 | MCP server wiring | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcpServers` |
 | Colour themes · LSP · workflow runner · primary agent · `/`-commands | ✅ | ➖ | ➖ | ➖ |
 

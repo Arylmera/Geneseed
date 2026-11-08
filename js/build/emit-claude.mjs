@@ -11,7 +11,7 @@ import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.m
 import { ensureAgentOverridesStub, writeAliasCommands } from '../hosts/opencode.mjs';
 import {
   managedBlockRemove, managedBlockWrite, mergeClaudeSettings,
-  unwireClaudeExcludes, unwireClaudeSettings, wireClaudeExcludes,
+  unwireClaudeEnv, unwireClaudeExcludes, unwireClaudeSettings, wireClaudeEnv, wireClaudeExcludes,
 } from '../hosts/settings.mjs';
 import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
@@ -281,6 +281,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   if (oldSf !== settingsName) {
     unwireClaudeSettings(path.join(cfgDir, oldSf), get(old, 'settings_hooks') || []);
     unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
+    unwireClaudeEnv(path.join(cfgDir, oldSf), get(old, 'settings_env'));
   }
   // The merge prunes recorded groups that are no longer canonical and returns the
   // COMPLETE current claim set — store it as-is; unioning with prior would resurrect the
@@ -293,6 +294,13 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
     doctrines, excludeRules, host, cfgDir, gates,
   );
   managed.settings_hooks = managedHooks;
+  // The subagent depth cap, Claude Code only (`CLAUDE_ENV` says why). The record is what this
+  // install wrote, prior plus new, so uninstall never takes a key the user set themselves.
+  if (host === 'claude') {
+    const priorEnv = oldSf === settingsName && isDict(get(old, 'settings_env')) ? old.settings_env : {};
+    const env = { ...priorEnv, ...wireClaudeEnv(settingsPath) };
+    if (Object.keys(env).length) managed.settings_env = env;
+  }
 
   // Project-bypasses-global (Claude and OpenClaude): a PROJECT install suppresses the GLOBAL
   // ~/.claude/CLAUDE.md (or ~/.openclaude/CLAUDE.md) while cwd is this repo, via the shared

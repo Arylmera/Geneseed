@@ -189,19 +189,16 @@ contract you do not already know.
 <!-- CATALOG:end -->
 
 **Rule of delegation:** read-only investigation can be dispatched freely; any
-{{AGENT}} that *writes* must return a summary of exactly what it changed. Every
-{{AGENT}} spec ends with a **self-improvement loop**: when a report carries a
-`spec-feedback:` line, weigh it — record a real flaw (with the user's assent) in
-`{{PATH_NOTES}}/agent-notes/<name>.md` and pass it to later dispatches;
-{{MEMORY}} gets a record only when it clears {{DOCTRINE:persist-insight}}'s bar.
+{{AGENT}} that *writes* must return a summary of exactly what it changed. Weigh any
+`spec-feedback:` line an {{AGENT}}'s report carries, as its spec's self-improvement loop says.
 
 <!-- LEAN:begin -->
 **Dispatching a multi-part goal.** When a goal spans several capabilities,
 decompose it into independent subtasks, route each to the single owning {{AGENT}}
 above, and converge the results yourself. Every handoff carries an **envelope** —
 the subtask goal, the inputs the {{AGENT}} needs, and its output contract — and the
-constraints travel with it: dispatched {{AGENTS}} never commit or push ({{DOCTRINE:consent-before-push}}
-stays with you), and an unfulfilled contract returns as a stated gap, never invented
+constraints travel with it: dispatched {{AGENTS}} never push, and commit only in their own
+worktree ({{DOCTRINE:consent-before-push}} stays with you), and an unfulfilled contract returns as a stated gap, never invented
 content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
 workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
 the same shape model-driven via the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md).
@@ -212,8 +209,8 @@ Ten of them — `advocate`, `skeptic`, `pragmatist`, `steward`, `visionary`,
 dispatched alone; the [council {{SKILL}}]({{DIR_SKILLS}}/council.md) convenes the
 subset that productively clashes on a given motion.
 <!-- LEAN:else -->
-Dispatched {{AGENTS}} never commit or push ({{DOCTRINE:consent-before-push}} stays with
-you), and an unfulfilled contract returns as a stated gap, never invented content. A
+Dispatched {{AGENTS}} commit only in their worktree, never push
+({{DOCTRINE:consent-before-push}} stays with you), and an unfulfilled contract returns as a stated gap, never invented content. A
 multi-part goal goes through the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md)
 (or the [workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md) where the host has a workflow tool);
 the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/council.md).

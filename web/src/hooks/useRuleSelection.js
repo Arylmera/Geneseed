@@ -82,7 +82,7 @@ export function useRuleSelection({ items, packs, install, canApply, onAction, ga
       .flatMap((p) => p.rules.filter((r) => !isOn(r.addr)).map((r) => r.addr))
     const warn = losingConsent
       ? '\n\nprocess 5 carries commit/push consent. Dropping it also removes the git-gate ' +
-        'hook, so commits and pushes stop being confirmed at the tool boundary. ' +
+        'hook, so commits and pushes stop being confirmed at the tool boundary (Bob still logs its warning). ' +
         (gateArmed
           ? '(Real data loss stays gated: that is Rule IV’s, not the pack’s.)'
           : '(Rule IV’s deletion gate is off on this install, so real data loss is not asked about either.)')

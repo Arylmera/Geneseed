@@ -51,7 +51,7 @@
  * and every file left behind. Absolute rather than compared is what let it survive the deletion
  * of the implementation it was once compared against.
  */
-import { readFileSync, readlinkSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readlinkSync, realpathSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
@@ -61,7 +61,9 @@ import {
   GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
   resolvePath, sovereignBypass,
 } from './hosts.mjs';
-import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
+import {
+  currentBranch, gitCommonDirOf, gitRootOf, loopLaunched, mainWorktreeOf, protectedBranches,
+} from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
   readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
@@ -169,6 +171,73 @@ export function loopExempt(command, cwd) {
   if (!segments.length) return false;
   return segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_COMMIT_RE.test(seg)
     || SEG_READONLY_RE.test(seg) || pushSegmentOk(seg, branch));
+}
+
+// A Foreman worker's local commit or merge: `git commit`/`git merge` with no global option
+// (`-C`, `-c`, `--git-dir`, `--work-tree` could aim it at another tree), its arguments plain
+// `ARG_RE` tokens plus at most one quoted message (`-m`, `-am`, `--message`). Nothing else is
+// quoted, so a quoted separator only splits the command into a segment that fails.
+const SEG_LOCAL_RE = new RegExp(`^git\\s+(?:commit|merge)(?:\\s+${ARG_RE})*`
+  + `(?:\\s+(?:-[a-zA-Z]*m|--message)\\s+(?:"[^"]*"|'[^']*'))?(?:\\s+${ARG_RE})*$`);
+const SEG_CD_RE = new RegExp(`^cd\\s+(${ARG_RE})$`);
+// What a shell can run inside an argument: PowerShell's `(...)`, `@(...)`, `$(...)`, `$var`,
+// `{...}` blocks and backtick escapes; bash's `$(...)`, `${...}` and backticks. Refused anywhere,
+// quoted or not, so a message can never carry a second command.
+const SUBSHELL_CHARS_RE = /[()@${}`]/;
+// The doctrine's shared branches, by name: never a worker's branch, whatever the repo says.
+const SHARED_BRANCH_RE = /^(?:main|master|develop|development|(?:release|hotfix)(?:\/.*)?)$/i;
+
+/**
+ * Consent Before Push's worktree exemption (user decision 2026-11-08): a commit or merge that a
+ * dispatched sub-agent runs inside a LINKED worktree, on a branch that is not shared, is the
+ * Foreman worker's own named batch. Every clause must hold, or the ask stands:
+ * - `agentId`: the host says the call comes from a sub-agent (Claude Code's `agent_id`, which it
+ *   sets on tool events inside a subagent or in-process teammate). A session that merely runs in
+ *   a worktree, as the desktop app's do, has none and asks. A host that sends none asks always.
+ * - The command: none of `UNSAFE_CHARS_RE` or `SUBSHELL_CHARS_RE`, no `push` word anywhere (a mixed
+ *   command asks), every segment an add, a read-only look, or `SEG_LOCAL_RE`, after at most one
+ *   leading `cd <path>` (an agent's shell starts in the parent's checkout). The `cd` target and
+ *   `cwd` are resolved with `realpathSync`, git's physical path; `cd -`, `~` or a path that does
+ *   not resolve asks.
+ * - The tree: `cwd` a linked worktree (`mainWorktreeOf`, read off disk, no spawn), its branch
+ *   known and, compared case-insensitively, neither a `SHARED_BRANCH_RE` name, a remote's HEAD
+ *   (`protectedBranches`), nor the branch checked out in the main worktree; and the branch is not
+ *   itself a symref to another one.
+ */
+export function worktreeExempt(command, cwd, agentId) {
+  if (typeof agentId !== 'string' || !agentId) return false;
+  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command) || SUBSHELL_CHARS_RE.test(command)
+    || /\bpush\b/i.test(command)) return false;
+  const segments = command.split(/&&|\|\||[;|]/).map((x) => x.trim()).filter(Boolean);
+  try {
+    let dir = realpathSync(cwd);
+    const cd = segments.length ? SEG_CD_RE.exec(segments[0]) : null;
+    if (cd) {
+      if (cd[1] === '-' || cd[1].startsWith('~')) return false;
+      dir = realpathSync(path.resolve(dir, cd[1]));
+      segments.shift();
+    }
+    if (!segments.length || !segments.every((seg) => SEG_ADD_RE.test(seg) || SEG_READONLY_RE.test(seg)
+      || SEG_LOCAL_RE.test(seg))) return false;
+    const main = mainWorktreeOf(dir);
+    const branch = main && currentBranch(dir);
+    if (!branch || branch.includes('..') || SHARED_BRANCH_RE.test(branch)) return false;
+    // HEAD names the branch, but the branch may itself be a symref (`git symbolic-ref
+    // refs/heads/sym refs/heads/develop`), and a commit then moves its target. Packed refs hold no
+    // symrefs, so only the loose file can alias: one that starts with `ref:` asks, however long
+    // the chain behind it. An absent file is a packed or unborn branch, which aliases nothing.
+    let loose = '';
+    try {
+      loose = readFileSync(path.join(gitCommonDirOf(gitRootOf(dir)), 'refs', 'heads', ...branch.split('/')), 'utf8');
+    } catch (e) {
+      if (e.code !== 'ENOENT') return false;
+    }
+    if (/^\s*ref:/.test(loose)) return false;
+    const taken = [...protectedBranches(gitRootOf(dir)), currentBranch(main)].filter(Boolean);
+    return !taken.some((b) => b.toLowerCase() === branch.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -775,6 +844,8 @@ function gitDecide(args, payload) {
   // Consent Before Push: a loop launched on its own `loop/*` branch is a named batch for a
   // fixed set of commit/push forms on that branch only — never a merge into anything shared.
   if (loopExempt(command, (payload && payload.cwd) || process.cwd())) return 0;
+  // A worker's own worktree branch is a named batch for local commits and merges, never a push.
+  if (worktreeExempt(command, (payload && payload.cwd) || process.cwd(), payload && payload.agent_id)) return 0;
   return ask(args, 'git-gate', 'process-5', 'commit', { says });
 }
 export const cmdGitGate = guardGate(gitGate, 'git-gate');

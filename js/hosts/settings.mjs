@@ -529,7 +529,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  */
 function warnCommentedJsonc(target, agentPath, permission,
   includeLsp = false, prefix = 'geneseed', doctrines = null, excluded = [], skillNames = [],
-  deletionGate = true, editAsks = []) {
+  deletionGate = true, editAsks = [], includeDepth = false) {
   process.stdout.write(`[${prefix}] ${path.basename(target)} has comments — not rewriting `
     + 'it (your edits are kept). Add this to its "instructions" array by hand:\n');
   process.stdout.write(`[${prefix}]     ${jsonDumps(agentPath)}\n`);
@@ -559,6 +559,10 @@ function warnCommentedJsonc(target, agentPath, permission,
   if (includeLsp) {
     process.stdout.write(`[${prefix}] and, to enable code intelligence, a top-level `
       + '"lsp": true\n');
+  }
+  if (includeDepth) {
+    process.stdout.write(`[${prefix}] and, to cap subagent nesting at two levels, a top-level `
+      + '"subagent_depth": 2\n');
   }
 }
 
@@ -698,7 +702,11 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   }
   const addLsp = !has(config, 'lsp');
   if (addLsp) config.lsp = true;
-  if (!addInstr && !permChanged && !addLsp) {
+  // Foreman's depth, main → worker → sub-worker, as OpenCode's own cap: absent ⇒ written,
+  // present ⇒ the user's. Left at uninstall, as `lsp` is.
+  const addDepth = !has(config, 'subagent_depth');
+  if (addDepth) config.subagent_depth = 2;
+  if (!addInstr && !permChanged && !addLsp && !addDepth) {
     result.skillsAdded = added;
     result.editRecord = edit;
     return target;
@@ -716,7 +724,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // block to paste, split by which of the two situations the reader is actually in. It is
     // stdout, not stderr, because on this path the paste-in IS the output.
     warnCommentedJsonc(target, agentPath, addPerm ? 'add' : (permChanged && 'reconcile'),
-      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate, editAsks);
+      addLsp, 'geneseed', doctrines, excluded, skillNames, deletionGate, editAsks, addDepth);
     return target;
   }
   try {
@@ -1128,6 +1136,67 @@ export function wireClaudeExcludes(p, excludes) {
     return [];
   }
   return added;
+}
+
+/**
+ * The `env` keys a Claude Code install arms. Foreman mode allows main → worker → sub-worker and
+ * no deeper; Claude Code's own default is three layers, so the cap is written, not assumed.
+ * Claude only: OpenClaude has no such cap in its source (checked on 0.31) and Bob documents none.
+ */
+export const CLAUDE_ENV = Object.freeze({ CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH: '2' });
+
+/**
+ * Add-if-absent into `env`, the `wireClaudeExcludes` shape: a key the user already set, to any
+ * value, is theirs and stays. Returns the `{key: value}` pairs actually written, which the
+ * manifest records so uninstall removes only those.
+ */
+export function wireClaudeEnv(p, want = CLAUDE_ENV) {
+  const loaded = readSettingsForMerge(p, 'Its "env" keys were not wired.');
+  if (!loaded) return {};
+  const [config, hadComments] = loaded;
+  // An `env` that is there but is not an object is the user's, however wrong: never replaced.
+  if (has(config, 'env') && !isDict(config.env)) {
+    process.stderr.write(`[geneseed] WARN: "env" in ${path.basename(p)} is not an object — `
+      + `NOT rewriting it. Add to it by hand once it is one: ${jsonDumpsCompact(want)}\n`);
+    return {};
+  }
+  const env = has(config, 'env') ? config.env : {};
+  const added = Object.fromEntries(Object.entries(want || {}).filter(([k]) => !has(env, k)));
+  if (!Object.keys(added).length) return {};
+  if (hadComments) {
+    process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
+      + '(your edits are kept). Add to its "env" object by hand: '
+      + `${jsonDumpsCompact(added)}\n`);
+    return {};
+  }
+  config.env = { ...env, ...added };
+  try {
+    atomicWriteJson(p, config);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+    process.stderr.write(`[geneseed] WARN: could not write ${p} (${e.message}) — `
+      + `its "env" keys were not wired. Add to its "env" object by hand: ${jsonDumpsCompact(added)}\n`);
+    return {};
+  }
+  return added;
+}
+
+/** Remove each recorded `env` key while it still holds the recorded value; drop an empty `env`. */
+export function unwireClaudeEnv(p, recorded) {
+  if (!isDict(recorded) || !Object.keys(recorded).length) return;
+  const { state, data: loaded, hadComments } = loadJsonObject(p);
+  if (state !== 'ok' || hadComments) return;
+  const env = get(loaded, 'env');
+  if (!isDict(env)) return;
+  const gone = Object.keys(recorded).filter((k) => has(env, k) && env[k] === recorded[k]);
+  if (!gone.length) return;
+  for (const k of gone) delete env[k];
+  if (!Object.keys(env).length) delete loaded.env;
+  try {
+    atomicWriteJson(p, loaded);
+  } catch (e) {
+    if (!isOsError(e)) throw e;
+  }
 }
 
 /** `_build_settings._unwire_claude_excludes`. */

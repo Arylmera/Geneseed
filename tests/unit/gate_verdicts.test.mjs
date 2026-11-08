@@ -92,6 +92,37 @@ const loop = mk('loop');                   // a launched loop: branch loop/x, an
 mk('loop', '.git');
 fs.writeFileSync(path.join(loop, '.git', 'HEAD'), 'ref: refs/heads/loop/x\n');
 fs.writeFileSync(path.join(loop, 'LOOP.md'), '<!-- loop-state:begin -->\n');
+// A repository with two LINKED worktrees, written as git lays them out: each worktree's `.git` is
+// a file naming `<main>/.git/worktrees/<n>`, whose `commondir` names the shared `.git`. `wt` is on
+// a feature branch, `wtMain` has the default branch checked out; `wtRepo` is the main checkout.
+const wtRepo = mk('wtrepo');
+mk('wtrepo', '.git', 'refs', 'heads');
+fs.writeFileSync(path.join(wtRepo, '.git', 'HEAD'), 'ref: refs/heads/trunk\n');
+mk('wtrepo', 'src');
+mk('wtrepo', '.git', 'refs', 'remotes', 'origin');
+fs.writeFileSync(path.join(wtRepo, '.git', 'refs', 'remotes', 'origin', 'HEAD'), 'ref: refs/remotes/origin/stable\n');
+const linked = (name, branch) => {
+  const gd = mk('wtrepo', '.git', 'worktrees', name);
+  fs.writeFileSync(path.join(gd, 'HEAD'), `ref: refs/heads/${branch}\n`);
+  fs.writeFileSync(path.join(gd, 'commondir'), '../..\n');
+  const dir = mk(`wt-${name}`);
+  fs.writeFileSync(path.join(dir, '.git'), `gitdir: ${gd}\n`);
+  return dir;
+};
+const wt = linked('feat', 'feat/x');
+const wtMain = linked('main', 'main');
+// Each one shared by a different rule: a case spelling of main, the doctrine's names, a remote's
+// HEAD, and the branch the main worktree (`wtRepo`, on `trunk`) has checked out.
+const wtCase = linked('case', 'Main');
+const wtDevelop = linked('develop', 'develop');
+const wtRelease = linked('release', 'release/1.2');
+const wtStable = linked('stable', 'stable');
+const wtTrunk = linked('trunk', 'trunk');
+// A branch that is a symref alias of a shared one: a commit on `sym` moves `develop`.
+const wtSym = linked('sym', 'sym');
+fs.writeFileSync(path.join(wtRepo, '.git', 'refs', 'heads', 'sym'), 'ref: refs/heads/develop\n');
+// A junction inside the worker's worktree whose physical target is the main checkout's tree.
+fs.symlinkSync(path.join(wtRepo, 'src'), path.join(wt, 'jx'), 'junction');
 const tmp = mk('tmp');                     // the ownership marker lives under the OS temp dir
 
 // The child hook processes and this process both see the sandbox as home and as temp dir. Set
@@ -309,6 +340,53 @@ const ROWS = [
   { id: 'process-5 commit -F outside a loop', kind: 'shell', cmd: () => 'git commit -F msg.txt',
     rule: 'The same form anywhere else is an ordinary commit: it asks on Claude and warns on Bob.',
     claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // The Foreman worktree batch (user decision 2026-11-08): a dispatched sub-agent's local commit or
+  // merge in a LINKED worktree, on a branch that is not shared, is the worker's own named batch.
+  // `agent: true` sends Claude Code's subagent fields; Bob sends none, so Bob always warns. Each
+  // pass has twins that must ask: no sub-agent, the main checkout, a shared branch, a push, a
+  // second command smuggled into an argument, a `cd` that leaves the worktree.
+  { id: 'process-5 worker commit in its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git add -A && git commit -m "merge sub-worker"',
+    rule: 'A sub-agent commit in a linked worktree on a feature branch passes; Bob, with no sub-agent field, warns.',
+    claude: 'pass', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 worker merge then commit in its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git merge --no-ff feat/x-sub && git commit --amend --no-edit',
+    rule: 'A sub-agent merge of a sub-worker branch, with its commit, passes in the same worktree.',
+    claude: 'pass', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 worker cd into its worktree, then commit', kind: 'shell', agent: true, cmd: () => `cd ${wt.split(path.sep).join('/')} && git commit -m x`,
+    rule: 'One leading cd into the worktree counts: an agent shell starts in the parent checkout.',
+    claude: 'pass', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session commit in a worktree', kind: 'shell', at: () => wt, cmd: () => 'git add -A && git commit -m "merge sub-worker"',
+    rule: 'The same commit with no sub-agent field is a session that runs in a worktree: it asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 worker commit in the main checkout', kind: 'shell', agent: true, at: () => wtRepo, cmd: () => 'git add -A && git commit -m "merge sub-worker"',
+    rule: 'A sub-agent commit in the main checkout of that repository still asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  ...[['main', () => wtMain], ['Main, by case', () => wtCase], ['develop', () => wtDevelop], ['release/1.2', () => wtRelease],
+    ['a remote HEAD', () => wtStable], ['the main worktree branch', () => wtTrunk],
+    ['a symref alias of develop', () => wtSym]].map(([what, at]) => (
+    { id: `process-5 worker commit in a worktree on ${what}`, kind: 'shell', agent: true, at, cmd: () => 'git commit -m x',
+      rule: 'A worktree on a shared branch is no worker branch: it asks, whatever the case of the name, and through a symref alias.',
+      claude: 'ask', bob: 'warn', v1: null, v2: null })),
+  { id: 'process-5 worker push from its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git push origin HEAD:feat/x',
+    rule: 'A push from a worker worktree asks: the batch covers commit and merge, never push.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 worker commit and push in its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git commit -m x && git push origin HEAD:feat/x',
+    rule: 'A command that mixes a commit with a push asks as a whole.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 worker commit with a PowerShell subexpression', kind: 'shell', ps: true, agent: true, at: () => wt,
+    cmd: () => `git commit -m x (git -C ${wtRepo.split(path.sep).join('/')} commit -am y)`,
+    rule: 'PowerShell runs a parenthesised argument as a command, so it asks.',
+    claude: 'ask', bob: null, v1: null, v2: null },
+  { id: 'process-5 worker commit with a PowerShell array subexpression', kind: 'shell', ps: true, agent: true, at: () => wt,
+    cmd: () => 'git commit -m @(git branch -f main HEAD)',
+    rule: 'An @(...) argument runs too, so it asks.',
+    claude: 'ask', bob: null, v1: null, v2: null },
+  { id: 'process-5 worker cd through a junction to the main checkout', kind: 'shell', agent: true, at: () => wt, cmd: () => 'cd jx && git commit -m x',
+    rule: 'A cd is judged by its physical target: a junction into the main checkout asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  ...['cd -', 'cd ~', 'cd nowhere'].map((cd) => (
+    { id: `process-5 worker ${cd} then commit`, kind: 'shell', agent: true, at: () => wt, cmd: () => `${cd} && git commit -m x`,
+      rule: 'A cd to the previous dir, the home dir, or a path that does not resolve asks.',
+      claude: 'ask', bob: 'warn', v1: null, v2: null })),
   { id: 'process-5 with consent off', kind: 'shell', cmd: () => 'git commit -m x', extra: ['--no-consent'],
     rule: '--no-consent drops the commit and push ask on the hooks.',
     claude: 'pass', bob: 'pass', v1: null, v2: null },
@@ -435,6 +513,8 @@ function payloadFor(row, host) {
   if (row.kind === 'raw') return row.stdin;
   const cwd = cwdOf(row);
   const session = row.session ? { session_id: randomUUID() } : {};
+  // Claude Code sets `agent_id`/`agent_type` on tool events inside a subagent; Bob sends none.
+  if (row.agent && host !== 'bob') Object.assign(session, { agent_id: 'a1b2c3', agent_type: 'developer' });
   if (row.kind === 'edit') {
     return JSON.stringify(host === 'bob'
       ? { event: 'PreToolUse', tool: 'search_and_replace', input: { path: row.path(), search: row.old, replace: row.now }, cwd, ...session }

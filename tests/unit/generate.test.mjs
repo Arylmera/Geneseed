@@ -1076,14 +1076,40 @@ test('a merge warns about and refuses to rewrite a commented .jsonc', () => {
 test('an already-wired commented .jsonc is a silent no-op', () => {
   // The refusal above is a warning the user is expected to ACT on. Repeating it on a file that
   // already carries everything the merge would add is how a warning gets trained away.
+  // "Everything" includes the subagent depth cap, the last top-level key the merge adds.
   withDir((d) => {
     const j = path.join(d, 'opencode.json');
     const jc = path.join(d, 'opencode.jsonc');
     const original = '// notes\n{\n  "instructions": ["AGENT.md"],\n'
-      + '  "permission": {"bash": "allow"},\n  "lsp": true\n}\n';
+      + '  "permission": {"bash": "allow"},\n  "lsp": true,\n  "subagent_depth": 2\n}\n';
     fs.writeFileSync(jc, original);
     const [, out] = captured(() => mergeOpencodeJson(j, 'AGENT.md'));
     assert.equal(out, '', `expected silence, got ${JSON.stringify(out)}`);
+    assert.equal(fs.readFileSync(jc, 'utf8'), original);
+  });
+});
+
+test("the subagent depth cap is added when absent and the user's own value is kept", () => {
+  // Key by key, as `lsp` is: no `subagent_depth` ⇒ 2 (main → worker → sub-worker); any value
+  // the user wrote, even a looser one, stays exactly as written.
+  withDir((d) => {
+    const j = path.join(d, 'opencode.json');
+    captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.equal(JSON.parse(fs.readFileSync(j, 'utf8')).subagent_depth, 2);
+    fs.writeFileSync(j, JSON.stringify({ instructions: [], subagent_depth: 5 }));
+    captured(() => mergeOpencodeJson(j, 'AGENT.md'));
+    assert.equal(JSON.parse(fs.readFileSync(j, 'utf8')).subagent_depth, 5);
+  });
+});
+
+test('a commented .jsonc missing only the depth cap is told to add it by hand', () => {
+  withDir((d) => {
+    const jc = path.join(d, 'opencode.jsonc');
+    const original = '// notes\n{\n  "instructions": ["AGENT.md"],\n'
+      + '  "permission": {"bash": "allow"},\n  "lsp": true\n}\n';
+    fs.writeFileSync(jc, original);
+    const [, out] = captured(() => mergeOpencodeJson(path.join(d, 'opencode.json'), 'AGENT.md'));
+    assert.match(out, /a top-level "subagent_depth": 2/);
     assert.equal(fs.readFileSync(jc, 'utf8'), original);
   });
 });
