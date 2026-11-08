@@ -29,7 +29,7 @@ import { parseIntStrict } from '../lib/text.mjs';
 import { promptLine } from '../lib/prompt.mjs';
 import { deployed } from './catalog.mjs';
 import { defaultView, warmDoctor, webState } from './state.mjs';
-import { clearDaemon, codeStamp, openUrl, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
+import { clearDaemon, codeStamp, openUrl, webSecret, readDaemon, restartDaemon, startDaemon, statusDaemon, stopDaemon, writeDaemon } from './daemon.mjs';
 import { makeHandler } from './handler.mjs';
 import { JobManager } from './jobs.mjs';
 import { spawnSync } from 'node:child_process';
@@ -165,9 +165,12 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
   srv.requestTimeout = 30_000;
   srv.headersTimeout = 10_000;
   holder.srv = srv;
+  // The install's shutdown secret, only when a daemon: a foreground server is not ended by `web start`.
+  if (daemon) holder.secret = webSecret(home);
   return new Promise((done) => {
     srv.on('error', () => {
       // On a listen error, retry with port 0 so the OS picks a free one.
+      printOut(`[web] port ${port} is taken by another process — using a free port instead.\n`);
       srv.listen(0, '127.0.0.1', () => ready());
     });
     srv.listen(port, '127.0.0.1', () => ready());

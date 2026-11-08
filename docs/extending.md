@@ -912,6 +912,8 @@ on N, and refuses (exit 1, nothing sent) when it names another port. A test inst
 port is therefore stopped with `--port`, never with a bare `web stop` — that one stops whatever
 the record names, usually the live console on 4747.
 
+When the preferred port is taken, `clearPort` (`js/web/daemon.mjs`) asks `/api/ping` who holds it. The ping carries `rootId()`, a hash of the checkout root. A holder with our root is asked to shut down on `/api/shutdown` with `X-Geneseed-Secret`: a MAC of the port under the install secret in `.geneseed-web-secret` (32 random bytes, mode 0600, created once next to the daemon record). The secret itself is never sent, and no pid is ever signalled, so a listener that only claims our root cannot cause harm. Any other answer is left alone and named. A console older than the field has no root, so it is never assumed to be ours.
+
 ---
 
 ## 10 — What to settle before the next wave

@@ -13,8 +13,9 @@ import { printOut, writeText } from '../lib/fs.mjs';
 import { isTruthy, jsonDumpsCompact } from '../lib/json.mjs';
 import { webState } from './state.mjs';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, openSync, readFileSync, unlinkSync } from 'node:fs';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { chmodSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join, resolve as pathResolve } from 'node:path';
 
 const ROOT = pathResolve(import.meta.dirname, '..', '..');
@@ -43,6 +44,20 @@ export function daemonStale(record, root = ROOT) {
 
 export const STALE_LINE = '[web] running OLD code (started before the last upgrade) — '
   + 'geneseed web restart';
+
+/** The port a console asks for when none is named. */
+export const DEFAULT_PORT = 4747;
+
+/**
+ * Which install a console belongs to: a hash of this checkout's root, carried in `/api/ping` so a
+ * port holder can be told apart from a console of ANOTHER install without exposing a path. A
+ * console older than this field answers without one — its install is unknown, never assumed.
+ */
+export function rootId(root = ROOT) {
+  const p = pathResolve(root);
+  return createHash('sha256').update(process.platform === 'win32' ? p.toLowerCase() : p)
+    .digest('hex').slice(0, 12);
+}
 
 const statePath = (target) => join(target, '.geneseed-web.json');
 
@@ -75,7 +90,7 @@ export function clearDaemon(target) {
 //
 // `geneseed web start|stop|status|restart`. The running server records pid/port/token/url
 // in a small JSON file and control is over HTTP, so nothing here needs OS process-kill
-// semantics, only a localhost request with the token.
+// semantics, only a localhost request with the token (or, for a console whose record is gone, the install secret).
 //
 //   * Every function below that touches the network is `async` (`fetch` has no
 //     synchronous equivalent), and `cmdWeb` awaits it.
@@ -106,12 +121,93 @@ export async function probe(url, timeout = 1.5) {
   }
 }
 
+/**
+ * Is the answer on `port` a Geneseed console, and whose? `null` when nothing answers a console's
+ * ping (nothing there, or some other program). Otherwise `{ pid, root }`, `root` null for a
+ * console older than the field. The shape is the proof: `ok`, a string `theme` and an integer
+ * `pid`, which no foreign server has a reason to send.
+ */
+export async function identify(port, timeout = 0.5) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/ping`, {
+      signal: AbortSignal.timeout(Math.round(timeout * 1000)),
+    });
+    const body = res.status === 200 ? await res.json() : null;
+    await res.body?.cancel().catch(() => {});
+    if (body?.ok !== true || typeof body.theme !== 'string' || !validPid(body.pid)) return null;
+    return { pid: body.pid, root: typeof body.root === 'string' ? body.root : null };
+  } catch {
+    return null;
+  }
+}
+
+/** A pid worth showing: an integer above 1. 0, 1 and negatives are never a console. */
+const validPid = (p) => Number.isInteger(p) && p > 1;
+
+/**
+ * The install's shutdown secret: 32 random bytes in an owner-only file next to the daemon
+ * record, created once and never rewritten. It lets a LATER `web start` end a console of this
+ * install whose record (and token) is gone. It is never sent: callers send `secretProof`, bound
+ * to the port, so a listener that merely claims our root learns nothing it can reuse elsewhere.
+ * `null` when the file can be neither read nor created — the feature is then off.
+ */
+export function webSecret(target) {
+  const p = join(target, '.geneseed-web-secret');
+  const read = () => { try { return readFileSync(p, 'utf-8').trim() || null; } catch { return null; } };
+  const have = read();
+  if (have) return have;
+  try {
+    mkdirSync(target, { recursive: true });
+    writeFileSync(p, randomBytes(32).toString('base64url'), { flag: 'wx', mode: 0o600 });
+  } catch { /* lost a race, or unwritable: read decides */ }
+  return read();
+}
+
+/** What a caller sends in `X-Geneseed-Secret`: a MAC of the port under the secret, not the secret. */
+export const secretProof = (secret, port) => createHmac('sha256', secret).update(`shutdown:${port}`).digest('hex');
+
+/** Can a server bind `port` on loopback right now? `true` means something else holds it. */
+export const portTaken = (port) => new Promise((resolve) => {
+  const s = createServer();
+  s.once('error', () => resolve(true));
+  s.listen(port, '127.0.0.1', () => s.close(() => resolve(false)));
+});
+
+/**
+ * Free `port` for a new console, or say why not. `null` when it is free (possibly after ending
+ * the previous console of THIS install, found by its root id in the ping); otherwise a phrase
+ * naming the holder, and nothing touched. Another install's console, a console too old to name
+ * its install, and any other program are never ended.
+ *
+ * "Ends" means asking it to shut down with this install's secret (`secretProof`) and waiting for
+ * the port. A listener that only CLAIMS our root cannot honour the request, so nothing is ever
+ * ended on a claim, and no pid is ever signalled.
+ */
+export async function clearPort(port, target) {
+  if (!await portTaken(port)) return null;
+  const c = await identify(port);
+  if (c && c.root === rootId()) {
+    const secret = webSecret(target);
+    const asked = secret !== null && await postShutdown(`http://127.0.0.1:${port}`, '', 3.0,
+      { 'X-Geneseed-Secret': secretProof(secret, port) });
+    for (let i = 0; asked && i < 50 && await portTaken(port); i += 1) await sleep(100);
+    if (asked && !await portTaken(port)) {
+      printOut(`[web] ended the previous console of this install on port ${port} (pid ${c.pid}).\n`);
+      return null;
+    }
+    return `held by a console (pid ${c.pid}) that claims this install but did not shut down on request`;
+  }
+  if (!c) return 'held by another program';
+  return `held by a Geneseed console (pid ${c.pid}) of ${c.root ? 'another install'
+    : 'an unknown install (older code) — end that pid yourself'}`;
+}
+
 /** The token-carrying POST `geneseed web stop` and the in-page Stop button both send. */
-async function postShutdown(url, token, timeout = 3.0) {
+async function postShutdown(url, token, timeout = 3.0, extra = {}) {
   try {
     const res = await fetch(`${url}/api/shutdown`, {
       method: 'POST',
-      headers: { 'X-Geneseed-Token': token, 'Content-Type': 'application/json' },
+      headers: { 'X-Geneseed-Token': token, 'Content-Type': 'application/json', ...extra },
       body: '{}',
       signal: AbortSignal.timeout(Math.round(timeout * 1000)),
     });
@@ -198,6 +294,13 @@ export function restartArgs(theme) {
  * to stop, started a fresh daemon on 4747 while this process still held it, lost the bind,
  * fell back to a random port, and left a background console nobody had asked for.
  */
+export function restartRefusal(theme) {
+  const rec = readDaemon(webState(theme).target);
+  if (!isTruthy(rec) || !validPid(rec.pid)) return 'foreground server: restart it from its terminal';
+  return `this console (pid ${process.pid}) is not the recorded daemon — that one is on ${none(rec.url)} `
+    + `(pid ${rec.pid}). Restart it there, or end pid ${process.pid}.`;
+}
+
 export function requestRestart(theme) {
   const target = webState(theme).target;
   if (readDaemon(target)?.pid !== process.pid) return false;
@@ -272,6 +375,9 @@ export async function startDaemon(theme, port, openBrowser = true) {
     return 0;
   }
   clearDaemon(target);
+  const held = await clearPort(port, target);
+  if (held) printOut(`[web] port ${port} is ${held} — not touching it; the console will use another port.
+`);
   const log = join(target, '.geneseed-web.log');
   spawnDetached(daemonArgs(port, theme), log);
   // Twelve seconds for the child to bind and write its record (60 * 200ms). The probe
@@ -282,6 +388,8 @@ export async function startDaemon(theme, port, openBrowser = true) {
     if (rec && isTruthy(rec.url) && await probe(rec.url, 0.5)) {
       printOut(`[web] Geneseed UI on ${rec.url}  (theme: ${none(rec.theme)}, `
         + `pid ${none(rec.pid)})\n`);
+      if (rec.port !== port) printOut(`[web] asked for port ${port}, serving on port ${rec.port} instead.
+`);
       printOut('[web] running in the background — `geneseed web stop` to stop it.\n');
       if (openBrowser) openUrl(rec.url);
       return 0;
@@ -355,19 +463,41 @@ export async function stopDaemon(theme = null, port = null) {
   return 0;
 }
 
-export async function statusDaemon(theme = null, port = null) {
+/** Every Geneseed console answering on the recorded port or `ports`, each once. */
+export async function findConsoles(target, ports) {
+  const rec = readDaemon(target);
+  const all = [...new Set([isTruthy(rec) ? Number(rec.port) : null, ...ports].filter(Number.isInteger))];
+  const found = [];
+  for (const p of all) {
+    // eslint-disable-next-line no-await-in-loop
+    const c = await identify(p);
+    if (c) found.push({ port: p, url: `http://127.0.0.1:${p}`, pid: c.pid, root: c.root,
+      recorded: isTruthy(rec) && rec.pid === c.pid && Number(rec.port) === p });
+  }
+  return found;
+}
+
+const whose = (c) => (c.root === null ? 'older code, install unknown' : c.root === rootId() ? 'this install' : 'another install');
+
+export async function statusDaemon(theme = null, port = null, scan = [DEFAULT_PORT]) {
   const { target } = webState(theme);
   const refused = await portRefusal(readDaemon(target), port, 'status');
   if (refused !== null) return refused;
   const st = await liveDaemon(target);
+  // Unnamed port only: `--port` already scoped this call to one daemon (`portRefusal`).
+  const others = port === null ? (await findConsoles(target, scan)).filter((c) => !(st && c.recorded)) : [];
+  const listOthers = () => others.forEach((c) => printOut(
+    `[web] also found a Geneseed console at ${c.url}  (pid ${c.pid}, not recorded — ${whose(c)})\n`));
   if (st) {
     printOut(`[web] running on ${st.url}  (theme: ${none(st.theme)}, pid ${none(st.pid)})\n`);
     if (daemonStale(st)) printOut(`${STALE_LINE}\n`);
+    listOthers();
     return 0;
   }
   // EXIT 1, which is the verb's whole contract for a script. The snapshot's `<exit>`
   // column is what gates it.
   printOut('[web] not running.\n');
+  listOthers();
   return 1;
 }
 

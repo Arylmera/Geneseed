@@ -19,6 +19,8 @@ Only one console runs at a time. A second `start` does nothing, so logging in tw
 
 > **Always use `web start` in a login item, never bare `web`.** Bare `geneseed web` runs in the foreground and leaves no record of itself. `web stop`, `web restart` and `web status` then cannot see it: they report no live server while it keeps serving. A `restart` would then start a second console that cannot take the busy port.
 
+**When the port is busy.** `web start` and `web restart` ask for port 4747 first. If something else holds it, they check what it is. A console of this same copy of Geneseed is ended and the port is taken. Anything else is left alone: another program, a console of another copy, or a console too old to say which copy it is. The command then prints a line naming the port and the holder, and serves on a free port instead (and says which). `geneseed web status` also lists a console on 4747 that is not the recorded one. If a page says *this console is not the recorded daemon*, you are on one of those older consoles: use the address `web status` prints, or end the pid it names.
+
 ## From the web console
 
 Open **Settings** and find the **Start at login** row in **Server**. The row shows the file and its state:

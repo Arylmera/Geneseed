@@ -29,7 +29,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
@@ -37,8 +37,12 @@ import { fileURLToPath } from 'node:url';
 
 import { cliSpec } from '../../js/ui/cli.mjs';
 import { POST_INLINE } from '../../js/web/routes.mjs';
+import { makeHandler } from '../../js/web/handler.mjs';
+import { JobManager } from '../../js/web/jobs.mjs';
 import {
-  codeStamp, daemonStale, readDaemon, writeDaemon, STALE_LINE,
+  clearPort, codeStamp, daemonStale, findConsoles, readDaemon, restartRefusal, rootId, secretProof, webSecret,
+  writeDaemon,
+  STALE_LINE,
 } from '../../js/web/daemon.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
 
@@ -524,4 +528,170 @@ test('web restart --port refuses when the recorded daemon is on another port', a
       assert.equal(readDaemon(dir)?.port, live.port);
     });
   } finally { await live.close(); }
+});
+
+// ---- who holds the preferred port --------------------------------------------------------------
+//
+// `restart` / `start` found 4747 taken, fell back to a random port, and left the old console
+// serving old code. `clearPort` is the decision: end a console of THIS install (found by the root
+// id in its ping), touch nothing else. The holders below are fakes on ephemeral ports, never 4747.
+
+/** A server on an ephemeral port answering every request with `reply`. */
+async function holder(reply) {
+  const srv = http.createServer((_q, r) => { r.end(JSON.stringify(reply)); });
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  return {
+    port: srv.address().port,
+    close: () => new Promise((r) => { srv.closeAllConnections(); srv.close(r); }),
+  };
+}
+
+const tmpDir = () => makeSandbox('websecret-').path;
+const portIsFree = async (port) => { try { await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(500) }); return false; } catch { return true; } };
+const stillAnswers = async (port) => (await fetch(`http://127.0.0.1:${port}/`)).status === 200;
+
+test('clearPort on a free port does nothing', async () => {
+  assert.equal(await clearPort(await deadPort(), tmpDir()), null);
+});
+
+test('clearPort leaves a foreign program alone and names it', async () => {
+  const h = await holder({ hello: 'world' });
+  try {
+    assert.equal(await clearPort(h.port, tmpDir()), 'held by another program');
+    assert.ok(await stillAnswers(h.port), 'the holder was disturbed');
+  } finally { await h.close(); }
+});
+
+test('clearPort leaves a console of another install, or of unknown install, alone', async () => {
+  const other = await holder({ ok: true, theme: 'neutral', pid: 2 ** 22, root: 'not-our-root' });
+  const old = await holder({ ok: true, theme: 'neutral', pid: 2 ** 22 });
+  try {
+    assert.equal(await clearPort(other.port, tmpDir()),
+      'held by a Geneseed console (pid 4194304) of another install');
+    assert.match(await clearPort(old.port, tmpDir()), /of an unknown install \(older code\)/);
+    assert.ok(await stillAnswers(other.port) && await stillAnswers(old.port), 'a holder was disturbed');
+  } finally { await other.close(); await old.close(); }
+});
+
+/** A REAL console handler (ping, guard, shutdown route) on an ephemeral port, holding `secret`. */
+async function realConsole(secret) {
+  const holder = { secret };
+  const srv = http.createServer(makeHandler({ theme: 'neutral' }, new JobManager(), 'tok', 'nowhere', holder));
+  holder.srv = srv;
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  return { port: srv.address().port, srv };
+}
+
+const shutdownWith = (port, headers) => fetch(`http://127.0.0.1:${port}/api/shutdown`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{}',
+});
+
+test('clearPort ends a console of this install by its secret, and frees the port', async () => {
+  const dir = tmpDir();
+  const c = await realConsole(webSecret(dir));
+  assert.equal(await clearPort(c.port, dir), null);
+  assert.equal(await portIsFree(c.port), true);
+});
+
+test('an impostor claiming our root and a victim pid ends nothing and is left running', async () => {
+  // A real bystander process stands for the victim. The impostor answers the ping with OUR root
+  // and each pid in turn; `clearPort` once `process.kill`ed whatever pid a ping named.
+  const victim = spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { stdio: 'ignore' });
+  const dir = tmpDir();
+  const secret = webSecret(dir);
+  try {
+    for (const pid of [-1, 0, 1, victim.pid]) {
+      const seen = [];
+      const srv = http.createServer((q, r) => {
+        seen.push(q.headers);
+        r.end(JSON.stringify({ ok: true, theme: 'neutral', pid, root: rootId() }));
+      });
+      await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+      const port = srv.address().port;
+      try {
+        const why = await clearPort(port, dir);
+        assert.ok(typeof why === 'string' && why.startsWith('held by'), `pid ${pid}: ${why}`);
+        assert.ok(await stillAnswers(port), `pid ${pid}: the impostor was disturbed`);
+        assert.equal(seen.filter((h) => JSON.stringify(h).includes(secret)).length, 0,
+          'the secret itself was sent to a listener that only claims our root');
+        assert.doesNotThrow(() => process.kill(victim.pid, 0), `pid ${pid}: the bystander died`);
+        assert.doesNotThrow(() => process.kill(process.pid, 0));
+      } finally { srv.closeAllConnections(); await new Promise((r) => { srv.close(r); }); }
+    }
+  } finally { victim.kill(); }
+});
+
+test('the shutdown route refuses a wrong secret, a proof for another port, and no proof', async () => {
+  const secret = webSecret(tmpDir());
+  const c = await realConsole(secret);
+  try {
+    for (const proof of [secretProof('wrong', c.port), secretProof(secret, c.port + 1), 'x', '']) {
+      const r = await shutdownWith(c.port, { 'X-Geneseed-Secret': proof });
+      assert.ok([401, 403].includes(r.status), `proof ${proof.slice(0, 8)}: ${r.status}`);
+    }
+    assert.equal((await shutdownWith(c.port, {})).status, 403);
+    // The Origin guard still runs ahead of a right proof.
+    const r = await shutdownWith(c.port, { 'X-Geneseed-Secret': secretProof(secret, c.port),
+      'Sec-Fetch-Site': 'cross-site' });
+    assert.equal(r.status, 403);
+    assert.equal((await fetch(`http://127.0.0.1:${c.port}/api/ping`)).status, 200, 'a refused request stopped the console');
+  } finally { c.srv.closeAllConnections(); await new Promise((r) => { c.srv.close(r); }); }
+});
+
+test('the secret file is created once and reused', () => {
+  const dir = tmpDir();
+  const p = path.join(dir, '.geneseed-web-secret');
+  assert.equal(existsSync(p), false);
+  const first = webSecret(dir);
+  assert.ok(first && first.length >= 43, 'expected 32 random bytes, base64url');
+  assert.equal(readFileSync(p, 'utf8'), first);
+  assert.equal(webSecret(dir), first);
+  assert.equal(readFileSync(p, 'utf8'), first, 'rewritten on the second call');
+  if (process.platform !== 'win32') assert.equal(statSync(p).mode & 0o777, 0o600);
+});
+
+test('findConsoles lists a recorded console and an unrecorded one, and skips a plain program', async () => {
+  const rec = await holder({ ok: true, theme: 'neutral', pid: 4242, root: rootId() });
+  const stray = await holder({ ok: true, theme: 'neutral', pid: 77 });
+  const prog = await holder({ nope: 1 });
+  const sb = makeSandbox('webfind-');
+  try {
+    writeDaemon(sb.path, { pid: 4242, port: rec.port, url: `http://127.0.0.1:${rec.port}`, token: 't' });
+    const found = await findConsoles(sb.path, [stray.port, prog.port]);
+    assert.deepEqual(found.map((c) => [c.port, c.pid, c.recorded]),
+      [[rec.port, 4242, true], [stray.port, 77, false]]);
+  } finally { await rec.close(); await stray.close(); await prog.close(); sb.cleanup(); }
+});
+
+test('a restart refused for a superseded console says so, not "foreground server"', () => {
+  const sb = makeSandbox('webrefuse-');
+  const saved = process.env.OPENCODE_CONFIG_DIR;
+  process.env.OPENCODE_CONFIG_DIR = sb.path;
+  try {
+    assert.equal(restartRefusal('neutral'), 'foreground server: restart it from its terminal');
+    writeDaemon(sb.path, { pid: 31337, port: 61660, url: 'http://127.0.0.1:61660', token: 't' });
+    assert.equal(restartRefusal('neutral'), `this console (pid ${process.pid}) is not the recorded `
+      + 'daemon — that one is on http://127.0.0.1:61660 (pid 31337). Restart it there, or end pid '
+      + `${process.pid}.`);
+  } finally {
+    if (saved === undefined) delete process.env.OPENCODE_CONFIG_DIR; else process.env.OPENCODE_CONFIG_DIR = saved;
+    sb.cleanup();
+  }
+});
+
+test('web start on a port a foreign program holds says so and serves elsewhere', async () => {
+  // The real CLI and a real (sandboxed, recorded) daemon, stopped in `finally` through the same
+  // record: the only way to see the launcher's own lines. The holder is never touched.
+  const h = await holder({ hello: 'world' });
+  try {
+    await inSandbox(async (_dir, run) => {
+      try {
+        const r = await run(['start', '--port', String(h.port), '--no-browser']);
+        assert.equal(r.code, 0, r.out);
+        assert.ok(r.out.includes(`[web] port ${h.port} is held by another program — not touching it`), r.out);
+        assert.match(r.out, new RegExp(`asked for port ${h.port}, serving on port (?!${h.port})\\d+ instead`));
+        assert.ok(await stillAnswers(h.port), 'the holder was disturbed');
+      } finally { await run(['stop']); }
+    });
+  } finally { await h.close(); }
 });
