@@ -2826,17 +2826,30 @@ a.tier .tier-bar > span { background: var(--line-3); }
   padding: 7px 11px; /* off-scale: filter field height matches the toolbar controls */ background: var(--bg-2); color: var(--text); border: 1px solid var(--line);
   border-radius: var(--r-sm); font: inherit; font-size: var(--fs-sm); }
 .law-filter:focus { border-color: var(--accent-line); }
-.law-wrap { --law-5: 92px minmax(0, 1.4fr) minmax(0, 1fr) 96px 104px; --law-cols: var(--law-5); }
-.law-wrap.with-toggle { --law-cols: var(--law-5) 64px 64px; }
-.law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */
+/* The rule table sizes itself to the room it has, not to the viewport: beside the right panels a
+   1274px window leaves it ~600px. The tracks live on each row and header (an @container rule can
+   restyle only the container's descendants, and --law-cols must resolve where --law-5 is set).
+   Columns drop in this order, the header following through its matching `data-col` cells:
+     >= 960  all seven: No. · Rule · Latin name · Status · Enforced by · Rule text · Hook gate
+     <  960  Latin name: a translation, the column least needed to read or switch a rule;
+             it moves under the rule name
+     <  760  Status and Enforced by: short words, kept as two chips under the rule name
+     <  540  No.: it moves above the name; switches 44px, padding and gaps tighten
+   Rule keeps 220px down to 540 (~213px at a 375px phone); the switches never drop. Their header
+   reads "Rule text" / "Hook gate" at 76px and its last word ("Text" / "Gate") once narrower. */
+.law-wrap { container: laws / inline-size; }
+.law-rowhead, .law-row { --law-gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ --law-tog: 76px; /* off-scale: fits "HOOK GATE" on one line */
+  --law-5: 92px minmax(220px, 1.4fr) minmax(140px, 1fr) 96px 104px; --law-cols: var(--law-5); }
+.law-wrap.with-toggle .law-rowhead, .law-wrap.with-toggle .law-row { --law-cols: var(--law-5) var(--law-tog) var(--law-tog); }
+.law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: var(--law-gap);
   align-items: center; padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--line); }
 .law-rowhead { padding-top: var(--sp-1); padding-bottom: var(--sp-1); font-family: var(--font-mono); font-size: var(--fs-2xs);
   font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
 .law-row { width: 100%; padding: 10px var(--sp-5); /* off-scale: 10px between --sp-2 and --sp-3 */ border-top: 0; border-left: 0; border-right: 0;
   background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
   transition: background var(--dur-2); }
-.law-row.has-toggle { grid-template-columns: minmax(0, 1fr) 64px 64px; padding-top: 0; padding-bottom: 0; }
-.law-disclosure { display: grid; grid-template-columns: var(--law-5); gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ align-items: center;
+.law-row.has-toggle { grid-template-columns: minmax(0, 1fr) var(--law-tog) var(--law-tog); padding-top: 0; padding-bottom: 0; }
+.law-disclosure { display: grid; grid-template-columns: var(--law-5); gap: var(--law-gap); align-items: center;
   min-width: 0; padding: 10px 0; /* off-scale: 10px between --sp-2 and --sp-3 */ border: 0; background: transparent; color: inherit; font: inherit;
   text-align: left; cursor: pointer; }
 .law-disclosure:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
@@ -2855,13 +2868,41 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .law-name { display: flex; flex-direction: column; gap: 2px; /* off-scale: 2px hairline, below the 4px grid */ min-width: 0; font-weight: 600; }
 .law-princ { font-weight: 400; font-size: var(--fs-sm); line-height: 1.4; color: var(--text-3); }
 .law-latin { min-width: 0; font-style: italic; color: var(--text-3); }
-.law-status { justify-self: start; padding: 2px var(--sp-2); /* off-scale: 2px hairline, below the 4px grid */ border-radius: 999px; /* off-scale: 999px pill */ white-space: nowrap;
+.law-status, .law-chip-status { justify-self: start; padding: 2px var(--sp-2); /* off-scale: 2px hairline, below the 4px grid */ border-radius: 999px; /* off-scale: 999px pill */ white-space: nowrap;
   background: var(--surface-3); color: var(--text-3); font-size: var(--fs-xs); font-weight: 600; }
-.law-status.ok { background: color-mix(in srgb, var(--good) 13%, transparent); color: var(--good-text); }
-.law-status.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn-text); }
-.law-enf { font-size: var(--fs-sm); color: var(--text-2); }
-.law-enf.hook { color: var(--accent-text); font-weight: 600; }
-.law-enf.gate-off { color: var(--warn-text); font-weight: 600; }
+.law-status.ok, .law-chip-status.ok { background: color-mix(in srgb, var(--good) 13%, transparent); color: var(--good-text); }
+.law-status.warn, .law-chip-status.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn-text); }
+.law-enf, .law-chip-enf { font-size: var(--fs-sm); color: var(--text-2); }
+.law-enf.hook, .law-chip-enf.hook { color: var(--accent-text); font-weight: 600; }
+.law-enf.gate-off, .law-chip-enf.gate-off { color: var(--warn-text); font-weight: 600; }
+/* A dropped column's content, back in the rule cell; shown only by the container queries below. */
+.law-fold { display: none; }
+.law-fold-no { order: -1; align-items: center; gap: var(--sp-2); font-family: var(--font-mono); font-weight: 400;
+  font-size: var(--fs-xs); color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.law-fold-no .x { color: var(--text-3); font-size: var(--fs-2xs); transition: transform var(--dur-3); }
+.law-row.on .law-fold-no .x { transform: rotate(90deg); }
+.law-fold-latin { font-weight: 400; font-size: var(--fs-sm); font-style: italic; color: var(--text-3); }
+.law-fold-chips { flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); margin-top: 2px; /* off-scale: 2px hairline */ font-weight: 400; }
+.law-fold-chips .law-chip-enf { font-size: var(--fs-xs); }
+@container laws (max-width: 959px) {
+  .law-rowhead, .law-row { --law-5: 92px minmax(220px, 1fr) 96px 104px; --law-tog: 64px; }
+  .law-wrap [data-col="latin"], .law-wrap .rh-cut { display: none; }
+  .law-fold-latin { display: block; }
+}
+@container laws (max-width: 759px) {
+  .law-rowhead, .law-row { --law-5: 92px minmax(220px, 1fr); }
+  .law-wrap [data-col="status"], .law-wrap [data-col="enf"] { display: none; }
+  .law-fold-chips { display: flex; }
+}
+@container laws (max-width: 539px) {
+  .law-rowhead, .law-row { --law-5: minmax(0, 1fr); --law-tog: 44px; --law-gap: var(--sp-2);
+    padding-left: var(--sp-3); padding-right: var(--sp-3); }
+  .law-wrap [data-col="no"] { display: none; }
+  /* "always on" is wider than 44px: the two-word lock label stacks, centred, instead of spilling. */
+  .law-row .no-gate { white-space: normal; text-align: center; line-height: 1.2; }
+  .law-fold-no { display: flex; }
+  .law-wrap .law-expand { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+}
 .law-row.law-off .law-no, .law-row.law-off .law-name > span:first-child { color: var(--text-3); }
 .law-expand { padding: var(--sp-1) var(--sp-5) 18px 46px; /* off-scale: 46px aligns the text under the law name column */ border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--accent) 4%, transparent); }
@@ -2887,7 +2928,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
   font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
 .pack-head .tier-h::before { content: ''; width: 8px; height: 8px; border-radius: 50%;
   background: var(--cc, var(--text-3)); }
-.pack-desc { flex: 1; font-size: var(--fs-sm); }
+/* A 14em basis: with too little room left on the line the description wraps to its own line,
+   never to a one-word column (it did beside the state at phone width). */
+.pack-desc { flex: 1 1 14em; font-size: var(--fs-sm); }
 .pack-state { font-size: var(--fs-xs); color: var(--text-3); }
 /* DIMMED, NEVER HIDDEN. A pack that is not built in stays legible: hiding it makes "off"
    indistinguishable from "never existed". Dimmed by colour, as .law-off is, never opacity:
@@ -3208,8 +3251,6 @@ a.kit-name:hover { color: var(--accent-text); }
   .library { grid-template-columns: 200px minmax(0, 1fr); }
   .library .lib-reader { grid-column: 1 / -1; border-top: 1px solid var(--line); }
   .library.locked .lib-reader { grid-column: auto; border-top: 0; }
-  .law-wrap { --law-5: 80px minmax(0, 1fr) 96px 104px; }
-  .law-latin, .law-rowhead > span:nth-child(3) { display: none; }
   .needs { grid-template-columns: max-content minmax(0, 1fr) max-content; }
   .needs-where { display: none; }
 }
@@ -3280,8 +3321,6 @@ a.kit-name:hover { color: var(--accent-text); }
   .health { flex-wrap: wrap; }
   .needs { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 10px; }
   .needs .tag { display: none; }
-  .law-wrap { --law-5: 64px minmax(0, 1fr) 84px; }
-  .law-enf, .law-rowhead > span:nth-child(5) { display: none; }
   .library, .library.locked { grid-template-columns: minmax(0, 1fr); }
   .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; }
   /* The rail becomes a strip: the entries in one scrolling row, and the selected entry's

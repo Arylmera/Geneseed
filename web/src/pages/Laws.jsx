@@ -573,20 +573,26 @@ function LawsOf({
       <span className="mono dim">{src}</span>
     </div>
   )
-  // One compact header row under every open band. Decorative for assistive tech: the rows are
+  // One compact header row under every open band, its `data-col` cells the twins of LawRow's, so
+  // the container queries in styles.css drop a column from header and rows alike. Decorative for assistive tech: the rows are
   // buttons, not table rows, so `columnheader` would be orphaned, and each row's label already
   // reads number, name, status and enforcement. Seven times over it would only be noise.
   const colHead = (withToggle) => (
     <div className="law-rowhead" aria-hidden="true">
-      <span>No.</span>
+      <span data-col="no">No.</span>
       <span>Rule</span>
-      <span>Latin name</span>
-      <span>Status</span>
-      <span>Enforced by</span>
+      <span data-col="latin">Latin name</span>
+      <span data-col="status">Status</span>
+      <span data-col="enf">Enforced by</span>
+      {/* Below the widest layout the switch columns narrow and each label keeps its last word. */}
       {withToggle && (
         <>
-          <span>Rule text</span>
-          <span>Hook gate</span>
+          <span>
+            <span className="rh-cut">Rule </span>text
+          </span>
+          <span>
+            <span className="rh-cut">Hook </span>gate
+          </span>
         </>
       )}
     </div>
