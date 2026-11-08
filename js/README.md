@@ -106,7 +106,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `gitref.mjs` | fs/path-only: `gitRootOf`, `gitDirOf`, `gitCommonDirOf`, `currentBranch`, `protectedBranches`, `stashExists`, `loopLaunched` — read straight off `.git`, never spawn git. Shared by `hooks.mjs`'s git-gate, `loss.mjs` and `js/loop/cli.mjs`'s commit-message writer |
 | `loss.mjs` | Law IV calibrated to real loss: `lossReason` decides whether a command would really lose data (protected branch, unpushed branch, dirty tree, stash, reflog, files git cannot restore) and fails closed. The gate path's one `git` spawn, reached only after `LOSS_CANDIDATE_RE` matched. Twin: the OpenCode guard plugin |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
-| `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`. Kept cheap to import |
+| `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`; and the web console's login launcher (`autostartState`/`autostartInstall`/`autostartRemove`). Kept cheap to import |
 | `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
 | `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |

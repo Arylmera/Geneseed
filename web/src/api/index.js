@@ -174,6 +174,8 @@ const pickFolder = () => post('/api/pick-folder', {})
 const ping = () => get('/api/ping')
 const shutdown = () => post('/api/shutdown')
 const restart = () => post('/api/restart')
+// Write or delete the login launcher. The body is the action alone: the server picks the file.
+const autostart = (action) => post('/api/autostart', { action })
 
 // ── Docs ────────────────────────────────────────────────────────────────────
 // Docs surface: the menu (groups + pages) and one page at a time. The page
@@ -255,6 +257,7 @@ export const api = {
   ping,
   shutdown,
   restart,
+  autostart,
   docs,
   docsPage,
   rules,

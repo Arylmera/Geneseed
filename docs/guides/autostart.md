@@ -19,11 +19,35 @@ Only one console runs at a time. A second `start` does nothing, so logging in tw
 
 > **Always use `web start` in a login item, never bare `web`.** Bare `geneseed web` runs in the foreground and leaves no record of itself. `web stop`, `web restart` and `web status` then cannot see it: they report no live server while it keeps serving. A `restart` would then start a second console that cannot take the busy port.
 
-> **This is a file you create. Geneseed never writes or edits a login item**, and that includes `geneseed migrate`. To remove the login item, delete the file.
+## From the web console
+
+Open **Settings** and find the **Start at login** row in **Server**. The row shows the file and its state:
+
+| State | What the row offers |
+| --- | --- |
+| Off | **Turn on** writes the login item for this platform |
+| On · written by Geneseed | **Remove** deletes it |
+| On · points at another copy or Node | **Update** rewrites it for this copy |
+| On · set up by hand | A link to this guide. Geneseed does not change or delete the file |
+
+Each button asks first, and the question names the file. Geneseed writes only one file per platform:
+
+- **Windows:** `geneseed-web.vbs` in your Startup folder.
+- **macOS:** `~/Library/LaunchAgents/dev.geneseed.web.plist`. It loads at your next login. Geneseed does not run `launchctl`. To start the console now, run `launchctl load` on the file, or run `geneseed web start`.
+
+The file runs the Node that runs the console, by absolute path, with this copy's `bin/geneseed-cli.mjs` and `web start --no-browser`. Its second line (the third line of a plist) is a `GENESEED_AUTOSTART` comment. Geneseed updates or removes a file only when that exact line is in that place, so a file you wrote yourself stays yours. If you upgrade Node or move the copy, the row shows **Update**. The confirm names the copy the file runs, and it warns you when that copy is an agent worktree (`.claude/worktrees`) or an npx cache: such a folder can be deleted, and the login item then fails. On Windows, Geneseed refuses a path with a `%` (the login script would expand it) or a character outside ASCII. Set those up by hand.
+
+> **The page token does not stop a local program.** Each write needs the page's token, which keeps other web pages in your browser from turning this on. A program that runs as you can read the token from the console's record, `.geneseed-web.json` in the install folder it serves, and send the same request. It could also write the file itself, so this adds no new risk. The confirm only asks you; it does not protect anything.
+
+If the write fails, the row shows the error from the system. A managed Windows PC can block the Startup folder or VBS scripts. Then use the scheduled task below, or ask your administrator.
+
+Only **Settings** writes a login item. `geneseed migrate` and uninstall do not write or delete one.
+
+## By hand
 
 The examples below assume `geneseed` is on your `PATH` (see [Run geneseed from anywhere](run-anywhere.md)). Login items do not see your shell's `PATH`, so always use the absolute path to the launcher. For an npm install, `npm prefix -g` shows where npm keeps it.
 
-## Windows
+### Windows
 
 Press **Win+R**, type `shell:startup`, and create a file called `geneseed-web.vbs` in the folder that opens:
 
@@ -41,7 +65,7 @@ schtasks /Create /TN "Geneseed Web" /SC ONLOGON /TR "\"%LOCALAPPDATA%\Geneseed\b
 schtasks /Delete /TN "Geneseed Web" /F   # to remove it
 ```
 
-## macOS
+### macOS
 
 Create a LaunchAgent at `~/Library/LaunchAgents/dev.geneseed.web.plist`. Set `RunAtLoad` and **no** `KeepAlive`. The launcher exits as soon as it has started the background process, which keeps running on its own.
 

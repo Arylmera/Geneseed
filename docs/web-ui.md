@@ -402,8 +402,10 @@ streams the output of background jobs and keeps their history across reloads.
   own, about the tool and never one install: a sheet with a section index. **Machine**:
   version + Update (labelled by how this copy updates: git pull, npm install -g, or the command
   to run by hand; on the Overview the button shows only when the pull can run), Add to PATH. **Server**: running · port ·
-  pid · uptime, whether the code matches the disk (with Restart), start-at-login state (read
-  only), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
+  pid · uptime, whether the code matches the disk (with Restart), Start at login (the
+  login launcher's state; it writes the file when absent, updates it when stale and removes it when
+  Geneseed wrote it, each after a confirm that names the file; a hand-written one gets only a
+  link to the guide), and the four request guards; the index marks Server with a good/warn dot. **About**: version, changelog, credits, source, creator.
   **Danger zone**: Stop server, Remove from PATH, and a pointer to each install's own
   Uninstall in Hosts.
 - **Appearance** (the topbar's popover, on every page) — the one home of the skin and the accent (a

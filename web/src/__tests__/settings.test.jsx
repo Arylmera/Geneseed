@@ -171,7 +171,11 @@ describe('Settings', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-10-24T12:00:00Z'))
     const started = Date.parse('2026-10-24T10:00:00Z') / 1000
-    const server = { pid: 4242, started, autostart: true }
+    const server = {
+      pid: 4242,
+      started,
+      autostart: { file: 'C:/S/geneseed-web.vbs', state: 'ours' },
+    }
     const { rerender } = render(
       <Settings onAction={() => {}} overview={{ server, daemon_stale: false }} />,
     )
@@ -181,7 +185,7 @@ describe('Settings', () => {
     expect(code().querySelector('.pill').textContent).toBe('matches disk')
     expect(code().querySelector('.pill').className).toContain('good')
     expect(within(code()).getByRole('button', { name: /Restart server/ })).toBeTruthy()
-    expect(within(section('Server')).getByText('On · login script')).toBeTruthy()
+    expect(within(section('Server')).getByText('On · written by Geneseed')).toBeTruthy()
 
     rerender(
       <Settings
@@ -191,7 +195,132 @@ describe('Settings', () => {
     )
     expect(code().querySelector('.pill').textContent).toBe('disk has newer code → Restart')
     expect(code().querySelector('.pill').className).toContain('warn')
-    expect(within(section('Server')).getByText('unknown')).toBeTruthy()
+    expect(within(section('Server')).getByText('not available')).toBeTruthy()
+  })
+
+  // Start at login: one button per state, each confirmed with the file the server will write or
+  // delete, and the body is the action alone. A hand-written file gets the guide, no button.
+  describe('Start at login', () => {
+    const VBS = 'C:/Startup/geneseed-web.vbs'
+    const ROOT = 'C:/git/Geneseed'
+    const row = () => within(section('Server')).getByText('Start at login').closest('.sheet-row')
+    const ui = (confirm, state) => (
+      <ConfirmContext.Provider value={confirm}>
+        <Settings
+          onAction={() => {}}
+          overview={{ server: { autostart: { file: VBS, state, root: ROOT, transient: false } } }}
+        />
+      </ConfirmContext.Provider>
+    )
+    afterEach(() => {
+      delete api.autostart
+    })
+
+    it('writes the launcher after a confirm that names the file', async () => {
+      const confirm = vi.fn(async () => true)
+      api.autostart = vi.fn(async () => ({ ok: true, autostart: { file: VBS, state: 'ours' } }))
+      render(ui(confirm, 'absent'))
+      expect(within(row()).getByText('Off')).toBeTruthy()
+      await act(async () => fireEvent.click(within(row()).getByRole('button', { name: 'Turn on' })))
+      expect(confirm).toHaveBeenCalledWith(
+        `Write ${VBS}? It starts the web console from ${ROOT} at each login (hidden, no browser).`,
+        { title: 'Start at login?', confirmLabel: 'Write file' },
+      )
+      expect(api.autostart).toHaveBeenCalledWith('install')
+      expect(within(row()).getByText('On · written by Geneseed')).toBeTruthy()
+      expect(within(row()).getByRole('button', { name: 'Remove' })).toBeTruthy()
+    })
+
+    it('says a plist loads at the next login, and warns about a copy that can be deleted', async () => {
+      const confirm = vi.fn(async () => false)
+      render(
+        <ConfirmContext.Provider value={confirm}>
+          <Settings
+            onAction={() => {}}
+            overview={{
+              server: {
+                autostart: {
+                  file: '/L/dev.geneseed.web.plist',
+                  state: 'absent',
+                  root: '/Users/me/.claude/worktrees/x',
+                  transient: true,
+                },
+              },
+            }}
+          />
+        </ConfirmContext.Provider>,
+      )
+      await act(async () => fireEvent.click(within(row()).getByRole('button', { name: 'Turn on' })))
+      expect(confirm.mock.calls[0][0]).toBe(
+        'Write /L/dev.geneseed.web.plist? It starts the web console from /Users/me/.claude/worktrees/x' +
+          ' at each login (hidden, no browser). It loads at your next login. Warning: that copy is an agent' +
+          ' worktree or an npx cache, which can be deleted; the login item then fails.',
+      )
+    })
+
+    it('sends nothing when the confirm is declined', async () => {
+      api.autostart = vi.fn()
+      render(
+        ui(
+          vi.fn(async () => false),
+          'ours',
+        ),
+      )
+      await act(async () => fireEvent.click(within(row()).getByRole('button', { name: 'Remove' })))
+      expect(api.autostart).not.toHaveBeenCalled()
+    })
+
+    it('removes our launcher after a confirm that names the file', async () => {
+      const confirm = vi.fn(async () => true)
+      api.autostart = vi.fn(async () => ({ ok: true, autostart: { file: VBS, state: 'absent' } }))
+      render(ui(confirm, 'ours'))
+      await act(async () => fireEvent.click(within(row()).getByRole('button', { name: 'Remove' })))
+      expect(confirm).toHaveBeenCalledWith(
+        `Delete ${VBS}? The console no longer starts at login.`,
+        { title: 'Stop starting at login?', confirmLabel: 'Delete file', tone: 'danger' },
+      )
+      expect(api.autostart).toHaveBeenCalledWith('remove')
+      expect(within(row()).getByText('Off')).toBeTruthy()
+    })
+
+    it('offers Update for a stale launcher', async () => {
+      const confirm = vi.fn(async () => true)
+      api.autostart = vi.fn(async () => ({ ok: true, autostart: { file: VBS, state: 'ours' } }))
+      render(ui(confirm, 'stale'))
+      await act(async () => fireEvent.click(within(row()).getByRole('button', { name: 'Update' })))
+      expect(confirm.mock.calls[0][1]).toEqual({ title: 'Start at login?', confirmLabel: 'Update' })
+      expect(api.autostart).toHaveBeenCalledWith('install')
+    })
+
+    it('points a hand-written launcher at the guide, with no button', () => {
+      render(ui(vi.fn(), 'hand'))
+      expect(within(row()).getByText('On · set up by hand')).toBeTruthy()
+      expect(within(row()).queryByRole('button')).toBeNull()
+      expect(
+        within(row())
+          .getByRole('link', { name: /Install guide/ })
+          .getAttribute('href'),
+      ).toBe('#/docs/autostart')
+    })
+
+    it("shows the server's own failure text", async () => {
+      const err = new Error(
+        'could not write C:/Startup/geneseed-web.vbs (EPERM: operation not permitted)',
+      )
+      err.status = 409
+      err.body = { ok: false, autostart: { file: VBS, state: 'absent' } }
+      api.autostart = vi.fn(async () => {
+        throw err
+      })
+      render(
+        ui(
+          vi.fn(async () => true),
+          'absent',
+        ),
+      )
+      await act(async () => fireEvent.click(within(row()).getByRole('button', { name: 'Turn on' })))
+      expect(within(row()).getByRole('alert').textContent).toBe(err.message)
+    })
   })
 
   // The four guards js/web/handler.mjs enforces, each a good pill.
