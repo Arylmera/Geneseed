@@ -11,7 +11,9 @@ import EmptyState from '../components/EmptyState.jsx'
 import { LAW_CATS, PACK_CATS } from '../lib/lawCats.js'
 import {
   GATE_COPY,
+  GATE_HOOK,
   GATE_SWITCH,
+  ALWAYS_ASKS,
   PRECEDENCE,
   PRECEDENCE_INFORM,
   enforcedBy,
@@ -46,6 +48,7 @@ import { fleetSlots, installTag, pairOf } from '../lib/hosts.js'
 // links keep the switch's own address, `ownership`, so a link to the gate opens this row.
 const OWNERSHIP_ROW = 'ont:ownership'
 const rowOf = (addr) => (addr === 'ownership' ? OWNERSHIP_ROW : addr)
+const CONSENT = 'process.5'
 
 // The doctrine rows, grouped by pack in the order the server sends them (PACK_ORDER, the reading
 // order, not alphabetical). Every pack is here whether or not it is built in. Pure over the
@@ -309,6 +312,15 @@ function LawsOf({
       ]
     : []
 
+  // Text excluded (staged or deployed) while its hook will still ask after Apply. A switched rule
+  // (rigor 5) counts only once its exclusion is deployed: Apply switches its gate off with it.
+  const stillAsks = (addr) => {
+    if (isOn(addr)) return false
+    if (ALWAYS_ASKS.has(addr)) return true
+    if (!GATE_SWITCH[addr] || gatesUnread) return false
+    return armed(addr) && !deployedRules.includes(addr)
+  }
+
   // A doctrine row's status is the STAGED switch against what is deployed: a rule the
   // install carries reads Active, one it excludes reads Off, and a rule whose switch was
   // flipped but not applied says so rather than reporting the staged state as fact.
@@ -319,6 +331,7 @@ function LawsOf({
     return {
       ...r,
       enf: gatesUnread && GATE_SWITCH[r.addr] && r.enf === 'Hook gate' ? 'Unknown' : r.enf,
+      note: stillAsks(r.addr) ? 'Text excluded; the hook still asks.' : '',
       off: !on,
       status,
       statusTone: on ? 'ok' : on === live ? '' : 'warn',
@@ -356,16 +369,49 @@ function LawsOf({
     )
     if (ok) onAction('install', { ...install, [key]: next })
   }
-  const gateSwitch = (addr) => (
+  // `rule` names the row's rule in the label, so a reader hears which hook this is; the ownership
+  // gate has none, and keeps its own name.
+  const gateSwitch = (addr, rule) => (
     <button
       type="button"
       className={`sw-toggle${armed(addr) ? ' on' : ''}`}
       role="switch"
       aria-checked={armed(addr)}
-      aria-label={GATE_SWITCH[addr].label}
+      aria-label={
+        rule ? `${GATE_SWITCH[addr].label}: hook gate of ${rule}` : GATE_SWITCH[addr].label
+      }
       onClick={() => toggleGate(addr)}
     />
   )
+  // A cell that cannot switch: its visible word, and why, for the pointer and the screen reader.
+  const locked = (word, why) => (
+    <span className="no-gate" title={why}>
+      {word}
+      <span className="sr-only">: {why}</span>
+    </span>
+  )
+  // The two toggle columns, Rule text then Hook gate, each a cell of its own.
+  const cells = (text, gate) => (
+    <>
+      <span className="toggle-cell">{text}</span>
+      <span className="toggle-cell">{gate}</span>
+    </>
+  )
+  // The Hook gate cell: a switch, a locked state for a hook with no switch, or nothing.
+  const hookCell = (r) => {
+    if (GATE_SWITCH[r.addr]) return gateSwitch(r.addr, r.name)
+    if (r.addr === CONSENT)
+      return locked(
+        'with text',
+        `No switch of its own: excluding ${r.name} drops its commit and push ask in the same rebuild (Bob still logs its warning).`,
+      )
+    if (ALWAYS_ASKS.has(r.addr))
+      return locked(
+        'always on',
+        `No switch yet: the hook asks even with ${r.name}'s text excluded.`,
+      )
+    return null
+  }
 
   // Gated: a hook enforces it now. A switched-off gate reads "Gate off", so it is not counted. A
   // rule with a gate switch follows that switch alone: excluding rigor 5 drops its text and the
@@ -378,7 +424,10 @@ function LawsOf({
     v === 'all' ||
     (v === 'gated'
       ? r.enf === 'Hook gate' &&
-        (GATE_SWITCH[r.addr] || !String(r.addr).includes('.') || deployedRules.includes(r.addr))
+        (GATE_SWITCH[r.addr] ||
+          ALWAYS_ASKS.has(r.addr) ||
+          !String(r.addr).includes('.') ||
+          deployedRules.includes(r.addr))
       : isChanged(r))
   // Substring narrowing over address, name, Latin name and principle; display-only, so the
   // staged selection above keeps operating on the full rule set.
@@ -531,8 +580,8 @@ function LawsOf({
     (ql || view !== 'all' ? gateRows.filter(match).length : 0) +
     (showInv ? invRows.length : 0) +
     (showDoc ? packs.reduce((n, p) => n + p.rules.filter(match).length, 0) : 0)
-  // The switch inside an open row (Ownership, rigor 5), where a switch can act. It sits outside the
-  // row's disclosure button, so a click on it never folds the row. Rigor 5's asks are on its row.
+  // The switch inside the open Ownership row, where a switch can act. It sits outside the row's
+  // disclosure button, so a click on it never folds the row. Rigor 5's switch is on its row.
   const gateAsks = withAsks(gateRows[0] || {}).asks
   const gateLine = (addr, asks) =>
     canApply ? (
@@ -545,6 +594,27 @@ function LawsOf({
         {gateSwitch(addr)}
       </div>
     ) : null
+  // What the hook does, folded, in any row a hook gates. Shown with or without an install to act
+  // on: it explains, it switches nothing. The switch line, where there is one, stays last.
+  const hookNote = (addr) => {
+    const h = GATE_HOOK[addr]
+    if (!h) return null
+    return (
+      <details className="law-hook">
+        <summary>What the hook does</summary>
+        <dl>
+          <dt>Triggers on</dt>
+          <dd>{h.on}</dd>
+          <dt>Per host</dt>
+          <dd>{h.hosts}</dd>
+          <dt>Does not see</dt>
+          <dd>{h.blind}</dd>
+          <dt>If switched off</dt>
+          <dd>{h.off}</dd>
+        </dl>
+      </details>
+    )
+  }
 
   return (
     <>
@@ -606,7 +676,14 @@ function LawsOf({
                   rev={dataRev}
                   isOpen={open === s.addr}
                   onToggle={() => toggle(s.addr)}
-                  after={s.addr === OWNERSHIP_ROW ? gateLine('ownership', gateAsks) : null}
+                  after={
+                    s.addr === OWNERSHIP_ROW ? (
+                      <>
+                        {hookNote('ownership')}
+                        {gateLine('ownership', gateAsks)}
+                      </>
+                    ) : null
+                  }
                 />
               ))}
             </>
@@ -646,6 +723,12 @@ function LawsOf({
             <span>Latin name</span>
             <span>Status</span>
             <span>Enforced by</span>
+            {canApply && (
+              <>
+                <span>Rule text</span>
+                <span>Hook gate</span>
+              </>
+            )}
           </div>
           {showInv && invRows.length > 0 && (
             <>
@@ -657,15 +740,18 @@ function LawsOf({
                   rev={dataRev}
                   isOpen={open === l.addr}
                   onToggle={() => toggle(l.addr)}
+                  after={hookNote(l.addr)}
                   toggleCol={
-                    !canApply || l.retired ? null : GATE_SWITCH[l.addr] ? (
-                      gateSwitch(l.addr)
-                    ) : (
-                      // A text-only law: nothing at the tool boundary to switch off.
-                      <span className="no-gate" title="Enforced by its text alone: no hook gate">
-                        no gate
-                      </span>
-                    )
+                    !canApply || l.retired
+                      ? null
+                      : cells(
+                          // A Dictate's text cannot be excluded: a locked cell, not a switch.
+                          locked(
+                            'locked',
+                            `A ${nouns.law} cannot be excluded: its text always binds.`,
+                          ),
+                          GATE_SWITCH[l.addr] ? gateSwitch(l.addr, l.name) : null,
+                        )
                   }
                 />
               ))}
@@ -724,18 +810,21 @@ function LawsOf({
                         rev={dataRev}
                         isOpen={open === r.addr}
                         onToggle={() => toggle(r.addr)}
-                        after={GATE_SWITCH[r.addr] ? gateLine(r.addr) : null}
+                        after={hookNote(r.addr)}
                         toggleCol={
-                          canApply ? (
-                            <button
-                              type="button"
-                              className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
-                              role="switch"
-                              aria-checked={isOn(r.addr)}
-                              aria-label={`${r.name} rule`}
-                              onClick={() => toggleRule(r.addr)}
-                            />
-                          ) : null
+                          canApply
+                            ? cells(
+                                <button
+                                  type="button"
+                                  className={`sw-toggle${isOn(r.addr) ? ' on' : ''}`}
+                                  role="switch"
+                                  aria-checked={isOn(r.addr)}
+                                  aria-label={`${r.name} rule text`}
+                                  onClick={() => toggleRule(r.addr)}
+                                />,
+                                hookCell(r),
+                              )
+                            : null
                         }
                       />
                     ))}

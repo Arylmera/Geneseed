@@ -827,6 +827,7 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   font-weight: 600; font-size: 17px; }
 /* pre-line: some questions (Diff restore, Laws rebuild) break lines with a newline, as they did in window.confirm */
 .confirm-body { color: var(--text-2); font-size: 13px; line-height: 1.5; white-space: pre-line; }
+.confirm-check { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); white-space: normal; color: var(--text); }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
 /* the in-page filter box on the Constitution/Skills toolbars (Library styles
@@ -2772,21 +2773,23 @@ a.tier .tier-bar > span { background: var(--line-3); }
   border-radius: var(--r-sm); font: inherit; font-size: var(--fs-sm); }
 .law-filter:focus { border-color: var(--accent-line); }
 .law-wrap { --law-5: 92px minmax(0, 1.4fr) minmax(0, 1fr) 96px 104px; --law-cols: var(--law-5); }
-.law-wrap.with-toggle { --law-cols: var(--law-5) 44px; }
+.law-wrap.with-toggle { --law-cols: var(--law-5) 64px 64px; }
 .law-rowhead, .law-row { display: grid; grid-template-columns: var(--law-cols); gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */
   align-items: center; padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--line); }
 .law-rowhead { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); }
 .law-row { width: 100%; padding: 10px var(--sp-5); /* off-scale: 10px between --sp-2 and --sp-3 */ border-top: 0; border-left: 0; border-right: 0;
   background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
   transition: background var(--dur-2); }
-.law-row.has-toggle { grid-template-columns: minmax(0, 1fr) 44px; padding-top: 0; padding-bottom: 0; }
+.law-row.has-toggle { grid-template-columns: minmax(0, 1fr) 64px 64px; padding-top: 0; padding-bottom: 0; }
 .law-disclosure { display: grid; grid-template-columns: var(--law-5); gap: 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ align-items: center;
   min-width: 0; padding: 10px 0; /* off-scale: 10px between --sp-2 and --sp-3 */ border: 0; background: transparent; color: inherit; font: inherit;
   text-align: left; cursor: pointer; }
 .law-disclosure:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
 /* A row without a switch is the focus target itself; `.panel.flush` clips an outer ring (CO-10). */
 .law-row:focus-visible { outline-offset: -2px; }
-.law-row .toggle-col { display: flex; align-items: center; justify-content: center; }
+.law-row .toggle-col { display: contents; }
+.law-row .toggle-cell { display: flex; align-items: center; justify-content: center; }
+.law-note { font-weight: 500; font-size: var(--fs-xs); color: var(--warn-text); }
 .law-row .no-gate { font-size: var(--fs-2xs); color: var(--text-3); white-space: nowrap; }
 .law-row:hover { background: var(--surface-2); }
 .law-row.on { background: var(--accent-soft); }
@@ -2814,6 +2817,14 @@ a.tier .tier-bar > span { background: var(--line-3); }
 /* A gate's switch inside an open row, below the text it does not change. */
 .law-gate { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+/* What a hook does, folded under the rule text: four short labelled lines. */
+.law-hook { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 75ch; }
+.law-hook > summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-sm); font-weight: 600; }
+.law-hook dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-3); margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm); line-height: 1.5; }
+.law-hook dt { color: var(--text-3); }
+.law-hook dd { margin: 0; color: var(--text-2); }
+@media (max-width: 640px) { .law-hook dl { grid-template-columns: 1fr; } .law-hook dd { margin-bottom: var(--sp-1); } }
 .band-head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
   padding: var(--sp-3) var(--sp-5) var(--sp-2); background: var(--bg-2); border-bottom: 1px solid var(--line); }
 .band-head .mono { font-size: var(--fs-2xs); }
