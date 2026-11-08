@@ -137,6 +137,7 @@
   "DOCTRINES": "Tactics",
   "AGENT": "Teammate",
   "AGENTS": "Teammates",
+  "PRIMARY_AGENT": "Player One",
   "SKILL": "Combo",
   "SKILLS": "Combos",
   "MEMORY": "Checkpoint",

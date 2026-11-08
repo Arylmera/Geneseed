@@ -410,10 +410,10 @@ function sessionEntry(rel, abs, text, label) {
  * A missing or unreadable file is simply absent — this is best-effort context, never a gate.
  * `host` is what the emitted hook passes (`emittedHost`), null for none, which reads as claude.
  */
-export function sessionFiles(hookRoot, host = null, carrier = installCarrier(hookRoot, host)) {
+export function sessionFiles(hookRoot, host = null, carrier = installCarrier(hookRoot, host), rels = SESSION_FILES) {
   const tier = readsTier(hookRoot, host) || projectReadsTier(carrier);
   const found = [];
-  for (const rel of SESSION_FILES) {
+  for (const rel of rels) {
     const wiki = rel === 'geneseed-wiki.jsonc';
     const pinned = wiki && process.env.GENESEED_WIKI && isFile(process.env.GENESEED_WIKI);
     const hostAbs = pinned ? process.env.GENESEED_WIKI
@@ -676,7 +676,12 @@ const installCarrier = (hookRoot, host) => installCarrierFile(hookRoot, host)[1]
  * instead of injected; a lazy listing shortened is not, since it only names files. `heads` are the
  * lines above the session block; `root` places `eager` and `lazy`. Reads, never prints.
  */
-function renderPayload({ heads, session, eager, lazy, source, root }) {
+const SESSION_TITLE = '=== SESSION FILES — your harness files, injected at session start '
+  + '(untouched seeds skipped) ===';
+// The sub-agent's banner (`subagentRules`): the user's rules alone, under their own title.
+export const USER_RULES_TITLE = '=== USER RULES — the user\'s standing rules; obey them as you obey the Dictates ===';
+
+function renderPayload({ heads, session, eager, lazy, source, root, title = SESSION_TITLE, budget = OUTPUT_BUDGET }) {
   const lines = [];
   // `spent` counts every character pushed, headers included: the budget is the host's cap on
   // the whole payload, not on the file bodies alone.
@@ -685,8 +690,7 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
   const push = (...ls) => { for (const l of ls) { lines.push(l); spent += cost(l); } };
   if (heads.length) push(...heads, '');
   if (session.length) {
-    push('=== SESSION FILES \u2014 your harness files, injected at session start '
-      + '(untouched seeds skipped) ===', '');
+    push(title, '');
     // Rules answer only to their own size: the lines above them never push one out, so they are
     // capped when their layers together pass the share, and everything after them spends `spent`.
     let rulesSpent = 0;
@@ -694,7 +698,7 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
     for (const s of session) {
       const head = `----- ${s.rel}${s.label ? ` (${s.label})` : ''} -----`;
       const rules = s.rel === 'user-rules.md';
-      const room = OUTPUT_BUDGET - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
+      const room = budget - LAZY_RESERVE - (rules ? rulesSpent : spent) - cost(head) - cost('');
       const where = `${s.abs} on demand`;
       if (room <= 0) {
         left.push({ rel: s.rel, line: `[context] ${s.rel} not injected (session budget) \u2014 read ${where}` });
@@ -708,7 +712,7 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
     // Paths have no length limit, so these lines answer to the budget like any listing.
     if (left.length) {
       cut = true;
-      const room = OUTPUT_BUDGET - LIST_RESERVE - spent - cost('');
+      const room = budget - LIST_RESERVE - spent - cost('');
       const tail = (n) => `[context] ${n} more session files not injected (session budget)`;
       // The memory map first, and by its short name when its path cannot fit: a count line must
       // never replace the one file C12 owes a line that names it.
@@ -739,7 +743,7 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
       push(head, `[context] MISSING eager file: ${asOsError(e, target)}`, '');
       continue;
     }
-    if (spent + cost(head) + cost(text) + cost('') > OUTPUT_BUDGET - LAZY_RESERVE) {
+    if (spent + cost(head) + cost(text) + cost('') > budget - LAZY_RESERVE) {
       demoted.push({ ...entry, over: true });
       continue;
     }
@@ -749,7 +753,7 @@ function renderPayload({ heads, session, eager, lazy, source, root }) {
   if (lazy.length || demoted.length) {
     const title = '--- Lazy entries (load only when the task needs them) ---';
     push(title);
-    push(...lazyLines([...lazy, ...demoted], root, OUTPUT_BUDGET - spent - cost('')), '');
+    push(...lazyLines([...lazy, ...demoted], root, budget - spent - cost('')), '');
   }
   return { text: `${lines.join('\n')}\n`, spent, cut: cut || demoted.length > 0 };
 }
@@ -767,6 +771,51 @@ export function sessionStartSize(hookRoot, host) {
   const session = sessionFiles(hookRoot, emittedHost(host));
   const { spent, cut } = renderPayload({ heads: [], session, eager: [], lazy: [], source: '', root: hookRoot });
   return { chars: spent, budget: OUTPUT_BUDGET, cut };
+}
+
+/**
+ * The user-rules layers a sub-agent gets, in SessionStart's order and under its labels: the tier
+ * and the install, then the project root's own `user-rules.md`, each file once. Only these files
+ * are read: a sub-agent start must not pay for the profile, the memory map or a wiki walk. The
+ * project root is `root`, the same `$GENESEED_ROOT || $CLAUDE_PROJECT_DIR || cwd` SessionStart
+ * discovers from, and its file is read directly, as discovery's root entry: a `context.json` that
+ * names it lazy or leaves it out does not keep it from a sub-agent.
+ */
+export function userRuleLayers(root, hookRoot, host) {
+  const rules = hookRoot ? sessionFiles(hookRoot, host, installCarrier(hookRoot, host), ['user-rules.md']) : [];
+  const abs = root ? path.join(root, 'user-rules.md') : null;
+  if (abs && !rules.some((s) => normcase(path.resolve(s.abs)) === normcase(path.resolve(abs)))) {
+    const text = sessionText(abs);
+    if (text !== null) rules.push({ rel: disp(abs, root), abs, label: '', text });
+  }
+  return rules;
+}
+
+/**
+ * A sub-agent's start (`SubagentStart`): no host hands a sub-agent the SessionStart output, so the
+ * user's rules reach it here, and nothing else (spec 2026-11-08, D4): not the profile, not the
+ * project context, which the root file already brings. Same renderer and same cut as SessionStart.
+ * Claude Code documents only the JSON form for this event, so the payload is ONE JSON object on
+ * stdout, and the budget holds for that line, not for the text inside it: `JSON.stringify` adds a
+ * character per `"`, `\` and line break, so a render whose line runs over is redone with the budget
+ * scaled by how far over it ran (each pass shrinks it, so a few converge). No rule anywhere prints
+ * nothing, as an empty SessionStart does.
+ */
+function subagentRules(root, hookRoot, host) {
+  const rules = userRuleLayers(root, hookRoot, host);
+  if (!rules.length) return 0;
+  let budget = OUTPUT_BUDGET;
+  for (let pass = 0; pass < 6; pass += 1) {
+    const { text } = renderPayload({ heads: [], session: rules, eager: [], lazy: [], source: '', root, title: USER_RULES_TITLE, budget });
+    const line = JSON.stringify({ hookSpecificOutput: { hookEventName: 'SubagentStart', additionalContext: text } });
+    if (line.length + 2 <= OUTPUT_BUDGET) {
+      out(`${line}\n`);
+      return 0;
+    }
+    // Scaled, not cut by the overrun: a budget unit of escape-heavy text serializes to two or more.
+    budget = Math.min(budget - 1, Math.floor((budget * OUTPUT_BUDGET) / (line.length + 2)));
+  }
+  return 0;   // never converged: nothing, rather than a payload the host would cut
 }
 
 export function cmdContext(args) {
@@ -793,6 +842,11 @@ export function cmdContext(args) {
   // The RAW `args.host`, never defaulted to claude, which would key an older
   // OpenClaude emit's `~/.openclaude` (no `--host`) on `.claude` instead of its folder name.
   if (globalHookStandingDown(hookRoot, root, args.host, 'context')) return 0;
+  // A sub-agent starts without its rules rather than without its Activity record: a throw here
+  // would exit 1 and skip `trackActivity` (spec 2026-11-08, failure table).
+  if (args.event === 'SubagentStart') {
+    try { return subagentRules(root, hookRoot, host); } catch { return 0; }
+  }
   const [carrierFile, carrier] = hookRoot ? installCarrierFile(hookRoot, host) : ['', ''];
   const session = hookRoot ? sessionFiles(hookRoot, host, carrier) : [];
   // A session file discovery would also pick up (a `user-rules.md` at the repo root of an

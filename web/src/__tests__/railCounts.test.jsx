@@ -9,7 +9,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // half, that `counts` is the size of these same lists, is tests/unit/web_counts.test.mjs.
 
 vi.mock('../api/index.js', () => ({
-  api: { catalog: vi.fn(), item: vi.fn(), usage: vi.fn(), overview: vi.fn(), rules: vi.fn() },
+  api: {
+    catalog: vi.fn(),
+    item: vi.fn(),
+    usage: vi.fn(),
+    overview: vi.fn(),
+    rules: vi.fn(),
+    loadout: vi.fn(async () => null),
+  },
 }))
 vi.mock('../lib/router.js', () => ({ go: vi.fn() }))
 
@@ -82,7 +89,10 @@ describe('a rail badge equals what its page lists', () => {
   it.each(LIBRARY_ORDER)('Library kind %s: the rail, the list head and the rows', async (kind) => {
     const { container } = render(<Library section={kind} overview={overview} />)
     await waitFor(() => expect(container.querySelector('.lib-row')).toBeTruthy())
-    const rows = [...container.querySelectorAll('.lib-row')].map((r) => r.dataset.title)
+    // The pinned primary agent (Agents only) is no catalogue entry, so no badge counts it.
+    const rows = [...container.querySelectorAll('.lib-row:not([data-pinned])')].map(
+      (r) => r.dataset.title,
+    )
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.sort()).toEqual(LISTS[kind].map((r) => r.title).sort())
     expect(container.querySelector('.lib-list-head .mono').textContent).toBe(String(rows.length))

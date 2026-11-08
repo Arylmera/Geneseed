@@ -221,3 +221,44 @@ test('activity exits 0 silently and writes only under <root>/activity on any std
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }), { numRuns: RUNS });
 });
+
+// `context` on SubagentStart (spec 2026-11-08, agent loadout): whatever else the payload carries
+// and whatever the user's rules say, it exits 0 and prints nothing or ONE JSON object naming the
+// event, and that line stays under the 9 000-character hook budget once JSON escaping has doubled
+// every quote and backslash. The home is sandboxed, so no machine tier is read.
+const ruleText = fc.array(fc.oneof(fc.string(), fc.constantFrom('"', '\\', '\\\\', '\n', '\u2014', '## R1 \u2014 x')),
+  { maxLength: 600 }).map((a) => a.join('').repeat(8));
+const subagentPayload = fc.record({
+  hook_event_name: fc.constant('SubagentStart'), session_id: sid, agent_id: fc.oneof(fc.string(), fc.jsonValue()),
+  agent_type: fc.oneof(fc.string(), fc.jsonValue()), cwd: fc.oneof(fc.string(), fc.jsonValue()),
+});
+
+test('context on SubagentStart prints nothing or one JSON object, under budget, on any payload', () => {
+  fc.assert(fc.property(subagentPayload, ruleText, (input, rules) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      const repo = path.join(dir, 'repo');
+      const root = path.join(repo, '.claude');
+      fs.mkdirSync(root, { recursive: true });
+      fs.writeFileSync(path.join(root, 'user-rules.md'), rules);
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, JSON.stringify(input));
+      const home = path.join(dir, 'home');
+      const env = { ...process.env, HOME: home, USERPROFILE: home, GENESEED_HOME: path.join(home, '.geneseed'),
+        GENESEED_ROOT: repo, GENESEED_ACTIVITY: 'off' };
+      const fd = fs.openSync(inFile, 'r');
+      let p;
+      try {
+        p = spawnSync(process.execPath, [HOOK, 'context', '--root', root],
+          { cwd: dir, encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], env });
+      } finally { fs.closeSync(fd); }
+      const show = JSON.stringify([input, rules.slice(0, 80)]).slice(0, 200);
+      assert.equal(p.status, 0, `context exited ${p.status} on ${show}\nstderr: ${p.stderr}`);
+      if (p.stdout === '') return;
+      assert.ok(p.stdout.length <= 9000, `${p.stdout.length} stdout chars on ${show}`);
+      const got = JSON.parse(p.stdout);
+      assert.equal(got.hookSpecificOutput.hookEventName, 'SubagentStart', show);
+      assert.equal(typeof got.hookSpecificOutput.additionalContext, 'string', show);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS });
+});

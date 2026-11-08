@@ -595,9 +595,10 @@ test('a Bob SessionStart is recorded only for a compaction', () => withBox((root
   assert.ok(fs.existsSync(path.join(root, 'activity', 'c.json')));
 }));
 
-// SubagentStart reaches the `activity` verb (settings.mjs) and is recorded as a branch.
-test('the activity verb records a SubagentStart', () => withBox((root) => {
-  const r = hook(root, ['activity', '--root', root],
+// SubagentStart reaches the `context` verb (settings.mjs, since the agent loadout) and is still
+// recorded as a branch: `trackActivity` runs after every verb. No rules in the box: no stdout.
+test('a SubagentStart through context is recorded as a branch', () => withBox((root) => {
+  const r = hook(root, ['context', '--root', root],
     { hook_event_name: 'SubagentStart', session_id: 'sa', agent_id: 'a1', agent_type: 'explorer' });
   assert.deepEqual([r.rc, r.out], [0, '']);
   assert.deepEqual(readJson(path.join(root, 'activity', 'sa.json')).agents.map((a) => [a.id, a.type, a.status]),

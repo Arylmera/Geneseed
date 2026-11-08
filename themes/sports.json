@@ -137,6 +137,7 @@
   "DOCTRINES": "Schemes",
   "AGENT": "Player",
   "AGENTS": "Players",
+  "PRIMARY_AGENT": "Team Captain",
   "SKILL": "Play",
   "SKILLS": "Plays",
   "MEMORY": "Tape",

@@ -137,6 +137,7 @@
   "DOCTRINES": "Policies",
   "AGENT": "Daemon",
   "AGENTS": "Daemons",
+  "PRIMARY_AGENT": "Netrunner",
   "SKILL": "Program",
   "SKILLS": "Programs",
   "MEMORY": "Datastore",

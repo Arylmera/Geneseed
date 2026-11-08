@@ -137,6 +137,7 @@
   "DOCTRINES": "Traditions",
   "AGENT": "Familiar",
   "AGENTS": "Familiars",
+  "PRIMARY_AGENT": "Archmage",
   "SKILL": "Spell",
   "SKILLS": "Spells",
   "MEMORY": "Grimoire",

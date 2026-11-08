@@ -137,6 +137,7 @@
   "DOCTRINES": "SOPs",
   "AGENT": "Operator",
   "AGENTS": "Operators",
+  "PRIMARY_AGENT": "Commander",
   "SKILL": "Drill",
   "SKILLS": "Drills",
   "MEMORY": "Logbook",

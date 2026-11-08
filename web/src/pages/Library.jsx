@@ -10,7 +10,8 @@ import { useAsync } from '../hooks/useAsync.js'
 import { dropRules } from '../hooks/useRules.js'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
-import { GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
+import { BaseBadge, GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
+import Loadout from '../components/Loadout.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -25,6 +26,9 @@ const AgentGlyph = lazy(() => import('../components/AgentGlyph.jsx'))
 
 // The usage ledger's kind for a Library section; only these two are counted.
 const USE_KIND = { skills: 'skill', agents: 'agent' }
+// The pinned first row of Agents: the main agent, which is no catalogue item (no agent file has a
+// colon in its stem), so it is never read through /api/item/.
+export const PRIMARY = ':primary'
 const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
@@ -293,17 +297,43 @@ export default function Library({
   const skillSplit = isSkills ? splitSkills(items) : null
   const rows = isSkills ? skillSplit.rows : sec === 'memory' ? groupMemory(items) : items
   const activeName = selected || rows[0]?.name || null
-  const fromCatalog = activeName ? items.find((it) => it.name === activeName) : null
+  const isAgents = sec === 'agents' && !lock
+  const isPrimary = isAgents && activeName === PRIMARY
+  // The primary's loadout gives its row its theme noun; a failed read keeps the neutral name.
+  const { data: primaryLoad } = useAsync(
+    () =>
+      isAgents
+        ? Promise.resolve()
+            .then(() => api.loadout())
+            .catch(() => null)
+        : Promise.resolve(null),
+    [isAgents, dataRev],
+    'loadout-primary',
+  )
+  const primaryRow = isAgents
+    ? {
+        name: PRIMARY,
+        type: 'agent',
+        base: true,
+        title: primaryLoad?.noun || 'Primary agent',
+        desc: 'The main agent of the session. Every agent inherits its root file.',
+      }
+    : null
+  const fromCatalog = isPrimary
+    ? primaryRow
+    : activeName
+      ? items.find((it) => it.name === activeName)
+      : null
   const activeType = fromCatalog?.type || SECTIONS[sec].type
   const pick = copyFrom?.sec === sec && copyFrom?.name === activeName ? copyFrom.key : null
   const { data: lastItem, error: itemErr } = useAsync(
     () =>
-      !activeName
+      !activeName || isPrimary
         ? Promise.resolve(null)
         : pick
           ? api.item(activeType, activeName, installOfKey(pick))
           : api.item(activeType, activeName),
-    [sec, activeName, activeType, pick, dataRev],
+    [sec, activeName, activeType, pick, dataRev, isPrimary],
   )
   // useAsync keeps the last good read beside a failed one; here that is the PREVIOUS
   // entry, so a failed read shows nothing of it (title, lede, source).
@@ -313,6 +343,25 @@ export default function Library({
   const copy = item && item.name === activeName && (!pick || item.install === pick) ? item : null
   // Which install the copy is, named in a confirm once the list spans two installs or more.
   const ofCopy = (c) => (fleetWide && c?.install ? ` in ${tagOf(c.install)}` : '')
+
+  // The Loadout panel: what this agent loads, read from the copy on screen's install, beside that
+  // install's primary for the delta line. The primary reads the default install.
+  const loadInst = isPrimary ? null : pick || item?.install || null
+  const wantLoad = isAgents && activeName && (isPrimary || (item && item.name === activeName))
+  const { data: load, error: loadErr } = useAsync(
+    () =>
+      !wantLoad
+        ? Promise.resolve(null)
+        : isPrimary
+          ? api.loadout().then((own) => ({ own, base: null }))
+          : Promise.all([
+              api.loadout(activeName, loadInst ? installOfKey(loadInst) : undefined),
+              api
+                .loadout(undefined, loadInst ? installOfKey(loadInst) : undefined)
+                .catch(() => null),
+            ]).then(([own, base]) => ({ own, base })),
+    [wantLoad, activeName, loadInst, dataRev],
+  )
 
   const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
@@ -446,9 +495,10 @@ export default function Library({
   const label = SECTIONS[sec].label
   const desc = item?.desc || activeItem?.desc || ''
   const { lede, when } = splitWhen(desc)
-  const src = activeItem
-    ? item?.source || activeItem.source || (itemErr ? null : libSource(sec, activeItem.name))
-    : null
+  const src =
+    activeItem && !isPrimary
+      ? item?.source || activeItem.source || (itemErr ? null : libSource(sec, activeItem.name))
+      : null
   const onCopy = async () => {
     try {
       await navigator.clipboard.writeText(src)
@@ -544,7 +594,7 @@ export default function Library({
         >
           {pending ? <Loading /> : null}
           <GroupedRows
-            rows={shown}
+            rows={primaryRow && listed ? [primaryRow, ...shown] : shown}
             activeName={activeItem?.name}
             hrefOf={itemHref}
             // Inside the row link, so nothing here may take focus: the list is one tab stop.
@@ -617,6 +667,7 @@ export default function Library({
             <>
               <div className="reader-tags">
                 <span className="tag acc">{label.replace(/s$/, '')}</span>
+                {isPrimary ? <BaseBadge /> : null}
                 {skillCat ? <span className="tag">{skillCat.label}</span> : null}
                 {(item?.kit ?? activeItem.kit) ? (
                   <KitBadge name={item?.kit ?? activeItem.kit} />
@@ -634,7 +685,7 @@ export default function Library({
               <div className="reader-head">
                 <h2 className="reader-title">{title}</h2>
                 {/* Console-only: the agent's emblem, beside its name (components/AgentGlyph.jsx). */}
-                {sec === 'agents' ? (
+                {sec === 'agents' && !isPrimary ? (
                   <Suspense fallback={null}>
                     <AgentGlyph name={activeItem.name} />
                   </Suspense>
@@ -695,8 +746,9 @@ export default function Library({
                 </label>
               ) : null}
               <hr className="hr" />
+              {isAgents ? <Loadout loadout={load?.own} base={load?.base} error={loadErr} /> : null}
               {/* A failed read (a stale bookmark, a retired skill) ends here, not on "Loading…" forever. */}
-              {itemErr ? (
+              {isPrimary ? null : itemErr ? (
                 <p className="sub">
                   No {label.replace(/s$/, '').toLowerCase()} named <em>{activeItem.name}</em> could
                   be read in this install.

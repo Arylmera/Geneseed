@@ -125,7 +125,9 @@ const VERBS = {
  */
 async function baselineStores(verb, args) {
   try {
-    if (verb !== 'context' || !args.root || process.env.GENESEED_LEARN_CHILD || isatty(0)) return;
+    // A SubagentStart carries the PARENT's session_id: a baseline there would reset the parent's.
+    if (verb !== 'context' || !args.root || args.event === 'SubagentStart' || process.env.GENESEED_LEARN_CHILD
+      || isatty(0)) return;
     const raw = readStdin();
     if (!raw.includes('session_id')) return;
     const { writeBaseline } = await import('../js/hosts/store-watch.mjs');
@@ -175,7 +177,7 @@ function die(code, msg) {
  */
 function parse(spec, argv) {
   const args = {
-    root: null, host: null, memory: null, consolidate: false, noConsent: false,
+    root: null, host: null, event: null, memory: null, consolidate: false, noConsent: false,
     noDeletionGate: false, noSecretsGate: false, noDoneGate: false, noOwnershipGate: false,
     noExternalGate: false, noTestNote: false, noRuleStore: false, noRootScan: false, file: null,
   };
@@ -261,6 +263,12 @@ async function main(argv) {
     // an effect (it sends Claude back to keep working instead of letting the turn end; docs
     // `hooks.md`, "Stop, SubagentStop, TaskCompleted, and TeammateIdle").
     return die(1, parsed.error);
+  }
+  // `context` answers SessionStart and SubagentStart (settings.mjs), told apart by the payload's
+  // event name. Read here, not in the verb, so an in-process caller never blocks on fd 0; the read
+  // is cached, so `trackActivity` reuses it. A terminal sends no payload.
+  if (verb === 'context' && !isatty(0)) {
+    try { parsed.args.event = JSON.parse(readStdin() || '{}').hook_event_name ?? null; } catch { /* not JSON: SessionStart */ }
   }
   const rc = (await spec.load())[spec.fn](parsed.args);
   await trackActivity(verb, parsed.args);
