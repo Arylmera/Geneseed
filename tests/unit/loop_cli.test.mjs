@@ -231,6 +231,22 @@ test('record --note-file round-trips a multi-line, CRLF note exactly into LOOP.m
   } finally { sb.cleanup(); }
 });
 
+// init --note-file: the factory hands a re-entered loop its carry as a note, and that reason can be
+// multi-line, so init reads it from a file as record does — CRLF-folded and trimmed, the same way.
+test('init --note-file starts the loop with the file as its first note', () => {
+  const sb = makeSandbox('loopcli-');
+  try {
+    mkdirSync(path.join(sb.path, '.git'));
+    const noteFile = path.join(sb.path, 'carry.txt');
+    writeFileSync(noteFile, 'review: totals off by one cent\r\nsee the EUR case\r\n');
+    const init = ['init', '--title', 'Rounding', '--requirement', 'Totals round wrong', '--graph', 'bugfix'];
+    assert.equal(run(sb.path, [...init, '--note', 'y', '--note-file', noteFile]).out.error, 'init takes --note or --note-file, not both');
+    assert.equal(run(sb.path, [...init, '--note-file', noteFile]).code, 0);
+    assert.match(readFileSync(path.join(sb.path, 'LOOP.md'), 'utf8'),
+      /"notes": \[\s*"review: totals off by one cent\\nsee the EUR case"\s*\]/);
+  } finally { sb.cleanup(); }
+});
+
 test('record --note and --note-file together is an error', () => {
   const sb = makeSandbox('loopcli-');
   try {

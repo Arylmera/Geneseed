@@ -24,11 +24,14 @@ const CATALOG = {
 };
 // The porcelain of a clean tree: a stage outside a loop must be handed one (J5).
 const CLEAN = { porcelain: '' };
-// R2: a loop stage records against its launch. `next` stores HEAD (none given here: null), the
-// loop commits, and `record` sees a HEAD that moved. `loopRec` is that whole round.
+// R2: a loop stage records against its launch. `next` stores HEAD (none given here: null) and the
+// time (T0), the loop inits after it (the registry's `initAt`, T1) and commits, and `record` sees
+// a HEAD that moved. `loopRec` is that whole round.
 const H0 = '0'.repeat(40); const H1 = '1'.repeat(40);
-const MOVED = { head: H1 };
-const loopRec = (s, outcome, opts = {}) => { nextStage(s, CATALOG); return recordStage(s, CATALOG, outcome, { ...MOVED, ...opts }); };
+const T0 = '2026-11-08T10:00:00.000Z'; const T1 = '2026-11-08T10:00:01.000Z';
+const LAUNCH = { now: T0 };
+const MOVED = { head: H1, loopInitAt: T1 };
+const loopRec = (s, outcome, opts = {}) => { nextStage(s, CATALOG, LAUNCH); return recordStage(s, CATALOG, outcome, { ...MOVED, ...opts }); };
 const step = (s, outcome) => (s.stage.startsWith('loop:') ? loopRec(s, outcome) : recordStage(s, CATALOG, outcome, CLEAN));
 // plan -> loop:bugfix -> review -> $close; review fail goes back to the loop (cycle rework, max 2).
 const fixFactory = () => ({
@@ -49,7 +52,7 @@ test('happy path: a brick stage, a loop stage, a brick stage, then $close', () =
     requirement: 'Totals round wrong', input: 'issue #12', carry: null, rules: ['Never merge.'],
   });
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: '' }), { stage: 'loop:bugfix' });
-  assert.deepEqual(nextStage(s, CATALOG), { stage: 'loop:bugfix', loop: 'bugfix', notes: [], rules: ['Never merge.'] });
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), { stage: 'loop:bugfix', loop: 'bugfix', notes: [], rules: ['Never merge.'] });
   assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'review' });
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: '' }), { done: true });
   assert.deepEqual(nextStage(s, CATALOG), {
@@ -73,7 +76,7 @@ test('back-route: the cycle counter, carry into the loop\'s notes, and max -> $s
   loopRec(s, 'pass');                                                   // loop -> review
   assert.deepEqual(recordStage(s, CATALOG, 'fail', { ...CLEAN, carry: 'review: totals still off by one cent' }), { stage: 'loop:bugfix' });
   assert.deepEqual(s.counters, { rework: 1 });
-  assert.deepEqual(nextStage(s, CATALOG).notes, ['review: totals still off by one cent']);
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH).notes, ['review: totals still off by one cent']);
   // the loop's own record replaces the carry: nothing stale reaches the next stage
   loopRec(s, 'pass');
   assert.equal(s.carry, null);
@@ -201,7 +204,7 @@ test('tasks: the loop stage replays once per spec task, with fresh budgets per t
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: '?? specs/r/spec.md', specPath: 'specs/r/spec.md', taskCount: 2 }),
     { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
   assert.deepEqual(decideFactory(s, CATALOG, 'ok'), { stage: 'loop:feature' });
-  assert.deepEqual(nextStage(s, CATALOG), { stage: 'loop:feature', loop: 'feature', notes: [], task: { path: 'specs/r/spec.md', count: 2, index: 1 } });
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), { stage: 'loop:feature', loop: 'feature', notes: [], task: { path: 'specs/r/spec.md', count: 2, index: 1 } });
   s.counters = { ci: 1 }; s.transitions = 7;
   assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'loop:feature', task: { path: 'specs/r/spec.md', count: 2, index: 2 } });
   assert.deepEqual(s.counters, {}); assert.equal(s.transitions, 0);
@@ -278,7 +281,7 @@ test('triage: the chosen loop comes from the allowlist, and only triage records 
     /^Error: refactor is not one of this factory's loops: bugfix, feature$/);
   assert.equal(JSON.stringify(s), before);
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...CLEAN, chosenLoop: 'feature' }), { stage: 'loop:$triaged' });
-  assert.deepEqual(nextStage(s, CATALOG), { stage: 'loop:$triaged', loop: 'feature', notes: [] });
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), { stage: 'loop:$triaged', loop: 'feature', notes: [] });
   assert.throws(() => recordStage(s, CATALOG, 'pass', { chosenLoop: 'bugfix', ...MOVED }), /^Error: --loop is recorded by the triage stage only$/);
   // a triaged stage reached with no choice on record is refused, never guessed
   const t = start(triagedFactory()); t.stage = 'loop:$triaged';
@@ -369,7 +372,7 @@ test('R2: with no LOOP.md, a loop stage records only after HEAD moved past its l
     /^Error: loop:bugfix was never launched: run `geneseed factory next` before its loop, then record$/);
   assert.equal(JSON.stringify(s), unlaunched);
   nextStage(s, CATALOG, { head: H0 });
-  assert.deepEqual(s.launched, { stage: 'loop:bugfix', template: 'bugfix', head: H0 });
+  assert.deepEqual(s.launched, { stage: 'loop:bugfix', template: 'bugfix', head: H0, at: null });
   nextStage(s, CATALOG, { head: H1 });
   assert.equal(s.launched.head, H0, 'a second next keeps the baseline');
   const launched = JSON.stringify(s);
@@ -381,6 +384,30 @@ test('R2: with no LOOP.md, a loop stage records only after HEAD moved past its l
   }
   assert.equal(JSON.stringify(s), launched);
   assert.deepEqual(recordStage(s, CATALOG, 'fail', { head: H1 }), { stopped: 'loop:bugfix reported fail' });
+});
+
+// R2, pass with no LOOP.md left: a HEAD move is enough for fail only. Pass also needs the loop
+// registry's `initAt` for this worktree strictly after the launch time — a loop init ran here
+// since `next`. No registry row, one from before the launch, the same instant, or a launch with no
+// time (an old FACTORY.md) cannot tell, so pass is refused and fail still goes through.
+test('R2: with no LOOP.md, pass needs a loop init after the launch; fail needs only the HEAD move', () => {
+  const refusal = 'loop:bugfix cannot report pass on a HEAD move alone: no LOOP.md is left, and the loop registry '
+    + 'records no `geneseed loop init` in this worktree since `factory next` — report fail, or record pass '
+    + 'while the done LOOP.md is still at the root';
+  for (const [launch, loopInitAt] of [[LAUNCH, null], [LAUNCH, '2026-11-08T09:59:59.000Z'], [LAUNCH, T0], [{}, T1], [LAUNCH, 'soon']]) {
+    const s = start();
+    recordStage(s, CATALOG, 'pass', CLEAN);
+    nextStage(s, CATALOG, { head: H0, ...launch });
+    const before = JSON.stringify(s);
+    assert.throws(() => recordStage(s, CATALOG, 'pass', { head: H1, loopInitAt }), { message: refusal }, String(loopInitAt));
+    assert.equal(JSON.stringify(s), before);
+    assert.deepEqual(recordStage(s, CATALOG, 'fail', { head: H1, loopInitAt }), { stopped: 'loop:bugfix reported fail' });
+  }
+  const s = start();
+  recordStage(s, CATALOG, 'pass', CLEAN);
+  nextStage(s, CATALOG, { head: H0, now: T0 });
+  assert.equal(s.launched.at, T0);
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', { head: H1, loopInitAt: T1 }), { stage: 'review' });
 });
 
 // R3 before a new loop: any LOOP.md left at the root (a stopped loop leaves one) blocks `next` on
@@ -411,9 +438,9 @@ test('tasks: only the owning loop stage replays per task', () => {
   recordStage(s, CATALOG, 'pass', SPEC); decideFactory(s, CATALOG, 'ok');
   assert.deepEqual(loopRec(s, 'fail'), { stage: 'loop:bugfix' });
   assert.equal(s.tasks.stage, 'loop:feature');
-  assert.equal(nextStage(s, CATALOG).task, undefined, 'the fix loop is handed no task');
+  assert.equal(nextStage(s, CATALOG, LAUNCH).task, undefined, 'the fix loop is handed no task');
   assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'loop:feature' });
-  assert.deepEqual(nextStage(s, CATALOG).task, { path: 'specs/r/spec.md', count: 2, index: 1 });
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH).task, { path: 'specs/r/spec.md', count: 2, index: 1 });
   assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'loop:feature', task: { path: 'specs/r/spec.md', count: 2, index: 2 } });
 });
 
@@ -440,8 +467,9 @@ test('J5: a folded untracked directory is refused with the porcelain form that u
 });
 
 // R4 past the JSON (F4): a FACTORY.md edited by hand into a state the engine could never write —
-// a counter that is not a non-negative integer, a ceiling past 30 x 20, a broken factory — is
-// unreadable, like a torn one.
+// a counter that is not a non-negative integer, a ceiling past 30 x 20, a gate amend count past 3,
+// a chosen loop outside `loops`, an unknown status, a `history` or `cycles` that is not a list, a
+// broken factory — is unreadable, like a torn one, and never throws anything else.
 test('R4: validateFactoryState refuses a state the engine could not have written', () => {
   const valid = () => { const s = start(); recordStage(s, CATALOG, 'pass', CLEAN); nextStage(s, CATALOG, { head: H0 }); return s; };
   validateFactoryState(valid(), CATALOG);
@@ -456,7 +484,15 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     [(s) => { s.taskCount = 21; }, 'taskCount must be null or an integer from 1 to 20'],
     [(s) => { s.taskCount = 2; s.tasks = { path: 'specs/r/spec.md', count: 9, index: 1, stage: null }; },
       'tasks must be null or a spec path with 1 <= index <= count <= taskCount'],
-    [(s) => { s.launched = { stage: 'loop:bugfix', template: 'bugfix', head: 7 }; }, 'launched must be null or a stage, a template and a head'],
+    [(s) => { s.launched = { stage: 'loop:bugfix', template: 'bugfix', head: 7 }; }, 'launched must be null or a stage, a template, a head and a time'],
+    [(s) => { s.launched.at = 5; }, 'launched must be null or a stage, a template, a head and a time'],
+    [(s) => { s.gateAmends = { 'spec@0': 4 }; }, 'gateAmends must map each gate to an integer from 0 to 3'],
+    [(s) => { s.gateAmends = { 'spec@0': -1 }; }, 'gateAmends must map each gate to an integer from 0 to 3'],
+    [(s) => { s.gateAmends = []; }, 'gateAmends must map each gate to an integer from 0 to 3'],
+    [(s) => { s.chosenLoop = 'feature'; }, "chosenLoop must be null or one of the factory's loops"],
+    [(s) => { s.status = 'paused'; }, 'status must be one of running, awaiting, done, stopped'],
+    [(s) => { s.history = {}; }, 'history must be a list'],
+    [(s) => { s.factory.cycles = {}; }, 'factory.cycles must be a list'],
     [(s) => { s.factory.edges.push(null); }, 'its factory no longer passes factory check: edges: entry 6 must have a string from, on and to'],
     [(s) => { s.factory = null; }, 'its factory no longer passes factory check: factory: must be an object'],
   ];
@@ -464,4 +500,23 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     const s = valid(); edit(s);
     assert.throws(() => validateFactoryState(s, CATALOG), { message: `FACTORY.md is unreadable: ${why}` }, why);
   }
+  // what the engine does write stays readable: no `cycles` key at all, and a triaged loop on record
+  const s = valid(); delete s.factory.cycles; s.factory.edges = s.factory.edges.filter((e) => !(e.from === 'review' && e.on === 'fail'));
+  s.factory.edges.push({ from: 'review', on: 'fail', to: '$stop' });
+  validateFactoryState(s, CATALOG);
+  const t = start(triagedFactory());
+  recordStage(t, CATALOG, 'pass', { ...CLEAN, chosenLoop: 'feature' });
+  validateFactoryState(t, CATALOG);
+});
+
+// R4 against the gate cap: the fourth amend stops the run without storing a count of 4, so the
+// stopped FACTORY.md stays readable and `next` reports the stop instead of refusing the file.
+test('R4: a run stopped by the amend cap stays readable', () => {
+  const s = start(specFactory());
+  recordStage(s, CATALOG, 'pass', CLEAN);
+  for (let i = 0; i < 3; i += 1) { decideFactory(s, CATALOG, 'amend', 'again'); recordStage(s, CATALOG, 'pass', CLEAN); }
+  assert.deepEqual(decideFactory(s, CATALOG, 'amend', 'again'), { stopped: 'gate amended 3 times at spec' });
+  assert.deepEqual(s.gateAmends, { 'spec@0': 3 });
+  validateFactoryState(s, CATALOG);
+  assert.equal(nextStage(s, CATALOG).terminal, '$stop');
 });

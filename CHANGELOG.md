@@ -17,6 +17,12 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **Doctrine comms 5, *Mark the Ask*, merged into comms 1, now *Codes and Markers*.** Both rules set the reply format and shared one example, so one rule now holds the reference codes and the ask markers. The id `mark-the-ask` is retired and never reused; the doctrines now hold 30 rules. An install that excluded `comms 5` gets a warning ("comms 5 was retired") and excludes nothing; the rebuild does not fail. *Automate Repetition* (craft 1) and *Search Before Creating* (craft 4) lose the sentences that repeated each other, and the Memory section points to *Persist Insight* instead of restating it. The lean root is about 900 characters shorter. Run `geneseed rebuild-all` to get it.
 - **Five situational rules keep one line in the lean root.** *Edit the Source, Not the Surface*, *Record the Probe, Not the Snapshot*, *Restart Is Not Reload*, *Serialize Against a Rationed Resource* (ops 3, 5, 6, 7) and *External Gate* (rigor 5) now carry one trigger sentence in a lean install; the full text stays in the pack file, which the root already points to. The full footprint does not change. The `parallel-agents` and `workflow` skills cite *Serialize Against a Rationed Resource* at their fan-out step. The lean root is about 1 200 characters shorter, and the lean size ceiling drops from 41 612 to 40 312. Run `geneseed rebuild-all` to get it.
 
+### Fixed
+- **`geneseed factory record` no longer accepts `pass` from a loop stage on a HEAD move alone.** With no `LOOP.md` left, `pass` now also needs the loop registry to show a `geneseed loop init` in the worktree after `factory next`. `next` stores the launch time, and each `loop init` stamps the registry row with a new `initAt`. Without that evidence only `fail` is accepted.
+- **`geneseed loop init --note-file <path>`** now reads the starting note from the file, as `record` does. Before, `init` ignored the flag.
+- **`FACTORY.md` is checked more strictly.** A gate amend count above 3, a chosen loop outside the factory's `loops`, an unknown status, or a `history` or `cycles` that is not a list is refused as unreadable. A `cycles: {}` no longer makes `record` crash. The fourth gate amend still stops the run, but now stores 3, so the stopped `FACTORY.md` stays readable.
+- **The docs list Factory actions after Loop actions.** The two pages had the same `order:`.
+
 ## [5.0.3] — 2026-11-08
 
 ### Added
