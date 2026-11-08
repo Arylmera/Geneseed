@@ -1747,6 +1747,8 @@ test('opencodeEditAsks: each tail bare and */-prefixed; the AGENT.md key follows
     const tails = ['opencode.json', 'opencode.jsonc', '.opencode/excludes.json',
       '.opencode/.geneseed-manifest.json', '.opencode/.geneseed-emit', '.opencode/plugins/*', '.opencode/plugin/*',
       '.opencode/agents/*.md', '.opencode/agent/*.md', '.opencode/mode/*.md', '.opencode/modes/*.md', '.opencode/tool/*', '.opencode/tools/*',
+      // The guard reads `.opencode/AGENT.md` before the project's carrier, so a project install asks on it too.
+      '.opencode/AGENT.md',
       '.claude/settings.json', '.claude/settings.local.json', '.openclaude/settings.json',
       '.openclaude/settings.local.json', '.bob/settings.json', '.bob/settings.local.json',
       '.bob/settings/settings.json',

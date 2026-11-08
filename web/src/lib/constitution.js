@@ -79,13 +79,18 @@ export const GATE_SWITCH = {
   'rigor.5': { key: 'externalGate', label: 'External gate' },
 }
 
-// The hooked doctrine rules with no switch of their own that keep asking with their text excluded
-// (process 1, ops 2): rule-gate and the root-scan check are wired in every build, and no flag
-// stands them down yet. Process 5 is not one: excluding it wires git-gate `--no-consent`
-// (`consentRuleOn`, js/hosts/settings.mjs), so its ask goes with its text. Bob's `tool-gate`
-// never gets that flag, so Bob keeps its commit/push warning line.
+// The hooked doctrine rules with no switch of their own whose hook goes with their text: excluding
+// the rule, or its pack, drops the hook in the same rebuild (`ruleOn`, js/hosts/settings.mjs; owner
+// decision 2026-11-08). Process 5 wires git-gate `--no-consent` (Bob's `tool-gate` never gets it,
+// so Bob keeps its commit/push warning line); process 1 `--no-rule-store` and ops 2 `--no-root-scan`
+// reach every host, the OpenCode guard through the carrier's `Excluded rules:` line.
+export const WITH_TEXT = new Set(['process.1', 'process.5', 'ops.2'])
+
+// The hooked doctrine rules with no switch that would keep asking with their text excluded: none
+// today. A hooked rule added to HOOK_GATED without a switch or a WITH_TEXT wiring lands here, and
+// the page then says its hook still asks.
 export const ALWAYS_ASKS = new Set(
-  [...HOOK_GATED].filter((a) => a.includes('.') && a !== 'process.5' && !GATE_SWITCH[a]),
+  [...HOOK_GATED].filter((a) => a.includes('.') && !WITH_TEXT.has(a) && !GATE_SWITCH[a]),
 )
 
 // What each switch's confirm says it does, by the same address: `arm` when it re-arms, `off`
@@ -150,7 +155,8 @@ export const GATE_COPY = {
 // the gate off (or why there is no switch). Every line is taken from the code: js/hosts/hooks.mjs
 // (`gitDecide`, `ruleDecide`, `BLOCK_RULES`), hooks-done.mjs, ownership-gate.mjs, and the
 // OpenCode guard and context plugins; docs/concepts/hooks.md is the long form. Not GATE_COPY:
-// that table is the switches' confirm copy, and process 1, process 5 and ops 2 have no switch.
+// that table is the switches' confirm copy, and process 1, process 5 and ops 2 have no switch:
+// their hook goes with their text (WITH_TEXT).
 export const GATE_HOOK = {
   I: {
     on:
@@ -236,7 +242,10 @@ export const GATE_HOOK = {
     blind:
       'bash -c, interpreters, scripts and variables. The change report at turn end still lists ' +
       'store changes made outside an approved write, memory writes included.',
-    off: 'No switch: the hook runs in every build, even with this rule excluded.',
+    off:
+      'Excluding this rule, or the process pack, is the switch: its hook goes with its text on ' +
+      'every host, OpenCode’s permission.edit keys on the rule files too. The change report ' +
+      'still lists rule-file changes.',
   },
   'process.5': {
     on:
@@ -277,7 +286,9 @@ export const GATE_HOOK = {
     blind:
       'A deeper path, ls / without -R, a quoted argument, the remote half of ssh, and a scan ' +
       'made by any other program.',
-    off: 'No switch: the check is wired in every build, whatever rules are excluded.',
+    off:
+      'Excluding this rule, or the ops pack, is the switch: a root scan stops asking on every ' +
+      'host. The data-loss checks stay.',
   },
 }
 

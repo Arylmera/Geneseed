@@ -173,6 +173,59 @@ test('the line names five files and counts the rest', () => {
     + 'memory/a.md, memory/b.md, memory/c.md, memory/d.md, memory/e.md (+2 more). This detects a change; it prevented nothing.');
 });
 
+// Process 1 excluded (`--no-rule-store`, owner decision 2026-11-08): a rule write runs with no prompt,
+// so the transcript proves no approval and the report still names it. Memory keeps its excuse.
+test('with process 1 excluded a rule write the transcript shows is still reported; memory is still excused', () => {
+  const w = world('sw-norule-');
+  try {
+    const rules = path.join(w.root, 'user-rules.md');
+    const draft = path.join(w.root, 'user-rules.draft.md');
+    const fact = path.join(w.root, 'memory', 'a.md');
+    const log = path.join(w.sb.path, 't.jsonl');
+    fs.writeFileSync(draft, 'draft');
+    w.start();
+    fs.appendFileSync(rules, ' unprompted');
+    fs.appendFileSync(draft, ' unprompted');
+    fs.appendFileSync(fact, ' the agent\'s own');
+    fs.writeFileSync(log, [tool('t1', 'Write', rules), result('t1', false), tool('t2', 'Edit', draft), result('t2', false),
+      tool('t3', 'Edit', fact), result('t3', false)].join('\n'));
+    const r = spawnHook(['learn', '--memory', path.join(w.root, 'memory'), '--no-done-gate', '--no-rule-store'],
+      JSON.stringify({ hook_event_name: 'Stop', session_id: 's1', cwd: w.sb.path, transcript_path: log }), { env: w.env, cwd: w.sb.path });
+    assert.equal(message(r), LINE(2, 'install/user-rules.draft.md, install/user-rules.md'));
+  } finally { w.sb.cleanup(); }
+});
+
+test('V1 with process 1 excluded: a native edit of a rule file is still reported; memory is still excused', async () => {
+  const sb = makeSandbox('sw-v1-norule-');
+  const saved = { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
+  process.env.XDG_CONFIG_HOME = path.join(sb.path, 'xdg');
+  try {
+    const cfg = path.join(sb.path, 'cfg');
+    fs.mkdirSync(path.join(cfg, 'plugins'), { recursive: true });
+    fs.mkdirSync(path.join(cfg, 'memory'), { recursive: true });
+    // The carrier the guard reads its state from, as the build writes it.
+    fs.writeFileSync(path.join(cfg, 'AGENT.md'), 'Active packs: craft, rigor, ops, process, comms\nExcluded rules: process 1\n');
+    const rules = path.join(cfg, 'user-rules.md');
+    const fact = path.join(cfg, 'memory', 'x.md');
+    fs.writeFileSync(rules, 'rules');
+    const copy = path.join(cfg, 'plugins', 'geneseed-guard.js');
+    fs.copyFileSync(path.resolve('adapters/opencode/plugins/geneseed-guard.js'), copy);
+    const { GeneseedGuard } = await import(pathToFileURL(copy).href);
+    const toasts = [];
+    const h = await GeneseedGuard({ directory: sb.path, worktree: sb.path, client: { tui: { showToast: async (o) => { toasts.push(o.body.message); } } } });
+    const ev = (type, properties) => h.event({ event: { type, properties } });
+    await ev('session.created', { info: { id: 's' } });
+    fs.writeFileSync(fact, 'one');
+    fs.appendFileSync(rules, ' unprompted');
+    for (const f of [fact, rules]) await h['tool.execute.after']({ tool: 'write', args: { filePath: f } }, {});
+    await ev('session.idle', { sessionID: 's' });
+    assert.deepEqual(toasts, [LINE(1, 'cfg/user-rules.md')]);
+  } finally {
+    if (saved.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = saved.XDG_CONFIG_HOME;
+    sb.cleanup();
+  }
+});
+
 test('V1: the guard reports through a toast, excuses a host-approved edit, and never throws', async () => {
   const sb = makeSandbox('sw-v1-');
   const saved = { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };

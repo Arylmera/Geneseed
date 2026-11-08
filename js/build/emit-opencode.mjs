@@ -98,7 +98,8 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const wired = {};
   const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
     agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills, staleSkillNames, wired,
-    cfg.deletionGate, opencodeEditAsks(dir, wireBase === dir, wireBase === dir ? null : agentPath), oldEdit));
+    cfg.deletionGate, opencodeEditAsks(dir, wireBase === dir, wireBase === dir ? null : agentPath,
+      cfg.doctrines, cfg.excludeRules), oldEdit));
   // The next record: Geneseed's earlier denies still wanted, plus the ones it added now. A merge
   // that wrote nothing (`skillsAdded` unset) keeps the old record whole.
   const skillDenies = wired.skillsAdded

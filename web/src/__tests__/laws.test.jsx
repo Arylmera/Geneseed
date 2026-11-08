@@ -982,8 +982,8 @@ describe('Constitution page — the Ownership row and its gate', () => {
   })
 
   // The Ethos band sits above the tabs, so every tab shows the row, and Gated counts the gate on
-  // each: the Dictates tab adds laws I and III to it, the Doctrines tab process.5 and ops.2 (its
-  // root-scan hook is wired in every build, so it counts with its pack not built in).
+  // each: the Dictates tab adds laws I and III to it, the Doctrines tab process.5 (ops.2's pack is
+  // not built in, and its root-scan hook goes with its text, so it does not count).
   it('shows under every tab, and counts in Gated on each', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: true }))
     await waitFor(() => expect(ownRow(container)).toBeTruthy())
@@ -992,15 +992,15 @@ describe('Constitution page — the Ownership row and its gate', () => {
     expect(screen.getByRole('button', { name: 'Gated 3' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^Doctrines/ }))
     expect(ownRow(container)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Gated 3' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Gated 2' })).toBeTruthy()
   })
 
-  // Off, a hook enforces nothing, so Gated stops counting it: Dictates I and III, process.5, ops.2.
+  // Off, a hook enforces nothing, so Gated stops counting it: Dictates I and III, process.5.
   // The row stays, as the sections around it do, and says Gate off.
   it('leaves the Gated count while off, and the row stays', async () => {
     const { container } = render(gatePage({ ...INSTALL, ownershipGate: false }))
     await waitFor(() => expect(ownRow(container)).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: 'Gated 4' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gated 3' }))
     expect(ownRow(container).querySelector('.law-enf').textContent).toBe('Gate off')
   })
 
@@ -1260,8 +1260,9 @@ describe('Constitution page — the External Gate switch', () => {
   // A hook with no switch shows a locked cell, never a toggle. Consent Before Push's hook goes
   // with its text (`--no-consent`), so it reads "with text" and never "still asks"; Bob's
   // tool-gate never gets that flag, so the reason says Bob still logs its warning. Commands Must
-  // Return keeps asking with its text out: ops.2 is excluded here (its pack is not built in), so
-  // its row says so. Craft rules have no hook, and their Hook gate cell is empty.
+  // Return's hook goes with its text too (owner decision 2026-11-08): ops.2 is excluded here (its
+  // pack is not built in), so it reads "with text" and carries no still-asks note. Craft rules have
+  // no hook, and their Hook gate cell is empty.
   it('locked cells for hooks with no switch, the still-asks note only where true, and empty cells for no hook', async () => {
     const { container } = render(page({ ...INSTALL }))
     await settled(container)
@@ -1269,16 +1270,18 @@ describe('Constitution page — the External Gate switch', () => {
     expect(hookCellOf('process.5').querySelector('[role="switch"]')).toBeNull()
     expect(hookCellOf('process.5').textContent).toMatch(/^with text: No switch of its own/)
     expect(hookCellOf('process.5').textContent).toMatch(/\(Bob still logs its warning\)\.$/)
-    expect(hookCellOf('ops.2').textContent).toMatch(/^always on: No switch yet/)
+    expect(hookCellOf('ops.2').textContent).toMatch(
+      /^with text: No switch of its own: excluding Commands Must Return, or its pack, drops its hook/,
+    )
     expect(hookCellOf('craft.1').textContent).toBe('')
-    expect(note(container, 'ops.2').textContent).toBe('Text excluded; the hook still asks.')
+    expect(note(container, 'ops.2')).toBeNull()
     expect(note(container, 'process.5')).toBeNull()
     expect(note(container, 'craft.3')).toBeNull()
     fireEvent.click(sw(container, 'Consent Before Push'))
     expect(note(container, 'process.5')).toBeNull()
   })
 
-  it('excluding a rule whose hook has no switch says the hook still asks', async () => {
+  it('excluding a rule whose hook goes with its text says the hook goes too', async () => {
     askConfirm.mockClear()
     api.catalog.mockResolvedValue({
       section: 'laws',
@@ -1291,12 +1294,13 @@ describe('Constitution page — the External Gate switch', () => {
     await settled(container)
     expect(note(container, 'ops.2')).toBeNull()
     fireEvent.click(sw(container, 'Commands Must Return'))
-    expect(note(container, 'ops.2').textContent).toBe('Text excluded; the hook still asks.')
+    expect(note(container, 'ops.2')).toBeNull()
     fireEvent.click(applyBtn())
     await answered()
     expect(askConfirm.mock.calls[0][0]).toMatch(
-      /Excluding Commands Must Return drops its text; its hook still asks \(it has no switch yet\)\./,
+      /Excluding Commands Must Return also drops its hook: it stops asking on every host\./,
     )
+    expect(askConfirm.mock.calls[0][0]).not.toMatch(/still asks/)
   })
 })
 
@@ -1599,20 +1603,20 @@ describe('Constitution page — themed tier nouns', () => {
 // the bar that holds every staged change with its Review / Revert / Apply.
 
 describe('Constitution page — the ladder layout', () => {
-  // Gated: a hook enforces the row now. In the fixture that is laws I and III, process.5, ops.2
-  // and the ownership gate; law II is text-only and no craft rule has a hook. ops.2's pack is not
-  // built in, but its root-scan hook rides git-gate in every build, so it still asks.
+  // Gated: a hook enforces the row now. In the fixture that is laws I and III, process.5 and the
+  // ownership gate; law II is text-only and no craft rule has a hook. ops.2's pack is not built in,
+  // and its root-scan hook goes with its text, so it is not gated.
   it('narrows to the hook-gated rules, and back with a second click', async () => {
     const { container } = render(withInstall())
     await settled(container)
-    const gated = screen.getByRole('button', { name: 'Gated 5' })
+    const gated = screen.getByRole('button', { name: 'Gated 4' })
     fireEvent.click(gated)
     expect(gated.getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByText('Sealed Secrets')).toBeTruthy()
     expect(screen.getByText('Consent Before Push')).toBeTruthy()
     expect(screen.queryByText('One Intent, One Act')).toBeNull()
     expect(screen.queryByText('Automate Repetition')).toBeNull()
-    expect(screen.getByText('Commands Must Return')).toBeTruthy()
+    expect(screen.queryByText('Commands Must Return')).toBeNull()
     fireEvent.click(gated)
     expect(gated.getAttribute('aria-pressed')).toBe('false')
     expect(screen.getByText('Automate Repetition')).toBeTruthy()

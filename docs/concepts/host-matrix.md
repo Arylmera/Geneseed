@@ -35,7 +35,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 
 ## The one conditional row
 
-The **consent before commit and push** row depends on a choice you make at build time. It enforces the rule *Consent Before Push*, which belongs to the **process** doctrine pack ([Rules](rules.md)). Build without that pack, or exclude that one rule, and the commit/push question goes away — but the gate itself stays: on Claude Code and OpenClaude the `git-gate` hook is still wired (with `--no-consent`), so destructive git is still caught. Everything else in the table is always on.
+The **consent before commit and push** row depends on a choice you make at build time. It enforces the rule *Consent Before Push*, which belongs to the **process** doctrine pack ([Rules](rules.md)). Build without that pack, or exclude that one rule, and the commit/push question goes away — but the gate itself stays: on Claude Code and OpenClaude the `git-gate` hook is still wired (with `--no-consent`), so destructive git is still caught. The standing-rule row is conditional the same way: it enforces *Persist Insight*, also in the process pack, and excluding it (or the pack) drops that hook on every host ([Exclusions](exclusions.md)). Everything else in the table is always on.
 
 One OpenCode asymmetry: Geneseed shares `opencode.json` with you and cannot tell its own `git commit*` permission entry from one you typed, so a rebuild without the process pack leaves an existing entry in place and says so instead of deleting it. A `permission.skill` deny is different: Geneseed records each one it writes, and a rebuild or uninstall takes back only those, never a deny you set yourself.
 

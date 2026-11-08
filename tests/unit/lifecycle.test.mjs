@@ -544,6 +544,27 @@ test('the gate-config edit asks are recorded, survive a re-emit, and uninstall r
   });
 });
 
+// Process 1 excluded drops its hook (owner decision, 2026-11-08), OpenCode's own rule-file asks
+// included: the re-emit sweeps the keys it recorded, bare and `*/`, and including the rule again
+// brings them back, recorded.
+test('excluding process 1 sweeps the rule-file edit asks; including it again restores them', () => {
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    fs.mkdirSync(cfg, { recursive: true });
+    const target = path.join(cfg, 'opencode.json');
+    const edit = () => JSON.parse(fs.readFileSync(target, 'utf8')).permission.edit;
+    const man = () => JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    const RULE_KEYS = ['user-rules.md', '*/user-rules.md', 'user-rules.draft.md', '*/user-rules.draft.md'];
+    globalReemit(d, cfg);
+    for (const k of RULE_KEYS) assert.ok(edit()[k] === 'ask' && man().edit_asks.includes(k), `armed: ${k}`);
+    globalReemit(d, cfg, ['--exclude-rules', 'process.1']);
+    for (const k of RULE_KEYS) assert.ok(!(k in edit()) && !man().edit_asks.includes(k), `excluded: ${k} stayed`);
+    assert.equal(edit()[`${path.basename(cfg)}/excludes.json`], 'ask', 'the other asks stay');
+    globalReemit(d, cfg);
+    for (const k of RULE_KEYS) assert.ok(edit()[k] === 'ask' && man().edit_asks.includes(k), `re-included: ${k}`);
+  });
+});
+
 test('a manifest with no skill_denies record sweeps nothing on re-emit', () => {
   // The safe reading of an older manifest: no record of what Geneseed wrote means no licence
   // to take anything away.

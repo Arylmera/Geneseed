@@ -263,14 +263,14 @@ screen the run list stacks above the detail.
   `--no-deletion-gate`, `--no-test-note`) and doctrine rigor 5 (`--no-external-gate`). Flipping
   one asks, then rebuilds the install once; *Enforced by* reads *Gate off* while one is off. A
   hook with no switch shows a locked cell: process 5 reads *with text*, because excluding it
-  drops its commit/push ask (`--no-consent`); process 1 and ops 2 read *always on*, because their
-  hooks ask in every build. A row with no hook leaves the cell empty. Each switch's accessible
+  drops its commit/push ask (`--no-consent`), and so do process 1 (`--no-rule-store`) and ops 2
+  (`--no-root-scan`): excluding the rule, or its pack, drops its hook in the same rebuild. A row with no hook leaves the cell empty. Each switch's accessible
   name names its rule (`Deletion gate: hook gate of Deletion Is Deliberate`, `External Gate rule
   text`). Excluding rigor 5's text also switches its gate off in the same Apply, and the confirm
   says so; including it again offers *Also turn the external gate back on*, checked by default.
   A row whose text is excluded while its hook will still ask reads *Text excluded; the hook still
-  asks.*: process 1 and ops 2 always, rigor 5 only once its exclusion is deployed with the gate
-  armed. The ownership gate belongs
+  asks.*: rigor 5 only, once its exclusion is deployed with the gate armed. Excluding process 1
+  or ops 2 says in the confirm that its hook goes too. The ownership gate belongs
   to no Rule, so its switch (`--no-ownership-gate`) sits inside the Ethos band's *Ownership*
   row and works the same way. Closed, the row reads *Always* (the section's text binds whatever
   the gate does) and *Hook gate* or *Gate off*. Open, it shows the text, then a gate line with

@@ -345,7 +345,9 @@ export function doctrinesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
-    const m = ACTIVE_PACKS_RE.exec(text);
+    // Only the managed block of a shared CLAUDE.md/AGENTS.md, as `gateOfDir` reads: a line the agent
+    // appended outside it would otherwise drop packs, and their hooks, at the next rebuild.
+    const m = ACTIVE_PACKS_RE.exec(gateCarrierText(carrierPath, text));
     if (!m) return undefined;
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());
@@ -401,7 +403,8 @@ export function excludedRulesOfDir(d, host = null) {
   return firstCarrier(d, (carrierPath) => {
     const text = readMaybe(carrierPath);
     if (text === null) return undefined;
-    const m = EXCLUDED_RULES_RE.exec(text);
+    // The managed block only, as above: an exclusion drops a rule's hook too.
+    const m = EXCLUDED_RULES_RE.exec(gateCarrierText(carrierPath, text));
     if (!m) return undefined;
     if (m[1] === 'none') return [];
     const named = m[1].split(',').map((s) => s.trim());

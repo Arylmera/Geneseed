@@ -56,7 +56,17 @@ The finer switch removes a single doctrine rule from an install while keeping th
 geneseed build --emit claude-global --exclude-rules "process 7"
 ```
 
-The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. The always-on Rules and the Ethos cannot be excluded. Picking packs and rules is covered in [Doctrine packs and single rules](../guides/setup-doctrines.md); what the layers are is in [Rules](rules.md).
+The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. The always-on Rules and the Ethos cannot be excluded.
+
+**A hook goes with its rule.** Three doctrine rules are also enforced by a hook with no switch of its own, and excluding the rule, or building without its pack, drops that hook in the same rebuild. Including the rule again re-arms it at the next rebuild.
+
+| Rule | What stops | Flag |
+| --- | --- | --- |
+| process 5, *Consent Before Push* | the commit/push ask of `git-gate` and OpenCode's `git commit*`/`git push*` keys. Bob keeps its warning line | `--no-consent` |
+| process 1, *Persist Insight* | the ask (on Bob the block or warning) on a write to `user-rules.md` or `user-rules.draft.md`, by write tool or parsed shell write, the hard-link check included: `rule-gate`, `git-gate`, Bob's `tool-gate`, the OpenCode guard, and OpenCode's `permission.edit` keys on those files | `--no-rule-store` |
+| ops 2, *Commands Must Return* | the root-scan check of `git-gate`, Bob's `tool-gate` and the OpenCode guard | `--no-root-scan` |
+
+Every other check of those hooks stays. The [change report](hooks.md#the-change-report) keeps reporting rule-file changes: with process 1 off, a rule write ran with no prompt, so it is never counted as approved. **With process 1 off, that report is the only signal that the agent changed your standing rules.** It detects and prevents nothing, and it can be fooled: the agent can write `memory/.own-writes.json`, the log of Geneseed's own writes, so a change it lists is excused. The OpenCode guard reads the same state from the install's `Active packs:` and `Excluded rules:` lines when it starts, so restart OpenCode after a rebuild. While the machine's hook shim points at an older checkout, that checkout refuses a flag it does not know and the gate verb lets every call through; run `geneseed rebuild-all` first. Rigor 5 is the exception: it has a switch of its own (below). Picking packs and rules is covered in [Doctrine packs and single rules](../guides/setup-doctrines.md); what the layers are is in [Rules](rules.md).
 
 ### Per-skill exclusion — skills you never use
 

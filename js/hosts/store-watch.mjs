@@ -10,7 +10,9 @@
  * transcript shows ran: a rule write runs only past the host's prompt, and a memory write is the
  * agent's own to make (owner decision, 2026-11-08). The transcript is read only when a file changed,
  * which keeps the common Stop to the stats. Bob has no transcript, so every change there is
- * reported, a free memory write included. OpenCode has this logic in the guard plugin, with the
+ * reported, a free memory write included. With process 1 excluded (`ruleStore: false`, the hook's
+ * `--no-rule-store`) a rule write runs with no prompt, so a rule file is never counted as approved and
+ * the report still shows it; memory keeps its excuse. OpenCode has this logic in the guard plugin, with the
  * baseline in memory and approval from `tool.execute.after`. A memory write by shell is reported on
  * every host: that, and the web console, is how the user sees what the agent chose to remember.
  *
@@ -47,6 +49,8 @@ const OWN_LOG = '.own-writes.json';
 const OWN_LOG_CAP = 2000;
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const NAMES_SHOWN = 5;
+// The coined rule-file names, at the end of a `normcase`d path (lower case on Windows).
+const RULE_FILE_RE = /[\\/]user-rules(?:\.draft)?\.md$/i;
 
 /** The store files under one home, as `path -> "size:mtime"`. The guard's `storeScan` is its twin. */
 export function storeScan(home, found = {}) {
@@ -188,8 +192,9 @@ export function lastStoreReport() {
 /**
  * Compare at a turn's end: the line to show, or null. Rolls the baseline, so a change is said once,
  * and a session with no baseline (installed mid-session) starts one here. `transcript` is null on Bob.
+ * `ruleStore: false`: process 1 is off, so no rule write passed a prompt (the header says why).
  */
-export function storeReport(root, sid, { transcript = null, cwd = null, host = 'claude' } = {}) {
+export function storeReport(root, sid, { transcript = null, cwd = null, host = 'claude', ruleStore = true } = {}) {
   try {
     if (typeof sid !== 'string' || !sid) return null;
     const before = readJson(stateFile(root, sid));
@@ -202,6 +207,7 @@ export function storeReport(root, sid, { transcript = null, cwd = null, host = '
     saveBaseline(root, sid, now);
     const own = homesOf(root).reduce((log, h) => ({ ...log, ...readJson(path.join(h, 'memory', OWN_LOG)) }), {});
     const approved = typeof transcript === 'string' ? approvedInTranscript(transcript, cwd) : new Set();
+    if (!ruleStore) for (const f of approved) if (RULE_FILE_RE.test(f)) approved.delete(f);
     const files = changed.filter((f) => own[f] !== (now[f] ?? 'gone') && !approved.has(normcase(f)));
     if (!files.length) return null;
     noteForStatus(files, host);

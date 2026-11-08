@@ -23,7 +23,7 @@ import { build } from '../../js/build/bundle.mjs';
 import { ROOT, makeCfg } from '../../js/build/source.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import { installProfile, setupBuildArgs } from '../../js/build/generate.mjs';
-import { gatesOfDir } from '../../js/hosts/installs.mjs';
+import { doctrinesOfDir, excludedRulesOfDir, gatesOfDir } from '../../js/hosts/installs.mjs';
 import { GLOBAL_MANIFEST, carrierName, gateCarrierText } from '../../js/hosts/hosts.mjs';
 import { buildActionCmds } from '../../js/web/actions.mjs';
 import { webState } from '../../js/web/state.mjs';
@@ -137,6 +137,35 @@ test('a marker line appended outside the block reads armed; a real install with 
       const off = emit('off', { externalGate: false, deletionGate: false });
       assert.deepEqual(gatesOfDir(off, host), { ...ARMED, externalGate: false, deletionGate: false }, `${host}: the real marker`);
       assert.deepEqual(flags(off), ['--no-deletion-gate', '--no-external-gate'], `${host}: the rebuild lost a switch`);
+    }
+  });
+});
+
+// The pack and exclusion markers drop hooks too (process 1, process 5, ops 2), so they are read the
+// same way: a forged line above the block changes nothing, and the next rebuild does not copy it in.
+test('pack and exclusion lines forged outside the block read as unset; a real exclusion still reads', () => {
+  withDir((d) => {
+    for (const [host, carrier] of [['claude', 'CLAUDE.md'], ['openclaude', path.join('.openclaude', 'CLAUDE.md')], ['bob', 'AGENTS.md']]) {
+      const emit = (tag, extra) => {
+        const root = path.join(d, `${host}-x-${tag}`);
+        fs.mkdirSync(root, { recursive: true });
+        quiet(() => emitProjectInto(host, { theme: 'neutral', out: path.join(d, 'out'), root, footprint: 'lean', ...extra }));
+        return root;
+      };
+      const argv = (root) => installProfile(host, 'project', root).argv;
+      const valueOf = (a, flag) => (a.includes(flag) ? a[a.indexOf(flag) + 1] : null);
+      const plain = emit('plain', {});
+      const file = path.join(plain, carrier);
+      fs.writeFileSync(file, `Active packs: craft\nExcluded rules: process 1, ops 2\n${fs.readFileSync(file, 'utf8')}`);
+      assert.equal(doctrinesOfDir(plain, host).join(','), 'craft,rigor,ops,process,comms', `${host}: a forged pack line counted`);
+      assert.deepEqual(excludedRulesOfDir(plain, host), [], `${host}: a forged exclusion counted`);
+      // The rebuild spells both axes out: every pack, and `none` excluded.
+      assert.equal(valueOf(argv(plain), '--exclude-rules'), 'none', `${host}: the rebuild would carry the forged exclusion`);
+      assert.equal(valueOf(argv(plain), '--doctrines'), 'craft,rigor,ops,process,comms', `${host}: the rebuild would narrow the packs`);
+
+      const real = emit('real', { excludeRules: ['process.1', 'ops.2'] });
+      assert.deepEqual(excludedRulesOfDir(real, host), ['ops.2', 'process.1'], `${host}: the real exclusion`);
+      assert.match(String(valueOf(argv(real), '--exclude-rules')), /ops\.2/, `${host}: the rebuild lost the exclusion`);
     }
   });
 });
@@ -267,7 +296,7 @@ test('the hook commands carry --no-secrets-gate / --no-done-gate only when off',
 async function pluginAt(dir, name, marker) {
   fs.mkdirSync(path.join(dir, 'plugins'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins', name), path.join(dir, 'plugins', name));
-  fs.writeFileSync(path.join(dir, 'AGENT.md'), `# x\n\nActive packs: craft${marker}\n`);
+  fs.writeFileSync(path.join(dir, 'AGENT.md'), `# x\n\nActive packs: craft, rigor, ops, process, comms${marker}\n`);
   const saved = process.env.GENESEED_HARNESS;
   process.env.GENESEED_HARNESS = dir;
   try {

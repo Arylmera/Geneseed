@@ -80,6 +80,24 @@ const consentRuleOn = (d, excluded = []) =>
   processPackOn(d) && !(Array.isArray(excluded) && excluded.includes(CONSENT_RULE));
 
 /**
+ * The same test for any rule whose hook goes with its text (owner decision, 2026-11-08): the rule's
+ * pack is on (unknown counts as on, like `processPackOn`) and the rule is not excluded. So excluding
+ * the rule, or its whole pack, drops its hook, as it drops process 5's. Process 1 (Persist Insight)
+ * is the rule-store ask; ops 2 (Commands Must Return) the root-scan check. Each flag is emitted only
+ * when its rule is off, so a build that keeps both is byte-identical to one from before.
+ */
+const STORE_RULE = 'process.1';
+const ROOT_SCAN_RULE = 'ops.2';
+const ruleOn = (id, d, excluded = []) => (!Array.isArray(d) || d.includes(id.split('.')[0]))
+  && !(Array.isArray(excluded) && excluded.includes(id));
+/** The derived hook flags of `ruleOn`, in emit order. `verb` keeps each flag to the verbs that read it. */
+function ruleFlags(verb, d, excluded) {
+  const store = ['git-gate', 'rule-gate', 'tool-gate', 'learn'].includes(verb) && !ruleOn(STORE_RULE, d, excluded);
+  const scan = ['git-gate', 'tool-gate'].includes(verb) && !ruleOn(ROOT_SCAN_RULE, d, excluded);
+  return `${store ? ' --no-rule-store' : ''}${scan ? ' --no-root-scan' : ''}`;
+}
+
+/**
  * `_build_settings._default_permission`.
  *
  * WHAT THE PACK TOGGLE REACHES AND WHAT IT MUST NOT. `git commit*` and `git push*` are the
@@ -401,17 +419,20 @@ function reconcileOpencodeSkillPermission(perm, names, staleNames = [], added = 
  * inside the project is relative to the session dir there, `file-access.ts` `resolve`). Never the
  * absolute path: a project opencode.json is often committed, and teammates do not share it.
  */
-export function opencodeEditAsks(cfgDir, global, agentRel = null) {
+export function opencodeEditAsks(cfgDir, global, agentRel = null, doctrines = null, excluded = []) {
   const cfg = path.basename(cfgDir);
   const tails = ['opencode.json', 'opencode.jsonc', ...['excludes.json', GLOBAL_MANIFEST, '.geneseed-emit',
     'plugins/*', 'plugin/*', 'agents/*.md', 'agent/*.md', 'mode/*.md', 'modes/*.md', 'tool/*', 'tools/*',
-    ...(global ? ['AGENT.md', 'config.json'] : [])].map((f) => `${cfg}/${f}`),
+    // `<cfg>/AGENT.md` in a project install too: the guard reads it BEFORE the project's own carrier
+    // (`CARRIER_DIRS`), so a file planted there would set its gate markers and rule exclusions.
+    'AGENT.md', ...(global ? ['config.json'] : [])].map((f) => `${cfg}/${f}`),
   ...['.claude', '.openclaude', '.bob'].flatMap((m) => [`${m}/settings.json`, `${m}/settings.local.json`]),
   '.bob/settings/settings.json',
   // Persist Insight: the rule stores, which the guard no longer releases on a re-issue. The coined
   // names match anywhere, as the guard and Claude's rule gate match them. Memory is written freely
   // (owner decision, 2026-11-08), so its keys are gone; a re-emit sweeps the ones an install recorded.
-  'user-rules.md', 'user-rules.draft.md'];
+  // With process 1 excluded (or its pack off) the rule files lose their ask too, and a re-emit sweeps it.
+  ...(ruleOn(STORE_RULE, doctrines, excluded) ? ['user-rules.md', 'user-rules.draft.md'] : [])];
   const keys = [];
   if (agentRel) {
     const abs = path.resolve(path.dirname(cfgDir), agentRel);
@@ -774,9 +795,12 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * prose layer for no gain in safety. Asymmetric risk, asymmetric answer — the BOUNDARY follows
  * the pack, the ASKING does not have to.
  *
- * The `rule-gate` group stays in every build. Its subject is which durable store a write
- * belongs in — the user's call — not how work is run, so it is not the process pack's to
- * remove. `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
+ * The `rule-gate` group stays in every build: it carries Law I, External Gate and the ownership
+ * gate, none of them the process pack's. Its process-1 branch (the rule-store ask) follows that
+ * rule like process 5 follows its own (owner decision, 2026-11-08): `--no-rule-store` when process 1
+ * or its pack is off, on `rule-gate`, `git-gate` (the shell path) and `learn` (the change report);
+ * ops 2's root-scan check gets `--no-root-scan` on `git-gate` the same way (`ruleFlags`).
+ * `default` here means unknown, and unknown keeps the gate (see `processPackOn`).
  */
 export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [], host = 'claude',
   gates = {}) {
@@ -834,7 +858,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `--no-deletion-gate`), and for a
       // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
       // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}${eg}${tn}` }] }],
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}${eg}${tn}${ruleFlags('tool-gate', doctrines, excluded)}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
@@ -856,7 +880,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
     + (deletionGate === false ? ' --no-deletion-gate' : '')
-    + (externalGate === false ? ' --no-external-gate' : '');
+    + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded);
   // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
   // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
@@ -866,9 +890,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`
     + (ownershipGate === false ? ' --no-ownership-gate' : '')
     + (externalGate === false ? ' --no-external-gate' : '')
-    + (testNote === false ? ' --no-test-note' : '');
+    + (testNote === false ? ' --no-test-note' : '') + ruleFlags('rule-gate', doctrines, excluded);
+  // `--no-rule-store` on learn: with process 1 off a rule write runs with no prompt, so the change
+  // report must not count it as approved (`storeReport`). Bob's learn reports every change already.
   const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
-    + `${testNote === false ? ' --no-test-note' : ''} || exit 0`;
+    + `${testNote === false ? ' --no-test-note' : ''}${ruleFlags('learn', doctrines, excluded)} || exit 0`;
   const activity = `${run} activity --root "${cfg}"${h} || exit 0`;
   // Claude Code only (hooks.md, v2.1.295+; Task 1): a `command` hook that can't start, times
   // out, or exits anything but 0 or 2 — even one whose stdout happens to be valid JSON — now

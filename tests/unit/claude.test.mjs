@@ -627,7 +627,8 @@ test('a PROJECT reactivate reads the pack selection off the repo root, not the c
     assert.ok(back.length > 0, 'the reactivate wired no hooks at all');
     assert.deepEqual(back.filter(consentGate), [],
       'the reactivate put the consent gate back into an install whose owner had removed it');
-    assert.ok(back.some((c) => c.includes('git-gate --root') && c.endsWith(' --no-consent')),
+    // `includes`, not `endsWith`: with `craft` alone the ops pack is off too, so `--no-root-scan` follows.
+    assert.ok(back.some((c) => c.includes('git-gate --root') && c.includes(' --no-consent')),
       `the reactivate dropped Law IV's git gate along with the consent: ${back.join(' | ')}`);
   });
 });
@@ -989,11 +990,13 @@ test('the process pack off drops the consent half of the git gate and keeps Law 
     assert.ok(on.some(consentGate), 'the consent gate is missing with the pack ON');
     assert.ok(!off.some(consentGate),
       `the consent gate survived --doctrines craft: ${off.join(' | ')}`);
-    assert.ok(off.some((c) => c.includes('git-gate') && c.endsWith(' --no-consent')),
+    // `includes`, not `endsWith`: process 1 and ops 2 go with their packs too (owner decision
+    // 2026-11-08), so the same command also carries `--no-rule-store --no-root-scan`.
+    assert.ok(off.some((c) => c.includes('git-gate') && c.includes(' --no-consent')),
       `Law IV's git gate went with the process pack: ${off.join(' | ')}`);
-    // NOT a blanket removal. The rule gate answers "standing rule or durable fact?", which is the
-    // user's call rather than a way of running work, and the two SessionStart/learn pairs are not
-    // the process pack's either. Asserting the survivors is what stops this from going green on a
+    // NOT a blanket removal. The rule gate also carries Law I and External Gate, which are not the
+    // process pack's: only its process-1 branch stands down (`--no-rule-store`). The two
+    // SessionStart/learn pairs are not the pack's either. Asserting the survivors is what stops this from going green on a
     // change that simply emptied the table.
     for (const verb of ['rule-gate', 'context', 'learn']) {
       assert.ok(off.some((c) => c.includes(verb)), `${verb} went with the process pack: ${off}`);
@@ -1020,7 +1023,10 @@ test('an install with NO Active packs: marker keeps the consent gate (B6, fail c
 
 test('an install whose marker reads `none` loses the consent gate (B6, the other arm)', () => {
   withDir((d) => {
-    fs.writeFileSync(path.join(d, 'CLAUDE.md'), '# Geneseed\n\nActive packs: none\n');
+    // Inside the managed block, where a real install writes it: in a shared CLAUDE.md a marker
+    // outside the block is the user's prose and counts for nothing (`gateCarrierText`).
+    fs.writeFileSync(path.join(d, 'CLAUDE.md'),
+      '# my notes\n<!-- BEGIN GENESEED -->\n# Geneseed\n\nActive packs: none\n<!-- END GENESEED -->\n');
     assert.deepEqual(doctrinesOfDir(d), [],
       '`none` is a real configuration and must read as the empty selection, not as unknown');
 

@@ -116,11 +116,12 @@ describe('HOOK_GATED', () => {
     expect(Object.keys(C.GATE_COPY)).toEqual(Object.keys(GATE_SWITCH))
   })
 
-  // The hooked doctrine rules that keep asking with their text excluded are the ones with no
-  // switch, less process 5, whose hook goes with its text (`--no-consent`): today process 1 and
-  // ops 2. A switch added for either one moves it out of this set and onto a Hook gate toggle.
-  it('ALWAYS_ASKS is process 1 and ops 2', () => {
-    expect([...C.ALWAYS_ASKS].sort()).toEqual(['ops.2', 'process.1'])
+  // The hooked doctrine rules with no switch all have their hook go with their text (owner
+  // decision 2026-11-08): process 1, process 5 and ops 2. So no hook keeps asking with its text
+  // excluded; a hooked rule added with neither a switch nor that wiring would land in ALWAYS_ASKS.
+  it('WITH_TEXT is every switchless hooked rule, and ALWAYS_ASKS is empty', () => {
+    expect([...C.WITH_TEXT].sort()).toEqual(['ops.2', 'process.1', 'process.5'])
+    expect([...C.ALWAYS_ASKS]).toEqual([])
   })
 
   // Every rule a hook gates, and every switchable gate, explains what its hook does, and no row

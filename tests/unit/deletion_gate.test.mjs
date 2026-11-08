@@ -174,7 +174,7 @@ async function guardAt(dir, marker) {
   fs.mkdirSync(path.join(dir, 'plugins'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'adapters', 'opencode', 'plugins', 'geneseed-guard.js'),
     path.join(dir, 'plugins', 'geneseed-guard.js'));
-  fs.writeFileSync(path.join(dir, 'AGENT.md'), `# x\n\nActive packs: craft${marker}\n`);
+  fs.writeFileSync(path.join(dir, 'AGENT.md'), `# x\n\nActive packs: craft, rigor, ops, process, comms${marker}\n`);
   return import(pathToFileURL(path.join(dir, 'plugins', 'geneseed-guard.js')).href);
 }
 async function guardBlocks(mod, command, cwd) {
