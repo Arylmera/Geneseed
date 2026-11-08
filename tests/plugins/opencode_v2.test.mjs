@@ -150,7 +150,9 @@ test("guard: a rule-store edit passes to the host, and evaluate turns it into a 
   assert.equal(asked.effect, "ask")
   assert.match(asked.message, /Persist Insight/)
   assert.doesNotMatch(asked.message, /GENESEED_/)
-  assert.equal((await ask({ resources: ["src/a.js", "memory/x.md", "MEMORY.md"] })).effect, "ask", "a location-relative resource, among others")
+  assert.equal((await ask({ resources: ["src/a.js", "memory/x.md", "user-rules.draft.md"] })).effect, "ask", "a location-relative resource, among others")
+  // Memory is written freely (owner decision, 2026-11-08): no prompt for the index or a fact.
+  assert.equal((await ask({ resources: ["memory/x.md", "MEMORY.md"] })).effect, "allow", "memory is written freely")
   assert.equal((await ask({ resources: ["src/a.js"] })).effect, "allow", "ordinary work is untouched")
   assert.equal((await ask({ action: "read" })).effect, "allow", "only an edit")
   assert.equal((await ask({ effect: "deny" })).effect, "deny", "never softens a deny")
@@ -190,12 +192,18 @@ test("guard: a parsed shell write to a store becomes a real prompt, by call id",
   await hooks.tool["execute.before"](plain)
   const p = ev("c3"); await hooks.permission.evaluate(p)
   assert.equal(p.effect, "allow")
-  // The live miss on 2.2.5, through the home: a tier file, so no coined name can answer for it.
-  const cmdlet = { tool: "shell", id: "c4", input: { command: "Add-Content -Path \"$HOME\\.config\\geneseed\\memory\\x.md\" -Value \"test gate\"" } }
+  // The live miss on 2.2.5, through the home: the tier's rule file, reached only by the home expansion.
+  const cmdlet = { tool: "shell", id: "c4", input: { command: "Add-Content -Path \"$HOME\\.config\\geneseed\\user-rules.md\" -Value \"test gate\"" } }
   await hooks.tool["execute.before"](cmdlet)
   assert.equal(cmdlet.tool, "shell", "the host asks; nothing is refused here")
   const c = ev("c4"); await hooks.permission.evaluate(c)
   assert.equal(c.effect, "ask")
+  // The same write to a tier memory file is free: no mark, so no prompt.
+  const fact = { tool: "shell", id: "c5", input: { command: "Add-Content -Path \"$HOME\\.config\\geneseed\\memory\\x.md\" -Value x" } }
+  await hooks.tool["execute.before"](fact)
+  assert.equal(fact.tool, "shell")
+  const m = ev("c5"); await hooks.permission.evaluate(m)
+  assert.equal(m.effect, "allow", "memory is written freely")
 })
 
 // The dialog shows no plugin text, so an ask posts its reason first. The TUI renders `description`, the

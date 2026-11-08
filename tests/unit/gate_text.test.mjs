@@ -113,17 +113,20 @@ const ASKS = [
     'It asks because what becomes a rule is your decision.',
     'If you allow it, the text can become a rule that binds every later session.',
     'Agent: if refused, ask the user; do not write it another way.')],
-  ['the memory index', 'store', { name: 'the memory index', pairs: [['', 'a\n']] }, lines(
-    'This edit changes the memory index (+1 line), which lists what the agent remembers across sessions.',
-    'Safe choice: Deny, unless you asked for this memory. (Persist Insight)',
-    'It asks because what the agent remembers is your decision.',
-    'If you allow it, the text shapes every later session until you remove it.',
+  // Memory is written freely (owner decision, 2026-11-08), so the store ask has no memory text; a
+  // shell write to a rule store reads "This command writes to", and a name the table lacks reads as
+  // user-rules.md, the strongest store, rather than as nothing.
+  ['the rule draft through a shell command', 'store', { name: 'the rule draft', shell: true }, lines(
+    'This command writes to the rule draft, which can become one of your standing rules.',
+    'Safe choice: Deny, unless you asked for this rule. (Persist Insight)',
+    'It asks because what becomes a rule is your decision.',
+    'If you allow it, the text can become a rule that binds every later session.',
     'Agent: if refused, ask the user; do not write it another way.')],
-  ['a memory file through a shell command', 'store', { name: 'memory', shell: true }, lines(
-    'This command writes to a memory file, which the agent reads in later sessions.',
-    'Safe choice: Deny, unless you asked for this memory. (Persist Insight)',
-    'It asks because what the agent remembers is your decision.',
-    'If you allow it, the text shapes every later session until you remove it.',
+  ['a store name the table lacks', 'store', { name: 'memory' }, lines(
+    'This edit changes user-rules.md, your standing rules, which the agent obeys in every session.',
+    'Safe choice: Deny, unless you asked for this rule. (Persist Insight)',
+    'It asks because what becomes a rule is your decision.',
+    'If you allow it, the text binds every later session until you remove it.',
     'Agent: if refused, ask the user; do not write it another way.')],
   ['Sealed Secrets', 'secret', { name: 'src/config.js' }, lines(
     'This edit puts a credential-shaped string in src/config.js.',
@@ -234,7 +237,7 @@ const REFUSED = [
     'You can make this change yourself, outside the agent.',
     'Agent: leave this folder alone.')],
   ['deep-args', { name: 'mcp_notes_store' }, lines(
-    'Tell the user this, word for word: The arguments of mcp_notes_store nest too deep to read, so a write to your rules or memory cannot be ruled out.',
+    'Tell the user this, word for word: The arguments of mcp_notes_store nest too deep to read, so a write to your rules cannot be ruled out.',
     'It was refused because what the gate cannot read, it cannot clear. (Persist Insight)',
     'You can make this change yourself, outside the agent.',
     'Agent: ask the user; do not write it another way.')],

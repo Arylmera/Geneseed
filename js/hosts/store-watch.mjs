@@ -7,10 +7,12 @@
  * `context` has answered, once per session, and `learn` compares on Stop. Both are stats, no reads.
  *
  * WHAT COUNTS AS APPROVED, per host. Claude and OpenClaude: a Write, Edit or NotebookEdit the
- * transcript shows ran, because a gated tool runs only past the host's prompt. The transcript is read
- * only when a file changed, which keeps the common Stop to the stats. Bob has no transcript and no
- * file-tool write passes its gate, so every change there is reported. OpenCode has this logic in
- * the guard plugin, with the baseline in memory and approval from `tool.execute.after`.
+ * transcript shows ran: a rule write runs only past the host's prompt, and a memory write is the
+ * agent's own to make (owner decision, 2026-11-08). The transcript is read only when a file changed,
+ * which keeps the common Stop to the stats. Bob has no transcript, so every change there is
+ * reported, a free memory write included. OpenCode has this logic in the guard plugin, with the
+ * baseline in memory and approval from `tool.execute.after`. A memory write by shell is reported on
+ * every host: that, and the web console, is how the user sees what the agent chose to remember.
  *
  * GENESEED'S OWN WRITES. `learn`, a memory removal and the fold run inside `recordOwnWrites`, which
  * snapshots the store around the run and logs what moved to `memory/.own-writes.json`, as an exact
@@ -36,6 +38,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import path from 'node:path';
 
 import { machineDir } from '../lib/machine-dir.mjs';
+import { gitRootOf } from './gitref.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { sovereignBypass } from './hosts.mjs';
 
@@ -50,7 +53,7 @@ export function storeScan(home, found = {}) {
   const stamp = (f) => {
     try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}`; } catch { /* absent */ }
   };
-  for (const n of ['user-rules.md', 'PROFILE.md', 'geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json']) stamp(path.join(home, n));
+  for (const n of ['user-rules.md', 'user-rules.draft.md', 'PROFILE.md', 'geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json']) stamp(path.join(home, n));
   const walk = (dir) => {
     let items = [];
     try { items = readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -64,7 +67,21 @@ export function storeScan(home, found = {}) {
 }
 
 const homesOf = (root) => [...new Set([root, machineDir()])];
-const scanAll = (root) => homesOf(root).reduce((found, h) => storeScan(h, found), {});
+const stampOf = (f, found) => {
+  try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}`; } catch { /* absent */ }
+  return found;
+};
+/**
+ * The project layer's rule files, which the context hook loads from the session's repository: its git
+ * root, else `cwd`. Only the two rule names: a repo's own `memory/` folder is not a store.
+ */
+function projectRules(cwd, found) {
+  if (typeof cwd !== 'string' || !cwd) return found;
+  const top = gitRootOf(cwd) ?? path.resolve(cwd);
+  for (const n of ['user-rules.md', 'user-rules.draft.md']) stampOf(path.join(top, n), found);
+  return found;
+}
+const scanAll = (root, cwd = null) => projectRules(cwd, homesOf(root).reduce((found, h) => storeScan(h, found), {}));
 const stateFile = (root, sid) => path.join(root, STATE_DIR, `${String(sid).replace(/[^\w.-]/g, '_').slice(0, 120)}.json`);
 const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return null; } };
 
@@ -78,12 +95,12 @@ function saveBaseline(root, sid, stamps) {
  * The session's baseline, written once. SessionStart fires again on resume and compact: keeping the
  * first one means those cannot launder a change made before them. Old sessions' files are dropped.
  */
-export function writeBaseline(root, sid) {
+export function writeBaseline(root, sid, cwd = null) {
   try {
     if (typeof sid !== 'string' || !sid || sovereignBypass(root)) return;
     const f = stateFile(root, sid);
     if (existsSync(f)) return;
-    saveBaseline(root, sid, scanAll(root));
+    saveBaseline(root, sid, scanAll(root, cwd));
     const dir = path.dirname(f);
     for (const n of readdirSync(dir)) {
       const old = path.join(dir, n);
@@ -176,8 +193,10 @@ export function storeReport(root, sid, { transcript = null, cwd = null, host = '
   try {
     if (typeof sid !== 'string' || !sid) return null;
     const before = readJson(stateFile(root, sid));
-    if (!before) { writeBaseline(root, sid); return null; }
-    const now = scanAll(root);
+    if (!before) { writeBaseline(root, sid, cwd); return null; }
+    // Every file the baseline names is stamped again, so a session whose cwd moved still compares
+    // the project files it started with.
+    const now = Object.keys(before).reduce((found, p) => stampOf(p, found), scanAll(root, cwd));
     const changed = changedFiles(before, now);
     if (!changed.length) return null;
     saveBaseline(root, sid, now);

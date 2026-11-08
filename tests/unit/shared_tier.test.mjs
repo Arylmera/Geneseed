@@ -282,9 +282,9 @@ test('the back-port queue reads a global install\'s tier notes, and a project in
 
 // ---- Carried from S3 ----------------------------------------------------------------------------
 
-test('the rule gate survives a home directory it cannot read, and still guards the install store', async () => {
-  // `sharedPaths()` throws with no home. Unguarded inside `ruleGateTarget`, the catch around it
-  // answers "no target" for every path, and a write into the install's own store goes unasked.
+test('the rule gate survives a home directory it cannot read, and still guards the rule store', async () => {
+  // A gate that touched the home dir unguarded would answer "no target" for every path, and a rule
+  // write would go unasked. Memory is written freely (owner decision, 2026-11-08), so it passes.
   await withDir(async (d) => {
     const root = path.join(d, 'install');
     fs.mkdirSync(path.join(root, 'memory'), { recursive: true });
@@ -295,9 +295,11 @@ test('the rule gate survives a home directory it cannot read, and still guards t
       path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'rule-gate', '--root', root],
     { cwd: d, encoding: 'utf8', env, windowsHide: true,
       input: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: file, content: 'x' } }) });
-    const inStore = gate(path.join(root, 'memory', 'fact.md'));
-    assert.equal(inStore.status, 0, inStore.stderr);
-    assert.match(inStore.stdout, /This edit changes a memory file/, 'the install store still asks');
+    const rules = gate(path.join(root, 'user-rules.md'));
+    assert.equal(rules.status, 0, rules.stderr);
+    assert.match(rules.stdout, /This edit changes user-rules\.md/, 'the rule store still asks');
+    const fact = gate(path.join(root, 'memory', 'fact.md'));
+    assert.equal(`${fact.status} ${fact.stdout}`, '0 ', 'memory is written freely');
     const outside = gate(path.join(d, 'elsewhere.md'));
     assert.equal(`${outside.status} ${outside.stdout}`, '0 ');
   });

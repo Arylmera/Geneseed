@@ -270,8 +270,8 @@ test('denyDecision is byte-identical to the compact json.dumps of a deny', async
 });
 
 // ---------------------------------------------------------------------------------------------
-// The rule gate: a write to `user-rules.md`, to `MEMORY.md`, or to a markdown file inside THIS
-// install's `memory/`, asks — so the rule-vs-memory choice reaches the user.
+// The rule gate: a write to `user-rules.md` or to the rule draft asks, so a standing rule reaches the
+// user. Memory is written freely (owner decision, 2026-11-08): `MEMORY.md` and a fact file defer.
 
 const writePayload = (p, key = 'file_path') =>
   JSON.stringify({ tool_name: 'Write', tool_input: { [key]: p } });
@@ -296,22 +296,24 @@ function assertPersistAsk(why) {
 const ruleDefers = (p, root = null) =>
   assertDefers(hookRun('rule-gate', { root, stdin: writePayload(p) }), p);
 
-test('the two coined store names ask anywhere', () => {
+test('the two coined rule names ask anywhere', () => {
   // Both names are Geneseed's own coinage, so they need no install context to be recognised.
   for (const p of ['C:\\Users\\me\\.claude\\user-rules.md',
     '/home/me/proj/.bob/user-rules.md',
-    'C:\\Users\\me\\.claude\\memory\\MEMORY.md']) {
+    'C:\\Users\\me\\.claude\\user-rules.draft.md']) {
     ruleAsks(p);
   }
 });
 
-test('a markdown file under THIS install\'s memory/ asks', () => {
+test('memory is written freely: the index and a fact under THIS install\'s memory/ defer', () => {
   const sb = makeSandbox();
   try {
     const root = sb.path;
     fs.mkdirSync(path.join(root, 'memory', 'agents'), { recursive: true });
-    ruleAsks(path.join(root, 'memory', 'pnpm-preferred.md'), { root });
-    ruleAsks(path.join(root, 'memory', 'agents', 'reviewer.md'), { root });
+    ruleDefers('C:\\Users\\me\\.claude\\memory\\MEMORY.md');
+    ruleDefers(path.join(root, 'memory', 'MEMORY.md'), root);
+    ruleDefers(path.join(root, 'memory', 'pnpm-preferred.md'), root);
+    ruleDefers(path.join(root, 'memory', 'agents', 'reviewer.md'), root);
   } finally { sb.cleanup(); }
 });
 
@@ -332,10 +334,8 @@ test('ordinary work defers', () => {
   ruleDefers('docs/rules.md');
 });
 
-test('the memory match needs a root, and the coined names still do not', () => {
-  // Without `--root` there is no install to scope `memory/` to, so an unrooted gate can never
-  // over-reach — but the two coined names are still recognised, which is what keeps the
-  // unrooted gate useful rather than inert.
+test('the coined names need no root', () => {
+  // An unrooted gate still knows the two coined rule names, which keeps it useful rather than inert.
   ruleDefers('/home/me/.claude/memory/fact.md');
   ruleAsks('/home/me/.claude/user-rules.md');
 });
@@ -1371,8 +1371,8 @@ test("a write to a gate's own configuration asks under External Gate; a near mis
     const f = gateConfigFixture(sb);
     for (const p of GATE_CONFIG_ASKS(f)) gateConfigAsks(gateRun(f, p), p);
     for (const p of GATE_CONFIG_DEFERS(f)) assertDefers(gateRun(f, p), p);
-    // The install's memory keeps its own question (Persist Insight), not this one.
-    ruleAsks(path.join(f.root, 'memory', 'fact.md'), { root: f.root });
+    // The install's memory is no gate configuration, and memory is written freely.
+    ruleDefers(path.join(f.root, 'memory', 'fact.md'), f.root);
   } finally { sb.cleanup(); }
 });
 

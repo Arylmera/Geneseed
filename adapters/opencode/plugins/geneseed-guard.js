@@ -9,8 +9,9 @@
 //   - Deletion Is Deliberate:  block catastrophic shell commands, and every command that would
 //     really lose data, judged against the repository's state (`lossReason`, below).
 //   - Commands Must Return:  block a recursive scan rooted at a whole filesystem (find /).
-//   - Persist Insight (rule vs memory):  a write to user-rules.md or a memory file needs the
+//   - Persist Insight (standing rules):  a write to user-rules.md or the rule draft needs the
 //     HOST's own prompt (`permission.edit`; on V2 the `evaluate` hook too); with none, it is refused.
+//     Memory is written freely (owner decision, 2026-11-08); the change report still sees it.
 //   - Wiki (AGENT.md §8):  block mutations under a declared wiki's `protected`
 //     folders — the user's knowledge base sets its own no-go zones in geneseed-wiki.jsonc.
 //   - Ownership:  in an application repo whose root AGENTS.md has no `## Ownership` section,
@@ -1064,18 +1065,16 @@ const gateIs = (rel, file) => {
 const GATE_FILE_OTHER = [null, 'which this project lists as a protected check',
   'that check can get weaker or stop running, and a failure could go unseen'];
 
-// `ruleGateTarget`'s four answers: name, what it is, what the safe line calls it, whose call it is, impact.
+// `ruleGateTarget`'s answers: name, what it is, what the safe line calls it, whose call it is, impact.
+// Memory has none: it is written freely (owner decision, 2026-11-08).
 const GATE_RULE = ['this rule', 'what becomes a rule'];
-const GATE_FACT = ['this memory', 'what the agent remembers'];
 const GATE_STORES = {
   'user-rules.md': ['user-rules.md', 'your standing rules, which the agent obeys in every session', ...GATE_RULE,
     'the text binds every later session until you remove it'],
   'the rule draft': ['the rule draft', 'which can become one of your standing rules', ...GATE_RULE,
     'the text can become a rule that binds every later session'],
-  'the memory index': ['the memory index', 'which lists what the agent remembers across sessions', ...GATE_FACT,
-    'the text shapes every later session until you remove it'],
-  memory: ['a memory file', 'which the agent reads in later sessions', ...GATE_FACT,
-    'the text shapes every later session until you remove it'],
+  'a hard link': ['a second name of a rule file', 'which writes to your standing rules or the rule draft', ...GATE_RULE,
+    'the text can bind every later session until you remove it'],
 };
 
 // Bidi and zero-width marks too (`\p{C}`): they make a name read as something it is not. A double
@@ -1151,7 +1150,7 @@ const GATE_ASKS = {
     why: 'a gate the agent can edit is a gate it can switch off',
     impact: 'a gate can stop working, and nothing would tell you' }),
   store: (f) => {
-    const [name, what, label, owner, impact] = GATE_STORES[f.name] ?? GATE_STORES.memory;
+    const [name, what, label, owner, impact] = GATE_STORES[f.name] ?? GATE_STORES['user-rules.md'];
     return { rule: 'Persist Insight', line: gateEdit(f, name, what), safe: `Deny, unless you asked for ${label}.`,
       why: `${owner} is your decision`, impact, tail: 'ask the user; do not write it another way', can: GATE_DO_IT };
   },
@@ -1210,9 +1209,9 @@ const GATE_ASKS = {
   wiki: (f) => ({ line: `This edit changes the protected wiki folder ${gateName(f.name)}.`,
     safe: 'Deny, unless you asked for this change.', why: 'you marked this folder as closed to the agent',
     impact: 'notes you protected can change', tail: 'leave this folder alone', can: GATE_DO_IT }),
-  'deep-args': (f) => ({ rule: 'Persist Insight', line: `The arguments of ${gateName(f.name)} nest too deep to read, so a write to your rules or memory cannot be ruled out.`,
+  'deep-args': (f) => ({ rule: 'Persist Insight', line: `The arguments of ${gateName(f.name)} nest too deep to read, so a write to your rules cannot be ruled out.`,
     safe: 'Deny, unless you know what this call writes.', why: 'what the gate cannot read, it cannot clear',
-    impact: 'the call can write to your rules or memory unseen', tail: 'ask the user; do not write it another way', can: GATE_DO_IT }),
+    impact: 'the call can write to your rules unseen', tail: 'ask the user; do not write it another way', can: GATE_DO_IT }),
   // It reports a crash, not a change, so it has no rule to name.
   'gate-error': (f) => ({ line: `Geneseed gate error: the check failed with ${gateName(f.name)}, so nothing judged this call.`,
     safe: 'Deny, then run geneseed doctor.', why: 'a gate that crashed cannot say this call is safe',
@@ -1604,10 +1603,11 @@ async function protectedPrefixes() {
   return prefixes
 }
 
-// ---- the rule / memory stores (Persist Insight) --------------------------------
-// Whether something the user wants kept is a standing rule or a durable fact is THEIR call, and
-// the HOST asks it, never the agent (External Gate). This was a speed bump: the first write was
-// refused and any re-issue passed, so an agent could release itself by claiming the user's
+// ---- the rule stores (Persist Insight) -------------------------------------------
+// A standing rule is the user's call, and the HOST asks it, never the agent (External Gate). A
+// durable fact is not: memory is written freely and shown afterwards (owner decision, 2026-11-08),
+// so only `ruleTarget` gates; `ruleStoreTarget` still names memory for the change report.
+// This was a speed bump: the first write was refused and any re-issue passed, so an agent could release itself by claiming the user's
 // authorization, and one did (2026-11). `tool.execute.before` can only allow or throw, so the
 // prompt comes from what runs AFTER it, inside the host's own edit tools:
 //   - V1: `permission.edit` "ask" keys (`opencodeEditAsks`, js/hosts/settings.mjs). V1 calls no
@@ -1621,9 +1621,9 @@ async function protectedPrefixes() {
 // everything else in a command is the host's own command permission's business.
 //
 // Install folder and file names are theme-independent by design, so the match is on
-// literal names. `user-rules.md` / `MEMORY.md` are Geneseed's own coinage and match
-// anywhere; other markdown matches only inside this install's own memory/ dir, so a
-// project's unrelated memory/ folder is never caught.
+// literal names. `user-rules.md` / `user-rules.draft.md` / `MEMORY.md` are Geneseed's own
+// coinage and match anywhere; for the change report, other markdown matches only inside this
+// install's own memory/ dir, so a project's unrelated memory/ folder is never caught.
 const nocase = (s) => (process.platform === "win32" ? s.toLowerCase() : s)
 // The host's own edit tools, the only ones its `edit` permission covers (V1 `edit`, `write`,
 // `apply_patch`; V2 `patch`). The guard's WRITE_TOOLS is a wider substring class, which also
@@ -1713,7 +1713,7 @@ function storeScan(home, found = {}) {
   const stamp = (f) => {
     try { const s = statSync(f); if (s.isFile()) found[f] = `${s.size}:${Math.trunc(s.mtimeMs)}` } catch { /* absent */ }
   }
-  for (const n of ["user-rules.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
+  for (const n of ["user-rules.md", "user-rules.draft.md", "PROFILE.md", "geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]) stamp(path.join(home, n))
   const walk = (dir) => {
     let items = []
     try { items = readdirSync(dir, { withFileTypes: true }) } catch { return }
@@ -1728,7 +1728,18 @@ function storeScan(home, found = {}) {
 
 // ---- the change report (twin of js/hosts/store-watch.mjs, whose header says why) ---------------
 // It detects; it prevents nothing. Here the baseline lives in memory, for as long as the plugin does.
-const scanAllStores = () => storeHomes().reduce((found, h) => storeScan(h, found), {})
+// Plus the project layer's two rule files, at the session's git root (else its directory): the twin
+// of js/hosts/store-watch.mjs's `projectRules`. A repo's own memory/ folder is no store.
+const scanAllStores = (dir = null) => {
+  const found = storeHomes().reduce((acc, h) => storeScan(h, acc), {})
+  if (!dir) return found
+  const top = gitRootOf(dir) ?? path.resolve(dir)
+  for (const n of ["user-rules.md", "user-rules.draft.md"]) {
+    const p = path.join(top, n)
+    try { const st = statSync(p); if (st.isFile()) found[p] = `${st.size}:${Math.trunc(st.mtimeMs)}` } catch { /* absent */ }
+  }
+  return found
+}
 const ownWrites = () => storeHomes().reduce((log, h) => {
   try { return { ...log, ...JSON.parse(readFileSync(path.join(h, "memory", ".own-writes.json"), "utf8")) } } catch { return log }
 }, {})
@@ -1744,8 +1755,9 @@ function noteForStatus(files) {
   } catch { /* a status line never fails a turn */ }
 }
 
-// The store a write would land in, or null. `base` is the session's directory: a relative path is
-// the tool's, never this process's.
+// The rule or memory store a write would land in, or null: what the change report excuses after an
+// approved native edit. `base` is the session's directory: a relative path is the tool's, never
+// this process's.
 function ruleStoreTarget(p, base) {
   const stores = storeDirs()
   for (const abs of landsOn(p, base)) {
@@ -1755,6 +1767,44 @@ function ruleStoreTarget(p, base) {
     if (nocase(t).endsWith(".md") && stores.some((d) => t.startsWith(`${d}/`))) return "memory"
   }
   return null
+}
+// The rule store a write would land in, or null: the gate's question. Every form a write lands on is
+// read, so a memory file linked to user-rules.md is still a rule write. Twin of js/hosts/hooks.mjs's
+// `ruleGateTarget`, `sameAsRule` included.
+const RULE_NAMES = new Set(["user-rules.md", "the rule draft"])
+/**
+ * Whether `f` is one of `rules` under a second name: an existing file with more than one name whose
+ * device and inode match a known rule file's. A hard link has no target to follow, so this is the only
+ * way to see one. bigint stat, because a 64-bit NTFS file id does not fit a double. Only a file that
+ * has a second name is compared, and only there does a rule file whose stat fails for any reason but
+ * absence count as a match (fail closed). Twin of js/hosts/hooks.mjs's, byte for byte.
+ */
+function sameAsRule(f, rules) {
+  let s;
+  try { s = statSync(f, { bigint: true }); } catch { return false; }
+  if (!s.isFile() || s.nlink < 2n) return false;
+  return rules.some((r) => {
+    try { const t = statSync(r, { bigint: true }); return t.dev === s.dev && t.ino === s.ino; } catch (e) {
+      return !['ENOENT', 'ENOTDIR'].includes(e?.code);
+    }
+  });
+}
+// The rule files a session loads, under each home: the install, the machine tier, the project layer.
+const ruleFilesUnder = (homes) => homes.filter(Boolean).flatMap((h) => ['user-rules.md', 'user-rules.draft.md'].map((n) => path.join(h, n)));
+function ruleTarget(p, base) {
+  const forms = landsOn(p, base)
+  for (const abs of forms) {
+    const hit = coined(path.basename(abs))
+    if (RULE_NAMES.has(hit)) return hit
+  }
+  // This install's homes, the machine tier and `$GENESEED_HARNESS` (`storeHomes`), the home of the store
+  // `$GENESEED_MEMORY` names, and the project layer at the session's git root.
+  // No session directory: this process's, as the hook twin falls back to its own.
+  const at = base || process.cwd()
+  const project = gitRootOf(at) ?? path.resolve(at)
+  const pinned = process.env.GENESEED_MEMORY ? path.dirname(path.resolve(process.env.GENESEED_MEMORY)) : null
+  const rules = ruleFilesUnder([...storeHomes(), project, pinned])
+  return forms.some((f) => sameAsRule(f, rules)) ? "a hard link" : null
 }
 // Whether the merged `permission.edit`'s pattern `k` matches `rel`: V1's `Wildcard.match` (1.19.5).
 const wildMatch = (k, s) => new RegExp(`^${k.replace(/\\/g, "/").replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -2288,12 +2338,12 @@ export const GeneseedGuard = async (ctx) => {
   const watch = async (sid) => {
     if (OFF || !sid || watched.has(sid) || unwatched.has(sid)) return
     if (await sovereignBypass(root()) || await isChildSession(sid)) { unwatched.add(sid); return }
-    watched.set(sid, scanAllStores())
+    watched.set(sid, scanAllStores(root()))
   }
   const compare = async (sid) => {
     const before = watched.get(sid)
     if (!before) return
-    const now = scanAllStores()
+    const now = scanAllStores(root())
     watched.set(sid, now)
     const changed = [...new Set([...Object.keys(before), ...Object.keys(now)])].filter((f) => before[f] !== now[f]).sort()
     if (!changed.length) return
@@ -2329,7 +2379,7 @@ export const GeneseedGuard = async (ctx) => {
         for (const raw of pickPath(input?.args ?? {}, cwd)) {
           if (!ruleStoreTarget(raw, cwd)) continue
           // Only keys the scan itself names: a link's other spellings would read as files gone.
-          const now = scanAllStores()
+          const now = scanAllStores(root())
           for (const f of landsOn(raw, cwd)) {
             for (const base of watched.values()) { if (f in now) base[f] = now[f]; else delete base[f] }
           }
@@ -2389,7 +2439,7 @@ export const GeneseedGuard = async (ctx) => {
             if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
             // V1 after an "always": the `permission.edit` ask on these files is gone too.
             if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            const store = ruleStoreTarget(raw, cwd)
+            const store = ruleTarget(raw, cwd)
             const prompted = (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
             if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
             if (store && !prompted) {
@@ -2423,7 +2473,7 @@ export const GeneseedGuard = async (ctx) => {
           const named = argPaths(args)
           if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
           for (const v of named) {
-            const store = ruleStoreTarget(v, cwd)
+            const store = ruleTarget(v, cwd)
             if (store) {
               await deny(`${refused("store", { name: store })}\n${PERSIST_EDIT_TOOL}`, "process-1")
               return
@@ -2463,7 +2513,7 @@ export const GeneseedGuard = async (ctx) => {
             if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
             // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
             // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
-            const store = ruleStoreTarget(p, wd)
+            const store = ruleTarget(p, wd)
             if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
             if (store) {
               await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
@@ -2528,14 +2578,14 @@ async function askOnRuleStore(ctx, shellAsks) {
           // call the tool hook marked. A command the host's parser finds no command in asserts nothing.
           const shellStore = shellAsks.get(event.source?.id)
           if (!shellAsks.delete(event.source?.id)) return
-          if (WARN_ONLY) { log("WARN (would ask): a shell write to a rule or memory file (Persist Insight)"); return }
+          if (WARN_ONLY) { log("WARN (would ask): a shell write to a rule file (Persist Insight)"); return }
           event.effect = "ask"
           event.message = gateSafe("store", "ask", { name: shellStore, shell: true })
           await note(event)
           return
         }
         if (event.action !== "edit") return
-        const store = event.resources.map((r) => ruleStoreTarget(r, dir)).find(Boolean)
+        const store = event.resources.map((r) => ruleTarget(r, dir)).find(Boolean)
         // The gate's own files have a static ask a saved "always" can outvote, so they are raised too.
         const gate = !store && event.resources.find((r) => nativeAskFile(path.resolve(dir, r)))
         if ((!store && !gate) || await sovereignBypass(ctx?.location?.project?.directory || dir)) return

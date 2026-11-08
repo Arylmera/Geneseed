@@ -1279,7 +1279,7 @@
     },
     {
       "name": "rule-gate",
-      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or memory (Persist Insight backstop), and stop the first write of a session once in an application repo with no ## Ownership section in its root AGENTS.md (the ownership gate)",
+      "help": "PreToolUse hook: force an ASK before any write to user-rules.md or the rule draft (Persist Insight backstop; memory is written freely), and stop the first write of a session once in an application repo with no ## Ownership section in its root AGENTS.md (the ownership gate)",
       "description": "",
       "positionals": [],
       "options": [

@@ -100,7 +100,7 @@ changed for each plugin:
 | tool part carries its name | `session.tool.called` has no name; it rides on `session.tool.input.started` |
 | tools `bash`, `apply_patch`, `task` | renamed `shell`, `patch`, `subagent` (the old ids are aliases). The guard's substring classes cover both spellings; its usage counter takes `subagent` (type under `agent`) beside `task`, since the hook sees the name before alias resolution |
 
-The note exists only for the two asks the guard hands to the host: a rule or memory write that reaches a host prompt, and a gate configuration file. Every other outcome here is a refusal, and a refusal goes to the model. A V2 refusal is the renamed tool, and core quotes that name in its `No tool named` error. The history keeps the original tool name, so several lines of text there reach no provider as a name (seen on 2.2.6 with a fake model, through `opencode run`).
+The note exists only for the two asks the guard hands to the host: a rule write that reaches a host prompt, and a gate configuration file. Every other outcome here is a refusal, and a refusal goes to the model. A V2 refusal is the renamed tool, and core quotes that name in its `No tool named` error. The history keeps the original tool name, so several lines of text there reach no provider as a name (seen on 2.2.6 with a fake model, through `opencode run`).
 
 None of this is checked by a mock alone: `node tests/host_canary.mjs` starts the real V1 and V2
 and fails on the host's own `failed to load plugin` log line.

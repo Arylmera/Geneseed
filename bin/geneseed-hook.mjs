@@ -123,7 +123,8 @@ async function baselineStores(verb, args) {
     const raw = readStdin();
     if (!raw.includes('session_id')) return;
     const { writeBaseline } = await import('../js/hosts/store-watch.mjs');
-    writeBaseline(args.root, JSON.parse(raw).session_id);
+    const { session_id: sid, cwd } = JSON.parse(raw);
+    writeBaseline(args.root, sid, cwd);
   } catch { /* see above */ }
 }
 

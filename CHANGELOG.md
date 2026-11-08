@@ -14,6 +14,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`--no-test-note` stops the weakened-test note,** at edit time, at turn end and in the OpenCode context plugin. The done checks do not change, and `--no-done-gate` still silences the turn-end line.
 - **The Constitution page has both switches.** Rule VIII carries the test note and now reads *Hook gate* or *Gate off*. Doctrine rigor 5 keeps its rule switch on the row and gets a gate line inside the opened row. Excluding the rule and switching off the gate are independent.
 
+### Changed
+
+- **Memory is written freely, with no prompt.** *Persist Insight* now gates only standing rules: a write to `user-rules.md` or the rule draft `user-rules.draft.md` still asks on Claude Code and OpenClaude, blocks on Bob, and gets OpenCode's own prompt or a refusal. `MEMORY.md` and the fact files in a memory store pass on every host, by a write tool and by a shell command. You see each memory afterwards in the web console, and a shell write to one still shows in the change report. The doctrine text, `AGENT.md` §5, the `rule` skill (the agent sorts a fact from a rule itself and writes a fact at once) and the memory-curator say the same. OpenCode drops the `permission.edit` asks on `MEMORY.md` and `memory/*.md`: a rebuild sweeps the ones an install recorded, so an install keeps prompting until it re-emits.
+- **A second name of a rule file asks like the rule file.** A hard link has no target to follow, so the gates compare a hard-linked target's device and inode with the known rule files (the install's, the shared tier's, the project's, and those beside `$GENESEED_HARNESS` and `$GENESEED_MEMORY`) on every host: a memory file hard-linked to `user-rules.md` no longer passes. Any other hard-linked file, a pnpm store's for example, still passes.
+- **A memory phrased as an instruction to later sessions is a standing rule.** The doctrine and the `rule` skill say so: "always…", "never…" or `force: constraint` goes through the rule branch, with consent.
+- **The change report watches the rule draft and the project layer's rule files,** at the session's git root, on every host.
+
 ### Fixed
 
 - **A gate marker outside the managed block no longer disarms a gate.** In a `CLAUDE.md` or `AGENTS.md`, every gate marker now counts only inside the `<!-- BEGIN GENESEED -->` block. Before, an appended line passed unasked and the next rebuild emitted the flag. A write tool that changes that block asks under External Gate, and an edit outside it stays silent. Bob global's `rules/geneseed.md` is now protected. A shell edit inside the block, or one that puts a fake block before it, stays a limit.

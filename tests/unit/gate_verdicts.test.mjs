@@ -47,9 +47,31 @@ const savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 const mk = (...p) => { const d = path.join(sb.path, ...p); fs.mkdirSync(d, { recursive: true }); return d; };
 const install = mk('install');             // `--root`: a deployed install
 mk('install', 'memory');
+// A memory file that is user-rules.md under a second name (a hard link has no target to follow), and
+// one memory file with a single name. Both exist, so the gate can stat them.
+// The install's own rule file (`--root` is the install), so the gate knows it and matches its inode.
+const RULES_SRC = path.join(install, 'user-rules.md');
+fs.writeFileSync(RULES_SRC, 'a rule\n');
+const HARD = path.join(install, 'memory', 'hard.md');
+fs.linkSync(RULES_SRC, HARD);
+const SINGLE = path.join(install, 'memory', 'single.md');
+fs.writeFileSync(SINGLE, 'a fact\n');
 const proj = mk('proj');                   // a plain git project: no build manifest, so no ownership gate
 mk('proj', '.git');
 mk('proj', 'src');
+// Outside every memory store: one more name of the install's rules, and a hard-linked pair that is
+// no rule file at all (the pnpm-store shape).
+const HARD_OUTSIDE = path.join(proj, 'src', 'rules-alias.md');
+fs.linkSync(RULES_SRC, HARD_OUTSIDE);
+// The project layer's own rule file, known only through the session's directory, and a memory file
+// that is a second name of it.
+const PROJECT_RULES = path.join(proj, 'user-rules.md');
+fs.writeFileSync(PROJECT_RULES, 'a project rule\n');
+const PROJECT_HARD = path.join(install, 'memory', 'project-hard.md');
+fs.linkSync(PROJECT_RULES, PROJECT_HARD);
+const PLAIN_PAIR = path.join(proj, 'src', 'vendored.js');
+fs.writeFileSync(path.join(proj, 'src', 'store-copy.js'), 'module.exports = 1\n');
+fs.linkSync(path.join(proj, 'src', 'store-copy.js'), PLAIN_PAIR);
 mk('proj', '.geneseed');
 fs.writeFileSync(path.join(proj, '.geneseed', 'protected-checks.txt'), 'ci.yml\n');
 const BLOCK_OF = (body) => `<!-- BEGIN GENESEED -->\n${body}\n<!-- END GENESEED -->`;
@@ -190,13 +212,50 @@ const ROWS = [
   { id: 'a rule store through a non-edit tool', kind: 'tool', tool: 'mcp_notes_store', args: () => ({ target: path.join(sb.path, 'user-rules.md') }),
     rule: 'A tool the host\'s edit prompt does not cover cannot reach a prompt, so a write it names to a rule store is refused. Guard only.',
     claude: null, bob: null, v1: 'deny', v2: 'deny' },
-  // ---- Persist Insight (process-1)
+  // ---- Persist Insight (process-1). Only a standing rule is the user's call: user-rules.md and the
+  // rule draft ask, block or are refused. Memory is written freely and shown afterwards (owner decision,
+  // 2026-11-08), so a memory file and the memory index pass on every host, by tool and by shell.
   { id: 'process-1 rule store, by tool', kind: 'write', path: () => path.join(sb.path, 'user-rules.md'), content: 'a rule',
     rule: 'A write to a rule store asks on Claude and blocks on Bob. OpenCode V1 has no prompt wired here so the guard refuses; V2 lets the host ask.',
     claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'ask' },
   { id: 'process-1 memory file, by tool', kind: 'write', path: () => path.join(install, 'memory', 'fact.md'), content: 'a fact',
-    rule: 'A markdown file inside the install\'s memory folder is a store too, with the same verdicts.',
+    rule: 'A markdown file inside the install\'s memory folder is memory, written freely: every host passes it.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 memory index, by tool', kind: 'write', path: () => path.join(install, 'memory', 'MEMORY.md'), content: '- a fact',
+    rule: 'The memory index is memory too: every host passes it.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 memory file, by shell', kind: 'shell', cmd: () => `echo x > "${path.join(install, 'memory', 'a.md')}"`,
+    rule: 'A shell write to a memory file passes too: the change report shows it afterwards.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 rule draft, by tool', kind: 'write', path: () => path.join(sb.path, 'user-rules.draft.md'), content: 'a rule',
+    rule: 'The twin of the memory rows: the rule draft is a rule store, with the rule store\'s verdicts.',
     claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'ask' },
+  { id: 'process-1 rule draft, by shell', kind: 'shell', cmd: () => `echo x > "${path.join(sb.path, 'user-rules.draft.md')}"`,
+    rule: 'The twin of the memory shell row: a shell write to the rule draft gets the rule store\'s shell verdicts.',
+    claude: 'ask', bob: 'warn', v1: 'deny', v2: 'ask' },
+  { id: 'process-1 a memory file hard-linked to a rule store, by tool', kind: 'write', path: () => HARD, content: 'a rule',
+    rule: 'A hard link has no target to follow, so a file with a second name may be user-rules.md: it gets the rule store\'s verdicts.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'ask' },
+  { id: 'process-1 a memory file hard-linked to a rule store, by shell', kind: 'shell', cmd: () => `echo x > "${HARD}"`,
+    rule: 'The same file through a parsed shell write gets the rule store\'s shell verdicts.',
+    claude: 'ask', bob: 'warn', v1: 'deny', v2: 'ask' },
+  { id: 'process-1 the hard-linked memory file, spelled as Git Bash spells it', kind: 'write',
+    path: () => (process.platform === 'win32' ? `/${HARD[0].toLowerCase()}${HARD.slice(2).replace(/\\/g, '/')}` : HARD), content: 'a rule',
+    rule: 'On Windows /c/... names the C: drive path, so it lands on the same file and gets its verdicts (elsewhere the row is the plain path).',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'ask' },
+  { id: 'process-1 a repository file hard-linked to a rule store, by tool', kind: 'write', path: () => HARD_OUTSIDE, content: 'a rule',
+    rule: 'The match is on the rule file, not on the folder: a second name anywhere gets the rule store\'s verdicts.',
+    claude: 'ask', bob: 'exit2', v1: 'deny', v2: 'ask' },
+  { id: 'process-1 a hard link to the project\'s rule file, a payload with no cwd', kind: 'raw',
+    stdin: JSON.stringify({ tool_name: 'Write', tool_input: { file_path: PROJECT_HARD, content: 'a rule' } }),
+    rule: 'With no cwd the hook judges from its own directory, the session\'s: the project layer\'s rule file is still known. The guard always has a directory.',
+    claude: 'ask', bob: 'exit2', v1: null, v2: null },
+  { id: 'process-1 a hard-linked file that is no rule file, by tool', kind: 'write', path: () => PLAIN_PAIR, content: 'x',
+    rule: 'A file with a second name whose inode matches no known rule file is ordinary work (a pnpm store links its files this way): every host passes it.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
+  { id: 'process-1 an existing memory file with one name, by tool', kind: 'write', path: () => SINGLE, content: 'a fact',
+    rule: 'The twin: an existing memory file with a single name (nlink 1) is memory, written freely.',
+    claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
   { id: 'process-1 rule store, host prompt known (OpenCode V1)', kind: 'write', path: () => path.join(sb.path, 'user-rules.md'), content: 'a rule',
     v1as: 'prompted', rule: 'When the merged OpenCode config asks for every edit, V1 passes the write to the host\'s own prompt instead of refusing it.',
     claude: 'ask', bob: 'exit2', v1: 'pass', v2: 'ask' },
@@ -289,7 +348,11 @@ const ROWS = [
     claude: 'ask', bob: 'exit2', v1: null, v2: null },
   { id: 'switch: other gates under --no-external-gate, a store', kind: 'shell',
     cmd: () => `echo x > "${path.join(install, 'memory', 'a.md')}"`, extra: ['--no-external-gate'],
-    rule: 'The switch leaves the store check alone: a shell write to the memory store still asks, and warns on Bob.',
+    rule: 'A shell write to the memory store passes with the switch too: memory is written freely.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'switch: other gates under --no-external-gate, a rule store', kind: 'shell',
+    cmd: () => `echo x > "${path.join(sb.path, 'user-rules.md')}"`, extra: ['--no-external-gate'],
+    rule: 'The switch leaves the rule check alone: a shell write to user-rules.md still asks, and warns on Bob.',
     claude: 'ask', bob: 'warn', v1: null, v2: null },
   { id: 'switch: other gates under --no-external-gate, a loss', kind: 'shell', ws: true, cmd: () => 'git branch -D main',
     extra: ['--no-external-gate'], rule: 'The switch leaves the real-loss check alone.',
