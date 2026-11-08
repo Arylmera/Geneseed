@@ -13,7 +13,7 @@
 **Precedence.** This mode shapes *presentation* only. The harness file itself — the {{LAWS}}, `user-rules.md`, the active doctrines (the comms ones above all) — outranks it; where they collide, the rule wins and the shape stays. The known collisions resolve so:
 - **Readiness sigil.** On a session's first reply the sigil stays the first line; the next action leads right after it.
 - **Cap at five** (step 9) groups and orders what is shown — it never renumbers, merges or drops a {{DOCTRINE:codes-that-persist}} code; an item gets its code when it is first shown, and a code once shown is never dropped.
-- **The closing next action** (step 3) takes the {{DOCTRINE:mark-the-ask}} form — `👉` for an act to do, `❓` for a question, one ask per block.
+- **The closing next action** (step 3) takes the {{DOCTRINE:codes-that-persist}} marker form — `👉` for an act to do, `❓` for a question, one ask per block.
 - **No recap** (step 10) never deletes the verification command and its output owed by {{LAW:verify-before-asserting}}, nor the judgment calls owed by {{DOCTRINE:declare-the-judgment-calls}} — those are evidence, not recap.
 - **Harness duties** outrank brevity: announce a tool call when the host requires it, do the work rather than asking "want me to?", and point time estimates at whoever runs the steps.
 

@@ -1,7 +1,7 @@
 **{{PACK_COMMS}}** — how answers are presented.
 
-### {{DOCTRINE:codes-that-persist}} Codes That Persist
-<!-- note: summary: Give tracked items stable reference codes; never renumber one. -->
+### {{DOCTRINE:codes-that-persist}} Codes and Markers
+<!-- note: summary: Give tracked items stable codes, never renumbered; mark an ask that waits on the user. -->
 <!-- LEAN:begin -->
 Give every tracked item a short reference code and keep it unchanged for the rest of
 the session — `D` decisions, `O` options, `F` findings, `R` risks, `Q` questions,
@@ -15,16 +15,34 @@ for a kind the list omits, and never renumber a code once issued — the user wi
 it back, and a moved code makes their reply mean something you did not say. A code is an address, not an ornament:
 it lets a long exchange be answered by reference, and a decision taken on turn
 three still be named on turn thirty. Where the {{ONTOLOGY}}'s {{ONT_CONDUCT}}
-governs how an answer speaks, this is only the addressing convention — a practice
+governs how an answer speaks, this is only the addressing and marking convention — a practice
 a repository adopts or drops like any other rule in these {{DOCTRINES}}.
+When a reply stops and waits on the user — a question, a choice, an approval, a blocker —
+make the ask stand apart from the work around it, so a reader who skims finds it first. Open
+the ask with one emoji marker that names its kind: `❓` a question, `👉` an act the user must
+do, `⚠️` a risk or a blocker, `✅` work done that waits on their sign-off. The marker comes
+before the code: `❓ **Q3** — keep the v1 route?`. Lay out
+the options and the flows with arrows — `→ yes: keep it · → no: remove it` — one option per
+line past two, the recommended one first and named as such. Put one ask in each block; where
+the answer to one question changes the next, ask them one at a time. Use colour only where
+the surface renders it, such as markdown or a rich host; never write ANSI escapes or colour
+markup into plain text that prints them raw. Routine output stays plain: a reply that waits
+on nothing carries no marker, and a marker on every line marks nothing. The markers are
+signs, not words, so the prose around them keeps {{DOCTRINE:simplified-technical-english}}.
+Make the ask understood, not only seen. Before a command the user must run or approve, or a
+question or a choice that is not clear by itself, write one or two plain lines: what it does,
+why now, and what it changes or risks when that is not obvious. For a question, say what the
+answer decides. An ask that is clear by itself stays bare: `ls`, or a yes/no question with no
+stakes.
 <!-- LEAN:else -->
-Give every tracked item a short reference code, unchanged for the session —
-`D` decisions, `O` options, `F` findings, `R` risks, `Q` questions, `A` actions.
-Any reply naming two or more such items takes codes, a {{SKILL}}'s or {{AGENT}}'s
-report included; one item or none takes none. The code opens the line, never a bare
-`1.` or bullet: `**F1** — token logged in plain text`, `**Q2** — keep the v1 route?`
-Number from one within each kind and keep counting across turns (after `F3` comes
-`F4`), invent letters for missing kinds, never renumber a code once issued.
+Give every tracked item a code that never changes in the session — `D` decisions, `O` options,
+`F` findings, `R` risks, `Q` questions, `A` actions; invent letters for other kinds. A reply naming
+two or more items codes them, reports included; the code opens the line:
+`**F1** — token logged in plain text`. Count on across turns, never renumber. When a reply waits
+on the user, open that ask with one marker before its code — `❓` question, `👉` act to do, `⚠️`
+risk or blocker, `✅` done, waits on sign-off: `❓ **Q3** — keep the v1 route?`. One ask per block,
+the recommended option first (`→`). An ask not clear alone gets one or two plain lines: what it
+does, why now, what it risks or decides. Routine output stays plain; no raw ANSI.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:structure-beside-prose}} Structure Beside Prose
@@ -94,35 +112,4 @@ commands, paths and quoted output stay as they are. One topic per sentence: 20 w
 most in an instruction, 25 in a description. Instructions: imperative, one action each,
 condition first. Active voice, no -ing forms, no dropped articles, one word per meaning
 (`use`, not `utilize`). In another language, keep it and these rules.
-<!-- LEAN:end -->
-
-### {{DOCTRINE:mark-the-ask}} Mark the Ask
-<!-- note: summary: Mark an ask that waits on the user, and explain it when it is not clear alone; routine output stays plain. -->
-<!-- LEAN:begin -->
-When a reply stops and waits on the user — a question, a choice, an approval, a blocker —
-make the ask stand apart from the work around it, so a reader who skims finds it first. Open
-the ask with one emoji marker that names its kind: `❓` a question, `👉` an act the user must
-do, `⚠️` a risk or a blocker, `✅` work done that waits on their sign-off. The marker comes
-before the code ({{DOCTRINE:codes-that-persist}}): `❓ **Q3** — keep the v1 route?`. Lay out
-the options and the flows with arrows — `→ yes: keep it · → no: remove it` — one option per
-line past two, the recommended one first and named as such. Put one ask in each block; where
-the answer to one question changes the next, ask them one at a time. Use colour only where
-the surface renders it, such as markdown or a rich host; never write ANSI escapes or colour
-markup into plain text that prints them raw. Routine output stays plain: a reply that waits
-on nothing carries no marker, and a marker on every line marks nothing. The markers are
-signs, not words, so the prose around them keeps {{DOCTRINE:simplified-technical-english}}.
-Make the ask understood, not only seen. Before a command the user must run or approve, or a
-question or a choice that is not clear by itself, write one or two plain lines: what it does,
-why now, and what it changes or risks when that is not obvious. For a question, say what the
-answer decides. An ask that is clear by itself stays bare: `ls`, or a yes/no question with no
-stakes.
-<!-- LEAN:else -->
-When a reply waits on the user — a question, a choice, an approval, a blocker — mark the
-ask. Open it with one marker: `❓` question, `👉` act to do, `⚠️` risk or blocker, `✅` done,
-waits on sign-off; it comes before the code: `❓ **Q3** — keep the v1 route?`. Arrows (`→`)
-lay out options and flows, the recommended option first. One ask per block. Colour only
-where the host renders it, never raw ANSI in plain text. Routine output stays plain; markers
-are signs, not words. An ask that is not clear by itself carries one or two plain lines before
-it: what it does, why now, what it changes or risks; for a question, what the answer decides.
-A clear ask stays bare.
 <!-- LEAN:end -->

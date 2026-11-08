@@ -14,6 +14,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Changed
 - **The loop engine ignores `FACTORY.md`** in its scoring and porcelain checks, as it ignores `LOOP.md`. Loop behaviour is otherwise unchanged.
+- **Doctrine comms 5, *Mark the Ask*, merged into comms 1, now *Codes and Markers*.** Both rules set the reply format and shared one example, so one rule now holds the reference codes and the ask markers. The id `mark-the-ask` is retired and never reused; the pack has 30 rules. An install that excluded `comms 5` gets a warning ("comms 5 was retired") and excludes nothing; the rebuild does not fail. *Automate Repetition* (craft 1) and *Search Before Creating* (craft 4) lose the sentences that repeated each other, and the Memory section points to *Persist Insight* instead of restating it. The lean root is about 900 characters shorter. Run `geneseed rebuild-all` to get it.
 
 ## [5.0.3] — 2026-11-08
 

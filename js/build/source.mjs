@@ -88,6 +88,8 @@ export const RULE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const RETIRED_RULE_IDS = {
   'external-gate': { was: 'Law IX', liveAs: 'DOCTRINE', note: 'moved to the rigor pack' },
   'absence-is-a-claim': { was: 'Law XI', liveAs: null, note: 'folded into verify-before-asserting' },
+  // 2026-11-08: both rules set the reply format and shared one example, so one rule now holds both.
+  'mark-the-ask': { was: 'comms 5', liveAs: null, note: 'merged into comms 1, Codes and Markers' },
 };
 
 /**
@@ -386,6 +388,23 @@ export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process', 'comms'];
  */
 export function knownRuleIds() {
   return ruleCanon(SRC).rules.filter((r) => r.kind === 'DOCTRINE').map((r) => `${r.pack}.${r.n}`);
+}
+
+/**
+ * `<pack>.<n>` -> why it names nothing now, for every retired doctrine rule whose address no
+ * live rule took over. Read off `RETIRED_RULE_IDS`' `was`, so the reason has one home. An
+ * install that excluded `comms 5` replays it on every rebuild; refusing it would break that
+ * rebuild forever, so the flag parsers warn and drop it instead. A live address is never
+ * retired: a rule appended later at the same number takes the address back.
+ */
+export function retiredRuleAddresses(known = knownRuleIds()) {
+  const out = new Map();
+  for (const { was, note } of Object.values(RETIRED_RULE_IDS)) {
+    const m = /^([a-z]+) (\d+)$/.exec(was);
+    const id = m && `${m[1]}.${m[2]}`;
+    if (id && PACK_ORDER.includes(m[1]) && !known.includes(id)) out.set(id, note);
+  }
+  return out;
 }
 
 /**

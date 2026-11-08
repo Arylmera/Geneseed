@@ -138,12 +138,12 @@ test('the overview counts the tiers without moving the laws badge', () => {
   // the four cannot be re-blessed.
   assert.equal(o.counts.laws, 9); // 9 since IX and XI were removed (2026-09-30)
   assert.equal(o.counts.ontology, 5); // 5 since Ownership joined the Credo (2026-10-26)
-  assert.deepEqual(o.counts.doctrines, { active: 5, total: 5, rules: 31 });
+  assert.deepEqual(o.counts.doctrines, { active: 5, total: 5, rules: 30 });
   const narrowed = apiOverview({ ...neutral(), inventory: tuiInventory('neutral', ['craft', 'rigor']) });
   assert.equal(narrowed.counts.laws, 9, 'a pack toggle moved the invariant count');
-  // The two packs it built in, but all 31 rules: the Constitution page lists a rule that is off,
+  // The two packs it built in, but all 30 rules: the Constitution page lists a rule that is off,
   // with its switch, and the rail's count is what the page lists.
-  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 5, rules: 31 });
+  assert.deepEqual(narrowed.counts.doctrines, { active: 2, total: 5, rules: 30 });
 });
 
 // ---------------------------------------------------------------------------------------------

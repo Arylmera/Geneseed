@@ -1399,8 +1399,8 @@ const plant = (text, find, put) => {
 test('every rule carries one summary, and the reader hands back the shipped text', () => {
   assert.deepEqual(ruleSummaryProblems(), []);
   const said = ruleSummaries();
-  // 9 laws and 31 doctrine rules — 31 since comms 5 (mark the ask) was appended on 2026-10-23.
-  assert.equal(said.size, 40, `${said.size} summaries read — expected 40`);
+  // 9 laws and 30 doctrine rules — 30 since comms 5 (mark the ask) merged into comms 1 on 2026-11-08.
+  assert.equal(said.size, 39, `${said.size} summaries read — expected 39`);
   assert.equal(said.get('sealed-secrets'), 'Secrets never touch tracked files; only .env or a manager.');
   // ⚠ THE EMITS MUST NOT CHANGE. The strip takes the whole line, newline included, so the heading
   // still sits directly on its LEAN block — a leftover blank line would move every install's bytes.
