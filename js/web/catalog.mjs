@@ -815,6 +815,8 @@ export function apiItem(state, type, name, fleet = [{ install: null, state }]) {
  * theme's name for the primary agent. An agent the install lacks, or no carrier, is a 404.
  */
 export function apiLoadout(state, agent = 'primary') {
+  // The catalogue is the allowlist: the name becomes a path, and this GET carries no token.
+  if (agent !== 'primary' && !state.inventory.agents.some((a) => a.name === agent)) throw new NotFound(agent);
   const [host] = EMIT_HOST_SCOPE.get(state.emit || '') ?? ['opencode'];
   const loadout = agentLoadout({ host, root: state.root ?? state.target, dir: state.target, agent });
   if (!loadout) throw new NotFound(agent);

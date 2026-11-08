@@ -18,6 +18,7 @@ import path from 'node:path';
 
 import { agentLoadout, alwaysOnCost } from '../../js/inspect/cost.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
+import { emitGlobalInto } from '../../js/build/driver.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 const CTX = 'node hook.mjs context --root "x" || exit 0';
@@ -124,5 +125,27 @@ test('the console adds the rules: Dictates, built-in doctrine rules, user rules,
       { kind: 'user', id: 'R1', title: 'Seal only your worktree', layer: 'install', citedBySpec: false },
     ]);
     assert.throws(() => apiLoadout(state, 'nobody'), NotFound);
+    // The name becomes a path: only a catalogue agent is ever looked up, so `..` reaches nothing.
+    assert.throws(() => apiLoadout(state, '../agents/rev'), NotFound);
   });
+});
+
+test('a real Claude global emit wires the user rules for its Adepts', () => {
+  // The hand-made manifest above proves the reader; this proves the emit writes what it reads:
+  // a fresh `claude-global` emit records SubagentStart -> context, so a shipped Adept is `wired`.
+  const sb = makeSandbox('loadout-emit-');
+  sandboxProcessHome();
+  const w = process.stdout.write.bind(process.stdout);
+  const ew = process.stderr.write.bind(process.stderr);
+  try {
+    const cfgDir = path.join(sb.path, 'cfg');
+    process.stdout.write = () => true;
+    process.stderr.write = () => true;
+    try { emitGlobalInto('claude', { theme: 'neutral', out: path.join(sb.path, 'b'), cfgDir, footprint: 'lean' }); } finally {
+      process.stdout.write = w;
+      process.stderr.write = ew;
+    }
+    const got = agentLoadout({ host: 'claude', root: cfgDir, dir: cfgDir, agent: 'reviewer' });
+    assert.equal(got.blocks.find((b) => b.id === 'user-rules').delivery, 'wired');
+  } finally { restoreProcessHome(); sb.cleanup(); }
 });
