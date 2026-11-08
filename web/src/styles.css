@@ -79,6 +79,12 @@
      block: a `.app`-level copy would outrank both media queries and the sidebar would stop
      collapsing. See the Atlas flavour's own note for the version of this that bit. */
   --rail-w: 248px;
+  /* Sidebar group tints: the icon chip's background and ink, and the group header's square. */
+  --sb-core-bg: #14262A;   --sb-core-ink: #3AD4C4;
+  --sb-govern-bg: #1E1A2E; --sb-govern-ink: #A99BF0;
+  --sb-build-bg: #2A2210;  --sb-build-ink: #E8B53D;
+  --sb-run-bg: #10271F;    --sb-run-ink: #4ADE9B;
+  --sb-help-bg: #1B2026;   --sb-help-ink: #9AA6B2;
   --topbar-h: 64px;
   --shadow-pop: 0 18px 50px -12px rgba(0,0,0,.7), 0 2px 0 rgba(255,255,255,.02) inset;
   --shadow-card: 0 1px 0 rgba(255,255,255,.02) inset, 0 14px 40px -28px rgba(0,0,0,.9);
@@ -667,31 +673,6 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .iconbtn:hover { background: var(--surface-3); color: var(--text); }
 .iconbtn .glyph { width: 16px; height: 16px; }
 
-/* theme popover — fixed to the viewport so it always anchors just above the
-   rail-foot's voice control, regardless of how tall the page content gets.
-   (Previously `position: absolute` against `.app` whose min-height grows with
-   the page; on long views like Library or Graph that pushed the popover well
-   below the viewport.) max-height: 60vh keeps it inside the screen even with
-   all 14 voices loaded. */
-.pop {
-  position: fixed; bottom: 72px; left: 14px; width: 232px; z-index: var(--z-pop);
-  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
-  box-shadow: var(--shadow-pop); padding: var(--sp-2); max-height: 60vh; overflow: auto;
-}
-/* Label over select: side by side they outgrow the box and the whole list scrolls sideways.
-   The box's width is what fits "opencode · global" beside the list's scrollbar. */
-.pop .install-pick { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-1);
-  padding: 0 10px var(--sp-2); }
-.pop .install-pick .sel { max-width: none; }
-.pop-item { display: flex; align-items: center; gap: 10px; padding: var(--sp-2) 10px; border-radius: var(--r-sm); /* off-scale: 10px, 2px from a step */
-  cursor: pointer; font-size: var(--fs-sm); width: 100%; border: 0; background: none; color: inherit;
-  font-family: inherit; text-align: left; }
-.pop-item:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
-.pop-item:hover { background: var(--surface-3); }
-.pop-item .pn { text-transform: capitalize; font-weight: 500; }
-.pop-item.on { background: var(--accent-soft); }
-.pop-item.on .pn { color: var(--accent-text); }
-
 /* fade/stagger entrance — transform-only so content is NEVER hidden at rest
    (a paused/offscreen iframe holds frame 0; opacity must stay visible there) */
 @keyframes rise { from { transform: translateY(9px); } to { transform: none; } }
@@ -725,6 +706,12 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
    flavour class on .app from the first render); this keeps only what is mode-wide.
    Accent vars are set inline (mode-aware) so each voice still tints it. */
 .app.light {
+  /* Pastel chips with deep ink, each pair at 5.3:1 or more (dark pairs above are 6.6+). */
+  --sb-core-bg: #D3EFEB;   --sb-core-ink: #0B5E56;
+  --sb-govern-bg: #E5E0FA; --sb-govern-ink: #4B3AA8;
+  --sb-build-bg: #F6E6B6;  --sb-build-ink: #7A5300;
+  --sb-run-bg: #CDEEDD;    --sb-run-ink: #0B6B3D;
+  --sb-help-bg: #E2E7EC;   --sb-help-ink: #445160;
   --chart-skill:   #3F7FA6;
   --chart-agent:   #7A63A8;
   --chart-context: #3C8F78;
@@ -2341,7 +2328,7 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
 .sidebar { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 2px; padding: var(--sp-5) var(--sp-3) 14px; /* off-scale: 2px row gap; 14px between steps */
   background: var(--bg-2); border-right: 1px solid var(--line); }
-.sb-brand { display: flex; align-items: center; gap: 10px; padding: var(--sp-1) var(--sp-2) var(--sp-5); /* off-scale: between steps */
+.sb-brand { display: flex; align-items: center; gap: 10px; padding: var(--sp-1) var(--sp-2); /* off-scale: between steps */
   background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .sb-mark { width: 30px; height: 30px; flex: none; display: grid; place-items: center;
   border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); }
@@ -2351,38 +2338,38 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
 .sb-name { font-weight: 700; font-size: 15px; } /* off-scale: heading above body size */
 .sb-ver { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-a.sb-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; /* off-scale: 9px sets the nav row height */
+.sb-head { display: flex; align-items: center; gap: var(--sp-1); padding-bottom: var(--sp-4); }
+.sb-head .sb-brand { flex: 1; min-width: 0; padding: var(--sp-1) var(--sp-2); order: 1; }
+.sb-collapse { order: 2; flex: none; display: grid; place-items: center; width: 32px; height: 32px;
+  background: none; border: 0; border-radius: var(--r-sm); color: var(--text-3); cursor: pointer; }
+.sb-collapse:hover { background: var(--surface); color: var(--text); }
+.sb-collapse .glyph { width: 16px; height: 16px; transform: rotate(180deg); }
+.sb-group { display: flex; flex-direction: column; margin-top: var(--sp-3); }
+.sb-group:first-of-type { margin-top: 0; }
+.sb-core { --sb-bg: var(--sb-core-bg); --sb-ink: var(--sb-core-ink); }
+.sb-govern { --sb-bg: var(--sb-govern-bg); --sb-ink: var(--sb-govern-ink); }
+.sb-build { --sb-bg: var(--sb-build-bg); --sb-ink: var(--sb-build-ink); }
+.sb-run { --sb-bg: var(--sb-run-bg); --sb-ink: var(--sb-run-ink); }
+.sb-help { --sb-bg: var(--sb-help-bg); --sb-ink: var(--sb-help-ink); }
+.sb-group-title { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-2);
+  font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-3); }
+.sb-group-title i { width: 6px; height: 6px; background: var(--sb-ink); }
+a.sb-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 10px 4px 6px; /* off-scale: 10px gap between steps */
   border-radius: var(--r-sm); color: var(--text-2); font-weight: 500;
   transition: background var(--dur-3), color var(--dur-3); }
 a.sb-item:hover { background: var(--surface); color: var(--text); }
-.sb-item .glyph { width: 18px; height: 18px; }
+a.sb-item:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
+.sb-chip { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; /* off-scale: chip radius */
+  background: var(--sb-bg); color: var(--sb-ink); }
+.sb-item .glyph { width: 16px; height: 16px; }
 .sb-label { flex: 1; min-width: 0; }
 .sb-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; } /* off-scale: 2px row gap */
-.sb-count { padding: 1px var(--sp-2); border-radius: 999px; background: var(--surface-3); /* off-scale: 1px chip inset */
-  font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-2);
+.sb-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3);
   font-variant-numeric: tabular-nums; }
-/* The lit page: a raised row with an accent edge, its label in plain text colour. */
+/* The lit page: a raised row, its label in plain text colour. */
 a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 650;
-  box-shadow: inset 2px 0 0 var(--accent); }
-.sb-spacer { flex: 1; min-height: 16px; }
-/* The vitals card at the rail's foot. */
-.sb-vitals { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); padding: 14px; /* off-scale: between steps */
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
-  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-3); }
-.sb-vitals > div { display: flex; justify-content: space-between; gap: var(--sp-2); }
-.sb-vitals b { font-weight: 500; color: var(--text); }
-.sb-vitals b.good { color: var(--good-text); }
-.sb-vitals b.warn { color: var(--warn-text); }
-.sb-vitals b.bad { color: var(--bad-text); }
-.sb-voice { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
-  width: 100%; height: 36px; margin-top: var(--sp-1); padding: 0 10px; border-radius: var(--r-sm); /* off-scale: between steps */
-  border: 1px solid var(--line-2); background: transparent; color: var(--text);
-  font: 500 13px var(--font-ui); cursor: pointer; text-align: left; }
-.sb-voice-name { display: flex; align-items: center; gap: var(--sp-2); min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sb-voice-swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
-.sb-voice .glyph { flex: none; width: 12px; height: 12px; color: var(--text-3); }
-.sb-voice:hover { border-color: var(--line-3); }
+  box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 0 0 1px var(--line); }
 
 /* ---- topbar ---- */
 .topbar { gap: 10px; padding: 0 var(--sp-7); background: var(--bg-2); backdrop-filter: none; } /* off-scale: between steps */
@@ -2449,7 +2436,7 @@ a.sb-item.on { background: var(--surface-2); color: var(--text); font-weight: 65
   /* What sits in a row or a list of its own grows to the target: the overlay above would only
      stack up on its neighbours here. */
   .btn:not(.sm), .sel, .seg button, .tabs a, .kind-list a, .sb-item, .lib-filter, .lib-row,
-  .sheet-index button, .row-pick, .sb-voice, .tabbar a, .rule-head, .newhere-x { min-height: 44px; }
+  .sheet-index button, .row-pick, .tabbar a, .rule-head, .newhere-x { min-height: 44px; }
 }
 
 /* ---- shared primitives (components/PageHeader, EmptyState, ErrorState, DataTable, Stat,
@@ -3147,14 +3134,32 @@ a.kit-name:hover { color: var(--accent-text); }
   .needs { grid-template-columns: max-content minmax(0, 1fr) max-content; }
   .needs-where { display: none; }
 }
+/* The desktop rail collapsed by the viewer: 64px of chips. Only above the tablet tier, where the
+   rail is already chips and the toggle is hidden; --rail-w is set here on .app, which is safe
+   because this block cannot reach the 960px and 720px overrides. */
+@media (min-width: 961px) {
+  .app:has(.sidebar.collapsed) { --rail-w: 64px; }
+  .sidebar.collapsed { padding: 18px 8px; align-items: stretch; }
+  .sidebar.collapsed .sb-head { flex-direction: column; align-items: center; gap: var(--sp-2); }
+  .sidebar.collapsed .sb-collapse { order: -1; width: 44px; height: 44px; }
+  .sidebar.collapsed .sb-collapse .glyph { transform: none; }
+  .sidebar.collapsed .sb-head .sb-brand { justify-content: center; padding: 4px 0; }
+  .sidebar.collapsed .sb-brand-text { display: none; }
+  .sidebar.collapsed .sb-label, .sidebar.collapsed .sb-count, .sidebar.collapsed .sb-group-title {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sidebar.collapsed .sb-group + .sb-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+  .sidebar.collapsed a.sb-item { justify-content: center; min-height: 44px; padding: 0; }
+}
 @media (max-width: 960px) {
   :root { --rail-w: 62px; }
   .sidebar { padding: 18px 8px; align-items: stretch; }
-  .sb-brand { justify-content: center; padding: 4px 0 16px; }
-  .sb-brand-text, .sb-vitals { display: none; }
-  .sb-label, .sb-count { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  .sb-head .sb-brand { justify-content: center; padding: 4px 0; }
+  .sb-brand-text, .sb-collapse { display: none; }
+  .sb-label, .sb-count, .sb-group-title { position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; }
-  a.sb-item { justify-content: center; padding: 10px 0; }
+  .sb-group + .sb-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+  .sb-group { margin-top: var(--sp-3); }
+  a.sb-item { justify-content: center; min-height: 44px; padding: 0; }
   .tier-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tier:nth-child(2) { border-right: 0; }
   .tier:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
@@ -3174,10 +3179,12 @@ a.kit-name:hover { color: var(--accent-text); }
     transition: transform var(--dur-4) var(--ease-fade), visibility var(--dur-4); box-shadow: 0 0 60px -10px rgba(0,0,0,.8); }
   .app.nav-open .sidebar { visibility: visible; transform: none; }
   /* In the drawer there is room for the labels again. */
-  .sb-brand { justify-content: flex-start; padding: 4px 8px 20px; }
-  .sb-brand-text, .sb-vitals { display: flex; }
-  .sb-label, .sb-count { position: static; width: auto; height: auto; clip-path: none; }
-  a.sb-item { justify-content: flex-start; padding: 9px 10px; }
+  .sb-head .sb-brand { justify-content: flex-start; padding: 4px 8px; }
+  .sb-brand-text { display: flex; }
+  .sb-label, .sb-count, .sb-group-title { position: static; width: auto; height: auto; clip-path: none; }
+  .sb-group + .sb-group { padding-top: 0; border-top: 0; }
+  .sb-group { margin-top: var(--sp-3); }
+  a.sb-item { justify-content: flex-start; min-height: 40px; padding: 4px 10px 4px 6px; }
   .nav-scrim { display: block; position: fixed; inset: 0; z-index: var(--z-scrim); padding: 0; border: 0;
     background: rgba(0,0,0,.55); cursor: pointer; }
   .page { padding: 18px 16px 150px; }
@@ -3458,15 +3465,7 @@ html { scrollbar-gutter: stable; }
 .crumbs li + li::before { content: "/" / ""; margin-right: 8px; }
 .crumbs a { color: inherit; }
 .crumbs a:hover { color: var(--text); }
-.sb-voice-rail { display: none; }
-@media (max-width: 960px) {
-  .sb-voice-rail { display: grid; place-items: center; padding: 10px 0; background: none; border: 0;
-    border-radius: var(--r-sm); color: var(--text-2); cursor: pointer; }
-  .sb-voice-rail:hover { background: var(--surface); color: var(--text); }
-  .sb-voice-rail .glyph { width: 18px; height: 18px; }
-}
 @media (max-width: 720px) {
-  .sb-voice-rail { display: none; }
   .popover.appearance-pop { right: var(--sp-4); }
   .spotlight { position: fixed; top: calc(var(--topbar-h) + 6px); left: var(--sp-4); right: var(--sp-4); width: auto; }
   .tabbar .tab-more { display: flex; flex-direction: column; align-items: center; justify-content: center;

@@ -142,15 +142,22 @@ first read is out, a sentence when it failed, and what it found when it is empty
 before its data. The Constitution waits for the picked install's own overview too: a gate read
 before it would read as armed.
 
-At the foot of the rail sits a **vitals** card — the doctor's verdict, local edits, how long ago the
-harness was built, and a Voice button — so those facts are on screen from every page. It is
-hidden where the rail collapses to icons (≤960px) and returns with the phone drawer. The topbar's
+The rail groups its pages under small mono headers, each with a square in the group's tint: the
+Overview alone, then **Govern** (Constitution, Personal), **Build** (Library, Kits, Loops), **Run**
+(Installs, Activity) and **Help** (Docs, Settings). Each icon sits in a 28 px chip tinted by its group
+(`--sb-<group>-bg` and `-ink` in `styles.css`; light mode has pastel chips with deep ink, 5.3:1 or
+better). The lit page gets a raised row and `aria-current="page"`; a count badge is muted mono on the
+right. The chevron in the header collapses the rail to 64 px of chips (44 px targets, each link with an
+`aria-label` and a tooltip, an expand button on top); the choice is kept per browser under
+`geneseed-rail`. Below 960px the rail is always chips and the toggle is hidden; the phone drawer is
+always full. The rail holds navigation only: the doctor's verdict, local edits and build age live on Doctor, Diff
+and Overview, and the voice gallery on Installs. The topbar's
 breadcrumb starts at the page: it names no install.
 
 **Install pickers.** The console has no install switch. Where a page acts on one install, one
 `InstallPicker`, always labelled *Install:*, sits right above the heading of the view it acts on
 (under the tabs on a tabbed page, over the h1 on a page with none), and starts on the default install; with one active install it is not shown. A form or popover that
-acts on its own install holds the same control: the new-rule form, the rail's Voice popover, and a
+acts on its own install holds the same control: the new-rule form and a
 Library entry with several copies. The Personal page names no harness for what the harnesses share:
 every global install reads one set of rules, one profile and one memory store in the shared tier
 (`~/.config/geneseed`), so Rules, Profile and Memory list each once. Its header states that scope
@@ -158,8 +165,8 @@ once, a list head or profile card says `shared`, and a project install keeps its
 install. Each `/api/installs` and `/api/fleet` row carries `shared`, which the pages read from
 `useInstalls`; `sharedTier` is only a project install's switch. A write goes back to the file an
 entry came from. Notebook stays per install, and its Forget acts on the install of the copy on
-screen. Doctor, Local edits, the Constitution (for its gate switches and doctrine Apply), Loops and
-the rail's Voice popover each keep their own pick (in the browser's localStorage). The Overview is
+screen. Doctor, Local edits, the Constitution (for its gate switches and doctrine Apply), and Loops
+each keep their own pick (in the browser's localStorage). The Overview is
 fleet-wide: each install's own facts (voice, footprint, posture, mode, local edits) sit on
 its row, and a figure still read off a project install set as the default (a suggestion, a lens)
 names that install once two or more are active. A *Needs you*

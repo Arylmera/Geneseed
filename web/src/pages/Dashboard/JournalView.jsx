@@ -7,7 +7,7 @@ import VerdictBadge from './VerdictBadge.jsx'
 
 // THE FIELD JOURNAL — the fourth Status lens, and the one that answers "what is this
 // harness, today" instead of "is it healthy". The health readout is still one click away
-// (the rail's vitals card on every page, and Run doctor in the lens row above); what this lens
+// (Run doctor in the lens row above); what this lens
 // leads with is the shape of the thing: how much has grown in each section, what grew most
 // recently, and the constitution that governs all of it, drawn rather than tallied.
 // One proportional bar per content section. The denominator is the largest count on show,

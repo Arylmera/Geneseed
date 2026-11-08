@@ -12,12 +12,9 @@ import { useLayout } from './hooks/useLayout.js'
 import { useOverview } from './hooks/useOverview.js'
 import { useJobs } from './hooks/useJobs.js'
 import { useAsync } from './hooks/useAsync.js'
-import { useInstallPick } from './hooks/useInstalls.js'
-import { activeInstalls, pairOf } from './lib/hosts.js'
 import Sidebar, { TabBar } from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import { InstallListStatus } from './components/InstallPicker.jsx'
-import VoicePopover from './components/VoicePopover.jsx'
 import Toast from './components/Toast.jsx'
 import Console from './components/Console.jsx'
 import BootSplash from './components/BootSplash.jsx'
@@ -47,7 +44,6 @@ const Docs = lazy(() => import('./pages/Docs/index.jsx'))
 export default function App() {
   const route = useRoute()
   const [toast, setToast] = useState(null)
-  const [voiceOpen, setVoiceOpen] = useState(false)
   const [mode, toggleMode] = useColorMode()
   const [flavour, setFlavour] = useFlavour()
   const [accentMode, setAccentMode] = useAccentMode()
@@ -144,10 +140,6 @@ export default function App() {
     'installs',
   )
   const installs = instData?.installs || null
-  // The install the rail's Voice popover rebuilds: its own pick, remembered (no console-wide one).
-  const activeList = activeInstalls(installs)
-  const [voiceInstall, pickVoiceInstall] = useInstallPick('voice', activeList)
-
   // One sentence describing what the job runner is doing, for the live region.
   const lastRun = runs[runs.length - 1]
   const jobAnnouncement = !lastRun
@@ -330,26 +322,8 @@ export default function App() {
           route={route}
           overview={overview}
           installs={installs}
-          onOpenVoice={() => setVoiceOpen((v) => !v)}
           onNavigate={() => setNavOpen(false)}
         />
-        {voiceOpen && (
-          <VoicePopover
-            themes={themes}
-            // The picked install's own voice; the default's (the overview) before the list lands.
-            current={voiceInstall ? voiceInstall.theme : overview?.theme}
-            installs={activeList}
-            install={voiceInstall}
-            ready={!instLoading || !!instData}
-            onInstall={pickVoiceInstall}
-            onPick={(name) => {
-              setVoiceOpen(false)
-              // The install's own emit is read server-side; only the theme changes.
-              runAction('build', { theme: name }, pairOf(voiceInstall))
-            }}
-            onClose={() => setVoiceOpen(false)}
-          />
-        )}
         <div className="col" ref={colRef}>
           <Topbar
             route={route}
