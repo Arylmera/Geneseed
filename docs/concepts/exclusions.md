@@ -56,7 +56,7 @@ The finer switch removes a single doctrine rule from an install while keeping th
 geneseed build --emit claude-global --exclude-rules "process 7"
 ```
 
-The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. The always-on Rules and the Ethos cannot be excluded.
+The install records it (`Excluded rules: process 7` beside its pack list) and every rebuild and upgrade keeps it. If a later version retires the rule (comms 5 merged into comms 1 on 2026-11-08), the rebuild prints a WARN, drops that address, and goes on. The always-on Rules and the Ethos cannot be excluded.
 
 **A hook goes with its rule.** Three doctrine rules are also enforced by a hook with no switch of its own, and excluding the rule, or building without its pack, drops that hook in the same rebuild. Including the rule again re-arms it at the next rebuild.
 
