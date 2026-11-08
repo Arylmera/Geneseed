@@ -1266,6 +1266,19 @@
           "is_flag": false,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": ["--factory"],
+          "dest": "factory",
+          "metavar": null,
+          "help": "on init, the slug of the factory run this loop is a stage of, stored on the loop's registry row",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []

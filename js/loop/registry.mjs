@@ -1,7 +1,8 @@
 /**
  * The loop registry — `<userLoopsDir()>/loops.json` — the list of worktrees `geneseed loop init`
  * has launched a loop in. `LOOP.md` stays the only source of loop STATE; this file stores
- * identity only (root, branch, title, started, initAt, finishedAt), so the Active tab can discover
+ * identity only (root, branch, title, started, initAt, finishedAt, and `factory` for a loop that
+ * is a factory stage), so the Active tab can discover
  * a loop without scanning every worktree on the machine.
  *
  * WRITER CONVENTIONS, mirrored from `js/inspect/registry.mjs` (`installs.json`'s own registry)
@@ -51,32 +52,39 @@ export function registryPath() {
   return path.join(userLoopsDir(), 'loops.json');
 }
 
-function load() {
+/**
+ * The rows under `key` in the registry `file`, `[]` when it is missing or corrupt. Exported with
+ * `saveRows`, `normalize`, `sameRoot` and `sweepRows` for `js/factory/registry.mjs`: its
+ * `factories.json` follows every convention of this file, so the two share the code, not a copy.
+ */
+export function loadRows(file, key) {
   try {
-    const data = parseJson(readFileSync(registryPath(), 'utf8'));
-    return Array.isArray(data?.loops) ? data.loops.filter((l) => l && typeof l.root === 'string') : [];
+    const data = parseJson(readFileSync(file, 'utf8'));
+    return Array.isArray(data?.[key]) ? data[key].filter((l) => l && typeof l.root === 'string') : [];
   } catch {
     return [];
   }
 }
 
-function save(loops) {
+export function saveRows(file, key, rows) {
   try {
-    const file = registryPath();
     mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
-    writeText(tmp, `${jsonDumpsIndent({ loops })}\n`);
+    writeText(tmp, `${jsonDumpsIndent({ [key]: rows })}\n`);
     renameWithRetry(tmp, file);
   } catch {
     /* best-effort: a registry hiccup must never fail init or a read */
   }
 }
 
-function normalize(dir) {
+const load = () => loadRows(registryPath(), 'loops');
+const save = (loops) => saveRows(registryPath(), 'loops', loops);
+
+export function normalize(dir) {
   try { return realpathSync.native(dir); } catch { return path.resolve(dir); }
 }
 
-const sameRoot = (a, b) => normcase(a) === normcase(b);
+export const sameRoot = (a, b) => normcase(a) === normcase(b);
 
 function runningRow(entry, state) {
   return {
@@ -96,17 +104,19 @@ function runningRow(entry, state) {
  * clear it on the very next poll once it sees LOOP.md present again. Never throws: an `init`
  * must succeed even when the registry itself cannot be written.
  */
-export function recordLoop({ root, branch, title, now = new Date() }) {
+export function recordLoop({ root, branch, title, factory = null, now = new Date() }) {
   try {
     const key = normalize(root);
     const loops = load();
     const idx = loops.findIndex((l) => sameRoot(l.root, key));
     const initAt = now.toISOString();
-    if (idx >= 0) {
-      loops[idx] = { ...loops[idx], root: key, branch, title, initAt };
-    } else {
-      loops.push({ root: key, branch, title, started: initAt, initAt });
-    }
+    const row = idx >= 0
+      ? { ...loops[idx], root: key, branch, title, initAt }
+      : { root: key, branch, title, started: initAt, initAt };
+    // The factory run this loop is a stage of (`loop init --factory <slug>`). A later plain
+    // `loop init` in the same worktree is a stage of no run, so the field drops.
+    if (factory) row.factory = factory; else delete row.factory;
+    if (idx >= 0) loops[idx] = row; else loops.push(row);
     save(loops);
   } catch {
     /* a registry hiccup must never fail loop init */
@@ -142,19 +152,33 @@ export function loopInitAt(root) {
  *     that frozen `finishedAt`, at which point the row is dropped (and the drop is saved).
  */
 export function activeLoops({ now = new Date() } = {}) {
-  const loops = load();
+  const { kept, rows, changed } = sweepRows(load(), {
+    stateFile: LOOP_FILE, parse: parseLoopFile, project: runningRow, now,
+    identity: (e) => ({ root: e.root, branch: e.branch, title: e.title, started: e.started }),
+  });
+  if (changed) save(kept);
+  return rows;
+}
+
+/**
+ * `activeLoops`' four outcomes, over any registry whose rows name a state file at their root:
+ * `parse` reads that file, `project(entry, state)` builds a running row, `identity(entry)` the row
+ * of an unreadable or finished one. Returns the rows, the entries to keep, and whether keeping
+ * them differs from what was loaded — the only case in which the caller saves.
+ */
+export function sweepRows(entries, { stateFile, parse, project, identity, now }) {
   const kept = [];
   const rows = [];
   let changed = false;
-  for (const entry of loops) {
+  for (const entry of entries) {
     if (!isDir(entry.root)) { changed = true; continue; }
-    const file = path.join(entry.root, LOOP_FILE);
-    const identity = { root: entry.root, branch: entry.branch, title: entry.title, started: entry.started };
+    const file = path.join(entry.root, stateFile);
+    const id = identity(entry);
     if (isFile(file)) {
       let state;
-      try { state = parseLoopFile(readText(file)); } catch {
+      try { state = parse(readText(file)); } catch {
         kept.push(entry);
-        rows.push({ ...identity, status: 'unreadable' });
+        rows.push({ ...id, status: 'unreadable' });
         continue;
       }
       let next = entry;
@@ -162,23 +186,22 @@ export function activeLoops({ now = new Date() } = {}) {
         next = { ...entry }; delete next.finishedAt; changed = true;
       }
       kept.push(next);
-      rows.push(runningRow(next, state));
+      rows.push(project(next, state));
       continue;
     }
     if (entry.finishedAt === undefined) {
       const next = { ...entry, finishedAt: now.toISOString() };
       changed = true;
       kept.push(next);
-      rows.push({ ...identity, status: 'finished' });
+      rows.push({ ...id, status: 'finished' });
       continue;
     }
     const age = now.getTime() - new Date(entry.finishedAt).getTime();
     if (age > SEVEN_DAYS_MS) { changed = true; continue; }
     kept.push(entry);
-    rows.push({ ...identity, status: 'finished' });
+    rows.push({ ...id, status: 'finished' });
   }
-  if (changed) save(kept);
-  return rows;
+  return { kept, rows, changed };
 }
 
 /**

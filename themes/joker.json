@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Send several sidekicks on independent bits at once, then bring in what they get.",
   "DESC_PIPELINE": "Send a small crew — scout, coder, tester — off to do their bit in their own green room, and only bring it on stage once the run-through comes back clean.",
   "DESC_LOOP": "Work a requirement in small, scored takes on a loop/* branch, the loop engine calling every cue.",
+  "DESC_FACTORY": "Carry one work item through the factory, act by act, to an open PR with green CI. The merge stays yours.",
   "DESC_BRICK_FORGE": "Write or rework a loop brick, then run it past geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the club's own laugh test — smallest bit, tests written to cover it, the affected set green, committed one beat at a time.",
   "DESC_TEACH": "Get someone functional, or test them — a crash course, material decoded, a day-by-day path; or a drill, the bit done back, a claimed mastery called out.",

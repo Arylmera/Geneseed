@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Loose several subroutines on independent tasks at once, then gather what they bring back.",
   "DESC_PIPELINE": "Dispatch a small crew of subroutines — scout, coder, tester — to labour in their own isolated loop, merged in only once the diagnostic returns clean (for whatever that's worth).",
   "DESC_LOOP": "Work a requirement in small, scored iterations on a loop/* branch, the loop engine deciding everything. Naturally.",
+  "DESC_FACTORY": "Carry one work item through a factory to an open PR with green CI, the engine deciding every stage. The merge stays yours. Obviously.",
   "DESC_BRICK_FORGE": "Author or adapt a loop brick, then check it with geneseed loop check. Not that it helps.",
   "DESC_DEVELOP": "Drive a change to the bitter end — smallest edit, trials written to cover it, the affected suite green, sealed slice by slice; it's never truly finished.",
   "DESC_TEACH": "Teach the user toward a result, or test what they know — a crash course, a decode, a day-by-day path; or a drill, an explain-back, a gap check. There are always gaps.",

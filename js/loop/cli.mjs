@@ -145,7 +145,7 @@ const ACTIONS = {
     writeLoopFile(file, state);
     // Best-effort: the registry is how the Active tab discovers this loop, but a registry
     // hiccup must never fail the init the loop itself just succeeded at.
-    recordLoop({ root, branch: currentBranch(root), title: args.title });
+    recordLoop({ root, branch: currentBranch(root), title: args.title, factory: args.factory ?? null });
     return { file, graph: graph.name, preset: state.preset, status: state.status };
   },
   next: () => withState((s, b) => nextStep(s, b), { write: false }),

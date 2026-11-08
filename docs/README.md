@@ -29,6 +29,7 @@
 | Set up | [Connect your wiki](guides/wiki.md) | Giving the agent your own notes, machine-wide |
 | Set up | [MCP servers](guides/mcp.md) · [MarkItDown](guides/mcp-markitdown.md) · [GitLab](guides/mcp-gitlab.md) · [Filesystem](guides/mcp-filesystem.md) · [Reading non-markdown docs](guides/read-non-markdown.md) | Where the config lives, the three presets, and reading PDF and Office files |
 | Loops | [Run a loop](guides/run-a-loop.md) · [Which loop template](guides/loop-which-template.md) · [While a loop runs](guides/loop-running.md) · [Finish a loop](guides/loop-finish.md) | Working a requirement as small, validated, committed iterations |
+| Factories | [Run a factory](guides/run-a-factory.md) | Carrying one bug report or issue to an open PR with green CI |
 | Keep it running | [Upgrade](guides/upgrade.md) | Getting a new version onto every install |
 | Keep it running | [Upgrade to 5.0](guides/upgrade-to-5.md) | A 4.x machine reaching 5.0: what moves, what to check, how to go back |
 | Keep it running | [Migrate from a clone to npm](guides/migrate.md) | Moving an old clone install to the npm package |
@@ -49,9 +50,11 @@
 
 **Loops** — [Loops](concepts/loops.md) · [Templates](concepts/loop-templates.md) · [Bricks and their origins](concepts/loop-bricks.md) · [Notes and rules](concepts/loop-notes.md) · [Risk, trust and validation levels](concepts/loop-risk.md) · [Human gates](concepts/loop-gates.md) · [Contracts and ignored deletions](concepts/loop-contracts.md) · [LOOP.md, trailers and the loop branch](concepts/loop-branch.md)
 
+**Factories** — [Factories](concepts/factories.md)
+
 ## 4 · Reference
 
-**CLI & environment** — [CLI](reference/cli.md) · [Loop actions](reference/loop-actions.md) · [Environment variables](reference/environment.md) · [Context and memory variables](reference/env-context.md)
+**CLI & environment** — [CLI](reference/cli.md) · [Loop actions](reference/loop-actions.md) · [Factory actions](reference/factory-actions.md) · [Environment variables](reference/environment.md) · [Context and memory variables](reference/env-context.md)
 
 **Troubleshooting** (by symptom) — [Overview](reference/troubleshooting.md) · [Install](reference/troubleshoot-install.md) · [Hooks, context and memory](reference/troubleshoot-hooks.md) · [Model, agents and MCP](reference/troubleshoot-tools.md) · [Updating](reference/troubleshoot-update.md) · [Doctor findings](reference/troubleshoot-doctor.md) · [Web console](reference/troubleshoot-web.md)
 

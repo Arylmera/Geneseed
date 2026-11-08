@@ -13,6 +13,9 @@ this way: the loop reports `{awaiting}` with `kind: "gate"` before the edge that
 normally follow is taken at all — **the gate holds the whole transition**, so nothing is scored,
 committed or counted against a ring budget while it waits.
 
+A [factory](factories.md) stage holds the same way, answered with `geneseed factory decide`:
+`merge-gate` (holds on `none` — the repo runs no CI on the PR) is the shipped one.
+
 `geneseed loop decide --verdict ok|no|amend` answers it:
 
 - **`ok`** follows the edge the brick's reported outcome actually points to. On a brick gated on

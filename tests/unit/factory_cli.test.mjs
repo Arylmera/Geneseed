@@ -59,7 +59,7 @@ test('check: the catalogue, one factory, and a broken one', () => {
           'factories/fixture-broken: cycle loop:nope, review has no declared cycle around it',
           'factories/fixture-broken: stage loop:nope: no loop template named nope',
         ],
-        factories: ['fixture-broken', 'fixture-fix', 'fixture-spec'],
+        factories: ['bug-report-to-fix', 'fixture-broken', 'fixture-fix', 'fixture-spec'],
       },
     });
     assert.deepEqual(run(sb.path, ['check', '--factory', 'fixture-fix']), { code: 0, out: { ok: true, problems: [] } });
@@ -68,6 +68,8 @@ test('check: the catalogue, one factory, and a broken one', () => {
   } finally { sb.cleanup(); }
 });
 
+// The catalogue is every origin: the shipped `bug-report-to-fix` (src/factories/) lists beside the
+// project's fixture, sorted by name.
 test('list: name, description, category and origin of every factory', () => {
   const sb = repo(['fixture-fix']);
   try {
@@ -75,6 +77,10 @@ test('list: name, description, category and origin of every factory', () => {
       code: 0,
       out: {
         factories: [{
+          name: 'bug-report-to-fix', category: 'development', origin: 'shipped',
+          description: 'Take one bug report, fix it with the bugfix loop, open the pull request and wait for green CI; '
+            + 'red CI sends the fix back to the loop, twice at most. The merge stays yours.',
+        }, {
           name: 'fixture-fix', category: null, origin: 'project',
           description: 'Test fixture: plan, run the bugfix loop, review; a failed review sends the item back to the loop.',
         }],
@@ -142,6 +148,27 @@ test('init -> next -> record through a brick stage, a loop stage and a back-rout
     assert.deepEqual(run(sb.path, ['next']).out.notes, ['totals still off by one cent']);
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'nope']),
       { code: 1, out: { error: 'loop:bugfix cannot report "nope" — one of pass, fail' } });
+  } finally { sb.cleanup(); }
+});
+
+// J9 through the CLI: `factory init` registers the run in factories.json, and `loop init --factory`
+// stamps the run's slug on the child loop's row in loops.json. Both rows share the worktree root,
+// which is how a reader groups them. The sandbox HEAD is detached, so the branch reads null.
+test('init registers the run; loop init --factory stamps the child loop row', () => {
+  const sb = repo(['fixture-fix']);
+  try {
+    const xdg = path.join(sb.path, 'xdg', 'geneseed');
+    assert.equal(run(sb.path, [...INIT, '--factory', 'fixture-fix']).code, 0);
+    const [row] = JSON.parse(readFileSync(path.join(xdg, 'factories.json'), 'utf8')).factories;
+    assert.deepEqual({ ...row, root: typeof row.root, started: typeof row.started },
+      { root: 'string', branch: null, factory: 'fixture-fix', title: 'Rounding', started: 'string' });
+    const r = spawnSync(process.execPath, [CLI, 'loop', 'init', '--title', 't', '--requirement', 'r', '--graph', 'bugfix', '--factory', 'rounding'], {
+      cwd: sb.path, encoding: 'utf8', windowsHide: true, env: { ...process.env, XDG_CONFIG_HOME: path.join(sb.path, 'xdg') },
+    });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const [loop] = JSON.parse(readFileSync(path.join(xdg, 'loops.json'), 'utf8')).loops;
+    assert.equal(loop.factory, 'rounding');
+    assert.equal(loop.root, row.root);
   } finally { sb.cleanup(); }
 });
 

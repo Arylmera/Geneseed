@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Loose many specialists upon independent tasks at once, then gather what they bring.",
   "DESC_PIPELINE": "Dispatch a small cohort of Adepts — scout, artisan, examiner — to labour in their own sealed chamber, sanctioned into the Reliquary only once the proving-rite returns clean.",
   "DESC_LOOP": "Labour on a requirement in small, weighed iterations on a loop/* branch, the loop engine ordaining every step.",
+  "DESC_FACTORY": "Carry one work item through the manufactorum, stage by stage, to an open PR with green CI, the factory engine ordaining each step. The merge stays yours.",
   "DESC_BRICK_FORGE": "Forge or adapt a loop brick, then submit it to geneseed loop check.",
   "DESC_DEVELOP": "Drive a change through the cover-and-verify loop — the smallest stroke, the trials written to cover it, the affected suite green, sealed slice by slice.",
   "DESC_TEACH": "Instruct the supplicant, or put their knowledge to the ordeal — a crash course, a text decoded, a path to the hour; or a drill, a recitation, a mastery tried.",

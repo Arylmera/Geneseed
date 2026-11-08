@@ -62,6 +62,7 @@
   "DESC_PARALLEL_AGENTS": "Send several engineers on independent jobs at once, then bring in what they get.",
   "DESC_PIPELINE": "Send a small crew — scout, engineer, tester — off on their own run, and only bring the setup into the race once the telemetry comes back clean.",
   "DESC_LOOP": "Work a requirement in short, scored stints on a loop/* branch, the loop engine calling every lap.",
+  "DESC_FACTORY": "Take one work item through the factory, stint by stint, to an open PR with green CI. The merge stays yours.",
   "DESC_BRICK_FORGE": "Build or tune a loop brick, then run it through geneseed loop check.",
   "DESC_DEVELOP": "Drive the change home — smallest move, a test written to cover it, the affected trials green, and sealed commit by commit.",
   "DESC_TEACH": "Get the user up to speed, or test them — a crash course, a decode, a day-by-day programme; or a drill, a debrief, a gap check. No wasted laps.",
