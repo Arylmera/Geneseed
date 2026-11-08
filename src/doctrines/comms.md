@@ -17,6 +17,7 @@ it lets a long exchange be answered by reference, and a decision taken on turn
 three still be named on turn thirty. Where the {{ONTOLOGY}}'s {{ONT_CONDUCT}}
 governs how an answer speaks, this is only the addressing and marking convention — a practice
 a repository adopts or drops like any other rule in these {{DOCTRINES}}.
+
 When a reply stops and waits on the user — a question, a choice, an approval, a blocker —
 make the ask stand apart from the work around it, so a reader who skims finds it first. Open
 the ask with one emoji marker that names its kind: `❓` a question, `👉` an act the user must

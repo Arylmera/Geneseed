@@ -285,9 +285,10 @@ const FOOTPRINTS = ['full', 'lean'];
  *
  * LEAN LOWERED 2026-11-08, FULL UNTOUCHED, O2 (situational rules): ops 3, ops 5, ops 6, ops 7
  * and rigor 5 keep one trigger sentence in their LEAN:else half; the full halves did not change.
- * Measured over all nine modes: lean largest `files` 39_445, smallest `opencode` 30_258 (above
- * the half-ceiling floor); full largest `files` 65_741, the same as after O1. `lean` moves
- * 41_612 -> 40_234, the measured maximum plus 2 % (user decision C2), rounded up.
+ * Measured over all nine modes: lean largest `files` 39_521, smallest `opencode` 30_316 (above
+ * the half-ceiling floor); full largest `files` 65_818, smallest `opencode` 56_595. `lean`
+ * moves 41_612 -> 40_312, the measured maximum plus 2 % (user decision C2), rounded up. The
+ * figures include the review fixes (section 5 keeps one clause on how memory is written).
  */
 // The constant itself lives in js/inspect/cost.mjs, where the console reads it for the cost
 // chart; the history above stays here, beside the gate that enforces it.
@@ -641,14 +642,14 @@ test('the carrier stays under the footprint ceiling', () => {
         + `${CEILING[footprint]} ceiling — the harness is paid for on every session`);
       // THE OTHER DIRECTION, and the reference had none: a ceiling alone is satisfied by an
       // emit that wrote almost nothing, which is exactly what a broken render produces. Half
-      // the ceiling (33_102 / 20_692) is below the SMALLEST measured carrier (`opencode` and
-      // `opencode-global`, 56_926 / 32_124 on 2026-10-29) and far above any plausible stub.
+      // the ceiling (33_216 / 20_156) is below the SMALLEST measured carrier (`opencode`,
+      // 56_595 / 30_316 on 2026-11-08) and far above any plausible stub.
       //
       // ⚠ BOTH PARENTHETICALS HAVE BEEN STALE TWICE. They carried 16_300 / 13_950, then
       // 23_038 / 18_320, then 27_400 / 18_750 beside a smallest carrier of 45_723 / 28_151 —
       // each set describing a corpus that had already moved. The arithmetic held every time, so
       // nothing was ever red, and a comment that is only wrong never announces itself.
-      // Re-derive both whenever the constant above moves; both moved on 2026-10-29 and these
+      // Re-derive both whenever the constant above moves; lean moved on 2026-11-08 and these
       // figures are that re-derivation.
       assert.ok(n > CEILING[footprint] / 2,
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `

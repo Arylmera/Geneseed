@@ -1,7 +1,7 @@
 **{{PACK_CRAFT}}** — how code is written.
 
 ### {{DOCTRINE:automate-repetition}} Automate Repetition
-<!-- note: summary: If it repeats, make it a script or skill; reuse first. -->
+<!-- note: summary: If it repeats, automate it: script, skill or code, by the task. -->
 <!-- LEAN:begin -->
 When an action repeats, automate it — and choose the vessel by the nature of the task,
 not by how many similar steps one session needs. Do not

@@ -35,7 +35,7 @@ import { isFile, readText } from '../lib/fs.mjs';
  * console draws it on the cost chart, so it lives here, once, where both read it. Raise it by
  * exactly the measured overrun and say why in that test's docblock, which keeps its history.
  */
-export const CARRIER_CEILING = { full: 66_432, lean: 40_234 };
+export const CARRIER_CEILING = { full: 66_432, lean: 40_312 };
 
 /**
  * THE TRADE OF `--shared-tier on`, stated once. `--help` (js/cli-table.json), the console's toggle
