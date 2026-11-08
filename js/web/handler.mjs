@@ -19,7 +19,7 @@ import {
   rebuildCmds,
 } from './actions.mjs';
 import { BadRequest, NotFound } from './catalog.mjs';
-import { openFolder, requestRestart } from './daemon.mjs';
+import { openFolder, requestRestart, restartRefusal, rootId, secretProof } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
 import {
@@ -71,8 +71,11 @@ export function securityHeaders(nonce) {
  * - `/api/*`: a cross-site or same-site fetch, or a foreign `Origin`, is refused even on GET —
  *   the reads expose paths and memories. A request with neither header (curl, Node) passes.
  * - Any non-GET: the CSRF token, compared in constant time so its bytes cannot be timed out.
+ *   `/api/shutdown` alone also takes `X-Geneseed-Secret`: a MAC of this socket's port under the
+ *   install secret (`secretProof`), so `web start` can end its own unrecorded console. Same Host and
+ *   Origin guards above, same constant-time compare; a wrong proof falls through to the token check.
  */
-export function requestGuard(req, token) {
+export function requestGuard(req, token, secret = null) {
   const host = req.headers.host || '';
   // Exact `name:port`, not `localHost` + a suffix test: that pair let `[::1]x.evil:4747` and
   // `localhost:1:4747` through. Lower-cased the way browsers send it.
@@ -91,6 +94,12 @@ export function requestGuard(req, token) {
     }
   }
   if (req.method !== 'GET') {
+    const proof = req.headers['x-geneseed-secret'];
+    if (secret && path === '/api/shutdown' && typeof proof === 'string') {
+      const have = Buffer.from(proof, 'utf-8');
+      const need = Buffer.from(secretProof(secret, req.socket.localPort), 'utf-8');
+      if (have.length === need.length && timingSafeEqual(have, need)) return null;
+    }
     const got = Buffer.from(String(req.headers['x-geneseed-token'] ?? ''), 'utf-8');
     const want = Buffer.from(token, 'utf-8');
     if (got.length !== want.length || !timingSafeEqual(got, want)) {
@@ -222,7 +231,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
     if (path === '/api/ping') {
-      return sendJson(res, { ok: true, theme: state.theme, pid: process.pid }, 200, ae);
+      return sendJson(res, { ok: true, theme: state.theme, pid: process.pid, root: rootId() }, 200, ae);
     }
     for (const [prefix, handler] of PREFIX_ROUTES) {
       if (path.startsWith(prefix)) return sendJson(res, handler(st, path, state), 200, ae);
@@ -268,7 +277,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       if (jm.busy) return sendJson(res, BUSY, 409, ae);
       if (!requestRestart(state.theme)) {
         return sendJson(res,
-          { error: 'foreground server: restart it from its terminal' }, 409, ae);
+          { error: restartRefusal(state.theme) }, 409, ae);
       }
       return sendJson(res, { restarting: true }, 200, ae);
     }
@@ -447,7 +456,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     const path = (req.url || '').split('?', 1)[0];
     try {
       // GUARD FIRST, BODY SECOND: a refused request is DISCARDED (`resume`, nothing buffered).
-      const refused = requestGuard(req, token);
+      const refused = requestGuard(req, token, holder?.secret);
       if (refused) {
         sendJson(res, refused.body, refused.code, ae);
         return req.resume();

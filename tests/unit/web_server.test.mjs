@@ -30,6 +30,7 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { rootId } from '../../js/web/daemon.mjs';
 import { KINDS } from '../../js/web/docs.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import { makeHandler } from '../../js/web/handler.mjs';
@@ -307,7 +308,7 @@ test('/api/ping names the process, so a restarting client can tell old from new'
   // reloaded on the first ping landed back on it. The pid is what it waits to see change.
   const r = await request('GET', '/api/ping');
   assert.deepEqual(JSON.parse(r.body.toString('utf8')),
-    { ok: true, theme: 'neutral', pid: process.pid });
+    { ok: true, theme: 'neutral', pid: process.pid, root: rootId() });
 });
 
 /** One POST whose declared length may exceed what is sent; resolves on the response. */
