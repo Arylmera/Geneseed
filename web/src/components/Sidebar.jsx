@@ -44,6 +44,8 @@ const NAV = [
     countTitle: 'Templates across every install',
     count: (o) => o?.counts?.loops ?? null,
   },
+  // No badge: the overview counts no factories, and a rail count must be what its page lists.
+  { group: 'build', hash: '#/factories', page: 'factories', label: 'Factories', icon: 'build' },
   { group: 'govern', hash: '#/personal', page: 'personal', label: 'Personal', icon: 'profile' },
   {
     group: 'run',

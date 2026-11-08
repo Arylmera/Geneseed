@@ -364,6 +364,8 @@ describe('light/dark contrast contract', () => {
     '.lr-node circle': 'a loop node circle, a shape',
     '.lr-node.current circle': 'the lit loop node circle, a shape',
     '.lr-node.inner.current circle': 'the lit inner-loop node circle, a shape',
+    '.fg-node rect': 'a factory brick block, a shape',
+    '.fg-node.brick.current rect': 'the lit factory brick block, a shape',
   }
 
   it('7: no text is painted with the raw --accent (text uses --accent-text)', () => {
@@ -388,6 +390,12 @@ describe('light/dark contrast contract', () => {
     '.lr-head-inner': 'the arrowhead marker on the inner loop, a shape',
     '.lr-node.inner circle': 'an inner-loop node circle, a shape',
     '.lr-gate circle': 'the human-gate disc on the loop ring, a shape',
+    '.fg-head-back': 'the arrowhead marker on a factory route back, a shape',
+    '.fg-head-stop': 'the arrowhead marker on the factory stop rail, a shape',
+    '.fg-node.loop rect': 'a factory loop-stage block, a shape',
+    '.fg-node.triaged rect': 'the factory triaged-loop block, a shape',
+    '.fg-close rect': 'the factory close cap, a shape',
+    '.fg-stop rect': 'the factory stop cap, a shape',
   }
 
   it('7b: no text is painted with a raw status colour (text uses --good/--warn/--bad-text)', () => {

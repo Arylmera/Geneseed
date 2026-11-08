@@ -3514,6 +3514,44 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .lr-sub.lr-warn { fill: var(--warn-text); }
 .lr-sub.lr-acc { fill: var(--accent-text); }
 .lr-title { font-size: 18px; /* off-scale: SVG ring title, part of the drawing geometry */ font-weight: 700; fill: var(--text); }
+
+/* ---- Factories page (pages/Factories.jsx, components/FactoryGraph.jsx) ----
+   The ring's tokens one level up: the accent is a brick, --good a loop stage, --warn a route
+   back (it spends a cycle), --bad the stop rail. A flow is drawn 1:1 at its layout width
+   (--fg-w) and scrolls, as a loop flow does. */
+.fg-wrap { overflow-x: auto; min-width: 0; }
+.fgraph { display: block; width: var(--fg-w); max-width: none; height: auto; font-family: var(--font-ui); }
+/* The ring inside a loop block fills its block, not the flow's width. */
+.fg-ring .loop-ring { width: 100%; max-width: none; }
+.fg-edge { fill: none; stroke: var(--line-3); stroke-width: 1.6; }
+.app.light .fg-edge { stroke: var(--text-3); }
+.fg-edge.back { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 6 4; }
+.fg-edge.stop { stroke: color-mix(in srgb, var(--bad) 55%, transparent); stroke-dasharray: 2 4; }
+.fg-head-flow { fill: var(--line-3); }
+.app.light .fg-head-flow { fill: var(--text-3); }
+.fg-head-back { fill: var(--warn); }
+.fg-head-stop { fill: var(--bad); }
+.fg-lbl { font-size: var(--fs-2xs); fill: var(--text-2); }
+.fg-lbl.back { fill: var(--warn-text); }
+.fg-node[role="button"] { cursor: pointer; }
+.fg-node rect { fill: color-mix(in srgb, var(--accent) 10%, var(--surface)); stroke: var(--accent); stroke-width: 1.6; }
+.fg-node.loop rect, .fg-node.triaged rect { fill: color-mix(in srgb, var(--good) 5%, var(--surface)); stroke: var(--good); }
+.fg-node.triaged rect { stroke-dasharray: 5 4; }
+.fg-node text { font-size: 12px; /* off-scale: SVG block label, sized to its block */ font-weight: 600; fill: var(--text); }
+.fg-node:hover rect { stroke-width: 3; }
+.fg-node:focus-visible rect { stroke: var(--text); stroke-width: 3; }
+.fg-node:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+/* The stage a run stands on: a brick fills, a loop block keeps its ring readable and thickens. */
+.fg-node.brick.current rect { fill: var(--accent); }
+.fg-node.brick.current text { fill: var(--accent-ink); }
+.fg-node.current rect { stroke-width: 3.5; }
+.fg-sub { font-size: var(--fs-2xs); fill: var(--text-2); }
+.fg-close rect { fill: color-mix(in srgb, var(--good) 16%, var(--surface)); stroke: var(--good); stroke-width: 1.6; }
+.fg-stop rect { fill: color-mix(in srgb, var(--bad) 12%, var(--surface)); stroke: var(--bad); stroke-width: 1.6; }
+.fg-close text, .fg-stop text { font-size: var(--fs-2xs); font-weight: 600; fill: var(--text); }
+.fgraph .lr-human circle:first-of-type { fill: var(--surface); stroke: var(--text-2); stroke-width: 1.4; }
+.fgraph .lr-human path.lr-human-fig, .fgraph .lr-human circle.lr-human-fig { fill: var(--text); stroke: none; }
+.fac-cycles { margin: 0; padding-left: 18px; /* off-scale: 18px between --sp-4 and --sp-5, as .loop-rules */ font-size: var(--fs-md); color: var(--text-2); }
 /* The ring console (V6b mockup): the ring with "How it runs" beside it — under it once the
    reader is narrow — then the command that starts the loop. */
 .loop-console { margin: 0; display: flex; flex-wrap: wrap; gap: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ align-items: flex-start; }

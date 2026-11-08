@@ -10,6 +10,7 @@ export const PAGES = {
   library: 'Library',
   kits: 'Kits',
   loops: 'Loops',
+  factories: 'Factories',
   personal: 'Personal',
   installs: 'Installs',
   docs: 'Docs',
@@ -21,6 +22,7 @@ export const PAGES = {
 // tab a bare `#/personal` or `#/installs` opens on, and the one an unknown tab falls to.
 export const TABS = {
   loops: ['templates', 'bricks', 'active'],
+  factories: ['templates', 'active'],
   personal: ['rules', 'profile', 'memory', 'notebook'],
   installs: ['hosts', 'edits', 'doctor'],
 }
@@ -73,7 +75,7 @@ const tabOf = (page, t) => (TABS[page].includes(t) ? t : TABS[page][0])
 //   page    - a PAGES key; an unknown hash is the overview.
 //   section - the Library kind to open (`#/library` leaves it undefined, which Library
 //             reads as "the first kind"). Laws are the one section with a page of their own.
-//   tab     - the Loops, Personal or Installs tab.
+//   tab     - the Loops, Factories, Personal or Installs tab.
 //   item    - the selected entry's name, URI-decoded. Docs and Activity reuse the slot for
 //             their own sub-address: the docs page id, the activity session id.
 // Routes: #/ , #/<page>, #/kits/<kit>, #/<page>/<tab>[/<item>], #/section/<name>, #/item/<type>/<name>,

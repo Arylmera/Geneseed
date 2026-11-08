@@ -70,7 +70,7 @@ Every `/api/*` read takes and checks the pair, with these exceptions:
 - `/api/ping` and `/api/jobs` ignore it.
 - The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`, `/api/migrate/preview`,
   `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active`,
-  `/api/activity`, and the Library's skill, agent, memory and notebook lists,
+  `/api/factories/active`, `/api/activity`, and the Library's skill, agent, memory and notebook lists,
   `/api/catalog/skills`, `/api/catalog/agents`, `/api/catalog/memory` and
   `/api/catalog/notebook`. Such a read does not check the pair, and its answer does not change
   with the pair. The Activity detail (`/api/activity/<id>`) and the Activity toggle still take
@@ -152,7 +152,7 @@ before its data. The Constitution waits for the picked install's own overview to
 before it would read as armed.
 
 The rail groups its pages under small mono headers, each with a square in the group's tint: the
-Overview alone, then **Govern** (Constitution, Personal), **Build** (Library, Kits, Loops), **Run**
+Overview alone, then **Govern** (Constitution, Personal), **Build** (Library, Kits, Loops, Factories), **Run**
 (Installs, Activity) and **Help** (Docs, Settings). Each icon sits in a 28 px chip tinted by its group
 (`--sb-<group>-bg` and `-ink` in `styles.css`; light mode has pastel chips with deep ink, 5.3:1 or
 better). The lit page gets a raised row and `aria-current="page"`; a count badge is muted mono on the
@@ -347,6 +347,22 @@ screen the run list stacks above the detail.
   the page's only write), what an awaiting loop waits on (launch / declared / actual / a
   human gate, with its node) — the answer is given in the agent's session, never here — and
   its ring with the current node filled, with its iteration history under it.
+- **Factories** (`#/factories`) — the factory catalogue `geneseed factory` runs from, read-only,
+  in the Loops page's three panes with two sections. **Templates** are grouped by origin; the
+  reader draws the selected factory as a graph (`web/src/lib/factoryFlow.js`): each stage a
+  block in the column of its longest path from `start`, joined by lines labelled with their
+  outcomes; a `loop:` stage a block holding its loop's ring; `loop:$triaged` a block naming its
+  allowlist; a `gate: human` brick with the person badge; each route back (an edge into a
+  cycle's first stage, the edge that spends a lap) an arc above the row with its cycle and `max`;
+  `close` at the end of the row and `stop` at the end of the rail every stop edge drops into.
+  Under it: the cycles in words, the `geneseed factory init` command with a Copy button, and the
+  factory's rules. It reads `GET /api/factories/catalog` for the install the *Install:* picker
+  names. **Active** is every run `geneseed factory init` registered on this machine
+  (`GET /api/factories/active`, polled every 5 s, the graph read from each run's `FACTORY.md`),
+  grouped as Loops › Active is; the reader shows the run's stage, transitions, task number, its
+  child loop's step and iteration, what it awaits, and its graph with the current stage lit,
+  the child loop's node lit in the stage's ring and each cycle's laps as `n / max`. No run
+  reports tab: a run's report lives in its own worktree.
 - **Profile** (`#/profile`) — `PROFILE.md`: who you are and how you like to work, one card
   per file: the shared one every global install reads, tagged `shared`, and each project
   install's own. Opens rendered; **Edit** is a whole-file editor. The save carries

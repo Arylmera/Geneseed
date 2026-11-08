@@ -64,6 +64,15 @@ The run report is git-ignored by the `.geneseed/.gitignore` Geneseed seeds. Wher
 in the worktree, `retro` writes the report to the OS temp directory instead, so the tree stays
 clean. The report lives in the worktree and goes when you remove it.
 
+## In the console
+
+The console's **Factories** page (in the Build group, after Loops) draws each factory as a
+graph: its stages left to right, a `loop:` stage as a block that holds its loop's ring, each
+route back as an arc above the row with its cycle and `max`, and `close` and `stop` as end caps.
+Its **Active** tab lists every registered run, with the current stage lit, the laps spent on
+each cycle and the child loop's current step. The page only reads; you answer a run in the
+agent's session.
+
 ## Your own factories
 
 Factories load from three levels, as bricks and loop templates do, and a later level overrides

@@ -1,0 +1,24 @@
+{
+  "name": "bug-report-to-fix",
+  "description": "Take one bug report, fix it with the bugfix loop, open the pull request and wait for green CI; red CI sends the fix back to the loop, twice at most. The merge stays yours.",
+  "category": "development",
+  "rules": [
+    "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",
+    "Push only this worktree's own branch."
+  ],
+  "stages": ["intake", "loop:bugfix", "pr-open", "merge-gate", "retro"],
+  "start": "intake",
+  "edges": [
+    { "from": "intake", "on": "pass", "to": "loop:bugfix" },
+    { "from": "intake", "on": "fail", "to": "$stop" },
+    { "from": "loop:bugfix", "on": "pass", "to": "pr-open" },
+    { "from": "loop:bugfix", "on": "fail", "to": "$stop" },
+    { "from": "pr-open", "on": "pass", "to": "merge-gate" },
+    { "from": "pr-open", "on": "fail", "to": "$stop" },
+    { "from": "merge-gate", "on": "pass", "to": "retro" },
+    { "from": "merge-gate", "on": "fail", "to": "loop:bugfix" },
+    { "from": "merge-gate", "on": "none", "to": "retro" },
+    { "from": "retro", "on": "pass", "to": "$close" }
+  ],
+  "cycles": [{ "name": "ci", "nodes": ["loop:bugfix", "pr-open", "merge-gate"], "max": 2 }]
+}

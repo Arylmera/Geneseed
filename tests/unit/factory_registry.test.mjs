@@ -64,6 +64,8 @@ test('activeFactories reads FACTORY.md back into a running row', () => {
         root, branch: 'loop/factory-a', factory: 'fixture-fix', title: 'Run', started: '2026-11-01T00:00:00.000Z',
         status: 'running', stage: 'plan', awaiting: null, reason: null, transitions: 0, counters: {},
         chosenLoop: null, tasks: null, history: [],
+        // The graph FACTORY.md was started from, whole: the console draws a run from it.
+        graph: FACTORY,
       }]);
     });
   } finally { sb.cleanup(); }
