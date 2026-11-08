@@ -375,12 +375,16 @@ screen the run list stacks above the detail.
   between polls. Tracking is on or off per install: the tracking
   card has one switch per install, and each switch changes only that install. OpenCode project
   installs have no switch: their sessions appear under, and follow, the OpenCode global switch. Sessions that ended in the last 7 days are listed under
-  **Recently ended**, below the live ones. Every host records it:
+  **Recently ended**, below the live ones, in the list view only; the Garden shows live sessions only. Every host records activity:
   the OpenCode plugin, and `geneseed-hook activity` on Claude Code, OpenClaude and Bob.
   The live sessions open in the **Garden** by default; a **List | Garden** switch (kept in the
   URL with the filters, which apply to both) shows them as a list of cards instead. The Garden
-  shows them as pixel bonsai: one shelf per repository (worktrees stand on their
-  repo's shelf, tagged ⎇), one tree per session. The pot's glaze is the host (clay Claude Code,
+  shows them as pixel bonsai: one wooden shelf per repository (worktrees stand on their
+  repo's shelf, tagged ⎇), one tree per session, its pot on the plank. A brass plate on the
+  plank names the repository and its session count. Under each pot a caption gives the session
+  title (two lines at most; the full title is the tooltip and the link's name), the install and
+  status pills (working green, your move amber, blocked red, idle grey) and `<turns> turns · <context>%`. A
+  narrow screen stacks a shelf's trees onto several planks, the plate on the first. The pot's glaze is the host (clay Claude Code,
   blue Bob, grey OpenCode, violet OpenClaude); the tree grows taller with turns, its crown
   with context fill, and the tips yellow past 80 %. A compaction cuts the crown flat (it
   regrows as context refills) and leaves a notch on the rim. A running sub-agent is a thick
@@ -389,7 +393,9 @@ screen the run list stacks above the detail.
   cannot tell, so all its blossoms sit on the crown). An amber `!` means the session needs
   you, a red `x` an error, a grey tree an idle session. Two sessions changing the same file
   are tied together in red (same worktree) or dashed amber (two worktrees of the repo): tangled
-  roots in the moss when they stand side by side, a thread under the pots when they do not.
+  roots in the moss when they stand side by side, a thread across the plank when they do not.
+  Two trees on different planks get no thread; the hover card and the link's name still list
+  the shared files.
   Hover a tree for its model, turns, context and compactions, or a pad for its author's files;
   click it to open the session. With no mouse, tap a pad to show its files (a second tap clears them,
   and neither opens the session), or focus the tree and walk its pads with the arrow keys; Escape leaves. Past ten trees, quiet shelves (no session working or waiting on
