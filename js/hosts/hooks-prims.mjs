@@ -251,18 +251,16 @@ const gateIs = (rel, file) => {
 const GATE_FILE_OTHER = [null, 'which this project lists as a protected check',
   'that check can get weaker or stop running, and a failure could go unseen'];
 
-// `ruleGateTarget`'s four answers: name, what it is, what the safe line calls it, whose call it is, impact.
+// `ruleGateTarget`'s answers: name, what it is, what the safe line calls it, whose call it is, impact.
+// Memory has none: it is written freely (owner decision, 2026-11-08).
 const GATE_RULE = ['this rule', 'what becomes a rule'];
-const GATE_FACT = ['this memory', 'what the agent remembers'];
 const GATE_STORES = {
   'user-rules.md': ['user-rules.md', 'your standing rules, which the agent obeys in every session', ...GATE_RULE,
     'the text binds every later session until you remove it'],
   'the rule draft': ['the rule draft', 'which can become one of your standing rules', ...GATE_RULE,
     'the text can become a rule that binds every later session'],
-  'the memory index': ['the memory index', 'which lists what the agent remembers across sessions', ...GATE_FACT,
-    'the text shapes every later session until you remove it'],
-  memory: ['a memory file', 'which the agent reads in later sessions', ...GATE_FACT,
-    'the text shapes every later session until you remove it'],
+  'a hard link': ['a second name of a rule file', 'which writes to your standing rules or the rule draft', ...GATE_RULE,
+    'the text can bind every later session until you remove it'],
 };
 
 // Bidi and zero-width marks too (`\p{C}`): they make a name read as something it is not. A double
@@ -338,7 +336,7 @@ const GATE_ASKS = {
     why: 'a gate the agent can edit is a gate it can switch off',
     impact: 'a gate can stop working, and nothing would tell you' }),
   store: (f) => {
-    const [name, what, label, owner, impact] = GATE_STORES[f.name] ?? GATE_STORES.memory;
+    const [name, what, label, owner, impact] = GATE_STORES[f.name] ?? GATE_STORES['user-rules.md'];
     return { rule: 'Persist Insight', line: gateEdit(f, name, what), safe: `Deny, unless you asked for ${label}.`,
       why: `${owner} is your decision`, impact, tail: 'ask the user; do not write it another way', can: GATE_DO_IT };
   },
@@ -397,9 +395,9 @@ const GATE_ASKS = {
   wiki: (f) => ({ line: `This edit changes the protected wiki folder ${gateName(f.name)}.`,
     safe: 'Deny, unless you asked for this change.', why: 'you marked this folder as closed to the agent',
     impact: 'notes you protected can change', tail: 'leave this folder alone', can: GATE_DO_IT }),
-  'deep-args': (f) => ({ rule: 'Persist Insight', line: `The arguments of ${gateName(f.name)} nest too deep to read, so a write to your rules or memory cannot be ruled out.`,
+  'deep-args': (f) => ({ rule: 'Persist Insight', line: `The arguments of ${gateName(f.name)} nest too deep to read, so a write to your rules cannot be ruled out.`,
     safe: 'Deny, unless you know what this call writes.', why: 'what the gate cannot read, it cannot clear',
-    impact: 'the call can write to your rules or memory unseen', tail: 'ask the user; do not write it another way', can: GATE_DO_IT }),
+    impact: 'the call can write to your rules unseen', tail: 'ask the user; do not write it another way', can: GATE_DO_IT }),
   // It reports a crash, not a change, so it has no rule to name.
   'gate-error': (f) => ({ line: `Geneseed gate error: the check failed with ${gateName(f.name)}, so nothing judged this call.`,
     safe: 'Deny, then run geneseed doctor.', why: 'a gate that crashed cannot say this call is safe',

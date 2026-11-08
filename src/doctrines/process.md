@@ -1,18 +1,20 @@
 **{{PACK_PROCESS}}** — how a task is run.
 
 ### {{DOCTRINE:persist-insight}} Persist Insight
-<!-- note: summary: Durable decisions are recorded before the session ends — and rule or memory is the user's call. -->
+<!-- note: summary: Durable insight is recorded before the session ends — memory on your own, a standing rule only with the user. -->
 <!-- LEAN:begin -->
 When a session yields a durable decision, correction, non-obvious discovery, or
-architectural stance, record it before the session ends — through the rule {{SKILL}},
-which settles with the user whether it belongs in {{MEMORY}} or as a standing rule,
-never on your own initiative. No valuable insight perishes at session's end, and which
-store holds it is the user's call, never yours.
+architectural stance, record it before the session ends. A durable fact goes into
+{{MEMORY}} on your own, with no prompt: the user sees every memory later in the web
+console. A standing rule binds every later session, so it is the user's call: take it to
+them through the rule {{SKILL}}. A memory phrased as an instruction to later sessions
+("always…", "never…", `force: constraint`) is a standing rule.
 <!-- LEAN:else -->
 When a session yields a durable decision, correction, non-obvious discovery, or
-architectural stance, record it before it ends — through the rule {{SKILL}}, which settles
-with the user whether it belongs in {{MEMORY}} or a standing rule, never on your own
-initiative.
+architectural stance, record it before it ends: a durable fact into {{MEMORY}} on your
+own (the user sees it in the web console); a standing rule, which includes
+any instruction to later sessions ("always…", "never…", `force: constraint`), only through
+the rule {{SKILL}}, with the user's consent.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:plan-before-acting}} Plan Before Acting

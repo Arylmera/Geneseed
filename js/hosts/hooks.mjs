@@ -55,7 +55,7 @@ import { readFileSync, readlinkSync, statSync, appendFileSync, writeFileSync } f
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
-import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
@@ -64,7 +64,7 @@ import {
 import { currentBranch, gitRootOf, loopLaunched } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
-  selfAndParents, readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
+  readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
   gateLoss, gateSafe,
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
@@ -239,7 +239,8 @@ const BOB_FINAL = ' Bob has no approval step for this gate: neither a confirmati
  * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
  * only", see bob-code.md B3. process-1 too (owner decision, 2026-11): with no prompt, a warning
- * let the agent write the user's rules and memory on its own say. Process 5 is the USER's call
+ * let the agent write the user's rules on its own say. Memory is written freely (owner decision,
+ * 2026-11-08), so a memory write reaches no rule here. Process 5 is the USER's call
  * as well, but a hard block would make Bob unable to commit at all, so it stays a warning the
  * host logs. ops-2 (Commands Must Return, the root-scan check) is a block too: a warning would let a
  * scan of every drive run for hours, and the agent loses nothing by re-targeting a directory.
@@ -715,7 +716,7 @@ function shellWriteReason(args, command, payload) {
 }
 
 /**
- * A parsed shell write that lands in a rule or memory store: which store, or null. Asked on Claude
+ * A parsed shell write that lands in a rule store: which one, or null. Asked on Claude
  * and OpenClaude, and only a warning on Bob, whose one verdict is a hard block: shell is no boundary,
  * and command text is no ground to refuse on. Fails open, like `shellWriteReason`.
  */
@@ -809,25 +810,27 @@ function landsOn(p, base) {
 }
 
 /**
- * `_rule_gate_target` — name the store a write would land in, or null for ordinary work.
+ * `_rule_gate_target` — name the rule store a write would land in, or null for ordinary work.
  *
- * A deployed install's folder and file names are theme-INDEPENDENT by design, so this
- * matches literal names and needs no install lookup. `user-rules.md`, `user-rules.draft.md` and
- * `MEMORY.md` are Geneseed's own coinage and match anywhere; any other markdown matches only
- * inside THIS install's `<root>/memory/` or the machine tier's `memory/`, or the store
- * `$GENESEED_HARNESS` or `$GENESEED_MEMORY` names. Twin of the OpenCode guard's `ruleStoreTarget`.
+ * Only the user's standing rules are gated: `user-rules.md` and the rule draft
+ * `user-rules.draft.md`, Geneseed's own coinage, matched anywhere by literal name (a deployed
+ * install's file names are theme-INDEPENDENT by design, so this needs no install lookup). Memory
+ * is written freely, with no prompt (owner decision, 2026-11-08): the change report
+ * (`./store-watch.mjs`) and the web console show it afterwards. Twin of the OpenCode guard's
+ * `ruleTarget`.
  *
  * The test is on what the write LANDS on: as spelled, `..` and `//` folded, and with links followed,
- * since a link from outside into a store and a store that links out are both real. On Windows a
- * stream (`user-rules.md::$DATA`), trailing dots and spaces, a device path and this machine's admin
- * share name the same file. A coined name matches by exact case outside a store: `docs/concepts/memory.md`
- * is another file, on Windows too, and on Bob this is a hard block. A file that EXISTS under a coined
+ * since a link from a memory file or any other path to a rule store is a write to that store. On
+ * Windows a stream (`user-rules.md::$DATA`), trailing dots and spaces, a device path and this
+ * machine's admin share name the same file. A coined name matches by exact case: `User-Rules.md` is
+ * another file, on Windows too, and on Bob this is a hard block. A file that EXISTS under a coined
  * name comes back in its true case through the link-followed form; a differently cased spelling
- * of one that does not exist yet is not caught. `base` is the session's directory.
+ * of one that does not exist yet is not caught. A hard link has no target to follow, so a file that is
+ * a known rule file under a second name answers `a hard link` (`sameAsRule`): this install's, the
+ * machine tier's, or the project layer's at the session's git root. `base` is the session's directory.
  */
-function ruleGateTarget(p, root, base = null) {
+function ruleGateTarget(p, root = null, base = null) {
   if (typeof p !== 'string') return null;
-  const win = process.platform === 'win32';
   // Split on BOTH separators rather than taking a basename: a payload carrying a Windows
   // path reaches a POSIX host with its backslashes intact, and `path.basename` there
   // returns the whole string — so the coined names would go unrecognised exactly
@@ -835,7 +838,6 @@ function ruleGateTarget(p, root, base = null) {
   const coined = (f) => {
     const name = f.split(/[\\/]/).pop();
     if (name === 'user-rules.md') return 'user-rules.md';
-    if (name === 'MEMORY.md') return 'the memory index';
     if (name === 'user-rules.draft.md') return 'the rule draft';
     return null;
   };
@@ -845,21 +847,37 @@ function ruleGateTarget(p, root, base = null) {
     const forms = landsOn(p, base);
     const hit = forms.map(coined).find(Boolean);
     if (hit) return hit;
-    // This install's store, the machine tier's (`~/.config/geneseed/memory`) and the two a variable
-    // points at: a path compare, each store as written and with its links followed.
-    const stores = [];
-    if (root) stores.push(path.join(root, 'memory'));
-    try { stores.push(sharedPaths().memory); } catch { /* no home dir: no shared store to match */ }
-    if (process.env.GENESEED_HARNESS) stores.push(path.join(process.env.GENESEED_HARNESS, 'memory'));
-    if (process.env.GENESEED_MEMORY) stores.push(process.env.GENESEED_MEMORY);
-    const homes = stores.flatMap((s) => [path.resolve(s), resolvePath(s)]).map(normcase);
-    // `.slice(1)`, so the store dir itself is not one of its own ancestors.
-    return forms.some((f) => (win ? f.toLowerCase() : f).endsWith('.md')
-      && selfAndParents(f).slice(1).some((a) => homes.includes(normcase(a)))) ? 'memory' : null;
+    // No `cwd` in the payload: the hook runs in the session's directory, so that is the project.
+    const at = base || process.cwd();
+    const project = gitRootOf(at) ?? path.resolve(at);
+    // The install, the machine tier, the project layer, and the homes the two variables name.
+    const pinned = process.env.GENESEED_MEMORY ? path.dirname(path.resolve(process.env.GENESEED_MEMORY)) : null;
+    const rules = ruleFilesUnder([root, machineDir(), project, process.env.GENESEED_HARNESS, pinned]);
+    return forms.some((f) => sameAsRule(f, rules)) ? 'a hard link' : null;
   } catch {
     return null;
   }
 }
+
+/**
+ * Whether `f` is one of `rules` under a second name: an existing file with more than one name whose
+ * device and inode match a known rule file's. A hard link has no target to follow, so this is the only
+ * way to see one. bigint stat, because a 64-bit NTFS file id does not fit a double. Only a file that
+ * has a second name is compared, and only there does a rule file whose stat fails for any reason but
+ * absence count as a match (fail closed). Twin of the guard's, byte for byte.
+ */
+function sameAsRule(f, rules) {
+  let s;
+  try { s = statSync(f, { bigint: true }); } catch { return false; }
+  if (!s.isFile() || s.nlink < 2n) return false;
+  return rules.some((r) => {
+    try { const t = statSync(r, { bigint: true }); return t.dev === s.dev && t.ino === s.ino; } catch (e) {
+      return !['ENOENT', 'ENOTDIR'].includes(e?.code);
+    }
+  });
+}
+// The rule files a session loads, under each home: the install, the machine tier, the project layer.
+const ruleFilesUnder = (homes) => homes.filter(Boolean).flatMap((h) => ['user-rules.md', 'user-rules.draft.md'].map((n) => path.join(h, n)));
 
 // Law I's boundary half is `SECRET_RE` (`./hooks-prims.mjs`, where the activity writer reads it
 // too). `.env*` is exempt because Law I names it as the place a secret may live.

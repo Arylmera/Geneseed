@@ -39,8 +39,8 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   over-matching the tool surface is harmless.
 - on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
   `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
-  file, and asks first on the first write to `user-rules.md` or a memory file (whether
-  something you want kept is a rule or a fact is your call). In an application repo (a git
+  file, and asks first on a write to `user-rules.md` or the rule draft (a standing rule is
+  your call; memory is written freely, and you see it afterwards in the web console). In an application repo (a git
   root holding a build manifest) whose root `AGENTS.md` has no `## Ownership` section, it also
   denies the session's first write once, with a reason addressed to the agent: propose the
   ownership setup now, skip this session, or skip in this repo until asked; the next write

@@ -80,6 +80,26 @@ test('an unapproved change is said once, on the visible channel', () => {
   } finally { w.sb.cleanup(); }
 });
 
+// The rule draft and the project layer's rule files are rules too: the context hook loads the project's
+// from the session's repository (its git root, else the cwd), so the baseline stamps them there.
+test('the rule draft and the project layer\'s rule files are baselined and reported', () => {
+  const w = world('sw-layer-');
+  try {
+    const draft = path.join(w.root, 'user-rules.draft.md');
+    const project = path.join(w.sb.path, 'user-rules.md');
+    fs.writeFileSync(draft, 'draft');
+    fs.writeFileSync(project, 'project rules');
+    w.start();
+    fs.appendFileSync(draft, ' planted');
+    fs.appendFileSync(project, ' planted');
+    assert.equal(message(w.stop()), LINE(2, `install/user-rules.draft.md, ${path.basename(w.sb.path)}/user-rules.md`));
+    // A repo's own memory/ folder is no store, at the project layer too.
+    fs.mkdirSync(path.join(w.sb.path, 'memory'));
+    fs.writeFileSync(path.join(w.sb.path, 'memory', 'notes.md'), 'repo notes');
+    assert.equal(message(w.stop()), null);
+  } finally { w.sb.cleanup(); }
+});
+
 test('a deleted fact counts, and a resumed session keeps its first baseline', () => {
   const w = world('sw-del-');
   try {
@@ -192,6 +212,15 @@ test('V1: the guard reports through a toast, excuses a host-approved edit, and n
       await ev('session.idle', { sessionID: 's' });
       assert.equal(toasts.length, 1, 'no phantom file from the link');
     }
+    // Approved under this machine's admin share or a device path: the same file, so no report.
+    if (process.platform === 'win32') {
+      for (const spelled of [`\\\\localhost\\${fact[0].toLowerCase()}$\\${fact.slice(3)}`, `\\\\?\\${fact}`]) {
+        fs.appendFileSync(fact, ' approved');
+        await h['tool.execute.after']({ tool: 'write', args: { filePath: spelled } }, {});
+        await ev('session.idle', { sessionID: 's' });
+        assert.equal(toasts.length, 1, `an approved write spelled ${spelled}`);
+      }
+    }
     // A new file the host let through, and a session that never sent `session.created`.
     const fresh = path.join(cfg, 'memory', 'fresh.md');
     fs.writeFileSync(fresh, 'new');
@@ -202,6 +231,10 @@ test('V1: the guard reports through a toast, excuses a host-approved edit, and n
     fs.writeFileSync(fact, 'planted later');
     await ev('session.idle', { sessionID: 'late' });
     assert.equal(toasts.length, 2, 'the first tool call took the baseline');
+    // The project layer's rule file, at the session's directory, is watched too (twin of the hook's).
+    fs.writeFileSync(path.join(sb.path, 'user-rules.draft.md'), 'project draft');
+    await ev('session.idle', { sessionID: 's' });
+    assert.equal(toasts.at(-1), LINE(2, `memory/x.md, ${path.basename(sb.path)}/user-rules.draft.md`));
     await assert.doesNotReject(h.event({}));
     await assert.doesNotReject(h['tool.execute.after'](null, null));
     const broken = await GeneseedGuard({ directory: sb.path, worktree: sb.path, client: { tui: { showToast: async () => { throw new Error('no tui'); } } } });

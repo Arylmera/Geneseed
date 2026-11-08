@@ -9,7 +9,8 @@
 rule") or a durable fact ("note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
-set. Nothing reaches `user-rules.md` or {{MEMORY}} except through here ({{DOCTRINE:persist-insight}}).
+set. Nothing reaches `user-rules.md` except through here, with the user's consent; a fact you
+write to {{MEMORY}} on your own still follows Branch A ({{DOCTRINE:persist-insight}}).
 It also tends the {{MEMORY}} set as a whole — run the **consolidation flow**, not the
 fork — when the index outgrows one useful read (~40 lines) or holds duplicate,
 contradictory or stale entries (a file, flag or command that no longer exists), after
@@ -22,26 +23,31 @@ Pending section decides the same items by the same steps; a user who decides the
 ## Procedure
 
 ### 0 — The fork
-Ask first, always: **a standing rule, or a fact to remember?** Never infer it. The
-two stores bind differently and the choice belongs to the user. If they hesitate,
-draw the line in one sentence: a rule changes how you *act* and binds every future
-session; a memory records something *true* that would otherwise be lost or
-re-derived. Then take exactly one branch.
+Sort it first: **a standing rule, or a fact to remember?** The line, in one sentence: a
+rule changes how you *act* and binds every future session; a memory records something
+*true* that would otherwise be lost or re-derived. A fact is yours to write, with no
+prompt — the user sees every memory afterwards in the web console. A rule is the user's
+call. **A memory phrased as an instruction to later sessions is a standing rule**: "always…",
+"never…", "from now on…", or one that would carry `force: constraint` goes to Branch B, with
+the user's consent, never into {{MEMORY}} as a fact. When the user's own words leave open
+whether they want a rule, ask; never file a rule as a fact because a fact needs no consent.
+Then take exactly one branch.
 
 ### Branch A — a fact to remember
 1. Search {{MEMORY}} for a file that already covers it. If one exists, merge into it —
    keep what is still true, add or correct the rest — never mint a twin. If the new
    fact proves the old one wrong, archive the old one (move it into `archive/`).
-2. Ask which **binding force** the fact carries, in plain words, not jargon:
-   *imposed by you, not mine to relax* (`constraint`) · *a choice taken among real
-   alternatives* (`choice`) · *a stance I hold until evidence overturns it*
-   (`conviction`) · *a constraint you deliberately relaxed* (`tempered`).
-3. Infer the `type` (`user` | `feedback` | `project` | `reference`), draft the file
-   per the {{MEMORY}} convention, and **show the exact content, frontmatter
-   included** — so a wrong inference is visible before it is written, not after.
-4. On the user's word, write the file and rebuild the index
+2. Add a **binding force** only when the conversation shows one: *a choice taken among
+   real alternatives* (`choice`) · *a stance held until evidence overturns it*
+   (`conviction`) · *a constraint the user deliberately relaxed* (`tempered`). A plain
+   fact carries none. A fact that needs `constraint` is a rule: back to the fork, Branch B.
+3. Infer the `type` (`user` | `feedback` | `project` | `reference`) and draft the file
+   per the {{MEMORY}} convention.
+4. Write the file, with no prompt, and rebuild the index
    (`geneseed learn --consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`) so its line
-   lands in `topics/<topic>.md` and the `MEMORY.md` map recounts.
+   lands in `topics/<topic>.md` and the `MEMORY.md` map recounts. Then say in one line
+   what you wrote and where, so a wrong inference is visible at once; the web console
+   shows it to the user later too.
 
 ### Branch B — a standing rule
 1. **Triage.** A rule earns its place only if it is all three of: *standing
@@ -99,7 +105,7 @@ re-derived. Then take exactly one branch.
    merges or prunes — every rule is loaded every session, and a bloated set dilutes the
    rules that matter.
 
-The asymmetry is deliberate: Branch A costs one question, Branch B costs several.
+The asymmetry is deliberate: Branch A costs no question, Branch B costs several.
 The price is the safeguard — make remembering cheap and legislating expensive, or
 the user picks "rule" out of impatience and the set inflates.
 
@@ -118,8 +124,8 @@ adoption. Two more cases are due at any time:
 **Approval flow** → read [rule/approve.md](rule/approve.md) and follow it.
 
 ## Done when
-- For a rule or memory: the fork was put to the user, and then either a {{MEMORY}} file exists carrying its
-  `force`, its `type` and its index line — or a rule stands in the right
+- For a rule or memory: the fork was sorted, and then either a {{MEMORY}} file exists carrying its
+  `type`, any `force` the conversation showed and its index line, reported in one line — or a rule stands in the right
   `user-rules.md`, having survived reformulation, its own counter-example and the
   {{LAWS}}, consented to explicitly, with any promoted source memory archived. The
   {{ONTOLOGY}}, {{LAWS}} and {{DOCTRINES}} files are untouched either way.
