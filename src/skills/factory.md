@@ -50,12 +50,16 @@ Repeat `geneseed factory next` and act on its JSON:
 ## Loop stages
 
 4. Call `next` before every loop, each task of a spec included: it records the launch that
-   `record` later checks. When it refuses a `LOOP.md` left by the previous loop, run
-   `git rm -f LOOP.md`, then `git commit -m "factory(<slug>): clear the previous loop"` (it asks),
-   then `next` again.
+   `record` later checks. When it refuses a `LOOP.md` left by the previous loop, remove it:
+   `git rm -f LOOP.md` when git tracks it, else delete the file (a loop that made no commit
+   leaves it untracked). Commit only when `git status` then shows the removal:
+   `git commit -m "factory(<slug>): clear the previous loop"` (it asks). Then `next` again.
+   A loop that ended `done` may instead be recorded `pass` while its `LOOP.md` is still there.
 5. Start the loop in this same worktree:
-   `geneseed loop init --title "<title>" --requirement "<requirement, plus the task when next gave one>" --graph <loop> --preset {{TRUST}} --factory <slug> --note "<notes[0]>"`
-   (drop `--note` when `notes` is empty; use `--note-file <path>` for a multi-line note). A loop
+   `geneseed loop init --title "<title>" --requirement "<requirement, plus the task when next gave one>" --graph <loop> --preset {{TRUST}} --factory <slug> --note-file <notes[0]>`
+   when `notes[0]` is the path of a stage's finding file (the usual carry), so the loop gets the
+   finding, not its path; `--note "<notes[0]>"` when it is plain text; neither when `notes` is
+   empty. A loop
    re-entered after a failure is a fresh loop: the reason arrives as its note.
 6. Follow the `loop` {{SKILL}} from *The cycle* through *The end*, skipping its Setup: the
    worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
