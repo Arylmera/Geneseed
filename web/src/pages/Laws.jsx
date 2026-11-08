@@ -391,13 +391,16 @@ function LawsOf({
       <span className="sr-only">: {why}</span>
     </span>
   )
-  // The two toggle columns, Rule text then Hook gate, each a cell of its own.
-  const cells = (text, gate) => (
-    <>
-      <span className="toggle-cell">{text}</span>
-      <span className="toggle-cell">{gate}</span>
-    </>
-  )
+  // The two toggle columns, Rule text and Hook gate, each a cell of its own. LawRow sets its
+  // Enforced by cell between them, so the pair is handed over apart.
+  const cells = (text, gate) => [
+    <span key="text" className="toggle-cell">
+      {text}
+    </span>,
+    <span key="gate" className="toggle-cell">
+      {gate}
+    </span>,
+  ]
   // The Hook gate cell: a switch, a locked state for a hook with no switch, or nothing.
   const hookCell = (r) => {
     if (GATE_SWITCH[r.addr]) return gateSwitch(r.addr, r.name)
@@ -589,17 +592,18 @@ function LawsOf({
       <span>Rule</span>
       <span data-col="latin">Latin name</span>
       <span data-col="status">Status</span>
-      <span data-col="enf">Enforced by</span>
-      {/* Below the widest layout the switch columns narrow and each label keeps its last word. */}
+      {/* Below the widest layout the switch columns narrow and each label keeps its last word.
+          With switches, Enforced by sits between them: status, text, enforcement, hook. */}
       {withToggle && (
-        <>
-          <span>
-            <span className="rh-cut">Rule </span>text
-          </span>
-          <span>
-            <span className="rh-cut">Hook </span>gate
-          </span>
-        </>
+        <span>
+          <span className="rh-cut">Rule </span>text
+        </span>
+      )}
+      <span data-col="enf">Enforced by</span>
+      {withToggle && (
+        <span>
+          <span className="rh-cut">Hook </span>gate
+        </span>
       )}
     </div>
   )

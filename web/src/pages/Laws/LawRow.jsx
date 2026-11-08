@@ -10,6 +10,14 @@ export default function LawRow({ law, isOpen, onToggle, rev, toggleCol = null, a
   // Each `data-col` cell has a twin of the same name in the band's header row (`colHead`), so a
   // container query drops a column from both at once. What a dropped column held reappears in
   // the rule cell as a `law-fold` line: decorative there, the row's label already reads it.
+  // With switches (`toggleCol` = [Rule text, Hook gate] cells), Enforced by leaves the disclosure
+  // button and sits between them: a switch cannot live inside a button, and the columns read
+  // Status, Rule text, Enforced by, Hook gate.
+  const enf = (
+    <span key="enf" className={`law-enf${enfTone}`} data-col="enf">
+      {law.enf}
+    </span>
+  )
   const head = (
     <>
       <span className="law-no" data-col="no">
@@ -45,9 +53,7 @@ export default function LawRow({ law, isOpen, onToggle, rev, toggleCol = null, a
       <span className={`law-status ${law.statusTone}`} data-col="status">
         {law.status}
       </span>
-      <span className={`law-enf${enfTone}`} data-col="enf">
-        {law.enf}
-      </span>
+      {toggleCol ? null : enf}
     </>
   )
   return (
@@ -60,7 +66,7 @@ export default function LawRow({ law, isOpen, onToggle, rev, toggleCol = null, a
       head={head}
       label={`${law.no ? law.no + ' ' : ''}${law.name}, ${law.status}, ${law.enf}`}
       rev={rev}
-      toggleCol={toggleCol}
+      toggleCol={toggleCol ? [toggleCol[0], enf, toggleCol[1]] : null}
       renderBody={(d) => <Markdown body={d.body || law.ess} links={d.links} />}
       srcLine={`$ geneseed law ${law.addr} · ${law.src}`}
       after={after}

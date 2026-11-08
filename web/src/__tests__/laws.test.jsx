@@ -116,6 +116,9 @@ describe('Constitution page — a header row under every open band', () => {
   const heads = (band) =>
     [...band.querySelectorAll('.law-rowhead > span')].map((e) => e.textContent)
   const FIVE = ['No.', 'Rule', 'Latin name', 'Status', 'Enforced by']
+  // A band with switches reads its last columns in the order a rule is judged: its status, its
+  // text switch, what enforces it, the hook switch (owner ask 2026-11-08).
+  const SEVEN = ['No.', 'Rule', 'Latin name', 'Status', 'Rule text', 'Enforced by', 'Hook gate']
 
   it('heads the Ethos, the Dictates and each open pack; a folded pack has none', async () => {
     const { container } = render(<Laws />)
@@ -128,7 +131,8 @@ describe('Constitution page — a header row under every open band', () => {
       if (h.className === 'pack-enable') h = h.nextElementSibling // the install hint sits between
       expect(h.className).toBe('law-rowhead')
       expect(h.getAttribute('aria-hidden')).toBe('true')
-      expect(heads(h.parentElement).slice(0, 5)).toEqual(FIVE)
+      const hs = heads(h)
+      expect(hs).toEqual(hs.length === 7 ? SEVEN : FIVE)
     }
     expect(container.querySelectorAll('.law-rowhead').length).toBe(5)
     fireEvent.click(screen.getByRole('button', { name: 'Craft' }))
@@ -144,8 +148,11 @@ describe('Constitution page — a header row under every open band', () => {
 // the same words as the column it stands in for. The show/hide itself was checked in a browser.
 describe('Constitution page — columns that fold into the rule cell', () => {
   const cols = (el) => [...el.querySelectorAll('[data-col]')].map((e) => e.dataset.col)
-  const ownCols = (row) =>
-    cols(row.classList.contains('has-toggle') ? row.querySelector('.law-disclosure') : row)
+  // A row with switches holds Enforced by between them, outside its disclosure button (a switch
+  // cannot sit inside a button), so its columns are read over the whole row, in DOM order.
+  const ownCols = (row) => cols(row)
+  const lastCells = (row) =>
+    [...row.querySelector('.toggle-col').children].map((c) => c.dataset.col || 'switch')
 
   it('each band header names the same droppable columns as its rows, in order', async () => {
     api.catalog.mockResolvedValue({ section: 'laws', items: [...ONT, ...INV, LAW4, ...DOC] })
@@ -163,6 +170,7 @@ describe('Constitution page — columns that fold into the rule cell', () => {
           expect(ownCols(r)).toEqual(cols(h))
           const toggles = r.querySelectorAll('.toggle-col > .toggle-cell').length
           expect(h.children.length).toBe(5 + toggles)
+          if (toggles) expect(lastCells(r)).toEqual(['switch', 'enf', 'switch'])
         }
         r = r.nextElementSibling
       }
@@ -1329,9 +1337,9 @@ describe('Constitution page — the secrets and done gate switches', () => {
     expect(cells[1].textContent).toBe('')
     expect(
       [...container.querySelectorAll('.law-rowhead')[1].querySelectorAll(':scope > span')]
-        .slice(-2)
+        .slice(-4)
         .map((e) => e.textContent),
-    ).toEqual(['Rule text', 'Hook gate'])
+    ).toEqual(['Status', 'Rule text', 'Enforced by', 'Hook gate'])
     expect(lawRow(container, 'II').querySelector('.law-enf').textContent).toBe('Instruction')
   })
 
