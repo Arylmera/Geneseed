@@ -1464,7 +1464,7 @@ test('the summary gate ends a rule at any heading, not only a rule heading', () 
 test('the summary gate flags a doctrine summary moved off its heading', () => {
   // `ruleSummaries` reads only the line under the heading, so one line lower is a blank Principle.
   const text = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
-  const line = '<!-- note: summary: If it repeats, make it a script or skill; reuse first. -->\n';
+  const line = '<!-- note: summary: If it repeats, automate it: script, skill or code, by the task. -->\n';
   const moved = plant(text, `${line}<!-- LEAN:begin -->\n`, `<!-- LEAN:begin -->\n${line}`);
   const problems = withFault({ [CRAFT_MD]: moved }, (root) => gate(root, 'm.ruleSummaryProblems()'));
   assert.ok(problems.some((x) => x.includes("rule craft 1 'automate-repetition' summary is not "
