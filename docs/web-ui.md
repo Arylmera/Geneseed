@@ -178,6 +178,25 @@ doctrine rule are all reachable by name; <kbd>↑</kbd>/<kbd>↓</kbd> to
 move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to clear. A bottom **Console** drawer
 streams the output of background jobs and keeps their history across reloads.
 
+**The Console drawer is a phase timeline.** The left column lists the runs, newest last. Each
+row has a status dot (green done, amber done with warnings, red failed, pulsing while it runs),
+the action, a short detail (the install, the commits pulled, the installs rebuilt) and the
+duration, with `✗` (failed), `⚠` (warnings) or `running` written beside it. A run whose output
+holds a failure line reads failed even when the job exited 0. The newest run is picked, and a new run takes the pick back from a click. The right
+column shows the picked run: its status pill, a `<duration> · N warnings · N notices` line and
+its numbered phases. A phase is one step the job ran (`$ <argv>`) or one install a `rebuild-all`
+rebuilt (`[rebuild-all] <host>:<scope>`), so an upgrade reads *Update the source*, then one
+*Rebuild* per install. Each phase states *Done*, *N warnings*, *N skipped*, *Failed* or
+*Running*. A warning (`[geneseed] WARN`) is an amber box: a short title, one sentence, and its
+full text under **Full text**. The `[rebuild-all] WARN` printed once after the last install is
+about the whole run, so it shows under **Run warnings**, not under that install. A refused link is a grey notice and counts as skipped. A failure
+line is red in its phase, and a failed job with no failure line marks its last phase failed
+with the last line it printed. A line the reader does not know stays in its phase as printed;
+lines before the first phase (the history keeps only an output's tail) go under **Other
+output**. **Full log** shows the raw output unchanged, for the picked run only. The one reader is
+`web/src/lib/runPhases.js`, and the prefixes it knows are listed at its top. On a narrow
+screen the run list stacks above the detail.
+
 ## Views
 
 ### Dashboard
