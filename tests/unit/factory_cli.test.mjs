@@ -486,7 +486,7 @@ test('F1: record reads the porcelain from a file redirected to stdin', () => {
 });
 
 // F1: the skill pipes `git status --porcelain --untracked-files=all | geneseed factory record`.
-// Windows PowerShell 5.1 re-encodes a native pipe: it puts a BOM before the first byte and ends
+// Windows PowerShell 5.1 re-encodes a native pipe: with a UTF-8 $OutputEncoding it puts a BOM before the first byte, and it ends
 // lines with CRLF (observed 2026-11-09). A clean spec porcelain must still record, and a dirty
 // line after the BOM must still be refused.
 test('F1: record reads a Windows PowerShell 5.1 pipe: a leading BOM and CRLF', () => {

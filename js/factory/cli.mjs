@@ -23,7 +23,7 @@
  * into `record`, in one command, so a new spec reaches the engine as its own path. No temp status
  * file and no shell variable: three attempts at those (F1/F2) shared a file across repos, broke on
  * zsh's read-only `$status`, or put free text back on the line. Windows PowerShell 5.1 pipes too,
- * but adds a leading BOM and CRLF; both are stripped below.
+ * but ends lines with CRLF, and adds a leading BOM when `$OutputEncoding` is UTF-8; both are stripped below.
  * The git gate (`GIT_GATE_RE`) asks on a line that holds the word `git` and the word `commit` or
  * `push`, so a record line whose spec path, carry path or outcome holds `commit` or `push` asks.
  * That ask is a false alarm the user answers yes to, and the skill says so; a shared or broken
@@ -172,7 +172,7 @@ const ACTIONS = {
         taskCount = countSpecTasks(text);
       }
       return recordStage(s, c, args.outcome, {
-        // Windows PowerShell 5.1 re-encodes a native pipe: a leading BOM and CRLF line ends
+        // Windows PowerShell 5.1 re-encodes a native pipe: CRLF line ends, and a leading BOM when $OutputEncoding is UTF-8
         porcelain: porcelain === null ? null : porcelain.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd(),
         specPath, taskCount, carry, loopStatus, loopTemplate, head,
         loopInitAt: loopInitAt(root),

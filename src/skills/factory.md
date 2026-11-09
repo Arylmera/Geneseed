@@ -46,7 +46,7 @@ Repeat `geneseed factory next` and act on its JSON.
 `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome>`.
 The same line works in PowerShell, which pipes too. Always use that porcelain form: plain
 `--porcelain` folds a new directory into one line, which the engine refuses. A carry is the path
-of the file the stage itself wrote (`--carry <that file>`), in the run's own worktree or notes.
+of the file the stage itself wrote (`--carry <that file>`), in the OS temp directory where the stage wrote it (never inside the worktree: a file there makes the porcelain dirty).
 Free text (the user's words for `decide`, a stop reason) never goes on the command line: write it
 with your file tool, never the shell, to a file whose name you make unique, such as
 `<os temp dir>/factory-<8 random hex>.txt`, then pass `--note-file <that file>` or
