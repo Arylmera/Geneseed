@@ -499,7 +499,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
   const err = tab === 'active' ? runs.error : error
 
   return (
-    <>
+    <div className="lib-wrap">
       {tab === 'active' ? null : (
         <InstallPicker
           className="page-pick"
@@ -601,6 +601,6 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           )}
         </article>
       </div>
-    </>
+    </div>
   )
 }

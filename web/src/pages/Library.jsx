@@ -513,7 +513,7 @@ export default function Library({
   }
 
   return (
-    <>
+    <div className="lib-wrap">
       <ErrorState error={err} style={{ margin: '0 0 var(--sp-3)' }} />
       {/* `lib-dossier` scopes the Library's own look: Docs, Loops and Kits reuse `.library`. */}
       <div className={`library lib-dossier${lock ? ' locked' : ''}${useOn ? ' uses' : ''}`}>
@@ -788,6 +788,6 @@ export default function Library({
           ) : null}
         </article>
       </div>
-    </>
+    </div>
   )
 }

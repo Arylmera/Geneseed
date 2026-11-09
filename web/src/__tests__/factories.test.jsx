@@ -93,6 +93,8 @@ describe('Factories — templates', () => {
     const rail = screen.getByRole('complementary', { name: 'Factories sections' })
     expect(rail.querySelector('h1').textContent).toBe('Factories')
     await waitFor(() => expect(text('.kind-list a', rail)).toEqual(['Templates1', 'Active1']))
+    // The panes sit in the `lib` size container the narrow tier queries (narrowPanes.test.js).
+    expect(rail.closest('.lib-wrap > .library')).not.toBeNull()
     const g = screen.getByRole('group', {
       name: 'bug-report-to-fix factory: intake, loop:bugfix, pr-open, merge-gate, retro',
     })

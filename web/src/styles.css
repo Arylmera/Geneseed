@@ -3018,6 +3018,10 @@ a.tier .tier-bar > span { background: var(--line-3); }
   min-height: calc(100vh - var(--topbar-h) - 150px); overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
 .library.locked { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); }
+/* The Library, Loops and Factories wrap `.library` in this: the panes fold by the width the page
+   gives them, not the viewport (the tier is after the breakpoints below). Docs has its own
+   container (.docs-wrap) and tiers. */
+.lib-wrap { container: lib / inline-size; }
 .lib-kinds { display: flex; flex-direction: column; gap: var(--sp-4); padding: 22px 14px; /* off-scale: 22px between --sp-5 and --sp-6; 14px between --sp-3 and --sp-4 */
   background: var(--bg-2); border-right: 1px solid var(--line); }
 .lib-title { display: flex; flex-direction: column; gap: 2px; /* off-scale: 2px hairline, below the 4px grid */ padding: 0 var(--sp-2); font-size: var(--fs-sm); }
@@ -3351,6 +3355,31 @@ a.kit-name:hover { color: var(--accent-text); }
 }
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
+}
+/* The Library's three panes, stacked (user, 2026-11-09): under 232 + 380 + 560 + 2px of
+   container the reader would share its row at under 560px, so the panes go one under the other
+   in reading order — the section header and its panels (a wrapped block, not a rail or a
+   sideways strip), the list (capped, scrolling on its own so the entry stays near), then the
+   entry at full width. Picking a row brings the entry into view (LibList, LibRows.jsx). After
+   the media tiers, and `.lib-wrap`-scoped, so it overrides their `.library` rules on these
+   pages and leaves Docs to its own. */
+@container lib (max-width: 1173px) {
+  .lib-wrap .library, .lib-wrap .library.locked { grid-template-columns: minmax(0, 1fr); }
+  .lib-wrap .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; /* off-scale: the phone rail's padding, as at 720px */ }
+  .lib-wrap .kind-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--sp-1);
+    overflow: visible; }
+  .lib-wrap .kind-list a { white-space: nowrap; }
+  .lib-wrap .rail-cats { flex-basis: 100%; position: static; width: auto; margin: 6px 0 0; /* off-scale: 6px between --sp-1 and --sp-2 */
+    padding: 0; border-left: 0; }
+  .lib-wrap .rail-cats ul { flex-direction: row; flex-wrap: wrap; gap: var(--sp-1); }
+  .lib-wrap .rail-cats button { width: auto; border: 1px solid var(--line); }
+  .lib-wrap .lib-list { border-right: 0; }
+  .lib-wrap .library .lib-rows { max-height: 45vh; }
+  .lib-wrap .library .lib-reader, .lib-wrap .library.locked .lib-reader { grid-column: auto;
+    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */ }
+}
+@container lib (max-width: 640px) {
+  .lib-wrap .library .lib-reader { padding: 20px 16px; /* off-scale: the phone reader's padding, as at 720px */ }
 }
 
 /* ============================ AGENT GLYPHS (components/AgentGlyph.jsx) ============ */

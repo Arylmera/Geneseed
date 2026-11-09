@@ -281,6 +281,47 @@ describe('Loops — templates', () => {
     expect(text('.loop-brick.on > b')).toEqual(['apply'])
   })
 
+  // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack, so
+  // the entry sits under the list: picking a row brings the entry into view (LibList). jsdom has
+  // no layout, so the two geometries are stubbed. Stacked: the reader's top is at or below the
+  // list's bottom. Side by side: they share a top. The entry a page opens on scrolls nothing.
+  describe('bringing the entry into view', () => {
+    const place = (readerTop, listBottom) => {
+      document.querySelector('.lib-reader').getBoundingClientRect = () => ({ top: readerTop })
+      document.querySelector('.lib-list').getBoundingClientRect = () => ({ bottom: listBottom })
+    }
+    const open = async (item) => {
+      const view = render(<Loops tab="templates" item={item} />)
+      await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+      const scroll = vi.fn()
+      document.querySelector('.lib-reader').scrollIntoView = scroll
+      return { view, scroll }
+    }
+
+    it('sits inside the `.lib-wrap` container the narrow tier queries', async () => {
+      await open('adr')
+      expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
+    })
+
+    it('scrolls to the entry when a row is picked in the stack', async () => {
+      const { view, scroll } = await open('adr')
+      expect(scroll).not.toHaveBeenCalled()
+      place(600, 500)
+      view.rerender(<Loops tab="templates" item="tiny" />)
+      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+      expect(scroll).toHaveBeenCalledTimes(1)
+      expect(scroll.mock.calls[0][0]).toMatchObject({ block: 'start' })
+    })
+
+    it('leaves the page where it is when the panes sit side by side', async () => {
+      const { view, scroll } = await open('adr')
+      place(100, 900)
+      view.rerender(<Loops tab="templates" item="tiny" />)
+      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+      expect(scroll).not.toHaveBeenCalled()
+    })
+  })
+
   // The list is keyboard-walkable like the Library's: arrows move focus between row links.
   it('walks the rows with the arrow keys', async () => {
     render(<Loops tab="templates" />)

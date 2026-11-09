@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import StatusBadge from './StatusBadge.jsx'
 import FilterInput from './FilterInput.jsx'
+import { motionOK } from '../lib/motion.js'
 
 // The origin of a skill or agent a kit ships, on its row and in its reader.
 export const KitBadge = ({ name }) => (
@@ -40,6 +41,8 @@ export function filterRows(rows, q) {
 // the filter (the Library's "Show" chips); the other lists pass none.
 export function LibList({ label, count, extra, tools, q, onQ, matched, inView, children }) {
   const rowsRef = useActiveRowInView(inView)
+  const listRef = useRef(null)
+  useEntryInView(listRef, inView)
   // After every render: the caller owns the rows, so any render may add or drop them.
   useLayoutEffect(() => rove(rowsRef.current))
   const [said, setSaid] = useState('')
@@ -60,7 +63,7 @@ export function LibList({ label, count, extra, tools, q, onQ, matched, inView, c
     rowsRef.current?.querySelector('.lib-row')?.focus()
   }
   return (
-    <section className="lib-list" aria-label={label} onKeyDown={onKeyDown}>
+    <section className="lib-list" aria-label={label} onKeyDown={onKeyDown} ref={listRef}>
       <div className="lib-list-head">
         <b>
           {label} <span className="mono dim">{count}</span>
@@ -192,4 +195,23 @@ export function useActiveRowInView(deps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
   return box
+}
+
+// Where the panes stack (the `lib` container tier in styles.css) the entry sits under the list,
+// so a row picked there would open off screen: bring the entry into view. Only a new selection
+// in the same section counts — not the entry a page opens on, nor the first row a new section
+// lights. "Stacked" is read from the layout (the reader starts at or below the list's bottom),
+// so the side-by-side panes and the Docs (page above its list) never scroll.
+function useEntryInView(listRef, [section, item]) {
+  const was = useRef([section, item])
+  useEffect(() => {
+    const [s0, i0] = was.current
+    was.current = [section, item]
+    if (!item || section !== s0 || item === i0) return
+    const list = listRef.current
+    const reader = list?.parentElement?.querySelector(':scope > .lib-reader')
+    if (!reader) return
+    if (reader.getBoundingClientRect().top < list.getBoundingClientRect().bottom - 1) return
+    reader.scrollIntoView?.({ behavior: motionOK() ? 'smooth' : 'auto', block: 'start' })
+  }, [listRef, section, item])
 }

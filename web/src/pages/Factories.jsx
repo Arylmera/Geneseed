@@ -290,7 +290,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
   const err = tab === 'active' ? runError : error
 
   return (
-    <>
+    <div className="lib-wrap">
       {tab === 'active' ? null : (
         <InstallPicker
           className="page-pick"
@@ -383,6 +383,6 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           )}
         </article>
       </div>
-    </>
+    </div>
   )
 }

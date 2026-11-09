@@ -125,6 +125,8 @@ describe('Library', () => {
       ['Wiki', '0', null],
       ['Setup files', '2', null],
     ])
+    // The panes sit in the `lib` size container the narrow tier queries (narrowPanes.test.js).
+    expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
   })
 
   // Every kind lists every install, so no list head names one.
