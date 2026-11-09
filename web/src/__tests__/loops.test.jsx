@@ -284,8 +284,23 @@ describe('Loops — templates', () => {
   // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack, so
   // the entry sits under the list: picking a row brings the entry into view (LibList). jsdom has
   // no layout, so the two geometries are stubbed. Stacked: the reader's top is at or below the
-  // list's bottom. Side by side: they share a top. The entry a page opens on scrolls nothing.
+  // list's bottom. Side by side: they share a top. The entry a page opens on scrolls nothing,
+  // nor a new section's first entry. The spy sits on the prototype from before the first render
+  // (jsdom has no scrollIntoView, so a call made at mount would otherwise vanish), and with no
+  // layout stubbed every rect is 0, which reads as stacked: a scroll at mount would be counted.
   describe('bringing the entry into view', () => {
+    let calls
+    let had
+    beforeEach(() => {
+      calls = []
+      had = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = function (opts) {
+        if (this.classList.contains('lib-reader')) calls.push(opts)
+      }
+    })
+    afterEach(() => {
+      Element.prototype.scrollIntoView = had
+    })
     const place = (readerTop, listBottom) => {
       document.querySelector('.lib-reader').getBoundingClientRect = () => ({ top: readerTop })
       document.querySelector('.lib-list').getBoundingClientRect = () => ({ bottom: listBottom })
@@ -293,9 +308,7 @@ describe('Loops — templates', () => {
     const open = async (item) => {
       const view = render(<Loops tab="templates" item={item} />)
       await screen.findByText('Record a decision.', { selector: '.reader-lede' })
-      const scroll = vi.fn()
-      document.querySelector('.lib-reader').scrollIntoView = scroll
-      return { view, scroll }
+      return view
     }
 
     it('sits inside the `.lib-wrap` container the narrow tier queries', async () => {
@@ -313,22 +326,32 @@ describe('Loops — templates', () => {
       expect(svg.closest('.loop-graph').style.getPropertyValue('--loop-w')).toBe(`${width}px`)
     })
 
-    it('scrolls to the entry when a row is picked in the stack', async () => {
-      const { view, scroll } = await open('adr')
-      expect(scroll).not.toHaveBeenCalled()
+    it('scrolls to the entry when a row is picked in the stack, not at mount', async () => {
+      const view = await open('adr')
+      expect(calls).toEqual([])
       place(600, 500)
       view.rerender(<Loops tab="templates" item="tiny" />)
       await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(scroll).toHaveBeenCalledTimes(1)
-      expect(scroll.mock.calls[0][0]).toMatchObject({ block: 'start' })
+      expect(calls).toHaveLength(1)
+      expect(calls[0]).toMatchObject({ block: 'start' })
     })
 
     it('leaves the page where it is when the panes sit side by side', async () => {
-      const { view, scroll } = await open('adr')
+      const view = await open('adr')
       place(100, 900)
       view.rerender(<Loops tab="templates" item="tiny" />)
       await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(scroll).not.toHaveBeenCalled()
+      expect(calls).toEqual([])
+    })
+
+    // A link into another section with its entry (a section and an item at once) is a new
+    // section, not a pick: its list starts at the top, so the page stays where it is.
+    it('leaves the page where it is when the section and the entry change together', async () => {
+      const view = await open('adr')
+      place(600, 500)
+      view.rerender(<Loops tab="bricks" item="apply" />)
+      await screen.findByText('Do it our way.')
+      expect(calls).toEqual([])
     })
   })
 
