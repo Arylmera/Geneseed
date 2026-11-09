@@ -68,9 +68,13 @@
  * TERMINATION BY CONSTRUCTION (J3, R8). `transitions` counts per task and resets with it. On top,
  * `runTransitions` counts every transition of the run, never resets, and stops the run past
  * `runCeiling`: `FACTORY_MAX_TRANSITIONS` until a spec is recorded, then
- * `FACTORY_MAX_TRANSITIONS` x its task count, set ONCE at the first --spec record. The count is
- * frozen there: a later --spec record may keep or lower it, never raise it, so no lap can buy a
- * task, a fresh budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
+ * `FACTORY_MAX_TRANSITIONS` x its task count. Until the first loop launches, each --spec record
+ * sets the count and the ceiling again: the spec's gate comes after its record, and an amend there
+ * may add tasks (G3). That window spends no fresh budget — no task has been reached, so the
+ * per-task count never resets in it — and the gate's amend cap bounds it. Once a loop has
+ * launched (`launched`, or a `loop:` stage in `history`, which never shrinks) the count is frozen:
+ * a later --spec record may keep or lower it, never raise it, so no lap can buy a task, a fresh
+ * budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
  * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
  * into several factory runs a human can review, not one run nobody reads to the end.
  */
@@ -196,6 +200,8 @@ export function initFactory({ title, requirement, factory, input = null }) {
 }
 
 const taskNo = (state) => state.tasks?.index ?? 0;
+// G3: the task count is frozen once any loop has launched (docblock: TERMINATION BY CONSTRUCTION).
+const tasksFrozen = (state) => state.launched != null || state.history.some((h) => loopOf(h?.stage) !== null);
 // The task as `next` and a replay hand it out: the owning stage is the engine's bookkeeping.
 const taskOut = ({ stage: _owner, ...task }) => task;
 
@@ -348,8 +354,8 @@ export function recordStage(state, { bricks }, outcome, {
     if (taskCount > FACTORY_MAX_TASKS) {
       throw new Error(`${specPath} lists ${taskCount} tasks; a factory runs ${FACTORY_MAX_TASKS} at most — split the requirement`);
     }
-    if (state.taskCount !== null && taskCount > state.taskCount) {
-      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen at the first --spec record`);
+    if (state.taskCount !== null && tasksFrozen(state) && taskCount > state.taskCount) {
+      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen when the first loop launched`);
     }
   }
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
@@ -358,7 +364,7 @@ export function recordStage(state, { bricks }, outcome, {
   if (isFork(from, bricks) && state.factory.stages.includes(edge.to)) state.lane = edge.to;
   if (isLoop) state.launched = null;
   if (specPath !== null) {
-    if (state.taskCount === null) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }
+    if (state.taskCount === null || !tasksFrozen(state)) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }
     state.tasks = { path: specPath, count: taskCount, index: 1, stage: null };
     state.taskHigh = Math.max(state.taskHigh, 1);
   }

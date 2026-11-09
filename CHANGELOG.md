@@ -20,6 +20,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Fixed
 - **A loop's discard no longer stashes `FACTORY.md`.** The `loop` skill's discard kept only `LOOP.md` out of the stash, so a loop run as a factory stage stashed the factory's state with the attempt: an untracked `FACTORY.md` was lost, and a tracked one rolled its counters back. The discard now keeps both engine files, and the `checks` and `review-panel` bricks, which delete the untracked files their commands created, never touch either.
 - **`geneseed factory record --spec` refuses a spec that is not at `specs/<slug>/spec.md`.** It took any path inside the worktree and stored it, and every later action then refused `FACTORY.md` as unreadable. The refusal now comes first, names the required shape, and leaves the state as it was. The `--spec` help names the shape too.
+- **An amend at the spec gate may add tasks.** The factory froze the task count at the first `--spec` record, which comes before the spec's human gate, so a spec amended to list more tasks was refused. The count, and the run-wide ceiling with it, now follow each `--spec` record until the first loop launches; from then on they are frozen as before. The amend cap of 3, the per-task ceiling and the 20-task cap still bound every run.
 
 ## [5.0.4] — 2026-11-09
 

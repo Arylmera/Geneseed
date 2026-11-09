@@ -365,15 +365,15 @@ test('fork: a gate\'s ok on a $lane edge re-enters the lane taken', () => {
   assert.deepEqual(s.counters, { rework: 1 });
 });
 
-// Termination by construction: the task count is frozen at the first --spec record, capped at
-// FACTORY_MAX_TASKS, and the run-wide ceiling is computed from it once.
+// Termination by construction: the task count is frozen once the first loop launches, capped at
+// FACTORY_MAX_TASKS, and the run-wide ceiling is computed from it then.
 test('tasks: a re-recorded spec may not grow, so laps that grow the spec still stop', () => {
   const s = start(redoFactory());
   let count = 2; let refused = 0;
   for (let i = 0; i < 200 && s.status === 'running'; i += 1) {
     if (s.stage === 'spec') {
       try { recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: count }); } catch (e) {
-        assert.equal(e.message, `specs/r/spec.md lists ${count} tasks, more than the 2 frozen at the first --spec record`);
+        assert.equal(e.message, `specs/r/spec.md lists ${count} tasks, more than the 2 frozen when the first loop launched`);
         refused += 1;
         recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 2 });
       }
@@ -394,15 +394,47 @@ test('tasks: more than FACTORY_MAX_TASKS tasks are refused', () => {
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 20 }), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
 });
 
-test('R8: the run-wide ceiling is fixed by the first spec, and a smaller re-record keeps it', () => {
+// R8: once a loop has run, the ceiling is fixed; a smaller re-record (lint sends the work back
+// to the spec) lowers the task list but keeps the ceiling.
+test('R8: the run-wide ceiling is fixed once a loop launched, and a smaller re-record keeps it', () => {
   const s = start(redoFactory());
   assert.equal(s.runCeiling, FACTORY_MAX_TRANSITIONS);
   recordStage(s, CATALOG, 'pass', SPEC); decideFactory(s, CATALOG, 'ok');
   assert.equal(s.runCeiling, 2 * FACTORY_MAX_TRANSITIONS);
-  s.stage = 'spec';
+  loopRec(s, 'pass'); loopRec(s, 'pass');
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { stage: 'spec' });
   recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 1 }); decideFactory(s, CATALOG, 'ok');
   assert.equal(s.runCeiling, 2 * FACTORY_MAX_TRANSITIONS);
+  assert.equal(s.taskCount, 2);
   assert.deepEqual(s.tasks, { path: 'specs/r/spec.md', count: 1, index: 1, stage: null });
+});
+
+// G3: the spec's gate comes after its record, so an amend there may make the re-run spec list
+// more tasks. Until the first loop launches, a --spec record sets the count and the ceiling again
+// (up or down); the amend cap of 3 bounds that window. Once a loop has launched, a larger count
+// is refused — `launched` alone already freezes it, before the loop records anything.
+test('G3: an amended spec may grow until the first loop launches, then the count is frozen', () => {
+  const s = start(redoFactory());
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', SPEC), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  assert.deepEqual(decideFactory(s, CATALOG, 'amend', 'split task 2'), { resumed: true });
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 3 }), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  assert.deepEqual([s.taskCount, s.runCeiling, s.tasks.count], [3, 3 * FACTORY_MAX_TRANSITIONS, 3]);
+  decideFactory(s, CATALOG, 'amend', 'drop task 3');
+  recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 1 });
+  assert.deepEqual([s.taskCount, s.runCeiling, s.tasks.count], [1, FACTORY_MAX_TRANSITIONS, 1]);
+  decideFactory(s, CATALOG, 'amend', 'put task 2 back');
+  recordStage(s, CATALOG, 'pass', SPEC);
+  assert.deepEqual([s.taskCount, s.runCeiling], [2, 2 * FACTORY_MAX_TRANSITIONS]);
+  assert.deepEqual(decideFactory(s, CATALOG, 'amend', 'a fourth amend'), { stopped: 'gate amended 3 times at spec' });
+  // frozen by the launch alone: the stage is the loop's, so a spec record is a hand-edit away
+  const t = start(redoFactory());
+  recordStage(t, CATALOG, 'pass', SPEC); decideFactory(t, CATALOG, 'ok');
+  nextStage(t, CATALOG, LAUNCH);
+  t.stage = 'spec';
+  const before = JSON.stringify(t);
+  assert.throws(() => recordStage(t, CATALOG, 'pass', { ...SPEC, taskCount: 3 }),
+    /^Error: specs\/r\/spec\.md lists 3 tasks, more than the 2 frozen when the first loop launched$/);
+  assert.equal(JSON.stringify(t), before);
 });
 
 // R2: when the child loop's LOOP.md is still there, its status decides what the stage may report.
