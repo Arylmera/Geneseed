@@ -421,3 +421,15 @@ test('D9: the three shipped factories carry the default review seat table', () =
     assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).review, D9, name);
   }
 });
+
+// G1: a loop run as a factory stage shares its worktree with FACTORY.md. Every stash the loop
+// skill gives must keep BOTH engine files out of it: stashed, an untracked FACTORY.md is lost,
+// and a tracked one rolls its counters and launch back.
+const shipped = (rel) => readFileSync(path.resolve(import.meta.dirname, '../../src', rel), 'utf8');
+test('G1: every stash in the loop skill keeps LOOP.md and FACTORY.md out of it', () => {
+  const stashes = shipped('skills/loop.md').split('\n').filter((l) => /stash -u/.test(l));
+  assert.equal(stashes.length, 1, 'the loop skill stashes in one place: the discard');
+  for (const l of stashes) {
+    assert.ok(l.includes(':^LOOP.md') && l.includes(':^FACTORY.md'), `stashes an engine file: ${l}`);
+  }
+});

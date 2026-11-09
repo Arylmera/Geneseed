@@ -34,7 +34,8 @@ nothing. Dispatch a seat with no verdict once more; a second time without one fa
 
 Before you record, put the tree back as it was: restore every tracked file a seat changed (`git
 restore --staged --worktree -- <path>`) and delete every untracked file a seat created (a test
-run's output), naming each one in the finding. Write one file in the OS temp directory: each
+run's output), naming each one in the finding. Never touch `FACTORY.md` or `LOOP.md`: they are
+the run's state. Write one file in the OS temp directory: each
 seat's verdict, then the findings that fail it (`file:line`, what is wrong, what to do instead),
 then the advisory points. Pass on only findings about the diff, and never quote holdout text.
 Report `fail` when any seat failed, else `pass`, with that file's path.

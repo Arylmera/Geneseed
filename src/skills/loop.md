@@ -77,8 +77,9 @@ What `score --diff`, `decide` and `record` print back:
   `origin` and a `message_file` path without spaces: if the path has a space, quote it and accept
   that the gate asks; with no remote, report and stop instead of retrying.
 - **`{discard: true}`** (with `resplit` when an inner ring was exhausted) — set the attempt aside,
-  keeping `LOOP.md`: `git stash -u -m loop-discarded -- . :^LOOP.md` (never `git stash push` —
-  the word `push` trips the git gate mid-run).
+  keeping the engine files: `git stash -u -m loop-discarded -- . :^LOOP.md :^FACTORY.md` (never
+  `git stash push` — the word `push` trips the git gate mid-run). `FACTORY.md` is the factory
+  run's state when this loop is one of its stages: stashed, the run would lose it or roll it back.
 - **`{done: true}`**, **`{empty}`**, **`{resumed}`**, **`{dropped}`**, **`{node}`**, **`{verify}`**,
   **`{awaiting}`** (a gate), **`{stopped}`**, a declared score, and any result with
   `commit: false` (a blocking diff score included — it surfaces as `{awaiting}`) — call `next`

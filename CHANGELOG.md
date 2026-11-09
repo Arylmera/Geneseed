@@ -17,6 +17,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **The Factories page draws every `loop:` stage as a compact box.** On the main path as in a fork's lanes, a loop stage names its loop over `whole loop` (or `not in catalogue`), and during a run `at <node>` names the child loop's step. The ring no longer sits inside the factory graph; the Loops page still draws it.
 - **The factory transition ceiling is 60 per task** (was 30), and so at most 1200 over a run, for the two new stages and their laps.
 
+### Fixed
+- **A loop's discard no longer stashes `FACTORY.md`.** The `loop` skill's discard kept only `LOOP.md` out of the stash, so a loop run as a factory stage stashed the factory's state with the attempt: an untracked `FACTORY.md` was lost, and a tracked one rolled its counters back. The discard now keeps both engine files, and the `checks` and `review-panel` bricks, which delete the untracked files their commands created, never touch either.
+
 ## [5.0.4] — 2026-11-09
 
 ### Added

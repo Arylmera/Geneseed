@@ -37,7 +37,8 @@ non-zero: name the first failing command and copy the last 40 lines of its outpu
 too when a command changed a tracked file, naming each file: a lint that fixes what it finds hides
 what it found. Afterwards, whatever the outcome, put the tree back: restore every tracked file the
 commands changed (`git restore --staged --worktree -- <path>`) and delete every untracked file
-they created, naming each one in the finding. A command that times out, or whose
+they created, naming each one in the finding. Never touch `FACTORY.md` or `LOOP.md`: they are the
+run's state, not a command's output. A command that times out, or whose
 tool is missing, is a `fail` too: mark it `environment`, so the loop knows its code cannot fix it.
 
 Only when every command passes, list the files the branch changed: `git diff --name-only
