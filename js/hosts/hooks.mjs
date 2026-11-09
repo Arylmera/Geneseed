@@ -54,7 +54,7 @@
 import { readFileSync, readlinkSync, realpathSync, statSync, appendFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
-import { normcase } from '../lib/paths.mjs';
+import { normcase, within } from '../lib/paths.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
@@ -1339,6 +1339,43 @@ function toolGate(args) {
   // Claude/OpenClaude route their `Skill|Agent|Task` matcher here (js/hosts/usage.mjs).
   recordUse(args.root, payload);
   const ti = (payload && payload.tool_input) || {};
+  if (payload && READ_TOOLS.has(payload.tool_name)) {
+    return payload.agent_type === 'developer' && holdoutTarget(payload.tool_name, ti, payload.cwd)
+      ? deny(args, 'tool-gate', 'holdout', HOLDOUT_DENY) : 0;
+  }
   return typeof ti.command === 'string' ? gitDecide(args, payload) : ruleDecide(args, payload);
+}
+
+/**
+ * HOLDOUT (factories D10, C10). Claude Code's `Read|Grep|Glob` matcher routes here, and the
+ * `developer` subagent (`agent_type`, set on every tool event inside a subagent — hooks docs,
+ * common input fields) is refused any read under `machineDir()/holdout/`: the scenarios a factory's
+ * judge plays must stay unseen by the agent that writes the code. A read never reaches
+ * `ruleDecide`, which would judge its path as a write. Grep and Glob recurse, so a search rooted at
+ * an ANCESTOR of the folder (home, `~/.config/geneseed`) is refused too; Grep's `pattern` is a
+ * content regex, never a path, and Glob's is read up to its first wildcard. Pure string work, no
+ * fs call: this runs on every read of every session. Bash `cat` is out of reach (R9), as is every
+ * other host: there the folder is protected only by its place outside the worktree and by R5.
+ */
+const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
+const HOLDOUT_DENY = 'Holdout scenarios are hidden from the developer by design (factory rule): '
+  + 'build from the work item and the notes you were given, never from this folder.';
+function holdoutTarget(tool, ti, cwd) {
+  const root = path.join(machineDir(), 'holdout');
+  const at = typeof cwd === 'string' && cwd ? cwd : process.cwd();
+  const str = (v) => (typeof v === 'string' && v ? v : null);
+  if (tool === 'Read') {
+    const f = str(ti.file_path);
+    return f !== null && within(path.resolve(at, f), root);
+  }
+  // A search reaches everything under its base: the folder itself, or one of its ancestors.
+  let base = path.resolve(at, str(ti.path) ?? '.');
+  if (tool === 'Glob' && str(ti.pattern)) {
+    const lead = ti.pattern.split(/[*?[{]/)[0];
+    // The literal lead up to its last separator: `hol*` searches the folder that holds `holdout`.
+    const cut = Math.max(lead.lastIndexOf('/'), lead.lastIndexOf('\\'));
+    if (cut >= 0) base = path.resolve(base, lead.slice(0, cut + 1));
+  }
+  return within(base, root) || within(root, base);
 }
 export const cmdToolGate = guardGate(toolGate, 'tool-gate');

@@ -6,13 +6,18 @@
     "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",
     "Push only this worktree's own branch."
   ],
-  "stages": ["intake", "loop:bugfix", "pr-open", "merge-gate", "retro"],
+  "stages": ["intake", "holdout-write", "loop:bugfix", "holdout", "pr-open", "merge-gate", "retro"],
   "start": "intake",
   "edges": [
-    { "from": "intake", "on": "pass", "to": "loop:bugfix" },
+    { "from": "intake", "on": "pass", "to": "holdout-write" },
     { "from": "intake", "on": "fail", "to": "$stop" },
-    { "from": "loop:bugfix", "on": "pass", "to": "pr-open" },
+    { "from": "holdout-write", "on": "pass", "to": "loop:bugfix" },
+    { "from": "holdout-write", "on": "fail", "to": "$stop" },
+    { "from": "loop:bugfix", "on": "pass", "to": "holdout" },
     { "from": "loop:bugfix", "on": "fail", "to": "$stop" },
+    { "from": "holdout", "on": "pass", "to": "pr-open" },
+    { "from": "holdout", "on": "fail", "to": "loop:bugfix" },
+    { "from": "holdout", "on": "error", "to": "$stop" },
     { "from": "pr-open", "on": "pass", "to": "merge-gate" },
     { "from": "pr-open", "on": "fail", "to": "$stop" },
     { "from": "merge-gate", "on": "pass", "to": "retro" },
@@ -20,5 +25,8 @@
     { "from": "merge-gate", "on": "none", "to": "retro" },
     { "from": "retro", "on": "pass", "to": "$close" }
   ],
-  "cycles": [{ "name": "ci", "nodes": ["loop:bugfix", "pr-open", "merge-gate"], "max": 2 }]
+  "cycles": [
+    { "name": "holdout", "nodes": ["loop:bugfix", "holdout"], "max": 2 },
+    { "name": "ci", "nodes": ["loop:bugfix", "holdout", "pr-open", "merge-gate"], "max": 2 }
+  ]
 }

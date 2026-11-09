@@ -39,7 +39,9 @@ The agent then:
 
 1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched.
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
-3. Steps the run: `intake` writes the work item, the `bugfix` loop fixes it commit by commit, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `intake` and picks the loop from `bugfix`, `feature`, `deps-upgrade` and `refactor`. Red CI then sends the work back to that loop.
+3. Steps the run: `intake` writes the work item, `holdout-write` writes the holdout scenarios outside the worktree, the `bugfix` loop fixes it commit by commit, `holdout` plays the scenarios against the fix, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `holdout-write` and picks the loop from `bugfix`, `feature`, `deps-upgrade` and `refactor`. A failed scenario or red CI then sends the work back to that loop.
+
+The holdout scenarios are checks the developer never sees: see [Holdout scenarios](../concepts/factories.md#holdout-scenarios). You can read them yourself in `~/.config/geneseed/holdout/<slug>/`; never paste them into the chat while the run is going, or the developer may see them.
 
 ## Build from an analysis
 
@@ -55,11 +57,15 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 2. `spec` writes `specs/<slug>/spec.md`: the scope, acceptance criteria in EARS form, and an
    ordered task list (20 tasks at most). The run then stops for you. Read the spec and answer
    `ok`, `no`, or `amend` with your corrections; an amend rewrites the spec.
-3. After your `ok`, the agent commits the spec (the commit asks you) and runs the `feature` loop
-   once per task, in order. `geneseed factory next` names each one as `task <i>/<n>`.
-4. After the last task, `pr-open` opens one PR for all of them, and `merge-gate` waits for CI.
-5. Red CI sends the work back to the `feature` loop as one extra task, "make CI green", with the
-   failing checks as its first note. That is twice at most; a third red result stops the run.
+3. After your `ok`, the agent commits the spec (the commit asks you), `holdout-write` writes the
+   holdout scenarios from it, and the agent runs the `feature` loop once per task, in order.
+   `geneseed factory next` names each one as `task <i>/<n>`.
+4. After the last task, `holdout` plays the scenarios, `pr-open` opens one PR for all of them,
+   and `merge-gate` waits for CI.
+5. A failed scenario sends the work back to the `feature` loop as one extra task, with one
+   sentence per failure (observed against expected) as its first note. Red CI does the same, with
+   the failing checks as the note: "make CI green". Each is twice at most; a third failure stops
+   the run.
 
 ## Where it stops for you
 
@@ -71,7 +77,7 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 | `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. |
 | The close commit | The last commit removes `FACTORY.md`, and it asks. Its push runs CI again: the agent reads the checks once more and reports the final state. |
 
-Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the one `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run.
+Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the one `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run. A failed holdout scenario works the same way, with its own count of two. A holdout `error` stops the run: the diff touched the holdout folder, or a scenario could not be played.
 
 ## When it ends
 

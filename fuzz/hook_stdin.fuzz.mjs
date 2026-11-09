@@ -128,6 +128,50 @@ test('rule-gate keeps its output contract in an application repo, on session-bea
   }), { numRuns: RUNS, examples: [[MUST_DENY]] });
 });
 
+// The holdout deny (factories C10) rides `tool-gate` on Claude's `Read|Grep|Glob` group, which
+// fires on every read of every session: a throw there is an ask on every read. Whatever the read
+// carries, the verdict is nothing or a deny, and a deny only for `agent_type: "developer"`. The
+// machine dir is the temp dir (XDG_CONFIG_HOME), so the anchor read under its holdout folder must
+// be refused.
+const HOLDOUT_PATHS = ['xdg/geneseed/holdout/run/a.md', 'xdg/geneseed', 'xdg', '.', '..', '', 'C:\\', '/'];
+const holdoutRead = fc.record({
+  tool_name: fc.oneof(fc.constantFrom('Read', 'Grep', 'Glob'), fc.string()),
+  agent_type: fc.oneof(fc.constantFrom('developer', 'tester', ''), fc.constant(undefined), fc.jsonValue()),
+  tool_input: fc.oneof(fc.jsonValue(), fc.record({
+    file_path: fc.oneof(fc.constantFrom(...HOLDOUT_PATHS), fc.string(), fc.jsonValue()),
+    path: fc.oneof(fc.constantFrom(...HOLDOUT_PATHS), fc.constant(undefined), fc.string(), fc.jsonValue()),
+    pattern: fc.oneof(fc.constantFrom('**/*.md', 'xdg/geneseed/hold*/**', '[', '{a,b}'), fc.string(), fc.jsonValue()),
+  })),
+  cwd: fc.oneof(fc.constant(undefined), fc.string(), fc.jsonValue()),
+}).map((v) => JSON.stringify(v));
+const READ_ANCHOR = JSON.stringify({ tool_name: 'Read', agent_type: 'developer',
+  tool_input: { file_path: 'xdg/geneseed/holdout/run/a.md' } });
+
+test('tool-gate on a read prints nothing or a deny, and denies only the developer', () => {
+  fc.assert(fc.property(holdoutRead, (input) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, input);
+      const fd = fs.openSync(inFile, 'r');
+      let p;
+      try {
+        p = spawnSync(process.execPath, [HOOK, 'tool-gate', '--root', path.join(dir, 'cfg')], { cwd: dir, encoding: 'utf8',
+          windowsHide: true, stdio: [fd, 'pipe', 'pipe'], env: { ...process.env, XDG_CONFIG_HOME: path.join(dir, 'xdg') } });
+      } finally { fs.closeSync(fd); }
+      const r = { rc: p.status, out: p.stdout, err: p.stderr };
+      const read = JSON.parse(input);
+      if (!['Read', 'Grep', 'Glob'].includes(read.tool_name)) return; // not a read: the other gates' contract
+      assertWellFormed('tool-gate', input, r);
+      if (r.out) {
+        assert.equal(JSON.parse(r.out).hookSpecificOutput?.permissionDecision, 'deny', `not a deny: ${r.out.slice(0, 200)}`);
+        assert.equal(read.agent_type, 'developer', `a deny for a non-developer read: ${input.slice(0, 200)}`);
+      }
+      if (input === READ_ANCHOR) assert.ok(r.out, 'the anchor developer read under the holdout folder was not refused');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS, examples: [[READ_ANCHOR]] });
+});
+
 // The done gate (#289) rides `learn` on Stop, where stdout is a verdict too: whatever the
 // transcript holds — torn lines, wrong types, random tool calls — `learn` exits 0 and prints
 // nothing or exactly one `{"decision":"block"}`. `$GENESEED_LLM` is unset, so nothing spawns.
