@@ -106,6 +106,9 @@ const kinds = () =>
     a.getAttribute('aria-current'),
   ])
 
+// The rail (the wide layout's sections and categories): the stacked toolbar holds a second copy.
+const rail = () => within(document.querySelector('.lib-kinds'))
+
 describe('Library', () => {
   // The kind on screen counts its fleet-wide list (2 agents here), not the one install that
   // `overview.counts` describes (18); the other kinds keep its counts.
@@ -580,7 +583,7 @@ describe('skill classes', () => {
   })
 
   const railNames = () =>
-    [...document.querySelectorAll('.rail-cats button')].map((b) =>
+    [...document.querySelectorAll('.lib-kinds .rail-cats button')].map((b) =>
       [...b.querySelectorAll('span:not(.cdot)')].map((x) => x.textContent).join(' '),
     )
 
@@ -589,69 +592,75 @@ describe('skill classes', () => {
       Promise.resolve({ section, items: section === 'skills' ? SKILLS : [] }),
     )
     render(<Library section="skills" overview={overview({ skills: 5 })} />)
-    await waitFor(() => expect(document.querySelector('.rail-cats')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('.lib-kinds .rail-cats')).toBeTruthy())
     // The types sit in the rail, right after Skills, and nowhere else: no banner over the card.
     const nav = screen.getByRole('navigation', { name: 'Kinds' })
-    const list = screen.getByRole('list', { name: 'Skill types' })
+    const list = rail().getByRole('list', { name: 'Skill types' })
     expect(nav.querySelector('a[aria-current="page"]').nextElementSibling).toBe(list.parentElement)
-    expect(document.querySelectorAll('.rail-cats').length).toBe(1)
+    expect(document.querySelectorAll('.lib-kinds .rail-cats').length).toBe(1)
     expect(railNames()).toEqual(['All 5', 'Design 1', 'Build 2', 'Ship 1', 'Custom 1'])
     // The share bar: one segment per class, grown by its count.
-    expect([...document.querySelectorAll('.rail-mix span')].map((s) => s.style.flexGrow)).toEqual([
-      '1',
-      '2',
-      '1',
-      '1',
-    ])
+    expect(
+      [...document.querySelectorAll('.lib-kinds .rail-mix span')].map((s) => s.style.flexGrow),
+    ).toEqual(['1', '2', '1', '1'])
     expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
       'Design',
       'Build',
       'Ship',
       'Custom',
     ])
-    fireEvent.click(screen.getByRole('button', { name: /^Build/ }))
-    expect(screen.getByRole('button', { name: /^Build/ }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(rail().getByRole('button', { name: /^Build/ }))
+    expect(
+      rail()
+        .getByRole('button', { name: /^Build/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
     expect([...document.querySelectorAll('.lib-row')].length).toBe(2)
     expect([...document.querySelectorAll('.lib-group')].map((g) => g.textContent)).toEqual([
       'Build',
     ])
-    fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+    fireEvent.click(rail().getByRole('button', { name: /^All/ }))
     expect([...document.querySelectorAll('.lib-row')].length).toBe(5)
   })
 
-  // The stacked layout's menus (LibMenus; styles.css shows them only in the `lib` tier, where
-  // the rail is hidden): Section ▾ lists the same kinds in the same order whatever kind is open,
-  // and Category ▾ exists only where the kind has types (Skills), then narrows the list.
-  it('offers the same Section menu on every kind, and a Category menu on Skills only', async () => {
+  // The stacked layout's toolbar (LibList; styles.css shows it only in the `lib` tier, where
+  // the rail is hidden): the same kinds in the same order as a segmented control whatever kind is
+  // open, each with its count once, the open one marked; the type chips only where the kind has
+  // types (Skills), narrowing the list. A locked Library (Personal) has no kinds to switch.
+  it('leads the stacked toolbar with the same kinds on every kind, chips on Skills only', async () => {
     api.catalog.mockImplementation((section) =>
       Promise.resolve({ section, items: section === 'skills' ? SKILLS : [] }),
     )
-    const sections = () => {
-      fireEvent.click(screen.getByRole('button', { name: /^Section/ }))
-      const menu = document.getElementById(
-        screen.getByRole('button', { name: /^Section/ }).getAttribute('aria-controls'),
-      )
-      const names = [...menu.querySelectorAll('a')].map((a) => a.firstChild.textContent)
-      fireEvent.keyDown(document, { key: 'Escape' })
-      return names
-    }
+    const seg = () =>
+      [...document.querySelectorAll('.lib-toolbar .lib-seg a')].map((a) => [
+        a.firstChild.textContent,
+        a.getAttribute('aria-current'),
+      ])
     const { unmount } = render(<Library section="skills" overview={overview({ skills: 5 })} />)
-    await waitFor(() => expect(document.querySelector('.rail-cats')).toBeTruthy())
-    expect(screen.getByRole('button', { name: /^Section/ }).textContent).toMatch(/Skills\s*5/)
-    const onSkills = sections()
-    expect(onSkills).toEqual(['Skills', 'Agents', 'Wiki', 'Setup files'])
-    const catBtn = screen.getByRole('button', { name: /^Category/ })
-    fireEvent.click(catBtn)
-    const catMenu = document.getElementById(catBtn.getAttribute('aria-controls'))
-    fireEvent.click(within(catMenu).getByRole('button', { name: /^Build/ }))
+    await waitFor(() => expect(document.querySelector('.lib-toolbar .rail-cats')).toBeTruthy())
+    expect(seg()).toEqual([
+      ['Skills', 'page'],
+      ['Agents', null],
+      ['Wiki', null],
+      ['Setup files', null],
+    ])
+    expect(document.querySelector('.lib-toolbar').firstElementChild.className).toBe('lib-seg')
+    const tb = document.querySelector('.lib-toolbar')
+    fireEvent.click(within(tb).getByRole('button', { name: /^Build/ }))
     expect([...document.querySelectorAll('.lib-row')].length).toBe(2)
+    expect(document.querySelector('.lib-list-toggle').textContent).toMatch(/^2 skills/)
     unmount()
 
-    render(<Library section="agents" overview={overview({})} />)
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Section/ })).toBeTruthy())
-    expect(screen.getByRole('button', { name: /^Section/ }).textContent).toMatch(/Agents/)
-    expect(sections()).toEqual(onSkills)
-    expect(screen.queryByRole('button', { name: /^Category/ })).toBeNull()
+    const second = render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() => expect(seg().length).toBe(4))
+    expect(seg().map(([n]) => n)).toEqual(['Skills', 'Agents', 'Wiki', 'Setup files'])
+    expect(seg()[1][1]).toBe('page')
+    expect(document.querySelector('.lib-toolbar .lib-chips')).toBeNull()
+    second.unmount()
+
+    render(<Library lock="memory" base="#/personal/memory" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('.lib-toolbar')).toBeTruthy())
+    expect(document.querySelector('.lib-toolbar .lib-seg')).toBeNull()
   })
 
   // Memory facts sit under their topic, in the map's (sorted) topic order, so one topic's facts
@@ -690,17 +699,17 @@ describe('skill classes', () => {
       }),
     )
     const { rerender } = render(<Library section="skills" overview={overview({ skills: 5 })} />)
-    await waitFor(() => expect(document.querySelector('.rail-cats')).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: /^Ship/ }))
+    await waitFor(() => expect(document.querySelector('.lib-kinds .rail-cats')).toBeTruthy())
+    fireEvent.click(rail().getByRole('button', { name: /^Ship/ }))
     expect([...document.querySelectorAll('.lib-row')].length).toBe(1)
 
     rerender(<Library section="agents" overview={overview({ skills: 5 })} />)
     await waitFor(() => expect(screen.getAllByText('Tester').length).toBeGreaterThan(0))
-    expect(document.querySelector('.rail-cats')).toBeNull()
+    expect(document.querySelector('.lib-kinds .rail-cats')).toBeNull()
 
     rerender(<Library section="skills" overview={overview({ skills: 5 })} />)
     await waitFor(() => expect([...document.querySelectorAll('.lib-row')].length).toBe(5))
-    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(rail().getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
   })
 })
 
@@ -960,7 +969,7 @@ describe('Library usage', () => {
   it('counts and narrows within the picked skill class', async () => {
     render(<Library section="skills" overview={overview({})} />)
     await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: /^Build/ }))
+    fireEvent.click(rail().getByRole('button', { name: /^Build/ }))
     const group = screen.getByRole('group', { name: 'Show' })
     expect([...group.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
       'All 1',
@@ -1079,6 +1088,27 @@ describe('Library usage', () => {
     expect(document.querySelector('.lib-list-head .lib-since').textContent).toBe(
       'calls since 2026-09-01',
     )
+    // Stacked (styles.css shows it there only), it sits on the page header's row instead.
+    expect(document.querySelector('.lib-title .lib-title-since').textContent).toBe(
+      'calls since 2026-09-01',
+    )
+  })
+
+  // Review F1: the stacked toolbar says the usage filter as one compact menu with no counts
+  // (DropMenu; styles.css swaps it for the counted Seg there); picking in it filters the list.
+  it('offers the usage filter as a compact menu in the stacked toolbar', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    const compact = document.querySelector('.lib-toolbar .lib-tools-compact')
+    const trigger = within(compact).getByRole('button', { name: /^Show:/ })
+    expect(trigger.getAttribute('aria-label')).toBe('Show: All uses')
+    expect(trigger.textContent).not.toMatch(/\d/)
+    const before = document.querySelectorAll('.lib-row').length
+    fireEvent.click(trigger)
+    const menu = document.getElementById(trigger.getAttribute('aria-controls'))
+    fireEvent.click(within(menu).getByRole('button', { name: 'Used' }))
+    expect(trigger.getAttribute('aria-label')).toBe('Show: Used')
+    expect(document.querySelectorAll('.lib-row').length).toBeLessThan(before)
   })
 })
 
