@@ -3039,6 +3039,8 @@ a.tier .tier-bar > span { background: var(--line-3); }
    two wrappers are `display: contents`, which also drops their card look: the panes lay out as
    before. The `lib` tiers below give them their boxes. */
 .lib-seg, .lib-chips, .lib-list-toggle { display: none; }
+/* Stacked only: the Library's "calls since" on the header row, the usage filter as one menu. */
+.lib-title-since, .lib-tools-compact { display: none; }
 .lib-toolbar, .lib-toolbar-filter, .lib-picker { display: contents; }
 .lib-toolbar { flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--line);
   border-radius: 12px; background: var(--surface); } /* off-scale: 12px, the design's card radius */
@@ -3059,6 +3061,20 @@ a.tier .tier-bar > span { background: var(--line-3); }
   border-radius: 999px; font-size: var(--fs-sm); } /* off-scale: 32px chip height; 10px, a pill's inset */
 .lib-chips .rail-cats button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
 .lib-chips .rail-mix { display: none; }
+/* The total is said once, on the section's button: the "All" chip drops its count. */
+.lib-chips .rail-cats li:first-child .mono { display: none; }
+/* The usage filter's menu (components/DropMenu.jsx), the filter field's height and edge. */
+.drop-menu { position: relative; }
+.drop-menu-btn { display: inline-flex; align-items: center; gap: var(--sp-2); height: 40px; padding: 0 var(--sp-3);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit;
+  white-space: nowrap; cursor: pointer; } /* off-scale: 40px and 8px, as the filter field */
+.drop-menu-btn:hover, .drop-menu-btn[aria-expanded="true"] { border-color: var(--accent-line); }
+.drop-menu-pop { top: calc(100% + 4px); right: 0; min-width: 180px; } /* off-scale: 4px of air under the trigger; 180px fits "Not used yet" */
+.drop-menu-list { display: flex; flex-direction: column; gap: 2px; } /* off-scale: 2px hairline, as the rail */
+.drop-menu-list button { padding: var(--sp-2); border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--text-2); font: inherit; text-align: left; cursor: pointer; }
+.drop-menu-list button:hover { background: var(--surface); color: var(--text); }
+.drop-menu-list button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); font-weight: 600; }
 /* The picker: its header names the filtered count and the open entry; the rows fold under it. */
 .lib-picker { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; } /* off-scale: 12px, the design's card radius */
 .lib-list-toggle { align-items: center; gap: var(--sp-3); width: 100%; min-width: 0; padding: 14px var(--sp-4);
@@ -3424,15 +3440,14 @@ a.kit-name:hover { color: var(--accent-text); }
   .lib-wrap .library:not(.locked) { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0;
     background: transparent; border: 0; border-radius: 0; overflow: visible; }
   .lib-wrap .library:not(.locked) .lib-list { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; border: 0; }
-  .lib-wrap .library:not(.locked) .lib-list-head { justify-content: flex-end; padding: 0; border: 0; }
-  .lib-wrap .library:not(.locked) .lib-list-head > b { display: none; }
-  .lib-wrap .library:not(.locked) .lib-list-head:not(:has(> :not(b):not(:empty))) { display: none; }
+  .lib-wrap .library:not(.locked) .lib-list-head { display: none; }
   .lib-wrap .library:not(.locked) .lib-toolbar, .lib-wrap .library:not(.locked) .lib-toolbar-filter { display: flex; }
   .lib-wrap .library:not(.locked) .lib-seg { display: grid; }
   .lib-wrap .library:not(.locked) .lib-chips { display: block; }
   .lib-wrap .library:not(.locked) .lib-toolbar .lib-filter { flex: 1 1 200px; width: auto; min-width: 0; height: 40px; padding: 0 var(--sp-3);
     border: 1px solid var(--line); border-radius: 8px; background: var(--bg); } /* off-scale: 40px, the control height; 8px, the design's field radius */
-  .lib-wrap .library:not(.locked) .lib-tools { padding: 0; border: 0; }
+  .lib-wrap .library:not(.locked) .lib-toolbar .lib-tools { display: none; }
+  .lib-wrap .library:not(.locked) .lib-toolbar .lib-tools-compact { display: block; }
   .lib-wrap .library:not(.locked) .lib-picker { display: block; }
   .lib-wrap .library:not(.locked) .lib-list-toggle { display: flex; }
   .lib-wrap .library:not(.locked) .lib-rows { max-height: calc(5 * var(--lib-row-h)); border-top: 1px solid var(--line); }
@@ -3440,6 +3455,10 @@ a.kit-name:hover { color: var(--accent-text); }
   .lib-wrap .library:not(.locked) .lib-reader { grid-column: auto; padding: 20px; border: 1px solid var(--line); border-radius: 12px;
     background: var(--surface); scroll-margin-top: calc(var(--topbar-h) + 12px); } /* off-scale: 20px and 12px, the design's card */
   .lib-wrap .lib-kinds { gap: var(--sp-2); padding: 0; border: 0; background: transparent; }
+  .lib-wrap .lib-title { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--sp-3);
+    align-items: baseline; }
+  .lib-wrap .lib-title > :not(.lib-title-since) { grid-column: 1; }
+  .lib-wrap .lib-title-since { display: block; grid-column: 2; grid-row: 1; font-size: var(--fs-2xs); }
   .lib-wrap .lib-kinds .kind-list { display: none; }
 }
 /* A locked Library (Personal › Memory, Notebook) has no rail, only the list and the reader:
@@ -3449,15 +3468,14 @@ a.kit-name:hover { color: var(--accent-text); }
   .lib-wrap .library.locked { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0;
     background: transparent; border: 0; border-radius: 0; overflow: visible; }
   .lib-wrap .library.locked .lib-list { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; border: 0; }
-  .lib-wrap .library.locked .lib-list-head { justify-content: flex-end; padding: 0; border: 0; }
-  .lib-wrap .library.locked .lib-list-head > b { display: none; }
-  .lib-wrap .library.locked .lib-list-head:not(:has(> :not(b):not(:empty))) { display: none; }
+  .lib-wrap .library.locked .lib-list-head { display: none; }
   .lib-wrap .library.locked .lib-toolbar, .lib-wrap .library.locked .lib-toolbar-filter { display: flex; }
   .lib-wrap .library.locked .lib-seg { display: grid; }
   .lib-wrap .library.locked .lib-chips { display: block; }
   .lib-wrap .library.locked .lib-toolbar .lib-filter { flex: 1 1 200px; width: auto; min-width: 0; height: 40px; padding: 0 var(--sp-3);
     border: 1px solid var(--line); border-radius: 8px; background: var(--bg); } /* off-scale: 40px, the control height; 8px, the design's field radius */
-  .lib-wrap .library.locked .lib-tools { padding: 0; border: 0; }
+  .lib-wrap .library.locked .lib-toolbar .lib-tools { display: none; }
+  .lib-wrap .library.locked .lib-toolbar .lib-tools-compact { display: block; }
   .lib-wrap .library.locked .lib-picker { display: block; }
   .lib-wrap .library.locked .lib-list-toggle { display: flex; }
   .lib-wrap .library.locked .lib-rows { max-height: calc(5 * var(--lib-row-h)); border-top: 1px solid var(--line); }

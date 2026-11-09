@@ -13,6 +13,7 @@ import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
 import { BaseBadge, GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
 import Loadout from '../components/Loadout.jsx'
 import RailCats from '../components/RailCats.jsx'
+import DropMenu from '../components/DropMenu.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Loading from '../components/Loading.jsx'
@@ -532,6 +533,10 @@ export default function Library({
             <div className="lib-title">
               <h1 className="h">Library</h1>
               <span className="dim">What the agent knows</span>
+              {/* Stacked only (styles.css): on the header row, since the list head is gone there. */}
+              {useOn && usage.since ? (
+                <span className="mono dim lib-title-since">calls since {usage.since}</span>
+              ) : null}
             </div>
             <nav className="kind-list" aria-label="Kinds">
               {LIBRARY_ORDER.map((k) => (
@@ -603,6 +608,17 @@ export default function Library({
                 <StatusLegend items={items} />
               </span>
             </>
+          }
+          // The stacked toolbar's usage filter: one menu, no counts (the totals are the section's).
+          toolsCompact={
+            listed && shows.length > 1 ? (
+              <DropMenu
+                label="Show"
+                options={shows.map(([k, l]) => ({ key: k, label: k === 'all' ? 'All uses' : l }))}
+                value={useF}
+                onChange={setUse}
+              />
+            ) : undefined
           }
           tools={
             listed && shows.length > 1 ? (

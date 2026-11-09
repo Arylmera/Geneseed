@@ -86,21 +86,43 @@ describe('Library panes: the narrow tier', () => {
     expect(rule('.lib-chips .rail-mix')).toMatch(/display:\s*none/)
   })
 
+  // Review F1: in the stacked toolbar a total is said once, on its section button. The "All"
+  // chip drops its count, and the usage filter swaps its counted Seg (`.lib-tools`, kept side
+  // by side) for one compact menu (`.lib-tools-compact`, DropMenu) with no counts.
+  it('in the stacked toolbar a total shows once: no count on All, a compact usage menu', () => {
+    const tier = threePane()
+    const x = '.lib-wrap .library:not(.locked)'
+    expect(rule('.lib-chips .rail-cats li:first-child .mono')).toMatch(/display:\s*none/)
+    expect(rule('.lib-title-since, .lib-tools-compact')).toMatch(/display:\s*none/)
+    expect(rule(`${x} .lib-toolbar .lib-tools`, tier)).toMatch(/display:\s*none/)
+    expect(rule(`${x} .lib-toolbar .lib-tools-compact`, tier)).toMatch(/display:\s*block/)
+  })
+
+  // Review F4: the Library's "calls since" moves to the right of the page header's row, and the
+  // list head (label, count, host legend) is gone from the stack: no tier of its own.
+  it('in the stack, "calls since" sits on the header row; the list head is gone', () => {
+    expect(rule('.lib-title-since, .lib-tools-compact')).toMatch(/display:\s*none/)
+    const tier = threePane()
+    expect(rule('.lib-wrap .lib-title', tier)).toMatch(
+      /grid-template-columns:\s*minmax\(0, 1fr\) auto/,
+    )
+    const since = rule('.lib-wrap .lib-title-since', tier)
+    expect(since).toMatch(/display:\s*block/)
+    expect(since).toMatch(/grid-column:\s*2/)
+    expect(since).toMatch(/grid-row:\s*1/)
+  })
+
   for (const [name, tierOf, x] of STACKS) {
     // No block keeps a height its content does not fill: no min-height left from the grid, the
     // blocks start at the top, and the list head (its label and count are the segmented
-    // control's and the picker's now) is display: none when nothing else is left in it, since a
-    // flex gap still counts an empty box.
+    // control's and the picker's now, "calls since" the page header's) is display: none.
     it(`in the stack of ${name}, every block is as tall as its content`, () => {
       const tier = tierOf()
       const lib = rule(x, tier)
       expect(lib).toMatch(/flex-direction:\s*column/)
       expect(lib).toMatch(/min-height:\s*0/)
       expect(rule(`${x} .lib-list`, tier)).toMatch(/display:\s*flex/)
-      expect(rule(`${x} .lib-list-head > b`, tier)).toMatch(/display:\s*none/)
-      expect(rule(`${x} .lib-list-head:not(:has(> :not(b):not(:empty)))`, tier)).toMatch(
-        /display:\s*none/,
-      )
+      expect(rule(`${x} .lib-list-head`, tier)).toMatch(/display:\s*none/)
     })
 
     it(`in the stack of ${name}, the toolbar, the picker and the entry are three cards`, () => {

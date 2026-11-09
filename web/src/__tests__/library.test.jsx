@@ -1088,6 +1088,27 @@ describe('Library usage', () => {
     expect(document.querySelector('.lib-list-head .lib-since').textContent).toBe(
       'calls since 2026-09-01',
     )
+    // Stacked (styles.css shows it there only), it sits on the page header's row instead.
+    expect(document.querySelector('.lib-title .lib-title-since').textContent).toBe(
+      'calls since 2026-09-01',
+    )
+  })
+
+  // Review F1: the stacked toolbar says the usage filter as one compact menu with no counts
+  // (DropMenu; styles.css swaps it for the counted Seg there); picking in it filters the list.
+  it('offers the usage filter as a compact menu in the stacked toolbar', async () => {
+    render(<Library section="skills" overview={overview({})} />)
+    await waitFor(() => expect(use('#/item/skill/brainstorm')).toBeTruthy())
+    const compact = document.querySelector('.lib-toolbar .lib-tools-compact')
+    const trigger = within(compact).getByRole('button', { name: /^Show:/ })
+    expect(trigger.getAttribute('aria-label')).toBe('Show: All uses')
+    expect(trigger.textContent).not.toMatch(/\d/)
+    const before = document.querySelectorAll('.lib-row').length
+    fireEvent.click(trigger)
+    const menu = document.getElementById(trigger.getAttribute('aria-controls'))
+    fireEvent.click(within(menu).getByRole('button', { name: 'Used' }))
+    expect(trigger.getAttribute('aria-label')).toBe('Show: Used')
+    expect(document.querySelectorAll('.lib-row').length).toBeLessThan(before)
   })
 })
 

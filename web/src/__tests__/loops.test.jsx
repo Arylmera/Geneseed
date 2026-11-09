@@ -424,6 +424,26 @@ describe('Loops — templates', () => {
       expect(header().getAttribute('aria-expanded')).toBe('true')
     })
 
+    // Review F2: a route into another section that names its entry (Ctrl-K, a link) lands on
+    // that entry, so the picker stays closed; only a route with no entry opens it.
+    it('keeps the picker closed on a section change that names an entry', async () => {
+      const view = await open({})
+      expect(header().getAttribute('aria-expanded')).toBe('true')
+      view.rerender(<Loops tab="bricks" item="apply" />)
+      await screen.findByText('Do it our way.')
+      expect(header().getAttribute('aria-expanded')).toBe('false')
+    })
+
+    // Review F3: a click on the open section's own segment changes no route (or lands on the
+    // same resolved entry), yet asks for the list: it opens the picker.
+    it('opens the picker from the open section segment, even with no route change', async () => {
+      await open({})
+      fireEvent.click(header())
+      expect(header().getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(within(toolbar()).getByRole('link', { name: /^Templates/ }))
+      expect(header().getAttribute('aria-expanded')).toBe('true')
+    })
+
     // The open row is brought into the list's view when the list unfolds; while folded the
     // scroller has no box. jsdom has no layout: the scroller and the row's geometry are stubbed.
     it('scrolls the open row into the list when the picker opens', async () => {

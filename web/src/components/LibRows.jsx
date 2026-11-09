@@ -46,12 +46,14 @@ export function filterRows(rows, q) {
 // (RailCats). The picker: a header button, "<n> <section> · <open entry>", then the rows, folded
 // behind it per useFolds. Side by side the rail carries the sections and categories, so the
 // segmented control, the chips and the header are hidden, and both wrappers are
-// `display: contents`: the pane lays out as before. The Docs pass no sections: no toolbar rows.
+// `display: contents`: the pane lays out as before. `toolsCompact` stands in for `tools` in the
+// stacked toolbar (the Library's usage filter as one menu, without the Seg's repeated counts).
 export function LibList({
   label,
   count,
   extra,
   tools,
+  toolsCompact,
   q,
   onQ,
   matched,
@@ -113,6 +115,10 @@ export function LibList({
                 href={s.href}
                 className={s.on ? 'on' : ''}
                 aria-current={s.on ? 'page' : undefined}
+                // The list, asked for: also from the open section, which may change no route.
+                onClick={(e) => {
+                  if (!(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0)) folds.setList(true)
+                }}
               >
                 {s.label}
                 <span className="mono">{s.n ?? ''}</span>
@@ -128,6 +134,7 @@ export function LibList({
             label={`Filter ${label}`}
           />
           {tools ? <div className="lib-tools">{tools}</div> : null}
+          {toolsCompact ? <div className="lib-tools-compact">{toolsCompact}</div> : null}
         </div>
         {cats?.length > 1 ? (
           <div className="lib-chips">
@@ -282,8 +289,10 @@ export function useActiveRowInView(deps) {
 }
 
 // The stacked list's fold (the `lib` container tiers, styles.css). `inView` is the route's
-// [section, entry]. A new section, or a route with no entry (a section's own address), shows
-// the list; an entry routed within the same section (a deep link, or a pick) folds it. `pick()`
+// [section, entry]. On a route change, a route with no entry (a section's own address) shows the
+// list; a route naming an entry (a deep link, a pick, Ctrl-K into another section) folds it, so
+// the entry sits right under the picker. A click on a section segment asks for the list even
+// where it changes no route (LibList). `pick()`
 // is a click on a row, the open one included (which changes no route): it folds the list and
 // bumps `picked`, on which LibList focuses its header.
 export function useFolds([section, item]) {
@@ -292,7 +301,7 @@ export function useFolds([section, item]) {
   const [picked, setPicked] = useState(0)
   if (seen[0] !== section || seen[1] !== item) {
     setSeen([section, item])
-    setList(seen[0] !== section || !item)
+    setList(!item)
   }
   const pick = () => {
     setList(false)
