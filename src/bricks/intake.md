@@ -10,8 +10,9 @@ gateOn: needs-info
 The stage hands you the run's `requirement` and its `input`: free text, a file path, or an issue (a
 GitHub URL or `#<n>`: `gh issue view <n> --json title,body,comments,labels`; a GitLab one:
 `glab issue view <n> --comments`). Read the input in full, then the code it names. Never edit any
-file, and never post on the issue. When the `carry` holds the user's answers to your earlier
-questions, build on them.
+file, and never post on the issue. On a re-run the `carry` holds the user's answers: first read
+your previous finding, the `carry` of the latest `intake` entry in `FACTORY.md`'s `history`, so
+each answer meets its question, then build on them.
 
 Write the work item to a file in the OS temp directory, never inside the worktree: a one-line
 title, what happens now, what should happen, how to reproduce it, the files it likely touches,

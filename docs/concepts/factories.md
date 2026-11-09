@@ -110,21 +110,30 @@ A loop proves its work with commands it can also edit. After the loop, two stage
 outside.
 
 - **`checks` reads the done list from the base branch** (`.geneseed/done-checks.txt` there, read
-  with `git show`), never from the branch, and runs it against the branch. It first refuses a diff
-  that touches a **locked path**: the done list, `.github/workflows/`, `.gitlab-ci.yml`, and
-  `.geneseed/factories/`, `.geneseed/loops/`, `.geneseed/bricks/`, plus any path in the factory's
-  `protected` list. That `error` holds for you: `ok` lets the change through and the run report
-  names it, `no` stops. Tests are not locked; the review judges a weakened test.
-- **No done list on the base.** `checks` proposes one from the base's manifests and holds. On your
-  yes, the list is committed and pushed on the base branch, then `checks` runs again, once.
+  with `git show`), never from the branch, and runs it against the branch. A red command is a
+  `fail`; a timeout or a missing tool is a `fail` marked `environment`, which the loop cannot fix.
+- **Locked paths.** Only when every command passes, `checks` lists the paths the branch changed,
+  a rename's old path included, and looks for a **locked path**: the done list,
+  `.github/workflows/`, `.gitlab-ci.yml`, `.geneseed/factories/`, `.geneseed/loops/`,
+  `.geneseed/bricks/`, plus each entry of the factory's `protected` list. A path is locked when it
+  equals an entry, or lies under an entry that ends in `/`. That `error` holds for you: `ok` lets
+  the change through and the run report names it, `no` stops. Tests are not locked; the review
+  judges a weakened test.
+- **No done list on the base**, or one with no command. `checks` proposes one, inferred from the
+  base's manifests as the done gate infers checks, and holds; with no manifest it proposes nothing
+  and says so. On your yes, the agent lands the file on the base branch from a temporary worktree
+  (or you land it by PR when the branch is protected); once it is there, `ok` runs `checks`
+  again, once.
 - **`review-panel` seats agents by the work item's size and areas.** `intake` rates the `size`
   (`small`, `medium`, `large`) and the `areas` (`security`, `performance`, `ui`, `data`). The
   factory's `review.seats` maps them to agents; the shipped default is `reviewer` for small, plus
   `tester` for medium, plus `steward` for large, with `security` for security or data,
   `performance` for performance and `user-advocate` for ui. Each seat gets only the work item,
   the diff and the factory's rules, in its own context: never the loop's notes or the holdout
-  scenarios. `steward` and `user-advocate` advise; any other seat's failing verdict fails the
-  stage. `geneseed factory check` refuses a seat that names no shipped agent.
+  scenarios, and it edits nothing. A failing verdict from `reviewer`, `security` or `tester`
+  fails the stage; `performance`, `steward` and `user-advocate` advise. A seat may name only an
+  agent Geneseed ships: `geneseed factory check` refuses any other, a project's own agents
+  included.
 
 A failed check or review sends the work back to the loop, twice at most each (cycles `checks` and
 `review`).

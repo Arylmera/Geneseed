@@ -153,6 +153,19 @@ test('the shipped catalogue is clean and carries exactly the fifteen shipped tem
   assert.deepEqual([...templates.keys()].sort(), ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'update-contract']);
 });
 
+// The agents a factory's review.seats may name: the shipped `src/agents/*.md` by stem. A name
+// starting with `_` is a template or an include, never an agent, and README.md is no agent; a
+// project's own agents are not read (the seat table names shipped agents only).
+test('agents: the shipped agent stems, without _ files, README.md or a project agent', () => {
+  const src = path.join(tmp, 'agents-src');
+  for (const f of ['reviewer.md', 'tester.md', '_template.md', '_self-improvement.md', 'README.md', 'notes.txt']) {
+    put(path.join(src, 'agents', f), '# x\n');
+  }
+  const repo = path.join(tmp, 'agents-repo');
+  put(path.join(repo, '.geneseed', 'agents', 'mine.md'), '# mine\n');
+  assert.deepEqual([...loadCatalog({ projectRoot: repo, srcRoot: src, globalLevel: false }).agents].sort(), ['reviewer', 'tester']);
+});
+
 test('globalLevel: false ignores a global brick entirely', () => {
   put(path.join(userLoopsDir(), 'bricks', 'only-global.md'), brickMd('only-global'));
   const withGlobal = loadCatalog({ projectRoot: null, globalLevel: true });

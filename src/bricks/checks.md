@@ -1,6 +1,6 @@
 ---
 name: checks
-description: Run the repo's done list as the base branch holds it, after refusing a diff that changes a locked path. Never trusts the branch's own copy.
+description: Run the repo's done list as the base branch holds it, then refuse a diff that changes a locked path. Never trusts the branch's own copy.
 effect: read
 agent: tester
 outcomes: pass, fail, error, none
@@ -12,22 +12,24 @@ defaultBranchRef`, or `git remote show origin`) and `git merge-base HEAD origin/
 edit or commit a file. Write every finding to a file in the OS temp directory, never inside the
 worktree, and report that file's path.
 
-List the files the branch changed: `git diff --name-only <merge-base> HEAD`. A file is locked when
-it is `.geneseed/done-checks.txt`, `.gitlab-ci.yml`, or lies under `.github/workflows/`,
-`.geneseed/factories/`, `.geneseed/loops/` or `.geneseed/bricks/`, or matches a path in the stage's
-`protected` list. Tests are not locked. Report `error` when any changed file is locked, naming each
-one: the user decides whether the run goes on.
-
 Read the done list from the base, never from this branch: `git show
 origin/<default>:.geneseed/done-checks.txt`, one command per line, `#` lines ignored. When the base
-has no such file, propose one from the BASE's manifests (`git show origin/<default>:<file>`), never
-this branch's: `package.json`'s `test`, `lint` and `typecheck` scripts run with the package manager
-its lockfile names, `pom.xml` → `mvn test`, `build.gradle(.kts)` → `gradle test`, `pyproject.toml` →
-`pytest`, `Cargo.toml` → `cargo test`, `go.mod` → `go test ./...`. Write that list and report `none`.
+has no such file, or it holds no command, propose one: derive it by the rules of Geneseed's
+`inferDoneChecks` (`js/hosts/done-checks.mjs`), applied to the BASE's manifests (`git show
+origin/<default>:<file>`), never this branch's. With no manifest, propose nothing and say so. Write
+the proposal and report `none`.
 
-Otherwise list the untracked files (`git status --porcelain --untracked-files=all`), then run each
-command from the worktree root, in order, each bounded under 10 minutes by your shell tool's
-timeout. Afterwards delete only the untracked files the commands created. Report `fail` when a
-command exits non-zero (name the first failing command and copy the last 40 lines of its output),
-or when anything else is left changed (name it). Report `pass` when every command passes and the
-tree is as you found it.
+List the untracked files (`git status --porcelain --untracked-files=all`), then run each command
+from the worktree root, in order, each bounded under 10 minutes by your shell tool's timeout.
+Afterwards delete only the untracked files the commands created. Report `fail` when a command
+exits non-zero (name the first failing command and copy the last 40 lines of its output), or when
+anything else is left changed (name it). A command that times out, or whose tool is missing, is a
+`fail` too: mark it `environment` in the finding, so the loop knows its code cannot fix it.
+
+Only when every command passes, list the files the branch changed: `git diff --name-only
+--no-renames <merge-base> HEAD` (`--no-renames` lists a rename's old path too, so moving a locked
+file out of place is seen). A path is locked when it equals an entry below, or lies under an entry
+that ends in `/`: `.geneseed/done-checks.txt`, `.gitlab-ci.yml`, `.github/workflows/`,
+`.geneseed/factories/`, `.geneseed/loops/`, `.geneseed/bricks/`, and each entry of the stage's
+`protected` list. Tests are not locked. Report `error` when any changed path is locked, naming each
+one: the user decides whether the run goes on. Else report `pass`.

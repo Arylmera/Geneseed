@@ -66,12 +66,16 @@ Repeat `geneseed factory next` and act on its JSON:
   The gated outcomes:
   - `intake` **`needs-info`**: show the user its numbered questions. Their answers go back as
     `amend --note "<their answers>"`; `ok` goes on with the assumptions intake wrote.
-  - `checks` **`error`**: the branch changed a locked path (the done list, CI config, a factory,
-    loop or brick). Show each path. `ok` lets the change through; the run report names it.
-  - `checks` **`none`**: the base has no done list, and the note is the one `checks` proposes.
-    On the user's yes, commit it as `.geneseed/done-checks.txt` on the base branch, from their
-    own checkout, never this worktree, and push it (both ask), or let them land it themselves.
-    Then `decide --verdict ok`: `checks` runs again against it. If it is not to be committed, `no`.
+  - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
+    list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
+  - `checks` **`none`**: the base has no done list (or an empty one), and the note is the one
+    `checks` proposes, or says no manifest gave one. On the user's yes, land it on the base, never
+    from this worktree: `git worktree add --detach ../<repo>-done-list origin/<default>`, write
+    `.geneseed/done-checks.txt` there, stage that file alone, commit, and
+    `git push origin HEAD:<default>` (each asks); then remove that worktree. A refused push (a
+    protected branch) is reported to the user, who lands the file by PR. `ok` waits until the
+    file is on the base: answer `decide --verdict ok` only then, and `checks` runs again against
+    it. If it is not to be landed, `no`.
 - **`{terminal: "$close"}`** or **`{terminal: "$stop"}`** — see *The end*.
 - A `record` or `decide` result (`{stage}`, `{awaiting}`, `{stopped}`) — call `next` again.
 - **`{error}`** — read it; it names the step you skipped or the evidence `record` lacks. Do that

@@ -62,7 +62,7 @@
   "DESC_PARALLEL_AGENTS": "<one-line description: fan independent subtasks to concurrent subagents, then converge>",
   "DESC_PIPELINE": "<one-line description: spawn a small crew — analyst, developer, tester — to work a substantial task in isolation, merging only on mechanical proof (tests + lint green)>",
   "DESC_LOOP": "<one-line description: work a requirement in small scored iterations on a loop/* branch, stepping the geneseed loop state machine>",
-  "DESC_FACTORY": "<one-line description: carry one work item (request, document or issue) through a factory of bricks and loops to an open PR with green CI, stepping the geneseed factory state machine; never merges>",
+  "DESC_FACTORY": "<one-line description: carry one work item (request, document or issue) through a factory of bricks and loops to an open PR with green CI, stepping the geneseed factory state machine; never merges without the user's yes, asked once at the end>",
   "DESC_BRICK_FORGE": "<one-line description: author or adapt a loop brick at project, global or shipped level, checked by geneseed loop check>",
   "DESC_FACTORY_FORGE": "<one-line description: compose bricks and loops into a factory through an interview, write it at project or global level, check it with geneseed factory check, and offer brick-forge for a missing brick>",
   "DESC_DEVELOP": "<one-line description: drive a code change through cover-and-verify — smallest change, tests written for it, affected suite green, committed slice by slice>",

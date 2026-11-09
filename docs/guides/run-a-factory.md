@@ -94,8 +94,8 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 | Moment | What you decide |
 | --- | --- |
 | `intake` reports `needs-info` | The work item leaves a question only you can answer. The agent shows its numbered questions, each with the assumption it would make. Answer them (`amend`, three times at most), say `ok` to go on with the assumptions, or `no` to stop. |
-| `checks` reports `error` | The branch changed a locked path: the done list, CI config, or a factory, loop or brick. `ok` lets it through (the run report names it), `no` stops. |
-| `checks` reports `none` | The base branch has no done list. The agent shows the one it proposes; on your yes it commits and pushes it on the base branch (both ask), and the checks run again. |
+| `checks` reports `error` | Every check passed, but the branch changed a locked path: the done list, CI config, or a factory, loop or brick. `ok` lets it through (the run report names it), `no` stops. |
+| `checks` reports `none` | The base branch has no done list, or an empty one. The agent shows the one it proposes (or says no manifest gave one). On your yes it lands the file on the base branch from a temporary worktree (each step asks); if the branch is protected, you land it by PR. Once it is on the base, `ok` runs the checks again. |
 | The `spec` gate (`analysis-to-build`) | The task list: `ok` starts the first task, `amend` revises the spec, `no` stops the run. The spec commit after your `ok` asks too. |
 | A push | Every push that is not a loop's own commit asks you, `pr-open`'s included. |
 | A loop gate | Anything the `bugfix` loop asks you, as in [While a loop runs](loop-running.md). |
