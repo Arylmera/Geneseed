@@ -112,8 +112,9 @@ outside.
 - **`checks` reads the done list from the base branch** (`.geneseed/done-checks.txt` there, read
   with `git show`), never from the branch, and runs it against the branch. A red command is a
   `fail`; a timeout, a missing tool, a failed fetch or no default branch is a `fail` marked
-  `environment`, which the loop cannot fix. Whatever the outcome, `checks` restores every file
-  its commands changed and deletes what they created, so the tree stays clean.
+  `environment`, which the loop cannot fix. A command that changes a tracked file is a `fail` too
+  (a lint that fixes what it finds hides what it found). Whatever the outcome, `checks` then
+  restores every file its commands changed and deletes what they created, so the tree stays clean.
 - **Locked paths.** Only when every command passes, `checks` lists the paths the branch changed,
   a rename's old path included, and looks for a **locked path**: the done list,
   `.github/workflows/`, `.gitlab-ci.yml`, `.geneseed/factories/`, `.geneseed/loops/`,

@@ -205,12 +205,13 @@ export function checkFactory(factory, { bricks, templates, agents }) {
     if (outcomes && !outcomes.includes(e.on)) problems.push(`${label}: ${e.on} is not an outcome of ${e.from}`);
   }
   // rule 3 — exactly one edge per outcome; `error` may go without one (the engine routes it to
-  // $stop), and so may `needs-info` (it follows the stage's `pass` edge: `edgeFor`), so a factory
-  // written before intake could ask stays valid, and so does a FACTORY.md that embeds one
+  // $stop), and so may `needs-info` when the stage has a `pass` edge for it to follow (`edgeFor`),
+  // so a factory written before intake could ask stays valid, and so does a FACTORY.md that embeds one
   for (const s of [...stages].sort()) {
     for (const o of stageOutcomes(s, bricks) ?? []) {
       const count = edges.filter((e) => e.from === s && e.on === o).length;
-      if (count === 0 && o !== 'error' && o !== NEEDS_INFO) problems.push(`stage ${s}: no edge for outcome ${o}`);
+      const exempt = o === 'error' || (o === NEEDS_INFO && edges.some((e) => e.from === s && e.on === 'pass'));
+      if (count === 0 && !exempt) problems.push(`stage ${s}: no edge for outcome ${o}`);
       else if (count > 1) problems.push(`stage ${s}: ${count} edges for outcome ${o}`);
     }
   }

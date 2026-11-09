@@ -284,6 +284,19 @@ test('J5: needs-info names no lane, so it makes no fork', () => {
   assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), []);
 });
 
+// Rule 3 and needs-info: the edge may be left out only where the stage has a `pass` edge for
+// needs-info to follow (`edgeFor`). A stage that declares needs-info and fail, but no pass, must
+// route needs-info itself, or check refuses it.
+test('rule 3: needs-info may go without an edge only beside a pass edge', () => {
+  const bricks = new Map([...CATALOG.bricks, brick('ask', ['needs-info', 'fail'])]);
+  const f = base();
+  f.stages.push('ask');
+  f.edges.push({ from: 'ask', on: 'fail', to: '$stop' });
+  assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), ['stage ask: no edge for outcome needs-info']);
+  const withPass = new Map([...CATALOG.bricks, brick('intake', ['pass', 'fail', 'needs-info'])]);
+  assert.deepEqual(checkFactory(base(), { ...CATALOG, bricks: withPass }), []);
+});
+
 // Rule 8: `protected` adds paths `checks` refuses to see changed; absent is fine, any other shape not.
 test('rule 8: protected, when present, is a list of non-empty paths', () => {
   assert.deepEqual(check({ ...base(), protected: ['infra/', 'Makefile'] }), []);

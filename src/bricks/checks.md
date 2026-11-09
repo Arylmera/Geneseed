@@ -32,10 +32,12 @@ Put the proposal in the finding as one fenced block, one command per line and no
 explain outside the block. Report `none`.
 
 The tree is clean before you run anything. Run each command from the worktree root, in order, each
-bounded under 10 minutes by your shell tool's timeout. Afterwards, whatever the outcome, restore
-every tracked file the commands changed (`git restore -- <path>`) and delete every untracked file
-they created, naming each one in the finding. Report `fail` when a command exits non-zero: name the
-first failing command and copy the last 40 lines of its output. A command that times out, or whose
+bounded under 10 minutes by your shell tool's timeout. Report `fail` when a command exits
+non-zero: name the first failing command and copy the last 40 lines of its output. Report `fail`
+too when a command changed a tracked file, naming each file: a lint that fixes what it finds hides
+what it found. Afterwards, whatever the outcome, put the tree back: restore every tracked file the
+commands changed (`git restore --staged --worktree -- <path>`) and delete every untracked file
+they created, naming each one in the finding. A command that times out, or whose
 tool is missing, is a `fail` too: mark it `environment`, so the loop knows its code cannot fix it.
 
 Only when every command passes, list the files the branch changed: `git diff --name-only
