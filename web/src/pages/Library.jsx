@@ -311,11 +311,13 @@ export default function Library({
   const isAgents = sec === 'agents' && !lock
   const isPrimary = isAgents && activeName === PRIMARY
   // The primary's loadout gives its row its theme noun, and is its Loadout panel too (one read);
-  // a failed read keeps the neutral name.
+  // a failed read keeps the neutral name. Revalidated on mount: agent sessions change the files
+  // it measures outside the console.
   const { data: primaryLoad, error: primaryErr } = useAsync(
     () => (isAgents ? Promise.resolve().then(() => api.loadout()) : Promise.resolve(null)),
     [isAgents, dataRev],
     'loadout-primary',
+    { revalidate: true },
   )
   const primaryRow = isAgents
     ? {
