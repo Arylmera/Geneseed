@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import StatusBadge from './StatusBadge.jsx'
 import FilterInput from './FilterInput.jsx'
 import RailCats from './RailCats.jsx'
@@ -91,6 +92,8 @@ export function LibList({
   const onKeyDown = (e) => {
     if (e.key !== 'ArrowDown' || !e.target.classList?.contains('lib-filter')) return
     e.preventDefault()
+    // Folded (stacked tier), the rows sit in `display: none` and take no focus: unfold first.
+    if (!open) flushSync(() => folds.setList(true))
     rowsRef.current?.querySelector('.lib-row')?.focus()
   }
   return (
@@ -161,11 +164,14 @@ export function LibList({
           ref={rowsRef}
           onKeyDown={walkRows}
           onFocus={(e) => rove(e.currentTarget)}
-          // A pick, even of the row already open (no route change), folds the list. A Ctrl-,
-          // Cmd-, Shift- or middle-click opens the row elsewhere: not a pick here.
+          // A pick keeps the list open through the route change it causes (useFolds). A row whose
+          // href is the route already changes no route, so it keeps nothing: a later jump from
+          // outside still folds. A Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere:
+          // not a pick here.
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
-            if (e.target.closest?.('.lib-row')) folds.pick()
+            const row = e.target.closest?.('.lib-row')
+            if (row && row.getAttribute('href') !== window.location.hash) folds.pick()
           }}
         >
           {children}
@@ -289,7 +295,8 @@ export function useActiveRowInView(deps) {
 // folds it, so the entry sits right under the picker. A pick in the list keeps it open (owner,
 // 2026-11-09: "can the list stay open when we click on something"), so the next row is one click
 // away and focus stays on the row. A click on a section segment asks for the list even where it
-// changes no route (LibList). `pick()` is a click on a row, the open one included.
+// changes no route (LibList). `pick()` is a click on a row that changes the route: the next
+// route change is that pick's own.
 export function useFolds([section, item]) {
   const [list, setList] = useState(!item)
   const [seen, setSeen] = useState([section, item])
