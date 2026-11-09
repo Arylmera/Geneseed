@@ -3043,8 +3043,8 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .lib-toolbar { flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--line);
   border-radius: 12px; background: var(--surface); } /* off-scale: 12px, the design's card radius */
 /* The sections: one row of links on a recessed track, the open one filled with the accent. */
-.lib-seg { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: var(--sp-1); padding: var(--sp-1);
-  border-radius: 10px; background: var(--bg-2); } /* off-scale: 104px fits "Setup files 2"; 10px, the track's radius */
+.lib-seg { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-1); padding: var(--sp-1);
+  border-radius: 10px; background: var(--bg-2); } /* off-scale: 140px fits "Setup files 2" and pairs four sections 2 by 2 on a phone; 10px, the track's radius */
 .lib-seg a { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 40px;
   padding: 0 var(--sp-2); border-radius: 8px; color: var(--text-2); font-weight: 600; text-align: center; } /* off-scale: 40px, the control height; 8px inside the 10px track */
 .lib-seg a:hover { background: var(--surface-2); color: var(--text); }
