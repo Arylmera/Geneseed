@@ -82,7 +82,13 @@ Repeat `geneseed factory next` and act on its JSON:
     block, stage that file alone, commit, push that worktree's own branch
     (`git push -u origin HEAD:geneseed/done-list-<slug>`), and open a PR to `<default>`
     (`gh pr create --base <default>`, or `glab mr create --target-branch <default>`; each asks).
-    Give the user the PR's URL: they merge it. Remove that worktree once the PR is merged. `ok`
+    Give the user the PR's URL: they merge it. Remove that worktree once the PR is merged.
+    When the branch or the worktree already exists (a re-run with the same slug), create
+    nothing and overwrite nothing: report it to the user with that worktree's path and the
+    branch's state (`git log -1 geneseed/done-list-<slug>`), and let them reuse, merge or
+    remove it. When `gh` or `glab` is missing or fails at the PR step, the branch is pushed
+    already: report it to the user with that worktree's path and the branch name, so they open
+    the PR themselves. `ok`
     waits until the file is on the base: answer `decide --verdict ok` only then, and `checks`
     runs again against it. If it is not to be landed, `no`.
 - **`{terminal: "$close"}`** or **`{terminal: "$stop"}`** — see *The end*.

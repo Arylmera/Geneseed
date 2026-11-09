@@ -514,4 +514,7 @@ test('G7: the factory skill lands a done list by its own branch and PR, never by
   assert.ok(skill.includes('-b geneseed/done-list-<slug> origin/<default>'), 'the done-list worktree has its own branch');
   assert.ok(skill.includes('`git push -u origin HEAD:geneseed/done-list-<slug>`'), 'it pushes that branch');
   assert.ok(skill.includes('open a PR to `<default>`'), 'it opens a PR for the user');
+  // the two ways that path fails, each reported to the user with the worktree's path
+  assert.match(skill, /When the branch or the worktree already exists \(a re-run with the same slug\), create nothing and overwrite nothing: report it to the user with that worktree's path/);
+  assert.match(skill, /When `gh` or `glab` is missing or fails at the PR step, the branch is pushed already: report it to the user with that worktree's path/);
 });
