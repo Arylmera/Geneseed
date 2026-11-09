@@ -125,6 +125,8 @@ describe('Library', () => {
       ['Wiki', '0', null],
       ['Setup files', '2', null],
     ])
+    // The panes sit in the `lib` size container the narrow tier queries (narrowPanes.test.js).
+    expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
   })
 
   // Every kind lists every install, so no list head names one.
@@ -493,6 +495,10 @@ describe('Library', () => {
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
     await waitFor(() =>
       expect(document.querySelector('.reader-src')?.textContent).toBe('skills/brainstorm/SKILL.md'),
+    )
+    // A narrow reader breaks the path after a slash, not mid-word: one <wbr> after each `/`.
+    expect(document.querySelector('.reader-src').innerHTML).toBe(
+      'skills/<wbr>brainstorm/<wbr>SKILL.md',
     )
   })
 

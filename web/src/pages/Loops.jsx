@@ -207,11 +207,12 @@ function TemplateDetail({ t, bricks, overridden, runs }) {
       </p>
       <hr className="hr" />
       <figure className="loop-console">
-        {/* A flow is as wide as its steps: drawn at that width and scrolled, not shrunk until
-            its labels cannot be read (a ring keeps scaling to the reader). */}
+        {/* A flow is as wide as its steps: drawn at that width (RingGraph's --loop-w) and
+            scrolled, not shrunk until its labels cannot be read (a ring scales to the reader).
+            The box carries the same width: the ring claims it before "How it runs" (styles.css). */}
         <div
           className={ring ? 'loop-graph' : 'loop-graph flow'}
-          style={ring ? undefined : { '--loop-w': `${layout.width}px` }}
+          style={{ '--loop-w': `${layout.width}px` }}
         >
           <RingGraph graph={t.graph} bricks={bricks} onSelect={toRow} />
         </div>
@@ -499,7 +500,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
   const err = tab === 'active' ? runs.error : error
 
   return (
-    <>
+    <div className="lib-wrap">
       {tab === 'active' ? null : (
         <InstallPicker
           className="page-pick"
@@ -601,6 +602,6 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           )}
         </article>
       </div>
-    </>
+    </div>
   )
 }

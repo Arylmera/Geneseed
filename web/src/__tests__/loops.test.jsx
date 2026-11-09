@@ -281,6 +281,80 @@ describe('Loops — templates', () => {
     expect(text('.loop-brick.on > b')).toEqual(['apply'])
   })
 
+  // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack, so
+  // the entry sits under the list: picking a row brings the entry into view (LibList). jsdom has
+  // no layout, so the two geometries are stubbed. Stacked: the reader's top is at or below the
+  // list's bottom. Side by side: they share a top. The entry a page opens on scrolls nothing,
+  // nor a new section's first entry. The spy sits on the prototype from before the first render
+  // (jsdom has no scrollIntoView, so a call made at mount would otherwise vanish), and with no
+  // layout stubbed every rect is 0, which reads as stacked: a scroll at mount would be counted.
+  describe('bringing the entry into view', () => {
+    let calls
+    let had
+    beforeEach(() => {
+      calls = []
+      had = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = function (opts) {
+        if (this.classList.contains('lib-reader')) calls.push(opts)
+      }
+    })
+    afterEach(() => {
+      Element.prototype.scrollIntoView = had
+    })
+    const place = (readerTop, listBottom) => {
+      document.querySelector('.lib-reader').getBoundingClientRect = () => ({ top: readerTop })
+      document.querySelector('.lib-list').getBoundingClientRect = () => ({ bottom: listBottom })
+    }
+    const open = async (item) => {
+      const view = render(<Loops tab="templates" item={item} />)
+      await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+      return view
+    }
+
+    it('sits inside the `.lib-wrap` container the narrow tier queries', async () => {
+      await open('adr')
+      expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
+    })
+
+    // The ring carries its drawn width, the cap `.loop-ring` scales up to (narrowPanes.test.js).
+    it('gives the ring its own drawn width as --loop-w', async () => {
+      await open('adr')
+      const svg = document.querySelector('.loop-ring')
+      const width = svg.getAttribute('viewBox').split(' ')[2]
+      expect(svg.style.getPropertyValue('--loop-w')).toBe(`${width}px`)
+      // …and so does its box in the ring console, which keeps that width before its caption.
+      expect(svg.closest('.loop-graph').style.getPropertyValue('--loop-w')).toBe(`${width}px`)
+    })
+
+    it('scrolls to the entry when a row is picked in the stack, not at mount', async () => {
+      const view = await open('adr')
+      expect(calls).toEqual([])
+      place(600, 500)
+      view.rerender(<Loops tab="templates" item="tiny" />)
+      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+      expect(calls).toHaveLength(1)
+      expect(calls[0]).toMatchObject({ block: 'start' })
+    })
+
+    it('leaves the page where it is when the panes sit side by side', async () => {
+      const view = await open('adr')
+      place(100, 900)
+      view.rerender(<Loops tab="templates" item="tiny" />)
+      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+      expect(calls).toEqual([])
+    })
+
+    // A link into another section with its entry (a section and an item at once) is a new
+    // section, not a pick: its list starts at the top, so the page stays where it is.
+    it('leaves the page where it is when the section and the entry change together', async () => {
+      const view = await open('adr')
+      place(600, 500)
+      view.rerender(<Loops tab="bricks" item="apply" />)
+      await screen.findByText('Do it our way.')
+      expect(calls).toEqual([])
+    })
+  })
+
   // The list is keyboard-walkable like the Library's: arrows move focus between row links.
   it('walks the rows with the arrow keys', async () => {
     render(<Loops tab="templates" />)
@@ -776,7 +850,8 @@ describe('Loops — the ring console', () => {
 
   // A flow (the fallback for a graph a ring cannot hold) is as wide as its steps, 60 + 100 per
   // node: shrunk into the reader it took 11px labels down to ~4px. So its box asks for its own
-  // width (--loop-w) and scrolls sideways; a ring keeps scaling to the reader.
+  // width (--loop-w, on the svg RingGraph draws) and scrolls sideways; a ring scales to the
+  // reader, up to the same --loop-w (its own 1:1 width) and no further.
   it('draws a flow at its own width, and a ring to fit', async () => {
     const nodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
     const long = tpl('long', 'Nine steps.', 'development', {
@@ -792,14 +867,13 @@ describe('Loops — the ring console', () => {
     await screen.findByText('Nine steps.', { selector: '.reader-lede' })
     const flow = reader().querySelector('.loop-graph')
     expect(flow.classList.contains('flow')).toBe(true)
-    expect(flow.style.getPropertyValue('--loop-w')).toBe('960px')
+    expect(flow.querySelector('.loop-ring').style.getPropertyValue('--loop-w')).toBe('960px')
     unmount()
 
     render(<Loops tab="templates" item="tiny" />)
     await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
     const ring = reader().querySelector('.loop-graph')
     expect(ring.classList.contains('flow')).toBe(false)
-    expect(ring.style.getPropertyValue('--loop-w')).toBe('')
   })
 
   it('gives the command that starts the template, and copies it', async () => {

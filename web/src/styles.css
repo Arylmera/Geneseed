@@ -1064,9 +1064,12 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .14em;
   text-transform: uppercase; color: var(--accent-text); margin-bottom: var(--sp-1); }
 
-/* The Map: a list of pieces with kind chips, and the selected piece in a panel beside it. */
-.docs-map { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--sp-4);
-  align-items: start; margin-top: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ }
+/* The Map: a list of pieces with kind chips, and the selected piece in a panel beside it while
+   the list keeps 360px, wrapped under it, full width, once it would not. */
+.docs-map { display: flex; flex-wrap: wrap; gap: var(--sp-4);
+  align-items: flex-start; margin-top: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ }
+.docs-map > .map-tree { flex: 999 1 0; min-width: min(360px, 100%); }
+.docs-map > .map-detail { flex: 1 1 280px; min-width: 0; }
 .map-tree { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line);
   border-radius: var(--r-md); overflow: hidden; }
 .map-tree li + li { border-top: 1px solid var(--line); }
@@ -1082,7 +1085,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   text-transform: uppercase; color: var(--text-3); margin-top: 10px; /* off-scale: 10px between --sp-2 and --sp-3 */ }
 .map-detail dd { margin: 3px 0 0; /* off-scale: 3px hairline, below the 4px grid */ color: var(--text); }
 @media (max-width: 1180px) {
-  .docs-map { grid-template-columns: 1fr; }
   .map-detail { position: static; }
 }
 @media (max-width: 720px) {
@@ -2816,9 +2818,12 @@ a.tier:hover { background: var(--surface-2); }
 .tier-bar > span { display: block; height: 100%; background: var(--accent); }
 a.tier .tier-bar > span { background: var(--line-3); }
 .tier-sub { font-size: var(--fs-xs); color: var(--text-3); }
-.split { display: flex; gap: var(--sp-5); align-items: flex-start; }
-.split > .panel { flex: 1; }
-.aside-stack { width: 340px; flex: none; display: flex; flex-direction: column; gap: var(--sp-4); }
+/* The rules beside their packs panel while the rules keep 560px, the panel wrapped under them,
+   full width, once they would not (the "sidebar" layout: the rules grow 999 times faster). It
+   reads the room the page gives, so the 1180px media fold it replaced is gone. */
+.split { display: flex; flex-wrap: wrap; gap: var(--sp-5); align-items: flex-start; }
+.split > .panel { flex: 999 1 0; min-width: min(560px, 100%); }
+.aside-stack { flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
 
 .law-toolbar { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
   padding: 10px var(--sp-4); /* off-scale: 10px between --sp-2 and --sp-3 */ border-bottom: 1px solid var(--line); }
@@ -3018,6 +3023,10 @@ a.tier .tier-bar > span { background: var(--line-3); }
   min-height: calc(100vh - var(--topbar-h) - 150px); overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
 .library.locked { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); }
+/* The Library, Loops and Factories wrap `.library` in this: the panes fold by the width the page
+   gives them, not the viewport (the tier is after the breakpoints below). Docs has its own
+   container (.docs-wrap) and tiers. */
+.lib-wrap { container: lib / inline-size; }
 .lib-kinds { display: flex; flex-direction: column; gap: var(--sp-4); padding: 22px 14px; /* off-scale: 22px between --sp-5 and --sp-6; 14px between --sp-3 and --sp-4 */
   background: var(--bg-2); border-right: 1px solid var(--line); }
 .lib-title { display: flex; flex-direction: column; gap: 2px; /* off-scale: 2px hairline, below the 4px grid */ padding: 0 var(--sp-2); font-size: var(--fs-sm); }
@@ -3066,6 +3075,14 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .lib-reader .hr { margin: 6px 0; /* off-scale: 6px between --sp-1 and --sp-2 */ }
 /* The body takes the reader's whole width (user, 2026-10-25): no measure cap. */
 .lib-reader .detail-doc { padding: 0; }
+/* The Library-family readers never scroll sideways (user, 2026-11-09): a long code line wraps,
+   a token too long for the line breaks anywhere. Docs keeps its own code blocks. */
+.lib-wrap .lib-reader .detail-doc .markdown pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lib-wrap .lib-reader .detail-doc .markdown code { overflow-wrap: anywhere; }
+/* "Install: [select] this entry only" wraps as whole phrases, never one word a line. */
+.lib-copy { flex-wrap: wrap; row-gap: var(--sp-1); }
+.lib-copy > span { white-space: nowrap; }
+.lib-copy .sel { min-width: 0; max-width: 100%; }
 /* The Library's own "dossier" look (pages/Library.jsx sets .lib-dossier; Docs, Loops and Kits
    reuse .library, so nothing here may be scoped to .library alone). List: the "Show" chips
    under the filter, wrapping on a narrow pane; the open row marked by an accent edge too, not
@@ -3252,8 +3269,6 @@ a.kit-name:hover { color: var(--accent-text); }
 
 /* ---- breakpoints (the three-tier contract at the top of this file) ---- */
 @media (max-width: 1180px) {
-  .split { flex-direction: column; align-items: stretch; }
-  .aside-stack { width: auto; }
   .hosts { grid-template-columns: minmax(0, 1fr); }
   .install-panel { position: static; }
   .library { grid-template-columns: 200px minmax(0, 1fr); }
@@ -3352,6 +3367,44 @@ a.kit-name:hover { color: var(--accent-text); }
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
 }
+/* The Library's three panes, stacked (user, 2026-11-09): under 232 + 380 + 560 + 2px of
+   container the reader would share its row at under 560px, so the panes go one under the other
+   in reading order — the section header and its panels (a wrapped block, not a rail or a
+   sideways strip), the list (capped, scrolling on its own so the entry stays near), then the
+   entry at full width. Picking a row brings the entry into view (LibList, LibRows.jsx). After
+   the media tiers, and `.lib-wrap`-scoped, so it overrides their `.library` rules on these
+   pages and leaves Docs to its own. */
+@container lib (max-width: 1173px) {
+  .lib-wrap .library:not(.locked) { grid-template-columns: minmax(0, 1fr); }
+  .lib-wrap .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; /* off-scale: the phone rail's padding, as at 720px */ }
+  .lib-wrap .kind-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--sp-1);
+    overflow: visible; }
+  .lib-wrap .kind-list a { white-space: nowrap; }
+  .lib-wrap .rail-cats { flex-basis: 100%; position: static; width: auto; margin: 6px 0 0; /* off-scale: 6px between --sp-1 and --sp-2 */
+    padding: 0; border-left: 0; }
+  .lib-wrap .rail-cats ul { flex-direction: row; flex-wrap: wrap; gap: var(--sp-1); }
+  .lib-wrap .rail-cats button { width: auto; border: 1px solid var(--line); }
+  .lib-wrap .library:not(.locked) .lib-list { border-right: 0; }
+  .lib-wrap .library:not(.locked) .lib-rows { max-height: 45vh; }
+  .lib-wrap .library:not(.locked) .lib-reader { grid-column: auto;
+    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
+    padding: 24px 20px; /* off-scale: a full-width reader gives its width to the content (the ring's label floor) */ }
+}
+/* A locked Library (Personal › Memory, Notebook) has no rail, only the list and the reader:
+   it keeps them side by side down to 380 + 560 + 2px, then stacks them the same way. */
+@container lib (max-width: 941px) {
+  .lib-wrap .library.locked { grid-template-columns: minmax(0, 1fr); }
+  .lib-wrap .library.locked .lib-list { border-right: 0; }
+  .lib-wrap .library.locked .lib-rows { max-height: 45vh; }
+  .lib-wrap .library.locked .lib-reader { grid-column: auto;
+    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
+    padding: 24px 20px; /* off-scale: as the three-pane stack above */ }
+}
+/* The phone reader's padding, after the tiers and as specific as their reader rules: a page of
+   673–720px is wider than any phone-sized container tier would be. */
+@media (max-width: 720px) {
+  .lib-wrap .library:not(.locked) .lib-reader, .lib-wrap .library.locked .lib-reader { padding: 20px 16px; /* off-scale: the phone reader's padding */ }
+}
 
 /* ============================ AGENT GLYPHS (components/AgentGlyph.jsx) ============ */
 /* A badge per agent beside its name: a soft disc and a slow dashed ring shared by all, a
@@ -3445,7 +3498,11 @@ a.kit-name:hover { color: var(--accent-text); }
 .loop-graph.flow .loop-ring { width: var(--loop-w); max-width: none; }
 .loop-rules { margin: 0; padding-left: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ max-width: 76ch; font-size: var(--fs-md); color: var(--text-2); }
 .loop-rules li + li { margin-top: var(--sp-1); }
-.loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
+/* A ring fills its pane up to its own drawn width (`--loop-w`, set by RingGraph), never past
+   it: at 1:1 its 11.5px node labels and 11px notes are as drawn; a narrower pane scales them
+   down. The stacked Library tier gives the reader the page's width, so from a ~790px pane even
+   the widest shipped ring (825) keeps its node labels at 11px or more. */
+.loop-ring { display: block; width: 100%; max-width: var(--loop-w, 680px); height: auto; margin: 0 auto;
   font-family: var(--font-ui); }
 .loop-run-wait { margin: 0; font-size: var(--fs-sm); }
 .loop-run-preset { display: flex; align-items: center; gap: var(--sp-2); }
@@ -3555,7 +3612,9 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 /* The ring console (V6b mockup): the ring with "How it runs" beside it — under it once the
    reader is narrow — then the command that starts the loop. */
 .loop-console { margin: 0; display: flex; flex-wrap: wrap; gap: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ align-items: flex-start; }
-.loop-console .loop-graph { flex: 1 1 420px; }
+/* The ring first claims the width that keeps its 11.5px labels at 11px or more (--loop-w, set by
+   Loops.jsx), "How it runs" beside it only when that width is left over. */
+.loop-console .loop-graph { flex: 999 1 0; min-width: min(calc(var(--loop-w, 420px) * 11 / 11.5), 100%); }
 .loop-how { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 10px; /* off-scale: 10px between --sp-2 and --sp-3 */
   font-size: var(--fs-sm); }
 .loop-how ol { margin: 0; padding-left: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ display: flex; flex-direction: column; gap: 6px; /* off-scale: 6px between --sp-1 and --sp-2 */
@@ -3570,7 +3629,9 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .loop-start { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .loop-start-bar { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2);
   padding: 6px var(--sp-2) 6px 14px; /* off-scale: 6px between --sp-1 and --sp-2; 14px between --sp-3 and --sp-4 */ background: var(--surface-2); border-bottom: 1px solid var(--line); }
-.loop-start pre { margin: 0; padding: var(--sp-3) 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ font-size: var(--fs-sm); overflow-x: auto; }
+/* Wrapped, never scrolled sideways: a long token (a path, a title) breaks anywhere. */
+.loop-start pre { margin: 0; padding: var(--sp-3) 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ font-size: var(--fs-sm);
+  white-space: pre-wrap; overflow-wrap: anywhere; }
 .loop-running { margin: 0; }
 
 /* V2/V3 integration (2026-10-24) */
