@@ -58,6 +58,20 @@ Each global emit, in the host's own config directory, moves that host's stores i
 
 Nothing is deleted. After every copy is read back, the old `memory/` moves to `archived-memory/<stamp>/` beside it, and the notes and whole files move to the same kind of folder. The host store returns to its seed and keeps its `README.md`. Hand-written index text and `archive/` stay in that folder, and the report line names every other file that stayed there and did not fold. A store or file already linked to the tier, in either direction, is left alone. If a copy fails, the old store stays readable, the emit reports it on stderr and goes on, and the next emit retries. There is no automatic way back: to downgrade, restore the archived folder by hand.
 
+### Retired skills
+
+The same global emit also clears retired skills. A skill that Geneseed shipped and then removed or renamed can leave its folder in `skills/` with no manifest that owns it. Before the skill layer writes, the emit moves such a folder to `archived-skills/<name>/<timestamp>/` in the config directory and prints `[geneseed] <host>: pruned retired skill skills/<name> (moved to …)`. It moves the folder only when all of these hold:
+
+- The name is an old alias or a retired skill id, and not a live skill.
+- No manifest owns a path under it.
+- The folder, the `skills/` folder, and everything inside it are real entries, not links or junctions, and the emit can read them.
+- Its `SKILL.md` has the shape every Geneseed build wrote:
+  - `name: <folder>` on the second line;
+  - a `description:` on the third line, written as a JSON-quoted string;
+  - outside any code fence, a heading `# <label>: <id>`. The label is the `SKILL` word of a shipped theme, such as `Rite` or `Skill`. The id is the folder name, or the skill that the folder name is an alias of.
+
+A folder that fails one check is yours. It stays, and `migrate --dry-run` lists it as an orphan. A folder the emit cannot read also stays, with a warning. A folder that passes all four checks is a `would prune` line there. A second emit finds nothing to move.
+
 ### The console
 
 The console has one hub and no install switch. On the **Personal** page, Rules, Profile and Memory list the shared store once, tagged `shared`, and name no harness; a project install keeps its own entry. Each rule row shows its token cost, and the page shows the total. There is no rule limit. A **Pending** section shows what waits in the draft, with *Approve* and *Reject* on a rule, and the two files with three choices on a profile or wiki pointer. A decision that moves a file offers *Rebuild all*, which removes the host copy. An edit in another session makes the decision reload instead of applying, and no decision applies while a rebuild runs.

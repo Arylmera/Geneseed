@@ -1382,7 +1382,7 @@
           ],
           "dest": "dry_run",
           "metavar": null,
-          "help": "survey and print the plan, with the fold each global install would run and any orphan; write nothing",
+          "help": "survey and print the plan, with the fold each global install would run, the retired skill folders it would prune and any orphan; write nothing",
           "choices": null,
           "default": false,
           "required": false,

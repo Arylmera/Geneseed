@@ -21,6 +21,7 @@ import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
 import { foldOnEmit } from './fold.mjs';
+import { pruneRetiredSkills } from './retired-skills.mjs';
 import { renderAll } from './render.mjs';
 import {
   ensureExcludesStub, ensureNotebookIndex, ensureProfileStub, ensureRulesStub,
@@ -219,6 +220,9 @@ export function emitOpencodeGlobalRender(cfg, job) {
   }
   // Co-owned, so never in `owned` — see `opencodeSentinelWrite`.
   opencodeSentinelWrite(cfgDir);
+
+  // As in `emitClaudeRender`: before the skill layer claims anything.
+  if (sharedRoot !== null) pruneRetiredSkills('opencode', cfgDir, oldOwned);
 
   // `manifestExisted` is deliberately not passed, so
   // the pre-manifest header line is unreachable from this emit.
