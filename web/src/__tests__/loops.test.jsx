@@ -303,6 +303,14 @@ describe('Loops — templates', () => {
       expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
     })
 
+    // The ring carries its drawn width, the cap `.loop-ring` scales up to (narrowPanes.test.js).
+    it('gives the ring its own drawn width as --loop-w', async () => {
+      await open('adr')
+      const svg = document.querySelector('.loop-ring')
+      const width = svg.getAttribute('viewBox').split(' ')[2]
+      expect(svg.style.getPropertyValue('--loop-w')).toBe(`${width}px`)
+    })
+
     it('scrolls to the entry when a row is picked in the stack', async () => {
       const { view, scroll } = await open('adr')
       expect(scroll).not.toHaveBeenCalled()
@@ -817,7 +825,8 @@ describe('Loops — the ring console', () => {
 
   // A flow (the fallback for a graph a ring cannot hold) is as wide as its steps, 60 + 100 per
   // node: shrunk into the reader it took 11px labels down to ~4px. So its box asks for its own
-  // width (--loop-w) and scrolls sideways; a ring keeps scaling to the reader.
+  // width (--loop-w, on the svg RingGraph draws) and scrolls sideways; a ring scales to the
+  // reader, up to the same --loop-w (its own 1:1 width) and no further.
   it('draws a flow at its own width, and a ring to fit', async () => {
     const nodes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
     const long = tpl('long', 'Nine steps.', 'development', {
@@ -833,14 +842,13 @@ describe('Loops — the ring console', () => {
     await screen.findByText('Nine steps.', { selector: '.reader-lede' })
     const flow = reader().querySelector('.loop-graph')
     expect(flow.classList.contains('flow')).toBe(true)
-    expect(flow.style.getPropertyValue('--loop-w')).toBe('960px')
+    expect(flow.querySelector('.loop-ring').style.getPropertyValue('--loop-w')).toBe('960px')
     unmount()
 
     render(<Loops tab="templates" item="tiny" />)
     await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
     const ring = reader().querySelector('.loop-graph')
     expect(ring.classList.contains('flow')).toBe(false)
-    expect(ring.style.getPropertyValue('--loop-w')).toBe('')
   })
 
   it('gives the command that starts the template, and copies it', async () => {

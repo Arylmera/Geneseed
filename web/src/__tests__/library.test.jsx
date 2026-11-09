@@ -496,6 +496,10 @@ describe('Library', () => {
     await waitFor(() =>
       expect(document.querySelector('.reader-src')?.textContent).toBe('skills/brainstorm/SKILL.md'),
     )
+    // A narrow reader breaks the path after a slash, not mid-word: one <wbr> after each `/`.
+    expect(document.querySelector('.reader-src').innerHTML).toBe(
+      'skills/<wbr>brainstorm/<wbr>SKILL.md',
+    )
   })
 
   it('shows no forget control outside memory', async () => {

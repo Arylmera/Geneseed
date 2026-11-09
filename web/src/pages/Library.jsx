@@ -33,6 +33,16 @@ const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
 const hostOf = (key) => key.split(':').slice(0, 2).join(' ')
+// A path that breaks after a slash in a narrow reader, not mid-word (`overflow-wrap: anywhere`
+// on `.reader-src` stays the fallback for a single segment longer than the line).
+const slashBreaks = (path) =>
+  path.split('/').map((seg, i) => (
+    <React.Fragment key={i}>
+      {i ? '/' : null}
+      {i ? <wbr /> : null}
+      {seg}
+    </React.Fragment>
+  ))
 // The same key as the `{host, path}` pair the API takes: the path is everything after the second
 // colon, byte for byte, or the server refuses it as an unknown install.
 export const installOfKey = (key) => {
@@ -678,7 +688,7 @@ export default function Library({
                 <StatusBadge status={status} withHint />
                 {src ? (
                   <>
-                    <span className="mono dim reader-src">{src}</span>
+                    <span className="mono dim reader-src">{slashBreaks(src)}</span>
                     <button type="button" className="btn ghost sm" onClick={onCopy}>
                       {copied?.src !== src ? 'Copy path' : copied.ok ? 'Copied' : 'Copy failed'}
                     </button>

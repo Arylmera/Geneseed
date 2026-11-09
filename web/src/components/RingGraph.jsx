@@ -40,6 +40,8 @@ export default function RingGraph({ graph, bricks, onSelect, highlight }) {
     <svg
       className="loop-ring"
       viewBox={`0 0 ${l.width} ${l.height}`}
+      // Its drawn width, the cap `.loop-ring` scales up to (styles.css).
+      style={{ '--loop-w': `${l.width}px` }}
       role="group"
       aria-label={`${graph.name} loop: ${graph.nodes.join(', ')}`}
     >

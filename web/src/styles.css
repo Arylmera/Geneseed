@@ -3070,6 +3070,13 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .lib-reader .hr { margin: 6px 0; /* off-scale: 6px between --sp-1 and --sp-2 */ }
 /* The body takes the reader's whole width (user, 2026-10-25): no measure cap. */
 .lib-reader .detail-doc { padding: 0; }
+/* The Library-family readers never scroll sideways (user, 2026-11-09): a long code line wraps,
+   a token too long for the line breaks anywhere. Docs keeps its own code blocks. */
+.lib-wrap .lib-reader .detail-doc .markdown pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* "Install: [select] this entry only" wraps as whole phrases, never one word a line. */
+.lib-copy { flex-wrap: wrap; row-gap: var(--sp-1); }
+.lib-copy > span { white-space: nowrap; }
+.lib-copy .sel { min-width: 0; max-width: 100%; }
 /* The Library's own "dossier" look (pages/Library.jsx sets .lib-dossier; Docs, Loops and Kits
    reuse .library, so nothing here may be scoped to .library alone). List: the "Show" chips
    under the filter, wrapping on a narrow pane; the open row marked by an accent edge too, not
@@ -3474,7 +3481,11 @@ a.kit-name:hover { color: var(--accent-text); }
 .loop-graph.flow .loop-ring { width: var(--loop-w); max-width: none; }
 .loop-rules { margin: 0; padding-left: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ max-width: 76ch; font-size: var(--fs-md); color: var(--text-2); }
 .loop-rules li + li { margin-top: var(--sp-1); }
-.loop-ring { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto;
+/* A ring fills its pane up to its own drawn width (`--loop-w`, set by RingGraph), never past
+   it: at 1:1 its 11.5px node labels and 11px notes are as drawn; a narrower pane scales them
+   down. The stacked Library tier gives the reader the page's width, so from a ~790px pane even
+   the widest shipped ring (825) keeps its node labels at 11px or more. */
+.loop-ring { display: block; width: 100%; max-width: var(--loop-w, 680px); height: auto; margin: 0 auto;
   font-family: var(--font-ui); }
 .loop-run-wait { margin: 0; font-size: var(--fs-sm); }
 .loop-run-preset { display: flex; align-items: center; gap: var(--sp-2); }
@@ -3599,7 +3610,9 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .loop-start { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .loop-start-bar { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2);
   padding: 6px var(--sp-2) 6px 14px; /* off-scale: 6px between --sp-1 and --sp-2; 14px between --sp-3 and --sp-4 */ background: var(--surface-2); border-bottom: 1px solid var(--line); }
-.loop-start pre { margin: 0; padding: var(--sp-3) 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ font-size: var(--fs-sm); overflow-x: auto; }
+/* Wrapped, never scrolled sideways: a long token (a path, a title) breaks anywhere. */
+.loop-start pre { margin: 0; padding: var(--sp-3) 14px; /* off-scale: 14px between --sp-3 and --sp-4 */ font-size: var(--fs-sm);
+  white-space: pre-wrap; overflow-wrap: anywhere; }
 .loop-running { margin: 0; }
 
 /* V2/V3 integration (2026-10-24) */

@@ -50,3 +50,26 @@ describe('Library panes: the narrow tier', () => {
     expect(rule(reader, tier)).toMatch(/grid-column:\s*auto/)
   })
 })
+
+describe('the entry reader never scrolls sideways', () => {
+  it('a start command wraps, breaking a long token anywhere', () => {
+    const pre = rule('.loop-start pre')
+    expect(pre).toMatch(/white-space:\s*pre-wrap/)
+    expect(pre).toMatch(/overflow-wrap:\s*anywhere/)
+    expect(pre).not.toMatch(/overflow-x/)
+  })
+
+  it("a code block in the Library family's reader wraps too", () => {
+    const pre = rule('.lib-wrap .lib-reader .detail-doc .markdown pre')
+    expect(pre).toMatch(/white-space:\s*pre-wrap/)
+    expect(pre).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
+  // A ring fills its pane up to its own width (`--loop-w`, RingGraph), never past it: the old
+  // 680px cap drew a wider ring (825px) at 0.82 even on a wide pane, its labels under 11px.
+  it('a loop ring is capped at its own drawn width, not at a fixed 680px', () => {
+    const ring = rule('.loop-ring')
+    expect(ring).toMatch(/max-width:\s*var\(--loop-w/)
+    expect(ring).not.toMatch(/max-width:\s*680px/)
+  })
+})
