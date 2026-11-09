@@ -164,14 +164,14 @@ export function LibList({
           ref={rowsRef}
           onKeyDown={walkRows}
           onFocus={(e) => rove(e.currentTarget)}
-          // A pick keeps the list open through the route change it causes (useFolds). A row whose
-          // href is the route already changes no route, so it keeps nothing: a later jump from
-          // outside still folds. A Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere:
-          // not a pick here.
+          // A pick keeps the list open through the route change it causes (useFolds). The open
+          // row of a route that names it changes no [section, entry] (its href may still be an
+          // alias of the route), so it keeps nothing: a later jump from outside still folds. A
+          // Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere: not a pick here.
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
             const row = e.target.closest?.('.lib-row')
-            if (row && row.getAttribute('href') !== window.location.hash) folds.pick()
+            if (row && !(inView[1] && row.classList.contains('on'))) folds.pick()
           }}
         >
           {children}
