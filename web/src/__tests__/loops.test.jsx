@@ -309,6 +309,8 @@ describe('Loops — templates', () => {
       const svg = document.querySelector('.loop-ring')
       const width = svg.getAttribute('viewBox').split(' ')[2]
       expect(svg.style.getPropertyValue('--loop-w')).toBe(`${width}px`)
+      // …and so does its box in the ring console, which keeps that width before its caption.
+      expect(svg.closest('.loop-graph').style.getPropertyValue('--loop-w')).toBe(`${width}px`)
     })
 
     it('scrolls to the entry when a row is picked in the stack', async () => {

@@ -208,8 +208,12 @@ function TemplateDetail({ t, bricks, overridden, runs }) {
       <hr className="hr" />
       <figure className="loop-console">
         {/* A flow is as wide as its steps: drawn at that width (RingGraph's --loop-w) and
-            scrolled, not shrunk until its labels cannot be read (a ring scales to the reader). */}
-        <div className={ring ? 'loop-graph' : 'loop-graph flow'}>
+            scrolled, not shrunk until its labels cannot be read (a ring scales to the reader).
+            The box carries the same width: the ring claims it before "How it runs" (styles.css). */}
+        <div
+          className={ring ? 'loop-graph' : 'loop-graph flow'}
+          style={{ '--loop-w': `${layout.width}px` }}
+        >
           <RingGraph graph={t.graph} bricks={bricks} onSelect={toRow} />
         </div>
         <figcaption className="loop-how">

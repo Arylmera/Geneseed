@@ -65,12 +65,30 @@ describe('the entry reader never scrolls sideways', () => {
     expect(pre).toMatch(/overflow-wrap:\s*anywhere/)
   })
 
+  // Measured 2026-11-09 at 420px: an agent body's inline `C:/Users/…/<your-name>.md` path drew
+  // 409px in a 386px reader.
+  it('an inline code token too long for the line breaks anywhere', () => {
+    expect(rule('.lib-wrap .lib-reader .detail-doc .markdown code')).toMatch(
+      /overflow-wrap:\s*anywhere/,
+    )
+  })
+
   // A ring fills its pane up to its own width (`--loop-w`, RingGraph), never past it: the old
   // 680px cap drew a wider ring (825px) at 0.82 even on a wide pane, its labels under 11px.
   it('a loop ring is capped at its own drawn width, not at a fixed 680px', () => {
     const ring = rule('.loop-ring')
     expect(ring).toMatch(/max-width:\s*var\(--loop-w/)
     expect(ring).not.toMatch(/max-width:\s*680px/)
+  })
+
+  // The label floor: an 11.5px node label stays at 11px or more while the ring is drawn at
+  // 11 / 11.5 of its own width or wider. Measured 2026-11-09 at 960px: "How it runs" beside the
+  // ring left it 6.6px labels in an 839px reader. So the ring claims that width first, "How it
+  // runs" wraps under it, and only a pane narrower than that shrinks the labels.
+  it('a ring keeps the width that holds its labels at 11px before "How it runs" sits beside it', () => {
+    const graph = rule('.loop-console .loop-graph')
+    expect(graph).toMatch(/flex:\s*999 1 0/)
+    expect(graph).toMatch(/min-width:\s*min\(calc\(var\(--loop-w, 420px\) \* 11 \/ 11\.5\), 100%\)/)
   })
 })
 

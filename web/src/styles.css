@@ -3078,6 +3078,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
 /* The Library-family readers never scroll sideways (user, 2026-11-09): a long code line wraps,
    a token too long for the line breaks anywhere. Docs keeps its own code blocks. */
 .lib-wrap .lib-reader .detail-doc .markdown pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lib-wrap .lib-reader .detail-doc .markdown code { overflow-wrap: anywhere; }
 /* "Install: [select] this entry only" wraps as whole phrases, never one word a line. */
 .lib-copy { flex-wrap: wrap; row-gap: var(--sp-1); }
 .lib-copy > span { white-space: nowrap; }
@@ -3386,7 +3387,8 @@ a.kit-name:hover { color: var(--accent-text); }
   .lib-wrap .lib-list { border-right: 0; }
   .lib-wrap .library .lib-rows { max-height: 45vh; }
   .lib-wrap .library .lib-reader, .lib-wrap .library.locked .lib-reader { grid-column: auto;
-    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */ }
+    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
+    padding: 24px 20px; /* off-scale: a full-width reader gives its width to the content (the ring's label floor) */ }
 }
 @container lib (max-width: 640px) {
   .lib-wrap .library .lib-reader { padding: 20px 16px; /* off-scale: the phone reader's padding, as at 720px */ }
@@ -3598,7 +3600,9 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 /* The ring console (V6b mockup): the ring with "How it runs" beside it — under it once the
    reader is narrow — then the command that starts the loop. */
 .loop-console { margin: 0; display: flex; flex-wrap: wrap; gap: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ align-items: flex-start; }
-.loop-console .loop-graph { flex: 1 1 420px; }
+/* The ring first claims the width that keeps its 11.5px labels at 11px or more (--loop-w, set by
+   Loops.jsx), "How it runs" beside it only when that width is left over. */
+.loop-console .loop-graph { flex: 999 1 0; min-width: min(calc(var(--loop-w, 420px) * 11 / 11.5), 100%); }
 .loop-how { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 10px; /* off-scale: 10px between --sp-2 and --sp-3 */
   font-size: var(--fs-sm); }
 .loop-how ol { margin: 0; padding-left: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ display: flex; flex-direction: column; gap: 6px; /* off-scale: 6px between --sp-1 and --sp-2 */
