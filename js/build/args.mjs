@@ -12,7 +12,7 @@ import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
   CONFIG, discoverNames, GATE_SWITCHES, PACK_ORDER, SRC, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits,
-  resolveSkillNames, retiredRuleAddresses, skillAliases,
+  resolveSkillNames, retiredRuleAddresses, reusedRuleAddresses, skillAliases,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
@@ -79,6 +79,7 @@ export function configDefaults() {
               + ' — ignoring them.\n');
           }
           d.excludeRules = [...new Set(ids.filter((id) => known.includes(id)))].sort();
+          warnReusedRules(d.excludeRules, `${path.basename(CONFIG)} "excludeRules"`);
         } else {
           process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" is `
             + 'not a list of rule addresses — excluding nothing.\n');
@@ -189,13 +190,32 @@ function parseExcludeRules(value) {
     }
     out.push(id);
   }
+  warnReusedRules(out, '--exclude-rules');
   return [...new Set(out)].sort();
 }
 
-/** One stderr line for a retired address: it excludes nothing now, and the build goes on. */
+/**
+ * One stderr line for a retired address: it excludes nothing now, and the build goes on. The
+ * entry's `effect`, when set, says what the old exclusion no longer does.
+ */
 function warnRetiredRule(id, retired, where) {
+  const { note, effect } = retired.get(id);
   process.stderr.write(`[geneseed] WARN: ${where}: '${id.replace('.', ' ')}' was retired `
-    + `(${retired.get(id)}) — ignoring it.\n`);
+    + `(${note})${effect ? `: ${effect}` : ''} — ignoring it.\n`);
+}
+
+/**
+ * A loud stderr line for each id in `ids` whose address a retired rule held and a different live
+ * rule holds now (`reusedRuleAddresses`): the exclusion binds the NEW rule, which an entry written
+ * for the old one never meant. It still binds — the line names both rules so a human decides.
+ */
+export function warnReusedRules(ids, where, reused = reusedRuleAddresses()) {
+  for (const id of ids.filter((x) => reused.has(x))) {
+    const { old, note, now } = reused.get(id);
+    process.stderr.write(`[geneseed] WARN: ${where}: '${id.replace('.', ' ')}' NOW EXCLUDES `
+      + `${now.name} (${now.id}), NOT the retired ${old} (${note}) that held this address before. `
+      + `If this exclusion was written for ${old}, remove it.\n`);
+  }
 }
 
 /**

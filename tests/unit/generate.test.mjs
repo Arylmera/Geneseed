@@ -40,8 +40,9 @@ import {
   doctrinesOfDir, excludedRulesOfDir, themeFiles,
 } from '../../js/hosts/installs.mjs';
 import {
-  ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds,
+  ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds, reusedRuleAddresses, ruleCanon,
 } from '../../js/build/source.mjs';
+import { warnReusedRules } from '../../js/build/args.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -2980,6 +2981,8 @@ test('a retired rule address is dropped with a WARN; an unknown one is still ref
       '--exclude-rules', 'comms 1,comms 5']);
     assert.equal(ok.status, 0, (ok.stderr || '').slice(-1200));
     assert.match(ok.stderr, /--exclude-rules: 'comms 5' was retired \(merged into comms 1, Codes and Markers\)/);
+    // And it says what changed: the markers now live in comms 1, so this exclusion stopped removing them.
+    assert.match(ok.stderr, /the ask markers it held now bind inside comms 1, so this exclusion no longer removes them/);
     assert.match(agentText(path.join(d, 'b')), /^Excluded rules: comms 1$/m,
       'the marker did not carry exactly the live exclusion');
     const bad = driver(d, ['--emit', 'files', '--theme', 'neutral', '--out', path.join(d, 'c'),
@@ -2987,6 +2990,25 @@ test('a retired rule address is dropped with a WARN; an unknown one is still ref
     assert.equal(bad.status, 2);
     assert.match(bad.stderr, /invalid choice: 'comms 9'/);
   });
+});
+
+test('an exclusion of a retired address a new rule took over warns loudly, naming both rules', () => {
+  // No live rule holds a retired address today, so the canon is a fixture: a rule appended to
+  // comms at position 5 takes `comms 5` back from the retired mark-the-ask. A stored
+  // `comms 5` exclusion then removes the NEW rule, which it never meant; it still binds, and
+  // the WARN names both so a human decides.
+  const live = ruleCanon().rules.filter((r) => r.kind === 'DOCTRINE');
+  assert.deepEqual([...reusedRuleAddresses(live).keys()], [], 'the real canon reuses an address now');
+  const appended = { kind: 'DOCTRINE', pack: 'comms', id: 'new-rule', name: 'New Rule', n: 5, label: 'comms 5' };
+  const reused = reusedRuleAddresses([...live.filter((r) => r.label !== 'comms 5'), appended]);
+  assert.deepEqual([...reused.keys()], ['comms.5']);
+  const lines = [];
+  const write = process.stderr.write;
+  process.stderr.write = (s) => { lines.push(String(s)); return true; };
+  try { warnReusedRules(['comms.1', 'comms.5'], '--exclude-rules', reused); } finally { process.stderr.write = write; }
+  assert.deepEqual(lines, ["[geneseed] WARN: --exclude-rules: 'comms 5' NOW EXCLUDES New Rule (new-rule), NOT the "
+    + 'retired mark-the-ask (merged into comms 1, Codes and Markers) that held this address before. If this '
+    + 'exclusion was written for mark-the-ask, remove it.\n']);
 });
 
 test('a plain files emit ships neither upstreams.json nor licenses/', () => {
