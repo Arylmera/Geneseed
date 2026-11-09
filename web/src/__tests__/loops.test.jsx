@@ -385,6 +385,15 @@ describe('Loops — templates', () => {
       await screen.findByText('Do it our way.')
       expect(listToggle().getAttribute('aria-expanded')).toBe('true')
     })
+
+    // Back to the section's own address (no entry routed): the list again, as on arrival.
+    // Found in the browser: from #/item/… to #/section/… the list stayed folded.
+    it('opens the list again when the route drops its entry', async () => {
+      const view = await open({ item: 'adr' })
+      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
+      view.rerender(<Loops tab="templates" />)
+      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
+    })
   })
 
   // The list is keyboard-walkable like the Library's: arrows move focus between row links.

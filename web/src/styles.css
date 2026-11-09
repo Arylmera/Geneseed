@@ -3130,6 +3130,8 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .lib-dossier .lib-tools .seg { flex-wrap: wrap; max-width: 100%; }
 .lib-dossier .lib-row.on { box-shadow: inset 3px 0 0 var(--accent); }
 .lib-dossier.uses .lr-desc { display: none; }
+/* With no line of description, a row is its padding, its 1px rule and its name's line. */
+.lib-dossier.uses { --lib-row-h: calc(2 * var(--lib-row-pad) + 1px + var(--lh-body) * var(--fs-md)); }
 .lib-dossier .lr-use .ub-trk { width: 70px; }
 .lib-dossier .lr-use .mono { min-width: 3ch; text-align: right; }
 /* Reader: tags, the source path with its Copy button, title; then the lede and the "Use when"

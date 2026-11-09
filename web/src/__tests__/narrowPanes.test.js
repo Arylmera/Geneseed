@@ -122,6 +122,16 @@ describe('Library panes: the narrow tier', () => {
     expect(rule('.lib-row')).toMatch(/border-bottom:\s*1px solid/)
   })
 
+  // With usage on, the Library hides the line of description, so its row is shorter: measured
+  // 2026-11-09, 42.7px against 67.85px, so the 5-row cap showed seven. Its height drops the
+  // description's line, its 2px and the gap.
+  it('a row with its description hidden drops that line from its height', () => {
+    expect(rule('.lib-dossier.uses .lr-desc')).toMatch(/display:\s*none/)
+    expect(rule('.lib-dossier.uses')).toMatch(
+      /--lib-row-h:\s*calc\(2 \* var\(--lib-row-pad\) \+ 1px \+ var\(--lh-body\) \* var\(--fs-md\)\)/,
+    )
+  })
+
   // At a 673–720px window the page is wider than 640px, so a container tier for the phone
   // padding never matched there and the 24px 20px stacked padding beat the phone's 20px 16px.
   // The phone padding is a media rule after the container tiers, as specific as their reader.

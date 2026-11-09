@@ -61,8 +61,8 @@ export function LibList({
   const [seen, setSeen] = useState([section, item])
   if (seen[0] !== section || seen[1] !== item) {
     setSeen([section, item])
-    if (seen[0] !== section) setOpen(true)
-    else if (item) setOpen(false)
+    // A new section, or no routed entry any more, shows the list; a pick folds it.
+    setOpen(seen[0] !== section || !item)
   }
   const rowsId = useId()
   // After every render: the caller owns the rows, so any render may add or drop them.
