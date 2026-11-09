@@ -45,7 +45,7 @@ skill directly. The console's **Factories** page shows the request for each fact
 
 The agent then:
 
-1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched.
+1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched. The slug never holds the word `git`, `commit` or `push`: `factory init` refuses it.
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
 3. Steps the run: `intake` writes the work item, `holdout-write` writes the holdout scenarios outside the worktree, the `bugfix` loop fixes it commit by commit, `checks` runs the base branch's done list against the fix, `review-panel` has a panel of agents review it, `holdout` plays the scenarios against the fix, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `holdout-write` and picks the lane: the `bugfix`, `feature`, `deps-upgrade` or `refactor` loop, or the `docs-update` brick for a docs-only change. A failed check, review or scenario, or red CI, then sends the work back to that lane.
 
@@ -55,7 +55,8 @@ The holdout scenarios are checks the developer never sees: see [Holdout scenario
 
 Create the worktree first, then register the run in it. Never run `init` in your own checkout:
 the run then works on your current branch. Keep the three commands as one `&&` chain and
-replace every placeholder: if one command fails, the next ones do not run.
+replace every placeholder: if one command fails, the next ones do not run. Pick a slug without the
+word `git`, `commit` or `push`: `factory init` refuses it.
 
 ```bash
 git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug> && cd ../<repo>-factory-<slug> && geneseed factory init --factory <name> --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"

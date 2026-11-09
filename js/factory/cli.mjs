@@ -19,15 +19,17 @@
  *
  * THE PORCELAIN IS TRUSTED AS PIPED. A TTY stdin is `null` and the engine refuses it after a
  * stage outside a loop (J5); an empty pipe (or a null device) reads as a clean tree, and nothing
- * here can tell it from one. The Rite writes `git status --porcelain --untracked-files=all` to the
- * run's own temp file (`<tmp>/factory-<slug>-status.txt`) on one line, then records with that
- * file on stdin (`< file`) on a second line, so a new spec reaches the engine as its own path.
+ * here can tell it from one. The Rite writes `git status --porcelain --untracked-files=all` to a
+ * fresh temp file held in a shell variable (`status=$(mktemp)`) on one line, then records with
+ * that file on stdin (`< "$status"`) on a second line of the same command, so a new spec reaches
+ * the engine as its own path, and two runs on one machine never share the file (F2).
  * The git gate (`GIT_GATE_RE`) asks on a line that holds the word `git` and the word `commit` or
- * `push`. What keeps every documented line clear of it, and its limit (F1): the slug never holds
- * those words (`init` refuses a `loop/factory-<slug>` branch whose slug does), every other path a
- * run fills is `<tmp>/factory-<slug>-…`, and free text goes through `--carry-file`/`--note-file`.
- * The OS temp directory's own path is the one thing nothing here can check: when it holds one of
- * those words, the gate asks on each record, and the skill says so.
+ * `push`. What keeps every documented line clear of it, and its limit (F1): the gate reads a
+ * variable's name, never its path, so every carry, note and stop file is a per-call variable too;
+ * the one path a run names is `--spec specs/<slug>/spec.md`, and `init` refuses a
+ * `loop/factory-<slug>` branch whose slug holds those words. Brick outcome names are the one thing
+ * nothing here checks: an outcome holding them makes the gate ask on its record, and the skill
+ * says so.
  *
  * `--spec` IS READ HERE, not in the state module: the engine stays pure, and the CLI is the one
  * layer that may read files. The path is stored root-relative with forward slashes, the form a
@@ -134,13 +136,15 @@ const ACTIONS = {
     const file = path.join(root, FACTORY_FILE);
     if (isFile(file)) throw new Error(`${file} already exists — a factory is already running here`);
     if (!args.title || !args.requirement || !args.factory) throw new Error('init needs --title, --requirement and --factory');
-    // F1: the slug lands on the porcelain line beside `git` and on every record line, where the
-    // git gate asks on the words git, commit and push. The run's branch carries it, so check it there.
+    // F1: the slug lands on the spec's record line (`--spec specs/<slug>/spec.md`), where the git
+    // gate asks on the words git, commit and push. The run's branch carries it, so check it there.
+    // Case-insensitive on purpose: stricter than the (case-sensitive) gate.
     const slug = /^loop\/factory-(.+)$/.exec(currentBranch(root) ?? '')?.[1];
     const word = slug && /\b(git|commit|push)\b/i.exec(slug);
     if (word) {
-      throw new Error(`the run's slug ${JSON.stringify(slug)} holds the word ${word[1]}: the git gate would ask on every `
-        + 'record line. Rename the branch loop/factory-<slug> to a slug without git, commit or push (spell them g1t, cmt, psh)');
+      throw new Error(`the run's slug ${JSON.stringify(slug)} holds the word ${word[1]}, in any case refused: the git gate `
+        + 'asks on git, commit and push on the spec\'s record line. Rename the branch loop/factory-<slug> to a slug without '
+        + 'git, commit or push (spell them g1t, cmt, psh)');
     }
     const catalog = loadCatalog({ projectRoot: root });
     const factory = resolveFactory(args.factory, catalog);

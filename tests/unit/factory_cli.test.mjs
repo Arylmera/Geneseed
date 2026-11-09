@@ -431,9 +431,11 @@ test('M7: record --carry-file and decide --note-file carry free text without the
   } finally { sb.cleanup(); }
 });
 
-// F1: the slug lands on the porcelain line beside `git` and on every record line, so `init`
+// F1: the slug lands on the spec's record line (`--spec specs/<slug>/spec.md`), so `init`
 // refuses a run branch `loop/factory-<slug>` whose slug holds the word git, commit or push, and
 // writes nothing. `digit` or `github` hold no such word; another branch is not checked.
+// F3: the refusal is case-insensitive (`Push-it`) and so deliberately stricter than the
+// case-sensitive gate, which would not ask on `Push`; the message claims no ask for it.
 test('F1: init refuses a run slug that holds the word git, commit or push', () => {
   const sb = repo(['fixture-fix']);
   const head = (branch) => writeFileSync(path.join(sb.path, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
@@ -443,8 +445,9 @@ test('F1: init refuses a run slug that holds the word git, commit or push', () =
       assert.deepEqual(run(sb.path, [...INIT, '--factory', 'fixture-fix']), {
         code: 1,
         out: {
-          error: `the run's slug "${slug}" holds the word ${word}: the git gate would ask on every record line. `
-            + 'Rename the branch loop/factory-<slug> to a slug without git, commit or push (spell them g1t, cmt, psh)',
+          error: `the run's slug "${slug}" holds the word ${word}, in any case refused: the git gate asks on git, commit `
+            + 'and push on the spec\'s record line. Rename the branch loop/factory-<slug> to a slug without git, commit or '
+            + 'push (spell them g1t, cmt, psh)',
         },
       }, slug);
       assert.equal(existsSync(path.join(sb.path, 'FACTORY.md')), false, slug);

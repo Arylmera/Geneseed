@@ -562,12 +562,13 @@ test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and th
 // F1: the git gate's own regex (read from js/hosts/hooks.mjs, never copied) over every command the
 // factory skill documents for `record`, `decide` and the porcelain. The gate asks on a line that
 // holds the word `git` and, anywhere on it, `commit` or `push`. Every placeholder a run fills is
-// filled with all three words (`git-commit-push`), except the bounded ones: `<slug>` (`factory
-// init` refuses a slug holding git, commit or push, so it gets `fix-hook-v2`), `<tmp>` (the OS temp
-// directory: the skill names that limit), `<outcome>` and `<stage>` (names the engine declares).
-// No record, decide or porcelain-file line may then match; the porcelain line holds `git` by
+// filled with all three words (`git-commit-push`), `<stage>` included (a project names its bricks
+// freely), except the bounded ones: `<slug>` (`factory init` refuses a slug holding git, commit or
+// push, so it gets `fix-hook-v2`) and `<outcome>`, bounded only because the skill states that limit
+// (nothing checks a brick's outcome names; the skill says the gate asks on such an outcome).
+// No record, decide or porcelain line may then match; the porcelain line holds `git` by
 // necessity, so it may hold only bounded placeholders, and no pipe.
-const BOUNDED = { '<slug>': 'fix-hook-v2', '<tmp>': '/tmp', '<outcome>': 'pass', '<stage>': 'merge-gate' };
+const BOUNDED = { '<slug>': 'fix-hook-v2', '<outcome>': 'pass' };
 // a placeholder starts right after `<`; the stdin redirect is `< ` with a space
 const PLACEHOLDER = /<[^<>\s][^<>]*>/g;
 const fill = (line) => line.replace(PLACEHOLDER, (p) => BOUNDED[p] ?? 'git-commit-push').replace(/…/g, '--outcome pass');
@@ -590,8 +591,18 @@ test('F1: no documented record, decide or porcelain line trips the git gate', ()
     assert.ok((line.match(PLACEHOLDER) ?? []).every((p) => p in BOUNDED), `an unbounded placeholder on the git line: ${line}`);
     assert.ok(!gate.test(fill(line)), `the git gate asks on: ${line}`);
   }
-  // one status file per run, never one name every run on the machine shares
-  assert.ok(porcelain.every((line) => line.includes('<slug>')), 'the status file is named per run');
+  // F2: every file a record, decide or porcelain line reads or writes is a fresh temp file made per
+  // call and held in a variable, never a name two runs on one machine could share. The one path a
+  // run names is `--spec specs/<slug>/spec.md`, inside its own worktree.
+  assert.ok(skill.includes('`status=$(mktemp)`') && skill.includes('`$status = (New-TemporaryFile).FullName`'),
+    'the skill makes the status file per call');
+  const VAR = /^"?\$[a-z]+"?$/;
+  for (const line of [...records, ...porcelain]) {
+    assert.doesNotMatch(line, /<tmp>|factory-<slug>/, `a shared temp path on: ${line}`);
+    const files = [...line.matchAll(/(?:^|\s)(?:--carry|--carry-file|--note-file|>|<)\s+(\S+)/g)].map((m) => m[1]);
+    for (const file of files) assert.match(file, VAR, `not a per-call temp variable on: ${line}`);
+    assert.doesNotMatch(line.replace(/--spec specs\/<slug>\/spec\.md/, ''), /<slug>/, `the slug in a path on: ${line}`);
+  }
 });
 
 // M17: factory-forge's example says it is "in the shape of the shipped bug-report-to-fix", so its
