@@ -61,11 +61,15 @@ Repeat `geneseed factory next` and act on its JSON:
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
-  `geneseed factory decide --verdict ok|no|amend --note "<their words>"` — `ok` follows the
+  write their words to a file in the OS temp directory, then
+  `geneseed factory decide --verdict ok|no|amend --note-file <that file>` — `ok` follows the
   reported outcome's edge, `no` stops, `amend` re-runs the stage with their note — and continue.
+  Free text always goes through a file (`--note-file`, `--carry-file`): a line of it that starts
+  with `git … commit` or `push` would sit on the command line, and the git gate would ask.
   The gated outcomes:
   - `intake` **`needs-info`**: show the user its numbered questions. Their answers go back as
-    `amend --note "<their answers>"`; `ok` goes on with the assumptions intake wrote.
+    `amend --note-file <a file holding their answers>`; `ok` goes on with the assumptions intake
+    wrote.
   - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
     list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
     When the finding starts `environment:` (a failed fetch, no default branch, a timeout, a
@@ -111,8 +115,8 @@ Repeat `geneseed factory next` and act on its JSON:
    later stage sent the work back: the task is "make CI green" (or, for another stage, make it
    pass), and `notes[0]` says why. Use `--note-file <notes[0]>`
    when `notes[0]` is the path of a stage's finding file (the usual carry), so the loop gets the
-   finding, not its path; `--note "<notes[0]>"` when it is plain text; neither when `notes` is
-   empty. A loop
+   finding, not its path; when it is plain text, write it to a file in the OS temp directory and
+   pass that file with `--note-file`; neither when `notes` is empty. A loop
    re-entered after a failure is a fresh loop: the reason arrives as its note.
 6. Follow the `loop` {{SKILL}} from *The cycle* through *The end*, skipping its Setup: the
    worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
@@ -120,7 +124,8 @@ Repeat `geneseed factory next` and act on its JSON:
 7. When the loop reaches `$close` and its close commit has removed `LOOP.md`:
    `git status --porcelain --untracked-files=all | geneseed factory record --outcome pass`.
    When it reaches `$stop`, leave its `LOOP.md` in place:
-   `git status --porcelain --untracked-files=all | geneseed factory record --outcome fail --carry "<the stop reason>"`.
+   write the stop reason to a file in the OS temp directory, then
+   `git status --porcelain --untracked-files=all | geneseed factory record --outcome fail --carry-file <that file>`.
 
 ## The end
 

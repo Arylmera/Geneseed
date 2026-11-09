@@ -367,6 +367,50 @@ test('record --spec accepts a path inside the worktree with a segment that start
   } finally { sb.cleanup(); }
 });
 
+// M6: every path argument resolves against the current directory, `--spec` included, as
+// `--factory <file>` and loop's `--note-file` do; FACTORY.md alone is found at the git root. From
+// `sub/`, `../specs/r/spec.md` is the spec, and `specs/r/spec.md` names `sub/specs/r/spec.md`.
+test('M6: record --spec resolves against the current directory, as every path argument does', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    mkdirSync(path.join(sb.path, 'sub'));
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const sub = path.join(sb.path, 'sub');
+    const r = run(sub, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'], '');
+    assert.equal(r.code, 1);
+    assert.match(r.out.error, /^cannot read --spec specs\/r\/spec\.md: /);
+    assert.deepEqual(run(sub, ['record', '--outcome', 'pass', '--spec', '../specs/r/spec.md'], ''),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
+// M7: `--carry-file` on record and `--note-file` on decide take free text from a file, so a line
+// that starts with `git … commit` never sits on the command line the git gate matches whole. The
+// text reaches the engine CRLF-folded and trimmed; a flag and its -file twin together are refused.
+test('M7: record --carry-file and decide --note-file carry free text without the command line', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const tmp = path.join(path.dirname(sb.path), `${path.basename(sb.path)}-texts`);
+    mkdirSync(tmp);
+    writeFileSync(path.join(tmp, 'carry.txt'), 'the spec, then:\r\ngit commit -m "spec"\r\n\r\n');
+    writeFileSync(path.join(tmp, 'note.txt'), 'split task 1\ngit push origin HEAD\n');
+    try {
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md', '--carry', 'x', '--carry-file', path.join(tmp, 'carry.txt')], ''),
+        { code: 1, out: { error: 'record takes --carry or --carry-file, not both' } });
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md', '--carry-file', path.join(tmp, 'carry.txt')], ''),
+        { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass', note: 'the spec, then:\ngit commit -m "spec"' } } });
+      assert.deepEqual(run(sb.path, ['decide', '--verdict', 'amend', '--note-file', path.join(tmp, 'missing.txt')]).out.error.startsWith('cannot read --note-file '), true);
+      assert.deepEqual(run(sb.path, ['decide', '--verdict', 'amend', '--note-file', path.join(tmp, 'note.txt')]), { code: 0, out: { resumed: true } });
+      assert.equal(run(sb.path, ['next']).out.carry, 'split task 1\ngit push origin HEAD');
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  } finally { sb.cleanup(); }
+});
+
 // G2: a spec inside the worktree but not at specs/<slug>/spec.md is refused, and FACTORY.md stays
 // as it was. Stored, it would pass this record and fail R4 on every later action: `decide` here.
 test('G2: record --spec refuses a path that is not specs/<slug>/spec.md, and the run goes on', () => {

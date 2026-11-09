@@ -25,6 +25,15 @@
  * `--spec` IS READ HERE, not in the state module: the engine stays pure, and the CLI is the one
  * layer that may read files. The path is stored root-relative with forward slashes, the form a
  * porcelain line carries it in, and a path outside the root is refused before it is read.
+ *
+ * EVERY PATH ARGUMENT RESOLVES AGAINST THE CURRENT DIRECTORY (M6): `--spec`, `--factory <file>`,
+ * `--carry-file` and `--note-file`, as `geneseed loop`'s `--note-file` does and as a shell user
+ * means a relative path. Only FACTORY.md itself is found at the git root. `--spec` resolved
+ * against the root once, so the same relative path named two files depending on the flag.
+ *
+ * `--carry-file` AND `--note-file` (M7) take the text from a file, never the command line: a carry
+ * or a note with a line that starts with `git … commit`/`push` would sit inside the command
+ * `GIT_GATE_RE` matches whole, and the gate would ask on the factory's own bookkeeping.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -43,6 +52,18 @@ import {
 const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error || obj.ok === false ? 1 : 0; };
 const stdin = () => (process.stdin.isTTY ? null : readFileSync(0, 'utf8'));
 const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** `--<flag>` or `--<flag>-file`'s content (CRLF folded, trimmed, as loop's `noteOf`); null when neither. */
+function textOf(args, key, flag, action) {
+  const fileKey = `${key}File`;
+  if (args[key] && args[fileKey]) throw new Error(`${action} takes --${flag} or --${flag}-file, not both`);
+  if (!args[fileKey]) return args[key] ?? null;
+  let raw;
+  try { raw = readText(path.resolve(args[fileKey])); } catch (e) {
+    throw new Error(`cannot read --${flag}-file ${args[fileKey]}: ${e.message}`, { cause: e });
+  }
+  return raw.replace(/\r\n/g, '\n').trimEnd();
+}
 
 /** R3: the LOOP.md at `root` — its status (`running` when it does not parse) and graph name; nulls without one. */
 function loopFileOf(root) {
@@ -122,11 +143,12 @@ const ACTIONS = {
   next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head, now: new Date().toISOString() })),
   record(args) {
     if (!args.outcome) throw new Error('record needs --outcome');
+    const carry = textOf(args, 'carry', 'carry', 'record');
     const porcelain = stdin();
     return withState((s, c, { root, loopStatus, loopTemplate, head }) => {
       let specPath = null; let taskCount = null;
       if (args.spec) {
-        const abs = path.resolve(root, args.spec);
+        const abs = path.resolve(args.spec);
         const rel = path.relative(root, abs);
         if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) throw new Error(`--spec ${args.spec} is outside the worktree`);
         let text;
@@ -136,12 +158,15 @@ const ACTIONS = {
       }
       return recordStage(s, c, args.outcome, {
         porcelain: porcelain === null ? null : porcelain.replace(/\r\n/g, '\n').trimEnd(),
-        specPath, taskCount, carry: args.carry ?? null, loopStatus, loopTemplate, head,
+        specPath, taskCount, carry, loopStatus, loopTemplate, head,
         loopInitAt: loopInitAt(root),
       });
     });
   },
-  decide: (args) => withState((s, c) => decideFactory(s, c, args.verdict, args.note ?? '')),
+  decide(args) {
+    const note = textOf(args, 'note', 'note', 'decide') ?? '';
+    return withState((s, c) => decideFactory(s, c, args.verdict, note));
+  },
 };
 
 export function cmdFactory(args) {
