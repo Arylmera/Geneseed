@@ -371,27 +371,32 @@ describe('Loops — templates', () => {
       expect(header().textContent).toMatch(/close/)
     })
 
-    it('opens, picks and closes: the header names the pick, the entry follows it', async () => {
+    // A pick keeps the list open (owner, 2026-11-09: "can the list stay open when we click on
+    // something"): the next row stays one click away and focus stays on the picked row. Only a
+    // route from outside the list (a deep link, Ctrl-K) folds it.
+    it('opens and picks: the list stays open, the header names the pick, the entry follows it', async () => {
       const view = await open({ item: 'adr' })
       fireEvent.click(header())
       expect(header().getAttribute('aria-expanded')).toBe('true')
-      fireEvent.click(document.querySelector('a.lib-row[href$="/tiny"]'))
+      const row = document.querySelector('a.lib-row[href$="/tiny"]')
+      row.focus()
+      fireEvent.click(row)
       view.rerender(<Loops tab="templates" item="tiny" />)
       await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(header().getAttribute('aria-expanded')).toBe('false')
+      expect(header().getAttribute('aria-expanded')).toBe('true')
       expect(header().textContent).toMatch(/tiny/)
-      expect(document.activeElement).toBe(header())
+      expect(document.activeElement).toBe(row)
     })
 
-    // A pick of the row already open changes no route, yet it is a pick.
-    it('a pick on the open row closes the picker and focuses its header', async () => {
+    // A pick of the row already open changes no route: the list stays open too.
+    it('a pick on the open row keeps the picker open', async () => {
       await open({ item: 'adr' })
       fireEvent.click(header())
       const row = document.querySelector('.lib-row.on')
       row.focus()
       fireEvent.click(row)
-      expect(header().getAttribute('aria-expanded')).toBe('false')
-      expect(document.activeElement).toBe(header())
+      expect(header().getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(row)
     })
 
     // Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere (a new tab or window), so the
