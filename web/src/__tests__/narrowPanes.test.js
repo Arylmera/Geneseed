@@ -54,20 +54,100 @@ describe('Library panes: the narrow tier', () => {
     expect(rule('.lib-wrap .library.locked', tier)).toMatch(
       /grid-template-columns:\s*minmax\(0, 1fr\)/,
     )
-    expect(rule('.lib-wrap .library.locked .lib-rows', tier)).toMatch(/max-height:\s*45vh/)
     expect(rule('.lib-wrap .library.locked .lib-reader', tier)).toMatch(/grid-column:\s*auto/)
   })
 
-  // Reading order is the DOM's: the section header, the panels, the list, the entry.
-  it('in the stack the panels wrap full width, the list scrolls inside a cap, the entry follows', () => {
+  // The stacked controls (user, 2026-11-09): the rail gives way to Section ▾ / Category ▾ menus,
+  // and the list and the entry each fold behind their own trigger. Outside the tiers the menus
+  // and both triggers are hidden and the entry's body lays out as if unwrapped, so the wide
+  // three panes are untouched. Inside each tier the triggers show, a folded panel hides its body
+  // (the list keeps its head and its live region), and the list scrolls inside a 5-row cap.
+  const STACKS = [
+    ['three panes', threePane, '.lib-wrap .library:not(.locked)'],
+    ['a locked Library', twoPane, '.lib-wrap .library.locked'],
+  ]
+  it('outside the stack, the menus and the triggers are hidden and the entry body unwrapped', () => {
+    expect(rule('.lib-menus, .lib-list-toggle, .lib-reader-toggle')).toMatch(/display:\s*none/)
+    expect(rule('.lib-reader-body')).toMatch(/display:\s*contents/)
+  })
+
+  // Review F5: at 420px the Category menu, placed under its own trigger, ran past the card's
+  // edge and `.library { overflow: hidden }` cut its counts. The menus open under the menu row,
+  // at most as wide as it.
+  it('a menu opens under the menu row and never wider than it', () => {
+    expect(rule('.lib-menus')).toMatch(/position:\s*relative/)
+    expect(rule('.lib-menu-pop')).toMatch(/left:\s*0/)
+    expect(rule('.lib-menu-pop')).toMatch(/max-width:\s*100%/)
+    expect(css).not.toMatch(/\n\.lib-menu \{ position: relative; \}/)
+  })
+
+  // Review F3, measured in the preview: useActiveRowInView (LibRows.jsx) reads a row's
+  // offsetTop as its place inside the scroller, but the scroller was not positioned, so
+  // offsetTop counted from the card and the list scrolled 2011px past the row. The scroller is
+  // the rows' offset parent.
+  it('the list scroller is the offset parent its rows are measured from', () => {
+    expect(rule('.lib-rows')).toMatch(/position:\s*relative/)
+  })
+
+  it('in the three-pane stack the rail gives way to the two menus', () => {
     const tier = threePane()
-    const kinds = rule('.lib-wrap .kind-list', tier)
-    expect(kinds).toMatch(/display:\s*flex/)
-    expect(kinds).toMatch(/flex-wrap:\s*wrap/)
-    expect(kinds).toMatch(/overflow:\s*visible/)
-    expect(rule('.lib-wrap .rail-cats', tier)).toMatch(/flex-basis:\s*100%/)
-    expect(rule('.lib-wrap .library:not(.locked) .lib-rows', tier)).toMatch(/max-height:\s*45vh/)
-    expect(rule('.lib-wrap .library:not(.locked) .lib-reader', tier)).toMatch(/grid-column:\s*auto/)
+    expect(rule('.lib-wrap .lib-kinds .kind-list', tier)).toMatch(/display:\s*none/)
+    expect(rule('.lib-wrap .lib-menus', tier)).toMatch(/display:\s*flex/)
+    expect(rule('.lib-wrap .lib-menus', tier)).toMatch(/flex-wrap:\s*wrap/)
+  })
+
+  for (const [name, tierOf, x] of STACKS) {
+    it(`in the stack of ${name}, the list and the entry fold behind their triggers`, () => {
+      const tier = tierOf()
+      expect(rule(`${x} .lib-list-toggle, ${x} .lib-reader-toggle`, tier)).toMatch(
+        /display:\s*flex/,
+      )
+      expect(
+        rule(
+          `${x} .lib-list[data-open="false"] > :not(.lib-list-head, .lib-list-toggle, .sr-only)`,
+          tier,
+        ),
+      ).toMatch(/display:\s*none/)
+      expect(rule(`${x} .lib-reader[data-open="false"] > .lib-reader-body`, tier)).toMatch(
+        /display:\s*none/,
+      )
+    })
+
+    // The cap is five rows, and a row's height is derived from the parts the row is drawn with
+    // (its padding, its gap, the 2px over its line of description, its 1px rule, and its two
+    // lines at the body's line height), each read from the one place that sets it.
+    it(`in the stack of ${name}, the list shows five rows before it scrolls`, () => {
+      expect(rule(`${x} .lib-rows`, tierOf())).toMatch(
+        /max-height:\s*calc\(5 \* var\(--lib-row-h\)\)/,
+      )
+    })
+  }
+
+  it('a row height is the sum of the parts the row is drawn with', () => {
+    const lib = rule('.library')
+    expect(lib).toMatch(/--lib-row-pad:\s*10px/)
+    expect(lib).toMatch(/--lib-row-gap:\s*3px/)
+    expect(lib).toMatch(
+      /--lib-row-h:\s*calc\(2 \* var\(--lib-row-pad\) \+ var\(--lib-row-gap\) \+ 2px \+ 1px \+ var\(--lh-body\) \* \(var\(--fs-md\) \+ var\(--fs-sm\)\)\)/,
+    )
+    const row = rule('.library .lib-row')
+    expect(row).toMatch(/padding:\s*var\(--lib-row-pad\) 18px/)
+    expect(row).toMatch(/gap:\s*var\(--lib-row-gap\)/)
+    expect(rule('body')).toMatch(/line-height:\s*var\(--lh-body\)/)
+    expect(rule('.library .lr-desc')).toMatch(/font-size:\s*var\(--fs-sm\)/)
+    expect(rule('.lib-row .lr-name')).toMatch(/font-size:\s*var\(--fs-md\)/)
+    expect(rule('.lib-row .lr-desc')).toMatch(/margin-top:\s*2px/)
+    expect(rule('.lib-row')).toMatch(/border-bottom:\s*1px solid/)
+  })
+
+  // With usage on, the Library hides the line of description, so its row is shorter: measured
+  // 2026-11-09, 42.7px against 67.85px, so the 5-row cap showed seven. Its height drops the
+  // description's line, its 2px and the gap.
+  it('a row with its description hidden drops that line from its height', () => {
+    expect(rule('.lib-dossier.uses .lr-desc')).toMatch(/display:\s*none/)
+    expect(rule('.lib-dossier.uses')).toMatch(
+      /--lib-row-h:\s*calc\(2 \* var\(--lib-row-pad\) \+ 1px \+ var\(--lh-body\) \* var\(--fs-md\)\)/,
+    )
   })
 
   // At a 673–720px window the page is wider than 640px, so a container tier for the phone

@@ -504,7 +504,9 @@ describe('Library', () => {
 
   it('shows no forget control outside memory', async () => {
     render(<Library section="agents" selected="reviewer" overview={overview({})} />)
-    await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText('A fact', { selector: '.reader-title' })).toBeTruthy(),
+    )
     expect(screen.queryByText('Forget this fact')).toBeNull()
   })
 
@@ -615,6 +617,41 @@ describe('skill classes', () => {
     ])
     fireEvent.click(screen.getByRole('button', { name: /^All/ }))
     expect([...document.querySelectorAll('.lib-row')].length).toBe(5)
+  })
+
+  // The stacked layout's menus (LibMenus; styles.css shows them only in the `lib` tier, where
+  // the rail is hidden): Section ▾ lists the same kinds in the same order whatever kind is open,
+  // and Category ▾ exists only where the kind has types (Skills), then narrows the list.
+  it('offers the same Section menu on every kind, and a Category menu on Skills only', async () => {
+    api.catalog.mockImplementation((section) =>
+      Promise.resolve({ section, items: section === 'skills' ? SKILLS : [] }),
+    )
+    const sections = () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Section/ }))
+      const menu = document.getElementById(
+        screen.getByRole('button', { name: /^Section/ }).getAttribute('aria-controls'),
+      )
+      const names = [...menu.querySelectorAll('a')].map((a) => a.firstChild.textContent)
+      fireEvent.keyDown(document, { key: 'Escape' })
+      return names
+    }
+    const { unmount } = render(<Library section="skills" overview={overview({ skills: 5 })} />)
+    await waitFor(() => expect(document.querySelector('.rail-cats')).toBeTruthy())
+    expect(screen.getByRole('button', { name: /^Section/ }).textContent).toMatch(/Skills\s*5/)
+    const onSkills = sections()
+    expect(onSkills).toEqual(['Skills', 'Agents', 'Wiki', 'Setup files'])
+    const catBtn = screen.getByRole('button', { name: /^Category/ })
+    fireEvent.click(catBtn)
+    const catMenu = document.getElementById(catBtn.getAttribute('aria-controls'))
+    fireEvent.click(within(catMenu).getByRole('button', { name: /^Build/ }))
+    expect([...document.querySelectorAll('.lib-row')].length).toBe(2)
+    unmount()
+
+    render(<Library section="agents" overview={overview({})} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Section/ })).toBeTruthy())
+    expect(screen.getByRole('button', { name: /^Section/ }).textContent).toMatch(/Agents/)
+    expect(sections()).toEqual(onSkills)
+    expect(screen.queryByRole('button', { name: /^Category/ })).toBeNull()
   })
 
   // Memory facts sit under their topic, in the map's (sorted) topic order, so one topic's facts
@@ -1000,7 +1037,9 @@ describe('Library usage', () => {
   it('shows no usage at all when the read fails', async () => {
     api.usage.mockImplementation(() => Promise.reject(new Error('down')))
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
-    await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText('A fact', { selector: '.reader-title' })).toBeTruthy(),
+    )
     await waitFor(() => expect(api.usage).toHaveBeenCalled())
     noUsageUi()
     expect(document.querySelector('.error-state, [role="alert"]')).toBeNull()
@@ -1009,7 +1048,9 @@ describe('Library usage', () => {
   it('shows no usage when counting is off', async () => {
     api.usage.mockImplementation(() => Promise.resolve({ ...USAGE, enabled: false }))
     render(<Library section="skills" selected="brainstorm" overview={overview({})} />)
-    await waitFor(() => expect(screen.getByText('A fact')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByText('A fact', { selector: '.reader-title' })).toBeTruthy(),
+    )
     await waitFor(() => expect(api.usage).toHaveBeenCalled())
     noUsageUi()
   })

@@ -10,7 +10,16 @@ import { useAsync } from '../hooks/useAsync.js'
 import { dropRules } from '../hooks/useRules.js'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
-import { BaseBadge, GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
+import {
+  BaseBadge,
+  GroupedRows,
+  KitBadge,
+  LibList,
+  LibReader,
+  filterRows,
+  useFolds,
+} from '../components/LibRows.jsx'
+import LibMenus from '../components/LibMenus.jsx'
 import Loadout from '../components/Loadout.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -32,6 +41,15 @@ export const PRIMARY = ':primary'
 const pct = (n, of) => `${of ? (n / of) * 100 : 0}%`
 // An install key is `host:scope:root`, and a root may hold ':' (a Windows drive), so only the
 // first two fields are read.
+// An entry's kind, on the stacked reader's trigger (LibReader).
+const KIND = {
+  skills: 'Skill',
+  agents: 'Agent',
+  wiki: 'Wiki page',
+  config: 'Setup file',
+  memory: 'Memory fact',
+  notebook: 'Notebook page',
+}
 const hostOf = (key) => key.split(':').slice(0, 2).join(' ')
 // A path that breaks after a slash in a narrow reader, not mid-word (`overflow-wrap: anywhere`
 // on `.reader-src` stays the fallback for a single segment longer than the line).
@@ -506,6 +524,7 @@ export default function Library({
   const status = item?.status || activeItem?.status
   const skillCat = sec === 'skills' ? SKILL_CATS[fromCatalog?.klass] : null
   const label = SECTIONS[sec].label
+  const folds = useFolds([sec, selected])
   const desc = item?.desc || activeItem?.desc || ''
   const { lede, when } = splitWhen(desc)
   const src =
@@ -533,6 +552,19 @@ export default function Library({
               <h1 className="h">Library</h1>
               <span className="dim">What the agent knows</span>
             </div>
+            <LibMenus
+              sections={LIBRARY_ORDER.map((k) => ({
+                key: k,
+                label: SECTIONS[k].label,
+                n: railCount(k),
+                href: `#/section/${k}`,
+                on: sec === k,
+              }))}
+              cats={isSkills && listed ? skillSplit.cats : null}
+              cat={cat}
+              total={items.length}
+              onCat={setCat}
+            />
             <nav className="kind-list" aria-label="Kinds">
               {LIBRARY_ORDER.map((k) => (
                 <React.Fragment key={k}>
@@ -568,6 +600,8 @@ export default function Library({
           onQ={setQ}
           matched={matches.length}
           inView={[sec, selected]}
+          current={activeItem ? title : undefined}
+          folds={folds}
           extra={
             <>
               {useOn && usage.since ? (
@@ -675,7 +709,7 @@ export default function Library({
             ))}
         </LibList>
 
-        <article className="lib-reader" aria-label="Entry">
+        <LibReader title={activeItem ? title : null} kind={KIND[sec]} folds={folds}>
           {activeItem ? (
             <>
               <div className="reader-tags">
@@ -796,7 +830,7 @@ export default function Library({
           ) : pending ? (
             <Loading />
           ) : null}
-        </article>
+        </LibReader>
       </div>
     </div>
   )
