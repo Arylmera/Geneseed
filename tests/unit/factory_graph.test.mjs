@@ -559,6 +559,34 @@ test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and th
   assert.doesNotMatch(`${skill}\n${guide}`, /which asks too\)|permission prompt also guards/);
 });
 
+// F1: the git gate's own regex (read from js/hosts/hooks.mjs, never copied) over every command the
+// factory skill documents for `record`, `decide` and the porcelain. The gate asks on a line that
+// holds the word `git` and, anywhere on it, `commit` or `push`; a slug, a path or a carry may hold
+// either, so each placeholder is filled with both words, and no record or decide line may then
+// match. The porcelain line holds `git` by necessity, so it must hold no placeholder a run fills
+// (only `<tmp>`, the OS temp directory).
+test('F1: no documented record, decide or porcelain line trips the git gate', () => {
+  const hooks = readFileSync(path.resolve(import.meta.dirname, '../../js/hosts/hooks.mjs'), 'utf8');
+  const [, body, flags] = /const GIT_GATE_RE = \/(.+)\/([a-z]*);/.exec(hooks);
+  const gate = new RegExp(body, flags);
+  assert.ok(gate.test('git status | geneseed factory record --spec specs/fix-commit-hook/spec.md'), 'the regex read is the gate');
+  const skill = shipped('skills/factory.md');
+  const spans = [...skill.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+  const records = spans.filter((s) => /geneseed factory (record|decide)/.test(s));
+  assert.ok(records.length >= 5, `the skill documents its record and decide lines: ${records.length}`);
+  for (const line of records) {
+    const filled = line.replace(/<[^>]+>/g, 'fix-commit-push').replace(/…/g, '--carry push-commit');
+    assert.ok(!gate.test(filled), `the git gate asks on: ${line}`);
+  }
+  // the porcelain a record reads (`--untracked-files=all`); a bare `git status --porcelain` check elsewhere records nothing
+  const porcelain = spans.filter((s) => /^git status --porcelain --untracked-files=all/.test(s));
+  assert.ok(porcelain.length >= 1);
+  for (const line of porcelain) {
+    assert.doesNotMatch(line, /\|/, `the porcelain is piped on the record's line: ${line}`);
+    assert.deepEqual(line.match(/<[^>]+>/g) ?? [], ['<tmp>'], `a run fills a placeholder on the git line: ${line}`);
+  }
+});
+
 // M17: factory-forge's example says it is "in the shape of the shipped bug-report-to-fix", so its
 // stage list is that factory's, with the loop stage as the placeholder.
 test('M17: the factory-forge example has the stages of the factory it names', () => {

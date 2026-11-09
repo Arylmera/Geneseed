@@ -36,13 +36,22 @@ when the diff touches it, and by this rule.
 
 ## The cycle
 
-Repeat `geneseed factory next` and act on its JSON:
+Repeat `geneseed factory next` and act on its JSON.
+
+**How to record.** `record` reads the porcelain on its stdin. Take it on one line, into a file in
+the OS temp directory (outside the worktree, or the porcelain lists that file):
+`git status --porcelain --untracked-files=all > <tmp>/factory-status.txt`.
+Then record on a second line, from that file: `geneseed factory record … < <tmp>/factory-status.txt`
+(PowerShell: `Get-Content -Raw <tmp>/factory-status.txt | geneseed factory record …`). Never join
+the two with a pipe: the git gate asks on any line that holds the word `git` and, anywhere on it,
+the word `commit` or `push`, and a slug, a path or a carry can hold either. Always use that
+porcelain form: plain `--porcelain` folds a new directory into one line, which the engine refuses.
+Below, `<status file>` is that file, written fresh just before each record.
 
 - **`{stage, prompt, outcomes}`** — a brick stage. Dispatch its `agent` (or follow its `skill`)
   with the `prompt`, the `requirement`, the `input`, the `carry` and the factory's `rules`. Then:
-  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --carry "<the file path the stage reported>"`.
-  The `--carry` is how the next stage gets this one's finding. Always use that porcelain form:
-  plain `--porcelain` folds a new directory into one line, which the engine refuses.
+  `geneseed factory record --outcome <outcome> --carry "<the file path the stage reported>" < <status file>`.
+  The `--carry` is how the next stage gets this one's finding.
   A fork stage (such as `triage`) also gets `lanes`: each outcome it may report, with the stage
   it leads to. Record the outcome it reported (`--outcome docs`): that outcome names the lane,
   and a later route back to `$lane` returns to it.
@@ -51,7 +60,7 @@ Repeat `geneseed factory next` and act on its JSON:
   engine refuses a dirty tree after any stage outside a loop.
   The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
   `carry`, not as a LOOP.md note) and reports with
-  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <its finding file>`, so the gate shows the user what to review.
+  `geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <its finding file> < <status file>`, so the gate shows the user what to review.
   Its gate holds for the user's review of the task list. After `decide --verdict ok`, commit the
   spec before the first loop: `git add specs/<slug>/spec.md`, then
   `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
@@ -64,8 +73,9 @@ Repeat `geneseed factory next` and act on its JSON:
   write their words to a file in the OS temp directory, then
   `geneseed factory decide --verdict ok|no|amend --note-file <that file>` — `ok` follows the
   reported outcome's edge, `no` stops, `amend` re-runs the stage with their note — and continue.
-  Free text always goes through a file (`--note-file`, `--carry-file`): a line of it that starts
-  with `git … commit` or `push` would sit on the command line, and the git gate would ask.
+  Free text always goes through a file (`--note-file`, `--carry-file`), never the command line:
+  the git gate asks on any line that holds the word `git` and the word `commit` or `push`, and
+  free text can hold all three.
   The gated outcomes:
   - `intake` **`needs-info`**: show the user its numbered questions. Their answers go back as
     `amend --note-file <a file holding their answers>`; `ok` goes on with the assumptions intake
@@ -126,10 +136,10 @@ Repeat `geneseed factory next` and act on its JSON:
    worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
    is `git push -u origin HEAD:loop/factory-<slug>`. Skip its final report too: the run goes on.
 7. When the loop reaches `$close` and its close commit has removed `LOOP.md`:
-   `git status --porcelain --untracked-files=all | geneseed factory record --outcome pass`.
+   `geneseed factory record --outcome pass < <status file>`.
    When it reaches `$stop`, leave its `LOOP.md` in place:
    write the stop reason to a file in the OS temp directory, then
-   `git status --porcelain --untracked-files=all | geneseed factory record --outcome fail --carry-file <that file>`.
+   `geneseed factory record --outcome fail --carry-file <that file> < <status file>`.
 
 ## The end
 

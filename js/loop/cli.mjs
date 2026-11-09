@@ -83,21 +83,27 @@ function resolveGraph(spec, catalog) {
 }
 
 /**
- * The note of `init` or `record`: `--note`, or `--note-file`'s content. A note too long for a
- * shell argument, or one that mentions `git … commit`/`push` (and would otherwise sit inside the
- * command line GIT_GATE_RE matches whole), goes through a file instead — never through the shell
- * at all. CRLF-folded and trimmed the same way the porcelain stdin is, so a Windows-authored file
- * round-trips identically.
+ * A text argument: `--<flag>`, or `--<flag>-file`'s content (`args[key]` / `args[key + 'File']`),
+ * null when neither is given. Text too long for a shell argument, or text that holds the word
+ * `commit` or `push` (GIT_GATE_RE asks on any line that also holds `git`), goes through a file
+ * instead — never through the shell at all. The path is relative to the current directory.
+ * CRLF-folded and trimmed the same way the porcelain stdin is, so a Windows-authored file
+ * round-trips identically. The one writer of this rule: `geneseed factory`'s `--carry-file` and
+ * `--note-file` call it too.
  */
-function noteOf(args, action) {
-  if (args.note && args.noteFile) throw new Error(`${action} takes --note or --note-file, not both`);
-  if (!args.noteFile) return args.note ?? '';
+export function textArg(args, key, flag, action) {
+  const fileKey = `${key}File`;
+  if (args[key] && args[fileKey]) throw new Error(`${action} takes --${flag} or --${flag}-file, not both`);
+  if (!args[fileKey]) return args[key] ?? null;
   let raw;
-  try { raw = readText(path.resolve(args.noteFile)); } catch (e) {
-    throw new Error(`cannot read --note-file ${args.noteFile}: ${e.message}`, { cause: e });
+  try { raw = readText(path.resolve(args[fileKey])); } catch (e) {
+    throw new Error(`cannot read --${flag}-file ${args[fileKey]}: ${e.message}`, { cause: e });
   }
   return raw.replace(/\r\n/g, '\n').trimEnd();
 }
+
+/** The note of `init` or `record`: `--note` or `--note-file`, '' when neither. */
+const noteOf = (args, action) => textArg(args, 'note', 'note', action) ?? '';
 
 const ACTIONS = {
   check(args) {

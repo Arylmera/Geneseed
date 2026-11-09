@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { headCommit } from '../../js/hosts/gitref.mjs';
@@ -429,6 +429,35 @@ test('M7: record --carry-file and decide --note-file carry free text without the
       assert.equal(run(sb.path, ['next']).out.carry, 'split task 1\ngit push origin HEAD');
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   } finally { sb.cleanup(); }
+});
+
+// F1: the skill records with the porcelain in a file on stdin (`< file`), not a pipe. A redirect
+// hands the process a file descriptor, not a pipe: `record` reads it the same way. A dirty line
+// in the file is refused; the clean spec porcelain records.
+test('F1: record reads the porcelain from a file redirected to stdin', () => {
+  const sb = repo(['fixture-spec']);
+  const status = path.join(path.dirname(sb.path), `${path.basename(sb.path)}-status.txt`);
+  const redirected = (argv, porcelain) => {
+    writeFileSync(status, porcelain);
+    const fd = openSync(status, 'r');
+    try {
+      const r = spawnSync(process.execPath, [CLI, 'factory', ...argv], {
+        cwd: sb.path, stdio: [fd, 'pipe', 'pipe'], encoding: 'utf8', windowsHide: true,
+        env: { ...process.env, XDG_CONFIG_HOME: path.join(sb.path, 'xdg') },
+      });
+      return { code: r.status, out: JSON.parse(r.stdout.trim()) };
+    } finally { closeSync(fd); }
+  };
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const argv = ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'];
+    const dirty = redirected(argv, '?? FACTORY.md\r\n?? specs/r/spec.md\r\n?? notes.txt\r\n');
+    assert.deepEqual([dirty.code, /dirty.*\?\? notes\.txt$/.test(dirty.out.error)], [1, true]);
+    assert.deepEqual(redirected(argv, '?? FACTORY.md\r\n?? specs/r/spec.md\r\n'),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { rmSync(status, { force: true }); sb.cleanup(); }
 });
 
 // G2: a spec inside the worktree but not at specs/<slug>/spec.md is refused, and FACTORY.md stays

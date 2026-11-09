@@ -19,8 +19,9 @@
  *
  * THE PORCELAIN IS TRUSTED AS PIPED. A TTY stdin is `null` and the engine refuses it after a
  * stage outside a loop (J5); an empty pipe (or a null device) reads as a clean tree, and nothing
- * here can tell it from one. The Rite pipes `git status --porcelain --untracked-files=all`, so a
- * new spec reaches the engine as its own path, never folded into its directory.
+ * here can tell it from one. The Rite writes `git status --porcelain --untracked-files=all` to a
+ * temp file on its own line, then records with that file on stdin (`< file`) on a second line, so
+ * a new spec reaches the engine as its own path, and no record line holds the word `git` (F1).
  *
  * `--spec` IS READ HERE, not in the state module: the engine stays pure, and the CLI is the one
  * layer that may read files. The path is stored root-relative with forward slashes, the form a
@@ -31,9 +32,9 @@
  * means a relative path. Only FACTORY.md itself is found at the git root. `--spec` resolved
  * against the root once, so the same relative path named two files depending on the flag.
  *
- * `--carry-file` AND `--note-file` (M7) take the text from a file, never the command line: a carry
- * or a note with a line that starts with `git … commit`/`push` would sit inside the command
- * `GIT_GATE_RE` matches whole, and the gate would ask on the factory's own bookkeeping.
+ * `--carry-file` AND `--note-file` (M7) take the text from a file, never the command line
+ * (`textArg`, shared with `geneseed loop`): `GIT_GATE_RE` asks on any line that holds the word
+ * `git` and, anywhere on it, the word `commit` or `push`, and free text can hold all three.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -42,6 +43,7 @@ import { gitRootOf, headCommit, currentBranch } from '../hosts/gitref.mjs';
 import { loadCatalog } from '../loop/catalog.mjs';
 import { LOOP_FILE, parseLoopFile } from '../loop/state.mjs';
 import { loopInitAt } from '../loop/registry.mjs';
+import { textArg } from '../loop/cli.mjs';
 import { recordFactory } from './registry.mjs';
 import { checkFactory, factoryCatalogProblems } from './graph.mjs';
 import {
@@ -53,17 +55,6 @@ const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error |
 const stdin = () => (process.stdin.isTTY ? null : readFileSync(0, 'utf8'));
 const byName = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** `--<flag>` or `--<flag>-file`'s content (CRLF folded, trimmed, as loop's `noteOf`); null when neither. */
-function textOf(args, key, flag, action) {
-  const fileKey = `${key}File`;
-  if (args[key] && args[fileKey]) throw new Error(`${action} takes --${flag} or --${flag}-file, not both`);
-  if (!args[fileKey]) return args[key] ?? null;
-  let raw;
-  try { raw = readText(path.resolve(args[fileKey])); } catch (e) {
-    throw new Error(`cannot read --${flag}-file ${args[fileKey]}: ${e.message}`, { cause: e });
-  }
-  return raw.replace(/\r\n/g, '\n').trimEnd();
-}
 
 /** R3: the LOOP.md at `root` — its status (`running` when it does not parse) and graph name; nulls without one. */
 function loopFileOf(root) {
@@ -150,7 +141,7 @@ const ACTIONS = {
   next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head, now: new Date().toISOString() })),
   record(args) {
     if (!args.outcome) throw new Error('record needs --outcome');
-    const carry = textOf(args, 'carry', 'carry', 'record');
+    const carry = textArg(args, 'carry', 'carry', 'record');
     const porcelain = stdin();
     return withState((s, c, { root, loopStatus, loopTemplate, head }) => {
       let specPath = null; let taskCount = null;
@@ -171,7 +162,7 @@ const ACTIONS = {
     });
   },
   decide(args) {
-    const note = textOf(args, 'note', 'note', 'decide') ?? '';
+    const note = textArg(args, 'note', 'note', 'decide') ?? '';
     return withState((s, c) => decideFactory(s, c, args.verdict, note));
   },
 };
