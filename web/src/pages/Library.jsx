@@ -310,14 +310,10 @@ export default function Library({
   const activeName = selected || rows[0]?.name || null
   const isAgents = sec === 'agents' && !lock
   const isPrimary = isAgents && activeName === PRIMARY
-  // The primary's loadout gives its row its theme noun; a failed read keeps the neutral name.
-  const { data: primaryLoad } = useAsync(
-    () =>
-      isAgents
-        ? Promise.resolve()
-            .then(() => api.loadout())
-            .catch(() => null)
-        : Promise.resolve(null),
+  // The primary's loadout gives its row its theme noun, and is its Loadout panel too (one read);
+  // a failed read keeps the neutral name.
+  const { data: primaryLoad, error: primaryErr } = useAsync(
+    () => (isAgents ? Promise.resolve().then(() => api.loadout()) : Promise.resolve(null)),
     [isAgents, dataRev],
     'loadout-primary',
   )
@@ -326,7 +322,7 @@ export default function Library({
         name: PRIMARY,
         type: 'agent',
         base: true,
-        title: primaryLoad?.noun || 'Primary agent',
+        title: (!primaryErr && primaryLoad?.noun) || 'Primary agent',
         desc: 'The main agent of the session. Every agent inherits its root file.',
       }
     : null
@@ -356,23 +352,22 @@ export default function Library({
   const ofCopy = (c) => (fleetWide && c?.install ? ` in ${tagOf(c.install)}` : '')
 
   // The Loadout panel: what this agent loads, read from the copy on screen's install, beside that
-  // install's primary for the delta line. The primary reads the default install.
+  // install's primary for the delta line. The primary reads the default install, the read its row
+  // already made.
   const loadInst = isPrimary ? null : pick || item?.install || null
-  const wantLoad = isAgents && activeName && (isPrimary || (item && item.name === activeName))
-  const { data: load, error: loadErr } = useAsync(
+  const wantLoad = isAgents && activeName && !isPrimary && item && item.name === activeName
+  const { data: adeptLoad, error: adeptErr } = useAsync(
     () =>
       !wantLoad
         ? Promise.resolve(null)
-        : isPrimary
-          ? api.loadout().then((own) => ({ own, base: null }))
-          : Promise.all([
-              api.loadout(activeName, loadInst ? installOfKey(loadInst) : undefined),
-              api
-                .loadout(undefined, loadInst ? installOfKey(loadInst) : undefined)
-                .catch(() => null),
-            ]).then(([own, base]) => ({ own, base })),
+        : Promise.all([
+            api.loadout(activeName, loadInst ? installOfKey(loadInst) : undefined),
+            api.loadout(undefined, loadInst ? installOfKey(loadInst) : undefined).catch(() => null),
+          ]).then(([own, base]) => ({ own, base })),
     [wantLoad, activeName, loadInst, dataRev],
   )
+  const load = isPrimary ? { own: primaryErr ? null : primaryLoad, base: null } : adeptLoad
+  const loadErr = isPrimary ? primaryErr : adeptErr
 
   const err = actionErr || catErr || itemErr
   // Prefer the catalog row; fall back to a synthetic one when the URL names an item that
@@ -442,6 +437,14 @@ export default function Library({
     !matches.some((it) => it.name === activeName)
       ? [...matches, ...rows.filter((it) => it.name === activeName)]
       : matches
+  // The pinned primary row passes the same filters as the rest. It has no usage record, so a
+  // usage filter (or Experimental) hides it, as it hides every row it does not name. `matched`
+  // (the picker's count, "No matches") counts it; the list head counts catalogue entries only,
+  // as the rail badge does.
+  const lead =
+    primaryRow && listed && cat === 'all' && useF === 'all' ? filterRows([primaryRow], ql) : []
+  const matched = lead.length + matches.length
+  const listedRows = [...lead, ...shown]
 
   const itemHref = (it) =>
     base ? `${base}/${enc(it.name)}` : `#/item/${it.type || SECTIONS[sec].type}/${enc(it.name)}`
@@ -571,7 +574,7 @@ export default function Library({
           count={!listed ? '' : ql ? `${matches.length} of ${pool.length}` : pool.length}
           q={q}
           onQ={setQ}
-          matched={matches.length}
+          matched={matched}
           inView={[sec, selected]}
           current={activeItem ? title : undefined}
           // Locked (Personal › Memory, Notebook): one kind, no sections to switch.
@@ -641,7 +644,7 @@ export default function Library({
         >
           {pending ? <Loading /> : null}
           <GroupedRows
-            rows={primaryRow && listed ? [primaryRow, ...shown] : shown}
+            rows={listedRows}
             activeName={activeItem?.name}
             hrefOf={itemHref}
             // Inside the row link, so nothing here may take focus: the list is one tab stop.
