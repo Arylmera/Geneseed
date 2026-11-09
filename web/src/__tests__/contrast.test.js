@@ -365,9 +365,7 @@ describe('light/dark contrast contract', () => {
     '.lr-node.current circle': 'the lit loop node circle, a shape',
     '.lr-node.inner.current circle': 'the lit inner-loop node circle, a shape',
     '.fg-node rect': 'a factory brick block, a shape',
-    '.fg-node.brick.current rect': 'the lit factory brick block, a shape',
-    '.fg-node.fork.current rect': 'the lit factory fork block, a shape',
-    '.fg-node.lane.current rect': 'the lit factory lane box, a shape',
+    '.fg-node.current rect': 'the lit factory block, any kind, a shape',
     '.fg-node.taken rect': 'the factory lane a run took, a shape',
     '.fg-node.loop rect': 'a factory loop-stage block, tinted teal, a shape',
   }

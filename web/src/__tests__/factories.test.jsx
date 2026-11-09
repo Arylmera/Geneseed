@@ -26,7 +26,7 @@ const brick = (name, extra = {}) => ({
   reason: null,
   ...extra,
 })
-// The bugfix ring, small: enough for the loop block to draw a RingGraph.
+// The bugfix loop, small: the catalogue holds it, so its box reads `whole loop`.
 const BUGFIX = {
   name: 'bugfix',
   nodes: ['reproduce', 'apply'],
@@ -99,11 +99,15 @@ describe('Factories — templates', () => {
     const g = screen.getByRole('group', {
       name: 'bug-report-to-fix factory: intake, loop:bugfix, pr-open, merge-gate, retro',
     })
-    // Each stage a labelled block, the loop block holding its ring, the human gate badged.
+    // Each stage a labelled block, the human gate badged. The loop stage is a compact box: its
+    // loop's name over `whole loop`, the full stage id in its title, and no ring inside it.
     expect(within(g).getByRole('img', { name: 'intake brick' })).toBeTruthy()
     expect(within(g).getByRole('img', { name: 'merge-gate brick, human gate' })).toBeTruthy()
     expect(within(g).getByRole('img', { name: 'loop:bugfix stage, the bugfix loop' })).toBeTruthy()
-    expect(within(g).getByRole('group', { name: 'bugfix loop: reproduce, apply' })).toBeTruthy()
+    const loop = within(g).getByRole('img', { name: 'loop:bugfix stage, the bugfix loop' })
+    expect(text('text', loop)).toEqual(['bugfix', 'whole loop'])
+    expect(loop.querySelector('title').textContent).toBe('loop:bugfix')
+    expect(g.querySelector('foreignObject, .loop-ring')).toBeNull()
     expect(g.querySelectorAll('.fg-close, .fg-stop')).toHaveLength(2)
     // The route back wears its cycle and max; the cycle is said in words under the graph.
     expect(g.querySelector('.fg-lbl.back').textContent).toBe('↺ ci · max 2')
@@ -161,12 +165,14 @@ describe('Factories — active', () => {
       'At loop:bugfix · 4 transitions · loop at apply, iteration 2',
     )
     const cur = document.querySelector('.fg-node.current')
-    expect(cur.getAttribute('aria-label')).toBe('loop:bugfix stage, the bugfix loop, current stage')
+    // The child loop's step is said, not only drawn: the block's role hides its text.
+    expect(cur.getAttribute('aria-label')).toBe(
+      'loop:bugfix stage, the bugfix loop, current stage, at apply',
+    )
     expect(cur.getAttribute('aria-current')).toBe('step')
     expect(document.querySelectorAll('.fg-node.current')).toHaveLength(1)
-    expect(document.querySelector('.lr-node.current').getAttribute('aria-label')).toBe(
-      'apply brick, current step',
-    )
+    // The child loop's node is named under the box, not lit in a ring.
+    expect(text('text', cur)).toEqual(['bugfix', 'at apply'])
     expect(document.querySelector('.fg-lbl.back').textContent).toBe('↺ ci · 1 / 2')
     expect(text('.fac-cycles li')).toEqual(['ci: loop:bugfix → pr-open → merge-gate — lap 1 of 2'])
   })
@@ -209,6 +215,15 @@ describe('Factories — active', () => {
       'deps-upgrade',
       'refactor',
       'docs-update',
+    ])
+    // Under each name: a loop the catalogue holds reads `whole loop`, one it lacks says so (this
+    // catalogue holds bugfix alone), and the brick lane reads `no loop`.
+    expect(text('.fg-node.lane > text.fg-sub', g)).toEqual([
+      'whole loop',
+      'not in catalogue',
+      'not in catalogue',
+      'not in catalogue',
+      'no loop',
     ])
     expect(text('.fg-lbl.fork', g)).toEqual(['bug', 'feature', 'deps', 'refactor', 'docs'])
     expect(text('.fg-lbl.back', g)).toEqual(['↺ holdout · 1 / 2', '↺ ci · 0 / 2'])

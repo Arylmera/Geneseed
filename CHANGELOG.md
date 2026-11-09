@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Changed
+- **The Factories page draws every `loop:` stage as a compact box.** On the main path as in a fork's lanes, a loop stage names its loop over `whole loop` (or `not in catalogue`), and during a run `at <node>` names the child loop's step. The ring no longer sits inside the factory graph; the Loops page still draws it.
+
 ## [5.0.4] — 2026-11-09
 
 ### Added
