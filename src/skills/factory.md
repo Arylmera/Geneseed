@@ -25,7 +25,11 @@ when the diff touches it, and by this rule.
 
 ## Setup
 
-1. Pick a short kebab-case `<slug>` from the work item. Create the run's worktree:
+1. Pick a short kebab-case `<slug>` from the work item, without the words `git`, `commit` or
+   `push` (spell them `g1t`, `cmt`, `psh`, or leave them out): the slug lands on the porcelain
+   line beside `git`, and on `record` lines, where those words make the git gate ask.
+   `factory init` refuses a `loop/factory-<slug>` branch whose slug holds one. Create the run's
+   worktree:
    `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, then make it the session's
    working directory with its own command. Every later command runs there as written below: no
    `cd` prefix, no `git -C`. Several runs may share a repo, each in its own worktree.
@@ -38,20 +42,28 @@ when the diff touches it, and by this rule.
 
 Repeat `geneseed factory next` and act on its JSON.
 
-**How to record.** `record` reads the porcelain on its stdin. Take it on one line, into a file in
-the OS temp directory (outside the worktree, or the porcelain lists that file):
-`git status --porcelain --untracked-files=all > <tmp>/factory-status.txt`.
-Then record on a second line, from that file: `geneseed factory record … < <tmp>/factory-status.txt`
-(PowerShell: `Get-Content -Raw <tmp>/factory-status.txt | geneseed factory record …`). Never join
-the two with a pipe: the git gate asks on any line that holds the word `git` and, anywhere on it,
-the word `commit` or `push`, and a slug, a path or a carry can hold either. Always use that
-porcelain form: plain `--porcelain` folds a new directory into one line, which the engine refuses.
-Below, `<status file>` is that file, written fresh just before each record.
+**How to record.** `record` reads the porcelain on its stdin. Take it on one line, into this
+run's own file in the OS temp directory (`<tmp>`; outside the worktree, or the porcelain lists
+that file, and named for the slug, so two runs never share it):
+`git status --porcelain --untracked-files=all > <tmp>/factory-<slug>-status.txt`.
+Then record on a second line, from that file, written fresh just before each record:
+`geneseed factory record … < <tmp>/factory-<slug>-status.txt`
+(PowerShell: `Get-Content -Raw <tmp>/factory-<slug>-status.txt | geneseed factory record …`).
+Never join the two with a pipe. The git gate asks on any line that holds the word `git` and,
+anywhere on it, the word `commit` or `push`, so nothing a run fills in goes on a record or
+decide line except the slug (which never holds those words), outcome and stage names, and paths
+under `<tmp>` named `factory-<slug>-…`: a stage's finding is copied to
+`<tmp>/factory-<slug>-<stage>.md` before it is carried, and the user's words and a stop reason go
+through `--note-file` and `--carry-file`. One limit stays: when the OS temp directory's own
+path holds the word `git`, `commit` or `push`, the gate asks on every record or porcelain line;
+approve each ask, or point the temp directory elsewhere. Always use that porcelain form: plain `--porcelain` folds a new directory
+into one line, which the engine refuses.
 
 - **`{stage, prompt, outcomes}`** — a brick stage. Dispatch its `agent` (or follow its `skill`)
   with the `prompt`, the `requirement`, the `input`, the `carry` and the factory's `rules`. Then:
-  `geneseed factory record --outcome <outcome> --carry "<the file path the stage reported>" < <status file>`.
-  The `--carry` is how the next stage gets this one's finding.
+  `geneseed factory record --outcome <outcome> --carry <tmp>/factory-<slug>-<stage>.md < <tmp>/factory-<slug>-status.txt`,
+  after copying the file the stage reported to that path. The `--carry` is how the next stage
+  gets this one's finding.
   A fork stage (such as `triage`) also gets `lanes`: each outcome it may report, with the stage
   it leads to. Record the outcome it reported (`--outcome docs`): that outcome names the lane,
   and a later route back to `$lane` returns to it.
@@ -60,7 +72,7 @@ Below, `<status file>` is that file, written fresh just before each record.
   engine refuses a dirty tree after any stage outside a loop.
   The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
   `carry`, not as a LOOP.md note) and reports with
-  `geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <its finding file> < <status file>`, so the gate shows the user what to review.
+  `geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <tmp>/factory-<slug>-spec.md < <tmp>/factory-<slug>-status.txt` (its finding copied there), so the gate shows the user what to review.
   Its gate holds for the user's review of the task list. After `decide --verdict ok`, commit the
   spec before the first loop: `git add specs/<slug>/spec.md`, then
   `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
@@ -70,8 +82,8 @@ Below, `<status file>` is that file, written fresh just before each record.
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
-  write their words to a file in the OS temp directory, then
-  `geneseed factory decide --verdict ok|no|amend --note-file <that file>` — `ok` follows the
+  write their words to `<tmp>/factory-<slug>-note.txt`, then
+  `geneseed factory decide --verdict ok|no|amend --note-file <tmp>/factory-<slug>-note.txt` — `ok` follows the
   reported outcome's edge, `no` stops, `amend` re-runs the stage with their note — and continue.
   Free text always goes through a file (`--note-file`, `--carry-file`), never the command line:
   the git gate asks on any line that holds the word `git` and the word `commit` or `push`, and
@@ -136,10 +148,10 @@ Below, `<status file>` is that file, written fresh just before each record.
    worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
    is `git push -u origin HEAD:loop/factory-<slug>`. Skip its final report too: the run goes on.
 7. When the loop reaches `$close` and its close commit has removed `LOOP.md`:
-   `geneseed factory record --outcome pass < <status file>`.
+   `geneseed factory record --outcome pass < <tmp>/factory-<slug>-status.txt`.
    When it reaches `$stop`, leave its `LOOP.md` in place:
-   write the stop reason to a file in the OS temp directory, then
-   `geneseed factory record --outcome fail --carry-file <that file> < <status file>`.
+   write the stop reason to `<tmp>/factory-<slug>-stop.txt`, then
+   `geneseed factory record --outcome fail --carry-file <tmp>/factory-<slug>-stop.txt < <tmp>/factory-<slug>-status.txt`.
 
 ## The end
 

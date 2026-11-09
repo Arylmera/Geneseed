@@ -7,7 +7,8 @@ gate: human
 outcomes: pass, fail
 ---
 Write `specs/<slug>/spec.md` and touch nothing else — no code. The slug is the run's: in a factory,
-the factory run's `<slug>`; in a loop, the slug of the loop's title. Write the problem, what is out
+the factory run's `<slug>` (it never holds the words git, commit or push); in a loop, the slug
+of the loop's title. Write the problem, what is out
 of scope, acceptance criteria in EARS form ("WHEN <trigger> THE SYSTEM SHALL <response>"), each one
 testable, and an ordered task list sized to one `identify` card apiece, ending with an end-to-end
 verification task.

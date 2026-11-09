@@ -431,6 +431,29 @@ test('M7: record --carry-file and decide --note-file carry free text without the
   } finally { sb.cleanup(); }
 });
 
+// F1: the slug lands on the porcelain line beside `git` and on every record line, so `init`
+// refuses a run branch `loop/factory-<slug>` whose slug holds the word git, commit or push, and
+// writes nothing. `digit` or `github` hold no such word; another branch is not checked.
+test('F1: init refuses a run slug that holds the word git, commit or push', () => {
+  const sb = repo(['fixture-fix']);
+  const head = (branch) => writeFileSync(path.join(sb.path, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
+  try {
+    for (const [slug, word] of [['fix-git-hook', 'git'], ['fix-commit-hook', 'commit'], ['Push-it', 'Push']]) {
+      head(`loop/factory-${slug}`);
+      assert.deepEqual(run(sb.path, [...INIT, '--factory', 'fixture-fix']), {
+        code: 1,
+        out: {
+          error: `the run's slug "${slug}" holds the word ${word}: the git gate would ask on every record line. `
+            + 'Rename the branch loop/factory-<slug> to a slug without git, commit or push (spell them g1t, cmt, psh)',
+        },
+      }, slug);
+      assert.equal(existsSync(path.join(sb.path, 'FACTORY.md')), false, slug);
+    }
+    head('loop/factory-digit-github-hook');
+    assert.equal(run(sb.path, [...INIT, '--factory', 'fixture-fix']).code, 0);
+  } finally { sb.cleanup(); }
+});
+
 // F1: the skill records with the porcelain in a file on stdin (`< file`), not a pipe. A redirect
 // hands the process a file descriptor, not a pipe: `record` reads it the same way. A dirty line
 // in the file is refused; the clean spec porcelain records.

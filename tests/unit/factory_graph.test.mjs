@@ -561,10 +561,16 @@ test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and th
 
 // F1: the git gate's own regex (read from js/hosts/hooks.mjs, never copied) over every command the
 // factory skill documents for `record`, `decide` and the porcelain. The gate asks on a line that
-// holds the word `git` and, anywhere on it, `commit` or `push`; a slug, a path or a carry may hold
-// either, so each placeholder is filled with both words, and no record or decide line may then
-// match. The porcelain line holds `git` by necessity, so it must hold no placeholder a run fills
-// (only `<tmp>`, the OS temp directory).
+// holds the word `git` and, anywhere on it, `commit` or `push`. Every placeholder a run fills is
+// filled with all three words (`git-commit-push`), except the bounded ones: `<slug>` (`factory
+// init` refuses a slug holding git, commit or push, so it gets `fix-hook-v2`), `<tmp>` (the OS temp
+// directory: the skill names that limit), `<outcome>` and `<stage>` (names the engine declares).
+// No record, decide or porcelain-file line may then match; the porcelain line holds `git` by
+// necessity, so it may hold only bounded placeholders, and no pipe.
+const BOUNDED = { '<slug>': 'fix-hook-v2', '<tmp>': '/tmp', '<outcome>': 'pass', '<stage>': 'merge-gate' };
+// a placeholder starts right after `<`; the stdin redirect is `< ` with a space
+const PLACEHOLDER = /<[^<>\s][^<>]*>/g;
+const fill = (line) => line.replace(PLACEHOLDER, (p) => BOUNDED[p] ?? 'git-commit-push').replace(/…/g, '--outcome pass');
 test('F1: no documented record, decide or porcelain line trips the git gate', () => {
   const hooks = readFileSync(path.resolve(import.meta.dirname, '../../js/hosts/hooks.mjs'), 'utf8');
   const [, body, flags] = /const GIT_GATE_RE = \/(.+)\/([a-z]*);/.exec(hooks);
@@ -574,17 +580,18 @@ test('F1: no documented record, decide or porcelain line trips the git gate', ()
   const spans = [...skill.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
   const records = spans.filter((s) => /geneseed factory (record|decide)/.test(s));
   assert.ok(records.length >= 5, `the skill documents its record and decide lines: ${records.length}`);
-  for (const line of records) {
-    const filled = line.replace(/<[^>]+>/g, 'fix-commit-push').replace(/…/g, '--carry push-commit');
-    assert.ok(!gate.test(filled), `the git gate asks on: ${line}`);
-  }
+  const asks = records.filter((line) => gate.test(fill(line)));
+  assert.deepEqual(asks, [], 'the git gate asks on these documented lines');
   // the porcelain a record reads (`--untracked-files=all`); a bare `git status --porcelain` check elsewhere records nothing
   const porcelain = spans.filter((s) => /^git status --porcelain --untracked-files=all/.test(s));
   assert.ok(porcelain.length >= 1);
   for (const line of porcelain) {
     assert.doesNotMatch(line, /\|/, `the porcelain is piped on the record's line: ${line}`);
-    assert.deepEqual(line.match(/<[^>]+>/g) ?? [], ['<tmp>'], `a run fills a placeholder on the git line: ${line}`);
+    assert.ok((line.match(PLACEHOLDER) ?? []).every((p) => p in BOUNDED), `an unbounded placeholder on the git line: ${line}`);
+    assert.ok(!gate.test(fill(line)), `the git gate asks on: ${line}`);
   }
+  // one status file per run, never one name every run on the machine shares
+  assert.ok(porcelain.every((line) => line.includes('<slug>')), 'the status file is named per run');
 });
 
 // M17: factory-forge's example says it is "in the shape of the shipped bug-report-to-fix", so its
