@@ -110,13 +110,16 @@ Repeat `geneseed factory next` and act on its JSON:
 
 ## The end
 
-8. On `$close`: the `retro` stage has written the run report. Close the run with
-   `git rm -f FACTORY.md`, then `git commit -m "factory(<slug>): close"` and
+8. On `$close`: the `retro` stage has written the run report. Remove `FACTORY.md`:
+   `git rm -f FACTORY.md` when git tracks it (a loop's commit carries it), else delete the file
+   (a run with no loop, such as the `docs` lane, never tracked it). Commit and push only when
+   `git status --porcelain` then shows the removal: `git commit -m "factory(<slug>): close"` and
    `git push -u origin HEAD:loop/factory-<slug>`. The gate asks: that ask is the user's consent.
-   The push re-runs CI on the PR, after `merge-gate` saw it green. Read the PR's checks again
+   That push re-runs CI on the PR, after `merge-gate` saw it green. Read the PR's checks again
    once, with the bounded wait the `merge-gate` brick names (30 minutes at most), and add the
    final state (green, red with the failing checks, or still pending at the bound) to the run
-   report. A red result is reported, never reworked: the run has closed.
+   report. With no close commit, CI did not re-run: the final state is the one `merge-gate`
+   read. A red result is reported, never reworked: the run has closed.
    **The merge proposal.** Only when that final state is green: show the user the PR URL, the CI
    state and each `review-panel` seat's verdict, and ask once whether to merge. On a yes:
    `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on GitLab), which the host's own
@@ -141,8 +144,8 @@ says a loop still runs, resume that loop first with `geneseed loop next` (the `l
 
 ## Done when
 
-- `$close` is reported with the PR open, `FACTORY.md` removed, and the CI state after that
-  removal read and reported; or `$stop` is
+- `$close` is reported with the PR open, `FACTORY.md` removed, and the final CI state read and
+  reported (after the close commit, or `merge-gate`'s when there was none); or `$stop` is
   reported with its reason and the run report. The PR was merged on the user's yes, asked once
   at the end, or left open; a `$stop` merges nothing.
 

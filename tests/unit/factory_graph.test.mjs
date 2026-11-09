@@ -433,3 +433,14 @@ test('G1: every stash in the loop skill keeps LOOP.md and FACTORY.md out of it',
     assert.ok(l.includes(':^LOOP.md') && l.includes(':^FACTORY.md'), `stashes an engine file: ${l}`);
   }
 });
+
+// G4: in the `docs` lane no loop runs, so nothing ever commits FACTORY.md, and `git rm -f` on it
+// exits 128. The close step names the untracked case, and commits only when there is a change.
+// A text check: it holds the step's wording, not an agent's reading of it.
+test('G4: the factory close step removes FACTORY.md tracked or not, and commits only a change', () => {
+  const close = shipped('skills/factory.md').split(/\n(?=\d+\. )/).find((s) => s.startsWith('8. On `$close`'));
+  assert.ok(close, 'the factory skill has its close step');
+  assert.match(close, /`git rm -f FACTORY\.md` when git tracks it/);
+  assert.match(close, /else delete the file/);
+  assert.match(close, /Commit and push only when\s+`git status --porcelain` then shows the removal/);
+});
