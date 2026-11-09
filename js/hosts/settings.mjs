@@ -923,11 +923,6 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // judges nothing else about it. `Task` is the subagent tool's older name. No
       // `onFailure: 'block'`: a counter that cannot start must never stop a skill.
       { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"` }] },
-      // The holdout deny (factories C10): `tool-gate` refuses the `developer` subagent a read under
-      // the holdout folder and judges no other read. Claude Code only: it is the host whose docs
-      // put `agent_type` on a subagent's tool events; OpenClaude is an older fork, unverified (R9).
-      // No `onFailure: 'block'`: a hook that cannot start must not block every read of a session.
-      ...(host === 'claude' ? [{ matcher: 'Read|Grep|Glob', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"` }] }] : []),
     ],
     // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
     // I4): every SessionStart source — `startup`, `resume`, `clear`, `compact` and `fork` —

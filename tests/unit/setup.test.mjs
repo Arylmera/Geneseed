@@ -423,8 +423,7 @@ const p = (...s) => path.join('<H>', ...s);
 // joined PreToolUse; Bob keeps 3 (its matcher-less tool-gate already counts). Then the activity
 // view added UserPromptSubmit everywhere and SessionEnd on the two hosts that have it: 9 and 4.
 // Then SubagentStart on Claude Code and OpenClaude only (Bob's strict schema has no such event,
-// and an unknown key drops its whole hooks block): 10 and 4. Then the holdout deny's
-// Read|Grep|Glob group on Claude Code alone: 11 there, OpenClaude stays at 10.
+// and an unknown key drops its whole hooks block): 10 and 4.
 test('the end-of-setup summary tells the truth for every host', () => {
   const cases = {
     'opencode-global': [
@@ -441,14 +440,14 @@ test('the end-of-setup summary tells the truth for every host', () => {
     ],
     'claude-global': [
       ['ok', `CLAUDE.md written to ${p('.claude', 'CLAUDE.md')}`],
-      ['ok', `11 hook groups wired in ${p('.claude', 'settings.json')}`],
+      ['ok', `10 hook groups wired in ${p('.claude', 'settings.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],
     ],
     claude: [
       ['ok', `CLAUDE.md written to ${p('proj', 'CLAUDE.md')}`],
-      ['ok', `11 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
+      ['ok', `10 hook groups wired in ${p('proj', '.claude', 'settings.local.json')}`],
       ['info', LEARN_OFF],
       ['info', "theme is now 'neutral' — start a NEW Claude Code session to load it"],
       ['info', NEXT],

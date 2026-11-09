@@ -169,8 +169,6 @@ for (const [name, { doctrines = PACK_ORDER, excluded = [] }] of Object.entries(B
 // `at` is the working directory; `ws` runs in the loss workspace's repository.
 // `session` adds a session id (only the ownership gate reads one). `extra` is hook argv. `ps` names
 // the PowerShell tool rather than Bash: only that says a here-string is one when no cmdlet does.
-// The holdout folder as the hook child computes it: `machineDir()` under the sandbox's XDG home.
-const HOLDOUT = path.join(base.XDG_CONFIG_HOME, 'geneseed', 'holdout');
 const ROWS = [
   // ---- Law I, Sealed Secrets
   { id: 'law-1 secret in a source file', kind: 'write', path: () => path.join(proj, 'src', 'a.js'), content: `k = "${SECRET}"`,
@@ -192,29 +190,8 @@ const ROWS = [
     rule: 'A command that is neither a commit, a loss, a scan nor a write passes.',
     claude: 'pass', bob: 'pass', v1: 'pass', v2: 'pass' },
   { id: 'a read of a rule store', kind: 'read', path: () => path.join(sb.path, 'user-rules.md'),
-    rule: 'Bob routes reads to the rule gate and a read is nobody\'s business; Claude routes one only to the holdout deny below. The guard passes a read tool.',
+    rule: 'Bob routes reads to the rule gate and a read is nobody\'s business; Claude never routes one. The guard passes a read tool.',
     claude: null, bob: 'pass', v1: 'pass', v2: 'pass' },
-  // ---- the holdout deny (factories C10): Claude Code's `Read|Grep|Glob` group runs tool-gate,
-  // which refuses the `developer` subagent a read under the machine dir's holdout folder. Every
-  // other reader passes, and so does a developer reading anywhere else. No other host has the deny
-  // (R9): Bob sends no agent_type, OpenCode has no subagent-aware read hook, hence null there.
-  ...[
-    ['developer Read of a scenario', 'developer', 'Read', { file_path: path.join(HOLDOUT, 'run', '01-x.md') }, 'deny'],
-    ['developer Read of the folder itself', 'developer', 'Read', { file_path: HOLDOUT }, 'deny'],
-    ['developer Grep inside it', 'developer', 'Grep', { pattern: 'Then', path: path.join(HOLDOUT, 'run') }, 'deny'],
-    ['developer Grep rooted at an ancestor', 'developer', 'Grep', { pattern: 'Then', path: path.dirname(HOLDOUT) }, 'deny'],
-    ['developer Glob whose pattern leads into it', 'developer', 'Glob', { pattern: `${HOLDOUT.split(path.sep).join('/')}/**/*.md` }, 'deny'],
-    ['developer Glob rooted at an ancestor', 'developer', 'Glob', { pattern: '**/*.md', path: sb.path }, 'deny'],
-    ['developer Read elsewhere', 'developer', 'Read', { file_path: path.join(proj, 'src', 'b.txt') }, 'pass'],
-    ['developer Grep for the word holdout elsewhere', 'developer', 'Grep', { pattern: 'holdout', path: path.join(proj, 'src') }, 'pass'],
-    ['developer Read of a sibling folder', 'developer', 'Read', { file_path: `${HOLDOUT}-notes${path.sep}a.md` }, 'pass'],
-    ['tester Read of a scenario', 'tester', 'Read', { file_path: path.join(HOLDOUT, 'run', '01-x.md') }, 'pass'],
-    ['main session Read of a scenario', null, 'Read', { file_path: path.join(HOLDOUT, 'run', '01-x.md') }, 'pass'],
-  ].map(([what, agent, tool, input, verdict]) => ({ id: `holdout: ${what}`, kind: 'raw', verb: 'tool-gate',
-    stdin: JSON.stringify({ tool_name: tool, tool_input: input, cwd: proj, ...(agent ? { agent_id: 'a1b2c3', agent_type: agent } : {}) }),
-    rule: verdict === 'deny' ? 'The developer subagent reaching the holdout folder, or a search above it, is refused.'
-      : 'Any other reader, or a developer read that does not reach the folder, passes.',
-    claude: verdict, bob: null, v1: null, v2: null })),
   // ---- Law IV, Deletion Is Deliberate
   { id: 'law-4 catastrophic', kind: 'shell', cmd: () => 'rm -rf /',
     rule: 'A command that would destroy a root asks on Claude, blocks on Bob and is refused by the guard.',
@@ -648,7 +625,7 @@ function derivedFlags(row, host, verb) {
 }
 
 function runHook(row, host) {
-  const verb = host === 'bob' ? 'tool-gate' : row.verb ?? (row.kind === 'shell' ? 'git-gate' : 'rule-gate');
+  const verb = host === 'bob' ? 'tool-gate' : row.kind === 'shell' ? 'git-gate' : 'rule-gate';
   const argv = [verb, '--root', install, ...(host === 'bob' ? ['--host', 'bob'] : host === 'openclaude' ? ['--host', 'openclaude'] : []),
     ...(row.extra || []), ...derivedFlags(row, host, verb)];
   const env = row.ws ? { ...base, ...Object.fromEntries(Object.entries(ws.env).filter(([k]) => k.startsWith('GIT_'))) } : base;

@@ -92,10 +92,9 @@ the `holdout` stage plays each scenario against the change as built and reports.
   an earlier run with the same slug; clear it yourself, then run again.
 - **Who sees them.** Both stages run as the `tester` agent. The `factory` skill never puts holdout
   content or the folder's path into a brief, a note or a carry.
-- **On Claude Code**, a hook also refuses the `developer` subagent any `Read`, `Grep` or `Glob`
-  that reaches the folder, a search rooted above it included. The hook reads the `agent_type`
-  field that Claude Code sets on every tool call made inside a subagent.
-- **On OpenCode, Bob and OpenClaude** no hook refuses it. The folder is protected only by its place
+- **No hook refuses a read of it**, on any host. A Claude Code read gate was built but is not
+  shipped: it would run a hook process on every Read, Grep and Glob of every session (about 90 ms
+  each on Windows) for a protection only a factory run uses. The folder is protected only by its place
   outside the worktree, by `holdout`'s `error`, and by the skill's rule. A shell command such as
   `cat` is not covered on any host.
 

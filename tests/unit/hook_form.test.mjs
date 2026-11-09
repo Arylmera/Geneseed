@@ -667,9 +667,6 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
         // The usage counter (js/hosts/usage.mjs) rides tool-gate WITHOUT onFailure: a counter
         // that cannot start must never block a skill, so it is a plain handler like context's.
         { matcher: 'Skill|Agent|Task', ...h(`& ${run} tool-gate --root "${cfg}"`) },
-        // The holdout deny (factories C10), Claude Code only, plain too: a hook that cannot
-        // start must not block every read of a session.
-        { matcher: 'Read|Grep|Glob', ...h(`& ${run} tool-gate --root "${cfg}"`) },
       ],
       SessionStart: [h(context)],
       Stop: [h(learn)],
@@ -717,7 +714,7 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
     for (const [shell, want] of [['powershell', 'powershell'], ['bash', undefined]]) {
       claims = emit(shell, claims);
       const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
-      for (const [event, n] of [['PreToolUse', 4], ['SessionStart', 1], ['Stop', 1],
+      for (const [event, n] of [['PreToolUse', 3], ['SessionStart', 1], ['Stop', 1],
         ['SubagentStop', 1], ['PreCompact', 1], ['UserPromptSubmit', 1], ['SessionEnd', 1],
         ['SubagentStart', 1]]) {
         assert.equal(hooks[event].length, n, `${shell}: ${event} ${JSON.stringify(hooks[event])}`);
@@ -725,9 +722,8 @@ test('a re-emit after the hook shell flips replaces the groups instead of double
       }
       // Seven since the usage counter's Skill|Agent|Task group joined PreToolUse (three groups
       // there); nine since the activity view's UserPromptSubmit and SessionEnd groups joined;
-      // ten since its SubagentStart group joined (the garden's sub-agent branch at launch);
-      // eleven since the holdout deny's Read|Grep|Glob group joined PreToolUse (four there).
-      assert.equal(claims.length, 11, `${shell}: the claim set is not the eleven current groups`);
+      // ten since its SubagentStart group joined (the garden's sub-agent branch at launch).
+      assert.equal(claims.length, 10, `${shell}: the claim set is not the ten current groups`);
     }
   });
 });
@@ -755,14 +751,13 @@ test('an install emitted before onFailure existed upgrades to it on re-emit', ()
     writeFileSync(settings, JSON.stringify({ hooks: old }));
     const [, claims] = mergeClaudeSettings(settings, priorClaims, opts, null, [], 'claude', cfg);
     const hooks = JSON.parse(readFileSync(settings, 'utf8')).hooks;
-    assert.equal(hooks.PreToolUse.length, 4, JSON.stringify(hooks.PreToolUse));
-    // The two GATES upgrade to onFailure: block; the usage counter's and the holdout deny's
-    // groups never carry it.
+    assert.equal(hooks.PreToolUse.length, 3, JSON.stringify(hooks.PreToolUse));
+    // The two GATES upgrade to onFailure: block; the usage counter's group never carries it.
     for (const g of hooks.PreToolUse) {
-      assert.equal(g.hooks[0].onFailure, ['Skill|Agent|Task', 'Read|Grep|Glob'].includes(g.matcher) ? undefined : 'block', JSON.stringify(g));
+      assert.equal(g.hooks[0].onFailure, g.matcher === 'Skill|Agent|Task' ? undefined : 'block', JSON.stringify(g));
     }
-    // Eleven: the eight gate/context/learn/holdout groups and the activity view's three (no onFailure).
-    assert.equal(claims.length, 11, 'the claim set is not the eleven current (upgraded) groups');
+    // Ten: the seven gate/context/learn groups and the activity view's three (no onFailure).
+    assert.equal(claims.length, 10, 'the claim set is not the ten current (upgraded) groups');
   });
 });
 

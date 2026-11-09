@@ -19,9 +19,8 @@ never part of a run.**
 developer and never inline. Never put holdout content (anything under `~/.config/geneseed/holdout/`)
 into any brief, prompt, note or `--carry` you hand on; never name that folder to a developer or a
 loop; never read it on a developer's behalf. Record `holdout-write`'s pass with the `--carry` it
-received, unchanged, and a `holdout` fail with the one-sentence file it reported. On Claude Code a
-hook refuses the `developer` {{AGENT}} any Read, Grep or Glob under the folder. On other hosts no
-hook does: the folder is protected only by its place outside the worktree, by `holdout`'s `error`
+received, unchanged, and a `holdout` fail with the one-sentence file it reported. No hook refuses a
+read of the folder on any host: the folder is protected only by its place outside the worktree, by `holdout`'s `error`
 when the diff touches it, and by this rule.
 
 ## Setup

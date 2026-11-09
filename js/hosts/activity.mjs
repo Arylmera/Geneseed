@@ -13,7 +13,7 @@
  * the host ran anyway has decided (the gates, `context` on SessionStart and SubagentStart, `learn`),
  * plus the `activity` verb for the events no other verb is wired to (UserPromptSubmit, SessionEnd).
  * So a Claude session's live phase moves only on the gated tools (`Bash|PowerShell`, `Write|Edit|NotebookEdit`,
- * `Skill|Agent|Task`, and on Claude Code `Read|Grep|Glob`, the holdout deny); the rest of the turn's tool calls arrive at Stop, read out of the
+ * `Skill|Agent|Task`); the rest of the turn's tool calls arrive at Stop, read out of the
  * transcript from a stored byte offset (`readTranscriptDelta`). Bob sends no `transcript_path`,
  * so a Bob session shows only what its matcher-less `tool-gate` sees, call by call.
  *
