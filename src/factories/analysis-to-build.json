@@ -1,6 +1,6 @@
 {
   "name": "analysis-to-build",
-  "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, then open one pull request and wait for green CI; red CI sends the work back to the loop as one more task, twice at most. The merge stays yours.",
+  "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, play the holdout scenarios it never saw, then open one pull request and wait for green CI; a failed scenario or red CI sends the work back to the loop as one more task, twice at most each. The merge stays yours.",
   "category": "development",
   "rules": [
     "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",

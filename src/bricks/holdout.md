@@ -13,9 +13,10 @@ each one against the change as built on this branch: run the app, the tests or t
 
 First read the branch's diff against the default branch it started from (`git merge-base HEAD
 origin/<default>`; `gh repo view --json defaultBranchRef` or `git remote show origin` names it).
-Report `error` when a changed file resolves under the holdout folder, or the diff names that
-folder's path. Report `error` too when a scenario cannot be played (a tool or a service it needs is
-missing).
+Report `error` when a changed file resolves under the holdout folder, or an added line holds that
+folder's resolved absolute path (a docs line naming `~/.config/geneseed/holdout/` in general is
+not a leak). Report `error` too when the folder is missing or holds no scenario (nothing played is
+not a pass), or a scenario cannot be played (a tool or a service it needs is missing).
 
 Report `pass` when every scenario passes. Report `fail` otherwise, with a file in the OS temp
 directory, never in the holdout folder or the worktree, that holds ONE sentence per failed

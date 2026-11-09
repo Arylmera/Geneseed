@@ -1,6 +1,6 @@
 {
   "name": "issue-to-pr",
-  "description": "Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), open the pull request and wait for green CI; red CI sends the work back to that loop, twice at most. The merge stays yours.",
+  "description": "Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or red CI sends the work back to that loop, twice at most each. The merge stays yours.",
   "category": "development",
   "rules": [
     "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",

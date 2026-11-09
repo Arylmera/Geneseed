@@ -1,6 +1,6 @@
 {
   "name": "bug-report-to-fix",
-  "description": "Take one bug report, fix it with the bugfix loop, open the pull request and wait for green CI; red CI sends the fix back to the loop, twice at most. The merge stays yours.",
+  "description": "Take one bug report, fix it with the bugfix loop, play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or red CI sends the fix back to the loop, twice at most each. The merge stays yours.",
   "category": "development",
   "rules": [
     "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",

@@ -79,20 +79,22 @@ test('list: name, description, category and origin of every factory', () => {
         factories: [{
           name: 'analysis-to-build', category: 'development', origin: 'shipped',
           description: 'Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, '
-            + 'build each task in turn with the feature loop in one worktree, then open one pull request and wait for '
-            + 'green CI; red CI sends the work back to the loop as one more task, twice at most. The merge stays yours.',
+            + 'build each task in turn with the feature loop in one worktree, play the holdout scenarios it never saw, then '
+            + 'open one pull request and wait for green CI; a failed scenario or red CI sends the work back to the loop as '
+            + 'one more task, twice at most each. The merge stays yours.',
         }, {
           name: 'bug-report-to-fix', category: 'development', origin: 'shipped',
-          description: 'Take one bug report, fix it with the bugfix loop, open the pull request and wait for green CI; '
-            + 'red CI sends the fix back to the loop, twice at most. The merge stays yours.',
+          description: 'Take one bug report, fix it with the bugfix loop, play the holdout scenarios it never saw, open the '
+            + 'pull request and wait for green CI; a failed scenario or red CI sends the fix back to the loop, twice at '
+            + 'most each. The merge stays yours.',
         }, {
           name: 'fixture-fix', category: null, origin: 'project',
           description: 'Test fixture: plan, run the bugfix loop, review; a failed review sends the item back to the loop.',
         }, {
           name: 'issue-to-pr', category: 'development', origin: 'shipped',
           description: 'Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), '
-            + 'open the pull request and wait for green CI; red CI sends the work back to that loop, twice at most. '
-            + 'The merge stays yours.',
+            + 'play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or '
+            + 'red CI sends the work back to that loop, twice at most each. The merge stays yours.',
         }],
       },
     });
