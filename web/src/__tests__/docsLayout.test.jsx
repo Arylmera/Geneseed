@@ -211,6 +211,22 @@ describe('Docs layout', () => {
       main.remove()
     }
   })
+
+  // The Library's "bring the entry into view on a pick" (LibList) is for the `.lib-wrap` pages
+  // only: the Docs open each page at the top of its scroller, above, and own their own scrolling.
+  it('does not scroll the reader into view on a page change', async () => {
+    const had = Element.prototype.scrollIntoView
+    const spy = vi.fn()
+    Element.prototype.scrollIntoView = spy
+    try {
+      const { rerender } = render(<Docs page="quick" overview={{}} />)
+      await screen.findByRole('heading', { level: 1 })
+      rerender(<Docs page="clone" overview={{}} />)
+      expect(spy.mock.contexts.filter((el) => el.classList?.contains('lib-reader'))).toEqual([])
+    } finally {
+      Element.prototype.scrollIntoView = had
+    }
+  })
 })
 
 // On a phone the page comes first in the DOM, not only on screen: reading and Tab order agree.

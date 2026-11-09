@@ -201,7 +201,7 @@ export function useActiveRowInView(deps) {
 // so a row picked there would open off screen: bring the entry into view. Only a new selection
 // in the same section counts — not the entry a page opens on, nor the first row a new section
 // lights. "Stacked" is read from the layout (the reader starts at or below the list's bottom),
-// so the side-by-side panes and the Docs (page above its list) never scroll.
+// so the side-by-side panes never scroll.
 function useEntryInView(listRef, [section, item]) {
   const was = useRef([section, item])
   useEffect(() => {
@@ -209,6 +209,8 @@ function useEntryInView(listRef, [section, item]) {
     was.current = [section, item]
     if (!item || section !== s0 || item === i0) return
     const list = listRef.current
+    // The `.lib-wrap` pages only: the Docs open each page at the top and own their scrolling.
+    if (!list?.closest('.lib-wrap')) return
     const reader = list?.parentElement?.querySelector(':scope > .lib-reader')
     if (!reader) return
     if (reader.getBoundingClientRect().top < list.getBoundingClientRect().bottom - 1) return
