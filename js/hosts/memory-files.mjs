@@ -441,15 +441,17 @@ function dropLines(p, needle) {
  * shortcut: rename only, and the day a store can live on another volume this needs a copy path.
  *
  * `move` is `copyFileSync` for a file that must stay readable until its replacement lands.
+ * `parent` is overridden only for a retired skill folder, whose sibling would sit inside the
+ * host's `skills/` scan root and load again: it goes to `<cfg>/archived-skills/<name>/` instead.
  */
-export function archiveStore(store, move = renameSync) {
+export function archiveStore(store, move = renameSync,
+  parent = path.join(path.dirname(store), `archived-${path.basename(store)}`)) {
   // `toLocaleString('sv-SE')` — LOCAL time, matching the old hand-rolled stamp
   // (`getHours()`/`getMinutes()`/`getSeconds()` are all local-time getters, unlike
   // `toISOString()`'s UTC). sv-SE's default format is already zero-padded
   // "YYYY-MM-DD HH:MM:SS"; stripping the punctuation and reinserting one dash reproduces
   // the exact `YYYYMMDD-HHMMSS` shape the padStart version built by hand.
   const stamp = new Date().toLocaleString('sv-SE').replace(/\D/g, '').replace(/^(\d{8})/, '$1-');
-  const parent = path.join(path.dirname(store), `archived-${path.basename(store)}`);
   // A taken name gets `-2`, …: two moves in one second must not fail the second.
   let dest = path.join(parent, stamp);
   for (let n = 2; existsSync(dest); n += 1) dest = path.join(parent, `${stamp}-${n}`);

@@ -48,6 +48,15 @@ The first global emit in a host's own config directory creates the folder and se
 
 Each global emit, in the host's own config directory, moves that host's stores into the tier and prints one line, such as `[shared] claude: 12 facts folded, 1 collision, 2 rules to approve, old store moved aside`. A host with nothing to move prints nothing, and a second emit writes nothing. `geneseed migrate --dry-run` previews the fold for each host, *Preview next rebuild* on the console's Installs page shows the same, and [Upgrade to 5.0](../guides/upgrade-to-5.md) walks through a first run.
 
+The same emit also clears retired skills. A skill that Geneseed shipped and then removed or renamed can leave its folder in `skills/` with no manifest that owns it. Before the skill layer writes, the emit moves such a folder to `archived-skills/<name>/<timestamp>/` in the config directory and prints `[geneseed] <host>: pruned retired skill skills/<name> (moved to …)`. It moves the folder only when all of these hold:
+
+- The name is an old alias or a retired skill id, and not a live skill.
+- No manifest owns a path under it.
+- The folder, the `skills/` folder, and everything inside it are real entries, not links or junctions.
+- Its `SKILL.md` has the shape every Geneseed build wrote: `name: <folder>` on the second line, a JSON-quoted `description:` on the third, and a `# <label>: <name>` heading in the body.
+
+A folder that fails one check is yours: it stays, and `migrate --dry-run` lists it as an orphan. A folder that passes all four is a `would prune` line there. A second emit finds nothing to move.
+
 - **Facts** copy byte for byte. A fact with the same name and other text lands as `<name>-<host>.md`, then `-2`, `-3`. The memory-curator agent can merge them later. Agent lessons append to the tier's file for that agent.
 - **Notes** in `notebook/skill-notes/` and `notebook/agent-notes/` copy the same way. The rest of the notebook stays per host.
 - **`PROFILE.md` and the wiki manifest** move when the tier holds only a seed. If the tier holds different text, the host file stays in force and `user-rules.draft.md` gets a pointer that asks which one becomes the shared file.

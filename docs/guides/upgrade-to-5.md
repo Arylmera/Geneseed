@@ -43,9 +43,9 @@ It writes nothing. It prints one line for each global install, read against the 
 
 **Use only the `--dry-run` form here.** The `would re-emit` lines are the plan of `geneseed migrate` itself, which moves a clone install to [the npm shape](migrate.md). That is not a 5.0 step. From a clone those lines do not appear: the preview ends by saying a real run would refuse, and a real `migrate` there exits 3 and changes nothing.
 
-It also lists orphans: a root `AGENT.md`, or the folder of a retired skill, that no manifest owns. Such a folder may be yours. Geneseed never moves it, so move it by hand if it is not.
+It also lists the folders of retired skills that no manifest owns. A `would prune` line names a folder that a Geneseed build rendered and that no longer ships. The next global emit moves it to `<config dir>/archived-skills/<name>/<timestamp>/`. An `orphan` line names a root `AGENT.md`, or a retired skill folder that is a link, holds a link, or does not look like a Geneseed render. Such a folder may be yours. Geneseed never moves it, so move it by hand if it is not.
 
-**In the console.** With no terminal, there is no preview before the first fold: *Update* on a clone pulls and rebuilds in one job, so the fold runs in that click, and a 4.x console has no preview. Nothing is deleted, as step 3 shows. After that, *Preview next rebuild* on the Installs page, beside *Rebuild all*, shows the same fold lines and orphans for any later rebuild, without the `would re-emit` lines, and writes nothing.
+**In the console.** With no terminal, there is no preview before the first fold: *Update* on a clone pulls and rebuilds in one job, so the fold runs in that click, and a 4.x console has no preview. Nothing is deleted, as step 3 shows. After that, *Preview next rebuild* on the Installs page, beside *Rebuild all*, shows the same fold lines and orphans for any later rebuild (not yet the `would prune` folders), without the `would re-emit` lines, and writes nothing.
 
 ## 3. Upgrade
 

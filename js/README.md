@@ -66,6 +66,7 @@ as a per-host install at project or global scope.
 | `emit-opencode.mjs` | The OpenCode emits — a project's `.opencode/` and the global config dir. Deliberate twin of the above |
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
 | `fold.mjs` | The fold: moves a global install's stores into the shared tier, in the emit. Moves aside, never deletes; a second run writes nothing |
+| `retired-skills.mjs` | Skill folders an old build rendered under a name that no longer ships: the canonical global emit moves a plain, fingerprinted, unowned one to `archived-skills/`; `migrate --dry-run` reads the same split |
 | `rule-decide.mjs` | The decisions on the draft: the approval flow of `src/skills/rule/approve.md`, as the console applies it. Write order: target, ledger, draft |
 | `stubs.mjs` | Write-once seed files: context, wiki, rules, excludes, profile, `.gitignore`, memory/notebook indexes |
 | `version.mjs` | The release marker: fingerprint the sources, read/compare/write an install's version, warn on downgrade |

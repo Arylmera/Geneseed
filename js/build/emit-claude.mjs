@@ -17,6 +17,7 @@ import { get, isDict, isTruthy } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
 import { assertSourceComplete, phaseLog, ensureMemoryStore } from './bundle.mjs';
 import { foldOnEmit } from './fold.mjs';
+import { pruneRetiredSkills } from './retired-skills.mjs';
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
@@ -124,6 +125,8 @@ export function emitClaudeRender(cfg, job) {
   // One shared `claim` (see `claimer`): the skills/agents writer and the Bob command writer
   // below both push into the same `owned` list, so a pre-manifest-install warning still
   // prints once across the whole emit rather than once per writer.
+  // Before the claim: a retired folder freed here lets this emit write the alias that replaces it.
+  if (sharedRoot !== null) pruneRetiredSkills(host, cfgDir, oldOwned);
   const claim = claimer(oldOwned, cfgDir, true, oldHashes);
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),

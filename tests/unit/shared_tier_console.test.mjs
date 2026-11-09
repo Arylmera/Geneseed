@@ -279,6 +279,8 @@ test('the migration preview answers what the next rebuild does, and writes nothi
     const before = snapshot(home);
     assert.deepEqual(STATE_ROUTES['/api/migrate/preview'](), {
       folds: [{ host: 'claude', summary: '1 fact folded, 1 rule to approve, 1 to approve, old store moved aside', failed: [] }],
+      // `prunes`: retired skill folders the next emit moves aside; this fixture has none.
+      prunes: [],
       orphans: [path.join(cfg, 'AGENT.md')],
     });
     assert.deepEqual(snapshot(home), before);

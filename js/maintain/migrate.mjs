@@ -29,7 +29,8 @@ import path from 'node:path';
 
 import { main as driverMain } from '../build/driver.mjs';
 import { foldHost, foldSummary } from '../build/fold.mjs';
-import { RETIRED_SKILL_IDS, ROOT, knownSkillIds, skillAliases } from '../build/source.mjs';
+import { ROOT } from '../build/source.mjs';
+import { ownsRel, retiredArchiveOf, retiredSkillFolders } from '../build/retired-skills.mjs';
 import { CLAUDE_STYLE, isCanonical, settingsFile } from '../hosts/hosts.mjs';
 import {
   claudeCfg, claudeReadManifest, EMIT_HOST_SCOPE, installState, installTargets,
@@ -130,31 +131,39 @@ function foldPreview(rows) {
 }
 
 /**
- * M5 — files no manifest owns, so no emit will ever prune them: the root `AGENT.md` and the folder
- * of a skill that no longer ships under its own name. An earlier build likely wrote them, but an
- * alias is a plain word and a folder under it may be the user's own, so nothing claims which.
- * REPORTED, never moved: they go aside on the user's word.
+ * M5 — files no manifest owns, so no emit's ordinary prune will ever reach them: the root
+ * `AGENT.md` and the folder of a skill that no longer ships under its own name. The skill
+ * folders split the way the next canonical emit treats them (`retiredSkillFolders`,
+ * `js/build/retired-skills.mjs`): `prunes`, a plain Geneseed render it moves aside, and
+ * `orphans`, everything it leaves — `AGENT.md`, a link, a folder without the render's
+ * fingerprint — because an alias is a plain word and such a folder may be the user's own.
  *
  * The candidate names come from what git history already settled and the source still records —
- * `RETIRED_SKILL_IDS` and the `aliases:` markers — because the CLI may not spawn `git`. Each
- * candidate is checked before it is listed: a live skill is never an orphan (`teach` is live,
- * `quiz` is its alias), and a path the manifest owns is not one either — the next emit prunes it.
+ * `RETIRED_SKILL_IDS` and the `aliases:` markers — because the CLI may not spawn `git`. A live
+ * skill is never a candidate (`teach` is live, `quiz` is its alias), and a path the manifest
+ * owns is not one either — the ordinary prune handles it.
  */
-export function orphanFindings(cfg, owned, { live = knownSkillIds(), aliases = skillAliases() } = {}) {
-  const owns = (rel) => owned.some((o) => o === rel || o.startsWith(`${rel}/`));
-  const names = [...new Set([...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)])].filter((n) => !live.includes(n));
-  return ['AGENT.md', ...names.map((n) => `skills/${n}`)]
-    .filter((rel) => !owns(rel) && existsSync(path.join(cfg, rel)))
-    .map((rel) => path.join(cfg, rel));
+export function orphanFindings(cfg, owned, opts = {}) {
+  return orphanSplit(cfg, owned, opts).orphans;
 }
 
-/** The `--dry-run` half of M5: the orphans of each global Claude-style install. */
+function orphanSplit(cfg, owned, opts = {}) {
+  const { prune, keep } = retiredSkillFolders(cfg, owned, opts);
+  const agent = !ownsRel(owned, 'AGENT.md') && existsSync(path.join(cfg, 'AGENT.md')) ? [path.join(cfg, 'AGENT.md')] : [];
+  return { prunes: prune, orphans: [...agent, ...keep] };
+}
+
+/** The `--dry-run` half of M5, for each canonical global install of every host. */
 function orphanPreview(rows) {
-  return rows.filter(({ host, scope, root }) => scope === 'global' && CLAUDE_STYLE.includes(host) && isCanonical(root, host))
-    .flatMap(({ root }) => {
-      const owned = claudeReadManifest(root).owned;
-      return orphanFindings(root, Array.isArray(owned) ? owned : []);
-    });
+  const out = { prunes: [], orphans: [] };
+  for (const { host, scope, root } of rows) {
+    if (scope !== 'global' || !isCanonical(root, host)) continue;
+    const owned = claudeReadManifest(root).owned;
+    const { prunes, orphans } = orphanSplit(root, Array.isArray(owned) ? owned : []);
+    out.prunes.push(...prunes);
+    out.orphans.push(...orphans);
+  }
+  return out;
 }
 
 /** The fold and orphan half of `--dry-run`, as the CLI prints it. */
@@ -163,20 +172,25 @@ function printPreview(rows) {
     printOut(summary ? `[migrate] would fold ${host}: ${summary}\n` : `[migrate] ${host}: nothing to fold\n`);
     for (const f of failed) printOut(`[migrate] ${host}: the fold would stop at ${f}\n`);
   }
-  for (const p of orphanPreview(rows)) {
+  const { prunes, orphans } = orphanPreview(rows);
+  for (const p of prunes) {
+    printOut(`[migrate] would prune: ${p} (Geneseed rendered it and no longer ships it; the next emit moves it to `
+      + `${retiredArchiveOf(path.dirname(path.dirname(p)), path.basename(p))})\n`);
+  }
+  for (const p of orphans) {
     printOut(`[migrate] orphan: ${p} (no manifest owns it; an earlier build may have written it, or it may be yours). Nothing moves it: if it is not yours, move it by hand.\n`);
   }
 }
 
 /**
- * What the next rebuild would do, for the console: `{folds: [{host, summary, failed}], orphans}`.
- * Writes nothing. A marker `migrate` refuses is in here too: `rebuild-all` coerces it, so that
- * install still folds. No `would re-emit` plan: that is this verb's, and a clone has none to run.
+ * What the next rebuild would do, for the console: `{folds: [{host, summary, failed}], prunes,
+ * orphans}`. Writes nothing. A marker `migrate` refuses is in here too: `rebuild-all` coerces it,
+ * so that install still folds. No `would re-emit` plan: that is this verb's, and a clone has none.
  */
 export function migratePreview() {
   const { rows, unrecognised } = migrateSurvey({ prune: false });
   const all = [...rows, ...unrecognised];
-  return { folds: foldPreview(all), orphans: orphanPreview(all) };
+  return { folds: foldPreview(all), ...orphanPreview(all) };
 }
 
 /** A stash key that cannot collide across drives, and is a legal file name on both platforms. */

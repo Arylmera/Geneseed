@@ -11,6 +11,7 @@ import path from 'node:path';
 
 import { foldHost, foldSummary } from '../../js/build/fold.mjs';
 import { orphanFindings } from '../../js/maintain/migrate.mjs';
+import { retiredSkillFolders } from '../../js/build/retired-skills.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
   SESSION_SEEDS, ensureExcludesStub, ensureMemoryIndex, ensureProfileStub, ensureRulesStub,
@@ -1250,3 +1251,138 @@ test('M5: a live skill is never an orphan, and neither is a path the manifest ow
   assert.deepEqual(at([]), ['AGENT.md', 'skills/quiz']);
   assert.deepEqual(at(['AGENT.md', 'skills/quiz/SKILL.md']), []);
 });
+
+// M6: a skill folder an earlier build rendered and no manifest owns is moved aside on a canonical
+// global emit, to `<cfg>/archived-skills/<name>/<stamp>/`. A same-name folder that is a link, holds
+// a link, or lacks the render's fingerprint is the user's: it stays and is still an orphan.
+/** A SKILL.md as every past native writer rendered it: `name:`, a JSON-quoted `description:`, a `# <Label>: <name>` heading. */
+const oldRender = (name, { crlf = false, comment = false, extra = '' } = {}) => {
+  const text = `---\nname: ${name}\ndescription: "Turn it green \\u2014 an old ${name}."\n${extra}---\n\n`
+    + `${comment ? '<!-- Authoring note: kept long on purpose. -->\n\n' : ''}# Rite: ${name}\n\n> An old ${name}.\n`;
+  return crlf ? text.replace(/\n/g, '\r\n') : text;
+};
+const seedSkill = (cfg, name, text) => {
+  fs.mkdirSync(path.join(cfg, 'skills', name), { recursive: true });
+  fs.writeFileSync(path.join(cfg, 'skills', name, 'SKILL.md'), text);
+};
+const archivedSkills = (cfg) => (exists(cfg, 'archived-skills')
+  ? fs.readdirSync(path.join(cfg, 'archived-skills')).sort() : []);
+const pruneLines = (out) => out.split(/\r?\n/).filter((l) => /^\[geneseed\] \w+: pruned retired skill /.test(l));
+const ownedOf = (cfg) => JSON.parse(read(cfg, '.geneseed-manifest.json')).owned;
+
+test('M6: claude-global moves an unowned old render aside, writes the alias, and a second emit does nothing', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  seedSkill(cfg, 'ci-fix', oldRender('ci-fix'));
+  const r = emit(home);
+  const lines = pruneLines(r.stdout);
+  assert.equal(lines.length, 1, r.stdout);
+  assert.match(lines[0], /^\[geneseed\] claude: pruned retired skill skills\/ci-fix \(moved to .*archived-skills.ci-fix.\d{8}-\d{6}\)$/);
+  assert.deepEqual(archivedSkills(cfg), ['ci-fix']);
+  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-skills', 'ci-fix'));
+  assert.equal(read(cfg, 'archived-skills', 'ci-fix', stamp, 'SKILL.md'), oldRender('ci-fix'));
+  // The folder freed, the alias claim held in the same emit: the next one has nothing to add.
+  assert.match(read(cfg, 'skills', 'ci-fix', 'SKILL.md'), /^description: "Alias of debug\."/m);
+  assert.ok(ownedOf(cfg).includes('skills/ci-fix/SKILL.md'));
+  const r2 = emit(home);
+  assert.deepEqual(pruneLines(r2.stdout), [], r2.stdout);
+  assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'ci-fix')), [stamp]);
+}));
+
+test('M6: bob-global prunes a CRLF render and one with a leading authoring comment, and recreates neither', () => withHome((home) => {
+  const cfg = path.join(home, '.bob');
+  seedSkill(cfg, 'ci-fix', oldRender('ci-fix', { crlf: true }));
+  seedSkill(cfg, 'herdr', oldRender('herdr', { comment: true, extra: 'compatibility: opencode\n' }));
+  const r = emit(home, 'bob-global');
+  assert.equal(pruneLines(r.stdout).length, 2, r.stdout);
+  assert.deepEqual(archivedSkills(cfg), ['ci-fix', 'herdr']);
+  assert.ok(!exists(cfg, 'skills', 'ci-fix'), 'Bob writes aliases as commands, never as a skill folder');
+  assert.ok(!exists(cfg, 'skills', 'herdr'));
+}));
+
+test('M6: opencode-global prunes an old render too (host parity)', () => withHome((home) => {
+  const cfg = path.join(home, '.config', 'opencode');
+  seedSkill(cfg, 'repo-map', oldRender('repo-map', { extra: 'compatibility: opencode\n' }));
+  const r = emit(home, 'opencode-global');
+  assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
+  assert.match(pruneLines(r.stdout)[0], /^\[geneseed\] opencode: pruned retired skill skills\/repo-map /);
+  assert.deepEqual(archivedSkills(cfg), ['repo-map']);
+}));
+
+test('M6: a same-name folder without the fingerprint, or holding a link, and a live skill folder all stay', () => withHome((home) => {
+  const cfg = path.join(home, '.bob');
+  // The upstream grill-me: unquoted description, no `# <Label>:` heading.
+  const upstream = '---\nname: grill-me\ndescription: Interview the user relentlessly about a plan.\n---\n\nInterview me.\n';
+  seedSkill(cfg, 'grill-me', upstream);
+  // Quoted and headed, but the folder also holds a link: not a plain render, so not ours to move.
+  seedSkill(cfg, 'slides', oldRender('slides'));
+  const elsewhere = path.join(home, 'elsewhere');
+  fs.mkdirSync(elsewhere);
+  fs.symlinkSync(elsewhere, path.join(cfg, 'skills', 'slides', 'refs'), 'junction');
+  // A live skill folder that predates the manifest is the user's (claim-on-create), whatever it says.
+  seedSkill(cfg, 'teach', oldRender('teach'));
+  const r = emit(home, 'bob-global');
+  assert.deepEqual(pruneLines(r.stdout), [], r.stdout);
+  assert.deepEqual(archivedSkills(cfg), []);
+  assert.equal(read(cfg, 'skills', 'grill-me', 'SKILL.md'), upstream);
+  assert.equal(read(cfg, 'skills', 'slides', 'SKILL.md'), oldRender('slides'));
+  assert.equal(read(cfg, 'skills', 'teach', 'SKILL.md'), oldRender('teach'));
+}));
+
+test('M6: a fingerprinted folder that is itself a link stays, and so does its target', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  const mine = path.join(home, 'my-skills', 'grill-me');
+  fs.mkdirSync(mine, { recursive: true });
+  fs.writeFileSync(path.join(mine, 'SKILL.md'), oldRender('grill-me'));
+  fs.mkdirSync(path.join(cfg, 'skills'), { recursive: true });
+  fs.symlinkSync(mine, path.join(cfg, 'skills', 'grill-me'), 'junction');
+  assert.ok(fs.lstatSync(path.join(cfg, 'skills', 'grill-me')).isSymbolicLink(), 'the fixture is a link');
+  const r = emit(home);
+  assert.deepEqual(pruneLines(r.stdout), [], r.stdout);
+  assert.ok(fs.lstatSync(path.join(cfg, 'skills', 'grill-me')).isSymbolicLink());
+  assert.equal(read(mine, 'SKILL.md'), oldRender('grill-me'));
+}));
+
+test('M6: a live name and a manifest-owned folder are never candidates, rendered or not', () => {
+  const cfg = makeSandbox('m6-').path;
+  seedSkill(cfg, 'quiz', oldRender('quiz'));
+  seedSkill(cfg, 'ci-fix', oldRender('ci-fix'));
+  const rel = (ps) => ps.map((p) => path.relative(cfg, p).replaceAll(path.sep, '/'));
+  const split = (owned, opts) => {
+    const { prune, keep } = retiredSkillFolders(cfg, owned, opts);
+    return { prune: rel(prune), keep: rel(keep) };
+  };
+  assert.deepEqual(split([]), { prune: ['skills/ci-fix', 'skills/quiz'], keep: [] });
+  // Were `quiz` live again, its folder would be the live skill's, whatever it holds.
+  assert.deepEqual(split([], { live: ['debug', 'quiz', 'teach'] }), { prune: ['skills/ci-fix'], keep: [] });
+  assert.deepEqual(split(['skills/ci-fix/SKILL.md']), { prune: ['skills/quiz'], keep: [] });
+});
+
+test('M6: an alias folder the manifest owns is left to the emit, never archived', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  emit(home);
+  assert.ok(ownedOf(cfg).includes('skills/quiz/SKILL.md'), 'claude writes the quiz alias');
+  const before = read(cfg, 'skills', 'quiz', 'SKILL.md');
+  const r = emit(home);
+  assert.deepEqual(pruneLines(r.stdout), [], r.stdout);
+  assert.deepEqual(archivedSkills(cfg), []);
+  assert.equal(read(cfg, 'skills', 'quiz', 'SKILL.md'), before);
+}));
+
+test('M6: migrate --dry-run says "would prune" for a render and "orphan" for the rest, and moves nothing', () => withHome((home) => {
+  const cfg = path.join(home, '.bob');
+  emit(home, 'bob-global');
+  fs.mkdirSync(path.join(home, '.geneseed'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.geneseed', '.migrated'), `${ROOT}\n`);
+  seedSkill(cfg, 'deps-audit', oldRender('deps-audit'));
+  seedSkill(cfg, 'grill-me', 'my own grill-me\n');
+  const r = run(home, 'geneseed-cli.mjs', ['migrate', '--dry-run']);
+  assert.equal(r.status, 0, r.stderr);
+  const prunes = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('[migrate] would prune:'));
+  const orphans = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('[migrate] orphan:'));
+  assert.deepEqual(prunes, [`[migrate] would prune: ${path.join(cfg, 'skills', 'deps-audit')} `
+    + `(Geneseed rendered it and no longer ships it; the next emit moves it to ${path.join(cfg, 'archived-skills', 'deps-audit')})`]);
+  assert.equal(orphans.length, 1, r.stdout);
+  assert.ok(orphans[0].includes(path.join(cfg, 'skills', 'grill-me')), r.stdout);
+  assert.equal(read(cfg, 'skills', 'deps-audit', 'SKILL.md'), oldRender('deps-audit'));
+  assert.deepEqual(archivedSkills(cfg), []);
+}));
