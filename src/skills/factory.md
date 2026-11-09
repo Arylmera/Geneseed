@@ -41,7 +41,7 @@ Repeat `geneseed factory next` and act on its JSON:
   first line of its file>`. The engine refuses a loop outside `loops`.
   The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
   `carry`, not as a LOOP.md note) and reports with
-  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md`.
+  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <its finding file>`, so the gate shows the user what to review.
   Its gate holds for the user's review of the task list. After `decide --verdict ok`, commit the
   spec before the first loop: `git add specs/<slug>/spec.md`, then
   `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
