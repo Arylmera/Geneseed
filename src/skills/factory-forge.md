@@ -33,7 +33,7 @@ to the loop three times, not two".
      and start the cycle's `nodes` with `$lane`. Only a `fail` routes back to a loop: `checks`
      `error` and `merge-gate` `none` also carry environment failures (a failed fetch, a missing
      tool, CI pending at the bound) that no loop can fix, so route them on or to `$stop`, never
-     to a loop or `$lane`.
+     to a loop or `$lane` (`factory check` refuses that route).
    - **rules** — optional lines every stage receives ("Never merge.").
    - **level** — project `<repo>/.geneseed/factories/` (this repository, shared with the team
      once committed) or global `$XDG_CONFIG_HOME/geneseed/factories/` (default
@@ -102,6 +102,8 @@ to the loop three times, not two".
    - `retired` — the file still uses `loop:$triaged` or `loops`: list each loop as its own stage,
      give the fork one edge per lane, and route back to `$lane`. Rewrite it with the user; never
      silently.
+   - `reports environment failures on …, which no loop can fix` — `checks` `error` or
+     `merge-gate` `none` routes to a loop or `$lane`: route it to the next stage or to `$stop`.
 6. **Hand off:** tell the user the file, then the `factory` {{SKILL}} runs it
    (`geneseed factory init --factory <name> …`). Do not start a run unasked.
 

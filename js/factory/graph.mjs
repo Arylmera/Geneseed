@@ -37,7 +37,7 @@
  * every cycle is declared, so an undeclared one is reported once, not twice.
  *
  * Problems come in a fixed order (shape, stages, edges, outcomes, reachability, cycles,
- * lanes, rules, protected paths, review seats) so a test writes the expected list out instead of sorting it. A malformed
+ * lanes, rules, protected paths, review seats, environment routes) so a test writes the expected list out instead of sorting it. A malformed
  * `cycles` or `edges` entry (an edge needs a string `from`, `on` and `to`) is reported by the shape
  * rule and left out of every later one: the doctor runs this over a user's file, and the engine
  * over a FACTORY.md anyone can edit, so it must never throw.
@@ -61,6 +61,12 @@ const NEEDS_INFO = 'needs-info';
 const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', NEEDS_INFO]);
 /** The work item sizes `intake` rates; `review.seats` needs a list for each (rule 9). */
 const SEAT_SIZES = ['small', 'medium', 'large'];
+/**
+ * The outcome on which a shipped brick reports an environment failure (a failed fetch, a missing
+ * tool, a timeout, CI pending at the bound): its body says so, and `factory_graph.test.mjs` holds
+ * the two in step. Rule 10 refuses a route from it to a loop, which could only spend laps on it.
+ */
+export const ENV_OUTCOMES = Object.freeze({ checks: 'error', 'merge-gate': 'none' });
 const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const edgeShaped = (e) => ['from', 'on', 'to'].every((k) => typeof e?.[k] === 'string');
 
@@ -281,6 +287,12 @@ export function checkFactory(factory, { bricks, templates, agents }) {
   }
   // rule 9 — the `review-panel` seat table
   if (factory.review !== undefined) problems.push(...seatProblems(factory.review, agents ?? new Set()));
+  // rule 10 — an outcome that carries environment failures never routes to a loop (M9)
+  for (const e of edges) {
+    if (ENV_OUTCOMES[e.from] === e.on && (loopOf(e.to) !== null || e.to === LANE)) {
+      problems.push(`edge ${e.from} --${e.on}--> ${e.to}: ${e.from} reports environment failures on ${e.on}, which no loop can fix — route it on or to $stop`);
+    }
+  }
   return problems;
 }
 

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf } from '../../js/factory/graph.mjs';
+import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf, ENV_OUTCOMES } from '../../js/factory/graph.mjs';
 import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -474,7 +474,9 @@ test('G5: the spec brick states the task format the factory counts, and never ty
 // every shipped factory those outcomes lead on, never to a `loop:` stage or `$lane`. The old text
 // ("report `fail` and mark it `environment`") sent it back to the loop, burning laps.
 test('G6: environment failures hold for the user and never route to a loop', () => {
-  const ENV = { checks: 'error', 'merge-gate': 'none' };
+  // the engine's own table (rule 10 reads it), held to what the brick bodies say below
+  const ENV = ENV_OUTCOMES;
+  assert.deepEqual(ENV, { checks: 'error', 'merge-gate': 'none' });
   for (const [stage, outcome] of Object.entries(ENV)) {
     const text = shipped(`bricks/${stage}.md`);
     const gateOn = /^gateOn:\s*(.+)$/m.exec(text)?.[1].split(/,\s*/) ?? [];
@@ -500,6 +502,38 @@ test('G6: environment failures hold for the user and never route to a loop', () 
       assert.ok(to && !loopOf(to) && to !== '$lane', `${name}: ${stage} --${outcome}--> ${to} routes an environment failure to a loop`);
     }
   }
+});
+
+// M9 (rule 10): `factory check` itself refuses a route from an environment outcome (`checks`
+// `error`, `merge-gate` `none`) to a `loop:` stage or `$lane`, for any factory, not only the forge's
+// text. Routing them on, or to `$stop`, passes. The rows read only rule 10's problems.
+test('M9: rule 10 refuses an environment outcome routed to a loop or $lane', () => {
+  const cat = {
+    ...CATALOG,
+    bricks: new Map([...CATALOG.bricks, brick('checks', ['pass', 'fail', 'error', 'none']), brick('merge-gate', ['pass', 'fail', 'none'])]),
+  };
+  const f = (checksError, gateNone) => ({
+    name: 'env', description: 'd', start: 'triage', stages: ['triage', 'loop:bugfix', 'loop:feature', 'notes', 'checks', 'merge-gate'],
+    edges: [
+      { from: 'triage', on: 'bug', to: 'loop:bugfix' }, { from: 'triage', on: 'feature', to: 'loop:feature' },
+      { from: 'triage', on: 'docs', to: 'notes' }, { from: 'triage', on: 'fail', to: '$stop' },
+      { from: 'loop:bugfix', on: 'pass', to: 'checks' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+      { from: 'loop:feature', on: 'pass', to: 'checks' }, { from: 'loop:feature', on: 'fail', to: '$stop' },
+      { from: 'notes', on: 'pass', to: 'checks' },
+      { from: 'checks', on: 'pass', to: 'merge-gate' }, { from: 'checks', on: 'fail', to: '$lane' },
+      { from: 'checks', on: 'error', to: checksError }, { from: 'checks', on: 'none', to: '$stop' },
+      { from: 'merge-gate', on: 'pass', to: '$close' }, { from: 'merge-gate', on: 'fail', to: '$lane' },
+      { from: 'merge-gate', on: 'none', to: gateNone },
+    ],
+    cycles: [{ name: 'ci', nodes: ['$lane', 'checks', 'merge-gate'], max: 2 }],
+  });
+  const env = (factory) => checkFactory(factory, cat).filter((p) => p.includes('environment'));
+  assert.deepEqual(env(f('merge-gate', '$close')), []);
+  assert.deepEqual(env(f('$stop', '$stop')), []);
+  assert.deepEqual(env(f('loop:bugfix', '$lane')), [
+    'edge checks --error--> loop:bugfix: checks reports environment failures on error, which no loop can fix — route it on or to $stop',
+    'edge merge-gate --none--> $lane: merge-gate reports environment failures on none, which no loop can fix — route it on or to $stop',
+  ]);
 });
 
 // G7: every shipped factory tells every stage "Push only this worktree's own branch.", so the
