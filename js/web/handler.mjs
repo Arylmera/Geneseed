@@ -19,7 +19,7 @@ import {
   rebuildCmds,
 } from './actions.mjs';
 import { BadRequest, NotFound } from './catalog.mjs';
-import { openFolder, requestRestart, restartRefusal, rootId, secretProof } from './daemon.mjs';
+import { nonceBook, openFolder, requestRestart, restartRefusal, rootId, secretProof } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
 import {
@@ -71,11 +71,13 @@ export function securityHeaders(nonce) {
  * - `/api/*`: a cross-site or same-site fetch, or a foreign `Origin`, is refused even on GET —
  *   the reads expose paths and memories. A request with neither header (curl, Node) passes.
  * - Any non-GET: the CSRF token, compared in constant time so its bytes cannot be timed out.
- *   `/api/shutdown` alone also takes `X-Geneseed-Secret`: a MAC of this socket's port under the
- *   install secret (`secretProof`), so `web start` can end its own unrecorded console. Same Host and
- *   Origin guards above, same constant-time compare; a wrong proof falls through to the token check.
+ *   `/api/shutdown` alone also takes `X-Geneseed-Secret`: a MAC of this socket's port and an
+ *   `X-Geneseed-Nonce` this console minted, under the install secret (`secretProof`), so
+ *   `web start` can end its own unrecorded console. The nonce is spent on the attempt, right or
+ *   wrong, so a proof is good once. Same Host and Origin guards above, same constant-time
+ *   compare; a wrong proof falls through to the token check.
  */
-export function requestGuard(req, token, secret = null) {
+export function requestGuard(req, token, secret = null, nonces = null) {
   const host = req.headers.host || '';
   // Exact `name:port`, not `localHost` + a suffix test: that pair let `[::1]x.evil:4747` and
   // `localhost:1:4747` through. Lower-cased the way browsers send it.
@@ -95,9 +97,11 @@ export function requestGuard(req, token, secret = null) {
   }
   if (req.method !== 'GET') {
     const proof = req.headers['x-geneseed-secret'];
-    if (secret && path === '/api/shutdown' && typeof proof === 'string') {
+    const nonce = req.headers['x-geneseed-nonce'];
+    if (secret && nonces && path === '/api/shutdown' && typeof proof === 'string'
+        && typeof nonce === 'string' && nonces.take(nonce)) {
       const have = Buffer.from(proof, 'utf-8');
-      const need = Buffer.from(secretProof(secret, req.socket.localPort), 'utf-8');
+      const need = Buffer.from(secretProof(secret, req.socket.localPort, nonce), 'utf-8');
       if (have.length === need.length && timingSafeEqual(have, need)) return null;
     }
     const got = Buffer.from(String(req.headers['x-geneseed-token'] ?? ''), 'utf-8');
@@ -139,6 +143,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
   // syscall against the readFileSync + gzipSync it saves. `gz` is the gzipped body,
   // computed once on the first gzip-accepting request instead of per request.
   const staticCache = new Map();
+  // This console's shutdown nonces (`nonceBook`), minted by `/api/ping?shutdown=1`.
+  const nonces = nonceBook();
   // `dist` RESOLVED ONCE, because every path compared against it below is resolved too.
   // `resolvePath` is `realpathSync.native`, so a checkout reached by any path that is not its
   // canonical one — a symlink, a Windows junction, a `subst` or mapped drive, an 8.3 short name,
@@ -230,8 +236,15 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     }
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
+    // `?shutdown=1` adds `nonce` for `clearPort`: a fresh one when this console holds the install
+    // secret, `null` when it does not (a foreground `geneseed web`, or a daemon that could not read
+    // its secret), so the caller can tell.
     if (path === '/api/ping') {
-      return sendJson(res, { ok: true, theme: state.theme, pid: process.pid, root: rootId() }, 200, ae);
+      const body = { ok: true, theme: state.theme, pid: process.pid, root: rootId() };
+      if (new URLSearchParams((req.url || '').split('?')[1] || '').has('shutdown')) {
+        body.nonce = holder?.secret ? nonces.issue() : null;
+      }
+      return sendJson(res, body, 200, ae);
     }
     for (const [prefix, handler] of PREFIX_ROUTES) {
       if (path.startsWith(prefix)) return sendJson(res, handler(st, path, state), 200, ae);
@@ -456,7 +469,7 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     const path = (req.url || '').split('?', 1)[0];
     try {
       // GUARD FIRST, BODY SECOND: a refused request is DISCARDED (`resume`, nothing buffered).
-      const refused = requestGuard(req, token, holder?.secret);
+      const refused = requestGuard(req, token, holder?.secret, nonces);
       if (refused) {
         sendJson(res, refused.body, refused.code, ae);
         return req.resume();

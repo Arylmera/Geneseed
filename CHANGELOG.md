@@ -18,6 +18,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **The factory transition ceiling is 60 per task** (was 30), and so at most 1200 over a run, for the two new stages and their laps.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The Factories graph draws a fork only where the engine sees one**: a brick that declares a named outcome. A `loop:` stage, or a brick whose pass/fail edges reach two stages, is no longer drawn as lanes. Many routes back into one stage now land inside its box instead of overflowing it.
 - **Factories › Active** says which install's catalogue drew a run's bricks and loops, shows "No runs yet" when the active-runs payload has no `factories` list instead of loading forever, and a catalogue payload without `factories` no longer crashes the page.
 - **Stacked library list:** a click on the open row no longer keeps the list open for a later Ctrl-K jump from outside, and ArrowDown from the filter unfolds a folded list before it focuses the first row.

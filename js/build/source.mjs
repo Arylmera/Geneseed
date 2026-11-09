@@ -89,7 +89,10 @@ export const RETIRED_RULE_IDS = {
   'external-gate': { was: 'Law IX', liveAs: 'DOCTRINE', note: 'moved to the rigor pack' },
   'absence-is-a-claim': { was: 'Law XI', liveAs: null, note: 'folded into verify-before-asserting' },
   // 2026-11-08: both rules set the reply format and shared one example, so one rule now holds both.
-  'mark-the-ask': { was: 'comms 5', liveAs: null, note: 'merged into comms 1, Codes and Markers' },
+  // `effect`: what an old exclusion of the address no longer does, printed with its WARN.
+  'mark-the-ask': { was: 'comms 5', liveAs: null, note: 'merged into comms 1, Codes and Markers',
+    effect: 'the ask markers it held now bind inside comms 1, so this exclusion no longer removes them; '
+      + "only excluding 'comms 1' would, and that drops the item codes too" },
 };
 
 /**
@@ -386,23 +389,40 @@ export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process', 'comms'];
  * constitution in the same sequence; a sort would silently disagree with a file whose headings
  * were ever out of order, and disagree in the direction that reads as correct.
  */
-export function knownRuleIds() {
-  return ruleCanon(SRC).rules.filter((r) => r.kind === 'DOCTRINE').map((r) => `${r.pack}.${r.n}`);
+export function knownRuleIds(rules = ruleCanon(SRC).rules) {
+  return rules.filter((r) => r.kind === 'DOCTRINE').map((r) => `${r.pack}.${r.n}`);
 }
 
 /**
- * `<pack>.<n>` -> why it names nothing now, for every retired doctrine rule whose address no
- * live rule took over. Read off `RETIRED_RULE_IDS`' `was`, so the reason has one home. An
- * install that excluded `comms 5` replays it on every rebuild; refusing it would break that
- * rebuild forever, so the flag parsers warn and drop it instead. A live address is never
- * retired: a rule appended later at the same number takes the address back.
+ * `<pack>.<n>` -> its `RETIRED_RULE_IDS` entry (`note`, and `effect` when set), for every
+ * retired doctrine rule whose address no live rule took over. Read off `was`, so the reason has
+ * one home. An install that excluded `comms 5` replays it on every rebuild; refusing it would
+ * break that rebuild forever, so the flag parsers warn and drop it instead. A live address is
+ * never retired: a rule appended later at the same number takes the address back
+ * (`reusedRuleAddresses`).
  */
 export function retiredRuleAddresses(known = knownRuleIds()) {
   const out = new Map();
-  for (const { was, note } of Object.values(RETIRED_RULE_IDS)) {
-    const m = /^([a-z]+) (\d+)$/.exec(was);
+  for (const entry of Object.values(RETIRED_RULE_IDS)) {
+    const m = /^([a-z]+) (\d+)$/.exec(entry.was);
     const id = m && `${m[1]}.${m[2]}`;
-    if (id && PACK_ORDER.includes(m[1]) && !known.includes(id)) out.set(id, note);
+    if (id && PACK_ORDER.includes(m[1]) && !known.includes(id)) out.set(id, entry);
+  }
+  return out;
+}
+
+/**
+ * `<pack>.<n>` -> `{ old, note, now }` for every retired doctrine rule whose address a different
+ * live rule (`now`, a `ruleCanon` rule) holds today. An exclusion stored for `old` would bind
+ * `now` in silence, so the flag parsers warn loudly with both names; the exclusion still binds,
+ * because the address is the new rule's now and nothing tells an old entry from a new one.
+ */
+export function reusedRuleAddresses(rules = ruleCanon(SRC).rules) {
+  const out = new Map();
+  for (const [old, { was, note }] of Object.entries(RETIRED_RULE_IDS)) {
+    const m = /^([a-z]+) (\d+)$/.exec(was);
+    const now = m && rules.find((r) => r.kind === 'DOCTRINE' && r.pack === m[1] && r.n === Number(m[2]));
+    if (now && now.id !== old) out.set(`${m[1]}.${m[2]}`, { old, note, now });
   }
   return out;
 }

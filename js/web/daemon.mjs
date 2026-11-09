@@ -125,17 +125,20 @@ export async function probe(url, timeout = 1.5) {
  * Is the answer on `port` a Geneseed console, and whose? `null` when nothing answers a console's
  * ping (nothing there, or some other program). Otherwise `{ pid, root }`, `root` null for a
  * console older than the field. The shape is the proof: `ok`, a string `theme` and an integer
- * `pid`, which no foreign server has a reason to send.
+ * `pid`, which no foreign server has a reason to send. `shutdown` asks for a shutdown nonce too:
+ * `nonce` is then a string (a daemon), `null` (a console without the secret) or `undefined` (a
+ * console older than the handshake).
  */
-export async function identify(port, timeout = 0.5) {
+export async function identify(port, timeout = 0.5, shutdown = false) {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/api/ping`, {
+    const res = await fetch(`http://127.0.0.1:${port}/api/ping${shutdown ? '?shutdown=1' : ''}`, {
       signal: AbortSignal.timeout(Math.round(timeout * 1000)),
     });
     const body = res.status === 200 ? await res.json() : null;
     await res.body?.cancel().catch(() => {});
     if (body?.ok !== true || typeof body.theme !== 'string' || !validPid(body.pid)) return null;
-    return { pid: body.pid, root: typeof body.root === 'string' ? body.root : null };
+    return { pid: body.pid, root: typeof body.root === 'string' ? body.root : null,
+      nonce: typeof body.nonce === 'string' || body.nonce === null ? body.nonce : undefined };
   } catch {
     return null;
   }
@@ -145,10 +148,13 @@ export async function identify(port, timeout = 0.5) {
 const validPid = (p) => Number.isInteger(p) && p > 1;
 
 /**
- * The install's shutdown secret: 32 random bytes in an owner-only file next to the daemon
- * record, created once and never rewritten. It lets a LATER `web start` end a console of this
- * install whose record (and token) is gone. It is never sent: callers send `secretProof`, bound
- * to the port, so a listener that merely claims our root learns nothing it can reuse elsewhere.
+ * The install's shutdown secret: 32 random bytes in a file next to the daemon record, created
+ * once and never rewritten. On POSIX the file is owner-only (mode 0600); on Windows the mode does
+ * nothing, and the file has the ACL it inherits from the folder it is in. It lets a LATER
+ * `web start` end a console of this install whose record (and token) is gone. It is never sent:
+ * callers send `secretProof`, bound to the port and to a nonce the console minted and accepts
+ * once, for a short time. A listener that merely claims our root can only hand out a nonce of its
+ * own, which no real console accepts, so the proof it collects is good nowhere, then or later.
  * `null` when the file can be neither read nor created — the feature is then off.
  */
 export function webSecret(target) {
@@ -163,8 +169,42 @@ export function webSecret(target) {
   return read();
 }
 
-/** What a caller sends in `X-Geneseed-Secret`: a MAC of the port under the secret, not the secret. */
-export const secretProof = (secret, port) => createHmac('sha256', secret).update(`shutdown:${port}`).digest('hex');
+/**
+ * What a caller sends in `X-Geneseed-Secret`: a MAC of the port and a nonce the console minted
+ * (`X-Geneseed-Nonce`) under the secret, never the secret itself.
+ */
+export const secretProof = (secret, port, nonce) => createHmac('sha256', secret)
+  .update(`shutdown:${port}:${nonce}`).digest('hex');
+
+/** How long a minted shutdown nonce stays good. `clearPort` spends it within a second. */
+export const NONCE_TTL_MS = 30_000;
+const NONCE_CAP = 8;
+
+/**
+ * One console's shutdown nonces: minted by `GET /api/ping?shutdown=1`, each taken once and only
+ * while fresh. At most `NONCE_CAP` outstanding, oldest dropped first, so a flood of pings cannot
+ * grow it. Per server (the handler's closure), never module-wide: one process may run several.
+ */
+export function nonceBook(now = Date.now) {
+  const live = new Map();
+  return {
+    issue() {
+      const t = now();
+      for (const [n, exp] of live) if (exp <= t) live.delete(n);
+      // A local ping flood can evict a nonce: that `web start` is refused, and nothing shuts down.
+      while (live.size >= NONCE_CAP) live.delete(live.keys().next().value);
+      const n = randomBytes(16).toString('hex');
+      live.set(n, t + NONCE_TTL_MS);
+      return n;
+    },
+    /** `true` once for a nonce this book minted and that has not expired; it is spent either way. */
+    take(n) {
+      const exp = live.get(n);
+      live.delete(n);
+      return exp !== undefined && exp > now();
+    },
+  };
+}
 
 /** Can a server bind `port` on loopback right now? `true` means something else holds it. */
 export const portTaken = (port) => new Promise((resolve) => {
@@ -179,17 +219,32 @@ export const portTaken = (port) => new Promise((resolve) => {
  * naming the holder, and nothing touched. Another install's console, a console too old to name
  * its install, and any other program are never ended.
  *
- * "Ends" means asking it to shut down with this install's secret (`secretProof`) and waiting for
- * the port. A listener that only CLAIMS our root cannot honour the request, so nothing is ever
- * ended on a claim, and no pid is ever signalled.
+ * "Ends" means a challenge and a response: ask it for a fresh nonce (`/api/ping?shutdown=1`),
+ * send `secretProof` over the port and that nonce, and wait for the port. A listener that only
+ * CLAIMS our root cannot honour the request, so nothing is ever ended on a claim, and no pid is
+ * ever signalled.
+ *
+ * A console older than the handshake answers no `nonce` and gets no proof at all: the only proof
+ * it could check is the fixed, replayable one this handshake replaced, and an impostor can pose
+ * as old as easily as new. It is named and left alone, like a console too old to name its root.
  */
 export async function clearPort(port, target) {
   if (!await portTaken(port)) return null;
   const c = await identify(port);
   if (c && c.root === rootId()) {
+    const n = (await identify(port, 0.5, true))?.nonce;
+    if (n === null) {
+      return `held by a console (pid ${c.pid}) of this install without the shutdown secret (a foreground `
+        + '`geneseed web`, or a daemon that could not read its secret) — stop it in its terminal (Ctrl+C), '
+        + 'or end that pid yourself';
+    }
+    if (typeof n !== 'string') {
+      return `held by an older console (pid ${c.pid}) of this install, from before the shutdown handshake `
+        + '— end that pid yourself';
+    }
     const secret = webSecret(target);
     const asked = secret !== null && await postShutdown(`http://127.0.0.1:${port}`, '', 3.0,
-      { 'X-Geneseed-Secret': secretProof(secret, port) });
+      { 'X-Geneseed-Nonce': n, 'X-Geneseed-Secret': secretProof(secret, port, n) });
     for (let i = 0; asked && i < 50 && await portTaken(port); i += 1) await sleep(100);
     if (asked && !await portTaken(port)) {
       printOut(`[web] ended the previous console of this install on port ${port} (pid ${c.pid}).\n`);
