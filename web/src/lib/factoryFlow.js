@@ -3,8 +3,8 @@
 //
 // A FACTORY READS TOP TO BOTTOM (spec D10). A stage's rank is its longest forward distance from
 // `start`, the routes back left out; each rank is one row, its stages side by side on one centre
-// column. So the targets of a fork (a stage whose edges reach two or more stages) share a rank
-// and sit side by side as LANES, and the stage every lane reaches sits below them: the join.
+// column. So the targets of a fork (forksOf: a brick that declares a named outcome, the engine's
+// `isFork`) share a rank and sit side by side as LANES, and the stage every lane reaches sits below them: the join.
 // Rows are joined by a bus: down from the source to the middle of the gap, across, down into the
 // target. `$close` is the end cap under the last row.
 //
@@ -53,6 +53,7 @@ const STACK_GAP = 22 // between stacked lanes: room for the outcome label above 
 const SPINE = 14 // a stacked row's spine, each side
 const RAIL = 14 // between left rails
 const TAG = 15 // one tag line under a stage
+const RAIL_IN = 4 // the outermost rail into a stage lands at least this far inside its box
 const CH = 7.2 // px per character of an 11px mono label, rounded up: an estimate, for room only
 export const SIZE = {
   brick: { w: 200, h: 48 },
@@ -84,24 +85,39 @@ export function spentCycle(cycles, from, to, lanes) {
   return best
 }
 
-// The forks of a factory: each stage whose forward edges reach two or more stages, with them.
-export function forksOf(factory) {
+// The outcomes that name no lane (js/factory/graph.mjs PLAIN_OUTCOMES, mirrored).
+const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', 'needs-info'])
+
+// The forks of a factory, each with the stages its forward edges reach: the engine's `isFork`,
+// mirrored — a brick stage (never `loop:`) that declares a named outcome, one outside
+// PLAIN_OUTCOMES. A brick the catalogue lacks (a run started in another project) is judged by
+// the outcomes its edges use, which `factory check` holds to the declared ones. The test is the
+// engine's; the lanes are not quite its `lanesOf`: a back edge (into a cycle's first stage) is
+// left out, a drawing choice, since a route back is a rail, never a lane box.
+export function forksOf(factory, bricks = []) {
   const stages = new Set(Array.isArray(factory.stages) ? factory.stages : [])
   const cycles = (factory.cycles || []).filter((c) => Array.isArray(c?.nodes))
   const isBack = (e) => cycles.some((c) => c.nodes[0] === e.to && c.nodes.includes(e.from))
+  const byName = new Map((Array.isArray(bricks) ? bricks : []).map((b) => [b?.name, b]))
+  const edges = (factory.edges || []).filter((e) => stages.has(e?.from))
+  const named = (s) =>
+    (byName.has(s)
+      ? byName.get(s)?.outcomes || []
+      : edges.filter((e) => e.from === s).map((e) => e.on)
+    ).some((o) => !PLAIN_OUTCOMES.has(o))
   const out = new Map()
-  for (const e of factory.edges || []) {
-    if (!stages.has(e?.from) || !stages.has(e?.to) || isBack(e)) continue
+  for (const e of edges) {
+    if (!stages.has(e.to) || isBack(e) || e.from.startsWith(LOOP) || !named(e.from)) continue
     if (!out.has(e.from)) out.set(e.from, [])
     if (!out.get(e.from).includes(e.to)) out.get(e.from).push(e.to)
   }
-  return new Map([...out].filter(([, t]) => t.length > 1))
+  return out
 }
 
 // The lane a run took: the target of the outcome its most recent fork recorded (FACTORY.md's
 // `history` holds `{ stage, outcome }` per transition), or null before any fork.
-export function laneTaken(factory, history) {
-  const forks = forksOf(factory)
+export function laneTaken(factory, history, bricks = []) {
+  const forks = forksOf(factory, bricks)
   for (const h of [...(Array.isArray(history) ? history : [])].reverse()) {
     if (!forks.has(h?.stage) || !h.outcome) continue
     const e = (factory.edges || []).find((x) => x.from === h.stage && x.on === h.outcome)
@@ -138,7 +154,7 @@ function place(factory, bricks, form, avail, taken) {
     Array.isArray(c?.nodes),
   )
   const byName = new Map(bricks.map((b) => [b.name, b]))
-  const forks = forksOf(factory)
+  const forks = forksOf(factory, bricks)
   const lanes = new Set([...forks.values()].flat())
   const cycleOf = (e) => spentCycle(cycles, e.from, e.to, lanes)
 
@@ -346,16 +362,24 @@ function place(factory, bricks, form, avail, taken) {
   const inFlow = new Map()
   for (const e of edges)
     if (e.kind === 'flow') inFlow.set(e.target, (inFlow.get(e.target) || 0) + 1)
-  const intoTarget = new Map() // rails landing on one stage, spread around its middle
+  // `$lane` lands on the row's left edge; stacked, the lanes share one x, so it lands on the
+  // lane the run took when one is known.
+  const targetOf = (e) =>
+    e.to === '$lane' && node.get(taken)?.stacked && forks.get(fork(e.from))?.includes(taken)
+      ? node.get(taken)
+      : node.get(e.target)
+  // Rails landing on one stage spread around its middle, 10 px apart, closer when that many
+  // would leave the box: the outermost lands RAIL_IN px inside its edge at most.
+  const railsInto = new Map()
+  for (const e of drawnRails) {
+    const id = targetOf(e).id
+    railsInto.set(id, (railsInto.get(id) || 0) + 1)
+  }
+  const intoTarget = new Map()
 
   const out = edges.map((e) => {
     const s = node.get(e.from)
-    // `$lane` lands on the row's left edge; stacked, the lanes share one x, so it lands on the
-    // lane the run took when one is known.
-    const t =
-      e.to === '$lane' && node.get(taken)?.stacked && forks.get(fork(e.from))?.includes(taken)
-        ? node.get(taken)
-        : node.get(e.target)
+    const t = targetOf(e)
     const base = { from: e.from, to: e.to, on: e.on, kind: e.kind, back: e.back, cycle: e.cycle }
     if (e.kind === 'stop') {
       if (!drawnStops.includes(e)) return { ...base, path: null }
@@ -373,7 +397,9 @@ function place(factory, bricks, form, avail, taken) {
       if (r < 0) return { ...base, path: null }
       const k = intoTarget.get(t.id) || 0
       intoTarget.set(t.id, k + 1)
-      const ty = cy(t) + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 10
+      const reach = Math.ceil((railsInto.get(t.id) - 1) / 2)
+      const step = reach ? Math.min(10, (t.h / 2 - RAIL_IN) / reach) : 10
+      const ty = cy(t) + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * step
       return {
         ...base,
         path: `M${s.x},${cy(s)} H${railX(r)} V${ty} H${t.x}`,

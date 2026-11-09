@@ -353,7 +353,9 @@ screen the run list stacks above the detail.
   stage on the row of its longest path from `start`, top to bottom, joined by lines; a brick a
   grey block, a fork amber, a `loop:` stage a teal box that names its loop (without `loop:`)
   over `whole loop`, or `not in catalogue` when this install lacks it; the ring itself is on the
-  Loops page. The targets of a fork share a row, side by side, each lane labelled with its outcome,
+  Loops page. A fork is what the engine calls one: a brick that declares a named outcome
+  (one outside `pass`, `fail`, `error`, `none` and `needs-info`), never a `loop:` stage, however
+  many stages its edges reach. The targets of a fork share a row, side by side, each lane labelled with its outcome,
   and join again at the first stage every lane reaches. Each route back (an edge into a cycle's
   first stage, the edge that spends a lap, `$lane` included) is a rail on the left labelled
   `↺ <cycle> · max N`, the smallest cycle that holds it; every stop edge on the main path runs
@@ -363,15 +365,19 @@ screen the run list stacks above the detail.
   first; when the rails do not fit, they become tags under the stage they leave, and the lanes
   shrink to compact boxes (named without `loop:`). Only when even those do not fit (below about
   524 px for five lanes) do the lanes stack as a list. Under it: a legend, the cycles in
-  words, the `geneseed factory init` command with a Copy button, and the
+  words, two ways to start a run, each with a Copy button — the request to paste to the agent
+  (`Run the <factory> factory on <issue URL, file or request>`), then the by-hand command, one
+  `&&` chain that adds a worktree, enters it and runs `geneseed factory init` there — and the
   factory's rules. It reads `GET /api/factories/catalog` for the install the *Install:* picker
   names. **Active** is every run `geneseed factory init` registered on this machine
   (`GET /api/factories/active`, polled every 5 s, the graph read from each run's `FACTORY.md`),
   grouped as Loops › Active is; the reader shows the run's stage, transitions, task number, its
   child loop's step and iteration, what it awaits, and its graph with the current stage lit,
   the lane its last fork took (the run's `lane`, else read from its `history`) lit, the child
-  loop's node named under the current stage (`at <node>`) and each cycle's laps as `n / max`. No run
-  reports tab: a run's report lives in its own worktree.
+  loop's node named under the current stage (`at <node>`) and each cycle's laps as `n / max`. A
+  run carries its graph but no bricks or loops: the graph borrows those from the catalogue of the
+  install the Templates tab's picker names, which the run's project may not share, and the reader
+  says which. No run reports tab: a run's report lives in its own worktree.
 - **Profile** (`#/profile`) — `PROFILE.md`: who you are and how you like to work, one card
   per file: the shared one every global install reads, tagged `shared`, and each project
   install's own. Opens rendered; **Edit** is a whole-file editor. The save carries

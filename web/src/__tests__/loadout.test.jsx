@@ -117,3 +117,15 @@ describe('Loadout rules and delivery', () => {
     expect(within(rulesSection()).getByText('Rules it follows · 7')).toBeTruthy()
   })
 })
+
+// "Show all rules" is one agent's choice: opening another agent shows its list collapsed.
+describe('Loadout show-all', () => {
+  it('collapses again when the agent changes', () => {
+    const { rerender } = render(<Loadout loadout={adept('wired')} />)
+    fireEvent.click(within(rulesSection()).getByRole('button', { name: 'Show all 7 rules' }))
+    expect(within(rulesSection()).getByText('User rule R1')).toBeTruthy()
+    rerender(<Loadout loadout={{ ...adept('wired'), agent: 'reviewer' }} />)
+    expect(within(rulesSection()).queryByText('User rule R1')).toBeNull()
+    expect(within(rulesSection()).getByRole('button', { name: 'Show all 7 rules' })).toBeTruthy()
+  })
+})

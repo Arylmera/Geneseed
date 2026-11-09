@@ -148,6 +148,13 @@ describe('Factories — templates', () => {
     expect(await screen.findByText('No factories')).toBeTruthy()
   })
 
+  // A payload without its `factories` list (an older or broken server) reads as none.
+  it('reads a catalogue with no factories list as empty', async () => {
+    api.factories.mockImplementation(() => Promise.resolve({ ...CATALOG, factories: undefined }))
+    render(<Factories tab="templates" />)
+    expect(await screen.findByText('No factories')).toBeTruthy()
+  })
+
   it('shows the read error rather than a blank page', async () => {
     api.factories.mockImplementation(() =>
       Promise.reject(new Error('not found: /api/factories/catalog')),
@@ -175,6 +182,16 @@ describe('Factories — active', () => {
     expect(text('text', cur)).toEqual(['bugfix', 'at apply'])
     expect(document.querySelector('.fg-lbl.back').textContent).toBe('↺ ci · 1 / 2')
     expect(text('.fac-cycles li')).toEqual(['ci: loop:bugfix → pr-open → merge-gate — lap 1 of 2'])
+  })
+
+  // A run carries its own graph, but no bricks or loops: those come from one install's
+  // catalogue, which the run's project may not share. The reader says which catalogue it is.
+  it('says which catalogue drew the run', async () => {
+    render(<Factories tab="active" />)
+    await screen.findByText('Fix the login bug', { selector: '.reader-title' })
+    expect(screen.getByText(/catalogue of the default install/).textContent).toBe(
+      'Bricks and loops drawn from the catalogue of the default install, which the run’s project may not share.',
+    )
   })
 
   // A run of the forked factory past its fork: the run's `lane` is taken (it wins over a history
@@ -248,6 +265,13 @@ describe('Factories — active', () => {
 
   it('says so when no run is registered', async () => {
     api.activeFactories.mockImplementation(() => Promise.resolve({ factories: [] }))
+    render(<Factories tab="active" />)
+    expect(await screen.findByText('No runs yet')).toBeTruthy()
+  })
+
+  // A payload without its `factories` list reads as no run, not as a read still out.
+  it('reads an active payload with no factories list as no run', async () => {
+    api.activeFactories.mockImplementation(() => Promise.resolve({}))
     render(<Factories tab="active" />)
     expect(await screen.findByText('No runs yet')).toBeTruthy()
   })

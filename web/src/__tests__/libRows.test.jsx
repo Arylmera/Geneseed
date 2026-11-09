@@ -65,3 +65,41 @@ describe('LibList announcement', () => {
     expect(screen.getByRole('status').textContent).toBe('C opened')
   })
 })
+
+// The stacked list's fold (useFolds): `inView` is [section, entry]. A route naming an entry
+// from outside the list folds it; a pick in the list keeps it open for the route change the
+// pick causes, and only that one.
+const Routed = ({ inView }) => (
+  <LibList label="Skills" count={3} q="" onQ={() => {}} matched={3} inView={inView}>
+    <GroupedRows rows={ROWS} activeName={inView[1]} hrefOf={(it) => `#/x/${it.name}`} />
+  </LibList>
+)
+const open = () => document.querySelector('.lib-list').dataset.open
+
+describe('LibList fold', () => {
+  it('a click on the open row keeps nothing for a later jump from outside', () => {
+    window.location.hash = '#/x'
+    const { rerender } = render(<Routed inView={['x', undefined]} />)
+    expect(open()).toBe('true')
+    fireEvent.click(rows()[0])
+    window.location.hash = '#/x/a'
+    rerender(<Routed inView={['x', 'a']} />)
+    expect(open()).toBe('true') // the pick's own route change keeps the list open
+    // The open row again: its href is the route, so no route change follows.
+    fireEvent.click(rows()[0])
+    rerender(<Routed inView={['y', 'b']} />) // Ctrl-K into another section
+    expect(open()).toBe('false')
+  })
+
+  // jsdom loads no styles.css, so a row inside `display: none` still takes focus here: this
+  // pins the unfold, the half that fails without the fix.
+  it('ArrowDown in the filter of a folded list unfolds it, then focuses the first row', () => {
+    render(<Routed inView={['x', 'b']} />)
+    expect(open()).toBe('false')
+    const filter = screen.getByRole('textbox', { name: 'Filter Skills' })
+    filter.focus()
+    fireEvent.keyDown(filter, { key: 'ArrowDown' })
+    expect(open()).toBe('true')
+    expect(document.activeElement).toBe(rows()[0])
+  })
+})

@@ -249,6 +249,29 @@ describe('Library', () => {
     await screen.findByText('session files (project context not counted)')
     expect(api.item).not.toHaveBeenCalled()
     expect(api.loadout).toHaveBeenCalledWith()
+    // One read serves both the row's noun and the Loadout panel.
+    expect(api.loadout).toHaveBeenCalledTimes(1)
+  })
+
+  // The pinned primary row obeys the text filter like every row: a filter it does not match
+  // leaves "No matches", and the picker's count counts what is listed.
+  it('filters the primary row with the rest', async () => {
+    render(<Library section="agents" selected="reviewer" overview={overview({})} />)
+    await waitFor(() => expect(document.querySelector('a.lib-row[data-pinned]')).toBeTruthy())
+    const filter = screen.getByRole('textbox', { name: /^Filter / })
+    fireEvent.change(filter, { target: { value: 'tester' } })
+    expect([...document.querySelectorAll('a.lib-row')].map((a) => a.getAttribute('href'))).toEqual([
+      '#/item/agent/tester',
+    ])
+    expect(document.querySelector('.lib-pick-n').textContent).toBe('1 agents')
+    fireEvent.change(filter, { target: { value: 'zzz' } })
+    expect(document.querySelector('a.lib-row')).toBeNull()
+    expect(screen.getByText('No matches')).toBeTruthy()
+    fireEvent.change(filter, { target: { value: 'servant' } })
+    expect([...document.querySelectorAll('a.lib-row')].map((a) => a.getAttribute('href'))).toEqual([
+      '#/item/agent/%3Aprimary',
+    ])
+    expect(document.querySelector('.lib-pick-n').textContent).toBe('1 agents')
   })
 
   // The delta against the primary is one pill per block (loadoutDelta's string split on ", "),
