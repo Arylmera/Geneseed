@@ -165,7 +165,10 @@ describe('Factories — active', () => {
       'At loop:bugfix · 4 transitions · loop at apply, iteration 2',
     )
     const cur = document.querySelector('.fg-node.current')
-    expect(cur.getAttribute('aria-label')).toBe('loop:bugfix stage, the bugfix loop, current stage')
+    // The child loop's step is said, not only drawn: the block's role hides its text.
+    expect(cur.getAttribute('aria-label')).toBe(
+      'loop:bugfix stage, the bugfix loop, current stage, at apply',
+    )
     expect(cur.getAttribute('aria-current')).toBe('step')
     expect(document.querySelectorAll('.fg-node.current')).toHaveLength(1)
     // The child loop's node is named under the box, not lit in a ring.

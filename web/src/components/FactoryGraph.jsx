@@ -9,7 +9,8 @@ const SLACK = 20 // px: more than a scrollbar's width
 // over `whole loop` (never its ring: the Loops page draws that), the lanes of a fork side by
 // side as compact boxes (stacked as a list when the pane is narrow), `$close` and `$stop` as end
 // caps, each route back as a rail on the left labelled with its cycle and `max`, and every stop
-// edge into one rail on the right. When the pane has no room for rails, they become tags under the stage they leave.
+// edge into one rail on the right. When the pane has no room for rails, they become tags under
+// the stage they leave.
 // Every colour is a class in styles.css (`.fg-*`) reading the console's tokens.
 //
 // The graph never scrolls sideways (D18): it measures its own box, lays out for that width, and
@@ -74,15 +75,17 @@ export default function FactoryGraph({
   const role = (n) => {
     const cur = n.id === highlight
     const said = `${label(n)}${n.id === taken ? ', the lane taken' : ''}`
+    // The live step is drawn as text inside the block, which an img or button hides: say it too.
+    const step = cur && child && (n.loop || n.lane) ? `, at ${child.node}` : ''
     return onSelect
       ? {
           role: 'button',
           tabIndex: 0,
-          'aria-label': said,
+          'aria-label': `${said}${step}`,
           onClick: pick(n.id),
           onKeyDown: pick(n.id),
         }
-      : { role: 'img', 'aria-label': `${said}${cur ? ', current stage' : ''}` }
+      : { role: 'img', 'aria-label': `${said}${cur ? ', current stage' : ''}${step}` }
   }
   const cls = (n) =>
     `fg-node ${n.kind}${n.lane ? ' lane' : ''}${n.id === highlight ? ' current' : ''}${n.id === taken ? ' taken' : ''}`
