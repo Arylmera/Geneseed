@@ -389,8 +389,8 @@ export const PACK_ORDER = ['craft', 'rigor', 'ops', 'process', 'comms'];
  * constitution in the same sequence; a sort would silently disagree with a file whose headings
  * were ever out of order, and disagree in the direction that reads as correct.
  */
-export function knownRuleIds() {
-  return ruleCanon(SRC).rules.filter((r) => r.kind === 'DOCTRINE').map((r) => `${r.pack}.${r.n}`);
+export function knownRuleIds(rules = ruleCanon(SRC).rules) {
+  return rules.filter((r) => r.kind === 'DOCTRINE').map((r) => `${r.pack}.${r.n}`);
 }
 
 /**

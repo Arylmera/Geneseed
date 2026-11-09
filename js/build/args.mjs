@@ -12,7 +12,7 @@ import { withPlatformNewlines } from '../lib/fs.mjs';
 import path from 'node:path';
 import {
   CONFIG, discoverNames, GATE_SWITCHES, PACK_ORDER, SRC, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits,
-  resolveSkillNames, retiredRuleAddresses, reusedRuleAddresses, skillAliases,
+  resolveSkillNames, retiredRuleAddresses, reusedRuleAddresses, ruleCanon, skillAliases,
 } from './source.mjs';
 // The loop engine's trust presets — the `--trust` choices. `score.mjs` imports nothing, which is
 // what lets it sit inside this module's `child_process` ban.
@@ -30,14 +30,14 @@ const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global'
  * stays as it was: stderr was once compared byte-for-byte across the two CLIs, and nothing
  * pins it now.
  */
-export function configDefaults() {
+export function configDefaults(config = CONFIG, rules = ruleCanon(SRC).rules) {
   const d = {
     theme: 'neutral', posture: 'peer', mode: 'direct', trust: DEFAULT_PRESET,
     doctrines: [...PACK_ORDER], excludeRules: [], excludeSkills: [], kits: [],
   };
-  if (!existsSync(CONFIG)) return d;
+  if (!existsSync(config)) return d;
   try {
-    const data = JSON.parse(readFileSync(CONFIG, 'utf8'));
+    const data = JSON.parse(readFileSync(config, 'utf8'));
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       if (data.theme !== undefined) d.theme = data.theme;
       if (data.posture !== undefined) d.posture = data.posture;
@@ -52,7 +52,7 @@ export function configDefaults() {
         if (Array.isArray(data.doctrines) && data.doctrines.every((x) => known.includes(x))) {
           d.doctrines = PACK_ORDER.filter((p) => data.doctrines.includes(p));
         } else {
-          process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "doctrines" is not a `
+          process.stderr.write(`[geneseed] WARN: ${path.basename(config)} "doctrines" is not a `
             + 'list of known pack names — using all packs.\n');
         }
       }
@@ -66,28 +66,28 @@ export function configDefaults() {
           // passed through lands in the `Excluded rules:` marker, `rebuild-all` hands it back
           // as a flag, and `parseExcludeRules` dies on it — every rebuild of that install,
           // forever. Unknown ids are dropped with a WARN; the known ones still bind.
-          const known = knownRuleIds();
+          const known = knownRuleIds(rules);
           const retired = retiredRuleAddresses(known);
           const ids = data.excludeRules.map((x) => x.trim().replace(/[ \t]+/, '.'));
           for (const id of ids.filter((x) => retired.has(x))) {
-            warnRetiredRule(id, retired, `${path.basename(CONFIG)} "excludeRules"`);
+            warnRetiredRule(id, retired, `${path.basename(config)} "excludeRules"`);
           }
           const unknown = ids.filter((id) => !known.includes(id) && !retired.has(id));
           if (unknown.length) {
-            process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" names `
+            process.stderr.write(`[geneseed] WARN: ${path.basename(config)} "excludeRules" names `
               + `unknown rule(s) ${unknown.map((id) => `'${id.replace('.', ' ')}'`).join(', ')}`
               + ' — ignoring them.\n');
           }
           d.excludeRules = [...new Set(ids.filter((id) => known.includes(id)))].sort();
-          warnReusedRules(d.excludeRules, `${path.basename(CONFIG)} "excludeRules"`);
+          warnReusedRules(d.excludeRules, `${path.basename(config)} "excludeRules"`, reusedRuleAddresses(rules));
         } else {
-          process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} "excludeRules" is `
+          process.stderr.write(`[geneseed] WARN: ${path.basename(config)} "excludeRules" is `
             + 'not a list of rule addresses — excluding nothing.\n');
         }
       }
     }
   } catch {
-    process.stderr.write(`[geneseed] WARN: ${path.basename(CONFIG)} is unreadable — `
+    process.stderr.write(`[geneseed] WARN: ${path.basename(config)} is unreadable — `
       + "using theme 'neutral'.\n");
   }
   return d;
@@ -175,10 +175,10 @@ function choicesFor() {
  * can least afford: the user asked for a rule to STOP binding and it would keep binding.
  * Sorted, deduped, for the same marker-stability reason `--doctrines` is.
  */
-function parseExcludeRules(value) {
+export function parseExcludeRules(value, rules = ruleCanon(SRC).rules) {
   const s = value.trim();
   if (s === 'none' || s === '') return [];
-  const known = knownRuleIds();
+  const known = knownRuleIds(rules);
   const retired = retiredRuleAddresses(known);
   const out = [];
   for (const raw of s.split(',').map((x) => x.trim()).filter(Boolean)) {
@@ -190,7 +190,7 @@ function parseExcludeRules(value) {
     }
     out.push(id);
   }
-  warnReusedRules(out, '--exclude-rules');
+  warnReusedRules(out, '--exclude-rules', reusedRuleAddresses(rules));
   return [...new Set(out)].sort();
 }
 

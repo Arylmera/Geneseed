@@ -191,6 +191,7 @@ export function nonceBook(now = Date.now) {
     issue() {
       const t = now();
       for (const [n, exp] of live) if (exp <= t) live.delete(n);
+      // A local ping flood can evict a nonce: that `web start` is refused, and nothing shuts down.
       while (live.size >= NONCE_CAP) live.delete(live.keys().next().value);
       const n = randomBytes(16).toString('hex');
       live.set(n, t + NONCE_TTL_MS);
@@ -233,8 +234,9 @@ export async function clearPort(port, target) {
   if (c && c.root === rootId()) {
     const n = (await identify(port, 0.5, true))?.nonce;
     if (n === null) {
-      return `held by a console (pid ${c.pid}) of this install that holds no shutdown secret — probably a `
-        + 'foreground `geneseed web`; stop it in its terminal (Ctrl+C)';
+      return `held by a console (pid ${c.pid}) of this install without the shutdown secret (a foreground `
+        + '`geneseed web`, or a daemon that could not read its secret) — stop it in its terminal (Ctrl+C), '
+        + 'or end that pid yourself';
     }
     if (typeof n !== 'string') {
       return `held by an older console (pid ${c.pid}) of this install, from before the shutdown handshake `

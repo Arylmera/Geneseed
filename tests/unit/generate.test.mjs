@@ -42,7 +42,7 @@ import {
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds, reusedRuleAddresses, ruleCanon,
 } from '../../js/build/source.mjs';
-import { warnReusedRules } from '../../js/build/args.mjs';
+import { configDefaults, parseExcludeRules, warnReusedRules } from '../../js/build/args.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -3002,13 +3002,31 @@ test('an exclusion of a retired address a new rule took over warns loudly, namin
   const appended = { kind: 'DOCTRINE', pack: 'comms', id: 'new-rule', name: 'New Rule', n: 5, label: 'comms 5' };
   const reused = reusedRuleAddresses([...live.filter((r) => r.label !== 'comms 5'), appended]);
   assert.deepEqual([...reused.keys()], ['comms.5']);
-  const lines = [];
-  const write = process.stderr.write;
-  process.stderr.write = (s) => { lines.push(String(s)); return true; };
-  try { warnReusedRules(['comms.1', 'comms.5'], '--exclude-rules', reused); } finally { process.stderr.write = write; }
-  assert.deepEqual(lines, ["[geneseed] WARN: --exclude-rules: 'comms 5' NOW EXCLUDES New Rule (new-rule), NOT the "
+  const canon = [...live.filter((r) => r.label !== 'comms 5'), appended];
+  const warning = (where) => `[geneseed] WARN: ${where}: 'comms 5' NOW EXCLUDES New Rule (new-rule), NOT the `
     + 'retired mark-the-ask (merged into comms 1, Codes and Markers) that held this address before. If this '
-    + 'exclusion was written for mark-the-ask, remove it.\n']);
+    + 'exclusion was written for mark-the-ask, remove it.\n';
+  const stderrOf = (fn) => {
+    const lines = [];
+    const write = process.stderr.write;
+    process.stderr.write = (s) => { lines.push(String(s)); return true; };
+    let out;
+    try { out = fn(); } finally { process.stderr.write = write; }
+    return { out, lines };
+  };
+  const helper = stderrOf(() => warnReusedRules(['comms.1', 'comms.5'], '--exclude-rules', reused));
+  assert.deepEqual(helper.lines, [warning('--exclude-rules')]);
+  // Both parse paths call it: the flag, and a stored `excludeRules` in the config file.
+  const flag = stderrOf(() => parseExcludeRules('comms 1,comms 5', canon));
+  assert.deepEqual(flag.out, ['comms.1', 'comms.5'], 'the reused exclusion stopped binding');
+  assert.deepEqual(flag.lines, [warning('--exclude-rules')]);
+  withDir((d) => {
+    const config = path.join(d, 'harness.config.json');
+    fs.writeFileSync(config, JSON.stringify({ excludeRules: ['comms 5'] }));
+    const cfg = stderrOf(() => configDefaults(config, canon));
+    assert.deepEqual(cfg.out.excludeRules, ['comms.5']);
+    assert.deepEqual(cfg.lines, [warning('harness.config.json "excludeRules"')]);
+  });
 });
 
 test('a plain files emit ships neither upstreams.json nor licenses/', () => {

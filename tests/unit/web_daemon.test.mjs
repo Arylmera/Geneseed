@@ -717,12 +717,14 @@ test('an older console of this install, without nonces, is named and sent no pro
   } finally { srv.closeAllConnections(); await new Promise((r) => { srv.close(r); }); }
 });
 
-test('a foreground console of this install is named as one, and left running', async () => {
-  // A foreground `geneseed web` never holds the install secret, so it can never honour the request.
+test('a console of this install without the secret is named as one, and left running', async () => {
+  // A foreground `geneseed web` never holds the install secret, nor does a daemon that could not
+  // read it; neither can honour the request.
   const c = await realConsole(null);
   try {
-    assert.equal(await clearPort(c.port, tmpDir()), `held by a console (pid ${process.pid}) of this install that `
-      + 'holds no shutdown secret — probably a foreground `geneseed web`; stop it in its terminal (Ctrl+C)');
+    assert.equal(await clearPort(c.port, tmpDir()), `held by a console (pid ${process.pid}) of this install `
+      + 'without the shutdown secret (a foreground `geneseed web`, or a daemon that could not read its secret) '
+      + '— stop it in its terminal (Ctrl+C), or end that pid yourself');
     assert.equal((await fetch(`http://127.0.0.1:${c.port}/api/ping`)).status, 200);
   } finally { await closeConsole(c); }
 });

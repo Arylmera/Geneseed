@@ -237,7 +237,8 @@ export function makeHandler(state, jm, token, dist, holder = null) {
     // `pid` is what a restarting client waits on: the OLD server keeps answering this ping for
     // a moment after `/api/restart` returns, and a reload onto it fetches the old token.
     // `?shutdown=1` adds `nonce` for `clearPort`: a fresh one when this console holds the install
-    // secret (a daemon), `null` when it does not (a foreground console), so the caller can tell.
+    // secret, `null` when it does not (a foreground `geneseed web`, or a daemon that could not read
+    // its secret), so the caller can tell.
     if (path === '/api/ping') {
       const body = { ok: true, theme: state.theme, pid: process.pid, root: rootId() };
       if (new URLSearchParams((req.url || '').split('?')[1] || '').has('shutdown')) {
