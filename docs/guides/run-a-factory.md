@@ -40,8 +40,8 @@ Take this analysis through analysis-to-build: docs/analysis/export-csv.md
 Run the analysis-to-build factory on this request: add CSV export to the report page
 ```
 
-`/factory` with the same words is the explicit form: it loads the `factory` skill directly. The
-console's **Factories** page shows the request for each factory, ready to copy.
+On Claude Code, `/factory` with the same words is the explicit form: it loads the `factory`
+skill directly. The console's **Factories** page shows the request for each factory, ready to copy.
 
 The agent then:
 
@@ -54,12 +54,11 @@ The holdout scenarios are checks the developer never sees: see [Holdout scenario
 ## Start one by hand
 
 Create the worktree first, then register the run in it. Never run `init` in your own checkout:
-the run then works on your current branch.
+the run then works on your current branch. Keep the three commands as one `&&` chain and
+replace every placeholder: if one command fails, the next ones do not run.
 
 ```bash
-git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>
-cd ../<repo>-factory-<slug>
-geneseed factory init --factory <name> --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"
+git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug> && cd ../<repo>-factory-<slug> && geneseed factory init --factory <name> --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"
 ```
 
 `init` alone runs nothing. It writes `FACTORY.md` and registers the run. An agent drives the run

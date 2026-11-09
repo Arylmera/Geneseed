@@ -84,12 +84,13 @@ function Cycles({ factory, counters }) {
 
 function FactoryDetail({ f, bricks, loops }) {
   const ask = `Run the ${f.name} factory on <issue URL, file or request>`
-  // The factory skill's Setup by hand: the worktree first, so the run never lands on this branch.
+  // The factory skill's Setup by hand, as one `&&` chain: pasted with its placeholders unfilled,
+  // the first command fails and `init` never runs in this checkout, on its current branch.
   const cmd = [
     'git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>',
     'cd ../<repo>-factory-<slug>',
     `geneseed factory init --factory ${f.name} --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"`,
-  ].join('\n')
+  ].join(' && ')
   return (
     <>
       <div className="reader-tags">
@@ -114,7 +115,7 @@ function FactoryDetail({ f, bricks, loops }) {
         <pre className="mono">{ask}</pre>
         <div className="loop-start-bar">
           <h3 className="loop-kicker">Or by hand, in a new worktree</h3>
-          <CopyButton text={cmd} label="Copy commands" />
+          <CopyButton text={cmd} label="Copy command" />
         </div>
         <pre className="mono">{cmd}</pre>
       </section>
