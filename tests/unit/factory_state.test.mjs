@@ -488,6 +488,34 @@ test('tasks: more than FACTORY_MAX_TASKS tasks are refused', () => {
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 20 }), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
 });
 
+// F2: the freeze is G3's "first TASK loop": a loop launched while a spec is on record. A loop that
+// ran before any spec (task 0 in history) owns no task, so the first spec still sets the count and
+// the ceiling, and an amend at its gate may still add tasks. The first loop after the spec freezes
+// both, as before.
+test('F2: a loop that ran before the spec does not freeze the task count', () => {
+  const s = start({
+    name: 'early', description: 'd', start: 'loop:bugfix', stages: ['loop:bugfix', 'spec', 'loop:feature', 'lint'],
+    edges: [
+      { from: 'loop:bugfix', on: 'pass', to: 'spec' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+      { from: 'spec', on: 'pass', to: 'loop:feature' }, { from: 'spec', on: 'fail', to: '$stop' },
+      { from: 'loop:feature', on: 'pass', to: 'lint' }, { from: 'loop:feature', on: 'fail', to: '$stop' },
+      { from: 'lint', on: 'pass', to: '$close' }, { from: 'lint', on: 'fail', to: 'spec' },
+    ],
+    cycles: [{ name: 'redo', nodes: ['spec', 'loop:feature', 'lint'], max: 1 }],
+  });
+  assert.deepEqual(loopRec(s, 'pass'), { stage: 'spec' });
+  recordStage(s, CATALOG, 'pass', SPEC);
+  assert.deepEqual([s.taskCount, s.runCeiling], [2, 2 * FACTORY_MAX_TRANSITIONS]);
+  decideFactory(s, CATALOG, 'amend', 'one more task');
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 3 }), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  assert.deepEqual([s.taskCount, s.runCeiling], [3, 3 * FACTORY_MAX_TRANSITIONS]);
+  decideFactory(s, CATALOG, 'ok');
+  nextStage(s, CATALOG, LAUNCH);   // the first task loop launches: frozen from here
+  s.stage = 'spec';
+  assert.throws(() => recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 4 }),
+    /^Error: specs\/r\/spec\.md lists 4 tasks, more than the 3 frozen when the first loop launched$/);
+});
+
 // R8: once a loop has run, the ceiling is fixed; a smaller re-record (lint sends the work back
 // to the spec) lowers the task list but keeps the ceiling.
 test('R8: the run-wide ceiling is fixed once a loop launched, and a smaller re-record keeps it', () => {

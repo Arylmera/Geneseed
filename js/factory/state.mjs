@@ -70,11 +70,12 @@
  * TERMINATION BY CONSTRUCTION (J3, R8). `transitions` counts per task and resets with it. On top,
  * `runTransitions` counts every transition of the run, never resets, and stops the run past
  * `runCeiling`: `FACTORY_MAX_TRANSITIONS` until a spec is recorded, then
- * `FACTORY_MAX_TRANSITIONS` x its task count. Until the first loop launches, each --spec record
- * sets the count and the ceiling again: the spec's gate comes after its record, and an amend there
- * may add tasks (G3). That window spends no fresh budget — no task has been reached, so the
- * per-task count never resets in it — and the gate's amend cap bounds it. Once a loop has
- * launched (`launched`, or a `loop:` stage in `history`, which never shrinks) the count is frozen:
+ * `FACTORY_MAX_TRANSITIONS` x its task count. Until the first task loop launches, each --spec
+ * record sets the count and the ceiling again: the spec's gate comes after its record, and an amend
+ * there may add tasks (G3). That window spends no fresh budget — no task has been reached, so the
+ * per-task count never resets in it — and the gate's amend cap bounds it. Once a task loop has
+ * launched (`launched` with a spec on record, or a `loop:` stage in `history` recorded with a
+ * task, which never shrinks; a loop that ran before any spec owns no task, F2) the count is frozen:
  * a later --spec record may keep or lower it, never raise it, so no lap can buy a task, a fresh
  * budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
  * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
@@ -242,8 +243,10 @@ export function initFactory({ title, requirement, factory, input = null }) {
 }
 
 const taskNo = (state) => state.tasks?.index ?? 0;
-// G3: the task count is frozen once any loop has launched (docblock: TERMINATION BY CONSTRUCTION).
-const tasksFrozen = (state) => state.launched != null || state.history.some((h) => loopOf(h?.stage) !== null);
+// G3, F2: the task count is frozen once the first TASK loop launched: a loop launched while a spec
+// is on record, or one in `history` recorded with a task (a loop before any spec records task 0).
+const tasksFrozen = (state) => (state.launched != null && state.tasks != null)
+  || state.history.some((h) => loopOf(h?.stage) !== null && h.task >= 1);
 // The task as `next` and a replay hand it out: the owning stage is the engine's bookkeeping.
 const taskOut = ({ stage: _owner, ...task }) => task;
 
