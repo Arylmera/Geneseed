@@ -421,7 +421,7 @@ export function recordStage(state, { bricks }, outcome, {
       throw new Error(`${specPath} lists ${taskCount} tasks; a factory runs ${FACTORY_MAX_TASKS} at most — split the requirement`);
     }
     if (state.taskCount !== null && tasksFrozen(state) && taskCount > state.taskCount) {
-      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen when the first loop launched`);
+      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen when the first task loop launched`);
     }
   }
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);

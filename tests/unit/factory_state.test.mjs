@@ -447,7 +447,7 @@ test('tasks: a re-recorded spec may not grow, so laps that grow the spec still s
   for (let i = 0; i < 200 && s.status === 'running'; i += 1) {
     if (s.stage === 'spec') {
       try { recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: count }); } catch (e) {
-        assert.equal(e.message, `specs/r/spec.md lists ${count} tasks, more than the 2 frozen when the first loop launched`);
+        assert.equal(e.message, `specs/r/spec.md lists ${count} tasks, more than the 2 frozen when the first task loop launched`);
         refused += 1;
         recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 2 });
       }
@@ -515,7 +515,7 @@ test('F2: a loop that ran before the spec does not freeze the task count', () =>
   nextStage(s, CATALOG, LAUNCH);   // the first task loop launches: frozen from here
   s.stage = 'spec';
   assert.throws(() => recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 4 }),
-    /^Error: specs\/r\/spec\.md lists 4 tasks, more than the 3 frozen when the first loop launched$/);
+    /^Error: specs\/r\/spec\.md lists 4 tasks, more than the 3 frozen when the first task loop launched$/);
 });
 
 // R8: once a loop has run, the ceiling is fixed; a smaller re-record (lint sends the work back
@@ -557,7 +557,7 @@ test('G3: an amended spec may grow until the first loop launches, then the count
   t.stage = 'spec';
   const before = JSON.stringify(t);
   assert.throws(() => recordStage(t, CATALOG, 'pass', { ...SPEC, taskCount: 3 }),
-    /^Error: specs\/r\/spec\.md lists 3 tasks, more than the 2 frozen when the first loop launched$/);
+    /^Error: specs\/r\/spec\.md lists 3 tasks, more than the 2 frozen when the first task loop launched$/);
   assert.equal(JSON.stringify(t), before);
 });
 
