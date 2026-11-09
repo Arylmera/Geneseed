@@ -489,3 +489,17 @@ test('G6: environment failures hold for the user and never route to a loop', () 
     }
   }
 });
+
+// G7: every shipped factory tells every stage "Push only this worktree's own branch.", so the
+// skill never pushes to the default branch: the proposed done list goes to the base from its own
+// worktree, on its own branch, by a PR the user merges. A text check on the skill's wording.
+test('G7: the factory skill lands a done list by its own branch and PR, never by a push to the base', () => {
+  for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+    assert.ok(JSON.parse(shipped(`factories/${name}.json`)).rules.includes('Push only this worktree\'s own branch.'), name);
+  }
+  const skill = shipped('skills/factory.md').replace(/\s+/g, ' ');
+  assert.doesNotMatch(skill, /git push origin HEAD:<default>|HEAD:<default>/);
+  assert.ok(skill.includes('-b geneseed/done-list-<slug> origin/<default>'), 'the done-list worktree has its own branch');
+  assert.ok(skill.includes('`git push -u origin HEAD:geneseed/done-list-<slug>`'), 'it pushes that branch');
+  assert.ok(skill.includes('open a PR to `<default>`'), 'it opens a PR for the user');
+});

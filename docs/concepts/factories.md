@@ -128,8 +128,9 @@ outside.
   judges a weakened test.
 - **No done list on the base**, or one with no command. `checks` proposes one, inferred from the
   base's manifests as the done gate infers checks, and holds; with no manifest it proposes nothing
-  and says so. On your yes, the agent lands the file on the base branch from a temporary worktree
-  (or you land it by PR when the branch is protected); once it is there, `ok` runs `checks`
+  and says so. On your yes, the agent commits the file in a temporary worktree on its own branch,
+  pushes that branch and opens a PR to the base branch: every factory stage pushes only its own
+  branch, never the base. You merge the PR; once the file is on the base, `ok` runs `checks`
   again, once.
 - **`review-panel` seats agents by the work item's size and areas.** `intake` rates the `size`
   (`small`, `medium`, `large`) and the `areas` (`security`, `performance`, `ui`, `data`). The
