@@ -93,7 +93,7 @@ export function loadCatalog({
   // Factories (`js/factory/`) are a third directory per level, same stem rule. Their parse
   // problems stay apart from `problems`: that list is `catalogProblems`' and so `loop check`'s,
   // and a broken factory file must not fail a loop.
-  const factories = new Map(); const factoryProblems = [];
+  const factories = new Map(); const factoryProblems = []; const factoryOverridden = [];
   for (const [origin, dir] of levels) {
     const brickDir = path.join(dir, 'bricks'); const loopDir = path.join(dir, 'loops');
     for (const f of listFiles(brickDir, '.md')) {
@@ -116,24 +116,27 @@ export function loadCatalog({
       }
       templates.set(stem, { ...graph, origin });
     }
+    // M8: a file that does not load still claims its name at its level: the factory of that name
+    // from a lower level is dropped, never run in its place, so `factory init` names the problem.
     const factoryDir = path.join(dir, 'factories');
     for (const f of listFiles(factoryDir, '.json')) {
-      let factory;
-      try { factory = JSON.parse(readText(path.join(factoryDir, f))); } catch {
-        factoryProblems.push(`factories/${f}: not JSON`); continue;
-      }
       const stem = f.slice(0, -'.json'.length);
-      if (factory?.name !== stem) {
-        factoryProblems.push(`factories/${f}: name ${JSON.stringify(factory?.name)} does not match the file name`);
-        continue;
-      }
+      const broken = (why) => { factoryProblems.push(`factories/${f} (${origin}): ${why}`); factories.delete(stem); };
+      let factory;
+      try { factory = JSON.parse(readText(path.join(factoryDir, f))); } catch { broken('not JSON'); continue; }
+      if (factory?.name !== stem) { broken(`name ${JSON.stringify(factory?.name)} does not match the file name`); continue; }
+      const prior = factories.get(stem);
+      if (prior) factoryOverridden.push(`${stem} (${origin}, overrides ${prior.origin})`);
       factories.set(stem, { ...factory, origin });
     }
   }
   // The shipped agents, by stem: what a factory's `review.seats` may name (`checkFactory` rule 9),
   // read where `availability` reads a brick's agent, so the two cannot disagree.
   const agents = new Set(listFiles(path.join(srcRoot, 'agents'), '.md').map((f) => f.slice(0, -'.md'.length)));
-  return { bricks, templates, problems, overridden: overridden.sort(), factories, factoryProblems, agents };
+  return {
+    bricks, templates, problems, overridden: overridden.sort(), factories, factoryProblems,
+    factoryOverridden: factoryOverridden.sort(), agents,
+  };
 }
 
 /** `catalog`: an already-loaded `loadCatalog(opts)`, for a caller that needs the catalogue

@@ -68,6 +68,26 @@ test('check: the catalogue, one factory, and a broken one', () => {
   } finally { sb.cleanup(); }
 });
 
+// M8: a project factory that shadows a shipped one is named in `check`'s `overridden`, as loop
+// check names an overridden brick; and a project file of that name that does not load makes
+// `init` refuse with its problem (and its origin), where the shipped graph used to run instead.
+test('M8: check names an overridden factory; init refuses a broken override instead of the shipped one', () => {
+  const sb = repo([]);
+  const file = path.join(sb.path, '.geneseed', 'factories', 'bug-report-to-fix.json');
+  try {
+    const shipped = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../src/factories/bug-report-to-fix.json'), 'utf8'));
+    writeFileSync(file, JSON.stringify(shipped));
+    assert.deepEqual(run(sb.path, ['check']).out.overridden, ['bug-report-to-fix (project, overrides shipped)']);
+    writeFileSync(file, '{ not json');
+    const check = run(sb.path, ['check']);
+    assert.deepEqual([check.code, check.out.problems, check.out.factories.includes('bug-report-to-fix')],
+      [1, ['factories/bug-report-to-fix.json (project): not JSON'], false]);
+    assert.deepEqual(run(sb.path, [...INIT, '--factory', 'bug-report-to-fix']),
+      { code: 1, out: { error: 'no factory named "bug-report-to-fix": factories/bug-report-to-fix.json (project): not JSON' } });
+    assert.equal(existsSync(path.join(sb.path, 'FACTORY.md')), false);
+  } finally { sb.cleanup(); }
+});
+
 // The catalogue is every origin: the shipped `analysis-to-build`, `bug-report-to-fix` and
 // `issue-to-pr` (src/factories/) list beside the project's fixture, sorted by name.
 test('list: name, description, category and origin of every factory', () => {

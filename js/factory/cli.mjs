@@ -100,7 +100,11 @@ function withState(fn) {
 function resolveFactory(spec, catalog) {
   if (spec.endsWith('.json')) return JSON.parse(readText(path.resolve(spec)));
   const f = catalog.factories.get(spec);
-  if (!f) throw new Error(`no factory named ${JSON.stringify(spec)}`);
+  if (!f) {
+    // M8: a file of that name that does not load is why, and is named; it never falls back to a lower level's factory
+    const why = catalog.factoryProblems.filter((p) => p.startsWith(`factories/${spec}.json (`));
+    throw new Error(`no factory named ${JSON.stringify(spec)}${why.length ? `: ${why.join('; ')}` : ''}`);
+  }
   const { origin, ...factory } = f;
   return factory;
 }
@@ -114,7 +118,10 @@ const ACTIONS = {
       return { ok: !problems.length, problems };
     }
     const problems = factoryCatalogProblems(catalog);
-    return { ok: !problems.length, problems, factories: [...catalog.factories.keys()].sort(byName) };
+    return {
+      ok: !problems.length, problems, factories: [...catalog.factories.keys()].sort(byName),
+      ...(catalog.factoryOverridden.length ? { overridden: catalog.factoryOverridden } : {}),
+    };
   },
   list() {
     const root = gitRootOf(process.cwd()) ?? process.cwd();
