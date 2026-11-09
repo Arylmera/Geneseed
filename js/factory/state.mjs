@@ -17,8 +17,9 @@
  * that convention would miscount: a cycle entered anywhere but its first stage, or a lap that
  * crosses no spending edge (a route back into the middle of a cycle).
  *
- * NO SCORING, AND A CLEAN TREE. Risk is the loop engine's job (J5). A stage outside a loop never
- * changes the worktree, so `recordStage` refuses a dirty porcelain after one — engine files and
+ * NO SCORING, AND A CLEAN TREE. Risk is the loop engine's job (J5). A stage outside a loop records
+ * only on a clean worktree — a mutate brick such as a `docs-update` lane (D12) commits its change
+ * first — so `recordStage` refuses a dirty porcelain after one — engine files and
  * the run's spec at `specs/<slug>/spec.md` excepted (the one being recorded, else the one on
  * record: it is uncommitted until the gate approves it, and the Rite commits it then, before the
  * first loop, whose first read brick would stop on it otherwise) — instead of carrying
@@ -42,10 +43,17 @@
  *
  * R4 COVERS WHAT A HAND CAN EDIT. FACTORY.md is a file; `validateFactoryState` refuses counters
  * that are not non-negative integers, a ceiling above 600, a task block out of its bounds, a gate
- * amend count above 3, a `chosenLoop` outside the factory's `loops`, a status the engine does not
+ * amend count above 3, a `lane` no fork of the factory leads to, a status the engine does not
  * write, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
  * `checkFactory` — the termination argument below holds only for a state this engine could have
  * written.
+ *
+ * LANES (D11, D13). A fork is a brick stage with named outcomes (`isFork`, `js/factory/graph.mjs`).
+ * `next` hands it `lanes` (each outcome with the stage it leads to), and `record` on it stores the
+ * stage its outcome's edge reaches as `lane`. An edge to `$lane` resolves to that stage, and spends
+ * the cycle `spentCycle` names for the literal `$lane` target, the rule `checkFactory` proves the
+ * graph against. A route to `$lane` with no lane on record (a state `check` cannot produce) is
+ * refused before the state changes, on `record` and on a gate's `ok` alike: never guessed.
  *
  * TASKS (D9). A stage that writes a spec records its path and task count (`tasks`). The first
  * `loop:` stage recorded after it owns the tasks (`tasks.stage`) and alone is replayed once per
@@ -68,7 +76,7 @@
  */
 import { writeText } from '../lib/fs.mjs';
 import { renameWithRetry, filterPorcelain } from '../loop/state.mjs';
-import { loopOf, stageOutcomes, reachable, checkFactory, TRIAGED } from './graph.mjs';
+import { loopOf, stageOutcomes, checkFactory, LANE, isFork, lanesOf, laneTargets, spentCycle } from './graph.mjs';
 
 const BEGIN = '<!-- factory-state:begin -->';
 const END = '<!-- factory-state:end -->';
@@ -142,10 +150,12 @@ export function validateFactoryState(state, catalog) {
   if (plainObject(state.factory) && state.factory.cycles !== undefined && !Array.isArray(state.factory.cycles)) {
     bad('factory.cycles must be a list');
   }
-  const loops = Array.isArray(state.factory?.loops) ? state.factory.loops : [];
-  if (state.chosenLoop !== null && !loops.includes(state.chosenLoop)) bad('chosenLoop must be null or one of the factory\'s loops');
   const problems = checkFactory(state.factory, catalog);
   if (problems.length) bad(`its factory no longer passes factory check: ${problems.join('; ')}`);
+  // absent in a state written before lanes existed: that reads as none on record
+  if (state.lane != null && !laneTargets(state.factory, catalog.bricks).has(state.lane)) {
+    bad('lane must be null or a stage a fork of the factory leads to');
+  }
 }
 
 /** `<file>.tmp` then `renameWithRetry`, as `writeLoopFile`: a killed write never tears FACTORY.md. */
@@ -179,7 +189,7 @@ export function initFactory({ title, requirement, factory, input = null }) {
     v: 1, title, requirement, input, factory, stage: factory.start,
     status: 'running', awaiting: null, reason: null,
     counters: {}, transitions: 0, runTransitions: 0, runCeiling: FACTORY_MAX_TRANSITIONS, taskHigh: 0, taskCount: null,
-    chosenLoop: null, tasks: null, carry: null, launched: null,
+    lane: null, tasks: null, carry: null, launched: null,
     history: [], gateAmends: {},
   };
 }
@@ -232,17 +242,15 @@ export function nextStage(state, { bricks }, { loopStatus = null, head = null, n
       throw new Error('the previous loop left its LOOP.md at the worktree root: run `git rm -f LOOP.md` and commit '
         + `that removal before \`geneseed loop init\` starts ${stage}`);
     }
-    const template = loop === '$triaged' ? state.chosenLoop : loop;
-    if (!template) throw new Error(`${TRIAGED}: no loop was triaged — the triage stage records one with --loop`);
     const owned = state.tasks && (state.tasks.stage === null || state.tasks.stage === stage);
-    if (state.launched?.stage !== stage) state.launched = { stage, template, head, at: now };
+    if (state.launched?.stage !== stage) state.launched = { stage, template: loop, head, at: now };
     // J7: the owner, recorded since the spec, entered by an edge rather than its own replay, has
     // passed its last task: this visit is one extra task, to fix what the stage before reported.
     const last = state.history.at(-1);
     const extra = owned && state.tasks.stage === stage && state.tasks.index === state.tasks.count && last?.stage !== stage
       ? { extra: `${last.stage} reported ${last.outcome ?? last.verdict}` } : {};
     return {
-      stage, loop: template, notes: state.carry ? [state.carry] : [],
+      stage, loop, notes: state.carry ? [state.carry] : [],
       ...(owned ? { task: { ...taskOut(state.tasks), ...extra } } : {}), ...rulesOf(state),
     };
   }
@@ -251,8 +259,8 @@ export function nextStage(state, { bricks }, { loopStatus = null, head = null, n
   return {
     stage, effect: brick.effect, agent: brick.agent, skill: brick.skill, outcomes: brick.outcomes,
     prompt: brick.body, requirement: state.requirement, input: state.input, carry: state.carry,
-    // D6: triage picks from the allowlist; the factory is its one writer, so the stage reads it here
-    ...(stage === 'triage' && state.factory.loops?.length ? { loops: state.factory.loops } : {}),
+    // D11: a fork picks from its own edges; the factory is their one writer, so the stage reads them here
+    ...(isFork(stage, bricks) ? { lanes: lanesOf(state.factory, stage) } : {}),
     ...rulesOf(state),
   };
 }
@@ -271,14 +279,15 @@ function dirtyLines(porcelain, specPath) {
 }
 
 /**
- * Record the current stage's outcome and follow its edge. `chosenLoop` (triage only), `specPath`
+ * Record the current stage's outcome and follow its edge. On a fork, the stage the outcome's edge
+ * reaches becomes the run's `lane`. `specPath`
  * with `taskCount` (a stage that wrote a spec), `carry` (the reason the next stage — above all a
  * re-entered loop — must hear). `loopTemplate` is the graph name in the LOOP.md the CLI read,
  * `head` the HEAD commit now, `loopInitAt` the registry row's last `loop init` time for this
  * worktree, or null (R2). Every refusal throws before the state changes.
  */
 export function recordStage(state, { bricks }, outcome, {
-  porcelain = null, chosenLoop = null, specPath = null, taskCount = null, carry = null, loopStatus = null,
+  porcelain = null, specPath = null, taskCount = null, carry = null, loopStatus = null,
   loopTemplate = null, head = null, loopInitAt = null,
 } = {}) {
   assertRunning(state);
@@ -320,22 +329,12 @@ export function recordStage(state, { bricks }, outcome, {
     if (dirty.length) {
       const folded = dirty.some((l) => /\/"?$/.test(l))
         ? ` — a path ending in / is a whole untracked directory: pipe \`${PORCELAIN}\`, which lists each file` : '';
-      throw new Error(`${from} left the worktree dirty, and a stage outside a loop never changes it: ${dirty.join('; ')}${folded}`);
+      throw new Error(`${from} left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick `
+        + `that changes files commits them first: ${dirty.join('; ')}${folded}`);
     }
-  }
-  if (chosenLoop !== null && from !== 'triage') throw new Error('--loop is recorded by the triage stage only');
-  const loops = state.factory.loops ?? [];
-  if (chosenLoop !== null && !loops.includes(chosenLoop)) {
-    throw new Error(`${chosenLoop} is not one of this factory's loops: ${loops.join(', ')}`);
   }
   const edge = state.factory.edges.find((e) => e.from === from && e.on === outcome)
     ?? (outcome === 'error' ? { from, on: 'error', to: '$stop' } : null);
-  // D6: any outcome whose route reaches the triaged loop names it — unless the route runs triage
-  // again first, which chooses afresh.
-  if (from === 'triage' && chosenLoop === null && edge && edge.to !== 'triage'
-    && reachable(edge.to, state.factory.edges, new Set(state.factory.stages), 'triage').has(TRIAGED)) {
-    throw new Error(`triage must name the loop it chose: --loop <one of ${loops.join(', ')}>`);
-  }
   if (specPath !== null) {
     if (!Number.isInteger(taskCount) || taskCount < 1) throw new Error(`${specPath} has no ordered task list under a Tasks heading`);
     if (taskCount > FACTORY_MAX_TASKS) {
@@ -346,8 +345,9 @@ export function recordStage(state, { bricks }, outcome, {
     }
   }
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
+  assertLane(state, edge);
 
-  if (chosenLoop !== null) state.chosenLoop = chosenLoop;
+  if (isFork(from, bricks) && state.factory.stages.includes(edge.to)) state.lane = edge.to;
   if (isLoop) state.launched = null;
   if (specPath !== null) {
     if (state.taskCount === null) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }
@@ -357,8 +357,7 @@ export function recordStage(state, { bricks }, outcome, {
   if (isLoop && state.tasks && state.tasks.stage === null) state.tasks.stage = from;
   state.carry = carry || null;
   state.history.push({
-    stage: from, outcome, task: taskNo(state), ...(chosenLoop !== null ? { loop: chosenLoop } : {}),
-    ...(carry ? { carry } : {}),
+    stage: from, outcome, task: taskNo(state), ...(carry ? { carry } : {}),
   });
   const brick = isLoop ? null : bricks.get(from);
   if (brick?.gate === 'human' && (!brick.gateOn || brick.gateOn.includes(outcome))) {
@@ -375,10 +374,17 @@ export function recordStage(state, { bricks }, outcome, {
     }
     return { stage: from, task: taskOut(state.tasks) };
   }
-  return transition(state, from, edge);
+  return transition(state, from, edge, bricks);
 }
 
-function transition(state, from, edge) {
+// D13: an edge to `$lane` needs a lane on record; checked before any state changes.
+function assertLane(state, edge) {
+  if (edge.to === LANE && state.lane == null) {
+    throw new Error(`${edge.from} routes to ${LANE}, but no fork has chosen a lane in this run`);
+  }
+}
+
+function transition(state, from, edge, bricks) {
   if (edge.to === '$stop') return stop(state, `${from} reported ${edge.on}`);
   if (edge.to === '$close') { state.status = 'done'; state.stage = '$close'; return { done: true }; }
   state.transitions += 1; state.runTransitions += 1;
@@ -386,17 +392,14 @@ function transition(state, from, edge) {
   if (state.runTransitions > state.runCeiling) {
     return stop(state, `run-wide transition ceiling of ${state.runCeiling} reached (${FACTORY_MAX_TRANSITIONS} per task)`);
   }
-  let cycle = null;
-  for (const c of state.factory.cycles ?? []) {
-    if (c.nodes?.[0] !== edge.to || !c.nodes.includes(from)) continue;
-    if (!cycle || c.nodes.length < cycle.nodes.length) cycle = c;
-  }
+  const cycle = spentCycle(state.factory.cycles ?? [], from, edge.to, laneTargets(state.factory, bricks));
   if (cycle) {
     state.counters[cycle.name] = (state.counters[cycle.name] ?? 0) + 1;
     if (state.counters[cycle.name] > cycle.max) return stop(state, `cycle ${cycle.name} exhausted its max of ${cycle.max}`);
   }
-  state.stage = edge.to;
-  return { stage: edge.to };
+  const to = edge.to === LANE ? state.lane : edge.to;
+  state.stage = to;
+  return { stage: to };
 }
 
 /**
@@ -404,10 +407,12 @@ function transition(state, from, edge) {
  * `ok` follows the held edge; `no` stops; `amend` re-runs the stage with the note as its `carry`,
  * `GATE_MAX_AMENDS` times per stage per task.
  */
-export function decideFactory(state, _catalog, verdict, note = '') {
+export function decideFactory(state, { bricks }, verdict, note = '') {
   if (state.status !== 'awaiting') throw new Error('nothing is awaiting a decision');
   if (!['ok', 'no', 'amend'].includes(verdict)) throw new Error(`verdict must be ok, no or amend, not ${JSON.stringify(verdict)}`);
   const { stage, outcome } = state.awaiting;
+  const edge = state.factory.edges.find((e) => e.from === stage && e.on === outcome) ?? { from: stage, on: outcome, to: '$stop' };
+  if (verdict === 'ok') assertLane(state, edge);
   state.awaiting = null; state.status = 'running';
   state.history.push({ stage, verdict, task: taskNo(state), ...(note ? { note } : {}) });
   if (verdict === 'no') return stop(state, `gate rejected at ${stage}${note ? `: ${note}` : ''}`);
@@ -420,6 +425,5 @@ export function decideFactory(state, _catalog, verdict, note = '') {
     state.stage = stage; state.carry = note || null;
     return { resumed: true };
   }
-  const edge = state.factory.edges.find((e) => e.from === stage && e.on === outcome) ?? { from: stage, on: outcome, to: '$stop' };
-  return transition(state, stage, edge);
+  return transition(state, stage, edge, bricks);
 }

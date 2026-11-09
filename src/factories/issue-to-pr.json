@@ -1,35 +1,49 @@
 {
   "name": "issue-to-pr",
-  "description": "Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or red CI sends the work back to that loop, twice at most each. The merge stays yours.",
+  "description": "Take one issue, let triage pick the lane that fits (the bugfix, feature, deps-upgrade or refactor loop, or a docs-only update), play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or red CI sends the work back to that lane, twice at most each. The merge stays yours.",
   "category": "development",
   "rules": [
     "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",
     "Push only this worktree's own branch."
   ],
-  "stages": ["intake", "holdout-write", "triage", "loop:$triaged", "holdout", "pr-open", "merge-gate", "retro"],
+  "stages": [
+    "intake", "holdout-write", "triage",
+    "loop:bugfix", "loop:feature", "loop:deps-upgrade", "loop:refactor", "docs-update",
+    "holdout", "pr-open", "merge-gate", "retro"
+  ],
   "start": "intake",
-  "loops": ["bugfix", "feature", "deps-upgrade", "refactor"],
   "edges": [
     { "from": "intake", "on": "pass", "to": "holdout-write" },
     { "from": "intake", "on": "fail", "to": "$stop" },
     { "from": "holdout-write", "on": "pass", "to": "triage" },
     { "from": "holdout-write", "on": "fail", "to": "$stop" },
-    { "from": "triage", "on": "pass", "to": "loop:$triaged" },
+    { "from": "triage", "on": "bug", "to": "loop:bugfix" },
+    { "from": "triage", "on": "feature", "to": "loop:feature" },
+    { "from": "triage", "on": "deps", "to": "loop:deps-upgrade" },
+    { "from": "triage", "on": "refactor", "to": "loop:refactor" },
+    { "from": "triage", "on": "docs", "to": "docs-update" },
     { "from": "triage", "on": "fail", "to": "$stop" },
-    { "from": "loop:$triaged", "on": "pass", "to": "holdout" },
-    { "from": "loop:$triaged", "on": "fail", "to": "$stop" },
+    { "from": "loop:bugfix", "on": "pass", "to": "holdout" },
+    { "from": "loop:bugfix", "on": "fail", "to": "$stop" },
+    { "from": "loop:feature", "on": "pass", "to": "holdout" },
+    { "from": "loop:feature", "on": "fail", "to": "$stop" },
+    { "from": "loop:deps-upgrade", "on": "pass", "to": "holdout" },
+    { "from": "loop:deps-upgrade", "on": "fail", "to": "$stop" },
+    { "from": "loop:refactor", "on": "pass", "to": "holdout" },
+    { "from": "loop:refactor", "on": "fail", "to": "$stop" },
+    { "from": "docs-update", "on": "pass", "to": "holdout" },
     { "from": "holdout", "on": "pass", "to": "pr-open" },
-    { "from": "holdout", "on": "fail", "to": "loop:$triaged" },
+    { "from": "holdout", "on": "fail", "to": "$lane" },
     { "from": "holdout", "on": "error", "to": "$stop" },
     { "from": "pr-open", "on": "pass", "to": "merge-gate" },
     { "from": "pr-open", "on": "fail", "to": "$stop" },
     { "from": "merge-gate", "on": "pass", "to": "retro" },
-    { "from": "merge-gate", "on": "fail", "to": "loop:$triaged" },
+    { "from": "merge-gate", "on": "fail", "to": "$lane" },
     { "from": "merge-gate", "on": "none", "to": "retro" },
     { "from": "retro", "on": "pass", "to": "$close" }
   ],
   "cycles": [
-    { "name": "holdout", "nodes": ["loop:$triaged", "holdout"], "max": 2 },
-    { "name": "ci", "nodes": ["loop:$triaged", "holdout", "pr-open", "merge-gate"], "max": 2 }
+    { "name": "holdout", "nodes": ["$lane", "holdout"], "max": 2 },
+    { "name": "ci", "nodes": ["$lane", "holdout", "pr-open", "merge-gate"], "max": 2 }
   ]
 }

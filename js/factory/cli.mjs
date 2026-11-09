@@ -136,7 +136,7 @@ const ACTIONS = {
       }
       return recordStage(s, c, args.outcome, {
         porcelain: porcelain === null ? null : porcelain.replace(/\r\n/g, '\n').trimEnd(),
-        chosenLoop: args.loop ?? null, specPath, taskCount, carry: args.carry ?? null, loopStatus, loopTemplate, head,
+        specPath, taskCount, carry: args.carry ?? null, loopStatus, loopTemplate, head,
         loopInitAt: loopInitAt(root),
       });
     });

@@ -16,14 +16,21 @@ to the loop three times, not two".
    - **what it does** — one line; it becomes `description`. A short `category` (`development`).
    - **input** — what one run takes: a request, a document, or a GitHub or GitLab issue. The
      first stage reads it, usually `intake`.
-   - **stages**, in order — each a brick name, `loop:<template>` (a whole loop: outcomes `pass`
-     and `fail`), or `loop:$triaged` (the loop a `triage` stage picks from a `loops` allowlist).
+   - **stages**, in order — each a brick name or `loop:<template>` (a whole loop: outcomes `pass`
+     and `fail`).
+   - **forks** — where the work takes one way or another, use a brick with named outcomes (a
+     **fork**, such as `triage`: `bug`, `feature`, `deps`, `refactor`, `docs`, `fail`). Give each
+     named outcome its own edge to its own **lane**: a loop for work that changes code, or a brick
+     where a loop adds nothing (`docs` → `docs-update`). Every lane joins the same path after it
+     (`holdout`, then `pr-open` and `merge-gate`). An outcome the factory does not offer goes to
+     `$stop`.
    - **where a human gates** — a gate belongs to the brick (`gate: human` in its frontmatter,
      narrowed by `gateOn`), never to the factory. A stage that must hold for a person uses a
      gated brick: an existing one, or one from step 4.
    - **routes** — for every outcome of every stage: the next stage, `$close` or `$stop`.
    - **failures that route back** — each one to an earlier stage, with its `max` from 1 to 5.
-     Each becomes a `cycles` entry.
+     Each becomes a `cycles` entry. After a fork, route back to `$lane`, the lane the run took,
+     and start the cycle's `nodes` with `$lane`.
    - **rules** — optional lines every stage receives ("Never merge.").
    - **level** — project `<repo>/.geneseed/factories/` (this repository, shared with the team
      once committed) or global `$XDG_CONFIG_HOME/geneseed/factories/` (default
@@ -41,13 +48,14 @@ to the loop three times, not two".
      "rules": ["<optional>"],
      "stages": ["intake", "loop:<template>", "pr-open", "merge-gate", "retro"],
      "start": "intake",
-     "edges": [{ "from": "<stage>", "on": "<outcome>", "to": "<stage | $close | $stop>" }],
-     "cycles": [{ "name": "<name>", "nodes": ["<first stage of the lap>", "..."], "max": 2 }],
-     "loops": ["<templates triage may pick, only with loop:$triaged>"]
+     "edges": [{ "from": "<stage>", "on": "<outcome>", "to": "<stage | $lane | $close | $stop>" }],
+     "cycles": [{ "name": "<name>", "nodes": ["<first stage of the lap, or $lane>", "..."], "max": 2 }]
    }
    ```
 
-   A cycle's `nodes[0]` is where every lap starts, and every route back targets it.
+   A cycle's `nodes[0]` is where every lap starts, and every route back targets it. A factory
+   with a fork follows the shipped `issue-to-pr`: one edge per named outcome out of `triage`,
+   and `$lane` as the target of each route back and as `nodes[0]` of its cycles.
 4. **A brick that does not exist** — never write it here. Offer the `brick-forge` {{SKILL}}, or
    run it when the user says so, then come back to this step. `brick-forge` is the only
    {{SKILL}} that writes bricks.
@@ -72,8 +80,12 @@ to the loop three times, not two".
      `nodes` or move the edge.
    - `laps without spending a declared cycle` — a route back to the middle of a cycle: target
      its first stage.
-   - `loop:$triaged` problems — it needs a non-empty `loops` and a `triage` stage on every path
-     to it.
+   - `$lane: no fork chooses a lane` / `before any fork has chosen a lane` — `$lane` needs a
+     fork on every path to it. `a fork's edge names its lane` — a fork's edge targets its lane
+     stage, never `$lane`.
+   - `retired` — the file still uses `loop:$triaged` or `loops`: list each loop as its own stage,
+     give the fork one edge per lane, and route back to `$lane`. Rewrite it with the user; never
+     silently.
 6. **Hand off:** tell the user the file, then the `factory` {{SKILL}} runs it
    (`geneseed factory init --factory <name> …`). Do not start a run unasked.
 

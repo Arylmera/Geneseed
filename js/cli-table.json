@@ -756,19 +756,6 @@
           "hidden": false
         },
         {
-          "names": ["--loop"],
-          "dest": "loop",
-          "metavar": null,
-          "help": "the loop the triage stage chose, one of the factory's loops (record)",
-          "choices": null,
-          "default": null,
-          "required": false,
-          "nargs": null,
-          "is_flag": false,
-          "type": null,
-          "hidden": false
-        },
-        {
           "names": ["--spec"],
           "dest": "spec",
           "metavar": null,
