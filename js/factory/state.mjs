@@ -171,20 +171,31 @@ export function writeFactoryFile(file, state) {
 }
 
 /**
- * The tasks of a spec (`specs/<slug>/spec.md`, the `spec` brick's format): the top-level numbered
- * items (`1.` or `1)`, indented 3 spaces at most) under the first heading that names tasks, up to
- * the next heading of the same or a higher level.
+ * The tasks of a spec (`specs/<slug>/spec.md`, the `spec` brick's format): the numbered items
+ * (`1.` or `1)`) under the first heading that names tasks, up to the next heading of the same or
+ * a higher level, at the indent of the first one (3 spaces at most). A numbered line indented
+ * deeper is a sub-item, as CommonMark nests it. A fenced block (``` or ~~~, closed by the same
+ * fence) is skipped whole: a `# comment` in it is no heading, a numbered line in it no task.
  */
 export function countSpecTasks(text) {
-  let level = 0; let count = 0;
+  let level = 0; let count = 0; let indent = -1; let fence = null;
   for (const line of String(text).replace(/\r\n/g, '\n').split('\n')) {
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) fence = null;
+      continue;
+    }
+    if (f) { fence = f[1]; continue; }
     const h = /^(#{1,6})\s+(.*)$/.exec(line);
     if (h) {
       if (level && h[1].length <= level) break;
       if (!level && /\btasks?\b/i.test(h[2])) level = h[1].length;
       continue;
     }
-    if (level && /^ {0,3}\d+[.)]\s+\S/.test(line)) count += 1;
+    const item = level ? /^( {0,3})\d+[.)]\s+\S/.exec(line) : null;
+    if (!item) continue;
+    if (indent < 0) indent = item[1].length;
+    if (item[1].length <= indent) count += 1;
   }
   return count;
 }

@@ -261,6 +261,22 @@ test('countSpecTasks counts the top-level numbered items under the first Tasks h
   assert.equal(countSpecTasks('# Spec\n\n1. no heading names tasks\n'), 0);
 });
 
+// A task is a numbered item at the indent of the list's FIRST task; a numbered item indented
+// deeper is a sub-item (CommonMark nests `   1.` under `1. `), never a task. A list may start
+// indented 1 to 3 spaces. A fenced block (``` or ~~~) is skipped whole: a `# comment` in it is
+// no heading, and a numbered line in it is no task.
+test('countSpecTasks counts the first task\'s indent only, and skips fenced blocks', () => {
+  const rows = [
+    ['numbered sub-items under 3 spaces', '## Tasks\n\n1. Parse\n   1. detail\n   2. more\n2. Verify\n', 2],
+    ['a list indented 1 space', '## Tasks\n\n 1. Parse\n    1. detail\n 2. Verify\n', 2],
+    ['a list indented 3 spaces', '## Tasks\n\n   1) Parse\n      2) detail\n   2) Verify\n   3) Ship\n', 3],
+    ['a ``` fence with a # line', '## Tasks\n\n1. a\n```\n# comment\n1. not a task\n```\n2. b\n', 2],
+    ['a ~~~ fence, then the list ends', '## Tasks\n\n1. a\n~~~sh\n## not a heading\n~~~\n2. b\n\n## Out of scope\n1. no\n', 2],
+    ['a ``` inside a ~~~ fence does not close it', '## Tasks\n\n1. a\n~~~\n```\n# x\n~~~\n2. b\n', 2],
+  ];
+  for (const [what, spec, n] of rows) assert.equal(countSpecTasks(spec), n, what);
+});
+
 test('gates: no stops, amend re-runs the stage with the note as its carry, three times at most', () => {
   const s = start(specFactory());
   recordStage(s, CATALOG, 'pass', CLEAN);

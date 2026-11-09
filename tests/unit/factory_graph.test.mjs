@@ -453,7 +453,8 @@ test('G4: the factory close step removes FACTORY.md tracked or not, and commits 
 test('G5: the spec brick states the task format the factory counts, and never types the limit', () => {
   const brick = shipped('bricks/spec.md').replace(/\s+/g, ' ');
   for (const rule of ['first heading that contains the word `task` or `tasks`', '`1.` or `1)`', 'indented 3 spaces at most',
-    'A sub-item or a deeper indent is not a task', 'A deeper heading keeps the list open',
+    'at the indent of the first task', 'An item indented deeper, numbered or not, is a sub-item, not a task',
+    'A fenced code block', 'neither ends the list nor adds a task', 'A deeper heading keeps the list open',
     'the next heading of the same or a higher level ends it', 'the factory\'s task limit',
     'the factory run\'s `<slug>`', 'stage\'s `carry`']) {
     assert.ok(brick.includes(rule), `the spec brick does not say: ${rule}`);
@@ -462,7 +463,8 @@ test('G5: the spec brick states the task format the factory counts, and never ty
   assert.doesNotMatch(brick, /the slug of the loop's title\) and|A gate amendment in LOOP\.md's notes/);
   // the format as the brick words it, counted by the engine: two tasks, a sub-item and a deeper
   // heading between them, then a sibling heading that ends the list
-  const spec = '# Spec\n\n## Ordered tasks\n\n1. Parse\n   - detail\n### Note\n2) Verify end to end\n\n## Out of scope\n3. not a task\n';
+  const spec = '# Spec\n\n## Ordered tasks\n\n1. Parse\n   - detail\n   1. a numbered sub-item\n   2. another\n'
+    + '```sh\n# a comment in a fence\n```\n### Note\n2) Verify end to end\n\n## Out of scope\n3. not a task\n';
   assert.equal(countSpecTasks(spec), 2);
 });
 
