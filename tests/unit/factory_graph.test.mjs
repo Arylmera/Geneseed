@@ -465,3 +465,27 @@ test('G5: the spec brick states the task format the factory counts, and never ty
   const spec = '# Spec\n\n## Ordered tasks\n\n1. Parse\n   - detail\n### Note\n2) Verify end to end\n\n## Out of scope\n3. not a task\n';
   assert.equal(countSpecTasks(spec), 2);
 });
+
+// G6: an environment failure (a failed fetch, no default branch, a timeout, a missing tool, CI
+// pending at the bound) is nothing a loop's code can fix, so it never routes to a loop. The bricks
+// report it on an outcome they gate for the user — `checks` `error`, `merge-gate` `none` — and in
+// every shipped factory those outcomes lead on, never to a `loop:` stage or `$lane`. The old text
+// ("report `fail` and mark it `environment`") sent it back to the loop, burning laps.
+test('G6: environment failures hold for the user and never route to a loop', () => {
+  const ENV = { checks: 'error', 'merge-gate': 'none' };
+  for (const [stage, outcome] of Object.entries(ENV)) {
+    const text = shipped(`bricks/${stage}.md`);
+    const gateOn = /^gateOn:\s*(.+)$/m.exec(text)?.[1].split(/,\s*/) ?? [];
+    assert.ok(/^gate: human$/m.test(text) && gateOn.includes(outcome), `${stage} does not gate ${outcome}`);
+    const body = text.replace(/\s+/g, ' ');
+    assert.ok(body.includes(`An environment failure is never a \`fail\``), `${stage} does not keep environment failures off fail`);
+    assert.doesNotMatch(body, /report `fail` and mark it|is a `fail` too: mark it `environment`|or with "CI pending after 30 minutes"/, stage);
+  }
+  for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+    const { edges } = JSON.parse(shipped(`factories/${name}.json`));
+    for (const [stage, outcome] of Object.entries(ENV)) {
+      const to = edges.find((e) => e.from === stage && e.on === outcome)?.to;
+      assert.ok(to && !loopOf(to) && to !== '$lane', `${name}: ${stage} --${outcome}--> ${to} routes an environment failure to a loop`);
+    }
+  }
+});

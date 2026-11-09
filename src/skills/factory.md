@@ -68,6 +68,12 @@ Repeat `geneseed factory next` and act on its JSON:
     `amend --note "<their answers>"`; `ok` goes on with the assumptions intake wrote.
   - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
     list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
+    When the finding starts `environment:` (a failed fetch, no default branch, a timeout, a
+    missing tool), show the cause instead: the loop cannot fix it. Once the user has fixed it,
+    `amend` runs `checks` again; `no` stops; `ok` goes on without the done list.
+  - `merge-gate` **`none`**: the repo runs no CI on the PR, or, when the finding starts
+    `environment:`, no verdict could be read (CI pending at the bound, `gh`/`glab` missing or
+    failing). `ok` goes on to `retro`, `amend` waits again, `no` stops.
   - `checks` **`none`**: the base has no done list (or an empty one), and the note is the one
     `checks` proposes, or says no manifest gave one. On the user's yes, land it on the base, never
     from this worktree: `git worktree add --detach ../<repo>-done-list origin/<default>`, write

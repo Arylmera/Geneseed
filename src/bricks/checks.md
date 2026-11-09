@@ -10,8 +10,9 @@ gateOn: error, none
 Never commit. Write every finding to a file in the OS temp directory, never inside the worktree,
 and report that file's path. Run `git fetch origin`, then find the default branch (`gh repo view
 --json defaultBranchRef`, or `git remote show origin`) and the base, `git merge-base HEAD
-origin/<default>`. When the fetch fails or no default branch is found, report `fail` and mark it
-`environment`.
+origin/<default>`. When the fetch fails or no default branch is found, report `error` and start
+the finding with `environment:` and the cause. An environment failure is never a `fail`: a `fail`
+goes back to the loop, whose code cannot fix it, and `error` holds for the user.
 
 Read the done list from the base, never from this branch: `git show
 origin/<default>:.geneseed/done-checks.txt`, one command per line, `#` lines ignored. When the base
@@ -39,7 +40,8 @@ what it found. Afterwards, whatever the outcome, put the tree back: restore ever
 commands changed (`git restore --staged --worktree -- <path>`) and delete every untracked file
 they created, naming each one in the finding. Never touch `FACTORY.md` or `LOOP.md`: they are the
 run's state, not a command's output. A command that times out, or whose
-tool is missing, is a `fail` too: mark it `environment`, so the loop knows its code cannot fix it.
+tool is missing, is an environment failure: stop there, and report `error` with the finding
+starting `environment:`, naming the command and the cause.
 
 Only when every command passes, list the files the branch changed: `git diff --name-only
 --no-renames <merge-base> HEAD` (`--no-renames` lists a rename's old path too, so moving a locked

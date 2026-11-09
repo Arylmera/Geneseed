@@ -94,12 +94,12 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 | Moment | What you decide |
 | --- | --- |
 | `intake` reports `needs-info` | The work item leaves a question only you can answer. The agent shows its numbered questions, each with the assumption it would make. Answer them (`amend`, three times at most), say `ok` to go on with the assumptions, or `no` to stop. |
-| `checks` reports `error` | Every check passed, but the branch changed a locked path: the done list, CI config, or a factory, loop or brick. `ok` lets it through (the run report names it), `no` stops. |
+| `checks` reports `error` | Every check passed, but the branch changed a locked path: the done list, CI config, or a factory, loop or brick. `ok` lets it through (the run report names it), `no` stops. Or the finding starts `environment:`: the fetch failed, no default branch was found, or a check timed out or its tool is missing. The loop cannot fix that: fix the environment and answer `amend` to run the checks again, or `no` to stop; `ok` goes on without them. |
 | `checks` reports `none` | The base branch has no done list, or an empty one. The agent shows the one it proposes (or says no manifest gave one). On your yes it lands the file on the base branch from a temporary worktree (each step asks); if the branch is protected, you land it by PR. Once it is on the base, `ok` runs the checks again. |
 | The `spec` gate (`analysis-to-build`) | The task list: `ok` starts the first task, `amend` revises the spec, `no` stops the run. The spec commit after your `ok` asks too. |
 | A push | Every push that is not a loop's own commit asks you, `pr-open`'s included. |
 | A loop gate | Anything the `bugfix` loop asks you, as in [While a loop runs](loop-running.md). |
-| `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. |
+| `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. Or the finding starts `environment:`: CI was still pending after 30 minutes, or `gh`/`glab` is missing or failed. `amend` waits again (after you fix the tool), `ok` goes on to `retro` without a green verdict (the close step reads CI once more, and proposes the merge only when it is green), `no` stops. |
 | The close commit | The last commit removes `FACTORY.md`, and it asks. Its push runs CI again: the agent reads the checks once more and reports the final state. A run with no loop (the `docs` lane) never committed `FACTORY.md`: the agent deletes the file, there is no close commit, and the final state is the one `merge-gate` read. |
 | The merge proposal | Only when that final CI state is green: the agent shows the PR, the CI state and each review seat's verdict, and asks once whether to merge. On yes it squash-merges (`gh pr merge --squash`, which asks too); otherwise the PR stays open. It never turns on auto-merge. |
 
