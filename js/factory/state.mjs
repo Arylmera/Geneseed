@@ -402,7 +402,9 @@ export function recordStage(state, { bricks }, outcome, {
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
   assertLane(state, edge);
 
-  if (isFork(from, bricks) && state.factory.stages.includes(edge.to)) state.lane = edge.to;
+  // M10: every fork record sets the lane, a terminal outcome to none: a gated fork re-run on an
+  // amend must not keep the lane its first answer chose.
+  if (isFork(from, bricks)) state.lane = state.factory.stages.includes(edge.to) ? edge.to : null;
   if (isLoop) state.launched = null;
   if (specPath !== null) {
     if (state.taskCount === null || !tasksFrozen(state)) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }

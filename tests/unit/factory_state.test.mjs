@@ -394,6 +394,22 @@ test('fork: a route to $lane with no lane on record is refused, never guessed', 
   assert.equal(JSON.stringify(g), held);
 });
 
+// M10: a gated fork records a lane, the user amends, and the re-run reports an outcome whose edge
+// is terminal: the lane is cleared, never left at the first answer's stage. A later record that
+// names a lane sets it again.
+test('M10: a gated fork re-run on an amend sets the lane again, to none on a terminal outcome', () => {
+  const gated = { ...CATALOG, bricks: new Map([...CATALOG.bricks, ['triage', { ...CATALOG.bricks.get('triage'), gate: 'human' }]]) };
+  const s = start(forkFactory());
+  assert.deepEqual(recordStage(s, gated, 'bug', CLEAN), { awaiting: { kind: 'gate', stage: 'triage', outcome: 'bug' } });
+  assert.equal(s.lane, 'loop:bugfix');
+  assert.deepEqual(decideFactory(s, gated, 'amend', 'it is not a bug'), { resumed: true });
+  assert.deepEqual(recordStage(s, gated, 'fail', CLEAN), { awaiting: { kind: 'gate', stage: 'triage', outcome: 'fail' } });
+  assert.equal(s.lane, null);
+  decideFactory(s, gated, 'amend', 'try again');
+  recordStage(s, gated, 'docs', CLEAN);
+  assert.equal(s.lane, 'notes');
+});
+
 // A gate's ok on an edge to `$lane` follows the lane taken, and spends the cycle like a record.
 test('fork: a gate\'s ok on a $lane edge re-enters the lane taken', () => {
   const s = start(forkFactory('judge'));
