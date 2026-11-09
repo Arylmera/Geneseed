@@ -37,11 +37,11 @@ import { fileURLToPath } from 'node:url';
 
 import { cliSpec } from '../../js/ui/cli.mjs';
 import { POST_INLINE } from '../../js/web/routes.mjs';
-import { makeHandler } from '../../js/web/handler.mjs';
+import { makeHandler, requestGuard } from '../../js/web/handler.mjs';
 import { JobManager } from '../../js/web/jobs.mjs';
 import {
-  clearPort, codeStamp, daemonStale, findConsoles, readDaemon, restartRefusal, rootId, secretProof, webSecret,
-  writeDaemon,
+  clearPort, codeStamp, daemonStale, findConsoles, NONCE_TTL_MS, nonceBook, readDaemon, restartRefusal, rootId,
+  secretProof, webSecret, writeDaemon,
   STALE_LINE,
 } from '../../js/web/daemon.mjs';
 import { cellEnv, makeSandbox, strippedEnv } from '../helpers/sandbox.mjs';
@@ -573,14 +573,18 @@ test('clearPort leaves a console of another install, or of unknown install, alon
   } finally { await other.close(); await old.close(); }
 });
 
-/** A REAL console handler (ping, guard, shutdown route) on an ephemeral port, holding `secret`. */
-async function realConsole(secret) {
+/** A REAL console handler (ping, guard, shutdown route) on `port` (ephemeral by default), holding `secret`. */
+async function realConsole(secret, port = 0) {
   const holder = { secret };
   const srv = http.createServer(makeHandler({ theme: 'neutral' }, new JobManager(), 'tok', 'nowhere', holder));
   holder.srv = srv;
-  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  await new Promise((r) => { srv.listen(port, '127.0.0.1', r); });
   return { port: srv.address().port, srv };
 }
+
+/** A fresh shutdown nonce from a console, the way `clearPort` asks for one. */
+const mintNonce = async (port) => (await (await fetch(`http://127.0.0.1:${port}/api/ping?shutdown=1`)).json()).nonce;
+const closeConsole = (c) => { c.srv.closeAllConnections(); return new Promise((r) => { c.srv.close(r); }); };
 
 const shutdownWith = (port, headers) => fetch(`http://127.0.0.1:${port}/api/shutdown`, {
   method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: '{}',
@@ -621,21 +625,106 @@ test('an impostor claiming our root and a victim pid ends nothing and is left ru
   } finally { victim.kill(); }
 });
 
-test('the shutdown route refuses a wrong secret, a proof for another port, and no proof', async () => {
+test('the shutdown route refuses a wrong secret, a proof for another port or nonce, and no proof', async () => {
   const secret = webSecret(tmpDir());
   const c = await realConsole(secret);
   try {
-    for (const proof of [secretProof('wrong', c.port), secretProof(secret, c.port + 1), 'x', '']) {
-      const r = await shutdownWith(c.port, { 'X-Geneseed-Secret': proof });
-      assert.ok([401, 403].includes(r.status), `proof ${proof.slice(0, 8)}: ${r.status}`);
+    const cases = [(n) => secretProof('wrong', c.port, n), (n) => secretProof(secret, c.port + 1, n),
+      () => secretProof(secret, c.port, 'f'.repeat(32)), () => 'x', () => ''];
+    for (const make of cases) {
+      const n = await mintNonce(c.port);
+      assert.equal(typeof n, 'string', 'a daemon console minted no nonce');
+      const r = await shutdownWith(c.port, { 'X-Geneseed-Nonce': n, 'X-Geneseed-Secret': make(n) });
+      assert.ok([401, 403].includes(r.status), `${make}: ${r.status}`);
     }
     assert.equal((await shutdownWith(c.port, {})).status, 403);
+    // A right proof over a nonce this console never minted: the impostor's own nonce.
+    const own = 'e'.repeat(32);
+    assert.equal((await shutdownWith(c.port, { 'X-Geneseed-Nonce': own,
+      'X-Geneseed-Secret': secretProof(secret, c.port, own) })).status, 403);
     // The Origin guard still runs ahead of a right proof.
-    const r = await shutdownWith(c.port, { 'X-Geneseed-Secret': secretProof(secret, c.port),
+    const n = await mintNonce(c.port);
+    const r = await shutdownWith(c.port, { 'X-Geneseed-Nonce': n, 'X-Geneseed-Secret': secretProof(secret, c.port, n),
       'Sec-Fetch-Site': 'cross-site' });
     assert.equal(r.status, 403);
     assert.equal((await fetch(`http://127.0.0.1:${c.port}/api/ping`)).status, 200, 'a refused request stopped the console');
-  } finally { c.srv.closeAllConnections(); await new Promise((r) => { c.srv.close(r); }); }
+  } finally { await closeConsole(c); }
+});
+
+test('a proof an impostor collects cannot shut down the real console later', async () => {
+  // THE REPLAY. While the console is down, an impostor on its port claims our root, hands out a
+  // nonce, and records what `clearPort` sends. Once the real console is back on that port, the
+  // recorded headers must not end it: the real console never minted that nonce.
+  const dir = tmpDir();
+  const secret = webSecret(dir);
+  const seen = [];
+  const imp = http.createServer((q, r) => {
+    if (q.method === 'POST') seen.push(q.headers);
+    r.end(JSON.stringify({ ok: true, theme: 'neutral', pid: 2 ** 22, root: rootId(), nonce: 'd'.repeat(32) }));
+  });
+  await new Promise((r) => { imp.listen(0, '127.0.0.1', r); });
+  const port = imp.address().port;
+  try {
+    assert.match(await clearPort(port, dir), /^held by/);
+  } finally { imp.closeAllConnections(); await new Promise((r) => { imp.close(r); }); }
+  assert.ok(seen.length > 0, 'clearPort sent the impostor nothing: the replay below would prove nothing');
+  const c = await realConsole(secret, port);
+  try {
+    for (const h of seen) {
+      const headers = Object.fromEntries(['x-geneseed-secret', 'x-geneseed-nonce']
+        .filter((k) => typeof h[k] === 'string').map((k) => [k, h[k]]));
+      assert.equal((await shutdownWith(port, headers)).status, 403, 'a replayed proof shut the console down');
+    }
+    assert.equal((await fetch(`http://127.0.0.1:${port}/api/ping`)).status, 200);
+  } finally { await closeConsole(c); }
+});
+
+test('a shutdown nonce is good once, only while fresh, and only if this console minted it', () => {
+  // The guard on its own, with the clock pinned: the single use and the lifetime are the fix.
+  let now = 1_000_000;
+  const book = nonceBook(() => now);
+  const port = 4791;
+  const req = (n) => ({ method: 'POST', url: '/api/shutdown', socket: { localPort: port },
+    headers: { host: `127.0.0.1:${port}`, 'x-geneseed-nonce': n, 'x-geneseed-secret': secretProof('s', port, n) } });
+  const guard = (n) => requestGuard(req(n), 'tok', 's', book)?.code ?? 200;
+  const n = book.issue();
+  assert.equal(guard(n), 200);
+  assert.equal(guard(n), 403, 'a nonce was accepted twice');
+  assert.equal(guard('c'.repeat(32)), 403, 'a nonce this console never minted was accepted');
+  const fresh = book.issue();
+  now += NONCE_TTL_MS - 1;
+  assert.equal(guard(fresh), 200, 'a nonce inside its lifetime was refused');
+  const stale = book.issue();
+  now += NONCE_TTL_MS;
+  assert.equal(guard(stale), 403, 'an expired nonce was accepted');
+  // Bounded: a flood of pings keeps only the newest few, so the store cannot grow.
+  const first = book.issue();
+  for (let i = 0; i < 64; i += 1) book.issue();
+  assert.equal(guard(first), 403, 'the store kept every nonce ever minted');
+});
+
+test('an older console of this install, without nonces, is named and sent no proof', async () => {
+  const seen = [];
+  const srv = http.createServer((q, r) => {
+    seen.push(q.method);
+    r.end(JSON.stringify({ ok: true, theme: 'neutral', pid: 2 ** 22, root: rootId() }));
+  });
+  await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+  try {
+    assert.equal(await clearPort(srv.address().port, tmpDir()), 'held by an older console (pid 4194304) of this '
+      + 'install, from before the shutdown handshake — end that pid yourself');
+    assert.deepEqual(seen.filter((m) => m !== 'GET'), [], 'a proof was sent to a console that cannot check a nonce');
+  } finally { srv.closeAllConnections(); await new Promise((r) => { srv.close(r); }); }
+});
+
+test('a foreground console of this install is named as one, and left running', async () => {
+  // A foreground `geneseed web` never holds the install secret, so it can never honour the request.
+  const c = await realConsole(null);
+  try {
+    assert.equal(await clearPort(c.port, tmpDir()), `held by a console (pid ${process.pid}) of this install that `
+      + 'holds no shutdown secret — probably a foreground `geneseed web`; stop it in its terminal (Ctrl+C)');
+    assert.equal((await fetch(`http://127.0.0.1:${c.port}/api/ping`)).status, 200);
+  } finally { await closeConsole(c); }
 });
 
 test('the secret file is created once and reused', () => {

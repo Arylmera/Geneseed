@@ -31,6 +31,11 @@ always get the command list.
 - **Daemon.** `start` runs the server detached and returns your shell; it's a singleton
   (already running ⇒ just reopens the browser). `stop` and the in-page **Stop** button
   both POST a token-guarded `/api/shutdown`; `status` reports the running instance.
+  When the port is held by an unrecorded console of this install, `start` ends it by challenge
+  and response: the console hands out a single-use nonce that expires after 30 seconds, and
+  `start` answers with a MAC of the port and that nonce under the install secret. A foreground
+  `geneseed web` holds no secret, and a console from before this handshake checks no nonce; `start`
+  names either one and leaves it running.
 - **Installable (PWA).** A manifest + service worker make it installable as a standalone
   app; immutable assets are cached, while HTML and `/api/*` stay on the network so the
   CSRF token never goes stale.
