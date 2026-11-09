@@ -10,7 +10,8 @@ then write the run report to `.geneseed/factory-runs/<slug>.md` at the worktree 
 being the branch name after `loop/factory-`. First run `git check-ignore -q <that path>`: when it
 exits non-zero the path is not ignored, so write the report to the OS temp directory instead.
 The report holds the work item, the PR URL, every stage with its outcome, each rework and its
-reason, and how the run ended (closed, or stopped and why).
+reason, each held outcome the user let through with `ok` (above all a locked path `checks`
+reported), and how the run ended (closed, or stopped and why).
 
 Change nothing else: no tracked file, no commit. Only a lesson that will hold beyond this run —
 a cause that will recur, a check this project lacks — goes into memory, one entry, under Persist
