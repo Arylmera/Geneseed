@@ -63,6 +63,12 @@ function Row({ label, n, children }) {
 
 export default function Loadout({ loadout, base, error, install }) {
   const [all, setAll] = useState(false)
+  // "Show all" is one agent's choice: another agent opens collapsed.
+  const [seen, setSeen] = useState(loadout?.agent)
+  if (loadout?.agent !== seen) {
+    setSeen(loadout?.agent)
+    setAll(false)
+  }
   if (error) return <p className="sub">Loadout not measured for this install.</p>
   if (!loadout) return null
   const sum = (bs) => bs.reduce((n, b) => n + b.chars, 0)
