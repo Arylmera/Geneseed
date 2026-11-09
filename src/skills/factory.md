@@ -4,7 +4,7 @@
 
 **Trigger:** the user asks to run a factory, or to carry one work item (a request, a document,
 a GitHub or GitLab issue) through to an open pull request with green CI; or names a factory
-(`bug-report-to-fix`, `issue-to-pr`).
+(`analysis-to-build`, `bug-report-to-fix`, `issue-to-pr`).
 
 ## What it is
 
@@ -39,6 +39,13 @@ Repeat `geneseed factory next` and act on its JSON:
   plain `--porcelain` folds a new directory into one line, which the engine refuses.
   The `triage` stage also gets the factory's `loops`; on `pass`, add `--loop <the name on the
   first line of its file>`. The engine refuses a loop outside `loops`.
+  The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
+  `carry`, not as a LOOP.md note) and reports with
+  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md`.
+  Its gate holds for the user's review of the task list. After `decide --verdict ok`, commit the
+  spec before the first loop: `git add specs/<slug>/spec.md`, then
+  `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
+  read brick; the engine exempts it only until then.
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
@@ -59,6 +66,10 @@ Repeat `geneseed factory next` and act on its JSON:
    A loop that ended `done` may instead be recorded `pass` while its `LOOP.md` is still there.
 5. Start the loop in this same worktree:
    `geneseed loop init --title "<title>" --requirement "<requirement, plus the task when next gave one>" --graph <loop> --preset {{TRUST}} --factory <slug> --note-file <notes[0]>`
+   where the task is item `task.index` under the spec's Tasks heading, written as
+   "task <index>/<count>: <its text>". When `task.extra` is set, the last task has passed and a
+   later stage sent the work back: the task is "make CI green" (or, for another stage, make it
+   pass), and `notes[0]` says why. Use `--note-file <notes[0]>`
    when `notes[0]` is the path of a stage's finding file (the usual carry), so the loop gets the
    finding, not its path; `--note "<notes[0]>"` when it is plain text; neither when `notes` is
    empty. A loop

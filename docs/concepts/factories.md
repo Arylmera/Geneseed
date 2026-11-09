@@ -42,13 +42,15 @@ A run works on its own branch, `loop/factory-<slug>`, in its own worktree. `FACT
 root holds the run's state; while a loop stage runs, its `LOOP.md` sits beside it. The loop
 engine treats `FACTORY.md` as bookkeeping, as it treats `LOOP.md`: it never scores it. A stage
 that is not a loop never changes the worktree, and `factory record` refuses a dirty tree after
-one. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
+one. The one exception is the run's spec, `specs/<slug>/spec.md`: the `spec` stage writes it, and
+it is committed once you approve it, before the first loop. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
 names the run it belongs to.
 
 ## The shipped factories
 
 | Factory | Stages |
 | --- | --- |
+| `analysis-to-build` | `intake` → `spec` → `loop:feature` → `pr-open` → `merge-gate` → `retro` → `$close`. `spec` writes `specs/<slug>/spec.md` with an ordered task list, and you approve it at its gate. `loop:feature` then runs once per task, in order, in the same worktree, and one PR opens at the end. A red `merge-gate` sends the work back to `loop:feature` as one extra task, "make CI green", twice at most (cycle `ci`) |
 | `bug-report-to-fix` | `intake` → `loop:bugfix` → `pr-open` → `merge-gate` → `retro` → `$close`. A red `merge-gate` sends the fix back to `loop:bugfix`, twice at most (cycle `ci`) |
 | `issue-to-pr` | `intake` → `triage` → `loop:$triaged` → `pr-open` → `merge-gate` → `retro` → `$close`. `triage` picks the loop from the factory's `loops`: `bugfix`, `feature`, `deps-upgrade` or `refactor`. A red `merge-gate` sends the work back to that same loop, twice at most (cycle `ci`) |
 
@@ -61,6 +63,9 @@ The bricks they add:
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
 | `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide | `pass`, `fail`, `none` |
 | `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, and keeps only a lasting lesson in memory | `pass` |
+
+`analysis-to-build` also uses the loops' own `spec` brick (`gate: human`), the one the
+`spec-first-feature` loop starts with.
 
 The run report is git-ignored by the `.geneseed/.gitignore` Geneseed seeds. Where no such file is
 in the worktree, `retro` writes the report to the OS temp directory instead, so the tree stays

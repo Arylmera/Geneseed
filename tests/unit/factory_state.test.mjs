@@ -444,8 +444,30 @@ test('tasks: only the owning loop stage replays per task', () => {
   assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'loop:feature', task: { path: 'specs/r/spec.md', count: 2, index: 2 } });
 });
 
-// J5 after the spec record (F2): the spec stays uncommitted until a loop commits it, so a later
-// stage outside a loop may leave it dirty too — that path only, never another one.
+// J7: a route back into the owner after its last task is ONE EXTRA TASK. `next` hands the last
+// task's index with `extra` naming the stage that sent it back, and the carry as its note; it is
+// no task never reached, so the lap spends cycle ci and the transition counts and resets neither,
+// and the next red review exhausts ci (max 1). A replay (task 1 -> 2) is never marked extra.
+test('J7: a route back after the last task is one extra task, bounded by its cycle', () => {
+  const s = start(specFactory());
+  recordStage(s, CATALOG, 'pass', SPEC); decideFactory(s, CATALOG, 'ok');
+  loopRec(s, 'pass');
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH).task, { path: 'specs/r/spec.md', count: 2, index: 2 }, 'a replay is a task');
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'review' });
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', { ...CLEAN, carry: 'ci.md' }), { stage: 'loop:feature' });
+  const transitions = s.transitions;
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), {
+    stage: 'loop:feature', loop: 'feature', notes: ['ci.md'],
+    task: { path: 'specs/r/spec.md', count: 2, index: 2, extra: 'review reported fail' },
+  });
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', MOVED), { stage: 'review' });
+  assert.deepEqual(s.counters, { ci: 1 }); assert.equal(s.transitions, transitions + 1);
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { stopped: 'cycle ci exhausted its max of 1' });
+});
+
+// J5 after the spec record (F2): the spec on record stays exempt for every later stage outside a
+// loop (the Rite commits it before the first loop, but the engine never relies on that) — that
+// path only, never another one.
 test('J5: the spec on record stays exempt for every later stage outside a loop', () => {
   const s = start(specFactory());
   recordStage(s, CATALOG, 'pass', SPEC); decideFactory(s, CATALOG, 'ok');

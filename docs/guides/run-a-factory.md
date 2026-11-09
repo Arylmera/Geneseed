@@ -4,7 +4,7 @@ order: 24.5
 title: "Run a factory"
 kind: "concept"
 section: "Factories"
-description: "Carry a bug report or an issue to an open PR with green CI: what you need, how to ask, and where it stops for you."
+description: "Carry a bug report, an issue or an analysis to an open PR with green CI: what you need, how to ask, and where it stops for you."
 ---
 A **factory** carries one work item to an open pull request with green CI. Each stage is a brick or a whole loop, and a red CI run sends the work back to the loop, a bounded number of times. You ask in plain words. The agent drives `geneseed factory`, which decides every step. The run never merges: the PR is yours to review and merge.
 
@@ -41,10 +41,31 @@ The agent then:
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
 3. Steps the run: `intake` writes the work item, the `bugfix` loop fixes it commit by commit, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `intake` and picks the loop from `bugfix`, `feature`, `deps-upgrade` and `refactor`. Red CI then sends the work back to that loop.
 
+## Build from an analysis
+
+`analysis-to-build` takes a larger piece of work: a design document, an analysis pasted into the
+chat, or a plain request. It splits the work into tasks that you approve, then builds them one by
+one in the same worktree, and opens one PR at the end.
+
+```text
+run the analysis-to-build factory on docs/analysis/export-csv.md
+```
+
+1. `intake` writes the work item from the document.
+2. `spec` writes `specs/<slug>/spec.md`: the scope, acceptance criteria in EARS form, and an
+   ordered task list (20 tasks at most). The run then stops for you. Read the spec and answer
+   `ok`, `no`, or `amend` with your corrections; an amend rewrites the spec.
+3. After your `ok`, the agent commits the spec (the commit asks you) and runs the `feature` loop
+   once per task, in order. `geneseed factory next` names each one as `task <i>/<n>`.
+4. After the last task, `pr-open` opens one PR for all of them, and `merge-gate` waits for CI.
+5. Red CI sends the work back to the `feature` loop as one extra task, "make CI green", with the
+   failing checks as its first note. That is twice at most; a third red result stops the run.
+
 ## Where it stops for you
 
 | Moment | What you decide |
 | --- | --- |
+| The `spec` gate (`analysis-to-build`) | The task list: `ok` starts the first task, `amend` revises the spec, `no` stops the run. The spec commit after your `ok` asks too. |
 | A push | Every push that is not a loop's own commit asks you, `pr-open`'s included. |
 | A loop gate | Anything the `bugfix` loop asks you, as in [While a loop runs](loop-running.md). |
 | `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. |

@@ -59,7 +59,7 @@ test('check: the catalogue, one factory, and a broken one', () => {
           'factories/fixture-broken: cycle loop:nope, review has no declared cycle around it',
           'factories/fixture-broken: stage loop:nope: no loop template named nope',
         ],
-        factories: ['bug-report-to-fix', 'fixture-broken', 'fixture-fix', 'fixture-spec', 'issue-to-pr'],
+        factories: ['analysis-to-build', 'bug-report-to-fix', 'fixture-broken', 'fixture-fix', 'fixture-spec', 'issue-to-pr'],
       },
     });
     assert.deepEqual(run(sb.path, ['check', '--factory', 'fixture-fix']), { code: 0, out: { ok: true, problems: [] } });
@@ -68,8 +68,8 @@ test('check: the catalogue, one factory, and a broken one', () => {
   } finally { sb.cleanup(); }
 });
 
-// The catalogue is every origin: the shipped `bug-report-to-fix` and `issue-to-pr` (src/factories/)
-// list beside the project's fixture, sorted by name.
+// The catalogue is every origin: the shipped `analysis-to-build`, `bug-report-to-fix` and
+// `issue-to-pr` (src/factories/) list beside the project's fixture, sorted by name.
 test('list: name, description, category and origin of every factory', () => {
   const sb = repo(['fixture-fix']);
   try {
@@ -77,6 +77,11 @@ test('list: name, description, category and origin of every factory', () => {
       code: 0,
       out: {
         factories: [{
+          name: 'analysis-to-build', category: 'development', origin: 'shipped',
+          description: 'Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, '
+            + 'build each task in turn with the feature loop in one worktree, then open one pull request and wait for '
+            + 'green CI; red CI sends the work back to the loop as one more task, twice at most. The merge stays yours.',
+        }, {
           name: 'bug-report-to-fix', category: 'development', origin: 'shipped',
           description: 'Take one bug report, fix it with the bugfix loop, open the pull request and wait for green CI; '
             + 'red CI sends the fix back to the loop, twice at most. The merge stays yours.',
@@ -377,6 +382,68 @@ test('record --spec with the porcelain real git prints: --untracked-files=all is
     assert.equal(all, '?? FACTORY.md\n?? specs/r/spec.md\n');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'], all),
       { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
+// D9 + J7 on the shipped `analysis-to-build`, in a real git repository, every porcelain the one
+// git prints: intake -> spec (3 tasks, gated) -> loop:feature once per task -> pr-open ->
+// merge-gate red -> loop:feature once more, the extra task "make CI green" (task 3/3 marked
+// `extra`, the red CI's carry as its note) -> pr-open -> merge-gate green -> retro -> $close.
+// The spec is committed after the gate's ok, before the first loop: an untracked spec would stop
+// that loop's first read brick (`plan`). Each loop is a real `loop init` (the registry's evidence)
+// and a real commit (HEAD moves); the extra pass goes to pr-open, never to a task 4.
+test('analysis-to-build: spec, three tasks, red CI as one extra task, then $close', () => {
+  const sb = gitRepo([]);
+  const porcelain = () => git(sb.path, 'status', '--porcelain', '--untracked-files=all');
+  const commit = (msg) => git(sb.path, 'commit', '-q', '--allow-empty', '-m', msg);
+  const RULES = ['Never merge, and never enable auto-merge: the run ends at an open PR with green CI.', "Push only this worktree's own branch."];
+  const TASK = { path: 'specs/build/spec.md', count: 3 };
+  try {
+    commit('base');
+    assert.equal(run(sb.path, [...INIT, '--factory', 'analysis-to-build']).out.stage, 'intake');
+    assert.equal(porcelain(), '?? FACTORY.md\n', 'FACTORY.md is the only change, and the engine ignores it');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md'], porcelain()), { code: 0, out: { stage: 'spec' } });
+    const spec = run(sb.path, ['next']).out;
+    assert.deepEqual({ stage: spec.stage, agent: spec.agent, carry: spec.carry }, { stage: 'spec', agent: 'architect', carry: 'item.md' });
+    mkdirSync(path.join(sb.path, 'specs', 'build'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'build', 'spec.md'),
+      '# Build\n\n## Tasks\n\n1. Parse the input\n2. Round half-even\n3. Verify end to end\n');
+    assert.equal(porcelain(), '?? FACTORY.md\n?? specs/build/spec.md\n');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/build/spec.md'], porcelain()),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+    assert.deepEqual(run(sb.path, ['decide', '--verdict', 'ok']), { code: 0, out: { stage: 'loop:feature' } });
+    git(sb.path, 'add', 'specs/build/spec.md'); commit('spec');
+
+    for (const index of [1, 2, 3]) {
+      assert.deepEqual(run(sb.path, ['next']).out,
+        { stage: 'loop:feature', loop: 'feature', notes: [], task: { ...TASK, index }, rules: RULES }, `task ${index}`);
+      loopRan(sb, 'feature'); commit(`task ${index}`);
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']).out,
+        index < 3 ? { stage: 'loop:feature', task: { ...TASK, index: index + 1 } } : { stage: 'pr-open' });
+    }
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out: { stage: 'merge-gate' } });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail', '--carry', 'ci-red.md'], porcelain()), { code: 0, out: { stage: 'loop:feature' } });
+    assert.deepEqual(run(sb.path, ['next']).out, {
+      stage: 'loop:feature', loop: 'feature', notes: ['ci-red.md'],
+      task: { ...TASK, index: 3, extra: 'merge-gate reported fail' }, rules: RULES,
+    });
+    loopRan(sb, 'feature'); commit('make CI green');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'pr-open' } });
+    for (const out of [{ stage: 'merge-gate' }, { stage: 'retro' }, { done: true }]) {
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out });
+    }
+    const end = run(sb.path, ['next']).out;
+    assert.equal(end.terminal, '$close');
+    assert.deepEqual(end.summary.history.map((h) => [h.stage, h.outcome ?? h.verdict, h.task]), [
+      ['intake', 'pass', 0], ['spec', 'pass', 1], ['spec', 'ok', 1],
+      ['loop:feature', 'pass', 1], ['loop:feature', 'pass', 2], ['loop:feature', 'pass', 3],
+      ['pr-open', 'pass', 3], ['merge-gate', 'fail', 3], ['loop:feature', 'pass', 3],
+      ['pr-open', 'pass', 3], ['merge-gate', 'pass', 3], ['retro', 'pass', 3],
+    ]);
+    const lf = readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8').replace(/\r\n/g, '\n');
+    const state = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(lf)[1]);
+    assert.deepEqual({ counters: state.counters, taskCount: state.taskCount, runCeiling: state.runCeiling, taskHigh: state.taskHigh },
+      { counters: { ci: 1 }, taskCount: 3, runCeiling: 90, taskHigh: 3 }, 'the extra lap spent ci once and bought no task');
   } finally { sb.cleanup(); }
 });
 

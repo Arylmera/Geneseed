@@ -20,9 +20,10 @@
  * NO SCORING, AND A CLEAN TREE. Risk is the loop engine's job (J5). A stage outside a loop never
  * changes the worktree, so `recordStage` refuses a dirty porcelain after one — engine files and
  * the run's spec at `specs/<slug>/spec.md` excepted (the one being recorded, else the one on
- * record: it stays uncommitted until a loop commits it) — instead of carrying uncommitted work
- * into the next loop. The porcelain must be `git status --porcelain --untracked-files=all`: plain
- * `--porcelain` folds a new directory into `?? specs/`, which no exemption can match. No porcelain
+ * record: it is uncommitted until the gate approves it, and the Rite commits it then, before the
+ * first loop, whose first read brick would stop on it otherwise) — instead of carrying
+ * uncommitted work into the next loop. The porcelain must be
+ * `git status --porcelain --untracked-files=all`: plain `--porcelain` folds a new directory into `?? specs/`, which no exemption can match. No porcelain
  * at all (`null`, a TTY stdin) is refused too: it proves nothing. The limit: an empty pipe reads
  * as a clean tree, so the engine trusts whoever pipes it.
  *
@@ -51,7 +52,10 @@
  * task, `index` 1 to `count`; a fix loop that runs in between follows its own edges. A task the
  * run reaches for the FIRST time starts with fresh cycle counters and a fresh per-task ceiling
  * (J6); `taskHigh` is the highest index reached, so a spec re-recorded after a route back (index
- * back to 1) gives no task a second fresh budget.
+ * back to 1) gives no task a second fresh budget. A route back into the owner after its last task
+ * (J7: red CI at `merge-gate`) is ONE EXTRA TASK: `next` marks it `extra`, read off `history`
+ * alone, and it reaches no task never reached, so it spends the route's cycle and both ceilings
+ * like any lap and resets nothing.
  *
  * TERMINATION BY CONSTRUCTION (J3, R8). `transitions` counts per task and resets with it. On top,
  * `runTransitions` counts every transition of the run, never resets, and stops the run past
@@ -232,9 +236,14 @@ export function nextStage(state, { bricks }, { loopStatus = null, head = null, n
     if (!template) throw new Error(`${TRIAGED}: no loop was triaged — the triage stage records one with --loop`);
     const owned = state.tasks && (state.tasks.stage === null || state.tasks.stage === stage);
     if (state.launched?.stage !== stage) state.launched = { stage, template, head, at: now };
+    // J7: the owner, recorded since the spec, entered by an edge rather than its own replay, has
+    // passed its last task: this visit is one extra task, to fix what the stage before reported.
+    const last = state.history.at(-1);
+    const extra = owned && state.tasks.stage === stage && state.tasks.index === state.tasks.count && last?.stage !== stage
+      ? { extra: `${last.stage} reported ${last.outcome ?? last.verdict}` } : {};
     return {
       stage, loop: template, notes: state.carry ? [state.carry] : [],
-      ...(owned ? { task: taskOut(state.tasks) } : {}), ...rulesOf(state),
+      ...(owned ? { task: { ...taskOut(state.tasks), ...extra } } : {}), ...rulesOf(state),
     };
   }
   const brick = bricks.get(stage);
