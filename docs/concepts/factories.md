@@ -29,7 +29,8 @@ A failure may route back to an earlier stage: red CI at `merge-gate` sends the w
 loop that wrote it. Every such route sits inside a declared **cycle** with a `max` (5 at most).
 Each lap back to the cycle's first stage spends one; past the `max`, the run stops. A route back
 always starts a **fresh** loop: a new `LOOP.md`, whose first note is the reason the last lap
-failed. The commits made before stay on the branch. A run also stops after 30 stage transitions,
+failed. When two cycles share that first stage, the lap spends the smallest one that holds the
+stage it came from: a failed `holdout` spends `holdout`, a red `merge-gate` spends `ci`. The commits made before stay on the branch. A run also stops after 30 stage transitions,
 whatever its cycles say.
 
 `geneseed factory check` refuses a factory before any stage runs: an unknown brick or loop, an
@@ -50,15 +51,17 @@ names the run it belongs to.
 
 | Factory | Stages |
 | --- | --- |
-| `analysis-to-build` | `intake` → `spec` → `loop:feature` → `pr-open` → `merge-gate` → `retro` → `$close`. `spec` writes `specs/<slug>/spec.md` with an ordered task list, and you approve it at its gate. `loop:feature` then runs once per task, in order, in the same worktree, and one PR opens at the end. A red `merge-gate` sends the work back to `loop:feature` as one extra task, "make CI green", twice at most (cycle `ci`) |
-| `bug-report-to-fix` | `intake` → `loop:bugfix` → `pr-open` → `merge-gate` → `retro` → `$close`. A red `merge-gate` sends the fix back to `loop:bugfix`, twice at most (cycle `ci`) |
-| `issue-to-pr` | `intake` → `triage` → `loop:$triaged` → `pr-open` → `merge-gate` → `retro` → `$close`. `triage` picks the loop from the factory's `loops`: `bugfix`, `feature`, `deps-upgrade` or `refactor`. A red `merge-gate` sends the work back to that same loop, twice at most (cycle `ci`) |
+| `analysis-to-build` | `intake` → `spec` → `holdout-write` → `loop:feature` → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. `spec` writes `specs/<slug>/spec.md` with an ordered task list, and you approve it at its gate. `loop:feature` then runs once per task, in order, in the same worktree, and one PR opens at the end. A failed `holdout` or a red `merge-gate` sends the work back to `loop:feature` as one extra task, twice at most each (cycles `holdout` and `ci`) |
+| `bug-report-to-fix` | `intake` → `holdout-write` → `loop:bugfix` → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. A failed `holdout` or a red `merge-gate` sends the fix back to `loop:bugfix`, twice at most each (cycles `holdout` and `ci`) |
+| `issue-to-pr` | `intake` → `holdout-write` → `triage` → `loop:$triaged` → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. `triage` picks the loop from the factory's `loops`: `bugfix`, `feature`, `deps-upgrade` or `refactor`. A failed `holdout` or a red `merge-gate` sends the work back to that same loop, twice at most each (cycles `holdout` and `ci`) |
 
 The bricks they add:
 
 | Brick | Does | Outcomes |
 | --- | --- | --- |
 | `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria | `pass`, `fail` |
+| `holdout-write` | Writes 3 to 8 prose scenarios (given / when / then) for the work item into the holdout folder, outside the worktree, and hands the work item on unchanged | `pass`, `fail` |
+| `holdout` | Plays every scenario against the built change. `fail` carries one sentence per failed scenario, observed against expected; `error` when the diff touches the holdout folder or a scenario cannot be played | `pass`, `fail`, `error` |
 | `triage` | Reads the work item and picks one loop from the factory's `loops`, with its reason. The engine refuses a loop outside that list. `fail` when none fits | `pass`, `fail` |
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
 | `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide | `pass`, `fail`, `none` |
@@ -70,6 +73,30 @@ The bricks they add:
 The run report is git-ignored by the `.geneseed/.gitignore` Geneseed seeds. Where no such file is
 in the worktree, `retro` writes the report to the OS temp directory instead, so the tree stays
 clean. The report lives in the worktree and goes when you remove it.
+
+## Holdout scenarios
+
+A loop's tests are written by the same agent that writes the code, so they can share its
+blind spots. A factory therefore keeps a second set of checks the developer never sees. After
+`intake` (or `spec`), the `holdout-write` stage writes 3 to 8 scenarios in plain prose, each a
+`Given` / `When` / `Then`, to `~/.config/geneseed/holdout/<slug>/` (under `$XDG_CONFIG_HOME` when
+it is set): outside the worktree, so no commit, diff or loop note carries them. After the loop,
+the `holdout` stage plays each scenario against the change as built and reports.
+
+- **On a failure**, the work goes back to the loop with one sentence per failed scenario: what was
+  observed against what was expected. Never the scenario's text. That lap spends the `holdout`
+  cycle, twice at most.
+- **On `error`**, the run stops: the diff touches the holdout folder, or a scenario cannot be
+  played.
+- **One folder per slug.** `holdout-write` reports `fail` when the folder already holds files from
+  an earlier run with the same slug; clear it yourself, then run again.
+- **Who sees them.** Both stages run as the `tester` agent. The `factory` skill never puts holdout
+  content or the folder's path into a brief, a note or a carry.
+- **No hook refuses a read of it**, on any host. A Claude Code read gate was built but is not
+  shipped: it would run a hook process on every Read, Grep and Glob of every session (about 90 ms
+  each on Windows) for a protection only a factory run uses. The folder is protected only by its place
+  outside the worktree, by `holdout`'s `error`, and by the skill's rule. A shell command such as
+  `cat` is not covered on any host.
 
 ## In the console
 

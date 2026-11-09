@@ -14,8 +14,14 @@ stage it hands you and report the outcome. Every action prints one JSON object: 
 never on your own reading of the graph. The run ends at an open PR with green CI. **The merge is
 never part of a run.**
 
-**Holdout rule.** Never put holdout content (anything under `~/.config/geneseed/holdout/`) into
-any brief, prompt, note or `--carry` you hand on, and never read it on a developer's behalf.
+**Holdout rule.** The `holdout-write` stage writes scenarios the developer never sees, and the
+`holdout` stage plays them before the PR. Both run as the `tester` {{AGENT}}, never as the
+developer and never inline. Never put holdout content (anything under `~/.config/geneseed/holdout/`)
+into any brief, prompt, note or `--carry` you hand on; never name that folder to a developer or a
+loop; never read it on a developer's behalf. Record `holdout-write`'s pass with the `--carry` it
+received, unchanged, and a `holdout` fail with the one-sentence file it reported. No hook refuses a
+read of the folder on any host: the folder is protected only by its place outside the worktree, by `holdout`'s `error`
+when the diff touches it, and by this rule.
 
 ## Setup
 

@@ -79,20 +79,22 @@ test('list: name, description, category and origin of every factory', () => {
         factories: [{
           name: 'analysis-to-build', category: 'development', origin: 'shipped',
           description: 'Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, '
-            + 'build each task in turn with the feature loop in one worktree, then open one pull request and wait for '
-            + 'green CI; red CI sends the work back to the loop as one more task, twice at most. The merge stays yours.',
+            + 'build each task in turn with the feature loop in one worktree, play the holdout scenarios it never saw, then '
+            + 'open one pull request and wait for green CI; a failed scenario or red CI sends the work back to the loop as '
+            + 'one more task, twice at most each. The merge stays yours.',
         }, {
           name: 'bug-report-to-fix', category: 'development', origin: 'shipped',
-          description: 'Take one bug report, fix it with the bugfix loop, open the pull request and wait for green CI; '
-            + 'red CI sends the fix back to the loop, twice at most. The merge stays yours.',
+          description: 'Take one bug report, fix it with the bugfix loop, play the holdout scenarios it never saw, open the '
+            + 'pull request and wait for green CI; a failed scenario or red CI sends the fix back to the loop, twice at '
+            + 'most each. The merge stays yours.',
         }, {
           name: 'fixture-fix', category: null, origin: 'project',
           description: 'Test fixture: plan, run the bugfix loop, review; a failed review sends the item back to the loop.',
         }, {
           name: 'issue-to-pr', category: 'development', origin: 'shipped',
           description: 'Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), '
-            + 'open the pull request and wait for green CI; red CI sends the work back to that loop, twice at most. '
-            + 'The merge stays yours.',
+            + 'play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or '
+            + 'red CI sends the work back to that loop, twice at most each. The merge stays yours.',
         }],
       },
     });
@@ -259,6 +261,11 @@ test('issue-to-pr: triage gets the allowlist, a loop outside it is refused, one 
   const file = path.join(sb.path, 'FACTORY.md');
   try {
     assert.equal(run(sb.path, [...INIT, '--factory', 'issue-to-pr']).code, 0);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md']), { code: 0, out: { stage: 'holdout-write' } });
+    // The holdout writer runs as tester and hands the work item on unchanged (J11, D18).
+    const hw = run(sb.path, ['next']).out;
+    assert.deepEqual({ stage: hw.stage, agent: hw.agent, outcomes: hw.outcomes, carry: hw.carry },
+      { stage: 'holdout-write', agent: 'tester', outcomes: ['pass', 'fail'], carry: 'item.md' });
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md']), { code: 0, out: { stage: 'triage' } });
     const next = run(sb.path, ['next']).out;
     assert.deepEqual({ stage: next.stage, agent: next.agent, outcomes: next.outcomes, carry: next.carry, loops: next.loops },
@@ -277,6 +284,25 @@ test('issue-to-pr: triage gets the allowlist, a loop outside it is refused, one 
       stage: 'loop:$triaged', loop: 'bugfix', notes: ['triage.md'],
       rules: ['Never merge, and never enable auto-merge: the run ends at an open PR with green CI.', "Push only this worktree's own branch."],
     });
+  } finally { sb.cleanup(); }
+});
+
+// R5 on the shipped `bug-report-to-fix`: the holdout writer sits between intake and the loop, the
+// judge after it, and a judge that reports `error` (the diff touches the holdout folder, or a
+// scenario cannot be played) stops the run; it never routes back to the developer.
+test('bug-report-to-fix: holdout-write before the loop, holdout after it, holdout error stops', () => {
+  const sb = repo([]);
+  try {
+    assert.equal(run(sb.path, [...INIT, '--factory', 'bug-report-to-fix']).code, 0);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md']), { code: 0, out: { stage: 'holdout-write' } });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md']), { code: 0, out: { stage: 'loop:bugfix' } });
+    assert.deepEqual(run(sb.path, ['next']).out.notes, ['item.md']);
+    loopRan(sb, 'bugfix'); setHead(sb, 1);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'holdout' } });
+    const judge = run(sb.path, ['next']).out;
+    assert.deepEqual({ stage: judge.stage, agent: judge.agent, outcomes: judge.outcomes },
+      { stage: 'holdout', agent: 'tester', outcomes: ['pass', 'fail', 'error'] });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'error']), { code: 0, out: { stopped: 'holdout reported error' } });
   } finally { sb.cleanup(); }
 });
 
@@ -386,9 +412,10 @@ test('record --spec with the porcelain real git prints: --untracked-files=all is
 });
 
 // D9 + J7 on the shipped `analysis-to-build`, in a real git repository, every porcelain the one
-// git prints: intake -> spec (3 tasks, gated) -> loop:feature once per task -> pr-open ->
-// merge-gate red -> loop:feature once more, the extra task "make CI green" (task 3/3 marked
-// `extra`, the red CI's carry as its note) -> pr-open -> merge-gate green -> retro -> $close.
+// git prints: intake -> spec (3 tasks, gated) -> holdout-write -> loop:feature once per task ->
+// holdout red -> loop:feature once more (task 3/3 marked `extra`, the failed scenario's sentence as
+// its note) -> holdout green -> pr-open -> merge-gate red -> the extra task "make CI green" (the red
+// CI's carry as its note) -> holdout -> pr-open -> merge-gate green -> retro -> $close.
 // The spec is committed after the gate's ok, before the first loop: an untracked spec would stop
 // that loop's first read brick (`plan`). Each loop is a real `loop init` (the registry's evidence)
 // and a real commit (HEAD moves); the extra pass goes to pr-open, never to a task 4.
@@ -411,39 +438,56 @@ test('analysis-to-build: spec, three tasks, red CI as one extra task, then $clos
     assert.equal(porcelain(), '?? FACTORY.md\n?? specs/build/spec.md\n');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/build/spec.md'], porcelain()),
       { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
-    assert.deepEqual(run(sb.path, ['decide', '--verdict', 'ok']), { code: 0, out: { stage: 'loop:feature' } });
+    assert.deepEqual(run(sb.path, ['decide', '--verdict', 'ok']), { code: 0, out: { stage: 'holdout-write' } });
     git(sb.path, 'add', 'specs/build/spec.md'); commit('spec');
+    // The holdout writer reads the spec's finding and hands it on unchanged: the scenarios live
+    // outside the worktree, so the tree stays clean.
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'spec-finding.md'], porcelain()),
+      { code: 0, out: { stage: 'loop:feature' } });
 
     for (const index of [1, 2, 3]) {
       assert.deepEqual(run(sb.path, ['next']).out,
-        { stage: 'loop:feature', loop: 'feature', notes: [], task: { ...TASK, index }, rules: RULES }, `task ${index}`);
+        { stage: 'loop:feature', loop: 'feature', notes: index === 1 ? ['spec-finding.md'] : [], task: { ...TASK, index }, rules: RULES }, `task ${index}`);
       loopRan(sb, 'feature'); commit(`task ${index}`);
       assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']).out,
-        index < 3 ? { stage: 'loop:feature', task: { ...TASK, index: index + 1 } } : { stage: 'pr-open' });
+        index < 3 ? { stage: 'loop:feature', task: { ...TASK, index: index + 1 } } : { stage: 'holdout' });
     }
-    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out: { stage: 'merge-gate' } });
+    // A failed scenario sends the work back as one extra task, its one-sentence carry as the note,
+    // and spends the `holdout` cycle (the smallest that holds the source), not `ci`.
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail', '--carry', 'holdout-red.md'], porcelain()), { code: 0, out: { stage: 'loop:feature' } });
+    assert.deepEqual(run(sb.path, ['next']).out, {
+      stage: 'loop:feature', loop: 'feature', notes: ['holdout-red.md'],
+      task: { ...TASK, index: 3, extra: 'holdout reported fail' }, rules: RULES,
+    });
+    loopRan(sb, 'feature'); commit('make the holdout pass');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'holdout' } });
+    for (const out of [{ stage: 'pr-open' }, { stage: 'merge-gate' }]) {
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out });
+    }
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail', '--carry', 'ci-red.md'], porcelain()), { code: 0, out: { stage: 'loop:feature' } });
     assert.deepEqual(run(sb.path, ['next']).out, {
       stage: 'loop:feature', loop: 'feature', notes: ['ci-red.md'],
       task: { ...TASK, index: 3, extra: 'merge-gate reported fail' }, rules: RULES,
     });
     loopRan(sb, 'feature'); commit('make CI green');
-    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'pr-open' } });
-    for (const out of [{ stage: 'merge-gate' }, { stage: 'retro' }, { done: true }]) {
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), { code: 0, out: { stage: 'holdout' } });
+    for (const out of [{ stage: 'pr-open' }, { stage: 'merge-gate' }, { stage: 'retro' }, { done: true }]) {
       assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out });
     }
     const end = run(sb.path, ['next']).out;
     assert.equal(end.terminal, '$close');
     assert.deepEqual(end.summary.history.map((h) => [h.stage, h.outcome ?? h.verdict, h.task]), [
-      ['intake', 'pass', 0], ['spec', 'pass', 1], ['spec', 'ok', 1],
+      ['intake', 'pass', 0], ['spec', 'pass', 1], ['spec', 'ok', 1], ['holdout-write', 'pass', 1],
       ['loop:feature', 'pass', 1], ['loop:feature', 'pass', 2], ['loop:feature', 'pass', 3],
-      ['pr-open', 'pass', 3], ['merge-gate', 'fail', 3], ['loop:feature', 'pass', 3],
+      ['holdout', 'fail', 3], ['loop:feature', 'pass', 3], ['holdout', 'pass', 3],
+      ['pr-open', 'pass', 3], ['merge-gate', 'fail', 3], ['loop:feature', 'pass', 3], ['holdout', 'pass', 3],
       ['pr-open', 'pass', 3], ['merge-gate', 'pass', 3], ['retro', 'pass', 3],
     ]);
     const lf = readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8').replace(/\r\n/g, '\n');
     const state = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(lf)[1]);
     assert.deepEqual({ counters: state.counters, taskCount: state.taskCount, runCeiling: state.runCeiling, taskHigh: state.taskHigh },
-      { counters: { ci: 1 }, taskCount: 3, runCeiling: 90, taskHigh: 3 }, 'the extra lap spent ci once and bought no task');
+      { counters: { holdout: 1, ci: 1 }, taskCount: 3, runCeiling: 90, taskHigh: 3 },
+      'each extra lap spent its own cycle once and bought no task');
   } finally { sb.cleanup(); }
 });
 

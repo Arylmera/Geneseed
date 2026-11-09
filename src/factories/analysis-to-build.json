@@ -1,20 +1,25 @@
 {
   "name": "analysis-to-build",
-  "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, then open one pull request and wait for green CI; red CI sends the work back to the loop as one more task, twice at most. The merge stays yours.",
+  "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, play the holdout scenarios it never saw, then open one pull request and wait for green CI; a failed scenario or red CI sends the work back to the loop as one more task, twice at most each. The merge stays yours.",
   "category": "development",
   "rules": [
     "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",
     "Push only this worktree's own branch."
   ],
-  "stages": ["intake", "spec", "loop:feature", "pr-open", "merge-gate", "retro"],
+  "stages": ["intake", "spec", "holdout-write", "loop:feature", "holdout", "pr-open", "merge-gate", "retro"],
   "start": "intake",
   "edges": [
     { "from": "intake", "on": "pass", "to": "spec" },
     { "from": "intake", "on": "fail", "to": "$stop" },
-    { "from": "spec", "on": "pass", "to": "loop:feature" },
+    { "from": "spec", "on": "pass", "to": "holdout-write" },
     { "from": "spec", "on": "fail", "to": "$stop" },
-    { "from": "loop:feature", "on": "pass", "to": "pr-open" },
+    { "from": "holdout-write", "on": "pass", "to": "loop:feature" },
+    { "from": "holdout-write", "on": "fail", "to": "$stop" },
+    { "from": "loop:feature", "on": "pass", "to": "holdout" },
     { "from": "loop:feature", "on": "fail", "to": "$stop" },
+    { "from": "holdout", "on": "pass", "to": "pr-open" },
+    { "from": "holdout", "on": "fail", "to": "loop:feature" },
+    { "from": "holdout", "on": "error", "to": "$stop" },
     { "from": "pr-open", "on": "pass", "to": "merge-gate" },
     { "from": "pr-open", "on": "fail", "to": "$stop" },
     { "from": "merge-gate", "on": "pass", "to": "retro" },
@@ -22,5 +27,8 @@
     { "from": "merge-gate", "on": "none", "to": "retro" },
     { "from": "retro", "on": "pass", "to": "$close" }
   ],
-  "cycles": [{ "name": "ci", "nodes": ["loop:feature", "pr-open", "merge-gate"], "max": 2 }]
+  "cycles": [
+    { "name": "holdout", "nodes": ["loop:feature", "holdout"], "max": 2 },
+    { "name": "ci", "nodes": ["loop:feature", "holdout", "pr-open", "merge-gate"], "max": 2 }
+  ]
 }
