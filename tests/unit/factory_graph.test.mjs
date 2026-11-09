@@ -483,6 +483,16 @@ test('G6: environment failures hold for the user and never route to a loop', () 
     assert.ok(body.includes(`An environment failure is never a \`fail\``), `${stage} does not keep environment failures off fail`);
     assert.doesNotMatch(body, /report `fail` and mark it|is a `fail` too: mark it `environment`|or with "CI pending after 30 minutes"/, stage);
   }
+  // `checks` states the environment rule BEFORE the red-exit rule, says it wins over a non-zero
+  // exit (127 included) and over an earlier red command, and restores the tree on every outcome.
+  const checks = shipped('bricks/checks.md').replace(/\s+/g, ' ');
+  const env = checks.indexOf('Environment failures come first, and they take precedence over a non-zero exit.');
+  assert.ok(env >= 0 && env < checks.indexOf('report `fail` when one exits non-zero'), 'checks states the environment rule first');
+  for (const rule of ['(exit 127,', 'When an earlier command was already red, the environment failure still wins: report `error`',
+    'on every outcome (`pass`, `fail` and `error` alike), put the tree back']) {
+    assert.ok(checks.includes(rule), `checks does not say: ${rule}`);
+  }
+  assert.doesNotMatch(readFileSync(path.resolve(import.meta.dirname, '../../CHANGELOG.md'), 'utf8'), /a timeout or a missing tool fails it/);
   for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
     const { edges } = JSON.parse(shipped(`factories/${name}.json`));
     for (const [stage, outcome] of Object.entries(ENV)) {
