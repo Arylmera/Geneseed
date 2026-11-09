@@ -376,7 +376,7 @@ test('G2: record --spec refuses a path that is not specs/<slug>/spec.md, and the
     writeFileSync(path.join(sb.path, 'plan.md'), '# R\n\n## Tasks\n\n1. one\n');
     const before = readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'plan.md'], ''),
-      { code: 1, out: { error: '--spec plan.md is not a spec the engine can keep: record specs/<slug>/spec.md, one folder named for the run\'s slug' } });
+      { code: 1, out: { error: '--spec plan.md is not a spec the engine can keep: record a file named spec.md one folder under specs/ (specs/<slug>/spec.md; the folder may have any name but . or ..)' } });
     assert.equal(readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8'), before);
     assert.equal(run(sb.path, ['next']).out.stage, 'spec');
   } finally { sb.cleanup(); }

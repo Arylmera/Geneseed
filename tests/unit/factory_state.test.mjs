@@ -238,7 +238,7 @@ test('G2 + J5: --spec takes specs/<slug>/spec.md and nothing else, and exempts o
     const s = start(specFactory());
     const before = JSON.stringify(s);
     assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: ` M ${specPath}`, specPath, taskCount: 2 }),
-      new RegExp(`^Error: --spec ${specPath.replaceAll('.', '\\.')} is not a spec the engine can keep: record specs/<slug>/spec\\.md, one folder named for the run's slug$`),
+      new RegExp(`^Error: --spec ${specPath.replaceAll('.', '\\.')} is not a spec the engine can keep: record a file named spec\\.md one folder under specs/ \\(specs/<slug>/spec\\.md; the folder may have any name but \\. or \\.\\.\\)$`),
       specPath);
     assert.equal(JSON.stringify(s), before, specPath);
   }
