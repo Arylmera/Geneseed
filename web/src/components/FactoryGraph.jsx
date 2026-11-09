@@ -53,7 +53,7 @@ export default function FactoryGraph({
     return () => ro.disconnect()
   }, [])
 
-  const taken = lane !== undefined ? lane : laneTaken(factory, history)
+  const taken = lane !== undefined ? lane : laneTaken(factory, history, bricks)
   const l = layoutFactory(factory, bricks, { width: room, lane: taken })
   const graphs = new Set(loops.map((t) => t.name))
   const cycles = new Map((factory.cycles || []).map((c) => [c.name, c]))

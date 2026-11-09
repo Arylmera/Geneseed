@@ -339,3 +339,77 @@ describe('laneTaken', () => {
     expect(laneTaken(factory, [{ stage: 'intake', outcome: 'pass' }])).toBeNull()
   })
 })
+
+// A fork is the engine's (js/factory/graph.mjs `isFork`): a brick stage that declares a named
+// outcome. A `loop:` stage reports pass or fail, and a brick of plain outcomes is no fork either,
+// however many stages its edges reach: no lane boxes, no lane taken.
+describe('forksOf — the engine fork', () => {
+  const looped = {
+    stages: ['loop:x', 'A', 'B'],
+    start: 'loop:x',
+    edges: [
+      { from: 'loop:x', on: 'pass', to: 'A' },
+      { from: 'loop:x', on: 'fail', to: 'B' },
+    ],
+  }
+  const review = {
+    stages: ['review', 'C', 'D'],
+    start: 'review',
+    edges: [
+      { from: 'review', on: 'pass', to: 'C' },
+      { from: 'review', on: 'fail', to: 'D' },
+    ],
+  }
+  const REVIEW = [{ name: 'review', outcomes: ['pass', 'fail'] }]
+
+  it('never makes a loop stage a fork', () => {
+    expect(forksOf(looped).size).toBe(0)
+    expect(laneTaken(looped, [{ stage: 'loop:x', outcome: 'pass' }])).toBeNull()
+  })
+
+  it('never makes a brick of plain outcomes a fork, catalogued or not', () => {
+    expect(forksOf(review, REVIEW).size).toBe(0)
+    expect(forksOf(review).size).toBe(0)
+    expect(at(layoutFactory(review, REVIEW), 'review').kind).toBe('brick')
+  })
+
+  // The catalogue's brick is the word: a declared named outcome makes the fork.
+  it('reads a catalogued brick by its declared outcomes', () => {
+    const bricks = [{ name: 'triage', outcomes: ['bug', 'feature', 'deps', 'refactor', 'docs'] }]
+    expect([...forksOf(forked, bricks)]).toEqual([['triage', LANES]])
+  })
+})
+
+// Rails into one stage spread 10 px apart around its middle; six or more would leave a 48 px
+// brick, so the spread closes up until the outermost lands 4 px inside the box.
+describe('layoutFactory — many rails into one stage', () => {
+  const N = 6
+  const steps = Array.from({ length: N }, (_, i) => `s${i + 1}`)
+  const g = {
+    stages: ['S', ...steps],
+    start: 'S',
+    edges: [
+      { from: 'S', on: 'pass', to: 's1' },
+      ...steps.map((s, i) => ({ from: s, on: 'pass', to: steps[i + 1] ?? '$close' })),
+      ...steps.map((s) => ({ from: s, on: 'fail', to: 'S' })),
+    ],
+    cycles: steps.map((s, i) => ({
+      name: `c${i + 1}`,
+      nodes: ['S', ...steps.slice(0, i + 1)],
+      max: 2,
+    })),
+  }
+
+  it('lands every rail inside the target box', () => {
+    const lay = layoutFactory(g)
+    expect(lay.mode).toBe('rails')
+    const s = at(lay, 'S')
+    const ys = lay.edges.filter((e) => e.back).map((e) => nums(e.path)[3])
+    expect(ys).toHaveLength(N)
+    for (const y of ys) {
+      expect(y).toBeGreaterThanOrEqual(s.y + 4)
+      expect(y).toBeLessThanOrEqual(s.y + s.h - 4)
+    }
+    expect(new Set(ys).size).toBe(N)
+  })
+})
