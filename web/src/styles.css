@@ -3375,7 +3375,7 @@ a.kit-name:hover { color: var(--accent-text); }
    the media tiers, and `.lib-wrap`-scoped, so it overrides their `.library` rules on these
    pages and leaves Docs to its own. */
 @container lib (max-width: 1173px) {
-  .lib-wrap .library, .lib-wrap .library.locked { grid-template-columns: minmax(0, 1fr); }
+  .lib-wrap .library:not(.locked) { grid-template-columns: minmax(0, 1fr); }
   .lib-wrap .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; /* off-scale: the phone rail's padding, as at 720px */ }
   .lib-wrap .kind-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--sp-1);
     overflow: visible; }
@@ -3384,14 +3384,26 @@ a.kit-name:hover { color: var(--accent-text); }
     padding: 0; border-left: 0; }
   .lib-wrap .rail-cats ul { flex-direction: row; flex-wrap: wrap; gap: var(--sp-1); }
   .lib-wrap .rail-cats button { width: auto; border: 1px solid var(--line); }
-  .lib-wrap .lib-list { border-right: 0; }
-  .lib-wrap .library .lib-rows { max-height: 45vh; }
-  .lib-wrap .library .lib-reader, .lib-wrap .library.locked .lib-reader { grid-column: auto;
+  .lib-wrap .library:not(.locked) .lib-list { border-right: 0; }
+  .lib-wrap .library:not(.locked) .lib-rows { max-height: 45vh; }
+  .lib-wrap .library:not(.locked) .lib-reader { grid-column: auto;
     border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
     padding: 24px 20px; /* off-scale: a full-width reader gives its width to the content (the ring's label floor) */ }
 }
-@container lib (max-width: 640px) {
-  .lib-wrap .library .lib-reader { padding: 20px 16px; /* off-scale: the phone reader's padding, as at 720px */ }
+/* A locked Library (Personal › Memory, Notebook) has no rail, only the list and the reader:
+   it keeps them side by side down to 380 + 560 + 2px, then stacks them the same way. */
+@container lib (max-width: 941px) {
+  .lib-wrap .library.locked { grid-template-columns: minmax(0, 1fr); }
+  .lib-wrap .library.locked .lib-list { border-right: 0; }
+  .lib-wrap .library.locked .lib-rows { max-height: 45vh; }
+  .lib-wrap .library.locked .lib-reader { grid-column: auto;
+    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
+    padding: 24px 20px; /* off-scale: as the three-pane stack above */ }
+}
+/* The phone reader's padding, after the tiers and as specific as their reader rules: a page of
+   673–720px is wider than any phone-sized container tier would be. */
+@media (max-width: 720px) {
+  .lib-wrap .library:not(.locked) .lib-reader, .lib-wrap .library.locked .lib-reader { padding: 20px 16px; /* off-scale: the phone reader's padding */ }
 }
 
 /* ============================ AGENT GLYPHS (components/AgentGlyph.jsx) ============ */

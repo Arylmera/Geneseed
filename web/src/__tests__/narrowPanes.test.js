@@ -28,26 +28,61 @@ describe('Library panes: the narrow tier', () => {
   // The threshold is derived, not typed: the rail and the list keep their widths from the base
   // rule, the reader keeps 560px, and the 1px border sits on each side. Below that sum the
   // three panes stack, so the reader never shares a row narrower than 560px.
-  it('stacks below the width that leaves the reader 560px beside the rail and the list', () => {
+  const threePane = () => {
     const cols = /grid-template-columns:\s*(\d+)px minmax\(0, (\d+)px\)/.exec(rule('.library'))
-    const fits = Number(cols[1]) + Number(cols[2]) + 560 + 2
-    const tier = tierAt(`@container lib (max-width: ${fits - 1}px) {`)
-    expect(rule('.lib-wrap .library, .lib-wrap .library.locked', tier)).toMatch(
+    return tierAt(
+      `@container lib (max-width: ${Number(cols[1]) + Number(cols[2]) + 560 + 2 - 1}px) {`,
+    )
+  }
+  // A locked Library (Personal › Memory, Notebook) has no rail: the list and the reader only,
+  // so it keeps both side by side down to the list's width + 560 + 2.
+  const twoPane = () => {
+    const cols = /grid-template-columns:\s*minmax\(0, (\d+)px\)/.exec(rule('.library.locked'))
+    return tierAt(`@container lib (max-width: ${Number(cols[1]) + 560 + 2 - 1}px) {`)
+  }
+
+  it('stacks below the width that leaves the reader 560px beside the rail and the list', () => {
+    expect(rule('.lib-wrap .library:not(.locked)', threePane())).toMatch(
       /grid-template-columns:\s*minmax\(0, 1fr\)/,
     )
+    // The three-pane tier leaves a locked Library alone: it has room down to its own tier.
+    expect(threePane()).not.toMatch(/\.library\.locked/)
+  })
+
+  it('a locked Library stacks below the width that leaves the reader 560px beside the list', () => {
+    const tier = twoPane()
+    expect(rule('.lib-wrap .library.locked', tier)).toMatch(
+      /grid-template-columns:\s*minmax\(0, 1fr\)/,
+    )
+    expect(rule('.lib-wrap .library.locked .lib-rows', tier)).toMatch(/max-height:\s*45vh/)
+    expect(rule('.lib-wrap .library.locked .lib-reader', tier)).toMatch(/grid-column:\s*auto/)
   })
 
   // Reading order is the DOM's: the section header, the panels, the list, the entry.
   it('in the stack the panels wrap full width, the list scrolls inside a cap, the entry follows', () => {
-    const tier = tierAt('@container lib (max-width:')
+    const tier = threePane()
     const kinds = rule('.lib-wrap .kind-list', tier)
     expect(kinds).toMatch(/display:\s*flex/)
     expect(kinds).toMatch(/flex-wrap:\s*wrap/)
     expect(kinds).toMatch(/overflow:\s*visible/)
     expect(rule('.lib-wrap .rail-cats', tier)).toMatch(/flex-basis:\s*100%/)
-    expect(rule('.lib-wrap .library .lib-rows', tier)).toMatch(/max-height:\s*45vh/)
-    const reader = '.lib-wrap .library .lib-reader, .lib-wrap .library.locked .lib-reader'
-    expect(rule(reader, tier)).toMatch(/grid-column:\s*auto/)
+    expect(rule('.lib-wrap .library:not(.locked) .lib-rows', tier)).toMatch(/max-height:\s*45vh/)
+    expect(rule('.lib-wrap .library:not(.locked) .lib-reader', tier)).toMatch(/grid-column:\s*auto/)
+  })
+
+  // At a 673–720px window the page is wider than 640px, so a container tier for the phone
+  // padding never matched there and the 24px 20px stacked padding beat the phone's 20px 16px.
+  // The phone padding is a media rule after the container tiers, as specific as their reader.
+  it('the phone reader padding wins over the stacked padding at every phone width', () => {
+    const at = css.indexOf('@media (max-width: 720px) {\n  .lib-wrap')
+    expect(at).toBeGreaterThan(css.indexOf('@container lib (max-width:'))
+    const phone = css.slice(at, css.indexOf('\n}\n', at))
+    expect(
+      rule(
+        '.lib-wrap .library:not(.locked) .lib-reader, .lib-wrap .library.locked .lib-reader',
+        phone,
+      ),
+    ).toMatch(/padding:\s*20px 16px/)
   })
 })
 
