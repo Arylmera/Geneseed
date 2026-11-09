@@ -22,7 +22,7 @@ to the loop three times, not two".
      **fork**, such as `triage`: `bug`, `feature`, `deps`, `refactor`, `docs`, `fail`). Give each
      named outcome its own edge to its own **lane**: a loop for work that changes code, or a brick
      where a loop adds nothing (`docs` → `docs-update`). Every lane joins the same path after it
-     (`holdout`, then `pr-open` and `merge-gate`). An outcome the factory does not offer goes to
+     (`checks`, then `review-panel` and `holdout`, then `pr-open` and `merge-gate`). An outcome the factory does not offer goes to
      `$stop`.
    - **where a human gates** — a gate belongs to the brick (`gate: human` in its frontmatter,
      narrowed by `gateOn`), never to the factory. A stage that must hold for a person uses a
@@ -46,12 +46,19 @@ to the loop three times, not two".
    {
      "name": "<name>", "description": "<one line>", "category": "<category>",
      "rules": ["<optional>"],
-     "stages": ["intake", "loop:<template>", "pr-open", "merge-gate", "retro"],
+     "stages": ["intake", "loop:<template>", "checks", "review-panel", "pr-open", "merge-gate", "retro"],
      "start": "intake",
      "edges": [{ "from": "<stage>", "on": "<outcome>", "to": "<stage | $lane | $close | $stop>" }],
-     "cycles": [{ "name": "<name>", "nodes": ["<first stage of the lap, or $lane>", "..."], "max": 2 }]
+     "cycles": [{ "name": "<name>", "nodes": ["<first stage of the lap, or $lane>", "..."], "max": 2 }],
+     "protected": ["<optional: paths checks refuses to see changed>"],
+     "review": { "seats": { "small": ["reviewer"], "medium": ["reviewer", "tester"], "large": ["reviewer", "tester", "steward"],
+       "areas": { "security": ["security"], "performance": ["performance"], "ui": ["user-advocate"], "data": ["security"] } } }
    }
    ```
+
+   The edge `intake --needs-info--> <stage>` is optional: without it, a `needs-info` the user
+   answers `ok` follows intake's `pass` edge. `protected` is optional. `review.seats` is what a
+   `review-panel` stage seats; copy the shipped table unless the user wants other seats.
 
    A cycle's `nodes[0]` is where every lap starts, and every route back targets it. A factory
    with a fork follows the shipped `issue-to-pr`: one edge per named outcome out of `triage`,
@@ -72,7 +79,13 @@ to the loop three times, not two".
      exist or cannot run here: fix the name, or step 4.
    - `is not an outcome of` / `no edge for outcome` / `edges for outcome` — every outcome of a
      stage has exactly one edge, and an edge uses only outcomes the stage declares (`error` may
-     go without one: it stops the run).
+     go without one: it stops the run; so may `needs-info`: it follows the `pass` edge).
+   - `protected: must be a list of non-empty paths` — `protected` is a list of path strings.
+   - `review: must be an object with a seats table` / `review.seats.<size>: must be a non-empty
+     list of agent names` / `review.seats.areas: must map each area to a list of agents` — the
+     seat table needs a list for `small`, `medium` and `large`, and `areas` maps each area to a list.
+   - `review.seats.<where>: no agent named <name>` — a seat names an agent Geneseed does not ship;
+     a project's own agents cannot sit.
    - `$close is not reachable` — no path from `start` ends the run well.
    - `has no declared cycle around it` — a route back with no `cycles` entry.
    - `max must be an integer` — a cycle's `max` is 1 to 5.

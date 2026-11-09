@@ -10,8 +10,9 @@ or asks to carry an issue, request or document to a PR with green CI.
 `geneseed factory` is a state machine kept in `FACTORY.md` at the worktree's root. A stage is a
 brick or a whole loop; the engine decides every transition, cycle count and stop, and you run the
 stage it hands you and report the outcome. Every action prints one JSON object: act on its keys,
-never on your own reading of the graph. The run ends at an open PR with green CI. **The merge is
-never part of a run.**
+never on your own reading of the graph. The run ends at an open PR with green CI. **No stage
+merges:** once the run has closed, you ask the user once whether to merge (*The end*), and never
+enable auto-merge.
 
 **Holdout rule.** The `holdout-write` stage writes scenarios the developer never sees, and the
 `holdout` stage plays them before the PR. Both run as the `tester` {{AGENT}}, never as the
@@ -55,11 +56,27 @@ Repeat `geneseed factory next` and act on its JSON:
   spec before the first loop: `git add specs/<slug>/spec.md`, then
   `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
   read brick; the engine exempts it only until then.
+  A stage whose `skill` is `factory` (`review-panel`) is yours: follow its `prompt` here,
+  dispatch its seats in one parallel batch, chair them, and record its outcome as above.
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
   `geneseed factory decide --verdict ok|no|amend --note "<their words>"` — `ok` follows the
   reported outcome's edge, `no` stops, `amend` re-runs the stage with their note — and continue.
+  The gated outcomes:
+  - `intake` **`needs-info`**: show the user its numbered questions. Their answers go back as
+    `amend --note "<their answers>"`; `ok` goes on with the assumptions intake wrote.
+  - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
+    list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
+  - `checks` **`none`**: the base has no done list (or an empty one), and the note is the one
+    `checks` proposes, or says no manifest gave one. On the user's yes, land it on the base, never
+    from this worktree: `git worktree add --detach ../<repo>-done-list origin/<default>`, write
+    `.geneseed/done-checks.txt` there holding exactly the lines of the finding's fenced block,
+    stage that file alone, commit, and `git push origin HEAD:<default>` (each asks). Remove that
+    worktree only once the file has landed. A refused push (a protected branch) is reported to
+    the user with that worktree's path, so they can land the file by PR from it. `ok` waits until
+    the file is on the base: answer `decide --verdict ok` only then, and `checks` runs again
+    against it. If it is not to be landed, `no`.
 - **`{terminal: "$close"}`** or **`{terminal: "$stop"}`** — see *The end*.
 - A `record` or `decide` result (`{stage}`, `{awaiting}`, `{stopped}`) — call `next` again.
 - **`{error}`** — read it; it names the step you skipped or the evidence `record` lacks. Do that
@@ -100,6 +117,11 @@ Repeat `geneseed factory next` and act on its JSON:
    once, with the bounded wait the `merge-gate` brick names (30 minutes at most), and add the
    final state (green, red with the failing checks, or still pending at the bound) to the run
    report. A red result is reported, never reworked: the run has closed.
+   **The merge proposal.** Only when that final state is green: show the user the PR URL, the CI
+   state and each `review-panel` seat's verdict, and ask once whether to merge. On a yes:
+   `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on GitLab), which the host's own
+   permission prompt also guards. On a no, or no answer, the PR stays open. Red or pending CI: no
+   proposal. Never enable auto-merge.
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and
@@ -108,7 +130,8 @@ Repeat `geneseed factory next` and act on its JSON:
    a lesson that holds beyond this run goes into memory, one entry. Leave the branch and
    `FACTORY.md` as they are.
 10. Report: the PR URL, the final CI state after the close commit, the stages with their outcomes from `summary.history`, every rework and
-    its reason, the run report's path, and the branch. **Never merge.**
+    its reason, the run report's path, the branch, and whether the PR was merged on the user's yes
+    or left open. **Never merge without that yes.**
 
 ## Resume
 
@@ -120,6 +143,7 @@ says a loop still runs, resume that loop first with `geneseed loop next` (the `l
 
 - `$close` is reported with the PR open, `FACTORY.md` removed, and the CI state after that
   removal read and reported; or `$stop` is
-  reported with its reason and the run report. In both cases nothing was merged.
+  reported with its reason and the run report. The PR was merged on the user's yes, asked once
+  at the end, or left open; a `$stop` merges nothing.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

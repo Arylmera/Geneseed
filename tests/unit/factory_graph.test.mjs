@@ -4,12 +4,13 @@
 // that). Its `triage` declares named outcomes, which makes it a fork.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf } from '../../js/factory/graph.mjs';
 import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
+import { inferDoneChecks, PM_LOCKS } from '../../js/hosts/done-checks.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, { name, outcomes, effect: 'read', available: true, ...extra }];
 const CATALOG = {
@@ -273,6 +274,63 @@ test('rule 7: rules, when present, are non-empty strings', () => {
   assert.deepEqual(check({ ...base(), rules: 'Never merge.' }), ['rules: must be a list of non-empty strings']);
 });
 
+// J5: `needs-info` is intake's question to the user, never a lane, so a brick declaring it beside
+// pass and fail is no fork: it gets no `lanes`, and its edge is an ordinary one.
+test('J5: needs-info names no lane, so it makes no fork', () => {
+  const bricks = new Map([...CATALOG.bricks, brick('intake', ['pass', 'fail', 'needs-info'])]);
+  assert.equal(isFork('intake', bricks), false);
+  const f = base();
+  f.edges.push({ from: 'intake', on: 'needs-info', to: 'loop:bugfix' });
+  assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), []);
+});
+
+// Rule 3 and needs-info: the edge may be left out only where the stage has a `pass` edge for
+// needs-info to follow (`edgeFor`). A stage that declares needs-info and fail, but no pass, must
+// route needs-info itself, or check refuses it.
+test('rule 3: needs-info may go without an edge only beside a pass edge', () => {
+  const bricks = new Map([...CATALOG.bricks, brick('ask', ['needs-info', 'fail'])]);
+  const f = base();
+  f.stages.push('ask');
+  f.edges.push({ from: 'ask', on: 'fail', to: '$stop' });
+  assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), ['stage ask: no edge for outcome needs-info']);
+  const withPass = new Map([...CATALOG.bricks, brick('intake', ['pass', 'fail', 'needs-info'])]);
+  assert.deepEqual(checkFactory(base(), { ...CATALOG, bricks: withPass }), []);
+});
+
+// Rule 8: `protected` adds paths `checks` refuses to see changed; absent is fine, any other shape not.
+test('rule 8: protected, when present, is a list of non-empty paths', () => {
+  assert.deepEqual(check({ ...base(), protected: ['infra/', 'Makefile'] }), []);
+  assert.deepEqual(check({ ...base(), protected: ['infra/', ''] }), ['protected: must be a list of non-empty paths']);
+  assert.deepEqual(check({ ...base(), protected: 'infra/' }), ['protected: must be a list of non-empty paths']);
+});
+
+// Rule 9 (J3): the review panel's seat table. Every size has a non-empty list, `areas` maps each
+// area to one, and every seat is an agent the catalogue ships. A catalogue that lists no agents
+// fails every seat: the rule fails closed.
+test('rule 9: review.seats names a list per size, and only shipped agents', () => {
+  const agents = new Set(['reviewer', 'tester', 'steward', 'security']);
+  const seats = () => ({ small: ['reviewer'], medium: ['reviewer', 'tester'], large: ['reviewer', 'tester', 'steward'], areas: { security: ['security'] } });
+  const withSeats = (s) => checkFactory({ ...base(), review: { seats: s } }, { ...CATALOG, agents });
+  assert.deepEqual(withSeats(seats()), []);
+  assert.deepEqual(withSeats({ ...seats(), medium: ['reviewer', 'ghost'], areas: { ui: ['nobody'] } }), [
+    'review.seats.medium: no agent named ghost',
+    'review.seats.areas.ui: no agent named nobody',
+  ]);
+  const { large: _large, ...noLarge } = seats();
+  assert.deepEqual(withSeats({ ...noLarge, small: [] }), [
+    'review.seats.small: must be a non-empty list of agent names',
+    'review.seats.large: must be a non-empty list of agent names',
+  ]);
+  assert.deepEqual(withSeats({ ...seats(), areas: ['security'] }), ['review.seats.areas: must map each area to a list of agents']);
+  assert.deepEqual(checkFactory({ ...base(), review: { small: ['reviewer'] } }, { ...CATALOG, agents }),
+    ['review: must be an object with a seats table']);
+  assert.deepEqual(check({ ...base(), review: { seats: { small: ['reviewer'], medium: ['reviewer'], large: ['reviewer'] } } }), [
+    'review.seats.small: no agent named reviewer',
+    'review.seats.medium: no agent named reviewer',
+    'review.seats.large: no agent named reviewer',
+  ]);
+});
+
 test('factoryCatalogProblems prefixes each factory, after the parse problems, sorted', () => {
   const broken = { ...base(), start: 'nowhere' };
   assert.deepEqual(factoryCatalogProblems({
@@ -296,4 +354,70 @@ test('the doctor\'s factoryProblems is clean over the shipped tree and red over 
       'factories/fixture-broken: stage loop:nope: no loop template named nope',
     ]);
   } finally { sb.cleanup(); }
+});
+
+// One writer per value: `inferDoneChecks` (js/hosts/done-checks.mjs) is the writer of the
+// manifest -> command rules, and the `checks` brick restates them because it runs in a user's
+// repo, where that module does not exist. So every command the writer infers, for each manifest
+// kind and each package manager, must be named in the brick, with the two exclusions it applies,
+// and every lockfile it reads, in its order. One mapping on purpose: the done gate's `go test` is
+// the brick's `go test ./...` — the brick RUNS the command, and bare `go test` tests only the root
+// package.
+test('the checks brick names every command inferDoneChecks infers', () => {
+  const brick = readFileSync(path.resolve(import.meta.dirname, '../../src/bricks/checks.md'), 'utf8');
+  const scripts = JSON.stringify({ scripts: { test: 'x', lint: 'x', typecheck: 'x' } });
+  const kinds = {
+    npm: { 'package.json': scripts },
+    pnpm: { 'package.json': scripts, 'pnpm-lock.yaml': '' },
+    yarn: { 'package.json': scripts, 'yarn.lock': '' },
+    bun: { 'package.json': scripts, 'bun.lock': '' },
+    maven: { 'pom.xml': '' },
+    gradle: { 'build.gradle': '' },
+    gradleKts: { 'build.gradle.kts': '' },
+    python: { 'pyproject.toml': '[tool.pytest.ini_options]\n' },
+    cargo: { 'Cargo.toml': '' },
+    go: { 'go.mod': '' },
+  };
+  const sb = makeSandbox('checksbrick-');
+  try {
+    const seen = [];
+    for (const [kind, files] of Object.entries(kinds)) {
+      const dir = path.join(sb.path, kind);
+      mkdirSync(dir, { recursive: true });
+      for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
+      const labels = inferDoneChecks(dir).checks.map((c) => c.label);
+      assert.ok(labels.length, `${kind}: the fixture infers nothing`);
+      for (const label of labels) {
+        const l = label === 'go test' ? 'go test ./...' : label;
+        seen.push(l); assert.ok(brick.includes(`\`${l}\``), `${kind}: the brick does not name \`${l}\``);
+      }
+    }
+    assert.equal(seen.length, 18, 'four package managers x three scripts, plus six other manifest fixtures');
+    const at = PM_LOCKS.map(([lock]) => brick.indexOf(`\`${lock}\``));
+    assert.ok(at.every((i) => i >= 0), `the brick names every lockfile: ${PM_LOCKS.map(([l]) => l).join(', ')}`);
+    assert.deepEqual(at, [...at].sort((x, y) => x - y), 'the brick lists the lockfiles in the order inferDoneChecks tries them');
+    // the exclusions the writer applies, named in the brick: the npm stub, and pytest only where it shows
+    writeFileSync(path.join(sb.path, 'npm', 'package.json'), JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }));
+    assert.deepEqual(inferDoneChecks(path.join(sb.path, 'npm')).checks, []);
+    assert.ok(brick.includes('no test specified'));
+    writeFileSync(path.join(sb.path, 'python', 'pyproject.toml'), '[project]\nname = "x"\n');
+    assert.deepEqual(inferDoneChecks(path.join(sb.path, 'python')).checks, []);
+    assert.ok(brick.includes('only where pytest shows'));
+  } finally { sb.cleanup(); }
+});
+
+// D9: every shipped factory carries the default seat table. small: reviewer; medium adds tester;
+// large adds steward; area security or data seats security, performance seats performance, ui
+// seats user-advocate.
+test('D9: the three shipped factories carry the default review seat table', () => {
+  const D9 = {
+    seats: {
+      small: ['reviewer'], medium: ['reviewer', 'tester'], large: ['reviewer', 'tester', 'steward'],
+      areas: { security: ['security'], performance: ['performance'], ui: ['user-advocate'], data: ['security'] },
+    },
+  };
+  for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+    const file = path.resolve(import.meta.dirname, '../../src/factories', `${name}.json`);
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).review, D9, name);
+  }
 });

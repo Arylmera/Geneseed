@@ -42,7 +42,7 @@
  * re-entered loop would never pass.
  *
  * R4 COVERS WHAT A HAND CAN EDIT. FACTORY.md is a file; `validateFactoryState` refuses counters
- * that are not non-negative integers, a ceiling above 600, a task block out of its bounds, a gate
+ * that are not non-negative integers, a ceiling above 1200, a task block out of its bounds, a gate
  * amend count above 3, a `lane` no fork of the factory leads to, a status the engine does not
  * write, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
  * `checkFactory` — the termination argument below holds only for a state this engine could have
@@ -71,17 +71,18 @@
  * `FACTORY_MAX_TRANSITIONS` x its task count, set ONCE at the first --spec record. The count is
  * frozen there: a later --spec record may keep or lower it, never raise it, so no lap can buy a
  * task, a fresh budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
- * ceiling is at most 600 transitions: past twenty tasks a requirement is a project, to be split
+ * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
  * into several factory runs a human can review, not one run nobody reads to the end.
  */
 import { writeText } from '../lib/fs.mjs';
 import { renameWithRetry, filterPorcelain } from '../loop/state.mjs';
-import { loopOf, stageOutcomes, checkFactory, LANE, isFork, lanesOf, laneTargets, spentCycle } from './graph.mjs';
+import { loopOf, stageOutcomes, checkFactory, LANE, isFork, lanesOf, laneTargets, spentCycle, edgeFor } from './graph.mjs';
 
 const BEGIN = '<!-- factory-state:begin -->';
 const END = '<!-- factory-state:end -->';
 export const FACTORY_FILE = 'FACTORY.md';
-export const FACTORY_MAX_TRANSITIONS = 30;
+// 60, not 30: `checks` and `review-panel` add two stages, and a lap back through both, to every factory (D15).
+export const FACTORY_MAX_TRANSITIONS = 60;
 export const FACTORY_MAX_TASKS = 20;
 const GATE_MAX_AMENDS = 3;
 const STATUSES = ['running', 'awaiting', 'done', 'stopped'];
@@ -220,7 +221,11 @@ function assertNoLoop(loopStatus) {
   }
 }
 
-const rulesOf = (state) => (state.factory.rules?.length ? { rules: state.factory.rules } : {});
+// What every stage receives from the factory itself: its `rules`, and the `protected` paths `checks` refuses to see changed.
+const rulesOf = ({ factory }) => ({
+  ...(factory.rules?.length ? { rules: factory.rules } : {}),
+  ...(factory.protected?.length ? { protected: factory.protected } : {}),
+});
 
 /**
  * `loopStatus`: the status in the LOOP.md at the worktree root, or null (the CLI looks; this stays
@@ -333,8 +338,7 @@ export function recordStage(state, { bricks }, outcome, {
         + `that changes files commits them first: ${dirty.join('; ')}${folded}`);
     }
   }
-  const edge = state.factory.edges.find((e) => e.from === from && e.on === outcome)
-    ?? (outcome === 'error' ? { from, on: 'error', to: '$stop' } : null);
+  const edge = edgeFor(state.factory, from, outcome);
   if (specPath !== null) {
     if (!Number.isInteger(taskCount) || taskCount < 1) throw new Error(`${specPath} has no ordered task list under a Tasks heading`);
     if (taskCount > FACTORY_MAX_TASKS) {
@@ -411,7 +415,7 @@ export function decideFactory(state, { bricks }, verdict, note = '') {
   if (state.status !== 'awaiting') throw new Error('nothing is awaiting a decision');
   if (!['ok', 'no', 'amend'].includes(verdict)) throw new Error(`verdict must be ok, no or amend, not ${JSON.stringify(verdict)}`);
   const { stage, outcome } = state.awaiting;
-  const edge = state.factory.edges.find((e) => e.from === stage && e.on === outcome) ?? { from: stage, on: outcome, to: '$stop' };
+  const edge = edgeFor(state.factory, stage, outcome) ?? { from: stage, on: outcome, to: '$stop' };
   if (verdict === 'ok') assertLane(state, edge);
   state.awaiting = null; state.status = 'running';
   state.history.push({ stage, verdict, task: taskNo(state), ...(note ? { note } : {}) });

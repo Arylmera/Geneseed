@@ -23,8 +23,9 @@ export function readDoneChecks(root) {
   }
 }
 
-// The package manager a lockfile names; first hit wins, npm without one.
-const PM_LOCKS = [['bun.lockb', 'bun'], ['bun.lock', 'bun'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn']];
+// The package manager a lockfile names; first hit wins, npm without one. Exported for the gate that
+// holds the factory `checks` brick's restatement of these rules to this list (factory_graph test).
+export const PM_LOCKS = [['bun.lockb', 'bun'], ['bun.lock', 'bun'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn']];
 const PM_SCRIPTS = ['test', 'lint', 'typecheck'];
 
 /** One package.json script as a check: the lockfile's own spellings, plus npm's (npm runs any). */

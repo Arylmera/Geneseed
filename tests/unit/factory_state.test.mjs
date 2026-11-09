@@ -8,6 +8,8 @@ import {
   validateFactoryState, countSpecTasks, FACTORY_MAX_TRANSITIONS,
 } from '../../js/factory/state.mjs';
 import * as engine from '../../js/factory/state.mjs';
+import { loadCatalog } from '../../js/loop/catalog.mjs';
+import { checkFactory } from '../../js/factory/graph.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, {
   name, outcomes, effect: 'read', agent: 'explorer', skill: null, body: `do ${name}`, available: true, ...extra,
@@ -19,6 +21,9 @@ const CATALOG = {
     brick('probe', ['pass', 'error']),
     brick('spec', ['pass', 'fail'], { effect: 'mutate', agent: 'architect', gate: 'human' }),
     brick('lint', ['pass', 'fail']),
+    brick('intake', ['pass', 'fail', 'needs-info'], { gate: 'human', gateOn: ['needs-info'] }),
+    brick('checks', ['pass', 'fail', 'error', 'none'], { agent: 'tester', gate: 'human', gateOn: ['error', 'none'] }),
+    brick('review-panel', ['pass', 'fail'], { agent: null, skill: 'factory' }),
   ]),
   templates: new Map([['bugfix', {}], ['feature', {}]]),
 };
@@ -130,14 +135,16 @@ test('J5: a dirty tree after a brick stage is refused, engine files aside', () =
   assert.equal(JSON.stringify(t), unchanged);
 });
 
-// R8: 30 transitions per run (per task), whatever the cycles still allow.
+// R8: 60 transitions per run (per task), whatever the cycles still allow. 60, not 30 (D15): the
+// `checks` and `review-panel` stages take a bug-report-to-fix worst case from about 18 to about
+// 38 transitions, so 30 would stop a run its own cycles still allow; the 61st stops, not the 31st.
 test('R8: the transition ceiling stops the run', () => {
-  assert.equal(FACTORY_MAX_TRANSITIONS, 30);
+  assert.equal(FACTORY_MAX_TRANSITIONS, 60);
   const s = start();
-  s.transitions = 29;
+  s.transitions = 59;
   assert.deepEqual(recordStage(s, CATALOG, 'pass', CLEAN), { stage: 'loop:bugfix' });
-  assert.equal(s.transitions, 30);
-  assert.deepEqual(loopRec(s, 'pass'), { stopped: 'transition ceiling of 30 reached' });
+  assert.equal(s.transitions, 60);
+  assert.deepEqual(loopRec(s, 'pass'), { stopped: 'transition ceiling of 60 reached' });
 });
 
 // spec -> loop:feature (two tasks) -> lint; a lint failure sends the item back to the spec
@@ -173,7 +180,7 @@ test('R8: the run-wide ceiling holds across tasks, whatever the per-task count s
   assert.equal(s.transitions, 0, 'the per-task count restarts for a task never reached');
   s.runTransitions = 2 * FACTORY_MAX_TRANSITIONS - 1;
   assert.deepEqual(loopRec(s, 'pass'), { stage: 'lint' });
-  assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { stopped: 'run-wide transition ceiling of 60 reached (30 per task)' });
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { stopped: 'run-wide transition ceiling of 120 reached (60 per task)' });
 });
 
 test('R4: FACTORY.md round-trips with CRLF, and anything else is refused', () => {
@@ -545,7 +552,7 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     [(s) => { s.runTransitions = -1; }, 'runTransitions must be a non-negative integer'],
     [(s) => { s.transitions = 1.5; }, 'transitions must be a non-negative integer'],
     [(s) => { s.runCeiling = '30'; }, 'runCeiling must be a non-negative integer'],
-    [(s) => { s.runCeiling = 601; }, 'runCeiling must be 600 at most'],
+    [(s) => { s.runCeiling = 1201; }, 'runCeiling must be 1200 at most'],
     [(s) => { s.taskHigh = null; }, 'taskHigh must be a non-negative integer'],
     [(s) => { s.counters = { rework: -1 }; }, 'counters must map each cycle to a non-negative integer'],
     [(s) => { s.counters = [1]; }, 'counters must map each cycle to a non-negative integer'],
@@ -592,4 +599,133 @@ test('R4: a run stopped by the amend cap stays readable', () => {
   assert.deepEqual(s.gateAmends, { 'spec@0': 3 });
   validateFactoryState(s, CATALOG);
   assert.equal(nextStage(s, CATALOG).terminal, '$stop');
+});
+
+// The shipped factories' new tail, in small: intake (gated on needs-info) -> loop:bugfix -> checks
+// -> review-panel -> $close. `checks` holds on error (a locked path changed) and none (no done
+// list on the base, whose `ok` re-runs it through the `done-list` cycle); a failed check or
+// review sends the work back to the loop, each through its own cycle, twice at most.
+const reviewFactory = () => ({
+  name: 'reviewed', description: 'd', start: 'intake', stages: ['intake', 'loop:bugfix', 'checks', 'review-panel'],
+  protected: ['infra/'],
+  edges: [
+    { from: 'intake', on: 'pass', to: 'loop:bugfix' }, { from: 'intake', on: 'fail', to: '$stop' },
+    { from: 'intake', on: 'needs-info', to: 'loop:bugfix' },
+    { from: 'loop:bugfix', on: 'pass', to: 'checks' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+    { from: 'checks', on: 'pass', to: 'review-panel' }, { from: 'checks', on: 'fail', to: 'loop:bugfix' },
+    { from: 'checks', on: 'error', to: 'review-panel' }, { from: 'checks', on: 'none', to: 'checks' },
+    { from: 'review-panel', on: 'pass', to: '$close' }, { from: 'review-panel', on: 'fail', to: 'loop:bugfix' },
+  ],
+  cycles: [
+    { name: 'done-list', nodes: ['checks'], max: 1 },
+    { name: 'checks', nodes: ['loop:bugfix', 'checks'], max: 2 },
+    { name: 'review', nodes: ['loop:bugfix', 'checks', 'review-panel'], max: 2 },
+  ],
+});
+
+// D3 + J5: needs-info holds the gate. amend re-runs intake with the user's answers as its carry,
+// three times at most (the engine's cap), the 4th stops; ok follows needs-info's own edge, which
+// goes where pass goes. needs-info is no lane: nothing records one, and intake gets no `lanes`.
+test('D3: intake needs-info holds, amend re-runs it with the answers, ok goes on, the 4th amend stops', () => {
+  const s = start(reviewFactory());
+  assert.equal('lanes' in nextStage(s, CATALOG), false);
+  assert.deepEqual(recordStage(s, CATALOG, 'needs-info', { ...CLEAN, carry: 'questions.md' }),
+    { awaiting: { kind: 'gate', stage: 'intake', outcome: 'needs-info', note: 'questions.md' } });
+  assert.equal(s.lane, null);
+  assert.deepEqual(decideFactory(s, CATALOG, 'amend', '1. half-even'), { resumed: true });
+  assert.equal(nextStage(s, CATALOG).carry, '1. half-even');
+  recordStage(s, CATALOG, 'needs-info', CLEAN);
+  assert.deepEqual(decideFactory(s, CATALOG, 'ok'), { stage: 'loop:bugfix' });
+  assert.equal(s.lane, null);
+  const t = start(reviewFactory());
+  for (let i = 0; i < 3; i += 1) {
+    recordStage(t, CATALOG, 'needs-info', CLEAN);
+    assert.deepEqual(decideFactory(t, CATALOG, 'amend', 'more answers'), { resumed: true });
+  }
+  recordStage(t, CATALOG, 'needs-info', CLEAN);
+  assert.deepEqual(decideFactory(t, CATALOG, 'amend', 'more answers'), { stopped: 'gate amended 3 times at intake' });
+});
+
+// D2 + D6: a failed check spends `checks`, a failed review spends `review` (the smallest cycle
+// that holds the source), and the third lap of either stops the run.
+test('D2: a checks fail spends checks, a review-panel fail spends review, the 3rd lap stops', () => {
+  const s = start(reviewFactory());
+  recordStage(s, CATALOG, 'pass', CLEAN);
+  for (const n of [1, 2]) {
+    loopRec(s, 'pass');
+    assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { stage: 'loop:bugfix' });
+    assert.deepEqual(s.counters, { checks: n });
+  }
+  loopRec(s, 'pass');
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { stopped: 'cycle checks exhausted its max of 2' });
+  const r = start(reviewFactory());
+  recordStage(r, CATALOG, 'pass', CLEAN);
+  for (const n of [1, 2]) {
+    loopRec(r, 'pass');
+    assert.deepEqual(recordStage(r, CATALOG, 'pass', CLEAN), { stage: 'review-panel' });
+    assert.deepEqual(recordStage(r, CATALOG, 'fail', CLEAN), { stage: 'loop:bugfix' });
+    assert.deepEqual(r.counters, { review: n });
+  }
+  loopRec(r, 'pass'); recordStage(r, CATALOG, 'pass', CLEAN);
+  assert.deepEqual(recordStage(r, CATALOG, 'fail', CLEAN), { stopped: 'cycle review exhausted its max of 2' });
+});
+
+// D16: a locked-path change holds rather than stops; ok goes on to the review, no stops. D13: no
+// done list on the base holds too, ok re-runs checks once (`done-list`, max 1), a second ok stops.
+// Every brick stage gets the factory's `protected` paths, as it gets its `rules`.
+test('D16 + D13: checks error and none hold the gate; ok continues or re-runs checks once', () => {
+  const s = start(reviewFactory());
+  recordStage(s, CATALOG, 'pass', CLEAN); loopRec(s, 'pass');
+  assert.deepEqual(nextStage(s, CATALOG).protected, ['infra/']);
+  assert.deepEqual(recordStage(s, CATALOG, 'error', { ...CLEAN, carry: 'locked.md' }),
+    { awaiting: { kind: 'gate', stage: 'checks', outcome: 'error', note: 'locked.md' } });
+  assert.deepEqual(decideFactory(s, CATALOG, 'ok'), { stage: 'review-panel' });
+  const n = start(reviewFactory());
+  recordStage(n, CATALOG, 'pass', CLEAN); loopRec(n, 'pass');
+  assert.deepEqual(recordStage(n, CATALOG, 'none', CLEAN), { awaiting: { kind: 'gate', stage: 'checks', outcome: 'none' } });
+  assert.deepEqual(decideFactory(n, CATALOG, 'ok'), { stage: 'checks' });
+  assert.deepEqual(n.counters, { 'done-list': 1 });
+  recordStage(n, CATALOG, 'none', CLEAN);
+  assert.deepEqual(decideFactory(n, CATALOG, 'ok'), { stopped: 'cycle done-list exhausted its max of 1' });
+  const x = start(reviewFactory());
+  recordStage(x, CATALOG, 'pass', CLEAN); loopRec(x, 'pass'); recordStage(x, CATALOG, 'error', CLEAN);
+  assert.deepEqual(decideFactory(x, CATALOG, 'no'), { stopped: 'gate rejected at checks' });
+});
+
+// F1, backward compatibility: `bug-report-to-fix` as it shipped before intake could ask (5.0.4),
+// written out here. It has no needs-info edge. Against today's shipped catalogue, where intake
+// declares needs-info, it must (1) still pass check, (2) still validate when a FACTORY.md embeds
+// it, and (3) on needs-info, hold, and on ok go where intake's pass goes: holdout-write.
+const OLD_BUG_REPORT_TO_FIX = {
+  name: 'bug-report-to-fix', description: 'd', category: 'development',
+  rules: ['Never merge, and never enable auto-merge: the run ends at an open PR with green CI.', "Push only this worktree's own branch."],
+  stages: ['intake', 'holdout-write', 'loop:bugfix', 'holdout', 'pr-open', 'merge-gate', 'retro'],
+  start: 'intake',
+  edges: [
+    { from: 'intake', on: 'pass', to: 'holdout-write' }, { from: 'intake', on: 'fail', to: '$stop' },
+    { from: 'holdout-write', on: 'pass', to: 'loop:bugfix' }, { from: 'holdout-write', on: 'fail', to: '$stop' },
+    { from: 'loop:bugfix', on: 'pass', to: 'holdout' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+    { from: 'holdout', on: 'pass', to: 'pr-open' }, { from: 'holdout', on: 'fail', to: 'loop:bugfix' },
+    { from: 'holdout', on: 'error', to: '$stop' },
+    { from: 'pr-open', on: 'pass', to: 'merge-gate' }, { from: 'pr-open', on: 'fail', to: '$stop' },
+    { from: 'merge-gate', on: 'pass', to: 'retro' }, { from: 'merge-gate', on: 'fail', to: 'loop:bugfix' },
+    { from: 'merge-gate', on: 'none', to: 'retro' }, { from: 'retro', on: 'pass', to: '$close' },
+  ],
+  cycles: [
+    { name: 'holdout', nodes: ['loop:bugfix', 'holdout'], max: 2 },
+    { name: 'ci', nodes: ['loop:bugfix', 'holdout', 'pr-open', 'merge-gate'], max: 2 },
+  ],
+};
+
+test('F1: a factory with no needs-info edge still checks, validates, and goes on along pass', () => {
+  const shipped = loadCatalog({ projectRoot: null, globalLevel: false });
+  assert.deepEqual(shipped.bricks.get('intake').outcomes, ['pass', 'fail', 'needs-info']);
+  assert.deepEqual(checkFactory(OLD_BUG_REPORT_TO_FIX, shipped), []);
+  const s = initFactory({ title: 'T', requirement: 'R', factory: structuredClone(OLD_BUG_REPORT_TO_FIX), input: null });
+  validateFactoryState(parseFactoryFile(renderFactoryFile(s)), shipped);
+  assert.deepEqual(recordStage(s, shipped, 'needs-info', { ...CLEAN, carry: 'questions.md' }),
+    { awaiting: { kind: 'gate', stage: 'intake', outcome: 'needs-info', note: 'questions.md' } });
+  validateFactoryState(parseFactoryFile(renderFactoryFile(s)), shipped);
+  assert.deepEqual(decideFactory(s, shipped, 'ok'), { stage: 'holdout-write' });
+  assert.deepEqual(s.counters, {});
 });

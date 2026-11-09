@@ -39,10 +39,10 @@ test('check over the shipped catalogue is clean, and lists templates and bricks'
     assert.deepEqual(r.out.templates, ['api-endpoint', 'architecture-decision', 'bugfix', 'ci-repair', 'deps-upgrade', 'enforce-architecture-rule', 'feature', 'fix-flaky-tests', 'legacy-refactor', 'legacy-tests', 'refactor', 'remove-dead-code', 'spec-first-feature', 'tdd', 'update-contract']);
     assert.deepEqual(r.out.overridden, []);
     assert.deepEqual(r.out.bricks.map((b) => b.name), [
-      'adr-challenge', 'adr-draft', 'apply', 'baseline-green', 'bruno-test', 'characterize', 'ci-fix',
+      'adr-challenge', 'adr-draft', 'apply', 'baseline-green', 'bruno-test', 'characterize', 'checks', 'ci-fix',
       'ci-triage', 'compat-check', 'deps-audit', 'docs-update', 'done-check', 'fitness-define',
       'flake-check', 'flake-repro', 'holdout', 'holdout-write', 'identify', 'intake', 'lint', 'merge-gate', 'migration-plan',
-      'mutation-check', 'plan', 'pr-open', 'red-test', 'reproduce', 'retro', 'review', 'security-scan',
+      'mutation-check', 'plan', 'pr-open', 'red-test', 'reproduce', 'retro', 'review', 'review-panel', 'security-scan',
       'spec', 'test', 'triage', 'upgrade-scout',
     ]);
     assert.deepEqual(r.out.bricks[2], {

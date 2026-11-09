@@ -8,8 +8,14 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Every shipped factory checks the work after the loop, and the `checks` and `review-panel` bricks.** `checks` (as `tester`) runs the repo's done list as the base branch holds it, never the branch's copy; a red command, a command that changes a tracked file, a timeout or a missing tool fails it, and the tree is restored afterwards. Once every command passes, a diff that touches a locked path holds for you. The locked paths are the done list, `.github/workflows/`, `.gitlab-ci.yml`, `.geneseed/factories/`, `loops/`, `bricks/`, and each path in the factory's new `protected` list, a rename's old path included. At that gate, `ok` lets it through, `no` stops. With no done list on the base, `checks` proposes one from the base's manifests and holds; on your yes it is committed on the base, and `checks` runs again once. `review-panel` seats agents by the work item's size and areas from the factory's new `review.seats` table (default: `reviewer`, plus `tester` for medium, plus `steward` for large; `security`, `performance` or `user-advocate` by area), each blind to how the change was built, and merges their verdicts. The order is now loop → `checks` → `review-panel` → `holdout` → `pr-open` → `merge-gate` → `retro`; a failed check or review sends the work back to the loop, twice at most each (cycles `checks` and `review`). `geneseed factory check` refuses a seat that names no shipped agent (a project's own agents are not seats), a size with no list, and a malformed `protected`.
+- **`intake` can ask.** It reports `needs-info` when a question only you can answer blocks the work, and holds: answer with `amend` (three times at most), go on with its stated assumptions with `ok`, or stop with `no`. `needs-info` names no lane, so `intake` is not a fork. It also rates the work item's `size` and `areas` for the review panel. Factories written before keep working, and so do runs in progress: the `needs-info` edge is optional, and without one, `ok` follows intake's `pass` edge. Add the edge only to route `needs-info` elsewhere.
+- **The merge is proposed at the end.** After the close commit, when CI is green, the `factory` skill shows the PR, the CI state and the review verdicts, and asks you once whether to merge; on yes it squash-merges. A run still never merges without that yes, and never enables auto-merge.
+
 ### Changed
 - **The Factories page draws every `loop:` stage as a compact box.** On the main path as in a fork's lanes, a loop stage names its loop over `whole loop` (or `not in catalogue`), and during a run `at <node>` names the child loop's step. The ring no longer sits inside the factory graph; the Loops page still draws it.
+- **The factory transition ceiling is 60 per task** (was 30), and so at most 1200 over a run, for the two new stages and their laps.
 
 ## [5.0.4] — 2026-11-09
 

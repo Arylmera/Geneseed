@@ -1,22 +1,29 @@
 {
   "name": "analysis-to-build",
-  "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, play the holdout scenarios it never saw, then open one pull request and wait for green CI; a failed scenario or red CI sends the work back to the loop as one more task, twice at most each. The merge stays yours.",
+  "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, run the base branch's checks and a review panel, play the holdout scenarios it never saw, then open one pull request and wait for green CI; a failed check, review or scenario, or red CI, sends the work back to the loop as one more task, twice at most each. At the end it asks you once whether to merge.",
   "category": "development",
   "rules": [
-    "Never merge, and never enable auto-merge: the run ends at an open PR with green CI.",
+    "Never merge or enable auto-merge without the user's yes, asked once at the end of the run.",
     "Push only this worktree's own branch."
   ],
-  "stages": ["intake", "spec", "holdout-write", "loop:feature", "holdout", "pr-open", "merge-gate", "retro"],
+  "stages": ["intake", "spec", "holdout-write", "loop:feature", "checks", "review-panel", "holdout", "pr-open", "merge-gate", "retro"],
   "start": "intake",
   "edges": [
     { "from": "intake", "on": "pass", "to": "spec" },
     { "from": "intake", "on": "fail", "to": "$stop" },
+    { "from": "intake", "on": "needs-info", "to": "spec" },
     { "from": "spec", "on": "pass", "to": "holdout-write" },
     { "from": "spec", "on": "fail", "to": "$stop" },
     { "from": "holdout-write", "on": "pass", "to": "loop:feature" },
     { "from": "holdout-write", "on": "fail", "to": "$stop" },
-    { "from": "loop:feature", "on": "pass", "to": "holdout" },
+    { "from": "loop:feature", "on": "pass", "to": "checks" },
     { "from": "loop:feature", "on": "fail", "to": "$stop" },
+    { "from": "checks", "on": "pass", "to": "review-panel" },
+    { "from": "checks", "on": "fail", "to": "loop:feature" },
+    { "from": "checks", "on": "error", "to": "review-panel" },
+    { "from": "checks", "on": "none", "to": "checks" },
+    { "from": "review-panel", "on": "pass", "to": "holdout" },
+    { "from": "review-panel", "on": "fail", "to": "loop:feature" },
     { "from": "holdout", "on": "pass", "to": "pr-open" },
     { "from": "holdout", "on": "fail", "to": "loop:feature" },
     { "from": "holdout", "on": "error", "to": "$stop" },
@@ -28,7 +35,18 @@
     { "from": "retro", "on": "pass", "to": "$close" }
   ],
   "cycles": [
-    { "name": "holdout", "nodes": ["loop:feature", "holdout"], "max": 2 },
-    { "name": "ci", "nodes": ["loop:feature", "holdout", "pr-open", "merge-gate"], "max": 2 }
-  ]
+    { "name": "done-list", "nodes": ["checks"], "max": 1 },
+    { "name": "checks", "nodes": ["loop:feature", "checks"], "max": 2 },
+    { "name": "review", "nodes": ["loop:feature", "checks", "review-panel"], "max": 2 },
+    { "name": "holdout", "nodes": ["loop:feature", "checks", "review-panel", "holdout"], "max": 2 },
+    { "name": "ci", "nodes": ["loop:feature", "checks", "review-panel", "holdout", "pr-open", "merge-gate"], "max": 2 }
+  ],
+  "review": {
+    "seats": {
+      "small": ["reviewer"],
+      "medium": ["reviewer", "tester"],
+      "large": ["reviewer", "tester", "steward"],
+      "areas": { "security": ["security"], "performance": ["performance"], "ui": ["user-advocate"], "data": ["security"] }
+    }
+  }
 }

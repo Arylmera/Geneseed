@@ -130,7 +130,10 @@ export function loadCatalog({
       factories.set(stem, { ...factory, origin });
     }
   }
-  return { bricks, templates, problems, overridden: overridden.sort(), factories, factoryProblems };
+  // The shipped agents, by stem: what a factory's `review.seats` may name (`checkFactory` rule 9),
+  // read where `availability` reads a brick's agent, so the two cannot disagree.
+  const agents = new Set(listFiles(path.join(srcRoot, 'agents'), '.md').map((f) => f.slice(0, -'.md'.length)));
+  return { bricks, templates, problems, overridden: overridden.sort(), factories, factoryProblems, agents };
 }
 
 /** `catalog`: an already-loaded `loadCatalog(opts)`, for a caller that needs the catalogue
