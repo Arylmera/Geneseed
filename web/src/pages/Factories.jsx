@@ -13,7 +13,7 @@ import { TONE } from '../components/ActiveLoops.jsx'
 import { TABS, TAB_LABELS } from '../lib/router.js'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
-import { pairOf } from '../lib/hosts.js'
+import { installTag, pairOf } from '../lib/hosts.js'
 
 const enc = encodeURIComponent
 const POLL_MS = 5000
@@ -138,7 +138,10 @@ function FactoryDetail({ f, bricks, loops }) {
   )
 }
 
-function RunDetail({ run, bricks, loops }) {
+// A run carries its own graph but no bricks or loops: those (a brick's human gate, its outcomes,
+// a loop's box) come from the catalogue of `from`, the Templates tab's install, which the run's
+// project may not share. The registry names no install per run, so the reader says so.
+function RunDetail({ run, bricks, loops, from }) {
   const t = run.tasks
   return (
     <>
@@ -179,6 +182,10 @@ function RunDetail({ run, bricks, loops }) {
             history={run.history}
           />
           <Cycles factory={run.graph} counters={run.counters} />
+          <p className="panel-note">
+            Bricks and loops drawn from the catalogue of {from || 'the default install'}, which the
+            run’s project may not share.
+          </p>
         </>
       ) : (
         <p className="reader-lede">
@@ -284,7 +291,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
 
   const bricks = data?.bricks || []
   const loops = data?.loops || []
-  const all = tab === 'active' ? runs && runRows(runs) : data && factoryRows(data.factories)
+  const all = tab === 'active' ? runs && runRows(runs) : data && factoryRows(data.factories || [])
   const rows = all || []
   const cats = groupsOf(rows)
   const pool = cat === 'all' ? rows : rows.filter((r) => r.group === cat)
@@ -296,7 +303,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
     : rows.find((r) => r.name === item) ||
       (tab === 'active' ? rows.find(live) || rows[0] : rows[0]) ||
       null
-  const counts = { templates: data?.factories.length, active: runs?.length }
+  const counts = { templates: data?.factories?.length, active: runs?.length }
   const label = SECTIONS.find(([k]) => k === tab)[1]
   const err = tab === 'active' ? runError : error
 
@@ -401,7 +408,12 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
               </EmptyState>
             ) : null
           ) : tab === 'active' ? (
-            <RunDetail run={sel} bricks={bricks} loops={loops} />
+            <RunDetail
+              run={sel}
+              bricks={bricks}
+              loops={loops}
+              from={install ? installTag(install) : null}
+            />
           ) : (
             <FactoryDetail key={sel.name} f={sel} bricks={bricks} loops={loops} />
           )}
