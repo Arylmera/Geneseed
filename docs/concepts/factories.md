@@ -32,8 +32,10 @@ loop that wrote it. Every such route sits inside a declared **cycle** with a `ma
 Each lap back to the cycle's first stage spends one; past the `max`, the run stops. A route back
 always starts a **fresh** loop: a new `LOOP.md`, whose first note is the reason the last lap
 failed. When two cycles share that first stage, the lap spends the smallest one that holds the
-stage it came from: a failed `holdout` spends `holdout`, a red `merge-gate` spends `ci`. The commits made before stay on the branch. A run also stops after 60 stage transitions,
-whatever its cycles say.
+stage it came from: a failed `holdout` spends `holdout`, a red `merge-gate` spends `ci`. The commits made before stay on the branch. Whatever its cycles say, a run also stops after 60
+stage transitions for one task (the count starts again for each spec task it reaches), and after
+60 transitions per spec task over the whole run: a spec lists 20 tasks at most, so no run passes
+1200.
 
 `geneseed factory check` refuses a factory before any stage runs: an unknown brick or loop, an
 outcome with no edge, a `$close` nothing reaches, a cycle with no `max`, a cycle entered anywhere

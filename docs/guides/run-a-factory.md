@@ -45,7 +45,7 @@ skill directly. The console's **Factories** page shows the request for each fact
 
 The agent then:
 
-1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched.
+1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched. The slug never holds the word `git`, `commit` or `push`: `factory init` refuses it.
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
 3. Steps the run: `intake` writes the work item, `holdout-write` writes the holdout scenarios outside the worktree, the `bugfix` loop fixes it commit by commit, `checks` runs the base branch's done list against the fix, `review-panel` has a panel of agents review it, `holdout` plays the scenarios against the fix, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `holdout-write` and picks the lane: the `bugfix`, `feature`, `deps-upgrade` or `refactor` loop, or the `docs-update` brick for a docs-only change. A failed check, review or scenario, or red CI, then sends the work back to that lane.
 
@@ -55,7 +55,8 @@ The holdout scenarios are checks the developer never sees: see [Holdout scenario
 
 Create the worktree first, then register the run in it. Never run `init` in your own checkout:
 the run then works on your current branch. Keep the three commands as one `&&` chain and
-replace every placeholder: if one command fails, the next ones do not run.
+replace every placeholder: if one command fails, the next ones do not run. Pick a slug without the
+word `git`, `commit` or `push`: `factory init` refuses it.
 
 ```bash
 git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug> && cd ../<repo>-factory-<slug> && geneseed factory init --factory <name> --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"
@@ -100,8 +101,9 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 | A push | Every push that is not a loop's own commit asks you, `pr-open`'s included. |
 | A loop gate | Anything the `bugfix` loop asks you, as in [While a loop runs](loop-running.md). |
 | `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. Or the finding starts `environment:`: CI was still pending after 30 minutes, or `gh`/`glab` is missing or failed. `amend` waits again (after you fix the tool), `ok` goes on to `retro` without a green verdict (the close step reads CI once more, and proposes the merge only when it is green), `no` stops. |
+| A `geneseed factory record` line asks | The git gate asks on any command line that holds the word `git` and the word `commit` or `push`. A record line starts with `git status`, so a spec path, a finding's path or an outcome name with `commit` or `push` in it makes the gate ask. On a record line this is a false alarm: answer yes. |
 | The close commit | The last commit removes `FACTORY.md`, and it asks. Its push runs CI again: the agent reads the checks once more and reports the final state. A run with no loop (the `docs` lane) never committed `FACTORY.md`: the agent deletes the file, there is no close commit, and the final state is the one `merge-gate` read. |
-| The merge proposal | Only when that final CI state is green: the agent shows the PR, the CI state and each review seat's verdict, and asks once whether to merge. On yes it squash-merges (`gh pr merge --squash`, which asks too); otherwise the PR stays open. It never turns on auto-merge. |
+| The merge proposal | Only when that final CI state is green: the agent shows the PR, the CI state and each review seat's verdict, and asks once whether to merge. Only on your explicit yes in chat does it squash-merge (`gh pr merge --squash`); no Geneseed gate asks before that command, so your answer is the only guard. Otherwise the PR stays open. It never turns on auto-merge. |
 
 Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the lane `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run. A failed holdout scenario works the same way, with its own count of two, and so do a failed `checks` and a failed `review-panel`. A holdout `error` stops the run: the diff touched the holdout folder, or a scenario could not be played.
 

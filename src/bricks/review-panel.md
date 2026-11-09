@@ -15,10 +15,12 @@ Pick the seats from the factory's `review.seats` in `FACTORY.md`: the list for t
 the list for each area, each agent once. With no `review.seats`, seat `reviewer` alone.
 
 Run `git fetch origin`, find the default branch (`gh repo view --json defaultBranchRef`, or `git
-remote show origin`), then the base, `git merge-base HEAD origin/<default>`, and take the diff:
-`git diff <merge-base> HEAD`. Dispatch every seat in one parallel batch, each in its own context.
+remote show origin`), then the base, `git merge-base HEAD origin/<default>`, and take the diff
+without the engine files, which the loops commit: `git diff <merge-base> HEAD -- . ':!FACTORY.md'
+':!LOOP.md'`. Dispatch every seat in one parallel batch, each in its own context.
 Each brief holds the work item, the factory's `rules` and the diff (inline for a seat that has no
-shell, such as `steward` or `user-advocate`; else the base commit to diff against), and states
+shell, such as `steward` or `user-advocate`; else the base commit and that diff command, engine
+files excluded), and states
 three rules: read only the diff and the files it touches, never the history past the diff,
 `LOOP.md`, `FACTORY.md` or the holdout folder; edit no file; return a verdict and its findings,
 nothing else. Never add a loop note, the developer's reasoning or anything from the holdout folder

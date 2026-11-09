@@ -3,6 +3,8 @@
 // catalogue is in memory; factory_cli.test.mjs drives the shipped bricks through the real CLI.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   initFactory, nextStage, recordStage, decideFactory, renderFactoryFile, parseFactoryFile,
   validateFactoryState, countSpecTasks, FACTORY_MAX_TRANSITIONS,
@@ -238,7 +240,7 @@ test('G2 + J5: --spec takes specs/<slug>/spec.md and nothing else, and exempts o
     const s = start(specFactory());
     const before = JSON.stringify(s);
     assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: ` M ${specPath}`, specPath, taskCount: 2 }),
-      new RegExp(`^Error: --spec ${specPath.replaceAll('.', '\\.')} is not a spec the engine can keep: record specs/<slug>/spec\\.md, one folder named for the run's slug$`),
+      new RegExp(`^Error: --spec ${specPath.replaceAll('.', '\\.')} is not a spec the engine can keep: record a file named spec\\.md one folder under specs/ \\(specs/<slug>/spec\\.md; the folder may have any name but \\. or \\.\\.\\)$`),
       specPath);
     assert.equal(JSON.stringify(s), before, specPath);
   }
@@ -249,6 +251,22 @@ test('G2 + J5: --spec takes specs/<slug>/spec.md and nothing else, and exempts o
     { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
   // the state it stores passes R4: the next action can read FACTORY.md back
   validateFactoryState(s, CATALOG);
+});
+
+// M11: git C-quotes a path with a non-ASCII byte (core.quotePath), so a slug `café` reaches the
+// engine as `"specs/caf\303\251/spec.md"`. The exemption compares the unquoted path, so the spec
+// at that path records on an otherwise clean tree, and nothing else is exempt.
+test('M11: a C-quoted, octal-escaped porcelain path matches the spec it names', () => {
+  assert.equal(engine.unquotePath('"specs/caf\\303\\251/spec.md"'), 'specs/café/spec.md');
+  assert.equal(engine.unquotePath('"a\\"b\\\\c\\td"'), 'a"b\\c\td');
+  assert.equal(engine.unquotePath('plain/path.md'), 'plain/path.md');
+  const s = start(specFactory());
+  const quoted = '?? "specs/caf\\303\\251/spec.md"';
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: quoted, specPath: 'specs/café/spec.md', taskCount: 2 }),
+    { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  const t = start(specFactory());
+  assert.throws(() => recordStage(t, CATALOG, 'pass', { porcelain: `${quoted}\n?? "specs/caf\\303\\251/notes.md"`, specPath: 'specs/café/spec.md', taskCount: 2 }),
+    /commits them first: \?\? "specs\/caf\\303\\251\/notes\.md"$/);
 });
 
 test('countSpecTasks counts the top-level numbered items under the first Tasks heading', () => {
@@ -275,6 +293,30 @@ test('countSpecTasks counts the first task\'s indent only, and skips fenced bloc
     ['a ``` inside a ~~~ fence does not close it', '## Tasks\n\n1. a\n~~~\n```\n# x\n~~~\n2. b\n', 2],
   ];
   for (const [what, spec, n] of rows) assert.equal(countSpecTasks(spec), n, what);
+});
+
+// M1-M3: the CommonMark rules the counter follows, each row with the count CommonMark gives.
+// M1: a numbered line nests only from the content offset of the task above it (indent, marker,
+// one space), so a line indented less is a sibling. M2: a backtick fence whose info string holds
+// a backtick is not a fence, so it hides nothing. M3: an ATX heading indented 1-3 spaces, and a
+// setext heading (a paragraph line over `===` or `---`), end the list; a `---` under a task's own
+// text is a thematic break, and the list goes on.
+test('M1-M3: countSpecTasks follows CommonMark on offsets, fences and headings', () => {
+  const rows = [
+    ['M1: siblings indented 1 and 2 spaces', '## Tasks\n\n1. a\n 2. b\n  3. c\n', 3],
+    ['M1: under a two-digit marker, 3 spaces is still a sibling', '## Tasks\n\n9. a\n10. b\n   11. c\n', 3],
+    ['M1: 3 spaces under a one-digit marker nests', '## Tasks\n\n1. a\n   1. sub\n2. b\n', 2],
+    ['M2: ```x`y is no fence, so the task under it counts', '## Tasks\n\n1. a\n```x`y\n2. b\n3. c\n', 3],
+    ['M2: an info string without a backtick still opens a fence', '## Tasks\n\n1. a\n```sh\n# x\n```\n2. b\n', 2],
+    ['M3: an ATX heading indented 2 spaces ends the list', '## Tasks\n\n1. a\n  ## Out of scope\n2. no\n', 1],
+    ['M3: a setext heading ends the list', '## Tasks\n\n1. a\n\nOut of scope\n------------\n2. no\n', 1],
+    ['M3: a setext Tasks heading starts it', 'Spec\n====\n\nTasks\n-----\n\n1. a\n2. b\n\nNext\n====\n3. no\n', 2],
+    ['M3: --- under a task is a thematic break, not a heading', '## Tasks\n\n1. a\n---\n2. b\n', 2],
+    ['F3: an indented paragraph after a blank line, underlined, stays in its task', '## Tasks\n1. a\n\n   detail\n   ---\n2. b', 2],
+    ['F3: a ## indented to the task\'s text is the task\'s own heading', '## Tasks\n\n1. a\n\n   ## step\n\n2. b\n', 2],
+  ];
+  // one compare over every row, so a failure names every row that is wrong, not the first
+  assert.deepEqual(rows.map(([what, spec]) => [what, countSpecTasks(spec)]), rows.map(([what, , n]) => [what, n]));
 });
 
 test('gates: no stops, amend re-runs the stage with the note as its carry, three times at most', () => {
@@ -372,6 +414,22 @@ test('fork: a route to $lane with no lane on record is refused, never guessed', 
   assert.equal(JSON.stringify(g), held);
 });
 
+// M10: a gated fork records a lane, the user amends, and the re-run reports an outcome whose edge
+// is terminal: the lane is cleared, never left at the first answer's stage. A later record that
+// names a lane sets it again.
+test('M10: a gated fork re-run on an amend sets the lane again, to none on a terminal outcome', () => {
+  const gated = { ...CATALOG, bricks: new Map([...CATALOG.bricks, ['triage', { ...CATALOG.bricks.get('triage'), gate: 'human' }]]) };
+  const s = start(forkFactory());
+  assert.deepEqual(recordStage(s, gated, 'bug', CLEAN), { awaiting: { kind: 'gate', stage: 'triage', outcome: 'bug' } });
+  assert.equal(s.lane, 'loop:bugfix');
+  assert.deepEqual(decideFactory(s, gated, 'amend', 'it is not a bug'), { resumed: true });
+  assert.deepEqual(recordStage(s, gated, 'fail', CLEAN), { awaiting: { kind: 'gate', stage: 'triage', outcome: 'fail' } });
+  assert.equal(s.lane, null);
+  decideFactory(s, gated, 'amend', 'try again');
+  recordStage(s, gated, 'docs', CLEAN);
+  assert.equal(s.lane, 'notes');
+});
+
 // A gate's ok on an edge to `$lane` follows the lane taken, and spends the cycle like a record.
 test('fork: a gate\'s ok on a $lane edge re-enters the lane taken', () => {
   const s = start(forkFactory('judge'));
@@ -389,7 +447,7 @@ test('tasks: a re-recorded spec may not grow, so laps that grow the spec still s
   for (let i = 0; i < 200 && s.status === 'running'; i += 1) {
     if (s.stage === 'spec') {
       try { recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: count }); } catch (e) {
-        assert.equal(e.message, `specs/r/spec.md lists ${count} tasks, more than the 2 frozen when the first loop launched`);
+        assert.equal(e.message, `specs/r/spec.md lists ${count} tasks, more than the 2 frozen when the first task loop launched`);
         refused += 1;
         recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 2 });
       }
@@ -400,6 +458,28 @@ test('tasks: a re-recorded spec may not grow, so laps that grow the spec still s
   assert.equal(refused, 1);
 });
 
+// M16: one writer per value. The engine's constants are the writer; the docs type the numbers by
+// hand, because the count tokens render from a table in js/web/docs.mjs, which has no factory
+// entry. So each typed copy is gated here: every sentence below must hold the engine's numbers,
+// and a page that types a ceiling the engine does not use fails.
+test('M16: every hand-typed factory limit in the docs is the engine\'s', () => {
+  const T = FACTORY_MAX_TRANSITIONS; const N = engine.FACTORY_MAX_TASKS;
+  const doc = (rel) => readFileSync(path.resolve(import.meta.dirname, '../../docs', rel), 'utf8').replace(/\s+/g, ' ');
+  const pages = {
+    'concepts/factories.md': [`after ${T} stage transitions for one task`, `after ${T} transitions per spec task over the whole run`,
+      `a spec lists ${N} tasks at most, so no run passes ${T * N}.`],
+    'reference/factory-actions.md': [`, ${N} at most.`, `a run-wide ceiling above ${T * N},`, `A run stops too after ${T} stage transitions,`,
+      `after ${T} transitions per task of the spec (${T} without a spec)`],
+    'guides/run-a-factory.md': [`ordered task list (${N} tasks at most)`],
+  };
+  for (const [rel, says] of Object.entries(pages)) {
+    const text = doc(rel);
+    for (const s of says) assert.ok(text.includes(s), `${rel} does not say: ${s}`);
+    // no other transition count: "<n> stage transitions" or "<n> transitions" names T alone
+    for (const m of text.matchAll(/\b(\d+) (?:stage )?transitions\b/g)) assert.equal(Number(m[1]), T, `${rel}: ${m[0]}`);
+  }
+});
+
 test('tasks: more than FACTORY_MAX_TASKS tasks are refused', () => {
   assert.equal(engine.FACTORY_MAX_TASKS, 20);
   const s = start(redoFactory());
@@ -408,6 +488,34 @@ test('tasks: more than FACTORY_MAX_TASKS tasks are refused', () => {
     /^Error: specs\/r\/spec\.md lists 21 tasks; a factory runs 20 at most — split the requirement$/);
   assert.equal(JSON.stringify(s), before);
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 20 }), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+});
+
+// F2: the freeze is G3's "first TASK loop": a loop launched while a spec is on record. A loop that
+// ran before any spec (task 0 in history) owns no task, so the first spec still sets the count and
+// the ceiling, and an amend at its gate may still add tasks. The first loop after the spec freezes
+// both, as before.
+test('F2: a loop that ran before the spec does not freeze the task count', () => {
+  const s = start({
+    name: 'early', description: 'd', start: 'loop:bugfix', stages: ['loop:bugfix', 'spec', 'loop:feature', 'lint'],
+    edges: [
+      { from: 'loop:bugfix', on: 'pass', to: 'spec' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+      { from: 'spec', on: 'pass', to: 'loop:feature' }, { from: 'spec', on: 'fail', to: '$stop' },
+      { from: 'loop:feature', on: 'pass', to: 'lint' }, { from: 'loop:feature', on: 'fail', to: '$stop' },
+      { from: 'lint', on: 'pass', to: '$close' }, { from: 'lint', on: 'fail', to: 'spec' },
+    ],
+    cycles: [{ name: 'redo', nodes: ['spec', 'loop:feature', 'lint'], max: 1 }],
+  });
+  assert.deepEqual(loopRec(s, 'pass'), { stage: 'spec' });
+  recordStage(s, CATALOG, 'pass', SPEC);
+  assert.deepEqual([s.taskCount, s.runCeiling], [2, 2 * FACTORY_MAX_TRANSITIONS]);
+  decideFactory(s, CATALOG, 'amend', 'one more task');
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 3 }), { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  assert.deepEqual([s.taskCount, s.runCeiling], [3, 3 * FACTORY_MAX_TRANSITIONS]);
+  decideFactory(s, CATALOG, 'ok');
+  nextStage(s, CATALOG, LAUNCH);   // the first task loop launches: frozen from here
+  s.stage = 'spec';
+  assert.throws(() => recordStage(s, CATALOG, 'pass', { ...SPEC, taskCount: 4 }),
+    /^Error: specs\/r\/spec\.md lists 4 tasks, more than the 3 frozen when the first task loop launched$/);
 });
 
 // R8: once a loop has run, the ceiling is fixed; a smaller re-record (lint sends the work back
@@ -449,7 +557,7 @@ test('G3: an amended spec may grow until the first loop launches, then the count
   t.stage = 'spec';
   const before = JSON.stringify(t);
   assert.throws(() => recordStage(t, CATALOG, 'pass', { ...SPEC, taskCount: 3 }),
-    /^Error: specs\/r\/spec\.md lists 3 tasks, more than the 2 frozen when the first loop launched$/);
+    /^Error: specs\/r\/spec\.md lists 3 tasks, more than the 2 frozen when the first task loop launched$/);
   assert.equal(JSON.stringify(t), before);
 });
 
@@ -627,6 +735,20 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     [(s) => { s.factory.cycles = {}; }, 'factory.cycles must be a list'],
     [(s) => { s.factory.edges.push(null); }, 'its factory no longer passes factory check: edges: entry 6 must have a string from, on and to'],
     [(s) => { s.factory = null; }, 'its factory no longer passes factory check: factory: must be an object'],
+    // M5: every stage the state names is the graph's, and `awaiting` matches `status`: a gate
+    // answered on a hand-made `awaiting: null` was a raw TypeError out of `decideFactory`
+    [(s) => { s.stage = 'nowhere'; }, 'stage must be a stage of the factory'],
+    [(s) => { s.stage = '$close'; }, 'stage must be a stage of the factory'],
+    [(s) => { s.taskCount = 2; s.tasks = { path: 'specs/r/spec.md', count: 2, index: 1, stage: 'review' }; },
+      'tasks.stage must be null or a loop stage of the factory'],
+    [(s) => { s.launched.stage = 'review'; }, 'launched.stage must be a loop stage of the factory, and launched.template its loop'],
+    [(s) => { s.launched.template = 'feature'; }, 'launched.stage must be a loop stage of the factory, and launched.template its loop'],
+    [(s) => { s.status = 'awaiting'; s.awaiting = null; }, 'awaiting must be set when, and only when, status is awaiting'],
+    [(s) => { s.awaiting = { kind: 'gate', stage: 'review', outcome: 'fail' }; }, 'awaiting must be set when, and only when, status is awaiting'],
+    [(s) => { s.status = 'awaiting'; s.awaiting = { kind: 'gate', stage: 'nowhere', outcome: 'pass' }; },
+      'awaiting must be a gate at a stage of the factory, with one of its outcomes'],
+    [(s) => { s.status = 'awaiting'; s.awaiting = { kind: 'gate', stage: 'review', outcome: 'maybe' }; },
+      'awaiting must be a gate at a stage of the factory, with one of its outcomes'],
   ];
   for (const [edit, why] of rows) {
     const s = valid(); edit(s);

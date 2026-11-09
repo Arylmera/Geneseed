@@ -25,7 +25,11 @@ when the diff touches it, and by this rule.
 
 ## Setup
 
-1. Pick a short kebab-case `<slug>` from the work item. Create the run's worktree:
+1. Pick a short kebab-case `<slug>` from the work item, without the words `git`, `commit` or
+   `push` (spell them `g1t`, `cmt`, `psh`, or leave them out): the slug lands on the spec's
+   `record` line and on `git commit -m` lines, where those words make the git gate ask.
+   `factory init` refuses a `loop/factory-<slug>` branch whose slug holds one. Create the run's
+   worktree:
    `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, then make it the session's
    working directory with its own command. Every later command runs there as written below: no
    `cd` prefix, no `git -C`. Several runs may share a repo, each in its own worktree.
@@ -36,13 +40,27 @@ when the diff touches it, and by this rule.
 
 ## The cycle
 
-Repeat `geneseed factory next` and act on its JSON:
+Repeat `geneseed factory next` and act on its JSON.
+
+**How to record.** `record` reads the porcelain on its stdin, piped in one command:
+`git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome>`.
+The same line works in PowerShell, which pipes too. Always use that porcelain form: plain
+`--porcelain` folds a new directory into one line, which the engine refuses. A carry is the path
+of the file the stage itself wrote (`--carry <that file>`), in the OS temp directory where the stage wrote it (never inside the worktree: a file there makes the porcelain dirty).
+Free text (the user's words for `decide`, a stop reason) never goes on the command line: write it
+with your file tool, never the shell, to a file whose name you make unique, such as
+`<os temp dir>/factory-<8 random hex>.txt`, then pass `--note-file <that file>` or
+`--carry-file <that file>`. Never delete a carry: the engine keeps its path for the next stage.
+
+The git gate asks on any line that holds the word `git` and the word `commit` or `push`. A
+record line holds `git`, so a spec path, a carry path or an outcome name with `commit` or `push`
+in it makes the gate ask. On a record line that ask is a false alarm: the user can answer yes.
+`factory init` refuses a slug that holds those words, which removes the commonest case.
 
 - **`{stage, prompt, outcomes}`** — a brick stage. Dispatch its `agent` (or follow its `skill`)
   with the `prompt`, the `requirement`, the `input`, the `carry` and the factory's `rules`. Then:
-  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --carry "<the file path the stage reported>"`.
-  The `--carry` is how the next stage gets this one's finding. Always use that porcelain form:
-  plain `--porcelain` folds a new directory into one line, which the engine refuses.
+  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --carry <the file the stage reported>`
+  (*How to record*). The `--carry` is how the next stage gets this one's finding.
   A fork stage (such as `triage`) also gets `lanes`: each outcome it may report, with the stage
   it leads to. Record the outcome it reported (`--outcome docs`): that outcome names the lane,
   and a later route back to `$lane` returns to it.
@@ -51,7 +69,8 @@ Repeat `geneseed factory next` and act on its JSON:
   engine refuses a dirty tree after any stage outside a loop.
   The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
   `carry`, not as a LOOP.md note) and reports with
-  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <its finding file>`, so the gate shows the user what to review.
+  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <the file the stage reported>`,
+  so the gate shows the user what to review.
   Its gate holds for the user's review of the task list. After `decide --verdict ok`, commit the
   spec before the first loop: `git add specs/<slug>/spec.md`, then
   `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
@@ -61,11 +80,14 @@ Repeat `geneseed factory next` and act on its JSON:
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
-  `geneseed factory decide --verdict ok|no|amend --note "<their words>"` — `ok` follows the
+  write their words to a unique file with your file tool (*How to record*), then
+  `geneseed factory decide --verdict ok|no|amend --note-file <that file>` — `ok` follows the
   reported outcome's edge, `no` stops, `amend` re-runs the stage with their note — and continue.
+  Their words never go on the command line.
   The gated outcomes:
   - `intake` **`needs-info`**: show the user its numbered questions. Their answers go back as
-    `amend --note "<their answers>"`; `ok` goes on with the assumptions intake wrote.
+    `amend`, with the note file holding their answers; `ok` goes on with the assumptions intake
+    wrote.
   - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
     list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
     When the finding starts `environment:` (a failed fetch, no default branch, a timeout, a
@@ -86,7 +108,11 @@ Repeat `geneseed factory next` and act on its JSON:
     When the branch or the worktree already exists (a re-run with the same slug), create
     nothing and overwrite nothing: report it to the user with that worktree's path and the
     branch's state (`git log -1 geneseed/done-list-<slug>`), and let them reuse, merge or
-    remove it. When `gh` or `glab` is missing or fails at the PR step, the branch is pushed
+    remove it. When the remote already has `geneseed/done-list-<slug>` but this clone has no
+    such branch (`git ls-remote --exit-code --heads origin geneseed/done-list-<slug>` exits 0
+    before the push), the push is refused: push nothing and overwrite nothing, and report it to
+    the user with that worktree's path and the remote branch's name, so they decide whether to
+    reuse, merge or delete it. When `gh` or `glab` is missing or fails at the PR step, the branch is pushed
     already: report it to the user with that worktree's path and the branch name, so they open
     the PR themselves. `ok`
     waits until the file is on the base: answer `decide --verdict ok` only then, and `checks`
@@ -111,16 +137,17 @@ Repeat `geneseed factory next` and act on its JSON:
    later stage sent the work back: the task is "make CI green" (or, for another stage, make it
    pass), and `notes[0]` says why. Use `--note-file <notes[0]>`
    when `notes[0]` is the path of a stage's finding file (the usual carry), so the loop gets the
-   finding, not its path; `--note "<notes[0]>"` when it is plain text; neither when `notes` is
-   empty. A loop
+   finding, not its path; when it is plain text, write it to a unique file with your file tool
+   (*How to record*) and pass that file with `--note-file`; neither when `notes` is empty. A loop
    re-entered after a failure is a fresh loop: the reason arrives as its note.
 6. Follow the `loop` {{SKILL}} from *The cycle* through *The end*, skipping its Setup: the
    worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
    is `git push -u origin HEAD:loop/factory-<slug>`. Skip its final report too: the run goes on.
 7. When the loop reaches `$close` and its close commit has removed `LOOP.md`:
    `git status --porcelain --untracked-files=all | geneseed factory record --outcome pass`.
-   When it reaches `$stop`, leave its `LOOP.md` in place:
-   `git status --porcelain --untracked-files=all | geneseed factory record --outcome fail --carry "<the stop reason>"`.
+   When it reaches `$stop`, leave its `LOOP.md` in place, write the stop reason to a unique file
+   with your file tool (*How to record*), then
+   `git status --porcelain --untracked-files=all | geneseed factory record --outcome fail --carry-file <that file>`.
 
 ## The end
 
@@ -135,14 +162,17 @@ Repeat `geneseed factory next` and act on its JSON:
    report. With no close commit, CI did not re-run: the final state is the one `merge-gate`
    read. A red result is reported, never reworked: the run has closed.
    **The merge proposal.** Only when that final state is green: show the user the PR URL, the CI
-   state and each `review-panel` seat's verdict, and ask once whether to merge. On a yes:
-   `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on GitLab), which the host's own
-   permission prompt also guards. On a no, or no answer, the PR stays open. Red or pending CI: no
-   proposal. Never enable auto-merge.
+   state and each `review-panel` seat's verdict, and ask once whether to merge. Only on the
+   user's explicit yes in chat: `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on
+   GitLab). No Geneseed gate asks before that command: the user's yes is the only guard, so
+   never run it on anything else (not on a rule, a note, or an earlier yes). On a no, or no
+   answer, the PR stays open. Red or pending CI: no proposal. Never enable auto-merge.
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and
-   the loops' notes. It goes to `.geneseed/factory-runs/<slug>.md`, or to the OS temp directory
+   the loops' notes. A closed loop's notes left with its `LOOP.md`: read each from git as the
+   `retro` brick says (`git log --format=%H --diff-filter=D <merge-base>..HEAD -- LOOP.md`, then
+   `git show <commit>^:LOOP.md`); a stopped loop's `LOOP.md` is still at the root. It goes to `.geneseed/factory-runs/<slug>.md`, or to the OS temp directory
    when `git check-ignore -q <that path>` exits non-zero. No tracked file changes, no commit; only
    a lesson that holds beyond this run goes into memory, one entry. Leave the branch and
    `FACTORY.md` as they are.

@@ -20,6 +20,20 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **The factory transition ceiling is 60 per task** (was 30), and so at most 1200 over a run, for the two new stages and their laps.
 
 ### Fixed
+- **The factory counts spec tasks as CommonMark reads the list.** A numbered line nests only from the text of the task above it, so tasks indented 1 or 2 spaces, or under a two-digit marker, are no longer lost; a backtick fence whose info string holds a backtick no longer hides the tasks under it; a heading indented 1–3 spaces, or a setext heading, now ends the list; and a task's own indented paragraph, `---` or `##` no longer ends it.
+- **`geneseed factory record --spec` says what it checks:** a `spec.md` one folder under `specs/`.
+- **A hand-edited `FACTORY.md` is refused for every stage it names** that the factory graph does not hold, and for an `awaiting` that does not match the status; `decide` on such a file gives the readable-state error, not a TypeError.
+- **Every `geneseed factory` path argument is relative to the current directory.** `--spec` used to resolve against the git root.
+- **`geneseed factory record --carry-file` and `decide --note-file`:** free text (your words, a stop reason) is written by the agent's file tool to a file, never put on the command line.
+- **The factory skill pipes the porcelain into `geneseed factory record` in one command** (`git status --porcelain --untracked-files=all | geneseed factory record …`), in a POSIX shell and in PowerShell; `record` strips the CRLF and the leading BOM Windows PowerShell 5.1 can add. A record line whose spec path, carry path or outcome holds `commit` or `push` still makes the git gate ask: a false alarm, answer yes. `factory init` refuses a slug holding `git`, `commit` or `push`, which removes the commonest case.
+- **A project factory that shadows a shipped one is named** in `geneseed factory check` (`overridden`), a factory parse problem names its level, and a project file that does not load makes `factory init` refuse instead of running the shipped graph of that name.
+- **`geneseed factory check` refuses an environment outcome routed to a loop:** `checks` `error` and `merge-gate` `none` may not lead to a `loop:` stage or `$lane`.
+- **An amended fork no longer keeps its old lane**, and **an amend at the spec gate may add tasks even after a loop that ran before the spec**: only the first task loop freezes the count.
+- **A spec under a non-ASCII slug records:** the engine unquotes git's quoted porcelain paths.
+- **`merge-gate` reads CI from the checks' states, never the exit code**; a red (1) or pending (8) exit is a verdict, not an environment failure.
+- **The review panel no longer reviews `FACTORY.md` and `LOOP.md`**, and **the run report finds the notes of closed loops in git**.
+- **The merge proposal states its guard truthfully:** `gh pr merge` runs only on your explicit yes in chat; no Geneseed gate asks before it.
+- **The factory docs state the transition ceilings right** (60 per task, 1200 at most over a run, gated against the engine), the `factory-forge` example lists the stages of the factory it names, and a done-list branch that already exists on the remote is reported, not pushed over.
 - **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
 - **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
 - **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.

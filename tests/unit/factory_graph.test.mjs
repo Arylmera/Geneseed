@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf } from '../../js/factory/graph.mjs';
+import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf, ENV_OUTCOMES } from '../../js/factory/graph.mjs';
 import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -453,7 +453,7 @@ test('G4: the factory close step removes FACTORY.md tracked or not, and commits 
 test('G5: the spec brick states the task format the factory counts, and never types the limit', () => {
   const brick = shipped('bricks/spec.md').replace(/\s+/g, ' ');
   for (const rule of ['first heading that contains the word `task` or `tasks`', '`1.` or `1)`', 'indented 3 spaces at most',
-    'at the indent of the first task', 'An item indented deeper, numbered or not, is a sub-item, not a task',
+    'keep every task at the same indent', 'An item indented as far as the text of the task above it (3 spaces under `1. `), numbered or not, is a sub-item, not a task',
     'A fenced code block', 'neither ends the list nor adds a task', 'A deeper heading keeps the list open',
     'the next heading of the same or a higher level ends it', 'the factory\'s task limit',
     'the factory run\'s `<slug>`', 'stage\'s `carry`']) {
@@ -474,7 +474,9 @@ test('G5: the spec brick states the task format the factory counts, and never ty
 // every shipped factory those outcomes lead on, never to a `loop:` stage or `$lane`. The old text
 // ("report `fail` and mark it `environment`") sent it back to the loop, burning laps.
 test('G6: environment failures hold for the user and never route to a loop', () => {
-  const ENV = { checks: 'error', 'merge-gate': 'none' };
+  // the engine's own table (rule 10 reads it), held to what the brick bodies say below
+  const ENV = ENV_OUTCOMES;
+  assert.deepEqual(ENV, { checks: 'error', 'merge-gate': 'none' });
   for (const [stage, outcome] of Object.entries(ENV)) {
     const text = shipped(`bricks/${stage}.md`);
     const gateOn = /^gateOn:\s*(.+)$/m.exec(text)?.[1].split(/,\s*/) ?? [];
@@ -502,6 +504,127 @@ test('G6: environment failures hold for the user and never route to a loop', () 
   }
 });
 
+// M9 (rule 10): `factory check` itself refuses a route from an environment outcome (`checks`
+// `error`, `merge-gate` `none`) to a `loop:` stage or `$lane`, for any factory, not only the forge's
+// text. Routing them on, or to `$stop`, passes. The rows read only rule 10's problems.
+test('M9: rule 10 refuses an environment outcome routed to a loop or $lane', () => {
+  const cat = {
+    ...CATALOG,
+    bricks: new Map([...CATALOG.bricks, brick('checks', ['pass', 'fail', 'error', 'none']), brick('merge-gate', ['pass', 'fail', 'none'])]),
+  };
+  const f = (checksError, gateNone) => ({
+    name: 'env', description: 'd', start: 'triage', stages: ['triage', 'loop:bugfix', 'loop:feature', 'notes', 'checks', 'merge-gate'],
+    edges: [
+      { from: 'triage', on: 'bug', to: 'loop:bugfix' }, { from: 'triage', on: 'feature', to: 'loop:feature' },
+      { from: 'triage', on: 'docs', to: 'notes' }, { from: 'triage', on: 'fail', to: '$stop' },
+      { from: 'loop:bugfix', on: 'pass', to: 'checks' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+      { from: 'loop:feature', on: 'pass', to: 'checks' }, { from: 'loop:feature', on: 'fail', to: '$stop' },
+      { from: 'notes', on: 'pass', to: 'checks' },
+      { from: 'checks', on: 'pass', to: 'merge-gate' }, { from: 'checks', on: 'fail', to: '$lane' },
+      { from: 'checks', on: 'error', to: checksError }, { from: 'checks', on: 'none', to: '$stop' },
+      { from: 'merge-gate', on: 'pass', to: '$close' }, { from: 'merge-gate', on: 'fail', to: '$lane' },
+      { from: 'merge-gate', on: 'none', to: gateNone },
+    ],
+    cycles: [{ name: 'ci', nodes: ['$lane', 'checks', 'merge-gate'], max: 2 }],
+  });
+  const env = (factory) => checkFactory(factory, cat).filter((p) => p.includes('environment'));
+  assert.deepEqual(env(f('merge-gate', '$close')), []);
+  assert.deepEqual(env(f('$stop', '$stop')), []);
+  assert.deepEqual(env(f('loop:bugfix', '$lane')), [
+    'edge checks --error--> loop:bugfix: checks reports environment failures on error, which no loop can fix — route it on or to $stop',
+    'edge merge-gate --none--> $lane: merge-gate reports environment failures on none, which no loop can fix — route it on or to $stop',
+  ]);
+});
+
+// M12-M15: text the factory and its bricks must hold. merge-gate reads the verdict from the
+// checks' buckets, never the exit code (1 red and 8 pending are verdicts). review-panel's diff
+// leaves out the engine files the loops commit. retro and the $stop report read a closed loop's
+// notes from git (the removal commit's parent). The merge waits for the user's yes in chat, and
+// no text claims a Geneseed gate asks before `gh pr merge`.
+test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and the merge consent', () => {
+  const gate = shipped('bricks/merge-gate.md').replace(/\s+/g, ' ');
+  assert.ok(gate.includes('never the exit code'), 'merge-gate reads the verdict from the exit code');
+  assert.ok(gate.includes('1 when a check is red, 8 when one is pending. That is a verdict, not an environment failure'));
+  const panel = shipped('bricks/review-panel.md').replace(/\s+/g, ' ');
+  assert.ok(panel.includes("`git diff <merge-base> HEAD -- . ':!FACTORY.md' ':!LOOP.md'`"), 'review-panel diffs the engine files');
+  for (const rel of ['bricks/retro.md', 'skills/factory.md']) {
+    const text = shipped(rel).replace(/\s+/g, ' ');
+    assert.ok(text.includes('git log --format=%H --diff-filter=D <merge-base>..HEAD -- LOOP.md'), `${rel}: no way to the closed loops' notes`);
+    assert.ok(text.includes('git show <commit>^:LOOP.md'), rel);
+  }
+  const skill = shipped('skills/factory.md').replace(/\s+/g, ' ');
+  assert.ok(skill.includes("Only on the user's explicit yes in chat: `gh pr merge <pr> --squash`"));
+  assert.ok(skill.includes('No Geneseed gate asks before that command'));
+  const guide = readFileSync(path.resolve(import.meta.dirname, '../../docs/guides/run-a-factory.md'), 'utf8');
+  assert.doesNotMatch(`${skill}\n${guide}`, /which asks too\)|permission prompt also guards/);
+});
+
+// F1: how the factory skill records, decides and hands the porcelain over. Three attempts to keep
+// every record line clear of the git gate (`GIT_GATE_RE`: the word `git` and `commit` or `push` on
+// one line) each made worse bugs: a status file shared across repos, a read-only `$status` in zsh,
+// here-documents that put free text back on the line, POSIX-only forms. So the design stops
+// chasing the ask: a spurious ask is harmless (the user says yes), a shared status file is not.
+// The rules, each its own check so a red names which one broke:
+//   (a) no user free text inline: no `--note "`, no `--carry "<the user…`, no here-document;
+//   (b) every `decide` line passes `--note-file <a path>` and every stop record `--carry-file <a
+//       path>`: a placeholder path the agent's file tool wrote, never a shell variable;
+//   (c) every porcelain step is the one pipe `git status --porcelain --untracked-files=all | geneseed factory record`;
+//   (d) the skill states the false alarm, and no longer claims no line can trip the gate;
+//   (e) no `mktemp`, `New-TemporaryFile` or shell temp variable is left.
+function recordProblems(skill) {
+  const spans = [...skill.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+  const lines = spans.filter((s) => /geneseed factory (record|decide)/.test(s));
+  const flat = skill.replace(/\s+/g, ' ');
+  const out = {};
+  const add = (key, msg) => { (out[key] ??= []).push(msg); };
+  if (lines.length < 5) add('count', `the skill documents its record and decide lines: ${lines.length}`);
+  for (const line of lines) {
+    if (/--note "|--carry "</.test(line) || /<</.test(line)) add('a', `free text inline on: ${line}`);
+  }
+  if (/<<-?\s*'?EOF/.test(skill) || /here-document/.test(skill)) add('a', 'a here-document is documented');
+  const decides = lines.filter((l) => /geneseed factory decide/.test(l));
+  const stops = lines.filter((l) => /record --outcome fail/.test(l) && !/--carry </.test(l));
+  if (decides.length < 1) add('b', 'no decide line');
+  if (stops.length < 1) add('b', 'no stop record line');
+  for (const l of decides) if (!/--note-file <[^<>]+>/.test(l)) add('b', `decide without --note-file <path>: ${l}`);
+  for (const l of stops) if (!/--carry-file <[^<>]+>/.test(l)) add('b', `stop record without --carry-file <path>: ${l}`);
+  const porcelain = spans.filter((s) => /git status --porcelain --untracked-files=all/.test(s));
+  if (porcelain.length < 1) add('c', 'no porcelain step');
+  for (const l of porcelain) {
+    if (!/^git status --porcelain --untracked-files=all \| geneseed factory record\b/.test(l)) add('c', `not the one pipe: ${l}`);
+  }
+  for (const l of lines.filter((x) => /geneseed factory record/.test(x))) {
+    if (!/^git status --porcelain --untracked-files=all \| geneseed factory record\b/.test(l)) add('c', `a record without the porcelain pipe: ${l}`);
+  }
+  if (!flat.includes('makes the gate ask. On a record line that ask is a false alarm: the user can answer yes.')) add('d', 'the false-alarm limit is not stated');
+  if (/nothing a run fills goes on a record|never the path behind it|no word the run chooses/.test(flat)) add('d', 'the old no-trip claim is still there');
+  // `{terminal: "$stop"}` is the engine's terminal, not a shell variable
+  for (const bad of [/mktemp/, /New-TemporaryFile/, /\$status/, /"\$carry"/, /"\$note"/, /"\$stop"(?!\})/]) {
+    if (bad.test(skill)) add('e', `still holds ${bad.source}`);
+  }
+  return out;
+}
+test('F1: the skill pipes the porcelain, puts free text in files, and states the false-alarm limit', () => {
+  const skill = shipped('skills/factory.md');
+  assert.deepEqual(recordProblems(skill), {});
+  // (a) cannot fail on a skill that already passes it, so prove it on a perturbed copy
+  const inlined = skill.replace('decide --verdict ok|no|amend --note-file <', 'decide --verdict ok|no|amend --note "<the user\'s words>" --note-file <');
+  assert.notEqual(inlined, skill, 'the perturbation applied');
+  assert.ok(recordProblems(inlined).a, 'check (a) catches an inline note');
+  const heredoc = `${skill}\n\`geneseed factory record --outcome fail --carry-file - <<'EOF'\`\n`;
+  assert.ok(recordProblems(heredoc).a, 'check (a) catches a here-document');
+});
+
+// M17: factory-forge's example says it is "in the shape of the shipped bug-report-to-fix", so its
+// stage list is that factory's, with the loop stage as the placeholder.
+test('M17: the factory-forge example has the stages of the factory it names', () => {
+  const forge = shipped('skills/factory-forge.md');
+  assert.match(forge, /in the shape of the shipped\s+`bug-report-to-fix`/);
+  const example = JSON.parse(`[${/"stages": \[([^\]]*)\]/.exec(forge)[1]}]`);
+  const { stages } = JSON.parse(shipped('factories/bug-report-to-fix.json'));
+  assert.deepEqual(example, stages.map((s) => (s.startsWith('loop:') ? 'loop:<template>' : s)));
+});
+
 // G7: every shipped factory tells every stage "Push only this worktree's own branch.", so the
 // skill never pushes to the default branch: the proposed done list goes to the base from its own
 // worktree, on its own branch, by a PR the user merges. A text check on the skill's wording.
@@ -517,4 +640,6 @@ test('G7: the factory skill lands a done list by its own branch and PR, never by
   // the two ways that path fails, each reported to the user with the worktree's path
   assert.match(skill, /When the branch or the worktree already exists \(a re-run with the same slug\), create nothing and overwrite nothing: report it to the user with that worktree's path/);
   assert.match(skill, /When `gh` or `glab` is missing or fails at the PR step, the branch is pushed already: report it to the user with that worktree's path/);
+  // M18: the remote has the branch, this clone does not — the push is refused; checked first, reported with the path
+  assert.match(skill, /When the remote already has `geneseed\/done-list-<slug>` but this clone has no such branch \(`git ls-remote --exit-code --heads origin geneseed\/done-list-<slug>` exits 0 before the push\), the push is refused: push nothing and overwrite nothing, and report it to the user with that worktree's path/);
 });

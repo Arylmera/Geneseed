@@ -24,7 +24,8 @@
  * record: it is uncommitted until the gate approves it, and the Rite commits it then, before the
  * first loop, whose first read brick would stop on it otherwise) — instead of carrying
  * uncommitted work into the next loop. The porcelain must be
- * `git status --porcelain --untracked-files=all`: plain `--porcelain` folds a new directory into `?? specs/`, which no exemption can match. No porcelain
+ * `git status --porcelain --untracked-files=all`: plain `--porcelain` folds a new directory into `?? specs/`, which no exemption can match.
+ * A path git C-quotes (a non-ASCII slug, under the default core.quotePath) is unquoted first (M11). No porcelain
  * at all (`null`, a TTY stdin) is refused too: it proves nothing. The limit: an empty pipe reads
  * as a clean tree, so the engine trusts whoever pipes it.
  *
@@ -44,7 +45,8 @@
  * R4 COVERS WHAT A HAND CAN EDIT. FACTORY.md is a file; `validateFactoryState` refuses counters
  * that are not non-negative integers, a ceiling above 1200, a task block out of its bounds, a gate
  * amend count above 3, a `lane` no fork of the factory leads to, a status the engine does not
- * write, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
+ * write, a `stage`, `tasks.stage`, `launched.stage` or `awaiting` gate the graph does not hold,
+ * an `awaiting` that disagrees with `status`, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
  * `checkFactory` — the termination argument below holds only for a state this engine could have
  * written.
  *
@@ -68,11 +70,12 @@
  * TERMINATION BY CONSTRUCTION (J3, R8). `transitions` counts per task and resets with it. On top,
  * `runTransitions` counts every transition of the run, never resets, and stops the run past
  * `runCeiling`: `FACTORY_MAX_TRANSITIONS` until a spec is recorded, then
- * `FACTORY_MAX_TRANSITIONS` x its task count. Until the first loop launches, each --spec record
- * sets the count and the ceiling again: the spec's gate comes after its record, and an amend there
- * may add tasks (G3). That window spends no fresh budget — no task has been reached, so the
- * per-task count never resets in it — and the gate's amend cap bounds it. Once a loop has
- * launched (`launched`, or a `loop:` stage in `history`, which never shrinks) the count is frozen:
+ * `FACTORY_MAX_TRANSITIONS` x its task count. Until the first task loop launches, each --spec
+ * record sets the count and the ceiling again: the spec's gate comes after its record, and an amend
+ * there may add tasks (G3). That window spends no fresh budget — no task has been reached, so the
+ * per-task count never resets in it — and the gate's amend cap bounds it. Once a task loop has
+ * launched (`launched` with a spec on record, or a `loop:` stage in `history` recorded with a
+ * task, which never shrinks; a loop that ran before any spec owns no task, F2) the count is frozen:
  * a later --spec record may keep or lower it, never raise it, so no lap can buy a task, a fresh
  * budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
  * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
@@ -157,6 +160,23 @@ export function validateFactoryState(state, catalog) {
   }
   const problems = checkFactory(state.factory, catalog);
   if (problems.length) bad(`its factory no longer passes factory check: ${problems.join('; ')}`);
+  // M5: every stage the state names is one of the graph's, so no action meets a stage it cannot run
+  const stages = new Set(state.factory.stages);
+  if (!(stages.has(state.stage) || (state.stage === '$close' && state.status === 'done'))) {
+    bad('stage must be a stage of the factory');
+  }
+  if (tasks?.stage != null && !(stages.has(tasks.stage) && loopOf(tasks.stage) !== null)) {
+    bad('tasks.stage must be null or a loop stage of the factory');
+  }
+  if (launched != null && !(stages.has(launched.stage) && loopOf(launched.stage) === launched.template)) {
+    bad('launched.stage must be a loop stage of the factory, and launched.template its loop');
+  }
+  const { awaiting } = state;
+  if ((state.status === 'awaiting') !== (awaiting != null)) bad('awaiting must be set when, and only when, status is awaiting');
+  if (awaiting != null && !(plainObject(awaiting) && awaiting.kind === 'gate' && stages.has(awaiting.stage)
+    && (stageOutcomes(awaiting.stage, catalog.bricks) ?? []).includes(awaiting.outcome))) {
+    bad('awaiting must be a gate at a stage of the factory, with one of its outcomes');
+  }
   // absent in a state written before lanes existed: that reads as none on record
   if (state.lane != null && !laneTargets(state.factory, catalog.bricks).has(state.lane)) {
     bad('lane must be null or a stage a fork of the factory leads to');
@@ -172,30 +192,46 @@ export function writeFactoryFile(file, state) {
 
 /**
  * The tasks of a spec (`specs/<slug>/spec.md`, the `spec` brick's format): the numbered items
- * (`1.` or `1)`) under the first heading that names tasks, up to the next heading of the same or
- * a higher level, at the indent of the first one (3 spaces at most). A numbered line indented
- * deeper is a sub-item, as CommonMark nests it. A fenced block (``` or ~~~, closed by the same
- * fence) is skipped whole: a `# comment` in it is no heading, a numbered line in it no task.
+ * (`1.` or `1)`, indented 3 spaces at most) under the first heading that names tasks, up to the
+ * next heading of the same or a higher level. A numbered line is a sub-item, as CommonMark nests
+ * it, only when its indent reaches the content offset of the task before it (that task's indent,
+ * its marker, one space): `1. a` / ` 2. b` and `9. a` / `10. b` / `   11. c` are siblings,
+ * `1. a` / `   1. b` nest. Any line indented that far belongs to the task (its paragraphs, even
+ * after a blank line, and a `---` or `##` of its own), so it never ends the list. Headings are ATX (`#`,
+ * indented 3 spaces at most) and setext (a paragraph line underlined with `=` or `-`; under a
+ * list item's own text that line is a thematic break, not a heading). A fenced block (``` or ~~~,
+ * closed by the same fence) is skipped whole; a backtick fence whose info string holds a backtick
+ * is no fence, as in CommonMark.
+ * shortcut: a line scanner, not a CommonMark parser (no block quotes, no HTML blocks, no tabs as
+ * indentation); a spec written as the `spec` brick says is inside what it reads right.
  */
 export function countSpecTasks(text) {
-  let level = 0; let count = 0; let indent = -1; let fence = null;
+  let level = 0; let count = 0; let offset = -1; let fence = null;
+  let para = ''; let inItem = false;   // the paragraph line before ('' for none) / the line before is a list item's text
   for (const line of String(text).replace(/\r\n/g, '\n').split('\n')) {
-    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
-      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) fence = null;
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null;
       continue;
     }
-    if (f) { fence = f[1]; continue; }
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (f && !(f[1][0] === '`' && f[2].includes('`'))) { fence = f[1]; para = ''; continue; }
+    if (!line.trim()) { para = ''; inItem = false; continue; }
+    // F3: a line indented to the last task's content belongs to that task — its paragraphs, its
+    // sub-items, even a `---` or `##` of its own — so it neither ends the list nor adds a task
+    if (level && offset >= 0 && line.length - line.trimStart().length >= offset) { para = ''; inItem = true; continue; }
+    const atx =/^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
+    const setext = para && /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
+    const h = atx ? { depth: atx[1].length, text: atx[2] ?? '' } : setext ? { depth: setext[1][0] === '=' ? 1 : 2, text: para } : null;
     if (h) {
-      if (level && h[1].length <= level) break;
-      if (!level && /\btasks?\b/i.test(h[2])) level = h[1].length;
-      continue;
+      if (level && h.depth <= level) break;
+      if (!level && /\btasks?\b/i.test(h.text)) level = h.depth;
+      para = ''; inItem = false; continue;
     }
-    const item = level ? /^( {0,3})\d+[.)]\s+\S/.exec(line) : null;
-    if (!item) continue;
-    if (indent < 0) indent = item[1].length;
-    if (item[1].length <= indent) count += 1;
+    const item = /^( {0,3})(\d{1,9}[.)])[ \t]+\S/.exec(line);
+    if (item || /^ {0,3}[-*+][ \t]+\S/.test(line)) { para = ''; inItem = true; } else { para = inItem ? '' : line; }
+    if (!item || !level) continue;
+    if (offset >= 0 && item[1].length >= offset) continue;   // inside the last task's content: a sub-item
+    count += 1; offset = item[1].length + item[2].length + 1;
   }
   return count;
 }
@@ -211,8 +247,10 @@ export function initFactory({ title, requirement, factory, input = null }) {
 }
 
 const taskNo = (state) => state.tasks?.index ?? 0;
-// G3: the task count is frozen once any loop has launched (docblock: TERMINATION BY CONSTRUCTION).
-const tasksFrozen = (state) => state.launched != null || state.history.some((h) => loopOf(h?.stage) !== null);
+// G3, F2: the task count is frozen once the first TASK loop launched: a loop launched while a spec
+// is on record, or one in `history` recorded with a task (a loop before any spec records task 0).
+const tasksFrozen = (state) => (state.launched != null && state.tasks != null)
+  || state.history.some((h) => loopOf(h?.stage) !== null && h.task >= 1);
 // The task as `next` and a replay hand it out: the owning stage is the engine's bookkeeping.
 const taskOut = ({ stage: _owner, ...task }) => task;
 
@@ -297,7 +335,24 @@ const initedSince = (initAt, launchAt) => {
 };
 function dirtyLines(porcelain, specPath) {
   const exempt = specPath !== null && SPEC_PATH.test(specPath) ? specPath : null;
-  return filterPorcelain(porcelain).split('\n').filter((l) => l && slash(l.slice(3).replace(/^"|"$/g, '')) !== exempt);
+  return filterPorcelain(porcelain).split('\n').filter((l) => l && slash(unquotePath(l.slice(3))) !== exempt);
+}
+
+// M11: git C-quotes a path with a byte it will not print as is (core.quotePath, on by default):
+// `"specs/caf\303\251/spec.md"` is `specs/café/spec.md`. Octal escapes are UTF-8 bytes.
+const C_ESCAPES = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 };
+export function unquotePath(p) {
+  if (!(p.length >= 2 && p.startsWith('"') && p.endsWith('"'))) return p;
+  const bytes = [];
+  for (let i = 1; i < p.length - 1; i += 1) {
+    const c = p[i];
+    if (c !== '\\') { bytes.push(...Buffer.from(c, 'utf8')); continue; }
+    const oct = /^[0-7]{3}/.exec(p.slice(i + 1));
+    if (oct) { bytes.push(parseInt(oct[0], 8)); i += 3; continue; }
+    const n = C_ESCAPES[p[i + 1]];
+    bytes.push(n ?? 92); if (n !== undefined) i += 1;
+  }
+  return Buffer.from(bytes).toString('utf8');
 }
 
 /**
@@ -324,7 +379,7 @@ export function recordStage(state, { bricks }, outcome, {
   if (specPath !== null && isLoop) throw new Error('--spec is recorded by a stage outside a loop');
   // R4 holds `tasks.path` to SPEC_PATH: stored, any other path would make every later action refuse FACTORY.md.
   if (specPath !== null && !SPEC_PATH.test(specPath)) {
-    throw new Error(`--spec ${specPath} is not a spec the engine can keep: record specs/<slug>/spec.md, one folder named for the run's slug`);
+    throw new Error(`--spec ${specPath} is not a spec the engine can keep: record a file named spec.md one folder under specs/ (specs/<slug>/spec.md; the folder may have any name but . or ..)`);
   }
   if (isLoop) {
     // R2: the loop's evidence — its own LOOP.md, or the commit it closed with (docblock above).
@@ -366,13 +421,15 @@ export function recordStage(state, { bricks }, outcome, {
       throw new Error(`${specPath} lists ${taskCount} tasks; a factory runs ${FACTORY_MAX_TASKS} at most — split the requirement`);
     }
     if (state.taskCount !== null && tasksFrozen(state) && taskCount > state.taskCount) {
-      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen when the first loop launched`);
+      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen when the first task loop launched`);
     }
   }
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
   assertLane(state, edge);
 
-  if (isFork(from, bricks) && state.factory.stages.includes(edge.to)) state.lane = edge.to;
+  // M10: every fork record sets the lane, a terminal outcome to none: a gated fork re-run on an
+  // amend must not keep the lane its first answer chose.
+  if (isFork(from, bricks)) state.lane = state.factory.stages.includes(edge.to) ? edge.to : null;
   if (isLoop) state.launched = null;
   if (specPath !== null) {
     if (state.taskCount === null || !tasksFrozen(state)) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }

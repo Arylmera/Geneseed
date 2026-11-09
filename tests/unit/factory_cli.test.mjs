@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { headCommit } from '../../js/hosts/gitref.mjs';
@@ -65,6 +65,26 @@ test('check: the catalogue, one factory, and a broken one', () => {
     assert.deepEqual(run(sb.path, ['check', '--factory', 'fixture-fix']), { code: 0, out: { ok: true, problems: [] } });
     assert.equal(run(sb.path, ['check', '--factory', 'fixture-broken']).code, 1);
     assert.deepEqual(run(sb.path, ['check', '--factory', 'nope']), { code: 1, out: { error: 'no factory named "nope"' } });
+  } finally { sb.cleanup(); }
+});
+
+// M8: a project factory that shadows a shipped one is named in `check`'s `overridden`, as loop
+// check names an overridden brick; and a project file of that name that does not load makes
+// `init` refuse with its problem (and its origin), where the shipped graph used to run instead.
+test('M8: check names an overridden factory; init refuses a broken override instead of the shipped one', () => {
+  const sb = repo([]);
+  const file = path.join(sb.path, '.geneseed', 'factories', 'bug-report-to-fix.json');
+  try {
+    const shipped = JSON.parse(readFileSync(path.resolve(import.meta.dirname, '../../src/factories/bug-report-to-fix.json'), 'utf8'));
+    writeFileSync(file, JSON.stringify(shipped));
+    assert.deepEqual(run(sb.path, ['check']).out.overridden, ['bug-report-to-fix (project, overrides shipped)']);
+    writeFileSync(file, '{ not json');
+    const check = run(sb.path, ['check']);
+    assert.deepEqual([check.code, check.out.problems, check.out.factories.includes('bug-report-to-fix')],
+      [1, ['factories/bug-report-to-fix.json (project): not JSON'], false]);
+    assert.deepEqual(run(sb.path, [...INIT, '--factory', 'bug-report-to-fix']),
+      { code: 1, out: { error: 'no factory named "bug-report-to-fix": factories/bug-report-to-fix.json (project): not JSON' } });
+    assert.equal(existsSync(path.join(sb.path, 'FACTORY.md')), false);
   } finally { sb.cleanup(); }
 });
 
@@ -367,6 +387,122 @@ test('record --spec accepts a path inside the worktree with a segment that start
   } finally { sb.cleanup(); }
 });
 
+// M6: every path argument resolves against the current directory, `--spec` included, as
+// `--factory <file>` and loop's `--note-file` do; FACTORY.md alone is found at the git root. From
+// `sub/`, `../specs/r/spec.md` is the spec, and `specs/r/spec.md` names `sub/specs/r/spec.md`.
+test('M6: record --spec resolves against the current directory, as every path argument does', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    mkdirSync(path.join(sb.path, 'sub'));
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const sub = path.join(sb.path, 'sub');
+    const r = run(sub, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'], '');
+    assert.equal(r.code, 1);
+    assert.match(r.out.error, /^cannot read --spec specs\/r\/spec\.md: /);
+    assert.deepEqual(run(sub, ['record', '--outcome', 'pass', '--spec', '../specs/r/spec.md'], ''),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
+// M7: `--carry-file` on record and `--note-file` on decide take free text from a file, so a line
+// that starts with `git … commit` never sits on the command line the git gate matches whole. The
+// text reaches the engine CRLF-folded and trimmed; a flag and its -file twin together are refused.
+test('M7: record --carry-file and decide --note-file carry free text without the command line', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const tmp = path.join(path.dirname(sb.path), `${path.basename(sb.path)}-texts`);
+    mkdirSync(tmp);
+    writeFileSync(path.join(tmp, 'carry.txt'), 'the spec, then:\r\ngit commit -m "spec"\r\n\r\n');
+    writeFileSync(path.join(tmp, 'note.txt'), 'split task 1\ngit push origin HEAD\n');
+    try {
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md', '--carry', 'x', '--carry-file', path.join(tmp, 'carry.txt')], ''),
+        { code: 1, out: { error: 'record takes --carry or --carry-file, not both' } });
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md', '--carry-file', path.join(tmp, 'carry.txt')], ''),
+        { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass', note: 'the spec, then:\ngit commit -m "spec"' } } });
+      assert.deepEqual(run(sb.path, ['decide', '--verdict', 'amend', '--note-file', path.join(tmp, 'missing.txt')]).out.error.startsWith('cannot read --note-file '), true);
+      assert.deepEqual(run(sb.path, ['decide', '--verdict', 'amend', '--note-file', path.join(tmp, 'note.txt')]), { code: 0, out: { resumed: true } });
+      assert.equal(run(sb.path, ['next']).out.carry, 'split task 1\ngit push origin HEAD');
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  } finally { sb.cleanup(); }
+});
+
+// F1: the slug lands on the spec's record line (`--spec specs/<slug>/spec.md`), so `init`
+// refuses a run branch `loop/factory-<slug>` whose slug holds the word git, commit or push, and
+// writes nothing. `digit` or `github` hold no such word; another branch is not checked.
+// F3: the refusal is case-insensitive (`Push-it`) and so deliberately stricter than the
+// case-sensitive gate, which would not ask on `Push`; the message claims no ask for it.
+test('F1: init refuses a run slug that holds the word git, commit or push', () => {
+  const sb = repo(['fixture-fix']);
+  const head = (branch) => writeFileSync(path.join(sb.path, '.git', 'HEAD'), `ref: refs/heads/${branch}\n`);
+  try {
+    for (const [slug, word] of [['fix-git-hook', 'git'], ['fix-commit-hook', 'commit'], ['Push-it', 'Push']]) {
+      head(`loop/factory-${slug}`);
+      assert.deepEqual(run(sb.path, [...INIT, '--factory', 'fixture-fix']), {
+        code: 1,
+        out: {
+          error: `the run's slug "${slug}" holds the word ${word}, in any case refused: the git gate asks on git, commit `
+            + 'and push on the spec\'s record line. Rename the branch loop/factory-<slug> to a slug without git, commit or '
+            + 'push (spell them g1t, cmt, psh)',
+        },
+      }, slug);
+      assert.equal(existsSync(path.join(sb.path, 'FACTORY.md')), false, slug);
+    }
+    head('loop/factory-digit-github-hook');
+    assert.equal(run(sb.path, [...INIT, '--factory', 'fixture-fix']).code, 0);
+  } finally { sb.cleanup(); }
+});
+
+// A redirect (`< file`) hands the process a file descriptor, not a pipe: `record` reads it the
+// same way. A dirty line in the file is refused; the clean spec porcelain records.
+test('F1: record reads the porcelain from a file redirected to stdin', () => {
+  const sb = repo(['fixture-spec']);
+  const status = path.join(path.dirname(sb.path), `${path.basename(sb.path)}-status.txt`);
+  const redirected = (argv, porcelain) => {
+    writeFileSync(status, porcelain);
+    const fd = openSync(status, 'r');
+    try {
+      const r = spawnSync(process.execPath, [CLI, 'factory', ...argv], {
+        cwd: sb.path, stdio: [fd, 'pipe', 'pipe'], encoding: 'utf8', windowsHide: true,
+        env: { ...process.env, XDG_CONFIG_HOME: path.join(sb.path, 'xdg') },
+      });
+      return { code: r.status, out: JSON.parse(r.stdout.trim()) };
+    } finally { closeSync(fd); }
+  };
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const argv = ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'];
+    const dirty = redirected(argv, '?? FACTORY.md\r\n?? specs/r/spec.md\r\n?? notes.txt\r\n');
+    assert.deepEqual([dirty.code, /dirty.*\?\? notes\.txt$/.test(dirty.out.error)], [1, true]);
+    assert.deepEqual(redirected(argv, '?? FACTORY.md\r\n?? specs/r/spec.md\r\n'),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { rmSync(status, { force: true }); sb.cleanup(); }
+});
+
+// F1: the skill pipes `git status --porcelain --untracked-files=all | geneseed factory record`.
+// Windows PowerShell 5.1 re-encodes a native pipe: with a UTF-8 $OutputEncoding it puts a BOM before the first byte, and it ends
+// lines with CRLF (observed 2026-11-09). A clean spec porcelain must still record, and a dirty
+// line after the BOM must still be refused.
+test('F1: record reads a Windows PowerShell 5.1 pipe: a leading BOM and CRLF', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const argv = ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'];
+    const dirty = run(sb.path, argv, '\uFEFF?? notes.txt\r\n?? FACTORY.md\r\n?? specs/r/spec.md\r\n');
+    assert.deepEqual([dirty.code, /dirty.*\?\? notes\.txt$/.test(dirty.out.error)], [1, true]);
+    assert.deepEqual(run(sb.path, argv, '\uFEFF?? FACTORY.md\r\n?? specs/r/spec.md\r\n'),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
 // G2: a spec inside the worktree but not at specs/<slug>/spec.md is refused, and FACTORY.md stays
 // as it was. Stored, it would pass this record and fail R4 on every later action: `decide` here.
 test('G2: record --spec refuses a path that is not specs/<slug>/spec.md, and the run goes on', () => {
@@ -376,7 +512,7 @@ test('G2: record --spec refuses a path that is not specs/<slug>/spec.md, and the
     writeFileSync(path.join(sb.path, 'plan.md'), '# R\n\n## Tasks\n\n1. one\n');
     const before = readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'plan.md'], ''),
-      { code: 1, out: { error: '--spec plan.md is not a spec the engine can keep: record specs/<slug>/spec.md, one folder named for the run\'s slug' } });
+      { code: 1, out: { error: '--spec plan.md is not a spec the engine can keep: record a file named spec.md one folder under specs/ (specs/<slug>/spec.md; the folder may have any name but . or ..)' } });
     assert.equal(readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8'), before);
     assert.equal(run(sb.path, ['next']).out.stage, 'spec');
   } finally { sb.cleanup(); }
@@ -437,6 +573,21 @@ test('record --spec with the porcelain real git prints: --untracked-files=all is
     const all = git(sb.path, 'status', '--porcelain', '--untracked-files=all');
     assert.equal(all, '?? FACTORY.md\n?? specs/r/spec.md\n');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'], all),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
+// M11: the porcelain real git prints for a non-ASCII slug is C-quoted with octal escapes (the
+// default core.quotePath); the engine unquotes it, so the spec records.
+test('M11: record --spec with a non-ASCII slug, on the porcelain real git prints', () => {
+  const sb = gitRepo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'café'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'café', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const all = git(sb.path, '-c', 'core.quotePath=true', 'status', '--porcelain', '--untracked-files=all');
+    assert.equal(all, '?? FACTORY.md\n?? "specs/caf\\303\\251/spec.md"\n');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/café/spec.md'], all),
       { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
   } finally { sb.cleanup(); }
 });
