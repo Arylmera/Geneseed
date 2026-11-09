@@ -1,7 +1,6 @@
 // tests/unit/factory_state.test.mjs
 // Scenarios: a script of engine calls with the expected result written after every call. The
-// catalogue is in memory (a `triage` brick does not ship yet); factory_cli.test.mjs drives the
-// shipped bricks through the real CLI.
+// catalogue is in memory; factory_cli.test.mjs drives the shipped bricks through the real CLI.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -15,7 +14,8 @@ const brick = (name, outcomes, extra = {}) => [name, {
 }];
 const CATALOG = {
   bricks: new Map([
-    brick('plan', ['pass']), brick('review', ['pass', 'fail']), brick('triage', ['pass', 'fail']),
+    brick('plan', ['pass']), brick('review', ['pass', 'fail']), brick('triage', ['bug', 'feature', 'docs', 'fail']),
+    brick('notes', ['pass']), brick('judge', ['pass', 'fail'], { gate: 'human' }),
     brick('probe', ['pass', 'error']),
     brick('spec', ['pass', 'fail'], { effect: 'mutate', agent: 'architect', gate: 'human' }),
     brick('lint', ['pass', 'fail']),
@@ -117,7 +117,7 @@ test('J5: a dirty tree after a brick stage is refused, engine files aside', () =
   const s = start();
   const before = JSON.stringify(s);
   assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: ' M src/a.js\n?? notes.txt' }),
-    /^Error: plan left the worktree dirty, and a stage outside a loop never changes it: {2}M src\/a\.js; \?\? notes\.txt$/);
+    /^Error: plan left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: {2}M src\/a\.js; \?\? notes\.txt$/);
   assert.equal(JSON.stringify(s), before, 'a refusal changes nothing');
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: ' M FACTORY.md\n?? FACTORY.md.tmp\n?? LOOP.md.tmp' }), { stage: 'loop:bugfix' });
   // a loop stage's porcelain is the child loop's business, never checked here
@@ -227,7 +227,7 @@ test('J5: the --spec exemption covers specs/<slug>/spec.md and nothing else', ()
   for (const specPath of ['src/a.js', 'specs/spec.md', 'specs/r/notes.md', 'specs/r/deep/spec.md']) {
     const s = start(specFactory());
     assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: ` M ${specPath}`, specPath, taskCount: 2 }),
-      new RegExp(`^Error: spec left the worktree dirty, and a stage outside a loop never changes it: {2}M ${specPath.replaceAll('.', '\\.')}$`),
+      new RegExp(`^Error: spec left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: {2}M ${specPath.replaceAll('.', '\\.')}$`),
       specPath);
   }
   const s = start(specFactory());
@@ -264,43 +264,89 @@ test('gates: no stops, amend re-runs the stage with the note as its carry, three
   assert.throws(() => decideFactory(t, CATALOG, 'ok'), /^Error: nothing is awaiting a decision$/);
 });
 
-// intake... here plan -> triage -> loop:$triaged, allowlist bugfix and feature.
-const triagedFactory = () => ({
-  name: 'triaged', description: 'd', start: 'triage', stages: ['triage', 'loop:$triaged'], loops: ['bugfix', 'feature'],
+// D11/D13: triage is a fork; each named outcome leads to its own lane (two loops and the `notes`
+// brick), all joining at review, whose fail routes back to `$lane` (cycle rework, max 2).
+const forkFactory = (judge = 'review') => ({
+  name: 'forked', description: 'd', start: 'triage', stages: ['triage', 'loop:bugfix', 'loop:feature', 'notes', judge],
   edges: [
-    { from: 'triage', on: 'pass', to: 'loop:$triaged' }, { from: 'triage', on: 'fail', to: '$stop' },
-    { from: 'loop:$triaged', on: 'pass', to: '$close' }, { from: 'loop:$triaged', on: 'fail', to: '$stop' },
+    { from: 'triage', on: 'bug', to: 'loop:bugfix' }, { from: 'triage', on: 'feature', to: 'loop:feature' },
+    { from: 'triage', on: 'docs', to: 'notes' }, { from: 'triage', on: 'fail', to: '$stop' },
+    { from: 'loop:bugfix', on: 'pass', to: judge }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+    { from: 'loop:feature', on: 'pass', to: judge }, { from: 'loop:feature', on: 'fail', to: '$stop' },
+    { from: 'notes', on: 'pass', to: judge },
+    { from: judge, on: 'pass', to: '$close' }, { from: judge, on: 'fail', to: '$lane' },
   ],
+  cycles: [{ name: 'rework', nodes: ['$lane', judge], max: 2 }],
 });
 
-test('triage: the chosen loop comes from the allowlist, and only triage records it', () => {
-  const s = start(triagedFactory());
+// The fork route: `next` hands the fork its lanes (outcome -> stage), the outcome names the lane,
+// and the record stores it as `lane`. A `pass` the fork does not declare is refused, unchanged.
+test('fork: next hands out the lanes, and the outcome recorded names the lane taken', () => {
+  const s = start(forkFactory());
+  assert.deepEqual(nextStage(s, CATALOG).lanes, { bug: 'loop:bugfix', feature: 'loop:feature', docs: 'notes' });
+  assert.equal(s.lane, null);
   const before = JSON.stringify(s);
-  assert.throws(() => recordStage(s, CATALOG, 'pass', CLEAN), /^Error: triage must name the loop it chose: --loop <one of bugfix, feature>$/);
-  assert.throws(() => recordStage(s, CATALOG, 'pass', { ...CLEAN, chosenLoop: 'refactor' }),
-    /^Error: refactor is not one of this factory's loops: bugfix, feature$/);
+  assert.throws(() => recordStage(s, CATALOG, 'pass', CLEAN), /^Error: triage cannot report "pass" — one of bug, feature, docs, fail$/);
   assert.equal(JSON.stringify(s), before);
-  assert.deepEqual(recordStage(s, CATALOG, 'pass', { ...CLEAN, chosenLoop: 'feature' }), { stage: 'loop:$triaged' });
-  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), { stage: 'loop:$triaged', loop: 'feature', notes: [] });
-  assert.throws(() => recordStage(s, CATALOG, 'pass', { chosenLoop: 'bugfix', ...MOVED }), /^Error: --loop is recorded by the triage stage only$/);
-  // a triaged stage reached with no choice on record is refused, never guessed
-  const t = start(triagedFactory()); t.stage = 'loop:$triaged';
-  assert.throws(() => nextStage(t, CATALOG), /^Error: loop:\$triaged: no loop was triaged/);
+  assert.deepEqual(recordStage(s, CATALOG, 'feature', { ...CLEAN, carry: 'triage.md' }), { stage: 'loop:feature' });
+  assert.equal(s.lane, 'loop:feature');
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), { stage: 'loop:feature', loop: 'feature', notes: ['triage.md'] });
+  assert.equal('lanes' in nextStage(start(), CATALOG), false, 'a stage that is no fork gets no lanes');
+  // a fork outcome to $stop chooses no lane
+  const t = start(forkFactory());
+  assert.deepEqual(recordStage(t, CATALOG, 'fail', CLEAN), { stopped: 'triage reported fail' });
+  assert.equal(t.lane, null);
 });
 
-// Any triage outcome whose route reaches the triaged loop must name it, not only `pass`; a route
-// that runs triage again first does not, since that triage chooses afresh.
-test('triage: --loop is required on every outcome that leads to the triaged loop', () => {
-  const f = triagedFactory();
-  f.stages.push('review');
-  f.edges = f.edges.map((e) => (e.from === 'triage' && e.on === 'fail' ? { ...e, to: 'review' } : e));
-  f.edges.push({ from: 'review', on: 'pass', to: 'loop:$triaged' }, { from: 'review', on: 'fail', to: 'triage' });
-  f.cycles = [{ name: 'again', nodes: ['triage', 'review'], max: 1 }];
-  const s = start(f);
-  assert.throws(() => recordStage(s, CATALOG, 'fail', CLEAN), /^Error: triage must name the loop it chose: --loop <one of bugfix, feature>$/);
-  assert.deepEqual(recordStage(s, CATALOG, 'fail', { ...CLEAN, chosenLoop: 'bugfix' }), { stage: 'review' });
-  // triage -> $stop leads nowhere near the triaged loop: no --loop needed
-  assert.deepEqual(recordStage(start(triagedFactory()), CATALOG, 'fail', CLEAN), { stopped: 'triage reported fail' });
+// The `$lane` route back: a failed review returns to the loop the fork chose, the reason as its
+// note, and spends the rework cycle.
+test('fork: a route back to $lane re-enters the lane taken and spends its cycle', () => {
+  const s = start(forkFactory());
+  recordStage(s, CATALOG, 'bug', CLEAN);
+  assert.deepEqual(loopRec(s, 'pass'), { stage: 'review' });
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', { ...CLEAN, carry: 'still off by one' }), { stage: 'loop:bugfix' });
+  assert.deepEqual(s.counters, { rework: 1 });
+  assert.deepEqual(nextStage(s, CATALOG, LAUNCH), { stage: 'loop:bugfix', loop: 'bugfix', notes: ['still off by one'] });
+});
+
+// Cycle laps through `$lane` on a brick lane: each failed review re-runs `notes` and spends one
+// lap; the third failure exhausts rework (max 2), and the run stops.
+test('fork: laps through $lane on a brick lane are bounded by the cycle max', () => {
+  const s = start(forkFactory());
+  assert.deepEqual(recordStage(s, CATALOG, 'docs', CLEAN), { stage: 'notes' });
+  const seen = [];
+  for (let i = 0; i < 20 && s.status === 'running'; i += 1) {
+    seen.push(recordStage(s, CATALOG, s.stage === 'review' ? 'fail' : 'pass', CLEAN));
+  }
+  assert.deepEqual(seen, [
+    { stage: 'review' }, { stage: 'notes' }, { stage: 'review' }, { stage: 'notes' }, { stage: 'review' },
+    { stopped: 'cycle rework exhausted its max of 2' },
+  ]);
+  assert.equal(s.lane, 'notes');
+});
+
+// `$lane` with no prior fork (a state `check` cannot produce, reached by hand): refused before the
+// state changes, never guessed — both on record and on a gate's ok.
+test('fork: a route to $lane with no lane on record is refused, never guessed', () => {
+  const s = start(forkFactory()); s.stage = 'review';
+  const before = JSON.stringify(s);
+  assert.throws(() => recordStage(s, CATALOG, 'fail', CLEAN), /^Error: review routes to \$lane, but no fork has chosen a lane in this run$/);
+  assert.equal(JSON.stringify(s), before);
+  const g = start(forkFactory('judge')); g.stage = 'judge';
+  assert.throws(() => recordStage(g, CATALOG, 'fail', CLEAN), /^Error: judge routes to \$lane, but no fork has chosen a lane in this run$/);
+  g.status = 'awaiting'; g.awaiting = { kind: 'gate', stage: 'judge', outcome: 'fail' };
+  const held = JSON.stringify(g);
+  assert.throws(() => decideFactory(g, CATALOG, 'ok'), /^Error: judge routes to \$lane, but no fork has chosen a lane in this run$/);
+  assert.equal(JSON.stringify(g), held);
+});
+
+// A gate's ok on an edge to `$lane` follows the lane taken, and spends the cycle like a record.
+test('fork: a gate\'s ok on a $lane edge re-enters the lane taken', () => {
+  const s = start(forkFactory('judge'));
+  recordStage(s, CATALOG, 'docs', CLEAN); recordStage(s, CATALOG, 'pass', CLEAN);
+  assert.deepEqual(recordStage(s, CATALOG, 'fail', CLEAN), { awaiting: { kind: 'gate', stage: 'judge', outcome: 'fail' } });
+  assert.deepEqual(decideFactory(s, CATALOG, 'ok'), { stage: 'notes' });
+  assert.deepEqual(s.counters, { rework: 1 });
 });
 
 // Termination by construction: the task count is frozen at the first --spec record, capped at
@@ -474,7 +520,7 @@ test('J5: the spec on record stays exempt for every later stage outside a loop',
   loopRec(s, 'pass'); loopRec(s, 'pass');
   assert.equal(s.stage, 'review');
   assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: '?? specs/r/spec.md\n?? specs/q/spec.md' }),
-    /^Error: review left the worktree dirty, and a stage outside a loop never changes it: \?\? specs\/q\/spec\.md$/);
+    /^Error: review left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: \?\? specs\/q\/spec\.md$/);
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: '?? specs/r/spec.md' }), { done: true });
 });
 
@@ -483,7 +529,7 @@ test('J5: the spec on record stays exempt for every later stage outside a loop',
 test('J5: a folded untracked directory is refused with the porcelain form that unfolds it', () => {
   const s = start(specFactory());
   assert.throws(() => recordStage(s, CATALOG, 'pass', { ...SPEC, porcelain: '?? specs/' }), {
-    message: 'spec left the worktree dirty, and a stage outside a loop never changes it: ?? specs/ — a path ending '
+    message: 'spec left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: ?? specs/ — a path ending '
       + 'in / is a whole untracked directory: pipe `git status --porcelain --untracked-files=all`, which lists each file',
   });
 });
@@ -511,7 +557,7 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     [(s) => { s.gateAmends = { 'spec@0': 4 }; }, 'gateAmends must map each gate to an integer from 0 to 3'],
     [(s) => { s.gateAmends = { 'spec@0': -1 }; }, 'gateAmends must map each gate to an integer from 0 to 3'],
     [(s) => { s.gateAmends = []; }, 'gateAmends must map each gate to an integer from 0 to 3'],
-    [(s) => { s.chosenLoop = 'feature'; }, "chosenLoop must be null or one of the factory's loops"],
+    [(s) => { s.lane = 'loop:bugfix'; }, 'lane must be null or a stage a fork of the factory leads to'],
     [(s) => { s.status = 'paused'; }, 'status must be one of running, awaiting, done, stopped'],
     [(s) => { s.history = {}; }, 'history must be a list'],
     [(s) => { s.factory.cycles = {}; }, 'factory.cycles must be a list'],
@@ -522,13 +568,18 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     const s = valid(); edit(s);
     assert.throws(() => validateFactoryState(s, CATALOG), { message: `FACTORY.md is unreadable: ${why}` }, why);
   }
-  // what the engine does write stays readable: no `cycles` key at all, and a triaged loop on record
+  // what the engine does write stays readable: no `cycles` key at all, a lane on record, and a
+  // state written before lanes existed (no `lane` key)
   const s = valid(); delete s.factory.cycles; s.factory.edges = s.factory.edges.filter((e) => !(e.from === 'review' && e.on === 'fail'));
   s.factory.edges.push({ from: 'review', on: 'fail', to: '$stop' });
   validateFactoryState(s, CATALOG);
-  const t = start(triagedFactory());
-  recordStage(t, CATALOG, 'pass', { ...CLEAN, chosenLoop: 'feature' });
+  const t = start(forkFactory());
+  recordStage(t, CATALOG, 'feature', CLEAN);
   validateFactoryState(t, CATALOG);
+  t.lane = 'review';
+  assert.throws(() => validateFactoryState(t, CATALOG), { message: 'FACTORY.md is unreadable: lane must be null or a stage a fork of the factory leads to' });
+  const old = valid(); delete old.lane;
+  validateFactoryState(old, CATALOG);
 });
 
 // R4 against the gate cap: the fourth amend stops the run without storing a count of 4, so the

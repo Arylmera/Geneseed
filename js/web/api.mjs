@@ -618,7 +618,7 @@ export function apiLoopsActive() {
  * The Factories page's catalogue: every factory the install ROOT resolves (shipped, global,
  * project, as `geneseed factory check` reads them), with the whole brick list — the graph draws a
  * brick's `gate: human` badge and the mini ring places its ⛨ gate from `effect` — and the graph
- * of every loop template a factory names (a `loop:<t>` stage, or its `loops` allowlist), so a
+ * of every loop template a factory names (a `loop:<t>` stage, a fork's lanes included), so a
  * `loop:` block can draw its ring. Read-only, like `apiLoops`.
  */
 export function apiFactoriesCatalog(state) {
@@ -628,10 +628,7 @@ export function apiFactoriesCatalog(state) {
   const factories = [...catalog.factories].sort(byName).map(([name, { origin, ...factory }]) => ({
     name, description: factory.description || '', origin, factory,
   }));
-  const named = new Set(factories.flatMap(({ factory: f }) => [
-    ...(Array.isArray(f.stages) ? f.stages : []).map(loopOf).filter((t) => t && t !== '$triaged'),
-    ...(Array.isArray(f.loops) ? f.loops : []),
-  ]));
+  const named = new Set(factories.flatMap(({ factory: f }) => (Array.isArray(f.stages) ? f.stages : []).map(loopOf).filter(Boolean)));
   return {
     factories,
     bricks: [...catalog.bricks].sort(byName).map(([, b]) => ({ reason: null, ...b })),

@@ -13,5 +13,10 @@ prose, reorganize a page, or fix an unrelated staleness you happen to notice whi
 Keep each doc in the format it is already in (Markdown or AsciiDoc) — never convert one; a new
 page follows the `Docs format:` line in the root `AGENTS.md`.
 
+As a factory's docs lane, there is no iteration diff: the stage hands you the work item as
+`carry` (and, when a later stage sent the work back, the reason). Make the doc change the work
+item asks for, under the same limits, then commit the files you changed: the factory records a
+stage only on a clean tree.
+
 Report `pass` once every doc the diff touched is back in sync, naming the files you changed — or
 that none needed it, if the diff left nothing stale.

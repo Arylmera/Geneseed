@@ -92,9 +92,9 @@ test('list: name, description, category and origin of every factory', () => {
           description: 'Test fixture: plan, run the bugfix loop, review; a failed review sends the item back to the loop.',
         }, {
           name: 'issue-to-pr', category: 'development', origin: 'shipped',
-          description: 'Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), '
-            + 'play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed scenario or '
-            + 'red CI sends the work back to that loop, twice at most each. The merge stays yours.',
+          description: 'Take one issue, let triage pick the lane that fits (the bugfix, feature, deps-upgrade or refactor '
+            + 'loop, or a docs-only update), play the holdout scenarios it never saw, open the pull request and wait for '
+            + 'green CI; a failed scenario or red CI sends the work back to that lane, twice at most each. The merge stays yours.',
         }],
       },
     });
@@ -152,7 +152,7 @@ test('init -> next -> record through a brick stage, a loop stage and a back-rout
     // J5: a brick stage outside a loop that left the tree dirty is refused, FACTORY.md untouched.
     const before = readFileSync(file, 'utf8');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], ' M src/a.js\n'), {
-      code: 1, out: { error: 'review left the worktree dirty, and a stage outside a loop never changes it:  M src/a.js' },
+      code: 1, out: { error: 'review left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first:  M src/a.js' },
     });
     assert.equal(readFileSync(file, 'utf8'), before);
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail', '--carry', 'totals still off by one cent'], ' M FACTORY.md\n'),
@@ -252,11 +252,10 @@ test('R4: every action refuses an unreadable FACTORY.md and leaves it as it was'
   } finally { sb.cleanup(); }
 });
 
-// D6 on the shipped `issue-to-pr` (no project factory loaded): the triage stage is handed the
-// factory's `loops`, and `record --loop` takes only a name from them. `tdd` is a real loop template
-// that the factory does not allow, so it is refused and FACTORY.md stays as it was; a pass without
-// `--loop` is refused too; `bugfix` routes on, and the triaged stage then runs that loop.
-test('issue-to-pr: triage gets the allowlist, a loop outside it is refused, one inside it runs', () => {
+// D11 on the shipped `issue-to-pr` (no project factory loaded): triage is a fork. `next` hands it
+// the lanes (each outcome with the stage it leads to), an outcome it does not declare is refused
+// and FACTORY.md stays as it was, and `bug` routes straight to the bugfix loop.
+test('issue-to-pr: triage gets its lanes, and the outcome it reports names the lane', () => {
   const sb = repo([]);
   const file = path.join(sb.path, 'FACTORY.md');
   try {
@@ -268,20 +267,18 @@ test('issue-to-pr: triage gets the allowlist, a loop outside it is refused, one 
       { stage: 'holdout-write', agent: 'tester', outcomes: ['pass', 'fail'], carry: 'item.md' });
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md']), { code: 0, out: { stage: 'triage' } });
     const next = run(sb.path, ['next']).out;
-    assert.deepEqual({ stage: next.stage, agent: next.agent, outcomes: next.outcomes, carry: next.carry, loops: next.loops },
-      { stage: 'triage', agent: 'explorer', outcomes: ['pass', 'fail'], carry: 'item.md', loops: ['bugfix', 'feature', 'deps-upgrade', 'refactor'] });
-    const before = readFileSync(file, 'utf8');
-    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--loop', 'tdd']), {
-      code: 1, out: { error: "tdd is not one of this factory's loops: bugfix, feature, deps-upgrade, refactor" },
+    assert.deepEqual({ stage: next.stage, agent: next.agent, outcomes: next.outcomes, carry: next.carry, lanes: next.lanes }, {
+      stage: 'triage', agent: 'explorer', outcomes: ['bug', 'feature', 'deps', 'refactor', 'docs', 'fail'], carry: 'item.md',
+      lanes: { bug: 'loop:bugfix', feature: 'loop:feature', deps: 'loop:deps-upgrade', refactor: 'loop:refactor', docs: 'docs-update' },
     });
+    const before = readFileSync(file, 'utf8');
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), {
-      code: 1, out: { error: 'triage must name the loop it chose: --loop <one of bugfix, feature, deps-upgrade, refactor>' },
+      code: 1, out: { error: 'triage cannot report "pass" — one of bug, feature, deps, refactor, docs, fail' },
     });
     assert.equal(readFileSync(file, 'utf8'), before);
-    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--loop', 'bugfix', '--carry', 'triage.md']),
-      { code: 0, out: { stage: 'loop:$triaged' } });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'bug', '--carry', 'triage.md']), { code: 0, out: { stage: 'loop:bugfix' } });
     assert.deepEqual(run(sb.path, ['next']).out, {
-      stage: 'loop:$triaged', loop: 'bugfix', notes: ['triage.md'],
+      stage: 'loop:bugfix', loop: 'bugfix', notes: ['triage.md'],
       rules: ['Never merge, and never enable auto-merge: the run ends at an open PR with green CI.', "Push only this worktree's own branch."],
     });
   } finally { sb.cleanup(); }
@@ -488,6 +485,53 @@ test('analysis-to-build: spec, three tasks, red CI as one extra task, then $clos
     assert.deepEqual({ counters: state.counters, taskCount: state.taskCount, runCeiling: state.runCeiling, taskHigh: state.taskHigh },
       { counters: { holdout: 1, ci: 1 }, taskCount: 3, runCeiling: 90, taskHigh: 3 },
       'each extra lap spent its own cycle once and bought no task');
+  } finally { sb.cleanup(); }
+});
+
+// D12 + D13 on the shipped `issue-to-pr`, in a real git repository: triage reports `docs`, so the
+// run takes the brick lane `docs-update` (a mutate brick, so it commits its change before record:
+// a dirty tree is refused). A failed holdout routes back to `$lane`, which is `docs-update` again,
+// spending the `holdout` cycle; then holdout -> pr-open -> merge-gate -> retro -> $close. The lane
+// taken is on record in FACTORY.md.
+test('issue-to-pr: triage reports docs, the run takes the docs-update lane and reaches pr-open', () => {
+  const sb = gitRepo([]);
+  const porcelain = () => git(sb.path, 'status', '--porcelain', '--untracked-files=all');
+  const commit = (msg) => git(sb.path, 'commit', '-q', '--allow-empty', '-m', msg);
+  const doc = (text) => { mkdirSync(path.join(sb.path, 'docs'), { recursive: true }); writeFileSync(path.join(sb.path, 'docs', 'guide.md'), text); };
+  try {
+    commit('base');
+    assert.equal(run(sb.path, [...INIT, '--factory', 'issue-to-pr']).out.stage, 'intake');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md'], porcelain()), { code: 0, out: { stage: 'holdout-write' } });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md'], porcelain()), { code: 0, out: { stage: 'triage' } });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'docs', '--carry', 'triage.md'], porcelain()), { code: 0, out: { stage: 'docs-update' } });
+    const lane = run(sb.path, ['next']).out;
+    assert.deepEqual({ stage: lane.stage, agent: lane.agent, effect: lane.effect, outcomes: lane.outcomes, carry: lane.carry },
+      { stage: 'docs-update', agent: 'docs', effect: 'mutate', outcomes: ['pass'], carry: 'triage.md' });
+    doc('# Guide\n\nThe flag is --strict.\n');
+    assert.equal(porcelain(), '?? FACTORY.md\n?? docs/guide.md\n');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), {
+      code: 1,
+      out: { error: 'docs-update left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: ?? docs/guide.md' },
+    });
+    git(sb.path, 'add', 'docs/guide.md'); commit('docs: the strict flag');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out: { stage: 'holdout' } });
+    // the failed scenario routes back to $lane: the docs lane, not a loop
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'fail', '--carry', 'holdout-red.md'], porcelain()), { code: 0, out: { stage: 'docs-update' } });
+    assert.equal(run(sb.path, ['next']).out.carry, 'holdout-red.md');
+    doc('# Guide\n\nThe flag is --strict, off by default.\n');
+    git(sb.path, 'add', 'docs/guide.md'); commit('docs: the default');
+    for (const out of [{ stage: 'holdout' }, { stage: 'pr-open' }, { stage: 'merge-gate' }, { stage: 'retro' }, { done: true }]) {
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass'], porcelain()), { code: 0, out });
+    }
+    const end = run(sb.path, ['next']).out;
+    assert.equal(end.terminal, '$close');
+    assert.deepEqual(end.summary.history.map((h) => [h.stage, h.outcome]), [
+      ['intake', 'pass'], ['holdout-write', 'pass'], ['triage', 'docs'], ['docs-update', 'pass'], ['holdout', 'fail'],
+      ['docs-update', 'pass'], ['holdout', 'pass'], ['pr-open', 'pass'], ['merge-gate', 'pass'], ['retro', 'pass'],
+    ]);
+    const lf = readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8').replace(/\r\n/g, '\n');
+    const state = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(lf)[1]);
+    assert.deepEqual({ lane: state.lane, counters: state.counters }, { lane: 'docs-update', counters: { holdout: 1 } });
   } finally { sb.cleanup(); }
 });
 

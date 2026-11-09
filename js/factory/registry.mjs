@@ -50,7 +50,7 @@ function runningRow(entry, state) {
   return {
     ...identity(entry), status: state.status, stage: state.stage, awaiting: state.awaiting,
     reason: state.reason, transitions: state.transitions, counters: state.counters,
-    chosenLoop: state.chosenLoop, tasks: state.tasks, history: state.history,
+    lane: state.lane ?? null, tasks: state.tasks, history: state.history,
     // The graph the run was started from, as the loop row carries its `graph`: the console draws
     // it, and a run started in another project names a factory this install may not have.
     graph: state.factory,

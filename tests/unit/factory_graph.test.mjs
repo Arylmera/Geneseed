@@ -1,12 +1,12 @@
 // tests/unit/factory_graph.test.mjs
 // `checkFactory`: each rule refused once, the expected problem list written out in full. The
-// catalogue is in memory — a `triage` brick does not ship yet, and the triaged-loop rules still
-// need one — so the rows test the rules, not the shipped bricks (factory_cli does that).
+// catalogue is in memory, so the rows test the rules, not the shipped bricks (factory_cli does
+// that). Its `triage` declares named outcomes, which makes it a fork.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, copyFileSync } from 'node:fs';
+import { mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { checkFactory, factoryCatalogProblems, loopOf } from '../../js/factory/graph.mjs';
+import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf } from '../../js/factory/graph.mjs';
 import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
@@ -14,7 +14,8 @@ import { makeSandbox } from '../helpers/sandbox.mjs';
 const brick = (name, outcomes, extra = {}) => [name, { name, outcomes, effect: 'read', available: true, ...extra }];
 const CATALOG = {
   bricks: new Map([
-    brick('intake', ['pass', 'fail']), brick('triage', ['pass', 'fail']), brick('review', ['pass', 'fail']),
+    brick('intake', ['pass', 'fail']), brick('triage', ['bug', 'feature', 'docs', 'fail']), brick('review', ['pass', 'fail']),
+    brick('notes', ['pass']),
     brick('probe', ['pass', 'fail', 'error']), brick('gone', ['pass'], { available: false, reason: 'agent x is not shipped' }),
   ]),
   templates: new Map([['bugfix', {}], ['feature', {}]]),
@@ -37,7 +38,6 @@ test('a well-formed factory has no problems', () => {
 
 test('loopOf names the template of a loop stage, null for a brick stage', () => {
   assert.equal(loopOf('loop:bugfix'), 'bugfix');
-  assert.equal(loopOf('loop:$triaged'), '$triaged');
   assert.equal(loopOf('review'), null);
 });
 
@@ -168,31 +168,103 @@ test('undeclaredCycles returns each uncovered cycle as its sorted node names', (
   assert.deepEqual(undeclaredCycles(['a', 'b', 'c'], edges, [{ nodes: ['a', 'b'] }, { nodes: ['c'] }]), []);
 });
 
-// intake -> triage -> loop:$triaged: the triage record names the loop, from the allowlist.
-const triaged = () => ({
-  ...base(), stages: ['intake', 'triage', 'loop:$triaged', 'review'], loops: ['bugfix', 'feature'],
+// D11: intake -> triage, a fork whose named outcomes each lead to a lane (two loops and a brick),
+// all three joining at review; a failed review routes back to `$lane`, the lane this run took.
+const forked = () => ({
+  ...base(), stages: ['intake', 'triage', 'loop:bugfix', 'loop:feature', 'notes', 'review'],
   edges: [
     { from: 'intake', on: 'pass', to: 'triage' }, { from: 'intake', on: 'fail', to: '$stop' },
-    { from: 'triage', on: 'pass', to: 'loop:$triaged' }, { from: 'triage', on: 'fail', to: '$stop' },
-    { from: 'loop:$triaged', on: 'pass', to: 'review' }, { from: 'loop:$triaged', on: 'fail', to: '$stop' },
-    { from: 'review', on: 'pass', to: '$close' }, { from: 'review', on: 'fail', to: 'loop:$triaged' },
+    { from: 'triage', on: 'bug', to: 'loop:bugfix' }, { from: 'triage', on: 'feature', to: 'loop:feature' },
+    { from: 'triage', on: 'docs', to: 'notes' }, { from: 'triage', on: 'fail', to: '$stop' },
+    { from: 'loop:bugfix', on: 'pass', to: 'review' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+    { from: 'loop:feature', on: 'pass', to: 'review' }, { from: 'loop:feature', on: 'fail', to: '$stop' },
+    { from: 'notes', on: 'pass', to: 'review' },
+    { from: 'review', on: 'pass', to: '$close' }, { from: 'review', on: 'fail', to: '$lane' },
   ],
-  cycles: [{ name: 'rework', nodes: ['loop:$triaged', 'review'], max: 2 }],
+  cycles: [{ name: 'rework', nodes: ['$lane', 'review'], max: 2 }],
+});
+const routed = (f, from, on, to) => ({ ...f, edges: f.edges.map((e) => (e.from === from && e.on === on ? { ...e, to } : e)) });
+
+// A fork is a brick stage that declares an outcome outside pass, fail, error and none; its lanes
+// are the outcomes whose edge reaches a stage (`fail` to $stop is no lane).
+test('D11: a fork routes each named outcome to its own lane', () => {
+  assert.deepEqual(check(forked()), []);
+  assert.equal(isFork('triage', CATALOG.bricks), true);
+  for (const s of ['review', 'loop:bugfix', 'nope']) assert.equal(isFork(s, CATALOG.bricks), false, s);
+  assert.deepEqual(lanesOf(forked(), 'triage'), { bug: 'loop:bugfix', feature: 'loop:feature', docs: 'notes' });
 });
 
-test('rule 6: the triaged loop needs a non-empty allowlist of templates, behind a triage stage', () => {
-  assert.deepEqual(check(triaged()), []);
-  assert.deepEqual(check({ ...triaged(), loops: ['bugfix', 'nope'] }), ['loops: no loop template named nope']);
-  assert.deepEqual(check({ ...triaged(), loops: [] }), ['loop:$triaged: loops must list at least one loop template']);
-  // intake routes straight to the triaged loop on fail: a path that skips triage.
-  const skip = triaged();
-  skip.edges = skip.edges.map((e) => (e.from === 'intake' && e.on === 'fail' ? { ...e, to: 'loop:$triaged' } : e));
-  assert.deepEqual(check(skip), ['loop:$triaged: reachable from intake without passing through triage']);
-  // No triage stage at all: intake goes to the triaged loop directly.
-  const none = triaged();
-  none.stages = none.stages.filter((s) => s !== 'triage');
-  none.edges = none.edges.filter((e) => e.from !== 'triage').map((e) => (e.to === 'triage' ? { ...e, to: 'loop:$triaged' } : e));
-  assert.deepEqual(check(none), ['loop:$triaged: needs a triage stage before it']);
+test('D11: a named outcome without its edge is refused like any other', () => {
+  const f = forked();
+  f.stages = f.stages.filter((s) => s !== 'notes');
+  f.edges = f.edges.filter((e) => !(e.from === 'triage' && e.on === 'docs') && e.from !== 'notes');
+  assert.deepEqual(check(f), ['stage triage: no edge for outcome docs']);
+});
+
+// D13: `$lane` resolves to the stage the run's most recent fork chose, so it needs a fork, and a
+// fork on every path to it; a fork's own edge names its lane.
+test('D13: $lane needs a fork, a fork before it on every path, and is never a fork\'s own target', () => {
+  const noFork = { ...routed(base(), 'review', 'fail', '$lane'), cycles: [{ name: 'rework', nodes: ['$lane', 'review'], max: 2 }] };
+  assert.deepEqual(check(noFork), ['$lane: no fork chooses a lane — a fork is a brick stage with a named outcome (triage --bug--> loop:bugfix)']);
+  assert.deepEqual(check(routed(forked(), 'intake', 'fail', '$lane')),
+    ['edge intake --fail--> $lane: reachable from intake before any fork has chosen a lane']);
+  assert.deepEqual(check(routed(forked(), 'triage', 'fail', '$lane')),
+    ['edge triage --fail--> $lane: a fork\'s edge names its lane, never $lane']);
+});
+
+// D13 + rule 5: a cycle may name `$lane`; it stands for every lane of every fork. As the first
+// stage, the run enters the cycle at whichever lane the fork chose, and only a route back to
+// `$lane` spends it.
+test('D13: a $lane cycle is entered at a lane, laps only through $lane, and must be declared', () => {
+  assert.deepEqual(check({ ...forked(), cycles: [{ name: 'rework', nodes: ['review', '$lane'], max: 2 }] }), [
+    'cycle rework: entered at loop:bugfix, not at its first stage review',
+    'cycle rework: entered at loop:feature, not at its first stage review',
+    'cycle rework: entered at notes, not at its first stage review',
+  ]);
+  // a route back to one lane by name spends no `$lane` cycle: it laps for free
+  assert.deepEqual(check(routed(forked(), 'review', 'fail', 'loop:bugfix')), ['cycle loop:bugfix, review laps without spending a declared cycle: '
+    + 'a route back must target the first stage of a declared cycle that holds its source']);
+  assert.deepEqual(check({ ...forked(), cycles: [] }), ['cycle loop:bugfix, loop:feature, notes, review has no declared cycle around it']);
+  // a cycle that holds one lane by name does not cover the route back to the others, and the
+  // other lanes enter it at review
+  assert.deepEqual(check({ ...forked(), cycles: [{ name: 'rework', nodes: ['loop:bugfix', 'review'], max: 2 }] }), [
+    'cycle loop:bugfix, loop:feature, notes, review has no declared cycle around it',
+    'cycle rework: entered at review, not at its first stage loop:bugfix',
+  ]);
+});
+
+// D15: the retired allowlist model is named, with its replacement, never read silently.
+test('D15: loop:$triaged and loops are retired, and check names the replacement', () => {
+  const old = {
+    ...base(), stages: ['intake', 'triage', 'loop:$triaged', 'review'], loops: ['bugfix', 'feature'],
+    edges: [
+      { from: 'intake', on: 'pass', to: 'triage' }, { from: 'intake', on: 'fail', to: '$stop' },
+      { from: 'triage', on: 'pass', to: 'loop:$triaged' }, { from: 'triage', on: 'fail', to: '$stop' },
+      { from: 'loop:$triaged', on: 'pass', to: 'review' }, { from: 'loop:$triaged', on: 'fail', to: '$stop' },
+      { from: 'review', on: 'pass', to: '$close' }, { from: 'review', on: 'fail', to: 'loop:$triaged' },
+    ],
+    cycles: [{ name: 'rework', nodes: ['loop:$triaged', 'review'], max: 2 }],
+  };
+  assert.deepEqual(check(old), [
+    'stage loop:$triaged: retired — list each loop as its own stage, one fork edge per lane (triage --bug--> loop:bugfix), and route back to $lane',
+    'edge triage --pass--> loop:$triaged: pass is not an outcome of triage',
+    'stage triage: no edge for outcome bug',
+    'stage triage: no edge for outcome feature',
+    'stage triage: no edge for outcome docs',
+    'loops: retired — the lanes are the edges out of a fork (triage --bug--> loop:bugfix)',
+  ]);
+  assert.deepEqual(check({ ...forked(), loops: [] }), ['loops: retired — the lanes are the edges out of a fork (triage --bug--> loop:bugfix)']);
+  // a user's file in that shape reaches the doctor's factory catalogue, prefixed, never skipped
+  const sb = makeSandbox('factorygraph-');
+  try {
+    const dir = path.join(sb.path, '.geneseed', 'factories');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, 'old.json'), JSON.stringify({ ...old, name: 'old' }));
+    assert.deepEqual(factoryProblems({ projectRoot: sb.path }).filter((p) => p.includes('retired')), [
+      'factories/old: loops: retired — the lanes are the edges out of a fork (triage --bug--> loop:bugfix)',
+      'factories/old: stage loop:$triaged: retired — list each loop as its own stage, one fork edge per lane (triage --bug--> loop:bugfix), and route back to $lane',
+    ]);
+  } finally { sb.cleanup(); }
 });
 
 test('rule 7: rules, when present, are non-empty strings', () => {
