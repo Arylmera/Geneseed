@@ -18,6 +18,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **The factory transition ceiling is 60 per task** (was 30), and so at most 1200 over a run, for the two new stages and their laps.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The Factories graph draws a fork only where the engine sees one**: a brick that declares a named outcome. A `loop:` stage, or a brick whose pass/fail edges reach two stages, is no longer drawn as lanes. Many routes back into one stage now land inside its box instead of overflowing it.
 - **Factories › Active** says which install's catalogue drew a run's bricks and loops, shows "No runs yet" when the active-runs payload has no `factories` list instead of loading forever, and a catalogue payload without `factories` no longer crashes the page.
 - **Stacked library list:** a click on the open row no longer keeps the list open for a later Ctrl-K jump from outside, and ArrowDown from the filter unfolds a folded list before it focuses the first row.
@@ -55,6 +59,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **Five situational rules keep one line in the lean root.** *Edit the Source, Not the Surface*, *Record the Probe, Not the Snapshot*, *Restart Is Not Reload*, *Serialize Against a Rationed Resource* (ops 3, 5, 6, 7) and *External Gate* (rigor 5) now carry one trigger sentence in a lean install; the full text stays in the pack file, which the root already points to. The full footprint does not change. The `parallel-agents` and `workflow` skills cite *Serialize Against a Rationed Resource* at their fan-out step. The lean root is about 1 200 characters shorter, and the lean size ceiling drops from 41 612 to 40 312. Run `geneseed rebuild-all` to get it.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **A loop can pass in a project with no linter.** The `test` brick listed a check the project does not have as `SKIPPED`, which the engine rightly refuses for a `pass`, so `bugfix` and `feature` could never close on such a repo (found by the factory end-to-end run). The brick now lists it as `<check>: N/A (not configured)`; a check that exists but did not run is still `SKIPPED` and still blocks.
 - **`pr-open` builds the PR body from what it is given.** It asked for the loop's notes, which leave with `LOOP.md` when the loop closes; it now uses the run's `requirement` and `input` and the branch's commit subjects.
 - **The Loadout panel no longer counts user rules a sub-agent never receives.** On a host with no SubagentStart wiring (Bob, OpenCode), or an install emitted before it, the user rules render muted with the reason and are left out of "Rules it follows".
@@ -104,6 +112,10 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **The subagent depth is capped at two where the host allows it.** Claude Code installs write `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"`, and OpenCode installs write `"subagent_depth": 2`, each only when the key is absent. Uninstall removes the Claude key while it still reads `"2"`; the OpenCode key stays, as `lsp` does. OpenClaude and Bob get no key.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - **An `Active packs:` or `Excluded rules:` line outside Geneseed's block no longer counts.** In a shared `CLAUDE.md` or `AGENTS.md` both are read from the managed block only, as the gate switches already were. A line appended to the user's part of the file used to drop packs or rules at the next rebuild, and their hooks with them (process 5's consent ask included). A generated `AGENT.md` is still read whole.
 - **An OpenCode project install asks before an edit tool writes `.opencode/AGENT.md`.** The guard reads that file before the project's own carrier, so a file planted there could set its gate markers and rule exclusions. Its `permission.edit` key was written for a global install only; the guard already refused a shell write to it.
@@ -120,6 +132,10 @@ PowerShell write cmdlets are parsed like their Unix forms, and a suite can no lo
 - **A path that opens with the home is read, in every parsed form:** `~`, `$HOME`, `${HOME}`, `$env:HOME` and `$env:USERPROFILE`, so `echo x >> "$HOME/user-rules.md"` is seen as well.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **A PowerShell here-string is data to the shell-write reader.** An apostrophe in a commit message could unpair the quotes and read a following line as a command. This holds only with a PowerShell cue, the tool's name or a `Verb-Noun` word outside the here-string: to bash `@'` is a plain quote, and what follows it is read.
 - **The test suite no longer writes the real machine tier.** The OpenCode 2 change-report test ran with the real home, so its fixture's path landed in `~/.config/geneseed/.store-report.json`. The test now has its own home. `tests/shim_intact.mjs` fails if the report names a path in the checkout's `adapters/` or `tests/` or in the temp root, and CI runs the suite against a fenced, empty tier that must stay empty.
 
@@ -136,6 +152,10 @@ The migration can finish in the console: a preview, and Approve and Reject on pe
 - **The rule skill's approval flow names the console as a second decider**, and reads the retired files of each host's config directory: `installs.json` holds project roots only, so the old wording found none.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The sidebar no longer says `built never` on a live Claude-family install.** The Overview read the mtime of `AGENT.md`, which such an install lacks. It now reads the version marker, as the fleet does.
 - **`geneseed migrate --dry-run` writes nothing, as it says.** It used to prune dead rows from `installs.json` while it listed the installs.
 
@@ -193,6 +213,10 @@ Memory, rules, profile and the wiki move to one machine-wide shared tier at `~/.
 - **A 1.x install must rebuild first.** Hooks that name `harness.py` no longer read as Geneseed's.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The console tells a pending read from a failed or empty one.** The Overview, Library and Activity show `Loading` until a first read lands, and no count before its data. The Constitution no longer shows "always", "Instruction" or an extra *Gated* row before the picked install is read, and says so when that read fails.
 - **The Overview's Sync cell draws a bar only for stale or edited files.** Otherwise it states one result: *No edits*, or *3 linked by you*. The New here meter appears after the first page read.
 - **Console copy says what is true.** Kits no longer mention a topbar selector. Activity reads *1 session*. Doctor states that it builds this install's theme. The garden's hint works on touch, and its *Sakura* button is *Pink blossom*. An empty Activity names no host.
@@ -244,6 +268,10 @@ Minor: shell writes reach the rule gate, a weakened test is reported at the end 
 - **The Library shows compact status icons, and the Overview graphs fill their cards.**
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Long install names no longer overflow** the voice menu, the Library rows and the sidebar.
 
 ## [4.31.0] — 2026-10-31
@@ -256,6 +284,10 @@ Minor: the web console becomes one hub over every install. The top install switc
 - **The web console has no install switch any more: it is one hub over every install.** The topbar selector and `POST /api/view` are gone, and the breadcrumb is the page name. A page or control that acts on one install carries its own labelled picker next to it, shown only when two or more installs are active: Doctor, Local edits and Server each remember theirs; the Constitution's gate switches and doctrine Apply, Loops and the Voice rebuild act on the install they name. Rules, Profile, Memory and Notebook list every install, each entry tagged; an edit, Forget or Promote writes back to the entry's own install, and a new rule goes where its form's "Write to:" picker says. Every per-install figure on a combined page names its install (the gate "off" badge reads "off · claude global"). The Overview is fleet-only, with each install's voice, footprint, posture, mode and memory count in its row. A request that names no install reads the default install: the first active one in host order, global before project.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The web console sees an OpenCode project install.** That install keeps its manifest and the skills and agents OpenCode loads under `<repo>/.opencode/`, and the console looked for the manifest only at the repo root. So it called the install "not deployed", listed the full source catalogue instead of what the install has (skills it left out included), refused Build, could jump to another install on refresh, and built its "never used" list from the root bundle. It now reads the manifest at either place, reads skills and agents from `.opencode/`, and Build rebuilds such an install in place with the same command `rebuild-all` uses. Diff and Restore are unchanged: as for every project install, no drift check exists.
 
 ## [4.30.1] — 2026-10-31
@@ -266,6 +298,10 @@ Patch: Bob can read a protected check again (a regression in 4.29.0 and 4.30.0).
 - **The web console: each request may name its install.** Reads take `?host=&path=` and install-scoped writes take `{host, path}`, so a page that picks its own install no longer re-points every other page through one shared viewed install. A request without the pair still uses the viewed install, and an unknown pair is refused (404). No page names its install yet, so nothing changes on screen.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Bob can read a protected check again.** Bob runs the gate on every tool, reads included, and since 4.29.0 a project emit seeds `.geneseed/protected-checks.txt` with the manifests, CI files and lint/test config. The gate refused every Bob read of those files, `package.json` included; now only a Bob write to a protected check, the list or `.geneseed/done-checks.txt` is blocked. A write is told by its tool name (`write`, `edit`, `diff`, `replace`, `insert`), the same rule the gate-configuration check already used.
 
 ## [4.30.0] — 2026-10-31
@@ -277,6 +313,10 @@ Minor: the ownership and learn-mode state files stay short (general preferences,
 - **The learn-mode and ownership state files stay short.** `.geneseed/ownership.md` and `.geneseed/learn.md` lose `## Pending`: the open checkpoint lives in the conversation, nothing is written per checkpoint, and after a restart or compaction the agent re-asks any step the visible conversation did not approve. The dated `## Decisions` log becomes `## Preferences`: general rules ("show the test first"), rewritten in place, about 10 lines at most, proposed only when the user states a rule generally or makes the same choice a third time in a session, and always asked. In ownership, a rule about the code is proposed as a one-line `AGENTS.md` convention instead. learn-mode's `## Understood` becomes one line per topic with a `not yet:` part, about 15 lines at most. An old-format file is condensed only on the user's yes.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **OpenCode activity cards land on their own repo shelf.** The activity plugin took `root`
   and `repo` from its plugin instance's worktree. One `opencode serve` hosts an instance per
   opened project, and every instance hears every session, so each stamped its own root on
@@ -312,6 +352,10 @@ Minor: the done gate works with no file (inferred checks, advisory in this relea
   exists at the git root.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The done gate no longer passes a masked check.** `npm test || true`, `npm test; true` and `npm test; exit 0` exit 0 on a red suite, so the gate read them as a passing run. Any `||` after a check, or a `;` or newline followed by `true`, `:`, `exit 0` or a bare `exit`, now reads as "not run"; `&&` still passes. OpenCode gets the same rule. One opening stays: `npm test; npm run lint` passes both checks.
 - `--no-ownership-gate` now silences everything: the install's `AGENT.md` no longer carries the
   "propose it once before the first write" sentence, so the model stops proposing the ownership
@@ -335,6 +379,10 @@ Minor: an ask that waits on the user and is not clear by itself now says what it
 - **An unclear ask now comes with its reason.** *Mark the Ask* (`comms` pack) said how to mark a command, a question or a choice that waits on the user, but not what it must say. A marked `👉 run git rebase --onto main HEAD~3` stayed opaque. The rule now adds: before a command the user must run or approve, or a question that is not clear by itself, write one or two plain lines on what it does, why now and what it changes or risks. For a question, say what the answer decides. A clear ask stays bare. Both the full and the lean text are amended. Run `geneseed rebuild-all` to get it.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - OpenCode 1.x: the workflow plugin no longer paints `[geneseed-workflow] loaded — …` in red over the TUI input box. Observed on 1.19.4: the banner does not print before the TUI draws, as #373 assumed. The banner now prints only with `GENESEED_DEBUG=1`. A warning that the tool may not register still goes out, to OpenCode's log.
 
@@ -346,6 +394,10 @@ Patch: the guard's refusals no longer name the switch that turns it off.
 - Run `geneseed rebuild-all` once after updating so OpenCode installs get the new guard plugin. Claude Code, OpenClaude and Bob get the new hook text with the update itself.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **A refusal no longer reads as leave to get round it.** Every OpenCode guard refusal ended with `— set GENESEED_GUARD=off to allow`. A weak model on OpenCode took that as permission and wrote the blocked memory index through a `python3` shell command instead of re-issuing the edit. The refusals no longer name any switch; `GENESEED_GUARD` stays documented for you in [the guard page](docs/reference/plugin-guard.md). The *Persist Insight* text (the first write to `user-rules.md` or a memory file) now ends, on every host, with: "Stop and ask the user now (the rule skill). If this edit was refused, re-issue the same edit only after they answer; never write it another way (for example through a shell command)." On Bob, where this gate only warns and the write already went through, the condition keeps the model from applying the edit twice. The same calls are blocked as before.
 
 ## [4.27.0] — 2026-10-27
@@ -388,6 +440,10 @@ Minor: Activity's Garden — every live session as a pixel bonsai, fed by richer
 - **Activity's API serves the garden's data.** Each live session now also carries its git root and main repo (with a case-folded `repo_key` to group them), sub-agents, prompt count, context size, compactions, its uncapped changed files (`files_all`) and the loops running in its worktree. A new top-level `collisions` lists every file two writers changed among the live sessions: same worktree, or two worktrees of one repo. The loop join reads the registry without writing it, so a page view still never writes a file.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **OpenCode sessions show their changed files on Activity.** OpenCode 1.x never fills the session summary's diffs; the per-turn diffs sit on the user message (`message.updated`), and a zeroed summary on every step wiped the list. Files now fold from each turn (a repeat of the same turn replaces it, a new turn adds), `session.diff` stays the fallback for 1.3, and an `/undo` (`message.removed`) drops the undone turn.
 - **Activity's host filter lists the hosts again.** The reader dropped each session's `host`, so the filter had no options; an OpenCode plugin snapshot, which carries no host, now reads as `opencode`.
 
@@ -396,6 +452,10 @@ Minor: Activity's Garden — every live session as a pixel bonsai, fed by richer
 Patch: Activity, session detail and Doctor use the full width.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Activity, a session's detail and Doctor use the full width** like the other pages, instead of stopping at 820px.
 
 ## [4.25.0] — 2026-10-25
@@ -416,9 +476,17 @@ Patch: pages use the whole window width.
 Minor: wave V7 — the audit's open findings: server hardening (generic 500s, one folder dialog, safe Reveal, 404 for missing assets), retired rules in a never-loaded file, a service worker that caches real assets only, confirms before Update and Rebuild all, an accessibility pass and a design pass; plus memory topics and run chips.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Pages use the whole window**: no content width cap and a gutter that scales with the window, so wide screens lose their empty sides and the Installs table no longer scrolls beside its panel.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Accessibility**: Genome cells are links; loop rings are labelled groups with no dead tab stops; off-pack rule rows keep full contrast and an unclipped focus ring; the command palette shows focus; accent and chart colours use text tokens in every mode; touch targets reach 44 px on coarse pointers; the docs outline moves focus; docs pages, Copy buttons and status hints have real names; a blocked session is announced.
 - **Console design pass**: voice accent dots removed (they promised a tint that never applied); a skin change resets a custom accent; Update is labelled by install kind; the Settings footprint is read-only with a link to Hosts; Docs article first, constitution map and loop flows legible on phones; Activity panels fold to one column; dead CSS removed.
 - **Retire keeps the rule's text**: it moves to `user-rules-retired.md` beside user-rules.md, a file no session loads or lists; retired ids are never reused. A server fault answers a fixed message (the detail goes to the server log); a name with a control character is refused; a missing asset is a 404, not the page shell; the folder picker opens one dialog at a time; Reveal opens folders in Explorer directly, so `%VAR%` in a path is never expanded.
@@ -454,6 +522,10 @@ Minor: the web console redesign (wave V6b) — every page rebuilt from the appro
 - **parallel-agents watches its units** the way the pipeline watches a crew: a result without its check, or one still waiting, is acted on at once, never waited on.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The Overview's cost card follows the install you view** and says what it measures: "Loaded every turn", that install's total, its parts with their tokens, and the range across all installs on one line.
 - **The Overview's root-file card follows the install you view** (the topbar picker) instead of always showing the fleet's worst; `/api/fleet` rows carry `selected`.
 - **The Library reader's text takes the full width** of the reader instead of stopping at 76 characters, and usage is one card: the count, then the last day, window and hosts on one line, over a sparkline that spans the card.
@@ -484,6 +556,10 @@ Minor: Activity "Today", per-install rebuild, usage in the Library, sync with so
 - **Rule scope `user` is an alias of `global`.** The rule skill documents `project` and `global`; the editor opens a `user` rule on `global` and writes `global` when you save it. Untouched rules keep what they say.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - The Constitution page's Dictates and Doctrines cells no longer show a light browser-default button background that hid their names in dark mode.
 
 ## [4.20.0] — 2026-10-24
@@ -509,6 +585,10 @@ Minor: shared console building blocks, rule summaries kept next to their rules, 
 - **Destructive confirmations look destructive.** Forget, Retire, Restore, Stop server and discarding an unsaved edit use a danger button and put focus on Cancel. An error toast stays until you dismiss it.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - The danger button's text now meets WCAG AA on dark backgrounds in every flavour.
 - The Overview lenses' readiness ring follows the fleet verdict (capped at 65% when the fleet needs a look, 40% when it is in trouble), and the Constitution map and KPI strip use the voice's own tier names.
 
@@ -517,6 +597,10 @@ Minor: shared console building blocks, rule summaries kept next to their rules, 
 Patch: the web console's light mode meets WCAG AA, and console installs default to lean.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Light mode meets WCAG AA in every flavour, mode and accent.** Accent and status text use darker text companions (`--accent-text`, `--good-text`, `--warn-text`, `--bad-text`), measured against each flavour's real surfaces; button text is chosen by contrast, so a light cyan, amber or green button now carries dark text; every control shows a 2 px focus ring; the light topbar is solid and light cards keep their flavour; the page behind the console and the browser's theme colour follow the active mode. A warning next to an amber accent turns orange, so it no longer looks like the accent. `contrast.test.js` checks all of it against the real stylesheet.
 
 ### Changed
@@ -527,6 +611,10 @@ Patch: the web console's light mode meets WCAG AA, and console installs default 
 Minor: the web console's numbers tell the truth (stale vs edited drift, lenses, Constitution, Docs) and it keeps your work (error boundary, draft guard, shared staging).
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Drift numbers tell the truth.** A file that differs from the source only because the install is behind (unmodified since its build) is now `stale`, not `edited`; `.geneseed-version` is always a build stamp. The Overview counts only real hand edits and shows stale files as "N files behind"; Local edits lists them apart under **Behind source** with a rebuild banner; `diff --out` and the upgrade export include only real local changes. "Never fired" counts each skill once across the fleet. A failed fleet read says so and keeps the last good table; a zero ceiling prints "no ceiling"; the ceiling marker sits on the root file's own lane.
 - **The four Overview lenses agree with the Ledger.** They show the newest runs first, carry the fleet verdict badge, and read runs as `verb · scope · result · duration`. The Greenhouse ring is full at 100%, the Lineage badge no longer hard-codes "in sync", a failed doctor says so instead of drawing a false "1 checks", the HUD KPIs sit on one row, and the Journal map keeps its height.
 - **Constitution ranks tiers by the real precedence** (Dictates, your rules, Credo, Doctrines) and renders rule bodies as Markdown. Rule texts are cached and a failed read offers Retry; a partly-on pack reads as mixed; a disarmed gate is marked off; tier names follow the voice.
@@ -545,6 +633,10 @@ Patch: the web console closes its security and data-loss holes from the 2026-10-
 - **The markdown sanitizer drops SVG animation elements, `template`, raw-text elements and `style` attributes.** These closed a `javascript:` link set through `<set>`/`<animate>`, a full-page overlay drawn with `style`, and a mutation XSS through `xmp`, `noembed`, `noframes`, `noscript` or `plaintext`.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Settings › Maintenance no longer offers an Uninstall.** It ran `geneseed uninstall --yes` with no target, so it always removed the OpenCode global install, whichever install you were viewing. Each install keeps its own Uninstall in Installs › Hosts.
 - **Editing a rule keeps its scope.** A rule written `scope: global` was saved back as `project` on every Edit or Graduate. A scope the editor does not list is now kept as written. A rule body with a line that reads as a rule heading (`## …`) is refused with a 400, because it could create a second rule with a forged id. So is a `|` in the scope or source.
 
@@ -569,6 +661,10 @@ Minor: doctrine comms 5 Mark the Ask; a version bump on main now releases itself
 - **The version bump is the release.** `publish.yml` now also runs when CI finishes green on a push to `main`. If the version in `harness.config.json` is not on npm yet, it re-runs its gates against the commit CI tested, publishes it, and creates the `v<version>` tag and the GitHub release from that version's CHANGELOG section; otherwise it stops after one cheap check. A PR's CI run, a red one or a fork's never publishes. The manual dispatch stays, still a dry run by default.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - Bob: a gate block no longer promises a confirmation Bob cannot give. Bob has no ask tier, so "Confirm this specific command" sent the model round the gate (a retry with `-Confirm:$false`, then `git clean`) and finally to "disable the Geneseed hook". Every Bob block now says that nothing in the chat lifts it, and that the user can act outside Bob. Claude's wording is unchanged.
 - Bob: read-only agents now stay read-only. Bob ignores Claude's `disallowedTools`, so every reviewer, explorer and council seat got Bob's default `read, edit, execute`. The Bob emit now writes Bob's own `groups:` key (`read`, plus `execute` for an agent that opts into bash). An `agent-overrides.json` value is not applied on Bob and a warning says so: Bob drops an agent that carries `model:`. Run `geneseed rebuild-all`.
 
@@ -585,6 +681,10 @@ Minor: foreman mode now really delegates, and the web console updates and rebuil
 - Pipelines: the parent session dispatches one background crew lead and goes back to the user. The crew lead picks the crew from the whole agent roster (the floor is only the minimum) and runs the relay. `pipeline` now has a per-host table; on a host where the crew lead cannot start subagents, it plays each role in turn.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - Web console: a git clone always gets the **Update** button, also when the npm release check gets no answer.
 - Web console: a rebuild on a console running old code (after a manual `git pull`) now restarts it and reloads the page.
 - Docs: the pipeline loop limit is 2 repair rounds, then one fresh developer, not "five rounds".
@@ -597,6 +697,10 @@ Patch: two host fixes. The first npm release since 4.14.0, so it also carries 4.
 - Run `geneseed rebuild-all`; nothing changes on a machine until something re-emits.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - OpenCode 1.x: the guard and learn plugins no longer write `[geneseed-guard] …` / `[geneseed-learn] …` lines in red over the TUI input box. Their messages now go to OpenCode's own log (`client.app.log`, service `geneseed-guard` / `geneseed-learn`). OpenCode 2 and a refused log call still use stderr. The workflow plugin's one-line load banner stays on stderr.
 - IBM Bob: the first reply now starts with the theme's readiness line. Both Bob carriers (global `rules/geneseed.md`, the project's `AGENTS.md` block) open with a short first-reply override; without it, Bob's own greeting won. A bare "hi" still gets Bob's fixed welcome. Run `geneseed rebuild-all` to pick it up.
 
@@ -664,6 +768,10 @@ Patch: a clone install on macOS or Linux puts the `geneseed` command on your PAT
 - Nothing to rebuild. If `geneseed` is not found in a new terminal, run `./geneseed link` from your clone and accept the offer to add `~/.local/bin` to your shell's startup file.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **A clone install puts `geneseed` on your PATH on macOS and Linux** (#359). `./install` never linked the command, and `geneseed link` wrote it to `~/.local/bin`, which macOS zsh does not search, so `geneseed` was not found (reported 2026-10). `./install` now runs `link` when `geneseed` is not found yet, and `link` offers, in a terminal, to add the folder to your shell's startup file (`~/.zshrc`, or `~/.bashrc` / `~/.bash_profile` for bash). It appends one marked block, never twice; `geneseed unlink` removes it. Outside a terminal it prints the line to add, as before.
 
 ## [4.11.1] — 2026-10-21
@@ -674,6 +782,10 @@ Patch: the web console on a machine with only IBM Bob (or any host but OpenCode)
 - Restart the console after updating (`geneseed web restart`) so it serves the rebuilt UI. If a per-repo install landed in `Harness/` inside your Geneseed clone, remove it with `./geneseed uninstall --target Harness --yes`, then delete `Harness/`.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The web console works on a machine without OpenCode** (#357). It always opened on the OpenCode global dir, so with only IBM Bob installed the Overview showed the first-deploy form over a working `~/.bob`, and nothing could re-point it (the harness selector hides itself below two installs). When nothing is deployed where it looks, the console now shows the first active install it finds, a global before a project, and follows a first deploy to where it landed.
 - **The first-deploy form asks a project mode for its folder** (#357). Picking a per-repo mode (`bob`, `claude`, `opencode`, `openclaude`) sent a Build with no folder, so the files landed in `Harness/` inside the Geneseed clone, where the host never looks. The form now asks for the folder (typed or Browse…) and deploys there; Build refuses a per-repo mode it has no folder for; the portable `files` bundle is left to the CLI. To remove an install misplaced this way, run `./geneseed uninstall --target Harness --yes` in the clone, then delete `Harness/`.
 - **The doctor's committed-bundle check no longer reads a Claude, Bob or OpenClaude project install as a broken bundle** (#357). Such a tree has a `.bob/`-style data dir, not the bundle layout, so every file read "missing" (178 lines on the reported machine) and no rebuild could clear them.
@@ -692,6 +804,10 @@ Minor: the self-improvement loops write to notebook notes instead of the install
 - **Self-improvement writes to a sidecar, not the skill** (#354). The skill and agent loops used to edit the rendered file in place, which the doctor reported as stale and the next rebuild erased. They now write corrections to `notebook/skill-notes/<name>.md` and `notebook/agent-notes/<name>.md` (seed-once, agent-owned, never overwritten), and read them back before the skill runs or the agent is dispatched. `geneseed diff` lists the notes and `--out` exports them for back-porting into `src/`. AGENT.md names the notes paths, so the carrier ceilings rise by exactly that text (full 62_263, lean 39_156).
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Setup's prompts no longer answer themselves in a real terminal** (#356). Reading `process.stdin` puts a terminal's input in non-blocking mode, and the line reader took the resulting `EAGAIN` for end of input: "Continue without one? (y/N)" printed and answered N at once, so `./install` stopped before anyone could type, and every other wizard question silently took its default. The reader now waits for the keypress.
 - **A tool installed for one user is found** (#356). Setup looked only on PATH, so an IBM Bob installed under the user's profile read as missing. It now also checks `~/.local/bin`, `~/bin`, each tool's own installer dir (`~/.opencode/bin`, `~/.claude/local`), the per-user npm prefix on Windows, and Bob's desktop app folder (`%LOCALAPPDATA%\Programs` on Windows, `/Applications` and `~/Applications` on macOS); a tool found there is listed with its path. When nothing is found, setup asks for the tool's path before offering to stop. The double-clickable `install.command` now waits for Enter before its window can close, as `install.cmd` already did.
 
@@ -714,6 +830,10 @@ Minor: opt-in kits (and a first one, `spring-boot`), credits for adapted content
 - `debug` proves a forced red landed by diffing against a pristine copy; `geneseed-code-review` searches the repo for its standards files (#351).
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - The web install action no longer re-themes an install you are not viewing (#350).
 
 ## [4.9.4] — 2026-10-18
@@ -734,6 +854,10 @@ Patch: rm -rf / and other catastrophic commands are caught on every host even wi
 - Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins pick up the changes.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **`rm -rf /` asks on Claude Code, OpenClaude and Bob even with the deletion gate off.** These hosts had no catastrophic-command check of their own: a recursive removal of `/`, a drive root or the home directory was caught only by Law IV's real-loss check, so `--no-deletion-gate` let it through unasked. `git-gate` (and Bob's `tool-gate`) now run the catastrophic class before that switch and whatever it says: a recursive removal of `/`, `C:\`, `/c` or `~`/`$HOME` (`rm`, `rd`/`del /s`, `Remove-Item -Recurse`), `mkfs` on a device, `dd` over a raw disk, `format C:` and a fork bomb ask on Claude Code and OpenClaude and exit 2 on Bob, as `law-4`. It judges the program after the shell structure is stripped, so `sudo rm -rf /`, `true & rm -rf /`, `(rm -rf /)`, `rm -rf /;`, `bash -c 'rm -rf /'` and a heredoc or here-string fed to a shell (`bash <<'EOF'`) are caught, and a commit message or a heredoc fed to `cat` or `git commit -F -` that only names `rm -rf /` is not. The check is one definition shared with the OpenCode guard (the loss twin block, pinned byte for byte), which now also blocks `rm -rf C:\`, `rm -rf /;`, `rd /s/q C:\` and `bash -c 'rm -rf /'`; its own stricter text match stays on top (it still blocks a command that only quotes one, and any `Remove-Item -Recurse -Force`). Ordinary commands are unaffected.
 - **A skill you replaced with a link to your own copy no longer reads as a hand edit forever.** The emit rightly refuses to write through a link, but `geneseed diff` then compared the rendered file with your linked one and reported it as "edited — review to back-port", which no rebuild could clear. A deployed path that is, or sits under, a link the emit refuses (a junction on Windows, a symlink on POSIX — the same test the emit uses) is now `linked`: `geneseed diff` lists it in its own group ("linked (yours, left alone)"), it is not drift, and it never goes into an improvements file. The console keeps it out of every drift figure: the Overview's "Hand edits" cell shows it as a muted "N linked" when it is all there is, and the Local edits page lists it apart, not selectable for Restore. A regular file you edited is still `edited`.
 
@@ -751,6 +875,10 @@ Patch: the review pass — faster emits, console and Stop; Build and setup keep 
 - **The console reads user-rules.md once, under one key, and a rules or profile write reloads only its own file.** Personal's cards, the Overview's ledger and the Constitution page's "Your rules" tier share one cached `/api/rules` read (`web/src/hooks/useRules.js`), so a rule written on Personal shows on the other two at once. Each visit to one of those pages paints the cached copy and refetches it once, so a rule an agent session wrote shows without waiting for a build. On Personal, a rules write no longer refetches the profile and a profile save no longer refetches the rules. A memory fact promoted to a rule from the Library drops the cached copy, so the Rules tab it lands on shows the new rule. Install changes (build, toggle, switch, edits) still refresh the whole console.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Protected checks follow links in both directions on every host.** Both the Claude/Bob hook and the OpenCode guard now read a write's target twice: as written, and with symlinks and junctions followed (the hook's `resolvePath`). A hit on either reading asks (Claude) or blocks (Bob, OpenCode). A write through a link from outside a repo into one of its protected folders is now caught on OpenCode, where before it passed; a protected folder inside a repo that links out of it is now caught by the hook, where before it passed. Ordinary repos are unchanged. The guard's git readers are now pinned to `js/hosts/gitref.mjs` by a test.
 - **The console's always-on cost no longer counts skills the model never sees.** The skill part of each install's cost counted every `SKILL.md`, including user-only skills and aliases the host keeps out of the model's catalogue. It now skips them the way each host does: on their `disable-model-invocation: true` frontmatter for Claude Code and OpenClaude, and on the `permission.skill` deny in `opencode.json(c)` for OpenCode, which ignores that frontmatter key. Bob writes no `SKILL.md` for a user-only skill, so nothing changes there. Measured on a fresh claude-global lean emit, the skill part drops from 12,982 to 10,837 characters (opencode-global: 12,548 to 11,825). The root-file ceiling is unaffected.
 - **The console's Build no longer re-arms switched-off gates or restores excluded rules and skills.** Rebuilding a deployed install from the console (the theme picker) assembled its own argv: no gate switches, `--exclude-rules none` and no excluded skills. It now takes the argv the install's own profile gives `rebuild-all` and `status`, with only the picked theme swapped in. A global install's Build also names its own `--config-dir`, and a project install's its own `--out`/`--root`.
@@ -764,6 +892,10 @@ Patch: Deletion Is Deliberate and the root-scan check no longer fail open behind
 - Run `geneseed rebuild-all` once after updating so installed hooks and OpenCode plugins pick up the fix.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Deletion Is Deliberate and the root-scan check no longer fail open when shell structure hides the program word.** `true & git reset --hard`, `(git reset --hard)`, `if …; then git reset --hard; fi`, `{ rm x; }`, `echo $(rm x)`, `` echo `rm x` ``, `sudo -u root rm x`, `env -u FOO rm x`, `nice -n 5 rm x`, `timeout 5 rm x`, `true & find / …` and `(find / …)` passed where the plain form asks. The `reset --hard` forms had regressed in 4.7.0. Several changes close it, on Claude Code, OpenClaude and Bob (`git-gate`/`tool-gate`) and in the OpenCode guard:
   - A lone `&` now separates commands. `2>&1`, `<&3`, `&>` and `|&` still do not.
   - Leading `(`, `{`, `!`, `then`, `do` and `else` are stripped before the program word, and so are closing `)`/`}`.
@@ -835,6 +967,10 @@ Minor: a refactor and cleanup pass over everything since 3.15.0, and the nine ga
 - Run `geneseed rebuild-all` once after updating so the installed hooks and OpenCode plugins pick up the fixes below.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Bob no longer blocks removing a secret.** The credential scan read the text being replaced (`search`, and the SEARCH half of an `apply_diff`), so an agent deleting a leaked key was hard-refused. Only what is written is scanned now; planting a key still blocks (#304).
 - **The done gate needs the whole command.** A declared check such as `npm run lint` was counted as run by `npm run lint:fix`, by `echo npm run lint`, or by a commit message naming it. The check must now open a command segment, end at a boundary and sit outside quotes, on Claude Code and OpenCode alike (#307).
 - **The OpenCode done reminder counts only edits inside the project.** An `apply_patch` outside the repo armed it, and a folder named like `..cache/` was taken for outside (#310). The wiki `put` had the same over-strict path check (#312).
@@ -861,6 +997,10 @@ Minor: gates that are proven, not just present — a done gate at turn end, `doc
 - **A stated rule keeps the user's own words.** The rule skill now writes `source: user <date> "<their sentence>"` for a rule the user stated, so a stale rule can be told from a changed mind. Its review flow gains two cases: a rule the user's later words contradict, and a rule only checked by reading that was broken twice (#288).
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Bob gates now block on Windows.** The hook shim (`~/.geneseed/bin/geneseed-hook.cmd`) ended with a bare `exit /b`, which returns 0 under `cmd /c` whatever the gate exited. As a result, Bob's exit-2 refusals (Laws I and IV, protected checks, root scans) went through. The shim now ends with `exit /b %ERRORLEVEL%`. Claude Code and OpenClaude were not affected, because their gates answer through stdout and exit 0. Run `geneseed rebuild-all` once to rewrite the shim (#290).
 
 ## [4.4.1] — 2026-10-16
@@ -900,6 +1040,10 @@ Patch: a folder excluded from the global harness now stays excluded in its git w
 - On Claude Code and OpenClaude, a worktree still loads the global `CLAUDE.md` until you commit the `claudeMdExcludes` snippet that `geneseed exclude list` prints into the repo's tracked settings file.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Exclusions cover git worktrees.** A session in a linked worktree of an excluded repo (`git worktree add`, or a tool that keeps worktrees elsewhere on disk) got the whole global harness, because the bypass only matched the working directory's path. The hooks and the three OpenCode plugins now follow the worktree's `.git` file back to the main repository, reading files only. `exclude add` and `exclude list` warn that `settings.local.json` never reaches a worktree and print the snippet to commit; Geneseed writes no tracked file. (#280)
 
 ## [4.3.0] — 2026-10-15
@@ -938,6 +1082,10 @@ Minor: the web console's Overview becomes a control panel over every installed h
 - `doctor` checks that the host matrix and the enforcement table have exactly one column per host.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - A prune no longer follows a manifest path outside the install. A per-repo manifest entry such as `../victim.txt` could delete a file outside the install on re-emit. Prune now applies the same containment check as uninstall.
 - An emit never writes through a symlink planted at an owned path. This covers every path an emit writes, including `rules/geneseed.md`, `.gitignore`, the OpenCode global `AGENT.md` and the version marker.
 
@@ -958,6 +1106,10 @@ Minor: the planning, review, debugging and multi-agent skills take the lessons o
 - The `cover-and-verify` doctrine and `develop` run the whole suite once at the end and name every failure, including ones the change did not cause; per step, only the affected tests still run.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - The daydream skill's cost line showed a mangled price on Claude Code, which replaces a dollar sign followed by a digit with the skill's arguments.
 - On OpenCode 2, the Activity view now names each tool call. OpenCode 2 sends a tool's name only when its input starts streaming, not with the call itself, so every tool card read "undefined".
 
@@ -969,6 +1121,10 @@ Minor: the planning, review, debugging and multi-agent skills take the lessons o
 Patch: none of the OpenCode plugins loaded on OpenCode 2, and MCP is read-only.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - The seven OpenCode plugins now load on OpenCode 2. OpenCode 2 rewrote the plugin API and refused every Geneseed plugin with *"Plugin must export a default definition with an id and an effect or setup function"*. It skipped them without crashing, so the context load, learn, notify, ponytail, activity and the `workflow` tool were all gone, and the guard's safety gates were silently off. Each plugin now carries both APIs in one file and works on OpenCode 1.3.4 or newer and on OpenCode 2. Plugins no longer load on OpenCode older than 1.3.4. On OpenCode 2 a guard block shows up as a failed tool call that gives the reason, and the Activity view shows no todo list or files-touched count, because OpenCode 2 sends no event for either. Run `geneseed rebuild-all` after updating to install the new plugin files.
 
 ### Changed
@@ -979,6 +1135,10 @@ Patch: none of the OpenCode plugins loaded on OpenCode 2, and MCP is read-only.
 Patch: the web console could not tell apart two project installs of the same host (#244).
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - Two project installs of one host (two repos on Bob, say) are now separate rows in the web console. Both used to get the id `bob:project`, so the Installs table showed both as selected and the topbar harness selector always switched back to the first. The id now carries the install root, and the selector names a project install by its folder. All four hosts had the bug and all four are covered by a test. Nothing is re-emitted; run `geneseed web restart` after updating.
 
 ## [4.0.0] — 2026-10-11
@@ -1004,6 +1164,10 @@ Major: a host-compatibility pass against the current IBM Bob, Claude Code, OpenC
 - The automatic *process 8* migration. An install built before the comms pack (3.7.0, 2026-09-27) used to be silently rewritten on every rebuild: `doctrinesOfDir` added `comms` so the codes rule it carried inside `process` was not lost, and `excludedRulesOfDir` re-addressed any `process 7`/`process 8` exclusion. Both relied on sniffing `process 8` in the rendered carrier, which breaks the day the process pack ever regains an eighth rule for an unrelated reason — it would then fire on a current install and rewrite data nobody asked rewritten. 4.0.0 removes the rewrite: a pre-comms carrier is now read exactly as written, and reading it (`doctor`, `diff`, `status`, `uninstall`) prints a warning on stderr instead, once per process. `rebuild-all` (and `upgrade`, which shells into it) now **skips** a pre-comms install entirely rather than re-emitting it — re-emitting would have written a fresh carrier that still drops `comms` and still carries unaddressed `process 7`/`process 8` exclusions, except now permanently, with no `process 8` text left for anything to ever catch again. **Upgrading:** if your install predates 3.7.0 and still names `process 8` in its carrier, run `geneseed setup` for it — `rebuild-all`/`upgrade` will skip it and name it in their summary until you do.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - Bob gates read Bob's own payload (`{event, tool, input}`); they used to read only `tool_input`, so on Bob no gate ever fired. Bob also scans `apply_diff` and `search_and_replace` bodies.
 - The Claude Code and OpenClaude git gate also matches the PowerShell tool (`Bash|PowerShell`); on Windows a destructive git command run through PowerShell used to pass unchecked. Read-only agents deny PowerShell too.
 - A hook argv error never exits 2: a stale machine-wide shim handed a newer flag used to block every tool call.
@@ -1081,6 +1245,10 @@ Not in the package; how Geneseed itself is built and checked.
 ## [3.16.1] — 2026-10-07
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - `geneseed upgrade` from a checkout older than the August rename of `bin/geneseed.mjs` to `bin/build-driver.mjs` no longer fails with `Cannot find module '…/bin/geneseed.mjs'` and `[E-BUILD]` after a successful pull and doctor gate. The old updater (and an old web daemon's build jobs) spawn the old path from the code they started with; `bin/geneseed.mjs` is back as a forwarder to the driver. If you already hit it, run `geneseed upgrade` again — it is up to date now and rebuilds with the new code.
 
@@ -1093,6 +1261,10 @@ Not in the package; how Geneseed itself is built and checked.
 - `--exclude-skills <name,…>` leaves skills you never use out of an install, on every host: their files, their catalogue rows and any OpenCode command that runs them. The install records the list on an `Excluded skills:` line, and `upgrade`, `rebuild-all`, `diff`, `setup` and the web console keep it. Unknown skills are refused, and so are the ten the harness links to by path. `status` shows `skills off: …`.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - The context hook (Claude Code, Bob, OpenClaude) now keeps its whole output under 9,000 characters. Claude Code shows the model only a preview of a hook output past ~10k, so a doc-heavy repo lost its context silently — this repo's was 25.6 KB, now 2.5 KB. Eager docs that do not fit are listed lazy with the reason; the lazy listing folds three or more docs in one folder into `dir/ — N docs` and ends in a count if it is still too long. The OpenCode plugin folds its project listing the same way.
 
@@ -1119,6 +1291,10 @@ the corrected command layer; then `geneseed web restart` (and a hard reload).
   `.json` file as a theme.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **`geneseed upgrade` kept your settings** — it re-rendered an OpenCode install with only its
   theme and emit, resetting footprint, posture, mode, doctrine packs and excluded rules to the
   defaults; it now reads the install's own values before pulling. The doctor rollback uses
@@ -1167,6 +1343,10 @@ per-verb hook modules; then `geneseed web restart`.
   already did); empty-directory pruning stops at the base.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - `--exclude-rules` is carried through every re-render: `geneseed diff` no longer reports drift on
   an install with excluded rules, console Restore and `geneseed migrate` no longer re-admit them,
   and `validate` honours every render axis. Unknown ids in `harness.config.json` now warn and are
@@ -1300,6 +1480,10 @@ new Loops and Docs pages.
   than declaring the whole repo writable.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Skill and agent descriptions follow the skill-authoring rules** — no trigger sentence is cut
   mid-way in any theme, and no description carries XML-like tags (#179).
 - **The install page no longer scrolls on open** — the reader's own host is lit (its link on the
@@ -1346,6 +1530,10 @@ new Loops and Docs pages.
   Enforced by the git gate on Claude Code, Bob and OpenClaude, and by `geneseed-guard` on OpenCode.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **`geneseed web stop|restart|status --port N`** act on that port only; a stop aimed at a test
   instance no longer shuts down the console recorded on another port (#175).
 
@@ -1381,6 +1569,10 @@ shim and restarts a console left running on old code.
   per term, so GitHub readers get it too.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **Docs no longer claim a foreman pipeline merges on its own.** It hands back an uncommitted
   worktree; the session re-runs the proof and merges only once you accept. The Claude hooks page
   no longer says dropping the process pack loses the git gate — destructive git is still refused.
@@ -1420,6 +1612,10 @@ re-emits them any more. Breaking for Copilot users only; every other host gains 
   OpenClaude, plus the plain `AGENT.md` bundle (#166).
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **The session files reach the session.** The root file names `user-rules.md`, `PROFILE.md`,
   the Memory and Notebook indexes, `wiki.jsonc` and `context.json` for session start, but on a
   Claude-shaped install (Claude Code, Bob, OpenClaude) the context hook only looked at the repo
@@ -1494,6 +1690,10 @@ rewritten `geneseed` skill.
   `geneseed validate`.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - `setup`'s non-interactive hint (`geneseed build --emit … --theme …`) was a usage error.
 - The `geneseed` skill named `geneseed learn` and `geneseed context`, which are hook verbs the CLI
   refuses; it now reads `status --json` and changes an install by one flag of its rebuild command.
@@ -2050,6 +2250,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   fused opener. Spec: `docs/specs/2026-08-27-lean-surgery-design.md`.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - **`ponytail` cited a law that does not exist** — "`{{LAW}} on reuse`" is now
   `{{DOCTRINE}} craft 4`, and "`{{LAW}} on scope`" (the only numeral-less law
@@ -2125,6 +2329,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   console has been designed at. The breakpoint overrides still win, so it still collapses.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - **The Spotlight input was never wired to its own listbox.** No `role="combobox"`,
   `aria-expanded`, `aria-controls`, or `aria-activedescendant`, and the rows had no ids —
@@ -2243,6 +2451,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   consent rule. `rm -rf` and force-push refusals remain Rule IV's territory and ride no axis.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - **Independent doctrine controls.** Each Constitution doctrine row now keeps its detail
   disclosure separate from the right-aligned switch. Toggling a staged rule no longer opens or
@@ -2280,6 +2492,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   force-push refusals are Rule IV's territory, ride no pack, and stay in every build.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - **The Constitution page printed a command that errors.** An inactive pack's enable hint read
   `geneseed build --doctrines …`; the CLI's `build` verb forwards `--theme` and nothing else, so
@@ -2390,6 +2606,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   README prose and SHIPPED.md's triple are all held to that one number by a frozen gate.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 
 - **Four `§N` cross-references that render into every bundle** pointed at the section that
   used to be there: inserting `## 2. Doctrines` pushed every later AGENT.md section down
@@ -2674,6 +2894,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   reported as your local edits.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **`rebuild-all`'s progress lines came out in the wrong order when its output was redirected
   to a file or a log** — every `[rebuild-all] <install>` line appeared *after* the build it
   introduced, so each one named the wrong install. Only visible outside a terminal, which is
@@ -3033,6 +3257,10 @@ and a re-emit migrates an older install's flat `settings.json` automatically.
   file is never regenerated.
 
 ### Fixed
+- **`geneseed web start` ends an unrecorded console of this install by challenge and response.** The console hands out a single-use nonce that lives 30 s, and the proof covers the port and that nonce, so a proof an impostor collects while the console is down can no longer shut the real console down later. A console from before this change gets no proof: it is named and left running, to be ended by hand once.
+- **`geneseed web start` names a console of this install without the shutdown secret** (a foreground `geneseed web`, or a daemon that could not read its secret) and says how to stop it, instead of reading as an impostor.
+- **An `--exclude-rules "comms 5"` exclusion (the retired *Mark the Ask*) says what it stopped doing:** the ask markers now bind inside comms 1, so the exclusion no longer removes them.
+- **A rule exclusion whose address once belonged to a retired rule, and now belongs to a different live rule, warns loudly at build time**, naming both rules.
 - **On Windows, `geneseed build > log.txt` wrote an empty log.** Anything the harness ran as
   a child process — the builder behind `build` and `rebuild-all`, and the same builder behind
   the web UI's "build all" — had its output silently thrown away whenever the harness's own
