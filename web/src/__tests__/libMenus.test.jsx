@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import LibMenus from '../components/LibMenus.jsx'
 
@@ -81,6 +81,30 @@ describe('LibMenus', () => {
     fireEvent.focusOut(document.activeElement, { relatedTarget: document.body })
     expect(trigger('Section').getAttribute('aria-expanded')).toBe('false')
     expect(trigger('Section').hasAttribute('aria-controls')).toBe(false)
+  })
+
+  // Review R1: on Safari and on Firefox for macOS a button takes no focus on mousedown, so a
+  // click on an option first moves focus to the popover box (tabIndex -1) or to nothing. That
+  // focus is still inside the menu: the pick must land, not be lost to a close before the click.
+  it('keeps the menu while focus moves to its own box, so a mouse pick lands', () => {
+    const onCat = vi.fn()
+    render(<LibMenus sections={SECTIONS} cats={CATS} cat="all" total={80} onCat={onCat} />)
+    fireEvent.click(trigger('Category'))
+    const menu = document.getElementById(trigger('Category').getAttribute('aria-controls'))
+    const box = menu.closest('.popover')
+    fireEvent.focusOut(document.activeElement, { relatedTarget: box })
+    fireEvent.click(within(menu).getByRole('button', { name: /^Design/ }))
+    expect(onCat).toHaveBeenCalledWith('design')
+  })
+
+  it('keeps the menu for a click when focus goes nowhere (a click outside closes it instead)', async () => {
+    const onCat = vi.fn()
+    render(<LibMenus sections={SECTIONS} cats={CATS} cat="all" total={80} onCat={onCat} />)
+    fireEvent.click(trigger('Category'))
+    const menu = document.getElementById(trigger('Category').getAttribute('aria-controls'))
+    fireEvent.focusOut(document.activeElement, { relatedTarget: null })
+    fireEvent.click(within(menu).getByRole('button', { name: /^Build/ }))
+    expect(onCat).toHaveBeenCalledWith('build')
   })
 
   it('closes on Escape and on a click outside, focus back on the trigger', () => {

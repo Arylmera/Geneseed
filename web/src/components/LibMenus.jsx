@@ -70,8 +70,12 @@ function MenuButton({ name, value, n, children }) {
     if (open) document.getElementById(id)?.querySelector('.on')?.focus()
   }, [open, id])
   const leave = (e) => {
+    // Focus that goes nowhere (null) is left to the click-outside rule: on Safari and on
+    // Firefox for macOS a click on an option moves focus there, or to the popover box, before
+    // the click lands, and closing here would lose the pick.
     const to = e.relatedTarget
-    if (!to || (!e.currentTarget.contains(to) && to !== ref.current)) close()
+    if (!to || to === ref.current || e.currentTarget.closest('.popover')?.contains(to)) return
+    close()
   }
   const walk = (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return

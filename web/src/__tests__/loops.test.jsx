@@ -425,6 +425,27 @@ describe('Loops — templates', () => {
       expect(document.activeElement).toBe(readerToggle())
     })
 
+    // Review R2: Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere (a new tab or
+    // window), so the page here is not picking: the list stays open and focus stays put.
+    it('a click that opens the row elsewhere is not a pick', async () => {
+      await open({ item: 'adr' })
+      fireEvent.click(listToggle())
+      fireEvent.click(readerToggle())
+      const row = document.querySelector('a.lib-row[href$="/tiny"]')
+      row.focus()
+      for (const opts of [
+        { ctrlKey: true },
+        { metaKey: true },
+        { shiftKey: true },
+        { button: 1 },
+      ]) {
+        fireEvent.click(row, opts)
+        expect(listToggle().getAttribute('aria-expanded')).toBe('true')
+        expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+        expect(document.activeElement).toBe(row)
+      }
+    })
+
     it('a pick of another row also leaves focus on the entry trigger', async () => {
       const view = await open({})
       fireEvent.click(document.querySelector('a.lib-row[href$="/tiny"]'))

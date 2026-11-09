@@ -117,7 +117,11 @@ export function LibList({
         onKeyDown={walkRows}
         onFocus={(e) => rove(e.currentTarget)}
         // A pick, even of the row already open (no route change): fold the list, open the entry.
-        onClick={(e) => e.target.closest?.('.lib-row') && folds.pick()}
+        // A Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere: not a pick here.
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+          if (e.target.closest?.('.lib-row')) folds.pick()
+        }}
       >
         {children}
         {q.trim() && matched === 0 && (
