@@ -44,7 +44,8 @@
  * R4 COVERS WHAT A HAND CAN EDIT. FACTORY.md is a file; `validateFactoryState` refuses counters
  * that are not non-negative integers, a ceiling above 1200, a task block out of its bounds, a gate
  * amend count above 3, a `lane` no fork of the factory leads to, a status the engine does not
- * write, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
+ * write, a `stage`, `tasks.stage`, `launched.stage` or `awaiting` gate the graph does not hold,
+ * an `awaiting` that disagrees with `status`, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
  * `checkFactory` — the termination argument below holds only for a state this engine could have
  * written.
  *
@@ -157,6 +158,23 @@ export function validateFactoryState(state, catalog) {
   }
   const problems = checkFactory(state.factory, catalog);
   if (problems.length) bad(`its factory no longer passes factory check: ${problems.join('; ')}`);
+  // M5: every stage the state names is one of the graph's, so no action meets a stage it cannot run
+  const stages = new Set(state.factory.stages);
+  if (!(stages.has(state.stage) || (state.stage === '$close' && state.status === 'done'))) {
+    bad('stage must be a stage of the factory');
+  }
+  if (tasks?.stage != null && !(stages.has(tasks.stage) && loopOf(tasks.stage) !== null)) {
+    bad('tasks.stage must be null or a loop stage of the factory');
+  }
+  if (launched != null && !(stages.has(launched.stage) && loopOf(launched.stage) === launched.template)) {
+    bad('launched.stage must be a loop stage of the factory, and launched.template its loop');
+  }
+  const { awaiting } = state;
+  if ((state.status === 'awaiting') !== (awaiting != null)) bad('awaiting must be set when, and only when, status is awaiting');
+  if (awaiting != null && !(plainObject(awaiting) && awaiting.kind === 'gate' && stages.has(awaiting.stage)
+    && (stageOutcomes(awaiting.stage, catalog.bricks) ?? []).includes(awaiting.outcome))) {
+    bad('awaiting must be a gate at a stage of the factory, with one of its outcomes');
+  }
   // absent in a state written before lanes existed: that reads as none on record
   if (state.lane != null && !laneTargets(state.factory, catalog.bricks).has(state.lane)) {
     bad('lane must be null or a stage a fork of the factory leads to');

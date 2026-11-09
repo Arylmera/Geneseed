@@ -649,6 +649,20 @@ test('R4: validateFactoryState refuses a state the engine could not have written
     [(s) => { s.factory.cycles = {}; }, 'factory.cycles must be a list'],
     [(s) => { s.factory.edges.push(null); }, 'its factory no longer passes factory check: edges: entry 6 must have a string from, on and to'],
     [(s) => { s.factory = null; }, 'its factory no longer passes factory check: factory: must be an object'],
+    // M5: every stage the state names is the graph's, and `awaiting` matches `status`: a gate
+    // answered on a hand-made `awaiting: null` was a raw TypeError out of `decideFactory`
+    [(s) => { s.stage = 'nowhere'; }, 'stage must be a stage of the factory'],
+    [(s) => { s.stage = '$close'; }, 'stage must be a stage of the factory'],
+    [(s) => { s.taskCount = 2; s.tasks = { path: 'specs/r/spec.md', count: 2, index: 1, stage: 'review' }; },
+      'tasks.stage must be null or a loop stage of the factory'],
+    [(s) => { s.launched.stage = 'review'; }, 'launched.stage must be a loop stage of the factory, and launched.template its loop'],
+    [(s) => { s.launched.template = 'feature'; }, 'launched.stage must be a loop stage of the factory, and launched.template its loop'],
+    [(s) => { s.status = 'awaiting'; s.awaiting = null; }, 'awaiting must be set when, and only when, status is awaiting'],
+    [(s) => { s.awaiting = { kind: 'gate', stage: 'review', outcome: 'fail' }; }, 'awaiting must be set when, and only when, status is awaiting'],
+    [(s) => { s.status = 'awaiting'; s.awaiting = { kind: 'gate', stage: 'nowhere', outcome: 'pass' }; },
+      'awaiting must be a gate at a stage of the factory, with one of its outcomes'],
+    [(s) => { s.status = 'awaiting'; s.awaiting = { kind: 'gate', stage: 'review', outcome: 'maybe' }; },
+      'awaiting must be a gate at a stage of the factory, with one of its outcomes'],
   ];
   for (const [edit, why] of rows) {
     const s = valid(); edit(s);
