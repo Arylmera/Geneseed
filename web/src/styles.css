@@ -1064,9 +1064,12 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .14em;
   text-transform: uppercase; color: var(--accent-text); margin-bottom: var(--sp-1); }
 
-/* The Map: a list of pieces with kind chips, and the selected piece in a panel beside it. */
-.docs-map { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--sp-4);
-  align-items: start; margin-top: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ }
+/* The Map: a list of pieces with kind chips, and the selected piece in a panel beside it while
+   the list keeps 360px, wrapped under it, full width, once it would not. */
+.docs-map { display: flex; flex-wrap: wrap; gap: var(--sp-4);
+  align-items: flex-start; margin-top: 18px; /* off-scale: 18px between --sp-4 and --sp-5 */ }
+.docs-map > .map-tree { flex: 999 1 0; min-width: min(360px, 100%); }
+.docs-map > .map-detail { flex: 1 1 280px; min-width: 0; }
 .map-tree { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line);
   border-radius: var(--r-md); overflow: hidden; }
 .map-tree li + li { border-top: 1px solid var(--line); }
@@ -1082,7 +1085,6 @@ dialog.confirm[open]::backdrop { transition: opacity var(--dur-4) var(--ease-fad
   text-transform: uppercase; color: var(--text-3); margin-top: 10px; /* off-scale: 10px between --sp-2 and --sp-3 */ }
 .map-detail dd { margin: 3px 0 0; /* off-scale: 3px hairline, below the 4px grid */ color: var(--text); }
 @media (max-width: 1180px) {
-  .docs-map { grid-template-columns: 1fr; }
   .map-detail { position: static; }
 }
 @media (max-width: 720px) {
@@ -2816,9 +2818,12 @@ a.tier:hover { background: var(--surface-2); }
 .tier-bar > span { display: block; height: 100%; background: var(--accent); }
 a.tier .tier-bar > span { background: var(--line-3); }
 .tier-sub { font-size: var(--fs-xs); color: var(--text-3); }
-.split { display: flex; gap: var(--sp-5); align-items: flex-start; }
-.split > .panel { flex: 1; }
-.aside-stack { width: 340px; flex: none; display: flex; flex-direction: column; gap: var(--sp-4); }
+/* The rules beside their packs panel while the rules keep 560px, the panel wrapped under them,
+   full width, once they would not (the "sidebar" layout: the rules grow 999 times faster). It
+   reads the room the page gives, so the 1180px media fold it replaced is gone. */
+.split { display: flex; flex-wrap: wrap; gap: var(--sp-5); align-items: flex-start; }
+.split > .panel { flex: 999 1 0; min-width: min(560px, 100%); }
+.aside-stack { flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
 
 .law-toolbar { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
   padding: 10px var(--sp-4); /* off-scale: 10px between --sp-2 and --sp-3 */ border-bottom: 1px solid var(--line); }
@@ -3263,8 +3268,6 @@ a.kit-name:hover { color: var(--accent-text); }
 
 /* ---- breakpoints (the three-tier contract at the top of this file) ---- */
 @media (max-width: 1180px) {
-  .split { flex-direction: column; align-items: stretch; }
-  .aside-stack { width: auto; }
   .hosts { grid-template-columns: minmax(0, 1fr); }
   .install-panel { position: static; }
   .library { grid-template-columns: 200px minmax(0, 1fr); }

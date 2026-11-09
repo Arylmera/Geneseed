@@ -73,3 +73,26 @@ describe('the entry reader never scrolls sideways', () => {
     expect(ring).not.toMatch(/max-width:\s*680px/)
   })
 })
+
+// A side panel beside a page's content (the Constitution's packs and gates, `.split`; the Docs
+// map's piece panel, `.docs-map`) sits beside the content while the content keeps its floor,
+// and wraps under it, full width, once it would not: the intrinsic "sidebar" layout (the content
+// grows 999 times faster, the panel keeps its basis). It reads the room the page gives, so it
+// needs no viewport breakpoint, and has none left.
+describe('side panels wrap under the content', () => {
+  it('the Constitution: the rules keep 560px, the packs panel 340px, then it wraps', () => {
+    expect(rule('.split')).toMatch(/flex-wrap:\s*wrap/)
+    expect(rule('.split > .panel')).toMatch(/flex:\s*999 1 0/)
+    expect(rule('.split > .panel')).toMatch(/min-width:\s*min\(560px, 100%\)/)
+    expect(rule('.aside-stack')).toMatch(/flex:\s*1 1 340px/)
+    expect(css).not.toMatch(/\.split \{ flex-direction: column/)
+  })
+
+  it('the Docs map: the pieces keep 360px, the piece panel 280px, then it wraps', () => {
+    expect(rule('.docs-map')).toMatch(/flex-wrap:\s*wrap/)
+    expect(rule('.docs-map > .map-tree')).toMatch(/flex:\s*999 1 0/)
+    expect(rule('.docs-map > .map-tree')).toMatch(/min-width:\s*min\(360px, 100%\)/)
+    expect(rule('.docs-map > .map-detail')).toMatch(/flex:\s*1 1 280px/)
+    expect(css).not.toMatch(/\.docs-map \{ grid-template-columns: 1fr; \}/)
+  })
+})
