@@ -26,19 +26,20 @@
 // side); tags with stacked lanes. Lanes side by side come first because they are the fork; the
 // rails are its margins. The last form is kept even when it does not fit; the svg scales down.
 //
-// layoutFactory(factory, bricks, { width, loops })
+// layoutFactory(factory, bricks, { width, lane })
 //   -> { width, height, mode, stacked, nodes, edges }
 //   lane   the lane a live run took (laneTaken), where a stacked `$lane` rail lands
 //   mode   'rails' | 'tags'; stacked: some row's lanes are stacked
 //   nodes  [{ id, kind, x, y, w, h, rank, lane, stacked, loop, human, tags }]
-//     kind  'brick' | 'fork' | 'loop' | 'close' | 'stop'
+//     kind  'brick' | 'fork' | 'loop' | 'close' | 'stop'; a loop stage is a compact box, as a
+//           lane is: its loop named, never its ring
 //     lane  in a row of two or more (drawn as a compact lane box); stacked: in a stacked row
 //     tags  [{ kind: 'back' | 'stop' | 'skip', on, to, cycle }]: the tags forms' rails, and a
 //           lane's stop edges in every form
 //   edges  [{ from, to, on, kind, back, cycle, path, lx, ly, anchor }]   one per from → to
 //     kind  'flow' | 'back' | 'skip' (a forward edge over a row) | 'stop'; path null: drawn as a
 //           tag on its source
-import { humanGate, layoutLoop } from './loopRing.js'
+import { humanGate } from './loopRing.js'
 
 const PAD = 24
 const ROW_GAP = 48 // between rows: the bus and an outcome label
@@ -53,10 +54,10 @@ const SPINE = 14 // a stacked row's spine, each side
 const RAIL = 14 // between left rails
 const TAG = 15 // one tag line under a stage
 const CH = 7.2 // px per character of an 11px mono label, rounded up: an estimate, for room only
-const LOOP_W = 440 // a loop block on the main path: its ring readable, not a thumbnail
 export const SIZE = {
   brick: { w: 200, h: 48 },
   fork: { w: 200, h: 48 },
+  loop: { w: 200, h: 56 }, // a brick's width, a lane's height: its loop name over `whole loop`
   lane: { w: 150, h: 56 },
   close: { w: 96, h: 34 },
   stop: { w: 76, h: 34 },
@@ -118,12 +119,12 @@ export function layoutFactory(factory, bricks = [], opts = {}) {
     { rails: false, stack: true },
   ]
   for (const f of forms) {
-    const l = place(factory, bricks, opts.loops || [], f, avail, opts.lane)
+    const l = place(factory, bricks, f, avail, opts.lane)
     if (l.width <= avail || f === forms.at(-1)) return l
   }
 }
 
-function place(factory, bricks, loops, form, avail, taken) {
+function place(factory, bricks, form, avail, taken) {
   const stages = Array.isArray(factory.stages) ? factory.stages : []
   const stageSet = new Set(stages)
   const edgesIn = (Array.isArray(factory.edges) ? factory.edges : []).filter(
@@ -137,7 +138,6 @@ function place(factory, bricks, loops, form, avail, taken) {
     Array.isArray(c?.nodes),
   )
   const byName = new Map(bricks.map((b) => [b.name, b]))
-  const rings = new Map(loops.map((t) => [t.name, t.graph]))
   const forks = forksOf(factory)
   const lanes = new Set([...forks.values()].flat())
   const cycleOf = (e) => spentCycle(cycles, e.from, e.to, lanes)
@@ -168,7 +168,6 @@ function place(factory, bricks, loops, form, avail, taken) {
   const padX = form.rails ? PAD : PAD_TIGHT
   const gap = form.rails ? LANE_GAP : LANE_GAP_TIGHT
   const room = avail === Infinity ? Infinity : avail - 2 * padX
-  const loopW = Math.max(SIZE.brick.w, Math.min(LOOP_W, room))
   const laneW = () => Math.max(SIZE.lane.w, Math.min(240, room - 2 * SPINE))
   // Side by side: full lanes with rails; in the tags forms, as wide as the room allows.
   const sideLaneW = (n) =>
@@ -180,14 +179,9 @@ function place(factory, bricks, loops, form, avail, taken) {
     const lane = inLane(s)
     const loop = s.startsWith(LOOP) ? s.slice(LOOP.length) : null
     const kind = loop ? 'loop' : forks.has(s) ? 'fork' : 'brick'
-    let size = lane
+    const size = lane
       ? { w: sideLaneW(rows[rank.get(s)].length), h: SIZE.lane.h }
       : { ...(SIZE[kind] || SIZE.brick) }
-    if (kind === 'loop' && !lane) {
-      const ring = rings.get(loop) ? layoutLoop(rings.get(loop), bricks) : null
-      const aspect = ring ? ring.height / ring.width : 0.8
-      size = { w: loopW, h: Math.round(36 + (loopW - 16) * aspect) }
-    }
     return {
       id: s,
       kind,

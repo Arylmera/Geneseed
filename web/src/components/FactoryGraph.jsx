@@ -1,15 +1,15 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { backLabel, laneTaken, layoutFactory } from '../lib/factoryFlow.js'
-import RingGraph, { HumanBadge } from './RingGraph.jsx'
+import { HumanBadge } from './RingGraph.jsx'
 
 const SLACK = 20 // px: more than a scrollbar's width
 
 // A factory drawn as its stages, top to bottom (lib/factoryFlow.js does the geometry, spec D10):
-// a brick as a grey block, a fork as an amber one, a `loop:` stage on the main path as a teal
-// block holding its loop's ring (RingGraph, scaled), the lanes of a fork side by side as compact
-// boxes (stacked as a list when the pane is narrow), `$close` and `$stop` as end caps, each route
-// back as a rail on the left labelled with its cycle and `max`, and every stop edge into one rail
-// on the right. When the pane has no room for rails, they become tags under the stage they leave.
+// a brick as a grey block, a fork as an amber one, a `loop:` stage as a teal one naming its loop
+// over `whole loop` (never its ring: the Loops page draws that), the lanes of a fork side by
+// side as compact boxes (stacked as a list when the pane is narrow), `$close` and `$stop` as end
+// caps, each route back as a rail on the left labelled with its cycle and `max`, and every stop
+// edge into one rail on the right. When the pane has no room for rails, they become tags under the stage they leave.
 // Every colour is a class in styles.css (`.fg-*`) reading the console's tokens.
 //
 // The graph never scrolls sideways (D18): it measures its own box, lays out for that width, and
@@ -17,10 +17,10 @@ const SLACK = 20 // px: more than a scrollbar's width
 // the width is unbounded and the rails form is drawn.
 //
 // The svg is a named `group`, as RingGraph's is. A block is a button only when `onSelect(id)` is
-// given, else a labelled image. A loop block's button is its title strip alone, never the ring:
-// a button's children are presentational, so wrapping the ring would hide its nodes (LP-1).
+// given, else a labelled image. `loops` (the catalogue's) lets a loop box say when its loop is
+// not in this install's catalogue.
 // `highlight` names the stage a live run stands on (`.current`, `aria-current="step"`); `child`
-// is that run's live loop (`{ graph, node }`), drawn in place of the template with its node lit.
+// is that run's live loop (`{ node }`): the box it stands on reads `at <node>`.
 // `lane` (the run's FACTORY.md `lane`) names the lane its last fork took (`.taken`); when the
 // run carries none (undefined), `history` (its transitions) names it.
 // `counters` (a run's cycle laps) turn a cycle's `max 2` into `1 / 2`.
@@ -53,8 +53,8 @@ export default function FactoryGraph({
   }, [])
 
   const taken = lane !== undefined ? lane : laneTaken(factory, history)
-  const l = layoutFactory(factory, bricks, { width: room, loops, lane: taken })
-  const graphs = new Map(loops.map((t) => [t.name, t.graph]))
+  const l = layoutFactory(factory, bricks, { width: room, lane: taken })
+  const graphs = new Set(loops.map((t) => t.name))
   const cycles = new Map((factory.cycles || []).map((c) => [c.name, c]))
   const forks = new Set(l.nodes.filter((n) => n.kind === 'fork').map((n) => n.id))
   const tagText = (t) =>
@@ -173,62 +173,39 @@ export default function FactoryGraph({
             )
           }
           const aria = n.id === highlight ? 'step' : undefined
-          if (n.lane || n.kind === 'brick' || n.kind === 'fork') {
-            const live = child && n.id === highlight ? child : null
-            const sub = n.lane
-              ? live
-                ? `at ${live.node}`
-                : n.kind === 'loop'
-                  ? 'whole loop'
-                  : 'no loop'
-              : null
-            return (
-              <g key={n.id}>
-                <g className={cls(n)} aria-current={aria} {...role(n)}>
-                  {/* A lane box is narrow: it names its loop without the `loop:` prefix; the full
-                      stage name stays in its aria-label and its hover title. */}
-                  {n.lane ? <title>{n.id}</title> : null}
-                  <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="10" />
-                  <text x={n.x + n.w / 2} y={n.y + n.h / 2 + (sub ? -2 : 4)} textAnchor="middle">
-                    {n.lane && n.loop ? n.loop : n.id}
-                  </text>
-                  {sub ? (
-                    <text
-                      x={n.x + n.w / 2}
-                      y={n.y + n.h / 2 + 14}
-                      textAnchor="middle"
-                      className="fg-sub"
-                    >
-                      {sub}
-                    </text>
-                  ) : null}
-                  {n.human ? <HumanBadge x={n.x + n.w - 4} y={n.y + 4} label={n.human} /> : null}
-                </g>
-                {tags(n)}
-              </g>
-            )
-          }
           const live = child && n.id === highlight ? child : null
-          const graph = live?.graph || (n.loop ? graphs.get(n.loop) : null)
+          const sub =
+            live && (n.loop || n.lane)
+              ? `at ${live.node}`
+              : n.loop
+                ? graphs.has(n.loop)
+                  ? 'whole loop'
+                  : 'not in catalogue'
+                : n.lane
+                  ? 'no loop'
+                  : null
           return (
             <g key={n.id}>
               <g className={cls(n)} aria-current={aria} {...role(n)}>
-                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="14" />
-                <text x={n.x + 12} y={n.y + 20} className="fg-title">
-                  {n.id}
+                {/* A loop box names its loop without the `loop:` prefix, as a narrow lane box
+                    names its stage; the full stage name stays in its aria-label and hover title. */}
+                {n.lane || n.loop ? <title>{n.id}</title> : null}
+                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="10" />
+                <text x={n.x + n.w / 2} y={n.y + n.h / 2 + (sub ? -2 : 4)} textAnchor="middle">
+                  {n.loop || n.id}
                 </text>
+                {sub ? (
+                  <text
+                    x={n.x + n.w / 2}
+                    y={n.y + n.h / 2 + 14}
+                    textAnchor="middle"
+                    className="fg-sub"
+                  >
+                    {sub}
+                  </text>
+                ) : null}
+                {n.human ? <HumanBadge x={n.x + n.w - 4} y={n.y + 4} label={n.human} /> : null}
               </g>
-              {graph ? (
-                <foreignObject x={n.x + 8} y={n.y + 28} width={n.w - 16} height={n.h - 34}>
-                  <div className="fg-ring">
-                    <RingGraph graph={graph} bricks={bricks} highlight={live?.node} />
-                  </div>
-                </foreignObject>
-              ) : (
-                <text x={n.x + 12} y={n.y + 48} className="fg-sub">
-                  not in this install&apos;s catalogue
-                </text>
-              )}
               {tags(n)}
             </g>
           )

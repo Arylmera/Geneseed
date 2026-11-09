@@ -127,11 +127,13 @@ the `holdout` stage plays each scenario against the change as built and reports.
 ## In the console
 
 The console's **Factories** page (in the Build group, after Loops) draws each factory as a
-graph: its stages left to right, a `loop:` stage as a block that holds its loop's ring, each
-route back as an arc above the row with its cycle and `max`, and `close` and `stop` as end caps.
+graph: its stages top to bottom, a fork's lanes side by side, a `loop:` stage as a compact box
+that names its loop over `whole loop`, each route back as a rail on the left with its cycle and
+`max`, and `close` and `stop` as end caps.
 Each factory shows how to start it: the request to give the agent, and the commands to start it
-by hand, the worktree first and then `geneseed factory init`. Its **Active** tab lists every registered run, with the current stage lit, the laps spent on
-each cycle and the child loop's current step. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
+by hand, the worktree first and then `geneseed factory init`. Its **Active** tab lists every
+registered run, with the current stage lit, the laps spent on each cycle and the child loop's
+current step, written `at <node>` in the current stage's box. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
 agent's session.
 
 ## Your own factories

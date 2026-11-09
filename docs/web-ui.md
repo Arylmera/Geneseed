@@ -351,8 +351,9 @@ screen the run list stacks above the detail.
   in the Loops page's three panes with two sections. **Templates** are grouped by origin; the
   reader draws the selected factory as a vertical graph (`web/src/lib/factoryFlow.js`): each
   stage on the row of its longest path from `start`, top to bottom, joined by lines; a brick a
-  grey block, a fork amber, a `loop:` stage on the main path a teal block holding its loop's
-  ring. The targets of a fork share a row, side by side, each lane labelled with its outcome,
+  grey block, a fork amber, a `loop:` stage a teal box that names its loop (without `loop:`)
+  over `whole loop`, or `not in catalogue` when this install lacks it; the ring itself is on the
+  Loops page. The targets of a fork share a row, side by side, each lane labelled with its outcome,
   and join again at the first stage every lane reaches. Each route back (an edge into a cycle's
   first stage, the edge that spends a lap, `$lane` included) is a rail on the left labelled
   `↺ <cycle> · max N`, the smallest cycle that holds it; every stop edge on the main path runs
@@ -368,8 +369,8 @@ screen the run list stacks above the detail.
   (`GET /api/factories/active`, polled every 5 s, the graph read from each run's `FACTORY.md`),
   grouped as Loops › Active is; the reader shows the run's stage, transitions, task number, its
   child loop's step and iteration, what it awaits, and its graph with the current stage lit,
-  the lane its last fork took (the run's `lane`, else read from its `history`) lit, the child loop's node lit in
-  the stage's ring and each cycle's laps as `n / max`. No run
+  the lane its last fork took (the run's `lane`, else read from its `history`) lit, the child
+  loop's node named under the current stage (`at <node>`) and each cycle's laps as `n / max`. No run
   reports tab: a run's report lives in its own worktree.
 - **Profile** (`#/profile`) — `PROFILE.md`: who you are and how you like to work, one card
   per file: the shared one every global install reads, tagged `shared`, and each project

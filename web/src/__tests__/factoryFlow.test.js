@@ -45,8 +45,9 @@ describe('layoutFactory — a factory with no fork', () => {
       ['$stop', 'stop'],
     ])
     expect(at(l, 'loop:bugfix').loop).toBe('bugfix')
-    // A loop stage on the main path holds its ring: 440 wide, about twice the old 224 block.
-    expect(at(l, 'loop:bugfix').w).toBe(440)
+    // A loop stage on the main path is a compact box, never its ring: a brick's 200 px width, so
+    // the column stays flush, and a lane's 56 px height, for its loop name over `whole loop`.
+    expect([at(l, 'loop:bugfix').w, at(l, 'loop:bugfix').h]).toEqual([200, 56])
     expect(at(l, 'merge-gate').human).toBe('Human gate')
     expect(at(l, 'intake').human).toBeNull()
   })
@@ -105,8 +106,7 @@ describe('layoutFactory — a factory with no fork', () => {
   })
 
   // At 400 px the rails do not fit: each becomes a tag under the stage it leaves, and the graph
-  // is no wider than its room. The loop block shrinks to the room: 400 less the tags form's two
-  // 16 px side pads.
+  // is no wider than its room. The loop box already fits, so it keeps its 200 px.
   it('folds the rails into tags when the pane is narrow', () => {
     const n = layoutFactory(factory, BRICKS, { width: 400 })
     expect(n.mode).toBe('tags')
@@ -117,7 +117,7 @@ describe('layoutFactory — a factory with no fork', () => {
     ])
     expect(at(n, 'intake').tags.map((t) => [t.kind, t.on.join()])).toEqual([['stop', 'fail']])
     expect(at(n, '$stop')).toBeUndefined()
-    expect(at(n, 'loop:bugfix').w).toBe(368)
+    expect(at(n, 'loop:bugfix').w).toBe(200)
   })
 
   // A forward edge over a row is no straight line through the block between: a rail on the left.

@@ -3662,8 +3662,6 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
    (--fg-w, set on the svg); the layout itself folds rails into tags and stacks lanes to fit. */
 .fg-wrap { min-width: 0; max-width: 100%; }
 .fgraph { display: block; width: 100%; max-width: var(--fg-w); height: auto; font-family: var(--font-ui); }
-/* The ring inside a loop block fills its block, not the flow's width. */
-.fg-ring .loop-ring { width: 100%; max-width: none; }
 .fg-edge { fill: none; stroke: var(--line-3); stroke-width: 1.6; }
 .app.light .fg-edge { stroke: var(--text-3); }
 .fg-edge.back { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 6 4; }
@@ -3685,11 +3683,10 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .fg-node:hover rect { stroke-width: 3; }
 .fg-node:focus-visible rect { stroke: var(--text); stroke-width: 3; }
 .fg-node:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
-/* The lane a run took thickens; the stage it stands on fills (a ring block keeps its ring readable). */
+/* The lane a run took thickens; the stage it stands on fills. */
 .fg-node.taken rect { fill: color-mix(in srgb, var(--accent) 28%, var(--surface)); stroke: var(--text); stroke-width: 3; }
-.fg-node.brick.current rect, .fg-node.fork.current rect, .fg-node.lane.current rect { fill: var(--accent); }
-.fg-node.brick.current text, .fg-node.fork.current text, .fg-node.lane.current text { fill: var(--accent-ink); }
-.fg-node.current rect { stroke-width: 3.5; }
+.fg-node.current rect { fill: var(--accent); stroke-width: 3.5; }
+.fg-node.current text { fill: var(--accent-ink); }
 .fg-sub { font-size: var(--fs-2xs); fill: var(--text-2); }
 .fg-close rect { fill: color-mix(in srgb, var(--good) 16%, var(--surface)); stroke: var(--good); stroke-width: 1.6; }
 .fg-stop rect { fill: color-mix(in srgb, var(--bad) 12%, var(--surface)); stroke: var(--bad); stroke-width: 1.6; }
