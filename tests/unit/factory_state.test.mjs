@@ -251,6 +251,22 @@ test('G2 + J5: --spec takes specs/<slug>/spec.md and nothing else, and exempts o
   validateFactoryState(s, CATALOG);
 });
 
+// M11: git C-quotes a path with a non-ASCII byte (core.quotePath), so a slug `café` reaches the
+// engine as `"specs/caf\303\251/spec.md"`. The exemption compares the unquoted path, so the spec
+// at that path records on an otherwise clean tree, and nothing else is exempt.
+test('M11: a C-quoted, octal-escaped porcelain path matches the spec it names', () => {
+  assert.equal(engine.unquotePath('"specs/caf\\303\\251/spec.md"'), 'specs/café/spec.md');
+  assert.equal(engine.unquotePath('"a\\"b\\\\c\\td"'), 'a"b\\c\td');
+  assert.equal(engine.unquotePath('plain/path.md'), 'plain/path.md');
+  const s = start(specFactory());
+  const quoted = '?? "specs/caf\\303\\251/spec.md"';
+  assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: quoted, specPath: 'specs/café/spec.md', taskCount: 2 }),
+    { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  const t = start(specFactory());
+  assert.throws(() => recordStage(t, CATALOG, 'pass', { porcelain: `${quoted}\n?? "specs/caf\\303\\251/notes.md"`, specPath: 'specs/café/spec.md', taskCount: 2 }),
+    /commits them first: \?\? "specs\/caf\\303\\251\/notes\.md"$/);
+});
+
 test('countSpecTasks counts the top-level numbered items under the first Tasks heading', () => {
   const spec = [
     '# Spec', '', '1. not a task: no Tasks heading yet', '', '## Ordered tasks', '',

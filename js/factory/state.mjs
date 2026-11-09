@@ -24,7 +24,8 @@
  * record: it is uncommitted until the gate approves it, and the Rite commits it then, before the
  * first loop, whose first read brick would stop on it otherwise) — instead of carrying
  * uncommitted work into the next loop. The porcelain must be
- * `git status --porcelain --untracked-files=all`: plain `--porcelain` folds a new directory into `?? specs/`, which no exemption can match. No porcelain
+ * `git status --porcelain --untracked-files=all`: plain `--porcelain` folds a new directory into `?? specs/`, which no exemption can match.
+ * A path git C-quotes (a non-ASCII slug, under the default core.quotePath) is unquoted first (M11). No porcelain
  * at all (`null`, a TTY stdin) is refused too: it proves nothing. The limit: an empty pipe reads
  * as a clean tree, so the engine trusts whoever pipes it.
  *
@@ -327,7 +328,24 @@ const initedSince = (initAt, launchAt) => {
 };
 function dirtyLines(porcelain, specPath) {
   const exempt = specPath !== null && SPEC_PATH.test(specPath) ? specPath : null;
-  return filterPorcelain(porcelain).split('\n').filter((l) => l && slash(l.slice(3).replace(/^"|"$/g, '')) !== exempt);
+  return filterPorcelain(porcelain).split('\n').filter((l) => l && slash(unquotePath(l.slice(3))) !== exempt);
+}
+
+// M11: git C-quotes a path with a byte it will not print as is (core.quotePath, on by default):
+// `"specs/caf\303\251/spec.md"` is `specs/café/spec.md`. Octal escapes are UTF-8 bytes.
+const C_ESCAPES = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 };
+export function unquotePath(p) {
+  if (!(p.length >= 2 && p.startsWith('"') && p.endsWith('"'))) return p;
+  const bytes = [];
+  for (let i = 1; i < p.length - 1; i += 1) {
+    const c = p[i];
+    if (c !== '\\') { bytes.push(...Buffer.from(c, 'utf8')); continue; }
+    const oct = /^[0-7]{3}/.exec(p.slice(i + 1));
+    if (oct) { bytes.push(parseInt(oct[0], 8)); i += 3; continue; }
+    const n = C_ESCAPES[p[i + 1]];
+    bytes.push(n ?? 92); if (n !== undefined) i += 1;
+  }
+  return Buffer.from(bytes).toString('utf8');
 }
 
 /**

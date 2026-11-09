@@ -505,6 +505,21 @@ test('record --spec with the porcelain real git prints: --untracked-files=all is
   } finally { sb.cleanup(); }
 });
 
+// M11: the porcelain real git prints for a non-ASCII slug is C-quoted with octal escapes (the
+// default core.quotePath); the engine unquotes it, so the spec records.
+test('M11: record --spec with a non-ASCII slug, on the porcelain real git prints', () => {
+  const sb = gitRepo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'café'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'café', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const all = git(sb.path, '-c', 'core.quotePath=true', 'status', '--porcelain', '--untracked-files=all');
+    assert.equal(all, '?? FACTORY.md\n?? "specs/caf\\303\\251/spec.md"\n');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/café/spec.md'], all),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
 // D9 + J7 on the shipped `analysis-to-build`, in a real git repository, every porcelain the one
 // git prints: intake -> spec (3 tasks, gated) -> holdout-write -> loop:feature once per task ->
 // checks red -> loop:feature once more (task 3/3 marked `extra`, the failing check as its note; D12:
