@@ -29,8 +29,9 @@ to the loop three times, not two".
      once committed) or global `$XDG_CONFIG_HOME/geneseed/factories/` (default
      `~/.config/geneseed/factories/`, every project on this machine). Shipped `src/factories/`
      only inside the Geneseed repository. At project level, when
-     `git check-ignore -q .geneseed/factories/<name>.json` exits 0, tell the user the file stays
-     personal until `.geneseed/.gitignore` lets `/factories/` back in.
+     `git check-ignore -q .geneseed/factories/<name>.json` exits 0, the repository's
+     `.geneseed/.gitignore` predates `!/factories/`: tell the user the file stays personal until
+     they add that line.
 3. **Write `<level>/<name>.json`**, `name` equal to the file stem, in the shape of the shipped
    `bug-report-to-fix`:
 
@@ -52,8 +53,9 @@ to the loop three times, not two".
    {{SKILL}} that writes bricks.
 5. **Check:** `geneseed factory check --factory <name>` (or the `.json` path). For each problem,
    tell the user which rule it names, then fix the file and re-run until it prints `ok: true`:
-   - `not JSON` / `does not match the file name` — the file does not parse, or its `name` is
-     not its stem; until fixed, `--factory <name>` cannot find it.
+   - `no factory named "<name>"` — `--factory <name>` found no loadable file of that name. Run
+     a bare `geneseed factory check`: it lists every catalogue problem, among them `not JSON`
+     (the file does not parse) and `does not match the file name` (its `name` is not its stem).
    - `must be a non-empty string` / `entry … must have` / `is listed twice` / `rules: must be` —
      the shape: a `name`, well-formed `edges` and `cycles` entries, each stage once, `rules` a
      list of non-empty strings.
