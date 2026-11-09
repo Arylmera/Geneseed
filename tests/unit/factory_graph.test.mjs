@@ -4,12 +4,13 @@
 // that). Its `triage` declares named outcomes, which makes it a fork.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf } from '../../js/factory/graph.mjs';
 import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
+import { inferDoneChecks } from '../../js/hosts/done-checks.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, { name, outcomes, effect: 'read', available: true, ...extra }];
 const CATALOG = {
@@ -339,5 +340,46 @@ test('the doctor\'s factoryProblems is clean over the shipped tree and red over 
       'factories/fixture-broken: cycle loop:nope, review has no declared cycle around it',
       'factories/fixture-broken: stage loop:nope: no loop template named nope',
     ]);
+  } finally { sb.cleanup(); }
+});
+
+// One writer per value: `inferDoneChecks` (js/hosts/done-checks.mjs) is the writer of the
+// manifest -> command rules, and the `checks` brick restates them because it runs in a user's
+// repo, where that module does not exist. So every command the writer infers, for each manifest
+// kind and each package manager, must be named in the brick, with the two exclusions it applies.
+test('the checks brick names every command inferDoneChecks infers', () => {
+  const brick = readFileSync(path.resolve(import.meta.dirname, '../../src/bricks/checks.md'), 'utf8');
+  const scripts = JSON.stringify({ scripts: { test: 'x', lint: 'x', typecheck: 'x' } });
+  const kinds = {
+    npm: { 'package.json': scripts },
+    pnpm: { 'package.json': scripts, 'pnpm-lock.yaml': '' },
+    yarn: { 'package.json': scripts, 'yarn.lock': '' },
+    bun: { 'package.json': scripts, 'bun.lock': '' },
+    maven: { 'pom.xml': '' },
+    gradle: { 'build.gradle': '' },
+    gradleKts: { 'build.gradle.kts': '' },
+    python: { 'pyproject.toml': '[tool.pytest.ini_options]\n' },
+    cargo: { 'Cargo.toml': '' },
+    go: { 'go.mod': '' },
+  };
+  const sb = makeSandbox('checksbrick-');
+  try {
+    const seen = [];
+    for (const [kind, files] of Object.entries(kinds)) {
+      const dir = path.join(sb.path, kind);
+      mkdirSync(dir, { recursive: true });
+      for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
+      const labels = inferDoneChecks(dir).checks.map((c) => c.label);
+      assert.ok(labels.length, `${kind}: the fixture infers nothing`);
+      for (const l of labels) { seen.push(l); assert.ok(brick.includes(`\`${l}\``), `${kind}: the brick does not name \`${l}\``); }
+    }
+    assert.equal(seen.length, 18, 'four package managers x three scripts, plus six other manifest fixtures');
+    // the exclusions the writer applies, named in the brick: the npm stub, and pytest only where it shows
+    writeFileSync(path.join(sb.path, 'npm', 'package.json'), JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }));
+    assert.deepEqual(inferDoneChecks(path.join(sb.path, 'npm')).checks, []);
+    assert.ok(brick.includes('no test specified'));
+    writeFileSync(path.join(sb.path, 'python', 'pyproject.toml'), '[project]\nname = "x"\n');
+    assert.deepEqual(inferDoneChecks(path.join(sb.path, 'python')).checks, []);
+    assert.ok(brick.includes('only where pytest shows'));
   } finally { sb.cleanup(); }
 });

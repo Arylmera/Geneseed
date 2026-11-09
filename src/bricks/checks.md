@@ -14,10 +14,19 @@ worktree, and report that file's path.
 
 Read the done list from the base, never from this branch: `git show
 origin/<default>:.geneseed/done-checks.txt`, one command per line, `#` lines ignored. When the base
-has no such file, or it holds no command, propose one: derive it by the rules of Geneseed's
-`inferDoneChecks` (`js/hosts/done-checks.mjs`), applied to the BASE's manifests (`git show
-origin/<default>:<file>`), never this branch's. With no manifest, propose nothing and say so. Write
-the proposal and report `none`.
+has no such file, or it holds no command, propose one from the BASE's manifests (`git show
+origin/<default>:<file>`), never this branch's:
+- `package.json`: its `test`, `lint` and `typecheck` scripts, each only when present, and `test`
+  not when it is npm's `no test specified` stub. Run them with the package manager the lockfile
+  names: `pnpm test`, `pnpm lint`, `pnpm typecheck` (`pnpm-lock.yaml`); `yarn test`, `yarn lint`,
+  `yarn typecheck` (`yarn.lock`); `bun run test`, `bun run lint`, `bun run typecheck`
+  (`bun.lock`); else `npm test`, `npm run lint`, `npm run typecheck`.
+- `pom.xml`: `mvn test`. `build.gradle` or `build.gradle.kts`: `gradle test`, as `./gradlew test`
+  when the repo has the wrapper. `Cargo.toml`: `cargo test`. `go.mod`: `go test`.
+- `pyproject.toml`: `pytest`, only where pytest shows (a `[tool.pytest` section, `pytest.ini`,
+  `conftest.py` or a `tests` folder).
+- No manifest: propose nothing, and say so.
+Write the proposal and report `none`.
 
 List the untracked files (`git status --porcelain --untracked-files=all`), then run each command
 from the worktree root, in order, each bounded under 10 minutes by your shell tool's timeout.
