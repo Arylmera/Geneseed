@@ -11,7 +11,7 @@ import path from 'node:path';
 
 import { foldHost, foldSummary } from '../../js/build/fold.mjs';
 import { orphanFindings } from '../../js/maintain/migrate.mjs';
-import { retiredSkillFolders } from '../../js/build/retired-skills.mjs';
+import { isRendered, retiredSkillFolders } from '../../js/build/retired-skills.mjs';
 import { ROOT } from '../../js/build/source.mjs';
 import {
   SESSION_SEEDS, ensureExcludesStub, ensureMemoryIndex, ensureProfileStub, ensureRulesStub,
@@ -1308,7 +1308,7 @@ test('M6: opencode-global prunes an old render too (host parity)', () => withHom
   assert.deepEqual(archivedSkills(cfg), ['repo-map']);
 }));
 
-test('M6: a same-name folder without the fingerprint, or holding a link, and a live skill folder all stay', () => withHome((home) => {
+test('M6: a same-name folder without the fingerprint, or holding a link, stays', () => withHome((home) => {
   const cfg = path.join(home, '.bob');
   // The upstream grill-me: unquoted description, no `# <Label>:` heading.
   const upstream = '---\nname: grill-me\ndescription: Interview the user relentlessly about a plan.\n---\n\nInterview me.\n';
@@ -1318,15 +1318,49 @@ test('M6: a same-name folder without the fingerprint, or holding a link, and a l
   const elsewhere = path.join(home, 'elsewhere');
   fs.mkdirSync(elsewhere);
   fs.symlinkSync(elsewhere, path.join(cfg, 'skills', 'slides', 'refs'), 'junction');
-  // A live skill folder that predates the manifest is the user's (claim-on-create), whatever it says.
-  seedSkill(cfg, 'teach', oldRender('teach'));
+  // A hand-written `quiz` (a retired alias name): quoted description and a colon heading, but the
+  // label is no theme's and the name is neither the folder nor its target.
+  const mine = '---\nname: quiz\ndescription: "Quiz me on a topic."\n---\n\n# Step 1: Understand\n';
+  seedSkill(cfg, 'quiz', mine);
   const r = emit(home, 'bob-global');
   assert.deepEqual(pruneLines(r.stdout), [], r.stdout);
   assert.deepEqual(archivedSkills(cfg), []);
   assert.equal(read(cfg, 'skills', 'grill-me', 'SKILL.md'), upstream);
   assert.equal(read(cfg, 'skills', 'slides', 'SKILL.md'), oldRender('slides'));
-  assert.equal(read(cfg, 'skills', 'teach', 'SKILL.md'), oldRender('teach'));
+  assert.equal(read(cfg, 'skills', 'quiz', 'SKILL.md'), mine);
 }));
+
+// The reviewer's counter-examples: a hand-written `grill-me` with a quoted description and some
+// colon heading is not a render. The heading's label must be a theme's `SKILL` label, its name the
+// folder or the skill the folder aliases, and a heading inside a code fence does not count.
+test('M6: the fingerprint refuses a hand-written skill with a quoted description and a colon heading', () => {
+  const dir = makeSandbox('m6fp-').path;
+  const at = (body, extra = '') => {
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\nname: grill-me\ndescription: "Grill me."\n${extra}---\n\n${body}`);
+    return isRendered(dir, 'grill-me');
+  };
+  assert.equal(at('# Step 1: Understand\n'), false);
+  assert.equal(at('# Grill Me: overview\n'), false);
+  assert.equal(at('# Phase 2: Review\n', 'license: MIT\n'), false);
+  assert.equal(at('```md\n# Example: foo\n```\n'), false);
+  assert.equal(at('```md\n# Rite: grill-me\n```\n'), false);
+  assert.equal(at('# Rite: debug\n'), false, 'grill-me aliases brainstorm, not debug');
+  assert.equal(at('# Overview: grill-me\n'), false, 'the right id under no theme label');
+  // What a render looks like: a theme label and the folder's own name, or its alias target.
+  assert.equal(at('# Rite: grill-me\n'), true);
+  assert.equal(at('# Spell: brainstorm\n'), true);
+  assert.equal(at('<!-- note -->\n\n# Skill: grill-me\n'), true);
+});
+
+test('M6: an unreadable folder is kept and reported, never a throw', () => {
+  const cfg = makeSandbox('m6rd-').path;
+  seedSkill(cfg, 'ci-fix', oldRender('ci-fix'));
+  const readdir = () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); };
+  const { prune, keep, unreadable } = retiredSkillFolders(cfg, [], { readdir });
+  assert.deepEqual(prune, []);
+  assert.deepEqual(keep, [path.join(cfg, 'skills', 'ci-fix')]);
+  assert.deepEqual(unreadable, [`${path.join(cfg, 'skills', 'ci-fix')} (EACCES: permission denied)`]);
+});
 
 test('M6: a fingerprinted folder that is itself a link stays, and so does its target', () => withHome((home) => {
   const cfg = path.join(home, '.claude');

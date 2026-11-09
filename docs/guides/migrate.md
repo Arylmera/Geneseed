@@ -25,7 +25,7 @@ geneseed migrate               # do it
 
 **It runs only from the npm package.** From a git clone or a bundle, a real run has nothing to move: the rebuild would point the shim back at that same copy. So it refuses with exit 3 before it writes anything, and says to use `geneseed update`. An `npx` run refuses too: npm prunes that cache, and the shim would die with it. `--dry-run` works from anywhere. Outside the package it previews the fold, then says a real run would refuse.
 
-`--dry-run` also previews [the fold](../concepts/shared-tier.md#the-fold) for each global install, even on a machine that has already migrated, because the fold runs in every global emit. Each host is read against the shared tier as it stands, so two hosts that hold the same new fact both count it. It also prints `would prune` for each retired skill folder that the next global emit moves aside, and `orphan` for each unowned file it leaves alone ([retired skills](../concepts/shared-tier.md#the-fold)).
+`--dry-run` also previews [the fold](../concepts/shared-tier.md#the-fold) for each global install, even on a machine that has already migrated, because the fold runs in every global emit. Each host is read against the shared tier as it stands, so two hosts that hold the same new fact both count it. It also prints `would prune` for each retired skill folder that the next global emit moves aside, and `orphan` for each unowned file it leaves alone ([retired skills](../concepts/shared-tier.md#retired-skills)).
 
 ## All or nothing
 

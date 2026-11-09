@@ -48,15 +48,6 @@ The first global emit in a host's own config directory creates the folder and se
 
 Each global emit, in the host's own config directory, moves that host's stores into the tier and prints one line, such as `[shared] claude: 12 facts folded, 1 collision, 2 rules to approve, old store moved aside`. A host with nothing to move prints nothing, and a second emit writes nothing. `geneseed migrate --dry-run` previews the fold for each host, *Preview next rebuild* on the console's Installs page shows the same, and [Upgrade to 5.0](../guides/upgrade-to-5.md) walks through a first run.
 
-The same emit also clears retired skills. A skill that Geneseed shipped and then removed or renamed can leave its folder in `skills/` with no manifest that owns it. Before the skill layer writes, the emit moves such a folder to `archived-skills/<name>/<timestamp>/` in the config directory and prints `[geneseed] <host>: pruned retired skill skills/<name> (moved to …)`. It moves the folder only when all of these hold:
-
-- The name is an old alias or a retired skill id, and not a live skill.
-- No manifest owns a path under it.
-- The folder, the `skills/` folder, and everything inside it are real entries, not links or junctions.
-- Its `SKILL.md` has the shape every Geneseed build wrote: `name: <folder>` on the second line, a JSON-quoted `description:` on the third, and a `# <label>: <name>` heading in the body.
-
-A folder that fails one check is yours: it stays, and `migrate --dry-run` lists it as an orphan. A folder that passes all four is a `would prune` line there. A second emit finds nothing to move.
-
 - **Facts** copy byte for byte. A fact with the same name and other text lands as `<name>-<host>.md`, then `-2`, `-3`. The memory-curator agent can merge them later. Agent lessons append to the tier's file for that agent.
 - **Notes** in `notebook/skill-notes/` and `notebook/agent-notes/` copy the same way. The rest of the notebook stays per host.
 - **`PROFILE.md` and the wiki manifest** move when the tier holds only a seed. If the tier holds different text, the host file stays in force and `user-rules.draft.md` gets a pointer that asks which one becomes the shared file.
@@ -66,6 +57,20 @@ A folder that fails one check is yours: it stays, and `migrate --dry-run` lists 
 **Approving a draft.** The [rule skill](skills.md) takes each item in turn, and the console's **Pending** section decides the same items by the same steps; nothing else writes a decision. Approve a rule and it joins the shared file under a new number, and the next fold of that host removes the host copy. Reject it and it stays on that host only, and the fold never drafts it again. For a profile or wiki pointer, the file you choose becomes the shared one and the other moves aside, or you keep both and the host file goes on overriding. The draft is never loaded: a drafted rule binds only from its host file.
 
 Nothing is deleted. After every copy is read back, the old `memory/` moves to `archived-memory/<stamp>/` beside it, and the notes and whole files move to the same kind of folder. The host store returns to its seed and keeps its `README.md`. Hand-written index text and `archive/` stay in that folder, and the report line names every other file that stayed there and did not fold. A store or file already linked to the tier, in either direction, is left alone. If a copy fails, the old store stays readable, the emit reports it on stderr and goes on, and the next emit retries. There is no automatic way back: to downgrade, restore the archived folder by hand.
+
+### Retired skills
+
+The same global emit also clears retired skills. A skill that Geneseed shipped and then removed or renamed can leave its folder in `skills/` with no manifest that owns it. Before the skill layer writes, the emit moves such a folder to `archived-skills/<name>/<timestamp>/` in the config directory and prints `[geneseed] <host>: pruned retired skill skills/<name> (moved to …)`. It moves the folder only when all of these hold:
+
+- The name is an old alias or a retired skill id, and not a live skill.
+- No manifest owns a path under it.
+- The folder, the `skills/` folder, and everything inside it are real entries, not links or junctions, and the emit can read them.
+- Its `SKILL.md` has the shape every Geneseed build wrote:
+  - `name: <folder>` on the second line;
+  - a `description:` on the third line, written as a JSON-quoted string;
+  - outside any code fence, a heading `# <label>: <id>`. The label is the `SKILL` word of a shipped theme, such as `Rite` or `Skill`. The id is the folder name, or the skill that the folder name is an alias of.
+
+A folder that fails one check is yours. It stays, and `migrate --dry-run` lists it as an orphan. A folder the emit cannot read also stays, with a warning. A folder that passes all four checks is a `would prune` line there. A second emit finds nothing to move.
 
 ### The console
 
