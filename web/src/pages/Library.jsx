@@ -10,7 +10,15 @@ import { useAsync } from '../hooks/useAsync.js'
 import { dropRules } from '../hooks/useRules.js'
 import ManifestDoc from '../components/ManifestDoc.jsx'
 import StatusBadge, { StatusLegend } from '../components/StatusBadge.jsx'
-import { BaseBadge, GroupedRows, KitBadge, LibList, filterRows } from '../components/LibRows.jsx'
+import {
+  BaseBadge,
+  GroupedRows,
+  KitBadge,
+  LibList,
+  LibReader,
+  filterRows,
+} from '../components/LibRows.jsx'
+import LibMenus from '../components/LibMenus.jsx'
 import Loadout from '../components/Loadout.jsx'
 import RailCats from '../components/RailCats.jsx'
 import ErrorState from '../components/ErrorState.jsx'
@@ -533,6 +541,19 @@ export default function Library({
               <h1 className="h">Library</h1>
               <span className="dim">What the agent knows</span>
             </div>
+            <LibMenus
+              sections={LIBRARY_ORDER.map((k) => ({
+                key: k,
+                label: SECTIONS[k].label,
+                n: railCount(k),
+                href: `#/section/${k}`,
+                on: sec === k,
+              }))}
+              cats={isSkills && listed ? skillSplit.cats : null}
+              cat={cat}
+              total={items.length}
+              onCat={setCat}
+            />
             <nav className="kind-list" aria-label="Kinds">
               {LIBRARY_ORDER.map((k) => (
                 <React.Fragment key={k}>
@@ -568,6 +589,7 @@ export default function Library({
           onQ={setQ}
           matched={matches.length}
           inView={[sec, selected]}
+          current={activeItem ? title : undefined}
           extra={
             <>
               {useOn && usage.since ? (
@@ -675,7 +697,7 @@ export default function Library({
             ))}
         </LibList>
 
-        <article className="lib-reader" aria-label="Entry">
+        <LibReader title={activeItem ? title : null} kind={label.replace(/s$/, '')} item={selected}>
           {activeItem ? (
             <>
               <div className="reader-tags">
@@ -796,7 +818,7 @@ export default function Library({
           ) : pending ? (
             <Loading />
           ) : null}
-        </article>
+        </LibReader>
       </div>
     </div>
   )

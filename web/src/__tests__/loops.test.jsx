@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest'
 import bugfix from '../../../src/loops/bugfix.json'
 import feature from '../../../src/loops/feature.json'
@@ -281,44 +281,32 @@ describe('Loops — templates', () => {
     expect(text('.loop-brick.on > b')).toEqual(['apply'])
   })
 
-  // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack, so
-  // the entry sits under the list: picking a row brings the entry into view (LibList). jsdom has
-  // no layout, so the two geometries are stubbed. Stacked: the reader's top is at or below the
-  // list's bottom. Side by side: they share a top. The entry a page opens on scrolls nothing,
-  // nor a new section's first entry. The spy sits on the prototype from before the first render
-  // (jsdom has no scrollIntoView, so a call made at mount would otherwise vanish), and with no
-  // layout stubbed every rect is 0, which reads as stacked: a scroll at mount would be counted.
-  describe('bringing the entry into view', () => {
-    let calls
-    let had
-    beforeEach(() => {
-      calls = []
-      had = Element.prototype.scrollIntoView
-      Element.prototype.scrollIntoView = function (opts) {
-        if (this.classList.contains('lib-reader')) calls.push(opts)
-      }
-    })
-    afterEach(() => {
-      Element.prototype.scrollIntoView = had
-    })
-    const place = (readerTop, listBottom) => {
-      document.querySelector('.lib-reader').getBoundingClientRect = () => ({ top: readerTop })
-      document.querySelector('.lib-list').getBoundingClientRect = () => ({ bottom: listBottom })
-    }
-    const open = async (item) => {
-      const view = render(<Loops tab="templates" item={item} />)
-      await screen.findByText('Record a decision.', { selector: '.reader-lede' })
+  // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack, and
+  // three disclosures replace the rail and the open panes: Section ▾ / Category ▾ menus
+  // (LibMenus), the list as "<section> <entry> ▾" (LibList), the entry as "<name> · <kind> ▾"
+  // (LibReader). jsdom evaluates no @container, so these pin the controls and their state; the
+  // CSS that shows them only in the stack, and hides a closed panel's body, is
+  // narrowPanes.test.js's.
+  describe('the stacked controls', () => {
+    const open = async (props) => {
+      const view = render(<Loops tab="templates" {...props} />)
+      await screen.findByText(/Record a decision\.|The smallest loop\./, {
+        selector: '.reader-lede',
+      })
       return view
     }
+    const btn = (name) => screen.getByRole('button', { name })
+    const listToggle = () => document.querySelector('.lib-list-toggle')
+    const readerToggle = () => document.querySelector('.lib-reader-toggle')
 
     it('sits inside the `.lib-wrap` container the narrow tier queries', async () => {
-      await open('adr')
+      await open({ item: 'adr' })
       expect(document.querySelector('.lib-wrap > .library')).not.toBeNull()
     })
 
     // The ring carries its drawn width, the cap `.loop-ring` scales up to (narrowPanes.test.js).
     it('gives the ring its own drawn width as --loop-w', async () => {
-      await open('adr')
+      await open({ item: 'adr' })
       const svg = document.querySelector('.loop-ring')
       const width = svg.getAttribute('viewBox').split(' ')[2]
       expect(svg.style.getPropertyValue('--loop-w')).toBe(`${width}px`)
@@ -326,32 +314,76 @@ describe('Loops — templates', () => {
       expect(svg.closest('.loop-graph').style.getPropertyValue('--loop-w')).toBe(`${width}px`)
     })
 
-    it('scrolls to the entry when a row is picked in the stack, not at mount', async () => {
-      const view = await open('adr')
-      expect(calls).toEqual([])
-      place(600, 500)
-      view.rerender(<Loops tab="templates" item="tiny" />)
-      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(calls).toHaveLength(1)
-      expect(calls[0]).toMatchObject({ block: 'start' })
+    it('says the section and the category on their menus, the sections in rail order', async () => {
+      await open({ item: 'adr' })
+      expect(btn(/^Section/).textContent).toMatch(/Templates\s*5/)
+      expect(btn(/^Category/).textContent).toMatch(/All\s*5/)
+      fireEvent.click(btn(/^Section/))
+      const menu = document.getElementById(btn(/^Section/).getAttribute('aria-controls'))
+      expect(text('a', menu)).toEqual(['Templates5', 'Bricks5', 'Active0'])
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(btn(/^Section/).getAttribute('aria-expanded')).toBe('false')
     })
 
-    it('leaves the page where it is when the panes sit side by side', async () => {
-      const view = await open('adr')
-      place(100, 900)
-      view.rerender(<Loops tab="templates" item="tiny" />)
-      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(calls).toEqual([])
+    it('narrows the list from the Category menu, as the rail does', async () => {
+      await open({ item: 'adr' })
+      fireEvent.click(btn(/^Category/))
+      const menu = document.getElementById(btn(/^Category/).getAttribute('aria-controls'))
+      fireEvent.click(within(menu).getByRole('button', { name: /^Tests/ }))
+      expect(btn(/^Category/).textContent).toMatch(/Tests\s*1/)
+      expect(listed()).toEqual(['# Tests', 'other'])
     })
 
-    // A link into another section with its entry (a section and an item at once) is a new
-    // section, not a pick: its list starts at the top, so the page stays where it is.
-    it('leaves the page where it is when the section and the entry change together', async () => {
-      const view = await open('adr')
-      place(600, 500)
-      view.rerender(<Loops tab="bricks" item="apply" />)
+    // A deep link opens on its entry: the list folded to the entry's name, the entry open.
+    it('opens a deep link with the list folded and the entry open', async () => {
+      await open({ item: 'adr' })
+      expect(listToggle().textContent).toMatch(/adr/)
+      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
+      expect(listToggle().closest('.lib-list').dataset.open).toBe('false')
+      expect(readerToggle().textContent).toMatch(/adr\s*·\s*Template/)
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
+      const body = document.getElementById(readerToggle().getAttribute('aria-controls'))
+      expect(body.closest('.lib-reader').dataset.open).toBe('true')
+    })
+
+    // A section with no routed entry opens on its list; the entry waits, folded.
+    it('opens a section with the list open and the entry folded', async () => {
+      await open({})
+      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('a pick folds the list and opens the entry, which follows it', async () => {
+      const view = await open({})
+      fireEvent.click(readerToggle())
+      fireEvent.click(readerToggle())
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+      view.rerender(<Loops tab="templates" item="tiny" />)
+      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
+      expect(listToggle().textContent).toMatch(/tiny/)
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
+      expect(readerToggle().textContent).toMatch(/tiny\s*·\s*Template/)
+    })
+
+    // Opening the list leaves the entry as it is; folding the entry leaves the list.
+    it('folds and opens each panel on its own', async () => {
+      await open({ item: 'adr' })
+      fireEvent.click(listToggle())
+      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(readerToggle())
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+      expect(readerToggle().closest('.lib-reader').dataset.open).toBe('false')
+      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
+    })
+
+    // A new section shows its list again, whatever the old one's state.
+    it('opens the list again on a section change', async () => {
+      const view = await open({ item: 'adr' })
+      view.rerender(<Loops tab="bricks" />)
       await screen.findByText('Do it our way.')
-      expect(calls).toEqual([])
+      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
     })
   })
 

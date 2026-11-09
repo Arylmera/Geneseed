@@ -41,6 +41,8 @@
 @import '@fontsource/space-mono/latin-700-italic.css';
 
 :root {
+  /* The body line height, one home: a Library row's height is derived from it (--lib-row-h). */
+  --lh-body: 1.55;
   /* base ink palette — cool neutral graphite (Reactor colorway) */
   --bg:        #08090B;
   --bg-2:      #0C0E11;
@@ -140,7 +142,7 @@ body {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -3020,6 +3022,11 @@ a.tier .tier-bar > span { background: var(--line-3); }
 /* ---- Library ---- */
 .pad-wide { max-width: none; }
 .library { display: grid; grid-template-columns: 232px minmax(0, 380px) minmax(0, 1fr);
+  /* A row's parts (.library .lib-row) and so its height: padding, gap, the 2px over the line of
+     description, the 1px rule under it, and its two lines (name, description) at the body's line
+     height. The stacked list is capped at five of them. */
+  --lib-row-pad: 10px; --lib-row-gap: 3px; /* off-scale: 10px and 3px, the row's own rhythm */
+  --lib-row-h: calc(2 * var(--lib-row-pad) + var(--lib-row-gap) + 2px + 1px + var(--lh-body) * (var(--fs-md) + var(--fs-sm)));
   min-height: calc(100vh - var(--topbar-h) - 150px); overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
 .library.locked { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); }
@@ -3027,6 +3034,34 @@ a.tier .tier-bar > span { background: var(--line-3); }
    gives them, not the viewport (the tier is after the breakpoints below). Docs has its own
    container (.docs-wrap) and tiers. */
 .lib-wrap { container: lib / inline-size; }
+/* The stacked controls (components/LibMenus.jsx, LibList and LibReader in LibRows.jsx): hidden
+   side by side, shown by the `lib` tiers below. The entry's body is `display: contents` so the
+   reader lays out as if it were not wrapped. */
+.lib-menus, .lib-list-toggle, .lib-reader-toggle { display: none; }
+.lib-reader-body { display: contents; }
+.lib-menus { gap: var(--sp-2); margin: 0 var(--sp-2); }
+.lib-menu { position: relative; }
+.lib-menu-btn, .lib-list-toggle, .lib-reader-toggle { align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.lib-menu-btn { display: inline-flex; }
+.lib-menu-btn:hover, .lib-list-toggle:hover, .lib-reader-toggle:hover { border-color: var(--accent-line); }
+.lib-menu-btn[aria-expanded="true"] { border-color: var(--accent-line); background: var(--surface-2); }
+.lib-list-toggle, .lib-reader-toggle { width: 100%; min-width: 0; }
+.lib-list-toggle b, .lib-reader-toggle b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-caret { margin-left: auto; color: var(--text-3); transition: transform var(--dur-3); }
+[aria-expanded="true"] > .lib-caret { transform: rotate(180deg); }
+.lib-menu-btn .lib-caret { margin-left: var(--sp-1); }
+.lib-menu-pop { top: calc(100% + 4px); left: 0; min-width: 220px; } /* off-scale: 4px of air under the trigger */
+.lib-menu-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; } /* off-scale: 2px hairline, as the rail */
+.lib-menu-list a, .lib-menu-list button { display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2); border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--text-2); font: inherit; text-align: left; cursor: pointer; }
+.lib-menu-list a:hover, .lib-menu-list button:hover { background: var(--surface); color: var(--text); }
+.lib-menu-list .on { background: var(--surface-3); color: var(--text); font-weight: 600; }
+.lib-menu-list .mono { margin-left: auto; }
+.lib-menu-list .cdot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cc, var(--text-3)); }
+@media (prefers-reduced-motion: reduce) { .lib-caret { transition: none; } }
 .lib-kinds { display: flex; flex-direction: column; gap: var(--sp-4); padding: 22px 14px; /* off-scale: 22px between --sp-5 and --sp-6; 14px between --sp-3 and --sp-4 */
   background: var(--bg-2); border-right: 1px solid var(--line); }
 .lib-title { display: flex; flex-direction: column; gap: 2px; /* off-scale: 2px hairline, below the 4px grid */ padding: 0 var(--sp-2); font-size: var(--fs-sm); }
@@ -3061,7 +3096,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
   border-right: 1px solid var(--line); }
 .lib-list-head { padding: 14px 18px; /* off-scale: 14px between --sp-3 and --sp-4; 18px between --sp-4 and --sp-5 */ border-bottom: 1px solid var(--line); }
 .library .lib-rows { flex: 1; max-height: calc(100vh - var(--topbar-h) - 250px); overflow: auto; }
-.library .lib-row { display: flex; flex-direction: column; gap: 3px; /* off-scale: 3px hairline, below the 4px grid */ padding: 10px 18px; /* off-scale: 10px between --sp-2 and --sp-3; 18px between --sp-4 and --sp-5 */
+.library .lib-row { display: flex; flex-direction: column; gap: var(--lib-row-gap); padding: var(--lib-row-pad) 18px; /* off-scale: 18px between --sp-4 and --sp-5 */
   color: var(--text); }
 .library .lib-row.on { background: var(--accent-soft); }
 .library .lib-row.on .lr-name { color: var(--text); }
@@ -3369,33 +3404,36 @@ a.kit-name:hover { color: var(--accent-text); }
 }
 /* The Library's three panes, stacked (user, 2026-11-09): under 232 + 380 + 560 + 2px of
    container the reader would share its row at under 560px, so the panes go one under the other
-   in reading order — the section header and its panels (a wrapped block, not a rail or a
-   sideways strip), the list (capped, scrolling on its own so the entry stays near), then the
-   entry at full width. Picking a row brings the entry into view (LibList, LibRows.jsx). After
-   the media tiers, and `.lib-wrap`-scoped, so it overrides their `.library` rules on these
-   pages and leaves Docs to its own. */
+   in reading order: the section header, then the rail as two menus (Section ▾, Category ▾;
+   LibMenus), then the list folded behind "<section> <entry> ▾" and capped at five rows (LibList),
+   then the entry folded behind "<name> · <kind> ▾" (LibReader). A folded panel hides its body;
+   the list keeps its head and its live region. After the media tiers, and `.lib-wrap`-scoped,
+   so it overrides their `.library` rules on these pages and leaves Docs to its own. */
 @container lib (max-width: 1173px) {
   .lib-wrap .library:not(.locked) { grid-template-columns: minmax(0, 1fr); }
   .lib-wrap .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; /* off-scale: the phone rail's padding, as at 720px */ }
-  .lib-wrap .kind-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: var(--sp-1);
-    overflow: visible; }
-  .lib-wrap .kind-list a { white-space: nowrap; }
-  .lib-wrap .rail-cats { flex-basis: 100%; position: static; width: auto; margin: 6px 0 0; /* off-scale: 6px between --sp-1 and --sp-2 */
-    padding: 0; border-left: 0; }
-  .lib-wrap .rail-cats ul { flex-direction: row; flex-wrap: wrap; gap: var(--sp-1); }
-  .lib-wrap .rail-cats button { width: auto; border: 1px solid var(--line); }
+  .lib-wrap .lib-kinds .kind-list { display: none; }
+  .lib-wrap .lib-menus { display: flex; flex-wrap: wrap; }
   .lib-wrap .library:not(.locked) .lib-list { border-right: 0; }
-  .lib-wrap .library:not(.locked) .lib-rows { max-height: 45vh; }
+  .lib-wrap .library:not(.locked) .lib-list-toggle, .lib-wrap .library:not(.locked) .lib-reader-toggle { display: flex; }
+  .lib-wrap .library:not(.locked) .lib-list-toggle { width: auto; margin: var(--sp-3) 18px; } /* off-scale: 18px, the list's own inset */
+  .lib-wrap .library:not(.locked) .lib-list[data-open="false"] > :not(.lib-list-head, .lib-list-toggle, .sr-only) { display: none; }
+  .lib-wrap .library:not(.locked) .lib-reader[data-open="false"] > .lib-reader-body { display: none; }
+  .lib-wrap .library:not(.locked) .lib-rows { max-height: calc(5 * var(--lib-row-h)); }
   .lib-wrap .library:not(.locked) .lib-reader { grid-column: auto;
     border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
     padding: 24px 20px; /* off-scale: a full-width reader gives its width to the content (the ring's label floor) */ }
 }
 /* A locked Library (Personal › Memory, Notebook) has no rail, only the list and the reader:
-   it keeps them side by side down to 380 + 560 + 2px, then stacks them the same way. */
+   it keeps them side by side down to 380 + 560 + 2px, then stacks and folds them the same way. */
 @container lib (max-width: 941px) {
   .lib-wrap .library.locked { grid-template-columns: minmax(0, 1fr); }
   .lib-wrap .library.locked .lib-list { border-right: 0; }
-  .lib-wrap .library.locked .lib-rows { max-height: 45vh; }
+  .lib-wrap .library.locked .lib-list-toggle, .lib-wrap .library.locked .lib-reader-toggle { display: flex; }
+  .lib-wrap .library.locked .lib-list-toggle { width: auto; margin: var(--sp-3) 18px; } /* off-scale: 18px, the list's own inset */
+  .lib-wrap .library.locked .lib-list[data-open="false"] > :not(.lib-list-head, .lib-list-toggle, .sr-only) { display: none; }
+  .lib-wrap .library.locked .lib-reader[data-open="false"] > .lib-reader-body { display: none; }
+  .lib-wrap .library.locked .lib-rows { max-height: calc(5 * var(--lib-row-h)); }
   .lib-wrap .library.locked .lib-reader { grid-column: auto;
     border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
     padding: 24px 20px; /* off-scale: as the three-pane stack above */ }

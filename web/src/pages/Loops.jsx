@@ -7,7 +7,8 @@ import CopyButton from '../components/CopyButton.jsx'
 import Loading from '../components/Loading.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import Markdown from '../components/Markdown.jsx'
-import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
+import { GroupedRows, LibList, LibReader, filterRows } from '../components/LibRows.jsx'
+import LibMenus from '../components/LibMenus.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
 import { humanGate, layoutLoop } from '../lib/loopRing.js'
@@ -32,6 +33,8 @@ const CATEGORY = {
 const ORIGIN = { project: 'Project', global: 'Global', shipped: 'Shipped' }
 // What the categories under each section in the rail are, for a screen reader.
 const RAIL_LABEL = { templates: 'Categories', bricks: 'Origins', active: 'Statuses' }
+// The entry's kind, on the stacked reader's trigger (LibReader).
+const KIND = { templates: 'Template', bricks: 'Brick', active: 'Run' }
 // Loops › Active by what they need from you: awaiting (it waits on the user) first, then the
 // running ones, then those over, and last the ones with nothing left to show.
 const STATUS = [
@@ -518,6 +521,19 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
             <span className="dim">What the engine runs</span>
           </div>
           <p className="panel-note lib-lede">{LEDE[tab]}</p>
+          <LibMenus
+            sections={SECTIONS.map(([k, l]) => ({
+              key: k,
+              label: l,
+              n: counts[k],
+              href: `#/loops/${k}`,
+              on: tab === k,
+            }))}
+            cats={cats}
+            cat={cat}
+            total={rows.length}
+            onCat={setCat}
+          />
           <nav className="kind-list" aria-label="Sections">
             {SECTIONS.map(([k, l]) => (
               <React.Fragment key={k}>
@@ -550,6 +566,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           onQ={setQ}
           matched={shown.length}
           inView={[tab, item]}
+          current={sel?.name}
         >
           {!all ? (
             err ? null : (
@@ -567,7 +584,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           )}
         </LibList>
 
-        <article className="lib-reader" aria-label="Entry">
+        <LibReader title={sel?.name} kind={KIND[tab]} item={item}>
           {gone ? (
             <EmptyState
               title={
@@ -600,7 +617,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
               runs={runs.loops}
             />
           )}
-        </article>
+        </LibReader>
       </div>
     </div>
   )
