@@ -312,6 +312,8 @@ test('M1-M3: countSpecTasks follows CommonMark on offsets, fences and headings',
     ['M3: a setext heading ends the list', '## Tasks\n\n1. a\n\nOut of scope\n------------\n2. no\n', 1],
     ['M3: a setext Tasks heading starts it', 'Spec\n====\n\nTasks\n-----\n\n1. a\n2. b\n\nNext\n====\n3. no\n', 2],
     ['M3: --- under a task is a thematic break, not a heading', '## Tasks\n\n1. a\n---\n2. b\n', 2],
+    ['F3: an indented paragraph after a blank line, underlined, stays in its task', '## Tasks\n1. a\n\n   detail\n   ---\n2. b', 2],
+    ['F3: a ## indented to the task\'s text is the task\'s own heading', '## Tasks\n\n1. a\n\n   ## step\n\n2. b\n', 2],
   ];
   // one compare over every row, so a failure names every row that is wrong, not the first
   assert.deepEqual(rows.map(([what, spec]) => [what, countSpecTasks(spec)]), rows.map(([what, , n]) => [what, n]));

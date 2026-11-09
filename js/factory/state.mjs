@@ -196,7 +196,8 @@ export function writeFactoryFile(file, state) {
  * next heading of the same or a higher level. A numbered line is a sub-item, as CommonMark nests
  * it, only when its indent reaches the content offset of the task before it (that task's indent,
  * its marker, one space): `1. a` / ` 2. b` and `9. a` / `10. b` / `   11. c` are siblings,
- * `1. a` / `   1. b` nest. Headings are ATX (`#`,
+ * `1. a` / `   1. b` nest. Any line indented that far belongs to the task (its paragraphs, even
+ * after a blank line, and a `---` or `##` of its own), so it never ends the list. Headings are ATX (`#`,
  * indented 3 spaces at most) and setext (a paragraph line underlined with `=` or `-`; under a
  * list item's own text that line is a thematic break, not a heading). A fenced block (``` or ~~~,
  * closed by the same fence) is skipped whole; a backtick fence whose info string holds a backtick
@@ -215,7 +216,10 @@ export function countSpecTasks(text) {
     }
     if (f && !(f[1][0] === '`' && f[2].includes('`'))) { fence = f[1]; para = ''; continue; }
     if (!line.trim()) { para = ''; inItem = false; continue; }
-    const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
+    // F3: a line indented to the last task's content belongs to that task — its paragraphs, its
+    // sub-items, even a `---` or `##` of its own — so it neither ends the list nor adds a task
+    if (level && offset >= 0 && line.length - line.trimStart().length >= offset) { para = ''; inItem = true; continue; }
+    const atx =/^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
     const setext = para && /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
     const h = atx ? { depth: atx[1].length, text: atx[2] ?? '' } : setext ? { depth: setext[1][0] === '=' ? 1 : 2, text: para } : null;
     if (h) {
