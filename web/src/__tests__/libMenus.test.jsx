@@ -67,6 +67,22 @@ describe('LibMenus', () => {
     expect(trigger('Category').getAttribute('aria-expanded')).toBe('false')
   })
 
+  // Review F6: the triggers say what they open; a menu opens on its current option; Tab out of
+  // it closes it; `aria-controls` names the menu only while it exists.
+  it('opens on the current option, names its popup, and closes when focus leaves it', () => {
+    const onAgents = SECTIONS.map((s) => ({ ...s, on: s.key === 'agents' }))
+    render(<LibMenus sections={onAgents} cats={[]} cat="all" total={80} />)
+    expect(trigger('Section').getAttribute('aria-haspopup')).toBe('dialog')
+    expect(trigger('Section').hasAttribute('aria-controls')).toBe(false)
+    fireEvent.click(trigger('Section'))
+    const menu = document.getElementById(trigger('Section').getAttribute('aria-controls'))
+    expect(menu).not.toBeNull()
+    expect(document.activeElement.textContent).toBe('Agents21')
+    fireEvent.focusOut(document.activeElement, { relatedTarget: document.body })
+    expect(trigger('Section').getAttribute('aria-expanded')).toBe('false')
+    expect(trigger('Section').hasAttribute('aria-controls')).toBe(false)
+  })
+
   it('closes on Escape and on a click outside, focus back on the trigger', () => {
     render(<LibMenus sections={SECTIONS} cats={[]} cat="all" total={80} />)
     fireEvent.click(trigger('Section'))

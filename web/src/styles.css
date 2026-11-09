@@ -500,7 +500,7 @@ code { font-family: var(--font-mono); font-size: .92em; background: var(--surfac
 .lib-filter::placeholder { color: var(--text-3); }
 .lib-more { padding: var(--sp-3) var(--sp-4); font-family: var(--font-mono); font-size: var(--fs-2xs);
   color: var(--text-3); border-bottom: 1px solid var(--line); }
-.lib-rows { max-height: calc(100vh - 280px); overflow: auto; }
+.lib-rows { position: relative; max-height: calc(100vh - 280px); overflow: auto; } /* positioned: a row's offsetTop counts from here (useActiveRowInView) */
 .lib-row {
   display: block; width: 100%; text-align: left;
   padding: var(--sp-3) var(--sp-4); border: 0; border-bottom: 1px solid var(--line);
@@ -3039,8 +3039,9 @@ a.tier .tier-bar > span { background: var(--line-3); }
    reader lays out as if it were not wrapped. */
 .lib-menus, .lib-list-toggle, .lib-reader-toggle { display: none; }
 .lib-reader-body { display: contents; }
-.lib-menus { gap: var(--sp-2); margin: 0 var(--sp-2); }
-.lib-menu { position: relative; }
+/* A menu opens under the whole row, not under its trigger, and never wider than the row:
+   under its own trigger the Category menu ran past the card, whose overflow cut it. */
+.lib-menus { position: relative; gap: var(--sp-2); margin: 0 var(--sp-2); }
 .lib-menu-btn, .lib-list-toggle, .lib-reader-toggle { align-items: center; gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--r-sm);
   background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -3052,7 +3053,7 @@ a.tier .tier-bar > span { background: var(--line-3); }
 .lib-caret { margin-left: auto; color: var(--text-3); transition: transform var(--dur-3); }
 [aria-expanded="true"] > .lib-caret { transform: rotate(180deg); }
 .lib-menu-btn .lib-caret { margin-left: var(--sp-1); }
-.lib-menu-pop { top: calc(100% + 4px); left: 0; min-width: 220px; } /* off-scale: 4px of air under the trigger */
+.lib-menu-pop { top: calc(100% + 4px); left: 0; min-width: min(240px, 100%); max-width: 100%; } /* off-scale: 4px of air under the trigger */
 .lib-menu-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; } /* off-scale: 2px hairline, as the rail */
 .lib-menu-list a, .lib-menu-list button { display: flex; align-items: center; gap: var(--sp-2);
   padding: var(--sp-2); border: 0; border-radius: var(--r-sm); background: transparent;

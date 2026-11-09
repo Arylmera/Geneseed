@@ -40,9 +40,9 @@ export function filterRows(rows, q) {
 // the filter (the Library's "Show" chips); the other lists pass none.
 //
 // Stacked (the `lib` container tier, styles.css), the pane folds behind a trigger saying the open
-// entry (`current`, its title), "Skills  explorer ▾": a deep link opens folded, a section opens
-// unfolded, a pick in the same section folds it, a new section unfolds it. Side by side the
-// trigger is hidden and the pane always open, whatever `data-open` says.
+// entry (`current`, its title), "Skills  explorer ▾"; `folds` (useFolds, below) says when, and
+// is the page's so a pick can also open the entry. A page that passes none (the Docs) gets its
+// own. Side by side the trigger is hidden and the pane always open, whatever `data-open` says.
 export function LibList({
   label,
   count,
@@ -53,17 +53,15 @@ export function LibList({
   matched,
   inView,
   current,
+  folds: given,
   children,
 }) {
-  const rowsRef = useActiveRowInView(inView)
-  const [section, item] = inView
-  const [open, setOpen] = useState(!item)
-  const [seen, setSeen] = useState([section, item])
-  if (seen[0] !== section || seen[1] !== item) {
-    setSeen([section, item])
-    // A new section, or no routed entry any more, shows the list; a pick folds it.
-    setOpen(seen[0] !== section || !item)
-  }
+  const own = useFolds(inView)
+  const folds = given || own
+  const open = folds.list
+  // The open row is brought into view on a route change and when the list unfolds: folded,
+  // the scroller has no box, so a scroll made then measured nothing.
+  const rowsRef = useActiveRowInView([...inView, open])
   const rowsId = useId()
   // After every render: the caller owns the rows, so any render may add or drop them.
   useLayoutEffect(() => rove(rowsRef.current))
@@ -97,7 +95,7 @@ export function LibList({
         className="lib-list-toggle"
         aria-expanded={open}
         aria-controls={rowsId}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => folds.setList((o) => !o)}
       >
         <span className="dim">{label}</span>
         <b>{current}</b>
@@ -118,6 +116,8 @@ export function LibList({
         ref={rowsRef}
         onKeyDown={walkRows}
         onFocus={(e) => rove(e.currentTarget)}
+        // A pick, even of the row already open (no route change): fold the list, open the entry.
+        onClick={(e) => e.target.closest?.('.lib-row') && folds.pick()}
       >
         {children}
         {q.trim() && matched === 0 && (
@@ -233,30 +233,55 @@ export function useActiveRowInView(deps) {
   return box
 }
 
-// The reader pane, shared by the Library, Loops and Factories. Stacked (the `lib` container
-// tier, styles.css), it folds behind a trigger naming the entry and its kind, "advocate · Agent
-// ▾" (user, 2026-11-09: "too big" open under the list). A deep link opens it, so does a pick;
-// a section with no routed entry opens folded; the viewer folds and unfolds it at will, and
-// unfolding the list leaves it as it is. Side by side the trigger is hidden and the body always
-// shown: `.lib-reader-body` is `display: contents`, so the reader lays out as before. Long
-// sections inside keep their own folds (the Loadout's cards); this is the only new one.
-export function LibReader({ title, kind, item, children }) {
-  const [open, setOpen] = useState(!!item)
-  const [seen, setSeen] = useState(item)
-  if (seen !== item) {
-    setSeen(item)
-    if (item) setOpen(true)
+// The two folds of the stacked panes (the `lib` container tier, styles.css), shared by the list
+// (LibList) and the entry (LibReader) because a pick in one moves both. `inView` is the route's
+// [section, entry]. A route with an entry opens the entry; one with none (a section's own
+// address) folds it, on navigation as on mount. A new section, or a route with no entry, shows
+// the list; an entry routed within the same section folds it. `pick()` is a click on a row,
+// the open one included (which changes no route): it folds the list, opens the entry and asks
+// LibReader to focus its trigger, since the row just activated is hidden with the list.
+export function useFolds([section, item]) {
+  const [list, setList] = useState(!item)
+  const [reader, setReader] = useState(!!item)
+  const [seen, setSeen] = useState([section, item])
+  // Bumped by a pick: LibReader focuses its trigger when it changes.
+  const [focusEntry, setFocusEntry] = useState(0)
+  if (seen[0] !== section || seen[1] !== item) {
+    setSeen([section, item])
+    setList(seen[0] !== section || !item)
+    setReader(!!item)
   }
+  const pick = () => {
+    setList(false)
+    setReader(true)
+    setFocusEntry((n) => n + 1)
+  }
+  return { list, setList, reader, setReader, pick, focusEntry }
+}
+
+// The reader pane, shared by the Library, Loops and Factories. Stacked, it folds behind a
+// trigger naming the entry and its kind, "advocate · Agent ▾" (user, 2026-11-09: "too big" open
+// under the list); `folds` (useFolds) says when it is open. With nothing to name (no entry, a
+// Loading reader) there is no trigger, so the body always shows: a fold with no handle would
+// hide it for good. Side by side the trigger is hidden and the body always shown:
+// `.lib-reader-body` is `display: contents`, so the reader lays out as before. Long sections
+// inside keep their own folds (the Loadout's cards); this is the only new one.
+export function LibReader({ title, kind, folds, children }) {
   const bodyId = useId()
+  const toggle = useRef(null)
+  useEffect(() => {
+    if (folds.focusEntry) toggle.current?.focus()
+  }, [folds.focusEntry])
   return (
-    <article className="lib-reader" aria-label="Entry" data-open={open}>
+    <article className="lib-reader" aria-label="Entry" data-open={folds.reader || !title}>
       {title ? (
         <button
+          ref={toggle}
           type="button"
           className="lib-reader-toggle"
-          aria-expanded={open}
+          aria-expanded={folds.reader}
           aria-controls={bodyId}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => folds.setReader((o) => !o)}
         >
           <b>{title}</b>
           {kind ? <span className="dim">· {kind}</span> : null}

@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import CopyButton from '../components/CopyButton.jsx'
 import Loading from '../components/Loading.jsx'
 import FactoryGraph from '../components/FactoryGraph.jsx'
-import { GroupedRows, LibList, LibReader, filterRows } from '../components/LibRows.jsx'
+import { GroupedRows, LibList, LibReader, filterRows, useFolds } from '../components/LibRows.jsx'
 import LibMenus from '../components/LibMenus.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { TONE } from '../components/ActiveLoops.jsx'
@@ -284,6 +284,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
       null
   const counts = { templates: data?.factories.length, active: runs?.length }
   const label = SECTIONS.find(([k]) => k === tab)[1]
+  const folds = useFolds([tab, item])
   const err = tab === 'active' ? runError : error
 
   return (
@@ -351,6 +352,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           matched={shown.length}
           inView={[tab, item]}
           current={sel?.name}
+          folds={folds}
         >
           {!all ? (
             err ? null : (
@@ -368,7 +370,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           )}
         </LibList>
 
-        <LibReader title={sel?.name} kind={KIND[tab]} item={item}>
+        <LibReader title={sel?.name} kind={KIND[tab]} folds={folds}>
           {gone ? (
             <EmptyState
               title={

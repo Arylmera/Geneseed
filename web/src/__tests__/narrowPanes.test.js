@@ -71,6 +71,24 @@ describe('Library panes: the narrow tier', () => {
     expect(rule('.lib-reader-body')).toMatch(/display:\s*contents/)
   })
 
+  // Review F5: at 420px the Category menu, placed under its own trigger, ran past the card's
+  // edge and `.library { overflow: hidden }` cut its counts. The menus open under the menu row,
+  // at most as wide as it.
+  it('a menu opens under the menu row and never wider than it', () => {
+    expect(rule('.lib-menus')).toMatch(/position:\s*relative/)
+    expect(rule('.lib-menu-pop')).toMatch(/left:\s*0/)
+    expect(rule('.lib-menu-pop')).toMatch(/max-width:\s*100%/)
+    expect(css).not.toMatch(/\n\.lib-menu \{ position: relative; \}/)
+  })
+
+  // Review F3, measured in the preview: useActiveRowInView (LibRows.jsx) reads a row's
+  // offsetTop as its place inside the scroller, but the scroller was not positioned, so
+  // offsetTop counted from the card and the list scrolled 2011px past the row. The scroller is
+  // the rows' offset parent.
+  it('the list scroller is the offset parent its rows are measured from', () => {
+    expect(rule('.lib-rows')).toMatch(/position:\s*relative/)
+  })
+
   it('in the three-pane stack the rail gives way to the two menus', () => {
     const tier = threePane()
     expect(rule('.lib-wrap .lib-kinds .kind-list', tier)).toMatch(/display:\s*none/)

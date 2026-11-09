@@ -394,6 +394,70 @@ describe('Loops — templates', () => {
       view.rerender(<Loops tab="templates" />)
       expect(listToggle().getAttribute('aria-expanded')).toBe('true')
     })
+
+    // Review F8: a section page with no routed entry folds the entry, on navigation as on
+    // mount, whether the section changes or only the entry drops out of the route.
+    it('folds the entry on a section page reached by navigation, as on mount', async () => {
+      const view = await open({ item: 'adr' })
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
+      view.rerender(<Loops tab="templates" />)
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+      view.rerender(<Loops tab="templates" item="adr" />)
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
+      view.rerender(<Loops tab="bricks" />)
+      await screen.findByText('Do it our way.')
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+    })
+
+    // Review F2 and F4: picking the row already open changes no route, yet it is a pick: the
+    // list folds, the entry opens, and focus lands on the entry's trigger, not on <body> (the
+    // row just activated is hidden with the folded list).
+    it('a pick on the open row folds the list, opens the entry and focuses its trigger', async () => {
+      await open({ item: 'adr' })
+      fireEvent.click(readerToggle())
+      fireEvent.click(listToggle())
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+      const row = document.querySelector('.lib-row.on')
+      row.focus()
+      fireEvent.click(row)
+      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
+      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
+      expect(document.activeElement).toBe(readerToggle())
+    })
+
+    it('a pick of another row also leaves focus on the entry trigger', async () => {
+      const view = await open({})
+      fireEvent.click(document.querySelector('a.lib-row[href$="/tiny"]'))
+      view.rerender(<Loops tab="templates" item="tiny" />)
+      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+      expect(document.activeElement).toBe(readerToggle())
+    })
+
+    // Review F3: the open row is brought into the list's view when the list unfolds; while
+    // folded the scroller has no box, so the scroll made on the route change measured nothing.
+    // jsdom has no layout: the scroller and the row's geometry are stubbed.
+    it('scrolls the open row into the list when the list unfolds', async () => {
+      await open({ item: 'tiny' })
+      const box = document.querySelector('.lib-rows')
+      const row = box.querySelector('.lib-row.on')
+      Object.defineProperty(box, 'clientHeight', { value: 100, configurable: true })
+      Object.defineProperty(row, 'offsetTop', { value: 400, configurable: true })
+      Object.defineProperty(row, 'clientHeight', { value: 40, configurable: true })
+      box.scrollTop = 0
+      fireEvent.click(listToggle())
+      expect(box.scrollTop).toBe(370)
+    })
+  })
+
+  // Review F1: with nothing to name (no run, a Loading reader), the entry has no trigger, so
+  // its body must show: a fold with no handle would hide the "What is a loop?" card for good.
+  describe('the stacked entry with nothing to name', () => {
+    it('shows the body, with no trigger, when the section has no entry', async () => {
+      render(<Loops tab="active" />)
+      await screen.findByText('What is a loop?')
+      expect(document.querySelector('.lib-reader-toggle')).toBeNull()
+      expect(document.querySelector('.lib-reader').dataset.open).toBe('true')
+    })
   })
 
   // The list is keyboard-walkable like the Library's: arrows move focus between row links.

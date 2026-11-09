@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import Popover from './Popover.jsx'
 
 // The stacked Library's two menus (user, 2026-11-09): styles.css shows them only under the
@@ -57,12 +57,22 @@ export default function LibMenus({ sections, cats, cat, total, onCat }) {
 }
 
 // A trigger saying its current value, over a Popover holding the options (Escape, a click
-// outside and a pick close it; focus goes back to the trigger). The arrow keys walk the options.
+// outside, a pick and Tab out of it close it; focus goes back to the trigger). It opens on the
+// current option; the arrow keys walk the options. `aria-controls` names the menu only while
+// it exists.
 function MenuButton({ name, value, n, children }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const id = useId()
   const close = () => setOpen(false)
+  // After the Popover's own effect (a child's runs first), which focused the first option.
+  useEffect(() => {
+    if (open) document.getElementById(id)?.querySelector('.on')?.focus()
+  }, [open, id])
+  const leave = (e) => {
+    const to = e.relatedTarget
+    if (!to || (!e.currentTarget.contains(to) && to !== ref.current)) close()
+  }
   const walk = (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     const opts = [...e.currentTarget.querySelectorAll('a, button')]
@@ -77,8 +87,9 @@ function MenuButton({ name, value, n, children }) {
         ref={ref}
         type="button"
         className="lib-menu-btn"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls={id}
+        aria-controls={open ? id : undefined}
         onClick={() => setOpen((o) => !o)}
       >
         <span className="dim">{name}</span>
@@ -89,7 +100,7 @@ function MenuButton({ name, value, n, children }) {
         </span>
       </button>
       <Popover open={open} onClose={close} anchorRef={ref} label={name} className="lib-menu-pop">
-        <div id={id} className="lib-menu-list" onKeyDown={walk}>
+        <div id={id} className="lib-menu-list" onKeyDown={walk} onBlur={leave}>
           {children(close)}
         </div>
       </Popover>

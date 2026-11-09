@@ -7,7 +7,7 @@ import CopyButton from '../components/CopyButton.jsx'
 import Loading from '../components/Loading.jsx'
 import RingGraph from '../components/RingGraph.jsx'
 import Markdown from '../components/Markdown.jsx'
-import { GroupedRows, LibList, LibReader, filterRows } from '../components/LibRows.jsx'
+import { GroupedRows, LibList, LibReader, filterRows, useFolds } from '../components/LibRows.jsx'
 import LibMenus from '../components/LibMenus.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
@@ -500,6 +500,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
     active: runs.loops?.length,
   }
   const label = SECTIONS.find(([k]) => k === tab)[1]
+  const folds = useFolds([tab, item])
   const err = tab === 'active' ? runs.error : error
 
   return (
@@ -567,6 +568,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           matched={shown.length}
           inView={[tab, item]}
           current={sel?.name}
+          folds={folds}
         >
           {!all ? (
             err ? null : (
@@ -584,7 +586,7 @@ export default function Loops({ tab = 'templates', item, dataRev }) {
           )}
         </LibList>
 
-        <LibReader title={sel?.name} kind={KIND[tab]} item={item}>
+        <LibReader title={sel?.name} kind={KIND[tab]} folds={folds}>
           {gone ? (
             <EmptyState
               title={
