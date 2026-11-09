@@ -15,7 +15,10 @@ brick only observes; a fix belongs in `apply`, not here.
 3. **Full suite** — only when everything above passed; otherwise `SKIPPED (an earlier check failed)`.
 
 List every check on its own line as `<check>: <status>`, the status one of `PASS`, `FAIL`, `ERROR`
-or `SKIPPED (reason)` — one that did not run is never left out, and silence is never a pass.
+or `SKIPPED (reason)` — one that did not run is never left out, and silence is never a pass. A
+check this project does not have at all (no linter configured, no build step) is not skipped:
+list it as `<check>: N/A (not configured)`. It neither passes nor blocks; never use it for a
+check that exists but was not run.
 Write each failure as four lines: the check's purpose, the property it guards, a one-line
 diagnostic (not the raw log), and the command that reruns it alone. Keep full logs in a file.
 Write the list to a file in the OS temp directory (never inside the worktree) and report that

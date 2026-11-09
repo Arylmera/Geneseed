@@ -12,8 +12,9 @@ only pushes the new commits to it.
 
 Push with `git push -u origin HEAD:<this branch>`. The push asks the user: wait for that answer,
 never work around it. With no PR yet, open one (`gh pr create` / `glab mr create`) titled from the
-run's title, its body built from the work item and the loop's notes, naming the issue it closes
-when the input was one. Change no file in the worktree.
+run's title, its body built from the run's `requirement` and `input` (as `next` gives them) and
+the branch's commit subjects (`git log --oneline origin/<default>..HEAD`; the loop's notes left
+with its `LOOP.md`), naming the issue it closes when the input was one. Change no file in the worktree.
 
 Report `pass` with the PR URL in a file in the OS temp directory — report that file's path. Report
 `fail` when the push is refused or fails, or the PR cannot be opened, with the exact error in
