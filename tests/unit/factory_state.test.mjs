@@ -8,6 +8,8 @@ import {
   validateFactoryState, countSpecTasks, FACTORY_MAX_TRANSITIONS,
 } from '../../js/factory/state.mjs';
 import * as engine from '../../js/factory/state.mjs';
+import { loadCatalog } from '../../js/loop/catalog.mjs';
+import { checkFactory } from '../../js/factory/graph.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, {
   name, outcomes, effect: 'read', agent: 'explorer', skill: null, body: `do ${name}`, available: true, ...extra,
@@ -688,4 +690,42 @@ test('D16 + D13: checks error and none hold the gate; ok continues or re-runs ch
   const x = start(reviewFactory());
   recordStage(x, CATALOG, 'pass', CLEAN); loopRec(x, 'pass'); recordStage(x, CATALOG, 'error', CLEAN);
   assert.deepEqual(decideFactory(x, CATALOG, 'no'), { stopped: 'gate rejected at checks' });
+});
+
+// F1, backward compatibility: `bug-report-to-fix` as it shipped before intake could ask (5.0.4),
+// written out here. It has no needs-info edge. Against today's shipped catalogue, where intake
+// declares needs-info, it must (1) still pass check, (2) still validate when a FACTORY.md embeds
+// it, and (3) on needs-info, hold, and on ok go where intake's pass goes: holdout-write.
+const OLD_BUG_REPORT_TO_FIX = {
+  name: 'bug-report-to-fix', description: 'd', category: 'development',
+  rules: ['Never merge, and never enable auto-merge: the run ends at an open PR with green CI.', "Push only this worktree's own branch."],
+  stages: ['intake', 'holdout-write', 'loop:bugfix', 'holdout', 'pr-open', 'merge-gate', 'retro'],
+  start: 'intake',
+  edges: [
+    { from: 'intake', on: 'pass', to: 'holdout-write' }, { from: 'intake', on: 'fail', to: '$stop' },
+    { from: 'holdout-write', on: 'pass', to: 'loop:bugfix' }, { from: 'holdout-write', on: 'fail', to: '$stop' },
+    { from: 'loop:bugfix', on: 'pass', to: 'holdout' }, { from: 'loop:bugfix', on: 'fail', to: '$stop' },
+    { from: 'holdout', on: 'pass', to: 'pr-open' }, { from: 'holdout', on: 'fail', to: 'loop:bugfix' },
+    { from: 'holdout', on: 'error', to: '$stop' },
+    { from: 'pr-open', on: 'pass', to: 'merge-gate' }, { from: 'pr-open', on: 'fail', to: '$stop' },
+    { from: 'merge-gate', on: 'pass', to: 'retro' }, { from: 'merge-gate', on: 'fail', to: 'loop:bugfix' },
+    { from: 'merge-gate', on: 'none', to: 'retro' }, { from: 'retro', on: 'pass', to: '$close' },
+  ],
+  cycles: [
+    { name: 'holdout', nodes: ['loop:bugfix', 'holdout'], max: 2 },
+    { name: 'ci', nodes: ['loop:bugfix', 'holdout', 'pr-open', 'merge-gate'], max: 2 },
+  ],
+};
+
+test('F1: a factory with no needs-info edge still checks, validates, and goes on along pass', () => {
+  const shipped = loadCatalog({ projectRoot: null, globalLevel: false });
+  assert.deepEqual(shipped.bricks.get('intake').outcomes, ['pass', 'fail', 'needs-info']);
+  assert.deepEqual(checkFactory(OLD_BUG_REPORT_TO_FIX, shipped), []);
+  const s = initFactory({ title: 'T', requirement: 'R', factory: structuredClone(OLD_BUG_REPORT_TO_FIX), input: null });
+  validateFactoryState(parseFactoryFile(renderFactoryFile(s)), shipped);
+  assert.deepEqual(recordStage(s, shipped, 'needs-info', { ...CLEAN, carry: 'questions.md' }),
+    { awaiting: { kind: 'gate', stage: 'intake', outcome: 'needs-info', note: 'questions.md' } });
+  validateFactoryState(parseFactoryFile(renderFactoryFile(s)), shipped);
+  assert.deepEqual(decideFactory(s, shipped, 'ok'), { stage: 'holdout-write' });
+  assert.deepEqual(s.counters, {});
 });

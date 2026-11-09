@@ -10,7 +10,7 @@ import { checkFactory, factoryCatalogProblems, loopOf, isFork, lanesOf } from '.
 import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { inferDoneChecks } from '../../js/hosts/done-checks.mjs';
+import { inferDoneChecks, PM_LOCKS } from '../../js/hosts/done-checks.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, { name, outcomes, effect: 'read', available: true, ...extra }];
 const CATALOG = {
@@ -346,7 +346,10 @@ test('the doctor\'s factoryProblems is clean over the shipped tree and red over 
 // One writer per value: `inferDoneChecks` (js/hosts/done-checks.mjs) is the writer of the
 // manifest -> command rules, and the `checks` brick restates them because it runs in a user's
 // repo, where that module does not exist. So every command the writer infers, for each manifest
-// kind and each package manager, must be named in the brick, with the two exclusions it applies.
+// kind and each package manager, must be named in the brick, with the two exclusions it applies,
+// and every lockfile it reads, in its order. One mapping on purpose: the done gate's `go test` is
+// the brick's `go test ./...` — the brick RUNS the command, and bare `go test` tests only the root
+// package.
 test('the checks brick names every command inferDoneChecks infers', () => {
   const brick = readFileSync(path.resolve(import.meta.dirname, '../../src/bricks/checks.md'), 'utf8');
   const scripts = JSON.stringify({ scripts: { test: 'x', lint: 'x', typecheck: 'x' } });
@@ -371,9 +374,15 @@ test('the checks brick names every command inferDoneChecks infers', () => {
       for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
       const labels = inferDoneChecks(dir).checks.map((c) => c.label);
       assert.ok(labels.length, `${kind}: the fixture infers nothing`);
-      for (const l of labels) { seen.push(l); assert.ok(brick.includes(`\`${l}\``), `${kind}: the brick does not name \`${l}\``); }
+      for (const label of labels) {
+        const l = label === 'go test' ? 'go test ./...' : label;
+        seen.push(l); assert.ok(brick.includes(`\`${l}\``), `${kind}: the brick does not name \`${l}\``);
+      }
     }
     assert.equal(seen.length, 18, 'four package managers x three scripts, plus six other manifest fixtures');
+    const at = PM_LOCKS.map(([lock]) => brick.indexOf(`\`${lock}\``));
+    assert.ok(at.every((i) => i >= 0), `the brick names every lockfile: ${PM_LOCKS.map(([l]) => l).join(', ')}`);
+    assert.deepEqual(at, [...at].sort((x, y) => x - y), 'the brick lists the lockfiles in the order inferDoneChecks tries them');
     // the exclusions the writer applies, named in the brick: the npm stub, and pytest only where it shows
     writeFileSync(path.join(sb.path, 'npm', 'package.json'), JSON.stringify({ scripts: { test: 'echo "Error: no test specified" && exit 1' } }));
     assert.deepEqual(inferDoneChecks(path.join(sb.path, 'npm')).checks, []);
@@ -382,4 +391,20 @@ test('the checks brick names every command inferDoneChecks infers', () => {
     assert.deepEqual(inferDoneChecks(path.join(sb.path, 'python')).checks, []);
     assert.ok(brick.includes('only where pytest shows'));
   } finally { sb.cleanup(); }
+});
+
+// D9: every shipped factory carries the default seat table. small: reviewer; medium adds tester;
+// large adds steward; area security or data seats security, performance seats performance, ui
+// seats user-advocate.
+test('D9: the three shipped factories carry the default review seat table', () => {
+  const D9 = {
+    seats: {
+      small: ['reviewer'], medium: ['reviewer', 'tester'], large: ['reviewer', 'tester', 'steward'],
+      areas: { security: ['security'], performance: ['performance'], ui: ['user-advocate'], data: ['security'] },
+    },
+  };
+  for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+    const file = path.resolve(import.meta.dirname, '../../src/factories', `${name}.json`);
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).review, D9, name);
+  }
 });

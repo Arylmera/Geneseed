@@ -5,15 +5,17 @@ effect: read
 skill: factory
 outcomes: pass, fail
 ---
-You run this stage yourself and chair it; the seats are agents you dispatch. Never edit a file.
+You run this stage yourself and chair it; the seats are agents you dispatch. Never edit a file; only put the tree back, as below.
 
-The work item is the latest `carry` an `intake` entry left in `FACTORY.md`'s `history` (in
-`analysis-to-build`, the approved `specs/<slug>/spec.md`). Read its `size:` and `areas:` lines; a
-missing or unknown size counts as `large`. Pick the seats from the factory's `review.seats` in
+Read `size:` and `areas:` from the latest `carry` an `intake` entry left in `FACTORY.md`'s
+`history`, always; a missing or unknown size counts as `large`. That carry is also the work item,
+except in `analysis-to-build`, where the work item text is the approved `specs/<slug>/spec.md`. Pick the seats from the factory's `review.seats` in
 `FACTORY.md`: the list for that size, plus the list for each area, each agent once. With no
 `review.seats`, seat `reviewer` alone.
 
-Find the base as `checks` does and take the diff: `git diff <merge-base> HEAD`. Dispatch every seat
+Run `git fetch origin`, find the default branch (`gh repo view --json defaultBranchRef`, or `git
+remote show origin`), then the base, `git merge-base HEAD origin/<default>`, and take the diff:
+`git diff <merge-base> HEAD`. Dispatch every seat
 in one parallel batch, each in its own context. Each brief holds the work item, the factory's
 `rules` and the diff (inline for a seat that has no shell, such as `steward` or `user-advocate`;
 else the base commit to diff against), and states three rules: read only the diff and the files it
@@ -29,7 +31,9 @@ or `cannot-measure`), `steward` and `user-advocate`. No verdict: `tester` `BLOCK
 `OUT_OF_SCOPE`, a `reviewer` or `security` seat that declines to give one, or a seat that returns
 nothing. Dispatch a seat with no verdict once more; a second time without one fails the panel.
 
-Write one file in the OS temp directory: each seat's verdict, then the findings that fail it
+Before you record, put the tree back as it was: restore every tracked file a seat changed (`git
+restore -- <path>`) and delete every untracked file a seat created (a test run's output), naming
+each one in the finding. Write one file in the OS temp directory: each seat's verdict, then the findings that fail it
 (`file:line`, what is wrong, what to do instead), then the advisory points. Pass on only findings
 about the diff, and never quote holdout text. Report `fail` when any seat failed, else `pass`,
 with that file's path.

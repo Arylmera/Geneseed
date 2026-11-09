@@ -57,11 +57,23 @@ export const LOOP_OUTCOMES = ['pass', 'fail'];
  * `needs-info` is `intake`'s question to the user (a gate), never a lane: listed here, it sets
  * no `state.lane`, hands no `lanes` and leaves `$lane` alone.
  */
-const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', 'needs-info']);
+const NEEDS_INFO = 'needs-info';
+const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', NEEDS_INFO]);
 /** The work item sizes `intake` rates; `review.seats` needs a list for each (rule 9). */
 const SEAT_SIZES = ['small', 'medium', 'large'];
 const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const edgeShaped = (e) => ['from', 'on', 'to'].every((k) => typeof e?.[k] === 'string');
+
+/**
+ * The edge an outcome follows: its own, else for `needs-info` the stage's `pass` edge (a factory
+ * with no needs-info edge goes on as if intake had passed), else for `error` a stop. Null when
+ * none applies. The engine's one lookup, so `record` and a gate's `ok` cannot disagree.
+ */
+export function edgeFor(factory, from, outcome) {
+  const own = (on) => (Array.isArray(factory?.edges) ? factory.edges : []).find((e) => e?.from === from && e.on === on);
+  return own(outcome) ?? (outcome === NEEDS_INFO ? own('pass') : undefined)
+    ?? (outcome === 'error' ? { from, on: 'error', to: '$stop' } : null);
+}
 
 /** The template a `loop:` stage names, or null for a brick stage. */
 export function loopOf(stage) {
@@ -192,11 +204,13 @@ export function checkFactory(factory, { bricks, templates, agents }) {
     const outcomes = stageOutcomes(e.from, bricks);
     if (outcomes && !outcomes.includes(e.on)) problems.push(`${label}: ${e.on} is not an outcome of ${e.from}`);
   }
-  // rule 3 — exactly one edge per outcome; `error` may go without one (the engine routes it to $stop)
+  // rule 3 — exactly one edge per outcome; `error` may go without one (the engine routes it to
+  // $stop), and so may `needs-info` (it follows the stage's `pass` edge: `edgeFor`), so a factory
+  // written before intake could ask stays valid, and so does a FACTORY.md that embeds one
   for (const s of [...stages].sort()) {
     for (const o of stageOutcomes(s, bricks) ?? []) {
       const count = edges.filter((e) => e.from === s && e.on === o).length;
-      if (count === 0 && o !== 'error') problems.push(`stage ${s}: no edge for outcome ${o}`);
+      if (count === 0 && o !== 'error' && o !== NEEDS_INFO) problems.push(`stage ${s}: no edge for outcome ${o}`);
       else if (count > 1) problems.push(`stage ${s}: ${count} edges for outcome ${o}`);
     }
   }

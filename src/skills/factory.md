@@ -71,11 +71,12 @@ Repeat `geneseed factory next` and act on its JSON:
   - `checks` **`none`**: the base has no done list (or an empty one), and the note is the one
     `checks` proposes, or says no manifest gave one. On the user's yes, land it on the base, never
     from this worktree: `git worktree add --detach ../<repo>-done-list origin/<default>`, write
-    `.geneseed/done-checks.txt` there, stage that file alone, commit, and
-    `git push origin HEAD:<default>` (each asks); then remove that worktree. A refused push (a
-    protected branch) is reported to the user, who lands the file by PR. `ok` waits until the
-    file is on the base: answer `decide --verdict ok` only then, and `checks` runs again against
-    it. If it is not to be landed, `no`.
+    `.geneseed/done-checks.txt` there holding exactly the lines of the finding's fenced block,
+    stage that file alone, commit, and `git push origin HEAD:<default>` (each asks). Remove that
+    worktree only once the file has landed. A refused push (a protected branch) is reported to
+    the user with that worktree's path, so they can land the file by PR from it. `ok` waits until
+    the file is on the base: answer `decide --verdict ok` only then, and `checks` runs again
+    against it. If it is not to be landed, `no`.
 - **`{terminal: "$close"}`** or **`{terminal: "$stop"}`** — see *The end*.
 - A `record` or `decide` result (`{stage}`, `{awaiting}`, `{stopped}`) — call `next` again.
 - **`{error}`** — read it; it names the step you skipped or the evidence `record` lacks. Do that

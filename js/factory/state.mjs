@@ -76,7 +76,7 @@
  */
 import { writeText } from '../lib/fs.mjs';
 import { renameWithRetry, filterPorcelain } from '../loop/state.mjs';
-import { loopOf, stageOutcomes, checkFactory, LANE, isFork, lanesOf, laneTargets, spentCycle } from './graph.mjs';
+import { loopOf, stageOutcomes, checkFactory, LANE, isFork, lanesOf, laneTargets, spentCycle, edgeFor } from './graph.mjs';
 
 const BEGIN = '<!-- factory-state:begin -->';
 const END = '<!-- factory-state:end -->';
@@ -338,8 +338,7 @@ export function recordStage(state, { bricks }, outcome, {
         + `that changes files commits them first: ${dirty.join('; ')}${folded}`);
     }
   }
-  const edge = state.factory.edges.find((e) => e.from === from && e.on === outcome)
-    ?? (outcome === 'error' ? { from, on: 'error', to: '$stop' } : null);
+  const edge = edgeFor(state.factory, from, outcome);
   if (specPath !== null) {
     if (!Number.isInteger(taskCount) || taskCount < 1) throw new Error(`${specPath} has no ordered task list under a Tasks heading`);
     if (taskCount > FACTORY_MAX_TASKS) {
@@ -416,7 +415,7 @@ export function decideFactory(state, { bricks }, verdict, note = '') {
   if (state.status !== 'awaiting') throw new Error('nothing is awaiting a decision');
   if (!['ok', 'no', 'amend'].includes(verdict)) throw new Error(`verdict must be ok, no or amend, not ${JSON.stringify(verdict)}`);
   const { stage, outcome } = state.awaiting;
-  const edge = state.factory.edges.find((e) => e.from === stage && e.on === outcome) ?? { from: stage, on: outcome, to: '$stop' };
+  const edge = edgeFor(state.factory, stage, outcome) ?? { from: stage, on: outcome, to: '$stop' };
   if (verdict === 'ok') assertLane(state, edge);
   state.awaiting = null; state.status = 'running';
   state.history.push({ stage, verdict, task: taskNo(state), ...(note ? { note } : {}) });

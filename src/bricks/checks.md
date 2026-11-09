@@ -7,33 +7,36 @@ outcomes: pass, fail, error, none
 gate: human
 gateOn: error, none
 ---
-Run `git fetch origin`, then find the base: the default branch (`gh repo view --json
-defaultBranchRef`, or `git remote show origin`) and `git merge-base HEAD origin/<default>`. Never
-edit or commit a file. Write every finding to a file in the OS temp directory, never inside the
-worktree, and report that file's path.
+Never commit. Write every finding to a file in the OS temp directory, never inside the worktree,
+and report that file's path. Run `git fetch origin`, then find the default branch (`gh repo view
+--json defaultBranchRef`, or `git remote show origin`) and the base, `git merge-base HEAD
+origin/<default>`. When the fetch fails or no default branch is found, report `fail` and mark it
+`environment`.
 
 Read the done list from the base, never from this branch: `git show
 origin/<default>:.geneseed/done-checks.txt`, one command per line, `#` lines ignored. When the base
 has no such file, or it holds no command, propose one from the BASE's manifests (`git show
 origin/<default>:<file>`), never this branch's:
 - `package.json`: its `test`, `lint` and `typecheck` scripts, each only when present, and `test`
-  not when it is npm's `no test specified` stub. Run them with the package manager the lockfile
-  names: `pnpm test`, `pnpm lint`, `pnpm typecheck` (`pnpm-lock.yaml`); `yarn test`, `yarn lint`,
-  `yarn typecheck` (`yarn.lock`); `bun run test`, `bun run lint`, `bun run typecheck`
-  (`bun.lock`); else `npm test`, `npm run lint`, `npm run typecheck`.
+  not when it is npm's `no test specified` stub. The first lockfile found, in this order, names
+  the package manager: `bun.lockb` or `bun.lock` → `bun run test`, `bun run lint`,
+  `bun run typecheck`; `pnpm-lock.yaml` → `pnpm test`, `pnpm lint`, `pnpm typecheck`;
+  `yarn.lock` → `yarn test`, `yarn lint`, `yarn typecheck`; none → `npm test`, `npm run lint`,
+  `npm run typecheck`.
 - `pom.xml`: `mvn test`. `build.gradle` or `build.gradle.kts`: `gradle test`, as `./gradlew test`
-  when the repo has the wrapper. `Cargo.toml`: `cargo test`. `go.mod`: `go test`.
+  when the repo has the wrapper. `Cargo.toml`: `cargo test`. `go.mod`: `go test ./...`.
 - `pyproject.toml`: `pytest`, only where pytest shows (a `[tool.pytest` section, `pytest.ini`,
   `conftest.py` or a `tests` folder).
 - No manifest: propose nothing, and say so.
-Write the proposal and report `none`.
+Put the proposal in the finding as one fenced block, one command per line and nothing else in it;
+explain outside the block. Report `none`.
 
-List the untracked files (`git status --porcelain --untracked-files=all`), then run each command
-from the worktree root, in order, each bounded under 10 minutes by your shell tool's timeout.
-Afterwards delete only the untracked files the commands created. Report `fail` when a command
-exits non-zero (name the first failing command and copy the last 40 lines of its output), or when
-anything else is left changed (name it). A command that times out, or whose tool is missing, is a
-`fail` too: mark it `environment` in the finding, so the loop knows its code cannot fix it.
+The tree is clean before you run anything. Run each command from the worktree root, in order, each
+bounded under 10 minutes by your shell tool's timeout. Afterwards, whatever the outcome, restore
+every tracked file the commands changed (`git restore -- <path>`) and delete every untracked file
+they created, naming each one in the finding. Report `fail` when a command exits non-zero: name the
+first failing command and copy the last 40 lines of its output. A command that times out, or whose
+tool is missing, is a `fail` too: mark it `environment`, so the loop knows its code cannot fix it.
 
 Only when every command passes, list the files the branch changed: `git diff --name-only
 --no-renames <merge-base> HEAD` (`--no-renames` lists a rename's old path too, so moving a locked
