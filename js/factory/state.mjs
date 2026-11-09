@@ -205,25 +205,25 @@ export function writeFactoryFile(file, state) {
  */
 export function countSpecTasks(text) {
   let level = 0; let count = 0; let offset = -1; let fence = null;
-  let para = false; let inItem = false;   // the line before is a paragraph line / a list item's text
+  let para = ''; let inItem = false;   // the paragraph line before ('' for none) / the line before is a list item's text
   for (const line of String(text).replace(/\r\n/g, '\n').split('\n')) {
     const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null;
       continue;
     }
-    if (f && !(f[1][0] === '`' && f[2].includes('`'))) { fence = f[1]; para = false; continue; }
-    if (!line.trim()) { para = false; inItem = false; continue; }
+    if (f && !(f[1][0] === '`' && f[2].includes('`'))) { fence = f[1]; para = ''; continue; }
+    if (!line.trim()) { para = ''; inItem = false; continue; }
     const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
     const setext = para && /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
-    const h = atx ? [atx[1].length, atx[2] ?? ''] : setext ? [setext[1][0] === '=' ? 1 : 2, para] : null;
+    const h = atx ? { depth: atx[1].length, text: atx[2] ?? '' } : setext ? { depth: setext[1][0] === '=' ? 1 : 2, text: para } : null;
     if (h) {
-      if (level && h[0] <= level) break;
-      if (!level && /\btasks?\b/i.test(h[1])) level = h[0];
-      para = false; inItem = false; continue;
+      if (level && h.depth <= level) break;
+      if (!level && /\btasks?\b/i.test(h.text)) level = h.depth;
+      para = ''; inItem = false; continue;
     }
     const item = /^( {0,3})(\d{1,9}[.)])[ \t]+\S/.exec(line);
-    if (item || /^ {0,3}[-*+][ \t]+\S/.test(line)) { para = false; inItem = true; } else { para = inItem ? false : line; }
+    if (item || /^ {0,3}[-*+][ \t]+\S/.test(line)) { para = ''; inItem = true; } else { para = inItem ? '' : line; }
     if (!item || !level) continue;
     if (offset >= 0 && item[1].length >= offset) continue;   // inside the last task's content: a sub-item
     count += 1; offset = item[1].length + item[2].length + 1;
