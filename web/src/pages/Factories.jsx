@@ -10,7 +10,6 @@ import FactoryGraph from '../components/FactoryGraph.jsx'
 import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { TONE } from '../components/ActiveLoops.jsx'
-import { layoutFactory } from '../lib/factoryFlow.js'
 import { TABS, TAB_LABELS } from '../lib/router.js'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
@@ -62,15 +61,8 @@ const PILLS = {
   active: (r) => tag(TONE[r.status], r.status),
 }
 
-// The factory's graph at its own width, scrolled when wider than the reader.
-function Graph(props) {
-  const { width } = layoutFactory(props.factory, props.bricks)
-  return (
-    <div className="fg-wrap" style={{ '--fg-w': `${width}px` }}>
-      <FactoryGraph {...props} />
-    </div>
-  )
-}
+// The factory's graph: it measures its own box and fits it, never scrolling sideways (D18).
+const Graph = FactoryGraph
 
 // Each declared cycle in words: its stages, and its laps (a run's `counters`) against `max`.
 function Cycles({ factory, counters }) {
@@ -166,6 +158,8 @@ function RunDetail({ run, bricks, loops }) {
             highlight={run.stage}
             child={run.loop}
             counters={run.counters}
+            lane={run.lane}
+            history={run.history}
           />
           <Cycles factory={run.graph} counters={run.counters} />
         </>

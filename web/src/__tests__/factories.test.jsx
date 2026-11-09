@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import factory from './fixtures/bug-report-to-fix.json'
+import forked from './fixtures/issue-to-pr-forks.json'
 
 // The Factories page over fixture `/api/factories/catalog` and `/api/factories/active` payloads:
 // the rail with its two sections and counts, the list, the reader drawing the factory as its
@@ -64,7 +65,7 @@ const RUN = {
   reason: null,
   transitions: 4,
   counters: { ci: 1 },
-  chosenLoop: null,
+  lane: null,
   tasks: null,
   history: [],
   graph: factory,
@@ -105,7 +106,15 @@ describe('Factories — templates', () => {
     expect(within(g).getByRole('group', { name: 'bugfix loop: reproduce, apply' })).toBeTruthy()
     expect(g.querySelectorAll('.fg-close, .fg-stop')).toHaveLength(2)
     // The route back wears its cycle and max; the cycle is said in words under the graph.
-    expect(g.querySelector('.fg-lbl.back').textContent).toBe('fail — ci · max 2')
+    expect(g.querySelector('.fg-lbl.back').textContent).toBe('↺ ci · max 2')
+    // The legend names the five marks; no lane, so no folded lane stops.
+    expect(text('.fg-legend li')).toEqual([
+      'brick',
+      'whole loop (test · fix · verify)',
+      'fork',
+      'route back, bounded by its max',
+      'fail → stop',
+    ])
     expect(text('.fac-cycles li')).toEqual([
       'ci: loop:bugfix → pr-open → merge-gate — 2 laps at most',
     ])
@@ -141,8 +150,68 @@ describe('Factories — active', () => {
     expect(document.querySelector('.lr-node.current').getAttribute('aria-label')).toBe(
       'apply brick, current step',
     )
-    expect(document.querySelector('.fg-lbl.back').textContent).toBe('fail — ci · 1 / 2')
+    expect(document.querySelector('.fg-lbl.back').textContent).toBe('↺ ci · 1 / 2')
     expect(text('.fac-cycles li')).toEqual(['ci: loop:bugfix → pr-open → merge-gate — lap 1 of 2'])
+  })
+
+  // A run of the forked factory past its fork: the run's `lane` is taken (it wins over a history
+  // that names another lane), the stage it stands on is current, and the two routes back read
+  // their laps.
+  const FORKED_RUN = {
+    ...RUN,
+    factory: forked.name,
+    stage: 'holdout',
+    counters: { holdout: 1 },
+    graph: forked,
+    loop: null,
+    lane: 'loop:feature',
+    history: [
+      { stage: 'intake', outcome: 'pass' },
+      { stage: 'holdout-write', outcome: 'pass' },
+      { stage: 'triage', outcome: 'bug' },
+      { stage: 'loop:bugfix', outcome: 'pass' },
+    ],
+  }
+  it('lights the lane a forked run took and the stage it stands on', async () => {
+    api.activeFactories.mockImplementation(() => Promise.resolve({ factories: [FORKED_RUN] }))
+    render(<Factories tab="active" />)
+    await screen.findByText('Fix the login bug', { selector: '.reader-title' })
+    const g = screen.getByRole('group', { name: /^issue-to-pr factory/ })
+    expect(g.querySelector('.fg-node.taken').getAttribute('aria-label')).toBe(
+      'loop:feature stage, the feature loop, the lane taken',
+    )
+    expect(g.querySelector('.fg-node.current').getAttribute('aria-label')).toBe(
+      'holdout brick, current stage',
+    )
+    expect(within(g).getByRole('img', { name: 'triage fork' })).toBeTruthy()
+    // Five lane boxes, named without the `loop:` prefix; the fork's outcomes on its lane edges.
+    expect(g.querySelectorAll('.fg-node.lane')).toHaveLength(5)
+    expect(text('.fg-node.lane > text:not(.fg-sub)', g)).toEqual([
+      'bugfix',
+      'feature',
+      'deps-upgrade',
+      'refactor',
+      'docs-update',
+    ])
+    expect(text('.fg-lbl.fork', g)).toEqual(['bug', 'feature', 'deps', 'refactor', 'docs'])
+    expect(text('.fg-lbl.back', g)).toEqual(['↺ holdout · 1 / 2', '↺ ci · 0 / 2'])
+    // The taken lane's edges in and out are lit.
+    expect(g.querySelectorAll('.fg-edge.taken')).toHaveLength(2)
+    // Every lane's stop edge is drawn as a tag under its box; no legend line stands in for them.
+    expect(text('.fg-tag.stop', g)).toEqual(Array(4).fill('fail → stop'))
+    expect(text('.fg-legend li')).toHaveLength(5)
+  })
+
+  // A run row from before the engine wrote `lane` has none: its history names the lane.
+  it('falls back to the history when the run carries no lane', async () => {
+    api.activeFactories.mockImplementation(() =>
+      Promise.resolve({ factories: [{ ...FORKED_RUN, lane: undefined }] }),
+    )
+    render(<Factories tab="active" />)
+    await screen.findByText('Fix the login bug', { selector: '.reader-title' })
+    expect(document.querySelector('.fg-node.taken').getAttribute('aria-label')).toBe(
+      'loop:bugfix stage, the bugfix loop, the lane taken',
+    )
   })
 
   it('says so when no run is registered', async () => {
