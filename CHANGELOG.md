@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.0.4] — 2026-11-09
+
 ### Added
 - **The Factories page draws a factory vertically, with its forks.** Stages run top to bottom; the lanes of a fork sit side by side, each labelled with its outcome, and join again at the first stage they all reach. Routes back are rails on the left (`↺ <cycle> · max N`), stop edges one rail on the right; a live run lights the lane it took and the stage it stands on. A loop stage's ring is about twice its old size. The graph never scrolls sideways: in a narrower pane its rails become tags and its lanes shrink to compact boxes, and only below about 524 px do the lanes stack.
 - **The factory engine and `geneseed factory`.** A factory carries one work item through a graph of stages, each a brick or a whole loop (`loop:<name>`). A failure may route back to an earlier stage, but only through a declared cycle with its `max` (5 at most). The state lives in `FACTORY.md` beside the child loop's `LOOP.md`. Every run ends by construction: 30 stage transitions per task, and a run-wide ceiling fixed at the first spec record (20 tasks at most). The CLI has the actions `check`, `list`, `init`, `next`, `record` and `decide`. It refuses an outcome that contradicts the child loop's `LOOP.md`, a dirty tree after a stage outside a loop, and a hand-edited `FACTORY.md` past the engine's bounds. See `docs/reference/factory-actions.md`.
