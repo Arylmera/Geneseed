@@ -83,7 +83,13 @@ function Cycles({ factory, counters }) {
 }
 
 function FactoryDetail({ f, bricks, loops }) {
-  const cmd = `geneseed factory init --factory ${f.name} --title "<title>" --requirement "<requirement>"`
+  const ask = `Run the ${f.name} factory on <issue URL, file or request>`
+  // The factory skill's Setup by hand: the worktree first, so the run never lands on this branch.
+  const cmd = [
+    'git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>',
+    'cd ../<repo>-factory-<slug>',
+    `geneseed factory init --factory ${f.name} --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"`,
+  ].join('\n')
   return (
     <>
       <div className="reader-tags">
@@ -101,12 +107,22 @@ function FactoryDetail({ f, bricks, loops }) {
       <section className="loop-start" aria-labelledby="fac-start-h">
         <div className="loop-start-bar">
           <h3 id="fac-start-h" className="loop-kicker">
-            Start it in a worktree
+            Start it: ask the agent
           </h3>
-          <CopyButton text={cmd} label="Copy command" />
+          <CopyButton text={ask} label="Copy request" />
+        </div>
+        <pre className="mono">{ask}</pre>
+        <div className="loop-start-bar">
+          <h3 className="loop-kicker">Or by hand, in a new worktree</h3>
+          <CopyButton text={cmd} label="Copy commands" />
         </div>
         <pre className="mono">{cmd}</pre>
       </section>
+      <p className="panel-note">
+        <code className="mono">init</code> only registers the run: an agent then drives{' '}
+        <code className="mono">geneseed factory next</code> and <code className="mono">record</code>
+        .
+      </p>
       {f.factory.rules?.length ? (
         <>
           <h3 className="loop-h2">Rules</h3>
@@ -206,8 +222,8 @@ const EMPTY = {
     title: 'No runs yet',
     body: (
       <>
-        Start one with <code className="mono">geneseed factory init</code> in a worktree, or ask the
-        agent to run a factory. It shows up here while it runs.
+        Ask the agent to run a factory, or start one by hand in a worktree with{' '}
+        <code className="mono">geneseed factory init</code>. It shows up here while it runs.
       </>
     ),
   },

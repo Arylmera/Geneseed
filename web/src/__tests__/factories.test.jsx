@@ -118,7 +118,14 @@ describe('Factories — templates', () => {
     expect(text('.fac-cycles li')).toEqual([
       'ci: loop:bugfix → pr-open → merge-gate — 2 laps at most',
     ])
-    expect(screen.getByText(/geneseed factory init --factory bug-report-to-fix/)).toBeTruthy()
+    // Asking the agent comes first; the manual path creates the worktree before `init`.
+    const starts = text('.loop-start pre')
+    expect(starts[0]).toBe('Run the bug-report-to-fix factory on <issue URL, file or request>')
+    expect(starts[1].split('\n')).toEqual([
+      'git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>',
+      'cd ../<repo>-factory-<slug>',
+      'geneseed factory init --factory bug-report-to-fix --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"',
+    ])
   })
 
   it('says so when the catalogue holds no factory', async () => {
