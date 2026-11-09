@@ -91,7 +91,9 @@ const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', 'needs-info'])
 // The forks of a factory, each with the stages its forward edges reach: the engine's `isFork`,
 // mirrored — a brick stage (never `loop:`) that declares a named outcome, one outside
 // PLAIN_OUTCOMES. A brick the catalogue lacks (a run started in another project) is judged by
-// the outcomes its edges use, which `factory check` holds to the declared ones.
+// the outcomes its edges use, which `factory check` holds to the declared ones. The test is the
+// engine's; the lanes are not quite its `lanesOf`: a back edge (into a cycle's first stage) is
+// left out, a drawing choice, since a route back is a rail, never a lane box.
 export function forksOf(factory, bricks = []) {
   const stages = new Set(Array.isArray(factory.stages) ? factory.stages : [])
   const cycles = (factory.cycles || []).filter((c) => Array.isArray(c?.nodes))

@@ -264,7 +264,7 @@ function useActiveFactories() {
     POLL_MS,
     [],
   )
-  return { runs: data?.factories ?? null, error }
+  return { runs: data ? data.factories || [] : null, error }
 }
 
 // The Factories page, in the Loops page's three panes: a rail of sections (Templates, Active),

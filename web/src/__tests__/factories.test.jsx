@@ -268,4 +268,11 @@ describe('Factories — active', () => {
     render(<Factories tab="active" />)
     expect(await screen.findByText('No runs yet')).toBeTruthy()
   })
+
+  // A payload without its `factories` list reads as no run, not as a read still out.
+  it('reads an active payload with no factories list as no run', async () => {
+    api.activeFactories.mockImplementation(() => Promise.resolve({}))
+    render(<Factories tab="active" />)
+    expect(await screen.findByText('No runs yet')).toBeTruthy()
+  })
 })
