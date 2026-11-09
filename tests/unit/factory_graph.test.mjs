@@ -11,6 +11,7 @@ import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { inferDoneChecks, PM_LOCKS } from '../../js/hosts/done-checks.mjs';
+import { countSpecTasks, FACTORY_MAX_TASKS } from '../../js/factory/state.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, { name, outcomes, effect: 'read', available: true, ...extra }];
 const CATALOG = {
@@ -443,4 +444,24 @@ test('G4: the factory close step removes FACTORY.md tracked or not, and commits 
   assert.match(close, /`git rm -f FACTORY\.md` when git tracks it/);
   assert.match(close, /else delete the file/);
   assert.match(close, /Commit and push only when\s+`git status --porcelain` then shows the removal/);
+});
+
+// G5: the `spec` brick states the task format `countSpecTasks` counts, and a list written the way
+// the brick says is counted in full. The limit is never typed: bricks render no count token, so
+// the brick refers to it in words, and the engine's refusal names it. And the brick speaks of the
+// factory's own wiring: the run's slug, and an amend that arrives as the stage's `carry`.
+test('G5: the spec brick states the task format the factory counts, and never types the limit', () => {
+  const brick = shipped('bricks/spec.md').replace(/\s+/g, ' ');
+  for (const rule of ['first heading that contains the word `task` or `tasks`', '`1.` or `1)`', 'indented 3 spaces at most',
+    'A sub-item or a deeper indent is not a task', 'A deeper heading keeps the list open',
+    'the next heading of the same or a higher level ends it', 'the factory\'s task limit',
+    'the factory run\'s `<slug>`', 'stage\'s `carry`']) {
+    assert.ok(brick.includes(rule), `the spec brick does not say: ${rule}`);
+  }
+  assert.doesNotMatch(brick, new RegExp(`\\b${FACTORY_MAX_TASKS}\\b`), 'the brick types the task limit');
+  assert.doesNotMatch(brick, /the slug of the loop's title\) and|A gate amendment in LOOP\.md's notes/);
+  // the format as the brick words it, counted by the engine: two tasks, a sub-item and a deeper
+  // heading between them, then a sibling heading that ends the list
+  const spec = '# Spec\n\n## Ordered tasks\n\n1. Parse\n   - detail\n### Note\n2) Verify end to end\n\n## Out of scope\n3. not a task\n';
+  assert.equal(countSpecTasks(spec), 2);
 });
