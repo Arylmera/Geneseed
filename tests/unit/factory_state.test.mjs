@@ -277,6 +277,28 @@ test('countSpecTasks counts the first task\'s indent only, and skips fenced bloc
   for (const [what, spec, n] of rows) assert.equal(countSpecTasks(spec), n, what);
 });
 
+// M1-M3: the CommonMark rules the counter follows, each row with the count CommonMark gives.
+// M1: a numbered line nests only from the content offset of the task above it (indent, marker,
+// one space), so a line indented less is a sibling. M2: a backtick fence whose info string holds
+// a backtick is not a fence, so it hides nothing. M3: an ATX heading indented 1-3 spaces, and a
+// setext heading (a paragraph line over `===` or `---`), end the list; a `---` under a task's own
+// text is a thematic break, and the list goes on.
+test('M1-M3: countSpecTasks follows CommonMark on offsets, fences and headings', () => {
+  const rows = [
+    ['M1: siblings indented 1 and 2 spaces', '## Tasks\n\n1. a\n 2. b\n  3. c\n', 3],
+    ['M1: under a two-digit marker, 3 spaces is still a sibling', '## Tasks\n\n9. a\n10. b\n   11. c\n', 3],
+    ['M1: 3 spaces under a one-digit marker nests', '## Tasks\n\n1. a\n   1. sub\n2. b\n', 2],
+    ['M2: ```x`y is no fence, so the task under it counts', '## Tasks\n\n1. a\n```x`y\n2. b\n3. c\n', 3],
+    ['M2: an info string without a backtick still opens a fence', '## Tasks\n\n1. a\n```sh\n# x\n```\n2. b\n', 2],
+    ['M3: an ATX heading indented 2 spaces ends the list', '## Tasks\n\n1. a\n  ## Out of scope\n2. no\n', 1],
+    ['M3: a setext heading ends the list', '## Tasks\n\n1. a\n\nOut of scope\n------------\n2. no\n', 1],
+    ['M3: a setext Tasks heading starts it', 'Spec\n====\n\nTasks\n-----\n\n1. a\n2. b\n\nNext\n====\n3. no\n', 2],
+    ['M3: --- under a task is a thematic break, not a heading', '## Tasks\n\n1. a\n---\n2. b\n', 2],
+  ];
+  // one compare over every row, so a failure names every row that is wrong, not the first
+  assert.deepEqual(rows.map(([what, spec]) => [what, countSpecTasks(spec)]), rows.map(([what, , n]) => [what, n]));
+});
+
 test('gates: no stops, amend re-runs the stage with the note as its carry, three times at most', () => {
   const s = start(specFactory());
   recordStage(s, CATALOG, 'pass', CLEAN);

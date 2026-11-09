@@ -172,30 +172,42 @@ export function writeFactoryFile(file, state) {
 
 /**
  * The tasks of a spec (`specs/<slug>/spec.md`, the `spec` brick's format): the numbered items
- * (`1.` or `1)`) under the first heading that names tasks, up to the next heading of the same or
- * a higher level, at the indent of the first one (3 spaces at most). A numbered line indented
- * deeper is a sub-item, as CommonMark nests it. A fenced block (``` or ~~~, closed by the same
- * fence) is skipped whole: a `# comment` in it is no heading, a numbered line in it no task.
+ * (`1.` or `1)`, indented 3 spaces at most) under the first heading that names tasks, up to the
+ * next heading of the same or a higher level. A numbered line is a sub-item, as CommonMark nests
+ * it, only when its indent reaches the content offset of the task before it (that task's indent,
+ * its marker, one space): `1. a` / ` 2. b` and `9. a` / `10. b` / `   11. c` are siblings,
+ * `1. a` / `   1. b` nest. Headings are ATX (`#`,
+ * indented 3 spaces at most) and setext (a paragraph line underlined with `=` or `-`; under a
+ * list item's own text that line is a thematic break, not a heading). A fenced block (``` or ~~~,
+ * closed by the same fence) is skipped whole; a backtick fence whose info string holds a backtick
+ * is no fence, as in CommonMark.
+ * shortcut: a line scanner, not a CommonMark parser (no block quotes, no HTML blocks, no tabs as
+ * indentation); a spec written as the `spec` brick says is inside what it reads right.
  */
 export function countSpecTasks(text) {
-  let level = 0; let count = 0; let indent = -1; let fence = null;
+  let level = 0; let count = 0; let offset = -1; let fence = null;
+  let para = false; let inItem = false;   // the line before is a paragraph line / a list item's text
   for (const line of String(text).replace(/\r\n/g, '\n').split('\n')) {
-    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
-      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) fence = null;
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null;
       continue;
     }
-    if (f) { fence = f[1]; continue; }
-    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (f && !(f[1][0] === '`' && f[2].includes('`'))) { fence = f[1]; para = false; continue; }
+    if (!line.trim()) { para = false; inItem = false; continue; }
+    const atx = /^ {0,3}(#{1,6})(?:[ \t]+(.*))?$/.exec(line);
+    const setext = para && /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
+    const h = atx ? [atx[1].length, atx[2] ?? ''] : setext ? [setext[1][0] === '=' ? 1 : 2, para] : null;
     if (h) {
-      if (level && h[1].length <= level) break;
-      if (!level && /\btasks?\b/i.test(h[2])) level = h[1].length;
-      continue;
+      if (level && h[0] <= level) break;
+      if (!level && /\btasks?\b/i.test(h[1])) level = h[0];
+      para = false; inItem = false; continue;
     }
-    const item = level ? /^( {0,3})\d+[.)]\s+\S/.exec(line) : null;
-    if (!item) continue;
-    if (indent < 0) indent = item[1].length;
-    if (item[1].length <= indent) count += 1;
+    const item = /^( {0,3})(\d{1,9}[.)])[ \t]+\S/.exec(line);
+    if (item || /^ {0,3}[-*+][ \t]+\S/.test(line)) { para = false; inItem = true; } else { para = inItem ? false : line; }
+    if (!item || !level) continue;
+    if (offset >= 0 && item[1].length >= offset) continue;   // inside the last task's content: a sub-item
+    count += 1; offset = item[1].length + item[2].length + 1;
   }
   return count;
 }

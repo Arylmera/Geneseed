@@ -453,7 +453,7 @@ test('G4: the factory close step removes FACTORY.md tracked or not, and commits 
 test('G5: the spec brick states the task format the factory counts, and never types the limit', () => {
   const brick = shipped('bricks/spec.md').replace(/\s+/g, ' ');
   for (const rule of ['first heading that contains the word `task` or `tasks`', '`1.` or `1)`', 'indented 3 spaces at most',
-    'at the indent of the first task', 'An item indented deeper, numbered or not, is a sub-item, not a task',
+    'keep every task at the same indent', 'An item indented as far as the text of the task above it (3 spaces under `1. `), numbered or not, is a sub-item, not a task',
     'A fenced code block', 'neither ends the list nor adds a task', 'A deeper heading keeps the list open',
     'the next heading of the same or a higher level ends it', 'the factory\'s task limit',
     'the factory run\'s `<slug>`', 'stage\'s `carry`']) {

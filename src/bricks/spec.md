@@ -14,10 +14,11 @@ verification task.
 
 Write the task list in the one form a factory counts. Put it under the spec's first heading that
 contains the word `task` or `tasks` (any case, such as `## Tasks`). Under it, write each task as one
-numbered item, `1.` or `1)`, at the indent of the first task, which is indented 3 spaces at most.
-An item indented deeper, numbered or not, is a sub-item, not a task. A fenced code block (```` ``` ````
-or `~~~`) neither ends the list nor adds a task. A deeper heading keeps the list open; the next
-heading of the same or a higher level ends it. List one task at least, and no more than the factory's task limit: a factory refuses a
+numbered item, `1.` or `1)`, indented 3 spaces at most; keep every task at the same indent. An
+item indented as far as the text of the task above it (3 spaces under `1. `), numbered or not, is
+a sub-item, not a task. A fenced code block (```` ``` ```` or `~~~`) neither ends the list nor
+adds a task. A deeper heading keeps the list open; the next heading of the same or a higher level
+ends it, `#` or underlined alike. List one task at least, and no more than the factory's task limit: a factory refuses a
 longer list and names its limit (Geneseed's Factory actions reference states it), so split the
 requirement instead.
 
