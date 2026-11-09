@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import factory from './fixtures/bug-report-to-fix.json'
 import forked from './fixtures/issue-to-pr-forks.json'
@@ -118,7 +118,24 @@ describe('Factories — templates', () => {
     expect(text('.fac-cycles li')).toEqual([
       'ci: loop:bugfix → pr-open → merge-gate — 2 laps at most',
     ])
-    expect(screen.getByText(/geneseed factory init --factory bug-report-to-fix/)).toBeTruthy()
+    // Asking the agent comes first; the manual path is ONE `&&` chain, worktree before `init`,
+    // so a paste with its placeholders unfilled fails before `init` runs in this checkout.
+    const ask = 'Run the bug-report-to-fix factory on <issue URL, file or request>'
+    const chain = [
+      'git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>',
+      'cd ../<repo>-factory-<slug>',
+      'geneseed factory init --factory bug-report-to-fix --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"',
+    ].join(' && ')
+    expect(text('.loop-start pre')).toEqual([ask, chain])
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    try {
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy request' })))
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy command' })))
+    } finally {
+      delete navigator.clipboard
+    }
+    expect(writeText.mock.calls).toEqual([[ask], [chain]])
   })
 
   it('says so when the catalogue holds no factory', async () => {

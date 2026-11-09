@@ -50,6 +50,11 @@
     { "query": "Add a security scan stage before the PR opens in our bug-report-to-fix factory", "should_trigger": true },
     { "query": "Run the bug-report-to-fix factory on issue 42", "should_trigger": false }
   ],
+  "factory": [
+    { "query": "Run the bug-report-to-fix factory on issue 42", "should_trigger": true },
+    { "query": "Take issue 418 through issue-to-pr", "should_trigger": true },
+    { "query": "Make a factory that takes a feature request through the feature loop to an open PR", "should_trigger": false }
+  ],
   "research": [
     { "query": "What changed in the latest Vite major release? Check the official sources", "should_trigger": true },
     { "query": "Find out which open-source licences allow use in a commercial SaaS, with sources", "should_trigger": true },

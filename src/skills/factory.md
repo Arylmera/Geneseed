@@ -2,9 +2,8 @@
 
 > {{DESC_FACTORY}}
 
-**Trigger:** the user asks to run a factory, or to carry one work item (a request, a document,
-a GitHub or GitLab issue) through to an open pull request with green CI; or names a factory
-(`analysis-to-build`, `bug-report-to-fix`, `issue-to-pr`).
+**Trigger:** the user names a factory (`analysis-to-build`, `bug-report-to-fix`, `issue-to-pr`),
+or asks to carry an issue, request or document to a PR with green CI.
 
 ## What it is
 

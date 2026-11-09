@@ -27,13 +27,21 @@ geneseed factory list
 geneseed factory check
 ```
 
-## Start a run
+## Start one by asking the agent
+
+Name the factory and the work item in plain words, in a session in your repo:
 
 ```text
-run the bug-report-to-fix factory on issue 412
-take this bug report through the factory: totals round the wrong way on refunds
-run the issue-to-pr factory on issue 418
+Run the bug-report-to-fix factory on https://github.com/acme/shop/issues/412
+Take this bug report through bug-report-to-fix: totals round the wrong way on refunds
+Run issue-to-pr on #42
+Take issue 418 through the issue-to-pr factory
+Take this analysis through analysis-to-build: docs/analysis/export-csv.md
+Run the analysis-to-build factory on this request: add CSV export to the report page
 ```
+
+On Claude Code, `/factory` with the same words is the explicit form: it loads the `factory`
+skill directly. The console's **Factories** page shows the request for each factory, ready to copy.
 
 The agent then:
 
@@ -42,6 +50,20 @@ The agent then:
 3. Steps the run: `intake` writes the work item, `holdout-write` writes the holdout scenarios outside the worktree, the `bugfix` loop fixes it commit by commit, `holdout` plays the scenarios against the fix, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `holdout-write` and picks the lane: the `bugfix`, `feature`, `deps-upgrade` or `refactor` loop, or the `docs-update` brick for a docs-only change. A failed scenario or red CI then sends the work back to that lane.
 
 The holdout scenarios are checks the developer never sees: see [Holdout scenarios](../concepts/factories.md#holdout-scenarios). You can read them yourself in `~/.config/geneseed/holdout/<slug>/`; never paste them into the chat while the run is going, or the developer may see them.
+
+## Start one by hand
+
+Create the worktree first, then register the run in it. Never run `init` in your own checkout:
+the run then works on your current branch. Keep the three commands as one `&&` chain and
+replace every placeholder: if one command fails, the next ones do not run.
+
+```bash
+git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug> && cd ../<repo>-factory-<slug> && geneseed factory init --factory <name> --title "<title>" --requirement "<requirement>" --input "<issue URL, file path or pasted text>"
+```
+
+`init` alone runs nothing. It writes `FACTORY.md` and registers the run. An agent drives the run
+from there with `geneseed factory next` and `geneseed factory record`: open a session in the
+worktree and ask it to resume the run.
 
 ## Build from an analysis
 
