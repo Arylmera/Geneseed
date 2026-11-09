@@ -64,6 +64,7 @@
   "DESC_LOOP": "Work a requirement in short, scored drills on a loop/* branch, the loop engine calling every play.",
   "DESC_FACTORY": "Carry one work item through the factory, play by play, to an open PR with green CI. The merge stays yours.",
   "DESC_BRICK_FORGE": "Draw up or adapt a loop brick, then run it through geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Draw up a factory from bricks and loops, run it through geneseed factory check, and bring in brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Drive it in on cover-and-verify — smallest gain, a test set on the new ground, the affected drills green, and log it snap by snap.",
   "DESC_TEACH": "Coach the player toward a result, or test them — a crash course, a playbook decoded, a training plan; or a drill, a film-session explain-back, a mastery stress-tested.",
   "DESC_ADHD": "Coach every reply for a reader with ADHD — next play first, numbered steps, the score restated each turn, tangents benched, real time estimates. On until \"stop adhd mode\".",

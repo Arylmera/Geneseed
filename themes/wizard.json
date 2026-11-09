@@ -64,6 +64,7 @@
   "DESC_LOOP": "Work a requirement in small, weighed incantations on a loop/* branch, the loop engine binding every step.",
   "DESC_FACTORY": "Carry one work item through the factory of spells to an open PR with green CI, the engine binding every stage. The merge stays yours.",
   "DESC_BRICK_FORGE": "Inscribe or adapt a loop brick, then prove it with geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Bind bricks and loops into a factory, prove it with geneseed factory check, and call on brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Drive a working through the cover-and-confirm loop — the smallest casting, its trials written, the touched trials green, sealed rune by rune.",
   "DESC_TEACH": "Tutor the apprentice, or test them — a crash course, a grimoire decoded, a day-by-day path; or a drill, an explain-back examination, a mastery put to trial.",
   "DESC_ADHD": "Shape every reply for a reader with ADHD — the next step of the spell first, numbered steps, the state recited each turn, tangents held back, true time estimates. On until \"stop adhd mode\".",

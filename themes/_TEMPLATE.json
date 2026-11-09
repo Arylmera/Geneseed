@@ -64,6 +64,7 @@
   "DESC_LOOP": "<one-line description: work a requirement in small scored iterations on a loop/* branch, stepping the geneseed loop state machine>",
   "DESC_FACTORY": "<one-line description: carry one work item (request, document or issue) through a factory of bricks and loops to an open PR with green CI, stepping the geneseed factory state machine; never merges>",
   "DESC_BRICK_FORGE": "<one-line description: author or adapt a loop brick at project, global or shipped level, checked by geneseed loop check>",
+  "DESC_FACTORY_FORGE": "<one-line description: compose bricks and loops into a factory through an interview, write it at project or global level, check it with geneseed factory check, and offer brick-forge for a missing brick>",
   "DESC_DEVELOP": "<one-line description: drive a code change through cover-and-verify — smallest change, tests written for it, affected suite green, committed slice by slice>",
   "DESC_TEACH": "<one-line description: teach toward a result — crash course, decode confusing material, or a day-by-day path to a deadline — or test what the user knows with a drill, an explain-it-back check or a gap check>",
   "DESC_ADHD": "<one-line description: an opt-in output mode for a reader with ADHD — next action first, numbered steps, state restated, tangents held back; on until \"stop adhd mode\">",

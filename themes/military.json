@@ -64,6 +64,7 @@
   "DESC_LOOP": "Execute a requirement in small, scored sorties on a loop/* branch, the loop engine issuing every order.",
   "DESC_FACTORY": "Move one work item through the factory, stage by stage, to an open PR with green CI, the engine issuing every order. The merge stays yours.",
   "DESC_BRICK_FORGE": "Draft or adapt a loop brick, then clear it through geneseed loop check.",
+  "DESC_FACTORY_FORGE": "Assemble a factory from bricks and loops, clear it through geneseed factory check, and call brick-forge when a brick is missing.",
   "DESC_DEVELOP": "Drive the change through the cover-and-verify loop — smallest move, tests written to cover it, affected suite green, committed slice by slice.",
   "DESC_TEACH": "Train the recruit, or test them — a crash course, a manual decoded, a day-by-day programme; or a drill, an explain-back debrief, a proficiency stress-tested.",
   "DESC_ADHD": "Brief every reply for a reader with ADHD — next action first, numbered steps, sitrep each turn, tangents held, concrete time estimates. In effect until \"stop adhd mode\".",
