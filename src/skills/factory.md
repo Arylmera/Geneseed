@@ -43,8 +43,12 @@ Repeat `geneseed factory next` and act on its JSON:
   `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --carry "<the file path the stage reported>"`.
   The `--carry` is how the next stage gets this one's finding. Always use that porcelain form:
   plain `--porcelain` folds a new directory into one line, which the engine refuses.
-  The `triage` stage also gets the factory's `loops`; on `pass`, add `--loop <the name on the
-  first line of its file>`. The engine refuses a loop outside `loops`.
+  A fork stage (such as `triage`) also gets `lanes`: each outcome it may report, with the stage
+  it leads to. Record the outcome it reported (`--outcome docs`): that outcome names the lane,
+  and a later route back to `$lane` returns to it.
+  A brick stage with `effect: mutate` (a `docs-update` lane) commits what it changed before the
+  record: `git add <the files it named>`, then `git commit -m "factory(<slug>): <stage>"`. The
+  engine refuses a dirty tree after any stage outside a loop.
   The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
   `carry`, not as a LOOP.md note) and reports with
   `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <its finding file>`, so the gate shows the user what to review.

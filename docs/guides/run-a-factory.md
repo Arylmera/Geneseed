@@ -39,7 +39,7 @@ The agent then:
 
 1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched.
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
-3. Steps the run: `intake` writes the work item, `holdout-write` writes the holdout scenarios outside the worktree, the `bugfix` loop fixes it commit by commit, `holdout` plays the scenarios against the fix, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `holdout-write` and picks the loop from `bugfix`, `feature`, `deps-upgrade` and `refactor`. A failed scenario or red CI then sends the work back to that loop.
+3. Steps the run: `intake` writes the work item, `holdout-write` writes the holdout scenarios outside the worktree, the `bugfix` loop fixes it commit by commit, `holdout` plays the scenarios against the fix, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `holdout-write` and picks the lane: the `bugfix`, `feature`, `deps-upgrade` or `refactor` loop, or the `docs-update` brick for a docs-only change. A failed scenario or red CI then sends the work back to that lane.
 
 The holdout scenarios are checks the developer never sees: see [Holdout scenarios](../concepts/factories.md#holdout-scenarios). You can read them yourself in `~/.config/geneseed/holdout/<slug>/`; never paste them into the chat while the run is going, or the developer may see them.
 
@@ -77,7 +77,7 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 | `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. |
 | The close commit | The last commit removes `FACTORY.md`, and it asks. Its push runs CI again: the agent reads the checks once more and reports the final state. |
 
-Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the one `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run. A failed holdout scenario works the same way, with its own count of two. A holdout `error` stops the run: the diff touched the holdout folder, or a scenario could not be played.
+Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the lane `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run. A failed holdout scenario works the same way, with its own count of two. A holdout `error` stops the run: the diff touched the holdout folder, or a scenario could not be played.
 
 ## When it ends
 

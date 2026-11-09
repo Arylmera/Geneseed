@@ -37,13 +37,37 @@ whatever its cycles say.
 outcome with no edge, a `$close` nothing reaches, a cycle with no `max`, a cycle entered anywhere
 but its first stage, or a route back that spends no cycle.
 
+## Forks and lanes
+
+A **fork** is where the work takes one way or another. It is a brick that declares **named
+outcomes**, any outcome other than `pass`, `fail`, `error` or `none`. `triage` is one: `bug`,
+`feature`, `deps`, `refactor`, `docs` and `fail`. Each named outcome has its own edge to its own
+stage, its **lane**, and the outcome the brick reports picks the lane. `geneseed factory next`
+hands the fork its `lanes`: each outcome with the stage it leads to.
+
+Not every factory runs a loop, and not every lane is one. A loop is the lane for work that
+changes code, because the loop carries the test → fix → verify proof. A brick is the lane where a
+loop adds nothing: in `issue-to-pr`, `docs` goes to the `docs-update` brick, which commits its own
+change. Every lane joins the same path after it: `holdout`, then `pr-open` and `merge-gate`.
+
+A route back after a fork targets **`$lane`**: the stage the run's most recent fork chose. The
+engine records it in `FACTORY.md` when the fork's outcome is recorded, and an edge to `$lane` goes
+there. A cycle may start at `$lane` too, and each route back to it spends one lap, as any route
+back does. `check` refuses `$lane` in a factory with no fork, or where some path reaches it before
+any fork. In its other checks, `$lane` stands for every lane, so a graph that passes holds for the
+lane any run takes.
+
+A factory written before forks used a `loop:$triaged` stage and a `loops` list. Both are retired:
+`check` names each with its replacement, and the doctor reports it. Nothing rewrites your file.
+
 ## One worktree, two state files
 
 A run works on its own branch, `loop/factory-<slug>`, in its own worktree. `FACTORY.md` at the
 root holds the run's state; while a loop stage runs, its `LOOP.md` sits beside it. The loop
 engine treats `FACTORY.md` as bookkeeping, as it treats `LOOP.md`: it never scores it. A stage
-that is not a loop never changes the worktree, and `factory record` refuses a dirty tree after
-one. The one exception is the run's spec, `specs/<slug>/spec.md`: the `spec` stage writes it, and
+that is not a loop records only on a clean worktree, and `factory record` refuses a dirty tree
+after one. A brick that changes files, such as a `docs-update` lane, commits them first. The one
+exception is the run's spec, `specs/<slug>/spec.md`: the `spec` stage writes it, and
 it is committed once you approve it, before the first loop. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
 names the run it belongs to.
 
@@ -53,7 +77,7 @@ names the run it belongs to.
 | --- | --- |
 | `analysis-to-build` | `intake` → `spec` → `holdout-write` → `loop:feature` → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. `spec` writes `specs/<slug>/spec.md` with an ordered task list, and you approve it at its gate. `loop:feature` then runs once per task, in order, in the same worktree, and one PR opens at the end. A failed `holdout` or a red `merge-gate` sends the work back to `loop:feature` as one extra task, twice at most each (cycles `holdout` and `ci`) |
 | `bug-report-to-fix` | `intake` → `holdout-write` → `loop:bugfix` → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. A failed `holdout` or a red `merge-gate` sends the fix back to `loop:bugfix`, twice at most each (cycles `holdout` and `ci`) |
-| `issue-to-pr` | `intake` → `holdout-write` → `triage` → `loop:$triaged` → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. `triage` picks the loop from the factory's `loops`: `bugfix`, `feature`, `deps-upgrade` or `refactor`. A failed `holdout` or a red `merge-gate` sends the work back to that same loop, twice at most each (cycles `holdout` and `ci`) |
+| `issue-to-pr` | `intake` → `holdout-write` → `triage`, a fork → one lane → `holdout` → `pr-open` → `merge-gate` → `retro` → `$close`. `triage` reports the lane: `bug` → `loop:bugfix`, `feature` → `loop:feature`, `deps` → `loop:deps-upgrade`, `refactor` → `loop:refactor`, `docs` → the `docs-update` brick. A failed `holdout` or a red `merge-gate` sends the work back to `$lane`, that same lane, twice at most each (cycles `holdout` and `ci`) |
 
 The bricks they add:
 
@@ -62,13 +86,14 @@ The bricks they add:
 | `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria | `pass`, `fail` |
 | `holdout-write` | Writes 3 to 8 prose scenarios (given / when / then) for the work item into the holdout folder, outside the worktree, and hands the work item on unchanged | `pass`, `fail` |
 | `holdout` | Plays every scenario against the built change. `fail` carries one sentence per failed scenario, observed against expected; `error` when the diff touches the holdout folder or a scenario cannot be played | `pass`, `fail`, `error` |
-| `triage` | Reads the work item and picks one loop from the factory's `loops`, with its reason. The engine refuses a loop outside that list. `fail` when none fits | `pass`, `fail` |
+| `triage` | A fork: reads the work item and reports the outcome that names its lane, with its reason. `fail` when no lane fits | `bug`, `feature`, `deps`, `refactor`, `docs`, `fail` |
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
 | `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide | `pass`, `fail`, `none` |
 | `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, and keeps only a lasting lesson in memory | `pass` |
 
 `analysis-to-build` also uses the loops' own `spec` brick (`gate: human`), the one the
-`spec-first-feature` loop starts with.
+`spec-first-feature` loop starts with, and `issue-to-pr` the loops' `docs-update` brick as its
+docs lane.
 
 The run report is git-ignored by the `.geneseed/.gitignore` Geneseed seeds. Where no such file is
 in the worktree, `retro` writes the report to the OS temp directory instead, so the tree stays
