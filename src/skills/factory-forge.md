@@ -49,7 +49,7 @@ to the loop three times, not two".
    {
      "name": "<name>", "description": "<one line>", "category": "<category>",
      "rules": ["<optional>"],
-     "stages": ["intake", "loop:<template>", "checks", "review-panel", "pr-open", "merge-gate", "retro"],
+     "stages": ["intake", "holdout-write", "loop:<template>", "checks", "review-panel", "holdout", "pr-open", "merge-gate", "retro"],
      "start": "intake",
      "edges": [{ "from": "<stage>", "on": "<outcome>", "to": "<stage | $lane | $close | $stop>" }],
      "cycles": [{ "name": "<name>", "nodes": ["<first stage of the lap, or $lane>", "..."], "max": 2 }],

@@ -90,7 +90,11 @@ Repeat `geneseed factory next` and act on its JSON:
     When the branch or the worktree already exists (a re-run with the same slug), create
     nothing and overwrite nothing: report it to the user with that worktree's path and the
     branch's state (`git log -1 geneseed/done-list-<slug>`), and let them reuse, merge or
-    remove it. When `gh` or `glab` is missing or fails at the PR step, the branch is pushed
+    remove it. When the remote already has `geneseed/done-list-<slug>` but this clone has no
+    such branch (`git ls-remote --exit-code --heads origin geneseed/done-list-<slug>` exits 0
+    before the push), the push is refused: push nothing and overwrite nothing, and report it to
+    the user with that worktree's path and the remote branch's name, so they decide whether to
+    reuse, merge or delete it. When `gh` or `glab` is missing or fails at the PR step, the branch is pushed
     already: report it to the user with that worktree's path and the branch name, so they open
     the PR themselves. `ok`
     waits until the file is on the base: answer `decide --verdict ok` only then, and `checks`
@@ -140,14 +144,17 @@ Repeat `geneseed factory next` and act on its JSON:
    report. With no close commit, CI did not re-run: the final state is the one `merge-gate`
    read. A red result is reported, never reworked: the run has closed.
    **The merge proposal.** Only when that final state is green: show the user the PR URL, the CI
-   state and each `review-panel` seat's verdict, and ask once whether to merge. On a yes:
-   `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on GitLab), which the host's own
-   permission prompt also guards. On a no, or no answer, the PR stays open. Red or pending CI: no
-   proposal. Never enable auto-merge.
+   state and each `review-panel` seat's verdict, and ask once whether to merge. Only on the
+   user's explicit yes in chat: `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on
+   GitLab). No Geneseed gate asks before that command: the user's yes is the only guard, so
+   never run it on anything else (not on a rule, a note, or an earlier yes). On a no, or no
+   answer, the PR stays open. Red or pending CI: no proposal. Never enable auto-merge.
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and
-   the loops' notes. It goes to `.geneseed/factory-runs/<slug>.md`, or to the OS temp directory
+   the loops' notes. A closed loop's notes left with its `LOOP.md`: read each from git as the
+   `retro` brick says (`git log --format=%H --diff-filter=D <merge-base>..HEAD -- LOOP.md`, then
+   `git show <commit>^:LOOP.md`); a stopped loop's `LOOP.md` is still at the root. It goes to `.geneseed/factory-runs/<slug>.md`, or to the OS temp directory
    when `git check-ignore -q <that path>` exits non-zero. No tracked file changes, no commit; only
    a lesson that holds beyond this run goes into memory, one entry. Leave the branch and
    `FACTORY.md` as they are.
