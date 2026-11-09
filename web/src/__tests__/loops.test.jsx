@@ -96,6 +96,9 @@ const listed = () =>
   )
 const reader = () => document.querySelector('.lib-reader')
 
+// The rail (the wide layout's sections and categories): the stacked toolbar holds a second copy.
+const rail = () => within(document.querySelector('.lib-kinds'))
+
 describe('Loops — the rail', () => {
   // The Library's rail: the page title and its line, then one link per section with its count.
   // Active counts the registered runs (none here); the routed section is the current one, and
@@ -121,7 +124,7 @@ describe('Loops — the rail', () => {
 // heading stays), the filter narrows within it, and moving to another section resets to All.
 describe('Loops — categories in the rail', () => {
   const cats = () =>
-    [...document.querySelectorAll('.rail-cats button')].map((b) =>
+    [...document.querySelectorAll('.lib-kinds .rail-cats button')].map((b) =>
       [...b.querySelectorAll('span:not(.cdot)')].map((x) => x.textContent).join(' '),
     )
 
@@ -129,47 +132,46 @@ describe('Loops — categories in the rail', () => {
     render(<Loops tab="templates" />)
     await screen.findByText('Record a decision.', { selector: '.reader-lede' })
     expect(cats()).toEqual(['All 5', 'Architecture 1', 'Tests 1', 'Development 2', 'Other 1'])
-    const nav = screen.getByRole('navigation', { name: 'Sections' })
+    const nav = rail().getByRole('navigation', { name: 'Sections' })
     expect(nav.querySelectorAll('.rail-cats').length).toBe(1)
     expect(nav.querySelector('a[aria-current="page"]').nextElementSibling).toBe(
-      screen.getByRole('list', { name: 'Categories' }).parentElement,
+      rail().getByRole('list', { name: 'Categories' }).parentElement,
     )
     // One bar segment per category, grown by its count.
-    expect(text('.rail-cats .rail-mix span').length).toBe(4)
-    expect([...document.querySelectorAll('.rail-mix span')].map((s) => s.style.flexGrow)).toEqual([
-      '1',
-      '1',
-      '2',
-      '1',
-    ])
+    expect(text('.lib-kinds .rail-cats .rail-mix span').length).toBe(4)
+    expect(
+      [...document.querySelectorAll('.lib-kinds .rail-mix span')].map((s) => s.style.flexGrow),
+    ).toEqual(['1', '1', '2', '1'])
   })
 
   it('narrows to the picked category, combines with the filter, and All restores', async () => {
     render(<Loops tab="templates" />)
     await screen.findByText('Record a decision.', { selector: '.reader-lede' })
-    fireEvent.click(screen.getByRole('button', { name: /^Development/ }))
-    expect(screen.getByRole('button', { name: /^Development/ }).getAttribute('aria-pressed')).toBe(
-      'true',
-    )
+    fireEvent.click(rail().getByRole('button', { name: /^Development/ }))
+    expect(
+      rail()
+        .getByRole('button', { name: /^Development/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
     expect(listed()).toEqual(['# Development', 'gated', 'tiny'])
     fireEvent.change(screen.getByLabelText('Filter Templates'), { target: { value: 'tiny' } })
     expect(listed()).toEqual(['# Development', 'tiny'])
     fireEvent.change(screen.getByLabelText('Filter Templates'), { target: { value: '' } })
-    fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+    fireEvent.click(rail().getByRole('button', { name: /^All/ }))
     expect(listed().length).toBe(9)
   })
 
   it('shows the brick origins under Bricks, and resets on the way back', async () => {
     const { rerender } = render(<Loops tab="templates" />)
     await screen.findByText('Record a decision.', { selector: '.reader-lede' })
-    fireEvent.click(screen.getByRole('button', { name: /^Tests/ }))
+    fireEvent.click(rail().getByRole('button', { name: /^Tests/ }))
     rerender(<Loops tab="bricks" />)
     await screen.findByText('Do it our way.')
     expect(cats()).toEqual(['All 5', 'Project 1', 'Global 1', 'Shipped 3'])
-    expect(screen.getByRole('list', { name: 'Origins' })).toBeTruthy()
+    expect(rail().getByRole('list', { name: 'Origins' })).toBeTruthy()
     rerender(<Loops tab="templates" />)
     await waitFor(() => expect(listed().length).toBe(9))
-    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(rail().getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true')
   })
 })
 
@@ -281,13 +283,14 @@ describe('Loops — templates', () => {
     expect(text('.loop-brick.on > b')).toEqual(['apply'])
   })
 
-  // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack, and
-  // three disclosures replace the rail and the open panes: Section ▾ / Category ▾ menus
-  // (LibMenus), the list as "<section> <entry> ▾" (LibList), the entry as "<name> · <kind> ▾"
-  // (LibReader). jsdom evaluates no @container, so these pin the controls and their state; the
-  // CSS that shows them only in the stack, and hides a closed panel's body, is
-  // narrowPanes.test.js's.
-  describe('the stacked controls', () => {
+  // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack as
+  // design "A, toolbar" (user, 2026-11-09): a toolbar card (the sections as a segmented control,
+  // the filter, the categories as chips), a picker card (a header "<n> <section> · <entry>", the
+  // rows folded behind it), then the entry as a plain card. All of it lives in LibList. jsdom
+  // evaluates no @container, so these pin the controls and their state; the CSS that shows them
+  // only in the stack is narrowPanes.test.js's. The rail keeps its own copy of the sections and
+  // categories for the wide panes, so queries here are scoped to the toolbar.
+  describe('the stacked toolbar and picker', () => {
     const open = async (props) => {
       const view = render(<Loops tab="templates" {...props} />)
       await screen.findByText(/Record a decision\.|The smallest loop\./, {
@@ -295,9 +298,8 @@ describe('Loops — templates', () => {
       })
       return view
     }
-    const btn = (name) => screen.getByRole('button', { name })
-    const listToggle = () => document.querySelector('.lib-list-toggle')
-    const readerToggle = () => document.querySelector('.lib-reader-toggle')
+    const toolbar = () => document.querySelector('.lib-toolbar')
+    const header = () => document.querySelector('.lib-list-toggle')
 
     it('sits inside the `.lib-wrap` container the narrow tier queries', async () => {
       await open({ item: 'adr' })
@@ -314,123 +316,89 @@ describe('Loops — templates', () => {
       expect(svg.closest('.loop-graph').style.getPropertyValue('--loop-w')).toBe(`${width}px`)
     })
 
-    it('says the section and the category on their menus, the sections in rail order', async () => {
+    // The toolbar's rows in order: the sections (each once, with its count, the open one
+    // marked), the filter, then the categories; the picker after the toolbar.
+    it('leads with the sections as a segmented control, then the filter, then the categories', async () => {
       await open({ item: 'adr' })
-      expect(btn(/^Section/).textContent).toMatch(/Templates\s*5/)
-      expect(btn(/^Category/).textContent).toMatch(/All\s*5/)
-      fireEvent.click(btn(/^Section/))
-      const menu = document.getElementById(btn(/^Section/).getAttribute('aria-controls'))
-      expect(text('a', menu)).toEqual(['Templates5', 'Bricks5', 'Active0'])
-      fireEvent.keyDown(document, { key: 'Escape' })
-      expect(btn(/^Section/).getAttribute('aria-expanded')).toBe('false')
+      const tb = toolbar()
+      expect([...tb.children].map((c) => c.className)).toEqual([
+        'lib-seg',
+        'lib-toolbar-filter',
+        'lib-chips',
+      ])
+      const seg = within(tb).getByRole('navigation', { name: 'Sections' })
+      expect(text('a', seg)).toEqual(['Templates5', 'Bricks5', 'Active0'])
+      expect([...seg.querySelectorAll('a')].map((a) => a.getAttribute('aria-current'))).toEqual([
+        'page',
+        null,
+        null,
+      ])
+      expect(within(tb).getByRole('textbox', { name: 'Filter Templates' })).toBeTruthy()
+      expect(text('.rc-name', tb)).toEqual(['All', 'Architecture', 'Tests', 'Development', 'Other'])
+      expect(tb.nextElementSibling.className).toBe('lib-picker')
     })
 
-    it('narrows the list from the Category menu, as the rail does', async () => {
+    it('has no category row for a section with one group or none', async () => {
+      render(<Loops tab="active" />)
+      await screen.findByText('What is a loop?')
+      expect(toolbar().querySelector('.lib-chips')).toBeNull()
+    })
+
+    it('narrows the list from a chip, and the header counts what is left', async () => {
       await open({ item: 'adr' })
-      fireEvent.click(btn(/^Category/))
-      const menu = document.getElementById(btn(/^Category/).getAttribute('aria-controls'))
-      fireEvent.click(within(menu).getByRole('button', { name: /^Tests/ }))
-      expect(btn(/^Category/).textContent).toMatch(/Tests\s*1/)
+      expect(header().textContent).toMatch(/^5 templates\s*adr/)
+      fireEvent.click(within(toolbar()).getByRole('button', { name: /^Tests/ }))
+      expect(
+        within(toolbar())
+          .getByRole('button', { name: /^Tests/ })
+          .getAttribute('aria-pressed'),
+      ).toBe('true')
       expect(listed()).toEqual(['# Tests', 'other'])
+      expect(header().textContent).toMatch(/^1 templates/)
     })
 
-    // A deep link opens on its entry: the list folded to the entry's name, the entry open.
-    it('opens a deep link with the list folded and the entry open', async () => {
+    // The picker's header: the filtered count, the open entry, a quiet hint, the fold state.
+    it('a deep link opens with the picker closed on its entry', async () => {
       await open({ item: 'adr' })
-      expect(listToggle().textContent).toMatch(/adr/)
-      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
-      expect(listToggle().closest('.lib-list').dataset.open).toBe('false')
-      expect(readerToggle().textContent).toMatch(/adr\s*·\s*Template/)
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
-      const body = document.getElementById(readerToggle().getAttribute('aria-controls'))
-      expect(body.closest('.lib-reader').dataset.open).toBe('true')
+      expect(header().textContent).toMatch(/5 templates\s*adr\s*change/)
+      expect(header().getAttribute('aria-expanded')).toBe('false')
+      expect(header().closest('.lib-list').dataset.open).toBe('false')
     })
 
-    // A section with no routed entry opens on its list; the entry waits, folded.
-    it('opens a section with the list open and the entry folded', async () => {
+    it('a section page opens with the picker open', async () => {
       await open({})
-      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+      expect(header().getAttribute('aria-expanded')).toBe('true')
+      expect(header().textContent).toMatch(/close/)
     })
 
-    it('a pick folds the list and opens the entry, which follows it', async () => {
-      const view = await open({})
-      fireEvent.click(readerToggle())
-      fireEvent.click(readerToggle())
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+    it('opens, picks and closes: the header names the pick, the entry follows it', async () => {
+      const view = await open({ item: 'adr' })
+      fireEvent.click(header())
+      expect(header().getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(document.querySelector('a.lib-row[href$="/tiny"]'))
       view.rerender(<Loops tab="templates" item="tiny" />)
       await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
-      expect(listToggle().textContent).toMatch(/tiny/)
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
-      expect(readerToggle().textContent).toMatch(/tiny\s*·\s*Template/)
+      expect(header().getAttribute('aria-expanded')).toBe('false')
+      expect(header().textContent).toMatch(/tiny/)
+      expect(document.activeElement).toBe(header())
     })
 
-    // Opening the list leaves the entry as it is; folding the entry leaves the list.
-    it('folds and opens each panel on its own', async () => {
+    // A pick of the row already open changes no route, yet it is a pick.
+    it('a pick on the open row closes the picker and focuses its header', async () => {
       await open({ item: 'adr' })
-      fireEvent.click(listToggle())
-      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
-      fireEvent.click(readerToggle())
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
-      expect(readerToggle().closest('.lib-reader').dataset.open).toBe('false')
-      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
-    })
-
-    // A new section shows its list again, whatever the old one's state.
-    it('opens the list again on a section change', async () => {
-      const view = await open({ item: 'adr' })
-      view.rerender(<Loops tab="bricks" />)
-      await screen.findByText('Do it our way.')
-      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
-    })
-
-    // Back to the section's own address (no entry routed): the list again, as on arrival.
-    // Found in the browser: from #/item/… to #/section/… the list stayed folded.
-    it('opens the list again when the route drops its entry', async () => {
-      const view = await open({ item: 'adr' })
-      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
-      view.rerender(<Loops tab="templates" />)
-      expect(listToggle().getAttribute('aria-expanded')).toBe('true')
-    })
-
-    // Review F8: a section page with no routed entry folds the entry, on navigation as on
-    // mount, whether the section changes or only the entry drops out of the route.
-    it('folds the entry on a section page reached by navigation, as on mount', async () => {
-      const view = await open({ item: 'adr' })
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
-      view.rerender(<Loops tab="templates" />)
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
-      view.rerender(<Loops tab="templates" item="adr" />)
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
-      view.rerender(<Loops tab="bricks" />)
-      await screen.findByText('Do it our way.')
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
-    })
-
-    // Review F2 and F4: picking the row already open changes no route, yet it is a pick: the
-    // list folds, the entry opens, and focus lands on the entry's trigger, not on <body> (the
-    // row just activated is hidden with the folded list).
-    it('a pick on the open row folds the list, opens the entry and focuses its trigger', async () => {
-      await open({ item: 'adr' })
-      fireEvent.click(readerToggle())
-      fireEvent.click(listToggle())
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+      fireEvent.click(header())
       const row = document.querySelector('.lib-row.on')
       row.focus()
       fireEvent.click(row)
-      expect(listToggle().getAttribute('aria-expanded')).toBe('false')
-      expect(readerToggle().getAttribute('aria-expanded')).toBe('true')
-      expect(document.activeElement).toBe(readerToggle())
+      expect(header().getAttribute('aria-expanded')).toBe('false')
+      expect(document.activeElement).toBe(header())
     })
 
-    // Review R2: Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere (a new tab or
-    // window), so the page here is not picking: the list stays open and focus stays put.
+    // Ctrl-, Cmd-, Shift- or middle-click opens the row elsewhere (a new tab or window), so the
+    // page here is not picking: the picker stays open and focus stays put.
     it('a click that opens the row elsewhere is not a pick', async () => {
       await open({ item: 'adr' })
-      fireEvent.click(listToggle())
-      fireEvent.click(readerToggle())
+      fireEvent.click(header())
       const row = document.querySelector('a.lib-row[href$="/tiny"]')
       row.focus()
       for (const opts of [
@@ -440,24 +408,25 @@ describe('Loops — templates', () => {
         { button: 1 },
       ]) {
         fireEvent.click(row, opts)
-        expect(listToggle().getAttribute('aria-expanded')).toBe('true')
-        expect(readerToggle().getAttribute('aria-expanded')).toBe('false')
+        expect(header().getAttribute('aria-expanded')).toBe('true')
         expect(document.activeElement).toBe(row)
       }
     })
 
-    it('a pick of another row also leaves focus on the entry trigger', async () => {
-      const view = await open({})
-      fireEvent.click(document.querySelector('a.lib-row[href$="/tiny"]'))
-      view.rerender(<Loops tab="templates" item="tiny" />)
-      await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
-      expect(document.activeElement).toBe(readerToggle())
+    it('opens the picker again on a section change, and when the route drops its entry', async () => {
+      const view = await open({ item: 'adr' })
+      view.rerender(<Loops tab="templates" />)
+      expect(header().getAttribute('aria-expanded')).toBe('true')
+      view.rerender(<Loops tab="templates" item="adr" />)
+      expect(header().getAttribute('aria-expanded')).toBe('false')
+      view.rerender(<Loops tab="bricks" />)
+      await screen.findByText('Do it our way.')
+      expect(header().getAttribute('aria-expanded')).toBe('true')
     })
 
-    // Review F3: the open row is brought into the list's view when the list unfolds; while
-    // folded the scroller has no box, so the scroll made on the route change measured nothing.
-    // jsdom has no layout: the scroller and the row's geometry are stubbed.
-    it('scrolls the open row into the list when the list unfolds', async () => {
+    // The open row is brought into the list's view when the list unfolds; while folded the
+    // scroller has no box. jsdom has no layout: the scroller and the row's geometry are stubbed.
+    it('scrolls the open row into the list when the picker opens', async () => {
       await open({ item: 'tiny' })
       const box = document.querySelector('.lib-rows')
       const row = box.querySelector('.lib-row.on')
@@ -465,19 +434,18 @@ describe('Loops — templates', () => {
       Object.defineProperty(row, 'offsetTop', { value: 400, configurable: true })
       Object.defineProperty(row, 'clientHeight', { value: 40, configurable: true })
       box.scrollTop = 0
-      fireEvent.click(listToggle())
+      fireEvent.click(header())
       expect(box.scrollTop).toBe(370)
     })
-  })
 
-  // Review F1: with nothing to name (no run, a Loading reader), the entry has no trigger, so
-  // its body must show: a fold with no handle would hide the "What is a loop?" card for good.
-  describe('the stacked entry with nothing to name', () => {
-    it('shows the body, with no trigger, when the section has no entry', async () => {
-      render(<Loops tab="active" />)
-      await screen.findByText('What is a loop?')
-      expect(document.querySelector('.lib-reader-toggle')).toBeNull()
-      expect(document.querySelector('.lib-reader').dataset.open).toBe('true')
+    // The entry is a plain card: no fold of its own, its body always there.
+    it('renders the entry with no fold', async () => {
+      await open({})
+      const reader = document.querySelector('.lib-reader')
+      expect(reader.tagName).toBe('ARTICLE')
+      expect(reader.querySelector('[aria-expanded]')).toBeNull()
+      expect(reader.hasAttribute('data-open')).toBe(false)
+      expect(reader.querySelector('.reader-lede').textContent).toBe('Record a decision.')
     })
   })
 
@@ -752,14 +720,14 @@ describe('Loops › Active', () => {
     expect(runRow('C:/w/fix-login').querySelector('.lr-desc').textContent).toBe('loop/fix-login')
     expect(text('.kind-list a')).toEqual(['Templates5', 'Bricks5', 'Active4'])
     // The statuses present nest under Active in the rail; Done · stopped has no run here.
-    expect(text('.rail-cats .rc-name')).toEqual([
+    expect(text('.lib-kinds .rail-cats .rc-name')).toEqual([
       'All',
       'Awaiting',
       'Running',
       'Finished · unreadable',
     ])
-    expect(screen.getByRole('list', { name: 'Statuses' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /^Finished/ }))
+    expect(rail().getByRole('list', { name: 'Statuses' })).toBeTruthy()
+    fireEvent.click(rail().getByRole('button', { name: /^Finished/ }))
     expect(listed()).toEqual(['# Finished · unreadable', 'An old loop', 'Broken'])
   })
 

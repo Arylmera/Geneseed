@@ -3034,34 +3034,40 @@ a.tier .tier-bar > span { background: var(--line-3); }
    gives them, not the viewport (the tier is after the breakpoints below). Docs has its own
    container (.docs-wrap) and tiers. */
 .lib-wrap { container: lib / inline-size; }
-/* The stacked controls (components/LibMenus.jsx, LibList and LibReader in LibRows.jsx): hidden
-   side by side, shown by the `lib` tiers below. The entry's body is `display: contents` so the
-   reader lays out as if it were not wrapped. */
-.lib-menus, .lib-list-toggle, .lib-reader-toggle { display: none; }
-.lib-reader-body { display: contents; }
-/* A menu opens under the whole row, not under its trigger, and never wider than the row:
-   under its own trigger the Category menu ran past the card, whose overflow cut it. */
-.lib-menus { position: relative; gap: var(--sp-2); margin: 0 var(--sp-2); }
-.lib-menu-btn, .lib-list-toggle, .lib-reader-toggle { align-items: center; gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--r-sm);
-  background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.lib-menu-btn { display: inline-flex; }
-.lib-menu-btn:hover, .lib-list-toggle:hover, .lib-reader-toggle:hover { border-color: var(--accent-line); }
-.lib-menu-btn[aria-expanded="true"] { border-color: var(--accent-line); background: var(--surface-2); }
-.lib-list-toggle, .lib-reader-toggle { width: 100%; min-width: 0; }
-.lib-list-toggle b, .lib-reader-toggle b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-caret { margin-left: auto; color: var(--text-3); transition: transform var(--dur-3); }
+/* The stacked toolbar and picker (LibList, LibRows.jsx; design "A, toolbar", user 2026-11-09).
+   Side by side the segmented control, the chips and the picker's header are hidden, and the
+   two wrappers are `display: contents`, which also drops their card look: the panes lay out as
+   before. The `lib` tiers below give them their boxes. */
+.lib-seg, .lib-chips, .lib-list-toggle { display: none; }
+.lib-toolbar, .lib-toolbar-filter, .lib-picker { display: contents; }
+.lib-toolbar { flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface); } /* off-scale: 12px, the design's card radius */
+/* The sections: one row of links on a recessed track, the open one filled with the accent. */
+.lib-seg { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: var(--sp-1); padding: var(--sp-1);
+  border-radius: 10px; background: var(--bg-2); } /* off-scale: 104px fits "Setup files 2"; 10px, the track's radius */
+.lib-seg a { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 40px;
+  padding: 0 var(--sp-2); border-radius: 8px; color: var(--text-2); font-weight: 600; text-align: center; } /* off-scale: 40px, the control height; 8px inside the 10px track */
+.lib-seg a:hover { background: var(--surface-2); color: var(--text); }
+.lib-seg a.on { background: var(--accent); color: var(--accent-ink); }
+.lib-seg a .mono { font-size: var(--fs-xs); opacity: .75; }
+.lib-toolbar-filter { flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+/* The categories as chips: RailCats, its share bar dropped. `.lib-chips .rail-cats` out-ranks the
+   phone rail's sticky strip rules, which are for the rail's own copy. */
+.lib-chips .rail-cats { position: static; width: auto; margin: 0; padding: 0; border-left: 0; grid-row: auto; grid-column: auto; }
+.lib-chips .rail-cats ul { flex-direction: row; flex-wrap: wrap; gap: 6px; } /* off-scale: 6px between --sp-1 and --sp-2 */
+.lib-chips .rail-cats button { width: auto; min-height: 32px; padding: 0 10px; border: 1px solid var(--line);
+  border-radius: 999px; font-size: var(--fs-sm); } /* off-scale: 32px chip height; 10px, a pill's inset */
+.lib-chips .rail-cats button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.lib-chips .rail-mix { display: none; }
+/* The picker: its header names the filtered count and the open entry; the rows fold under it. */
+.lib-picker { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow: hidden; } /* off-scale: 12px, the design's card radius */
+.lib-list-toggle { align-items: center; gap: var(--sp-3); width: 100%; min-width: 0; padding: 14px var(--sp-4);
+  border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; } /* off-scale: 14px, the header's height */
+.lib-list-toggle:hover { background: var(--surface-2); }
+.lib-list-toggle b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-pick-n, .lib-pick-hint { flex: none; font-size: var(--fs-xs); }
+.lib-caret { color: var(--text-3); transition: transform var(--dur-3); }
 [aria-expanded="true"] > .lib-caret { transform: rotate(180deg); }
-.lib-menu-btn .lib-caret { margin-left: var(--sp-1); }
-.lib-menu-pop { top: calc(100% + 4px); left: 0; min-width: min(240px, 100%); max-width: 100%; } /* off-scale: 4px of air under the trigger */
-.lib-menu-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; } /* off-scale: 2px hairline, as the rail */
-.lib-menu-list a, .lib-menu-list button { display: flex; align-items: center; gap: var(--sp-2);
-  padding: var(--sp-2); border: 0; border-radius: var(--r-sm); background: transparent;
-  color: var(--text-2); font: inherit; text-align: left; cursor: pointer; }
-.lib-menu-list a:hover, .lib-menu-list button:hover { background: var(--surface); color: var(--text); }
-.lib-menu-list .on { background: var(--surface-3); color: var(--text); font-weight: 600; }
-.lib-menu-list .mono { margin-left: auto; }
-.lib-menu-list .cdot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cc, var(--text-3)); }
 @media (prefers-reduced-motion: reduce) { .lib-caret { transition: none; } }
 .lib-kinds { display: flex; flex-direction: column; gap: var(--sp-4); padding: 22px 14px; /* off-scale: 22px between --sp-5 and --sp-6; 14px between --sp-3 and --sp-4 */
   background: var(--bg-2); border-right: 1px solid var(--line); }
@@ -3405,41 +3411,59 @@ a.kit-name:hover { color: var(--accent-text); }
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
 }
-/* The Library's three panes, stacked (user, 2026-11-09): under 232 + 380 + 560 + 2px of
-   container the reader would share its row at under 560px, so the panes go one under the other
-   in reading order: the section header, then the rail as two menus (Section ▾, Category ▾;
-   LibMenus), then the list folded behind "<section> <entry> ▾" and capped at five rows (LibList),
-   then the entry folded behind "<name> · <kind> ▾" (LibReader). A folded panel hides its body;
-   the list keeps its head and its live region. After the media tiers, and `.lib-wrap`-scoped,
-   so it overrides their `.library` rules on these pages and leaves Docs to its own. */
+/* The Library's three panes, stacked (user, 2026-11-09; design "A, toolbar"): under 232 + 380 +
+   560 + 2px of container the reader would share its row at under 560px, so the panes become
+   blocks, one under the other, each as tall as its content: the page header, the toolbar card
+   (the sections as a segmented control, the filter, the categories as chips), the picker card
+   (its header, the rows folded under it, five at most), then the entry as a plain card. The
+   rail is hidden: the toolbar carries its sections and categories. `.library` stops being one
+   grid card, whose rows stretched to its min-height and left the empty gaps of the first
+   version. After the media tiers, and `.lib-wrap`-scoped, so it overrides their `.library` rules
+   on these pages and leaves Docs to its own. */
 @container lib (max-width: 1173px) {
-  .lib-wrap .library:not(.locked) { grid-template-columns: minmax(0, 1fr); }
-  .lib-wrap .lib-kinds { border-right: 0; border-bottom: 1px solid var(--line); padding: 16px 12px; /* off-scale: the phone rail's padding, as at 720px */ }
+  .lib-wrap .library:not(.locked) { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0;
+    background: transparent; border: 0; border-radius: 0; overflow: visible; }
+  .lib-wrap .library:not(.locked) .lib-list { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; border: 0; }
+  .lib-wrap .library:not(.locked) .lib-list-head { justify-content: flex-end; padding: 0; border: 0; }
+  .lib-wrap .library:not(.locked) .lib-list-head > b { display: none; }
+  .lib-wrap .library:not(.locked) .lib-list-head:not(:has(> :not(b):not(:empty))) { display: none; }
+  .lib-wrap .library:not(.locked) .lib-toolbar, .lib-wrap .library:not(.locked) .lib-toolbar-filter { display: flex; }
+  .lib-wrap .library:not(.locked) .lib-seg { display: grid; }
+  .lib-wrap .library:not(.locked) .lib-chips { display: block; }
+  .lib-wrap .library:not(.locked) .lib-toolbar .lib-filter { flex: 1 1 200px; width: auto; min-width: 0; height: 40px; padding: 0 var(--sp-3);
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); } /* off-scale: 40px, the control height; 8px, the design's field radius */
+  .lib-wrap .library:not(.locked) .lib-tools { padding: 0; border: 0; }
+  .lib-wrap .library:not(.locked) .lib-picker { display: block; }
+  .lib-wrap .library:not(.locked) .lib-list-toggle { display: flex; }
+  .lib-wrap .library:not(.locked) .lib-rows { max-height: calc(5 * var(--lib-row-h)); border-top: 1px solid var(--line); }
+  .lib-wrap .library:not(.locked) .lib-list[data-open="false"] .lib-rows { display: none; }
+  .lib-wrap .library:not(.locked) .lib-reader { grid-column: auto; padding: 20px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--surface); scroll-margin-top: calc(var(--topbar-h) + 12px); } /* off-scale: 20px and 12px, the design's card */
+  .lib-wrap .lib-kinds { gap: var(--sp-2); padding: 0; border: 0; background: transparent; }
   .lib-wrap .lib-kinds .kind-list { display: none; }
-  .lib-wrap .lib-menus { display: flex; flex-wrap: wrap; }
-  .lib-wrap .library:not(.locked) .lib-list { border-right: 0; }
-  .lib-wrap .library:not(.locked) .lib-list-toggle, .lib-wrap .library:not(.locked) .lib-reader-toggle { display: flex; }
-  .lib-wrap .library:not(.locked) .lib-list-toggle { width: auto; margin: var(--sp-3) 18px; } /* off-scale: 18px, the list's own inset */
-  .lib-wrap .library:not(.locked) .lib-list[data-open="false"] > :not(.lib-list-head, .lib-list-toggle, .sr-only) { display: none; }
-  .lib-wrap .library:not(.locked) .lib-reader[data-open="false"] > .lib-reader-body { display: none; }
-  .lib-wrap .library:not(.locked) .lib-rows { max-height: calc(5 * var(--lib-row-h)); }
-  .lib-wrap .library:not(.locked) .lib-reader { grid-column: auto;
-    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
-    padding: 24px 20px; /* off-scale: a full-width reader gives its width to the content (the ring's label floor) */ }
 }
 /* A locked Library (Personal › Memory, Notebook) has no rail, only the list and the reader:
-   it keeps them side by side down to 380 + 560 + 2px, then stacks and folds them the same way. */
+   it keeps them side by side down to 380 + 560 + 2px, then stacks them the same way, its toolbar
+   the filter alone. */
 @container lib (max-width: 941px) {
-  .lib-wrap .library.locked { grid-template-columns: minmax(0, 1fr); }
-  .lib-wrap .library.locked .lib-list { border-right: 0; }
-  .lib-wrap .library.locked .lib-list-toggle, .lib-wrap .library.locked .lib-reader-toggle { display: flex; }
-  .lib-wrap .library.locked .lib-list-toggle { width: auto; margin: var(--sp-3) 18px; } /* off-scale: 18px, the list's own inset */
-  .lib-wrap .library.locked .lib-list[data-open="false"] > :not(.lib-list-head, .lib-list-toggle, .sr-only) { display: none; }
-  .lib-wrap .library.locked .lib-reader[data-open="false"] > .lib-reader-body { display: none; }
-  .lib-wrap .library.locked .lib-rows { max-height: calc(5 * var(--lib-row-h)); }
-  .lib-wrap .library.locked .lib-reader { grid-column: auto;
-    border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + 12px); /* off-scale: 12px of air under the topbar */
-    padding: 24px 20px; /* off-scale: as the three-pane stack above */ }
+  .lib-wrap .library.locked { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0;
+    background: transparent; border: 0; border-radius: 0; overflow: visible; }
+  .lib-wrap .library.locked .lib-list { display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; border: 0; }
+  .lib-wrap .library.locked .lib-list-head { justify-content: flex-end; padding: 0; border: 0; }
+  .lib-wrap .library.locked .lib-list-head > b { display: none; }
+  .lib-wrap .library.locked .lib-list-head:not(:has(> :not(b):not(:empty))) { display: none; }
+  .lib-wrap .library.locked .lib-toolbar, .lib-wrap .library.locked .lib-toolbar-filter { display: flex; }
+  .lib-wrap .library.locked .lib-seg { display: grid; }
+  .lib-wrap .library.locked .lib-chips { display: block; }
+  .lib-wrap .library.locked .lib-toolbar .lib-filter { flex: 1 1 200px; width: auto; min-width: 0; height: 40px; padding: 0 var(--sp-3);
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); } /* off-scale: 40px, the control height; 8px, the design's field radius */
+  .lib-wrap .library.locked .lib-tools { padding: 0; border: 0; }
+  .lib-wrap .library.locked .lib-picker { display: block; }
+  .lib-wrap .library.locked .lib-list-toggle { display: flex; }
+  .lib-wrap .library.locked .lib-rows { max-height: calc(5 * var(--lib-row-h)); border-top: 1px solid var(--line); }
+  .lib-wrap .library.locked .lib-list[data-open="false"] .lib-rows { display: none; }
+  .lib-wrap .library.locked .lib-reader { grid-column: auto; padding: 20px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--surface); scroll-margin-top: calc(var(--topbar-h) + 12px); } /* off-scale: 20px and 12px, the design's card */
 }
 /* The phone reader's padding, after the tiers and as specific as their reader rules: a page of
    673–720px is wider than any phone-sized container tier would be. */

@@ -7,8 +7,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import CopyButton from '../components/CopyButton.jsx'
 import Loading from '../components/Loading.jsx'
 import FactoryGraph from '../components/FactoryGraph.jsx'
-import { GroupedRows, LibList, LibReader, filterRows, useFolds } from '../components/LibRows.jsx'
-import LibMenus from '../components/LibMenus.jsx'
+import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { TONE } from '../components/ActiveLoops.jsx'
 import { TABS, TAB_LABELS } from '../lib/router.js'
@@ -23,8 +22,6 @@ const POLL_MS = 5000
 const SECTIONS = TABS.factories.map((k) => [k, TAB_LABELS[k]])
 const ORIGIN = { project: 'Project', global: 'Global', shipped: 'Shipped' }
 const RAIL_LABEL = { templates: 'Origins', active: 'Statuses' }
-// The entry's kind, on the stacked reader's trigger (LibReader).
-const KIND = { templates: 'Factory', active: 'Run' }
 // Runs by what they need from you, as Loops › Active orders loops.
 const STATUS = [
   ['awaiting', 'Awaiting'],
@@ -284,7 +281,6 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
       null
   const counts = { templates: data?.factories.length, active: runs?.length }
   const label = SECTIONS.find(([k]) => k === tab)[1]
-  const folds = useFolds([tab, item])
   const err = tab === 'active' ? runError : error
 
   return (
@@ -306,19 +302,6 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
             <span className="dim">Work items, carried to a PR</span>
           </div>
           <p className="panel-note lib-lede">{LEDE[tab]}</p>
-          <LibMenus
-            sections={SECTIONS.map(([k, l]) => ({
-              key: k,
-              label: l,
-              n: counts[k],
-              href: `#/factories/${k}`,
-              on: tab === k,
-            }))}
-            cats={cats}
-            cat={cat}
-            total={rows.length}
-            onCat={setCat}
-          />
           <nav className="kind-list" aria-label="Sections">
             {SECTIONS.map(([k, l]) => (
               <React.Fragment key={k}>
@@ -352,7 +335,18 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           matched={shown.length}
           inView={[tab, item]}
           current={sel?.name}
-          folds={folds}
+          sections={SECTIONS.map(([k, l]) => ({
+            key: k,
+            label: l,
+            n: counts[k],
+            href: `#/factories/${k}`,
+            on: tab === k,
+          }))}
+          cats={cats}
+          cat={cat}
+          total={rows.length}
+          onCat={setCat}
+          catLabel={RAIL_LABEL[tab]}
         >
           {!all ? (
             err ? null : (
@@ -370,7 +364,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           )}
         </LibList>
 
-        <LibReader title={sel?.name} kind={KIND[tab]} folds={folds}>
+        <article className="lib-reader" aria-label="Entry">
           {gone ? (
             <EmptyState
               title={
@@ -394,7 +388,7 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           ) : (
             <FactoryDetail key={sel.name} f={sel} bricks={bricks} loops={loops} />
           )}
-        </LibReader>
+        </article>
       </div>
     </div>
   )
