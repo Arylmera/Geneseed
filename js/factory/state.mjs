@@ -42,7 +42,7 @@
  * re-entered loop would never pass.
  *
  * R4 COVERS WHAT A HAND CAN EDIT. FACTORY.md is a file; `validateFactoryState` refuses counters
- * that are not non-negative integers, a ceiling above 600, a task block out of its bounds, a gate
+ * that are not non-negative integers, a ceiling above 1200, a task block out of its bounds, a gate
  * amend count above 3, a `lane` no fork of the factory leads to, a status the engine does not
  * write, a `history` or `factory.cycles` that is not a list, and a factory that no longer passes
  * `checkFactory` — the termination argument below holds only for a state this engine could have
@@ -71,7 +71,7 @@
  * `FACTORY_MAX_TRANSITIONS` x its task count, set ONCE at the first --spec record. The count is
  * frozen there: a later --spec record may keep or lower it, never raise it, so no lap can buy a
  * task, a fresh budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
- * ceiling is at most 600 transitions: past twenty tasks a requirement is a project, to be split
+ * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
  * into several factory runs a human can review, not one run nobody reads to the end.
  */
 import { writeText } from '../lib/fs.mjs';
@@ -81,7 +81,8 @@ import { loopOf, stageOutcomes, checkFactory, LANE, isFork, lanesOf, laneTargets
 const BEGIN = '<!-- factory-state:begin -->';
 const END = '<!-- factory-state:end -->';
 export const FACTORY_FILE = 'FACTORY.md';
-export const FACTORY_MAX_TRANSITIONS = 30;
+// 60, not 30: `checks` and `review-panel` add two stages, and a lap back through both, to every factory (D15).
+export const FACTORY_MAX_TRANSITIONS = 60;
 export const FACTORY_MAX_TASKS = 20;
 const GATE_MAX_AMENDS = 3;
 const STATUSES = ['running', 'awaiting', 'done', 'stopped'];
@@ -220,7 +221,11 @@ function assertNoLoop(loopStatus) {
   }
 }
 
-const rulesOf = (state) => (state.factory.rules?.length ? { rules: state.factory.rules } : {});
+// What every stage receives from the factory itself: its `rules`, and the `protected` paths `checks` refuses to see changed.
+const rulesOf = ({ factory }) => ({
+  ...(factory.rules?.length ? { rules: factory.rules } : {}),
+  ...(factory.protected?.length ? { protected: factory.protected } : {}),
+});
 
 /**
  * `loopStatus`: the status in the LOOP.md at the worktree root, or null (the CLI looks; this stays

@@ -11,7 +11,7 @@
  * rather than copied, so the two engines cannot drift on what "declared" means.
  *
  * FORKS AND `$lane` (D11, D13). A fork is a brick stage that declares an outcome other than
- * `pass`, `fail`, `error` or `none` — a named outcome, such as `triage`'s `bug` or `docs`. Each
+ * `pass`, `fail`, `error`, `none` or `needs-info` — a named outcome, such as `triage`'s `bug` or `docs`. Each
  * outcome has its own edge (rule 3), so the edges out of a fork ARE its lanes: an outcome whose
  * edge reaches a stage. An edge target or a cycle node may be `$lane`: the stage the run's most
  * recent fork chose, which the engine records in FACTORY.md and resolves at runtime. Statically,
@@ -24,7 +24,7 @@
  * with its replacement, and never rewrites a user's file (D15).
  *
  * `max` IS CAPPED AT 5. A factory cycle re-runs whole loops; five laps of "CI is red, fix it" is
- * already a conversation for the user, not a loop, and the run-wide ceiling of 30 transitions
+ * already a conversation for the user, not a loop, and the per-task ceiling of 60 transitions
  * (`FACTORY_MAX_TRANSITIONS`, J3) sits on top of it.
  *
  * A CYCLE IS ENTERED AT ITS FIRST STAGE, AND EVERY LAP SPENDS ONE. The engine spends a cycle on an
@@ -37,7 +37,7 @@
  * every cycle is declared, so an undeclared one is reported once, not twice.
  *
  * Problems come in a fixed order (shape, stages, edges, outcomes, reachability, cycles,
- * lanes, rules) so a test writes the expected list out instead of sorting it. A malformed
+ * lanes, rules, protected paths, review seats) so a test writes the expected list out instead of sorting it. A malformed
  * `cycles` or `edges` entry (an edge needs a string `from`, `on` and `to`) is reported by the shape
  * rule and left out of every later one: the doctor runs this over a user's file, and the engine
  * over a FACTORY.md anyone can edit, so it must never throw.
@@ -52,8 +52,15 @@ const RETIRED_TRIAGED = 'loop:$triaged';
 export const FACTORY_MAX_CYCLE = 5;
 /** What a `loop:` stage reports: its child loop reached `$close`, or it did not. */
 export const LOOP_OUTCOMES = ['pass', 'fail'];
-/** The outcomes that name no lane; any other declared outcome makes its brick a fork (D11). */
-const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none']);
+/**
+ * The outcomes that name no lane; any other declared outcome makes its brick a fork (D11).
+ * `needs-info` is `intake`'s question to the user (a gate), never a lane: listed here, it sets
+ * no `state.lane`, hands no `lanes` and leaves `$lane` alone.
+ */
+const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', 'needs-info']);
+/** The work item sizes `intake` rates; `review.seats` needs a list for each (rule 9). */
+const SEAT_SIZES = ['small', 'medium', 'large'];
+const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const edgeShaped = (e) => ['from', 'on', 'to'].every((k) => typeof e?.[k] === 'string');
 
 /** The template a `loop:` stage names, or null for a brick stage. */
@@ -114,7 +121,30 @@ export const reachable = (startStage, edges, stageSet, skip = new Set()) => {
   return seen;
 };
 
-export function checkFactory(factory, { bricks, templates }) {
+/**
+ * Rule 9: the review panel's seat table — a non-empty list per size, an optional list per area,
+ * every seat a shipped agent. No `agents` in the catalogue reads as none shipped: closed, not open.
+ */
+function seatProblems(review, agents) {
+  const seats = plainObject(review) ? review.seats : undefined;
+  if (!plainObject(seats)) return ['review: must be an object with a seats table'];
+  const out = [];
+  const lists = SEAT_SIZES.map((s) => [s, seats[s]]);
+  if (seats.areas !== undefined) {
+    if (plainObject(seats.areas)) lists.push(...Object.entries(seats.areas).map(([a, l]) => [`areas.${a}`, l]));
+    else out.push('review.seats.areas: must map each area to a list of agents');
+  }
+  for (const [where, list] of lists) {
+    if (!Array.isArray(list) || !list.length || !list.every((a) => typeof a === 'string')) {
+      out.push(`review.seats.${where}: must be a non-empty list of agent names`);
+      continue;
+    }
+    for (const a of list) if (!agents.has(a)) out.push(`review.seats.${where}: no agent named ${a}`);
+  }
+  return out;
+}
+
+export function checkFactory(factory, { bricks, templates, agents }) {
   if (!factory || typeof factory !== 'object' || Array.isArray(factory)) return ['factory: must be an object'];
   const problems = [];
   const stages = Array.isArray(factory.stages) ? factory.stages : [];
@@ -229,6 +259,13 @@ export function checkFactory(factory, { bricks, templates }) {
   if (rules !== undefined && !(Array.isArray(rules) && rules.every((r) => typeof r === 'string' && r.trim()))) {
     problems.push('rules: must be a list of non-empty strings');
   }
+  // rule 8 — the paths `checks` refuses to see changed, beyond its own fixed list
+  const locked = factory.protected;
+  if (locked !== undefined && !(Array.isArray(locked) && locked.every((p) => typeof p === 'string' && p.trim()))) {
+    problems.push('protected: must be a list of non-empty paths');
+  }
+  // rule 9 — the `review-panel` seat table
+  if (factory.review !== undefined) problems.push(...seatProblems(factory.review, agents ?? new Set()));
   return problems;
 }
 

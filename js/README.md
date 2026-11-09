@@ -212,7 +212,7 @@ brick or a whole loop; a fork's named outcomes pick its lane), persisted as a JS
 
 | module | owns |
 |---|---|
-| `graph.mjs` | `checkFactory` — the rules a factory must satisfy before a stage runs: stages exist, edges cover every outcome, `$close` is reachable, every cycle is declared (the loop engine's `undeclaredCycles`), `$lane` only behind a fork. Also the fork helpers the engine shares: `isFork`, `lanesOf`, `laneTargets`, `spentCycle` |
+| `graph.mjs` | `checkFactory` — the rules a factory must satisfy before a stage runs: stages exist, edges cover every outcome, `$close` is reachable, every cycle is declared (the loop engine's `undeclaredCycles`), `$lane` only behind a fork, `protected` a list of paths, and every `review.seats` entry a shipped agent. Also the fork helpers the engine shares: `isFork`, `lanesOf`, `laneTargets`, `spentCycle` |
 | `state.mjs` | The engine itself: `initFactory`, `nextStage`, `recordStage`, `decideFactory`, `renderFactoryFile`/`parseFactoryFile`, `validateFactoryState`, `countSpecTasks` |
 | `cli.mjs` | `geneseed factory check\|list\|init\|next\|record\|decide` — the only face of this engine |
 | `registry.mjs` | `factories.json` beside `loops.json`: `recordFactory` (called by `factory init`) and `activeFactories`, on the loop registry's own `loadRows`/`saveRows`/`sweepRows`. A run and its child loop share a root, which is how a reader groups them |

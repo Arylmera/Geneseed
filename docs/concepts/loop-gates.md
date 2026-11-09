@@ -13,8 +13,11 @@ this way: the loop reports `{awaiting}` with `kind: "gate"` before the edge that
 normally follow is taken at all — **the gate holds the whole transition**, so nothing is scored,
 committed or counted against a ring budget while it waits.
 
-A [factory](factories.md) stage holds the same way, answered with `geneseed factory decide`:
-`merge-gate` (holds on `none` — the repo runs no CI on the PR) is the shipped one.
+A [factory](factories.md) stage holds the same way, answered with `geneseed factory decide`.
+Three shipped bricks do: `intake` (holds on `needs-info` — it has questions only you can
+answer), `checks` (holds on `error` — the branch changed a locked path — and on `none` — the
+base branch has no done list yet) and `merge-gate` (holds on `none` — the repo runs no CI on the
+PR).
 
 `geneseed loop decide --verdict ok|no|amend` answers it:
 

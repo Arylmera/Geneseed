@@ -273,6 +273,50 @@ test('rule 7: rules, when present, are non-empty strings', () => {
   assert.deepEqual(check({ ...base(), rules: 'Never merge.' }), ['rules: must be a list of non-empty strings']);
 });
 
+// J5: `needs-info` is intake's question to the user, never a lane, so a brick declaring it beside
+// pass and fail is no fork: it gets no `lanes`, and its edge is an ordinary one.
+test('J5: needs-info names no lane, so it makes no fork', () => {
+  const bricks = new Map([...CATALOG.bricks, brick('intake', ['pass', 'fail', 'needs-info'])]);
+  assert.equal(isFork('intake', bricks), false);
+  const f = base();
+  f.edges.push({ from: 'intake', on: 'needs-info', to: 'loop:bugfix' });
+  assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), []);
+});
+
+// Rule 8: `protected` adds paths `checks` refuses to see changed; absent is fine, any other shape not.
+test('rule 8: protected, when present, is a list of non-empty paths', () => {
+  assert.deepEqual(check({ ...base(), protected: ['infra/', 'Makefile'] }), []);
+  assert.deepEqual(check({ ...base(), protected: ['infra/', ''] }), ['protected: must be a list of non-empty paths']);
+  assert.deepEqual(check({ ...base(), protected: 'infra/' }), ['protected: must be a list of non-empty paths']);
+});
+
+// Rule 9 (J3): the review panel's seat table. Every size has a non-empty list, `areas` maps each
+// area to one, and every seat is an agent the catalogue ships. A catalogue that lists no agents
+// fails every seat: the rule fails closed.
+test('rule 9: review.seats names a list per size, and only shipped agents', () => {
+  const agents = new Set(['reviewer', 'tester', 'steward', 'security']);
+  const seats = () => ({ small: ['reviewer'], medium: ['reviewer', 'tester'], large: ['reviewer', 'tester', 'steward'], areas: { security: ['security'] } });
+  const withSeats = (s) => checkFactory({ ...base(), review: { seats: s } }, { ...CATALOG, agents });
+  assert.deepEqual(withSeats(seats()), []);
+  assert.deepEqual(withSeats({ ...seats(), medium: ['reviewer', 'ghost'], areas: { ui: ['nobody'] } }), [
+    'review.seats.medium: no agent named ghost',
+    'review.seats.areas.ui: no agent named nobody',
+  ]);
+  const { large: _large, ...noLarge } = seats();
+  assert.deepEqual(withSeats({ ...noLarge, small: [] }), [
+    'review.seats.small: must be a non-empty list of agent names',
+    'review.seats.large: must be a non-empty list of agent names',
+  ]);
+  assert.deepEqual(withSeats({ ...seats(), areas: ['security'] }), ['review.seats.areas: must map each area to a list of agents']);
+  assert.deepEqual(checkFactory({ ...base(), review: { small: ['reviewer'] } }, { ...CATALOG, agents }),
+    ['review: must be an object with a seats table']);
+  assert.deepEqual(check({ ...base(), review: { seats: { small: ['reviewer'], medium: ['reviewer'], large: ['reviewer'] } } }), [
+    'review.seats.small: no agent named reviewer',
+    'review.seats.medium: no agent named reviewer',
+    'review.seats.large: no agent named reviewer',
+  ]);
+});
+
 test('factoryCatalogProblems prefixes each factory, after the parse problems, sorted', () => {
   const broken = { ...base(), start: 'nowhere' };
   assert.deepEqual(factoryCatalogProblems({
