@@ -457,9 +457,8 @@ test('F1: init refuses a run slug that holds the word git, commit or push', () =
   } finally { sb.cleanup(); }
 });
 
-// F1: the skill records with the porcelain in a file on stdin (`< file`), not a pipe. A redirect
-// hands the process a file descriptor, not a pipe: `record` reads it the same way. A dirty line
-// in the file is refused; the clean spec porcelain records.
+// A redirect (`< file`) hands the process a file descriptor, not a pipe: `record` reads it the
+// same way. A dirty line in the file is refused; the clean spec porcelain records.
 test('F1: record reads the porcelain from a file redirected to stdin', () => {
   const sb = repo(['fixture-spec']);
   const status = path.join(path.dirname(sb.path), `${path.basename(sb.path)}-status.txt`);
@@ -484,6 +483,24 @@ test('F1: record reads the porcelain from a file redirected to stdin', () => {
     assert.deepEqual(redirected(argv, '?? FACTORY.md\r\n?? specs/r/spec.md\r\n'),
       { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
   } finally { rmSync(status, { force: true }); sb.cleanup(); }
+});
+
+// F1: the skill pipes `git status --porcelain --untracked-files=all | geneseed factory record`.
+// Windows PowerShell 5.1 re-encodes a native pipe: it puts a BOM before the first byte and ends
+// lines with CRLF (observed 2026-11-09). A clean spec porcelain must still record, and a dirty
+// line after the BOM must still be refused.
+test('F1: record reads a Windows PowerShell 5.1 pipe: a leading BOM and CRLF', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    mkdirSync(path.join(sb.path, 'specs', 'r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', 'r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const argv = ['record', '--outcome', 'pass', '--spec', 'specs/r/spec.md'];
+    const dirty = run(sb.path, argv, '\uFEFF?? notes.txt\r\n?? FACTORY.md\r\n?? specs/r/spec.md\r\n');
+    assert.deepEqual([dirty.code, /dirty.*\?\? notes\.txt$/.test(dirty.out.error)], [1, true]);
+    assert.deepEqual(run(sb.path, argv, '\uFEFF?? FACTORY.md\r\n?? specs/r/spec.md\r\n'),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
 });
 
 // G2: a spec inside the worktree but not at specs/<slug>/spec.md is refused, and FACTORY.md stays

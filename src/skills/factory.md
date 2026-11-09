@@ -42,33 +42,25 @@ when the diff touches it, and by this rule.
 
 Repeat `geneseed factory next` and act on its JSON.
 
-**How to record.** `record` reads the porcelain on its stdin. Every file a record or decide
-reads is a fresh temp file the OS makes for that call, held in a shell variable: two runs never
-share one, and no word the run chooses (slug, stage, outcome text, repo name) lands in a path on
-those lines. A variable dies with its command, so run each record as **one** command, one step per
-line, never joined by a pipe: `status=$(mktemp)`, then
-`git status --porcelain --untracked-files=all > "$status"`, then
-`geneseed factory record … < "$status"`. In PowerShell: `$status = (New-TemporaryFile).FullName`,
-then `git status --porcelain --untracked-files=all > $status`, then
-`Get-Content -Raw $status | geneseed factory record …`. A carried finding, the user's words and
-a stop reason take a temp file of their own in the same command: `carry=$(mktemp)` (or `note`,
-`stop`), copy the stage's file into it (`cp <that file> "$carry"`) or write the text into it
-with a quoted here-document, then pass `--carry "$carry"`, `--carry-file "$stop"` or
-`--note-file "$note"`. Never delete them: the engine keeps a carry's path for the next stage.
-The git gate asks on any line that holds the word `git` and, anywhere on that line, the word
-`commit` or `push`; it reads the variable's name, never the path behind it. So nothing a run
-fills goes on a record or decide line except the outcome and the spec's
-`specs/<slug>/spec.md` (`factory init` refuses a slug that holds those words). One limit stays:
-outcome names come from bricks and nothing checks them, so a project brick whose outcome holds
-`git` and `commit` or `push` makes the gate ask on its record line; approve that ask, or rename
-the outcome. Always use that porcelain form: plain `--porcelain` folds a new directory
-into one line, which the engine refuses.
+**How to record.** `record` reads the porcelain on its stdin, piped in one command:
+`git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome>`.
+The same line works in PowerShell, which pipes too. Always use that porcelain form: plain
+`--porcelain` folds a new directory into one line, which the engine refuses. A carry is the path
+of the file the stage itself wrote (`--carry <that file>`), in the run's own worktree or notes.
+Free text (the user's words for `decide`, a stop reason) never goes on the command line: write it
+with your file tool, never the shell, to a file whose name you make unique, such as
+`<os temp dir>/factory-<8 random hex>.txt`, then pass `--note-file <that file>` or
+`--carry-file <that file>`. Never delete a carry: the engine keeps its path for the next stage.
+
+The git gate asks on any line that holds the word `git` and the word `commit` or `push`. A
+record line holds `git`, so a spec path, a carry path or an outcome name with `commit` or `push`
+in it makes the gate ask. On a record line that ask is a false alarm: the user can answer yes.
+`factory init` refuses a slug that holds those words, which removes the commonest case.
 
 - **`{stage, prompt, outcomes}`** — a brick stage. Dispatch its `agent` (or follow its `skill`)
   with the `prompt`, the `requirement`, the `input`, the `carry` and the factory's `rules`. Then:
-  `geneseed factory record --outcome <outcome> --carry "$carry" < "$status"`,
-  in one command with `carry=$(mktemp)`, `cp <the file the stage reported> "$carry"` and the
-  porcelain step (*How to record*). The `--carry` is how the next stage gets this one's finding.
+  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --carry <the file the stage reported>`
+  (*How to record*). The `--carry` is how the next stage gets this one's finding.
   A fork stage (such as `triage`) also gets `lanes`: each outcome it may report, with the stage
   it leads to. Record the outcome it reported (`--outcome docs`): that outcome names the lane,
   and a later route back to `$lane` returns to it.
@@ -77,7 +69,8 @@ into one line, which the engine refuses.
   engine refuses a dirty tree after any stage outside a loop.
   The `spec` stage writes `specs/<slug>/spec.md` (the run's slug; a gate amend reaches it as the
   `carry`, not as a LOOP.md note) and reports with
-  `geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry "$carry" < "$status"` (its finding copied into `$carry`), so the gate shows the user what to review.
+  `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --spec specs/<slug>/spec.md --carry <the file the stage reported>`,
+  so the gate shows the user what to review.
   Its gate holds for the user's review of the task list. After `decide --verdict ok`, commit the
   spec before the first loop: `git add specs/<slug>/spec.md`, then
   `git commit -m "factory(<slug>): spec"` (it asks). An uncommitted spec stops the loop's first
@@ -87,15 +80,13 @@ into one line, which the engine refuses.
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
-  in one command, `note=$(mktemp)`, write their words into it, then
-  `geneseed factory decide --verdict ok|no|amend --note-file "$note"` — `ok` follows the
+  write their words to a unique file with your file tool (*How to record*), then
+  `geneseed factory decide --verdict ok|no|amend --note-file <that file>` — `ok` follows the
   reported outcome's edge, `no` stops, `amend` re-runs the stage with their note — and continue.
-  Free text always goes through a temp file (`--note-file`, `--carry-file`), never as an argument
-  on the record or decide line: the git gate asks on any line that holds the word `git` and the
-  word `commit` or `push`, and free text can hold all three.
+  Their words never go on the command line.
   The gated outcomes:
   - `intake` **`needs-info`**: show the user its numbered questions. Their answers go back as
-    `amend --note-file "$note"`, with `$note` holding their answers; `ok` goes on with the assumptions intake
+    `amend`, with the note file holding their answers; `ok` goes on with the assumptions intake
     wrote.
   - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
     list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
@@ -146,17 +137,17 @@ into one line, which the engine refuses.
    later stage sent the work back: the task is "make CI green" (or, for another stage, make it
    pass), and `notes[0]` says why. Use `--note-file <notes[0]>`
    when `notes[0]` is the path of a stage's finding file (the usual carry), so the loop gets the
-   finding, not its path; when it is plain text, write it to a file in the OS temp directory and
-   pass that file with `--note-file`; neither when `notes` is empty. A loop
+   finding, not its path; when it is plain text, write it to a unique file with your file tool
+   (*How to record*) and pass that file with `--note-file`; neither when `notes` is empty. A loop
    re-entered after a failure is a fresh loop: the reason arrives as its note.
 6. Follow the `loop` {{SKILL}} from *The cycle* through *The end*, skipping its Setup: the
    worktree is this one, and its `loop/<slug>` is `loop/factory-<slug>` here, so every loop push
    is `git push -u origin HEAD:loop/factory-<slug>`. Skip its final report too: the run goes on.
 7. When the loop reaches `$close` and its close commit has removed `LOOP.md`:
-   `geneseed factory record --outcome pass < "$status"`.
-   When it reaches `$stop`, leave its `LOOP.md` in place:
-   in one command, `stop=$(mktemp)`, write the stop reason into it, then
-   `geneseed factory record --outcome fail --carry-file "$stop" < "$status"`.
+   `git status --porcelain --untracked-files=all | geneseed factory record --outcome pass`.
+   When it reaches `$stop`, leave its `LOOP.md` in place, write the stop reason to a unique file
+   with your file tool (*How to record*), then
+   `git status --porcelain --untracked-files=all | geneseed factory record --outcome fail --carry-file <that file>`.
 
 ## The end
 

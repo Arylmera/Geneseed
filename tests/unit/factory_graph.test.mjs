@@ -559,50 +559,60 @@ test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and th
   assert.doesNotMatch(`${skill}\n${guide}`, /which asks too\)|permission prompt also guards/);
 });
 
-// F1: the git gate's own regex (read from js/hosts/hooks.mjs, never copied) over every command the
-// factory skill documents for `record`, `decide` and the porcelain. The gate asks on a line that
-// holds the word `git` and, anywhere on it, `commit` or `push`. Every placeholder a run fills is
-// filled with all three words (`git-commit-push`), `<stage>` included (a project names its bricks
-// freely), except the bounded ones: `<slug>` (`factory init` refuses a slug holding git, commit or
-// push, so it gets `fix-hook-v2`) and `<outcome>`, bounded only because the skill states that limit
-// (nothing checks a brick's outcome names; the skill says the gate asks on such an outcome).
-// No record, decide or porcelain line may then match; the porcelain line holds `git` by
-// necessity, so it may hold only bounded placeholders, and no pipe.
-const BOUNDED = { '<slug>': 'fix-hook-v2', '<outcome>': 'pass' };
-// a placeholder starts right after `<`; the stdin redirect is `< ` with a space
-const PLACEHOLDER = /<[^<>\s][^<>]*>/g;
-const fill = (line) => line.replace(PLACEHOLDER, (p) => BOUNDED[p] ?? 'git-commit-push').replace(/…/g, '--outcome pass');
-test('F1: no documented record, decide or porcelain line trips the git gate', () => {
-  const hooks = readFileSync(path.resolve(import.meta.dirname, '../../js/hosts/hooks.mjs'), 'utf8');
-  const [, body, flags] = /const GIT_GATE_RE = \/(.+)\/([a-z]*);/.exec(hooks);
-  const gate = new RegExp(body, flags);
-  assert.ok(gate.test('git status | geneseed factory record --spec specs/fix-commit-hook/spec.md'), 'the regex read is the gate');
-  const skill = shipped('skills/factory.md');
+// F1: how the factory skill records, decides and hands the porcelain over. Three attempts to keep
+// every record line clear of the git gate (`GIT_GATE_RE`: the word `git` and `commit` or `push` on
+// one line) each made worse bugs: a status file shared across repos, a read-only `$status` in zsh,
+// here-documents that put free text back on the line, POSIX-only forms. So the design stops
+// chasing the ask: a spurious ask is harmless (the user says yes), a shared status file is not.
+// The rules, each its own check so a red names which one broke:
+//   (a) no user free text inline: no `--note "`, no `--carry "<the user…`, no here-document;
+//   (b) every `decide` line passes `--note-file <a path>` and every stop record `--carry-file <a
+//       path>`: a placeholder path the agent's file tool wrote, never a shell variable;
+//   (c) every porcelain step is the one pipe `git status --porcelain --untracked-files=all | geneseed factory record`;
+//   (d) the skill states the false alarm, and no longer claims no line can trip the gate;
+//   (e) no `mktemp`, `New-TemporaryFile` or shell temp variable is left.
+function recordProblems(skill) {
   const spans = [...skill.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
-  const records = spans.filter((s) => /geneseed factory (record|decide)/.test(s));
-  assert.ok(records.length >= 5, `the skill documents its record and decide lines: ${records.length}`);
-  const asks = records.filter((line) => gate.test(fill(line)));
-  assert.deepEqual(asks, [], 'the git gate asks on these documented lines');
-  // the porcelain a record reads (`--untracked-files=all`); a bare `git status --porcelain` check elsewhere records nothing
-  const porcelain = spans.filter((s) => /^git status --porcelain --untracked-files=all/.test(s));
-  assert.ok(porcelain.length >= 1);
-  for (const line of porcelain) {
-    assert.doesNotMatch(line, /\|/, `the porcelain is piped on the record's line: ${line}`);
-    assert.ok((line.match(PLACEHOLDER) ?? []).every((p) => p in BOUNDED), `an unbounded placeholder on the git line: ${line}`);
-    assert.ok(!gate.test(fill(line)), `the git gate asks on: ${line}`);
+  const lines = spans.filter((s) => /geneseed factory (record|decide)/.test(s));
+  const flat = skill.replace(/\s+/g, ' ');
+  const out = {};
+  const add = (key, msg) => { (out[key] ??= []).push(msg); };
+  if (lines.length < 5) add('count', `the skill documents its record and decide lines: ${lines.length}`);
+  for (const line of lines) {
+    if (/--note "|--carry "</.test(line) || /<</.test(line)) add('a', `free text inline on: ${line}`);
   }
-  // F2: every file a record, decide or porcelain line reads or writes is a fresh temp file made per
-  // call and held in a variable, never a name two runs on one machine could share. The one path a
-  // run names is `--spec specs/<slug>/spec.md`, inside its own worktree.
-  assert.ok(skill.includes('`status=$(mktemp)`') && skill.includes('`$status = (New-TemporaryFile).FullName`'),
-    'the skill makes the status file per call');
-  const VAR = /^"?\$[a-z]+"?$/;
-  for (const line of [...records, ...porcelain]) {
-    assert.doesNotMatch(line, /<tmp>|factory-<slug>/, `a shared temp path on: ${line}`);
-    const files = [...line.matchAll(/(?:^|\s)(?:--carry|--carry-file|--note-file|>|<)\s+(\S+)/g)].map((m) => m[1]);
-    for (const file of files) assert.match(file, VAR, `not a per-call temp variable on: ${line}`);
-    assert.doesNotMatch(line.replace(/--spec specs\/<slug>\/spec\.md/, ''), /<slug>/, `the slug in a path on: ${line}`);
+  if (/<<-?\s*'?EOF/.test(skill) || /here-document/.test(skill)) add('a', 'a here-document is documented');
+  const decides = lines.filter((l) => /geneseed factory decide/.test(l));
+  const stops = lines.filter((l) => /record --outcome fail/.test(l) && !/--carry </.test(l));
+  if (decides.length < 1) add('b', 'no decide line');
+  if (stops.length < 1) add('b', 'no stop record line');
+  for (const l of decides) if (!/--note-file <[^<>]+>/.test(l)) add('b', `decide without --note-file <path>: ${l}`);
+  for (const l of stops) if (!/--carry-file <[^<>]+>/.test(l)) add('b', `stop record without --carry-file <path>: ${l}`);
+  const porcelain = spans.filter((s) => /git status --porcelain --untracked-files=all/.test(s));
+  if (porcelain.length < 1) add('c', 'no porcelain step');
+  for (const l of porcelain) {
+    if (!/^git status --porcelain --untracked-files=all \| geneseed factory record\b/.test(l)) add('c', `not the one pipe: ${l}`);
   }
+  for (const l of lines.filter((x) => /geneseed factory record/.test(x))) {
+    if (!/^git status --porcelain --untracked-files=all \| geneseed factory record\b/.test(l)) add('c', `a record without the porcelain pipe: ${l}`);
+  }
+  if (!flat.includes('makes the gate ask. On a record line that ask is a false alarm: the user can answer yes.')) add('d', 'the false-alarm limit is not stated');
+  if (/nothing a run fills goes on a record|never the path behind it|no word the run chooses/.test(flat)) add('d', 'the old no-trip claim is still there');
+  // `{terminal: "$stop"}` is the engine's terminal, not a shell variable
+  for (const bad of [/mktemp/, /New-TemporaryFile/, /\$status/, /"\$carry"/, /"\$note"/, /"\$stop"(?!\})/]) {
+    if (bad.test(skill)) add('e', `still holds ${bad.source}`);
+  }
+  return out;
+}
+test('F1: the skill pipes the porcelain, puts free text in files, and states the false-alarm limit', () => {
+  const skill = shipped('skills/factory.md');
+  assert.deepEqual(recordProblems(skill), {});
+  // (a) cannot fail on a skill that already passes it, so prove it on a perturbed copy
+  const inlined = skill.replace('decide --verdict ok|no|amend --note-file <', 'decide --verdict ok|no|amend --note "<the user\'s words>" --note-file <');
+  assert.notEqual(inlined, skill, 'the perturbation applied');
+  assert.ok(recordProblems(inlined).a, 'check (a) catches an inline note');
+  const heredoc = `${skill}\n\`geneseed factory record --outcome fail --carry-file - <<'EOF'\`\n`;
+  assert.ok(recordProblems(heredoc).a, 'check (a) catches a here-document');
 });
 
 // M17: factory-forge's example says it is "in the shape of the shipped bug-report-to-fix", so its

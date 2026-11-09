@@ -19,17 +19,16 @@
  *
  * THE PORCELAIN IS TRUSTED AS PIPED. A TTY stdin is `null` and the engine refuses it after a
  * stage outside a loop (J5); an empty pipe (or a null device) reads as a clean tree, and nothing
- * here can tell it from one. The Rite writes `git status --porcelain --untracked-files=all` to a
- * fresh temp file held in a shell variable (`status=$(mktemp)`) on one line, then records with
- * that file on stdin (`< "$status"`) on a second line of the same command, so a new spec reaches
- * the engine as its own path, and two runs on one machine never share the file (F2).
+ * here can tell it from one. The Rite pipes `git status --porcelain --untracked-files=all` straight
+ * into `record`, in one command, so a new spec reaches the engine as its own path. No temp status
+ * file and no shell variable: three attempts at those (F1/F2) shared a file across repos, broke on
+ * zsh's read-only `$status`, or put free text back on the line. Windows PowerShell 5.1 pipes too,
+ * but adds a leading BOM and CRLF; both are stripped below.
  * The git gate (`GIT_GATE_RE`) asks on a line that holds the word `git` and the word `commit` or
- * `push`. What keeps every documented line clear of it, and its limit (F1): the gate reads a
- * variable's name, never its path, so every carry, note and stop file is a per-call variable too;
- * the one path a run names is `--spec specs/<slug>/spec.md`, and `init` refuses a
- * `loop/factory-<slug>` branch whose slug holds those words. Brick outcome names are the one thing
- * nothing here checks: an outcome holding them makes the gate ask on its record, and the skill
- * says so.
+ * `push`, so a record line whose spec path, carry path or outcome holds `commit` or `push` asks.
+ * That ask is a false alarm the user answers yes to, and the skill says so; a shared or broken
+ * status file would be a wrong record. `init` refuses a `loop/factory-<slug>` branch whose slug
+ * holds those words, which removes the commonest case.
  *
  * `--spec` IS READ HERE, not in the state module: the engine stays pure, and the CLI is the one
  * layer that may read files. The path is stored root-relative with forward slashes, the form a
@@ -41,8 +40,8 @@
  * against the root once, so the same relative path named two files depending on the flag.
  *
  * `--carry-file` AND `--note-file` (M7) take the text from a file, never the command line
- * (`textArg`, shared with `geneseed loop`): `GIT_GATE_RE` asks on any line that holds the word
- * `git` and, anywhere on it, the word `commit` or `push`, and free text can hold all three.
+ * (`textArg`, shared with `geneseed loop`): free text can hold any word and any quote. The Rite
+ * writes that file with the host's file tool, never the shell, under a name it makes unique.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -173,7 +172,8 @@ const ACTIONS = {
         taskCount = countSpecTasks(text);
       }
       return recordStage(s, c, args.outcome, {
-        porcelain: porcelain === null ? null : porcelain.replace(/\r\n/g, '\n').trimEnd(),
+        // Windows PowerShell 5.1 re-encodes a native pipe: a leading BOM and CRLF line ends
+        porcelain: porcelain === null ? null : porcelain.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd(),
         specPath, taskCount, carry, loopStatus, loopTemplate, head,
         loopInitAt: loopInitAt(root),
       });
