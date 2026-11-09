@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:web/dist/assets/Tabs-BqpmdJO7.js
-import"./rolldown-runtime-XKyaHtl9.js";import{i as e,t}from"./react-C1iE8mnY.js";import{Dt as n,Ot as r}from"./index-DiTKKh0Z.js";e();var i=t();function a({page:e,current:t,badges:a={},label:o}){return(0,i.jsx)(`nav`,{className:`tabs`,"aria-label":o,children:n[e].map(n=>(0,i.jsxs)(`a`,{href:`#/${e}/${n}`,className:t===n?`on`:``,"aria-current":t===n?`page`:void 0,children:[r[n],a[n]==null?null:(0,i.jsx)(`span`,{className:`tab-badge`,children:a[n]})]},n))})}export{a as t};
-========
-import"./rolldown-runtime-XKyaHtl9.js";import{i as e,t}from"./react-C1iE8mnY.js";import{Dt as n,Ot as r}from"./index-Saamhvpd.js";e();var i=t();function a({page:e,current:t,badges:a={},label:o}){return(0,i.jsx)(`nav`,{className:`tabs`,"aria-label":o,children:n[e].map(n=>(0,i.jsxs)(`a`,{href:`#/${e}/${n}`,className:t===n?`on`:``,"aria-current":t===n?`page`:void 0,children:[r[n],a[n]==null?null:(0,i.jsx)(`span`,{className:`tab-badge`,children:a[n]})]},n))})}export{a as t};
->>>>>>>> 3847f9f9 (feat(web): draw a factory vertically, with its forks as lanes side by side (D10, D18)):web/dist/assets/Tabs-D3QexU6c.js
