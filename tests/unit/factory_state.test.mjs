@@ -229,17 +229,26 @@ test('tasks: a spec with no task list, or one recorded at a loop stage, is refus
     /^Error: --spec is recorded by a stage outside a loop$/);
 });
 
-// J5: the spec a stage records may stay dirty only at the `spec` brick's own path.
-test('J5: the --spec exemption covers specs/<slug>/spec.md and nothing else', () => {
-  for (const specPath of ['src/a.js', 'specs/spec.md', 'specs/r/notes.md', 'specs/r/deep/spec.md']) {
+// G2 + J5: `--spec` names the `spec` brick's own path or nothing. Any other path is refused before
+// the porcelain is read and before the state changes: R4 holds `tasks.path` to that shape, so a
+// stored `src/a.js` would make every later action refuse FACTORY.md. The exemption then covers
+// that one file, never a sibling in its folder.
+test('G2 + J5: --spec takes specs/<slug>/spec.md and nothing else, and exempts only that file', () => {
+  for (const specPath of ['src/a.js', 'specs/spec.md', 'specs/r/notes.md', 'specs/r/deep/spec.md', 'specs/../spec.md']) {
     const s = start(specFactory());
+    const before = JSON.stringify(s);
     assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: ` M ${specPath}`, specPath, taskCount: 2 }),
-      new RegExp(`^Error: spec left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: {2}M ${specPath.replaceAll('.', '\\.')}$`),
+      new RegExp(`^Error: --spec ${specPath.replaceAll('.', '\\.')} is not a spec the engine can keep: record specs/<slug>/spec\\.md, one folder named for the run's slug$`),
       specPath);
+    assert.equal(JSON.stringify(s), before, specPath);
   }
   const s = start(specFactory());
+  assert.throws(() => recordStage(s, CATALOG, 'pass', { porcelain: '?? specs/r-2/spec.md\n?? specs/r-2/notes.md', specPath: 'specs/r-2/spec.md', taskCount: 2 }),
+    /^Error: spec left the worktree dirty, and a stage outside a loop records only on a clean tree, so a brick that changes files commits them first: \?\? specs\/r-2\/notes\.md$/);
   assert.deepEqual(recordStage(s, CATALOG, 'pass', { porcelain: '?? specs/r-2/spec.md', specPath: 'specs/r-2/spec.md', taskCount: 2 }),
     { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } });
+  // the state it stores passes R4: the next action can read FACTORY.md back
+  validateFactoryState(s, CATALOG);
 });
 
 test('countSpecTasks counts the top-level numbered items under the first Tasks heading', () => {

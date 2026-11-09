@@ -305,6 +305,10 @@ export function recordStage(state, { bricks }, outcome, {
   }
   const isLoop = loopOf(from) !== null;
   if (specPath !== null && isLoop) throw new Error('--spec is recorded by a stage outside a loop');
+  // R4 holds `tasks.path` to SPEC_PATH: stored, any other path would make every later action refuse FACTORY.md.
+  if (specPath !== null && !SPEC_PATH.test(specPath)) {
+    throw new Error(`--spec ${specPath} is not a spec the engine can keep: record specs/<slug>/spec.md, one folder named for the run's slug`);
+  }
   if (isLoop) {
     // R2: the loop's evidence — its own LOOP.md, or the commit it closed with (docblock above).
     const launch = state.launched;

@@ -19,6 +19,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ### Fixed
 - **A loop's discard no longer stashes `FACTORY.md`.** The `loop` skill's discard kept only `LOOP.md` out of the stash, so a loop run as a factory stage stashed the factory's state with the attempt: an untracked `FACTORY.md` was lost, and a tracked one rolled its counters back. The discard now keeps both engine files, and the `checks` and `review-panel` bricks, which delete the untracked files their commands created, never touch either.
+- **`geneseed factory record --spec` refuses a spec that is not at `specs/<slug>/spec.md`.** It took any path inside the worktree and stored it, and every later action then refused `FACTORY.md` as unreadable. The refusal now comes first, names the required shape, and leaves the state as it was. The `--spec` help names the shape too.
 
 ## [5.0.4] — 2026-11-09
 
