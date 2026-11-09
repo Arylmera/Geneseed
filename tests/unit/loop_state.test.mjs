@@ -900,6 +900,8 @@ test('review notes reach apply, leave when apply records, and only the new findi
 // cannot be a pass, so the engine refuses it and nothing moves. The word is matched where the status
 // sits, right after a colon, in any case: the word elsewhere on a line, or a runner's own count,
 // is not an entry. Any other outcome, and any other brick's note, says what it likes.
+// A check the project does not have at all is written `N/A (not configured)` by the test brick:
+// it is not a skipped check, so a project with no linter can still pass.
 const SKIPPED_LIST = 'Gate: PASS\nLint: PASS\nFull suite: SKIPPED (an earlier check failed)';
 const atTest = () => {
   const s = start(); s.node = 'identify'; s.iteration = 1;
@@ -929,6 +931,7 @@ for (const [label, outcome, note, to] of [
   ['pass with the word in a check description', 'pass', 'Unit: PASS - covers the SKIPPED guard', 'review'],
   ['pass with a runner count after a colon', 'pass', 'Full suite: PASS\nTests: skipped 0', 'review'],
   ['pass with no note', 'pass', '', 'review'],
+  ['pass with a check the project does not have', 'pass', 'Gate: PASS\nLint: N/A (not configured)\nFull suite: PASS', 'review'],
   ['fail with a SKIPPED entry', 'fail', SKIPPED_LIST, 'apply'],
 ]) {
   test(`test accepts ${label}`, () => {
