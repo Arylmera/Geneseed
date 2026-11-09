@@ -74,11 +74,6 @@ export function LibList({
   const rowsRef = useActiveRowInView([...inView, open])
   const rowsId = useId()
   const header = useRef(null)
-  // A pick hides the row just activated with the folded list: focus goes to the picker's
-  // header, not to <body>. Side by side the header is display: none, so focus stays put.
-  useEffect(() => {
-    if (folds.picked) header.current?.focus()
-  }, [folds.picked])
   // After every render: the caller owns the rows, so any render may add or drop them.
   useLayoutEffect(() => rove(rowsRef.current))
   const [said, setSaid] = useState('')
@@ -290,22 +285,20 @@ export function useActiveRowInView(deps) {
 
 // The stacked list's fold (the `lib` container tiers, styles.css). `inView` is the route's
 // [section, entry]. On a route change, a route with no entry (a section's own address) shows the
-// list; a route naming an entry (a deep link, a pick, Ctrl-K into another section) folds it, so
-// the entry sits right under the picker. A click on a section segment asks for the list even
-// where it changes no route (LibList). `pick()`
-// is a click on a row, the open one included (which changes no route): it folds the list and
-// bumps `picked`, on which LibList focuses its header.
+// list; a route naming an entry from outside the list (a deep link, Ctrl-K into another section)
+// folds it, so the entry sits right under the picker. A pick in the list keeps it open (owner,
+// 2026-11-09: "can the list stay open when we click on something"), so the next row is one click
+// away and focus stays on the row. A click on a section segment asks for the list even where it
+// changes no route (LibList). `pick()` is a click on a row, the open one included.
 export function useFolds([section, item]) {
   const [list, setList] = useState(!item)
   const [seen, setSeen] = useState([section, item])
-  const [picked, setPicked] = useState(0)
+  const [kept, setKept] = useState(false)
   if (seen[0] !== section || seen[1] !== item) {
     setSeen([section, item])
-    setList(!item)
+    setList(kept || !item)
+    setKept(false)
   }
-  const pick = () => {
-    setList(false)
-    setPicked((n) => n + 1)
-  }
-  return { list, setList, pick, picked }
+  const pick = () => setKept(true)
+  return { list, setList, pick }
 }
