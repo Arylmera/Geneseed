@@ -3,6 +3,8 @@
 // catalogue is in memory; factory_cli.test.mjs drives the shipped bricks through the real CLI.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   initFactory, nextStage, recordStage, decideFactory, renderFactoryFile, parseFactoryFile,
   validateFactoryState, countSpecTasks, FACTORY_MAX_TRANSITIONS,
@@ -452,6 +454,28 @@ test('tasks: a re-recorded spec may not grow, so laps that grow the spec still s
   }
   assert.equal(s.status, 'stopped');
   assert.equal(refused, 1);
+});
+
+// M16: one writer per value. The engine's constants are the writer; the docs type the numbers by
+// hand, because the count tokens render from a table in js/web/docs.mjs, which has no factory
+// entry. So each typed copy is gated here: every sentence below must hold the engine's numbers,
+// and a page that types a ceiling the engine does not use fails.
+test('M16: every hand-typed factory limit in the docs is the engine\'s', () => {
+  const T = FACTORY_MAX_TRANSITIONS; const N = engine.FACTORY_MAX_TASKS;
+  const doc = (rel) => readFileSync(path.resolve(import.meta.dirname, '../../docs', rel), 'utf8').replace(/\s+/g, ' ');
+  const pages = {
+    'concepts/factories.md': [`after ${T} stage transitions for one task`, `after ${T} transitions per spec task over the whole run`,
+      `a spec lists ${N} tasks at most, so no run passes ${T * N}.`],
+    'reference/factory-actions.md': [`, ${N} at most.`, `a run-wide ceiling above ${T * N},`, `A run stops too after ${T} stage transitions,`,
+      `after ${T} transitions per task of the spec (${T} without a spec)`],
+    'guides/run-a-factory.md': [`ordered task list (${N} tasks at most)`],
+  };
+  for (const [rel, says] of Object.entries(pages)) {
+    const text = doc(rel);
+    for (const s of says) assert.ok(text.includes(s), `${rel} does not say: ${s}`);
+    // no other transition count: "<n> stage transitions" or "<n> transitions" names T alone
+    for (const m of text.matchAll(/\b(\d+) (?:stage )?transitions\b/g)) assert.equal(Number(m[1]), T, `${rel}: ${m[0]}`);
+  }
 });
 
 test('tasks: more than FACTORY_MAX_TASKS tasks are refused', () => {
