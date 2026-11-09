@@ -15,6 +15,7 @@ These rules hold for every checkpoint this {{SKILL}} raises.
   !/.gitignore
   !/bricks/
   !/loops/
+  !/factories/
   !/protected-checks.txt
   !/done-checks.txt
   ```

@@ -7,11 +7,13 @@ gate: human
 gateOn: none
 outcomes: pass, fail, none
 ---
-Read the PR's checks with the form that returns at once, never a watch: `gh pr checks <pr> --json
-name,bucket,link` (exit code 8 means pending), or `glab ci status --branch <this branch>`. Poll it
-about once a minute, 30 minutes at most. A PR pushed moments ago may show no checks yet: poll for
-about 2 minutes before you conclude it has none. Never merge, re-run or cancel a check, and never
-edit any file.
+Wait with a command that returns by itself, never a foreground `sleep`: `gh pr checks <pr> --watch
+--interval 30`, or `glab ci status --wait --branch <this branch>`. Bound each call under 10
+minutes, by your shell tool's timeout or `timeout 540` in a POSIX shell, and repeat it up to 30
+minutes in all. Then read the verdict once: `gh pr checks <pr> --json name,bucket,link` (exit 8:
+pending), or `glab ci status --branch <this branch>`. A PR pushed moments ago may show no checks
+yet, and a watch then returns at once: re-check for about 2 minutes before you conclude it has
+none. Never merge, re-run or cancel a check, and never edit any file.
 
 Report `pass` when every check is green. Report `fail` when one is red — for each failing check,
 its name and the cause read from its log (`gh run view <id> --log-failed`), never guessed from its

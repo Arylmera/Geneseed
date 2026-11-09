@@ -416,7 +416,7 @@ test('GET /api/factories/catalog: factories, bricks, the loops they name, and gr
       assert.equal(factories.find((f) => f.name === 'team').origin, 'project');
       assert.deepEqual(bricks.find((b) => b.name === 'merge-gate').outcomes, ['pass', 'fail', 'none']);
       assert.ok(loops.some((l) => l.name === 'bugfix' && l.graph.name === 'bugfix'), 'loop:bugfix has no graph to draw');
-      assert.ok(!loops.some((l) => l.name === 'feature'), 'a loop no factory names is not sent');
+      assert.ok(!loops.some((l) => l.name === 'tdd'), 'a loop no factory names is not sent');
       assert.deepEqual(problems.filter((p) => /^factories\/(team|bug-report-to-fix):/.test(p)),
         ['factories/team: edge retro --fail--> nowhere: nowhere is not a stage, $close or $stop']);
       assert.equal(STATE_ROUTES['/api/factories/catalog'], apiFactoriesCatalog);

@@ -125,7 +125,7 @@ function isolationReport(stats) {
 // user's own edit survives; its failure never costs the trace. The same string lives in
 // `workflows/_runtime.js` (a plugin cannot share a file — V2 loads every .js here as a
 // plugin — and the runtime is imported lazily, from a configurable dir); tests pin both.
-const GENESEED_GITIGNORE = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"
+const GENESEED_GITIGNORE = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n"
 // Create-if-absent; a file holding only `*` is Geneseed's former output (it hid team bricks),
 // never a user edit, so it is upgraded. Any other content is the user's. Never throws.
 async function writeGitignore(file) {

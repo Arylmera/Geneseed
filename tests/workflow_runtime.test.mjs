@@ -252,7 +252,7 @@ test("a second same-day run gets its own branch, and worktrees live under .genes
     assert.equal(path.relative(path.join(repo, ".geneseed", "worktrees"), w.dir), `${w.branch.slice(12)}`)
   }
   assert.equal(fs.readFileSync(path.join(repo, ".geneseed", ".gitignore"), "utf8"),
-    "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n")
+    "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n")
   // The worktrees stay hidden; only the .gitignore itself shows, since a team commits it.
   assert.equal(gitSync(["status", "--porcelain", "-uall"], repo), "?? .geneseed/.gitignore\n")
   for (const w of kept) gitSync(["worktree", "remove", "--force", w.dir], repo)
@@ -273,7 +273,7 @@ test("the .geneseed/.gitignore the runtime writes hides personal state and keeps
   for (const p of [".geneseed/ownership.md", ".geneseed/learn.md", ".geneseed/workflow-runs/x.json",
     ".geneseed/worktrees/a/b"]) assert.equal(ignored(p), true, `${p} must be ignored`)
   for (const p of [".geneseed/.gitignore", ".geneseed/bricks/x.md", ".geneseed/bricks/sub/y.md",
-    ".geneseed/loops/z.json", ".geneseed/protected-checks.txt", ".geneseed/done-checks.txt"]) {
+    ".geneseed/loops/z.json", ".geneseed/factories/x.json", ".geneseed/protected-checks.txt", ".geneseed/done-checks.txt"]) {
     assert.equal(ignored(p), false, `${p} must not be ignored`)
   }
   gitSync(["worktree", "remove", "--force", w.dir], repo)
@@ -284,7 +284,7 @@ test("the .geneseed/.gitignore the runtime writes hides personal state and keeps
 // former output, which hid team bricks — isolation upgrades it. `*` plus anything else, or any
 // other content, is a user's edit and stays byte-identical.
 test("isolation upgrades a former '*' .gitignore and leaves a user's byte-identical", async () => {
-  const ALLOW = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n"
+  const ALLOW = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n"
   for (const [before, after] of [["*\n", ALLOW], ["*\r\n", ALLOW], ["*", ALLOW],
     ["*\n# mine\n", "*\n# mine\n"], ["# mine\n!keep\r\n", "# mine\n!keep\r\n"]]) {
     const { dir: repo, cleanup } = tempRepo()

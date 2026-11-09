@@ -32,13 +32,14 @@ geneseed factory check
 ```text
 run the bug-report-to-fix factory on issue 412
 take this bug report through the factory: totals round the wrong way on refunds
+run the issue-to-pr factory on issue 418
 ```
 
 The agent then:
 
 1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched.
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
-3. Steps the run: `intake` writes the work item, the `bugfix` loop fixes it commit by commit, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report.
+3. Steps the run: `intake` writes the work item, the `bugfix` loop fixes it commit by commit, `pr-open` opens the PR, `merge-gate` waits for CI, and `retro` writes the run report. In `issue-to-pr`, a `triage` stage comes after `intake` and picks the loop from `bugfix`, `feature`, `deps-upgrade` and `refactor`. Red CI then sends the work back to that loop.
 
 ## Where it stops for you
 
@@ -47,9 +48,9 @@ The agent then:
 | A push | Every push that is not a loop's own commit asks you, `pr-open`'s included. |
 | A loop gate | Anything the `bugfix` loop asks you, as in [While a loop runs](loop-running.md). |
 | `merge-gate` reports `none` | The repo runs no CI on the PR: `ok` goes on to `retro`, `no` stops the run. |
-| The close commit | The last commit removes `FACTORY.md`, and it asks. |
+| The close commit | The last commit removes `FACTORY.md`, and it asks. Its push runs CI again: the agent reads the checks once more and reports the final state. |
 
-Red CI does not stop for you: it sends the work back to the `bugfix` loop with the failing checks as its first note, twice at most. A third red result stops the run.
+Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`, or the one `triage` chose) with the failing checks as its first note, twice at most. A third red result stops the run.
 
 ## When it ends
 

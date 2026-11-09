@@ -242,6 +242,8 @@ export function nextStage(state, { bricks }, { loopStatus = null, head = null, n
   return {
     stage, effect: brick.effect, agent: brick.agent, skill: brick.skill, outcomes: brick.outcomes,
     prompt: brick.body, requirement: state.requirement, input: state.input, carry: state.carry,
+    // D6: triage picks from the allowlist; the factory is its one writer, so the stage reads it here
+    ...(stage === 'triage' && state.factory.loops?.length ? { loops: state.factory.loops } : {}),
     ...rulesOf(state),
   };
 }

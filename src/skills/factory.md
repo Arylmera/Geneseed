@@ -4,7 +4,7 @@
 
 **Trigger:** the user asks to run a factory, or to carry one work item (a request, a document,
 a GitHub or GitLab issue) through to an open pull request with green CI; or names a factory
-(`bug-report-to-fix`).
+(`bug-report-to-fix`, `issue-to-pr`).
 
 ## What it is
 
@@ -37,6 +37,8 @@ Repeat `geneseed factory next` and act on its JSON:
   `git status --porcelain --untracked-files=all | geneseed factory record --outcome <outcome> --carry "<the file path the stage reported>"`.
   The `--carry` is how the next stage gets this one's finding. Always use that porcelain form:
   plain `--porcelain` folds a new directory into one line, which the engine refuses.
+  The `triage` stage also gets the factory's `loops`; on `pass`, add `--loop <the name on the
+  first line of its file>`. The engine refuses a loop outside `loops`.
 - **`{stage, loop, notes}`** — a loop stage: see *Loop stages*.
 - **`{awaiting}`** — a `gate: human` stage holds. Show the user the `stage`, the `outcome` it
   reported and the file its `note` names, then **end the run** and wait. On their answer:
@@ -74,7 +76,10 @@ Repeat `geneseed factory next` and act on its JSON:
 8. On `$close`: the `retro` stage has written the run report. Close the run with
    `git rm -f FACTORY.md`, then `git commit -m "factory(<slug>): close"` and
    `git push -u origin HEAD:loop/factory-<slug>`. The gate asks: that ask is the user's consent.
-   The push re-runs CI on the PR; that commit only removes `FACTORY.md`.
+   The push re-runs CI on the PR, after `merge-gate` saw it green. Read the PR's checks again
+   once, with the bounded wait the `merge-gate` brick names (30 minutes at most), and add the
+   final state (green, red with the failing checks, or still pending at the bound) to the run
+   report. A red result is reported, never reworked: the run has closed.
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and
@@ -82,7 +87,7 @@ Repeat `geneseed factory next` and act on its JSON:
    when `git check-ignore -q <that path>` exits non-zero. No tracked file changes, no commit; only
    a lesson that holds beyond this run goes into memory, one entry. Leave the branch and
    `FACTORY.md` as they are.
-10. Report: the PR URL, the stages with their outcomes from `summary.history`, every rework and
+10. Report: the PR URL, the final CI state after the close commit, the stages with their outcomes from `summary.history`, every rework and
     its reason, the run report's path, and the branch. **Never merge.**
 
 ## Resume
@@ -93,7 +98,8 @@ says a loop still runs, resume that loop first with `geneseed loop next` (the `l
 
 ## Done when
 
-- `$close` is reported with the PR open, its CI green, and `FACTORY.md` removed; or `$stop` is
+- `$close` is reported with the PR open, `FACTORY.md` removed, and the CI state after that
+  removal read and reported; or `$stop` is
   reported with its reason and the run report. In both cases nothing was merged.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

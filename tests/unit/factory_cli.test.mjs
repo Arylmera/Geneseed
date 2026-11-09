@@ -59,7 +59,7 @@ test('check: the catalogue, one factory, and a broken one', () => {
           'factories/fixture-broken: cycle loop:nope, review has no declared cycle around it',
           'factories/fixture-broken: stage loop:nope: no loop template named nope',
         ],
-        factories: ['bug-report-to-fix', 'fixture-broken', 'fixture-fix', 'fixture-spec'],
+        factories: ['bug-report-to-fix', 'fixture-broken', 'fixture-fix', 'fixture-spec', 'issue-to-pr'],
       },
     });
     assert.deepEqual(run(sb.path, ['check', '--factory', 'fixture-fix']), { code: 0, out: { ok: true, problems: [] } });
@@ -68,8 +68,8 @@ test('check: the catalogue, one factory, and a broken one', () => {
   } finally { sb.cleanup(); }
 });
 
-// The catalogue is every origin: the shipped `bug-report-to-fix` (src/factories/) lists beside the
-// project's fixture, sorted by name.
+// The catalogue is every origin: the shipped `bug-report-to-fix` and `issue-to-pr` (src/factories/)
+// list beside the project's fixture, sorted by name.
 test('list: name, description, category and origin of every factory', () => {
   const sb = repo(['fixture-fix']);
   try {
@@ -83,6 +83,11 @@ test('list: name, description, category and origin of every factory', () => {
         }, {
           name: 'fixture-fix', category: null, origin: 'project',
           description: 'Test fixture: plan, run the bugfix loop, review; a failed review sends the item back to the loop.',
+        }, {
+          name: 'issue-to-pr', category: 'development', origin: 'shipped',
+          description: 'Take one issue, let triage pick the loop that fits (bugfix, feature, deps-upgrade or refactor), '
+            + 'open the pull request and wait for green CI; red CI sends the work back to that loop, twice at most. '
+            + 'The merge stays yours.',
         }],
       },
     });
@@ -237,6 +242,36 @@ test('R4: every action refuses an unreadable FACTORY.md and leaves it as it was'
     }
     assert.equal(run(sb.path, [...INIT, '--factory', 'fixture-fix']).code, 1, 'init does not overwrite it either');
     assert.equal(readFileSync(file, 'utf8'), before);
+  } finally { sb.cleanup(); }
+});
+
+// D6 on the shipped `issue-to-pr` (no project factory loaded): the triage stage is handed the
+// factory's `loops`, and `record --loop` takes only a name from them. `tdd` is a real loop template
+// that the factory does not allow, so it is refused and FACTORY.md stays as it was; a pass without
+// `--loop` is refused too; `bugfix` routes on, and the triaged stage then runs that loop.
+test('issue-to-pr: triage gets the allowlist, a loop outside it is refused, one inside it runs', () => {
+  const sb = repo([]);
+  const file = path.join(sb.path, 'FACTORY.md');
+  try {
+    assert.equal(run(sb.path, [...INIT, '--factory', 'issue-to-pr']).code, 0);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--carry', 'item.md']), { code: 0, out: { stage: 'triage' } });
+    const next = run(sb.path, ['next']).out;
+    assert.deepEqual({ stage: next.stage, agent: next.agent, outcomes: next.outcomes, carry: next.carry, loops: next.loops },
+      { stage: 'triage', agent: 'explorer', outcomes: ['pass', 'fail'], carry: 'item.md', loops: ['bugfix', 'feature', 'deps-upgrade', 'refactor'] });
+    const before = readFileSync(file, 'utf8');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--loop', 'tdd']), {
+      code: 1, out: { error: "tdd is not one of this factory's loops: bugfix, feature, deps-upgrade, refactor" },
+    });
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass']), {
+      code: 1, out: { error: 'triage must name the loop it chose: --loop <one of bugfix, feature, deps-upgrade, refactor>' },
+    });
+    assert.equal(readFileSync(file, 'utf8'), before);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--loop', 'bugfix', '--carry', 'triage.md']),
+      { code: 0, out: { stage: 'loop:$triaged' } });
+    assert.deepEqual(run(sb.path, ['next']).out, {
+      stage: 'loop:$triaged', loop: 'bugfix', notes: ['triage.md'],
+      rules: ['Never merge, and never enable auto-merge: the run ends at an open PR with green CI.', "Push only this worktree's own branch."],
+    });
   } finally { sb.cleanup(); }
 });
 

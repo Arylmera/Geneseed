@@ -27,7 +27,7 @@ import { gitRootOf } from './gitref.mjs';
  * `!bricks/`. The same string lives in `adapters/opencode/plugins/geneseed-workflow.js`,
  * `adapters/opencode/workflows/_runtime.js` and `src/skills/_checkpoints.md`; tests pin them.
  */
-export const GENESEED_GITIGNORE = '/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/protected-checks.txt\n!/done-checks.txt\n';
+export const GENESEED_GITIGNORE = '/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n';
 
 /**
  * Create-if-absent; a file holding only `*` is Geneseed's former output (it hid team bricks),

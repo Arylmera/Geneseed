@@ -112,7 +112,8 @@ test('a corrupt factories.json reads as empty, and neither function throws', () 
 
 // D19: retro writes `.geneseed/factory-runs/<slug>.md`. The seeded `.geneseed/.gitignore` starts
 // with `/*` and lets back only the team paths, so git ignores the report; a team file such as
-// `bricks/x.md` stays visible. Real git answers, through `check-ignore` (exit 0: ignored).
+// `bricks/x.md` stays visible, and so does a project factory (D8, `factories/x.json`). Real git
+// answers, through `check-ignore` (exit 0: ignored).
 test('the seeded .geneseed/.gitignore makes git ignore factory-runs/ and nothing a team shares', () => {
   const sb = makeSandbox('factreg-');
   try {
@@ -122,5 +123,6 @@ test('the seeded .geneseed/.gitignore makes git ignore factory-runs/ and nothing
     writeFileSync(path.join(sb.path, '.geneseed', '.gitignore'), GENESEED_GITIGNORE);
     assert.equal(g('check-ignore', '-q', '.geneseed/factory-runs/fix-rounding.md').status, 0);
     assert.equal(g('check-ignore', '-q', '.geneseed/bricks/x.md').status, 1);
+    assert.equal(g('check-ignore', '-q', '.geneseed/factories/x.json').status, 1);
   } finally { sb.cleanup(); }
 });
