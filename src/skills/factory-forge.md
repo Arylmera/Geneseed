@@ -30,7 +30,10 @@ to the loop three times, not two".
    - **routes** — for every outcome of every stage: the next stage, `$close` or `$stop`.
    - **failures that route back** — each one to an earlier stage, with its `max` from 1 to 5.
      Each becomes a `cycles` entry. After a fork, route back to `$lane`, the lane the run took,
-     and start the cycle's `nodes` with `$lane`.
+     and start the cycle's `nodes` with `$lane`. Only a `fail` routes back to a loop: `checks`
+     `error` and `merge-gate` `none` also carry environment failures (a failed fetch, a missing
+     tool, CI pending at the bound) that no loop can fix, so route them on or to `$stop`, never
+     to a loop or `$lane`.
    - **rules** — optional lines every stage receives ("Never merge.").
    - **level** — project `<repo>/.geneseed/factories/` (this repository, shared with the team
      once committed) or global `$XDG_CONFIG_HOME/geneseed/factories/` (default

@@ -68,15 +68,29 @@ Repeat `geneseed factory next` and act on its JSON:
     `amend --note "<their answers>"`; `ok` goes on with the assumptions intake wrote.
   - `checks` **`error`**: every check passed, but the branch changed a locked path (the done
     list, CI config, a factory, loop or brick). Show each path. `ok` lets the change through; the run report names it.
+    When the finding starts `environment:` (a failed fetch, no default branch, a timeout, a
+    missing tool), show the cause instead: the loop cannot fix it. Once the user has fixed it,
+    `amend` runs `checks` again; `no` stops; `ok` goes on without the done list.
+  - `merge-gate` **`none`**: the repo runs no CI on the PR, or, when the finding starts
+    `environment:`, no verdict could be read (CI pending at the bound, `gh`/`glab` missing or
+    failing). `ok` goes on to `retro`, `amend` waits again, `no` stops.
   - `checks` **`none`**: the base has no done list (or an empty one), and the note is the one
-    `checks` proposes, or says no manifest gave one. On the user's yes, land it on the base, never
-    from this worktree: `git worktree add --detach ../<repo>-done-list origin/<default>`, write
-    `.geneseed/done-checks.txt` there holding exactly the lines of the finding's fenced block,
-    stage that file alone, commit, and `git push origin HEAD:<default>` (each asks). Remove that
-    worktree only once the file has landed. A refused push (a protected branch) is reported to
-    the user with that worktree's path, so they can land the file by PR from it. `ok` waits until
-    the file is on the base: answer `decide --verdict ok` only then, and `checks` runs again
-    against it. If it is not to be landed, `no`.
+    `checks` proposes, or says no manifest gave one. On the user's yes, land it on the base by a
+    PR of its own, never from this worktree and never by a push to `<default>`:
+    `git worktree add ../<repo>-done-list-<slug> -b geneseed/done-list-<slug> origin/<default>`,
+    write `.geneseed/done-checks.txt` there holding exactly the lines of the finding's fenced
+    block, stage that file alone, commit, push that worktree's own branch
+    (`git push -u origin HEAD:geneseed/done-list-<slug>`), and open a PR to `<default>`
+    (`gh pr create --base <default>`, or `glab mr create --target-branch <default>`; each asks).
+    Give the user the PR's URL: they merge it. Remove that worktree once the PR is merged.
+    When the branch or the worktree already exists (a re-run with the same slug), create
+    nothing and overwrite nothing: report it to the user with that worktree's path and the
+    branch's state (`git log -1 geneseed/done-list-<slug>`), and let them reuse, merge or
+    remove it. When `gh` or `glab` is missing or fails at the PR step, the branch is pushed
+    already: report it to the user with that worktree's path and the branch name, so they open
+    the PR themselves. `ok`
+    waits until the file is on the base: answer `decide --verdict ok` only then, and `checks`
+    runs again against it. If it is not to be landed, `no`.
 - **`{terminal: "$close"}`** or **`{terminal: "$stop"}`** — see *The end*.
 - A `record` or `decide` result (`{stage}`, `{awaiting}`, `{stopped}`) — call `next` again.
 - **`{error}`** — read it; it names the step you skipped or the evidence `record` lacks. Do that
@@ -110,13 +124,16 @@ Repeat `geneseed factory next` and act on its JSON:
 
 ## The end
 
-8. On `$close`: the `retro` stage has written the run report. Close the run with
-   `git rm -f FACTORY.md`, then `git commit -m "factory(<slug>): close"` and
+8. On `$close`: the `retro` stage has written the run report. Remove `FACTORY.md`:
+   `git rm -f FACTORY.md` when git tracks it (a loop's commit carries it), else delete the file
+   (a run with no loop, such as the `docs` lane, never tracked it). Commit and push only when
+   `git status --porcelain` then shows the removal: `git commit -m "factory(<slug>): close"` and
    `git push -u origin HEAD:loop/factory-<slug>`. The gate asks: that ask is the user's consent.
-   The push re-runs CI on the PR, after `merge-gate` saw it green. Read the PR's checks again
+   That push re-runs CI on the PR, after `merge-gate` saw it green. Read the PR's checks again
    once, with the bounded wait the `merge-gate` brick names (30 minutes at most), and add the
    final state (green, red with the failing checks, or still pending at the bound) to the run
-   report. A red result is reported, never reworked: the run has closed.
+   report. With no close commit, CI did not re-run: the final state is the one `merge-gate`
+   read. A red result is reported, never reworked: the run has closed.
    **The merge proposal.** Only when that final state is green: show the user the PR URL, the CI
    state and each `review-panel` seat's verdict, and ask once whether to merge. On a yes:
    `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on GitLab), which the host's own
@@ -141,8 +158,8 @@ says a loop still runs, resume that loop first with `geneseed loop next` (the `l
 
 ## Done when
 
-- `$close` is reported with the PR open, `FACTORY.md` removed, and the CI state after that
-  removal read and reported; or `$stop` is
+- `$close` is reported with the PR open, `FACTORY.md` removed, and the final CI state read and
+  reported (after the close commit, or `merge-gate`'s when there was none); or `$stop` is
   reported with its reason and the run report. The PR was merged on the user's yes, asked once
   at the end, or left open; a `$stop` merges nothing.
 

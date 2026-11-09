@@ -89,11 +89,11 @@ The bricks they add:
 | `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria, its `size` and its `areas`. `needs-info` holds for your answers to its questions (`gate: human`) | `pass`, `fail`, `needs-info` |
 | `holdout-write` | Writes 3 to 8 prose scenarios (given / when / then) for the work item into the holdout folder, outside the worktree, and hands the work item on unchanged | `pass`, `fail` |
 | `holdout` | Plays every scenario against the built change. `fail` carries one sentence per failed scenario, observed against expected; `error` when the diff touches the holdout folder or a scenario cannot be played | `pass`, `fail`, `error` |
-| `checks` | Runs the done list as the base branch holds it, never the branch's copy. `error` holds when the diff touches a locked path; `none` holds with a proposed list when the base has none | `pass`, `fail`, `error`, `none` |
+| `checks` | Runs the done list as the base branch holds it, never the branch's copy. `error` holds when the diff touches a locked path, or on an environment failure (a failed fetch, a timeout, a missing tool); `none` holds with a proposed list when the base has none | `pass`, `fail`, `error`, `none` |
 | `review-panel` | The `factory` skill seats a panel sized to the work item, each seat blind to how the change was built, and merges their verdicts | `pass`, `fail` |
 | `triage` | A fork: reads the work item and reports the outcome that names its lane, with its reason. `fail` when no lane fits | `bug`, `feature`, `deps`, `refactor`, `docs`, `fail` |
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
-| `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide | `pass`, `fail`, `none` |
+| `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide; so does CI still pending at the bound, or a `gh`/`glab` that is missing or fails | `pass`, `fail`, `none` |
 | `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, and keeps only a lasting lesson in memory | `pass` |
 
 `analysis-to-build` also uses the loops' own `spec` brick (`gate: human`), the one the
@@ -111,8 +111,12 @@ outside.
 
 - **`checks` reads the done list from the base branch** (`.geneseed/done-checks.txt` there, read
   with `git show`), never from the branch, and runs it against the branch. A red command is a
-  `fail`; a timeout, a missing tool, a failed fetch or no default branch is a `fail` marked
-  `environment`, which the loop cannot fix. A command that changes a tracked file is a `fail` too
+  `fail`. A timeout, a missing tool, a failed fetch or no default branch is an **environment
+  failure**: the loop's code cannot fix it, so it never goes back to the loop. It is an `error`
+  whose finding starts `environment:`, and it holds for you: fix the environment and answer
+  `amend` to run `checks` again, or `no` to stop (`ok` goes on without the done list). The same
+  rule holds at `merge-gate`: CI still pending after 30 minutes, or `gh`/`glab` missing, is a
+  `none` that holds for you, and `amend` waits again. A command that changes a tracked file is a `fail` too
   (a lint that fixes what it finds hides what it found). Whatever the outcome, `checks` then
   restores every file its commands changed and deletes what they created, so the tree stays clean.
 - **Locked paths.** Only when every command passes, `checks` lists the paths the branch changed,
@@ -124,8 +128,9 @@ outside.
   judges a weakened test.
 - **No done list on the base**, or one with no command. `checks` proposes one, inferred from the
   base's manifests as the done gate infers checks, and holds; with no manifest it proposes nothing
-  and says so. On your yes, the agent lands the file on the base branch from a temporary worktree
-  (or you land it by PR when the branch is protected); once it is there, `ok` runs `checks`
+  and says so. On your yes, the agent commits the file in a temporary worktree on its own branch,
+  pushes that branch and opens a PR to the base branch: every factory stage pushes only its own
+  branch, never the base. You merge the PR; once the file is on the base, `ok` runs `checks`
   again, once.
 - **`review-panel` seats agents by the work item's size and areas.** `intake` rates the `size`
   (`small`, `medium`, `large`) and the `areas` (`security`, `performance`, `ui`, `data`). The

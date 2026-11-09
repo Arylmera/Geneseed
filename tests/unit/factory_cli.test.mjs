@@ -354,15 +354,31 @@ test('record --spec refuses a path outside the worktree, before reading it', () 
 });
 
 // F6: a directory whose name starts with `..` is inside the root; only `..` itself, or a path
-// under it, is outside.
-test('record --spec accepts a path inside the worktree whose first segment starts with ..', () => {
+// under it, is outside. The slug folder is such a directory here, so the path is also the spec
+// brick's own shape (G2).
+test('record --spec accepts a path inside the worktree with a segment that starts with ..', () => {
   const sb = repo(['fixture-spec']);
   try {
     run(sb.path, [...INIT, '--factory', 'fixture-spec']);
-    mkdirSync(path.join(sb.path, '..r'));
-    writeFileSync(path.join(sb.path, '..r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
-    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', '..r/spec.md'], ''),
+    mkdirSync(path.join(sb.path, 'specs', '..r'), { recursive: true });
+    writeFileSync(path.join(sb.path, 'specs', '..r', 'spec.md'), '# R\n\n## Tasks\n\n1. one\n');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'specs/..r/spec.md'], ''),
       { code: 0, out: { awaiting: { kind: 'gate', stage: 'spec', outcome: 'pass' } } });
+  } finally { sb.cleanup(); }
+});
+
+// G2: a spec inside the worktree but not at specs/<slug>/spec.md is refused, and FACTORY.md stays
+// as it was. Stored, it would pass this record and fail R4 on every later action: `decide` here.
+test('G2: record --spec refuses a path that is not specs/<slug>/spec.md, and the run goes on', () => {
+  const sb = repo(['fixture-spec']);
+  try {
+    run(sb.path, [...INIT, '--factory', 'fixture-spec']);
+    writeFileSync(path.join(sb.path, 'plan.md'), '# R\n\n## Tasks\n\n1. one\n');
+    const before = readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8');
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--spec', 'plan.md'], ''),
+      { code: 1, out: { error: '--spec plan.md is not a spec the engine can keep: record specs/<slug>/spec.md, one folder named for the run\'s slug' } });
+    assert.equal(readFileSync(path.join(sb.path, 'FACTORY.md'), 'utf8'), before);
+    assert.equal(run(sb.path, ['next']).out.stage, 'spec');
   } finally { sb.cleanup(); }
 });
 

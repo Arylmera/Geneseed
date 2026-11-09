@@ -11,6 +11,7 @@ import { undeclaredCycles } from '../../js/loop/graph.mjs';
 import { factoryProblems } from '../../js/inspect/checks-authoring.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import { inferDoneChecks, PM_LOCKS } from '../../js/hosts/done-checks.mjs';
+import { countSpecTasks, FACTORY_MAX_TASKS } from '../../js/factory/state.mjs';
 
 const brick = (name, outcomes, extra = {}) => [name, { name, outcomes, effect: 'read', available: true, ...extra }];
 const CATALOG = {
@@ -420,4 +421,100 @@ test('D9: the three shipped factories carry the default review seat table', () =
     const file = path.resolve(import.meta.dirname, '../../src/factories', `${name}.json`);
     assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')).review, D9, name);
   }
+});
+
+// G1: a loop run as a factory stage shares its worktree with FACTORY.md. Every stash the loop
+// skill gives must keep BOTH engine files out of it: stashed, an untracked FACTORY.md is lost,
+// and a tracked one rolls its counters and launch back.
+const shipped = (rel) => readFileSync(path.resolve(import.meta.dirname, '../../src', rel), 'utf8');
+test('G1: every stash in the loop skill keeps LOOP.md and FACTORY.md out of it', () => {
+  const stashes = shipped('skills/loop.md').split('\n').filter((l) => /stash -u/.test(l));
+  assert.equal(stashes.length, 1, 'the loop skill stashes in one place: the discard');
+  for (const l of stashes) {
+    assert.ok(l.includes(':^LOOP.md') && l.includes(':^FACTORY.md'), `stashes an engine file: ${l}`);
+  }
+});
+
+// G4: in the `docs` lane no loop runs, so nothing ever commits FACTORY.md, and `git rm -f` on it
+// exits 128. The close step names the untracked case, and commits only when there is a change.
+// A text check: it holds the step's wording, not an agent's reading of it.
+test('G4: the factory close step removes FACTORY.md tracked or not, and commits only a change', () => {
+  const close = shipped('skills/factory.md').split(/\n(?=\d+\. )/).find((s) => s.startsWith('8. On `$close`'));
+  assert.ok(close, 'the factory skill has its close step');
+  assert.match(close, /`git rm -f FACTORY\.md` when git tracks it/);
+  assert.match(close, /else delete the file/);
+  assert.match(close, /Commit and push only when\s+`git status --porcelain` then shows the removal/);
+});
+
+// G5: the `spec` brick states the task format `countSpecTasks` counts, and a list written the way
+// the brick says is counted in full. The limit is never typed: bricks render no count token, so
+// the brick refers to it in words, and the engine's refusal names it. And the brick speaks of the
+// factory's own wiring: the run's slug, and an amend that arrives as the stage's `carry`.
+test('G5: the spec brick states the task format the factory counts, and never types the limit', () => {
+  const brick = shipped('bricks/spec.md').replace(/\s+/g, ' ');
+  for (const rule of ['first heading that contains the word `task` or `tasks`', '`1.` or `1)`', 'indented 3 spaces at most',
+    'at the indent of the first task', 'An item indented deeper, numbered or not, is a sub-item, not a task',
+    'A fenced code block', 'neither ends the list nor adds a task', 'A deeper heading keeps the list open',
+    'the next heading of the same or a higher level ends it', 'the factory\'s task limit',
+    'the factory run\'s `<slug>`', 'stage\'s `carry`']) {
+    assert.ok(brick.includes(rule), `the spec brick does not say: ${rule}`);
+  }
+  assert.doesNotMatch(brick, new RegExp(`\\b${FACTORY_MAX_TASKS}\\b`), 'the brick types the task limit');
+  assert.doesNotMatch(brick, /the slug of the loop's title\) and|A gate amendment in LOOP\.md's notes/);
+  // the format as the brick words it, counted by the engine: two tasks, a sub-item and a deeper
+  // heading between them, then a sibling heading that ends the list
+  const spec = '# Spec\n\n## Ordered tasks\n\n1. Parse\n   - detail\n   1. a numbered sub-item\n   2. another\n'
+    + '```sh\n# a comment in a fence\n```\n### Note\n2) Verify end to end\n\n## Out of scope\n3. not a task\n';
+  assert.equal(countSpecTasks(spec), 2);
+});
+
+// G6: an environment failure (a failed fetch, no default branch, a timeout, a missing tool, CI
+// pending at the bound) is nothing a loop's code can fix, so it never routes to a loop. The bricks
+// report it on an outcome they gate for the user — `checks` `error`, `merge-gate` `none` — and in
+// every shipped factory those outcomes lead on, never to a `loop:` stage or `$lane`. The old text
+// ("report `fail` and mark it `environment`") sent it back to the loop, burning laps.
+test('G6: environment failures hold for the user and never route to a loop', () => {
+  const ENV = { checks: 'error', 'merge-gate': 'none' };
+  for (const [stage, outcome] of Object.entries(ENV)) {
+    const text = shipped(`bricks/${stage}.md`);
+    const gateOn = /^gateOn:\s*(.+)$/m.exec(text)?.[1].split(/,\s*/) ?? [];
+    assert.ok(/^gate: human$/m.test(text) && gateOn.includes(outcome), `${stage} does not gate ${outcome}`);
+    const body = text.replace(/\s+/g, ' ');
+    assert.ok(body.includes(`An environment failure is never a \`fail\``), `${stage} does not keep environment failures off fail`);
+    assert.doesNotMatch(body, /report `fail` and mark it|is a `fail` too: mark it `environment`|or with "CI pending after 30 minutes"/, stage);
+  }
+  // `checks` states the environment rule BEFORE the red-exit rule, says it wins over a non-zero
+  // exit (127 included) and over an earlier red command, and restores the tree on every outcome.
+  const checks = shipped('bricks/checks.md').replace(/\s+/g, ' ');
+  const env = checks.indexOf('Environment failures come first, and they take precedence over a non-zero exit.');
+  assert.ok(env >= 0 && env < checks.indexOf('report `fail` when one exits non-zero'), 'checks states the environment rule first');
+  for (const rule of ['(exit 127,', 'When an earlier command was already red, the environment failure still wins: report `error`',
+    'on every outcome (`pass`, `fail` and `error` alike), put the tree back']) {
+    assert.ok(checks.includes(rule), `checks does not say: ${rule}`);
+  }
+  assert.doesNotMatch(readFileSync(path.resolve(import.meta.dirname, '../../CHANGELOG.md'), 'utf8'), /a timeout or a missing tool fails it/);
+  for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+    const { edges } = JSON.parse(shipped(`factories/${name}.json`));
+    for (const [stage, outcome] of Object.entries(ENV)) {
+      const to = edges.find((e) => e.from === stage && e.on === outcome)?.to;
+      assert.ok(to && !loopOf(to) && to !== '$lane', `${name}: ${stage} --${outcome}--> ${to} routes an environment failure to a loop`);
+    }
+  }
+});
+
+// G7: every shipped factory tells every stage "Push only this worktree's own branch.", so the
+// skill never pushes to the default branch: the proposed done list goes to the base from its own
+// worktree, on its own branch, by a PR the user merges. A text check on the skill's wording.
+test('G7: the factory skill lands a done list by its own branch and PR, never by a push to the base', () => {
+  for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+    assert.ok(JSON.parse(shipped(`factories/${name}.json`)).rules.includes('Push only this worktree\'s own branch.'), name);
+  }
+  const skill = shipped('skills/factory.md').replace(/\s+/g, ' ');
+  assert.doesNotMatch(skill, /git push origin HEAD:<default>|HEAD:<default>/);
+  assert.ok(skill.includes('-b geneseed/done-list-<slug> origin/<default>'), 'the done-list worktree has its own branch');
+  assert.ok(skill.includes('`git push -u origin HEAD:geneseed/done-list-<slug>`'), 'it pushes that branch');
+  assert.ok(skill.includes('open a PR to `<default>`'), 'it opens a PR for the user');
+  // the two ways that path fails, each reported to the user with the worktree's path
+  assert.match(skill, /When the branch or the worktree already exists \(a re-run with the same slug\), create nothing and overwrite nothing: report it to the user with that worktree's path/);
+  assert.match(skill, /When `gh` or `glab` is missing or fails at the PR step, the branch is pushed already: report it to the user with that worktree's path/);
 });

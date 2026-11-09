@@ -68,9 +68,13 @@
  * TERMINATION BY CONSTRUCTION (J3, R8). `transitions` counts per task and resets with it. On top,
  * `runTransitions` counts every transition of the run, never resets, and stops the run past
  * `runCeiling`: `FACTORY_MAX_TRANSITIONS` until a spec is recorded, then
- * `FACTORY_MAX_TRANSITIONS` x its task count, set ONCE at the first --spec record. The count is
- * frozen there: a later --spec record may keep or lower it, never raise it, so no lap can buy a
- * task, a fresh budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
+ * `FACTORY_MAX_TRANSITIONS` x its task count. Until the first loop launches, each --spec record
+ * sets the count and the ceiling again: the spec's gate comes after its record, and an amend there
+ * may add tasks (G3). That window spends no fresh budget — no task has been reached, so the
+ * per-task count never resets in it — and the gate's amend cap bounds it. Once a loop has
+ * launched (`launched`, or a `loop:` stage in `history`, which never shrinks) the count is frozen:
+ * a later --spec record may keep or lower it, never raise it, so no lap can buy a task, a fresh
+ * budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
  * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
  * into several factory runs a human can review, not one run nobody reads to the end.
  */
@@ -167,20 +171,31 @@ export function writeFactoryFile(file, state) {
 }
 
 /**
- * The tasks of a spec (`specs/<slug>/spec.md`, the `spec` brick's format): the top-level numbered
- * items (`1.` or `1)`, indented 3 spaces at most) under the first heading that names tasks, up to
- * the next heading of the same or a higher level.
+ * The tasks of a spec (`specs/<slug>/spec.md`, the `spec` brick's format): the numbered items
+ * (`1.` or `1)`) under the first heading that names tasks, up to the next heading of the same or
+ * a higher level, at the indent of the first one (3 spaces at most). A numbered line indented
+ * deeper is a sub-item, as CommonMark nests it. A fenced block (``` or ~~~, closed by the same
+ * fence) is skipped whole: a `# comment` in it is no heading, a numbered line in it no task.
  */
 export function countSpecTasks(text) {
-  let level = 0; let count = 0;
+  let level = 0; let count = 0; let indent = -1; let fence = null;
   for (const line of String(text).replace(/\r\n/g, '\n').split('\n')) {
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) fence = null;
+      continue;
+    }
+    if (f) { fence = f[1]; continue; }
     const h = /^(#{1,6})\s+(.*)$/.exec(line);
     if (h) {
       if (level && h[1].length <= level) break;
       if (!level && /\btasks?\b/i.test(h[2])) level = h[1].length;
       continue;
     }
-    if (level && /^ {0,3}\d+[.)]\s+\S/.test(line)) count += 1;
+    const item = level ? /^( {0,3})\d+[.)]\s+\S/.exec(line) : null;
+    if (!item) continue;
+    if (indent < 0) indent = item[1].length;
+    if (item[1].length <= indent) count += 1;
   }
   return count;
 }
@@ -196,6 +211,8 @@ export function initFactory({ title, requirement, factory, input = null }) {
 }
 
 const taskNo = (state) => state.tasks?.index ?? 0;
+// G3: the task count is frozen once any loop has launched (docblock: TERMINATION BY CONSTRUCTION).
+const tasksFrozen = (state) => state.launched != null || state.history.some((h) => loopOf(h?.stage) !== null);
 // The task as `next` and a replay hand it out: the owning stage is the engine's bookkeeping.
 const taskOut = ({ stage: _owner, ...task }) => task;
 
@@ -305,6 +322,10 @@ export function recordStage(state, { bricks }, outcome, {
   }
   const isLoop = loopOf(from) !== null;
   if (specPath !== null && isLoop) throw new Error('--spec is recorded by a stage outside a loop');
+  // R4 holds `tasks.path` to SPEC_PATH: stored, any other path would make every later action refuse FACTORY.md.
+  if (specPath !== null && !SPEC_PATH.test(specPath)) {
+    throw new Error(`--spec ${specPath} is not a spec the engine can keep: record specs/<slug>/spec.md, one folder named for the run's slug`);
+  }
   if (isLoop) {
     // R2: the loop's evidence — its own LOOP.md, or the commit it closed with (docblock above).
     const launch = state.launched;
@@ -344,8 +365,8 @@ export function recordStage(state, { bricks }, outcome, {
     if (taskCount > FACTORY_MAX_TASKS) {
       throw new Error(`${specPath} lists ${taskCount} tasks; a factory runs ${FACTORY_MAX_TASKS} at most — split the requirement`);
     }
-    if (state.taskCount !== null && taskCount > state.taskCount) {
-      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen at the first --spec record`);
+    if (state.taskCount !== null && tasksFrozen(state) && taskCount > state.taskCount) {
+      throw new Error(`${specPath} lists ${taskCount} tasks, more than the ${state.taskCount} frozen when the first loop launched`);
     }
   }
   if (!edge) throw new Error(`no edge from ${from} on ${outcome}`);
@@ -354,7 +375,7 @@ export function recordStage(state, { bricks }, outcome, {
   if (isFork(from, bricks) && state.factory.stages.includes(edge.to)) state.lane = edge.to;
   if (isLoop) state.launched = null;
   if (specPath !== null) {
-    if (state.taskCount === null) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }
+    if (state.taskCount === null || !tasksFrozen(state)) { state.taskCount = taskCount; state.runCeiling = FACTORY_MAX_TRANSITIONS * taskCount; }
     state.tasks = { path: specPath, count: taskCount, index: 1, stage: null };
     state.taskHigh = Math.max(state.taskHigh, 1);
   }

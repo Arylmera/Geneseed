@@ -10,8 +10,9 @@ gateOn: error, none
 Never commit. Write every finding to a file in the OS temp directory, never inside the worktree,
 and report that file's path. Run `git fetch origin`, then find the default branch (`gh repo view
 --json defaultBranchRef`, or `git remote show origin`) and the base, `git merge-base HEAD
-origin/<default>`. When the fetch fails or no default branch is found, report `fail` and mark it
-`environment`.
+origin/<default>`. When the fetch fails or no default branch is found, report `error` and start
+the finding with `environment:` and the cause. An environment failure is never a `fail`: a `fail`
+goes back to the loop, whose code cannot fix it, and `error` holds for the user.
 
 Read the done list from the base, never from this branch: `git show
 origin/<default>:.geneseed/done-checks.txt`, one command per line, `#` lines ignored. When the base
@@ -32,13 +33,25 @@ Put the proposal in the finding as one fenced block, one command per line and no
 explain outside the block. Report `none`.
 
 The tree is clean before you run anything. Run each command from the worktree root, in order, each
-bounded under 10 minutes by your shell tool's timeout. Report `fail` when a command exits
-non-zero: name the first failing command and copy the last 40 lines of its output. Report `fail`
-too when a command changed a tracked file, naming each file: a lint that fixes what it finds hides
-what it found. Afterwards, whatever the outcome, put the tree back: restore every tracked file the
-commands changed (`git restore --staged --worktree -- <path>`) and delete every untracked file
-they created, naming each one in the finding. A command that times out, or whose
-tool is missing, is a `fail` too: mark it `environment`, so the loop knows its code cannot fix it.
+bounded under 10 minutes by your shell tool's timeout.
+
+Environment failures come first, and they take precedence over a non-zero exit. A command that
+times out, or whose tool is missing (exit 127, or "command not found" / "is not recognized"), is
+an environment failure, never a red check: stop there, and report `error` with the finding
+starting `environment:`, naming the command and the cause. When an earlier command was already
+red, the environment failure still wins: report `error`, and name the red command and its last 40
+lines in the same finding. The loop cannot fix the environment, so a `fail` would spend a lap
+and meet the same failure again; once the user fixes it, an `amend` re-runs every command, and a
+command still red then reports `fail`.
+
+Otherwise, run every command, and report `fail` when one exits non-zero: name the first failing
+command and copy the last 40 lines of its output. Report `fail` too when a command changed a
+tracked file, naming each file: a lint that fixes what it finds hides what it found.
+
+Afterwards, on every outcome (`pass`, `fail` and `error` alike), put the tree back: restore every
+tracked file the commands changed (`git restore --staged --worktree -- <path>`) and delete every
+untracked file they created, naming each one in the finding. Never touch `FACTORY.md` or
+`LOOP.md`: they are the run's state, not a command's output.
 
 Only when every command passes, list the files the branch changed: `git diff --name-only
 --no-renames <merge-base> HEAD` (`--no-renames` lists a rename's old path too, so moving a locked

@@ -1,6 +1,6 @@
 ---
 name: merge-gate
-description: Wait for the pull request's CI, at most 30 minutes, and report green, red, or no CI at all. Never merges.
+description: Wait for the pull request's CI, at most 30 minutes, and report green, red, or no verdict (no CI, or none readable). Never merges.
 effect: read
 agent: tester
 gate: human
@@ -17,6 +17,9 @@ none. Never merge, re-run or cancel a check, and never edit any file.
 
 Report `pass` when every check is green. Report `fail` when one is red — for each failing check,
 its name and the cause read from its log (`gh run view <id> --log-failed`), never guessed from its
-title — or with "CI pending after 30 minutes" when checks still run at the bound. Report `none`
-when the repo runs no CI on this PR: the user decides whether the run goes on. Write the findings
-to a file in the OS temp directory and report that file's path.
+title. Report `none` when the repo runs no CI on this PR: the user decides whether the run goes
+on. Report `none` too, with the finding starting `environment:` and the cause, when no verdict
+can be read: checks still pending after 30 minutes, or `gh`/`glab` missing or failing. An
+environment failure is never a `fail`: a `fail` goes back to the loop, whose code cannot fix it,
+and `none` holds for the user. Write the findings to a file in the OS temp directory and report
+that file's path.
