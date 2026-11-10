@@ -277,6 +277,36 @@ test("guard: the change report tells the user of an unapproved change, once", as
   } finally { await fs.rm(fact, { force: true }) }
 })
 
+// One `opencode serve` loads the guard once per opened project, and every instance hears every
+// session. Each has its own baseline of the same machine-wide stores, so each finds the same
+// change at the same turn end. The user is told ONCE: the instances share a marker per
+// (session, files, stamps), and the first to create it reports. Four instances stand for four
+// open projects, the case that showed four identical messages. A later, different change is a
+// new marker and is reported again, once.
+test("guard: four instances that all see one change report it once between them", async () => {
+  const instances = []
+  for (let i = 0; i < 4; i += 1) {
+    const one = fakeCtx()
+    await (await load("guard")).setup(one.ctx)
+    instances.push(one)
+  }
+  const fact = path.join(cfgRoot(), "memory", "w2g-once.md")
+  await fs.mkdir(path.dirname(fact), { recursive: true })
+  await fs.rm(fact, { force: true })
+  try {
+    const turn = async (type) => { for (const one of instances) one.emit(type, { sessionID: "multi-1" }); await settle() }
+    const said = () => instances.flatMap((one) => one.calls.filter(([n]) => n === "synthetic").map(([, i]) => i))
+    await turn("session.execution.started")
+    await fs.writeFile(fact, "planted")
+    await turn("session.execution.succeeded")
+    assert.equal(said().length, 1, `four instances posted ${said().length} reports of one change`)
+    assert.equal(said()[0].sessionID, "multi-1")
+    await fs.writeFile(fact, "planted again, and longer")
+    await turn("session.execution.succeeded")
+    assert.equal(said().length, 2, "a second, different change is reported, once")
+  } finally { await fs.rm(fact, { force: true }) }
+})
+
 test("guard: a V2 with no permission domain has no prompt, so the write is refused, re-issued or not", async () => {
   const { ctx, hooks } = fakeCtx({ permission: false })
   await (await load("guard")).setup(ctx)
