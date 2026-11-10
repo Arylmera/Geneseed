@@ -71,12 +71,12 @@ describe('parseRun on real samples', () => {
     expect(w.title).toBe('opencode.json keeps 4 entries under "permission".bash')
     expect(w.body).toBe(
       'The rule behind those gates (a doctrine, or the deletion gate) is off in this build, but ' +
-        'Geneseed cannot tell its own entry from one you wrote, so it removes neither.',
+        'Geneseed has no record that it wrote them, so it leaves them.',
     )
     expect(
       w.text.startsWith('opencode.json keeps "tool a*", "tool b*", "tool c*", "tool d*"'),
     ).toBe(true)
-    expect(w.text.endsWith('Delete them by hand if you want them gone.')).toBe(true)
+    expect(w.text.endsWith('or delete them by hand.')).toBe(true)
   })
 
   it('reads an install with refused links as one phase with two grey notices', () => {
