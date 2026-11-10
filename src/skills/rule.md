@@ -44,7 +44,7 @@ Then take exactly one branch.
 3. Infer the `type` (`user` | `feedback` | `project` | `reference`) and draft the file
    per the {{MEMORY}} convention.
 4. Write the file, with no prompt, and rebuild the index
-   (`geneseed learn --consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`) so its line
+   (`geneseed memory consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`) so its line
    lands in `topics/<topic>.md` and the `MEMORY.md` map recounts. Then say in one line
    what you wrote and where, so a wrong inference is visible at once; the web console
    shows it to the user later too.

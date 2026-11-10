@@ -210,6 +210,69 @@ test('rm with no name refuses, and refusing is not deleting', () => {
   });
 });
 
+// ---------------------------------------------------------------------------------------------
+// `memory consolidate` — the index rebuild, by hand.
+//
+// THE RULE: the index is GENERATED from the fact files, so after a rebuild every top-level fact
+// has exactly one line in `topics/<topic>.md` (topic = `topic:`, else `type:`, else `misc`), a
+// line whose file is gone is dropped, and `MEMORY.md` maps each topic with its count. The
+// report counts both directions against what the index held before, so a second run over an
+// unchanged store reports +0/-0 and rewrites nothing. `seed` gives two facts without
+// frontmatter (so both land in `misc`) and an index naming both; the test adds one typed fact
+// the index does not know and one index line whose file does not exist.
+const MAP_HEAD = '# Memory Index\n\nEach topic file lists its facts; open the one the task needs.\n\n';
+const lf = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+
+test('consolidate reports both directions, writes both index levels, and is idempotent', () => {
+  withStore((d) => {
+    writeFileSync(path.join(d, 'new-fact.md'),
+      '---\nname: new-fact\ndescription: a new fact\ntype: project\n---\nbody\n', 'utf8');
+    writeFileSync(path.join(d, 'MEMORY.md'), `${INDEX}- [gone](gone.md) — stale\n`, 'utf8');
+    const r = run(d, 'consolidate');
+    assert.equal(r.status, 0, r.stderr);
+    // ON STDOUT, WITH THE VERB'S PREFIX — the hook's twin says `[learn]` on stderr. One
+    // orphan indexed (`new-fact`), one dead line pruned (`gone`); a-fact and b-fact were
+    // already pointed at, so they count as neither. No two facts share a description.
+    assert.equal(r.stdout.replace(/\r\n/g, '\n'),
+      `[memory] consolidated ${d}: +1 indexed, -1 pruned, 0 duplicate description(s)\n`);
+    assert.equal(lf(path.join(d, 'topics', 'project.md')),
+      '# project\n\n- [new-fact](../new-fact.md) — a new fact\n');
+    const misc = lf(path.join(d, 'topics', 'misc.md'));
+    assert.match(misc, /\(\.\.\/a-fact\.md\)/);
+    assert.match(misc, /\(\.\.\/b-fact\.md\)/);
+    assert.ok(!misc.includes('gone'), 'the dead line survived the rebuild');
+    const map = lf(path.join(d, 'MEMORY.md'));
+    assert.equal(map, `${MAP_HEAD}- [misc](topics/misc.md) — 2 facts\n`
+      + '- [project](topics/project.md) — 1 fact\n');
+    // The facts themselves are the input, never the output.
+    assert.equal(readFileSync(path.join(d, 'a-fact.md'), 'utf8'), 'first\n');
+    assert.equal(readFileSync(path.join(d, 'README.md'), 'utf8'), 'how the store works\n');
+
+    const again = run(d, 'consolidate');
+    assert.equal(again.status, 0, again.stderr);
+    assert.equal(again.stdout.replace(/\r\n/g, '\n'),
+      `[memory] consolidated ${d}: +0 indexed, -0 pruned, 0 duplicate description(s)\n`);
+    assert.equal(lf(path.join(d, 'MEMORY.md')), map);
+    assert.equal(lf(path.join(d, 'topics', 'misc.md')), misc);
+  });
+});
+
+// A REBUILD TAKES NO FACT NAME AND NEITHER SWITCH. Accepting `consolidate a-fact --purge` and
+// ignoring the rest would read as "purged a-fact"; so each is the verb's usage refusal (exit 2,
+// like `rm` without a name) and the index — still the flat one `seed` wrote — is untouched.
+test('consolidate refuses a fact name, --archived and --purge, and rebuilds nothing', () => {
+  withStore((d) => {
+    for (const extra of [['a-fact'], ['--archived'], ['--purge']]) {
+      const r = run(d, 'consolidate', ...extra);
+      assert.equal(r.status, 2, `${extra}: expected a usage refusal, got ${r.status}: ${r.stdout}`);
+      assert.match(r.stderr, /consolidate rebuilds the whole index/);
+      assert.equal(r.stdout, '');
+    }
+    assert.equal(readFileSync(path.join(d, 'MEMORY.md'), 'utf8'), INDEX);
+    assert.ok(!existsSync(path.join(d, 'topics')), 'a refused consolidate wrote topic files');
+  });
+});
+
 test('with no store anywhere the verb refuses and says how to point it at one', () => {
   const sb = makeSandbox('gs-memory-none-');
   try {
@@ -414,7 +477,9 @@ test('the entry dispatches `memory` at this module, with the actions the table d
   // THE ACTION LIST IS A CHOICES SET, WHICH IS WHAT MAKES A TYPO A REFUSAL RATHER THAN A NO-OP.
   // Every Geneseed CLI path exits 0 and signals through stdout, so an unrecognised action that
   // fell through to the end of the dispatch would be indistinguishable from a successful run.
-  assert.deepEqual(cmd.positionals[0].choices, ['list', 'rm']);
+  // `consolidate` joined in 5.1.1: the specs told readers to run `geneseed learn --consolidate`,
+  // a hook verb this binary refuses, so the rebuild got a door a person may use.
+  assert.deepEqual(cmd.positionals[0].choices, ['list', 'rm', 'consolidate']);
   assert.equal(cmd.positionals[0].required, true, 'the action became optional');
   assert.equal(cmd.positionals[1].nargs, '?', 'the fact name became required for `list` too');
   // Deleting for good is opt-in: both switches are flags that default off.

@@ -111,7 +111,7 @@ facts the store holds:
 
 A fact's topic is its `topic:`, else its `type:`, else `misc`, normalised to
 lowercase `[a-z0-9-]`. Both levels are generated from the fact files:
-`geneseed learn --consolidate --memory <this dir>` rebuilds them (refreshing each
+`geneseed memory consolidate --memory <this dir>` rebuilds them (refreshing each
 hook from its `description`), and the `learn` hook rebuilds them after every fact it
 writes, updates or archives. Only top-level fact files are indexed; `archive/` and
 `agents/` never are. A build moves a flat, one-line-per-fact `MEMORY.md` from an older install to

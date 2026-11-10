@@ -8,6 +8,17 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.1.1] — 2026-11-10
+
+### Added
+- **`geneseed memory consolidate`** rebuilds the memory index by hand: `MEMORY.md` and `topics/`, from the fact files on disk. It prints `+N indexed, -N pruned` and each pair of facts that share a description, and never merges them. It takes `--memory <dir>` like `list` and `rm`; a fact name, `--archived` or `--purge` is refused with exit 2.
+
+### Fixed
+- **The memory instructions name a command that runs.** The rule skill, the `memory-curator` agent and the memory README told the agent to run `geneseed learn --consolidate`, which the CLI refuses: `learn` is a hook verb. They now say `geneseed memory consolidate`. The `learn` hook still rebuilds the index after every fact it writes.
+
+### Removed
+- **`adapters/claude-code/skills/geneseed/SKILL.md`**, a stale hand-written copy of the `geneseed` skill that no install used. It told the agent to run `geneseed learn` and `geneseed context` by hand. The skill every install gets is rendered from `src/skills/geneseed.md`.
+
 ## [5.1.0] — 2026-11-09
 
 ### Added
