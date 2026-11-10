@@ -32,7 +32,7 @@ The packs always load in the same order (craft, rigor, ops, process, comms), wha
 **Dropping `process` changes what the machine does, not only what the agent reads.** The *Consent Before Push* rule in that pack is enforced at the tool boundary as well as in the prose:
 
 - On Claude Code and OpenClaude, the git hook stays wired but stops asking before a commit or push.
-- On OpenCode, a fresh install no longer gets the `git commit*` and `git push*` ask entries in `opencode.json`. On an existing install, entries that are already there are left in place and reported, because Geneseed cannot tell its own entries from ones you typed.
+- On OpenCode, a fresh install no longer gets the `git commit*` and `git push*` ask entries in `opencode.json`. On an existing install, the entries Geneseed recorded adding are removed. Entries you typed, and those on an install made before 5.2.0, are left in place and reported; build once with `--prune-gates` to remove the second kind.
 
 The refusals of destructive git and `rm -rf` belong to the always-on Rules, not to the pack, so they stay in every build. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
 

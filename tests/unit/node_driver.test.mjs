@@ -112,6 +112,8 @@ const BARE_FLAGS = [
   ['--no-ownership-gate', 'noOwnershipGate'],
   ['--no-external-gate', 'noExternalGate'],
   ['--no-test-note', 'noTestNote'],
+  // Not a switch: a one-shot act on an OpenCode config, never written to a marker.
+  ['--prune-gates', 'pruneGates'],
   // One build's instruction, not a gate switch: nothing records it or replays it.
   ['--force', 'force'],
   ['-v', 'verbose'],
@@ -770,4 +772,39 @@ test('the help choices come from the parser, not a copy', () => {
     checked += values.length;
   }
   assert.ok(checked >= 18, `only ${checked} choices were cross-checked against the help text`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// THE CLI's `build` VERB FORWARDS THE ONE-SHOT FLAGS. `geneseed build` is a second parser in
+// front of the generator: it reads its flags off js/cli-table.json and re-spells the ones it
+// knows as an argv for the driver (`cmdBuild`). A flag in the table that `cmdBuild` does not
+// forward is accepted, shown in `--help`, and does nothing. `--prune-gates` shipped that way in
+// its first draft, because every test of it called the merge function or the generator directly.
+// So this goes through the CLI binary: an OpenCode install with no `bash_gates` record keeps its
+// gates on a `--no-deletion-gate` build, and loses them when `--prune-gates` is given too.
+test('geneseed build forwards --prune-gates to the generator', () => {
+  const { sb, env } = emitSandbox('driver-prune-gates-');
+  try {
+    const cfg = path.join(sb.path, 'cfg');
+    const cli = (...flags) => spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-cli.mjs'),
+      'build', '--emit', 'opencode-global', '--theme', 'neutral', '--config-dir', cfg, ...flags],
+    { cwd: sb.path, env, encoding: 'utf8', windowsHide: true });
+    const bash = () => JSON.parse(readFileSync(path.join(cfg, 'opencode.json'), 'utf8')).permission.bash;
+    assert.equal(cli().status, 0);
+    assert.ok('git reflog expire*' in bash(), 'the fresh install wired no deletion gate to remove');
+    // An install older than the record: the gates are there, the manifest does not name them.
+    const manifest = path.join(cfg, '.geneseed-manifest.json');
+    const m = JSON.parse(readFileSync(manifest, 'utf8'));
+    delete m.bash_gates;
+    writeFileSync(manifest, JSON.stringify(m));
+
+    assert.equal(cli('--no-deletion-gate').status, 0);
+    assert.ok('git reflog expire*' in bash(), 'an unrecorded gate was removed without --prune-gates');
+    const r = cli('--no-deletion-gate', '--prune-gates');
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!('git reflog expire*' in bash()),
+      '`geneseed build --prune-gates` left the gate: the verb did not forward the flag');
+  } finally {
+    sb.cleanup();
+  }
 });

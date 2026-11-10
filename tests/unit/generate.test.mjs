@@ -1497,9 +1497,11 @@ test('a pack toggle never removes a permission entry the user may own', () => {
   // record. But `'ask'` is exactly what a user writes too, and `git commit*: ask` is an
   // ordinary thing to want, so a pack-off build DELETED a gate its owner had typed by hand.
   //
-  // REMOVAL IS GUARDED BY OWNERSHIP, AND NOTHING ON DISK RECORDS OWNERSHIP — so nothing on an
-  // existing block is removed at all. The residue is fail-CLOSED (a gate with no rule compelling
-  // it, which only ever asks too much); the reverse would be a rule with no gate.
+  // REMOVAL IS GUARDED BY OWNERSHIP, AND THIS FILE CARRIES NO RECORD OF IT (no `bash_gates`
+  // is passed, as for every install made before 5.2.0) — so nothing on the existing block is
+  // removed at all. The residue is fail-CLOSED (a gate with no rule compelling it, which only
+  // ever asks too much); the reverse would be a rule with no gate. The cells after this one
+  // state what a record, or `--prune-gates`, changes.
   withDir((d) => {
     const p = path.join(d, 'opencode.json');
     fs.writeFileSync(p, JSON.stringify({
@@ -1518,6 +1520,148 @@ test('a pack toggle never removes a permission entry the user may own', () => {
       'a user who deliberately re-scoped one of our keys had their edit reverted');
     // The invariant half (Law IV's always-loss keys) is still WIRED into a file that never had it.
     assert.equal(perm.bash['git reflog expire*'], 'ask');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `bash_gates` — the manifest's record of the `permission.bash` keys Geneseed itself added, the
+// `bash` twin of `skill_denies`. `mergeOpencodeJson`'s 11th argument, `oldGates`, is the previous
+// record; `result.bashGates` is the next one. THE RULE: a gate whose rule this build has off is
+// removed only when it is RECORDED and still reads the verdict Geneseed writes; a key that was
+// already in the file when Geneseed arrived is never recorded, so it is never removed.
+
+test('bashGates records the gates this merge added, never one that was already there', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    // The user's own `git commit*: ask` is there first; `git push*` and the Law IV keys are not.
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'git commit*': 'ask' } } }));
+    const res = {};
+    mergeOpencodeJson(p, 'AGENT.md', [...PACK_ORDER], [], [], [], res);
+    assert.ok(res.bashGates.includes('git push*'), 'the gate this merge added went unrecorded');
+    assert.ok(res.bashGates.includes('git reflog expire*'));
+    assert.ok(!res.bashGates.includes('git commit*'),
+      "a key that was already in the file was claimed as Geneseed's");
+
+    // A fresh file: the whole block is Geneseed's, so every key in it is recorded.
+    const f = path.join(d, 'fresh', 'opencode.json');
+    fs.mkdirSync(path.dirname(f));
+    const fresh = {};
+    mergeOpencodeJson(f, 'AGENT.md', [...PACK_ORDER], [], [], [], fresh);
+    assert.deepEqual([...fresh.bashGates].sort(),
+      Object.keys(JSON.parse(fs.readFileSync(f, 'utf8')).permission.bash).sort());
+
+    // A commented `.jsonc` is never rewritten, so nothing may be recorded as written.
+    const c = path.join(d, 'c', 'opencode.jsonc');
+    fs.mkdirSync(path.dirname(c));
+    fs.writeFileSync(c, '// mine\n{"permission": {"bash": {}}}');
+    const commented = {};
+    captured(() => mergeOpencodeJson(c, 'AGENT.md', [...PACK_ORDER], [], [], [], commented));
+    assert.equal(commented.bashGates, undefined);
+  });
+});
+
+test('a recorded gate goes when its rule goes off; an unrecorded or re-scoped one stays', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const bashOf = () => JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+    // The user wrote `git commit*: ask` and `curl *: ask`; Geneseed then adds the rest, all packs on.
+    fs.writeFileSync(p, JSON.stringify({ permission: { bash: { 'curl *': 'ask', 'git commit*': 'ask' } } }));
+    const on = {};
+    mergeOpencodeJson(p, 'AGENT.md', [...PACK_ORDER], [], [], [], on);
+    assert.equal(bashOf()['git push*'], 'ask');
+
+    // The user re-scopes one recorded Law IV gate to their own answer.
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    cfg.permission.bash['git gc --prune*'] = 'deny';
+    fs.writeFileSync(p, JSON.stringify(cfg));
+
+    // Process pack off AND deletion gate off: nothing of Geneseed's is wanted but the loop chain.
+    const off = {};
+    const [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', ['craft'], [], [], [], off,
+      false, [], null, on.bashGates));
+    const bash = bashOf();
+    // Recorded and still `ask`: taken back.
+    assert.ok(!('git push*' in bash), 'a recorded gate outlived its rule');
+    assert.ok(!('git reflog expire*' in bash), 'a recorded Law IV gate outlived --no-deletion-gate');
+    assert.ok(!('git push --force* main' in bash));
+    // Never recorded (the user's own, same value as ours): kept, and said so.
+    assert.equal(bash['git commit*'], 'ask', "the user's own gate was removed on the strength of its value");
+    // Recorded but re-scoped: the record licenses our entry, not theirs.
+    assert.equal(bash['git gc --prune*'], 'deny', 'a gate the user re-scoped was removed');
+    assert.equal(bash['curl *'], 'ask');
+    for (const k of ['"git commit*"', '"git gc --prune*"']) {
+      assert.ok(err.includes(k), `the kept gate ${k} went unreported:\n${err}`);
+    }
+    assert.ok(!err.includes('"git push*"'), `a removed gate was reported as kept:\n${err}`);
+    assert.match(err, /--prune-gates/, 'the warning does not name the way out');
+    // Neither kept key is Geneseed's any more, and the removed ones are gone from the record.
+    for (const k of ['git commit*', 'git gc --prune*', 'git push*', 'git reflog expire*']) {
+      assert.ok(!off.bashGates.includes(k), `${k} is still recorded`);
+    }
+
+    // Back on: the gates return, and are recorded again.
+    const again = {};
+    mergeOpencodeJson(p, 'AGENT.md', [...PACK_ORDER], [], [], [], again, true, [], null, off.bashGates);
+    assert.equal(bashOf()['git push*'], 'ask');
+    assert.ok(again.bashGates.includes('git push*'));
+    assert.equal(bashOf()['git gc --prune*'], 'deny', "the user's re-scope was reverted");
+  });
+});
+
+// `--prune-gates` (the 12th argument) is for an install with gates and NO record — every
+// `opencode.json` written before 5.2.0. For that one build the user's word stands in for the
+// record; the value check does not move, so a re-scoped entry is still theirs.
+test('--prune-gates removes unrecorded gates that still read as Geneseed writes them', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    mergeOpencodeJson(p, 'AGENT.md', [...PACK_ORDER]);            // an old install: no record kept
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    cfg.permission.bash['git gc --prune*'] = 'allow';             // the user's own answer
+    cfg.permission.bash['curl *'] = 'ask';
+    fs.writeFileSync(p, JSON.stringify(cfg));
+
+    // Without the flag: all stay (the cell above), and the warning names the flag.
+    let [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', ['craft'], [], [], [], {}, false));
+    assert.ok(err.includes('"git reflog expire*"') && /--prune-gates/.test(err), err);
+
+    const res = {};
+    [, , err] = captured(() => mergeOpencodeJson(p, 'AGENT.md', ['craft'], [], [], [], res, false,
+      [], null, [], true));
+    const bash = JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash;
+    for (const k of ['git commit*', 'git push*', 'git reflog expire*', 'git gc * --prune*',
+      'git push --force* main', 'git branch -D master']) {
+      assert.ok(!(k in bash), `${k} survived --prune-gates`);
+    }
+    assert.equal(bash['git gc --prune*'], 'allow', 'an entry the user changed was pruned');
+    assert.equal(bash['curl *'], 'ask', 'an entry Geneseed never owned was pruned');
+    // The loop chain is wanted in every build, so it stays.
+    assert.equal(bash['git push * HEAD:loop/*'], 'allow');
+    // Only the changed one is left to report.
+    assert.ok(err.includes('"git gc --prune*"'), err);
+    assert.ok(!err.includes('"git reflog expire*"'), err);
+  });
+});
+
+test('a commented .jsonc names the gates it cannot remove, and keeps them recorded', () => {
+  withDir((d) => {
+    // What this build (process off, deletion gate off) wires, plus one gate it does not want.
+    const plain = path.join(d, 'opencode.json');
+    mergeOpencodeJson(plain, 'AGENT.md', ['craft'], [], [], [], {}, false);
+    const cfg = JSON.parse(fs.readFileSync(plain, 'utf8'));
+    cfg.permission.bash['git push*'] = 'ask';
+    fs.rmSync(plain);
+    const c = path.join(d, 'opencode.jsonc');
+    const body = `// mine\n${JSON.stringify(cfg)}`;
+    fs.writeFileSync(c, body);
+    const res = {};
+    const [, out, err] = captured(() => mergeOpencodeJson(c, 'AGENT.md', ['craft'], [], [], [], res,
+      false, [], null, ['git push*']));
+    assert.equal(fs.readFileSync(c, 'utf8'), body, 'a commented .jsonc was rewritten');
+    assert.match(err, /has comments, so it is not rewritten: remove these .*"git push\*"/);
+    // Unset: the caller keeps the old record, so the gate is still Geneseed's on the next emit.
+    assert.equal(res.bashGates, undefined);
+    // The paste-in advice is for what a file is MISSING; this one is missing nothing.
+    assert.equal(out, '');
   });
 });
 
