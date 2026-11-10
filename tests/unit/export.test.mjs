@@ -43,6 +43,10 @@ test('a skill, an agent and the constitution each land in their own folder', () 
     'skills/acme-commit/SKILL.md', 'skills/acme-commit/metadata.yaml',
     'agents/personas/acme-reviewer/AGENT.md', 'agents/personas/acme-reviewer/metadata.yaml',
     'laws/acme-laws/LAWS.md', 'laws/acme-laws/metadata.yaml',
+    // The constitution is one file per category, and LAWS.md is their index.
+    'laws/acme-laws/ontology.md', 'laws/acme-laws/laws.md', 'laws/acme-laws/doctrines-craft.md',
+    'laws/acme-laws/doctrines-rigor.md', 'laws/acme-laws/doctrines-ops.md',
+    'laws/acme-laws/doctrines-process.md', 'laws/acme-laws/doctrines-comms.md',
   ]) assert.ok(file(rel), `${rel} is missing`);
   const types = plan.entities.map((e) => e.type);
   assert.ok(types.includes('skill') && types.includes('persona'));
@@ -213,4 +217,15 @@ test('the checkout profile loads, and is the default the verb names', () => {
     assert.ok(fs.existsSync(path.join(sb.path, 'o', 'skills', `${profile.prefix}commit`, 'SKILL.md')));
   } finally { process.stdout.write = orig; sb.cleanup(); }
   assert.match(chunks.join(''), /\[export\] profile: .*export\.profile\.json/);
+});
+
+test('the constitution index names every category file, and holds no rule text itself', () => {
+  const index = text('laws/acme-laws/LAWS.md');
+  const named = [...index.matchAll(/^- `([a-z-]+\.md)`/gm)].map((m) => m[1]);
+  const written = plan.files.map((f) => f.rel).filter((r) => r.startsWith('laws/acme-laws/')
+    && !/(LAWS\.md|metadata\.yaml)$/.test(r)).map((r) => r.split('/').at(-1));
+  assert.deepEqual(named.sort(), written.sort());
+  assert.equal(named.length, 7);
+  assert.ok(index.length < 1000, 'the index carries rule text');
+  assert.match(text('laws/acme-laws/laws.md'), /Sealed Secrets/);
 });

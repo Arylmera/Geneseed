@@ -56,6 +56,7 @@ import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
+import { markerLines } from '../lib/managed-block.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
@@ -1281,7 +1282,8 @@ function carrierBlockChange(p, payload) {
     if (e?.code !== 'ENOENT') return true;
   }
   const after = carrierAfter(before, payload);
-  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlock(after) !== carrierBlock(before);
+  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlock(after) !== carrierBlock(before)
+    || markerLines(after) !== markerLines(before);
 }
 
 /**

@@ -1192,7 +1192,8 @@ async function doneLine(dir, judged = true) {
 const OWN_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
   "composer.json", "Gemfile"])
 const isOwnManifest = (n) => OWN_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
-const OWN_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g
+// Whole-line markers: js/lib/managed-block.mjs BLOCK_RE_SOURCE, by value (a plugin imports nothing).
+const OWN_BLOCK_RE = /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/gm
 const OWN_SECTION_RE = /^## Ownership[ \t]*\r?$/m
 const OWN_DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m
 let ownershipGateOffOnce = null

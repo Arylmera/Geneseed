@@ -35,6 +35,7 @@
  */
 import { existsSync, mkdirSync, renameSync, rmSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
+import { blockDelimiters, blockSpan } from '../lib/managed-block.mjs';
 import { readText, writeText, isOsError } from '../lib/fs.mjs';
 import {
   jsonDumps, jsonDumpsCompact, jsonDumpsIndent, parseJson, deepEquals, formatRepr,
@@ -1350,35 +1351,8 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
   return flush();
 }
 
-const delimiters = (blockId) => [`<!-- BEGIN ${blockId} -->`, `<!-- END ${blockId} -->`];
-
-/**
- * Where the managed block sits in `text`: `[start, stop]`, from the first character of its BEGIN
- * line to the last of its END line (no trailing newline), or null when the file has none.
- *
- * A MARKER IS A WHOLE LINE. The block is written with each marker alone on its line, so that is
- * the only shape read back. Matching the marker text anywhere took a user's sentence ABOUT the
- * block ("everything below the `<!-- BEGIN GENESEED -->` line is generated") for the block's
- * start: the next emit replaced everything from that sentence down to the real END, the user's
- * own rules with it, and said nothing.
- *
- * THE PAIR IS the first END line with a BEGIN line above it, and the LAST such BEGIN. A lone
- * BEGIN left higher up (a hand-deleted block's first line) therefore stays the user's text, with
- * whatever they wrote under it. A file with no such pair has no block: the write appends one,
- * and the remove and the read leave the file alone.
- */
-function blockSpan(text, blockId) {
-  const [begin, end] = delimiters(blockId);
-  let at = 0;
-  let start = -1;
-  for (const line of text.split('\n')) {
-    const bare = line.replace(/[ \t]+$/, '');
-    if (bare === begin) start = at;
-    else if (bare === end && start >= 0) return [start, at + line.length];
-    at += line.length + 1;
-  }
-  return null;
-}
+// Where the block is: `blockSpan` (js/lib/managed-block.mjs), shared with the hook-side readers.
+const delimiters = blockDelimiters;
 
 /**
  * `_build_settings._managed_block_write` — 'created' | 'updated' | 'merged'.

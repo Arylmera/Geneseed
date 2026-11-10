@@ -20,6 +20,7 @@ import os from 'node:os';
 import { printErr, withDiscardableStderr, isDir, isFile, readText } from '../lib/fs.mjs';
 import { toPlatformPath, normcase } from '../lib/paths.mjs';
 import { sharedPaths, machineDir } from '../lib/machine-dir.mjs';
+import { blockOf } from '../lib/managed-block.mjs';
 import { mainWorktreeOf } from './gitref.mjs';
 
 /** The marker a project built `--shared-tier on` carries, and its one reader. The OpenCode context plugin holds a copy. */
@@ -517,12 +518,9 @@ export const CARRIERS = [
   path.join('rules', 'geneseed.md'), 'AGENTS.md',
 ];
 
-// `managedBlockWrite`'s delimiters (./settings.mjs, which this module may not import). First block
-// only, as that writer reads it.
-const CARRIER_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/;
 const SHARED_CARRIER_RE = /(?:^|[\\/])(?:CLAUDE|AGENTS)\.md$/i;
 /** The managed block as a reader sees it, `''` with none. */
-export const carrierBlock = (text) => CARRIER_BLOCK_RE.exec(text)?.[0] ?? '';
+export const carrierBlock = (text) => blockOf(text);
 /** The file a Windows write lands on: `CLAUDE.md::$DATA` and `CLAUDE.md.` both write `CLAUDE.md`. */
 export function carrierName(file) {
   const s = String(file);

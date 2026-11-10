@@ -11,7 +11,8 @@
  *   <skillsDir>/<name>/references/     the skill's side files
  *   <agentsDir>/<name>/AGENT.md        the same frontmatter rule
  *   <agentsDir>/<name>/metadata.yaml
- *   <lawsDir>/<name>/LAWS.md           the whole constitution, as one entity
+ *   <lawsDir>/<name>/LAWS.md           the constitution's index, one entity
+ *   <lawsDir>/<name>/<category>.md     ontology, laws, and one file per doctrine pack
  *
  * ONE WAY. The source stays `src/`; an export is a render of it, as an install is. Nothing reads
  * an exported folder back.
@@ -303,12 +304,38 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
   if (aliases.length) skipped.push(`${aliases.sort().join(', ')}: aliases, each a second name for a skill exported once`);
 
   if (profile.laws) {
-    // The constitution whole: ontology, laws, then every doctrine pack, as the install ships them.
-    const part = (prefix) => items.filter((it) => it.text !== null && srcRel(it).startsWith(`${prefix}/`)
-      && !/README\.md$/.test(srcRel(it))).map((it) => stripSkillBodyLinks(lstripNewlines(it.text)).replace(/\s+$/, ''));
-    const text = [...part('ontology'), ...part('laws'), ...part('doctrines')].join('\n\n---\n\n');
+    // The constitution, ONE FILE PER CATEGORY (the user asked, 2026-11: a reader looking for a
+    // doctrine pack should not scroll through the laws to find it): the ontology, the laws, and
+    // each doctrine pack, as the install ships them. `LAWS.md` is the index a reader opens
+    // first, naming each file and what it holds.
     const dir = `${profile.lawsDir}/${lawsName}`;
-    files.push({ rel: `${dir}/LAWS.md`, text: `${text}\n` });
+    const parts = [];
+    const packs = cfg.doctrines;   // the pack order the carrier lists them in
+    for (const it of items) {
+      const m = /^(ontology|laws|doctrines)\/([a-z0-9-]+)\.md$/.exec(srcRel(it));
+      if (!m || it.text === null) continue;
+      const [, tier, stem] = m;
+      const body = stripSkillBodyLinks(lstripNewlines(it.text)).replace(/\s+$/, '');
+      const rules = (body.match(/^### /gm) || []).length;
+      // A rendered tier file opens on prose, with no title of its own: inside an install the
+      // carrier's section heading is its title. Standing alone it needs one.
+      const pack = /^\*\*(.+?)\*\* — (.+?)\.?$/m.exec(body);
+      const [title, what] = tier === 'doctrines'
+        ? [`Doctrines — ${pack?.[1] ?? stem}`, `${pack?.[2] ?? 'a doctrine pack'} (${rules} rules)`]
+        : tier === 'laws'
+          ? ['Laws', `the invariants, always in force (${rules} rules)`]
+          : ['Ontology', 'how the agent thinks, decides and behaves'];
+      const file = tier === 'doctrines' ? `doctrines-${stem}.md` : `${tier}.md`;
+      parts.push({ rank: ['ontology', 'laws'].indexOf(tier) >= 0 ? ['ontology', 'laws'].indexOf(tier) : 2 + packs.indexOf(stem), file, title, what });
+      files.push({ rel: `${dir}/${file}`, text: `# ${title}\n\n${body}\n` });
+    }
+    parts.sort((x, y) => x.rank - y.rank);
+    files.push({ rel: `${dir}/LAWS.md`, text: [
+      `# ${lawsName}`, '',
+      'The constitution the skills and agents of this collection cite by principle name. One '
+        + 'file per category:', '',
+      ...parts.map((x) => `- \`${x.file}\` — ${x.title}: ${x.what}`), '',
+    ].join('\n') });
     files.push({ rel: `${dir}/metadata.yaml`, text: metadataYaml({
       ...base, type: 'laws', name: lawsName, requires: [], version: release,
       description: 'The constitution the exported skills and agents cite by principle name: '

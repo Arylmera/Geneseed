@@ -1925,7 +1925,8 @@ function gateConfig(p) {
 // when neither the file nor the patch holds the opening delimiter, since a line patch cannot form one.
 const CARRIER_BEGIN = "<!-- BEGIN GENESEED -->"
 const CARRIER_REPLAY_CAP = 1024 * 1024
-const carrierBlockOf = (text) => /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/.exec(text)?.[0] ?? ""
+// Whole-line markers: js/lib/managed-block.mjs BLOCK_RE_SOURCE, by value (a plugin imports nothing).
+const carrierBlockOf = (text) => /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/m.exec(text)?.[0] ?? ""
 function carrierName(file) {
   const s = String(file)
   const at = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1
@@ -2272,7 +2273,7 @@ const OWNERSHIP_SEEN = new Set()
 const OWNERSHIP_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
   "composer.json", "Gemfile"])
 const isManifest = (n) => OWNERSHIP_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
-const MANAGED_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g
+const MANAGED_BLOCK_RE = /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/gm
 const OWNERSHIP_SECTION_RE = /^## Ownership[ \t]*\r?$/m
 const OWNERSHIP_TAIL = "Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per " +
   "install: rebuild with `--no-ownership-gate`. Offer the full documentation " +
