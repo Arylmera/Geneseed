@@ -138,6 +138,12 @@ stays 48 KB. The Claude hook renders the wiki as the OpenCode plugin does, with 
 lines, inside its own budget: its lazy listing folds and cuts with a count, and it reads no note
 headings.
 
+**Gate logic is copied into the OpenCode plugins by a tool.** A plugin is one self-contained
+file and cannot import `js/`, so the loss gate, the gate texts, the shell-write reader (with
+`shellReading`), the test-weakening rules and `runsUnpiped` live in `js/hosts/` and are copied
+between marker comments. After changing one, `node tests/twins.mjs --write`; `--check` names a
+copy that drifted, and the plugin tests fail on it.
+
 **Every OpenCode plugin serves two plugin APIs from one file.** OpenCode 2 loads only
 `export default { id, setup }`; V1 (>= 1.3.4) loads `{ id, server }`; each ignores the other's
 key. So each `adapters/opencode/plugins/*.js` exports `{ id: <file stem>, server, setup }`, and

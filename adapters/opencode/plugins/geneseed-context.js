@@ -1231,30 +1231,36 @@ async function runtimeFloorLine(dir) {
 }
 
 function runsUnpiped(command, line) {
-  const cmd = String(command).replace(/[ \t]+/g, " ")
+  const cmd = String(command).replace(/[ \t]+/g, ' ');
   for (let i = cmd.indexOf(line); i !== -1; i = cmd.indexOf(line, i + 1)) {
-    const next = cmd[i + line.length]
-    if (next !== undefined && !/[\s;&|]/.test(next)) continue
-    const head = cmd.slice(0, i)
-    if (!/(^|&&|\|\||;|\n) ?$/.test(head)) continue
-    let quote = "", esc = false
+    const next = cmd[i + line.length];
+    if (next !== undefined && !/[\s;&|]/.test(next)) continue;
+    const head = cmd.slice(0, i);
+    // Not after `||`: `true || npm test` never runs the check.
+    if (!/(^|&&|(?<!\|)\|(?!\|)|;|\n) ?$/.test(head.replace(/\|\| ?$/, '\u0000'))) continue;
+    let quote = '', esc = false;
     for (const ch of head) {
-      if (esc) esc = false
-      else if (ch === "\\" && quote !== "'") esc = true
-      else if (quote) { if (ch === quote) quote = "" }
-      else if (ch === '"' || ch === "'") quote = ch
+      if (esc) esc = false;
+      else if (ch === '\\' && quote !== "'") esc = true;
+      else if (quote) { if (ch === quote) quote = ''; }
+      else if (ch === '"' || ch === "'") quote = ch;
     }
-    if (quote) continue
-    const rest = cmd.slice(i + line.length)
-    let piped = false
+    if (quote) continue;
+    const rest = cmd.slice(i + line.length);
+    let piped = false;
     for (let j = 0; j < rest.length; j += 1) {
-      const two = rest.slice(j, j + 2)
-      if (two === "&&" || two === "||" || rest[j] === ";" || rest[j] === "\n") break
-      if (rest[j] === "|") { piped = true; break }
+      const two = rest.slice(j, j + 2);
+      if (two === '&&' || two === '||' || rest[j] === ';' || rest[j] === '\n') break;
+      if (rest[j] === '|') { piped = true; break; }
     }
-    if (!piped && !/\|\||[;\n] ?(?:true|:|exit(?: 0)?)(?= ?(?:$|[;&|\n]))/.test(rest)) return true
+    // MASKED when the line's exit status is not the check's: a `||` after it; behind `;` or a
+    // newline, a command that always succeeds (`true`, `:`, `exit`, and `echo`/`printf`, as in
+    // the common `npm test; echo "exit: $?"`, which exits 0 on a red suite); or a trailing lone
+    // `&`, which backgrounds the check. A real next command is not a mask, and `&&` keeps the status.
+    const masked = /\|\||[;\n] ?(?:true|:|exit(?: 0)?|(?:echo|printf)(?: [^;&|\n]*)?)(?= ?(?:$|[;&|\n]))|(?<!&)& ?$/.test(rest);
+    if (!piped && !masked) return true;
   }
-  return false
+  return false;
 }
 
 // The twin of hooks-done.mjs's `groupPasses`: a form runs unpiped, and no flag in `refuse`
