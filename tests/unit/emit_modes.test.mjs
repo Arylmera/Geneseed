@@ -114,14 +114,29 @@ test('the files emit writes the core tree', () => {
   });
 });
 
-test('a rebuild prunes stale files in an owned directory', () => {
+// OWNERSHIP IS PER FILE, by the list the bundle keeps of what it wrote (`bundleFiles`,
+// js/hosts/owned.mjs). A rebuild removes a file an earlier build recorded and this one no longer
+// ships; a file no build recorded is the user's and stays. It used to be per DIRECTORY, a wipe
+// of `agents/` and its siblings before every rebuild, and for an OpenCode project emit that
+// directory is the repository's own `agents/`: the user's files in it were deleted.
+test('a rebuild prunes a file an earlier build recorded, and keeps one it did not', () => {
   withDir((d) => {
     const out = path.join(d, 'Harness');
     buildBundle(out);
-    const stale = path.join(out, 'agents', 'ghost-agent.md');
-    writeFileSync(stale, 'not from source', 'utf8');
-    buildBundle(out);                                   // owned dirs are wiped and rewritten
-    assert.ok(!existsSync(stale), 'a stale file in an owned dir survived a rebuild');
+    // A retired agent: on disk and in the record, as the build that shipped it left it.
+    const retired = path.join(out, 'agents', 'ghost-agent.md');
+    writeFileSync(retired, 'shipped by an older source tree', 'utf8');
+    const marker = path.join(out, '.geneseed-srcdirs.json');
+    const record = JSON.parse(readFileSync(marker, 'utf8'));
+    assert.ok(record.files.includes('agents/reviewer.md'), 'the build recorded no file list');
+    record.files.push('agents/ghost-agent.md');
+    writeFileSync(marker, JSON.stringify(record), 'utf8');
+    const mine = path.join(out, 'agents', 'support_bot.py');
+    writeFileSync(mine, 'the user wrote this', 'utf8');
+
+    buildBundle(out);
+    assert.ok(!existsSync(retired), 'a recorded file the source no longer ships survived a rebuild');
+    assert.equal(readFileSync(mine, 'utf8'), 'the user wrote this');
     assert.ok(existsSync(path.join(out, 'agents', 'reviewer.md')));
   });
 });

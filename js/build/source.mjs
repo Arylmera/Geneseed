@@ -601,7 +601,7 @@ export const GATE_SWITCHES = [
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
   excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false),
-  pruneGates = false, ...switches
+  pruneGates = false, force = false, ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -633,6 +633,8 @@ export function makeCfg({
     kits: Array.isArray(kits) ? [...kits] : [],
     // The shared tier read by a PROJECT install (`--shared-tier on`); `on` from the flag, a boolean from a read-back.
     sharedTier: sharedTier === true || sharedTier === 'on',
+    // `--force`, for this one build: only a literal `true` forces. Never an axis of the install.
+    force: force === true,
     // The gate switches (`GATE_SWITCHES`: `secretsGate`, `doneGate`, `deletionGate`), each armed
     // unless its `no*` arg says so in so many words: only a literal `true` disarms, so every
     // caller that never heard of a switch keeps the gate.

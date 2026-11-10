@@ -56,6 +56,7 @@ import path from 'node:path';
 import { printOut as out, printErr as err, withDiscardableStderr } from '../lib/fs.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
+import { markerLines } from '../lib/managed-block.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
   GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
@@ -763,6 +764,68 @@ export function shellWriteTargets(command, cwd, ps = false) {
   }
   return [...found];
 }
+/**
+ * THE ONE READING OF A COMMAND every gate below is handed. The lexers here are non-POSIX on
+ * purpose (`SCAN_TOKEN_RE`: a backslash is never an escape, so PowerShell's `"C:\"` closes), and
+ * that is wrong for the shell most commands run in. In bash:
+ *   - a backslash-newline joins two lines, so `rm -rf \⏎ /` is one command. Read as two, the
+ *     operand landed in a segment with no program and every gate passed it;
+ *   - `\'` and `\"` outside single quotes are a literal quote, not a delimiter. Read as one, the
+ *     everyday `'it'\''s'` left the quote state inverted and hid the rest of the line as data,
+ *     `&& rm -rf /` included.
+ * So for a bash-like shell the continuation is joined and an escaped quote or separator is
+ * replaced by `_`, which is inert to every lexer and keeps every other character where it was.
+ * For PowerShell only its own continuation, a backtick-newline, is joined, and nothing else
+ * changes: there the backslash is a path separator.
+ *
+ * `shell` is what the caller knows: `'bash'` (Claude's `Bash` tool, Git Bash on Windows too),
+ * `'powershell'`, or null. Unknown is read as bash unless the platform is Windows or a
+ * `Verb-Noun` word says PowerShell.
+ */
+export function shellReading(command, shell = null) {
+  const bashLike = shell === 'bash'
+    || (shell !== 'powershell' && process.platform !== 'win32' && !PS_CUE_RE.test(command));
+  if (!bashLike) return command.replace(/`\r?\n/g, '');
+  if (!command.includes('\\')) return command;
+  let out = '';
+  let quote = '';
+  const tags = [];   // heredocs opened on this line: `[stripTabs, tag]`
+  for (let i = 0; i < command.length; i += 1) {
+    const ch = command[i];
+    const next = command[i + 1];
+    // A heredoc body is copied as it is: under a quoted tag a backslash is literal, and the
+    // gates read a body as data or, for `bash <<EOF`, as the command it is.
+    if (!quote && ch === '<' && next === '<' && command[i + 2] !== '<' && command[i - 1] !== '<') {
+      const m = /^<<(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/.exec(command.slice(i));
+      if (m) { tags.push([m[1], m[3]]); out += m[0]; i += m[0].length - 1; continue; }
+    }
+    if (!quote && ch === '\n' && tags.length) {
+      out += ch;
+      while (tags.length) {
+        const end = command.indexOf('\n', i + 1);
+        const line = command.slice(i + 1, end < 0 ? command.length : end);
+        out += line + (end < 0 ? '' : '\n');
+        i = end < 0 ? command.length : end;
+        const bare = line.replace(/\r$/, '');
+        if ((tags[0][0] ? bare.replace(/^\t+/, '') : bare) === tags[0][1]) tags.shift();
+        if (end < 0) break;
+      }
+      continue;
+    }
+    if (ch === '\\' && quote !== "'" && next !== undefined) {
+      const eol = next === '\n' ? 1 : (next === '\r' && command[i + 2] === '\n' ? 2 : 0);
+      if (eol) { i += eol; continue; }
+      // In double quotes only `\"` matters to a lexer; outside, a quote or a separator does.
+      out += ch + ((quote ? next === '"' : /["';|&]/.test(next)) ? '_' : next);
+      i += 1;
+      continue;
+    }
+    if (quote) { if (ch === quote) quote = ''; } else if (ch === '"' || ch === "'") quote = ch;
+    out += ch;
+  }
+  return out;
+}
+
 // ---- shell-write twin: END
 
 /**
@@ -802,10 +865,47 @@ function shellStoreReason(args, command, payload) {
   return null;
 }
 
+// The git verbs that neither commit nor push nor run a command of the caller's choosing, and the
+// programs that only read. `consentBenign` is the only reader.
+const GIT_READ_VERBS = new Set(['log', 'diff', 'show', 'status', 'stash', 'blame', 'grep', 'ls-files',
+  'rev-parse', 'reflog', 'shortlog', 'describe', 'branch', 'fetch', 'help', 'ls-remote', 'cat-file']);
+const READ_PROGS = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'egrep', 'rg', 'ls', 'wc',
+  'sort', 'uniq', 'cut', 'file', 'stat', 'true', 'cd']);
+
+/**
+ * True when a command that trips `GIT_GATE_RE` provably neither commits nor pushes: the regex
+ * reads words, so `git log | grep push`, `cat .git/hooks/pre-commit.sample`, `git stash push`
+ * and `git diff -- docs/commit-style.md` all asked, and a gate that asks when nothing is at
+ * stake trains the click-through it exists to prevent.
+ *
+ * FAIL-CLOSED: the ask stands unless EVERY segment is one of two known shapes, a program that
+ * only reads, or `git` with a read verb reached past `-C <dir>`/`--no-pager` alone. Anything
+ * else keeps the ask: another program (`sh`, `xargs`, `sudo`: it may run the words), another
+ * git option (`-c alias.x=…`), a verb outside the list (an alias may be a commit), a
+ * substitution, or a redirection into a file.
+ */
+function consentBenign(command) {
+  if (/\$\(|`|[<>]/.test(command)) return false;
+  for (const seg of scanSegments(command)) {
+    const toks = stripStructure(seg.match(SCAN_TOKEN_RE) || []).map(unquote);
+    if (!toks.length) continue;
+    const prog = toks[0].toLowerCase();
+    if (READ_PROGS.has(prog)) continue;
+    if (prog !== 'git') return false;
+    let i = 1;
+    while (i < toks.length && (toks[i] === '--no-pager' || toks[i] === '-C')) i += toks[i] === '-C' ? 2 : 1;
+    if (!GIT_READ_VERBS.has(toks[i])) return false;
+    // `git stash push` and `git branch` take no option that runs a command; `--exec`/`-c` do.
+    if (toks.slice(i + 1).some((t) => /^(?:--exec|--upload-pack|--receive-pack|-c$|--ext)/.test(t))) return false;
+  }
+  return true;
+}
+
 function gitDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
-  const { command } = ti;
-  if (typeof command !== 'string') return 0;
+  if (typeof ti.command !== 'string') return 0;
+  const tool = payload && payload.tool_name;
+  const command = shellReading(ti.command, tool === 'Bash' ? 'bash' : tool === 'PowerShell' ? 'powershell' : null);
   // The agent's own words, for the asks where they are no conflict of interest (`gateText`'s `quote`).
   const says = typeof ti.description === 'string' ? ti.description : '';
   // Law IV's catastrophic class (a root, a drive, the home dir, a disk): no state makes it safe,
@@ -842,7 +942,7 @@ function gitDecide(args, payload) {
   // `--no-consent`: the process pack (or process 5 alone) is off, so the commit/push ask has
   // no rule behind it — but Law IV above is universal and has already run. Checked before
   // `loopExempt` so a non-git command, or one with consent off, never pays for the whitelist.
-  if (args.noConsent || !GIT_GATE_RE.test(command)) return 0;
+  if (args.noConsent || !GIT_GATE_RE.test(command) || consentBenign(command)) return 0;
   // Consent Before Push: a loop launched on its own `loop/*` branch is a named batch for a
   // fixed set of commit/push forms on that branch only — never a merge into anything shared.
   if (loopExempt(command, (payload && payload.cwd) || process.cwd())) return 0;
@@ -1182,7 +1282,8 @@ function carrierBlockChange(p, payload) {
     if (e?.code !== 'ENOENT') return true;
   }
   const after = carrierAfter(before, payload);
-  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlock(after) !== carrierBlock(before);
+  return after === null || after.length > CARRIER_REPLAY_CAP || carrierBlock(after) !== carrierBlock(before)
+    || markerLines(after) !== markerLines(before);
 }
 
 /**

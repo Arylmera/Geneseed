@@ -2092,19 +2092,33 @@ test('renaming DIR_AGENTS and DIR_SKILLS together prunes both old dirs', () => {
 // TWO builds into the same `out`, and only through something the second build does not re-emit.
 //
 // Two directions, because the constant is spent on two different things in `build()`: the
-// pre-emit wipe of the managed dir, and the `resolvedSrcDirs` entry that reaches the
-// `.geneseed-srcdirs.json` marker and licenses the next build's rename prune. Deleting an entry
-// breaks both; asserting both is what stops a half-fix from reading as green.
+// prune of a recorded file the source no longer ships, which reaches only into an owned dir, and
+// the `resolvedSrcDirs` entry that reaches the `.geneseed-srcdirs.json` marker and licenses the
+// next build's rename prune. Deleting an entry breaks both; asserting both is what stops a
+// half-fix from reading as green.
+//
+// THE PRUNE GOES BY THE BUNDLE'S FILE LIST, not by the directory: the marker's `files` names
+// what the previous build wrote, and only a name on it is removed. A file in an owned dir that
+// no build recorded is the user's (an OpenCode project emit renders into the repository root,
+// where `doctrines/` may be theirs) and survives every rebuild.
 
-test('the ontology and doctrines dirs are owned — a stale file in either is wiped on rebuild', () => {
+test('the ontology and doctrines dirs are owned — a recorded file the source dropped is pruned on rebuild', () => {
   withDir((d) => {
     const out = path.join(d, 'bundle');
     buildInto(out);                       // establishes the bundle (.geneseed-theme + version)
 
-    // A file the source does not produce, in each of the two new dirs. Standing in for a pack
-    // renamed or dropped upstream: nothing re-emits it, so only the wipe can remove it.
+    // A file the source does not produce, in each of the two new dirs, on the record as an
+    // older build's. Standing in for a pack renamed or dropped upstream: nothing re-emits it,
+    // so only the prune can remove it.
     const strays = ['ontology', 'doctrines'].map((dir) => path.join(out, dir, 'gone.md'));
     for (const p of strays) fs.writeFileSync(p, 'left over from an older source tree');
+    const marker = path.join(out, '.geneseed-srcdirs.json');
+    const record = JSON.parse(fs.readFileSync(marker, 'utf8'));
+    record.files.push('ontology/gone.md', 'doctrines/gone.md');
+    fs.writeFileSync(marker, JSON.stringify(record));
+    // And one nobody recorded, beside them: the user's.
+    const mine = path.join(out, 'doctrines', 'house-rules.md');
+    fs.writeFileSync(mine, 'user content');
 
     buildInto(out);
     for (const p of strays) {
@@ -2112,8 +2126,9 @@ test('the ontology and doctrines dirs are owned — a stale file in either is wi
         `${path.basename(path.dirname(p))}/ is not in OWNED_SRC_DIRS — a file the source no `
         + 'longer produces survived a rebuild and would sit in the install forever');
     }
-    // The control: the wipe is a wipe-and-regenerate, not a wipe. Without this an emit that
-    // deleted the two dirs and never rewrote them would pass the loop above.
+    assert.equal(fs.readFileSync(mine, 'utf8'), 'user content');
+    // The control: the prune removes the dropped file and nothing else. Without this an emit
+    // that emptied the two dirs and never rewrote them would pass the loop above.
     assert.ok(isFile(out, 'ontology', 'universal.md'));
     for (const pack of ['craft', 'rigor', 'ops', 'process', 'comms']) {
       assert.ok(isFile(out, 'doctrines', `${pack}.md`));
@@ -2153,20 +2168,29 @@ test('a rename round-trips back without leftovers', () => {
   });
 });
 
-test('a first build into a non-bundle dir never wipes user content', () => {
-  // The prior-dirs marker may only prune inside an ESTABLISHED bundle. A first render into an
-  // arbitrary repo must not delete a directory the user owns just because the name collides.
+test('a first build into a non-bundle dir neither wipes nor overwrites user content', () => {
+  // A first render into an arbitrary repo must not delete a directory the user owns just
+  // because the name collides, and must not overwrite a FILE of theirs whose name collides
+  // either: a file the build finds and did not write is the user's.
   withDir((d) => {
     const out = path.join(d, 'repo');
     fs.mkdirSync(path.join(out, 'laws'), { recursive: true });
     fs.writeFileSync(path.join(out, 'laws', 'mine.md'), 'user content');
+    fs.writeFileSync(path.join(out, 'laws', 'universal.md'), 'the user\'s own bylaws');
     const { out: said } = buildInto(out);   // no .geneseed-theme / -version yet
     assert.ok(isFile(out, 'laws', 'mine.md'), 'a first build deleted a user directory');
-    // The reference only redirected this warning away to keep its output clean. Asserting it
-    // instead is what keeps the test from passing vacuously: without it, a build that never
-    // looked at `laws/` at all satisfies the line above just as well as one that looked and
-    // deliberately kept its hands off.
-    assert.match(said, /already exists and .* is not a Geneseed bundle/);
+    assert.equal(fs.readFileSync(path.join(out, 'laws', 'universal.md'), 'utf8'),
+      'the user\'s own bylaws');
+    // The warning is what keeps the test from passing vacuously: without it, a build that
+    // never looked at `laws/` at all satisfies the lines above just as well as one that looked
+    // and deliberately kept its hands off.
+    assert.match(said, /kept 1 existing file\(s\) Geneseed did not write .*laws\/universal\.md/);
+    // And the second build still keeps them: the first one's markers used to turn the next
+    // rebuild into a wipe of the whole directory.
+    buildInto(out);
+    assert.ok(isFile(out, 'laws', 'mine.md'), 'the second build deleted a user file');
+    assert.equal(fs.readFileSync(path.join(out, 'laws', 'universal.md'), 'utf8'),
+      'the user\'s own bylaws');
   });
 });
 

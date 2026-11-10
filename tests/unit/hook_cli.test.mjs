@@ -194,7 +194,7 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // SessionEnd) long after the reference: its absolute gate is tests/unit/activity_writer.test.mjs.
 // `factory` is the loop engine one level up, with no Python original either: its absolute gate
 // is tests/unit/factory_cli.test.mjs.
-const NATIVE = ['activity', 'catalog', 'factory', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
+const NATIVE = ['activity', 'catalog', 'export', 'factory', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

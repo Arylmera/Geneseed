@@ -30,15 +30,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         node: ["22"]
+        shard: [""]
         # Node 24 too, on Linux: it is what the release job runs, and until now the suite only
         # met it at release time — the npm 12 `pack --json` break surfaced exactly there.
+        #
+        # WINDOWS RUNS THE SUITE IN THREE SHARDS. It took about 14 minutes there against 2 on
+        # Linux (837 s, 2026-11-10): process creation is CPU-bound on Windows, so more slots in
+        # one job bought nothing (see CONCURRENCY below), and the job was the wait on every PR.
+        # `node --test --test-shard=i/n` splits by FILE, so each test still runs exactly once.
+        # The steps that do not depend on the split (lint, typecheck, doctor, fuzz, the mutation
+        # anchors) run in the first shard only; the shim check runs in each, after its own tests.
         include:
           - os: ubuntu-latest
             node: "24"
+            shard: ""
+          - os: windows-latest
+            node: "22"
+            shard: "1/3"
+          - os: windows-latest
+            node: "22"
+            shard: "2/3"
+          - os: windows-latest
+            node: "22"
+            shard: "3/3"
     runs-on: ${{ matrix.os }}
-    name: validate (${{ matrix.os }}, node ${{ matrix.node }})
+    name: validate (${{ matrix.os }}, node ${{ matrix.node }}${{ matrix.shard && format(', shard {0}', matrix.shard) || '' }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -61,13 +79,13 @@ jobs:
       # Lint and tsc stay COLD here: their caches live in node_modules/.cache, which CI never
       # restores, so the flags in package.json speed up only a local run.
       - name: lint
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
         run: npm run lint
       # TYPES, FROM INFERENCE AND JSDoc. `tsc --noEmit` over js/ and bin/ with `checkJs`
       # (tsconfig.json says why strict is off). A wrong call shape, a missing property, an
       # argument a function does not take — the class of slip a reader cannot check by eye.
       - name: typecheck
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
         run: npm run typecheck
       # ON BOTH OPERATING SYSTEMS, which is stronger than the gate this replaces: the same
       # sweep used to run here from the reference and, bare, from a Linux-only cell job.
@@ -75,7 +93,7 @@ jobs:
       # `npm` is not on PATH, so it is not a gate this job can lean on — a conditional skip is
       # exactly the shape that turns a red gate green without a diff.
       - name: doctor (every theme + parity + authoring gates)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
         run: node bin/geneseed-cli.mjs doctor --all
       # THE FENCE AROUND THE MACHINE TIER. The change report writes only to a tier that exists, so
       # on a fresh runner a test running with the real home leaves no trace: the leak that reached
@@ -116,15 +134,19 @@ jobs:
         shell: bash
         env:
           CONCURRENCY: ${{ runner.os == 'Windows' && '3' || '8' }}
+          SHARD: ${{ matrix.shard }}
         run: |
           log="$(mktemp)"
-          node --test --test-concurrency="$CONCURRENCY" --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
+          node --test --test-concurrency="$CONCURRENCY" ${SHARD:+--test-shard="$SHARD"} --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
           # The floor is COMPUTED: 90% of the `test(`/`it(` calls written in the tracked test
           # files. A fixed 500 let the suite lose half itself (a directory rename) and stay green;
           # a computed one needs nobody to maintain it and still ignores small churn.
           written="$(git ls-files 'tests/*.test.mjs' 'tests/**/*.test.mjs' | xargs grep -hcE '^\s*(test|it)\(' | awk '{s+=$1} END{print s+0}')"
           floor=$(( written * 9 / 10 ))
+          # A shard holds 1/n of the FILES, not of the tests, so its own floor is half its even
+          # share: still far above the zero a glob that stopped matching would report.
+          if [ -n "$SHARD" ]; then floor=$(( floor / ${SHARD#*/} / 2 )); fi
           echo "the suite reported $n tests (floor $floor, from $written written)"
           if [ "$n" -lt "$floor" ]; then
             echo "only $n tests ran — the glob has stopped matching part of the suite"
@@ -151,7 +173,7 @@ jobs:
       # generated garbage through the real entry point, a process per case — which is why it is
       # outside the unit glob. A failure prints fast-check's seed and the shrunk input.
       - name: fuzz the hook gates (fuzz/*.fuzz.mjs)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
         run: node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
 
       # THE MUTATION MATRIX'S ANCHORS, AND ONLY ITS ANCHORS. `tests/mutate.mjs` is not run here
@@ -164,7 +186,7 @@ jobs:
       # also the one nothing else reported. `--verify` answers only "does every anchor still
       # resolve", writes nothing, runs no gate, and takes about 50 ms.
       - name: the mutation matrix still describes this code
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (matrix.shard == '' || matrix.shard == '1/3') }}
         run: node tests/mutate.mjs --verify
 
       # ⚠ THE PACKAGING SUITE AGAIN, UNDER THE npm THE RELEASE ACTUALLY USES. Everything above

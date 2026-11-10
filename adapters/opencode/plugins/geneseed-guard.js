@@ -891,7 +891,16 @@ function lossReason(segments, cwd, { always = true, split } = {}) {
   /** The first loss among `segs`, run from `start`; a substitution body is judged as a command. */
   const judge = (segs, start, depth = 0) => {
     let dir = start;
-    for (const raw of segs.map(stripStructure)) {
+    // A `cd` inside `( … )` ends with the subshell, and `popd` goes back somewhere this reader
+    // never recorded. Both used to leave `dir` where the `cd` put it, so a removal after them
+    // was looked for in the wrong folder, found absent, and passed. Now the directory is
+    // unknown from there on, which asks for a relative path.
+    let nest = 0;
+    let cdInside = false;
+    for (const [n, raw] of segs.map(stripStructure).entries()) {
+      const bare = segs[n].filter((t) => !/^["']/.test(t));
+      const opens = bare.filter((t) => /^\(/.test(t)).length;
+      const closes = bare.filter((t) => /\)$/.test(t) && !/\$\(/.test(t)).length;
       const text = raw.join(' ');
       const named = LOSS_CANDIDATE_RE.test(text);
       for (const body of named ? substitutions(text) : []) {
@@ -907,12 +916,19 @@ function lossReason(segments, cwd, { always = true, split } = {}) {
         w = /^\w+=/.test(w[0]) ? w.slice(1) : pastWrapper(wrapper, w.slice(1));
         if (!w && named) unverified(`\`${wrapper}\` takes a flag the gate does not know`);
       }
-      if (!w || !w.length) continue;
+      const leave = () => {
+        nest = Math.max(0, nest + opens - closes);
+        if (nest === 0 && cdInside) { dir = null; cdInside = false; }
+      };
+      if (!w || !w.length) { leave(); continue; }
       const prog = progOf(w[0]);
       const args = w.slice(1);
+      if (prog === 'popd' || prog === 'pop-location') { dir = null; leave(); continue; }
       if (CD_PROGS.has(prog)) {
         const target = args.find((a) => !a.startsWith('-') && !/^\/d$/i.test(a));
         try { dir = target && target !== '-' ? resolveIn(dir, target) : null; } catch { dir = null; }
+        if (nest + opens > 0) cdInside = true;
+        leave();
         continue;
       }
       let verdict = null;
@@ -927,6 +943,7 @@ function lossReason(segments, cwd, { always = true, split } = {}) {
         unverified(`\`${w[0].replace(OPAQUE, '')}\` is not a program the gate reads, and a removal follows it`);
       }
       if (verdict) return verdict;
+      leave();
     }
     return null;
   };
@@ -1908,7 +1925,8 @@ function gateConfig(p) {
 // when neither the file nor the patch holds the opening delimiter, since a line patch cannot form one.
 const CARRIER_BEGIN = "<!-- BEGIN GENESEED -->"
 const CARRIER_REPLAY_CAP = 1024 * 1024
-const carrierBlockOf = (text) => /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/.exec(text)?.[0] ?? ""
+// Whole-line markers: js/lib/managed-block.mjs BLOCK_RE_SOURCE, by value (a plugin imports nothing).
+const carrierBlockOf = (text) => /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/m.exec(text)?.[0] ?? ""
 function carrierName(file) {
   const s = String(file)
   const at = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1
@@ -2174,6 +2192,68 @@ function shellWriteTargets(command, cwd, ps = false) {
   }
   return [...found];
 }
+/**
+ * THE ONE READING OF A COMMAND every gate below is handed. The lexers here are non-POSIX on
+ * purpose (`SCAN_TOKEN_RE`: a backslash is never an escape, so PowerShell's `"C:\"` closes), and
+ * that is wrong for the shell most commands run in. In bash:
+ *   - a backslash-newline joins two lines, so `rm -rf \⏎ /` is one command. Read as two, the
+ *     operand landed in a segment with no program and every gate passed it;
+ *   - `\'` and `\"` outside single quotes are a literal quote, not a delimiter. Read as one, the
+ *     everyday `'it'\''s'` left the quote state inverted and hid the rest of the line as data,
+ *     `&& rm -rf /` included.
+ * So for a bash-like shell the continuation is joined and an escaped quote or separator is
+ * replaced by `_`, which is inert to every lexer and keeps every other character where it was.
+ * For PowerShell only its own continuation, a backtick-newline, is joined, and nothing else
+ * changes: there the backslash is a path separator.
+ *
+ * `shell` is what the caller knows: `'bash'` (Claude's `Bash` tool, Git Bash on Windows too),
+ * `'powershell'`, or null. Unknown is read as bash unless the platform is Windows or a
+ * `Verb-Noun` word says PowerShell.
+ */
+function shellReading(command, shell = null) {
+  const bashLike = shell === 'bash'
+    || (shell !== 'powershell' && process.platform !== 'win32' && !PS_CUE_RE.test(command));
+  if (!bashLike) return command.replace(/`\r?\n/g, '');
+  if (!command.includes('\\')) return command;
+  let out = '';
+  let quote = '';
+  const tags = [];   // heredocs opened on this line: `[stripTabs, tag]`
+  for (let i = 0; i < command.length; i += 1) {
+    const ch = command[i];
+    const next = command[i + 1];
+    // A heredoc body is copied as it is: under a quoted tag a backslash is literal, and the
+    // gates read a body as data or, for `bash <<EOF`, as the command it is.
+    if (!quote && ch === '<' && next === '<' && command[i + 2] !== '<' && command[i - 1] !== '<') {
+      const m = /^<<(-?)[ \t]*(["']?)([A-Za-z_]\w*)\2/.exec(command.slice(i));
+      if (m) { tags.push([m[1], m[3]]); out += m[0]; i += m[0].length - 1; continue; }
+    }
+    if (!quote && ch === '\n' && tags.length) {
+      out += ch;
+      while (tags.length) {
+        const end = command.indexOf('\n', i + 1);
+        const line = command.slice(i + 1, end < 0 ? command.length : end);
+        out += line + (end < 0 ? '' : '\n');
+        i = end < 0 ? command.length : end;
+        const bare = line.replace(/\r$/, '');
+        if ((tags[0][0] ? bare.replace(/^\t+/, '') : bare) === tags[0][1]) tags.shift();
+        if (end < 0) break;
+      }
+      continue;
+    }
+    if (ch === '\\' && quote !== "'" && next !== undefined) {
+      const eol = next === '\n' ? 1 : (next === '\r' && command[i + 2] === '\n' ? 2 : 0);
+      if (eol) { i += eol; continue; }
+      // In double quotes only `\"` matters to a lexer; outside, a quote or a separator does.
+      out += ch + ((quote ? next === '"' : /["';|&]/.test(next)) ? '_' : next);
+      i += 1;
+      continue;
+    }
+    if (quote) { if (ch === quote) quote = ''; } else if (ch === '"' || ch === "'") quote = ch;
+    out += ch;
+  }
+  return out;
+}
+
 // ---- shell-write twin: END
 
 // A segment that is only a redirect: `> f`, or `A=1 > f`. V2's shell tool asserts only when its parser
@@ -2193,7 +2273,7 @@ const OWNERSHIP_SEEN = new Set()
 const OWNERSHIP_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
   "composer.json", "Gemfile"])
 const isManifest = (n) => OWNERSHIP_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
-const MANAGED_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g
+const MANAGED_BLOCK_RE = /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/gm
 const OWNERSHIP_SECTION_RE = /^## Ownership[ \t]*\r?$/m
 const OWNERSHIP_TAIL = "Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per " +
   "install: rebuild with `--no-ownership-gate`. Offer the full documentation " +
@@ -2515,7 +2595,9 @@ export const GeneseedGuard = async (ctx) => {
         if (hasAny(tool, SHELL_TOOLS)) {
           // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
           const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
-          const c = pickCommand(args)
+          // One reading for every check below: continuations joined, escaped quotes inert (`shellReading`).
+          const picked = pickCommand(args)
+          const c = typeof picked === "string" && picked ? shellReading(picked, /powershell|pwsh/i.test(tool) ? "powershell" : null) : picked
           const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
           if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
           const scan = c && !ROOT_SCAN_OFF && rootScan(c)

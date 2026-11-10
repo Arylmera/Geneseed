@@ -212,6 +212,18 @@ test('the install command rejects a bogus theme and falls back', () => {
   });
 });
 
+// `--force` reaches the argv on a literal `true` and on nothing else: it is the one build that
+// overwrites the user's files, so a truthy string or a 1 from a careless client must not be it.
+test('the install command forces only on a literal true', () => {
+  withThreeInstalls(({ st, oc }) => {
+    const argv = (body) => apiInstallCmd(st, { host: 'opencode', path: oc, ...body }).cmd.map(String);
+    assert.ok(argv({ force: true }).includes('--force'));
+    for (const force of [undefined, false, 'true', 1, 'yes']) {
+      assert.ok(!argv({ force }).includes('--force'), `force=${JSON.stringify(force)} forced the build`);
+    }
+  });
+});
+
 test('an active install rebuilds in place with the same build command', () => {
   withThreeInstalls(({ st, oc }) => {
     const plan = apiInstallCmd(st, { host: 'opencode', path: oc, theme: 'imperial' });

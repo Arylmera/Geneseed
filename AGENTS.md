@@ -96,8 +96,10 @@ node tests/mutate.mjs --verify
 
 Answers only "does every mutation anchor still resolve", writes nothing, takes ~50 ms. **Run it
 after any refactor that moves code** — a moved anchor makes a row unappliable, which the matrix
-scores as a SURVIVOR. `--all` runs the real 36-row matrix and takes minutes; an interrupted run
-leaves the product tree **mutated**, so check `git status` before doing anything else.
+scores as a SURVIVOR. `--all` runs the real 36-row matrix and takes minutes, editing product files as it
+goes. A mode is required (`--verify`, `--list`, `--all`, `--only <id>`); anything else is refused.
+An interrupted run leaves one file **mutated**: the next start of the script, in any mode, restores
+it from its journal and says so. Check `git status` all the same before doing anything else.
 
 ## What bites
 
@@ -136,6 +138,12 @@ stays 48 KB. The Claude hook renders the wiki as the OpenCode plugin does, with 
 lines, inside its own budget: its lazy listing folds and cuts with a count, and it reads no note
 headings.
 
+**Gate logic is copied into the OpenCode plugins by a tool.** A plugin is one self-contained
+file and cannot import `js/`, so the loss gate, the gate texts, the shell-write reader (with
+`shellReading`), the test-weakening rules and `runsUnpiped` live in `js/hosts/` and are copied
+between marker comments. After changing one, `node tests/twins.mjs --write`; `--check` names a
+copy that drifted, and the plugin tests fail on it.
+
 **Every OpenCode plugin serves two plugin APIs from one file.** OpenCode 2 loads only
 `export default { id, setup }`; V1 (>= 1.3.4) loads `{ id, server }`; each ignores the other's
 key. So each `adapters/opencode/plugins/*.js` exports `{ id: <file stem>, server, setup }`, and
@@ -151,6 +159,12 @@ errors (the guard blocks by renaming the call, not by throwing).
 commented; skills, agents and `.gitignore` are claim-on-create (`claimer`, `js/hosts/native.mjs`)
 and uninstall deletes only manifest-owned paths. The user decided (2026-10) that this is enough —
 do not add a snapshot/restore layer.
+
+**`--force` reaches only a path Geneseed ships.** It is one build's instruction, never recorded.
+It turns `claimer`'s two refusals into overwrites and removes retired leftovers, each named. A file
+under a name Geneseed does not ship is the user's and no forced path may write or remove it (the
+user decided, 2026-11). An emit records what it kept (`kept` in the manifest, `kept`/`stale` in a
+bundle's marker); `leftoversOf` reads that for the console's notice and its forced rebuild.
 
 **`--exclude-skills` filters in ONE place: `renderAll`** (`js/build/render.mjs`). Every host's
 emit, the command layer and the plain bundle read the filtered `items`, so a new host gets the

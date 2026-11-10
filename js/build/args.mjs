@@ -115,6 +115,9 @@ const FLAGS = {
   // One-shot, so no marker and no rebuild replays it: take back the OpenCode `permission.bash`
   // gates whose rule is off, on an install older than the `bash_gates` record.
   '--prune-gates': 'pruneGates',
+  // One build's instruction, never recorded: Geneseed's copy replaces a file the user edited
+  // or put at a name Geneseed ships. `claimer` (js/hosts/native.mjs) holds the rule.
+  '--force': 'force',
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -371,7 +374,7 @@ export function parseArgs(argv, defaults) {
     kits: defaults.kits ?? [],
     sharedTier: 'off',
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false, pruneGates: false,
+    syncThemes: false, validateOnly: false, verbose: false, pruneGates: false, force: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),
   };
   const { tokens } = nodeParseArgs({

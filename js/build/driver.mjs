@@ -214,8 +214,11 @@ function writeManifestAtomic(file, data) {
  * your edited... delete it to get Geneseed's copy back": two warnings about one rel that is in
  * fact still shipped. Excluded from `stale` before anything is checked or printed — silently,
  * because `claimer` already said everything there is to say about it.
+ *
+ * `force` (`--force`): an edited stale rel is removed too, and named. It was Geneseed's file and
+ * Geneseed no longer ships it, which is the leftover the flag exists to clear.
  */
-function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = []) {
+function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = [], force = false) {
   const now = new Set(owned);
   const alreadyWarned = new Set(editRefused);
   const stale = [...new Set(oldOwned)]
@@ -223,8 +226,11 @@ function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = []) {
   const failed = [];
   for (const rel of ownedWithin(oc, stale)) {
     if (ownedState(oc, rel, oldHashes) === 'modified') {
-      process.stderr.write(`[geneseed] kept your edited ${rel} (no longer shipped)\n`);
-      continue;
+      if (!force) {
+        process.stderr.write(`[geneseed] kept your edited ${rel} (no longer shipped)\n`);
+        continue;
+      }
+      process.stderr.write(`[geneseed] --force: removed your edited ${rel} (no longer shipped)\n`);
     }
     const victim = path.join(oc, rel);
     try {
@@ -245,6 +251,13 @@ function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = []) {
       + `${failed.join(', ')}\n`);
   }
 }
+
+/**
+ * The manifest's `kept` key: the rels this emit left to the user where it ships a file of its
+ * own (`claim.kept`). Written only when there is one, so a clean install's manifest is unchanged.
+ * `keptFilesOf` (js/hosts/installs.mjs) is the reader, for the console.
+ */
+const keptKey = (kept) => (kept && kept.length ? { kept: [...kept].sort() } : {});
 
 /**
  * Whether this PROJECT emit seeds `<git root>/.geneseed/protected-checks.txt`. A real emit does;
@@ -334,12 +347,12 @@ function emitOpencode(cfg, args, out) {
       nativeCatalog: hostCatalogsNatively('opencode'), oldOwned, manifestExisted, agentPath,
       oldDenies, oldEdit, oldHashes, oldGates,
     });
-  const { owned, stats, cfgName, skillDenies, editRecord, editRefused, bashGates } = rendered;
+  const { owned, stats, cfgName, skillDenies, editRecord, editRefused, bashGates, kept } = rendered;
   // Seed once: absent -> created, then the user's (never recorded, rewritten or removed).
   if (seeds(args)) seedProtectedChecks(root);
 
   phaseLog('PRUNE');
-  pruneOwned(oc, oldOwned, owned, oldHashes, editRefused);
+  pruneOwned(oc, oldOwned, owned, oldHashes, editRefused, cfg.force);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -348,6 +361,7 @@ function emitOpencode(cfg, args, out) {
       + 'list is yours and is never touched.',
     owned: [...owned].sort(),
     hashes: ownedHashes(oc, owned),
+    ...keptKey(kept),
     scope: 'project',
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
     ...editRecordKeys(editRecord),
@@ -398,10 +412,10 @@ function emitOpencodeGlobal(cfg, args, out) {
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
       oldOwned, agentPath, oldDenies, oldEdit, oldHashes, oldGates,
     });
-  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRecord, editRefused, bashGates } = rendered;
+  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRecord, editRefused, bashGates, kept } = rendered;
 
   phaseLog('PRUNE');
-  pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
+  pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused, cfg.force);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -410,6 +424,7 @@ function emitOpencodeGlobal(cfg, args, out) {
       + 'stores are NOT listed — they are never deleted.',
     owned: [...owned].sort(),
     hashes: ownedHashes(cfgDir, owned),
+    ...keptKey(kept),
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
     ...editRecordKeys(editRecord),
     ...(bashGates.length ? { bash_gates: bashGates } : {}),
@@ -454,12 +469,12 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
     hookOpts, oldHashes,
   });
-  const { owned, stats, memStatus, nbStatus, managed, editRefused } = rendered;
+  const { owned, stats, memStatus, nbStatus, managed, editRefused, kept } = rendered;
   // `root` is null on a global emit: it has no project to seed.
   if (root && seeds(args)) seedProtectedChecks(root);
 
   phaseLog('PRUNE');
-  pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
+  pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused, cfg.force);
 
   phaseLog('MANIFEST');
   writeManifestAtomic(manifestPath, {
@@ -470,6 +485,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
       + 'hooks so uninstall removes exactly those.',
     owned: [...owned].sort(),
     hashes: ownedHashes(cfgDir, owned),
+    ...keptKey(kept),
     managed,
     scope,
   });

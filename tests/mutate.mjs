@@ -194,8 +194,8 @@ export const MUTATIONS = [
     id: 'M7',
     name: 'make an emit non-idempotent',
     file: 'js/hosts/settings.mjs',
-    find: '    writeText(p, pre + block + lstripNewlines(post));',
-    replace: '    writeText(p, pre + block + post);',
+    find: '    writeText(p, existing.slice(0, span[0]) + block + lstripNewlines(existing.slice(span[1])));',
+    replace: '    writeText(p, existing.slice(0, span[0]) + block + existing.slice(span[1]));',
     gate: IDEMPOTENT,
     why: 'CLOSED IN P3 T7, after two phases declared ungated. The re-emit path is what every '
       + 'real user is on from their second build onwards, and `golden.mjs --idempotent` has '
@@ -661,16 +661,59 @@ function withMutation(m, fn) {
     return { skipped: `${m.id}: the edit changed nothing — a no-op mutation is a row that `
       + 'always passes' };
   }
+  // THE JOURNAL, written before the product file is touched. A gate runs in `spawnSync`, so a
+  // signal to this process during one is not delivered until the child returns, and a killed
+  // run skips the `finally` below: it left `js/lib/proc.mjs` mutated in the tree (2026-11).
+  // The journal survives that, and `restoreInterrupted` puts the file back on the next start,
+  // whatever the mode.
+  fs.mkdirSync(path.dirname(JOURNAL), { recursive: true });
+  fs.writeFileSync(JOURNAL, JSON.stringify({ id: m.id, file: m.file, original }));
   fs.writeFileSync(file, mutated);
   try {
     return fn();
   } finally {
     fs.writeFileSync(file, original);
+    fs.rmSync(JOURNAL, { force: true });
   }
 }
 
+/** Under `node_modules/`, so it is never tracked and never shipped. */
+const JOURNAL = path.join(ROOT, 'node_modules', '.cache', 'geneseed-mutate-journal.json');
+
+/** Put back the file an interrupted run left mutated. True when there was one. */
+function restoreInterrupted() {
+  let j;
+  try { j = JSON.parse(fs.readFileSync(JOURNAL, 'utf8')); } catch { return false; }
+  if (typeof j?.file === 'string' && typeof j.original === 'string') {
+    fs.writeFileSync(path.join(ROOT, j.file), j.original);
+    console.error(`[mutate] an earlier run was interrupted inside ${j.id}: restored ${j.file}`);
+  }
+  fs.rmSync(JOURNAL, { force: true });
+  return true;
+}
+
+const USAGE = [
+  'usage: node tests/mutate.mjs --verify | --list | --all | --only <id>',
+  '  --verify     does every mutation anchor still resolve? Writes nothing, ~50 ms.',
+  '  --list       the rows, and which gate each has.',
+  '  --all        run the whole matrix. EDITS PRODUCT FILES while it runs, takes minutes.',
+  '  --only <id>  run one row (the same edit-and-restore).',
+].join('\n');
+const MODES = ['--verify', '--list', '--all', '--only'];
+
 function main(argv) {
+  restoreInterrupted();
+  // A MODE IS REQUIRED, and anything unrecognised is refused. The matrix used to be what ran
+  // when no known flag was given, so `--help` started editing product files.
   const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
+  const stray = argv.filter((a, i) => !MODES.includes(a) && !(argv[i - 1] === '--only'));
+  if (stray.length || !argv.some((a) => MODES.includes(a))
+    || (argv.includes('--only') && !MUTATIONS.some((m) => m.id === only))) {
+    const help = argv.includes('--help') || argv.includes('-h');
+    (help ? console.log : console.error)(USAGE);
+    if (!help && argv.includes('--only')) console.error(`[mutate] --only takes one of: ${MUTATIONS.map((m) => m.id).join(' ')}`);
+    return help ? 0 : 2;
+  }
   if (argv.includes('--list')) {
     for (const m of MUTATIONS) {
       console.log(`${m.id}  ${m.gate ? 'gated  ' : 'UNGATED'}  ${m.name}`);

@@ -7,6 +7,7 @@
  * plainly as two files with the same shape than as two sections of one.
  */
 import path from 'node:path';
+import { bundleFiles } from '../hosts/owned.mjs';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import {
@@ -60,7 +61,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
   // One claim for every writer below whose path lands in `owned` — see `claimer`.
-  const claim = claimer(oldOwned, dir, manifestExisted, oldHashes);
+  const claim = claimer(oldOwned, dir, manifestExisted, oldHashes, cfg.force);
 
   const { nAgents, nSkills, written, userOnlySkills } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
@@ -112,6 +113,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
     skillDenies, editRecord: wired.editRecord ?? oldEdit, editRefused: [...claim.editRefused],
     // As `skillDenies`: a merge that wrote nothing keeps the old record whole.
     bashGates: wired.bashGates ? [...wired.bashGates].sort() : oldGates,
+    kept: [...claim.kept],
   };
 }
 
@@ -143,14 +145,18 @@ export function emitOpencodeRender(cfg, job) {
 
   // OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
   // plain names (the portable build keeps them). A deliberate de-link, not a fix.
+  // Only the AGENT.md this build wrote: one it found there and kept is the user's, and this
+  // rewrite changed its links, and its line endings on Windows.
   const agentMd = path.join(out, 'AGENT.md');
-  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
+  if (isFile(agentMd) && bundleFiles(out)?.includes('AGENT.md')) {
+    writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
+  }
 
   const owned = [];
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
     oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes, oldGates,
   });
@@ -165,6 +171,7 @@ export function emitOpencodeRender(cfg, job) {
     editRecord,
     editRefused,
     bashGates,
+    kept,
   };
 }
 
@@ -230,7 +237,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed, so
   // the pre-manifest header line is unreachable from this emit.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
     oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes, oldGates,
   });
@@ -262,5 +269,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     editRecord,
     editRefused,
     bashGates,
+    kept,
   };
 }

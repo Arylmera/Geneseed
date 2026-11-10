@@ -384,6 +384,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--force"
+          ],
+          "dest": "force",
+          "metavar": null,
+          "help": "for this one build, take Geneseed's copy of every file it ships: replaces a shipped file you edited and a file of yours at a shipped name, removes a retired file you edited, and removes retired skills an older build left in a bundle. Each file is named. A skill or agent under a name Geneseed does not ship is never touched, nor is memory, the notebook, your rules or your profile. Not recorded: the next build is an ordinary one",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []
@@ -676,6 +691,75 @@
         }
       ],
       "options": [],
+      "mutex": []
+    },
+    {
+      "name": "export",
+      "help": "write the skills, the agents and the constitution as catalogue entities for a shared library: one folder each with SKILL.md or AGENT.md (frontmatter name and description only) and a metadata.yaml. One way: the source stays src/. Not an install: no carrier, hooks or settings",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": null,
+          "help": "the folder the entity folders are written into (required); it may be a checkout of the library: only files an earlier export wrote there are replaced or pruned",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--profile"
+          ],
+          "dest": "profile",
+          "metavar": null,
+          "help": "a JSON file with the receiving library's rules, prefix, owner, maintainer, status, compatibleTools, skillsDir, agentsDir, lawsDir, lawsName, laws, only, exclude, keepSkillSelfImprovement (default: export.profile.json at the root of a git checkout when it has one, else none; `none` exports under the source names with no owner)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "the voice the text is rendered in (default: neutral)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--kits"
+          ],
+          "dest": "kits",
+          "metavar": null,
+          "help": "comma-separated kits whose skills and agents are exported, or none (default: every kit)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

@@ -27,6 +27,7 @@ import path from 'node:path';
 import { resolvePath } from './hosts.mjs';
 import { within } from '../lib/paths.mjs';
 import { isFile, statOrNull, textWrites } from '../lib/fs.mjs';
+import { isDict, parseJson } from '../lib/json.mjs';
 
 /**
  * The manifest rels that resolve INSIDE `base` — the one security boundary every walk over
@@ -228,4 +229,46 @@ export function ownedState(root, rel, hashes) {
   const p = path.join(root, rel);
   if (!isFile(p)) return 'missing';
   return fileHash(p) === expected ? 'unmodified' : 'modified';
+}
+
+/**
+ * THE BUNDLE'S OWN FILE LIST, and why it exists. A bundle is rendered straight into `out`, and
+ * for the OpenCode project emit `out` is the user's repository root, where `agents/`, `skills/`
+ * and `laws/` are ordinary names for the user's own folders. The build used to decide ownership
+ * by DIRECTORY: the first render merged into such a folder and overwrote any file of the same
+ * name, and wrote the markers; from the second render on, those markers made it delete the
+ * folders whole before writing, and uninstall deleted them whole too. A user's
+ * `agents/support_bot.py` did not survive two emits, or one emit and an uninstall.
+ *
+ * Ownership is now per FILE, claim-on-create, the rule `claimer` (`js/hosts/native.mjs`) holds
+ * for a host's config dir: a file this build finds at its destination and did not write before
+ * is the user's and is kept; a recorded file this build no longer ships is removed; nothing
+ * else under `out` is touched. `bundleFiles` is the reader, here rather than in
+ * `js/build/bundle.mjs` because the uninstall shares it and imports nothing from the generator.
+ * The list rides in the bundle's `.geneseed-srcdirs.json` marker, which the build already wrote.
+ *
+ * null when the marker carries no list: a bundle an older build rendered. `build` then
+ * overwrites what it ships, as that build did, and removes nothing, and its own marker starts
+ * the record.
+ */
+export const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
+export const BUNDLE_FILES_KEY = 'files';
+export function bundleFiles(out) {
+  let data;
+  try { data = parseJson(readFileSync(path.join(out, SRC_DIRS_MARKER), 'utf8')); } catch { return null; }
+  const files = isDict(data) ? data[BUNDLE_FILES_KEY] : null;
+  return Array.isArray(files) ? files.filter((f) => typeof f === 'string') : null;
+}
+
+/**
+ * What the last build left in a bundle that is not Geneseed's copy: `kept`, the files that are
+ * the user's at a path the bundle ships, and `stale`, the retired skills an older build left
+ * behind. Each only while the file still exists. `--force` on the next build clears both.
+ */
+export function bundleLeftovers(out) {
+  let data;
+  try { data = parseJson(readFileSync(path.join(out, SRC_DIRS_MARKER), 'utf8')); } catch { data = null; }
+  const list = (key) => (isDict(data) && Array.isArray(data[key]) ? data[key] : [])
+    .filter((r) => typeof r === 'string' && isFile(path.join(out, r)));
+  return { kept: ownedWithin(out, list('kept')), stale: ownedWithin(out, list('stale')) };
 }

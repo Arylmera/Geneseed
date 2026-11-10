@@ -495,6 +495,67 @@ describe('Installs / Hosts', () => {
     )
   })
 
+  // THE FORCED REBUILD. An install can hold files that are the user's where Geneseed ships its
+  // own (`leftovers.kept`: an edited shipped skill, or a file of theirs under a shipped name)
+  // and retired skills an older version left (`leftovers.stale`). A rebuild keeps both. The
+  // panel names them and offers the one rebuild that replaces them, behind a danger confirm
+  // that names each file again; with nothing left over it shows neither.
+  it('names the files a rebuild keeps, and a forced rebuild asks before replacing them', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce({
+      installs: [
+        {
+          id: 'claude:C:/git/Terra',
+          host: 'claude',
+          scope: 'project',
+          path: 'C:/git/Terra',
+          state: 'active',
+          theme: 'neutral',
+          footprint: 'lean',
+          posture: 'peer',
+          mode: 'direct',
+          trust: 'balanced',
+          sharedTier: false,
+          leftovers: {
+            kept: ['.claude/skills/plan/SKILL.md'],
+            stale: ['skills/domain-modeling.md'],
+          },
+        },
+      ],
+      postures: ['peer'],
+      modes: ['direct'],
+      trusts: ['balanced'],
+    })
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const box = await screen.findByRole('group', { name: 'Files a rebuild keeps' })
+    expect(within(box).getByText('.claude/skills/plan/SKILL.md')).toBeTruthy()
+    expect(within(box).getByText('skills/domain-modeling.md')).toBeTruthy()
+    expect(within(box).getByText(/under your own names.*are never\s+touched/)).toBeTruthy()
+    askConfirm.mockClear()
+    fireEvent.click(within(box).getByRole('button', { name: 'Replace with Geneseed’s copies…' }))
+    await answered()
+    const [msg, opts] = askConfirm.mock.calls[0]
+    expect(msg).toContain('.claude/skills/plan/SKILL.md')
+    expect(msg).toContain('Remove: skills/domain-modeling.md')
+    expect(opts.tone).toBe('danger')
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({
+        host: 'claude',
+        path: 'C:/git/Terra',
+        theme: 'neutral',
+        force: true,
+      }),
+    )
+  })
+
+  it('an install with nothing left over shows no such block', async () => {
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    await screen.findByRole('button', { name: 'Apply and rebuild' })
+    expect(screen.queryByRole('group', { name: 'Files a rebuild keeps' })).toBeNull()
+  })
+
   it('a global install has no shared-tier switch and never sends the key', async () => {
     const onAction = vi.fn()
     render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)

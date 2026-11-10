@@ -59,7 +59,9 @@ import {
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
 import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
-import { hashesOf, ownedState, ownedWithin, recordedDenies, recordedEdit } from '../hosts/owned.mjs';
+import {
+  SRC_DIRS_MARKER, bundleFiles, hashesOf, ownedState, ownedWithin, recordedDenies, recordedEdit,
+} from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
@@ -405,11 +407,26 @@ export function installAgentEntryOf(instr) {
 /**
  * Reverse a per-repo OpenCode emit.
  *
- * Two shapes, and which one runs is decided by the manifest's PRESENCE. With one,
- * `.opencode/` is unlinked file by file so a hand-added agent or plugin under it survives;
- * without one — a pre-manifest legacy install — the directory goes whole. The portable bundle
- * dirs beside it (`laws`/`agents`/`skills`) are deleted whole EITHER WAY, because the plain
- * `build()` step wipes and rewrites them every run regardless of what the manifest says.
+ * ONLY WHAT THE EMIT RECORDED IS REMOVED, in both halves. `.opencode/` is unlinked file by file
+ * off its manifest, so a hand-added agent or plugin under it survives. The portable bundle
+ * beside it is unlinked file by file off the bundle's own list (`bundleFiles`,
+ * `js/build/bundle.mjs`), so the user's own `agents/`, `skills/`, `laws/` or `AGENT.md` at the
+ * repository root survive too. Both halves used to delete by directory, and a repository that
+ * had such folders before the install lost them.
+ *
+ * `userOnly` names the watched directories this reversal emptied of everything recorded and
+ * that still exist: what is left in them is the user's. `installUninstall` does not count them
+ * as survivors. Counting them reported INCOMPLETE and advised a retry, with the manifest already
+ * unlinked, and the retry then read `.opencode/` as a pre-manifest install and removed it whole.
+ *
+ * WITHOUT A RECORD the old shape still runs, for an install an older build made: no manifest
+ * means `.opencode/` goes whole, and no bundle list means `laws`/`agents`/`skills` and
+ * `AGENT.md` go whole. Two conditions fence it. The root must carry a bundle's own marker
+ * (`.geneseed-theme` or the version file), the test `build` uses: `installState` calls a bare
+ * `.opencode/` directory an install, and without the marker this reversal took a repository
+ * Geneseed had already left, or never entered, for a pre-manifest install. And a root that has
+ * the bundle list was made by a build that also writes the manifest, so a missing manifest
+ * there is not a pre-manifest install and `.opencode/` is left alone.
  *
  * The entry is read BEFORE AGENT.md is deleted. Reading it after would find the wire
  * describing a file that no longer exists, which the fallback would then paper over with the
@@ -421,8 +438,11 @@ function opencodeProjectUninstall(root, force = false) {
   let failed = [];
   let kept = [];
   let man = null;
+  const userOnly = [];
   const oc = path.join(root, '.opencode');
   const manifestPath = path.join(oc, GLOBAL_MANIFEST);
+  const listed = bundleFiles(root);
+  const legacy = isFile(path.join(root, '.geneseed-theme')) || isFile(path.join(root, VERSION_MARKER));
   if (isFile(manifestPath)) {
     man = claudeReadManifest(oc);
     [removed, failed, kept] = unlinkOwned(oc, ownedOf(man), '.opencode/', hashesOf(man), force);
@@ -434,22 +454,41 @@ function opencodeProjectUninstall(root, force = false) {
     if (!failed.length) {
       unlinkQuiet(manifestPath);
       if (isDir(oc) && isEmptyDir(oc)) rmdirQuiet(oc);
+      else if (isDir(oc)) userOnly.push(oc);
     } else {
       warnMarkersKept();
     }
   } else if (isDir(oc)) {
-    rmtreeQuiet(oc);
-    removed += 1;
+    if (listed || !legacy) userOnly.push(oc);
+    else { rmtreeQuiet(oc); removed += 1; }
   }
-  for (const d of ['laws', 'agents', 'skills']) {
-    const p = path.join(root, d);
-    if (isDir(p)) { rmtreeQuiet(p); removed += 1; }
+  if (listed) {
+    const [n, bundleFailed] = unlinkOwned(root, listed, '', {}, true);
+    removed += n;
+    if (bundleFailed.length) {
+      warnSurvivors(bundleFailed);
+      failed = failed.concat(bundleFailed);
+    } else {
+      unlinkQuiet(path.join(root, SRC_DIRS_MARKER));
+      for (const d of ['laws', 'agents', 'skills']) {
+        if (isDir(path.join(root, d))) userOnly.push(path.join(root, d));
+      }
+    }
+  } else if (legacy) {
+    for (const d of ['laws', 'agents', 'skills']) {
+      const p = path.join(root, d);
+      if (isDir(p)) { rmtreeQuiet(p); removed += 1; }
+    }
+    const am = path.join(root, 'AGENT.md');
+    if (isFile(am)) { unlinkQuiet(am); removed += 1; }
+  } else {
+    for (const d of ['laws', 'agents', 'skills']) {
+      if (isDir(path.join(root, d))) userOnly.push(path.join(root, d));
+    }
   }
-  const am = path.join(root, 'AGENT.md');
-  if (isFile(am)) { unlinkQuiet(am); removed += 1; }
   const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
     man ? recordedDenies(man) : [], man ? recordedEdit(man) : null);
-  const result = { removed, unmerged, archived: null };
+  const result = { removed, unmerged, archived: null, userOnly };
   if (failed.length) result.failed = failed;
   if (kept.length) result.kept = kept;
   return result;
@@ -536,7 +575,11 @@ export function installUninstall(root, host = 'opencode', scope = 'global', memo
   // `kept` rels are spelled relative to the reversal's own base: the cfg dir for the Claude
   // family, the root for OpenCode (whose project reversal already prefixes `.opencode/`).
   const keptAbs = new Set(kept.map((r) => path.join(CLAUDE_STYLE.includes(host) ? data : root, r)));
+  // `userOnly`: a reversal that removed by record names the watched dirs it left holding only
+  // the user's files (`opencodeProjectUninstall`).
+  const userOnly = new Set(summary.userOnly || []);
   const survivors = ownedDirsFor(root, host, scope, data).filter((d) => existsSync(d)
+    && !userOnly.has(d)
     && !(keptAbs.size && readdirSync(d, { recursive: true, withFileTypes: true })
       .every((e) => e.isDirectory() || keptAbs.has(path.join(e.parentPath, e.name)))));
   const withKept = (o) => (kept.length ? { ...o, kept } : o);

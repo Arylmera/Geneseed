@@ -97,6 +97,9 @@ test("runsUnpiped stays in parity with js/hosts/hooks-done.mjs (twin)", async ()
     ["npm run lint:fix", "npm run lint", false], ['git commit -m "ran npm test"', "npm test", false],
     ['git commit -m "x; npm test"', "npm test", false], ["echo npm test", "npm test", false],
     ["npm test -- --watch=false", "npm test", true], ["cd x && npm test", "npm test", true],
+    // The masks added with the hook's: an always-succeeding echo, a background run, a check behind `||`.
+    ['npm test; echo "exit: $?"', "npm test", false], ["npm test &", "npm test", false],
+    ["true || npm test", "npm test", false], ["npm test; npm run lint", "npm test", true],
   ]
   for (const [cmd, line, want] of rows) {
     assert.equal(nodeRunsUnpiped(cmd, line), want, `node: ${cmd}`)

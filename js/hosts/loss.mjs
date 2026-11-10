@@ -600,7 +600,16 @@ export function lossReason(segments, cwd, { always = true, split } = {}) {
   /** The first loss among `segs`, run from `start`; a substitution body is judged as a command. */
   const judge = (segs, start, depth = 0) => {
     let dir = start;
-    for (const raw of segs.map(stripStructure)) {
+    // A `cd` inside `( … )` ends with the subshell, and `popd` goes back somewhere this reader
+    // never recorded. Both used to leave `dir` where the `cd` put it, so a removal after them
+    // was looked for in the wrong folder, found absent, and passed. Now the directory is
+    // unknown from there on, which asks for a relative path.
+    let nest = 0;
+    let cdInside = false;
+    for (const [n, raw] of segs.map(stripStructure).entries()) {
+      const bare = segs[n].filter((t) => !/^["']/.test(t));
+      const opens = bare.filter((t) => /^\(/.test(t)).length;
+      const closes = bare.filter((t) => /\)$/.test(t) && !/\$\(/.test(t)).length;
       const text = raw.join(' ');
       const named = LOSS_CANDIDATE_RE.test(text);
       for (const body of named ? substitutions(text) : []) {
@@ -616,12 +625,19 @@ export function lossReason(segments, cwd, { always = true, split } = {}) {
         w = /^\w+=/.test(w[0]) ? w.slice(1) : pastWrapper(wrapper, w.slice(1));
         if (!w && named) unverified(`\`${wrapper}\` takes a flag the gate does not know`);
       }
-      if (!w || !w.length) continue;
+      const leave = () => {
+        nest = Math.max(0, nest + opens - closes);
+        if (nest === 0 && cdInside) { dir = null; cdInside = false; }
+      };
+      if (!w || !w.length) { leave(); continue; }
       const prog = progOf(w[0]);
       const args = w.slice(1);
+      if (prog === 'popd' || prog === 'pop-location') { dir = null; leave(); continue; }
       if (CD_PROGS.has(prog)) {
         const target = args.find((a) => !a.startsWith('-') && !/^\/d$/i.test(a));
         try { dir = target && target !== '-' ? resolveIn(dir, target) : null; } catch { dir = null; }
+        if (nest + opens > 0) cdInside = true;
+        leave();
         continue;
       }
       let verdict = null;
@@ -636,6 +652,7 @@ export function lossReason(segments, cwd, { always = true, split } = {}) {
         unverified(`\`${w[0].replace(OPAQUE, '')}\` is not a program the gate reads, and a removal follows it`);
       }
       if (verdict) return verdict;
+      leave();
     }
     return null;
   };
