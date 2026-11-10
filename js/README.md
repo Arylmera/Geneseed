@@ -170,6 +170,7 @@ into files users have committed, so change the test that states it in the same c
 | `udiff.mjs` | `geneseed diff`'s own difflib clone — the alignment IS the printed hunks — plus `splitLines` |
 | `proc.mjs` | One constant: the `windowsHide` flag every spawn in `js/` must reuse |
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
+| `managed-block.mjs` | Where the `<!-- BEGIN/END GENESEED -->` block is in a co-owned file: whole-line markers, the first END with the last BEGIN above it. One definition for the writer (`settings.mjs`) and the hook-side readers; no imports, so the hook path may load it. The OpenCode plugins carry `BLOCK_RE_SOURCE` by value |
 | `machine-dir.mjs` | `machineDir()`, `sharedPaths()`, `readDefaultInstall()` and `WIKI_NAMES`: the one home of `$XDG_CONFIG_HOME/geneseed`, the names beneath it, the reader of the chosen default install, and the wiki manifest's names. Spawn-free, so the hook and driver may import it |
 | `node-floor.mjs` | The first import of all three binaries: below Node 22.7, one sentence on stderr and exit 1 (0 in the hook) instead of a stack trace |
 

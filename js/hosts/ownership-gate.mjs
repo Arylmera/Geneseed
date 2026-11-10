@@ -22,6 +22,7 @@
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withoutBlocks } from '../lib/managed-block.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
 
@@ -30,10 +31,9 @@ const MANIFESTS = new Set(['package.json', 'pom.xml', 'pyproject.toml', 'go.mod'
   'composer.json', 'Gemfile']);
 const isManifest = (n) => MANIFESTS.has(n) || n.startsWith('build.gradle') || n.endsWith('.csproj');
 
-// `managedBlockWrite`'s delimiters (js/hosts/settings.mjs `delimiters('GENESEED')`). On a Bob
-// project install the block holds the whole carrier, `#### Ownership` included — hence the strip
-// and the exact `##` heading match. `\r?`: a CRLF file's `$` sits after the `\r`.
-const MANAGED_BLOCK_RE = /<!-- BEGIN GENESEED -->[\s\S]*?<!-- END GENESEED -->/g;
+// On a Bob project install the managed block holds the whole carrier, `#### Ownership` included —
+// hence the strip (`withoutBlocks`) and the exact `##` heading match. `\r?`: a CRLF file's `$`
+// sits after the `\r`.
 const SECTION_RE = /^## Ownership[ \t]*\r?$/m;
 
 // Write-shaped tool names (Bob's `tool-gate` also routes reads here: `read_file` carries a path).
@@ -97,7 +97,7 @@ function declinedSince(root) {
 function ownAgentsText(root) {
   let text = null;
   try { text = readFileSync(path.join(root, 'AGENTS.md'), 'utf8'); } catch { /* none */ }
-  return text === null ? '' : text.replace(MANAGED_BLOCK_RE, '');
+  return text === null ? '' : withoutBlocks(text);
 }
 
 /**
