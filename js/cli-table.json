@@ -705,7 +705,7 @@
           ],
           "dest": "profile",
           "metavar": null,
-          "help": "a JSON file with the receiving library's rules, kept outside this repository: prefix, owner, maintainer, status, compatibleTools, skillsDir, agentsDir, lawsDir, lawsName, laws, only, exclude, keepSkillSelfImprovement (default: none; source names, no owner)",
+          "help": "a JSON file with the receiving library's rules, prefix, owner, maintainer, status, compatibleTools, skillsDir, agentsDir, lawsDir, lawsName, laws, only, exclude, keepSkillSelfImprovement (default: export.profile.json at the root of a git checkout when it has one, else none; `none` exports under the source names with no owner)",
           "choices": null,
           "default": null,
           "required": false,

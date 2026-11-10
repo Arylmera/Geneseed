@@ -368,6 +368,8 @@ const WITHHELD = [
     + 'prove the product and are not part of it'],
   ['tsconfig.json', 'type-checks THIS repository\'s JavaScript in CI (`npm run typecheck`); an install '
     + 'runs the code and never compiles anything'],
+  ['export.profile.json', 'the maintainer\'s own defaults for `geneseed export` from THIS checkout (prefix, '
+    + 'owner, maintainer); an npm install exports under the source names unless given a profile'],
   ['stryker.config.json', 'the weekly Stryker run over THIS repository\'s settings parser; an install '
     + 'never mutates anything'],
   ['commitlint.config.js','the rules CI applies to a PR title in THIS repository; an install '

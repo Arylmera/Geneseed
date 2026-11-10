@@ -18,8 +18,9 @@
  *
  * THE PROFILE is where the receiving library's own rules go: the name prefix it demands, the
  * owner and maintainer its metadata requires, its folder names. It is a JSON file the user keeps
- * OUTSIDE this repository, because those values are theirs and often not public. This module
- * names no library and ships no profile; without one it exports under the source names.
+ * outside the package, because those values are theirs. This module names no library; without
+ * a profile it exports under the source names. A git checkout may carry one of its own,
+ * `export.profile.json` at the root (`DEFAULT_PROFILE`), which is the default there.
  *
  * WHAT CHANGES IN THE TEXT, and why each:
  *   - a reference to another exported entity is rewritten to the name it is exported under, and
@@ -60,6 +61,13 @@ import {
 import { sourceFingerprint, sourceReleaseVersion } from './version.mjs';
 
 export const EXPORT_MANIFEST = 'geneseed-export.json';
+/**
+ * The checkout's own profile, read when `--profile` is not given: the maintainer's defaults for
+ * the library they publish to (the user asked for it to live in the repository, 2026-11). It is
+ * a git checkout's file and is not in the npm package's `files`, so an npm install exports
+ * under the source names unless a profile is passed. `--profile none` ignores it.
+ */
+export const DEFAULT_PROFILE = path.join(ROOT, 'export.profile.json');
 
 /** What a profile may say, with what an export without one uses. */
 const PROFILE_DEFAULTS = {
@@ -365,7 +373,9 @@ export function cmdExport(args) {
     return 2;
   }
   try {
-    const profile = loadProfile(args.profile);
+    const given = args.profile == null && existsSync(DEFAULT_PROFILE) ? DEFAULT_PROFILE : args.profile;
+    const profile = loadProfile(given === 'none' ? null : given);
+    if (given === DEFAULT_PROFILE) printOut(`[export] profile: ${DEFAULT_PROFILE} (--profile none to export without one)\n`);
     const kits = args.kits == null ? null : String(args.kits).split(',').map((k) => k.trim()).filter((k) => k && k !== 'none');
     const plan = planExport({ profile, theme: args.theme || 'neutral', kits });
     const out = path.resolve(String(args.out));

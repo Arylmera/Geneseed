@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  EXPORT_MANIFEST, loadProfile, planExport, writeExport, cmdExport,
+  DEFAULT_PROFILE, EXPORT_MANIFEST, loadProfile, planExport, writeExport, cmdExport,
 } from '../../js/build/export.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
@@ -184,7 +184,7 @@ test('the verb needs --out, and reports what it wrote', () => {
   process.stderr.write = (c) => { chunks.push(String(c)); return true; };
   try {
     assert.equal(cmdExport({}), 2);
-    assert.equal(cmdExport({ out: path.join(sb.path, 'o'), kits: 'none' }), 0);
+    assert.equal(cmdExport({ out: path.join(sb.path, 'o'), kits: 'none', profile: 'none' }), 0);
   } finally {
     [process.stdout.write, process.stderr.write] = orig;
     sb.cleanup();
@@ -193,4 +193,24 @@ test('the verb needs --out, and reports what it wrote', () => {
   assert.match(said, /--out <folder> is required/);
   assert.match(said, /\[export\] \d+ skill\(s\), \d+ agent\(s\), the constitution -> /);
   assert.match(said, /no owner or maintainer in the profile/);
+});
+
+// THE CHECKOUT'S OWN PROFILE. `export.profile.json` at the repository root is what the verb
+// reads when no `--profile` is given; `--profile none` exports without one (the test above).
+// It is the maintainer's, tracked on purpose and withheld from the npm package. What is held
+// here is that it loads, and that the names it produces are ones a library can take.
+test('the checkout profile loads, and is the default the verb names', () => {
+  const profile = loadProfile(DEFAULT_PROFILE);
+  assert.match(profile.prefix, /^[a-z0-9]+(-[a-z0-9]+)*-$/);
+  assert.match(profile.maintainer, /^@/);
+  assert.ok(planExport({ profile: { ...profile, only: ['commit'], laws: false } }).entities.length === 1);
+  const sb = makeSandbox('gs-export-default-');
+  const chunks = [];
+  const orig = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
+  try {
+    assert.equal(cmdExport({ out: path.join(sb.path, 'o'), kits: 'none' }), 0);
+    assert.ok(fs.existsSync(path.join(sb.path, 'o', 'skills', `${profile.prefix}commit`, 'SKILL.md')));
+  } finally { process.stdout.write = orig; sb.cleanup(); }
+  assert.match(chunks.join(''), /\[export\] profile: .*export\.profile\.json/);
 });
