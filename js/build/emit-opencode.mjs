@@ -55,7 +55,7 @@ import { mkdirSync } from 'node:fs';
 function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const {
     oldOwned, manifestExisted, agentPath, wireBase, overridesDir, oldDenies = [], oldEdit = { asks: [], shorthand: null },
-    oldHashes = {},
+    oldHashes = {}, oldGates = [],
   } = opts;
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
@@ -100,7 +100,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const cfgName = path.basename(mergeOpencodeJson(path.join(wireBase, 'opencode.json'),
     agentPath, cfg.doctrines, cfg.excludeRules, userOnlySkills, staleSkillNames, wired,
     cfg.deletionGate, opencodeEditAsks(dir, wireBase === dir, wireBase === dir ? null : agentPath,
-      cfg.doctrines, cfg.excludeRules), oldEdit));
+      cfg.doctrines, cfg.excludeRules), oldEdit, oldGates, cfg.pruneGates));
   // The next record: Geneseed's earlier denies still wanted, plus the ones it added now. A merge
   // that wrote nothing (`skillsAdded` unset) keeps the old record whole.
   const skillDenies = wired.skillsAdded
@@ -110,6 +110,8 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
     skillDenies, editRecord: wired.editRecord ?? oldEdit, editRefused: [...claim.editRefused],
+    // As `skillDenies`: a merge that wrote nothing keeps the old record whole.
+    bashGates: wired.bashGates ? [...wired.bashGates].sort() : oldGates,
   };
 }
 
@@ -133,7 +135,7 @@ export function emitOpencodeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: _theme, out, root, footprint, nativeCatalog, oldOwned, manifestExisted, agentPath,
-    oldDenies, oldEdit, oldHashes = {},
+    oldDenies, oldEdit, oldHashes = {}, oldGates = [],
   } = job;
   const oc = path.join(root, '.opencode');
 
@@ -148,9 +150,9 @@ export function emitOpencodeRender(cfg, job) {
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
-    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes,
+    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes, oldGates,
   });
 
   return {
@@ -162,6 +164,7 @@ export function emitOpencodeRender(cfg, job) {
     skillDenies,
     editRecord,
     editRefused,
+    bashGates,
   };
 }
 
@@ -196,7 +199,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath, oldDenies, oldEdit,
-    oldHashes = {},
+    oldHashes = {}, oldGates = [],
   } = job;
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
@@ -227,9 +230,9 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed, so
   // the pre-manifest header line is unreachable from this emit.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
-    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes,
+    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes, oldGates,
   });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
@@ -258,5 +261,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     skillDenies,
     editRecord,
     editRefused,
+    bashGates,
   };
 }

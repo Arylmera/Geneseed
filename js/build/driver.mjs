@@ -51,7 +51,7 @@ import {
   openclaudeConfigDir, hostCatalogsNatively,
 } from '../hosts/hosts.mjs';
 import {
-  hashesOf, ownedHashes, ownedState, ownedWithin, recordedDenies, recordedEdit, editRecordKeys,
+  hashesOf, ownedHashes, ownedState, ownedWithin, recordedDenies, recordedEdit, recordedGates, editRecordKeys,
 } from '../hosts/owned.mjs';
 import { seedProtectedChecks } from '../hosts/geneseed-dir.mjs';
 
@@ -319,6 +319,7 @@ function emitOpencode(cfg, args, out) {
   const oldOwned = (doc && doc.owned) || [];
   const oldDenies = recordedDenies(doc);
   const oldEdit = recordedEdit(doc);
+  const oldGates = recordedGates(doc);
   const oldHashes = hashesOf(doc);
 
   const agentPathRel = relUnder(out, root);
@@ -331,9 +332,9 @@ function emitOpencode(cfg, args, out) {
     {
       theme: args.theme, out, root, footprint: args.footprint,
       nativeCatalog: hostCatalogsNatively('opencode'), oldOwned, manifestExisted, agentPath,
-      oldDenies, oldEdit, oldHashes,
+      oldDenies, oldEdit, oldHashes, oldGates,
     });
-  const { owned, stats, cfgName, skillDenies, editRecord, editRefused } = rendered;
+  const { owned, stats, cfgName, skillDenies, editRecord, editRefused, bashGates } = rendered;
   // Seed once: absent -> created, then the user's (never recorded, rewritten or removed).
   if (seeds(args)) seedProtectedChecks(root);
 
@@ -350,6 +351,7 @@ function emitOpencode(cfg, args, out) {
     scope: 'project',
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
     ...editRecordKeys(editRecord),
+    ...(bashGates.length ? { bash_gates: bashGates } : {}),
   });
 
   const extra = extrasTail(stats);
@@ -384,6 +386,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const oldOwned = (doc && doc.owned) || [];
   const oldDenies = recordedDenies(doc);
   const oldEdit = recordedEdit(doc);
+  const oldGates = recordedGates(doc);
   const oldHashes = hashesOf(doc);
 
   const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
@@ -393,9 +396,9 @@ function emitOpencodeGlobal(cfg, args, out) {
     {
       theme: args.theme, cfgDir, out, sharedRoot: args.sharedRoot,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
-      oldOwned, agentPath, oldDenies, oldEdit, oldHashes,
+      oldOwned, agentPath, oldDenies, oldEdit, oldHashes, oldGates,
     });
-  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRecord, editRefused } = rendered;
+  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRecord, editRefused, bashGates } = rendered;
 
   phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused);
@@ -409,6 +412,7 @@ function emitOpencodeGlobal(cfg, args, out) {
     hashes: ownedHashes(cfgDir, owned),
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
     ...editRecordKeys(editRecord),
+    ...(bashGates.length ? { bash_gates: bashGates } : {}),
   });
 
   const extra = extrasTail(stats);

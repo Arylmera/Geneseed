@@ -112,6 +112,9 @@ const FLAGS = {
   // deliberately: a rebuild elides a flag when armed, so a config default could disarm an armed
   // install on its next upgrade.
   ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.flag, g.arg])),
+  // One-shot, so no marker and no rebuild replays it: take back the OpenCode `permission.bash`
+  // gates whose rule is off, on an install older than the `bash_gates` record.
+  '--prune-gates': 'pruneGates',
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -368,7 +371,7 @@ export function parseArgs(argv, defaults) {
     kits: defaults.kits ?? [],
     sharedTier: 'off',
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false,
+    syncThemes: false, validateOnly: false, verbose: false, pruneGates: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),
   };
   const { tokens } = nodeParseArgs({

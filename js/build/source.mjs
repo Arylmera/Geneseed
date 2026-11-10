@@ -600,7 +600,8 @@ export const GATE_SWITCHES = [
  */
 export function makeCfg({
   posture = 'peer', mode = 'direct', trust = DEFAULT_PRESET, doctrines = PACK_ORDER,
-  excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false), ...switches
+  excludeRules = [], excludeSkills = [], kits = [], sharedTier = /** @type {boolean | string} */ (false),
+  pruneGates = false, ...switches
 } = {}) {
   return {
     root: ROOT,
@@ -636,5 +637,7 @@ export function makeCfg({
     // unless its `no*` arg says so in so many words: only a literal `true` disarms, so every
     // caller that never heard of a switch keeps the gate.
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.key, switches[g.arg] !== true])),
+    // `--prune-gates`: only a literal `true`, so a caller that never heard of it prunes nothing.
+    pruneGates: pruneGates === true,
   };
 }

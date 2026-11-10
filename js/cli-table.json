@@ -369,6 +369,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--prune-gates"
+          ],
+          "dest": "prune_gates",
+          "metavar": null,
+          "help": "OpenCode only, this build only: remove from opencode.json the permission.bash gates whose rule this build has off (a doctrine, or the deletion gate) and that still read as Geneseed writes them, on an install made before Geneseed recorded which gates it added; an entry you changed stays. Never replayed by rebuilds",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []

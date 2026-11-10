@@ -112,6 +112,8 @@ const BARE_FLAGS = [
   ['--no-ownership-gate', 'noOwnershipGate'],
   ['--no-external-gate', 'noExternalGate'],
   ['--no-test-note', 'noTestNote'],
+  // Not a switch: a one-shot act on an OpenCode config, never written to a marker.
+  ['--prune-gates', 'pruneGates'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

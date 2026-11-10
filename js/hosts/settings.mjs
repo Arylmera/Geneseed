@@ -272,6 +272,10 @@ function defaultPermission(doctrines = null, excluded = [], deletionGate = true)
 const OWNED_BASH = ['git commit*', 'git push*',
   ...PUSH_CHAIN.flatMap(([keys]) => keys)];
 
+/** The verdict Geneseed itself writes for each owned key — what "still reads as ours" means. */
+const OWNED_VERDICT = new Map([['git commit*', 'ask'], ['git push*', 'ask']]);
+for (const [keys, verdict] of PUSH_CHAIN) for (const k of /** @type {string[]} */ (keys)) OWNED_VERDICT.set(k, /** @type {string} */ (verdict));
+
 /**
  * Bring an ALREADY-WRITTEN `permission` block back into line with the pack selection, and
  * touch nothing else. Returns `[changed, stranded]` — whether anything moved, and the owned
@@ -293,16 +297,27 @@ const OWNED_BASH = ['git commit*', 'git push*',
  * thing to want, and the value Geneseed writes precisely because it is the obvious one — had
  * it DELETED by a pack-off build.
  *
- * NOTHING ON DISK RECORDS PROVENANCE, and none of the candidates survived contact: the value
- * is what a user would write too; the carrier's `Active packs:` marker is rewritten by this
- * same emit BEFORE `mergeOpencodeJson` runs (`emitOpencodeGlobalRender` writes AGENT.md at the
- * top and wires the config at the bottom), so it answers with the NEW selection and would
- * licence every removal; and a per-install ownership record would be a new marker file joining
- * the owned set, the reversal markers and the deletion corpus — a much larger change than the
- * defect. So removal is CONSERVATIVE: an unwanted owned key that is already on disk stays, and
- * is reported to the caller as `stranded` so the user is told rather than left to discover it.
+ * THE RECORD IS THE MANIFEST'S `bash_gates` (5.1.2), the `bash` twin of `skill_denies` and
+ * `edit_asks`: the keys an emit itself ADDED, because they were absent when it ran. `record` is
+ * the previous manifest's list, as a Set, updated in place. A key that was already there, at
+ * any value, is the user's and is never claimed — the value is what a user would write too, and
+ * the carrier's `Active packs:` marker cannot stand in for a record either: this same emit
+ * rewrites it BEFORE `mergeOpencodeJson` runs, so it answers with the NEW selection and would
+ * licence every removal. (This docblock once ruled the record out as "a new marker file"; the
+ * manifest has since carried two such records, so it is one more key, not one more file.)
  *
- * That leaves a gate wired for a rule this build does not make binding, which is the
+ * So an unwanted owned key goes only when BOTH hold: it is recorded, and it still reads
+ * Geneseed's own verdict (`OWNED_VERDICT`) — the record licenses taking back our entry, not
+ * whatever a user has since put under that key. Anything else stays and is reported as
+ * `stranded`, so the user is told rather than left to discover it.
+ *
+ * `pruneAll` (`--prune-gates`) IS THE USER SAYING "THEY ARE YOURS" for an install that predates
+ * the record: every `opencode.json` written before 5.1.2 has the gates and no `bash_gates`, so
+ * without it they would be stranded for good. For that one build it stands in for the record;
+ * the value check stays, so an entry the user re-scoped is still kept. One-shot: no marker
+ * records it and no rebuild replays it.
+ *
+ * A stranded gate is wired for a rule this build does not make binding, which is the
  * FAIL-CLOSED direction — the boundary asks for a confirmation the constitution no longer
  * compels, exactly as the commit skill's own consent step does with the pack off. The unsafe
  * direction, a rule with no gate behind it, cannot occur here. A FRESH file is unaffected:
@@ -319,10 +334,11 @@ const OWNED_BASH = ['git commit*', 'git push*',
  * Returns a third element, `opaque`: the shape reason wiring was impossible, or `null`. The
  * caller warns on it. This is the one branch where the boundary can end up with NO Geneseed
  * gate at all while the constitution states the rule — the unsafe direction — so it must not
- * also be the silent one.
+ * also be the silent one. `removed` collects the keys taken back, for the commented-`.jsonc`
+ * branch, which cannot write and has to name them instead.
  * @returns {[boolean, string[], string | null]}
  */
-function reconcileOpencodePermission(perm, want) {
+function reconcileOpencodePermission(perm, want, record = new Set(), pruneAll = false, removed = []) {
   // A `permission` that is not an object, or whose `bash` is not one — OpenCode also accepts a
   // bare `"bash": "allow"` — is a shape this function has no owned keys inside of. Leaving it
   // exactly as found is the whole point; rewriting it into a map would DELETE a blanket policy
@@ -335,12 +351,23 @@ function reconcileOpencodePermission(perm, want) {
   const bash = fresh ? {} : get(perm, 'bash');
   let changed = false;
   const stranded = [];
+  let addedAny = false;
   for (const k of OWNED_BASH) {
     if (has(want.bash, k)) {
-      if (!has(bash, k)) { bash[k] = want.bash[k]; changed = true; }
-    } else if (has(bash, k)) stranded.push(k);
+      if (!has(bash, k)) { bash[k] = want.bash[k]; changed = addedAny = true; record.add(k); }
+    } else if (has(bash, k)) {
+      if ((record.has(k) || pruneAll) && bash[k] === OWNED_VERDICT.get(k)) {
+        delete bash[k];
+        removed.push(k);
+        changed = true;
+      } else stranded.push(k);
+      // Taken back, or re-scoped by the user since: either way no longer ours to remember.
+      record.delete(k);
+    } else record.delete(k);
   }
-  if (changed && fresh) perm.bash = bash;
+  if (addedAny && fresh) perm.bash = bash;
+  // The last gate out takes the map with it, as uninstall drops an emptied `permission.skill`.
+  if (removed.length && !fresh && !Object.keys(bash).length) delete perm.bash;
   return [changed, stranded, null];
 }
 
@@ -619,9 +646,12 @@ export function atomicWriteJson(p, config) {
  * `result.skillsAdded` is set to the `permission.skill` denies this call added ONLY when the
  * file on disk now matches what it computed (written, or nothing to change). Left unset on
  * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
- * failure — so the caller keeps its previous record rather than claiming denies never written. */
+ * failure — so the caller keeps its previous record rather than claiming denies never written.
+ * `result.bashGates` (the next `bash_gates`, from `oldGates`) follows the same rule.
+ * `pruneGates` is `--prune-gates`: see `reconcileOpencodePermission`. */
 export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [], skillNames = [],
-  staleSkillNames = [], result = {}, deletionGate = true, editAsks = [], oldEdit = null) {
+  staleSkillNames = [], result = {}, deletionGate = true, editAsks = [], oldEdit = null,
+  oldGates = [], pruneGates = false) {
   const target = opencodeTarget(p);
   let config = { $schema: OPENCODE_SCHEMA, instructions: [] };
   const { state, data, hadComments, error } = loadJsonObject(target);
@@ -655,11 +685,16 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   let skillOpaque = null;
   let permIsObject = true;
   const added = [];
+  const gates = new Set(oldGates);
+  const gatesRemoved = [];
+  let permOther = false;   // a `permission.skill` or `.edit` change, as opposed to a bash gate's
   // The edit record is a copy, filled in place, and handed back only on the paths that wrote.
   const edit = { asks: [...((oldEdit && oldEdit.asks) || [])], shorthand: (oldEdit && oldEdit.shorthand) || null };
   let editNote = null;
   if (addPerm) {
     config.permission = defaultPermission(doctrines, excluded, deletionGate);
+    gates.clear();
+    for (const k of Object.keys(config.permission.bash)) gates.add(k);
     if (skillNames.length) {
       config.permission.skill = defaultSkillPermission(skillNames);
       added.push(...skillNames);
@@ -669,7 +704,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     const perm = get(config, 'permission');
     permIsObject = isDict(perm);
     [permChanged, stranded, opaque] = reconcileOpencodePermission(perm,
-      defaultPermission(doctrines, excluded, deletionGate));
+      defaultPermission(doctrines, excluded, deletionGate), gates, pruneGates, gatesRemoved);
     // Independent of the `bash` shape: a `permission.bash` the build cannot wire into must
     // not also block the UNRELATED `permission.skill` key from being reconciled.
     if (permIsObject) {
@@ -680,6 +715,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
       let editChanged;
       [editChanged, editNote] = reconcileOpencodeEditPermission(perm, editAsks, edit);
       permChanged = permChanged || editChanged;
+      permOther = skillChanged || editChanged;
     }
   }
   // The shape said no. This is the direction the residue warning above is NOT — a rule stated
@@ -713,8 +749,9 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     process.stderr.write(`[geneseed] WARN: ${path.basename(target)} keeps `
       + `${stranded.map((k) => jsonDumps(k)).join(', ')} under "permission".bash — the `
       + 'rule behind those gates (a doctrine, or the deletion gate) is off in this build, but '
-      + 'Geneseed cannot tell its own entry from one you wrote, so it removes neither. Delete '
-      + 'them by hand if you want them gone.\n');
+      + 'Geneseed has no record that it wrote them, so it leaves them. Run this build once '
+      + 'with --prune-gates to remove those still set as Geneseed writes them, or delete them '
+      + 'by hand.\n');
   }
   if (editNote) {
     process.stderr.write(`[geneseed] WARN: "permission"."edit" in ${path.basename(target)} `
@@ -730,9 +767,20 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
   if (!addInstr && !permChanged && !addLsp && !addDepth) {
     result.skillsAdded = added;
     result.editRecord = edit;
+    result.bashGates = [...gates];
     return target;
   }
   if (path.extname(target) === '.jsonc' && hadComments) {
+    // Named, since this branch cannot take them out; `bash_gates` keeps its old value (the
+    // caller's rule for a merge that wrote nothing), so they are still ours on the next emit.
+    if (gatesRemoved.length) {
+      process.stderr.write(`[geneseed] WARN: ${path.basename(target)} has comments, so it is `
+        + 'not rewritten: remove these from its "permission".bash by hand — the rule behind '
+        + `them is off in this build: ${gatesRemoved.map((k) => jsonDumps(k)).join(', ')}.\n`);
+      // Nothing but removals: the paste-in advice below is for what a file is MISSING.
+      const gateAdds = [...gates].some((k) => !oldGates.includes(k));
+      if (!addInstr && !addPerm && !gateAdds && !permOther && !addLsp && !addDepth) return target;
+    }
     // ⚠ THE TWO CASES GIVE OPPOSITE ADVICE, and telling a file that HAS a `permission` key to
     // add one is how the first cut of this got it wrong. `add` = there is no block, here is the
     // whole one; `reconcile` = there is a block and it is missing gates this build wires, and
@@ -752,6 +800,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     atomicWriteJson(target, config);
     result.skillsAdded = added;
     result.editRecord = edit;
+    result.bashGates = [...gates];
   } catch (e) {
     if (!isOsError(e)) throw e;
     process.stderr.write(`[geneseed] WARN: could not write ${target} (${e.message}) — `
