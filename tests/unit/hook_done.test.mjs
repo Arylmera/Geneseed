@@ -88,6 +88,14 @@ test('runsUnpiped: the segment rule, written out', () => {
     ['npm test; exit', 'npm test', false],
     ['npm test\ntrue', 'npm test', false],
     ['npm test && echo ok; true', 'npm test', false],       // the mask ends the whole line
+    // `echo` and `printf` always succeed too, and reporting the code this way is common.
+    ['npm test; echo "exit: $?"', 'npm test', false],
+    ['npm test 2>&1; echo done', 'npm test', false],
+    ['npm test\nprintf ok', 'npm test', false],
+    // Backgrounded, the check's status is never the line's. `2>&1` is no background.
+    ['npm test &', 'npm test', false],
+    // After `||` the check may never run.
+    ['true || npm test', 'npm test', false],
     // ...but `&&` masks nothing, and a real next command is not a mask.
     ['npm test && echo ok', 'npm test', true],
     ['npm test; npm run lint', 'npm test', true],

@@ -2103,3 +2103,57 @@ test('rule-gate: an ask on the same write keeps stdout to one document', () => {
     assert.match(askDecision(r, 'protected').permissionDecisionReason, /External Gate/);
   } finally { sb.cleanup(); }
 });
+
+// ---------------------------------------------------------------------------------------------
+// THE ONE READING OF A COMMAND (`shellReading`, js/hosts/hooks.mjs). The gates' lexers treat a
+// backslash as an ordinary character, which is PowerShell's rule; in bash a backslash-newline
+// joins two lines and `\'` / `\"` outside single quotes are literal quotes. Each row is a bash
+// command and the reading every gate is handed: continuations joined, an escaped quote or
+// separator made inert (`_`), everything else character for character. A heredoc body is copied
+// as it is, and so is the whole of a PowerShell command apart from its backtick continuation.
+const { shellReading } = await import('../../js/hosts/hooks.mjs');
+const READINGS = [
+  ['no backslash at all', 'git status && ls', 'bash', 'git status && ls'],
+  ['a continuation', 'rm -rf \\\n  /', 'bash', 'rm -rf   /'],
+  ['a CRLF continuation', 'git \\\r\n commit', 'bash', 'git  commit'],
+  ["the apostrophe idiom 'it'\\''s'", "echo 'it'\\''s done' && rm -rf /", 'bash', "echo 'it'\\_'s done' && rm -rf /"],
+  ['an escaped double quote inside double quotes', 'echo "5\\" wide" && rm -rf /', 'bash', 'echo "5\\_ wide" && rm -rf /'],
+  ['an escaped separator is an argument', 'echo a\\;b', 'bash', 'echo a\\_b'],
+  ['a backslash inside single quotes is literal', "echo 'a\\'", 'bash', "echo 'a\\'"],
+  ['a heredoc body is untouched', "bash <<'EOF'\nrm -rf C:\\\nEOF", 'bash', "bash <<'EOF'\nrm -rf C:\\\nEOF"],
+  ['PowerShell keeps its backslashes', 'gci "C:\\" -Recurse', 'powershell', 'gci "C:\\" -Recurse'],
+  ['PowerShell joins a backtick continuation', 'Remove-Item `\n  C:\\', 'powershell', 'Remove-Item   C:\\'],
+];
+for (const [name, command, shell, want] of READINGS) {
+  test(`shellReading: ${name}`, () => assert.equal(shellReading(command, shell), want));
+}
+
+// What that reading closes, through the real entry point: each of these passed every gate.
+test('a destructive command behind an escaped quote or a continuation still asks', () => {
+  for (const cmd of ["echo 'it'\\''s done' && rm -rf /", 'echo "5\\" wide" && rm -rf /', 'rm -rf \\\n  /']) {
+    const r = hookRun('git-gate', { stdin: bashPayload(cmd), cwd: PLAIN });
+    assert.equal(JSON.parse(r.out).hookSpecificOutput.permissionDecision, 'ask', cmd);
+    assert.match(r.out, /destroy a filesystem root/, cmd);
+  }
+  const split = hookRun('git-gate', { stdin: bashPayload('git \\\n commit -m x'), cwd: PLAIN });
+  assert.match(split.out, /commits or pushes with git/);
+});
+
+// CONSENT BEFORE PUSH ASKS FOR A COMMIT OR A PUSH, not for the words. The prefilter reads words,
+// so a command that trips it is then read segment by segment, and it passes only when EVERY
+// segment is a program that only reads or `git` with a read verb (`consentBenign`). Anything
+// that could run the words keeps the ask.
+test('a read-only command that merely names commit or push does not ask', () => {
+  for (const cmd of ['git log --oneline | grep push', 'cat .git/hooks/pre-commit.sample',
+    'git stash push -m wip', 'git diff HEAD~1 -- docs/commit-style.md', 'git -C . log --grep=push']) {
+    assertDefers(hookRun('git-gate', { stdin: bashPayload(cmd), cwd: PLAIN }), cmd);
+  }
+});
+test('anything that could commit, push or run the words still asks', () => {
+  for (const cmd of ['git commit -m x', 'git -C . push', 'git log; git push', 'echo "git push" | sh',
+    'git log > push.txt', 'git -c alias.x=push x', 'git ci -m "push it"', 'git log $(git push)',
+    'sudo git push', 'git rebase --exec "git commit" HEAD~1']) {
+    const r = hookRun('git-gate', { stdin: bashPayload(cmd), cwd: PLAIN });
+    assert.match(r.out, /commits or pushes with git/, cmd);
+  }
+});

@@ -98,7 +98,8 @@ export function runsUnpiped(command, line) {
     const next = cmd[i + line.length];
     if (next !== undefined && !/[\s;&|]/.test(next)) continue;
     const head = cmd.slice(0, i);
-    if (!/(^|&&|\|\||;|\n) ?$/.test(head)) continue;
+    // Not after `||`: `true || npm test` never runs the check.
+    if (!/(^|&&|(?<!\|)\|(?!\|)|;|\n) ?$/.test(head.replace(/\|\| ?$/, '\u0000'))) continue;
     let quote = '', esc = false;
     for (const ch of head) {
       if (esc) esc = false;
@@ -114,7 +115,12 @@ export function runsUnpiped(command, line) {
       if (two === '&&' || two === '||' || rest[j] === ';' || rest[j] === '\n') break;
       if (rest[j] === '|') { piped = true; break; }
     }
-    if (!piped && !/\|\||[;\n] ?(?:true|:|exit(?: 0)?)(?= ?(?:$|[;&|\n]))/.test(rest)) return true;
+    // MASKED when the line's exit status is not the check's: a `||` after it; behind `;` or a
+    // newline, a command that always succeeds (`true`, `:`, `exit`, and `echo`/`printf`, as in
+    // the common `npm test; echo "exit: $?"`, which exits 0 on a red suite); or a trailing lone
+    // `&`, which backgrounds the check. A real next command is not a mask, and `&&` keeps the status.
+    const masked = /\|\||[;\n] ?(?:true|:|exit(?: 0)?|(?:echo|printf)(?: [^;&|\n]*)?)(?= ?(?:$|[;&|\n]))|(?<!&)& ?$/.test(rest);
+    if (!piped && !masked) return true;
   }
   return false;
 }
