@@ -61,7 +61,7 @@ as a per-host install at project or global scope.
 |---|---|
 | `source.mjs` | Where the SOURCE is: `ROOT`/`SRC`/`THEMES`/`CONFIG`, `PACK_ORDER`, the rule canon (stable ids → positional numbers, citations → names), the cfg object |
 | `render.mjs` | The pure text pipeline: theme load, `INCLUDE` inlining, CATALOG blocks, `{{TOKENS}}`, dest paths |
-| `bundle.mjs` | `build` — render a theme into a bundle dir, plus the source-completeness refusal. Sits UNDER both emits |
+| `bundle.mjs` | `build` — render a theme into a bundle dir, claim-on-create per file (an existing file it did not write is the user's), plus the source-completeness refusal. Sits UNDER both emits |
 | `emit-claude.mjs` | The Claude/Bob/OpenClaude emit — the render half plus the settings + CLAUDE.md managed-block wire |
 | `emit-opencode.mjs` | The OpenCode emits — a project's `.opencode/` and the global config dir. Deliberate twin of the above |
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
@@ -114,7 +114,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
 | `mcp.mjs` | Reads each host's MCP config (`mcpServers`, or OpenCode's `mcp`) and where it lives — read-only since 2026-10: the user edits the file, Geneseed only shows it |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
-| `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry |
+| `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry; and `bundleFiles`, the list a bundle keeps of the files it wrote (in `.geneseed-srcdirs.json`), which the build's prune and the OpenCode project uninstall remove by |
 
 **Before editing:** `hooks*.mjs` **are the hook path** — the verdict travels as JSON on stdout and
 every arm exits 0, so one stray printed byte turns a blocking gate silently permissive, and anything

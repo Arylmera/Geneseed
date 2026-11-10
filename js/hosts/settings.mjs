@@ -1353,6 +1353,34 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
 const delimiters = (blockId) => [`<!-- BEGIN ${blockId} -->`, `<!-- END ${blockId} -->`];
 
 /**
+ * Where the managed block sits in `text`: `[start, stop]`, from the first character of its BEGIN
+ * line to the last of its END line (no trailing newline), or null when the file has none.
+ *
+ * A MARKER IS A WHOLE LINE. The block is written with each marker alone on its line, so that is
+ * the only shape read back. Matching the marker text anywhere took a user's sentence ABOUT the
+ * block ("everything below the `<!-- BEGIN GENESEED -->` line is generated") for the block's
+ * start: the next emit replaced everything from that sentence down to the real END, the user's
+ * own rules with it, and said nothing.
+ *
+ * THE PAIR IS the first END line with a BEGIN line above it, and the LAST such BEGIN. A lone
+ * BEGIN left higher up (a hand-deleted block's first line) therefore stays the user's text, with
+ * whatever they wrote under it. A file with no such pair has no block: the write appends one,
+ * and the remove and the read leave the file alone.
+ */
+function blockSpan(text, blockId) {
+  const [begin, end] = delimiters(blockId);
+  let at = 0;
+  let start = -1;
+  for (const line of text.split('\n')) {
+    const bare = line.replace(/[ \t]+$/, '');
+    if (bare === begin) start = at;
+    else if (bare === end && start >= 0) return [start, at + line.length];
+    at += line.length + 1;
+  }
+  return null;
+}
+
+/**
  * `_build_settings._managed_block_write` — 'created' | 'updated' | 'merged'.
  * Idempotent: a re-emit replaces the block, never stacks them.
  */
@@ -1365,10 +1393,9 @@ export function managedBlockWrite(p, content, blockId = 'GENESEED') {
     return 'created';
   }
   const existing = readText(p);
-  if (existing.includes(begin) && existing.includes(end)) {
-    const pre = existing.split(begin)[0];
-    const post = existing.slice(existing.indexOf(end) + end.length);
-    writeText(p, pre + block + lstripNewlines(post));
+  const span = blockSpan(existing, blockId);
+  if (span) {
+    writeText(p, existing.slice(0, span[0]) + block + lstripNewlines(existing.slice(span[1])));
     return 'updated';
   }
   const sep = existing.endsWith('\n') ? '' : '\n';
@@ -1383,12 +1410,11 @@ export function managedBlockRemove(p, blockId = 'GENESEED', whole = false) {
     unlinkSync(p);
     return;
   }
-  const [begin, end] = delimiters(blockId);
   const existing = readText(p);
-  if (!existing.includes(begin) || !existing.includes(end)) return;
-  const pre = existing.split(begin)[0];
-  const post = existing.slice(existing.indexOf(end) + end.length);
-  const rest = stripWhitespace(`${stripTrailingNewlines(pre)}\n${lstripNewlines(post)}`);
+  const span = blockSpan(existing, blockId);
+  if (!span) return;
+  const rest = stripWhitespace(`${stripTrailingNewlines(existing.slice(0, span[0]))}\n`
+    + `${lstripNewlines(existing.slice(span[1]))}`);
   if (rest) writeText(p, `${rest}\n`);
   else unlinkSync(p);
 }
@@ -1414,11 +1440,12 @@ export function opencodeSentinelWrite(cfgDir) {
 /** `_build_settings._managed_block_read` — the block's inner content, or null. */
 export function managedBlockRead(p, blockId = 'GENESEED') {
   if (!existsSync(p)) return null;
-  const [begin, end] = delimiters(blockId);
   const text = readText(p);
-  if (!text.includes(begin) || !text.includes(end)) return null;
-  const inner = text.slice(text.indexOf(begin) + begin.length);
-  return stripNewlines(inner.slice(0, inner.indexOf(end)));
+  const span = blockSpan(text, blockId);
+  if (!span) return null;
+  // Between the two marker lines; an empty block has one newline, which is both ends.
+  const block = text.slice(span[0], span[1]);
+  return stripNewlines(block.slice(block.indexOf('\n') + 1, Math.max(block.lastIndexOf('\n'), 0)));
 }
 
 /** `str.lstrip("\n")`; the one copy — `native.mjs` and `opencode.mjs` import it from here. */

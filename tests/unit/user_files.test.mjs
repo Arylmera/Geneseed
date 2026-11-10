@@ -14,7 +14,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { writeNativeLayer } from '../../js/hosts/native.mjs';
+import { claimer, writeNativeLayer } from '../../js/hosts/native.mjs';
+import { managedBlockRead, managedBlockRemove, managedBlockWrite } from '../../js/hosts/settings.mjs';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 
 // One install root with a `src` tree beside it, shaped the way `writeNativeLayer` reads: each
@@ -127,5 +128,99 @@ test('a caller that passes no ownership at all is not silently refused', () => {
     ));
     assert.ok(value.written.includes(dest));
     assert.match(fs.readFileSync(dest, 'utf8'), /written/);
+  } finally { f.sb.cleanup(); }
+});
+
+// A SKILL'S SIDE FILES FOLLOW ITS SKILL.md, with one exception stated here. A side file is
+// written only when the claim on its skill's SKILL.md held, so a user's own skill folder never
+// gets a Geneseed file dropped into it. The exception is a side file the previous emit wrote:
+// it stays written and owned when that claim no longer holds, which is a shipped skill whose
+// SKILL.md the user edited. Without it the edit dropped the side files out of the manifest and
+// the prune deleted them, licence files included.
+test('editing a shipped SKILL.md does not cost the skill its side files', () => {
+  const f = fixture();
+  try {
+    const items = [
+      item(f.src, 'skills/probe.md', '# Skill: probe\n\n> Probes.\n'),
+      item(f.src, 'skills/probe/extra.md', 'the side file\n'),
+    ];
+    const skill = path.join(f.skillsDir, 'probe', 'SKILL.md');
+    const side = path.join(f.skillsDir, 'probe', 'extra.md');
+    fs.mkdirSync(path.dirname(skill), { recursive: true });
+    fs.writeFileSync(skill, 'the user edited this\n');
+    fs.writeFileSync(side, 'an older side file\n');
+
+    // The state after the edit was first refused: SKILL.md is out of `owned`, the side file in.
+    const { value } = captured(() => writeNativeLayer(items, f.agentsDir, f.skillsDir, null,
+      { host: 'opencode', oldOwned: ['skills/probe/extra.md'], cfg: f.cfg, src: f.src }));
+    assert.equal(fs.readFileSync(skill, 'utf8'), 'the user edited this\n');
+    assert.equal(fs.readFileSync(side, 'utf8'), 'the side file\n');
+    assert.ok(value.written.includes(side),
+      'the side file left `written`, so it leaves the manifest and the prune deletes it');
+
+    // The control: a folder this install never wrote into gets no side file.
+    fs.rmSync(side);
+    const { value: v2 } = captured(() => writeNativeLayer(items, f.agentsDir, f.skillsDir, null,
+      { host: 'opencode', oldOwned: [], cfg: f.cfg, src: f.src }));
+    assert.ok(!fs.existsSync(side), "a side file was dropped into the user's own skill folder");
+    assert.ok(!v2.written.includes(side));
+    assert.equal(typeof claimer([], f.cfg).owned, 'function');
+  } finally { f.sb.cleanup(); }
+});
+
+// THE MANAGED BLOCK IS FOUND BY WHOLE-LINE MARKERS. The block is written with `<!-- BEGIN
+// GENESEED -->` and `<!-- END GENESEED -->` each alone on a line, and only that shape is read
+// back: the first END line with a BEGIN line above it, and the last such BEGIN. The marker text
+// inside a sentence is the user's prose. Each row is a user's CLAUDE.md around a real block,
+// and what must still be there after a rewrite and after the removal.
+const BLOCK = (body) => `<!-- BEGIN GENESEED -->\n${body}\n<!-- END GENESEED -->\n`;
+const BLOCK_ROWS = [
+  ['a sentence that names the BEGIN marker, above the user\'s own rules',
+    'Everything below the `<!-- BEGIN GENESEED -->` line is generated.\n\n- Use pnpm.\n\n',
+    '',
+    'Everything below the `<!-- BEGIN GENESEED -->` line is generated.\n\n- Use pnpm.\n'],
+  ['a sentence that names both markers, END first',
+    'It ends at <!-- END GENESEED --> and starts at <!-- BEGIN GENESEED -->.\n\n',
+    '',
+    'It ends at <!-- END GENESEED --> and starts at <!-- BEGIN GENESEED -->.\n'],
+  ['a lone BEGIN line left from a hand-deleted block, with text under it',
+    '<!-- BEGIN GENESEED -->\nmy notes\n\n',
+    '',
+    '<!-- BEGIN GENESEED -->\nmy notes\n'],
+  ['plain text above and below',
+    'above\n\n',
+    '\nbelow\n',
+    'above\nbelow\n'],
+];
+for (const [name, pre, post, afterRemove] of BLOCK_ROWS) {
+  test(`the managed block leaves the user's text alone: ${name}`, () => {
+    const f = fixture();
+    try {
+      const p = path.join(f.cfg, 'CLAUDE.md');
+      fs.writeFileSync(p, pre + BLOCK('old harness') + post);
+      assert.equal(managedBlockRead(p), 'old harness');
+      assert.equal(managedBlockWrite(p, 'new harness'), 'updated');
+      assert.equal(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'),
+        pre + BLOCK('new harness') + post.replace(/^\n+/, ''));
+      // Rewriting again stacks nothing.
+      managedBlockWrite(p, 'new harness');
+      assert.equal(fs.readFileSync(p, 'utf8').split('<!-- END GENESEED -->\n').length - 1, 1);
+      managedBlockRemove(p);
+      assert.equal(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'), afterRemove);
+    } finally { f.sb.cleanup(); }
+  });
+}
+
+test('a file that only mentions the markers gets the block appended, and loses nothing', () => {
+  const f = fixture();
+  try {
+    const p = path.join(f.cfg, 'CLAUDE.md');
+    const prose = 'The block sits between `<!-- BEGIN GENESEED -->` and `<!-- END GENESEED -->`.\n';
+    fs.writeFileSync(p, prose);
+    assert.equal(managedBlockRead(p), null);
+    assert.equal(managedBlockWrite(p, 'harness'), 'merged');
+    assert.equal(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'), `${prose}\n${BLOCK('harness')}`);
+    managedBlockRemove(p);
+    assert.equal(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'), prose);
   } finally { f.sb.cleanup(); }
 });

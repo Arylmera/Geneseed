@@ -211,6 +211,61 @@ test('an unobstructed uninstall reports no incompleteness', () => {
   });
 });
 
+// THE USER'S OWN FILES, in the two places an OpenCode project install shares with them: the
+// repository root, where the bundle renders `agents/`, `skills/`, `laws/` and `AGENT.md`, and
+// `.opencode/`. Removal goes by what the emit recorded and by nothing else. It used to go by
+// directory: the second emit wiped the root folders, the uninstall deleted them whole, and an
+// uninstall that found the user's file in `.opencode/` reported INCOMPLETE with the manifest
+// already gone, so the retry it advised read the folder as a pre-manifest install and deleted it.
+test('an OpenCode project install never removes the files the user had there', () => {
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    const theirs = {
+      'agents/support_bot.py': "print('bot')\n",
+      'agents/reviewer.md': 'my own reviewer notes\n',     // a name the bundle ships too
+      'skills/data.yaml': 'k: v\n',
+      'laws/bylaws.txt': 'bylaws\n',
+      'AGENT.md': '# my AGENT.md\n',                        // and the bundle's own carrier
+      '.opencode/agents/mine.md': 'my agent\n',
+    };
+    for (const [rel, text] of Object.entries(theirs)) {
+      fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true });
+      fs.writeFileSync(path.join(repo, rel), text, 'utf8');
+    }
+    const intact = (when) => {
+      for (const [rel, text] of Object.entries(theirs)) {
+        assert.ok(fs.existsSync(path.join(repo, rel)), `${when}: ${rel} was deleted`);
+        assert.equal(fs.readFileSync(path.join(repo, rel), 'utf8'), text, `${when}: ${rel} was rewritten`);
+      }
+    };
+
+    emit('opencode', repo, path.join(d, 'home'));
+    intact('after the first emit');
+    // The control: the emit did render beside them, so "intact" is not an emit that did nothing.
+    assert.ok(fs.statSync(path.join(repo, 'agents', 'tester.md')).isFile());
+    emit('opencode', repo, path.join(d, 'home'));
+    intact('after the second emit');
+    fs.writeFileSync(path.join(repo, '.geneseed-emit'), 'opencode\n', 'utf8');
+
+    const [summary, , err] = capturedErr(
+      () => installUninstall(repo, 'opencode', 'project', 'keep'));
+    intact('after the uninstall');
+    // Complete in one pass: what is left in the watched folders is the user's, not a survivor.
+    assert.ok(!JSON.stringify(summary).includes('incomplete'), JSON.stringify(summary));
+    assert.ok(!err.toLowerCase().includes('retried'), err);
+    assert.ok(!fs.existsSync(path.join(repo, '.geneseed-emit')));
+    // And what the emit wrote is gone, the half of the bundle the old reversal never reached too.
+    for (const rel of ['agents/tester.md', 'skills/commit.md', 'laws/universal.md',
+      'doctrines/craft.md', 'bricks/plan.md', '.opencode/agents/tester.md']) {
+      assert.ok(!fs.existsSync(path.join(repo, rel)), `${rel} was left behind`);
+    }
+
+    // The retry a user might still type finds no install and touches nothing.
+    capturedErr(() => installUninstall(repo, 'opencode', 'project', 'keep'));
+    intact('after a second uninstall');
+  });
+});
+
 /** The resolved spelling, which is what the registry stores and compares. */
 const resolved = (p) => fs.realpathSync.native(p);
 

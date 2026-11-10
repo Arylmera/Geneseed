@@ -556,6 +556,8 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
     return false;
   };
   claim.editRefused = editRefused;
+  // Did the previous emit write `dest`? Read by `writeNativeLayer` for a skill's side files.
+  claim.owned = (dest) => oldSet !== null && cfg != null && oldSet.has(relPosix(cfg, dest));
   return claim;
 }
 
@@ -745,8 +747,13 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
     if (kind === 'agent') nAgents += 1;
     else nSkills += 1;
   }
+  // A side file follows its skill's claim, with one exception: a side file the previous emit
+  // wrote stays maintained when the claim on SKILL.md no longer holds. That is a shipped skill
+  // whose SKILL.md the user edited. The edit takes SKILL.md out of `owned` for good, and
+  // skipping its side files here dropped them out too, so the prune deleted them: the kept
+  // SKILL.md pointed at a file that was gone, and credited text lost its licence.
   for (const [stem, dest, text, source] of sideFiles) {
-    if (!claimedSkills.has(stem) || !claim(dest)) continue;
+    if (!(claimedSkills.has(stem) || claim.owned?.(dest)) || !claim(dest)) continue;
     if (text !== null) { write(dest, stripSkillBodyLinks(text)); continue; }
     mkdirSync(path.dirname(dest), { recursive: true });
     copyFile(source, dest);

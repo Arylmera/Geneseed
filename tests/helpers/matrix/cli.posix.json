@@ -6471,7 +6471,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[uninstall] INCOMPLETE — removed 5 file(s)"
+        "[uninstall] done — removed 5 file(s)"
       ],
       "expect_absent_files": [
         "repo/.opencode/agents/advocate.md",
@@ -6480,13 +6480,13 @@
         "repo/laws",
         "repo/agents",
         "repo/skills/wayfinder/SKILL.md",
-        "repo/skills"
+        "repo/skills",
+        "repo/.geneseed-emit"
       ],
       "expect_files": [
         "repo/.opencode/agents/mine.md",
         "repo/.opencode/context.json",
-        "repo/README.md",
-        "repo/.geneseed-emit"
+        "repo/README.md"
       ],
       "id": "uninstall/a-manifest-unlinks-the-layer-file-by-file",
       "steps": [

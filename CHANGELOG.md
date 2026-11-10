@@ -8,6 +8,13 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **An OpenCode project install no longer deletes the user's own `agents/`, `skills/`, `laws/` or `AGENT.md` at the repository root.** The bundle now records each file it writes (in `.geneseed-srcdirs.json`) and owns only those: a file already there is kept and named in a warning, a rebuild prunes only recorded files, and uninstall removes only recorded files. Before, the second emit wiped those folders and uninstall deleted them whole. A bundle built by an older version has no record: the next build overwrites what it ships, removes nothing, and starts the record.
+- **`geneseed uninstall` on an OpenCode project no longer deletes `.opencode/` on a retry.** A file of the user's under `.opencode/` made the first pass report INCOMPLETE with the manifest already removed, and the retry it advised then removed the whole folder. The uninstall now completes in one pass and leaves the user's files, and the whole-folder removal kept for pre-manifest installs runs only where the root still carries a bundle marker.
+- **The managed block in `CLAUDE.md` / `AGENTS.md` is found by whole-line markers.** A sentence that mentioned `<!-- BEGIN GENESEED -->` was taken for the block's start, and the next emit silently deleted everything from that sentence to the real block.
+- **Editing a shipped `SKILL.md` no longer makes the next emit delete that skill's side files and licence files.**
+- `tests/unit/sandbox.test.mjs` no longer fails when run as root.
+
 ## [5.1.1] — 2026-11-10
 
 ### Added
