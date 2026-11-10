@@ -74,6 +74,7 @@ as a per-host install at project or global scope.
 | `args.mjs` | The generator's flag surface: `harness.config.json` defaults, the `--emit`/`--theme`/`--footprint` parse tables and choices, `-h`, and `die` (a throw, so `rebuild-all` survives one bad install) |
 | `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `driver.mjs` |
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
+| `export.mjs` | `geneseed export` — skills, agents and the constitution as catalogue entities for a shared library (`SKILL.md`/`AGENT.md` + `metadata.yaml`), shaped by a profile kept outside the repo. One way, claim-on-create, not an install |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |
 
 **Before editing:** `render.mjs` writes nothing, and its output is what every emit target

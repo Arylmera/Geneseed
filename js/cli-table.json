@@ -679,6 +679,75 @@
       "mutex": []
     },
     {
+      "name": "export",
+      "help": "write the skills, the agents and the constitution as catalogue entities for a shared library: one folder each with SKILL.md or AGENT.md (frontmatter name and description only) and a metadata.yaml. One way: the source stays src/. Not an install: no carrier, hooks or settings",
+      "description": "",
+      "positionals": [],
+      "options": [
+        {
+          "names": [
+            "--out"
+          ],
+          "dest": "out",
+          "metavar": null,
+          "help": "the folder the entity folders are written into (required); it may be a checkout of the library: only files an earlier export wrote there are replaced or pruned",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--profile"
+          ],
+          "dest": "profile",
+          "metavar": null,
+          "help": "a JSON file with the receiving library's rules, kept outside this repository: prefix, owner, maintainer, status, compatibleTools, skillsDir, agentsDir, lawsDir, lawsName, laws, only, exclude, keepSkillSelfImprovement (default: none; source names, no owner)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme",
+          "metavar": null,
+          "help": "the voice the text is rendered in (default: neutral)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--kits"
+          ],
+          "dest": "kits",
+          "metavar": null,
+          "help": "comma-separated kits whose skills and agents are exported, or none (default: every kit)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "factory",
       "help": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide)",
       "description": "",
