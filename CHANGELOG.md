@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.2.0] — 2026-11-10
+
 ### Added
 - **`geneseed export --out <folder> [--profile <file>]`** writes the skills, the agents and the constitution as catalogue entities for a shared library that is not a Geneseed install: one folder each, with `SKILL.md` or `AGENT.md` (frontmatter `name` and `description` only) and a `metadata.yaml` (type, owner, maintainer, version, status, compatible tools, licence and origin of a credited port, `requires`). A reference to another exported entity takes its exported name and becomes a requirement; a skill's side files move under `references/`; the constitution is one `laws` entity that every citing entity requires, written as one file per category (`ontology.md`, `laws.md`, `doctrines-<pack>.md`) behind a `LAWS.md` index. The profile, a JSON file, carries the library's own values (name prefix, owner, maintainer, folder names, `only`/`exclude`); a git checkout's `export.profile.json` is the default, `--profile none` ignores it, and the npm package does not carry it. One way: `src/` stays the source. Vendored folder skills and aliases are not exported, and are named.
 - **`geneseed build --force`** takes Geneseed's copy of every file it ships, for that one build. It replaces a shipped file you edited and a file of yours at a shipped name, removes a retired file you edited, and removes retired skills an older build left in a bundle. Every file is named. A skill or agent under a name Geneseed does not ship is never touched, nor are memory, the notebook, your rules or your profile. To keep your own file at a shipped name for good, use `--exclude-skills`.
