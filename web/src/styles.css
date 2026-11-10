@@ -3229,6 +3229,8 @@ code.ip-path { padding: 0; background: none; border: 0; font-size: var(--fs-xs);
 .ip-picks .sel, .field .sel { width: 100%; min-width: 0; font-family: var(--font-ui); }
 .ip-block { display: flex; flex-direction: column; gap: 6px; } /* off-scale: 6px, 2px from a step */
 .ip-label { font-size: var(--fs-sm); font-weight: 600; }
+.ip-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
+.ip-files code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .install-panel .mcp-target { margin: 0; border: 0; border-radius: 0; overflow: visible; }
 .install-panel .mcp-target .mt-head { padding: var(--sp-1) 0; background: none; flex-wrap: wrap; }
 .install-panel .mcp-row { justify-content: space-between; padding: var(--sp-2) 0; }

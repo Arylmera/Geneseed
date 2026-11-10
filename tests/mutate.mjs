@@ -194,8 +194,8 @@ export const MUTATIONS = [
     id: 'M7',
     name: 'make an emit non-idempotent',
     file: 'js/hosts/settings.mjs',
-    find: '    writeText(p, pre + block + lstripNewlines(post));',
-    replace: '    writeText(p, pre + block + post);',
+    find: '    writeText(p, existing.slice(0, span[0]) + block + lstripNewlines(existing.slice(span[1])));',
+    replace: '    writeText(p, existing.slice(0, span[0]) + block + existing.slice(span[1]));',
     gate: IDEMPOTENT,
     why: 'CLOSED IN P3 T7, after two phases declared ungated. The re-emit path is what every '
       + 'real user is on from their second build onwards, and `golden.mjs --idempotent` has '

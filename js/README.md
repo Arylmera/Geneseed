@@ -61,7 +61,7 @@ as a per-host install at project or global scope.
 |---|---|
 | `source.mjs` | Where the SOURCE is: `ROOT`/`SRC`/`THEMES`/`CONFIG`, `PACK_ORDER`, the rule canon (stable ids → positional numbers, citations → names), the cfg object |
 | `render.mjs` | The pure text pipeline: theme load, `INCLUDE` inlining, CATALOG blocks, `{{TOKENS}}`, dest paths |
-| `bundle.mjs` | `build` — render a theme into a bundle dir, plus the source-completeness refusal. Sits UNDER both emits |
+| `bundle.mjs` | `build` — render a theme into a bundle dir, claim-on-create per file (an existing file it did not write is the user's), plus the source-completeness refusal. Sits UNDER both emits |
 | `emit-claude.mjs` | The Claude/Bob/OpenClaude emit — the render half plus the settings + CLAUDE.md managed-block wire |
 | `emit-opencode.mjs` | The OpenCode emits — a project's `.opencode/` and the global config dir. Deliberate twin of the above |
 | `emit-common.mjs` | Constants, tree walkers, and the three writers BOTH global emits share. Decides no host |
@@ -74,6 +74,7 @@ as a per-host install at project or global scope.
 | `args.mjs` | The generator's flag surface: `harness.config.json` defaults, the `--emit`/`--theme`/`--footprint` parse tables and choices, `-h`, and `die` (a throw, so `rebuild-all` survives one bad install) |
 | `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `driver.mjs` |
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
+| `export.mjs` | `geneseed export` — skills, agents and the constitution as catalogue entities for a shared library (`SKILL.md`/`AGENT.md` + `metadata.yaml`), shaped by a profile kept outside the repo. One way, claim-on-create, not an install |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |
 
 **Before editing:** `render.mjs` writes nothing, and its output is what every emit target
@@ -109,12 +110,12 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `loss.mjs` | Law IV calibrated to real loss: `lossReason` decides whether a command would really lose data (protected branch, unpushed branch, dirty tree, stash, reflog, files git cannot restore) and fails closed. The gate path's one `git` spawn, reached only after `LOSS_CANDIDATE_RE` matched. Twin: the OpenCode guard plugin |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
 | `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`; and the web console's login launcher (`autostartState`/`autostartInstall`/`autostartRemove`). Kept cheap to import |
-| `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
+| `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit. `claimer`: claim-on-create, what an emit kept (`claim.kept`), and `--force` |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
-| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
+| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset; `leftoversOf`, the files an install keeps that are not Geneseed's copy, read off the emit's record for the console |
 | `mcp.mjs` | Reads each host's MCP config (`mcpServers`, or OpenCode's `mcp`) and where it lives — read-only since 2026-10: the user edits the file, Geneseed only shows it |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
-| `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry |
+| `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry; and `bundleFiles`, the list a bundle keeps of the files it wrote (in `.geneseed-srcdirs.json`), which the build's prune and the OpenCode project uninstall remove by |
 
 **Before editing:** `hooks*.mjs` **are the hook path** — the verdict travels as JSON on stdout and
 every arm exits 0, so one stray printed byte turns a blocking gate silently permissive, and anything

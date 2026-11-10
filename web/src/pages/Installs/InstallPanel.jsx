@@ -59,6 +59,55 @@ function McpList({ targets, onReveal }) {
   )
 }
 
+// What a rebuild leaves alone here and a forced one would not: files that are the user's at a
+// path Geneseed ships (`kept`), and retired skills an older build left behind (`stale`). The
+// server reads both off the emit's own record (`leftoversOf`, js/hosts/installs.mjs). Shown
+// only when there is one, with the files named, because the button below it overwrites them.
+const SHOWN = 6
+function Leftovers({ leftovers, canAct, busy, onForce }) {
+  const kept = leftovers?.kept || []
+  const stale = leftovers?.stale || []
+  const all = [...kept, ...stale]
+  if (!all.length) return null
+  return (
+    <div className="ip-block ip-leftovers" role="group" aria-label="Files a rebuild keeps">
+      <span className="ip-label">
+        Not Geneseed’s copy <span className="mono dim">{all.length}</span>
+      </span>
+      {kept.length ? (
+        <p className="sub">
+          {kept.length === 1 ? 'This file is yours' : 'These files are yours'} where Geneseed ships
+          its own: you edited a shipped file, or had one under the same name. A rebuild keeps{' '}
+          {kept.length === 1 ? 'it' : 'them'}.
+        </p>
+      ) : null}
+      {stale.length ? (
+        <p className="sub">
+          {stale.length === 1 ? 'One retired skill was' : `${stale.length} retired skills were`}{' '}
+          left by an older version. A rebuild leaves {stale.length === 1 ? 'it' : 'them'} in place.
+        </p>
+      ) : null}
+      <ul className="ip-files">
+        {all.slice(0, SHOWN).map((rel) => (
+          <li key={rel}>
+            <code title={rel}>{rel}</code>
+          </li>
+        ))}
+        {all.length > SHOWN ? <li className="dim">and {all.length - SHOWN} more</li> : null}
+      </ul>
+      {canAct ? (
+        <button type="button" className="btn ghost danger-line" disabled={busy} onClick={onForce}>
+          Replace with Geneseed’s copies…
+        </button>
+      ) : null}
+      <p className="sub">
+        Skills and agents under your own names, memory, notebook, rules and profile are never
+        touched. To keep a file of yours for good, exclude that skill instead.
+      </p>
+    </div>
+  )
+}
+
 const BADGE = {
   active: ['Active', 'ok'],
   disabled: ['Disabled', 'warn'],
@@ -85,6 +134,7 @@ export default function InstallPanel({
   onToggleInstall,
   onRemove,
   onRevealMcp,
+  onForce,
 }) {
   const who = `${hostInfo(inst.host).label} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
@@ -140,6 +190,9 @@ export default function InstallPanel({
         </div>
       ) : null}
 
+      {active ? (
+        <Leftovers leftovers={inst.leftovers} canAct={canAct} busy={busy} onForce={onForce} />
+      ) : null}
       {active && targets.length ? <McpList targets={targets} onReveal={onRevealMcp} /> : null}
       {active && inst.scope === 'global' ? <ExclusionsCard /> : null}
 

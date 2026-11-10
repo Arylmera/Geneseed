@@ -402,6 +402,40 @@ export default function Hosts({
       })
   }
 
+  // The forced rebuild: the install's own choices, plus `force`. The confirm names every file
+  // it replaces or removes, because this is the one rebuild that overwrites the user's work.
+  const forceRebuild = async (inst) => {
+    const { theme, footprint, posture, mode, trust, sharedTier } = choiceFor(inst)
+    const kept = inst.leftovers?.kept || []
+    const stale = inst.leftovers?.stale || []
+    const list = (rels) =>
+      rels.slice(0, 8).join(', ') + (rels.length > 8 ? `, and ${rels.length - 8} more` : '')
+    const msg =
+      (kept.length
+        ? `Replace with Geneseed’s copy: ${list(kept)}. Your version of each is overwritten. `
+        : '') +
+      (stale.length ? `Remove: ${list(stale)}. ` : '') +
+      'Nothing else is touched.'
+    const ok = await confirm(msg, {
+      title: 'Replace your files with Geneseed’s?',
+      confirmLabel: 'Replace and rebuild',
+      tone: 'danger',
+    })
+    if (ok)
+      onAction?.('install', {
+        host: inst.host,
+        scope: inst.scope,
+        path: inst.path,
+        theme,
+        footprint,
+        posture,
+        mode,
+        trust,
+        ...(inst.scope === 'global' ? {} : { sharedTier }),
+        force: true,
+      })
+  }
+
   const toggleInstall = async (inst) => {
     if (
       inst.state === 'active' &&
@@ -676,6 +710,7 @@ export default function Hosts({
           onToggleInstall={() => toggleInstall(current)}
           onRemove={() => confirmRemove(current)}
           onRevealMcp={revealMcp}
+          onForce={() => forceRebuild(current)}
         />
       ) : null}
     </div>

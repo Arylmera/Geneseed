@@ -16,8 +16,8 @@ import { relPosix } from '../lib/text.mjs';
 import { SRC_DIR_TOKENS, destRel } from './render.mjs';
 import { mkdirSync, readdirSync, cpSync } from 'node:fs';
 
-/** `_build_render.SRC_DIRS_MARKER`. */
-export const SRC_DIRS_MARKER = '.geneseed-srcdirs.json';
+/** `_build_render.SRC_DIRS_MARKER` — defined beside its file-list reader, `bundleFiles`. */
+export { SRC_DIRS_MARKER } from '../hosts/owned.mjs';
 /**
  * `_build_render.OWNED_SRC_DIRS` — wiped and regenerated each run.
  *

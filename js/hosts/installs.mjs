@@ -45,6 +45,7 @@ import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
+import { bundleLeftovers, ownedWithin } from './owned.mjs';
 import { claudeHookShell, hookShimPath } from './shim.mjs';
 
 export { carriersFor };
@@ -584,6 +585,33 @@ export function installKind(root) {
   if (existsSync(path.join(root, GLOBAL_MANIFEST))) return 'global';
   if (isDir(path.join(root, '.opencode'))) return 'project';
   return null;
+}
+
+/**
+ * What the last emit left at `root` that is not Geneseed's copy, for the console: `kept`, the
+ * files that are the user's at a path Geneseed ships (an edit to a shipped skill, or a file of
+ * theirs under a shipped name), and `stale`, the retired skills an older build left in a bundle.
+ * Rels are spelled from `root`, the way the user would find them.
+ *
+ * Read off what the emit recorded (the manifest's `kept`, and for an OpenCode project the
+ * bundle marker at the root), never by rendering, so a page poll can afford it. Each entry
+ * only while its file still exists: a file the user removed since is no leftover. A build
+ * with `--force` replaces the first kind and removes the second.
+ */
+export function leftoversOf(root, host = 'opencode', scope = 'global') {
+  const cfg = scope === 'project' ? claudeCfg(root, 'project', host) : root;
+  const prefix = scope === 'project' ? `${path.basename(cfg)}/` : '';
+  const man = claudeReadManifest(cfg);
+  const recorded = isDict(man) && Array.isArray(man.kept) ? man.kept : [];
+  const kept = ownedWithin(cfg, recorded.filter((r) => typeof r === 'string'))
+    .filter((r) => isFile(path.join(cfg, r))).map((r) => `${prefix}${r}`);
+  let stale = [];
+  if (host === 'opencode' && scope === 'project') {
+    const bundle = bundleLeftovers(root);
+    kept.push(...bundle.kept);
+    stale = bundle.stale;
+  }
+  return { kept: kept.sort(), stale };
 }
 
 /** 'active' | 'disabled' | 'absent'. */

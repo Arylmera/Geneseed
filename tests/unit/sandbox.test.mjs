@@ -132,7 +132,8 @@ test('a cleanup failure cannot destroy a finished run', (t) => {
   try {
     fs.rmSync(probe, { recursive: true, maxRetries: 0 });
   } catch { raised = true; }
-  liftProbe();
+  // As root the removal above succeeded, and there is nothing left to lift.
+  if (raised) liftProbe();
   fs.rmSync(probe, { recursive: true, force: true });
   if (!raised) return t.skip('this environment removes a sabotaged tree anyway (root?)');
 

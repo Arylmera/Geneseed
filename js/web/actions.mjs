@@ -786,6 +786,9 @@ export function apiInstallCmd(state, body) {
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
     kits ?? kitsOfDir(root, host), sharedTier);
+  // `--force` only on a literal `true`: the panel's "Replace with Geneseed's copies", which
+  // names the files first. It is this one build's instruction and is never recorded.
+  if (bget(body, 'force') === true) argv.push('--force');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 

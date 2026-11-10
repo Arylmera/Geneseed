@@ -12,8 +12,9 @@
  */
 import path from 'node:path';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
+import { BUNDLE_FILES_KEY, bundleFiles, ownedWithin } from '../hosts/owned.mjs';
 import { migrateMemoryIndex } from '../hosts/memory-files.mjs';
-import { copyFile, isDir, isFile, readText, writeText } from '../lib/fs.mjs';
+import { copyFile, isFile, readText, writeText } from '../lib/fs.mjs';
 import { jsonDumpsIndent, parseJson, formatReprAscii, isTruthy } from '../lib/json.mjs';
 import { OWNED_SRC_DIRS, SRC_DIRS_MARKER, TMPL_SPEC_RE } from './emit-common.mjs';
 import { SRC_DIR_TOKENS, renderAll } from './render.mjs';
@@ -21,8 +22,12 @@ import {
   ensureBundleGitignore, ensureContextStub, ensureMemoryIndex, ensureNotebookIndex,
   ensureProfileStub, ensureRulesStub, ensureWikiStub,
 } from './stubs.mjs';
+import { retiredSkillNames, skillLabels } from './retired-skills.mjs';
+import { skillAliases } from './source.mjs';
 import { writeVersion } from './version.mjs';
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync,
+} from 'node:fs';
 
 /**
  * Seed the memory index, then move a flat one to topics — the pair every emit runs on its
@@ -94,11 +99,51 @@ function readPriorSrcDirs(out) {
   return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 }
 
-/** `_build_render._write_src_dirs_marker` — temp + replace. */
-function writeSrcDirsMarker(out, resolved) {
+/**
+ * `_build_render._write_src_dirs_marker` — temp + replace. `files` rides in the same marker:
+ * every rel this build wrote, the stores apart (see `build`).
+ */
+function writeSrcDirsMarker(out, resolved, files, extra = {}) {
   const tmp = path.join(out, `${SRC_DIRS_MARKER}.tmp`);
-  writeText(tmp, `${jsonDumpsIndent(resolved)}\n`);
+  writeText(tmp, `${jsonDumpsIndent({ ...resolved, [BUNDLE_FILES_KEY]: files, ...extra })}\n`);
   renameSync(tmp, path.join(out, SRC_DIRS_MARKER));
+}
+
+/**
+ * The retired skills still lying in a bundle's skills dir that no record owns: `<name>.md`
+ * where the name is one Geneseed shipped and no longer does, and the file carries the render's
+ * `# <Skill label>: <id>` heading outside a code fence, the flat twin of `isRendered`
+ * (`./retired-skills.mjs`). A retired name is a plain word, so a file under one may be the
+ * user's own; the heading is what tells them apart.
+ *
+ * This is the leftover of a bundle an older build rendered, which kept no file list: the build
+ * that starts the list cannot know what its predecessor wrote, so it leaves such a file, names
+ * it, and records it as `stale`. `--force` removes it.
+ */
+function staleRetired(out, skillsDirname, shipped, mine, aliases) {
+  const labels = skillLabels();
+  const found = [];
+  for (const name of retiredSkillNames({ aliases })) {
+    const rel = `${skillsDirname}/${name}.md`;
+    if (shipped.has(rel) || mine?.has(rel)) continue;
+    let text;
+    try { text = readText(path.join(out, rel)); } catch { continue; }
+    const ids = new Set([name, aliases.get(name)].filter(Boolean));
+    let fenced = false;
+    for (const line of text.split('\n')) {
+      if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+      const h = fenced ? null : /^# (.+?): (\S+)\s*$/.exec(line);
+      if (h && labels.has(h[1]) && ids.has(h[2])) { found.push(rel); break; }
+    }
+  }
+  return found;
+}
+
+/** Remove now-empty directories from `dir` up to, never including, `out`. */
+function pruneEmptyDirs(dir, out) {
+  for (let d = dir; d !== out && d.startsWith(out + path.sep); d = path.dirname(d)) {
+    try { if (readdirSync(d).length) return; rmdirSync(d); } catch { return; }
+  }
 }
 
 /**
@@ -171,16 +216,19 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
   assertSourceComplete(cfg, `theme '${themeName}'`);
   mkdirSync(out, { recursive: true });
 
-  // Wipe the owned dirs ONLY inside an established bundle: a first render into an
-  // arbitrary repo (`--out .`) must never delete an agents/ or skills/ the USER owns.
+  // Ownership is per file — `bundleFiles` says why. `mine` is what the previous build wrote
+  // here, or null when there is no record (a first render, or an older build's bundle).
   const isBundle = isFile(path.join(out, '.geneseed-theme')) || isFile(path.join(out, VERSION_MARKER));
   const priorSrcDirs = isBundle ? readPriorSrcDirs(out) : {};
+  const prior = isBundle ? bundleFiles(out) : null;
+  const mine = prior && new Set(prior);
   const resolvedSrcDirs = {};
+  const ownedNames = new Set();
   for (const srcDir of OWNED_SRC_DIRS) {
     // `??` falls back on an explicit JSON null too. No theme has one.
     const dirname = theme[SRC_DIR_TOKENS[srcDir]] ?? srcDir;
     resolvedSrcDirs[srcDir] = dirname;
-    const managed = path.join(out, dirname);
+    ownedNames.add(dirname);
 
     // `isTruthy`, not `priorName &&`: the marker is user-editable JSON, and an
     // empty `[]`, `{}` or `0` must count as absent although JS's `&&` treats the first two
@@ -188,44 +236,95 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
     // only from a hand-edited file, which is the one place nobody would look for it.
     const priorName = priorSrcDirs[srcDir];
     if (isBundle && isTruthy(priorName) && priorName !== dirname) {
-      if (safePriorDirName(out, priorName)) {
-        const stale = path.join(out, priorName);
-        if (isDir(stale)) rmSync(stale, { recursive: true, force: true });
-      } else {
+      // A theme renamed the dir: the old name's recorded files go in the prune below.
+      if (safePriorDirName(out, priorName)) ownedNames.add(priorName);
+      else {
         process.stderr.write('[geneseed] WARN: ignoring suspicious prior dir name '
           + `${formatReprAscii(priorName)} recorded in ${SRC_DIRS_MARKER} - not pruned.\n`);
       }
     }
+  }
 
-    if (!isDir(managed)) continue;
-    if (isBundle) {
-      rmSync(managed, { recursive: true, force: true });
-    } else {
-      // STDOUT, and ASCII-only: this print crashed with UnicodeEncodeError on a cp1252
-      // Windows console when it carried a warning-sign emoji.
-      process.stdout.write(`[geneseed] WARN: ${managed} already exists and ${out} is not a `
-        + 'Geneseed bundle — keeping it; rendered files merge into it.\n');
+  // The prune: a recorded file under an owned dir that this render no longer ships. Before the
+  // writes, as the whole-dir wipe it replaces was, so a rel that changed only in case is not
+  // deleted after being written on a case-insensitive disk. `ownedWithin` contains the rels:
+  // the marker is a file a user can edit.
+  const shipped = new Set(items.map(({ rel }) => rel));
+  for (const rel of ownedWithin(out, (prior ?? []).filter((r) => !shipped.has(r)))) {
+    if (!ownedNames.has(rel.split('/')[0])) continue;
+    const victim = path.join(out, rel);
+    try {
+      if (isFile(victim)) { unlinkSync(victim); pruneEmptyDirs(path.dirname(victim), out); }
+    } catch (e) {
+      process.stderr.write(`[geneseed] WARN: could not remove stale ${rel} (${e.message})\n`);
     }
   }
 
   const nbDirname = theme[SRC_DIR_TOKENS.notebook] ?? 'notebook';
+  const memDirname = theme[SRC_DIR_TOKENS.memory] ?? 'memory';
+  const written = [];
+  const yours = [];
+  const replaced = [];
+  const force = cfg.force === true;
   for (const { rel, text, src } of items) {
     const dest = path.join(out, rel);
-    mkdirSync(path.dirname(dest), { recursive: true });
     // The notebook is the agent's sovereign space: seeded files are written once and
     // never re-emitted, so the agent may rewrite its own rules. Only `.gitignore` is
     // re-asserted — the one law it cannot lift.
     const parts = rel.split('/');
-    if (parts[0] === nbDirname && path.basename(rel) !== '.gitignore' && existsSync(dest)) {
+    const there = existsSync(dest);
+    if (parts[0] === nbDirname && path.basename(rel) !== '.gitignore' && there) {
       continue;
     }
+    // The two stores stand outside the claim and the record: their seeds are rewritten as
+    // before, and nothing in them is ever removed, by a build or by an uninstall.
+    const store = parts[0] === nbDirname || parts[0] === memDirname;
+    // Claim-on-create. With a record, only a recorded file is overwritten. Without one, an
+    // older build's bundle is overwritten as that build did, and in a folder that is no
+    // bundle at all an existing file is the user's.
+    // `--force` takes Geneseed's copy instead, and says which files it replaced.
+    if (there && !store && !(mine ? mine.has(rel) : isBundle)) {
+      if (!force) { yours.push(rel); continue; }
+      replaced.push(rel);
+    }
+    mkdirSync(path.dirname(dest), { recursive: true });
     if (text !== null) writeText(dest, text);
     else copyFile(src, dest);
+    if (!store) written.push(rel);
+  }
+  const shown = (rels) => rels.slice(0, 5).join(', ') + (rels.length > 5 ? `, and ${rels.length - 5} more` : '');
+  if (replaced.length) {
+    process.stdout.write(`[geneseed] --force: replaced ${replaced.length} existing file(s) in ${out}: `
+      + `${shown(replaced)}.\n`);
+  }
+  let stale = staleRetired(out, resolvedSrcDirs.skills, shipped, mine, skillAliases(cfg.src));
+  if (stale.length && force) {
+    for (const rel of ownedWithin(out, stale)) {
+      try { unlinkSync(path.join(out, rel)); } catch { /* still there: named again next build */ }
+    }
+    process.stdout.write(`[geneseed] --force: removed ${stale.length} retired file(s) an older build `
+      + `left in ${out}: ${shown(stale)}.\n`);
+    stale = stale.filter((rel) => existsSync(path.join(out, rel)));
+  } else if (stale.length) {
+    process.stdout.write(`[geneseed] WARN: ${stale.length} file(s) in ${out} are skills an older build `
+      + `shipped and this one retired: ${shown(stale)}. They were left in place; rebuild with `
+      + '--force to remove them.\n');
+  }
+  if (yours.length) {
+    // STDOUT, and ASCII-only: this print crashed with UnicodeEncodeError on a cp1252
+    // Windows console when it carried a warning-sign emoji.
+    process.stdout.write(`[geneseed] WARN: kept ${yours.length} existing file(s) Geneseed did not `
+      + `write in ${out}, and skipped its own copy of each: ${shown(yours)}. Move one aside and `
+      + 'rebuild to get Geneseed\'s copy, or rebuild with --force to replace them all.\n');
   }
 
   writeText(path.join(out, '.geneseed-theme'), `${themeName}\n`);
   writeVersion(cfg, out);
-  writeSrcDirsMarker(out, resolvedSrcDirs);
+  // `kept` and `stale` only when there is one: a clean bundle's marker carries neither.
+  writeSrcDirsMarker(out, resolvedSrcDirs, written.sort(), {
+    ...(yours.length ? { kept: yours.sort() } : {}),
+    ...(stale.length ? { stale: stale.sort() } : {}),
+  });
   ensureContextStub(out);
   ensureWikiStub(out);
   ensureRulesStub(out);

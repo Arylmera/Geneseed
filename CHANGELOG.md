@@ -8,6 +8,18 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **`geneseed export --out <folder> [--profile <file>]`** writes the skills, the agents and the constitution as catalogue entities for a shared library that is not a Geneseed install: one folder each, with `SKILL.md` or `AGENT.md` (frontmatter `name` and `description` only) and a `metadata.yaml` (type, owner, maintainer, version, status, compatible tools, licence and origin of a credited port, `requires`). A reference to another exported entity takes its exported name and becomes a requirement; a skill's side files move under `references/`; the constitution is one `laws` entity that every citing entity requires. The profile, a JSON file, carries the library's own values (name prefix, owner, maintainer, folder names, `only`/`exclude`); a git checkout's `export.profile.json` is the default, `--profile none` ignores it, and the npm package does not carry it. One way: `src/` stays the source. Vendored folder skills and aliases are not exported, and are named.
+- **`geneseed build --force`** takes Geneseed's copy of every file it ships, for that one build. It replaces a shipped file you edited and a file of yours at a shipped name, removes a retired file you edited, and removes retired skills an older build left in a bundle. Every file is named. A skill or agent under a name Geneseed does not ship is never touched, nor are memory, the notebook, your rules or your profile. To keep your own file at a shipped name for good, use `--exclude-skills`.
+- **The console says when an install holds files a rebuild keeps.** Each emit records them (`kept` in the manifest, `kept` and `stale` in a bundle's `.geneseed-srcdirs.json`), `/api/installs` returns them as `leftovers`, and the install's panel lists them with a **Replace with Geneseed's copies…** button that runs the forced rebuild behind a confirm naming each file.
+
+### Fixed
+- **An OpenCode project install no longer deletes the user's own `agents/`, `skills/`, `laws/` or `AGENT.md` at the repository root.** The bundle now records each file it writes (in `.geneseed-srcdirs.json`) and owns only those: a file already there is kept and named in a warning, a rebuild prunes only recorded files, and uninstall removes only recorded files. Before, the second emit wiped those folders and uninstall deleted them whole. A bundle built by an older version has no record: the next build overwrites what it ships, removes nothing, starts the record, and names any retired skill it left behind (`--force` removes those).
+- **`geneseed uninstall` on an OpenCode project no longer deletes `.opencode/` on a retry.** A file of the user's under `.opencode/` made the first pass report INCOMPLETE with the manifest already removed, and the retry it advised then removed the whole folder. The uninstall now completes in one pass and leaves the user's files, and the whole-folder removal kept for pre-manifest installs runs only where the root still carries a bundle marker.
+- **The managed block in `CLAUDE.md` / `AGENTS.md` is found by whole-line markers.** A sentence that mentioned `<!-- BEGIN GENESEED -->` was taken for the block's start, and the next emit silently deleted everything from that sentence to the real block.
+- **Editing a shipped `SKILL.md` no longer makes the next emit delete that skill's side files and licence files.**
+- `tests/unit/sandbox.test.mjs` no longer fails when run as root.
+
 ## [5.1.1] — 2026-11-10
 
 ### Added

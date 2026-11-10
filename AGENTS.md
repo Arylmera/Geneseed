@@ -152,6 +152,12 @@ commented; skills, agents and `.gitignore` are claim-on-create (`claimer`, `js/h
 and uninstall deletes only manifest-owned paths. The user decided (2026-10) that this is enough —
 do not add a snapshot/restore layer.
 
+**`--force` reaches only a path Geneseed ships.** It is one build's instruction, never recorded.
+It turns `claimer`'s two refusals into overwrites and removes retired leftovers, each named. A file
+under a name Geneseed does not ship is the user's and no forced path may write or remove it (the
+user decided, 2026-11). An emit records what it kept (`kept` in the manifest, `kept`/`stale` in a
+bundle's marker); `leftoversOf` reads that for the console's notice and its forced rebuild.
+
 **`--exclude-skills` filters in ONE place: `renderAll`** (`js/build/render.mjs`). Every host's
 emit, the command layer and the plain bundle read the filtered `items`, so a new host gets the
 exclusion for free — do not add a second filter in an emitter. The marker line

@@ -146,6 +146,9 @@ const VERBS = {
   // The factory engine, the loop engine one level up: native like `loop`, gated absolutely by
   // tests/unit/factory_cli.test.mjs.
   factory: () => import('../js/factory/cli.mjs').then((m) => m.cmdFactory),
+  // Native too: a render for a library that is not an install. Its absolute gate is
+  // tests/unit/export.test.mjs.
+  export: () => import('../js/build/export.mjs').then((m) => m.cmdExport),
   // A fifth native verb, and a port rather than an invention: the AI Harness Scorecard
   // (upstream Python, pinned in the module's docblock). There is no recorded cell — its absolute gate is
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.

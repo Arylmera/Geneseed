@@ -105,6 +105,7 @@ export function cmdBuild(args) {
   // The bare switches `build` forwards (the gate switches): they take no value, so they are
   // not BUILD_FORWARD rows.
   for (const g of GATE_SWITCHES) if (args[g.arg]) argv.push(g.flag);
+  if (args.force) argv.push('--force');
   return driverMain(argv);
 }
 
