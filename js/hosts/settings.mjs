@@ -298,7 +298,7 @@ for (const [keys, verdict] of PUSH_CHAIN) for (const k of /** @type {string[]} *
  * thing to want, and the value Geneseed writes precisely because it is the obvious one — had
  * it DELETED by a pack-off build.
  *
- * THE RECORD IS THE MANIFEST'S `bash_gates` (5.1.2), the `bash` twin of `skill_denies` and
+ * THE RECORD IS THE MANIFEST'S `bash_gates` (5.2.0), the `bash` twin of `skill_denies` and
  * `edit_asks`: the keys an emit itself ADDED, because they were absent when it ran. `record` is
  * the previous manifest's list, as a Set, updated in place. A key that was already there, at
  * any value, is the user's and is never claimed — the value is what a user would write too, and
@@ -313,7 +313,7 @@ for (const [keys, verdict] of PUSH_CHAIN) for (const k of /** @type {string[]} *
  * `stranded`, so the user is told rather than left to discover it.
  *
  * `pruneAll` (`--prune-gates`) IS THE USER SAYING "THEY ARE YOURS" for an install that predates
- * the record: every `opencode.json` written before 5.1.2 has the gates and no `bash_gates`, so
+ * the record: every `opencode.json` written before 5.2.0 has the gates and no `bash_gates`, so
  * without it they would be stranded for good. For that one build it stands in for the record;
  * the value check stays, so an entry the user re-scoped is still kept. One-shot: no marker
  * records it and no rebuild replays it.

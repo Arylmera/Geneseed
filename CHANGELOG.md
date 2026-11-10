@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.2.0] — 2026-11-10
+
 ### Changed
 - **OpenCode: a gate whose rule you switch off is removed from `opencode.json`.** The install manifest now records the `permission.bash` entries Geneseed itself added (`bash_gates`). A rebuild with the process pack off, with *Consent Before Push* excluded or with `--no-deletion-gate` removes the recorded entries that still read as Geneseed wrote them. An entry that was already in the file, or that you changed, stays and is named in the warning. A commented `opencode.jsonc` is still never rewritten: the build names the entries to remove.
 

@@ -1498,7 +1498,7 @@ test('a pack toggle never removes a permission entry the user may own', () => {
   // ordinary thing to want, so a pack-off build DELETED a gate its owner had typed by hand.
   //
   // REMOVAL IS GUARDED BY OWNERSHIP, AND THIS FILE CARRIES NO RECORD OF IT (no `bash_gates`
-  // is passed, as for every install made before 5.1.2) — so nothing on the existing block is
+  // is passed, as for every install made before 5.2.0) — so nothing on the existing block is
   // removed at all. The residue is fail-CLOSED (a gate with no rule compelling it, which only
   // ever asks too much); the reverse would be a rule with no gate. The cells after this one
   // state what a record, or `--prune-gates`, changes.
@@ -1609,7 +1609,7 @@ test('a recorded gate goes when its rule goes off; an unrecorded or re-scoped on
 });
 
 // `--prune-gates` (the 12th argument) is for an install with gates and NO record — every
-// `opencode.json` written before 5.1.2. For that one build the user's word stands in for the
+// `opencode.json` written before 5.2.0. For that one build the user's word stands in for the
 // record; the value check does not move, so a re-scoped entry is still theirs.
 test('--prune-gates removes unrecorded gates that still read as Geneseed writes them', () => {
   withDir((d) => {

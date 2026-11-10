@@ -415,7 +415,7 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
   reconciled key by key — Geneseed adds back what a returning pack wants and removes
   **only what the manifest records it adding** (`bash_gates`) and that still reads as it
   wrote it. A pack-off rebuild leaves a `git commit*` you typed, or one from an install made
-  before 5.1.2, in place and reports it; `--prune-gates` on one build removes the latter. Routine local work
+  before 5.2.0, in place and reports it; `--prune-gates` on one build removes the latter. Routine local work
   (edits, builds, tests) is unaffected; to allow frictionless commits/pushes, set
   `"git commit*"` / `"git push*"` to `"allow"` in your own `permission.bash` map. (Note:
   OpenCode lets a user pick "always allow" for the session, which makes the gate

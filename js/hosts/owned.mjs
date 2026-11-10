@@ -203,7 +203,7 @@ export function recordedEdit(doc) {
 /**
  * An OpenCode manifest's `bash_gates` — the `permission.bash` keys Geneseed itself added, which
  * a later build may take back once their rule is off (`reconcileOpencodePermission`). Absent or
- * malformed reads as nothing owned, like `recordedDenies`: a manifest from before 5.1.2 has no
+ * malformed reads as nothing owned, like `recordedDenies`: a manifest from before 5.2.0 has no
  * such key, so its gates stay until `--prune-gates` or a hand edit.
  */
 export function recordedGates(doc) {
