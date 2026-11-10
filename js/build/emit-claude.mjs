@@ -127,7 +127,7 @@ export function emitClaudeRender(cfg, job) {
   // prints once across the whole emit rather than once per writer.
   // Before the claim: a retired folder freed here lets this emit write the alias that replaces it.
   if (sharedRoot !== null) pruneRetiredSkills(host, cfgDir, oldOwned);
-  const claim = claimer(oldOwned, cfgDir, true, oldHashes);
+  const claim = claimer(oldOwned, cfgDir, true, oldHashes, cfg.force);
   const { nAgents, nSkills, written } = writeNativeLayer(
     items, path.join(cfgDir, 'agents'), path.join(cfgDir, 'skills'),
     loadAgentOverrides(cfgDir),
@@ -206,6 +206,7 @@ export function emitClaudeRender(cfg, job) {
     nbStatus,
     managed,
     editRefused: [...claim.editRefused],
+    kept: [...claim.kept],
   };
 }
 

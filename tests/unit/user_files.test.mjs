@@ -224,3 +224,44 @@ test('a file that only mentions the markers gets the block appended, and loses n
     assert.equal(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'), prose);
   } finally { f.sb.cleanup(); }
 });
+
+// `--force`, AT THE CLAIM. Both refusals above become overwrites, each named on stderr, and
+// nothing else changes: `claim` is only ever asked about a path Geneseed ships, so a skill
+// under the user's own name is not in question, forced or not. `claim.kept` is the other
+// half: every rel an unforced emit left to the user, which the manifest records for the console.
+test('--force replaces an edited file and a pre-existing one, and nothing under another name', () => {
+  const f = fixture();
+  try {
+    const items = [
+      item(f.src, 'agents/scribe.md', "GENESEED'S SCRIBE\n"),
+      item(f.src, 'agents/clerk.md', "GENESEED'S CLERK\n"),
+    ];
+    const scribe = path.join(f.agentsDir, 'scribe.md');   // pre-existing, never owned
+    const clerk = path.join(f.agentsDir, 'clerk.md');     // owned, then edited
+    const mine = path.join(f.agentsDir, 'my-own.md');     // a name Geneseed does not ship
+    fs.writeFileSync(scribe, 'THE USER WROTE THIS\n');
+    fs.writeFileSync(clerk, 'the user edited this\n');
+    fs.writeFileSync(mine, 'mine\n');
+    const opts = (force) => ({
+      host: 'opencode', src: f.src,
+      claim: claimer(['agents/clerk.md'], f.cfg, true, { 'agents/clerk.md': 'sha256:not-this' }, force),
+    });
+
+    // Unforced: both kept, both in `kept`.
+    const plain = opts(false);
+    captured(() => writeNativeLayer(items, f.agentsDir, f.skillsDir, null, plain));
+    assert.equal(fs.readFileSync(scribe, 'utf8'), 'THE USER WROTE THIS\n');
+    assert.equal(fs.readFileSync(clerk, 'utf8'), 'the user edited this\n');
+    assert.deepEqual([...plain.claim.kept].sort(), ['agents/clerk.md', 'agents/scribe.md']);
+
+    const forced = opts(true);
+    const { value, err } = captured(() => writeNativeLayer(items, f.agentsDir, f.skillsDir, null, forced));
+    assert.match(fs.readFileSync(scribe, 'utf8'), /GENESEED'S SCRIBE/);
+    assert.match(fs.readFileSync(clerk, 'utf8'), /GENESEED'S CLERK/);
+    assert.equal(fs.readFileSync(mine, 'utf8'), 'mine\n');
+    assert.equal(value.written.length, 2);
+    assert.deepEqual([...forced.claim.kept], []);
+    assert.match(err, /--force: replaced your existing agents\/scribe\.md/);
+    assert.match(err, /--force: replaced your edited agents\/clerk\.md/);
+  } finally { f.sb.cleanup(); }
+});

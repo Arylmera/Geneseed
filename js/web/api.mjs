@@ -23,7 +23,7 @@ import { CLAUDE_STYLE, VERSION_MARKER } from '../hosts/hosts.mjs';
 import { factCount } from '../hosts/memory-files.mjs';
 import { autostartState } from '../hosts/shim.mjs';
 import {
-  footprintOfDir, gatesOfDir, installState, installTargets, modeOfDir,
+  footprintOfDir, gatesOfDir, installState, installTargets, leftoversOf, modeOfDir,
   trustOfDir, sharedTierOfDir,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
@@ -228,6 +228,9 @@ export function apiInstalls(state) {
       trust: trustOfDir(root, host),
       // A project install's switch for reading the machine tier (a global install owns it).
       sharedTier: scope === 'global' ? false : sharedTierOfDir(root, host),
+      // Files here that are the user's where Geneseed ships one, and retired leftovers: what a
+      // forced rebuild would replace or remove (`leftoversOf`). Read off the emit's own record.
+      leftovers: leftoversOf(root, host, scope),
       // The install a request naming none reads (`defaultView`): the console's pickers start on it.
       default: !!def && samePath(viewCfg(host, scope, root), def[0]),
     });

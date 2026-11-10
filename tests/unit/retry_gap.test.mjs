@@ -30,6 +30,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { installUninstall, cmdUninstall } from '../../js/maintain/uninstall.mjs';
+import { leftoversOf } from '../../js/hosts/installs.mjs';
 import { registryRecord, registryRoots } from '../../js/inspect/registry.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { ROOT } from '../../js/build/source.mjs';
@@ -45,10 +46,10 @@ function withDir(fn) {
   try { return fn(sb.path); } finally { sb.cleanup(); }
 }
 
-function emit(kind, repo, home) {
+function emit(kind, repo, home, ...flags) {
   const r = spawnSync(process.execPath,
     [path.join(ROOT, 'bin', 'build-driver.mjs'), '--emit', kind, '--theme', 'neutral',
-      '--out', repo, '--root', repo],
+      '--out', repo, '--root', repo, ...flags],
     {
       cwd: ROOT,
       encoding: 'utf8',
@@ -57,6 +58,7 @@ function emit(kind, repo, home) {
       windowsHide: true,
     });
   if (r.status !== 0) throw new Error(`${kind} emit (${r.status}): ${(r.stderr || '').slice(-1200)}`);
+  return `${r.stdout}${r.stderr}`;
 }
 
 /**
@@ -266,6 +268,69 @@ test('an OpenCode project install never removes the files the user had there', (
     intact('after a second uninstall');
   });
 });
+
+// `--force`, END TO END, with the record the console reads. An ordinary emit keeps a file that
+// is the user's where Geneseed ships one and records it (`leftoversOf`); `--force` takes
+// Geneseed's copy of each, removes a retired skill an older build left in the bundle, names
+// every file it touched, and leaves the record empty. Through all of it a file under a name
+// Geneseed does not ship is never touched, and the build after a forced one is an ordinary one.
+for (const host of ['claude', 'opencode']) {
+  test(`--force replaces what a ${host} project emit kept, and only that`, () => {
+    withDir((d) => {
+      const repo = path.join(d, 'repo');
+      const home = path.join(d, 'home');
+      const layer = host === 'claude' ? '.claude' : '.opencode';
+      const shipped = `${layer}/skills/commit/SKILL.md`;       // a name Geneseed ships
+      const personal = `${layer}/skills/my-deploy/SKILL.md`;   // a name it does not
+      for (const [rel, text] of [[shipped, 'my own commit skill\n'], [personal, 'my deploy steps\n']]) {
+        fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true });
+        fs.writeFileSync(path.join(repo, rel), text, 'utf8');
+      }
+      const read = (rel) => fs.readFileSync(path.join(repo, rel), 'utf8');
+
+      emit(host, repo, home);
+      // Then the user edits a file the emit wrote.
+      const edited = `${layer}/skills/plan/SKILL.md`;
+      fs.appendFileSync(path.join(repo, edited), '- my extra step\n');
+      emit(host, repo, home);
+      assert.equal(read(shipped), 'my own commit skill\n');
+      assert.match(read(edited), /my extra step/);
+      const want = [shipped, edited].sort();
+      if (host === 'opencode') {
+        // The bundle at the root is the second place: a file of theirs under a shipped name,
+        // and a retired skill as an older build rendered it, with the list that build never kept.
+        assert.deepEqual(leftoversOf(repo, host, 'project'), { kept: want, stale: [] });
+        fs.writeFileSync(path.join(repo, 'skills', 'domain-modeling.md'), '# Skill: domain-modeling\n');
+        fs.writeFileSync(path.join(repo, 'skills', 'grill-me.md'), '# My notes on grilling\n');
+        const marker = path.join(repo, '.geneseed-srcdirs.json');
+        const record = JSON.parse(fs.readFileSync(marker, 'utf8'));
+        delete record.files;
+        fs.writeFileSync(marker, JSON.stringify(record));
+        const said = emit(host, repo, home);
+        assert.match(said, /skills\/domain-modeling\.md\. They were left in place; rebuild with --force/);
+        assert.deepEqual(leftoversOf(repo, host, 'project'),
+          { kept: want, stale: ['skills/domain-modeling.md'] });
+      } else {
+        assert.deepEqual(leftoversOf(repo, host, 'project'), { kept: want, stale: [] });
+      }
+
+      const said = emit(host, repo, home, '--force');
+      assert.match(read(shipped), /^---\r?\nname: commit\r?\n/, 'the shipped name still holds the user\'s file');
+      assert.doesNotMatch(read(edited), /my extra step/);
+      assert.match(said, new RegExp(`--force: replaced your existing ${shipped.slice(layer.length + 1)}`));
+      assert.equal(read(personal), 'my deploy steps\n');
+      assert.deepEqual(leftoversOf(repo, host, 'project'), { kept: [], stale: [] });
+      if (host === 'opencode') {
+        assert.ok(!fs.existsSync(path.join(repo, 'skills', 'domain-modeling.md')));
+        assert.match(said, /--force: removed 1 retired file\(s\)/);
+        // A retired NAME without the render's heading is the user's own file.
+        assert.equal(read('skills/grill-me.md'), '# My notes on grilling\n');
+      }
+      // Not recorded: the next build forces nothing and has nothing to say about these files.
+      assert.doesNotMatch(emit(host, repo, home), /--force|kept your/);
+    });
+  });
+}
 
 /** The resolved spelling, which is what the registry stores and compares. */
 const resolved = (p) => fs.realpathSync.native(p);

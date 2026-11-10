@@ -109,9 +109,9 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `loss.mjs` | Law IV calibrated to real loss: `lossReason` decides whether a command would really lose data (protected branch, unpushed branch, dirty tree, stash, reflog, files git cannot restore) and fails closed. The gate path's one `git` spawn, reached only after `LOSS_CANDIDATE_RE` matched. Twin: the OpenCode guard plugin |
 | `settings.mjs` | Merges into user-owned `settings.json`/`opencode.json` (one `loadJsonObject` reader for all of them) and the managed blocks |
 | `shim.mjs` | The machine-wide hook shim: its path, body, liveness (`shimDead`, read on every CLI run), `hookPrefix`/`hookRunnerEntry`; and the web console's login launcher (`autostartState`/`autostartInstall`/`autostartRemove`). Kept cheap to import |
-| `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit |
+| `native.mjs` | Capability specs → host-native subagents and skills. The impure half of the emit. `claimer`: claim-on-create, what an emit kept (`claim.kept`), and `--force` |
 | `opencode.mjs` | OpenCode-only extras: colour themes, primary agent, `/commands`, plugins, overrides stub |
-| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset |
+| `installs.mjs` | Detects deployed installs and reads back their theme, footprint, posture, mode and loop trust preset; `leftoversOf`, the files an install keeps that are not Geneseed's copy, read off the emit's record for the console |
 | `mcp.mjs` | Reads each host's MCP config (`mcpServers`, or OpenCode's `mcp`) and where it lives — read-only since 2026-10: the user edits the file, Geneseed only shows it |
 | `link.mjs` | `geneseed link`/`unlink` — the PATH shim, and the only Windows USER-Path registry edit |
 | `owned.mjs` | Manifest rel -> path on disk decisions: `ownedWithin`, the containment boundary `uninstall.mjs` and the driver's prune both go through before acting on an `owned` list entry; and `bundleFiles`, the list a bundle keeps of the files it wrote (in `.geneseed-srcdirs.json`), which the build's prune and the OpenCode project uninstall remove by |

@@ -112,6 +112,8 @@ const BARE_FLAGS = [
   ['--no-ownership-gate', 'noOwnershipGate'],
   ['--no-external-gate', 'noExternalGate'],
   ['--no-test-note', 'noTestNote'],
+  // One build's instruction, not a gate switch: nothing records it or replays it.
+  ['--force', 'force'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

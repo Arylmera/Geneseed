@@ -524,11 +524,21 @@ function warnBobIgnored(overrides) {
  * Geneseed's copy back" — two warnings about one rel that is in fact still shipped. The caller
  * reads this set back off the closure and hands it to `pruneOwned` so that rel is excluded from
  * the stale set entirely, silently, rather than re-evaluated.
+ *
+ * `claim.kept`: every rel this closure refused, edited or pre-existing. The emit writes it into
+ * the manifest (`kept`), which is how the console knows an install holds files that are the
+ * user's where Geneseed ships one, without rendering anything.
+ *
+ * `force` (`--force`): both refusals become overwrites, each named on stderr. It reaches only
+ * what `claim` is asked about, and `claim` is asked only about a path Geneseed ships, so a
+ * skill or agent under the user's own name is never in question. The leaf guard still runs: a
+ * forced write goes through a link no more than an ordinary one does.
  */
-export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
+export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}, force = false) {
   const oldSet = oldOwned !== null && oldOwned !== undefined ? new Set(oldOwned) : null;
   let headerPrinted = false;
   const editRefused = new Set();
+  const kept = new Set();
   const rroot = cfg != null ? resolvePath(cfg) : undefined;  // once per emit, not per leaf
   const claim = (dest) => {
     if (cfg != null && !claimLeaf(cfg, dest, relPosix(cfg, dest), rroot)) return false;
@@ -540,10 +550,19 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
       // constraint that a manifest without `hashes` keeps today's behaviour exactly is this
       // branch doing nothing extra, not a special case.
       if (ownedState(cfg, rel, oldHashes) === 'modified') {
+        if (force) {
+          warn(`[geneseed] --force: replaced your edited ${rel}`);
+          return true;
+        }
         warn(`[geneseed] kept your edited ${rel} — delete it to get Geneseed's copy back`);
         editRefused.add(rel);
+        kept.add(rel);
         return false;
       }
+      return true;
+    }
+    if (force) {
+      warn(`[geneseed] --force: replaced your existing ${rel}`);
       return true;
     }
     if (!manifestExisted && !headerPrinted) {
@@ -553,9 +572,11 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}) {
     }
     warn(`[geneseed] kept your existing ${rel} — skipped Geneseed's copy to avoid `
       + 'clobbering it');
+    kept.add(rel);
     return false;
   };
   claim.editRefused = editRefused;
+  claim.kept = kept;
   // Did the previous emit write `dest`? Read by `writeNativeLayer` for a skill's side files.
   claim.owned = (dest) => oldSet !== null && cfg != null && oldSet.has(relPosix(cfg, dest));
   return claim;

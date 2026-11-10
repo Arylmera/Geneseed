@@ -61,7 +61,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
   // One claim for every writer below whose path lands in `owned` — see `claimer`.
-  const claim = claimer(oldOwned, dir, manifestExisted, oldHashes);
+  const claim = claimer(oldOwned, dir, manifestExisted, oldHashes, cfg.force);
 
   const { nAgents, nSkills, written, userOnlySkills } = writeNativeLayer(
     items, path.join(dir, 'agents'), path.join(dir, 'skills'), overrides,
@@ -111,6 +111,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   return {
     nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands: commands.length, cfgName,
     skillDenies, editRecord: wired.editRecord ?? oldEdit, editRefused: [...claim.editRefused],
+    kept: [...claim.kept],
   };
 }
 
@@ -153,7 +154,7 @@ export function emitOpencodeRender(cfg, job) {
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, kept,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
     oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes,
   });
@@ -167,6 +168,7 @@ export function emitOpencodeRender(cfg, job) {
     skillDenies,
     editRecord,
     editRefused,
+    kept,
   };
 }
 
@@ -232,7 +234,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed, so
   // the pre-manifest header line is unreachable from this emit.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, kept,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
     oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes,
   });
@@ -263,5 +265,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     skillDenies,
     editRecord,
     editRefused,
+    kept,
   };
 }

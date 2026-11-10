@@ -112,6 +112,9 @@ const FLAGS = {
   // deliberately: a rebuild elides a flag when armed, so a config default could disarm an armed
   // install on its next upgrade.
   ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.flag, g.arg])),
+  // One build's instruction, never recorded: Geneseed's copy replaces a file the user edited
+  // or put at a name Geneseed ships. `claimer` (js/hosts/native.mjs) holds the rule.
+  '--force': 'force',
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -368,7 +371,7 @@ export function parseArgs(argv, defaults) {
     kits: defaults.kits ?? [],
     sharedTier: 'off',
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false,
+    syncThemes: false, validateOnly: false, verbose: false, force: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),
   };
   const { tokens } = nodeParseArgs({

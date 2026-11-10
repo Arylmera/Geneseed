@@ -22,6 +22,8 @@ import {
   ensureBundleGitignore, ensureContextStub, ensureMemoryIndex, ensureNotebookIndex,
   ensureProfileStub, ensureRulesStub, ensureWikiStub,
 } from './stubs.mjs';
+import { retiredSkillNames, skillLabels } from './retired-skills.mjs';
+import { skillAliases } from './source.mjs';
 import { writeVersion } from './version.mjs';
 import {
   existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, unlinkSync,
@@ -101,10 +103,40 @@ function readPriorSrcDirs(out) {
  * `_build_render._write_src_dirs_marker` — temp + replace. `files` rides in the same marker:
  * every rel this build wrote, the stores apart (see `build`).
  */
-function writeSrcDirsMarker(out, resolved, files) {
+function writeSrcDirsMarker(out, resolved, files, extra = {}) {
   const tmp = path.join(out, `${SRC_DIRS_MARKER}.tmp`);
-  writeText(tmp, `${jsonDumpsIndent({ ...resolved, [BUNDLE_FILES_KEY]: files })}\n`);
+  writeText(tmp, `${jsonDumpsIndent({ ...resolved, [BUNDLE_FILES_KEY]: files, ...extra })}\n`);
   renameSync(tmp, path.join(out, SRC_DIRS_MARKER));
+}
+
+/**
+ * The retired skills still lying in a bundle's skills dir that no record owns: `<name>.md`
+ * where the name is one Geneseed shipped and no longer does, and the file carries the render's
+ * `# <Skill label>: <id>` heading outside a code fence, the flat twin of `isRendered`
+ * (`./retired-skills.mjs`). A retired name is a plain word, so a file under one may be the
+ * user's own; the heading is what tells them apart.
+ *
+ * This is the leftover of a bundle an older build rendered, which kept no file list: the build
+ * that starts the list cannot know what its predecessor wrote, so it leaves such a file, names
+ * it, and records it as `stale`. `--force` removes it.
+ */
+function staleRetired(out, skillsDirname, shipped, mine, aliases) {
+  const labels = skillLabels();
+  const found = [];
+  for (const name of retiredSkillNames({ aliases })) {
+    const rel = `${skillsDirname}/${name}.md`;
+    if (shipped.has(rel) || mine?.has(rel)) continue;
+    let text;
+    try { text = readText(path.join(out, rel)); } catch { continue; }
+    const ids = new Set([name, aliases.get(name)].filter(Boolean));
+    let fenced = false;
+    for (const line of text.split('\n')) {
+      if (/^\s*(```|~~~)/.test(line)) { fenced = !fenced; continue; }
+      const h = fenced ? null : /^# (.+?): (\S+)\s*$/.exec(line);
+      if (h && labels.has(h[1]) && ids.has(h[2])) { found.push(rel); break; }
+    }
+  }
+  return found;
 }
 
 /** Remove now-empty directories from `dir` up to, never including, `out`. */
@@ -232,6 +264,8 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
   const memDirname = theme[SRC_DIR_TOKENS.memory] ?? 'memory';
   const written = [];
   const yours = [];
+  const replaced = [];
+  const force = cfg.force === true;
   for (const { rel, text, src } of items) {
     const dest = path.join(out, rel);
     // The notebook is the agent's sovereign space: seeded files are written once and
@@ -248,24 +282,49 @@ export function build(cfg, themeName, out, { footprint = 'full', nativeCatalog =
     // Claim-on-create. With a record, only a recorded file is overwritten. Without one, an
     // older build's bundle is overwritten as that build did, and in a folder that is no
     // bundle at all an existing file is the user's.
-    if (there && !store && !(mine ? mine.has(rel) : isBundle)) { yours.push(rel); continue; }
+    // `--force` takes Geneseed's copy instead, and says which files it replaced.
+    if (there && !store && !(mine ? mine.has(rel) : isBundle)) {
+      if (!force) { yours.push(rel); continue; }
+      replaced.push(rel);
+    }
     mkdirSync(path.dirname(dest), { recursive: true });
     if (text !== null) writeText(dest, text);
     else copyFile(src, dest);
     if (!store) written.push(rel);
   }
+  const shown = (rels) => rels.slice(0, 5).join(', ') + (rels.length > 5 ? `, and ${rels.length - 5} more` : '');
+  if (replaced.length) {
+    process.stdout.write(`[geneseed] --force: replaced ${replaced.length} existing file(s) in ${out}: `
+      + `${shown(replaced)}.\n`);
+  }
+  let stale = staleRetired(out, resolvedSrcDirs.skills, shipped, mine, skillAliases(cfg.src));
+  if (stale.length && force) {
+    for (const rel of ownedWithin(out, stale)) {
+      try { unlinkSync(path.join(out, rel)); } catch { /* still there: named again next build */ }
+    }
+    process.stdout.write(`[geneseed] --force: removed ${stale.length} retired file(s) an older build `
+      + `left in ${out}: ${shown(stale)}.\n`);
+    stale = stale.filter((rel) => existsSync(path.join(out, rel)));
+  } else if (stale.length) {
+    process.stdout.write(`[geneseed] WARN: ${stale.length} file(s) in ${out} are skills an older build `
+      + `shipped and this one retired: ${shown(stale)}. They were left in place; rebuild with `
+      + '--force to remove them.\n');
+  }
   if (yours.length) {
     // STDOUT, and ASCII-only: this print crashed with UnicodeEncodeError on a cp1252
     // Windows console when it carried a warning-sign emoji.
-    const shown = yours.slice(0, 5).join(', ') + (yours.length > 5 ? `, and ${yours.length - 5} more` : '');
     process.stdout.write(`[geneseed] WARN: kept ${yours.length} existing file(s) Geneseed did not `
-      + `write in ${out}, and skipped its own copy of each: ${shown}. Move one aside and `
-      + 'rebuild to get Geneseed\'s copy.\n');
+      + `write in ${out}, and skipped its own copy of each: ${shown(yours)}. Move one aside and `
+      + 'rebuild to get Geneseed\'s copy, or rebuild with --force to replace them all.\n');
   }
 
   writeText(path.join(out, '.geneseed-theme'), `${themeName}\n`);
   writeVersion(cfg, out);
-  writeSrcDirsMarker(out, resolvedSrcDirs, written.sort());
+  // `kept` and `stale` only when there is one: a clean bundle's marker carries neither.
+  writeSrcDirsMarker(out, resolvedSrcDirs, written.sort(), {
+    ...(yours.length ? { kept: yours.sort() } : {}),
+    ...(stale.length ? { stale: stale.sort() } : {}),
+  });
   ensureContextStub(out);
   ensureWikiStub(out);
   ensureRulesStub(out);

@@ -248,3 +248,16 @@ export function bundleFiles(out) {
   const files = isDict(data) ? data[BUNDLE_FILES_KEY] : null;
   return Array.isArray(files) ? files.filter((f) => typeof f === 'string') : null;
 }
+
+/**
+ * What the last build left in a bundle that is not Geneseed's copy: `kept`, the files that are
+ * the user's at a path the bundle ships, and `stale`, the retired skills an older build left
+ * behind. Each only while the file still exists. `--force` on the next build clears both.
+ */
+export function bundleLeftovers(out) {
+  let data;
+  try { data = parseJson(readFileSync(path.join(out, SRC_DIRS_MARKER), 'utf8')); } catch { data = null; }
+  const list = (key) => (isDict(data) && Array.isArray(data[key]) ? data[key] : [])
+    .filter((r) => typeof r === 'string' && isFile(path.join(out, r)));
+  return { kept: ownedWithin(out, list('kept')), stale: ownedWithin(out, list('stale')) };
+}
