@@ -225,7 +225,8 @@ test('an OpenCode project install never removes the files the user had there', (
       'agents/reviewer.md': 'my own reviewer notes\n',     // a name the bundle ships too
       'skills/data.yaml': 'k: v\n',
       'laws/bylaws.txt': 'bylaws\n',
-      'AGENT.md': '# my AGENT.md\n',                        // and the bundle's own carrier
+      // The bundle's own carrier, with the row link the emit strips from the one it writes.
+      'AGENT.md': '# my AGENT.md\n\n| [reviewer](agents/reviewer.md) | mine |\n',
       '.opencode/agents/mine.md': 'my agent\n',
     };
     for (const [rel, text] of Object.entries(theirs)) {

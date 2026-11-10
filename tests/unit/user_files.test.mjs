@@ -154,7 +154,7 @@ test('editing a shipped SKILL.md does not cost the skill its side files', () => 
     const { value } = captured(() => writeNativeLayer(items, f.agentsDir, f.skillsDir, null,
       { host: 'opencode', oldOwned: ['skills/probe/extra.md'], cfg: f.cfg, src: f.src }));
     assert.equal(fs.readFileSync(skill, 'utf8'), 'the user edited this\n');
-    assert.equal(fs.readFileSync(side, 'utf8'), 'the side file\n');
+    assert.equal(fs.readFileSync(side, 'utf8').replace(/\r\n/g, '\n'), 'the side file\n');
     assert.ok(value.written.includes(side),
       'the side file left `written`, so it leaves the manifest and the prune deletes it');
 
@@ -204,7 +204,7 @@ for (const [name, pre, post, afterRemove] of BLOCK_ROWS) {
         pre + BLOCK('new harness') + post.replace(/^\n+/, ''));
       // Rewriting again stacks nothing.
       managedBlockWrite(p, 'new harness');
-      assert.equal(fs.readFileSync(p, 'utf8').split('<!-- END GENESEED -->\n').length - 1, 1);
+      assert.equal(fs.readFileSync(p, 'utf8').split('\n<!-- END GENESEED -->').length - 1, 1);
       managedBlockRemove(p);
       assert.equal(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n'), afterRemove);
     } finally { f.sb.cleanup(); }

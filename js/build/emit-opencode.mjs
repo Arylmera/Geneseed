@@ -7,6 +7,7 @@
  * plainly as two files with the same shape than as two sections of one.
  */
 import path from 'node:path';
+import { bundleFiles } from '../hosts/owned.mjs';
 import { VERSION_MARKER } from '../hosts/hosts.mjs';
 import { claimer, loadAgentOverrides, writeNativeLayer } from '../hosts/native.mjs';
 import {
@@ -141,8 +142,12 @@ export function emitOpencodeRender(cfg, job) {
 
   // OpenCode loads agents/skills natively, so strip AGENT.md's per-row spec links to
   // plain names (the portable build keeps them). A deliberate de-link, not a fix.
+  // Only the AGENT.md this build wrote: one it found there and kept is the user's, and this
+  // rewrite changed its links, and its line endings on Windows.
   const agentMd = path.join(out, 'AGENT.md');
-  if (isFile(agentMd)) writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
+  if (isFile(agentMd) && bundleFiles(out)?.includes('AGENT.md')) {
+    writeText(agentMd, stripCapabilityLinks(readText(agentMd)));
+  }
 
   const owned = [];
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
