@@ -52,11 +52,12 @@
 // upgrade path there is still a session-level `permission` ruleset set by the loop launcher
 // when it creates the loop session (`session.create` accepts one).
 
-import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync } from "node:fs"
+import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
-import { homedir } from "node:os"
+import { homedir, tmpdir } from "node:os"
+import { createHash } from "node:crypto"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
@@ -1785,6 +1786,27 @@ const storeLine = (files) => {
   return `Geneseed change report: ${files.length} rule or memory file${files.length === 1 ? "" : "s"} ` +
     `changed outside this session's approved writes (another session, or a decision of yours in the web console, may have made it): ${shown}${more}. This detects a change; it prevented nothing.`
 }
+// ONE REPORT PER CHANGE, however many plugin instances saw it. One `opencode serve` loads this
+// plugin once per opened project, and every instance hears every session's turn edges. Each kept
+// its own baseline of the same machine-wide stores, found the same change at the same turn end,
+// and posted its own message: four projects open, four identical reports (2026-11-10). The
+// instances share no memory, so the first to create the marker for (session, files, their new
+// stamps) reports and the rest stay silent. A file, because that is the one thing instances of
+// one process and separate OpenCode processes both see. A marker it cannot write does not
+// silence a report: saying it twice is the smaller fault. Markers older than a day are swept.
+const REPORT_MARKS = path.join(tmpdir(), "geneseed-change-reports")
+function claimReport(sid, files, now) {
+  const key = createHash("sha1").update([sid, ...files.map((f) => `${f}=${now[f] ?? "gone"}`)].join("\n")).digest("hex")
+  try {
+    mkdirSync(REPORT_MARKS, { recursive: true })
+    for (const name of readdirSync(REPORT_MARKS)) {
+      const p = path.join(REPORT_MARKS, name)
+      try { if (Date.now() - statSync(p).mtimeMs > 86400000) unlinkSync(p) } catch { /* another instance swept it */ }
+    }
+    writeFileSync(path.join(REPORT_MARKS, key), "", { flag: "wx" })
+    return true
+  } catch (err) { return err?.code !== "EEXIST" }
+}
 function noteForStatus(files) {
   try {
     if (existsSync(machineDir())) writeFileSync(path.join(machineDir(), ".store-report.json"), JSON.stringify({ at: new Date().toISOString(), host: "opencode", files }))
@@ -2450,6 +2472,7 @@ export const GeneseedGuard = async (ctx) => {
     const own = ownWrites()
     const files = changed.filter((f) => own[f] !== (now[f] ?? "gone"))
     if (!files.length) return
+    if (!claimReport(sid, files, now)) return
     const line = storeLine(files)
     log(line)
     noteForStatus(files)
