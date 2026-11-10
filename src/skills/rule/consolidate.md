@@ -25,7 +25,7 @@ instead: it runs this flow topic by topic in its own context and also assigns to
    archiving would keep it on disk, so propose deleting it outright, on sight
    ({{LAW:sealed-secrets}}).
 5. **Rebuild the index** with
-   `geneseed learn --consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`: one pointer line per
+   `geneseed memory consolidate --memory <the {{PATH_MEMORY}}/ dir's path>`: one pointer line per
    surviving file in its `topics/<topic>.md`, and the `MEMORY.md` map recounted. Each
    hook is the fact's `description`, so sharpen a weak hook there — it should say why a
    future session would open the fact.

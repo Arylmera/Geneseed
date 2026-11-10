@@ -466,6 +466,9 @@ export function archiveStore(store, move = renameSync,
  * duplicate descriptions. It REPORTS them and never merges: merging is a judgement, made by
  * the model at learn time (`writeMemories`'s `update`) or by the user, never by this rebuild. `added` and
  * `pruned` compare against the pointers of BOTH levels, so a migration counts as neither.
+ *
+ * TWO DOORS, ONE REBUILD. The hook's `learn --consolidate` (`hooks-learn.mjs`) and the CLI's
+ * `geneseed memory consolidate` (`js/maintain/memory.mjs`) both land here, never on a copy.
  */
 export function consolidateMemory(memDir) {
   const { facts, old } = rebuildIndex(memDir, true);

@@ -232,7 +232,7 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
-| `memory.mjs` | `geneseed memory list|rm` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint |
+| `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |
 
 **Before editing:** `update.mjs` is the one module that MUST spawn rather than import — the code on
 disk is replaced mid-run, so an in-process call would validate the *old* source and then render it.

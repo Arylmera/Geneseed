@@ -1306,7 +1306,7 @@
     },
     {
       "name": "memory",
-      "help": "manage the memory store: list the facts the agent reads, or remove one by name (archived into memory/archive/; --purge deletes). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
+      "help": "manage the memory store: list the facts the agent reads, remove one by name (archived into memory/archive/; --purge deletes), or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
       "description": "",
       "positionals": [
         {
@@ -1316,7 +1316,8 @@
           "help": "",
           "choices": [
             "list",
-            "rm"
+            "rm",
+            "consolidate"
           ],
           "default": null,
           "required": true,

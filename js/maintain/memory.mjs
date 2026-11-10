@@ -3,7 +3,7 @@
  *
  * WHY THIS VERB IS NEW RATHER THAN PORTED. The reference had no `memory` subcommand: a fact
  * could be written by the `learn` hook and deleted from the web console, and there was no
- * third way. So the semantics here are the DELETE ENDPOINT's, deliberately and field for
+ * third way. So the semantics of `list` and `rm` are the DELETE ENDPOINT's, deliberately and field for
  * field — the same reserved names, the same "a bare slug, never a path" rule, the same
  * index line dropped from MEMORY.md after the file goes — because two ways to remove a fact
  * that disagree about what a fact is would be worse than one way.
@@ -32,11 +32,23 @@
  * learn uses), so a slip of the keyboard or a click in the console is reversible; only
  * `--purge` unlinks. `--archived` points `list` and `rm` at `archive/` itself, and a file
  * there can only be purged — it has nowhere further to go.
+ *
+ * `consolidate` IS THE BY-HAND DOOR TO THE INDEX REBUILD, AND IT HOLDS NO REBUILD OF ITS OWN.
+ * The other door is `geneseed-hook learn --consolidate`, which the specs once told a reader
+ * to type as `geneseed learn --consolidate` — a command this binary refuses by design: `learn`
+ * spawns the model CLI, so the whole verb lives in the hook binary (ADR 0002), and hook verbs
+ * are the host's to run, never a person's. The rebuild itself is pure filesystem work, so it
+ * is legal here. Both doors call `consolidateMemory` inside `recordOwnWrites` — the
+ * `memoryDelete` precedent: one implementation, two entries. What differs is the SURFACE, in
+ * three places: the report line carries the `[memory]` prefix on stdout where the hook prints
+ * `[learn]` on stderr; with no store this exits 1 with the verb's shared refusal where the
+ * hook exits 0; and a fact name, `--archived` or `--purge` is a usage refusal (exit 2),
+ * because a rebuild takes none of them and silently ignoring `--purge` would be a lie.
  */
 import { readdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 
-import { RESERVED_STEMS, archiveFact, memoryDropIndex } from '../hosts/memory-files.mjs';
+import { RESERVED_STEMS, archiveFact, consolidateMemory, memoryDropIndex } from '../hosts/memory-files.mjs';
 import { recordOwnWrites } from '../hosts/store-watch.mjs';
 import { resolveMemoryDir } from '../hosts/hosts.mjs';
 import { printOut, printErr, isFile } from '../lib/fs.mjs';
@@ -97,6 +109,19 @@ export function cmdMemory(args) {
     printErr('[memory] no memory store found. Pass --memory <dir>, or run this from a project '
       + 'install.\n');
     return 1;
+  }
+  if (args.action === 'consolidate') {
+    if (args.name || args.archived || args.purge) {
+      printErr('[memory] consolidate rebuilds the whole index: it takes no fact name, '
+        + '--archived or --purge.\n');
+      return 2;
+    }
+    const report = recordOwnWrites(path.dirname(dir), () => consolidateMemory(dir));
+    printOut(`[memory] consolidated ${dir}: +${report.added.length} indexed, `
+      + `-${report.pruned.length} pruned, `
+      + `${report.duplicates.length} duplicate description(s)\n`);
+    for (const [a, b] of report.duplicates) printOut(`  duplicate: ${a} <-> ${b}\n`);
+    return 0;
   }
   const where = args.archived ? path.join(dir, 'archive') : dir;
   if (args.action === 'list') {

@@ -6,7 +6,7 @@
 - The {{MEMORY}} store needs tidying in bulk. The session context says so in one
   line when a topic holds over 40 facts or a `misc` topic exists; or the user asks
   to tidy, dedupe or re-topic their memory.
-- `geneseed learn --consolidate` reported duplicate descriptions that need a merge.
+- `geneseed memory consolidate` reported duplicate descriptions that need a merge.
 
 ## When NOT to dispatch
 - A handful of facts to review — the rule {{SKILL}}'s consolidation flow does
@@ -19,8 +19,8 @@
   scope: the whole store, or named topics only.
 
 ## Allowed tools
-- **Read + write to the {{MEMORY}} store only.** May run `geneseed memory` and
-  `geneseed learn --consolidate`. A write into the store meets no prompt at the tool boundary
+- **Read + write to the {{MEMORY}} store only.** May run `geneseed memory`
+  (`list`, `rm`, `consolidate`). A write into the store meets no prompt at the tool boundary
   (memory is written freely), but bulk curation reworks facts the user already keeps, so it still
   shows each topic's plan and applies it with the user's consent.
   <!-- bash: allow -->
@@ -51,7 +51,7 @@
    and run `geneseed memory rm <name> --archived --purge` only for the codes the user
    approves. A fact holding a secret, live or archived, is proposed for `--purge` on sight
    ({{LAW:sealed-secrets}}).
-7. Finish with `geneseed learn --consolidate --memory <the store's path>`, so both
+7. Finish with `geneseed memory consolidate --memory <the store's path>`, so both
    index levels match the files.
 
 ## Output contract
