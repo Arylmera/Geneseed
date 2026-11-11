@@ -1347,3 +1347,143 @@ Geneseed did make are listed in [Why Geneseed works this way](understand/design-
   anchor stays. A runtime toggle that works beside the anchor, without replacing it, remains
   possible. See
   [Foreman mode](concepts/foreman-mode.md).
+
+---
+
+## Extending guide — settled history (moved 2026-11-11)
+
+[docs/extending.md](extending.md) carried these sections while they were live. Each one was
+settled, so they moved here as a record; the rules that still hold stayed in the guide. Section
+numbers below are the guide's numbers at the time, and "today" means the date in each heading.
+
+### 5.1 ✅ A fifth hook verb — resolved 2026-08-19
+
+**This was a hard blocker and it is now open.** Recorded here because the shape of the problem
+recurs: any gate whose expected value lives in an artifact nothing can re-make will eventually
+stop a legitimate change, and the fix is never to delete the artifact.
+
+`tests/unit/hook_cli.test.mjs` asserted a strict equality between the hook verbs the frozen
+matrix covers and the verbs `bin/geneseed-hook.mjs` carries. The CLI half of the same test
+already exempted a named `NATIVE` list; the hook half exempted nothing — so a fifth hook verb
+failed with **no green path**, since the recorder died on 2026-08-17 and the failure message
+correctly forbids deleting cells to pass.
+
+`NATIVE` in `tests/unit/hook_cli.test.mjs` names the verbs held to the structural rules rather
+than to a per-verb gate, and the reverse check refuses an exemption for a verb neither entry point
+carries — so a name that stops meaning anything fails rather than sitting there.
+
+**To add a hook verb today:** implement `cmd<Verb>` in `js/hosts/hooks.mjs`, wire the string in
+`claudeHookGroups`, add the `VERBS` entry, add the `js/cli-table.json` row, then give it an
+absolute unit gate. `NATIVE` used to be duplicated across two files that read each other's source
+to stay in step; there is one copy now, so there is nothing to keep in step.
+
+### 5.2 ✅ Theme text is free to edit — resolved 2026-08-23
+
+Seven keys (`TAGLINE`, `LOADED_SIGIL`, `VOICE`, `LEX_I`, `BENEDICTION`, `ACCENT`, `BANNER`) used to
+be pinned byte-for-byte by a recording with no re-bless path, so restyling a theme's tagline was a
+red gate. **That recording is gone.** Theme text is now held only by `doctor --all` — key presence,
+cross-theme parity, and no unresolved tokens — which is a claim about structure, not wording.
+
+Restyle freely. What still bites is `LOADED_SIGIL` uniqueness (§6): it is load-bearing for theme
+detection and nothing checks it.
+
+### 5.4 ✅ Expected values are written out — resolved 2026-08-23
+
+This section used to say that a snapshot red was a finding rather than a step: the recordings under
+`tests/__snapshots__/` came from an implementation that no longer existed, there was no `--record`,
+and a change that moved a recorded byte left only two honest options — revert it, or argue in
+writing that the recording was wrong. The rule that fell out of it was *when a frozen recording
+blocks a change, move the logic to the nearest caller that is not frozen*.
+
+**None of that applies any more.** The recordings are retired (tag `corpus-reference-v3.1.2` is the
+only way back to them), and every expected value now lives in the test file that asserts it, above
+a sentence saying which decision it pins. The rule is correspondingly ordinary:
+
+> **Change the expectation and the sentence that explains it in the same commit, and say why in
+> the message.**
+
+A red test is a step again. What it costs is an argument, in prose, that the new answer is better —
+the cost that keeps the tables honest, and far cheaper than the one it replaced.
+
+The CLI surface is no longer the most expensive thing in the repo to change. Editing a verb's help
+text or flags is now an ordinary edit: `js/cli-table.json` is the owned document, and
+`tests/unit/text_layout.test.mjs` renders every verb through `formatHelp` to check the layout
+holds. Three hand-written equalities still converge on it and are cheap to keep in step — the
+29-command count and the hidden-argument rule (`tests/unit/cli_table.test.mjs`), and
+`tests/unit/docs.test.mjs`, which validates every fenced `geneseed <verb> <flags>` line in
+`README.md`, `SHIPPED.md` and every page under `docs/{understand,guides,concepts,reference}/` against the table.
+
+### 7 — Stale on 2026-08-18, fixed on 2026-08-19
+
+Nine items were found while writing this file, and fixed the next day. They are recorded as a
+list rather than left as a diff, because the PATTERN is the useful part: every one was a document
+or a comment pointing a reader at something that is not there, and in each case the gate that
+should have caught it either did not cover that file — or was itself the frozen copy of a wrong
+answer.
+
+**Fixed.**
+
+1. **`DESIGN.md` taught the deleted Python build.** Its header promises *"the spec behind the
+   harness — read this before changing structure"*, and under it sat the six-edit checklist for
+   adding a Law, naming a deleted generator, `rituals/_harness_tui.py` for `LAW_CLASS`, and an
+   invocation of a program that no longer exists. Worse, `tests/unit/no_python.test.mjs` exempted
+   the file as a *historical record* — so the gate that hunts pointers-to-nothing was looking away
+   from the one document most likely to hold one. **Split**: the 190-line standing contract keeps
+   the name and is now scanned; the 1,290-line port narrative moved to
+   the port narrative above, which is exempt on the merits, and its dead links were
+   repaired because a link is a pointer whatever the prose around it says.
+2. **`doctor` printed a command that errors.** The theme-parity tip named
+   `./geneseed build --sync-themes`; `cmdBuild` forwards `--theme` and nothing else. The comment
+   above the tip argued that spelling on a premise the port had quietly stopped satisfying. It now
+   names `geneseed-build --sync-themes`, which is what README and SETUP said all along.
+3. **User-facing output named a program that does not exist.** `tui` and `uninstall` told users to
+   run `harness setup` / `harness uninstall` — the reference's name, dropped in P0. Five sites.
+   One of them was **pinned verbatim by a test**, so a gate was holding the wrong string in place;
+   that assertion is now a property — every backticked command a refusal offers must be a verb
+   `js/cli-table.json` declares — which is strictly stronger and fires on the next rename too.
+4. **The `tui` help promised a "full-screen curses control panel"** for a verb that returns 1 on
+   every path. `docs/limits.md` listed this as permanently unfixable, on the grounds that the help
+   corpus is frozen — but `formatHelp` never reads `cmd.help`, so it was an ordinary edit all
+   along. The limits row went with the fix.
+5. **Numbers in docblocks that had drifted** — `_TEMPLATE.json`'s "137 values" (140), "the 145
+   tokens" `src/` uses (148), and "sixteen `_*_problems` checks" (fifteen — the sixteenth was
+   named as `cli`, which was removed).
+6. **A claim that was simply false.** `js/build/render.mjs` said `--theme` is validated against
+   `choices` before anything renders, which is why its own refusal read as an unreachable nicety.
+   It is not in `choicesFor`; that refusal is the only one there is, on every path.
+7. **Five dead cross-references** to `tests/snapshot/no_python_in_corpus.test.mjs`, retired with
+   the corpora — three test files justified their own design by pointing at a gate that is gone.
+   Plus a skip message naming a `record-corpus` CI job that no longer exists.
+8. **`CHANGELOG.md` said 2.0.0 was "not yet published"**, with "no tag, no release and no install
+   URL"; `geneseed@2.0.0` has been on npm since 2026-08-17. And **`SETUP.md`** documented
+   `geneseed upgrade v1.0.0 # pin to a tag`, which `js/maintain/update.mjs` prints is IGNORED.
+9. **`docs/web/agents.md`** enumerated 16 agents and omitted `developer`, where README says 17 —
+   the doctor arm cannot fire, because the page spells `{N_AGENTS}` and that arm only ever catches
+   a literal. **`docs/web/rules.md`** called each law "a short markdown file under `src/laws/`";
+   there is one file.
+
+### 10 — What to settle before the next wave
+
+Ordered by what unblocks the most work per unit of effort. Each is small; none is urgent enough to
+stop a change today, and all of them cost a contributor a wrong turn until they are done.
+
+1. **Extend the fenced-command gate to `DESIGN.md` and `docs/**/*.md` (§7.3).** One array literal.
+   Today it covers four documents, and both of the pointer-to-nothing defects §7 records — the
+   `DESIGN.md` authoring section and `doctor`'s theme-parity tip, since fixed — sat outside its
+   reach. It keeps catching them.
+2. **Decide the hook-verb question (§5.1) before it is asked under pressure.** Either mirror the
+   CLI side's exemption list onto the hook half, or write down that the hook verb set is closed.
+   Either answer is fine; discovering the question mid-feature is not.
+3. **Write down the frozen-key list (§5.2) where a theme author will see it** — `themes/README.md`
+   is the natural home. Seven keys × fifteen files is a small enough surface to name explicitly,
+   and today nothing warns you before the snapshot goes red.
+4. **Gate `AGENT_LESSON_PROMPT` like its sibling (§7.7), and either gate or delete
+   `adapters/claude-code/settings.json` (§7.10).** Two silent failure modes, both cheap to close.
+5. **Finish the `scripts` block in the root `package.json`.** `lint` landed with the ESLint
+   config; the rest of what CI runs is still reassembled by hand from this file. A `verify` script
+   chaining lint + suite + doctor is three lines and makes §1 executable rather than descriptive.
+
+The list of hand-maintained satellites in §6 is the *design*, not a defect — this project
+deliberately keeps tables and prose hand-written and gates them from the source tree. The
+recommendations above are about the places where the gate is missing, wrong, or pointed at a file
+that no longer exists.
