@@ -461,7 +461,7 @@ test('GET /api/factories/active carries the board fields, and survives an unpars
   try {
     withLoopsXdg(sb, () => {
       const factory = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../fixtures/factories/fixture-fix.json'), 'utf8'));
-      const at = (hhmm) => `2026-11-11T${hhmm}:00.000Z`;
+      const at = (hhmm) => `2026-11-01T${hhmm}:00.000Z`;
       const roots = Object.fromEntries(['held', 'broken', 'gone'].map((name) => {
         const root = path.join(sb.path, name);
         fs.mkdirSync(root, { recursive: true });
@@ -481,20 +481,25 @@ test('GET /api/factories/active carries the board fields, and survives an unpars
       const heldFile = renderFactoryFile(held);
       fs.writeFileSync(path.join(roots.held, 'FACTORY.md'), heldFile);
       fs.writeFileSync(path.join(roots.broken, 'FACTORY.md'), '# Factory\n\nno state block here\n');
+      const before = Date.now();
       const { factories } = apiFactoriesActive();
+      const after = Date.now();
       const row = (name) => factories.find((r) => r.root === roots[name]);
       const { status, stage, awaiting, counters, tasks, metrics } = row('held');
       assert.deepEqual({ status, stage, awaiting, counters, tasks }, {
         status: 'awaiting', stage: 'review', awaiting: { kind: 'gate', stage: 'review', outcome: 'fail', note: 'review.md' }, counters: {}, tasks: null,
       });
-      assert.deepEqual(metrics, {
+      // U3: the wait still open at the held gate, from its record (10:13) to the time of the poll
+      const held13 = Date.parse(at('10:13'));
+      assert.ok(metrics.openWaitMs >= before - held13 && metrics.openWaitMs <= after - held13, `openWaitMs ${metrics.openWaitMs}`);
+      assert.deepEqual({ ...metrics, openWaitMs: 'measured above' }, {
         started: at('10:00'),
         stages: [
           { stage: 'plan', runs: 1, reworks: 0, workMs: 60000, tokens: 300 },
           { stage: 'loop:bugfix', runs: 1, reworks: 0, workMs: 600000, tokens: null },
           { stage: 'review', runs: 1, reworks: 0, workMs: 120000, tokens: null },
         ],
-        workMs: 780000, waitMs: 0, tokens: 300, transitions: 2,
+        workMs: 780000, waitMs: 0, openWaitMs: 'measured above', tokens: 300, transitions: 2,
         entries: [{ ms: 60000, wait: false, rework: false }, { ms: 600000, wait: false, rework: false }, { ms: 120000, wait: false, rework: false }],
       });
       const id = (name) => ({ root: roots[name], branch: `loop/factory-${name}`, factory: 'fixture-fix', title: name, started: '2026-11-11T10:00:00.000Z', loop: null });

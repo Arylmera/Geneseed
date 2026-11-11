@@ -1,7 +1,7 @@
 // tests/unit/factory_registry.test.mjs
 //
 // `js/factory/registry.mjs` — the run identity list `geneseed factory init` records into, and the
-// console reads back through `activeFactories`. It shares the loop registry's code (`sweepRows`),
+// console reads back through `listFactories`. It shares the loop registry's code (`sweepRows`),
 // so these rows prove the factory side of it: its own file, its own key, its own state file. Every
 // test points XDG_CONFIG_HOME into the sandbox (restored afterwards) so nothing touches the
 // machine tier, and `now` is always passed in, never read off the clock. The last test is the one
@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
-import { factoryRegistryPath, recordFactory, activeFactories, listFactories } from '../../js/factory/registry.mjs';
+import { factoryRegistryPath, recordFactory, listFactories } from '../../js/factory/registry.mjs';
 import { registryPath } from '../../js/loop/registry.mjs';
 import { initFactory, renderFactoryFile } from '../../js/factory/state.mjs';
 import { GENESEED_GITIGNORE } from '../../js/hosts/geneseed-dir.mjs';
@@ -54,13 +54,13 @@ test('factories.json sits beside loops.json; recordFactory upserts by root and k
   } finally { sb.cleanup(); }
 });
 
-test('activeFactories reads FACTORY.md back into a running row', () => {
+test('listFactories reads FACTORY.md back into a running row', () => {
   const sb = makeSandbox('factreg-');
   try {
     withXdg(sb, () => {
       const root = runRoot(sb, 'proj');
       recordFactory({ root, branch: 'loop/factory-a', factory: 'fixture-fix', title: 'Run', now: new Date('2026-11-01T00:00:00Z') });
-      assert.deepEqual(activeFactories({ now: new Date('2026-11-01T00:01:00Z') }), [{
+      assert.deepEqual(listFactories({ now: '2026-11-01T00:01:00.000Z' }), [{
         root, branch: 'loop/factory-a', factory: 'fixture-fix', title: 'Run', started: '2026-11-01T00:00:00.000Z',
         status: 'running', stage: 'plan', awaiting: null, reason: null, transitions: 0, counters: {},
         lane: null, tasks: null, history: [],
@@ -68,37 +68,15 @@ test('activeFactories reads FACTORY.md back into a running row', () => {
         graph: FACTORY,
         // D7: the board's numbers, `runMetrics` of the state: this run has recorded nothing, and
         // its FACTORY.md carries no `started` (the fixture passes no `now`), so that is unknown.
-        metrics: { started: null, stages: [], workMs: 0, waitMs: 0, tokens: null, transitions: 0, entries: [] },
+        metrics: { started: null, stages: [], workMs: 0, waitMs: 0, openWaitMs: null, tokens: null, transitions: 0, entries: [] },
       }]);
     });
   } finally { sb.cleanup(); }
 });
 
-// The loop registry's four outcomes, through the factory's file: a vanished root is dropped, an
-// unreadable FACTORY.md is kept (R4), and a run whose FACTORY.md is gone is `finished` from the
-// first poll that sees it so, then dropped once that moment is more than 7 days old.
-test('vanished, unreadable and finished runs, with the 7-day prune', () => {
-  const sb = makeSandbox('factreg-');
-  try {
-    withXdg(sb, () => {
-      const t0 = new Date('2026-11-01T00:00:00Z');
-      const gone = runRoot(sb, 'gone'); const bad = runRoot(sb, 'bad'); const done = runRoot(sb, 'done');
-      for (const root of [gone, bad, done]) recordFactory({ root, branch: 'b', factory: 'f', title: 't', now: t0 });
-      rmSync(gone, { recursive: true });
-      writeFileSync(path.join(bad, 'FACTORY.md'), '# no state block\n');
-      rmSync(path.join(done, 'FACTORY.md'));
-      const id = (root) => ({ root, branch: 'b', factory: 'f', title: 't', started: '2026-11-01T00:00:00.000Z' });
-      assert.deepEqual(activeFactories({ now: t0 }), [{ ...id(bad), status: 'unreadable' }, { ...id(done), status: 'finished' }]);
-      assert.deepEqual(raw().factories.map((r) => r.finishedAt ?? null), [null, '2026-11-01T00:00:00.000Z']);
-      const day = 24 * 60 * 60 * 1000;
-      assert.equal(activeFactories({ now: new Date(t0.getTime() + 7 * day) }).length, 2, 'exactly 7 days: kept');
-      assert.deepEqual(activeFactories({ now: new Date(t0.getTime() + 7 * day + 1) }), [{ ...id(bad), status: 'unreadable' }]);
-      assert.equal(raw().factories.length, 1);
-    });
-  } finally { sb.cleanup(); }
-});
-
-// D7: the console's read (`listFactories`) never writes. A running, an unreadable and a finished
+// D7: the console's read (`listFactories`) never writes. `recordFactory` is the one sweep: it
+// stamps `finishedAt` on a run whose FACTORY.md is gone, drops a vanished root, and drops a
+// finished run once its stamp is more than 7 days old (exactly 7 days: kept). A running, an unreadable and a finished
 // run (FACTORY.md gone), and a root that no longer exists: the poll lists the first three as
 // running, `unreadable` and `finished`, skips the vanished root, and leaves the bytes of
 // factories.json as they were, so it stamps no `finishedAt` and drops no row. The sweep it no
@@ -125,6 +103,11 @@ test('listFactories never writes factories.json; recordFactory sweeps it', () =>
       recordFactory({ root: fresh, branch: 'b', factory: 'f', title: 't', now: new Date('2026-11-02T00:00:00Z') });
       assert.deepEqual(raw().factories.map((r) => [r.root, r.finishedAt ?? null]),
         [[live, null], [bad, null], [done, '2026-11-02T00:00:00.000Z'], [fresh, null]]);
+      const day = 24 * 60 * 60 * 1000;
+      recordFactory({ root: fresh, branch: 'b', factory: 'f', title: 't', now: new Date(Date.parse('2026-11-02T00:00:00Z') + 7 * day) });
+      assert.equal(raw().factories.length, 4, 'exactly 7 days after the stamp: kept');
+      recordFactory({ root: fresh, branch: 'b', factory: 'f', title: 't', now: new Date(Date.parse('2026-11-02T00:00:00Z') + 7 * day + 1) });
+      assert.deepEqual(raw().factories.map((r) => r.root), [live, bad, fresh], 'past 7 days: dropped');
     });
   } finally { sb.cleanup(); }
 });
@@ -135,7 +118,7 @@ test('a corrupt factories.json reads as empty, and neither function throws', () 
     withXdg(sb, () => {
       mkdirSync(path.dirname(factoryRegistryPath()), { recursive: true });
       writeFileSync(factoryRegistryPath(), '{ nope');
-      assert.deepEqual(activeFactories({ now: new Date() }), []);
+      assert.deepEqual(listFactories(), []);
       const root = runRoot(sb, 'proj');
       recordFactory({ root, branch: 'b', factory: 'f', title: 't', now: new Date('2026-11-01T00:00:00Z') });
       assert.equal(raw().factories.length, 1);

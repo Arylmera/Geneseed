@@ -46,9 +46,15 @@ export const factoryRows = (factories) =>
     (f) => f.origin,
     Object.entries(ORIGIN),
   )
+// A run's row in the list: its factory, then its facts on a second line (live runs only).
 export const runRows = (runs) =>
   grouped(
-    runs.map((r) => ({ ...r, name: r.root, desc: r.factory })),
+    runs.map((r) => ({
+      ...r,
+      name: r.root,
+      desc: r.factory,
+      meta: live(r) ? cardFacts(r).join(' · ') : undefined,
+    })),
     (r) => r.status,
     STATUS,
   )
@@ -64,27 +70,30 @@ export function fmtMs(ms) {
 // An engine time (ISO, UTC) to the minute, as written: no locale, so every viewer reads the same.
 const clock = (at) => `${at.slice(0, 16).replace('T', ' ')} UTC`
 
-// What a card says under the run's title: where it stands, its task, the laps it has spent
-// against each cycle's max, and its work and waiting time (`runMetrics`, computed by the engine).
+// What a run's card and list row say beside its title, as short as a 800 px pane allows: where
+// it stands (a held gate as `stage · outcome`), its task as `i/n`, its work time so far, the
+// wait still open at its gate, and the cycles it has spent (only those above 0) as `name n/max`.
+// The numbers are the engine's (`metrics`, `runMetrics`). A run with no state says why.
 export function cardFacts(r) {
   if (r.status === 'unreadable') return ['Its FACTORY.md cannot be read.']
   if (r.status === 'finished') return ['Its FACTORY.md is gone: the run closed.']
   const t = r.tasks
-  const laps = (r.graph?.cycles || [])
-    .filter((c) => r.counters?.[c.name])
-    .map((c) => `${c.name} ${r.counters[c.name]} / ${c.max}`)
+  const m = r.metrics
   const where = r.awaiting
-    ? `Waits at ${r.awaiting.stage} (${r.awaiting.outcome})`
+    ? `${r.awaiting.stage} · ${r.awaiting.outcome}`
     : r.status === 'stopped'
-      ? `Stopped: ${r.reason}`
+      ? `stopped: ${r.reason}`
       : r.status === 'done'
-        ? 'Closed'
-        : `At ${r.stage}`
+        ? 'closed'
+        : r.stage
   return [
     where,
-    t ? `task ${t.index} / ${t.count}` : null,
-    laps.length ? `laps: ${laps.join(', ')}` : null,
-    r.metrics ? `work ${fmtMs(r.metrics.workMs)} · waited ${fmtMs(r.metrics.waitMs)}` : null,
+    t ? `task ${t.index}/${t.count}` : null,
+    m ? `work ${fmtMs(m.workMs)}` : null,
+    m?.openWaitMs != null ? `waiting ${fmtMs(m.openWaitMs)}` : null,
+    ...(r.graph?.cycles || [])
+      .filter((c) => r.counters?.[c.name] > 0)
+      .map((c) => `${c.name} ${r.counters[c.name]}/${c.max}`),
   ].filter(Boolean)
 }
 
@@ -107,9 +116,7 @@ function RunBoard({ runs }) {
                     <a className="fac-card" href={`#/factories/active/${enc(r.root)}`}>
                       <b>{r.title}</b>
                       <span className="mono">{r.factory}</span>
-                      {cardFacts(r).map((f) => (
-                        <span key={f}>{f}</span>
-                      ))}
+                      <span>{cardFacts(r).join(' · ')}</span>
                     </a>
                   </li>
                 ))}
@@ -173,7 +180,9 @@ function Timeline({ run }) {
       />
       {m ? (
         <p className="panel-note fac-totals">
-          Work {fmtMs(m.workMs)} · waited {fmtMs(m.waitMs)} · tokens {m.tokens ?? 'unknown'}
+          Work {fmtMs(m.workMs)} · waited {fmtMs(m.waitMs)}
+          {m.openWaitMs != null ? ` · waiting ${fmtMs(m.openWaitMs)}` : ''} · tokens{' '}
+          {m.tokens ?? 'unknown'}
         </p>
       ) : null}
     </>
@@ -496,7 +505,8 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           onQ={setQ}
           matched={shown.length}
           inView={[tab, item]}
-          current={sel?.name}
+          // the open entry's name; a run's is its title, never its root path
+          current={sel ? sel.title || sel.name : undefined}
           sections={SECTIONS.map(([k, l]) => ({
             key: k,
             label: l,

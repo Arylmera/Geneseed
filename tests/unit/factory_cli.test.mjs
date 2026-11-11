@@ -810,7 +810,7 @@ test('report: started, at and tokens reach FACTORY.md, and report prints the met
     run(sb.path, [...INIT, '--factory', 'fixture-fix']);
     const fresh = run(sb.path, ['report']);
     assert.match(fresh.out.started, ISO);
-    assert.deepEqual(fresh, { code: 0, out: { started: fresh.out.started, stages: [], workMs: 0, waitMs: 0, tokens: null, transitions: 0, entries: [] } });
+    assert.deepEqual(fresh, { code: 0, out: { started: fresh.out.started, stages: [], workMs: 0, waitMs: 0, openWaitMs: null, tokens: null, transitions: 0, entries: [] } });
     const before = readFileSync(file, 'utf8');
     for (const bad of ['0', '-4', '1.5', '1e3', 'many']) {
       assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', `--tokens=${bad}`], ''),
@@ -828,7 +828,7 @@ test('report: started, at and tokens reach FACTORY.md, and report prints the met
     assert.ok(ms >= 0, `at ${entry.at} is before started ${out.started}`);
     assert.deepEqual(out, {
       started: out.started, stages: [{ stage: 'plan', runs: 1, reworks: 0, workMs: ms, tokens: 900 }],
-      workMs: ms, waitMs: 0, tokens: 900, transitions: 1, entries: [{ ms, wait: false, rework: false }],
+      workMs: ms, waitMs: 0, openWaitMs: null, tokens: 900, transitions: 1, entries: [{ ms, wait: false, rework: false }],
     });
   } finally { sb.cleanup(); }
 });

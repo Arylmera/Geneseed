@@ -201,7 +201,7 @@ const ACTIONS = {
     return withState((s, c) => decideFactory(s, c, args.verdict, note, { now: nowIso() }));
   },
   // D5: read-only, and validated like every state action, so the numbers come from a state the engine could have written
-  report: () => runMetrics(readState().state),
+  report: () => runMetrics(readState().state, { now: nowIso() }),
 };
 
 export function cmdFactory(args) {

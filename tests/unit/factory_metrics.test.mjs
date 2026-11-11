@@ -7,7 +7,8 @@
 //   - on a `record` entry that is the stage's work time, on a `decide` entry it is waiting time;
 //   - an entry with no `at`, or whose predecessor has none, is `null`, and so is every sum over it;
 //   - a rework is an outcome whose edge spends a declared cycle; a held outcome spends only on `ok`;
-//   - tokens add what the entries carry, and are `null` when none carries a count.
+//   - tokens add what the entries carry, and are `null` when none carries a count;
+//   - `openWaitMs` is `now` minus the gated record's `at` while the run is awaiting, else null.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runMetrics } from '../../js/factory/metrics.mjs';
@@ -66,7 +67,7 @@ const ROWS = [
       { stage: 'loop:bugfix', runs: 1, reworks: 0, workMs: 10 * MIN, tokens: null },
       { stage: 'review', runs: 1, reworks: 0, workMs: 2 * MIN, tokens: 500 },
     ],
-    workMs: 13 * MIN, waitMs: 0, tokens: 800, transitions: 2,
+    workMs: 13 * MIN, waitMs: 0, openWaitMs: null, tokens: 800, transitions: 2,
     entries: [work(1 * MIN), work(10 * MIN), work(2 * MIN)],
   }],
   ['one rework: the review that failed carries it, and both stages count two runs', {
@@ -85,7 +86,7 @@ const ROWS = [
       { stage: 'loop:bugfix', runs: 2, reworks: 0, workMs: 17 * MIN, tokens: null },
       { stage: 'review', runs: 2, reworks: 1, workMs: 3 * MIN, tokens: null },
     ],
-    workMs: 21 * MIN, waitMs: 0, tokens: null, transitions: 4,
+    workMs: 21 * MIN, waitMs: 0, openWaitMs: null, tokens: null, transitions: 4,
     entries: [work(1 * MIN), work(10 * MIN), work(2 * MIN, true), work(7 * MIN), work(1 * MIN)],
   }],
   ['human gates: the time to each answer is waiting, never work; amend is no rework, ok on `checks none` is one', {
@@ -106,7 +107,7 @@ const ROWS = [
       { stage: 'loop:bugfix', runs: 1, reworks: 0, workMs: 10 * MIN, tokens: null },
       { stage: 'checks', runs: 2, reworks: 1, workMs: 3 * MIN, tokens: null },
     ],
-    workMs: 18 * MIN, waitMs: 90 * MIN, tokens: null, transitions: 3,
+    workMs: 18 * MIN, waitMs: 90 * MIN, openWaitMs: null, tokens: null, transitions: 3,
     entries: [work(2 * MIN), wait(30 * MIN), work(3 * MIN), work(10 * MIN), work(1 * MIN, true), wait(60 * MIN), work(2 * MIN)],
   }],
   ['a gate still held: the outcome has spent no cycle yet, and nothing waits in the sums', {
@@ -123,7 +124,7 @@ const ROWS = [
       { stage: 'loop:bugfix', runs: 1, reworks: 0, workMs: 10 * MIN, tokens: null },
       { stage: 'checks', runs: 1, reworks: 0, workMs: 1 * MIN, tokens: null },
     ],
-    workMs: 13 * MIN, waitMs: 0, tokens: null, transitions: 2,
+    workMs: 13 * MIN, waitMs: 0, openWaitMs: null, tokens: null, transitions: 2,
     entries: [work(2 * MIN), work(10 * MIN), work(1 * MIN)],
   }],
   ['no times: an entry without `at` is null, so is the entry after it, and so is every sum that holds one', {
@@ -140,7 +141,7 @@ const ROWS = [
       { stage: 'loop:bugfix', runs: 1, reworks: 0, workMs: null, tokens: null },
       { stage: 'review', runs: 1, reworks: 0, workMs: 2 * MIN, tokens: null },
     ],
-    workMs: null, waitMs: 0, tokens: null, transitions: 2,
+    workMs: null, waitMs: 0, openWaitMs: null, tokens: null, transitions: 2,
     entries: [work(null), work(null), work(2 * MIN)],
   }],
   ['a fork: a fail routed to `$lane` is a rework, the fork read off the factory\'s own edges', {
@@ -159,7 +160,7 @@ const ROWS = [
       { stage: 'loop:bugfix', runs: 2, reworks: 0, workMs: 15 * MIN, tokens: null },
       { stage: 'review', runs: 2, reworks: 1, workMs: 2 * MIN, tokens: null },
     ],
-    workMs: 18 * MIN, waitMs: 0, tokens: null, transitions: 4,
+    workMs: 18 * MIN, waitMs: 0, openWaitMs: null, tokens: null, transitions: 4,
     entries: [work(1 * MIN), work(10 * MIN), work(1 * MIN, true), work(5 * MIN), work(1 * MIN)],
   }],
 ];
@@ -171,7 +172,7 @@ for (const [name, state, expected] of ROWS) {
 // The console calls it on a FACTORY.md nobody validated: a state of any shape gives numbers or
 // nulls, never a throw. A time that does not parse, or one before its predecessor, is unknown.
 test('runMetrics never throws, and reads a bad or backward time as unknown', () => {
-  const empty = { started: null, stages: [], workMs: 0, waitMs: 0, tokens: null, transitions: null, entries: [] };
+  const empty = { started: null, stages: [], workMs: 0, waitMs: 0, openWaitMs: null, tokens: null, transitions: null, entries: [] };
   assert.deepEqual(runMetrics({}), empty);
   assert.deepEqual(runMetrics(null), empty);
   assert.deepEqual(runMetrics({ factory: 'x', history: 'y', started: 7 }), empty);
@@ -182,3 +183,30 @@ test('runMetrics never throws, and reads a bad or backward time as unknown', () 
   });
   assert.deepEqual(m.entries, [work(null), work(null)]);
 });
+
+// The wait still open at a held gate (U3). The same held state each time: started 10:00, intake
+// at 10:02, the loop at 10:12, `checks none` recorded at 10:13 and not answered yet. With no `now`
+// the open wait is unknown (null); with `now` 10:43 it is 30 minutes; and once the same history is
+// running again (no gate held), there is no open wait, whatever `now` says.
+const HELD_STATE = {
+  started: at('10:00'), factory: GATED, runTransitions: 2, status: 'awaiting',
+  awaiting: { kind: 'gate', stage: 'checks', outcome: 'none' },
+  history: [
+    { stage: 'intake', outcome: 'pass', task: 0, at: at('10:02') },
+    { stage: 'loop:bugfix', outcome: 'pass', task: 0, at: at('10:12') },
+    { stage: 'checks', outcome: 'none', task: 0, at: at('10:13') },
+  ],
+};
+const OPEN_WAIT = [
+  ['no now', HELD_STATE, undefined, null],
+  ['awaiting, now 30 minutes after the gated record', HELD_STATE, at('10:43'), 30 * MIN],
+  ['awaiting, but the gated record has no time', { ...HELD_STATE, history: [...HELD_STATE.history.slice(0, 2), { stage: 'checks', outcome: 'none', task: 0 }] }, at('10:43'), null],
+  ['running', { ...HELD_STATE, status: 'running', awaiting: null }, at('10:43'), null],
+];
+for (const [name, state, now, expected] of OPEN_WAIT) {
+  test(`runMetrics openWaitMs — ${name}`, () => {
+    const m = runMetrics(state, now === undefined ? undefined : { now });
+    assert.equal(m.openWaitMs, expected);
+    assert.equal(m.waitMs, 0, 'an open wait is never counted as a waited one');
+  });
+}

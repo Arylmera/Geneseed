@@ -12,7 +12,8 @@
  * THE CONSOLE'S POLL NEVER WRITES (spec 2026-11-11 D7). The board polls every 5 s; a sweep there
  * would stamp `finishedAt`, drop rows, and race `recordFactory` on the one `factories.json.tmp`
  * during a `factory init`. So `listFactories` is read-only, as `runningLoops` is beside
- * `activeLoops`, and the sweep (stamp, 7-day prune, drop of a vanished root) runs in
+ * `activeLoops` (but with no sweeping twin: nothing else needs one), and the sweep (stamp,
+ * 7-day prune, drop of a vanished root) runs in
  * `recordFactory`, which writes the file anyway. A finished run is first stamped by the next
  * `factory init` on the machine, so it is pruned 7 days after that, not after it closed.
  *
@@ -56,7 +57,7 @@ export function recordFactory({ root, branch, factory, title, now = new Date() }
 
 const identity = (e) => ({ root: e.root, branch: e.branch, factory: e.factory, title: e.title, started: e.started });
 
-function runningRow(entry, state) {
+function runningRow(entry, state, now = null) {
   return {
     ...identity(entry), status: state.status, stage: state.stage, awaiting: state.awaiting,
     reason: state.reason, transitions: state.transitions, counters: state.counters,
@@ -66,7 +67,7 @@ function runningRow(entry, state) {
     graph: state.factory,
     // D7: the board's numbers, from the one function `factory report` prints (it never throws on
     // a state that parsed, and nothing here validated this one).
-    metrics: runMetrics(state),
+    metrics: runMetrics(state, { now }),
   };
 }
 
@@ -75,23 +76,13 @@ const sweep = (rows, now) => sweepRows(rows, {
 });
 
 /**
- * `listFactories`' rows, after the sweep: a vanished root is dropped, a finished run is stamped
- * and dropped 7 days later, and the file is saved when that changed anything. Not the console's
- * read; kept as the sweep's entry point for a caller that means to tidy the registry.
- */
-export function activeFactories({ now = new Date() } = {}) {
-  const { kept, rows, changed } = sweep(load(), now);
-  if (changed) save(kept);
-  return rows;
-}
-
-/**
  * The rows the console renders, READ-ONLY: never a save, a stamp or a prune. A running row read
- * fresh off each registered worktree's FACTORY.md, `unreadable` when it does not parse, and
+ * fresh off each registered worktree's FACTORY.md (its metrics' open wait measured to `now`, the
+ * time of the poll), `unreadable` when it does not parse, and
  * `finished` when it is gone. A row whose root no longer exists is skipped: the sweep in
  * `recordFactory` drops it, and a card for a deleted worktree would open on nothing.
  */
-export function listFactories() {
+export function listFactories({ now = new Date().toISOString() } = {}) {
   const rows = [];
   for (const entry of load()) {
     if (!isDir(entry.root)) continue;
@@ -99,7 +90,7 @@ export function listFactories() {
     if (!isFile(file)) { rows.push({ ...identity(entry), status: 'finished' }); continue; }
     let state;
     try { state = parseFactoryFile(readText(file)); } catch { rows.push({ ...identity(entry), status: 'unreadable' }); continue; }
-    rows.push(runningRow(entry, state));
+    rows.push(runningRow(entry, state, now));
   }
   return rows;
 }

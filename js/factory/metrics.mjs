@@ -25,6 +25,12 @@
  * here they are read off the factory's own edges, one edge per outcome (rule 3 of `checkFactory`),
  * so this module needs no catalogue and the daemon can call it on any registered run.
  *
+ * THE OPEN WAIT. A wait is counted on the `decide` that ends it, so a run still held at a gate has
+ * waited nothing yet by that count. `now` (an ISO time, optional) gives `openWaitMs`: `now` minus
+ * the `at` of the gated record, while the run is `awaiting`. It is null without `now`, on a run
+ * that is not awaiting, and when that record has no `at`. The caller reads the clock (`factory
+ * report` its own, the console the time of its poll); this module stays pure.
+ *
  * NEVER THROWS on a state that parsed: the console calls it on a FACTORY.md nobody validated.
  */
 import { edgeFor, laneTargets, spentCycle } from './graph.mjs';
@@ -41,12 +47,12 @@ const tokensOf = (hs) => {
 };
 
 /**
- * `{ started, stages, workMs, waitMs, tokens, transitions, entries }`. `stages` lists each stage
+ * `{ started, stages, workMs, waitMs, openWaitMs, tokens, transitions, entries }`. `stages` lists each stage
  * the run recorded, in the order it first ran: `{ stage, runs, reworks, workMs, tokens }`.
  * `entries` is parallel to `state.history`: `{ ms, wait, rework }`, `wait` true on a `decide`
  * entry. `transitions` is the run-wide count the engine keeps.
  */
-export function runMetrics(state) {
+export function runMetrics(state, { now = null } = {}) {
   const factory = state?.factory;
   const history = list(state?.history).map((h) => (h !== null && typeof h === 'object' ? h : {}));
   const edges = list(factory?.edges);
@@ -79,6 +85,7 @@ export function runMetrics(state) {
     stages: [...byStage.values()].map(({ stage, runs, reworks, ms, hs }) => ({ stage, runs, reworks, workMs: sum(ms), tokens: tokensOf(hs) })),
     workMs: sum(entries.filter((e) => !e.wait).map((e) => e.ms)),
     waitMs: sum(entries.filter((e) => e.wait).map((e) => e.ms)),
+    openWaitMs: state?.status === 'awaiting' && now ? elapsed(history.at(-1)?.at, now) : null,
     tokens: tokensOf(history),
     transitions: Number.isInteger(state?.runTransitions) ? state.runTransitions : null,
     entries,

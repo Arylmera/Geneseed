@@ -274,9 +274,10 @@ describe('Factories — active', () => {
   // The board: with no run named, every run is a card in one of three columns, by what it needs
   // from you. `awaiting` waits for you, and so does a FACTORY.md that cannot be read (no engine
   // action runs until it is repaired); `running` runs; `stopped`, `done` and `finished` (its
-  // FACTORY.md gone) have ended. A card says where the run stands, its task, the laps spent
-  // against each cycle's max, and the engine's work and waiting time: 13 min is 780000 ms,
-  // 1 h 30 min is 5400000 ms, and a time nobody recorded is `unknown`, never 0.
+  // FACTORY.md gone) have ended. A card says, on one line: where the run stands (a held gate as
+  // `stage · outcome`), its task as `i/n`, its work time, the wait still open at its gate, and the
+  // cycles spent above 0 as `name n/max`. 13 min is 780000 ms, 25 min is 1500000 ms, and a time
+  // nobody recorded is `unknown`, never 0. A run with no state says why instead.
   const at = (hhmm) => `2026-11-11T${hhmm}:00.000Z`
   const run = (name, extra) => ({
     ...RUN,
@@ -307,6 +308,7 @@ describe('Factories — active', () => {
       stages: [],
       workMs: null,
       waitMs: 5400000,
+      openWaitMs: 1500000,
       tokens: 4200,
       transitions: 6,
       entries: [
@@ -322,7 +324,7 @@ describe('Factories — active', () => {
     },
   })
   const BOARD = [
-    run('going'),
+    run('going', { counters: { ci: 1 } }),
     HELD,
     run('halted', { status: 'stopped', reason: 'cycle ci exhausted its max of 2' }),
     run('closed', { status: 'done', stage: '$close' }),
@@ -343,10 +345,7 @@ describe('Factories — active', () => {
         '#/factories/active/C%3A%2Fwork%2Fheld',
         'held',
         'bug-report-to-fix',
-        'Waits at merge-gate (none)',
-        'task 2 / 3',
-        'laps: ci 1 / 2',
-        'work unknown · waited 1 h 30 min',
+        'merge-gate · none · task 2/3 · work unknown · waiting 25 min · ci 1/2',
       ],
       [
         '#/factories/active/C%3A%2Fwork%2Fbroken',
@@ -360,22 +359,36 @@ describe('Factories — active', () => {
         '#/factories/active/C%3A%2Fwork%2Fgoing',
         'going',
         'bug-report-to-fix',
-        'At loop:bugfix',
-        'work 13 min · waited 0 s',
+        'loop:bugfix · work 13 min · ci 1/2',
       ],
     ])
     expect(cards('Ended').map((c) => c.slice(1))).toEqual([
-      [
-        'halted',
-        'bug-report-to-fix',
-        'Stopped: cycle ci exhausted its max of 2',
-        'work 13 min · waited 0 s',
-      ],
-      ['closed', 'bug-report-to-fix', 'Closed', 'work 13 min · waited 0 s'],
+      ['halted', 'bug-report-to-fix', 'stopped: cycle ci exhausted its max of 2 · work 13 min'],
+      ['closed', 'bug-report-to-fix', 'closed · work 13 min'],
       ['gone', 'bug-report-to-fix', 'Its FACTORY.md is gone: the run closed.'],
     ])
     // No run is drawn until one is named.
     expect(document.querySelector('.reader-title')).toBeNull()
+  })
+
+  // U1 + U2: with a run open, the list pane carries the same facts as its card, on the row's
+  // second line under the factory, and its header names the open run by its title, never by its
+  // root path. A run with no state has no facts line.
+  it('puts the facts on each list row, and names the open run by its title', async () => {
+    api.activeFactories.mockImplementation(() => Promise.resolve({ factories: BOARD }))
+    render(<Factories tab="active" item="C:/work/held" />)
+    await screen.findByText('held', { selector: '.reader-title' })
+    const row = (title) => document.querySelector(`.lib-row[data-title="${title}"]`)
+    expect(text('.lr-desc, .lr-meta', row('held'))).toEqual([
+      'bug-report-to-fix',
+      'merge-gate · none · task 2/3 · work unknown · waiting 25 min · ci 1/2',
+    ])
+    expect(text('.lr-desc, .lr-meta', row('going'))).toEqual([
+      'bug-report-to-fix',
+      'loop:bugfix · work 13 min · ci 1/2',
+    ])
+    expect(text('.lr-desc, .lr-meta', row('broken'))).toEqual(['bug-report-to-fix'])
+    expect(document.querySelector('.lib-list-toggle b').textContent).toBe('held')
   })
 
   it('says None in a column that holds no run', async () => {
@@ -409,7 +422,7 @@ describe('Factories — active', () => {
     ])
     expect(table.querySelectorAll('.tag.warn')).toHaveLength(1)
     expect(document.querySelector('.fac-totals').textContent).toBe(
-      'Work unknown · waited 1 h 30 min · tokens 4200',
+      'Work unknown · waited 1 h 30 min · waiting 25 min · tokens 4200',
     )
     expect(screen.getByRole('link', { name: '← All runs' }).getAttribute('href')).toBe(
       '#/factories/active',

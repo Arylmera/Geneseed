@@ -378,9 +378,12 @@ screen the run list stacks above the detail.
   (`GET /api/factories/active`, polled every 5 s, the graph read from each run's `FACTORY.md`),
   shown as a **board** while no run is selected: three columns of cards, **Waits for you** (a
   held gate, or a `FACTORY.md` that cannot be read), **Running**, and **Ended** (stopped, closed,
-  or its `FACTORY.md` gone). A card gives the run's title, its factory, where it stands, its task
-  number, the laps spent against each cycle's `max`, and its work time and waiting time. The
-  list beside it groups the runs under the same three names. A card opens the run: the reader
+  or its `FACTORY.md` gone). A card gives the run's title, its factory, and one line of facts: where it
+  stands (a held gate as `stage · outcome`), its task as `i/n`, its work time so far, the wait
+  still open at its gate (`waiting 25 min`), and each cycle spent above 0 as `name n/max`. A
+  run with no state says why instead. The list beside it groups the runs under the same three
+  names, each row with the same facts under its factory, and while a run is open the list's
+  header names it by its title. A card opens the run: the reader
   shows the run's stage, transitions, task number, its
   child loop's step and iteration, what it awaits, and its graph with the current stage lit,
   the lane its last fork took (the run's `lane`, else read from its `history`) lit, the child
