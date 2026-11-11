@@ -559,7 +559,7 @@ test('update and upgrade reach the same preflight; a second positional is refuse
 test('sync-self is an unknown verb since 5.0.0', () => {
   const r = cli(CO2, 'sync-self');
   assert.equal(r.rc, 2, `sync-self exited ${r.rc}`);
-  assert.match(r.out, /invalid choice: 'sync-self'/);
+  assert.match(r.out, /unknown command 'sync-self'/);
 });
 
 test('an unfinished doctor holds a direct rebuild-all and setup, as it holds upgrade', () => {
@@ -581,7 +581,7 @@ test('an unfinished doctor holds a direct rebuild-all and setup, as it holds upg
 test('an unknown verb is rejected by the parser with exit code 2', () => {
   const bad = cli(CO2, 'frobnicate');
   assert.equal(bad.rc, 2, `an unknown verb exited ${bad.rc}`);
-  assert.match(bad.out, /invalid choice: 'frobnicate'/);
+  assert.match(bad.out, /unknown command 'frobnicate'/);
   // The other half of the partition: 2 has to MEAN "no such verb". A entry point that exited 2
   // for everything would pass the assertion above and be useless.
   const good = cli(CO2, 'version');

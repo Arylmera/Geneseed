@@ -3524,14 +3524,16 @@
       },
       "expect": [
         "* Geneseed - status",
-        "+-",
-        "|  theme"
+        "  theme ",
+        " - "
       ],
       "expect_absent": [
         "─",
         "◆",
         "·",
-        "│"
+        "│",
+        "+-",
+        "|  theme"
       ],
       "expect_re": [
         "components\\s+[1-9]\\d* agents - [1-9]\\d* skills - [1-9]\\d* laws"
@@ -3596,6 +3598,68 @@
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
         "repo/.keep": ""
       }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[version] 2 global installs found; showing <HOME>",
+        "installed: deadbeef1234"
+      ],
+      "id": "version/several-installs-name-the-one-shown",
+      "steps": [
+        {
+          "argv": [
+            "version"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\"\n  ]\n}\n",
+        "home/.config/opencode/.geneseed-theme": "neutral\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[version] 2 global installs found; showing <HOME>",
+        "installed: 0123456789ab"
+      ],
+      "id": "version/the-picked-default-install-leads-as-it-does-in-status",
+      "steps": [
+        {
+          "argv": [
+            "version"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\"\n  ]\n}\n",
+        "home/.config/opencode/.geneseed-theme": "neutral\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
+        "repo/.keep": "",
+        "home/.config/geneseed/default-install.json": "{\"host\": \"claude\", \"path\": \"{home/}/.claude\"}\n"
+      },
+      "expect_absent": [
+        "installed: deadbeef1234"
+      ]
     },
     {
       "bin": "cli",
@@ -4558,6 +4622,34 @@
         }
       ],
       "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[diff] deployed <HOME>",
+        "(theme: neutral)"
+      ],
+      "expect_absent": [
+        "no global Geneseed install",
+        "global installs found"
+      ],
+      "id": "diff/a-claude-only-machine-diffs-its-claude-install",
+      "steps": [
+        {
+          "argv": [
+            "diff"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
         "repo/.keep": ""
       }
     },
@@ -5819,6 +5911,77 @@
         "home/.config/opencode/opencode.json": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"instructions\": [\n    \"{home/}/.config/opencode/AGENT.md\",\n    \"./MY-OWN.md\"\n  ],\n  \"theme\": \"mine\"\n}\n",
         "home/.config/opencode/prompts/mine.md": "# my own prompt, unowned\n",
         "home/.config/opencode/skills/vend/references/deep.md": "# nested owned\n",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[uninstall] target: <HOME>",
+        "(claude:global)"
+      ],
+      "expect_absent": [
+        "opencode:global"
+      ],
+      "expect_files": [
+        "home/.claude/agents/advocate.md"
+      ],
+      "id": "uninstall/a-claude-only-machine-resolves-to-its-claude-install",
+      "steps": [
+        {
+          "argv": [
+            "uninstall"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[uninstall] 2 global installs found, and no --target names one.",
+        "geneseed uninstall --target",
+        "(opencode:global)",
+        "(claude:global)"
+      ],
+      "expect_absent": [
+        "[uninstall] target:",
+        "[uninstall] done"
+      ],
+      "expect_files": [
+        "home/.config/opencode/AGENT.md",
+        "home/.claude/agents/advocate.md"
+      ],
+      "expect_silent": true,
+      "id": "uninstall/two-global-installs-and-no-target-refuses-and-lists-both",
+      "steps": [
+        {
+          "argv": [
+            "uninstall",
+            "--yes"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\"\n  ]\n}\n",
+        "home/.config/opencode/.geneseed-theme": "neutral\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
         "repo/.keep": ""
       }
     },
@@ -7550,6 +7713,99 @@
         "GENESEED_OUT": "{sb}/bundle"
       },
       "expect": [
+        "argument --theme: 'neutral' contradicts the theme argument 'cyberpunk'"
+      ],
+      "expect_absent": [
+        "preflight: checking the local checkout",
+        "rebuilding bundle"
+      ],
+      "git": "uptodate",
+      "id": "upgrade/a-theme-argument-and-a-different---theme-are-refused",
+      "steps": [
+        {
+          "argv": [
+            "upgrade",
+            "cyberpunk",
+            "--theme",
+            "neutral"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      },
+      "expect_absent_files": [
+        "bundle/AGENT.md"
+      ]
+    },
+    {
+      "bin": "cli",
+      "env": {
+        "GENESEED_OUT": "{sb}/bundle"
+      },
+      "expect": [
+        "(theme: cyberpunk, emit: files)",
+        "built theme 'cyberpunk'"
+      ],
+      "expect_absent": [
+        "theme: neutral",
+        "is IGNORED"
+      ],
+      "expect_files": [
+        "bundle/AGENT.md",
+        "bundle/.geneseed-theme",
+        "bundle/.geneseed-version"
+      ],
+      "git": "uptodate",
+      "id": "upgrade/--theme-is-the-theme-argument-spelled-as-a-flag",
+      "steps": [
+        {
+          "argv": [
+            "upgrade",
+            "--theme",
+            "cyberpunk"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[geneseed] step 1/1: Update & rebuild ...",
+        "[geneseed] ✓ update complete.",
+        "[setup] needs an interactive terminal. Non-interactive? e.g.:",
+        "  geneseed build --emit opencode-global --theme neutral"
+      ],
+      "expect_absent": [
+        "✗ step",
+        "deprecated"
+      ],
+      "git": "dirty",
+      "id": "upgrade/--setup-hands-off-to-a-FRESH-setup-process-as-bootstrap-did",
+      "steps": [
+        {
+          "argv": [
+            "upgrade",
+            "--setup"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "env": {
+        "GENESEED_OUT": "{sb}/bundle"
+      },
+      "expect": [
         "(theme: cyberpunk, emit: opencode-global)",
         "[geneseed] opencode-global -> "
       ],
@@ -7920,6 +8176,7 @@
     {
       "bin": "cli",
       "expect": [
+        "[geneseed] bootstrap is deprecated: run `geneseed upgrade --setup`",
         "[geneseed] step 1/1: Update & rebuild ...",
         "[geneseed] ✓ update complete.",
         "[setup] needs an interactive terminal. Non-interactive? e.g.:",
@@ -8604,12 +8861,14 @@
       "bin": "cli",
       "expect": [
         "Geneseed — no interactive menu here. Get started with:  geneseed setup",
-        "Other commands:  bootstrap · update · build · doctor · diff · tui · web",
+        "Other commands:  update · build · doctor · diff · web",
         "`geneseed --help` lists every command."
       ],
       "expect_absent": [
         "TUI unavailable",
-        "opening the web console"
+        "opening the web console",
+        " tui ",
+        "bootstrap"
       ],
       "id": "menu/off-a-tty-prints-the-command-list",
       "steps": [
@@ -8674,7 +8933,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`."
+        "[tui] tui is retired; use `geneseed menu`."
       ],
       "expect_absent": [
         "\u001b[?1049h",
@@ -8683,7 +8942,8 @@
         "AGENTS (",
         "SKILLS (",
         "LAWS (",
-        "full-screen panel unavailable"
+        "full-screen panel unavailable",
+        "not an interactive terminal"
       ],
       "id": "tui/off-a-tty-refuses-before-it-builds-anything",
       "steps": [
@@ -8701,7 +8961,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`."
+        "[tui] tui is retired; use `geneseed menu`."
       ],
       "expect_absent": [
         "\u001b[?1049h",
@@ -8711,7 +8971,8 @@
         "SKILLS (",
         "LAWS (",
         "full-screen panel unavailable",
-        "nosuchtheme"
+        "nosuchtheme",
+        "not an interactive terminal"
       ],
       "id": "tui/the-theme-argument-is-not-read-before-the-refusal",
       "steps": [

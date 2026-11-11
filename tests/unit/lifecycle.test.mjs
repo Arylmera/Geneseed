@@ -953,6 +953,34 @@ test('no target and no project marker falls back to the OpenCode global default'
   });
 });
 
+test('a bare uninstall takes the one global install, and refuses with exit 2 when there are two', () => {
+  // The cells see the words; this sees the exit code, which no cell compares. 2 is the usage
+  // refusal, as for any unparsed line: the command was incomplete, nothing was attempted.
+  withDir((d) => {
+    const home = path.join(d, 'home');
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    const plant = (dir, emitName) => {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, '.geneseed-emit'), `${emitName}\n`);
+      fs.writeFileSync(path.join(dir, GLOBAL_MANIFEST), '{"owned": [], "scope": "global"}\n');
+    };
+    withHome(home, () => inCwd(repo, () => {
+      const claudeDir = path.join(home, '.claude');
+      plant(claudeDir, 'claude-global');
+      // One install: the bare resolve names it, though it is not OpenCode's.
+      assert.deepEqual(uninstallResolve(null).slice(0, 2), ['claude', 'global']);
+      plant(opencodeConfigDir(), 'opencode-global');
+      const [rc, out, err] = captured(() => cmdUninstall({ target: null, yes: true }));
+      assert.equal(rc, 2, `two installs and no --target exited ${rc}: ${out}${err}`);
+      assert.equal(out, '', 'the refusal printed a target line, as if it had chosen one');
+      assert.match(err, /2 global installs found/);
+      assert.ok(fs.existsSync(path.join(claudeDir, GLOBAL_MANIFEST)), 'the refusal removed something');
+      assert.ok(fs.existsSync(path.join(opencodeConfigDir(), GLOBAL_MANIFEST)), 'the refusal removed something');
+    }), { CLAUDE_CONFIG_DIR: '' });
+  });
+});
+
 test('someone else\'s plain .claude/ does not hijack the default', () => {
   // A repo with the user's OWN `.claude/` — no Geneseed manifest, no emit marker — is NOT a
   // Geneseed project install. Bare `uninstall` must keep the legacy global default, and an

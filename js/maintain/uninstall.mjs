@@ -72,6 +72,7 @@ import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } fro
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { archiveStore } from '../hosts/memory-files.mjs';
+import { hostGlobalInstalls } from '../inspect/excludes.mjs';
 import { comparePaths, isAbsolutePath } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
@@ -720,7 +721,8 @@ export function projectQualifies(root, host) {
  *   2. `--target` IS a project marker dir itself (…/.claude) — root is its parent.
  *   3. `--target` (as a root) carries a Geneseed project install.
  *   4. `--target` given and unrecognised — null, and the caller reports it.
- *   5. No `--target`: the cwd, then the OpenCode global config dir.
+ *   5. No `--target`: the cwd, then the one global install on the machine, else the OpenCode
+ *      global config dir (`cmdUninstall` refuses when there are several).
  */
 export function uninstallResolve(targetArg) {
   const globalHit = (p) => {
@@ -754,7 +756,21 @@ export function uninstallResolve(targetArg) {
   // would otherwise return a root that LOOKS different from the identical directory.
   const hit = projectHit(resolvePath(process.cwd()));
   if (hit) return hit;
+  // The one global install on this machine, whatever its host: a Claude-only machine used to
+  // resolve to the empty OpenCode dir. With none, or several, the OpenCode dir stays the
+  // answer; `cmdUninstall` refuses the several case before it acts on it.
+  const globals = globalInstalls();
+  if (globals.length === 1) return [globals[0][0], 'global', globals[0][1]];
   return ['opencode', 'global', opencodeConfigDir()];
+}
+
+/**
+ * `[host, configDir]` for each host's global dir that holds an install (`installState` not
+ * absent) — the candidates a bare `uninstall` chooses from. The walk is `hostGlobalInstalls`
+ * (`inspect/excludes.mjs`), its one owner; `version` and `diff` call it with their own marker.
+ */
+export function globalInstalls() {
+  return hostGlobalInstalls((host, dir) => installState(dir, host, 'global') !== 'absent');
 }
 
 /**
@@ -831,6 +847,17 @@ export function cmdUninstall(args) {
     return 1;
   }
   const [host, scope, root] = hit;
+  // No `--target` and more than one global install: which one is meant is a guess, and this
+  // verb deletes. Refused before anything is printed as a target, `--yes` or not.
+  if (!args.target && scope === 'global') {
+    const globals = globalInstalls();
+    if (globals.length > 1) {
+      printErr(`[uninstall] ${globals.length} global installs found, and no --target names one. `
+        + 'Run one of:\n'
+        + globals.map(([h, d]) => `  geneseed uninstall --target "${d}"   (${h}:global)\n`).join(''));
+      return 2;
+    }
+  }
   if (installState(root, host, scope) === 'absent') {
     const where = scope === 'project' && host !== 'opencode'
       ? ` under ${hostSpec(host).projectMarker}/` : '';

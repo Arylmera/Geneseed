@@ -936,7 +936,17 @@ export async function upgrade(themeArg = null) {
  * captured against the PRE-refresh source. Anything it throws is a warning on stderr and the
  * upgrade continues — a failed export is a lost note, a blocked upgrade is a broken install.
  */
-export async function cmdUpgrade(args) {
+export async function cmdUpgrade(args, { handoff = reexec } = {}) {
+  // `--theme NAME` is the positional `[theme]` spelled as every other verb spells it; both kept.
+  // Two different answers on one line is a typo, not a choice, so it is refused before anything runs.
+  if (args.theme && args.themeOpt && args.theme !== args.themeOpt) {
+    printErr(`geneseed: error: argument --theme: '${args.themeOpt}' contradicts the theme `
+      + `argument '${args.theme}' — give one.\n`);
+    return 2;
+  }
+  const theme = args.themeOpt || args.theme || null;
+  // `--setup`: the update with its step banner, then a FRESH `setup` — what `bootstrap` was.
+  if (args.setup) return updateThenSetup(theme, { handoff });
   try {
     const [ipath] = exportImprovements();
     if (ipath) {
@@ -947,7 +957,7 @@ export async function cmdUpgrade(args) {
     printErr(`[upgrade] ⚠️  could not export local edits (${e && e.message ? e.message : e}) — `
       + 'run `geneseed diff --out FILE` before upgrading to keep them.\n');
   }
-  return upgrade(args.theme);
+  return upgrade(theme);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1037,7 +1047,7 @@ export function diagnoseFailedStep(n, total, title, cmd, rc, output) {
  *
  * Returns true when a step FAILED, so scripted callers get a real exit code.
  */
-async function bootstrapPlain() {
+async function bootstrapPlain(theme = null) {
   // One `git pull` refreshes launchers + factory together, then rebuilds — a single step.
   //
   // `cmdUpgrade`, NOT `upgrade`. The step the reference runs is the SUBCOMMAND — its argv is
@@ -1048,7 +1058,7 @@ async function bootstrapPlain() {
   // which was written for `_flush_export_notes` and found this instead.
   /** @type {Array<[string, string[], () => Promise<number>]>} */
   const steps = [['Update & rebuild', updateStepCmd('upgrade'),
-    () => cmdUpgrade({ theme: null })]];
+    () => cmdUpgrade({ theme })]];
   let failed = false;
   for (let i = 0; i < steps.length; i += 1) {
     const [title, cmd, step] = steps[i];
@@ -1095,20 +1105,34 @@ function reexec(argv) {
  *
  * AN UNCHECKED SOURCE IS THE EXCEPTION: `setup` renders, and no doctor has judged this tree.
  * An npm install has no record to hold, so it is not asked.
+ *
+ * `upgrade --setup` since `bootstrap` was folded into it; `setup: false` is what
+ * `bootstrap --no-setup` still reaches for the one release it stays.
  */
-export async function cmdBootstrap(args, { handoff = reexec } = {}) {
-  const failed = await bootstrapPlain();
+async function updateThenSetup(theme, { handoff = reexec, setup = true } = {}) {
+  const failed = await bootstrapPlain(theme);
   flushExportNotes();
   if (isGitCheckout() && pendingGate()) {
     printOut('[geneseed] setup not started: the source has no doctor verdict yet. '
       + 'Run `geneseed update`, then `geneseed setup`.\n');
     return 1;
   }
-  if (!args.noSetup) {
+  if (setup) {
     const rc = handoff([process.execPath,
       path.join(String(ROOT), 'bin', 'geneseed-cli.mjs'), 'setup']);
     return failed ? 1 : rc;
   }
   // Scripted `bootstrap --no-setup` must not exit 0 over a failed update.
   return failed ? 1 : 0;
+}
+
+/**
+ * `bootstrap`, DEPRECATED: folded into `upgrade --setup`. Kept one release as an alias that
+ * says so on stderr and then does exactly what it did; its `--no-setup` is a plain `upgrade`
+ * with the step banner.
+ */
+export async function cmdBootstrap(args, { handoff = reexec } = {}) {
+  printErr('[geneseed] bootstrap is deprecated: run `geneseed upgrade --setup` '
+    + '(or `geneseed upgrade` for --no-setup).\n');
+  return updateThenSetup(null, { handoff, setup: !args.noSetup });
 }

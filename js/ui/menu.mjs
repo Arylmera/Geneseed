@@ -25,7 +25,7 @@ import { startDaemon } from '../web/daemon.mjs';
 /** The off-TTY arm, and the fallback both TTY arms end in. */
 function menuHelp() {
   printOut('Geneseed — no interactive menu here. Get started with:  geneseed setup\n');
-  printOut('Other commands:  bootstrap · update · build · doctor · diff · tui · web\n');
+  printOut('Other commands:  update · build · doctor · diff · web\n');
   printOut('`geneseed --help` lists every command.\n');
   return 0;
 }

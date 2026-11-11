@@ -89,8 +89,10 @@ test('formatHelp renders the usage line, then the options block', () => {
     '',
     'options:',
     '  -h, --help       show this help message and exit',
-    '  --target TARGET  deployed dir to check (default: the OpenCode global config',
-    '                   dir)',
+    // The row's help since `version` defaults to the one global install there is, whatever
+    // its host; the layout under test (two columns, the wrap under the blurb) is unchanged.
+    '  --target TARGET  deployed dir to check (default: the global install there',
+    '                   is; with several, the first, named on stderr)',
     // Trailing newline, so the shell prompt lands on its own line after `--help`.
     '',
   ].join('\n'));

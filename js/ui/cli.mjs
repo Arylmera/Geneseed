@@ -35,15 +35,19 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { choicesFor } from '../build/args.mjs';
 import { ROOT } from '../build/source.mjs';
 import { printOut } from '../lib/fs.mjs';
 import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 
 const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
 
-/** The keys the docs page has always carried, per argument — `type` and `hidden` are ours. */
+/**
+ * The keys the docs page carries, per argument — `type` and `hidden` are ours. `description` is
+ * an argument's own paragraph, when the table gives one; `null` when it does not.
+ */
 const PAGE_ARG_KEYS = ['names', 'dest', 'metavar', 'help', 'choices', 'default',
-  'required', 'nargs', 'is_flag'];
+  'required', 'nargs', 'is_flag', 'description'];
 
 /**
  * `js/cli-table.json`, parsed. An unreadable file is the empty reference; the entry points
@@ -59,6 +63,26 @@ function load() {
   } catch {
     return { prog: 'geneseed', commands: [] };
   }
+}
+
+/**
+ * `build` forwards the generator's flags, and the generator owns their choice lists — two of
+ * them (`--posture`, `--mode`) are discovered from the checkout. So the table carries no copy:
+ * the readers that SHOW the rows (help, the docs page) lay `choicesFor` over them here. Not in
+ * `load`: `cliSpec` never reads an option's choices, and every verb's parse would pay the scan.
+ */
+function withDriverChoices(cmd) {
+  if (cmd?.name !== 'build') return cmd;
+  const choices = choicesFor();
+  for (const o of cmd.options ?? []) {
+    const list = choices[o.names?.[0]];
+    if (!list) continue;
+    o.choices = list;
+    // A row with its own metavar (`--emit`: nine names do not fit a usage line) names the
+    // list in its help instead of in `{…}`.
+    if (o.metavar) o.help = `${o.help} (one of: ${list.join(', ')})`;
+  }
+  return cmd;
 }
 
 const pageArgs = (args) => (args ?? [])
@@ -77,7 +101,7 @@ export function cliReference() {
   const data = load();
   return {
     prog: data.prog ?? 'geneseed',
-    commands: (data.commands ?? []).map((c) => ({
+    commands: (data.commands ?? []).map(withDriverChoices).map((c) => ({
       name: c.name ?? '',
       help: c.help ?? '',
       description: c.description ?? '',
@@ -364,6 +388,12 @@ export function formatHelp(cmd, prog, width) {
     maxHelpPosition);
 
   const blocks = [`${formatUsage(prog, optParts, posParts, width)}\n`];
+  // argparse's `description`, wrapped to the full width after the usage line. It is where a
+  // verb's paragraph lives, so the top-level listing can keep each verb to one short line.
+  if (cmd.description && cmd.description.trim()) {
+    const collapsed = cmd.description.replace(/[ \t\n\v\f\r]+/g, ' ').trim();
+    blocks.push(`${wrapText(collapsed, Math.max(width, 11)).join('\n')}\n`);
+  }
   if (positionals.length) {
     blocks.push(`positional arguments:\n${positionals
       .map((a) => formatAction(a, true, helpPosition, width)).join('')}`);
@@ -401,7 +431,7 @@ export function helpWidth() {
 
 /** One command's raw row — everything the table knows, unlike the page's filtered view. */
 export function cliCommand(verb) {
-  return (load().commands ?? []).find((c) => c.name === verb) ?? null;
+  return withDriverChoices((load().commands ?? []).find((c) => c.name === verb) ?? null);
 }
 
 /**

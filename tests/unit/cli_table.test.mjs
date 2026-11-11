@@ -23,6 +23,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { choicesFor } from '../../js/build/args.mjs';
 import { cliCommand, cliReference, cliSpec, helpWidth } from '../../js/ui/cli.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
@@ -103,6 +104,33 @@ test('the table is the document the entry reads, and the page is derived from it
   // bootstrap `extra`);
   // the floor is what the table still holds, so a filter that stopped looking still reads as red.
   assert.ok(checked >= 1, `only ${checked} hidden arguments were checked`);
+});
+
+test("an option's description reaches the docs page payload", () => {
+  // The web console's CLI page renders an argument's `description` when the payload carries it.
+  // No shipped option has one yet, so a COPY plants one and reads `cliReference()` from it; the
+  // live table then shows the key present and null on every argument the page receives.
+  const sb = makeSandbox('clitable-desc-');
+  try {
+    const co = path.join(sb.path, 'checkout');
+    const table = JSON.parse(readFileSync(TABLE, 'utf8'));
+    table.commands.find((c) => c.name === 'version').options[0].description = 'PLANTED paragraph';
+    copyCheckout(co, { 'js/cli-table.json': `${JSON.stringify(table, null, 2)}\n` });
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "const { cliReference } = await import('file://' + process.argv[1]);"
+      + "const v = cliReference().commands.find((c) => c.name === 'version');"
+      + 'process.stdout.write(JSON.stringify(v.options[0]));',
+    '--', path.join(co, 'js', 'ui', 'cli.mjs')], { encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).description, 'PLANTED paragraph');
+  } finally {
+    sb.cleanup();
+  }
+  for (const c of cliReference().commands) {
+    for (const a of [...c.positionals, ...c.options]) {
+      assert.ok('description' in a, `${c.name} ${a.dest}: the page payload has no description key`);
+    }
+  }
 });
 
 test('the help width is the terminal width less two, and COLUMNS wins', () => {
@@ -212,7 +240,58 @@ test('`geneseed --help` lists every verb the entry dispatches, and exits 0', () 
     { cwd: ROOT, encoding: 'utf8', windowsHide: true });
   assert.equal(r.status, 0, r.stderr);
   const listed = [...r.stdout.matchAll(/^ {2}([a-z][a-z-]*) /gm)].map((m) => m[1]);
-  assert.deepEqual(listed.sort(), [...entryVerbs(), 'validate'].sort());
+  // `validate` and `help` are the two names `main` answers before the VERBS lookup.
+  assert.deepEqual(listed.sort(), [...entryVerbs(), 'validate', 'help'].sort());
+  // One short line per verb: a paragraph belongs in the verb's own `--help` (the row's
+  // `description`), not in a listing of 30 verbs. 100 columns is the line the listing may use.
+  const long = r.stdout.split(/\r?\n/).filter((l) => l.length > 100);
+  assert.deepEqual(long, [], 'a verb carries paragraph help at top level');
+});
+
+test("every `geneseed build` option has help, and its choices are the generator's", () => {
+  // The choices are NOT in the table: `js/ui/cli.mjs` lays `choicesFor` over the rows, so a
+  // posture added to `src/postures/` appears in `build --help` with no edit here.
+  const build = cliCommand('build');
+  const empty = build.options.filter((o) => !o.hidden && !o.help).map((o) => o.names[0]);
+  assert.deepEqual(empty, [], 'a build option prints a bare flag with no help');
+  const choices = choicesFor();
+  for (const [flag, list] of Object.entries(choices)) {
+    assert.deepEqual(build.options.find((o) => o.names[0] === flag)?.choices, list, flag);
+  }
+  const onDisk = JSON.parse(readFileSync(TABLE, 'utf8')).commands.find((c) => c.name === 'build');
+  assert.ok(onDisk.options.every((o) => o.choices === null),
+    'the table holds a copy of a generator choice list; derive it instead');
+});
+
+test('the front door answers --version, help and a mistyped verb', () => {
+  const run = (...argv) => spawnSync(process.execPath, [path.join(ROOT, ...ENTRY.split('/')), ...argv],
+    { cwd: ROOT, encoding: 'utf8', windowsHide: true, env: { ...process.env, GENESEED_NO_SHIM_CHECK: '1' } });
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  // `--version` and `-V` print the package version and exit 0. `version` is a different verb:
+  // it compares build fingerprints, so it is not what a script asks for with `--version`.
+  for (const flag of ['--version', '-V']) {
+    const r = run(flag);
+    assert.equal(r.status, 0, `${flag}: ${r.stderr}`);
+    assert.equal(r.stdout.trim(), `geneseed ${pkg.version}`);
+  }
+  // `help <verb>` is `<verb> --help`, byte for byte; bare `help` is `--help`.
+  assert.equal(run('help', 'version').stdout, run('version', '--help').stdout);
+  assert.equal(run('help').stdout, run('--help').stdout);
+  // `help help` is the listing as well, never "unknown command 'help'. Did you mean 'help'?".
+  const helpHelp = run('help', 'help');
+  assert.equal(helpHelp.status, 0, helpHelp.stderr);
+  assert.equal(helpHelp.stdout, run('--help').stdout);
+  // A near miss is named, a far one is not, and both exit 2 and point at --help.
+  const near = run('stauts');
+  assert.equal(near.status, 2);
+  assert.match(near.stderr, /unknown command 'stauts'\. Did you mean 'status'\? See geneseed --help\./);
+  const far = run('frobnicate');
+  assert.equal(far.status, 2);
+  assert.match(far.stderr, /unknown command 'frobnicate'\. See geneseed --help\./);
+  // A hook verb is in the table but not on this entry: it is named as one, not as unknown.
+  const hook = run('context');
+  assert.equal(hook.status, 2);
+  assert.match(hook.stderr, /'context' is a hook verb/);
 });
 
 test('a bare `geneseed` runs `home`, as both launchers do', () => {

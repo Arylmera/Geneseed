@@ -166,7 +166,7 @@ Full reference — every view, the launch/daemon/PWA surface, the security model
 
 ### ⌨️ Terminal — `geneseed`
 
-No browser? Every action the console offers is also a verb: `build`, `doctor`, `diff`, `rebuild-all`, `status`, `memory`, `catalog`, `exclude`, `mcp`, `link`/`unlink`, `uninstall` (global **or** per-repo). `geneseed setup` runs the install wizard — plain text prompts, every console, every OS; see [Setup](#-2--setup) above for the walkthrough. `geneseed --help` lists every command, and bare `geneseed` (or `./geneseed`) opens the web console when it can, else prints the command list. There is no full-screen panel: `tui` and `menu` are verbs that say so and print the command list.
+No browser? Every action the console offers is also a verb: `build`, `doctor`, `diff`, `rebuild-all`, `status`, `memory`, `catalog`, `exclude`, `mcp`, `link`/`unlink`, `uninstall` (global **or** per-repo). `geneseed setup` runs the install wizard — plain text prompts, every console, every OS; see [Setup](#-2--setup) above for the walkthrough. `geneseed --help` lists every command, and bare `geneseed` (or `./geneseed`) opens the web console when it can, else prints the command list. There is no full-screen panel: `menu` prints the command list (`tui` is retired, and says so).
 
 ---
 
@@ -336,7 +336,7 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 
 ```bash
 ./geneseed update      # everything in one: refresh the scripts + content, then rebuild
-./geneseed bootstrap   # update everything, then drop into the setup wizard
+./geneseed upgrade --setup   # update everything, then drop into the setup wizard (was: bootstrap)
 ./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
 

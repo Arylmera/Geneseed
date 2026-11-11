@@ -46,6 +46,7 @@ import {
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
 } from '../hosts/installs.mjs';
 import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
+import { hostGlobalInstalls as globalInstalls } from './excludes.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';
@@ -527,7 +528,21 @@ export function flushExportNotes() {
 }
 
 export function cmdDiff(args) {
-  const { target, theme, files } = diffCollect({ target: args.target, theme: args.theme });
+  // No `--target`: the global install there is, whatever its host — the OpenCode dir used to be
+  // the answer on a Claude-only machine too. Several: the first, named on stderr. None: the
+  // OpenCode dir, whose refusal below says what to do. Here and not in `diffCollect`, whose
+  // other caller (`upgrade`'s export) keeps its own default.
+  let chosen = args.target;
+  if (!chosen) {
+    const globals = globalInstalls((_h, d) => existsSync(path.join(d, GLOBAL_MANIFEST))
+      && manifestScope(d) !== 'project');
+    if (globals.length) chosen = globals[0][1];
+    if (globals.length > 1) {
+      printErr(`[diff] ${globals.length} global installs found; diffing ${globals[0][1]} `
+        + `(${globals[0][0]}:global). Pass --target for another.\n`);
+    }
+  }
+  const { target, theme, files } = diffCollect({ target: chosen, theme: args.theme });
   if (files === null) {
     if (existsSync(path.join(target, GLOBAL_MANIFEST)) && manifestScope(target) === 'project') {
       printErr(`[diff] ${target} is a PROJECT install — diff only compares GLOBAL `

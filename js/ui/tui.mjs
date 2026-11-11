@@ -1,11 +1,11 @@
 /**
  * `tui` — and the TUI's pure half: the layout helpers that have no screen in them.
  *
- * `cmdTui` is an entry with no full-screen panel. Off a TTY it prints one line and returns 1;
- * on a TTY it prints a refusal that names the console and returns 1, rather than inventing
- * a screen — the same decision `js/ui/menu.mjs` makes. `tests/unit/no_panel.test.mjs` fakes
- * `isTTY` true in a child and asserts BOTH arms — the exit code, and that the refusal names
- * the console rather than pretending to draw.
+ * `cmdTui` is RETIRED: an alias kept one release that prints one line pointing at `geneseed
+ * menu` and returns 0, on a TTY or off one — `menu`'s own off-terminal exit. There is no
+ * full-screen panel behind it, the same decision `js/ui/menu.mjs` makes.
+ * `tests/unit/no_panel.test.mjs` fakes `isTTY` true in a child and asserts the exit code, that
+ * the line names only declared verbs, and that nothing is drawn.
  *
  * What lives here is the alignment contract — the functions below that decide what a row
  * looks like: display width, fitting, glyph tiers, the catalogue's entries and detail lines.
@@ -310,15 +310,12 @@ export function detailLines(kind, label, data) {
 // ---- the verb ------------------------------------------------------------------------
 
 /**
- * The `tui` verb. Arm one is the reachable one; there is no panel, so the TTY arm
- * refuses — see this module's header.
+ * The `tui` verb, RETIRED: it refused on every terminal, since there is no panel (see this
+ * module's header). Kept one release as an alias that says where to go and exits as `menu`
+ * does off a terminal (0), so a script that called it learns the new name without breaking.
+ * The same one line on a TTY and off one. The layout helpers above stay: `catalog` uses them.
  */
 export function cmdTui() {
-  if (!process.stdin.isTTY) {
-    printOut('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
-    return 1;
-  }
-  printOut('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
-    + 'half, not its screens). Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
-  return 1;
+  printOut('[tui] tui is retired; use `geneseed menu`.\n');
+  return 0;
 }

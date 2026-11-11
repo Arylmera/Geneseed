@@ -99,14 +99,14 @@ export function configDefaults(config = CONFIG, rules = ruleCanon(SRC).rules) {
  * own private copy of the flags is a second source that drifts silently the first time a
  * flag is added to one and not the other, and nothing downstream would say so.
  */
-const VALUED = {
+export const VALUED = {
   '--theme': 'theme', '--posture': 'posture', '--mode': 'mode', '--trust': 'trust',
   '--doctrines': 'doctrines', '--exclude-rules': 'excludeRules', '--exclude-skills': 'excludeSkills',
   '--kits': 'kits', '--shared-tier': 'sharedTier',
   '--out': 'out', '--target': 'out', '--emit': 'emit',
   '--footprint': 'footprint', '--root': 'root', '--config-dir': 'cfgDir',
 };
-const FLAGS = {
+export const FLAGS = {
   '--sync-themes': 'syncThemes', '--validate-only': 'validateOnly',
   // The gate switches (`GATE_SWITCHES`, law order). No `harness.config.json` key feeds them,
   // deliberately: a rebuild elides a flag when armed, so a config default could disarm an armed
@@ -155,7 +155,7 @@ const FLAG_BY_NAME = Object.fromEntries(
  * advertised a metavar that lies. It is validated by `parseDoctrines` instead and prints the
  * plain `DOCTRINES` metavar, exactly as `--theme` (also open-ended) already does.
  */
-function choicesFor() {
+export function choicesFor() {
   return {
     '--emit': EMITS,
     '--footprint': ['lean', 'full'],

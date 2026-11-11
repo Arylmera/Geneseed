@@ -7,7 +7,7 @@
 //   * `js/maintain/setup.mjs` and `js/maintain/update.mjs` contain nothing that could paint a screen
 //     (`docs/limits.md` row 6 — its ONLY gate was that retired Python test)
 //   * `js/ui/tui.mjs` contains nothing that could paint a screen, and
-//   * `js/ui/tui.mjs` REFUSES on a TTY with a refusal that still offers what does work
+//   * `js/ui/tui.mjs`, now a retired alias, answers on a TTY with one line that still offers what does work
 //     (row 1, whose stated form is already stale: P2 removed the `rituals/harness.py tui`
 //     pointer it claims is there, and a refusal naming a file this migration deletes would be
 //     worse than one that simply says the screen does not exist)
@@ -108,12 +108,15 @@ const nodeRun = () => {
   } finally { box.cleanup(); }
 };
 
-test('js/ui/tui.mjs refuses on a TTY, and the refusal is not a dead end', () => {
+test('js/ui/tui.mjs is a retired alias on a TTY, and its one line is not a dead end', () => {
   const { stdout, rc } = nodeRun();
 
-  assert.equal(rc, 1, 'the refusal must be a failure exit, not a silent success');
-  assert.match(stdout, /full-screen panel unavailable/,
-    'the refusal must say what is unavailable');
+  // RETIRED, NOT REFUSED. `tui` refused on every terminal (exit 1) while `menu` off a terminal
+  // printed its list and exited 0, so the two "no screen here" answers disagreed. It is now an
+  // alias for one release: one line naming `menu`, and `menu`'s off-terminal exit, 0.
+  assert.equal(rc, 0, 'the retired alias must exit as menu does off a terminal');
+  assert.match(stdout, /tui is retired; use `geneseed menu`/,
+    'the alias must say it is retired and what replaces it');
 
   // ROW 1, IN ITS CORRECTED FORM. The refusal used to end "run `python rituals/harness.py tui`",
   // a real fallback while the panel existed. P2 took the pointer out rather than re-aiming it.

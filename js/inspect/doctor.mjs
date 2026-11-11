@@ -38,7 +38,7 @@ import {
   hookShellProblems, installedDefaults, openclaudeDualHarnessRoots, themeFiles,
 } from '../hosts/installs.mjs';
 import { validateIsVendored } from '../hosts/native.mjs';
-import { printOut } from '../lib/fs.mjs';
+import { printErr, printOut } from '../lib/fs.mjs';
 import { authoringProblems, factoryProblems, loopProblems } from './checks-authoring.mjs';
 import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
@@ -189,7 +189,7 @@ export function claudeBobEmitProblems(themeName) {
  */
 export function doctorCollect({
   theme = null, allThemes = false, bundle = null, noBundle = false, groups = null,
-  probe = false, probed = null, extraProbeProblems = [],
+  probe = false, probed = null, extraProbeProblems = [], onTheme = null,
 } = {}) {
   const available = themeFiles().map(stemOf);
   if (!available.length) return [[], ['[doctor] no themes found']];
@@ -217,7 +217,9 @@ export function doctorCollect({
   if (probeRun && probed) probed.push(...probeRun.probed);
   let problems = [];
   withTempDir((tmp) => {
-    for (const themeName of themes) {
+    for (const [i, themeName] of themes.entries()) {
+      // A sweep of several themes runs for minutes; the caller may say where it is.
+      if (onTheme && themes.length > 1) onTheme(i + 1, themes.length, themeName);
       const out = path.join(tmp, themeName);
       // capture_output=True: BOTH streams, unlike the emits below, which redirect stdout
       // only. A failing build's stderr is not doctor's output either — the return code is.
@@ -302,6 +304,8 @@ function doctorReport(args, guard) {
     theme: args.theme, allThemes: Boolean(args.all), bundle: args.bundle,
     noBundle: Boolean(args.noBundle), probe: Boolean(args.probe), probed,
     extraProbeProblems: guard ? guard.problems : [],
+    // stderr, so the verdict on stdout is the bytes it was; `--all` took ~2 min 40 s in silence.
+    onTheme: (n, total, name) => printErr(`[doctor] theme ${n}/${total}: ${name}\n`),
   });
   if (!themes.length) {
     printOut(`${collected.length ? collected[0] : '[doctor] no themes found'}\n`);
