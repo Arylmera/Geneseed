@@ -64,8 +64,20 @@ describe('Ledger', () => {
       usage.reject(new Error('down'))
       gates.resolve(null)
     })
-    expect(await calls.findByText('Usage could not be read.')).toBeTruthy()
+    // A rejection keeps its reason; an answer of nothing has none to give.
+    expect(await calls.findByText('Usage could not be read: down')).toBeTruthy()
     expect(region('Gate asks · 30 days').getByText('Gate activity could not be read.')).toBeTruthy()
+  })
+
+  it('asks a failed usage read again from its Retry', async () => {
+    api.usage.mockRejectedValueOnce(new Error('down'))
+    render(<Ledger overview={null} onAction={() => {}} />)
+    const calls = region('Skill and agent calls')
+    await calls.findByText('Usage could not be read: down')
+    const asked = api.usage.mock.calls.length
+    await act(async () => calls.getByRole('button', { name: 'Retry: usage' }).click())
+    expect(api.usage.mock.calls.length).toBe(asked + 1)
+    await waitFor(() => expect(calls.queryByText(/Usage could not be read/)).toBeNull())
   })
 
   it('gives no root-file or Needs verdict before the fleet lands', async () => {

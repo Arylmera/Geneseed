@@ -6,6 +6,7 @@ import { storeInstallPick, useInstalls } from '../../hooks/useInstalls.js'
 import { useRules } from '../../hooks/useRules.js'
 import { driftTotal, relTime } from '../../lib/format.js'
 import { hostInfo, installTag } from '../../lib/hosts.js'
+import ErrorState from '../../components/ErrorState.jsx'
 import Loading from '../../components/Loading.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Ring from '../../components/Ring.jsx'
@@ -33,11 +34,34 @@ import { alwaysOnRange, gateSummary, rootFileFigure, usageTotal } from './ledger
 // words, and an empty one says what it found. The fleet is the page's spine, so its failure is
 // said out loud, with a Retry.
 
+// Only the update chip reads softly: it keeps its last answer through a failed poll.
 const soft = (p) => p.catch(() => null)
 // A first read still out. `data` beats `loading`: a reload keeps the last answer on screen.
 const pendingOf = (q) => q.loading && !q.data
 // A read that ended with nothing: rejected, or a soft read's null.
 const failedOf = (q) => !q.loading && !q.data
+// A failed read in words, with the reason the request gave when it gave one. The house badge, but
+// a ghost Retry named for its read: this page keeps one filled action and names each control once.
+// Without `retry` the card only says so: a second card over the same read leaves the Retry to the first.
+function ReadFailed({ what, read, retry = true }) {
+  const said = read.error
+    ? `${what} could not be read: ${read.error}`
+    : `${what} could not be read.`
+  if (!retry) return <ErrorState error={said} />
+  return (
+    <div className="error-state">
+      <ErrorState error={said} />
+      <button
+        type="button"
+        className="btn ghost sm"
+        aria-label={`Retry: ${what.toLowerCase()}`}
+        onClick={read.reload}
+      >
+        Retry
+      </button>
+    </div>
+  )
+}
 // Keyed reads are shared, so a failure must reject: a soft null would be cached for every reader.
 const shared = (fn) => Promise.resolve().then(fn)
 const pct = (n, of) => `${of ? Math.min(100, (n / of) * 100) : 0}%`
@@ -329,7 +353,7 @@ function CostKpi({ installs, pending, failed }) {
   )
 }
 
-function CallsKpi({ usage, pending }) {
+function CallsKpi({ usage, read, pending }) {
   // `per_day` always spans the last 30 days, so the figure is named "since" only while fewer
   // than 30 are counted; past that, an older `since` would pass a 30-day sum off as all-time.
   const since = !usage?.enabled
@@ -347,7 +371,7 @@ function CallsKpi({ usage, pending }) {
       {pending ? (
         <Loading />
       ) : !usage ? (
-        <p className="dim">Usage could not be read.</p>
+        <ReadFailed what="Usage" read={read} />
       ) : !usage.enabled ? (
         <p className="dim">Usage counting is off on this machine.</p>
       ) : (
@@ -362,7 +386,7 @@ function CallsKpi({ usage, pending }) {
   )
 }
 
-function GatesKpi({ gates, laws, pending }) {
+function GatesKpi({ gates, laws, read, pending }) {
   const g = gateSummary(gates, laws)
   return (
     <Kpi
@@ -378,7 +402,7 @@ function GatesKpi({ gates, laws, pending }) {
       {pending ? (
         <Loading />
       ) : !gates ? (
-        <p className="dim">Gate activity could not be read.</p>
+        <ReadFailed what="Gate activity" read={read} />
       ) : !g.total ? (
         <p className="dim">No gate asked in 30 days.</p>
       ) : (
@@ -652,7 +676,7 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
   )
 }
 
-function Needs({ rows, pending, partial, onAction, onRebuild }) {
+function Needs({ rows, pending, partial, onRetry, onAction, onRebuild }) {
   const problems = rows.filter((r) => !r.sugg).length
   if (pending) {
     return (
@@ -706,12 +730,24 @@ function Needs({ rows, pending, partial, onAction, onRebuild }) {
         <p className="needs-empty">Nothing needs you.</p>
       )}
       {/* A failed read may hide a row, so the list never reads as an all-clear. */}
-      {partial ? <p className="dim">Some reads failed, so this list may be incomplete.</p> : null}
+      {partial ? (
+        <p className="dim">
+          Some reads failed, so this list may be incomplete.{' '}
+          <button
+            type="button"
+            className="btn ghost sm"
+            aria-label="Retry: the failed reads"
+            onClick={onRetry}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
     </section>
   )
 }
 
-function WhatFires({ usage, pending }) {
+function WhatFires({ usage, read, pending }) {
   const head = (
     <div className="panel-head">
       <h2 id="ldg-usage">What fires</h2>
@@ -722,7 +758,7 @@ function WhatFires({ usage, pending }) {
     return (
       <section className="panel" aria-labelledby="ldg-usage">
         {head}
-        {pending ? <Loading /> : <p className="dim">Usage could not be read.</p>}
+        {pending ? <Loading /> : <ReadFailed what="Usage" read={read} retry={false} />}
       </section>
     )
   }
@@ -849,13 +885,14 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
   // last good answer on a failed reload, so a blip shows the old table under an error line.
   const fleetRead = useAsync(() => api.fleet(), [dataRev])
   const { data: fleet, error: fleetError, reload: reloadFleet } = fleetRead
-  const usageRead = useAsync(() => soft(api.usage()), [dataRev])
-  const gatesRead = useAsync(() => soft(api.gates()), [dataRev])
+  // Not soft either: a rejection keeps its reason, which the failed card says beside a Retry.
+  const usageRead = useAsync(() => api.usage(), [dataRev])
+  const gatesRead = useAsync(() => api.gates(), [dataRev])
   const { data: usage } = usageRead
   const { data: gates } = gatesRead
   const rulesRead = useRules(dataRev)
-  const activityRead = useAsync(() => soft(api.activity()), [dataRev])
-  const profileRead = useAsync(() => soft(api.profile()), [dataRev])
+  const activityRead = useAsync(() => api.activity(), [dataRev])
+  const profileRead = useAsync(() => api.profile(), [dataRev])
   const skillsRead = useAsync(
     () => shared(() => api.catalog('skills')),
     [dataRev],
@@ -949,8 +986,8 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
           </h2>
           <RootKpi installs={installs} pending={fleetPending} failed={fleetFailed} />
           <CostKpi installs={installs} pending={fleetPending} failed={fleetFailed} />
-          <CallsKpi usage={usage} pending={pendingOf(usageRead)} />
-          <GatesKpi gates={gates} laws={laws} pending={pendingOf(gatesRead)} />
+          <CallsKpi usage={usage} read={usageRead} pending={pendingOf(usageRead)} />
+          <GatesKpi gates={gates} laws={laws} read={gatesRead} pending={pendingOf(gatesRead)} />
         </div>
         <section className="panel" aria-labelledby="ldg-fleet">
           <div className="panel-head panel-head-rule">
@@ -1027,10 +1064,11 @@ export default function Ledger({ overview, setup, runs, onAction, dataRev, banne
             rows={needs}
             pending={needsPending}
             partial={needsReads.some(failedOf)}
+            onRetry={() => needsReads.filter(failedOf).forEach((q) => q.reload())}
             onAction={onAction}
             onRebuild={rebuild}
           />
-          <WhatFires usage={usage} pending={pendingOf(usageRead)} />
+          <WhatFires usage={usage} read={usageRead} pending={pendingOf(usageRead)} />
         </div>
       </div>
     </>
