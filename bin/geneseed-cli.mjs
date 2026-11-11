@@ -116,13 +116,9 @@ const VERBS = {
   // argues both.
   menu: () => import('../js/ui/menu.mjs').then((m) => m.cmdMenu),
   home: () => import('../js/ui/menu.mjs').then((m) => m.cmdHome),
-  // P7b, and it is the twenty-fifth and last. `cmd_tui`'s FIRST arm is `if not sys.stdin.
-  // isatty()`, so off a TTY — which is every cell there is — the verb is one line and an
-  // exit code, and that arm crosses byte for byte. The panel behind it is P7c's;
-  // `js/ui/tui.mjs`'s header argues why this entry falls back to `cmd_tui`'s own
-  // panel-unavailable line rather than inventing a second full-screen UI, and
-  // `tests/unit/no_panel.test.mjs` asserts that no panel lies behind it — the module paints
-  // nothing and refuses on a TTY too — rather than leaving that merely untested.
+  // RETIRED: there was never a panel behind it, so it refused on every terminal. Kept one
+  // release as an alias that prints one line pointing at `menu` and exits 0, as `menu` does off
+  // a terminal; `tests/unit/no_panel.test.mjs` asserts the module still paints nothing.
   tui: () => import('../js/ui/tui.mjs').then((m) => m.cmdTui),
   // THE THREE THAT NEVER HAD A PYTHON ORIGINAL, and they are last for that reason rather
   // than by alphabet: every row above is the twin of a subparser, and these three are not.

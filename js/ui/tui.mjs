@@ -310,15 +310,12 @@ export function detailLines(kind, label, data) {
 // ---- the verb ------------------------------------------------------------------------
 
 /**
- * The `tui` verb. Arm one is the reachable one; there is no panel, so the TTY arm
- * refuses — see this module's header.
+ * The `tui` verb, RETIRED: it refused on every terminal, since there is no panel (see this
+ * module's header). Kept one release as an alias that says where to go and exits as `menu`
+ * does off a terminal (0), so a script that called it learns the new name without breaking.
+ * The same one line on a TTY and off one. The layout helpers above stay: `catalog` uses them.
  */
 export function cmdTui() {
-  if (!process.stdin.isTTY) {
-    printOut('[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
-    return 1;
-  }
-  printOut('[tui] full-screen panel unavailable (this entry carries the TUI\'s layout '
-    + 'half, not its screens). Use `geneseed setup`, `geneseed doctor`, or `geneseed build`.\n');
-  return 1;
+  printOut('[tui] tui is retired; use `geneseed menu`.\n');
+  return 0;
 }

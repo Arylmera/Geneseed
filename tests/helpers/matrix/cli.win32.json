@@ -8697,12 +8697,14 @@
       "bin": "cli",
       "expect": [
         "Geneseed — no interactive menu here. Get started with:  geneseed setup",
-        "Other commands:  bootstrap · update · build · doctor · diff · tui · web",
+        "Other commands:  update · build · doctor · diff · web",
         "`geneseed --help` lists every command."
       ],
       "expect_absent": [
         "TUI unavailable",
-        "opening the web console"
+        "opening the web console",
+        " tui ",
+        "bootstrap"
       ],
       "id": "menu/off-a-tty-prints-the-command-list",
       "steps": [
@@ -8767,7 +8769,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`."
+        "[tui] tui is retired; use `geneseed menu`."
       ],
       "expect_absent": [
         "\u001b[?1049h",
@@ -8776,7 +8778,8 @@
         "AGENTS (",
         "SKILLS (",
         "LAWS (",
-        "full-screen panel unavailable"
+        "full-screen panel unavailable",
+        "not an interactive terminal"
       ],
       "id": "tui/off-a-tty-refuses-before-it-builds-anything",
       "steps": [
@@ -8794,7 +8797,7 @@
     {
       "bin": "cli",
       "expect": [
-        "[tui] not an interactive terminal. Use `geneseed setup`, `geneseed doctor`, or `geneseed build`."
+        "[tui] tui is retired; use `geneseed menu`."
       ],
       "expect_absent": [
         "\u001b[?1049h",
@@ -8804,7 +8807,8 @@
         "SKILLS (",
         "LAWS (",
         "full-screen panel unavailable",
-        "nosuchtheme"
+        "nosuchtheme",
+        "not an interactive terminal"
       ],
       "id": "tui/the-theme-argument-is-not-read-before-the-refusal",
       "steps": [

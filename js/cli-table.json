@@ -1983,7 +1983,7 @@
     },
     {
       "name": "tui",
-      "help": "print the harness at a glance (interactive terminals only)",
+      "help": "retired: prints one line pointing at menu (kept for one release)",
       "description": "",
       "positionals": [],
       "options": [
