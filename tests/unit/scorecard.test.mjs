@@ -140,7 +140,9 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
   }
   // The seven files sorted by name; host-canary, mutate, scorecard and upstream-drift run on
   // `schedule:`, ci, pr-title and publish do not. upstream-drift is one job, `drift` (weekly issue sync).
-  // ci's last three jobs came with #211 (audit), #213 (coverage) and the link check, in file order.
+  // ci's audit job came with #211 and the link check after it, in file order; #213's coverage job
+  // folded into validate's node-22 leg (c8 wraps its suite step), and suite-count, right after
+  // validate, sums the Windows shards' test counts against the whole-suite floor.
   // pr-title, also from #211, left ci for its own file in #455 so that editing a PR title re-runs
   // it (`types: [... edited ...]`) without re-running ci's whole matrix.
   // ci-ok, last, needs every other ci job and fails unless each succeeded: one stable name for
@@ -149,7 +151,7 @@ test("this repo's own workflows parse, with their schedules and jobs", () => {
   // began to release itself: the cheap "is this version on npm yet?" job gates the expensive one.
   const configs = parseCiConfigs(ROOT);
   assert.deepEqual(configs.map((c) => [c.ciType, c.hasSchedule, c.jobs.map((j) => j.name)]), [
-    ['github', false, ['validate', 'node-cells', 'package-no-python', 'web', 'audit', 'coverage',
+    ['github', false, ['validate', 'suite-count', 'node-cells', 'package-no-python', 'web', 'audit',
       'links', 'ci-ok']],
     ['github', true, ['canary']],
     ['github', true, ['mutate', 'stryker']],

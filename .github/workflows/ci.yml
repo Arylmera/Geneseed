@@ -129,15 +129,29 @@ jobs:
       # 30 s deadline, so 8 halves the step (2.1 -> 1.1 min, #361). On Windows it bought nothing:
       # 9.7 min at 8 against 9.1 min at the default on an unchanged main the same hour —
       # process creation there is CPU-bound, so the extra slots only queue.
+      #
+      # COVERAGE RIDES THE LINUX NODE-22 LEG, INFORMATIONAL. It used to be its own job, which ran
+      # the whole Linux suite a third time beside the node 22 and 24 legs. c8 also collects from
+      # the product processes the suite spawns (the golden and CLI cells run the real binaries),
+      # passes the suite's exit code through, and prints its tables AFTER the TAP, so the count
+      # below reads the same log. No threshold: the first reading (2026-10-08) was 91.7 % lines,
+      # 82.9 % branches over js/ and bin/. The summary lands on the run page.
       - name: node test suites (every tests/**/*.test.mjs)
         if: ${{ !cancelled() }}
         shell: bash
         env:
           CONCURRENCY: ${{ runner.os == 'Windows' && '3' || '8' }}
           SHARD: ${{ matrix.shard }}
+          COVERAGE: ${{ runner.os == 'Linux' && matrix.node == '22' && '1' || '' }}
         run: |
           log="$(mktemp)"
-          node --test --test-concurrency="$CONCURRENCY" ${SHARD:+--test-shard="$SHARD"} --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
+          # An array, not a prefix in a variable: an unquoted `js/**` would be glob-expanded by bash.
+          run=()
+          if [ -n "$COVERAGE" ]; then run=(npx c8 --include 'js/**' --include 'bin/**' --reporter=text-summary --reporter=text); fi
+          "${run[@]}" node --test --test-concurrency="$CONCURRENCY" ${SHARD:+--test-shard="$SHARD"} --test-reporter=tap "tests/**/*.test.mjs" | tee "$log"
+          if [ -n "$COVERAGE" ]; then
+            { echo '```'; sed -n '/^=* Coverage summary/,$p' "$log"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
           n="$(awk '/^# tests /{n=$3} END{print n+0}' "$log")"
           # The floor is COMPUTED: 90% of the `test(`/`it(` calls written in the tracked test
           # files. A fixed 500 let the suite lose half itself (a directory rename) and stay green;
@@ -145,13 +159,28 @@ jobs:
           written="$(git ls-files 'tests/*.test.mjs' 'tests/**/*.test.mjs' | xargs grep -hcE '^\s*(test|it)\(' | awk '{s+=$1} END{print s+0}')"
           floor=$(( written * 9 / 10 ))
           # A shard holds 1/n of the FILES, not of the tests, so its own floor is half its even
-          # share: still far above the zero a glob that stopped matching would report.
-          if [ -n "$SHARD" ]; then floor=$(( floor / ${SHARD#*/} / 2 )); fi
+          # share: still far above the zero a glob that stopped matching would report. That floor
+          # alone lets a shard lose half its tests, so each shard also hands its count to the
+          # `suite-count` job, which holds the SUM of the shards to the whole suite's floor.
+          if [ -n "$SHARD" ]; then
+            echo "$SHARD $n $written" > "$RUNNER_TEMP/suite-count-${SHARD%/*}.txt"
+            floor=$(( floor / ${SHARD#*/} / 2 ))
+          fi
           echo "the suite reported $n tests (floor $floor, from $written written)"
           if [ "$n" -lt "$floor" ]; then
             echo "only $n tests ran — the glob has stopped matching part of the suite"
             exit 1
           fi
+      # No file is not an error HERE: a shard whose suite went red never wrote one, and that
+      # shard is already red. A count missing from the sum is the `suite-count` job's to refuse.
+      - name: hand this shard's test count to suite-count
+        if: ${{ !cancelled() && matrix.shard != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: suite-count-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/suite-count-*.txt
+          if-no-files-found: ignore
+          retention-days: 1
 
       # ⚠ WHAT THE SUITE LEFT BEHIND, OUTSIDE ITS OWN SANDBOXES. An emit writes the machine-wide
       # hook shim at a path taken from the ENVIRONMENT rather than from `--out`, so a test that
@@ -212,6 +241,48 @@ jobs:
           # exception to remember. The step that most invites a bare `node --test` is the one
           # someone later adds a count gate to.
           node --test --test-reporter=tap tests/unit/package_manifest.test.mjs
+
+  # THE SHARDED SUITE, COUNTED AS ONE. Each Windows shard is held only to half its even share of
+  # the floor, so one could lose half its files and stay green. This job sums what the shards
+  # reported and holds the sum to the floor the unsharded legs meet: 90 % of the tests written.
+  # FAIL-CLOSED: no count at all, a missing shard, a count file for no shard, or shards that disagree on how many
+  # shards there are or how many tests are written, are each red. It needs `validate`, so a red
+  # leg skips it — and `ci-ok` reads a skip as red too.
+  suite-count:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: suite-count-*
+          merge-multiple: true
+          path: counts
+      - name: the shards together ran the whole suite
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(counts/suite-count-*.txt)
+          if [ "${#files[@]}" -eq 0 ]; then echo "no shard reported a test count"; exit 1; fi
+          total="" written="" sum=0
+          for f in "${files[@]}"; do
+            read -r shard n w < "$f"
+            echo "$f: shard $shard ran $n tests (written: $w)"
+            t="${shard#*/}"
+            if [ -z "$total" ]; then total="$t" written="$w"; fi
+            if [ "$t" != "$total" ] || [ "$w" != "$written" ]; then
+              echo "the shards disagree: $f says $shard of $w written, another said */$total of $written"; exit 1
+            fi
+            sum=$(( sum + n ))
+          done
+          for i in $(seq 1 "$total"); do
+            if [ ! -f "counts/suite-count-$i.txt" ]; then echo "shard $i/$total reported no count"; exit 1; fi
+          done
+          if [ "${#files[@]}" -ne "$total" ]; then echo "${#files[@]} count files for $total shards"; exit 1; fi
+          floor=$(( written * 9 / 10 ))
+          echo "the $total shards ran $sum tests together (floor $floor, from $written written)"
+          if [ "$sum" -lt "$floor" ]; then
+            echo "only $sum tests ran across the shards — part of the suite was never run"; exit 1
+          fi
 
   # THE SELF-COMPARISONS. Both modes below run the generator twice and compare the two runs
   # against each other, so they assert a property — re-emitting changes nothing, and the prune
@@ -453,29 +524,6 @@ jobs:
         working-directory: web
         run: npm audit --audit-level=high
 
-  # COVERAGE, INFORMATIONAL. The whole suite under c8, which also collects from the product
-  # processes the suite spawns (the golden and CLI cells run the real binaries). No threshold yet:
-  # the first reading (2026-10-08) was 91.7 % lines, 82.9 % branches over js/ and bin/, and a floor
-  # comes once a few weeks show how much it moves. Its own job so the validate legs keep their
-  # wall clock; the summary lands on the run page.
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - name: suite under c8
-        shell: bash
-        run: |
-          npx c8 --include 'js/**' --include 'bin/**' --reporter=text-summary --reporter=text \
-            node --test --test-reporter=tap "tests/**/*.test.mjs" > coverage.txt
-          { echo '```'; sed -n '/^=* Coverage summary/,$p' coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          sed -n '/^=* Coverage summary/,/^=*$/p' coverage.txt
-
   # DEAD LINKS IN THE REPOSITORY'S OWN MARKDOWN. doctor already checks every link in the RENDERED
   # harness, but nothing checked README, docs/, ARCHITECTURE.md or the ADRs — a moved page left
   # them pointing at nothing. `--offline` checks only links inside the repository: no network, so
@@ -501,7 +549,7 @@ jobs:
   # file must be added to `needs:` below, or this gate says nothing about it.
   ci-ok:
     if: always()
-    needs: [validate, node-cells, package-no-python, web, audit, coverage, links]
+    needs: [validate, suite-count, node-cells, package-no-python, web, audit, links]
     runs-on: ubuntu-latest
     steps:
       - name: every needed job succeeded
