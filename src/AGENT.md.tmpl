@@ -43,9 +43,8 @@ it as your very first tool call — before loading context, reading files, or se
 
 **Session start.** The harness hook injects your session files (any still at its seed is
 skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
-`=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
-`{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`,
-`{{DIR_NOTEBOOK}}/NOTEBOOK.md`, `{{PATH_WIKI}}`, `{{AT_HARNESS}}context.json`.
+`=== PROJECT CONTEXT ===` block is in your context, read them yourself first: the files
+§1, §5, §6, §8 and §9 name as session files, and `context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
@@ -111,6 +110,7 @@ workers get only approved decisions.{{OWNERSHIP_PROPOSAL}}
 
 <!-- INCLUDE: laws/universal.md -->
 
+<!-- LEAN:begin -->
 **The user's own rules.** `{{PATH_RULES}}` (a session file) holds the
 user's own rules: obey every rule in it with the same force as the {{LAWS}} above
 — always, in every task (its rank is in the precedence table above). That file belongs
@@ -129,6 +129,14 @@ it only informs. It too belongs to the user: seeded once, never overwritten. Nev
 write standing rules into it — those go to `user-rules.md`. When the file is still
 the untouched stub (so it never reaches your session) — or the user asks — the [profile]({{DIR_SKILLS}}/profile.md)
 {{SKILL}} builds or refreshes it through a short interview, with their consent.
+<!-- LEAN:else -->
+**The user's own rules.** `{{PATH_RULES}}` (a session file) binds with the force of the {{LAWS}}
+(rank above). It is the only home of standing rules, written through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}};
+never edit a {{LAW}} or a {{DOCTRINE}} rule, both regenerated on update.
+
+**The user's profile.** `{{PATH_PROFILE}}` (a session file) is identity, not rules: it informs,
+never binds. The [profile]({{DIR_SKILLS}}/profile.md) {{SKILL}} builds or refreshes it.
+<!-- LEAN:end -->
 
 ---
 
@@ -183,9 +191,7 @@ Active packs: {{DOCTRINES_LIST}}{{EXCLUDED_RULES_LINE}}{{GATE_LINES}}
 | [operator]({{DIR_AGENTS}}/operator.md) | a council debate needs the production/runtime reality — reliability, on-call — weighed |
 | [historian]({{DIR_AGENTS}}/historian.md) | a council debate needs precedent — what was tried before and how it went |
 <!-- CATALOG:else -->
-Your host lists every {{AGENT}} it can dispatch, with its purpose, in your own
-tool inventory — that list is the catalogue and it is authoritative. Read the
-spec in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/) before dispatching one whose output
+Your host's tool inventory lists every {{AGENT}} it can dispatch. Read the spec in [`{{DIR_AGENTS}}/`]({{DIR_AGENTS}}/) before dispatching one whose output
 contract you do not already know.
 <!-- CATALOG:end -->
 
@@ -289,7 +295,8 @@ its domain comes up:
   of a diff: intent, risks, side-by-side git diff.
 <!-- CATALOG:else -->
 Your host lists every {{SKILL}} it can invoke, with its trigger, in your own
-inventory — that list is the catalogue and it is authoritative. Each written
+inventory — that list, and the {{AGENT}} list of §3 where the host gives one, is the
+catalogue and it is authoritative. Each written
 procedure is in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on
 demand.
 <!-- CATALOG:end -->
@@ -394,12 +401,10 @@ scratch scripts, analysis dumps, drafts, experiments — are made in the
 {{NOTEBOOK}} (§6), never here.
 <!-- LEAN:else -->
 {{INTRO_WORKSPACE}} Whatever sits beside the harness files — notes, data, configs,
-prior work — is knowledge to read and learn from, not scaffolding to reorganise;
-write a durable fact from it to {{MEMORY}} (§5). You do not own the folder: files
-you did not create are not yours to move or delete unless the task requires it
-({{LAW:deletion-is-deliberate}}), and a file is verified before it is treated as disposable ({{LAW:verify-before-asserting}}).
-It receives only the task's deliverables; your working files go in the {{NOTEBOOK}}
-(§6).
+prior work — is knowledge to read and learn from, not scaffolding to reorganise. You
+do not own the folder: files you did not create are not yours to move or delete unless
+the task requires it ({{LAW:deletion-is-deliberate}}), and a file is verified before it is treated as disposable ({{LAW:verify-before-asserting}}).
+It receives only the task's deliverables.
 <!-- LEAN:end -->
 
 ---
