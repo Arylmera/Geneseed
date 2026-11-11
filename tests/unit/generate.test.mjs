@@ -283,11 +283,14 @@ test("lean drops the voice's half of each rule title and the section epigraphs; 
 });
 
 // The one lean pointer, as the neutral voice renders it in a plain bundle (no laws prefix). It
-// replaced two notes, one under each tier, that said the same thing (owner decision D2).
-const BRIEF_POINTER = '> Each Rule and Doctrine above is given in brief — the rule, not its reasoning. '
+// replaced two notes, one under each tier, that said the same thing (owner decision D2). With no
+// pack active only the Rules are above, so the opening names only them; the rest is the same.
+const POINTER_TAIL = ' above is given in brief — the rule, not its reasoning. '
   + 'The complete text is in `laws/universal.md` (binding) and in `doctrines/` (every pack, active '
-  + "or not). Read it whenever a rule's application is unclear; read `laws/universal.md` before any "
-  + 'act touching secrets, deletion, git history, scope, or untrusted content.';
+  + "or not). Read the matching file whenever a rule's application is unclear; read `laws/universal.md` "
+  + 'before any act touching secrets, deletion, git history, scope, or untrusted content.';
+const BRIEF_POINTER = `> Each Rule and Doctrine${POINTER_TAIL}`;
+const BRIEF_POINTER_NO_PACK = `> Each Rule${POINTER_TAIL}`;
 
 test('lean closes the doctrine section with one pointer to both complete texts; full has none', () => {
   const lean = rendered('AGENT.md', 'neutral', 'lean');
@@ -297,8 +300,8 @@ test('lean closes the doctrine section with one pointer to both complete texts; 
   assert.ok(!rendered('AGENT.md', 'neutral', 'full').includes('given in brief'));
   // With no pack active the pointer still ships: it is the only one that names the laws' file.
   const { items } = renderAll({ ...cfg(), doctrines: [] }, 'neutral', { footprint: 'lean' });
-  assert.ok(items.find((i) => i.rel === 'AGENT.md').text.includes(BRIEF_POINTER),
-    'a lean build with no doctrine pack lost the pointer to the laws');
+  assert.ok(items.find((i) => i.rel === 'AGENT.md').text.includes(BRIEF_POINTER_NO_PACK),
+    'a lean build with no doctrine pack lost the pointer to the laws, or names a Doctrine above');
 });
 
 test('a lean build still ships the complete law, ontology and doctrine files', () => {

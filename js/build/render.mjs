@@ -301,14 +301,16 @@ export function splitAtLawHeadings(text) {
  * authored in LEAN blocks, and this names where the complete text of each lives. It was two notes,
  * one under each section, saying the same thing (owner decision D2, 2026-11-11).
  */
-export function briefPointer(theme, lawsPrefix = '') {
+export function briefPointer(theme, lawsPrefix = '', anyPack = true) {
   const law = theme.LAW ?? 'Law';
   const doctrine = theme.DOCTRINE ?? 'Doctrine';
   const lawsDir = theme.DIR_LAWS ?? 'laws';
   const dir = theme.DIR_DOCTRINES ?? 'doctrines';
-  return `> Each ${law} and ${doctrine} above is given in brief — the rule, not its reasoning. `
+  // With no pack active only the laws are above; the packs' folder is still named, as it ships.
+  const above = anyPack ? `${law} and ${doctrine}` : law;
+  return `> Each ${above} above is given in brief — the rule, not its reasoning. `
     + `The complete text is in \`${lawsPrefix}${lawsDir}/universal.md\` (binding) and in `
-    + `\`${lawsPrefix}${dir}/\` (every pack, active or not). Read it whenever a rule's application `
+    + `\`${lawsPrefix}${dir}/\` (every pack, active or not). Read the matching file whenever a rule's application `
     + `is unclear; read \`${lawsPrefix}${lawsDir}/universal.md\` before any act touching secrets, `
     + 'deletion, git history, scope, or untrusted content.';
 }
@@ -526,7 +528,7 @@ function dropExcludedRules(text, pack, excluded) {
 
 function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
   // At lean the section still carries the one pointer with no pack active: it names the laws too.
-  if (!active.length) return footprint === 'lean' ? briefPointer(theme, lawsPrefix) : '';
+  if (!active.length) return footprint === 'lean' ? briefPointer(theme, lawsPrefix, false) : '';
   const excluded = new Set(cfg.excludeRules ?? []);
   const parts = active.map((name) => {
     const raw = dropExcludedRules(readPackText(path.join(cfg.src, 'doctrines', `${name}.md`)),
