@@ -195,6 +195,30 @@ test("session files, shared tier: an empty tier prints no label", async () => {
   assert.ok(text.includes("----- user-rules.md -----\nhost rule\n"), text)
 })
 
+// Host parity with the Claude hook: the user-rules seed explanation above the first rule is for the
+// file's owner, so it is not injected; prose the owner wrote there stays. The rule is the hook's
+// own code, carried as the `rules preamble` twin (node tests/twins.mjs).
+test("session files: the rules seed explanation above the first rule is skipped, owner prose stays", async () => {
+  const { SESSION_SEEDS } = await import("../../js/build/stubs.mjs")
+  const rules = "## R1 — Plan first\nWrite a plan.\n"
+  const seeded = await tierBlock("preamble-seed", { emit: "opencode", host: { "user-rules.md": `${SESSION_SEEDS["user-rules.md"]}\n${rules}` } })
+  assert.ok(seeded.includes(`----- user-rules.md -----\n${rules}`), seeded)
+  assert.ok(!seeded.includes("Geneseed seeded this file once"), seeded)
+  const own = await tierBlock("preamble-own", { emit: "opencode", host: { "user-rules.md": `# Mine\nRead me.\n\n${rules}` } })
+  assert.ok(own.includes(`----- user-rules.md -----\n# Mine\nRead me.\n\n${rules}`), own)
+})
+
+test("the rules preamble twin block is byte-identical to js/hosts/hooks-context.mjs", async () => {
+  const cut = (s) => {
+    const b = s.indexOf("// ---- rules preamble twin: BEGIN"), e = s.indexOf("// ---- rules preamble twin: END")
+    assert.ok(b >= 0 && e > b, "twin markers missing")
+    return s.slice(b, e).replace(/^export /gm, "")
+  }
+  const hook = await fs.readFile(new URL("../../js/hosts/hooks-context.mjs", import.meta.url), "utf8")
+  const plugin = await fs.readFile(new URL(PLUGIN), "utf8")
+  assert.equal(cut(plugin), cut(hook), "the plugin's rules preamble block drifted from js/hosts/hooks-context.mjs")
+})
+
 test("the wiki: the tier's manifest stands behind a host seed, and a host manifest replaces it", async () => {
   // Whole file, as the hook has it. The manifests name the plugin's own tmp as their root.
   const { SESSION_SEEDS } = await import("../../js/build/stubs.mjs")

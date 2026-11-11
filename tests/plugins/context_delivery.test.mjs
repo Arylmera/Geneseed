@@ -83,6 +83,25 @@ test("default: the transform prepends the context; session.created posts nothing
   assert.match(output.messages[0].parts[0].text, /# Delivery Repo/)
 })
 
+// The transform runs on every request. The block is cached for 30 s, and so are the two lookups
+// that gate it, per instance: the exclude lists (`excludes.json`, read twice) and the done checks.
+// So a second request inside the TTL reads no `excludes.json` at all, and still gets the block.
+test("a second request inside the TTL reads no excludes.json", async () => {
+  const { plugin } = await load({}, "ttl")
+  const real = fs.readFile
+  let reads = 0
+  fs.readFile = (p, ...rest) => { if (String(p).endsWith("excludes.json")) reads += 1; return real.call(fs, p, ...rest) }
+  try {
+    const first = { messages: [userMsg("s1")] }
+    await plugin["experimental.chat.messages.transform"]({}, first)
+    assert.equal(reads, 2, "the first request reads the install's list and the shared one")
+    const second = { messages: [userMsg("s1")] }
+    await plugin["experimental.chat.messages.transform"]({}, second)
+    assert.equal(reads, 2, "the second request read excludes.json again")
+    assert.match(second.messages[0].parts[0].text, /PROJECT CONTEXT/)
+  } finally { fs.readFile = real }
+})
+
 test("GENESEED_CONTEXT_VISIBLE=1: session.created posts the block; the transform stays out", async () => {
   const { plugin, client } = await load({ GENESEED_CONTEXT_VISIBLE: "1" }, "visible")
   await plugin.event({ event: { type: "session.created", properties: { sessionID: "s1" } } })

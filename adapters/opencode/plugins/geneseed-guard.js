@@ -356,9 +356,14 @@ function stashExists(root) {
  * a spawn. A git destructive VERB anywhere after `git` on the same line, or a removal program
  * as a word at a command boundary. Deliberately loose — the parse decides; this only has to be
  * a superset of what the parse acts on.
+ *
+ * The git half is LINEAR: it starts only at the input's start or a `\n` and tries the line's
+ * first `git` alone, which matches whenever any later `git` would. `\bgit\b[^\n]*\b(?:…)` from
+ * every `git` was quadratic: a 270 KB `git -C x …` took seconds, and a hook past its timeout
+ * lets the call through. `(?<![\s\S])`, not `^`: under `m`, `^` also starts after `\r`.
  */
 const LOSS_CANDIDATE_RE =
-  /\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'`])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
+  /(?:(?<![\s\S])|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:reset|clean|branch|checkout|switch|restore|stash|reflog|gc|push)\b|(?:^|[\s;&|("'`])(?:rm|rmdir|unlink|del|erase|remove-item|ri|rd)(?:\.exe)?(?=[\s;&|)"'`]|$)|(?:^|\s)-delete(?=\s|$)/im;
 
 class Unverified extends Error {}
 const unverified = (why) => { throw new Unverified(why); };

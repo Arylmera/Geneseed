@@ -1056,6 +1056,55 @@ for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
   });
 }
 
+// A verb module that fails to load must not read as a defer. On 5.2.0, with `loss.mjs` gone (as
+// it is for a moment mid-`git pull` under the shared shim), a gate exited 1 with empty stdout,
+// and Claude let the call through. Now a gate verb gives `guardGate`'s gate-error verdict: an ask
+// on Claude, a stderr warning with rc 0 on Bob (gate-error is never a block there). Every other
+// verb exits 0 with nothing on stdout and one stderr line. The module is broken by a resolve
+// hook, so no file in the checkout is touched.
+const BREAK_HOOKS = 'export async function resolve(s, c, next) {'
+  + ' if (new RegExp(process.env.GS_BREAK).test(s)) throw new Error("broken module path: " + s);'
+  + ' return next(s, c); }';
+const BREAK_LOADER = `data:text/javascript,${encodeURIComponent('import { register } from "node:module";'
+  + ` register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(BREAK_HOOKS)}`)});`)}`;
+function brokenRun(argv, broken, input) {
+  const sb = makeSandbox('gs-broken-');
+  try {
+    return spawnSync(process.execPath, ['--import', BREAK_LOADER, path.join(ROOT, HOOK), ...argv, '--root', sb.path], {
+      cwd: sb.path, input, encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, GS_BREAK: broken, GENESEED_ACTIVITY: 'off' },
+    });
+  } finally { sb.cleanup(); }
+}
+
+test('a gate whose module fails to load asks; any other verb exits 0 and says so on stderr', () => {
+  const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git push' } });
+  for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
+    const r = brokenRun([verb], 'loss\\.mjs$', payload);
+    assert.equal(r.status, 0, `${verb}: ${r.stderr.slice(0, 300)}`);
+    const dec = JSON.parse(r.stdout).hookSpecificOutput;
+    assert.equal(dec.permissionDecision, 'ask', verb);
+    assert.match(dec.permissionDecisionReason, /gate error: the check failed with "broken module path: .*loss\.mjs"/, verb);
+    const bob = brokenRun([verb, '--host', 'bob'], 'loss\\.mjs$', payload);
+    assert.equal(bob.status, 0, `${verb} on bob`);
+    assert.equal(bob.stdout, '', `${verb} on bob`);
+    assert.match(bob.stderr, /\[geneseed\] Geneseed gate error/, `${verb} on bob`);
+  }
+  // A non-gate verb decides nothing, so stdout stays empty and the exit 0; one stderr line names
+  // the failure, so a broken context hook shows in the host's hook log. Same on Bob.
+  for (const host of [[], ['--host', 'bob']]) {
+    const ctx = brokenRun(['context', ...host], 'hooks-context\\.mjs$', '{}');
+    assert.equal(ctx.status, 0, `context ${host}: ${ctx.stderr.slice(0, 300)}`);
+    assert.equal(ctx.stdout, '', `context ${host}`);
+    assert.match(ctx.stderr, /^\[geneseed-hook\] context failed: broken module path: .*hooks-context\.mjs\r?\n$/, `context ${host}`);
+  }
+  // The control: without the broken path the same gate decides as usual, so the ask above is the
+  // missing module's, not the loader's.
+  const ok = brokenRun(['git-gate'], 'no-such-module$', payload);
+  assert.equal(ok.status, 0);
+  assert.doesNotMatch(ok.stdout, /gate error/);
+});
+
 test('two mutually exclusive theme flags are refused, and one of them is not', () => {
   // A mutually-exclusive group is BEHAVIOUR even though its wording is not reproduced, and the two
   // are separable — which is why this is a hand-written gate rather than a cell. A cell would

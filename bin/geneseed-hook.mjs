@@ -50,10 +50,10 @@
 import '../js/lib/node-floor.mjs';
 // Not a new module on the hot path: every verb's module imports `js/lib/fs.mjs` too, so this
 // edge only loads early a file the process would load anyway.
-import { printErr } from '../js/lib/fs.mjs';
+import { printErr, printOut } from '../js/lib/fs.mjs';
 // Also not a new module: every verb's module imports it. It carries the activity switch, so the
 // off path costs one file read and no import of the writer.
-import { activityOn, readStdin } from '../js/hosts/hooks-prims.mjs';
+import { activityOn, askDecision, gateSafe, readStdin } from '../js/hosts/hooks-prims.mjs';
 import { isatty } from 'node:tty';
 import path from 'node:path';
 
@@ -163,6 +163,35 @@ async function trackActivity(verb, args) {
   } catch { /* the activity view is best-effort; a hook that fails is a tool call that fails */ }
 }
 
+/**
+ * A verb whose module failed to load, or threw past its own guard. `guardGate` only covers a gate
+ * once its module has loaded; a module that cannot (a file missing mid-`git pull` under the shared
+ * shim, a syntax error) used to exit 1 with nothing on stdout, which Claude reads as "the gate
+ * deferred". So a gate verb gives the gate-error verdict `guardGate` gives — an ask on Claude and
+ * OpenClaude, a stderr warning on Bob, where gate-error is never a block — built from
+ * `./hooks-prims.mjs`, which the entry has already loaded. Not ledgered: the ledger's writer is
+ * in the module that failed. Every other verb exits 0 with stdout empty and one stderr line, so a
+ * broken context hook shows in the host's hook log: stdout is the only channel any host reads as
+ * a decision, and on Bob too a stderr line with exit 0 is a log entry (the gates' Bob warnings
+ * already are). The residual limit: a
+ * module this file imports statically (`fs.mjs`, `hooks-prims.mjs`) fails at link time, before
+ * any of this runs.
+ */
+function verbFailed(verb, args, e) {
+  let name = e;
+  try { name = e.message || e; } catch { /* `gateSafe` meets `e` as it is */ }
+  if (!GATE_VERBS.has(verb)) {
+    try { printErr(`[geneseed-hook] ${verb} failed: ${name}\n`); } catch { /* an unprintable error says nothing */ }
+    return 0;
+  }
+  if (args.host === 'bob') {
+    printErr(`[geneseed] ${gateSafe('gate-error', 'warned', { name })}\n`);
+    return 0;
+  }
+  printOut(askDecision(gateSafe('gate-error', 'ask', { name })));
+  return 0;
+}
+
 function die(code, msg) {
   // CRLF on Windows, for the same reason the hook verbs' funnels translate: argparse
   // writes this line through `sys.stderr`, which does. `printErr` owns the `\n`-to-`os.linesep` rule.
@@ -270,7 +299,12 @@ async function main(argv) {
   if (verb === 'context' && !isatty(0)) {
     try { parsed.args.event = JSON.parse(readStdin() || '{}').hook_event_name ?? null; } catch { /* not JSON: SessionStart */ }
   }
-  const rc = (await spec.load())[spec.fn](parsed.args);
+  let rc;
+  try {
+    rc = (await spec.load())[spec.fn](parsed.args);
+  } catch (e) {
+    return verbFailed(verb, parsed.args, e);
+  }
   await trackActivity(verb, parsed.args);
   await baselineStores(verb, parsed.args);
   return rc;
