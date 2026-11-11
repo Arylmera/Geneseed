@@ -524,7 +524,6 @@ export async function findConsoles(target, ports) {
   const all = [...new Set([isTruthy(rec) ? Number(rec.port) : null, ...ports].filter(Number.isInteger))];
   const found = [];
   for (const p of all) {
-    // eslint-disable-next-line no-await-in-loop
     const c = await identify(p);
     if (c) found.push({ port: p, url: `http://127.0.0.1:${p}`, pid: c.pid, root: c.root,
       recorded: isTruthy(rec) && rec.pid === c.pid && Number(rec.port) === p });
