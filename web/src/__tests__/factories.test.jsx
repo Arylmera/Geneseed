@@ -416,6 +416,22 @@ describe('Factories — active', () => {
     )
   })
 
+  // FACTORY.md is a file anyone can edit, and the console reads it unvalidated: an `at` that is
+  // not a string (a number here) reads `unknown`, as a missing one does, and the page still draws.
+  it('reads a time that is not a string as unknown, and still draws the run', async () => {
+    const odd = run('odd', {
+      history: [{ stage: 'intake', outcome: 'pass', task: 0, at: 5 }],
+      metrics: { ...HELD.metrics, entries: [{ ms: null, wait: false, rework: false }] },
+    })
+    api.activeFactories.mockImplementation(() => Promise.resolve({ factories: [odd] }))
+    render(<Factories tab="active" item="C:/work/odd" />)
+    await screen.findByText('odd', { selector: '.reader-title' })
+    const table = screen.getByRole('table', { name: 'Run history' })
+    expect([...table.querySelectorAll('tbody tr')].map((tr) => text('td', tr))).toEqual([
+      ['intake', 'pass ', 'unknown', 'unknown'],
+    ])
+  })
+
   // A payload without its `factories` list reads as no run, not as a read still out.
   it('reads an active payload with no factories list as no run', async () => {
     api.activeFactories.mockImplementation(() => Promise.resolve({}))

@@ -215,7 +215,7 @@ registered run, in three columns: **Waits for you**, **Running** and **Ended**. 
 the run stands, its task, the laps spent on each cycle, and its work and waiting time. A card
 opens the run: its graph with the current stage lit, the laps spent on each cycle, the child
 loop's current step, written `at <node>` in the current stage's box, and a timeline of every
-stage with its outcome, its time, its duration and each rework. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
+stage with its outcome, its time, its duration and each rework. The page changes nothing, neither a run nor `factories.json`: the next `geneseed factory init` on the machine drops a run whose worktree is gone, and a closed run 7 days after that init first saw it closed. You answer a run in the
 agent's session.
 
 ## Your own factories

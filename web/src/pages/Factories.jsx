@@ -156,7 +156,13 @@ function Timeline({ run }) {
           {
             key: 'at',
             label: 'Time',
-            render: (r) => (r.h.at ? <time dateTime={r.h.at}>{clock(r.h.at)}</time> : 'unknown'),
+            // a hand-edited FACTORY.md may hold any value here: only a string is a time
+            render: (r) =>
+              typeof r.h.at === 'string' ? (
+                <time dateTime={r.h.at}>{clock(r.h.at)}</time>
+              ) : (
+                'unknown'
+              ),
           },
           {
             key: 'ms',

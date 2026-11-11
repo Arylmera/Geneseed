@@ -30,7 +30,7 @@ import {
 import { PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops, runningLoops, sameRoot } from '../loop/registry.mjs';
-import { activeFactories } from '../factory/registry.mjs';
+import { listFactories } from '../factory/registry.mjs';
 import { factoryCatalogProblems, loopOf } from '../factory/graph.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
@@ -650,13 +650,13 @@ export function apiFactoriesCatalog(state) {
  * It is the board's read too (D7). A live row carries what `FACTORY.md` holds — `status`, `stage`,
  * `awaiting`, `tasks`, `counters` beside the graph's cycles and their `max`, `history` — and
  * `metrics`, `runMetrics` of that state. A `FACTORY.md` that does not parse is a row with status
- * `unreadable`, and a missing one `finished`: identity only, never a throw. Nothing here writes
- * a run; `factories.json` alone loses the finished runs older than 7 days.
+ * `unreadable`, and a missing one `finished`: identity only, never a throw. `listFactories` is
+ * read-only: this poll never writes a run or `factories.json` (D7).
  */
 export function apiFactoriesActive() {
   const loops = runningLoops();
   return {
-    factories: activeFactories().map((run) => {
+    factories: listFactories().map((run) => {
       const l = loops.find((x) => sameRoot(x.root, run.root));
       return { ...run, loop: l ? { title: l.title, status: l.status, node: l.node, iteration: l.iteration, graph: l.graph } : null };
     }),
