@@ -35,7 +35,7 @@ import { parseJson } from '../lib/json.mjs';
 import { normcase, comparePaths } from '../lib/paths.mjs';
 // `js/build/source.mjs` imports nothing but node builtins, so this direction cannot cycle.
 import {
-  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, upstreamOf,
+  CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
 import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
@@ -296,14 +296,41 @@ export function splitAtLawHeadings(text) {
   return out;
 }
 
-/** The pointer under §1 at lean. The laws' lean text itself is authored in LEAN blocks. */
-export function lawsPointer(theme, lawsPrefix = '') {
+/**
+ * The one pointer at lean, closing §2 for both tiers: the laws' and the rules' lean text is
+ * authored in LEAN blocks, and this names where the complete text of each lives. It was two notes,
+ * one under each section, saying the same thing (owner decision D2, 2026-11-11).
+ */
+export function briefPointer(theme, lawsPrefix = '', anyPack = true) {
   const law = theme.LAW ?? 'Law';
+  const doctrine = theme.DOCTRINE ?? 'Doctrine';
   const lawsDir = theme.DIR_LAWS ?? 'laws';
-  return `> Each ${law} above is given in brief — the rule, not its reasoning. The `
-    + `complete, binding text of every ${law} is in \`${lawsPrefix}${lawsDir}/universal.md\`; `
-    + `read it whenever a ${law}'s application is unclear, and before any act touching `
-    + 'secrets, deletion, git history, scope, or untrusted content.';
+  const dir = theme.DIR_DOCTRINES ?? 'doctrines';
+  // With no pack active only the laws are above; the packs' folder is still named, as it ships.
+  const above = anyPack ? `${law} and ${doctrine}` : law;
+  return `> Each ${above} above is given in brief — the rule, not its reasoning. `
+    + `The complete text is in \`${lawsPrefix}${lawsDir}/universal.md\` (binding) and in `
+    + `\`${lawsPrefix}${dir}/\` (every pack, active or not). Read the matching file whenever a rule's application `
+    + `is unclear; read \`${lawsPrefix}${lawsDir}/universal.md\` before any act touching secrets, `
+    + 'deletion, git history, scope, or untrusted content.';
+}
+
+/**
+ * LEAN DROPS THE VOICE'S HALF of each rule title and the italic epigraph under each § heading
+ * (owner decision D2, 2026-11-11). A theme spells a title `Arcana Sigillata · Sealed Secrets`;
+ * lean renders the principle alone, the name every citation already renders (`*Sealed
+ * Secrets*`), so one rule reads the same at its heading and where it is cited. Done here, on the
+ * unsubstituted tokens, so all fourteen voices follow without a theme edit. Keyed on the PER-FILE
+ * footprint: the on-disk `laws/`, `ontology/` and `doctrines/` render full even in a lean install,
+ * keep the voice, and are what `js/inspect/inventory.mjs` and the console parse.
+ */
+const TITLE_TOKEN_RE = /\{\{((?:LEX|DOC)_[A-Z0-9_]+)\}\}/g;
+const EPIGRAPH_LINE_RE = /^\*\{\{EPI_[A-Z_]+\}\}\*\n\n/gm;
+function leanVoice(text, src) {
+  text = text.replace(EPIGRAPH_LINE_RE, '');
+  if (!text.includes('{{LEX_') && !text.includes('{{DOC_')) return text;
+  const names = new Map(ruleCanon(src).rules.map((r) => [titleKey(r.kind, r.id), r.name]));
+  return text.replace(TITLE_TOKEN_RE, (whole, key) => names.get(key) ?? whole);
 }
 
 /**
@@ -392,17 +419,14 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
     if (normcase(target) === normcase(here) || visiting.has(normcase(target))) {
       return `<!-- CIRCULAR INCLUDE: ${rel} -->`;
     }
-    let inner = renderFile(cfg, target, theme, footprint, lawsPrefix,
-                          new Set(visiting).add(normcase(here)), nativeCatalog)
+    return renderFile(cfg, target, theme, footprint, lawsPrefix,
+                      new Set(visiting).add(normcase(here)), nativeCatalog)
       .replace(/\n+$/, '');                              // `.rstrip("\n")`
-    if (footprint === 'lean' && rel === 'laws/universal.md') {
-      inner = `${inner}\n\n${lawsPointer(theme, lawsPrefix)}`;
-    }
-    return inner;
   });
 
   text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? [], cfg);
   text = resolveLean(text, footprint);
+  if (footprint === 'lean') text = leanVoice(text, cfg.src);
   return substitute(text, theme);
 }
 
@@ -503,7 +527,8 @@ function dropExcludedRules(text, pack, excluded) {
 }
 
 function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
-  if (!active.length) return '';
+  // At lean the section still carries the one pointer with no pack active: it names the laws too.
+  if (!active.length) return footprint === 'lean' ? briefPointer(theme, lawsPrefix, false) : '';
   const excluded = new Set(cfg.excludeRules ?? []);
   const parts = active.map((name) => {
     const raw = dropExcludedRules(readPackText(path.join(cfg.src, 'doctrines', `${name}.md`)),
@@ -512,15 +537,10 @@ function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
     // voice second. THE ORDER IS LOAD-BEARING — `resolveLean` reads HTML markers, and
     // substituting first would hand it prose in fourteen voices. The first-sentence cut is gone;
     // a rule's lean text is written in `src/doctrines/<pack>.md`, not measured out of its prose.
-    return substitute(resolveLean(raw, footprint), theme).trim();
+    const text = resolveLean(raw, footprint);
+    return substitute(footprint === 'lean' ? leanVoice(text, cfg.src) : text, theme).trim();
   });
-  if (footprint === 'lean') {
-    const doctrine = theme.DOCTRINE ?? 'Doctrine';
-    const dir = theme.DIR_DOCTRINES ?? 'doctrines';
-    parts.push(`> Each ${doctrine} above is given in brief — the rule, not its reasoning. `
-      + `The complete text of every pack, active or not, is in \`${lawsPrefix}${dir}/\`; read `
-      + `the pack file whenever a ${doctrine}'s application is unclear.`);
-  }
+  if (footprint === 'lean') parts.push(briefPointer(theme, lawsPrefix));
   return parts.join('\n\n');
 }
 
@@ -667,8 +687,8 @@ export function renderAll(cfg, themeName, {
     if (NOT_BUNDLED.has(sp[0])) continue;
     if (sp.length >= 2 && Object.hasOwn(off, sp[0]) && off[sp[0]].has(sp[1].replace(/\.md$/, ''))) continue;
     const outRel = destRel(themedRel(rel, theme)).split(path.sep).join('/');  // as_posix()
-    // The on-disk `laws/`, `ontology/` and `doctrines/` are the "complete text" the two lean
-    // pointers promise — §1's and the Doctrines section's. They render at full whatever the
+    // The on-disk `laws/`, `ontology/` and `doctrines/` are the "complete text" the lean
+    // pointer under the Doctrines section promises. They render at full whatever the
     // footprint; only what AGENT.md INLINES leans. `doctrines/` joined them when its rules got
     // authored LEAN blocks: before that a pack file carried no markers and shipped whole by
     // accident, which is a different thing from shipping whole by contract.

@@ -471,7 +471,7 @@ test('the capability tables match the declared host capability', () => {
  * not carry imperial's titles.
  *
  * Both footprints, because they render the law list by different halves of each LEAN block:
- * `full` inlines the rationale half, `lean` the authored brief plus `lawsPointer`.
+ * `full` inlines the rationale half, `lean` the authored brief plus `briefPointer`.
  *
  * PROVEN, and the proof named its own blind spot. Dropping one law's LEAN block from the source
  * render (a broken `LEAN:end` marker) reddens this row alone, naming the rule and the footprint, with every
