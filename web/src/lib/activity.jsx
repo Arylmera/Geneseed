@@ -129,7 +129,9 @@ export function SessionHeader({ s, heading, id, children }) {
       {s.phase && (
         <div className="row gap-8 act-phase">
           <Icon name="activity" />
-          <span className="act-ell">{s.phase}</span>
+          <span className="act-ell" title={s.phase}>
+            {s.phase}
+          </span>
         </div>
       )}
 

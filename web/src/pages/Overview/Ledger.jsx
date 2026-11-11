@@ -486,7 +486,9 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
         <div className="ldg-name">
           <span className="ldg-host">{hostInfo(i.host).label}</span>{' '}
           <span className="dim">{i.scope}</span>
-          <div className="mono dim ldg-path">{i.path}</div>
+          <div className="mono dim ldg-path" title={i.path}>
+            {i.path}
+          </div>
         </div>
       </div>
     </td>
@@ -680,7 +682,9 @@ function Needs({ rows, pending, partial, onAction, onRebuild }) {
                 <b>{n.title}</b>
                 {n.detail ? <span className="dim"> · {n.detail}</span> : null}
               </span>
-              <span className="mono dim needs-where">{n.where}</span>
+              <span className="mono dim needs-where" title={n.where}>
+                {n.where}
+              </span>
               {n.act ? (
                 <button
                   type="button"
@@ -763,7 +767,7 @@ function WhatFires({ usage, pending }) {
       <ul className="ubars">
         {top.map((r, j) => (
           <li key={`${r.install}:${r.kind}:${r.name}`} className={r.kind}>
-            <span className="ub-name">
+            <span className="ub-name" title={`${r.name} ${r.kind}`}>
               {r.name} <span className="dim">{r.kind}</span>
             </span>
             <span className="ub-trk">
