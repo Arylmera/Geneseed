@@ -67,7 +67,7 @@ import {
 } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
-  readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
+  readStdin, SECRET_RE, DONE_LIST, diffBlocks, isTestPath, weakenedBy, editPairs,
   gateLoss, gateSafe, askDecision, decisionDoc, asciiJson,
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
@@ -1176,9 +1176,9 @@ function settingsAfter(before, payload) {
     return ranged ? null : replaceOnce(before, ti.search, ti.replace);
   }
   if (tool === 'apply_diff' && typeof ti.diff === 'string') {
-    const blocks = [...ti.diff.matchAll(DIFF_BLOCK_RE)];
+    const blocks = diffBlocks(ti.diff);
     let text = before;
-    for (const [, search, replace] of blocks) if ((text = replaceOnce(text, search, replace)) === null) return null;
+    for (const [search, replace] of blocks) if ((text = replaceOnce(text, search, replace)) === null) return null;
     // One block only: with several, Bob may apply some and refuse others (its start-line window).
     return blocks.length === 1 ? text : null;
   }
@@ -1233,8 +1233,8 @@ const ASK_COUNT_MAX = 1024 * 1024;
  * The `editPairs` of a write the gate will ask about, for the line count, or undefined for none. Run
  * only then, because `Write`'s old text is a file read. A pair says nothing of how often it applies,
  * so a `replace_all` and a `search_and_replace` count nothing, and a notebook cell names no old text.
- * A `diff` counts nothing either: the agent writes it, and `DIFF_BLOCK_RE` took 20 s on 80 KB of
- * opened blocks. A count must cost no verdict, so whatever is not a small regular file, or cannot be
+ * A `diff` counts nothing either: the agent writes it, and the regex `diffBlocks` replaced took 20 s
+ * on 80 KB of opened blocks. A count must cost no verdict, so whatever is not a small regular file, or cannot be
  * read, counts nothing. Only a file that is truly absent is a new file.
  */
 function askPairs(payload, p) {
@@ -1339,21 +1339,39 @@ function ruleGate(args) {
 
 // The REPLACE halves of a Roo-style `apply_diff` (`<<<<<<< SEARCH … ======= <new> >>>>>>> REPLACE`).
 // A diff without those markers is a shape we do not know, so it is returned whole: fail closed.
+// One pass: each half runs from a separator line to the FIRST closing line after it, as the lazy
+// `/^=======\r?\n([\s\S]*?)^>>>>>>> REPLACE/gm` did, and a separator with no closing after it ends
+// the scan, where that regex rescanned the rest of the diff once per separator.
 function diffReplaced(diff) {
   if (typeof diff !== 'string') return diff;
-  const halves = [...diff.matchAll(/^=======\r?\n([\s\S]*?)^>>>>>>> REPLACE/gm)].map((m) => m[1]);
+  const SEP = /^=======\r?\n/gm;
+  const CLOSE = /^>>>>>>> REPLACE/gm;
+  const halves = [];
+  for (let sep; (sep = SEP.exec(diff));) {
+    CLOSE.lastIndex = sep.index + sep[0].length;
+    const close = CLOSE.exec(diff);
+    if (!close) break;
+    halves.push(diff.slice(sep.index + sep[0].length, close.index));
+    SEP.lastIndex = CLOSE.lastIndex;
+  }
   return halves.length ? halves.join('\n') : diff;
 }
 
 const RULE_PATH_KEYS = ['file_path', 'path', 'notebook_path', 'target_file', 'target', 'file', 'filename', 'destination', 'dest',
   'new_path', 'new_name', 'old_path', 'source', 'from', 'to'];
-function ruleDecide(args, payload) {
+// Exported for the in-process timing rows, as `gitDecide` is.
+export function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   // NotebookEdit names its target `notebook_path`; the settings matcher routes it here too. Every
   // key is read, never the first found: Bob's move and rename tools carry two, and a harmless
   // `path` beside the real target must not hide it from any gate below.
   const paths = [...new Set(RULE_PATH_KEYS.map((k) => ti[k]).filter((v) => typeof v === 'string' && v))];
   if (!paths.length) return 0;
+  // A diff past the command bound is not read, for `MAX_COMMAND_CHARS`' reason: on Bob a scan past
+  // the hook timeout lets the write through with no secrets check. Same `unverified` ask, law-4.
+  if (typeof ti.diff === 'string' && ti.diff.length > MAX_COMMAND_CHARS) {
+    return ask(args, 'rule-gate', 'law-4', 'unverified', {});
+  }
   // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
   // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
   // MultiEdit is no longer in Claude Code's own tool table (tools-reference.md) or the

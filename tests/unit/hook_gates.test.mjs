@@ -1243,12 +1243,45 @@ test('a text too big, or written by the agent as a diff, shows no count and stil
     assert.equal(first(toolCall('Write', { file_path: file, content: 'a\n' })), plain, 'a folder is no regular file');
     fs.rmdirSync(file);
     assert.equal(first(toolCall('apply_diff', { path: file, diff: '<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE' })), plain);
-    // Blocks opened and never closed: 20 s through `DIFF_BLOCK_RE` at this size.
-    const diff = '<<<<<<< SEARCH\nx\n=======\ny\n'.repeat(3200);
+    // Blocks opened and never closed: 20 s at 86 KB through the regex `diffBlocks` replaced. 2 400
+    // blocks are 64 800 characters, under the 64 KB diff bound, so this row still reaches the count;
+    // past the bound the gate asks without reading the diff (the next test).
+    const diff = '<<<<<<< SEARCH\nx\n=======\ny\n'.repeat(2400);
     const start = performance.now();
     assert.equal(first(toolCall('apply_diff', { path: file, diff })), plain);
     assert.ok(performance.now() - start < 5000, `${Math.round(performance.now() - start)} ms`);
   } finally { sb.cleanup(); }
+});
+
+// An `apply_diff` is read in one pass, and past 64 KB not at all. Its block regex retried every
+// later separator from every opening: 32 KB took 4.7 s, and 256 KB of opened blocks ran past
+// 120 s through the binary, past Bob's hook timeout, so the secrets gate never judged the write.
+// Past the bound the rule gate asks with the `unverified` text (law-4, so Bob refuses it too).
+// Timed in process; the binary row checks the same ask reaches stdout.
+test('a 256 KB pathological apply_diff asks within 200 ms, in process and through the real entry', async () => {
+  const { ruleDecide } = await import('../../js/hosts/hooks.mjs');
+  const diff = repeated('<<<<<<< SEARCH\na\n=======\n', 256 * 1024);
+  const call = { tool_name: 'apply_diff', tool_input: { path: 'tests/a.test.js', diff }, cwd: PLAIN };
+  const chunks = [];
+  const realWrite = process.stdout.write;
+  process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+  const t = performance.now();
+  let rc;
+  try { rc = ruleDecide({ root: null }, call); } finally { process.stdout.write = realWrite; }
+  const ms = performance.now() - t;
+  assert.ok(ms < 200, `256 KB diff took ${ms.toFixed(0)} ms`);
+  assert.equal(rc, 0);
+  assert.match(JSON.parse(chunks.join('')).hookSpecificOutput.permissionDecisionReason, /could not work out what it removes/);
+  const r = askDecision(hookRun('rule-gate', { stdin: JSON.stringify(call), cwd: PLAIN }), '256 KB apply_diff');
+  assert.match(r.permissionDecisionReason, /could not work out what it removes/);
+  // Under the bound the same shape is read, in one pass, and a plain write still defers.
+  const small = repeated('<<<<<<< SEARCH\na\n=======\n', 63 * 1024);
+  const t2 = performance.now();
+  process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+  chunks.length = 0;
+  try { rc = ruleDecide({ root: null }, { ...call, tool_input: { path: 'tests/a.test.js', diff: small } }); } finally { process.stdout.write = realWrite; }
+  assert.ok(performance.now() - t2 < 200, `63 KB diff took ${(performance.now() - t2).toFixed(0)} ms`);
+  assert.equal(chunks.join(''), '', 'a 63 KB diff that closes no block defers');
 });
 
 // The count reads the file the gate judged: a `~` or a Git Bash path must not read as a new file.

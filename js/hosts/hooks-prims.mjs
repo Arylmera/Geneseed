@@ -182,8 +182,37 @@ export function weakenedBy(pairs) {
 }
 // ---- test-weakening twin: END
 
-// One Roo-style `apply_diff` block: its SEARCH half, then its REPLACE half.
-export const DIFF_BLOCK_RE = /<<<<<<< SEARCH\r?\n(?::start_line:\s*\d+\r?\n)?(?:-------\r?\n)?([\s\S]*?)\r?\n?=======\r?\n([\s\S]*?)\r?\n?>>>>>>> REPLACE/g;
+/**
+ * The Roo-style `apply_diff` blocks of `diff` as `[search, replace]` pairs: what
+ * `/<<<<<<< SEARCH\r?\n(?::start_line:\s*\d+\r?\n)?(?:-------\r?\n)?([\s\S]*?)\r?\n?=======\r?\n([\s\S]*?)\r?\n?>>>>>>> REPLACE/g`
+ * matched, read in one pass. That regex, on blocks opened and never closed, retried every later
+ * separator from every opening: 32 KB took 4.7 s and 256 KB ran past 120 s, past Bob's hook
+ * timeout, so the secrets gate never judged the call. Each half ends at the FIRST separator after
+ * it, as the lazy groups did; a block with no closing after its first separator has none after any
+ * later one either, so the scan stops there, where the regex would have found nothing more.
+ */
+export function diffBlocks(diff) {
+  const at = (re, from) => { re.lastIndex = from; return re.exec(diff); };
+  const OPEN = /<<<<<<< SEARCH\r?\n/g;
+  const LINE = /:start_line:\s*\d+\r?\n/y;
+  const DASH = /-------\r?\n/y;
+  const SEP = /\r?\n?=======\r?\n/g;
+  const CLOSE = /\r?\n?>>>>>>> REPLACE/g;
+  const pairs = [];
+  for (let pos = 0, open; (open = at(OPEN, pos));) {
+    let start = open.index + open[0].length;
+    const line = at(LINE, start);
+    if (line) start += line[0].length;
+    const dash = at(DASH, start);
+    if (dash) start += dash[0].length;
+    const sep = at(SEP, start);
+    const close = sep && at(CLOSE, sep.index + sep[0].length);
+    if (!close) break;
+    pairs.push([diff.slice(start, sep.index), diff.slice(sep.index + sep[0].length, close.index)]);
+    pos = close.index + close[0].length;
+  }
+  return pairs;
+}
 
 /**
  * A write tool's input as `[old, new]` pairs for `weakenedBy`. `whole` is the file before a
@@ -200,7 +229,7 @@ export function editPairs(ti, whole = '') {
   for (const e of Array.isArray(ti.edits) ? ti.edits : []) {
     if (e && typeof e.new_string === 'string') pairs.push([text(e.old_string), e.new_string]);
   }
-  if (typeof ti.diff === 'string') for (const m of ti.diff.matchAll(DIFF_BLOCK_RE)) pairs.push([m[1], m[2]]);
+  if (typeof ti.diff === 'string') pairs.push(...diffBlocks(ti.diff));
   return pairs;
 }
 
