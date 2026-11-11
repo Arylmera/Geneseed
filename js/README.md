@@ -39,9 +39,10 @@ layers. These pairs import each other (relative imports between folders, measure
 | build ↔ hosts | 24 / 5 | hosts reads `build/source.mjs` (`installs`, `link`, `native`, `opencode`) and `build/version.mjs` (`opencode`) |
 | build ↔ inspect | 2 / 23 | `build/driver.mjs` records deploy roots in `inspect/registry.mjs`; `build/catalog.mjs` reads `inspect/inventory.mjs` |
 | build ↔ loop | 4 / 1 | `loop/catalog.mjs` reads `build/source.mjs` |
-| build ↔ ui | 2 / 1 | `ui/cli.mjs` reads `ROOT` from `build/source.mjs` |
+| build ↔ ui | 2 / 2 | `ui/cli.mjs` reads `ROOT` from `build/source.mjs` and the generator's choice lists from `build/args.mjs` |
 | build ↔ web | 1 / 9 | `build/generate.mjs` lazily imports `web/daemon.mjs` to restart a stale console after `rebuild-all` |
 | hosts ↔ inspect | 1 / 36 | `hosts/installs.mjs` reads `inspect/registry.mjs`'s deploy roots |
+| inspect ↔ maintain | 2 / 4 | `inspect/status.mjs` and `inspect/diff.mjs` read `globalInstalls` (the no-`--target` default) from `maintain/uninstall.mjs`, which imports neither |
 | ui ↔ web | 1 / 1 | `ui/menu.mjs` starts the daemon; `web/docs.mjs` renders `ui/cli.mjs`'s CLI reference |
 | maintain ↔ web | 1 / 7 | `maintain/update.mjs` lazily imports `web/daemon.mjs` for the same restart |
 

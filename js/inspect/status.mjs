@@ -316,8 +316,10 @@ export function statusData() {
     try { otherCfg.push(fn()); } catch { /* a missing host dir must not sink status */ }
   }
   const hostDirs = [...(cfgDir ? [cfgDir] : []), ...otherCfg, path.join(process.cwd(), 'Harness')];
-  // Same walk as `cmdVersion`'s fallback, and cwd-relative for the same reason.
-  for (const base of [...hostDirs, process.cwd()]) {
+  // Same walk as `cmdVersion`'s fallback, and cwd-relative for the same reason — led by the
+  // global install the `install` row names, so the `version` row describes that install.
+  const lead = picked && picked[1] === 'global' ? [picked[2]] : [];
+  for (const base of [...lead, ...hostDirs, process.cwd()]) {
     const v = readVersion(base);
     if (v) { installedFp = v; verTarget = base; break; }
   }

@@ -55,28 +55,31 @@ const PAGE_ARG_KEYS = ['names', 'dest', 'metavar', 'help', 'choices', 'default',
  * One re-read of a file this size is not a cost worth buying that with.
  */
 function load() {
-  let data;
   try {
-    data = JSON.parse(readFileSync(CLI_JSON, 'utf-8'));
+    return JSON.parse(readFileSync(CLI_JSON, 'utf-8'));
   } catch {
     return { prog: 'geneseed', commands: [] };
   }
-  // `build` forwards the generator's flags, and the generator owns their choice lists — two of
-  // them (`--posture`, `--mode`) are discovered from the checkout. So the table carries no copy:
-  // the choices are laid over its rows here, from `choicesFor`, the list the generator refuses by.
-  const build = (data.commands ?? []).find((c) => c.name === 'build');
-  if (build) {
-    const choices = choicesFor();
-    for (const o of build.options ?? []) {
-      const list = choices[o.names?.[0]];
-      if (!list) continue;
-      o.choices = list;
-      // A row with its own metavar (`--emit`: nine names do not fit a usage line) names the
-      // list in its help instead of in `{…}`.
-      if (o.metavar) o.help = `${o.help} (one of: ${list.join(', ')})`;
-    }
+}
+
+/**
+ * `build` forwards the generator's flags, and the generator owns their choice lists — two of
+ * them (`--posture`, `--mode`) are discovered from the checkout. So the table carries no copy:
+ * the readers that SHOW the rows (help, the docs page) lay `choicesFor` over them here. Not in
+ * `load`: `cliSpec` never reads an option's choices, and every verb's parse would pay the scan.
+ */
+function withDriverChoices(cmd) {
+  if (cmd?.name !== 'build') return cmd;
+  const choices = choicesFor();
+  for (const o of cmd.options ?? []) {
+    const list = choices[o.names?.[0]];
+    if (!list) continue;
+    o.choices = list;
+    // A row with its own metavar (`--emit`: nine names do not fit a usage line) names the
+    // list in its help instead of in `{…}`.
+    if (o.metavar) o.help = `${o.help} (one of: ${list.join(', ')})`;
   }
-  return data;
+  return cmd;
 }
 
 const pageArgs = (args) => (args ?? [])
@@ -95,7 +98,7 @@ export function cliReference() {
   const data = load();
   return {
     prog: data.prog ?? 'geneseed',
-    commands: (data.commands ?? []).map((c) => ({
+    commands: (data.commands ?? []).map(withDriverChoices).map((c) => ({
       name: c.name ?? '',
       help: c.help ?? '',
       description: c.description ?? '',
@@ -425,7 +428,7 @@ export function helpWidth() {
 
 /** One command's raw row — everything the table knows, unlike the page's filtered view. */
 export function cliCommand(verb) {
-  return (load().commands ?? []).find((c) => c.name === verb) ?? null;
+  return withDriverChoices((load().commands ?? []).find((c) => c.name === verb) ?? null);
 }
 
 /**
