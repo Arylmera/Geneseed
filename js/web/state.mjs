@@ -287,40 +287,44 @@ const WARM_DOCTOR_LIMIT_MS = 180_000;
  *
  * A verdict is stamped only while its job is still the current one: `refresh`, `selectView` and a
  * newer run all clear `_doctorJob`, and the daemon must not serve what a mutation made stale. A
- * failed warm-up, like the old one, just leaves the cache cold: the next ask runs in line. The
- * `error` listener is not optional, an unheard worker error is uncaught and kills the daemon.
- * `unref`: a stopping daemon does not wait for it.
+ * thread that dies (an `error`, or an exit with no verdict) is stamped as a FAILED verdict too:
+ * left cold, a serving daemon's getter would start a new thread on every overview poll and read
+ * "checking" for good. The `error` listener is not optional, an unheard worker error is uncaught
+ * and kills the daemon. `unref`: a stopping daemon does not wait for it. `script` is the worker's
+ * module, for a test that needs a thread that dies.
  *
  * A HUNG run would leave `/api/doctor` unanswered and the console polling for good, so past
  * `limitMs` it is stopped and stamped as a FAILED verdict: unknown is never a green. Re-run clears it.
  */
-export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS) {
+export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS,
+  script = new URL('./doctor-worker.mjs', import.meta.url)) {
   if (st._doctor !== null || st._doctorJob !== null) return st._doctorJob;
   st._doctorWorker?.terminate();
   st._doctorWorker = null;
   let worker;
   try {
-    worker = new Worker(new URL('./doctor-worker.mjs', import.meta.url),
-      { workerData: { theme: st.theme } });
+    worker = new Worker(script, { workerData: { theme: st.theme } });
   } catch { return null; }
   worker.unref();
   st._doctorWorker = worker;
   const job = new Promise((done) => {
-    const limit = setTimeout(() => {
+    const failed = (said) => {
       if (st._doctorJob === job) {
-        const said = `[doctor] the warm-up run did not finish in ${limitMs / 1000} s, so nothing was checked`;
         st.stampDoctor([said], [], [{ check: 'warm_up', label: 'Warm-up run', problems: [said] }]);
       }
+    };
+    const limit = setTimeout(() => {
+      failed(`[doctor] the warm-up run did not finish in ${limitMs / 1000} s, so nothing was checked`);
       worker.terminate();
     }, limitMs);
     limit.unref();
     worker.once('message', (r) => {
       if (st._doctorJob === job) st.stampDoctor(r.problems, r.themes, r.groups);
     });
-    worker.once('error', () => { /* cold cache, computed on demand */ });
-    worker.once('exit', () => {
+    worker.once('error', (e) => failed(`[doctor] the warm-up run failed: ${e?.message ?? e}`));
+    worker.once('exit', (code) => {
       clearTimeout(limit);
-      if (st._doctorJob === job) st._doctorJob = null;
+      failed(`[doctor] the warm-up run ended (code ${code}) without a verdict, so nothing was checked`);
       if (st._doctorWorker === worker) st._doctorWorker = null;
       done();
     });
