@@ -1,23 +1,12 @@
 import React from 'react'
+import { SEEN_KEY, TRACK_GROUP, readSeen } from '../../lib/track.js'
 
 // Where a docs page sits, and the prev/next bar under it. Every page has a part (the folder:
 // Understand, Guides, Concepts, Reference) and a section inside it (`section:` frontmatter,
 // General when absent); the menu already lists a part's pages section by section.
 //
-// The Understand part is also a course: its progress is the reader's own, in localStorage
-// only — the ids of the understand pages they have opened. The Overview's "New here?" card
-// reads the same key.
-export const SEEN_KEY = 'geneseed-understand-seen'
-export const TRACK_GROUP = 'understand'
-
-export function readSeen() {
-  try {
-    const v = JSON.parse(localStorage.getItem(SEEN_KEY))
-    return Array.isArray(v) ? v : []
-  } catch {
-    return []
-  }
-}
+// The Understand part is also a course: its progress is the reader's own (lib/track.js, which
+// the Overview's "New here?" card reads too).
 
 export function markSeen(id) {
   const seen = readSeen()

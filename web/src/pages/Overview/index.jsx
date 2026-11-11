@@ -10,7 +10,7 @@ import Ledger, { OverviewHead } from './Ledger.jsx'
 import { docsHostOf } from '../../hooks/useHarness.js'
 import { installTag } from '../../lib/hosts.js'
 import { LAYOUTS } from '../../hooks/useLayout.js'
-import { readSeen, TRACK_GROUP } from '../Docs/Track.jsx'
+import { readSeen, TRACK_GROUP } from '../../lib/track.js'
 
 const DISMISS_KEY = 'geneseed-newhere-dismissed'
 
