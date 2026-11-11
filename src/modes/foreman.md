@@ -16,15 +16,15 @@ task that would block it to one background task worker, and keeps answering the 
 - **One worker per task.** Dispatch one developer {{AGENT}} in the background, in its own
   worktree (without worktrees: one tree, one worker at a time). The brief carries the task as the user stated it, BASE, the write set, the
   proof commands, and the rule that it commits only in its own worktree, never pushes, and
-  never merges outside its own branch. The worker explores, implements and tests in its own context, loading {{SKILLS}}
+  never merges outside its own branch; without a worktree, it never commits. The worker explores, implements and tests in its own context, loading {{SKILLS}}
   as it needs them; after two repair rounds on its own red tests it returns red with its
   findings ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
   ({{DOCTRINE:one-writer-per-file}}).
 - **A worker may lead, inside its worktree.** It may dispatch read-only helpers (explorer,
   researcher) at any time, and writing sub-workers, each in its own worktree branched from
   its branch, merged into its own with the proof re-run after each merge. Depth stops at
-  main → worker → sub-worker: a sub-worker dispatches nothing. It watches its members as a
-  pipeline crew lead does (steps 2–3). The blind reviewer stays the parent's.
+  main → worker → sub-worker: a sub-worker dispatches nothing. Every lead holds every member's result
+  before it ends. The blind reviewer stays the parent's.
 - **Status, one line per change.** A worker reports
   `T<n> · <task> · files: <write set> · <state>` at start and on each change: by
   `SendMessage` to the parent on Claude Code (on OpenClaude only in its agent-teams mode);

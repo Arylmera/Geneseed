@@ -44,7 +44,7 @@ it as your very first tool call — before loading context, reading files, or se
 **Session start.** The harness hook injects your session files (any still at its seed is
 skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
 `=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
-`{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`, then §6's index, §8's wiki file, `context.json`.
+`{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`, then §6's index, §8's wiki file, `{{AT_HARNESS}}context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
@@ -132,10 +132,11 @@ the untouched stub (so it never reaches your session) — or the user asks — t
 <!-- LEAN:else -->
 **The user's own rules.** `{{PATH_RULES}}` (a session file) binds with the force of the {{LAWS}}
 (rank above). It is the only home of standing rules, written through the [rule]({{DIR_SKILLS}}/rule.md) {{SKILL}};
-never edit a {{LAW}} or a {{DOCTRINE}} rule, both regenerated on update.
+never add, edit or remove a {{LAW}} or a {{DOCTRINE}} rule, both regenerated on update.
 
 **The user's profile.** `{{PATH_PROFILE}}` (a session file) is identity, not rules: it informs,
-never binds. The [profile]({{DIR_SKILLS}}/profile.md) {{SKILL}} builds or refreshes it.
+never binds; never write standing rules into it. The [profile]({{DIR_SKILLS}}/profile.md) {{SKILL}} builds or
+refreshes it, with their consent.
 <!-- LEAN:end -->
 
 ---

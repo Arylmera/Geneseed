@@ -58,7 +58,7 @@
 
 Dispatched as Foreman's task worker, there is no tester seat: explore, implement and test
 in your own context, and after two repair rounds on your own red tests return red with the
-findings ({{DOCTRINE:bound-the-loop}}). Report `T<n> · <task> · files: <write set> · <state>`
+findings ({{DOCTRINE:bound-the-loop}}). As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
 at start and on each change, as the mode says. Return the branch, its commit list, any
 uncommitted work, and the raw test + lint output — the parent re-runs it before any merge.
 
