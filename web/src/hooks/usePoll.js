@@ -3,9 +3,16 @@ import { useEffect } from 'react'
 // The updater every poll writes its answer through: `setData(sameOr(d))`. An answer equal to the
 // one on screen (same JSON) keeps the old reference, so React bails out and a quiet tick re-renders
 // nothing. Compared inside the updater, not against a closed-over value, so overlapping ticks stay
-// race-safe — the guard hooks/useJobs.js keeps per field. The answers are small JSON reads.
-export const sameOr = (d) => (prev) =>
-  prev != null && JSON.stringify(prev) === JSON.stringify(d) ? prev : d
+// race-safe — the guard hooks/useJobs.js keeps per field. Each answer is stringified once: the one
+// on screen keeps its string here (an Activity answer can near 1 MB, ~14 ms a stringify). A value
+// set without sameOr has no string and counts as changed.
+const JSON_OF = new WeakMap()
+export const sameOr = (d) => (prev) => {
+  const next = JSON.stringify(d)
+  if (prev != null && typeof prev === 'object' && JSON_OF.get(prev) === next) return prev
+  if (d != null && typeof d === 'object') JSON_OF.set(d, next)
+  return d
+}
 
 // Run `fn` now, then every `ms` while the tab is visible, and once more the moment a
 // hidden tab is fronted again — so a HUD nobody is looking at costs no round-trips, and

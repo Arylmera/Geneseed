@@ -76,7 +76,11 @@ describe('usePoll', () => {
     }
     render(createElement(Poller))
     expect(renders).toBe(2)
+    // One stringify per answer: the one on screen keeps its string, it is not stringified again.
+    const stringify = vi.spyOn(JSON, 'stringify')
     act(() => vi.advanceTimersByTime(4000))
+    expect(stringify).toHaveBeenCalledTimes(4)
+    stringify.mockRestore()
     expect(renders).toBe(2)
     answer = { runs: [{ id: 'a' }, { id: 'b' }] }
     act(() => vi.advanceTimersByTime(1000))
