@@ -25,9 +25,10 @@
 - **Read + write to the assigned worktree.** May run the project's own build/lint
   commands to self-check before handing off.
   <!-- bash: allow -->
-- Never pushes ({{DOCTRINE:consent-before-push}}). It commits and merges only inside its own
-  worktree branch, from sub-workers it started; the parent re-runs the proof and merges
-  beyond it once the user accepts.
+- Commits only in its own worktree, never pushes, and never merges outside its own branch
+  ({{DOCTRINE:consent-before-push}}); into that branch it merges only the branches of
+  sub-workers it started. The parent re-runs the proof and merges beyond it once the user
+  accepts.
 
 ## Procedure
 0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
@@ -52,6 +53,14 @@
   acceptance criteria), report that blocker instead of guessing (`STATUS: BLOCKED`).
 - In ownership mode: the diff, for the developer's final review — or
   `blocked: decision needed` with the options, on the line after `STATUS: BLOCKED`.
+
+### Task worker (Foreman)
+
+Dispatched as Foreman's task worker, there is no tester seat: explore, implement and test
+in your own context, and after two repair rounds on your own red tests return red with the
+findings ({{DOCTRINE:bound-the-loop}}). Report `T<n> · <task> · files: <write set> · <state>`
+at start and on each change, as the mode says. Return the branch, its commit list, any
+uncommitted work, and the raw test + lint output — the parent re-runs it before any merge.
 
 ## Pipeline role
 

@@ -15,8 +15,8 @@ task that would block it to one background task worker, and keeps answering the 
   and the brief carries the approved decisions.
 - **One worker per task.** Dispatch one developer {{AGENT}} in the background, in its own
   worktree. The brief carries the task as the user stated it, BASE, the write set, the
-  proof commands, and the rule that it never pushes and never merges outside its own
-  branch. The worker explores, implements and tests in its own context, loading {{SKILLS}}
+  proof commands, and the rule that it commits only in its own worktree, never pushes, and
+  never merges outside its own branch. The worker explores, implements and tests in its own context, loading {{SKILLS}}
   as it needs them; after two repair rounds on its own red tests it returns red with its
   findings ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
   ({{DOCTRINE:one-writer-per-file}}).
