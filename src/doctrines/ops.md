@@ -99,7 +99,7 @@ recreate, down-and-up, reload, or full restart — perform it, then confirm the 
 value in the *running* system, not the file ({{LAW:verify-before-asserting}}). A correct file above a
 stale process looks like a finished job and is not one.
 <!-- LEAN:else -->
-After a config edit, confirm the new value in the running process, not the file.
+After a config edit, force the re-read, then confirm the new value in the running process, not the file.
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:serialize-against-a-rationed-resource}} Serialize Against a Rationed Resource

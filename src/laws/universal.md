@@ -86,8 +86,8 @@ force-pushing your own branch, a worktree — runs freely, as does
 `reset --hard` over a dirty tree.
 <!-- LEAN:else -->
 Real data loss — deleting untracked, modified, unpushed, unmerged work,
-discarding uncommitted work (except `reset --hard`), deleting or
-force-moving main, master or the default branch, pruning reflog/gc — and any
+discarding uncommitted work (except `reset --hard` over a dirty tree),
+rewriting, deleting or force-moving main, master or the default branch, pruning reflog/gc — and any
 irreversible, financial, privilege-changing or outward-facing act need
 explicit confirmation bound to that act, or a durable authorization covering
 it; one yes never stretches to the next. What git restores runs freely:
