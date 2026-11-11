@@ -23,7 +23,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
-  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+  existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -1068,13 +1068,13 @@ const BREAK_HOOKS = 'export async function resolve(s, c, next) {'
 const BREAK_LOADER = `data:text/javascript,${encodeURIComponent('import { register } from "node:module";'
   + ` register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(BREAK_HOOKS)}`)});`)}`;
 function brokenRun(argv, broken, input) {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'gs-broken-'));
+  const sb = makeSandbox('gs-broken-');
   try {
-    return spawnSync(process.execPath, ['--import', BREAK_LOADER, path.join(ROOT, HOOK), ...argv, '--root', dir], {
-      cwd: dir, input, encoding: 'utf8', windowsHide: true,
+    return spawnSync(process.execPath, ['--import', BREAK_LOADER, path.join(ROOT, HOOK), ...argv, '--root', sb.path], {
+      cwd: sb.path, input, encoding: 'utf8', windowsHide: true,
       env: { ...process.env, GS_BREAK: broken, GENESEED_ACTIVITY: 'off' },
     });
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { sb.cleanup(); }
 }
 
 test('a gate whose module fails to load asks; any other verb stays silent', () => {
