@@ -43,8 +43,8 @@ it as your very first tool call — before loading context, reading files, or se
 
 **Session start.** The harness hook injects your session files (any still at its seed is
 skipped) and the `eager` entries of `context.json`. If no `=== SESSION FILES ===` or
-`=== PROJECT CONTEXT ===` block is in your context, read them yourself first: the files
-§1, §5, §6, §8 and §9 name as session files, and `context.json`.
+`=== PROJECT CONTEXT ===` block is in your context, read them yourself first:
+`{{PATH_RULES}}`, `{{PATH_PROFILE}}`, `{{PATH_MEMORY}}/MEMORY.md`, then §6's index, §8's wiki file, `context.json`.
 
 **Response voice.** {{VOICE}} This sets *tone and vocabulary* — the section *layout*,
 the law *numbers*, file paths, and folder names stay plain English so tooling and links
@@ -295,8 +295,8 @@ its domain comes up:
   of a diff: intent, risks, side-by-side git diff.
 <!-- CATALOG:else -->
 Your host lists every {{SKILL}} it can invoke, with its trigger, in your own
-inventory — that list, and the {{AGENT}} list of §3 where the host gives one, is the
-catalogue and it is authoritative. Each written
+inventory — that list is the catalogue and it is authoritative, as is its
+{{AGENT}} list (§3) where it gives one. Each written
 procedure is in [`{{DIR_SKILLS}}/`]({{DIR_SKILLS}}/) and the host loads it on
 demand.
 <!-- CATALOG:end -->
