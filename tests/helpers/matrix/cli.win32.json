@@ -3637,6 +3637,39 @@
     {
       "bin": "cli",
       "expect": [
+        "[version] 2 global installs found; showing <HOME>",
+        "installed: 0123456789ab"
+      ],
+      "id": "version/the-picked-default-install-leads-as-it-does-in-status",
+      "steps": [
+        {
+          "argv": [
+            "version"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\"\n  ]\n}\n",
+        "home/.config/opencode/.geneseed-theme": "neutral\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
+        "repo/.keep": "",
+        "home/.config/geneseed/default-install.json": "{\"host\": \"claude\", \"path\": \"{home/}/.claude\"}\n"
+      },
+      "expect_absent": [
+        "installed: deadbeef1234"
+      ]
+    },
+    {
+      "bin": "cli",
+      "expect": [
         "installed: 0123456789ab"
       ],
       "id": "version/a-target-with-no-marker-falls-back-to-another-host",

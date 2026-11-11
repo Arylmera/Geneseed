@@ -80,7 +80,14 @@ export function cmdVersion(args) {
   const current = sourceFingerprint(cfg);
   // `Path(args.target).expanduser().resolve()` — `resolvePath` already expands, so the tilde
   // is handled once rather than twice.
-  let target = args.target ? resolvePath(args.target) : opencodeConfigDir();
+  let target = args.target ? resolvePath(args.target) : null;
+  // No `--target`: the global install the user picked as the default leads, as it leads
+  // `status`'s version row (`statusData`), so the two verbs name the same install.
+  if (!target) {
+    const picked = pickedInstall();
+    if (picked && picked[1] === 'global' && readVersion(picked[2]) !== null) target = picked[2];
+  }
+  target ??= opencodeConfigDir();
   let installed = readVersion(target);
   if (installed === null) {
     // A claude/bob/openclaude-only machine must not report "no install detected". The bundle
