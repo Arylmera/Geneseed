@@ -14,7 +14,7 @@ link: {"hash": "#/installs/hosts", "label": "Change it on Installs →"}
 ### The difference
 
 - **Full** — the instructions file carries the Ethos, every Rule and every rule of the active doctrine packs at complete length, reasoning included, every turn.
-- **Lean** — each Rule and each doctrine rule is carried as its heading plus a short form written by hand (the rule and how it works, not the first sentence cut off). Each layer ends with a pointer to its complete text on disk, and the agent reads the reasoning when a rule's application is unclear. The Ethos gets one hand-written short form for the whole layer, because it is flowing prose rather than numbered rules.
+- **Lean** — each Rule and each doctrine rule is carried as its heading plus a short form written by hand (the rule and how it works, not the first sentence cut off). One pointer after the doctrine packs names where the complete text of both layers is on disk, and the agent reads the reasoning when a rule's application is unclear. The Ethos gets one hand-written short form for the whole layer, because it is flowing prose rather than numbered rules. Lean also drops the voice's flourish: a heading names the rule by its plain principle (`Dictate I — Sealed Secrets`, not `Dictate I — Arcana Sigillata · Sealed Secrets`), and no section opens with an italic epigraph. Full keeps both, and so do the complete files on disk.
 
 Neither setting hides text from the agent. They decide what is in front of it on *every* turn.
 

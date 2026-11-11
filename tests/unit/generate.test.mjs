@@ -263,6 +263,44 @@ test("lean inlines each doctrine rule's authored brief", () => {
   assert.ok(full.includes(DOC_FULL_ONLY), 'full no longer carries the complete doctrine text');
 });
 
+test("lean drops the voice's half of each rule title and the section epigraphs; full keeps both", () => {
+  // Owner decision D2 (2026-11-11). At lean a heading names the rule by the principle every
+  // citation already renders, and no section opens with its italic epigraph. Full is the control:
+  // the same voice, both kept. The law file on disk renders full in a lean build, so it keeps the
+  // voice too — it is what the console's Latin column reads.
+  const lean = rendered('AGENT.md', 'imperial', 'lean');
+  assert.ok(lean.includes('\n### Dictate I — Sealed Secrets\n'), 'lean law heading is not the plain principle');
+  assert.ok(lean.includes('\n### Doctrina craft 1 — Automate Repetition\n'), 'lean doctrine heading is not the plain principle');
+  assert.ok(!lean.includes('Arcana Sigillata'), "lean kept a law title's voice half");
+  assert.ok(!lean.includes('Machina Pro Labore'), "lean kept a doctrine title's voice half");
+  assert.ok(!lean.includes('*A servant unbound by law is a servant already lost.*'), 'lean kept an epigraph');
+  const full = rendered('AGENT.md', 'imperial', 'full');
+  assert.ok(full.includes('\n### Dictate I — Arcana Sigillata · Sealed Secrets\n'));
+  assert.ok(full.includes('\n### Doctrina craft 1 — Machina Pro Labore · Automate Repetition\n'));
+  assert.ok(full.includes('\n*A servant unbound by law is a servant already lost.*\n'));
+  assert.ok(rendered('laws/universal.md', 'imperial', 'lean')
+    .includes('### Dictate I — Arcana Sigillata · Sealed Secrets\n'), 'the lean build narrowed the law file on disk');
+});
+
+// The one lean pointer, as the neutral voice renders it in a plain bundle (no laws prefix). It
+// replaced two notes, one under each tier, that said the same thing (owner decision D2).
+const BRIEF_POINTER = '> Each Rule and Doctrine above is given in brief — the rule, not its reasoning. '
+  + 'The complete text is in `laws/universal.md` (binding) and in `doctrines/` (every pack, active '
+  + "or not). Read it whenever a rule's application is unclear; read `laws/universal.md` before any "
+  + 'act touching secrets, deletion, git history, scope, or untrusted content.';
+
+test('lean closes the doctrine section with one pointer to both complete texts; full has none', () => {
+  const lean = rendered('AGENT.md', 'neutral', 'lean');
+  assert.equal(lean.split('given in brief').length - 1, 1, 'lean carries more than one brief pointer');
+  const at = lean.indexOf(BRIEF_POINTER);
+  assert.ok(at > lean.indexOf('\n## 2. ') && at < lean.indexOf('\n## 3. '), 'the pointer is not inside §2');
+  assert.ok(!rendered('AGENT.md', 'neutral', 'full').includes('given in brief'));
+  // With no pack active the pointer still ships: it is the only one that names the laws' file.
+  const { items } = renderAll({ ...cfg(), doctrines: [] }, 'neutral', { footprint: 'lean' });
+  assert.ok(items.find((i) => i.rel === 'AGENT.md').text.includes(BRIEF_POINTER),
+    'a lean build with no doctrine pack lost the pointer to the laws');
+});
+
 test('a lean build still ships the complete law, ontology and doctrine files', () => {
   // THE ONE THAT MATTERS. Lean trims what AGENT.md INLINES; it must not trim what BINDS. A
   // build that shipped a condensed universal.md would silently narrow the agent's law — and
