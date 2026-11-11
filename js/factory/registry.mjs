@@ -6,8 +6,16 @@
  *
  * EVERY CONVENTION IS THE LOOP REGISTRY'S, and so is the code (`js/loop/registry.mjs`: `loadRows`,
  * `saveRows`, `sweepRows`): atomic tmp + rename, every function swallows its own errors, rows keyed
- * by their normalised root, no `lastSeen`, a save only when the kept set changed, and a finished
- * run dropped 7 days after it was first seen without its FACTORY.md.
+ * by their normalised root, no `lastSeen`, and a finished run dropped 7 days after it was first
+ * seen without its FACTORY.md.
+ *
+ * THE CONSOLE'S POLL NEVER WRITES (spec 2026-11-11 D7). The board polls every 5 s; a sweep there
+ * would stamp `finishedAt`, drop rows, and race `recordFactory` on the one `factories.json.tmp`
+ * during a `factory init`. So `listFactories` is read-only, as `runningLoops` is beside
+ * `activeLoops` (but with no sweeping twin: nothing else needs one), and the sweep (stamp,
+ * 7-day prune, drop of a vanished root) runs in
+ * `recordFactory`, which writes the file anyway. A finished run is first stamped by the next
+ * `factory init` on the machine, so it is pruned 7 days after that, not after it closed.
  *
  * THE ROOT IS THE JOIN KEY. A child loop runs in the factory's own worktree, so its `loops.json`
  * row has the same root, and carries `factory: <slug>` (`loop init --factory`). A reader groups a
@@ -15,9 +23,12 @@
  */
 import path from 'node:path';
 
+import { readText, isDir, isFile } from '../lib/fs.mjs';
+
 import { userLoopsDir } from '../loop/catalog.mjs';
 import { loadRows, saveRows, sweepRows, normalize, sameRoot } from '../loop/registry.mjs';
 import { FACTORY_FILE, parseFactoryFile } from './state.mjs';
+import { runMetrics } from './metrics.mjs';
 
 export function factoryRegistryPath() {
   return path.join(userLoopsDir(), 'factories.json');
@@ -34,7 +45,7 @@ const save = (rows) => saveRows(factoryRegistryPath(), 'factories', rows);
 export function recordFactory({ root, branch, factory, title, now = new Date() }) {
   try {
     const key = normalize(root);
-    const rows = load();
+    const rows = sweep(load(), now).kept;   // the registry's one sweep: see the docblock
     const idx = rows.findIndex((r) => sameRoot(r.root, key));
     if (idx >= 0) rows[idx] = { ...rows[idx], root: key, branch, factory, title };
     else rows.push({ root: key, branch, factory, title, started: now.toISOString() });
@@ -46,7 +57,7 @@ export function recordFactory({ root, branch, factory, title, now = new Date() }
 
 const identity = (e) => ({ root: e.root, branch: e.branch, factory: e.factory, title: e.title, started: e.started });
 
-function runningRow(entry, state) {
+function runningRow(entry, state, now = null) {
   return {
     ...identity(entry), status: state.status, stage: state.stage, awaiting: state.awaiting,
     reason: state.reason, transitions: state.transitions, counters: state.counters,
@@ -54,18 +65,32 @@ function runningRow(entry, state) {
     // The graph the run was started from, as the loop row carries its `graph`: the console draws
     // it, and a run started in another project names a factory this install may not have.
     graph: state.factory,
+    // D7: the board's numbers, from the one function `factory report` prints (it never throws on
+    // a state that parsed, and nothing here validated this one).
+    metrics: runMetrics(state, { now }),
   };
 }
 
+const sweep = (rows, now) => sweepRows(rows, {
+  stateFile: FACTORY_FILE, parse: parseFactoryFile, project: runningRow, identity, now,
+});
+
 /**
- * The rows the console renders, read fresh off each registered worktree's FACTORY.md: a running
- * row, `unreadable` (kept, R4), or `finished` (FACTORY.md gone; pruned 7 days later). A root that
- * no longer exists is dropped. Saves only when the kept set changed.
+ * The rows the console renders, READ-ONLY: never a save, a stamp or a prune. A running row read
+ * fresh off each registered worktree's FACTORY.md (its metrics' open wait measured to `now`, the
+ * time of the poll), `unreadable` when it does not parse, and
+ * `finished` when it is gone. A row whose root no longer exists is skipped: the sweep in
+ * `recordFactory` drops it, and a card for a deleted worktree would open on nothing.
  */
-export function activeFactories({ now = new Date() } = {}) {
-  const { kept, rows, changed } = sweepRows(load(), {
-    stateFile: FACTORY_FILE, parse: parseFactoryFile, project: runningRow, identity, now,
-  });
-  if (changed) save(kept);
+export function listFactories({ now = new Date().toISOString() } = {}) {
+  const rows = [];
+  for (const entry of load()) {
+    if (!isDir(entry.root)) continue;
+    const file = path.join(entry.root, FACTORY_FILE);
+    if (!isFile(file)) { rows.push({ ...identity(entry), status: 'finished' }); continue; }
+    let state;
+    try { state = parseFactoryFile(readText(file)); } catch { rows.push({ ...identity(entry), status: 'unreadable' }); continue; }
+    rows.push(runningRow(entry, state, now));
+  }
   return rows;
 }

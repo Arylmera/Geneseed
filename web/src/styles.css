@@ -3705,6 +3705,16 @@ path.lr-inner { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linec
 .fg-key.fork { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
 .fg-key.back, .fg-key.stop { width: 14px; height: 2px; border: 0; border-radius: 0; background: var(--warn); }
 .fg-key.stop { background: var(--bad); }
+/* Factories › Active as a board: three columns of run cards, the ones that wait for the user first. */
+.fac-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--sp-4); align-items: start; }
+.fac-col { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.fac-col h3 { margin: 0; display: flex; justify-content: space-between; gap: var(--sp-2); }
+.fac-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.fac-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); color: inherit; text-decoration: none; }
+.fac-card:hover, .fac-card:focus-visible { border-color: var(--accent-line); }
+.fac-card b, .fac-card span { overflow-wrap: anywhere; }
+.fac-card span { font-size: var(--fs-sm); color: var(--text-2); }
+.fac-col.wait .fac-card { border-color: color-mix(in srgb, var(--warn) 36%, transparent); }
 .fac-cycles { margin: 0; padding-left: 18px; /* off-scale: 18px between --sp-4 and --sp-5, as .loop-rules */ font-size: var(--fs-md); color: var(--text-2); }
 /* The ring console (V6b mockup): the ring with "How it runs" beside it — under it once the
    reader is narrow — then the command that starts the loop. */
