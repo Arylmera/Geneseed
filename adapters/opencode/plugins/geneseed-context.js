@@ -947,6 +947,22 @@ async function cachedBlockText(root, cache) {
   return text
 }
 
+// Per INSTANCE, as `cache` above, and keyed by directory: `sovereignBypass` (two JSON reads)
+// and `doneChecksOf` (manifest reads) ran on EVERY request while the block they gate is cached
+// for BLOCK_TTL_MS, so they get the same TTL. A rejection is not kept: the next call retries.
+function ttlMemo(fn) {
+  const hits = new Map()
+  return (key) => {
+    const now = Date.now()
+    const hit = hits.get(key)
+    if (hit && now - hit.at < BLOCK_TTL_MS) return hit.p
+    const p = Promise.resolve().then(() => fn(key))
+    hits.set(key, { p, at: now })
+    p.catch(() => { if (hits.get(key)?.p === p) hits.delete(key) })
+    return p
+  }
+}
+
 // ---- cross-instance idempotency ----------------------------------------------
 async function alreadyInjected(client, sid) {
   try {
@@ -1372,6 +1388,8 @@ export const GeneseedContext = async (ctx) => {
   const done = new Set()
   const root = repoRoot(ctx)
   const blockCache = { text: null, at: 0 }
+  const bypassed = ttlMemo(sovereignBypass)
+  const doneChecks = ttlMemo(doneChecksOf)
 
   // Visible delivery — post the block as a noReply session message. Used when
   // GENESEED_CONTEXT_VISIBLE forces it, and by the transform fallback below.
@@ -1430,7 +1448,7 @@ export const GeneseedContext = async (ctx) => {
 
     event: async ({ event }) => {
       if (!event || INJECT_OFF) return
-      if (await sovereignBypass(root)) return
+      if (await bypassed(root)) return
       const sid =
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
@@ -1459,7 +1477,7 @@ export const GeneseedContext = async (ctx) => {
     // OpenCode hook; if it is absent in a build this key is simply never called.
     "experimental.session.compacting": async (_input, output) => {
       if (INJECT_OFF || (TRANSFORM && !fallbackVisible)) return
-      if (await sovereignBypass(root)) return
+      if (await bypassed(root)) return
       try {
         const { block } = await resolveBlock(root)
         if (block && output && Array.isArray(output.context)) {
@@ -1482,13 +1500,13 @@ export const GeneseedContext = async (ctx) => {
       // both end on an empty request, an excluded repo, or a skipped session.
       if (!output || !Array.isArray(output.messages) || !output.messages.length) return
       const sid = output.messages[0]?.info?.sessionID
-      if (await sovereignBypass(root) || await skipSession(sid)) return
+      if (await bypassed(root) || await skipSession(sid)) return
       // The done gate's reminder: FIRST, and independent of the context block:
       // INJECT_OFF and the visible delivery leave it on, and no early return below can skip it.
       // Its own function, so its early returns end the reminder, never the context injection.
       await (async () => {
         if (await doneGateOff()) return
-        const { root: gitRoot, source, blocking, checks } = await doneChecksOf(root)
+        const { root: gitRoot, source, blocking, checks } = await doneChecks(root)
         if (!checks.length) return
         const owed = doneOwed(output.messages, checks, gitRoot)
         if (!owed.length) return
@@ -1562,6 +1580,8 @@ async function setupV2(ctx) {
   const root = repoRoot({ worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory })
   // `judged: false`: OpenCode 2 never judges a turn, so the done line claims no verdict.
   const blockCache = { text: null, at: 0, judged: false }
+  const bypassed = ttlMemo(sovereignBypass)
+  const doneChecks = ttlMemo(doneChecksOf)
   // Same scope rule as V1's skipSession. V2's info names the parent `parentID` only, so only
   // that and the title are passed on.
   const skipSession = sessionSkipper(async (sid) => {
@@ -1571,7 +1591,7 @@ async function setupV2(ctx) {
 
   // The done gate is not judged on OpenCode 2 (see `doneOwed`): said once, where its log goes.
   // The listed gate only: an inferred one would log in every repo with a manifest.
-  if (!(await doneGateOff()) && await doneChecksOf(root).then((d) => d.blocking && d.checks.length, () => false)) {
+  if (!(await doneGateOff()) && await doneChecks(root).then((d) => d.blocking && d.checks.length, () => false)) {
     console.error(`[geneseed-context] done gate: ${DONE_LIST} found, but OpenCode 2 turns are not judged.`)
   }
 
@@ -1582,7 +1602,7 @@ async function setupV2(ctx) {
   })
   const remindWeakened = async (event) => {
     try {
-      if (!Array.isArray(event?.messages) || await sovereignBypass(root) || await doneGateOff()) return
+      if (!Array.isArray(event?.messages) || await bypassed(root) || await doneGateOff()) return
       if (await skipSession(event.sessionID)) return
       const weakened = takeWeakened(event.sessionID)
       if (weakened) event.messages.unshift(v2UserMessage(event.messages, weakened))
@@ -1598,7 +1618,7 @@ async function setupV2(ctx) {
       await remindWeakened(event)
       if (INJECT_OFF) return
       try {
-        if (await sovereignBypass(root)) return
+        if (await bypassed(root)) return
         if (!Array.isArray(event?.messages) || v2HasMarker(event.messages)) return
         if (await skipSession(event.sessionID)) return
         const cached = await cachedBlockText(root, blockCache)
@@ -1617,7 +1637,7 @@ async function setupV2(ctx) {
   await ctx.session.hook("compaction", async (event) => {
     if (INJECT_OFF) return
     try {
-      if (await sovereignBypass(root)) return
+      if (await bypassed(root)) return
       if (!Array.isArray(event?.messages) || await skipSession(event.sessionID)) return
       const { block } = await resolveBlock(root, false)
       if (block) event.messages.unshift(v2UserMessage(event.messages, block.text))
@@ -1632,7 +1652,7 @@ async function setupV2(ctx) {
       const d = ev.data ?? {}
       try {
         if (isSkippedSession({ parentID: d.parentID, title: d.title })) continue
-        if (await sovereignBypass(root)) continue
+        if (await bypassed(root)) continue
         const { block } = await resolveBlock(root, false)
         if (!block) continue
         await ctx.session.synthetic({
