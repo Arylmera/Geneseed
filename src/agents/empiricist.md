@@ -3,7 +3,7 @@
 > {{DESC_EMPIRICIST}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to hold every claim, *for and against*, to evidence, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs every claim, for and against, held to evidence.
 - The debate is running on assertion and intuition; the user wants it anchored to data, tests, or precedent.
 
 ## When NOT to dispatch

@@ -3,7 +3,7 @@
 > {{DESC_OPERATOR}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to speak for running it in production, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs a voice for running it in production.
 - The motion ships to a live system: its behaviour under load, its observability, and the on-call burden all matter.
 
 ## When NOT to dispatch

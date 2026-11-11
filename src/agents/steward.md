@@ -3,7 +3,7 @@
 > {{DESC_STEWARD}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to defend the *long term* against short-term wins, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs a defence of the long term against short-term wins.
 - The user wants the architectural and maintenance consequences of a change weighed before committing.
 
 ## When NOT to dispatch

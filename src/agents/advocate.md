@@ -3,7 +3,7 @@
 > {{DESC_ADVOCATE}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to argue the strongest case **for** the motion, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs the strongest case for the motion.
 - The user wants the upside of a change, plan, or decision pressed hard rather than hedged.
 
 ## When NOT to dispatch

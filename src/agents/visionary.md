@@ -3,7 +3,7 @@
 > {{DESC_VISIONARY}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to argue the bold, transformative version against incrementalism, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs the bold, transformative version argued against incrementalism.
 - The debate risks under-reaching: the user wants the ambitious upside of a change pushed, not just the safe slice.
 
 ## When NOT to dispatch
