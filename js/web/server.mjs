@@ -188,6 +188,7 @@ export async function serve({ theme = null, port = 4747, openBrowser = true,
       printOut(daemon ? '[web] daemon ready.\n' : '[web] Ctrl-C to stop.\n');
       if (openBrowser) openUrl(url);
       // After the record and the ready line, so `web start`'s wait loop already has its URL.
+      state.warm = true;
       warmDoctor(state);
       // Node kills on SIGINT by default, which would skip this message and the record
       // cleanup in `srv.on('close', ...)` below — a foreground `--daemon-internal` server

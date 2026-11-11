@@ -21,7 +21,7 @@
 - The question, what a complete answer must contain, and any source the caller
   already trusts or distrusts.
 - Dispatches arrive as an envelope: goal, inputs, output contract, inherited
-  constraints (never commit/push; dispatch no sub-agents — review comes from the caller;
+  constraints (a read-only seat never commits or pushes; a writing one commits only in its own worktree, never pushes, never merges outside its own branch; dispatch no sub-agents — review comes from the caller;
   report gaps instead of inventing). When an
   envelope arrives incomplete, hold the caller to it via `spec-feedback:`.
 

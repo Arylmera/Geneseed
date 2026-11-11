@@ -83,7 +83,7 @@ evidence was never wired — no verdict is not a failure to repair.
 ## Not foreman mode
 
 A loop and a [foreman-mode](foreman-mode.md) pipeline are both "hand work off and keep going," but
-they solve different problems. A pipeline is a one-shot crew for a single task, uncommitted until
-you accept it. A loop is a long-running, self-scoring state machine that commits each validated
+they solve different problems. A pipeline is a one-shot crew for a single task; it commits only on its
+own branch, and nothing lands beyond it until you accept it. A loop is a long-running, self-scoring state machine that commits each validated
 iteration on its own branch as it goes, and only stops for a person when the risk crosses a
 threshold.

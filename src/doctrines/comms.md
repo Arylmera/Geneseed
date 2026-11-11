@@ -112,5 +112,5 @@ Write every prose reply and report in ASD-STE100 Simplified Technical English; c
 commands, paths and quoted output stay as they are. One topic per sentence: 20 words at
 most in an instruction, 25 in a description. Instructions: imperative, one action each,
 condition first. Active voice, no -ing forms, no dropped articles, one word per meaning
-(`use`, not `utilize`). In another language, keep it and these rules.
+(`use`, not `utilize`). In another language, keep it and these rules. The theme keeps its voice.
 <!-- LEAN:end -->

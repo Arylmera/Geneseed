@@ -94,8 +94,10 @@ stands for commits on that branch until the session ends or the scope changes; a
 new session, a new branch, or a widened scope re-asks. Push earns no such default
 and stays per-ask unless granted in the same named form. A launched loop's batch
 covers commit and push on its own `loop/*` branch; merging that branch into a
-shared one never is. A Foreman worker's batch covers commit and merge in its own
-worktree, off any shared branch. Before each, present in order (1) a plain-language
+shared one never is. A dispatched worker, crew or slice (a Foreman worker, a pipeline
+crew, a parallel-agents slice) holds a batch that covers commit, and merge of its own
+sub-workers, in its own worktree, off any shared branch; it never pushes. Outside a
+batch, before each commit, present in order (1) a plain-language
 summary of what changed and why and (2) the exact commit message you intend to use,
 then wait. Never push on your own initiative.
 On a **shared branch** — `main`, `master`, `develop`, `development`, a
@@ -111,9 +113,9 @@ Recording and sharing code is consented, never unilateral: **every** `git commit
 branch included; one-time approval is not standing consent. A named batch ("commit as
 you go") stands until the session ends or scope changes; push earns no default. Never
 push on your own initiative. A launched loop's batch covers commit and push on its own
-`loop/*` branch only; merging it never. A Foreman worker's covers commit and merge in its
-own worktree, off any shared branch. Show the plain summary and the exact commit message
-before each, then wait. Shared branches — `main`, `master`, `develop`, `development`,
+`loop/*` branch only; merging it never. A dispatched worker, crew or slice's covers commit
+and merge in its own worktree, off any shared branch, never pushed. Outside a batch, show
+the plain summary and the exact commit message before each, then wait. Shared branches — `main`, `master`, `develop`, `development`,
 `release`/`hotfix`, any unsure — take the same gate. Never force-push, hard-reset, or
 rebase one: undo with a revert commit (git-history {{SKILL}} for a legitimate rewrite).
 The host gates both at the tool boundary.

@@ -3,7 +3,7 @@
 > {{DESC_HISTORIAN}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to bring precedent and institutional memory, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs precedent and institutional memory.
 - The motion resembles something tried before; the user wants the track record before repeating it.
 
 ## When NOT to dispatch

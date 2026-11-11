@@ -3,7 +3,7 @@
 > {{DESC_USER_ADVOCATE}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to speak for whoever consumes the outcome, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs a voice for whoever consumes the outcome.
 - The motion touches a user-facing surface: UX, an API's ergonomics, docs, error messages, or a downstream developer's workflow.
 
 ## When NOT to dispatch

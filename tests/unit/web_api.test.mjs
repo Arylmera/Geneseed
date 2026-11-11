@@ -7,11 +7,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { localHost, makeHandler } from '../../js/web/handler.mjs';
 import { apiOverview, apiDoctor, apiFleet, apiLoops } from '../../js/web/api.mjs';
 import { NotFound, apiCatalog } from '../../js/web/catalog.mjs';
 import { defaultView, warmDoctor, webState as realWebState } from '../../js/web/state.mjs';
-import { buildActionCmds } from '../../js/web/actions.mjs';
+import { buildActionCmds, installView } from '../../js/web/actions.mjs';
 import { apiRules, apiRulesMutate } from '../../js/web/user-files.mjs';
 import { tuiInventory } from '../../js/inspect/inventory.mjs';
 import { apiInstallToggle, apiMemoryDelete } from '../../js/web/actions.mjs';
@@ -524,6 +525,102 @@ test('a refresh during the warm-up drops its verdict', async () => {
     assert.deepEqual(st.doctor.problems, ['planted']);
   } finally { clearInterval(beat); }
 });
+
+// A SERVING daemon (`warm`) never runs the doctor in a request. Every job ends in `refresh`, and
+// the console asks the overview right after: that ask used to run the doctor in line, ~12 s of a
+// frozen console. Now the refresh starts the run on its thread, the overview answers at once with
+// a pending verdict (null, which the console polls on), and `?fresh=1` waits on the thread too.
+// Relative timings, so a loaded machine cannot redden it: the request must take well under the run.
+test('after a refresh, a serving daemon answers the overview without running the doctor', async () => {
+  const st = neutral();
+  st.warm = true;
+  st.stampDoctor(['before the job']);
+  const beat = setInterval(() => {}, 50);
+  try {
+    const start = performance.now();
+    st.refresh();
+    const job = st._doctorJob;
+    assert.ok(job instanceof Promise, 'the refresh started no warm-up run');
+    const asked = performance.now();
+    const ov = apiOverview(st);
+    const took = performance.now() - asked;
+    assert.equal(ov.doctor, null, 'the overview did not read the verdict as pending');
+    await job;
+    const run = performance.now() - start;
+    assert.ok(took < run / 2, `the overview took ${took} ms of a ${run} ms doctor run`);
+    assert.ok(Array.isArray(st._doctor.problems) && !st._doctor.problems.includes('before the job'));
+
+    const page = STATE_ROUTES['/api/doctor'](st, '/api/doctor?fresh=1');
+    assert.ok(page instanceof Promise, 'a fresh run went on the event loop');
+    assert.equal(st._doctor, null);
+    const { groups } = await page;
+    assert.ok(groups.length > 1, 'the fresh run carried no per-check groups');
+  } finally { clearInterval(beat); }
+});
+
+// A Doctor page waiting on a run that a job's refresh then replaced must follow the new run, never
+// fall back to running the doctor in line. The stub stands for that in-line run; it must not fire.
+test('a doctor page whose run a refresh replaced waits on the new run', async () => {
+  const st = neutral();
+  st.warm = true;
+  const beat = setInterval(() => {}, 50);
+  try {
+    warmDoctor(st);
+    const page = STATE_ROUTES['/api/doctor'](st, '/api/doctor');
+    st.refresh();
+    st.runDoctor = () => { throw new Error('the doctor ran in line'); };
+    const { groups, ok } = await page;
+    assert.ok(groups.length > 1, 'the page carried no per-check groups');
+    assert.equal(ok, st._doctor.ok);
+  } finally { clearInterval(beat); }
+});
+
+// The Doctor page always names an install, so its request reaches a PINNED view (`installView`).
+// That view is the serving daemon's too: after a job's refresh dropped its verdict, neither the
+// page nor Re-run may run the doctor in line. The stub stands for that in-line run.
+test('a named install doctor on a serving daemon runs on the thread after a refresh', async () => {
+  const beat = setInterval(() => {}, 50);
+  try {
+    const [page, fresh] = withTwoViews(({ st, cl }) => {
+      st.warm = true;
+      const v = installView(st, { host: 'claude', path: cl });
+      assert.equal(v.warm, true, 'the pinned view does not follow the daemon');
+      v.stampDoctor(['before the job']);
+      st.refresh();
+      assert.equal(v._doctor, null, 'the refresh kept the view verdict');
+      v.runDoctor = () => { throw new Error('the doctor ran in line'); };
+      const asked = [STATE_ROUTES['/api/doctor'](v, '/api/doctor'),
+        STATE_ROUTES['/api/doctor'](v, '/api/doctor?fresh=1')];
+      for (const p of asked) assert.ok(p instanceof Promise, 'a pinned-view doctor answered in line');
+      return asked;
+    });
+    for (const p of [page, fresh]) assert.ok((await p).groups.length >= 1, 'no verdict came back');
+  } finally { clearInterval(beat); }
+});
+
+// A thread that dies must leave a FAILED verdict, never a cold cache: on a serving daemon the
+// getter would start a thread on every overview poll and the console would read "checking" for
+// good. Rows: a thread that throws (an `error`), and one that exits with no message.
+for (const [why, body, said] of [
+  ['throws', "throw new Error('boom');\n", /the warm-up run failed: boom/],
+  ['exits without a verdict', 'process.exit(3);\n', /ended \(code 3\) without a verdict/],
+]) {
+  test(`a warm-up thread that ${why} reads as a failed verdict`, async () => {
+    const sb = makeSandbox();
+    const beat = setInterval(() => {}, 50);
+    try {
+      const script = path.join(sb.path, 'dies.mjs');
+      fs.writeFileSync(script, body);
+      const st = neutral();
+      st.warm = true;
+      await warmDoctor(st, 60_000, pathToFileURL(script));
+      assert.equal(st._doctor?.ok, false, 'a dead thread left no verdict');
+      assert.match(st._doctor.problems[0], said);
+      assert.equal(st.doctor, st._doctor);
+      assert.equal(st._doctorJob, null, 'reading the verdict started another thread');
+    } finally { clearInterval(beat); sb.cleanup(); }
+  });
+}
 
 // THE DEFAULT INSTALL, e.g. ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The
 // console opened on the OpenCode global dir, found nothing deployed there and showed the
