@@ -55,7 +55,8 @@
 // whole graph: `tests/unit/hook_cli.test.mjs`'s `importClosure` follows both import spellings.
 // FIRST, before anything it could fail to run: an old Node gets one sentence, not a stack trace.
 import '../js/lib/node-floor.mjs';
-import { cliSpec, printHelp, printVerbList } from '../js/ui/cli.mjs';
+import { readFileSync } from 'node:fs';
+import { cliCommand, cliSpec, printHelp, printVerbList } from '../js/ui/cli.mjs';
 import { parseIntStrict } from '../js/lib/text.mjs';
 import { printErr, printOut } from '../js/lib/fs.mjs';
 
@@ -73,8 +74,8 @@ import { printErr, printOut } from '../js/lib/fs.mjs';
  *
  * IT IS STILL A TABLE and still the DISPATCH rather than a declaration beside one.
  * `tests/unit/hook_cli.test.mjs` scrapes `const VERBS = {` for its matrix gates, and
- * `main`'s refusal lists `Object.keys(VERBS)` IN THIS ORDER (no cell asserts the list
- * verbatim any more) — the order is the old table's and is not alphabetical.
+ * `main`'s unknown-verb refusal draws its nearest-match suggestion from `Object.keys(VERBS)`
+ * (it no longer prints the list) — the order is the old table's and is not alphabetical.
  *
  * FLATTENED TO `verb: fn` since Task 5, AND TO `verb: loader` since the lazy pass: every row
  * is now a thunk that imports the command's module and resolves to its function, so the one
@@ -154,6 +155,34 @@ const VERBS = {
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.
   scorecard: () => import('../js/inspect/scorecard.mjs').then((m) => m.cmdScorecard),
 };
+
+/** Levenshtein distance, for the one "did you mean" an unknown verb gets. */
+function editDistance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i += 1) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * The closest verb to a mistyped one, or null when nothing is close. Close is at most a third
+ * of the typed word's length (and at least 1), so `stauts` finds `status` and `frobnicate`
+ * finds nothing: a suggestion for every typo is noise, not help.
+ */
+function nearestVerb(typed, verbs) {
+  let best = null;
+  let bestD = Math.max(1, Math.floor(typed.length / 3)) + 1;
+  for (const v of verbs) {
+    const d = editDistance(typed, v);
+    if (d < bestD) { best = v; bestD = d; }
+  }
+  return best;
+}
 
 function die(code, msg) {
   // CRLF on Windows, for the same reason `js/hosts/hooks.mjs`'s funnels translate: argparse writes
@@ -293,11 +322,23 @@ async function main(argv) {
   // Bare = `home`, as both launchers (`geneseed`, `geneseed.cmd`) already did — but the npm
   // `bin` names THIS file, so a bare `geneseed` off PATH used to die asking for a verb.
   if (!argv.length) argv = ['home'];
+  // The package version, which `geneseed version` does NOT print: that verb compares the
+  // install's build fingerprint with this source's. Read off the package.json beside this file,
+  // so it is the version npm installed, and answered before the shim check.
+  if (argv[0] === '--version' || argv[0] === '-V') {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    printOut(`geneseed ${pkg.version}\n`);
+    return 0;
+  }
+  // `help` and `help <verb>` are spellings of `--help` and `<verb> --help`, and nothing more:
+  // a rewrite here rather than a VERBS row, because a row would owe the table a subcommand.
+  if (argv[0] === 'help') argv = argv.length > 1 ? [argv[1], '--help'] : ['--help'];
   const verb = argv[0];
   if (verb === '-h' || verb === '--help') {
-    return printVerbList('geneseed', [...Object.keys(VERBS), 'validate'], {
+    return printVerbList('geneseed', [...Object.keys(VERBS), 'validate', 'help'], {
       update: 'an alias of upgrade',
       validate: "check the source tree without emitting (the generator's --validate-only)",
+      help: "this list; help <command> prints that command's help",
     });
   }
   // A DEAD HOOK SHIM, SAID ON EVERY RUN. The shim is machine-wide, so one stale write turns off
@@ -345,9 +386,16 @@ async function main(argv) {
     // named, the two entry points now cover every subcommand there is, so the clause was not
     // just about to become false — it was already claiming a third place for verbs that do
     // not exist.
-    return die(2, `invalid choice: '${verb}'. This entry point carries only `
-      + `${Object.keys(VERBS).join(', ')}; the six hook verbs live in `
-      + 'bin/geneseed-hook.mjs.');
+    //
+    // A hook verb (`context`, `tool-gate`, …) is in the table but not here: the emitted
+    // settings call it through `geneseed-hook`, and saying so beats "unknown command".
+    if (cliCommand(verb) !== null) {
+      return die(2, `'${verb}' is a hook verb: the host runs it through geneseed-hook `
+        + '(bin/geneseed-hook.mjs), not this command. See geneseed --help.');
+    }
+    const near = nearestVerb(verb, [...Object.keys(VERBS), 'validate', 'help']);
+    return die(2, `unknown command '${verb}'.${near ? ` Did you mean '${near}'?` : ''} `
+      + 'See geneseed --help.');
   }
   // `js/cli-table.json`, the CLI as data. A verb this table dispatches and the file does not
   // describe is a REFUSAL and not a parse with no rules: an empty spec would accept every

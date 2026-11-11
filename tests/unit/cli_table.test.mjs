@@ -212,7 +212,35 @@ test('`geneseed --help` lists every verb the entry dispatches, and exits 0', () 
     { cwd: ROOT, encoding: 'utf8', windowsHide: true });
   assert.equal(r.status, 0, r.stderr);
   const listed = [...r.stdout.matchAll(/^ {2}([a-z][a-z-]*) /gm)].map((m) => m[1]);
-  assert.deepEqual(listed.sort(), [...entryVerbs(), 'validate'].sort());
+  // `validate` and `help` are the two names `main` answers before the VERBS lookup.
+  assert.deepEqual(listed.sort(), [...entryVerbs(), 'validate', 'help'].sort());
+});
+
+test('the front door answers --version, help and a mistyped verb', () => {
+  const run = (...argv) => spawnSync(process.execPath, [path.join(ROOT, ...ENTRY.split('/')), ...argv],
+    { cwd: ROOT, encoding: 'utf8', windowsHide: true, env: { ...process.env, GENESEED_NO_SHIM_CHECK: '1' } });
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  // `--version` and `-V` print the package version and exit 0. `version` is a different verb:
+  // it compares build fingerprints, so it is not what a script asks for with `--version`.
+  for (const flag of ['--version', '-V']) {
+    const r = run(flag);
+    assert.equal(r.status, 0, `${flag}: ${r.stderr}`);
+    assert.equal(r.stdout.trim(), `geneseed ${pkg.version}`);
+  }
+  // `help <verb>` is `<verb> --help`, byte for byte; bare `help` is `--help`.
+  assert.equal(run('help', 'version').stdout, run('version', '--help').stdout);
+  assert.equal(run('help').stdout, run('--help').stdout);
+  // A near miss is named, a far one is not, and both exit 2 and point at --help.
+  const near = run('stauts');
+  assert.equal(near.status, 2);
+  assert.match(near.stderr, /unknown command 'stauts'\. Did you mean 'status'\? See geneseed --help\./);
+  const far = run('frobnicate');
+  assert.equal(far.status, 2);
+  assert.match(far.stderr, /unknown command 'frobnicate'\. See geneseed --help\./);
+  // A hook verb is in the table but not on this entry: it is named as one, not as unknown.
+  const hook = run('context');
+  assert.equal(hook.status, 2);
+  assert.match(hook.stderr, /'context' is a hook verb/);
 });
 
 test('a bare `geneseed` runs `home`, as both launchers do', () => {
