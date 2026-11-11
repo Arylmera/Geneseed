@@ -11,6 +11,7 @@ import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
 import RailCats, { groupsOf } from '../components/RailCats.jsx'
 import { ActiveDetail, TONE, live, useActiveLoops } from '../components/ActiveLoops.jsx'
 import { humanGate, layoutLoop } from '../lib/loopRing.js'
+import { motionOK } from '../lib/motion.js'
 import { TABS, TAB_LABELS } from '../lib/router.js'
 import InstallPicker from '../components/InstallPicker.jsx'
 import { useInstallPick, useInstalls } from '../hooks/useInstalls.js'
@@ -187,11 +188,12 @@ function TemplateDetail({ t, bricks, overridden, runs }) {
   // A run carries the graph it was started from, under its template's name. Null while the
   // first poll is out: the line waits rather than say "none".
   const running = runs?.filter((l) => live(l) && l.graph.name === t.name).length
+  // motionOK(): a JS `behavior` option is beyond the CSS reduced-motion override.
   const toRow = (name) => {
     setLit(name)
     document
       .getElementById(`brick-${name}`)
-      ?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+      ?.scrollIntoView?.({ behavior: motionOK() ? 'smooth' : 'auto', block: 'nearest' })
   }
   return (
     <>

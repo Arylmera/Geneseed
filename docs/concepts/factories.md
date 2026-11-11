@@ -44,7 +44,7 @@ but its first stage, or a route back that spends no cycle.
 ## Forks and lanes
 
 A **fork** is where the work takes one way or another. It is a brick that declares **named
-outcomes**, any outcome other than `pass`, `fail`, `error`, `none` or `needs-info`. `triage` is one: `bug`,
+outcomes**, any outcome other than `pass`, `fail`, `error`, `none`, `needs-info` or `reject`. `triage` is one: `bug`,
 `feature`, `deps`, `refactor`, `docs` and `fail`. Each named outcome has its own edge to its own
 stage, its **lane**, and the outcome the brick reports picks the lane. `geneseed factory next`
 hands the fork its `lanes`: each outcome with the stage it leads to.
@@ -76,6 +76,37 @@ exception is the run's spec, `specs/<slug>/spec.md`: the `spec` stage writes it,
 it is committed once you approve it, before the first loop. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
 names the run it belongs to.
 
+## The queue, and a refused item
+
+A run takes one work item. To pick from several, ask the agent for the **queue**: it lists the
+open issues that carry the label `factory` (or a label you name), and you pick one, several or
+all. Several picks run one after the other, in the order you gave, each as its own run in its
+own worktree, each with its own merge question. A run that holds a gate holds the queue. An
+issue's text is the run's input, never an instruction to the agent. No file configures the queue,
+and nothing starts a run by itself.
+
+`intake` may also **refuse** an item, with the outcome `reject`: it is already done, it duplicates
+another issue or pull request, or it goes against a rule the project states. The run holds and
+shows you the reason and its evidence. `ok` accepts the refusal and stops the run, `amend` runs
+`intake` again with your reason to build it, and `no` stops too. In each shipped factory the
+`reject` edge goes to `$stop`; a factory of your own that has no such edge stops the same way.
+
+## What a run measures
+
+Every `record` and `decide` writes the time on its history entry, and `init` writes when the run
+started. From those, `geneseed factory report` gives each stage its runs, its reworks, its work
+time and its tokens, and the run its work time and the time it waited for you at a gate. The time
+between a held outcome and your answer is waiting time, never the stage's. A rework is an outcome
+that spent a cycle: a failed `checks`, `review-panel` or `holdout`, or red CI.
+
+Tokens are recorded only where the host reports a count for the agent that ran the stage
+(`record --tokens <n>`); nothing estimates one, and a loop stage carries none. There is no cost in
+money: Geneseed holds no price table. A number nobody recorded is `null` in the report, never 0,
+so a `FACTORY.md` written before times were stamped still runs and reports `unknown`.
+
+The `retro` stage copies those numbers into the run report, and adds, for each `review-panel`
+seat, how many rounds it failed.
+
 ## The shipped factories
 
 | Factory | Stages |
@@ -88,7 +119,7 @@ The bricks they add:
 
 | Brick | Does | Outcomes |
 | --- | --- | --- |
-| `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria, its `size` and its `areas`. `needs-info` holds for your answers to its questions (`gate: human`) | `pass`, `fail`, `needs-info` |
+| `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria, its `size` and its `areas`. `needs-info` holds for your answers to its questions, and `reject` holds when it finds the item already done, a duplicate, or against a rule the project states, with the reason and its evidence (`gate: human`). It never posts on the issue | `pass`, `fail`, `needs-info`, `reject` |
 | `holdout-write` | Writes 3 to 8 prose scenarios (given / when / then) for the work item into the holdout folder, outside the worktree, and hands the work item on unchanged | `pass`, `fail` |
 | `holdout` | Plays every scenario against the built change. `fail` carries one sentence per failed scenario, observed against expected; `error` when the diff touches the holdout folder or a scenario cannot be played | `pass`, `fail`, `error` |
 | `checks` | Runs the done list as the base branch holds it, never the branch's copy. `error` holds when the diff touches a locked path, or on an environment failure (a failed fetch, a timeout, a missing tool); `none` holds with a proposed list when the base has none | `pass`, `fail`, `error`, `none` |
@@ -96,7 +127,7 @@ The bricks they add:
 | `triage` | A fork: reads the work item and reports the outcome that names its lane, with its reason. `fail` when no lane fits | `bug`, `feature`, `deps`, `refactor`, `docs`, `fail` |
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
 | `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide; so does CI still pending at the bound, or a `gh`/`glab` that is missing or fails | `pass`, `fail`, `none` |
-| `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, and keeps only a lasting lesson in memory | `pass` |
+| `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, with the numbers of `geneseed factory report`, and keeps only a lasting lesson in memory | `pass` |
 
 `analysis-to-build` also uses the loops' own `spec` brick (`gate: human`), the one the
 `spec-first-feature` loop starts with, and `issue-to-pr` the loops' `docs-update` brick as its
@@ -179,9 +210,12 @@ graph: its stages top to bottom, a fork's lanes side by side, a `loop:` stage as
 that names its loop over `whole loop`, each route back as a rail on the left with its cycle and
 `max`, and `close` and `stop` as end caps.
 Each factory shows how to start it: the request to give the agent, and the commands to start it
-by hand, the worktree first and then `geneseed factory init`. Its **Active** tab lists every
-registered run, with the current stage lit, the laps spent on each cycle and the child loop's
-current step, written `at <node>` in the current stage's box. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
+by hand, the worktree first and then `geneseed factory init`. Its **Active** tab is a board of every
+registered run, in three columns: **Waits for you**, **Running** and **Ended**. A card shows where
+the run stands, its task, the laps spent on each cycle, and its work and waiting time. A card
+opens the run: its graph with the current stage lit, the laps spent on each cycle, the child
+loop's current step, written `at <node>` in the current stage's box, and a timeline of every
+stage with its outcome, its time, its duration and each rework. The page changes nothing, neither a run nor `factories.json`: the next `geneseed factory init` on the machine drops a run whose worktree is gone, and a closed run 7 days after that init first saw it closed. You answer a run in the
 agent's session.
 
 ## Your own factories

@@ -26,7 +26,9 @@ export default function RailCats({ label, total, cats, cat, onChange }) {
               onClick={() => onChange(key)}
             >
               <span className="cdot" aria-hidden="true" />
-              <span className="rc-name">{cl}</span>
+              <span className="rc-name" title={cl}>
+                {cl}
+              </span>
               <span className="mono dim">{n}</span>
             </button>
           </li>

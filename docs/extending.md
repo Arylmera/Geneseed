@@ -63,9 +63,10 @@ badge keys `agents`/`skills`/`laws`/`themes`/`plugins`; `proseMirrorProblems` ho
 The baseline is whatever these commands report on your checkout — run them; no count is
 written here, because a typed count is stale by the next commit.
 
-CI is **four jobs expanding to six runs** (`.github/workflows/ci.yml`): `validate` and
-`node-cells` on Linux *and* Windows, plus `package-no-python` and `web` on Linux. From the repo
-root — never from a worktree, see §5:
+CI (`.github/workflows/ci.yml`) runs `validate` on Linux (Node 22 under c8, and Node 24) and on
+Windows (the suite in shards, which `suite-count` sums), `node-cells` on Linux *and* Windows, and
+`package-no-python`, `web`, `audit` and `links` on Linux; `ci-ok` is the one required check. From
+the repo root — never from a worktree, see §5.3:
 
 ```bash
 node bin/geneseed-cli.mjs doctor --all
@@ -97,13 +98,15 @@ cd web && npm ci && npm run lint && npm run format:check && npm test && npm run 
 
 Notes that matter:
 
-- The root `package.json` has exactly one script, `lint`, and no pre-commit hook, Makefile or
+- The root `package.json` has two scripts, `lint` and `typecheck`, and no pre-commit hook, Makefile or
   justfile exists. `npm test` at the root exits 1 with *Missing script: "test"*; the suite is run
   by hand with the glob above. `npm ci` once per clone installs the devDependencies `lint` needs
   — it pulls no runtime dependency, because there are none.
-- `--test-reporter=tap` is not decoration. Both workflows gate on the *count* (`# tests N ≥ 500`)
-  because `node --test` over a glob that matches nothing prints `# tests 0` and **exits 0**. Node's
-  default reporter changed between majors, which is how a green 1043-test suite once reported zero.
+- `--test-reporter=tap` is not decoration. Both workflows gate on the *count* (`# tests N`, at
+  least 90 % of the `test(`/`it(` calls written in the tracked test files; the Windows shards are
+  held to it as a sum) because `node --test` over a glob that matches nothing prints `# tests 0`
+  and **exits 0**. Node's default reporter changed between majors, which is how a green 1043-test
+  suite once reported zero.
 - `--cli` runs the ~320-cell CLI/hook matrix against the expectations written in each cell —
   the only end-to-end gate on what a verb prints. CI runs it in `node-cells` on both platforms.
   A cell that needs a broken checkout plants its fault as an **edit of the real file**
@@ -114,7 +117,7 @@ Notes that matter:
 - **A local pass is weaker than CI.** ~18 tests in `tests/unit/package_manifest.test.mjs` carry
   `{ skip: NO_NPM }` (`:83`) — every tarball, install and rename gate. On a machine without `npm`
   on PATH they report *skipped* and the run is green.
-- CI additionally re-runs the packaging suite under `npm@latest` (Linux, last in the job) and
+- CI additionally re-runs the packaging suite under `npm@11`, the release's npm (Linux, last in the job), and
   packs the tarball into a `node:22-slim` container with no interpreter. Neither is reproducible
   from the seven commands; the container one is reachable locally through
   `tests/helpers/no-python-container.sh` with a docker daemon.
@@ -134,7 +137,6 @@ Notes that matter:
   Its *anchors* are now in CI (`--verify`, above): a row whose anchor a refactor has moved counts
   as a **survivor**, not a skip, and until 2026-08-19 that only showed up for whoever ran the
   matrix by hand — which nothing did.
-- **Node 24.** No CI job runs it; `publish.yml` does. See §8.
 - **`tests/golden.mjs`** is absent from the publish path entirely.
 
 ### Gates that fire on changes you would not expect to be gated
@@ -142,10 +144,10 @@ Notes that matter:
 - **A new subprocess anywhere in `js/` or `bin/`** — `tests/unit/spawn_hygiene.test.mjs` requires
   capturing spawns to set `windowsHide` and inheriting spawns not to. (`adapters/` is *not*
   scanned, so a plugin that spawns is on its own.)
-- **Editing `.github/workflows/*.yml`** — seven structural assertions in
-  `tests/unit/docs.test.mjs:336-399` gate `publish.yml`'s shape, and `:422-444` discovers every
-  workflow with a test-count gate and pins `--test-reporter=tap` on it. A unit test gates the CI
-  files.
+- **Editing `.github/workflows/*.yml`** — structural assertions in `tests/unit/docs.test.mjs`
+  gate `publish.yml`'s shape (found by `publishWorkflow`), and the test *every workflow that
+  count-gates `node --test` pins the TAP reporter* discovers every workflow with a test-count gate
+  and pins `--test-reporter=tap` on each `node --test` line. A unit test gates the CI files.
 - **Adding any tracked file** — `tests/unit/package_manifest.test.mjs:401` demands every tracked
   path fall on exactly one side of a declared partition, *with a written reason*. Adding this very
   document required a `SHIPS` row; without one the tarball test fails, and it fails **before** the
@@ -205,8 +207,8 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
    node bin/build-driver.mjs --sync-themes
    ```
 
-   ⚠ Four spellings of this command are in circulation and two of them fail — `doctor`'s own tip
-   is one of the two. See §7.2 before you copy a command from anywhere else. Then restyle all
+   ⚠ `geneseed-build --sync-themes` is the same command; `geneseed build --sync-themes` is not —
+   `cmdBuild` (`BUILD_FORWARD`) does not forward `--sync-themes`. Then restyle all
    fourteen by hand: `--sync-themes` writes the template's placeholder and only *prints*
    `RESTYLE these`; a shipped placeholder passes every gate.
 4. `CHANGELOG.md`.
@@ -370,7 +372,7 @@ emit leaves the prior install intact.
 5. `registry.json` — a row keyed `skills/<name>` or `agents/<name>` with `status` ∈
    {`experimental`, `approved`, `deprecated`}, a semver `version`, a non-blank `owner`, an ISO
    `added`, and `last_verified: ""`. **This is the most forgettable step**: four hand-typed fields,
-   and the gate fires in both directions (`js/inspect/doctor.mjs:388-436`).
+   and the gate fires in both directions (`registryProblems`, `js/inspect/checks-repo.mjs`).
 6. `README.md` — the badge, the `**🤖 Agents** (N)` / `**🛠 Skills** (N)` count, and for a skill the
    `·`-separated name in the 🛠 row (that enumeration is gated two ways, unlike the laws' one).
 7. `SHIPPED.md` — the `N laws, N agents, N skills` triple.
@@ -560,12 +562,12 @@ No `registry.json` row, no `package.json` edit — `files[]` ships `adapters/` w
 
 ### 4b — A hook verb (claude + bob)
 
-⚠ **Read §5 first. A fifth hook verb has no green path today.**
-
 The mechanical part: implement `cmd<Verb>` in `js/hosts/hooks.mjs`; wire the command string in
-`claudeHookGroups` (`js/hosts/settings.mjs:434`, spelled `` `${run} <verb> …` `` — the gate scrapes that
-shape); add the entry to `bin/geneseed-hook.mjs:43` `VERBS` with **exactly two-space indent**; add
-a row to `js/cli-table.json` with a help string over 20 characters.
+`claudeHookGroups` (`js/hosts/settings.mjs`, spelled `` `${run} <verb> …` `` — the gate scrapes that
+shape); add the entry to `VERBS` in `bin/geneseed-hook.mjs` with **exactly two-space indent**; add
+a row to `js/cli-table.json` with a help string over 20 characters. Then give the verb an absolute
+unit gate, or name it in `NATIVE` (`tests/unit/hook_cli.test.mjs`), which holds a verb to the
+structural rules instead; the reverse check refuses a `NATIVE` name no entry point carries.
 
 ### 4c — A documentation page
 
@@ -653,41 +655,16 @@ specifiers under `js/`, `bin/` and `adapters/` and exactly one was bare — the 
 exception above. The invariant already held; it had simply never been written down. A library that
 would delete fewer lines than its vendored source adds is not a saving.
 
-## 5 — The four things that are genuinely hard
+## 5 — Rules that cost something to learn
 
-These are not checklist items. They are structural, and each one should be settled *before* the
-change that needs it, not during.
+These are not checklist items. The numbers are kept because code cites §5.3; §5.1 (the hook-verb
+gate, now in §4b) was settled, and the history of all four is in [design history](design-history.md).
 
-### 5.1 ✅ A fifth hook verb — resolved 2026-08-19
+### 5.2 Theme text is free to edit
 
-**This was a hard blocker and it is now open.** Recorded here because the shape of the problem
-recurs: any gate whose expected value lives in an artifact nothing can re-make will eventually
-stop a legitimate change, and the fix is never to delete the artifact.
-
-`tests/unit/hook_cli.test.mjs` asserted a strict equality between the hook verbs the frozen
-matrix covers and the verbs `bin/geneseed-hook.mjs` carries. The CLI half of the same test
-already exempted a named `NATIVE` list; the hook half exempted nothing — so a fifth hook verb
-failed with **no green path**, since the recorder died on 2026-08-17 and the failure message
-correctly forbids deleting cells to pass.
-
-`NATIVE` in `tests/unit/hook_cli.test.mjs` names the verbs held to the structural rules rather
-than to a per-verb gate, and the reverse check refuses an exemption for a verb neither entry point
-carries — so a name that stops meaning anything fails rather than sitting there.
-
-**To add a hook verb today:** implement `cmd<Verb>` in `js/hosts/hooks.mjs`, wire the string in
-`claudeHookGroups`, add the `VERBS` entry, add the `js/cli-table.json` row, then give it an
-absolute unit gate. `NATIVE` used to be duplicated across two files that read each other's source
-to stay in step; there is one copy now, so there is nothing to keep in step.
-
-### 5.2 ✅ Theme text is free to edit — resolved 2026-08-23
-
-Seven keys (`TAGLINE`, `LOADED_SIGIL`, `VOICE`, `LEX_I`, `BENEDICTION`, `ACCENT`, `BANNER`) used to
-be pinned byte-for-byte by a recording with no re-bless path, so restyling a theme's tagline was a
-red gate. **That recording is gone.** Theme text is now held only by `doctor --all` — key presence,
-cross-theme parity, and no unresolved tokens — which is a claim about structure, not wording.
-
-Restyle freely. What still bites is `LOADED_SIGIL` uniqueness (§6): it is load-bearing for theme
-detection and nothing checks it.
+Theme text is held only by `doctor --all` — key presence, cross-theme parity, and no unresolved
+tokens — which is a claim about structure, not wording. Restyle freely. What still bites is
+`LOADED_SIGIL` uniqueness (§6): it is load-bearing for theme detection and nothing checks it.
 
 ### 5.3 ⚠ The hook shim is machine-wide and last-writer-wins
 
@@ -727,23 +704,13 @@ remains the cheapest thing to run.
 Related: a stray `console.log` on a hook path silently disables a gate. Hooks signal through
 stdout JSON and return 0 on every path — a printed byte is not a warning, it is a disabled gate.
 
-### 5.4 ✅ Expected values are written out — resolved 2026-08-23
+### 5.4 Expected values are written out
 
-This section used to say that a snapshot red was a finding rather than a step: the recordings under
-`tests/__snapshots__/` came from an implementation that no longer existed, there was no `--record`,
-and a change that moved a recorded byte left only two honest options — revert it, or argue in
-writing that the recording was wrong. The rule that fell out of it was *when a frozen recording
-blocks a change, move the logic to the nearest caller that is not frozen*.
-
-**None of that applies any more.** The recordings are retired (tag `corpus-reference-v3.1.2` is the
-only way back to them), and every expected value now lives in the test file that asserts it, above
-a sentence saying which decision it pins. The rule is correspondingly ordinary:
+Every expected value lives in the test file that asserts it, above a sentence saying which
+decision it pins. There is no snapshot directory and no `--record`, so a red test is a step:
 
 > **Change the expectation and the sentence that explains it in the same commit, and say why in
 > the message.**
-
-A red test is a step again. What it costs is an argument, in prose, that the new answer is better —
-the cost that keeps the tables honest, and far cheaper than the one it replaced.
 
 The CLI surface is no longer the most expensive thing in the repo to change. Editing a verb's help
 text or flags is now an ordinary edit: `js/cli-table.json` is the owned document, and
@@ -770,75 +737,30 @@ only, at best, on its presence.
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
 | `THEME_BLURBS` (8 of 14), `ART` (8 of 14) | `js/maintain/setup.mjs`, `js/ui/anim.mjs` | nothing — missing entries fall back silently |
 | `LOADED_SIGIL` uniqueness | `themes/*.json` | nothing, and it is load-bearing for theme detection |
-| `adapters/claude-code/settings.json` | — | nothing compares it to what the emitter writes; **it is already divergent** |
-| `NATIVE`, twice | two test files | they check each other, which is the gate that makes the duplication safe |
+| The hand-wiring copy of the Claude hooks | `adapters/claude-code/settings.json` — it ships (`files[]` takes `adapters/` whole), and `js/hosts/settings.mjs` sends a user whose `settings.json` has comments to it | nothing compares it with what `claudeHookGroups` emits (§7) |
 | The emit-size `CEILING` | `tests/unit/emit_smoke.test.mjs` (`const CEILING`) | a hand-transcribed measurement |
-| Stale docblock counts | `js/build/themes.mjs:62` ("137 values" → 140), `js/build/render.mjs:116` ("145 tokens" → 148) | nothing |
 
 ---
 
-## 7 — Stale on 2026-08-18, fixed on 2026-08-19
+## 7 — Still open
 
-Nine items were found while writing this file, and fixed the next day. They are recorded as a
-list rather than left as a diff, because the PATTERN is the useful part: every one was a document
-or a comment pointing a reader at something that is not there, and in each case the gate that
-should have caught it either did not cover that file — or was itself the frozen copy of a wrong
-answer.
+Each is small, and each costs a contributor a wrong turn until it is done. What was found and
+fixed here before is recorded in [design history](design-history.md).
 
-**Fixed.**
-
-1. **`DESIGN.md` taught the deleted Python build.** Its header promises *"the spec behind the
-   harness — read this before changing structure"*, and under it sat the six-edit checklist for
-   adding a Law, naming a deleted generator, `rituals/_harness_tui.py` for `LAW_CLASS`, and an
-   invocation of a program that no longer exists. Worse, `tests/unit/no_python.test.mjs` exempted
-   the file as a *historical record* — so the gate that hunts pointers-to-nothing was looking away
-   from the one document most likely to hold one. **Split**: the 190-line standing contract keeps
-   the name and is now scanned; the 1,290-line port narrative moved to
-   [design-history.md](design-history.md), which is exempt on the merits, and its dead links were
-   repaired because a link is a pointer whatever the prose around it says.
-2. **`doctor` printed a command that errors.** The theme-parity tip named
-   `./geneseed build --sync-themes`; `cmdBuild` forwards `--theme` and nothing else. The comment
-   above the tip argued that spelling on a premise the port had quietly stopped satisfying. It now
-   names `geneseed-build --sync-themes`, which is what README and SETUP said all along.
-3. **User-facing output named a program that does not exist.** `tui` and `uninstall` told users to
-   run `harness setup` / `harness uninstall` — the reference's name, dropped in P0. Five sites.
-   One of them was **pinned verbatim by a test**, so a gate was holding the wrong string in place;
-   that assertion is now a property — every backticked command a refusal offers must be a verb
-   `js/cli-table.json` declares — which is strictly stronger and fires on the next rename too.
-4. **The `tui` help promised a "full-screen curses control panel"** for a verb that returns 1 on
-   every path. `docs/limits.md` listed this as permanently unfixable, on the grounds that the help
-   corpus is frozen — but `formatHelp` never reads `cmd.help`, so it was an ordinary edit all
-   along. The limits row went with the fix.
-5. **Numbers in docblocks that had drifted** — `_TEMPLATE.json`'s "137 values" (140), "the 145
-   tokens" `src/` uses (148), and "sixteen `_*_problems` checks" (fifteen — the sixteenth was
-   named as `cli`, which was removed).
-6. **A claim that was simply false.** `js/build/render.mjs` said `--theme` is validated against
-   `choices` before anything renders, which is why its own refusal read as an unreachable nicety.
-   It is not in `choicesFor`; that refusal is the only one there is, on every path.
-7. **Five dead cross-references** to `tests/snapshot/no_python_in_corpus.test.mjs`, retired with
-   the corpora — three test files justified their own design by pointing at a gate that is gone.
-   Plus a skip message naming a `record-corpus` CI job that no longer exists.
-8. **`CHANGELOG.md` said 2.0.0 was "not yet published"**, with "no tag, no release and no install
-   URL"; `geneseed@2.0.0` has been on npm since 2026-08-17. And **`SETUP.md`** documented
-   `geneseed upgrade v1.0.0 # pin to a tag`, which `js/maintain/update.mjs` prints is IGNORED.
-9. **`docs/web/agents.md`** enumerated 16 agents and omitted `developer`, where README says 17 —
-   the doctor arm cannot fire, because the page spells `{N_AGENTS}` and that arm only ever catches
-   a literal. **`docs/web/rules.md`** called each law "a short markdown file under `src/laws/`";
-   there is one file.
-
-**Still open.**
-
-- **`adapters/claude-code/settings.json` is divergent documentation.** It writes
-  `node bin/geneseed-hook.mjs <verb>` on seven lines, including one the emitter does not produce
-  at all, and carries none of the flags `claudeHookGroups` emits. Nothing compares the two; the
-  only reference to it anywhere is the error message that sends users to it. Either gate it
-  against the emitter, or delete it.
+- **`adapters/claude-code/settings.json` has no gate.** It ships, and the refusal for a commented
+  `settings.json` tells users to copy hooks from it. It writes `node bin/geneseed-hook.mjs <verb>`,
+  a path that resolves only from a checkout root, and none of the `--no-*-gate` flags
+  `claudeHookGroups` emits. Nothing compares the two. Either gate it against the emitter, or point
+  the refusal at an emitted file and delete it.
 - **`AGENT_LESSON_PROMPT` has no drift gate.** Its sibling `LEARN_PROMPT_HEAD` is checked for
   extractability; this one's parity test was retired. Reformat the declaration in
   `geneseed-learn.js` and the per-agent lesson prompt silently degrades to a two-line fallback.
 - **The fenced-command gate skips the maintainer docs.** `tests/unit/docs.test.mjs` validates
   every `geneseed <verb> <flags>` line against `js/cli-table.json` in `README.md`, `SHIPPED.md`
   and the user docs tree — not in `DESIGN.md` or the `docs/*.md` maintainer pages.
+- **No `verify` script.** The root `package.json` has `lint` and `typecheck`; the rest of what CI
+  runs is still reassembled by hand from §1. A script chaining lint, typecheck, the suite and
+  doctor would make §1 executable rather than descriptive.
 
 ---
 
@@ -862,18 +784,16 @@ gh workflow run publish.yml -f dry_run=true
 
 Two structural facts worth carrying:
 
-- **`publish.yml` deliberately runs a newer toolchain than `ci.yml`** — Node 24 and `npm@latest`,
-  because trusted publishing requires them, against `ci.yml`'s Node 22. So toolchain-sensitive
-  defaults break *first and only* at the release. That has now happened twice: `npm pack --json`
-  changed its container between majors, and Node 24's default test reporter made the count gate
-  read zero on a green suite.
+- **`publish.yml` runs Node 24 and `npm@11`**, because trusted publishing requires them. Toolchain
+  defaults that differ from Node 22's broke the release twice: `npm pack --json` changed its
+  container between majors, and Node 24's default test reporter made the count gate read zero on
+  a green suite. `ci.yml` now meets both before a release does — a `validate` leg on Node 24, the
+  packaging suite re-run under `npm@11`, and the TAP reporter pinned in both workflows.
 - **Renaming `publish.yml` breaks publishing silently** — npm keys the trusted publisher on the
   filename.
 
-Both known breaks have been patched at the symptom (`ci.yml` re-runs the packaging suite under
-`npm@latest`; both workflows pin the TAP reporter). The *cause* is untouched: **no CI job runs
-Node 24 at all**, so the release still executes a runtime nothing exercises — and `publish.yml`
-never runs `tests/golden.mjs`, so the two self-comparisons are absent from the release path.
+`publish.yml` never runs `tests/golden.mjs`, so the two self-comparisons are absent from the
+release path; they run only in `ci.yml`'s `node-cells`.
 
 A sweep-and-replace version bump must not touch `registry.json`'s per-entity `"version": "1.0.0"`
 rows, nor `web/package.json`.
@@ -913,31 +833,3 @@ port is therefore stopped with `--port`, never with a bare `web stop` — that o
 the record names, usually the live console on 4747.
 
 When the preferred port is taken, `clearPort` (`js/web/daemon.mjs`) asks `/api/ping` who holds it. The ping carries `rootId()`, a hash of the checkout root. A holder with our root is asked for a nonce (`/api/ping?shutdown=1`), then asked to shut down on `/api/shutdown` with `X-Geneseed-Nonce` and `X-Geneseed-Secret`: a MAC of the port and the nonce under the install secret in `.geneseed-web-secret` (32 random bytes, created once next to the daemon record; mode 0600 on POSIX, the folder's inherited ACL on Windows). The console accepts each nonce it minted once, within 30 seconds, so a proof that an impostor collects is good nowhere later. The secret itself is never sent, and no pid is ever signalled, so a listener that only claims our root cannot cause harm. A holder of our root that answers `nonce: null` holds no secret (a foreground console, or a daemon that could not read its secret), and one that answers no `nonce` predates the handshake; both are named and left alone. Any other answer is left alone and named. A console older than the field has no root, so it is never assumed to be ours.
-
----
-
-## 10 — What to settle before the next wave
-
-Ordered by what unblocks the most work per unit of effort. Each is small; none is urgent enough to
-stop a change today, and all of them cost a contributor a wrong turn until they are done.
-
-1. **Extend the fenced-command gate to `DESIGN.md` and `docs/**/*.md` (§7.3).** One array literal.
-   Today it covers four documents, and both of the pointer-to-nothing defects §7 records — the
-   `DESIGN.md` authoring section and `doctor`'s theme-parity tip, since fixed — sat outside its
-   reach. It keeps catching them.
-2. **Decide the hook-verb question (§5.1) before it is asked under pressure.** Either mirror the
-   CLI side's exemption list onto the hook half, or write down that the hook verb set is closed.
-   Either answer is fine; discovering the question mid-feature is not.
-3. **Write down the frozen-key list (§5.2) where a theme author will see it** — `themes/README.md`
-   is the natural home. Seven keys × fifteen files is a small enough surface to name explicitly,
-   and today nothing warns you before the snapshot goes red.
-4. **Gate `AGENT_LESSON_PROMPT` like its sibling (§7.7), and either gate or delete
-   `adapters/claude-code/settings.json` (§7.10).** Two silent failure modes, both cheap to close.
-5. **Finish the `scripts` block in the root `package.json`.** `lint` landed with the ESLint
-   config; the rest of what CI runs is still reassembled by hand from this file. A `verify` script
-   chaining lint + suite + doctor is three lines and makes §1 executable rather than descriptive.
-
-The list of hand-maintained satellites in §6 is the *design*, not a defect — this project
-deliberately keeps tables and prose hand-written and gates them from the source tree. The
-recommendations above are about the places where the gate is missing, wrong, or pointed at a file
-that no longer exists.

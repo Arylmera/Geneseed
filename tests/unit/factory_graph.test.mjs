@@ -285,6 +285,21 @@ test('J5: needs-info names no lane, so it makes no fork', () => {
   assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), []);
 });
 
+// D12: `reject` is intake's refusal, a gate and never a lane, so declaring it makes no fork. Its
+// edge may be left out (rule 3): the engine routes a refusal to $stop, as it routes `error`, so a
+// factory written before intake could refuse still passes. Written out, it is an ordinary edge,
+// and a second one is still one too many.
+test('D12: reject names no lane, and may go without an edge', () => {
+  const bricks = new Map([...CATALOG.bricks, brick('intake', ['pass', 'fail', 'needs-info', 'reject'])]);
+  assert.equal(isFork('intake', bricks), false);
+  assert.deepEqual(checkFactory(base(), { ...CATALOG, bricks }), []);
+  const f = base();
+  f.edges.push({ from: 'intake', on: 'reject', to: '$stop' });
+  assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), []);
+  f.edges.push({ from: 'intake', on: 'reject', to: '$stop' });
+  assert.deepEqual(checkFactory(f, { ...CATALOG, bricks }), ['stage intake: 2 edges for outcome reject']);
+});
+
 // Rule 3 and needs-info: the edge may be left out only where the stage has a `pass` edge for
 // needs-info to follow (`edgeFor`). A stage that declares needs-info and fail, but no pass, must
 // route needs-info itself, or check refuses it.

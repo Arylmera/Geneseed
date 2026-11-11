@@ -4,7 +4,7 @@ import Popover from './Popover.jsx'
 // One of several choices as a compact button, "Used ▾", over a menu of the choices on the house
 // Popover (the stacked Library toolbar's usage filter, where the counted Seg would repeat the
 // totals). `options`: [{ key, label }]. The trigger is named "<label>: <choice>". Escape, a
-// click outside, a pick and Tab out of the menu close it; focus goes back to the trigger. It
+// click outside and Tab out of the menu close it (the Popover's), as does a pick; focus goes back to the trigger. It
 // opens on the current choice; the arrow keys walk the choices. `aria-controls` names the menu
 // only while it exists.
 export default function DropMenu({ label, options, value, onChange }) {
@@ -17,14 +17,6 @@ export default function DropMenu({ label, options, value, onChange }) {
   useEffect(() => {
     if (open) document.getElementById(id)?.querySelector('[aria-pressed="true"]')?.focus()
   }, [open, id])
-  const leave = (e) => {
-    // Focus that goes nowhere (null) is left to the click-outside rule: on Safari and on
-    // Firefox for macOS a click on a choice moves focus there, or to the popover box, before
-    // the click lands, and closing here would lose the pick.
-    const to = e.relatedTarget
-    if (!to || to === ref.current || e.currentTarget.closest('.popover')?.contains(to)) return
-    close()
-  }
   const walk = (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     const opts = [...e.currentTarget.querySelectorAll('button')]
@@ -50,7 +42,7 @@ export default function DropMenu({ label, options, value, onChange }) {
         </span>
       </button>
       <Popover open={open} onClose={close} anchorRef={ref} label={label} className="drop-menu-pop">
-        <div id={id} className="drop-menu-list" onKeyDown={walk} onBlur={leave}>
+        <div id={id} className="drop-menu-list" onKeyDown={walk}>
           {options.map((o) => (
             <button
               key={o.key}

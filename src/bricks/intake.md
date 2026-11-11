@@ -1,11 +1,11 @@
 ---
 name: intake
-description: Read the work item — a request, a document or an issue — and write it down as one clear item for the run, or ask the user what only they can answer.
+description: Read the work item — a request, a document or an issue — and write it down as one clear item for the run, ask the user what only they can answer, or refuse an item that should not be built.
 effect: read
 agent: explorer
-outcomes: pass, fail, needs-info
+outcomes: pass, fail, needs-info, reject
 gate: human
-gateOn: needs-info
+gateOn: needs-info, reject
 ---
 The stage hands you the run's `requirement` and its `input`: free text, a file path, or an issue (a
 GitHub URL or `#<n>`: `gh issue view <n> --json title,body,comments,labels`; a GitLab one:
@@ -25,3 +25,10 @@ migration; medium between), and `areas:` with any of `security`, `performance`, 
 Report `pass` with that file's path. Report `needs-info` when a question blocks the work and only
 the user can answer it: write the questions in that file, numbered, each with the assumption you
 would build on without an answer, and report its path. Report `fail` when the input cannot be read.
+
+Report `reject` when the item should not be built, and you can show why: it is already done (name
+the commit or the file:line that does it), it duplicates an open issue or pull request (name it),
+or it goes against a rule the project states (quote the rule and its file). Write the reason and
+that evidence in the file and report its path; the user decides. A doubt is not a refusal: with
+no evidence to show, ask (`needs-info`) or go on (`pass`). On a re-run whose `carry` holds the
+user's reason to build it, do not refuse on the same ground again.

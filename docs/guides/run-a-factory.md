@@ -43,7 +43,19 @@ Run the analysis-to-build factory on this request: add CSV export to the report 
 On Claude Code, `/factory` with the same words is the explicit form: it loads the `factory`
 skill directly. The console's **Factories** page shows the request for each factory, ready to copy.
 
-The agent then:
+To pick from the issues that wait, ask for the queue:
+
+```text
+Show me the factory queue
+Run the factory queue with the label ready-to-build
+```
+
+The agent lists the open issues that carry the label `factory` (or the label you name), with
+`gh issue list` or `glab issue list`. Pick one, several or all. Several picks run one after the
+other, in your order, each in its own worktree, and each ends with its own merge question. A run
+that waits for you holds the ones after it.
+
+For each run, the agent then:
 
 1. Creates a worktree on a new branch, `git worktree add ../<repo>-factory-<slug> -b loop/factory-<slug>`, and works from there. Your own checkout is not touched. The slug never holds the word `git`, `commit` or `push`: `factory init` refuses it.
 2. Runs `geneseed factory init --title … --requirement … --factory bug-report-to-fix --input <issue or text>`. This writes `FACTORY.md` at the worktree root and registers the run.
@@ -95,6 +107,7 @@ run the analysis-to-build factory on docs/analysis/export-csv.md
 | Moment | What you decide |
 | --- | --- |
 | `intake` reports `needs-info` | The work item leaves a question only you can answer. The agent shows its numbered questions, each with the assumption it would make. Answer them (`amend`, three times at most), say `ok` to go on with the assumptions, or `no` to stop. |
+| `intake` reports `reject` | The item should not be built: it is already done, a duplicate, or against a rule the project states. The agent shows the reason and its evidence. `ok` accepts the refusal and stops the run, `amend` with your reason runs `intake` again to build it, `no` stops too. Nothing is posted on the issue. |
 | `checks` reports `error` | Every check passed, but the branch changed a locked path: the done list, CI config, or a factory, loop or brick. `ok` lets it through (the run report names it), `no` stops. Or the finding starts `environment:`: the fetch failed, no default branch was found, or a check timed out or its tool is missing. The loop cannot fix that: fix the environment and answer `amend` to run the checks again, or `no` to stop; `ok` goes on without them. |
 | `checks` reports `none` | The base branch has no done list, or an empty one. The agent shows the one it proposes (or says no manifest gave one). On your yes it commits the file in a temporary worktree on its own branch, `geneseed/done-list-<slug>`, pushes that branch and opens a PR to the base branch (each step asks). You merge that PR. Once the file is on the base, `ok` runs the checks again. |
 | The `spec` gate (`analysis-to-build`) | The task list: `ok` starts the first task, `amend` revises the spec, `no` stops the run. The spec commit after your `ok` asks too. |
@@ -109,7 +122,7 @@ Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`
 
 ## When it ends
 
-On success the agent reports the PR (merged on your yes, or open), every stage with its outcome, each rework and why, and the run report at `.geneseed/factory-runs/<slug>.md`. On a stop it reports the reason and still writes the run report; the branch and `FACTORY.md` stay as they were, so you can see where it stopped. After a crash, ask the agent to resume: it runs `geneseed factory next` in the worktree.
+On success the agent reports the PR (merged on your yes, or open), every stage with its outcome, each rework and why, and the run report at `.geneseed/factory-runs/<slug>.md`. The run report has a table with one row per stage: its runs, its reworks, its work time and its tokens, where the host reports them. It also gives the time the run waited for you. To read the same numbers while a run is going, run `geneseed factory report` in its worktree, or open the console's **Factories › Active** board: the runs that wait for you come first, and a card opens the run's timeline. On a stop it reports the reason and still writes the run report; the branch and `FACTORY.md` stay as they were, so you can see where it stopped. After a crash, ask the agent to resume: it runs `geneseed factory next` in the worktree.
 
 ---
 

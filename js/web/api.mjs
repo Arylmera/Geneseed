@@ -30,7 +30,7 @@ import {
 import { PRESETS } from '../loop/score.mjs';
 import { loadCatalog, catalogProblems } from '../loop/catalog.mjs';
 import { activeLoops, runningLoops, sameRoot } from '../loop/registry.mjs';
-import { activeFactories } from '../factory/registry.mjs';
+import { listFactories } from '../factory/registry.mjs';
 import { factoryCatalogProblems, loopOf } from '../factory/graph.mjs';
 import { EMIT_OPTIONS, themeOptions } from '../maintain/setup.mjs';
 import { accentFor, keptKitFiles, statusData } from '../inspect/status.mjs';
@@ -40,7 +40,7 @@ import { comparePaths } from '../lib/paths.mjs';
 import {
   configItems, deployed, dget, fleetCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
-import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
+import { defaultView, samePath, stampMinute, viewCfg, warmDoctor } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
 
 /**
@@ -93,22 +93,34 @@ const DOCTOR_COOLDOWN_MS = 3_000;
  *
  * A fresh ask within `DOCTOR_COOLDOWN_MS` of the last one THIS PATH ran reuses that run, so a
  * page looping on `?fresh=1` cannot pin the event loop. `_doctorFreshAt` is written here only: a
- * verdict planted any other way still re-runs. No single-flight promise — `runDoctor` is
- * synchronous, so two fresh runs cannot overlap; only the warm-up is not (`warmDoctor`).
+ * verdict planted any other way still re-runs. On a serving daemon (`state.warm`) the fresh run
+ * goes to the warm-up thread (`warmDoctor`, which stops the run it replaces); elsewhere it is
+ * the synchronous `runDoctor`.
  *
- * This page needs the groups, so during the warm-up it answers with a promise of the verdict
- * rather than a pending one: the request waits, the event loop does not.
+ * This page needs the groups, so while a run is out it answers with a promise of the verdict
+ * rather than a pending one: the request waits, the event loop does not. A run that a refresh or
+ * a newer fresh ask replaced settles with no verdict, so the promise follows the newer run. Only a
+ * thread that could not give one (it failed to start or died) leaves the run to this request.
  */
 export function apiDoctor(state, fresh = false) {
   if (fresh && Date.now() - (state._doctorFreshAt ?? 0) >= DOCTOR_COOLDOWN_MS) {
-    state.runDoctor();
+    // A daemon re-runs on the warm-up thread: the page waits on the promise, the loop does not.
+    if (state.warm) {
+      state._doctor = null;
+      state._doctorJob = null;
+    } else state.runDoctor();
     state._doctorFreshAt = Date.now();
   }
+  // `_doctor`, not the `doctor` getter: on a daemon the getter would start a thread and say null.
   const answer = () => {
-    const { ok, problems, checked_at } = state.doctor;
+    if (state._doctor === null && state._doctorJob !== null) return state._doctorJob.then(answer);
+    if (state._doctor === null) state.runDoctor();
+    const { ok, problems, checked_at } = state._doctor;
     return { ...state._doctorRun, ok, problems, checked_at };
   };
-  return state._doctorJob === null ? answer() : state._doctorJob.then(answer);
+  // A cold cache on a daemon (a view switch dropped it) is filled on the thread, as the overview's is.
+  if (state.warm && state._doctor === null) warmDoctor(state);
+  return answer();
 }
 
 /**
@@ -646,11 +658,17 @@ export function apiFactoriesCatalog(state) {
  * `apiLoopsActive`), each with the loop running in its worktree as `loop` (the root is the join
  * key, `js/factory/registry.mjs`), or null. `runningLoops`, not `activeLoops`: it is read-only,
  * so this poll never prunes or stamps `loops.json` behind the Loops page's back.
+ *
+ * It is the board's read too (D7). A live row carries what `FACTORY.md` holds — `status`, `stage`,
+ * `awaiting`, `tasks`, `counters` beside the graph's cycles and their `max`, `history` — and
+ * `metrics`, `runMetrics` of that state. A `FACTORY.md` that does not parse is a row with status
+ * `unreadable`, and a missing one `finished`: identity only, never a throw. `listFactories` is
+ * read-only: this poll never writes a run or `factories.json` (D7).
  */
 export function apiFactoriesActive() {
   const loops = runningLoops();
   return {
-    factories: activeFactories().map((run) => {
+    factories: listFactories().map((run) => {
       const l = loops.find((x) => sameRoot(x.root, run.root));
       return { ...run, loop: l ? { title: l.title, status: l.status, node: l.node, iteration: l.iteration, graph: l.graph } : null };
     }),

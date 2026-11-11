@@ -6,7 +6,7 @@
 
 {{CREDIT:piomin-spring-boot:skills/spring-boot/references/testing.md}}
 
-**Trigger:** writing or fixing tests in a Spring Boot project: unit tests of services, `@WebMvcTest` / `@DataJpaTest` slices, `@SpringBootTest` integration tests, Testcontainers, mocking beans. Spring-specific; core test discipline lives in the test-gates and develop skills.
+**Trigger:** writing or fixing tests in a Spring Boot project: unit tests of services, `@WebMvcTest` / `@DataJpaTest` slices, `@SpringBootTest` integration tests, Testcontainers, mocking beans. Spring-specific; core test discipline lives in the develop {{SKILL}} and the tester {{AGENT}}.
 
 Target stack: Spring Boot 4, JUnit 5, Mockito, AssertJ.
 

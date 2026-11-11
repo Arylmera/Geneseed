@@ -11,7 +11,7 @@ link: {"hash": "#/installs/hosts", "label": "Set the mode on Installs →"}
 
 > **You already know this:** a tech lead with a team. Quick questions get answered on the spot; a real feature becomes a ticket that someone builds on a branch, and the lead reviews the result before it is merged.
 
-Mode is chosen at build time, so it does not drift mid-session, and kept across every rebuild and re-theme. It is separate from [posture](collaboration.md) (the relationship register), the doctrine packs ([Rules](rules.md)) and [footprint](footprint.md). It is also separate from a [loop](loops.md) — a task worker or a pipeline is a one-shot, uncommitted run for a single task; a loop is a long-running state machine that commits each validated iteration on its own branch.
+Mode is chosen at build time, so it does not drift mid-session, and kept across every rebuild and re-theme. It is separate from [posture](collaboration.md) (the relationship register), the doctrine packs ([Rules](rules.md)) and [footprint](footprint.md). It is also separate from a [loop](loops.md) — a task worker or a pipeline is a one-shot run for a single task, committed only on its own branch and merged by the session once you accept; a loop is a long-running state machine that commits each validated iteration on its own branch.
 
 ### direct — the default
 
@@ -70,7 +70,7 @@ Inside the crew, the developer implements and the tester runs the tests and lint
 
 ### Nothing lands beyond the worker's branch
 
-When a crew is done, it hands back its worktree **uncommitted**. A worker hands back its branch: the local commits from its own sub-workers' merges, and any uncommitted work. Each comes with the raw test and lint output and the list of files it changed. Then the session:
+A worker or crew commits only in its own worktree, never pushes, and never merges outside its own branch. When it is done, it hands back that branch: its local commits (its own, and its sub-workers' merges) and any uncommitted work. Each comes with the raw test and lint output and the list of files it changed. Then the session:
 
 1. re-runs the tests and lint itself — its log is its own account, not proof;
 2. shows you the diff from the base it recorded, and the green output;

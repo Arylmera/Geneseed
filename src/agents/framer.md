@@ -3,7 +3,7 @@
 > {{DESC_FRAMER}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to pressure-test the *framing*: are we solving the right problem? — in its own isolated context.
+- A council debate (the council {{SKILL}}) needs a test of the framing — is this the right problem.
 - The motion may be a solution in search of a problem, or the real need sits upstream of what's proposed.
 
 ## When NOT to dispatch

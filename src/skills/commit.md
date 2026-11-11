@@ -24,7 +24,11 @@
    the change *and* the exact commit message, then wait for explicit acceptance before
    committing. For a non-trivial change, offer the `explain-changes` skill's visual
    walkthrough before asking — an offer, never a condition of the commit. A previous
-   approval is not standing consent; ask again each commit. On a *shared branch*
+   approval is not standing consent; ask again each commit, unless a batch that
+   {{DOCTRINE:consent-before-push}} names covers it: a named batch, a launched loop on its
+   own `loop/*` branch, or a dispatched worker, crew or slice (a Foreman worker, a
+   pipeline crew, a parallel-agents slice) in its own worktree, off any shared branch —
+   which commits there without asking, since it cannot reach the user, and never pushes. On a *shared branch*
    (`main`, `master`, `develop`/`development`, a release/hotfix branch, or any branch
    that is not a dedicated feature branch) apply the same gate with extra care.
 6. Push only when the user has explicitly approved *that push* ({{DOCTRINE:consent-before-push}} / {{LAW:deletion-is-deliberate}})
@@ -33,6 +37,7 @@
 
 ## Done when
 - The commit contains only the intended change and the working tree is clean of it,
-  and every commit and push went out only with the user's explicit, per-action consent.
+  and every commit and push went out only with the user's explicit, per-action consent
+  or inside a batch that covers it.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

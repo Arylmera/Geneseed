@@ -12,15 +12,8 @@ import CliPage from './CliPage.jsx'
 import Glossary from './Glossary.jsx'
 import MapPage from './MapPage.jsx'
 import Margin from './Margin.jsx'
-import {
-  PageBar,
-  TrackProgress,
-  TRACK_GROUP,
-  docHref,
-  markSeen,
-  placeOf,
-  readSeen,
-} from './Track.jsx'
+import { PageBar, TrackProgress, docHref, markSeen, placeOf } from './Track.jsx'
+import { TRACK_GROUP, readSeen } from '../../lib/track.js'
 import About from './About.jsx'
 import { scroller, useOnScroll } from './scroll.js'
 import Seg from '../../components/Seg.jsx'

@@ -359,7 +359,7 @@ screen the run list stacks above the detail.
   grey block, a fork amber, a `loop:` stage a teal box that names its loop (without `loop:`)
   over `whole loop`, or `not in catalogue` when this install lacks it; the ring itself is on the
   Loops page. A fork is what the engine calls one: a brick that declares a named outcome
-  (one outside `pass`, `fail`, `error`, `none` and `needs-info`), never a `loop:` stage, however
+  (one outside `pass`, `fail`, `error`, `none`, `needs-info` and `reject`), never a `loop:` stage, however
   many stages its edges reach. The targets of a fork share a row, side by side, each lane labelled with its outcome,
   and join again at the first stage every lane reaches. Each route back (an edge into a cycle's
   first stage, the edge that spends a lap, `$lane` included) is a rail on the left labelled
@@ -376,13 +376,26 @@ screen the run list stacks above the detail.
   factory's rules. It reads `GET /api/factories/catalog` for the install the *Install:* picker
   names. **Active** is every run `geneseed factory init` registered on this machine
   (`GET /api/factories/active`, polled every 5 s, the graph read from each run's `FACTORY.md`),
-  grouped as Loops › Active is; the reader shows the run's stage, transitions, task number, its
+  shown as a **board** while no run is selected: three columns of cards, **Waits for you** (a
+  held gate, or a `FACTORY.md` that cannot be read), **Running**, and **Ended** (stopped, closed,
+  or its `FACTORY.md` gone). A card gives the run's title, its factory, and one line of facts: where it
+  stands (a held gate as `stage · outcome`), its task as `i/n`, its work time so far, the wait
+  still open at its gate (`waiting 25 min`), and each cycle spent above 0 as `name n/max`. A
+  run with no state says why instead. The list beside it groups the runs under the same three
+  names, each row with the same facts under its factory, and while a run is open the list's
+  header names it by its title. A card opens the run: the reader
+  shows the run's stage, transitions, task number, its
   child loop's step and iteration, what it awaits, and its graph with the current stage lit,
   the lane its last fork took (the run's `lane`, else read from its `history`) lit, the child
   loop's node named under the current stage (`at <node>`) and each cycle's laps as `n / max`. A
   run carries its graph but no bricks or loops: the graph borrows those from the catalogue of the
   install the Templates tab's picker names, which the run's project may not share, and the reader
-  says which. No run reports tab: a run's report lives in its own worktree.
+  says which. Under the graph, a **timeline** has one row per history entry: the stage, its
+  outcome or your answer at a gate, the time it was recorded (UTC), its duration (waiting time on
+  an answer) and a rework mark. A held run names its gate's stage, its outcome and the path of
+  its note; the console does not read the note. The numbers are the ones `geneseed factory report`
+  prints, and a time nobody recorded reads `unknown`. The board changes nothing: you answer a gate
+  in the agent's session. No run reports tab: a run's report lives in its own worktree.
 - **Profile** (`#/profile`) — `PROFILE.md`: who you are and how you like to work, one card
   per file: the shared one every global install reads, tagged `shared`, and each project
   install's own. Opens rendered; **Edit** is a whole-file editor. The save carries

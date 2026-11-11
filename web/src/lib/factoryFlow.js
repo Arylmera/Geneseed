@@ -86,7 +86,7 @@ export function spentCycle(cycles, from, to, lanes) {
 }
 
 // The outcomes that name no lane (js/factory/graph.mjs PLAIN_OUTCOMES, mirrored).
-const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', 'needs-info'])
+const PLAIN_OUTCOMES = new Set(['pass', 'fail', 'error', 'none', 'needs-info', 'reject'])
 
 // The forks of a factory, each with the stages its forward edges reach: the engine's `isFork`,
 // mirrored — a brick stage (never `loop:`) that declares a named outcome, one outside

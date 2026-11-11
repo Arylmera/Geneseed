@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
-import { usePoll } from '../hooks/usePoll.js'
+import { sameOr, usePoll } from '../hooks/usePoll.js'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import CopyButton from '../components/CopyButton.jsx'
+import DataTable from '../components/DataTable.jsx'
 import Loading from '../components/Loading.jsx'
 import FactoryGraph from '../components/FactoryGraph.jsx'
 import { GroupedRows, LibList, filterRows } from '../components/LibRows.jsx'
@@ -22,15 +23,16 @@ const POLL_MS = 5000
 const SECTIONS = TABS.factories.map((k) => [k, TAB_LABELS[k]])
 const ORIGIN = { project: 'Project', global: 'Global', shipped: 'Shipped' }
 const RAIL_LABEL = { templates: 'Origins', active: 'Statuses' }
-// Runs by what they need from you, as Loops › Active orders loops.
-const STATUS = [
-  ['awaiting', 'Awaiting'],
-  ['running', 'Running'],
-  ['done', 'Done · stopped'],
-  ['stopped', 'Done · stopped'],
-  ['finished', 'Finished · unreadable'],
-  ['unreadable', 'Finished · unreadable'],
+// The board's columns, by what a run needs from you, the ones that wait first. A FACTORY.md
+// that cannot be read stops every engine action until someone repairs it, so it waits for you
+// too. `done` is a closed run whose FACTORY.md is still there; `finished` one whose file is gone.
+// Inside a column, runs keep the order of its statuses: a stopped run before a closed one.
+export const COLUMNS = [
+  ['wait', 'Waits for you', ['awaiting', 'unreadable']],
+  ['run', 'Running', ['running']],
+  ['end', 'Ended', ['stopped', 'done', 'finished']],
 ]
+const STATUS = COLUMNS.flatMap(([, label, statuses]) => statuses.map((s) => [s, label]))
 // A live row carries FACTORY.md's state; a finished or unreadable one only its identity.
 const live = (r) => !!r.graph
 
@@ -44,12 +46,148 @@ export const factoryRows = (factories) =>
     (f) => f.origin,
     Object.entries(ORIGIN),
   )
+// A run's row in the list: its factory, then its facts on a second line (live runs only).
 export const runRows = (runs) =>
   grouped(
-    runs.map((r) => ({ ...r, name: r.root, desc: r.factory })),
+    runs.map((r) => ({
+      ...r,
+      name: r.root,
+      desc: r.factory,
+      meta: live(r) ? cardFacts(r).join(' · ') : undefined,
+    })),
     (r) => r.status,
     STATUS,
   )
+
+// A duration as the board prints it. `null` is a time nobody recorded: `unknown`, never 0.
+export function fmtMs(ms) {
+  if (ms == null) return 'unknown'
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s} s`
+  const m = Math.round(s / 60)
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`
+}
+// An engine time (ISO, UTC) to the minute, as written: no locale, so every viewer reads the same.
+const clock = (at) => `${at.slice(0, 16).replace('T', ' ')} UTC`
+
+// What a run's card and list row say beside its title, as short as a 800 px pane allows: where
+// it stands (a held gate as `stage · outcome`), its task as `i/n`, its work time so far, the
+// wait still open at its gate, and the cycles it has spent (only those above 0) as `name n/max`.
+// The numbers are the engine's (`metrics`, `runMetrics`). A run with no state says why.
+export function cardFacts(r) {
+  if (r.status === 'unreadable') return ['Its FACTORY.md cannot be read.']
+  if (r.status === 'finished') return ['Its FACTORY.md is gone: the run closed.']
+  const t = r.tasks
+  const m = r.metrics
+  const where = r.awaiting
+    ? `${r.awaiting.stage} · ${r.awaiting.outcome}`
+    : r.status === 'stopped'
+      ? `stopped: ${r.reason}`
+      : r.status === 'done'
+        ? 'closed'
+        : r.stage
+  return [
+    where,
+    t ? `task ${t.index}/${t.count}` : null,
+    m ? `work ${fmtMs(m.workMs)}` : null,
+    m?.openWaitMs != null ? `waiting ${fmtMs(m.openWaitMs)}` : null,
+    ...(r.graph?.cycles || [])
+      .filter((c) => r.counters?.[c.name] > 0)
+      .map((c) => `${c.name} ${r.counters[c.name]}/${c.max}`),
+  ].filter(Boolean)
+}
+
+// Factories › Active with no run selected: every run as a card, in three columns. A card opens
+// the run's detail. Read-only, as the whole page is: a gate is answered in the agent's session.
+function RunBoard({ runs }) {
+  return (
+    <section className="fac-board" aria-label="Runs board">
+      {COLUMNS.map(([key, label, statuses]) => {
+        const col = runs.filter((r) => statuses.includes(r.status))
+        return (
+          <div key={key} className={`fac-col ${key}`} role="group" aria-label={label}>
+            <h3 className="loop-kicker">
+              {label} <span className="mono dim">{col.length}</span>
+            </h3>
+            {col.length ? (
+              <ul>
+                {col.map((r) => (
+                  <li key={r.root}>
+                    <a className="fac-card" href={`#/factories/active/${enc(r.root)}`}>
+                      <b>{r.title}</b>
+                      <span className="mono">{r.factory}</span>
+                      <span>{cardFacts(r).join(' · ')}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="panel-note">None.</p>
+            )}
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
+// A run's history, one row per entry: a stage's outcome or the user's answer at a gate, when it
+// was recorded, how long it took (work time, or waiting time on an answer) and a rework mark.
+// Durations and marks are the engine's (`metrics.entries`, parallel to `history`).
+function Timeline({ run }) {
+  if (!run.history?.length) return null
+  const m = run.metrics
+  const rows = run.history.map((h, i) => ({ i, h, e: m?.entries?.[i] || {} }))
+  return (
+    <>
+      <h3 className="loop-h2">Timeline</h3>
+      <DataTable
+        caption="Run history"
+        captionHidden
+        rowKey={(r) => r.i}
+        rows={rows}
+        columns={[
+          { key: 'stage', label: 'Stage', render: (r) => r.h.stage },
+          {
+            key: 'result',
+            label: 'Result',
+            render: (r) =>
+              r.h.verdict ? (
+                `you answered ${r.h.verdict}`
+              ) : (
+                <>
+                  {r.h.outcome} {r.e.rework ? <span className="tag warn">rework</span> : null}
+                </>
+              ),
+          },
+          {
+            key: 'at',
+            label: 'Time',
+            // a hand-edited FACTORY.md may hold any value here: only a string is a time
+            render: (r) =>
+              typeof r.h.at === 'string' ? (
+                <time dateTime={r.h.at}>{clock(r.h.at)}</time>
+              ) : (
+                'unknown'
+              ),
+          },
+          {
+            key: 'ms',
+            label: 'Duration',
+            render: (r) => `${fmtMs(r.e.ms)}${r.e.wait ? ' waiting' : ''}`,
+          },
+        ]}
+      />
+      {m ? (
+        <p className="panel-note fac-totals">
+          Work {fmtMs(m.workMs)} · waited {fmtMs(m.waitMs)}
+          {m.openWaitMs != null ? ` · waiting ${fmtMs(m.openWaitMs)}` : ''} · tokens{' '}
+          {m.tokens ?? 'unknown'}
+        </p>
+      ) : null}
+    </>
+  )
+}
 
 const tag = (cls, text) => (
   <span key={text} className={`tag${cls ? ` ${cls}` : ''}`}>
@@ -145,6 +283,9 @@ function RunDetail({ run, bricks, loops, from }) {
   const t = run.tasks
   return (
     <>
+      <p className="panel-note">
+        <a href="#/factories/active">← All runs</a>
+      </p>
       <div className="reader-tags">
         <span className="tag acc">Factory run</span>
         <span className={`tag${TONE[run.status] ? ` ${TONE[run.status]}` : ''}`}>{run.status}</span>
@@ -167,6 +308,12 @@ function RunDetail({ run, bricks, loops, from }) {
                 {run.awaiting.stage ? ` at ${run.awaiting.stage} (${run.awaiting.outcome})` : ''}
               </b>{' '}
               — Answer in the agent&apos;s session.
+              {run.awaiting.note ? (
+                <>
+                  {' '}
+                  Its note: <code className="mono">{run.awaiting.note}</code>
+                </>
+              ) : null}
             </p>
           ) : null}
           {run.reason ? <p className="panel-note">{run.reason}</p> : null}
@@ -182,6 +329,7 @@ function RunDetail({ run, bricks, loops, from }) {
             history={run.history}
           />
           <Cycles factory={run.graph} counters={run.counters} />
+          <Timeline run={run} />
           <p className="panel-note">
             Bricks and loops drawn from the catalogue of {from || 'the default install'}, which the
             run’s project may not share.
@@ -245,8 +393,8 @@ const LEDE = {
   ),
   active: (
     <>
-      Factory runs registered on this machine, read from their FACTORY.md.{' '}
-      <a href="#/docs/run-a-factory">Run a factory →</a>
+      Factory runs registered on this machine, read from their FACTORY.md: the ones that wait for
+      you first. A card opens its timeline. <a href="#/docs/run-a-factory">Run a factory →</a>
     </>
   ),
 }
@@ -258,7 +406,7 @@ function useActiveFactories() {
   usePoll(
     (alive) =>
       api.activeFactories().then(
-        (d) => alive() && (setData(d), setError(null)),
+        (d) => alive() && (setData(sameOr(d)), setError(null)),
         (e) => alive() && setError(e.message),
       ),
     POLL_MS,
@@ -298,11 +446,10 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
   const ql = q.trim()
   const shown = filterRows(pool, ql)
   const gone = !!(item && all && !rows.some((r) => r.name === item))
+  // Active with no run named is the board; a template always has one selected.
   const sel = gone
     ? null
-    : rows.find((r) => r.name === item) ||
-      (tab === 'active' ? rows.find(live) || rows[0] : rows[0]) ||
-      null
+    : rows.find((r) => r.name === item) || (tab === 'active' ? null : rows[0]) || null
   const counts = { templates: data?.factories?.length, active: runs?.length }
   const label = SECTIONS.find(([k]) => k === tab)[1]
   const err = tab === 'active' ? runError : error
@@ -358,7 +505,8 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
           onQ={setQ}
           matched={shown.length}
           inView={[tab, item]}
-          current={sel?.name}
+          // the open entry's name; a run's is its title, never its root path
+          current={sel ? sel.title || sel.name : undefined}
           sections={SECTIONS.map(([k, l]) => ({
             key: k,
             label: l,
@@ -399,7 +547,9 @@ export default function Factories({ tab = 'templates', item, dataRev }) {
               docs={{ href: `#/factories/${tab}`, label: `All ${label.toLowerCase()} →` }}
             />
           ) : !sel ? (
-            tab === 'active' && all ? (
+            tab === 'active' && all && rows.length ? (
+              <RunBoard runs={shown} />
+            ) : tab === 'active' && all ? (
               <EmptyState
                 title="What is a factory?"
                 docs={{ href: '#/docs/factories', label: 'How factories work →' }}

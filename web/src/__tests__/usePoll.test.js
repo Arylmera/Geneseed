@@ -1,6 +1,7 @@
-import { renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
+import { createElement, useState } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { usePoll } from '../hooks/usePoll.js'
+import { sameOr, usePoll } from '../hooks/usePoll.js'
 
 // usePoll's contract, in ticks: one call on mount, one per interval while the tab is
 // visible, none while hidden, one the moment the tab is fronted again, none after unmount.
@@ -55,5 +56,34 @@ describe('usePoll', () => {
     rerender({ id: 'b' })
     vi.advanceTimersByTime(1000)
     expect(fn.mock.calls.map((c) => c[0])).toEqual(['a', 'b', 'b'])
+  })
+
+  // Every tick answers a NEW object. Equal to the last one, the state keeps its reference and the
+  // page under it does not re-render: its mount and the first answer are its only two renders over
+  // four quiet ticks (React may call the polling component itself once more before it bails out;
+  // the subtree is what costs). A changed answer renders once more.
+  it('re-renders the page for a changed answer only, written through sameOr', () => {
+    let answer = { runs: [{ id: 'a' }] }
+    let renders = 0
+    const Page = ({ data }) => {
+      renders++
+      return data ? data.runs.length : null
+    }
+    const Poller = () => {
+      const [data, setData] = useState(null)
+      usePoll(() => setData(sameOr(structuredClone(answer))), 1000, [])
+      return createElement(Page, { data })
+    }
+    render(createElement(Poller))
+    expect(renders).toBe(2)
+    // One stringify per answer: the one on screen keeps its string, it is not stringified again.
+    const stringify = vi.spyOn(JSON, 'stringify')
+    act(() => vi.advanceTimersByTime(4000))
+    expect(stringify).toHaveBeenCalledTimes(4)
+    stringify.mockRestore()
+    expect(renders).toBe(2)
+    answer = { runs: [{ id: 'a' }, { id: 'b' }] }
+    act(() => vi.advanceTimersByTime(1000))
+    expect(renders).toBe(3)
   })
 })

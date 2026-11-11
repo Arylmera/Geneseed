@@ -92,7 +92,12 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
   // Constitution, which paint that copy, the profile for the tab's "template" badge. Not the
   // app-wide `dataRev`: neither file feeds the overview, the fleet or an install.
   const { reload: reloadRules } = useRules(dataRev)
-  const { data: profile, reload: reloadProfile } = useAsync(() => soft(api.profile()), [dataRev])
+  // Not soft: a failed read must not look like a profile with no template badge.
+  const {
+    data: profile,
+    error: profileError,
+    reload: reloadProfile,
+  } = useAsync(() => api.profile(), [dataRev])
   // The same key and deps as Library's own read of each folder, so the count here and the
   // pane share one fetch, and a delete in the pane moves the count. No `soft`: a cached null
   // would be served to the pane's next mount instead of a fetch.
@@ -117,7 +122,8 @@ export default function Personal({ tab = 'rules', item, dataRev, onCountsChanged
   const counts = { memory: facts, notebook: notes }
   // No rules figure: each rules file heads its own list with its count and cost.
   const badges = {
-    profile: profile?.seeded ? 'template' : null,
+    // The Profile tab itself says why, with a Retry; the badge only says the read failed.
+    profile: profileError ? 'read failed' : profile?.seeded ? 'template' : null,
     memory: facts,
     notebook: notes,
   }

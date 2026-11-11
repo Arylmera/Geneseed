@@ -9,7 +9,7 @@ import Loading from '../components/Loading.jsx'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import PageHeader from '../components/PageHeader.jsx'
-import { usePoll } from '../hooks/usePoll.js'
+import { sameOr, usePoll } from '../hooks/usePoll.js'
 
 // Timeline-row dot colour by record kind/outcome.
 function dotFor(rec) {
@@ -159,7 +159,7 @@ export default function ActivityDetail({ sid: item }) {
         : api.activityDetail(sid, install).then(
             (d) => {
               if (alive()) {
-                setData(d)
+                setData(sameOr(d))
                 setError('')
                 setGone(false)
               }

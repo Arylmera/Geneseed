@@ -67,8 +67,8 @@ import {
 } from './gitref.mjs';
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
-  readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
-  gateLoss, gateSafe,
+  readStdin, SECRET_RE, DONE_LIST, diffBlocks, isTestPath, weakenedBy, editPairs,
+  gateLoss, gateSafe, askDecision, decisionDoc, asciiJson,
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
@@ -81,7 +81,20 @@ import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
 // (`git add . && git commit … && git push`) and `-C <path>` forms, so a compound
 // one-liner can never slip a commit past the prompt. `[^\n]*` is the boundary: a `git` on
 // one line and a `commit` on the next are two commands, not one.
-const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
+//
+// LINEAR, ON PURPOSE. The plain `\bgit\b[^\n]*\b(?:commit|push)\b` rescanned to the end of the
+// line from EVERY `git`, so `git -C x ` repeated to 270 KB took 7.8 s here alone, and past the
+// host's hook timeout the call ran unguarded. A match can start only at the input's start or at
+// a `\n` (never `^` with `m`, whose `\r`/`U+2028` line starts would bring the rescan back), and
+// it tries only the line's FIRST `git`: if any `git` on a line precedes a verb, the first one
+// does too, so the truth set is unchanged and each line is read once.
+const GIT_GATE_RE = /(?:^|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:commit|push)\b/;
+
+// Past this many characters a command is not read at all: it asks. Every reader on the path
+// (`shellReading`, the splitters, `catastrophic`) is at least linear, some worse, and a gate
+// that has not finished when the host's hook timeout fires lets the call through unjudged. No
+// real command line comes near it; a generated one that does is worth a human look.
+const MAX_COMMAND_CHARS = 64 * 1024;
 
 // Law IV's boundary half lives in `./loss.mjs`: it asks only when a command would really lose
 // data — a protected branch deleted or force-pushed, an unpushed unmerged branch deleted,
@@ -241,17 +254,8 @@ export function worktreeExempt(command, cwd, agentId) {
   }
 }
 
-/**
- * The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling: `, ` and
- * `: ` separators, and `ensure_ascii` — every code unit past `~` as a lowercase `\uXXXX`, which is
- * why a reason's em dash reaches stdout as `—`.
- *
- * A TEMPLATE, NOT `js/lib/json.mjs`'s `jsonDumpsCompact`. The keys are fixed and the one value
- * is a string, so the general serializer bought nothing here — and it cost every tool call a
- * 378-line module parse, being the only thing on the gate path that needed it.
- * `tests/unit/hook_gates.test.mjs` holds the two byte-identical over non-ASCII reasons.
- */
-export function askDecision(reason) { return decisionDoc('ask', reason); }
+// `askDecision` lives in `./hooks-prims.mjs`, so the entry can ask when THIS module fails to load.
+export { askDecision };
 
 /**
  * The `permissionDecision: "deny"` twin of `askDecision`, same spelling. Claude Code shows an
@@ -260,14 +264,6 @@ export function askDecision(reason) { return decisionDoc('ask', reason); }
  * ownership gate: "propose the setup") must deny, not ask.
  */
 export function denyDecision(reason) { return decisionDoc('deny', reason); }
-
-function decisionDoc(decision, reason) {
-  return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "${decision}", `
-    + `"permissionDecisionReason": ${asciiJson(reason)}}}\n`;
-}
-
-const asciiJson = (s) => JSON.stringify(s)
-  .replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 /**
  * A note to the MODEL that decides nothing: PreToolUse `additionalContext` with no
@@ -901,9 +897,16 @@ function consentBenign(command) {
   return true;
 }
 
-function gitDecide(args, payload) {
+// Exported for the in-process timing rows (tests/unit/hook_gates.test.mjs): a spawn's own start-up
+// on a loaded Windows host is noise next to a 200 ms bound.
+export function gitDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   if (typeof ti.command !== 'string') return 0;
+  // Before any switch: the catastrophic class below runs whatever the install turned off, so
+  // every gate verb reads the command. `unverified` under law-4, so Bob refuses it as well.
+  if (ti.command.length > MAX_COMMAND_CHARS) {
+    return ask(args, 'git-gate', 'law-4', 'unverified', {});
+  }
   const tool = payload && payload.tool_name;
   const command = shellReading(ti.command, tool === 'Bash' ? 'bash' : tool === 'PowerShell' ? 'powershell' : null);
   // The agent's own words, for the asks where they are no conflict of interest (`gateText`'s `quote`).
@@ -1173,9 +1176,9 @@ function settingsAfter(before, payload) {
     return ranged ? null : replaceOnce(before, ti.search, ti.replace);
   }
   if (tool === 'apply_diff' && typeof ti.diff === 'string') {
-    const blocks = [...ti.diff.matchAll(DIFF_BLOCK_RE)];
+    const blocks = diffBlocks(ti.diff);
     let text = before;
-    for (const [, search, replace] of blocks) if ((text = replaceOnce(text, search, replace)) === null) return null;
+    for (const [search, replace] of blocks) if ((text = replaceOnce(text, search, replace)) === null) return null;
     // One block only: with several, Bob may apply some and refuse others (its start-line window).
     return blocks.length === 1 ? text : null;
   }
@@ -1230,8 +1233,8 @@ const ASK_COUNT_MAX = 1024 * 1024;
  * The `editPairs` of a write the gate will ask about, for the line count, or undefined for none. Run
  * only then, because `Write`'s old text is a file read. A pair says nothing of how often it applies,
  * so a `replace_all` and a `search_and_replace` count nothing, and a notebook cell names no old text.
- * A `diff` counts nothing either: the agent writes it, and `DIFF_BLOCK_RE` took 20 s on 80 KB of
- * opened blocks. A count must cost no verdict, so whatever is not a small regular file, or cannot be
+ * A `diff` counts nothing either: the agent writes it, and the regex `diffBlocks` replaced took 20 s
+ * on 80 KB of opened blocks. A count must cost no verdict, so whatever is not a small regular file, or cannot be
  * read, counts nothing. Only a file that is truly absent is a new file.
  */
 function askPairs(payload, p) {
@@ -1336,21 +1339,39 @@ function ruleGate(args) {
 
 // The REPLACE halves of a Roo-style `apply_diff` (`<<<<<<< SEARCH … ======= <new> >>>>>>> REPLACE`).
 // A diff without those markers is a shape we do not know, so it is returned whole: fail closed.
+// One pass: each half runs from a separator line to the FIRST closing line after it, as the lazy
+// `/^=======\r?\n([\s\S]*?)^>>>>>>> REPLACE/gm` did, and a separator with no closing after it ends
+// the scan, where that regex rescanned the rest of the diff once per separator.
 function diffReplaced(diff) {
   if (typeof diff !== 'string') return diff;
-  const halves = [...diff.matchAll(/^=======\r?\n([\s\S]*?)^>>>>>>> REPLACE/gm)].map((m) => m[1]);
+  const SEP = /^=======\r?\n/gm;
+  const CLOSE = /^>>>>>>> REPLACE/gm;
+  const halves = [];
+  for (let sep; (sep = SEP.exec(diff));) {
+    CLOSE.lastIndex = sep.index + sep[0].length;
+    const close = CLOSE.exec(diff);
+    if (!close) break;
+    halves.push(diff.slice(sep.index + sep[0].length, close.index));
+    SEP.lastIndex = CLOSE.lastIndex;
+  }
   return halves.length ? halves.join('\n') : diff;
 }
 
 const RULE_PATH_KEYS = ['file_path', 'path', 'notebook_path', 'target_file', 'target', 'file', 'filename', 'destination', 'dest',
   'new_path', 'new_name', 'old_path', 'source', 'from', 'to'];
-function ruleDecide(args, payload) {
+// Exported for the in-process timing rows, as `gitDecide` is.
+export function ruleDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   // NotebookEdit names its target `notebook_path`; the settings matcher routes it here too. Every
   // key is read, never the first found: Bob's move and rename tools carry two, and a harmless
   // `path` beside the real target must not hide it from any gate below.
   const paths = [...new Set(RULE_PATH_KEYS.map((k) => ti[k]).filter((v) => typeof v === 'string' && v))];
   if (!paths.length) return 0;
+  // A diff past the command bound is not read, for `MAX_COMMAND_CHARS`' reason: on Bob a scan past
+  // the hook timeout lets the write through with no secrets check. Same `unverified` ask, law-4.
+  if (typeof ti.diff === 'string' && ti.diff.length > MAX_COMMAND_CHARS) {
+    return ask(args, 'rule-gate', 'law-4', 'unverified', {});
+  }
   // Write carries `content`, Edit `new_string`, NotebookEdit `new_source`, MultiEdit an
   // `edits[]` of `new_string`s — every one can plant a credential, so every one is scanned.
   // MultiEdit is no longer in Claude Code's own tool table (tools-reference.md) or the

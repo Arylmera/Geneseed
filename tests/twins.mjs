@@ -25,6 +25,7 @@ export const TWINS = [
   ['block', 'gate text', 'js/hosts/hooks-prims.mjs', `${PLUGINS}/geneseed-guard.js`],
   ['block', 'shell-write', 'js/hosts/hooks.mjs', `${PLUGINS}/geneseed-guard.js`],
   ['block', 'test-weakening', 'js/hosts/hooks-prims.mjs', `${PLUGINS}/geneseed-context.js`],
+  ['block', 'rules preamble', 'js/hosts/hooks-context.mjs', `${PLUGINS}/geneseed-context.js`],
   ['function', 'runsUnpiped', 'js/hosts/hooks-done.mjs', `${PLUGINS}/geneseed-context.js`],
 ];
 

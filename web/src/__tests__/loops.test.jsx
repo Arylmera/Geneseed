@@ -277,10 +277,25 @@ describe('Loops — templates', () => {
     const row = document.getElementById('brick-identify')
     row.scrollIntoView = vi.fn()
     fireEvent.click(screen.getByRole('button', { name: 'identify brick' }))
-    expect(row.scrollIntoView).toHaveBeenCalled()
+    // jsdom has no matchMedia, which motionOK() reads as reduced motion: the jump is instant.
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'nearest' })
     expect(text('.loop-brick.on > b')).toEqual(['identify'])
     fireEvent.keyDown(screen.getByRole('button', { name: 'apply brick' }), { key: 'Enter' })
     expect(text('.loop-brick.on > b')).toEqual(['apply'])
+  })
+
+  // With motion allowed (matchMedia says no reduce), the same jump is smooth. Stubbed after the
+  // render, so only the jump reads it.
+  it('scrolls smoothly to the brick row when motion is allowed', async () => {
+    render(<Loops tab="templates" item="tiny" />)
+    await screen.findByText('The smallest loop.', { selector: '.reader-lede' })
+    const row = document.getElementById('brick-identify')
+    row.scrollIntoView = vi.fn()
+    window.matchMedia = vi.fn((q) => ({ matches: false, media: q }))
+    onTestFinished(() => delete window.matchMedia)
+    fireEvent.click(screen.getByRole('button', { name: 'identify brick' }))
+    expect(window.matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)')
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' })
   })
 
   // Under the narrow tier (an @container query on `.lib-wrap`, styles.css) the panes stack as

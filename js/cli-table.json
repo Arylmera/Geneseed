@@ -765,7 +765,7 @@
     {
       "name": "factory",
       "help": "run a factory: carry one work item through bricks and loops to an open PR",
-      "description": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide)",
+      "description": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide/report)",
       "positionals": [
         {
           "names": [],
@@ -778,7 +778,8 @@
             "init",
             "next",
             "record",
-            "decide"
+            "decide",
+            "report"
           ],
           "default": null,
           "required": true,
@@ -872,6 +873,19 @@
           "dest": "carry",
           "metavar": null,
           "help": "the reason the next stage must hear, such as why CI failed; a re-entered loop starts with it as a note (record)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": ["--tokens"],
+          "dest": "tokens",
+          "metavar": null,
+          "help": "the token count the host reported for the agent that ran the stage, a positive integer; left out when the host gave none (record)",
           "choices": null,
           "default": null,
           "required": false,
