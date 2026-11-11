@@ -42,6 +42,10 @@
  * `--carry-file` AND `--note-file` (M7) take the text from a file, never the command line
  * (`textArg`, shared with `geneseed loop`): free text can hold any word and any quote. The Rite
  * writes that file with the host's file tool, never the shell, under a name it makes unique.
+ *
+ * THE CLOCK IS READ HERE (D2): `init`, `next`, `record` and `decide` pass the time now to the
+ * engine, which stays pure. `report` prints `runMetrics` and writes nothing, so the `retro` brick
+ * and the Rite read durations off it and no model does date arithmetic (D5).
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -57,6 +61,7 @@ import {
   FACTORY_FILE, initFactory, nextStage, recordStage, decideFactory, writeFactoryFile, parseFactoryFile,
   validateFactoryState, countSpecTasks,
 } from './state.mjs';
+import { runMetrics } from './metrics.mjs';
 
 const emit = (obj) => { printOut(`${JSON.stringify(obj)}\n`); return obj.error || obj.ok === false ? 1 : 0; };
 const stdin = () => (process.stdin.isTTY ? null : readFileSync(0, 'utf8'));
@@ -83,17 +88,24 @@ function requireRoot() {
  * R4: an unreadable FACTORY.md throws in `parseFactoryFile` or `validateFactoryState`, before `fn`
  * runs or anything is written.
  */
-function withState(fn) {
+function readState() {
   const root = requireRoot();
   const file = path.join(root, FACTORY_FILE);
   if (!isFile(file)) throw new Error(`${file} does not exist — run \`geneseed factory init\` first`);
   const state = parseFactoryFile(readText(file));
   const catalog = loadCatalog({ projectRoot: root });
   validateFactoryState(state, catalog);
+  return { root, file, state, catalog };
+}
+
+function withState(fn) {
+  const { root, file, state, catalog } = readState();
   const result = fn(state, catalog, { root, head: headCommit(root), ...loopFileOf(root) });
   writeFactoryFile(file, state);
   return result;
 }
+
+const nowIso = () => new Date().toISOString();
 
 function resolveFactory(spec, catalog) {
   if (spec.endsWith('.json')) return JSON.parse(readText(path.resolve(spec)));
@@ -149,17 +161,22 @@ const ACTIONS = {
     const factory = resolveFactory(args.factory, catalog);
     const problems = checkFactory(factory, catalog);
     if (problems.length) return { error: 'the factory does not pass factory check', problems };
-    const state = initFactory({ title: args.title, requirement: args.requirement, factory, input: args.input ?? null });
+    const state = initFactory({ title: args.title, requirement: args.requirement, factory, input: args.input ?? null, now: nowIso() });
     writeFactoryFile(file, state);
     // Best-effort, as `loop init`'s `recordLoop`: the registry is how the console finds the run.
     recordFactory({ root, branch: currentBranch(root), factory: factory.name, title: args.title });
     return { file, factory: factory.name, stage: state.stage, status: state.status };
   },
-  next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head, now: new Date().toISOString() })),
+  next: () => withState((s, c, { loopStatus, head }) => nextStage(s, c, { loopStatus, head, now: nowIso() })),
   record(args) {
     if (!args.outcome) throw new Error('record needs --outcome');
     const carry = textArg(args, 'carry', 'carry', 'record');
     const porcelain = stdin();
+    // D3: digits only, so `1e3`, `1.5`, `-4` and `0` are refused here, before the state is read
+    if (args.tokens != null && !/^[1-9]\d*$/.test(String(args.tokens))) {
+      throw new Error(`--tokens ${args.tokens} is not a positive integer: pass the count the host reported, or leave it out`);
+    }
+    const tokens = args.tokens != null ? Number(args.tokens) : null;
     return withState((s, c, { root, loopStatus, loopTemplate, head }) => {
       let specPath = null; let taskCount = null;
       if (args.spec) {
@@ -175,14 +192,16 @@ const ACTIONS = {
         // Windows PowerShell 5.1 re-encodes a native pipe: CRLF line ends, and a leading BOM when $OutputEncoding is UTF-8
         porcelain: porcelain === null ? null : porcelain.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd(),
         specPath, taskCount, carry, loopStatus, loopTemplate, head,
-        loopInitAt: loopInitAt(root),
+        loopInitAt: loopInitAt(root), now: nowIso(), tokens,
       });
     });
   },
   decide(args) {
     const note = textArg(args, 'note', 'note', 'decide') ?? '';
-    return withState((s, c) => decideFactory(s, c, args.verdict, note));
+    return withState((s, c) => decideFactory(s, c, args.verdict, note, { now: nowIso() }));
   },
+  // D5: read-only, and validated like every state action, so the numbers come from a state the engine could have written
+  report: () => runMetrics(readState().state),
 };
 
 export function cmdFactory(args) {

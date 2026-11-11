@@ -8,6 +8,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **A factory run records its times, and `geneseed factory report` prints its numbers.** `init` stamps `started`, and `record` and `decide` stamp `at` on their history entry. `record --tokens <n>` stores the token count the host reported for the stage's agent; nothing estimates one, and there is no cost in money. `report` is read-only and prints one JSON object: per stage its runs, its reworks (an outcome that spent a cycle), its work time and its tokens, and for the run its work time, the time it waited at human gates, its tokens and its transitions. A number nobody recorded is `null`, never 0, so a `FACTORY.md` written before this release still validates and still runs. The `retro` brick and the Rite's stop report copy those numbers, and `retro` adds how many rounds each `review-panel` seat failed.
+
 ## [5.2.0] — 2026-11-10
 
 ### Changed

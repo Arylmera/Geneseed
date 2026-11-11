@@ -52,6 +52,10 @@ with your file tool, never the shell, to a file whose name you make unique, such
 `<os temp dir>/factory-<8 random hex>.txt`, then pass `--note-file <that file>` or
 `--carry-file <that file>`. Never delete a carry: the engine keeps its path for the next stage.
 
+When the host returned a token count for the {{AGENT}} that ran the stage, add `--tokens <n>` to
+the record line: that count as the host gave it. Never estimate a count and never add counts by
+hand. Leave `--tokens` out for a loop stage, and whenever the host gave no count.
+
 The git gate asks on any line that holds the word `git` and the word `commit` or `push`. A
 record line holds `git`, so a spec path, a carry path or an outcome name with `commit` or `push`
 in it makes the gate ask. On a record line that ask is a false alarm: the user can answer yes.
@@ -170,7 +174,9 @@ in it makes the gate ask. On a record line that ask is a false alarm: the user c
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and
-   the loops' notes. A closed loop's notes left with its `LOOP.md`: read each from git as the
+   the loops' notes. Run `geneseed factory report` first and hand its JSON to that {{AGENT}}: the
+   report's table (stage, runs, reworks, work time, tokens) and its waiting time are those
+   numbers, copied, and a `null` is written `unknown`. A closed loop's notes left with its `LOOP.md`: read each from git as the
    `retro` brick says (`git log --format=%H --diff-filter=D <merge-base>..HEAD -- LOOP.md`, then
    `git show <commit>^:LOOP.md`); a stopped loop's `LOOP.md` is still at the root. It goes to `.geneseed/factory-runs/<slug>.md`, or to the OS temp directory
    when `git check-ignore -q <that path>` exits non-zero. No tracked file changes, no commit; only

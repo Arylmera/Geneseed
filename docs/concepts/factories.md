@@ -76,6 +76,22 @@ exception is the run's spec, `specs/<slug>/spec.md`: the `spec` stage writes it,
 it is committed once you approve it, before the first loop. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
 names the run it belongs to.
 
+## What a run measures
+
+Every `record` and `decide` writes the time on its history entry, and `init` writes when the run
+started. From those, `geneseed factory report` gives each stage its runs, its reworks, its work
+time and its tokens, and the run its work time and the time it waited for you at a gate. The time
+between a held outcome and your answer is waiting time, never the stage's. A rework is an outcome
+that spent a cycle: a failed `checks`, `review-panel` or `holdout`, or red CI.
+
+Tokens are recorded only where the host reports a count for the agent that ran the stage
+(`record --tokens <n>`); nothing estimates one, and a loop stage carries none. There is no cost in
+money: Geneseed holds no price table. A number nobody recorded is `null` in the report, never 0,
+so a `FACTORY.md` written before times were stamped still runs and reports `unknown`.
+
+The `retro` stage copies those numbers into the run report, and adds, for each `review-panel`
+seat, how many rounds it failed.
+
 ## The shipped factories
 
 | Factory | Stages |
@@ -96,7 +112,7 @@ The bricks they add:
 | `triage` | A fork: reads the work item and reports the outcome that names its lane, with its reason. `fail` when no lane fits | `bug`, `feature`, `deps`, `refactor`, `docs`, `fail` |
 | `pr-open` | Pushes the branch (the push asks you) and opens the PR, or updates the one already open | `pass`, `fail` |
 | `merge-gate` | Waits for the PR's CI with a watch that returns by itself (each call under 10 minutes), 30 minutes at most. A repo with no CI reports `none`, and you decide; so does CI still pending at the bound, or a `gh`/`glab` that is missing or fails | `pass`, `fail`, `none` |
-| `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, and keeps only a lasting lesson in memory | `pass` |
+| `retro` | Writes the run report to `.geneseed/factory-runs/<slug>.md`, with the numbers of `geneseed factory report`, and keeps only a lasting lesson in memory | `pass` |
 
 `analysis-to-build` also uses the loops' own `spec` brick (`gate: human`), the one the
 `spec-first-feature` loop starts with, and `issue-to-pr` the loops' `docs-update` brick as its

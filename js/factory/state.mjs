@@ -80,6 +80,13 @@
  * budget or a higher ceiling. And it is capped at `FACTORY_MAX_TASKS` (20), so the
  * ceiling is at most 1200 transitions: past twenty tasks a requirement is a project, to be split
  * into several factory runs a human can review, not one run nobody reads to the end.
+ *
+ * TIME AND TOKENS ARE RECORDED, NEVER READ BACK (D2, D3). `init` stamps `started`, and `record`
+ * and `decide` stamp `at` on the history entry they push: the ISO time the CLI passes as `now`,
+ * as `next` does for a launch. `record` also stores `tokens`, the count the host reported for the
+ * agent that ran the stage. No transition reads either one, so both are optional in a state: a
+ * FACTORY.md written before them still validates and still runs. `runMetrics`
+ * (`js/factory/metrics.mjs`) is their one reader.
  */
 import { writeText } from '../lib/fs.mjs';
 import { renameWithRetry, filterPorcelain } from '../loop/state.mjs';
@@ -117,6 +124,7 @@ export function parseFactoryFile(text) {
 }
 
 const count = (v) => Number.isInteger(v) && v >= 0;
+const tokenCount = (v) => Number.isSafeInteger(v) && v >= 1;
 const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
@@ -150,6 +158,12 @@ export function validateFactoryState(state, catalog) {
   }
   if (!STATUSES.includes(state.status)) bad(`status must be one of ${STATUSES.join(', ')}`);
   if (!Array.isArray(state.history)) bad('history must be a list');
+  // D2, D3: optional, so a state written before them validates; a wrong shape would feed `runMetrics` nonsense
+  if (state.started != null && typeof state.started !== 'string') bad('started must be a time');
+  for (const h of state.history) {
+    if (h?.at != null && typeof h.at !== 'string') bad('a history entry\'s at must be a time');
+    if (h?.tokens !== undefined && !tokenCount(h.tokens)) bad('a history entry\'s tokens must be a positive integer');
+  }
   if (!plainObject(state.gateAmends) || !Object.values(state.gateAmends).every((n) => count(n) && n <= GATE_MAX_AMENDS)) {
     bad(`gateAmends must map each gate to an integer from 0 to ${GATE_MAX_AMENDS}`);
   }
@@ -236,13 +250,14 @@ export function countSpecTasks(text) {
   return count;
 }
 
-export function initFactory({ title, requirement, factory, input = null }) {
+export function initFactory({ title, requirement, factory, input = null, now = null }) {
   return {
     v: 1, title, requirement, input, factory, stage: factory.start,
     status: 'running', awaiting: null, reason: null,
     counters: {}, transitions: 0, runTransitions: 0, runCeiling: FACTORY_MAX_TRANSITIONS, taskHigh: 0, taskCount: null,
     lane: null, tasks: null, carry: null, launched: null,
     history: [], gateAmends: {},
+    ...(now ? { started: now } : {}),
   };
 }
 
@@ -361,13 +376,16 @@ export function unquotePath(p) {
  * with `taskCount` (a stage that wrote a spec), `carry` (the reason the next stage — above all a
  * re-entered loop — must hear). `loopTemplate` is the graph name in the LOOP.md the CLI read,
  * `head` the HEAD commit now, `loopInitAt` the registry row's last `loop init` time for this
- * worktree, or null (R2). Every refusal throws before the state changes.
+ * worktree, or null (R2). `now` is the ISO time stamped on the history entry as `at`, and `tokens`
+ * the count the host reported for the stage's agent (D2, D3); both are left out when null.
+ * Every refusal throws before the state changes.
  */
 export function recordStage(state, { bricks }, outcome, {
   porcelain = null, specPath = null, taskCount = null, carry = null, loopStatus = null,
-  loopTemplate = null, head = null, loopInitAt = null,
+  loopTemplate = null, head = null, loopInitAt = null, now = null, tokens = null,
 } = {}) {
   assertRunning(state);
+  if (tokens !== null && !tokenCount(tokens)) throw new Error('--tokens must be a positive integer: the count the host reported, never an estimate');
   assertNoLoop(loopStatus);
   const from = state.stage;
   const outcomes = stageOutcomes(from, bricks);
@@ -440,6 +458,7 @@ export function recordStage(state, { bricks }, outcome, {
   state.carry = carry || null;
   state.history.push({
     stage: from, outcome, task: taskNo(state), ...(carry ? { carry } : {}),
+    ...(tokens !== null ? { tokens } : {}), ...(now ? { at: now } : {}),
   });
   const brick = isLoop ? null : bricks.get(from);
   if (brick?.gate === 'human' && (!brick.gateOn || brick.gateOn.includes(outcome))) {
@@ -487,16 +506,16 @@ function transition(state, from, edge, bricks) {
 /**
  * The answer to a held `gate: human` stage (D14: the loop engine's gate and verdicts, reused).
  * `ok` follows the held edge; `no` stops; `amend` re-runs the stage with the note as its `carry`,
- * `GATE_MAX_AMENDS` times per stage per task.
+ * `GATE_MAX_AMENDS` times per stage per task. `now` is stamped on the history entry as `at` (D2).
  */
-export function decideFactory(state, { bricks }, verdict, note = '') {
+export function decideFactory(state, { bricks }, verdict, note = '', { now = null } = {}) {
   if (state.status !== 'awaiting') throw new Error('nothing is awaiting a decision');
   if (!['ok', 'no', 'amend'].includes(verdict)) throw new Error(`verdict must be ok, no or amend, not ${JSON.stringify(verdict)}`);
   const { stage, outcome } = state.awaiting;
   const edge = edgeFor(state.factory, stage, outcome) ?? { from: stage, on: outcome, to: '$stop' };
   if (verdict === 'ok') assertLane(state, edge);
   state.awaiting = null; state.status = 'running';
-  state.history.push({ stage, verdict, task: taskNo(state), ...(note ? { note } : {}) });
+  state.history.push({ stage, verdict, task: taskNo(state), ...(note ? { note } : {}), ...(now ? { at: now } : {}) });
   if (verdict === 'no') return stop(state, `gate rejected at ${stage}${note ? `: ${note}` : ''}`);
   if (verdict === 'amend') {
     const key = `${stage}@${taskNo(state)}`;

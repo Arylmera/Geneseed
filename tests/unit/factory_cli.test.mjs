@@ -773,3 +773,40 @@ test('headCommit reads the HEAD commit git names, without spawning it', () => {
     assert.equal(headCommit(sb.path), revParse(sb.path), 'detached');
   } finally { sb.cleanup(); }
 });
+
+// D2, D3, D5 through the CLI. `init` stamps `started` and `record` stamps `at`, both the ISO time
+// of the call, so the expected values are their form, and the order: `at` is not before `started`.
+// `--tokens` takes digits that make a positive integer and nothing else; a refusal leaves
+// FACTORY.md as it was. `report` prints `runMetrics` of the state and writes nothing: the file is
+// byte-equal after it. With no FACTORY.md it refuses as every state action does.
+test('report: started, at and tokens reach FACTORY.md, and report prints the metrics without writing', () => {
+  const sb = repo();
+  const file = path.join(sb.path, 'FACTORY.md');
+  const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+  try {
+    assert.deepEqual(run(sb.path, ['report']), { code: 1, out: { error: `${file} does not exist — run \`geneseed factory init\` first` } });
+    run(sb.path, [...INIT, '--factory', 'fixture-fix']);
+    const fresh = run(sb.path, ['report']);
+    assert.match(fresh.out.started, ISO);
+    assert.deepEqual(fresh, { code: 0, out: { started: fresh.out.started, stages: [], workMs: 0, waitMs: 0, tokens: null, transitions: 0, entries: [] } });
+    const before = readFileSync(file, 'utf8');
+    for (const bad of ['0', '-4', '1.5', '1e3', 'many']) {
+      assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', `--tokens=${bad}`], ''),
+        { code: 1, out: { error: `--tokens ${bad} is not a positive integer: pass the count the host reported, or leave it out` } });
+    }
+    assert.equal(readFileSync(file, 'utf8'), before);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'pass', '--tokens', '900'], ''), { code: 0, out: { stage: 'loop:bugfix' } });
+    const stored = readFileSync(file, 'utf8');
+    const { out } = run(sb.path, ['report']);
+    assert.equal(readFileSync(file, 'utf8'), stored);
+    const [entry] = JSON.parse(stored.slice(stored.indexOf('{'), stored.lastIndexOf('}') + 1)).history;
+    assert.match(entry.at, ISO);
+    assert.deepEqual(entry, { stage: 'plan', outcome: 'pass', task: 0, tokens: 900, at: entry.at });
+    const ms = Date.parse(entry.at) - Date.parse(out.started);
+    assert.ok(ms >= 0, `at ${entry.at} is before started ${out.started}`);
+    assert.deepEqual(out, {
+      started: out.started, stages: [{ stage: 'plan', runs: 1, reworks: 0, workMs: ms, tokens: 900 }],
+      workMs: ms, waitMs: 0, tokens: 900, transitions: 1, entries: [{ ms, wait: false, rework: false }],
+    });
+  } finally { sb.cleanup(); }
+});

@@ -908,3 +908,39 @@ test('F1: a factory with no needs-info edge still checks, validates, and goes on
   assert.deepEqual(decideFactory(s, shipped, 'ok'), { stage: 'holdout-write' });
   assert.deepEqual(s.counters, {});
 });
+
+// D2 + D3: `init` stamps the time it is given as `started`, `record` and `decide` stamp it as `at`
+// on the entry they push, and `record` stores the host's token count. Each is left out when not
+// given, so a state written before them (every scenario above) still validates. A count that is
+// not a positive integer is refused before the state changes, by `record` and by R4.
+test('D2 + D3: started, at and tokens are stamped when given, optional on read, and tokens is a positive integer', () => {
+  const T2 = '2026-11-08T10:30:00.000Z';
+  const s = initFactory({ title: 'T', requirement: 'R', factory: reviewFactory(), now: T0 });
+  assert.equal(s.started, T0);
+  recordStage(s, CATALOG, 'needs-info', { ...CLEAN, now: T1, tokens: 1200 });
+  decideFactory(s, CATALOG, 'ok', '', { now: T2 });
+  assert.deepEqual(s.history, [
+    { stage: 'intake', outcome: 'needs-info', task: 0, tokens: 1200, at: T1 },
+    { stage: 'intake', verdict: 'ok', task: 0, at: T2 },
+  ]);
+  validateFactoryState(parseFactoryFile(renderFactoryFile(s)), CATALOG);
+  const old = start(reviewFactory());
+  recordStage(old, CATALOG, 'pass', CLEAN);
+  assert.deepEqual(['started' in old, old.history], [false, [{ stage: 'intake', outcome: 'pass', task: 0 }]]);
+  validateFactoryState(old, CATALOG);
+  for (const tokens of [0, -5, 1.5, '12']) {
+    const t = start(reviewFactory());
+    assert.throws(() => recordStage(t, CATALOG, 'pass', { ...CLEAN, tokens }), /--tokens must be a positive integer/);
+    assert.deepEqual([t.history, t.stage], [[], 'intake']);
+  }
+  const rows = [
+    [(x) => { x.started = 7; }, 'started must be a time'],
+    [(x) => { x.history[0].at = 5; }, 'a history entry\'s at must be a time'],
+    [(x) => { x.history[0].tokens = 0; }, 'a history entry\'s tokens must be a positive integer'],
+    [(x) => { x.history[0].tokens = 1.5; }, 'a history entry\'s tokens must be a positive integer'],
+  ];
+  for (const [edit, says] of rows) {
+    const x = structuredClone(s); edit(x);
+    assert.throws(() => validateFactoryState(x, CATALOG), new RegExp(`FACTORY.md is unreadable: ${says}`));
+  }
+});
