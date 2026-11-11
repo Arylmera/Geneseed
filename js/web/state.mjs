@@ -139,6 +139,10 @@ export function webState(theme = null, target = null) {
     // The per-install views made off this daemon's state, keyed `[host, root]` — see
     // `installView`. Kept here, not at module level, so each handler (each test's) has its own.
     _views: new Map(),
+    // Set by `serve()` once it listens: from then on no request runs the doctor on the event loop.
+    // A cold cache starts `warmDoctor` and reads as pending; tests and one-shot reads keep the
+    // inline run, which answers at once.
+    warm: false,
   };
   // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob/openclaude
   // PROJECT install keeps its data under <repo>/.claude|.bob|.openclaude while the markers
@@ -172,7 +176,8 @@ export function webState(theme = null, target = null) {
     // NULL WHILE THE WARM-UP RUNS, and only then: a pending verdict, which the console draws as
     // "checking" and asks again for. Blocking here would put the run back on the event loop.
     get() {
-      if (st._doctor === null && st._doctorJob === null) st.runDoctor();
+      // A worker that cannot start (`warmDoctor` returns null) falls back to the inline run.
+      if (st._doctor === null && st._doctorJob === null && !(st.warm && warmDoctor(st))) st.runDoctor();
       return st._doctor;
     },
   });
@@ -260,6 +265,9 @@ export function webState(theme = null, target = null) {
   st.refresh = (opts = {}) => {
     st.refreshOwn(opts);
     for (const v of st._views.values()) v.refreshOwn(opts);
+    // Every job ends here, and the console asks the overview right after: start the new verdict
+    // now, on its thread, rather than inside that request (~12 s of a frozen console).
+    if (st.warm && opts.doctor !== false) warmDoctor(st);
   };
   return st;
 }

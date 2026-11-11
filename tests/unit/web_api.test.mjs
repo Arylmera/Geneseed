@@ -525,6 +525,38 @@ test('a refresh during the warm-up drops its verdict', async () => {
   } finally { clearInterval(beat); }
 });
 
+// A SERVING daemon (`warm`) never runs the doctor in a request. Every job ends in `refresh`, and
+// the console asks the overview right after: that ask used to run the doctor in line, ~12 s of a
+// frozen console. Now the refresh starts the run on its thread, the overview answers at once with
+// a pending verdict (null, which the console polls on), and `?fresh=1` waits on the thread too.
+// Relative timings, so a loaded machine cannot redden it: the request must take well under the run.
+test('after a refresh, a serving daemon answers the overview without running the doctor', async () => {
+  const st = neutral();
+  st.warm = true;
+  st.stampDoctor(['before the job']);
+  const beat = setInterval(() => {}, 50);
+  try {
+    const start = performance.now();
+    st.refresh();
+    const job = st._doctorJob;
+    assert.ok(job instanceof Promise, 'the refresh started no warm-up run');
+    const asked = performance.now();
+    const ov = apiOverview(st);
+    const took = performance.now() - asked;
+    assert.equal(ov.doctor, null, 'the overview did not read the verdict as pending');
+    await job;
+    const run = performance.now() - start;
+    assert.ok(took < run / 2, `the overview took ${took} ms of a ${run} ms doctor run`);
+    assert.ok(Array.isArray(st._doctor.problems) && !st._doctor.problems.includes('before the job'));
+
+    const page = STATE_ROUTES['/api/doctor'](st, '/api/doctor?fresh=1');
+    assert.ok(page instanceof Promise, 'a fresh run went on the event loop');
+    assert.equal(st._doctor, null);
+    const { groups } = await page;
+    assert.ok(groups.length > 1, 'the fresh run carried no per-check groups');
+  } finally { clearInterval(beat); }
+});
+
 // THE DEFAULT INSTALL, e.g. ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The
 // console opened on the OpenCode global dir, found nothing deployed there and showed the
 // onboarding form over a working ~/.bob. The default is the first ACTIVE install in the console's

@@ -40,7 +40,7 @@ import { comparePaths } from '../lib/paths.mjs';
 import {
   configItems, deployed, dget, fleetCounts, memoryDir, memoryItems, notebookItems, orSkip, tierOf, wikiItems,
 } from './catalog.mjs';
-import { defaultView, samePath, stampMinute, viewCfg } from './state.mjs';
+import { defaultView, samePath, stampMinute, viewCfg, warmDoctor } from './state.mjs';
 import { MANUAL_UPDATE, gitBehind, installKind, updateStatus } from './update-check.mjs';
 
 /**
@@ -101,11 +101,17 @@ const DOCTOR_COOLDOWN_MS = 3_000;
  */
 export function apiDoctor(state, fresh = false) {
   if (fresh && Date.now() - (state._doctorFreshAt ?? 0) >= DOCTOR_COOLDOWN_MS) {
-    state.runDoctor();
+    // A daemon re-runs on the warm-up thread: the page waits on the promise, the loop does not.
+    if (state.warm) {
+      state._doctor = null;
+      state._doctorJob = null;
+      warmDoctor(state);
+    } else state.runDoctor();
     state._doctorFreshAt = Date.now();
   }
   const answer = () => {
-    const { ok, problems, checked_at } = state.doctor;
+    // A worker that failed leaves the cache cold; only then does this page run it in line.
+    const { ok, problems, checked_at } = state.doctor ?? (state.runDoctor(), state._doctor);
     return { ...state._doctorRun, ok, problems, checked_at };
   };
   return state._doctorJob === null ? answer() : state._doctorJob.then(answer);
