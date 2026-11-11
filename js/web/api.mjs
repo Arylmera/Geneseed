@@ -93,11 +93,14 @@ const DOCTOR_COOLDOWN_MS = 3_000;
  *
  * A fresh ask within `DOCTOR_COOLDOWN_MS` of the last one THIS PATH ran reuses that run, so a
  * page looping on `?fresh=1` cannot pin the event loop. `_doctorFreshAt` is written here only: a
- * verdict planted any other way still re-runs. No single-flight promise — `runDoctor` is
- * synchronous, so two fresh runs cannot overlap; only the warm-up is not (`warmDoctor`).
+ * verdict planted any other way still re-runs. On a serving daemon (`state.warm`) the fresh run
+ * goes to the warm-up thread (`warmDoctor`, which stops the run it replaces); elsewhere it is
+ * the synchronous `runDoctor`.
  *
- * This page needs the groups, so during the warm-up it answers with a promise of the verdict
- * rather than a pending one: the request waits, the event loop does not.
+ * This page needs the groups, so while a run is out it answers with a promise of the verdict
+ * rather than a pending one: the request waits, the event loop does not. A run that a refresh or
+ * a newer fresh ask replaced settles with no verdict, so the promise follows the newer run. Only a
+ * thread that could not give one (it failed to start or died) leaves the run to this request.
  */
 export function apiDoctor(state, fresh = false) {
   if (fresh && Date.now() - (state._doctorFreshAt ?? 0) >= DOCTOR_COOLDOWN_MS) {
@@ -105,16 +108,19 @@ export function apiDoctor(state, fresh = false) {
     if (state.warm) {
       state._doctor = null;
       state._doctorJob = null;
-      warmDoctor(state);
     } else state.runDoctor();
     state._doctorFreshAt = Date.now();
   }
+  // `_doctor`, not the `doctor` getter: on a daemon the getter would start a thread and say null.
   const answer = () => {
-    // A worker that failed leaves the cache cold; only then does this page run it in line.
-    const { ok, problems, checked_at } = state.doctor ?? (state.runDoctor(), state._doctor);
+    if (state._doctor === null && state._doctorJob !== null) return state._doctorJob.then(answer);
+    if (state._doctor === null) state.runDoctor();
+    const { ok, problems, checked_at } = state._doctor;
     return { ...state._doctorRun, ok, problems, checked_at };
   };
-  return state._doctorJob === null ? answer() : state._doctorJob.then(answer);
+  // A cold cache on a daemon (a view switch dropped it) is filled on the thread, as the overview's is.
+  if (state.warm && state._doctor === null) warmDoctor(state);
+  return answer();
 }
 
 /**

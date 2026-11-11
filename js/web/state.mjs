@@ -95,7 +95,7 @@ export function stampMinute(ms) {
  * THE CACHING IS BEHAVIOUR, NOT AN OPTIMISATION: `doctorCollect` renders a theme per call
  * and the console GETs `/api/overview` on mount and again after every mutation, so an
  * uncached `doctor` would put a full build on each of those requests. `refresh()` is what a mutation calls to
- * drop both — except where the mutation cannot change anything the doctor reads (the checkout,
+ * drop both (a serving daemon then re-runs the doctor on its thread at once, `warmDoctor`) — except where the mutation cannot change anything the doctor reads (the checkout,
  * the hook shim, the hook shell, the OpenCode config dirs, the deployed install): a memory
  * delete passes `{ doctor: false }` and keeps the ~3.6 s verdict. Rule and profile writes do not
  * call `refresh()` at all. Every other caller keeps the default, so a new one is slow, never stale.
@@ -124,6 +124,8 @@ export function webState(theme = null, target = null) {
     _doctorRun: null,
     // The warm-up run still in flight, a promise settled when its thread ends (`warmDoctor`).
     _doctorJob: null,
+    // The thread of the latest warm-up, so the next one can stop it once a refresh dropped its job.
+    _doctorWorker: null,
     // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
     // it re-renders on its own key change, so `refresh()` leaves it alone.
     renderMemo: null,
@@ -276,9 +278,12 @@ export function webState(theme = null, target = null) {
 const WARM_DOCTOR_LIMIT_MS = 180_000;
 
 /**
- * Run the doctor once right after the server binds, ON ITS OWN THREAD. On the event loop this run
- * held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s. Until it
- * lands `st.doctor` is null and `/api/doctor` waits on the promise this returns.
+ * Run the doctor ON ITS OWN THREAD: right after the server binds, and on a serving daemon
+ * (`st.warm`) after every refresh, on a cold cache and for `/api/doctor?fresh=1`. On the event loop
+ * this run held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s, and
+ * froze the console ~12 s after every job. Until it lands `st.doctor` is null and `/api/doctor`
+ * waits on the promise this returns. A new run stops the thread of the one it replaces: its
+ * verdict would be dropped anyway, and a burst of writes must not stack CPU-bound threads.
  *
  * A verdict is stamped only while its job is still the current one: `refresh`, `selectView` and a
  * newer run all clear `_doctorJob`, and the daemon must not serve what a mutation made stale. A
@@ -291,12 +296,15 @@ const WARM_DOCTOR_LIMIT_MS = 180_000;
  */
 export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS) {
   if (st._doctor !== null || st._doctorJob !== null) return st._doctorJob;
+  st._doctorWorker?.terminate();
+  st._doctorWorker = null;
   let worker;
   try {
     worker = new Worker(new URL('./doctor-worker.mjs', import.meta.url),
       { workerData: { theme: st.theme } });
   } catch { return null; }
   worker.unref();
+  st._doctorWorker = worker;
   const job = new Promise((done) => {
     const limit = setTimeout(() => {
       if (st._doctorJob === job) {
@@ -313,6 +321,7 @@ export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS) {
     worker.once('exit', () => {
       clearTimeout(limit);
       if (st._doctorJob === job) st._doctorJob = null;
+      if (st._doctorWorker === worker) st._doctorWorker = null;
       done();
     });
   });

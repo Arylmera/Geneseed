@@ -557,6 +557,23 @@ test('after a refresh, a serving daemon answers the overview without running the
   } finally { clearInterval(beat); }
 });
 
+// A Doctor page waiting on a run that a job's refresh then replaced must follow the new run, never
+// fall back to running the doctor in line. The stub stands for that in-line run; it must not fire.
+test('a doctor page whose run a refresh replaced waits on the new run', async () => {
+  const st = neutral();
+  st.warm = true;
+  const beat = setInterval(() => {}, 50);
+  try {
+    warmDoctor(st);
+    const page = STATE_ROUTES['/api/doctor'](st, '/api/doctor');
+    st.refresh();
+    st.runDoctor = () => { throw new Error('the doctor ran in line'); };
+    const { groups, ok } = await page;
+    assert.ok(groups.length > 1, 'the page carried no per-check groups');
+    assert.equal(ok, st._doctor.ok);
+  } finally { clearInterval(beat); }
+});
+
 // THE DEFAULT INSTALL, e.g. ON A MACHINE WITHOUT OPENCODE (reported 2026-10: IBM Bob only). The
 // console opened on the OpenCode global dir, found nothing deployed there and showed the
 // onboarding form over a working ~/.bob. The default is the first ACTIVE install in the console's
