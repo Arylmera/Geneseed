@@ -19,7 +19,7 @@ geneseed rebuild-all               # rebuild every install with its own settings
 
 `rebuild-all` re-renders each registered install in place, keeping its own theme, host, footprint, posture, mode, packs and rule exclusions. It is best-effort: when one install fails, it reports the failure and carries on with the rest.
 
-`upgrade`, `update` and `bootstrap` are the clone route. Run from an npm install, they stop before touching anything and point you to `npm install -g geneseed@latest` instead.
+`upgrade` and `update` (and the deprecated `bootstrap`) are the clone route. Run from an npm install, they stop before touching anything and point you to `npm install -g geneseed@latest` instead.
 
 ## Installed from a clone
 
@@ -36,7 +36,7 @@ geneseed upgrade imperial     # the same, switching the theme
 
 If the `doctor` pass cannot finish, for example on a busy machine after 300 seconds, `upgrade` keeps the pull, rebuilds nothing, and exits 1. The pulled source is unchecked, not bad. Run `geneseed upgrade` again: it runs `doctor` first, rebuilds on a pass, and rolls back to the last checked commit on a failure.
 
-A dirty working tree, or a folder that is not a git clone, is reported rather than force-updated. `update` is an alias of `upgrade`; `sync-self` was removed in 5.0.0, and `upgrade` takes only a theme. `bootstrap` does the same and then opens the setup wizard (`--no-setup` skips the wizard).
+A dirty working tree, or a folder that is not a git clone, is reported rather than force-updated. `update` is an alias of `upgrade`; `sync-self` was removed in 5.0.0, and `upgrade` takes only a theme (as an argument or `--theme`). `upgrade --setup` does the same and then opens the setup wizard; `bootstrap`, its old name, still works for one release and says so.
 
 ## The Update button in the web console
 

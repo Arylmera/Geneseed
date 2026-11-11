@@ -42,7 +42,7 @@
     },
     {
       "name": "bootstrap",
-      "help": "update everything (upgrade) with a progress UI, then run setup",
+      "help": "deprecated: use upgrade --setup (kept for one release)",
       "description": "",
       "positionals": [],
       "options": [
@@ -2101,7 +2101,38 @@
           "hidden": false
         }
       ],
-      "options": [],
+      "options": [
+        {
+          "names": [
+            "--setup"
+          ],
+          "dest": "setup",
+          "metavar": null,
+          "help": "after the update, run the setup wizard (what bootstrap did)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme_opt",
+          "metavar": "THEME",
+          "help": "force a theme, as the theme argument does",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {
@@ -2123,7 +2154,38 @@
           "hidden": false
         }
       ],
-      "options": [],
+      "options": [
+        {
+          "names": [
+            "--setup"
+          ],
+          "dest": "setup",
+          "metavar": null,
+          "help": "after the update, run the setup wizard (what bootstrap did)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--theme"
+          ],
+          "dest": "theme_opt",
+          "metavar": "THEME",
+          "help": "force a theme, as the theme argument does",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

@@ -336,7 +336,7 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 
 ```bash
 ./geneseed update      # everything in one: refresh the scripts + content, then rebuild
-./geneseed bootstrap   # update everything, then drop into the setup wizard
+./geneseed upgrade --setup   # update everything, then drop into the setup wizard (was: bootstrap)
 ./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
 ```
 

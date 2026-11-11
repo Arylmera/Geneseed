@@ -7686,6 +7686,99 @@
         "GENESEED_OUT": "{sb}/bundle"
       },
       "expect": [
+        "argument --theme: 'neutral' contradicts the theme argument 'cyberpunk'"
+      ],
+      "expect_absent": [
+        "preflight: checking the local checkout",
+        "rebuilding bundle"
+      ],
+      "git": "uptodate",
+      "id": "upgrade/a-theme-argument-and-a-different---theme-are-refused",
+      "steps": [
+        {
+          "argv": [
+            "upgrade",
+            "cyberpunk",
+            "--theme",
+            "neutral"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      },
+      "expect_absent_files": [
+        "bundle/AGENT.md"
+      ]
+    },
+    {
+      "bin": "cli",
+      "env": {
+        "GENESEED_OUT": "{sb}/bundle"
+      },
+      "expect": [
+        "(theme: cyberpunk, emit: files)",
+        "built theme 'cyberpunk'"
+      ],
+      "expect_absent": [
+        "theme: neutral",
+        "is IGNORED"
+      ],
+      "expect_files": [
+        "bundle/AGENT.md",
+        "bundle/.geneseed-theme",
+        "bundle/.geneseed-version"
+      ],
+      "git": "uptodate",
+      "id": "upgrade/--theme-is-the-theme-argument-spelled-as-a-flag",
+      "steps": [
+        {
+          "argv": [
+            "upgrade",
+            "--theme",
+            "cyberpunk"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[geneseed] step 1/1: Update & rebuild ...",
+        "[geneseed] ✓ update complete.",
+        "[setup] needs an interactive terminal. Non-interactive? e.g.:",
+        "  geneseed build --emit opencode-global --theme neutral"
+      ],
+      "expect_absent": [
+        "✗ step",
+        "deprecated"
+      ],
+      "git": "dirty",
+      "id": "upgrade/--setup-hands-off-to-a-FRESH-setup-process-as-bootstrap-did",
+      "steps": [
+        {
+          "argv": [
+            "upgrade",
+            "--setup"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "env": {
+        "GENESEED_OUT": "{sb}/bundle"
+      },
+      "expect": [
         "(theme: cyberpunk, emit: opencode-global)",
         "[geneseed] opencode-global -> "
       ],
@@ -8056,6 +8149,7 @@
     {
       "bin": "cli",
       "expect": [
+        "[geneseed] bootstrap is deprecated: run `geneseed upgrade --setup`",
         "[geneseed] step 1/1: Update & rebuild ...",
         "[geneseed] ✓ update complete.",
         "[setup] needs an interactive terminal. Non-interactive? e.g.:",
