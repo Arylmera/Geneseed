@@ -277,6 +277,10 @@ test('the front door answers --version, help and a mistyped verb', () => {
   // `help <verb>` is `<verb> --help`, byte for byte; bare `help` is `--help`.
   assert.equal(run('help', 'version').stdout, run('version', '--help').stdout);
   assert.equal(run('help').stdout, run('--help').stdout);
+  // `help help` is the listing as well, never "unknown command 'help'. Did you mean 'help'?".
+  const helpHelp = run('help', 'help');
+  assert.equal(helpHelp.status, 0, helpHelp.stderr);
+  assert.equal(helpHelp.stdout, run('--help').stdout);
   // A near miss is named, a far one is not, and both exit 2 and point at --help.
   const near = run('stauts');
   assert.equal(near.status, 2);

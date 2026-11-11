@@ -328,7 +328,8 @@ async function main(argv) {
   }
   // `help` and `help <verb>` are spellings of `--help` and `<verb> --help`, and nothing more:
   // a rewrite here rather than a VERBS row, because a row would owe the table a subcommand.
-  if (argv[0] === 'help') argv = argv.length > 1 ? [argv[1], '--help'] : ['--help'];
+  // `help help` is the listing too: `help` is not a VERBS row, so it has no help of its own.
+  if (argv[0] === 'help') argv = argv.length > 1 && argv[1] !== 'help' ? [argv[1], '--help'] : ['--help'];
   const verb = argv[0];
   if (verb === '-h' || verb === '--help') {
     return printVerbList('geneseed', [...Object.keys(VERBS), 'validate', 'help'], {
