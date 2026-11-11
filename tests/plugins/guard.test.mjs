@@ -322,6 +322,21 @@ test("not a verb, or not a loss: never blocks", async () => {
   }
 })
 
+// A long command is read in linear time. `LOSS_CANDIDATE_RE` (the loss twin) rescanned the line
+// from every `git`: on 5.2.0, 270 KB of `git -C x ` cost it 6.4 s alone, every one of them a
+// stalled tool call. The verb after the long line must still be found: `push --mirror` deletes
+// remote branches in every state, so it blocks. 1000 ms, not the hooks' 200 ms: the guard's
+// whole inspection runs here, not one decision, and these runs share a loaded machine.
+test("a 270 KB command is inspected in linear time, and a loss verb after it still blocks", async () => {
+  const long = "git -C x ".repeat(30000)
+  let t = performance.now()
+  assert.equal(await blocked("bash", { command: long }), false)
+  assert.ok(performance.now() - t < 1000, `long git line: ${(performance.now() - t).toFixed(0)} ms`)
+  t = performance.now()
+  assert.equal(await blocked("bash", { command: `${long}\ngit push --mirror origin` }), true)
+  assert.ok(performance.now() - t < 1000, `long line then a loss: ${(performance.now() - t).toFixed(0)} ms`)
+})
+
 // ---- content secret scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide) -----
 // The path check above only ever saw the FILENAME; this is the body that would land on disk.
 

@@ -35,7 +35,7 @@ import { rebuildAll } from '../../js/build/generate.mjs';
 import { cmdMigrate, hookSettingsFile } from '../../js/maintain/migrate.mjs';
 import {
   cmdContext, discoverContext, SEED_SHA256, SESSION_FILES, sessionFiles, sessionStartSize,
-  CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge,
+  CURATE_NUDGE, CURATE_TOPIC_MAX, memoryNudge, RULES_PREAMBLE_SHA256,
 } from '../../js/hosts/hooks-context.mjs';
 import {
   GLOBAL_MANIFEST, VERSION_MARKER, HOSTS, claudeConfigDir, opencodeConfigDir, bobConfigDir,
@@ -2142,6 +2142,32 @@ for (const row of TIER_LAYERS) {
     for (const [head, body] of row.want) assert.ok(out.includes(`----- ${head} -----\n${body}\n`), out);
   }));
 }
+
+// The seed's explanation above the rules is for the file's owner, not the agent: sent at every
+// SessionStart and SubagentStart it was 1 331 of 4 474 characters. So text above the first
+// column-0 `## R<n>` heading that is still the seed, byte for byte once CRLF is folded and its
+// trailing newlines trimmed, is dropped. Prose the owner wrote there stays, and so does a seed
+// with one word changed.
+const SEED_RULES = SESSION_SEEDS['user-rules.md'];
+const TWO_RULES = '## R1 — Plan first\nWrite a plan.\n\n## R2 — Test\nRun the tests.\n';
+for (const [name, file, want] of [
+  ['the seed above two rules is dropped', `${SEED_RULES}\n${TWO_RULES}`, TWO_RULES.trimEnd()],
+  ['so is a CRLF copy of it', `${SEED_RULES}\n${TWO_RULES}`.replace(/\n/g, '\r\n'), TWO_RULES.trimEnd()],
+  ['owner prose above the rules stays', `# Mine\nRead me.\n\n${TWO_RULES}`, `# Mine\nRead me.\n\n${TWO_RULES}`.trimEnd()],
+  ['an edited seed stays', `${SEED_RULES.replace('Keep the set small', 'Keep it small')}\n${TWO_RULES}`,
+    `${SEED_RULES.replace('Keep the set small', 'Keep it small')}\n${TWO_RULES}`.trimEnd()],
+  ['the seed with prose after it stays', `${SEED_RULES}\nMy note.\n\n${TWO_RULES}`, `${SEED_RULES}\nMy note.\n\n${TWO_RULES}`.trimEnd()],
+]) {
+  test(`a rules file's seed preamble: ${name}`, () => withTier((t) => {
+    t.put(path.join(t.cfg, RULES), file);
+    assert.deepEqual(sessionFiles(t.cfg).map((s) => [s.rel, s.text]), [[RULES, want]]);
+  }));
+}
+
+test('the rules preamble hash is the user-rules seed\'s', () => {
+  assert.equal(RULES_PREAMBLE_SHA256,
+    createHash('sha256').update(SEED_RULES.replace(/\r\n/g, '\n').replace(/\n+$/, '')).digest('hex'));
+});
 
 test('the wiki is one whole file across the layers, and $GENESEED_WIKI outranks both', () => withTier((t) => {
   const names = () => sessionFiles(t.cfg).map((s) => [s.text.split(' ')[2], s.label]);

@@ -416,6 +416,66 @@ test('Law IV fails closed with the `unverified` text when it cannot read the sta
   } finally { ws.cleanup(); }
 });
 
+// A gate that has not answered when the host's hook timeout fires lets the call run unjudged, so
+// the command readers must be linear and an oversized command must ask, not defer. On 5.2.0 the
+// git-verb scans rescanned the line from every `git`: 270 KB of `git -C x ` took 9.8 s, 540 KB
+// 80.8 s. The bound is 64 KB: past it the command is not read at all and asks with the
+// `unverified` text (law-4, so Bob refuses it too). Timed in process — a spawn's own start-up on
+// a loaded Windows runner is noise next to 200 ms.
+const repeated = (unit, n) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
+function decideInProcess(command, host = null) {
+  return import('../../js/hosts/hooks.mjs').then(({ gitDecide }) => {
+    const chunks = [];
+    const realWrite = process.stdout.write;
+    process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+    const t = performance.now();
+    let rc;
+    try {
+      rc = gitDecide({ root: null, host }, { tool_name: 'Bash', tool_input: { command }, cwd: PLAIN });
+    } finally { process.stdout.write = realWrite; }
+    return { rc, ms: performance.now() - t, out: chunks.join('') };
+  });
+}
+
+test('a 1 MB command asks within 200 ms, in process and through the real entry', async () => {
+  const big = repeated('git -C x ', 1024 * 1024);
+  const r = await decideInProcess(big);
+  assert.ok(r.ms < 200, `1 MB took ${r.ms.toFixed(0)} ms`);
+  assert.equal(r.rc, 0);
+  assert.match(JSON.parse(r.out).hookSpecificOutput.permissionDecisionReason, /could not work out what it removes/);
+  // The real entry: the same ask, not an exit with nothing on stdout.
+  askDecision(hookRun('git-gate', { stdin: bashPayload(big), cwd: PLAIN }), '1 MB git-gate');
+  askDecision(hookRun('tool-gate', { stdin: bashPayload(big), cwd: PLAIN }), '1 MB tool-gate');
+});
+
+test('commands just under the 64 KB bound are read in linear time, with their usual verdict', async () => {
+  // Each row is a shape that rescanned to the end of the line once per occurrence on 5.2.0.
+  for (const [unit, verdict] of [['git -C x ', 'defer'], ['git status && ', 'defer'],
+    ['git -C x commit ', 'ask'], ['GIT -C x\r', 'defer']]) {
+    const r = await decideInProcess(repeated(unit, 63 * 1024));
+    assert.ok(r.ms < 200, `${JSON.stringify(unit)}: ${r.ms.toFixed(0)} ms`);
+    assert.equal(r.out ? JSON.parse(r.out).hookSpecificOutput.permissionDecision : 'defer', verdict, unit);
+  }
+});
+
+test('the git-verb scans keep their truth set: one line, the first `git`, a word boundary', async () => {
+  const { LOSS_CANDIDATE_RE } = await import('../../js/hosts/loss.mjs');
+  // A verb on the NEXT line is another command; `gitcommit` and `pushy` are not words; a later
+  // `git` on the line changes nothing. Commit verbs only, so no loss ask can answer first.
+  for (const [cmd, asks] of [['git commit', true], ['gitcommit', false], ['echo git; git commit -m x', true],
+    ['git status\necho commit', false], ['a git b git commit', true], ['git x commits', false]]) {
+    const r = await decideInProcess(cmd);
+    assert.equal(/commits or pushes/.test(r.out), asks, cmd);
+  }
+  for (const [cmd, named] of [['gitpush', false], ['echo git; git push', true], ['git status\necho reset', false],
+    ['echo x\ngit -C y reset --hard', true], ['git x pushy', false], ['a git b git push', true], ['GIT RESET', true]]) {
+    assert.equal(LOSS_CANDIDATE_RE.test(cmd), named, cmd);
+  }
+  const t = performance.now();
+  LOSS_CANDIDATE_RE.test(repeated('git -C x ', 1024 * 1024));
+  assert.ok(performance.now() - t < 200, 'LOSS_CANDIDATE_RE over 1 MB');
+});
+
 // User decision (2026-10-17): removing a worktree, forced or not, is routine agent housekeeping,
 // not a Law IV deletion — so `worktree remove -f`/`--force` passes the git gate like a plain
 // `worktree remove`, on Claude (defer: rc 0, no stdout) and on Bob (rc 0, no BLOCKED line).
@@ -1183,12 +1243,45 @@ test('a text too big, or written by the agent as a diff, shows no count and stil
     assert.equal(first(toolCall('Write', { file_path: file, content: 'a\n' })), plain, 'a folder is no regular file');
     fs.rmdirSync(file);
     assert.equal(first(toolCall('apply_diff', { path: file, diff: '<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE' })), plain);
-    // Blocks opened and never closed: 20 s through `DIFF_BLOCK_RE` at this size.
-    const diff = '<<<<<<< SEARCH\nx\n=======\ny\n'.repeat(3200);
+    // Blocks opened and never closed: 20 s at 86 KB through the regex `diffBlocks` replaced. 2 400
+    // blocks are 64 800 characters, under the 64 KB diff bound, so this row still reaches the count;
+    // past the bound the gate asks without reading the diff (the next test).
+    const diff = '<<<<<<< SEARCH\nx\n=======\ny\n'.repeat(2400);
     const start = performance.now();
     assert.equal(first(toolCall('apply_diff', { path: file, diff })), plain);
     assert.ok(performance.now() - start < 5000, `${Math.round(performance.now() - start)} ms`);
   } finally { sb.cleanup(); }
+});
+
+// An `apply_diff` is read in one pass, and past 64 KB not at all. Its block regex retried every
+// later separator from every opening: 32 KB took 4.7 s, and 256 KB of opened blocks ran past
+// 120 s through the binary, past Bob's hook timeout, so the secrets gate never judged the write.
+// Past the bound the rule gate asks with the `unverified` text (law-4, so Bob refuses it too).
+// Timed in process; the binary row checks the same ask reaches stdout.
+test('a 256 KB pathological apply_diff asks within 200 ms, in process and through the real entry', async () => {
+  const { ruleDecide } = await import('../../js/hosts/hooks.mjs');
+  const diff = repeated('<<<<<<< SEARCH\na\n=======\n', 256 * 1024);
+  const call = { tool_name: 'apply_diff', tool_input: { path: 'tests/a.test.js', diff }, cwd: PLAIN };
+  const chunks = [];
+  const realWrite = process.stdout.write;
+  process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+  const t = performance.now();
+  let rc;
+  try { rc = ruleDecide({ root: null }, call); } finally { process.stdout.write = realWrite; }
+  const ms = performance.now() - t;
+  assert.ok(ms < 200, `256 KB diff took ${ms.toFixed(0)} ms`);
+  assert.equal(rc, 0);
+  assert.match(JSON.parse(chunks.join('')).hookSpecificOutput.permissionDecisionReason, /could not work out what it removes/);
+  const r = askDecision(hookRun('rule-gate', { stdin: JSON.stringify(call), cwd: PLAIN }), '256 KB apply_diff');
+  assert.match(r.permissionDecisionReason, /could not work out what it removes/);
+  // Under the bound the same shape is read, in one pass, and a plain write still defers.
+  const small = repeated('<<<<<<< SEARCH\na\n=======\n', 63 * 1024);
+  const t2 = performance.now();
+  process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+  chunks.length = 0;
+  try { rc = ruleDecide({ root: null }, { ...call, tool_input: { path: 'tests/a.test.js', diff: small } }); } finally { process.stdout.write = realWrite; }
+  assert.ok(performance.now() - t2 < 200, `63 KB diff took ${(performance.now() - t2).toFixed(0)} ms`);
+  assert.equal(chunks.join(''), '', 'a 63 KB diff that closes no block defers');
 });
 
 // The count reads the file the gate judged: a `~` or a Git Bash path must not read as a new file.
