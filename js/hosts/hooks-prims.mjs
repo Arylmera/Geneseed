@@ -474,6 +474,26 @@ export function gateLoss(reason) {
 }
 // ---- gate text twin: END
 
+/**
+ * The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling: `, ` and
+ * `: ` separators, and `ensure_ascii` — every code unit past `~` as a lowercase `\uXXXX`, which is
+ * why a reason's em dash reaches stdout as `—`.
+ *
+ * A TEMPLATE, NOT `js/lib/json.mjs`'s `jsonDumpsCompact`. The keys are fixed and the one value
+ * is a string, so the general serializer bought nothing here — and it cost every tool call a
+ * 378-line module parse, being the only thing on the gate path that needed it.
+ * `tests/unit/hook_gates.test.mjs` holds the two byte-identical over non-ASCII reasons.
+ */
+export function askDecision(reason) { return decisionDoc('ask', reason); }
+
+export function decisionDoc(decision, reason) {
+  return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "${decision}", `
+    + `"permissionDecisionReason": ${asciiJson(reason)}}}\n`;
+}
+
+export const asciiJson = (s) => JSON.stringify(s)
+  .replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
 const OFF = ['off', '0', 'false', 'no'];
 
 /**

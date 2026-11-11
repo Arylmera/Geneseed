@@ -68,7 +68,7 @@ import {
 import { LOSS_CANDIDATE_RE, catastrophic, lossReason, stripStructure } from './loss.mjs';
 import {
   readStdin, SECRET_RE, DONE_LIST, DIFF_BLOCK_RE, isTestPath, weakenedBy, editPairs,
-  gateLoss, gateSafe,
+  gateLoss, gateSafe, askDecision, decisionDoc, asciiJson,
 } from './hooks-prims.mjs';
 import { recordUse } from './usage.mjs';
 import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
@@ -254,17 +254,8 @@ export function worktreeExempt(command, cwd, agentId) {
   }
 }
 
-/**
- * The `permissionDecision: "ask"` document, in Python's compact `json.dumps` spelling: `, ` and
- * `: ` separators, and `ensure_ascii` — every code unit past `~` as a lowercase `\uXXXX`, which is
- * why a reason's em dash reaches stdout as `—`.
- *
- * A TEMPLATE, NOT `js/lib/json.mjs`'s `jsonDumpsCompact`. The keys are fixed and the one value
- * is a string, so the general serializer bought nothing here — and it cost every tool call a
- * 378-line module parse, being the only thing on the gate path that needed it.
- * `tests/unit/hook_gates.test.mjs` holds the two byte-identical over non-ASCII reasons.
- */
-export function askDecision(reason) { return decisionDoc('ask', reason); }
+// `askDecision` lives in `./hooks-prims.mjs`, so the entry can ask when THIS module fails to load.
+export { askDecision };
 
 /**
  * The `permissionDecision: "deny"` twin of `askDecision`, same spelling. Claude Code shows an
@@ -273,14 +264,6 @@ export function askDecision(reason) { return decisionDoc('ask', reason); }
  * ownership gate: "propose the setup") must deny, not ask.
  */
 export function denyDecision(reason) { return decisionDoc('deny', reason); }
-
-function decisionDoc(decision, reason) {
-  return `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "${decision}", `
-    + `"permissionDecisionReason": ${asciiJson(reason)}}}\n`;
-}
-
-const asciiJson = (s) => JSON.stringify(s)
-  .replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 /**
  * A note to the MODEL that decides nothing: PreToolUse `additionalContext` with no
