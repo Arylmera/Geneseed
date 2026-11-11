@@ -5,6 +5,24 @@ import PageHeader from '../../components/PageHeader.jsx'
 // A command's heading id, shared with the margin's outline (Margin.jsx) so each entry lands.
 export const cmdId = (name) => 'cmd-' + String(name).replace(/[^\w-]+/g, '-')
 
+// The long help of a verb or an option (`description` in js/cli-table.json), under its one-line
+// `help`: a paragraph per blank-line-separated block. Absent or empty, nothing is drawn, so the
+// page reads the same for a table that has none.
+function Description({ text, className }) {
+  const paras = String(text || '')
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (!paras.length) return null
+  return (
+    <div className={className}>
+      {paras.map((p, i) => (
+        <p key={i}>{p}</p>
+      ))}
+    </div>
+  )
+}
+
 // Render one positional or option argument with its help text. Compact —
 // we render up to ~20 commands and each has a few args, so visual density
 // matters here.
@@ -22,6 +40,7 @@ function Arg({ a, kind }) {
       <code className="cli-arg-name">{head}</code>
       {meta.length > 0 && <code className="cli-arg-meta"> {meta.join(' · ')}</code>}
       {a.help && <div className="cli-arg-help">{a.help}</div>}
+      <Description text={a.description} className="cli-arg-help cli-desc" />
     </div>
   )
 }
@@ -51,6 +70,7 @@ function Command({ cmd, prog }) {
           title={`Copy ${prog} ${cmd.name}`}
         />
       </div>
+      <Description text={cmd.description} className="cli-desc" />
       <pre className="cli-syn">{synopsis}</pre>
       {(cmd.positionals || []).length > 0 && (
         <div className="cli-block">
