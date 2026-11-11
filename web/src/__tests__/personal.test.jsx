@@ -250,6 +250,13 @@ describe('Personal', () => {
     expect(container.textContent).not.toContain('●')
   })
 
+  // A failed read is not a profile without a template: the badge says the read failed.
+  it('badges a profile that could not be read as "read failed"', async () => {
+    api.profile.mockImplementation(() => Promise.reject(new Error('down')))
+    render(<Personal tab="rules" dataRev={0} />)
+    await waitFor(() => expect(badgeOf('Profile')?.textContent).toBe('read failed'))
+  })
+
   it('has at most one filled button on the rules tab with a trial rule open', async () => {
     const { container } = render(<Personal tab="rules" dataRev={0} />)
     fireEvent.click(await screen.findByText('Prefer tabs'))
