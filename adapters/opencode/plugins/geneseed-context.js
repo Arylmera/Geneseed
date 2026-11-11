@@ -284,12 +284,38 @@ async function draftLine() {
   } catch { return null }
 }
 
+// ---- rules preamble twin: BEGIN — adapters/opencode/plugins/geneseed-context.js carries everything
+// down to the END marker verbatim, with `export ` dropped (node tests/twins.mjs --write keeps it).
+
+/**
+ * SHA-256 of the `user-rules.md` seed with its trailing newlines trimmed: the explanation every
+ * rules file starts with, until its owner edits it. Hashed, not imported, for `SEED_SHA256`'s
+ * reason; tests/unit/claude.test.mjs derives it from `SESSION_SEEDS`.
+ */
+const RULES_PREAMBLE_SHA256 = 'd6973e837c9bf25b50ce068832ceef0a5e5ed2b5931c2c488428ad68aad758c3';
+// A rule's heading, at column 0: the seed's own example (`    ## R1 — …`) is indented.
+const RULE_HEADING_RE = /^## R\d+\b/m;
+
+/**
+ * `text` from its first rule on, when the text above that rule is still the seed's, byte for byte
+ * once CRLF is folded: the seed explains the file to its owner, and it cost 1 331 of 4 474
+ * characters at every session and sub-agent start. Any prose the owner wrote above the rules stays.
+ */
+function withoutRulesPreamble(text) {
+  const rule = RULE_HEADING_RE.exec(text);
+  const head = rule ? text.slice(0, rule.index).replace(/\n+$/, '') : null;
+  return head !== null && createHash('sha256').update(head).digest('hex') === RULES_PREAMBLE_SHA256
+    ? text.slice(rule.index) : text;
+}
+// ---- rules preamble twin: END
+
 // A session file's text, CRLF-folded and trimmed; null when missing, unreadable or still its seed.
+// A rules file's seed explanation above its first rule is dropped, as on the hook.
 async function sessionText(abs) {
   let text
   try { text = (await fs.readFile(abs, "utf8")).replace(/\r\n/g, "\n") } catch { return null }
   if (SEED_SHA256.has(createHash("sha256").update(text).digest("hex"))) return null
-  return text.replace(/\n+$/, "")
+  return withoutRulesPreamble(text).replace(/\n+$/, "")
 }
 
 // Session files in force for the harness dir, changed from their seed: [{ rel, abs, text, label }],
