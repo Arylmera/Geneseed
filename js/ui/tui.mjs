@@ -1,11 +1,11 @@
 /**
  * `tui` — and the TUI's pure half: the layout helpers that have no screen in them.
  *
- * `cmdTui` is an entry with no full-screen panel. Off a TTY it prints one line and returns 1;
- * on a TTY it prints a refusal that names the console and returns 1, rather than inventing
- * a screen — the same decision `js/ui/menu.mjs` makes. `tests/unit/no_panel.test.mjs` fakes
- * `isTTY` true in a child and asserts BOTH arms — the exit code, and that the refusal names
- * the console rather than pretending to draw.
+ * `cmdTui` is RETIRED: an alias kept one release that prints one line pointing at `geneseed
+ * menu` and returns 0, on a TTY or off one — `menu`'s own off-terminal exit. There is no
+ * full-screen panel behind it, the same decision `js/ui/menu.mjs` makes.
+ * `tests/unit/no_panel.test.mjs` fakes `isTTY` true in a child and asserts the exit code, that
+ * the line names only declared verbs, and that nothing is drawn.
  *
  * What lives here is the alignment contract — the functions below that decide what a row
  * looks like: display width, fitting, glyph tiers, the catalogue's entries and detail lines.

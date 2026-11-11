@@ -26,7 +26,7 @@ The upgrade is a `git pull`, so it first checks the folder. Each refusal says wh
 
 | What you see | Cause and fix |
 | --- | --- |
-| `geneseed: error: invalid choice: 'sync-self'.` | The verb is gone. Run `geneseed upgrade`. |
+| `geneseed: error: unknown command 'sync-self'. See geneseed --help.` | The verb is gone. Run `geneseed upgrade`. |
 | `geneseed: error: unrecognized arguments: imperial` from `upgrade main imperial` | `upgrade` takes only a theme. Run `geneseed upgrade imperial`. |
 | A host's `memory/` folder holds only its seed | Expected: [the fold](../concepts/shared-tier.md#the-fold) moved the facts to `~/.config/geneseed/memory/`. `geneseed memory list` shows them, and the old store is in `archived-memory/<stamp>/`. |
 | `[shared] <host>: … rules to approve` | Those rules wait in `user-rules.draft.md` and still bind from the host file. Ask the agent to review the pending rules; the `rule` skill decides them. |
