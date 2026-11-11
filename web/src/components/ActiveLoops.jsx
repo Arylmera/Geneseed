@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { api } from '../api/index.js'
-import { usePoll } from '../hooks/usePoll.js'
+import { sameOr, usePoll } from '../hooks/usePoll.js'
 import RingGraph from './RingGraph.jsx'
 import DataTable from './DataTable.jsx'
 
@@ -26,7 +26,7 @@ export function useActiveLoops() {
   usePoll(
     (alive) =>
       api.activeLoops().then(
-        (d) => alive() && (setData(d), setError(null)),
+        (d) => alive() && (setData(sameOr(d)), setError(null)),
         (e) => alive() && setError(e.message),
       ),
     POLL_MS,

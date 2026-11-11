@@ -1,5 +1,12 @@
 import { useEffect } from 'react'
 
+// The updater every poll writes its answer through: `setData(sameOr(d))`. An answer equal to the
+// one on screen (same JSON) keeps the old reference, so React bails out and a quiet tick re-renders
+// nothing. Compared inside the updater, not against a closed-over value, so overlapping ticks stay
+// race-safe — the guard hooks/useJobs.js keeps per field. The answers are small JSON reads.
+export const sameOr = (d) => (prev) =>
+  prev != null && JSON.stringify(prev) === JSON.stringify(d) ? prev : d
+
 // Run `fn` now, then every `ms` while the tab is visible, and once more the moment a
 // hidden tab is fronted again — so a HUD nobody is looking at costs no round-trips, and
 // one that comes back into view refreshes at once instead of waiting out the interval.
@@ -11,7 +18,7 @@ import { useEffect } from 'react'
 //
 // Activity and ActivityDetail each carried a hand-rolled copy of exactly this; the job
 // console's poller (hooks/useJobs.js) is different in kind — it stops itself when the job
-// ends — and stays its own.
+// ends — and stays its own. Each caller writes through `sameOr` above.
 export function usePoll(fn, ms, deps) {
   useEffect(() => {
     let alive = true
