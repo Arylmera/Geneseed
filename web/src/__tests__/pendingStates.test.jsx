@@ -69,15 +69,26 @@ describe('Ledger', () => {
     expect(region('Gate asks · 30 days').getByText('Gate activity could not be read.')).toBeTruthy()
   })
 
-  it('asks a failed usage read again from its Retry', async () => {
+  // One alert per failed read: "What fires" says it too, but quietly and without a second Retry.
+  // Retry hands focus to its card, since the button goes while the read is out.
+  it('asks a failed usage read again from its Retry, and keeps focus on the card', async () => {
     api.usage.mockRejectedValueOnce(new Error('down'))
+    const again = deferred()
     render(<Ledger overview={null} onAction={() => {}} />)
     const calls = region('Skill and agent calls')
     await calls.findByText('Usage could not be read: down')
+    const fires = within(screen.getByRole('region', { name: 'What fires' }))
+    expect(fires.getByText('Usage could not be read: down').getAttribute('role')).toBeNull()
+    expect(calls.getByText('Usage could not be read: down').getAttribute('role')).toBe('alert')
+    api.usage.mockReturnValueOnce(again.promise)
     const asked = api.usage.mock.calls.length
     await act(async () => calls.getByRole('button', { name: 'Retry: usage' }).click())
     expect(api.usage.mock.calls.length).toBe(asked + 1)
-    await waitFor(() => expect(calls.queryByText(/Usage could not be read/)).toBeNull())
+    expect(document.activeElement).toBe(
+      screen.getByRole('region', { name: 'Skill and agent calls' }),
+    )
+    await act(async () => again.resolve({ enabled: true, per_day: [], rows: [], never: [] }))
+    expect(calls.queryByText(/Usage could not be read/)).toBeNull()
   })
 
   it('gives no root-file or Needs verdict before the fleet lands', async () => {

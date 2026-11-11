@@ -40,14 +40,24 @@ const soft = (p) => p.catch(() => null)
 const pendingOf = (q) => q.loading && !q.data
 // A read that ended with nothing: rejected, or a soft read's null.
 const failedOf = (q) => !q.loading && !q.data
+// A Retry goes away with its badge while the read is out (the card shows Loading), and focus on a
+// removed button falls to <body>. It waits on the card instead; tabindex -1 lets the card take it
+// without becoming a tab stop.
+const holdFocus = (e) => {
+  const card = e.currentTarget.closest('section')
+  if (!card) return
+  card.setAttribute('tabindex', '-1')
+  card.focus()
+}
 // A failed read in words, with the reason the request gave when it gave one. The house badge, but
 // a ghost Retry named for its read: this page keeps one filled action and names each control once.
-// Without `retry` the card only says so: a second card over the same read leaves the Retry to the first.
+// Without `retry` the card only says so: a second card over the same read leaves the Retry to the
+// first, and is no second alert either.
 function ReadFailed({ what, read, retry = true }) {
   const said = read.error
     ? `${what} could not be read: ${read.error}`
     : `${what} could not be read.`
-  if (!retry) return <ErrorState error={said} />
+  if (!retry) return <ErrorState error={said} role={null} />
   return (
     <div className="error-state">
       <ErrorState error={said} />
@@ -55,7 +65,10 @@ function ReadFailed({ what, read, retry = true }) {
         type="button"
         className="btn ghost sm"
         aria-label={`Retry: ${what.toLowerCase()}`}
-        onClick={read.reload}
+        onClick={(e) => {
+          holdFocus(e)
+          read.reload()
+        }}
       >
         Retry
       </button>
@@ -737,7 +750,10 @@ function Needs({ rows, pending, partial, onRetry, onAction, onRebuild }) {
             type="button"
             className="btn ghost sm"
             aria-label="Retry: the failed reads"
-            onClick={onRetry}
+            onClick={(e) => {
+              holdFocus(e)
+              onRetry()
+            }}
           >
             Retry
           </button>
