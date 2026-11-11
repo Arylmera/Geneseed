@@ -3530,14 +3530,16 @@
       },
       "expect": [
         "* Geneseed - status",
-        "+-",
-        "|  theme"
+        "  theme ",
+        " - "
       ],
       "expect_absent": [
         "─",
         "◆",
         "·",
-        "│"
+        "│",
+        "+-",
+        "|  theme"
       ],
       "expect_re": [
         "components\\s+[1-9]\\d* agents - [1-9]\\d* skills - [1-9]\\d* laws"
@@ -3600,6 +3602,35 @@
       ],
       "world": {
         "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[version] 2 global installs found; showing <HOME>",
+        "installed: deadbeef1234"
+      ],
+      "id": "version/several-installs-name-the-one-shown",
+      "steps": [
+        {
+          "argv": [
+            "version"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\"\n  ]\n}\n",
+        "home/.config/opencode/.geneseed-theme": "neutral\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
         "repo/.keep": ""
       }
     },
@@ -4564,6 +4595,34 @@
         }
       ],
       "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[diff] deployed <HOME>",
+        "(theme: neutral)"
+      ],
+      "expect_absent": [
+        "no global Geneseed install",
+        "global installs found"
+      ],
+      "id": "diff/a-claude-only-machine-diffs-its-claude-install",
+      "steps": [
+        {
+          "argv": [
+            "diff"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
         "repo/.keep": ""
       }
     },
@@ -5825,6 +5884,77 @@
         "home/.config/opencode/opencode.json": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"instructions\": [\n    \"{home/}/.config/opencode/AGENT.md\",\n    \"./MY-OWN.md\"\n  ],\n  \"theme\": \"mine\"\n}\n",
         "home/.config/opencode/prompts/mine.md": "# my own prompt, unowned\n",
         "home/.config/opencode/skills/vend/references/deep.md": "# nested owned\n",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[uninstall] target: <HOME>",
+        "(claude:global)"
+      ],
+      "expect_absent": [
+        "opencode:global"
+      ],
+      "expect_files": [
+        "home/.claude/agents/advocate.md"
+      ],
+      "id": "uninstall/a-claude-only-machine-resolves-to-its-claude-install",
+      "steps": [
+        {
+          "argv": [
+            "uninstall"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
+        "[uninstall] 2 global installs found, and no --target names one.",
+        "geneseed uninstall --target",
+        "(opencode:global)",
+        "(claude:global)"
+      ],
+      "expect_absent": [
+        "[uninstall] target:",
+        "[uninstall] done"
+      ],
+      "expect_files": [
+        "home/.config/opencode/AGENT.md",
+        "home/.claude/agents/advocate.md"
+      ],
+      "expect_silent": true,
+      "id": "uninstall/two-global-installs-and-no-target-refuses-and-lists-both",
+      "steps": [
+        {
+          "argv": [
+            "uninstall",
+            "--yes"
+          ],
+          "cwd": "repo"
+        }
+      ],
+      "world": {
+        "home/.config/opencode/.geneseed-emit": "opencode-global\n",
+        "home/.config/opencode/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"AGENT.md\"\n  ]\n}\n",
+        "home/.config/opencode/.geneseed-theme": "neutral\n",
+        "home/.config/opencode/.geneseed-version": "deadbeef1234 (built 2020-01-01) [release 0.1]\n",
+        "home/.config/opencode/AGENT.md": "# deployed\n",
+        "home/.claude/.geneseed-emit": "claude-global\n",
+        "home/.claude/.geneseed-manifest.json": "{\n  \"owned\": [\n    \"agents/advocate.md\"\n  ],\n  \"scope\": \"global\"\n}\n",
+        "home/.claude/.geneseed-theme": "neutral\n",
+        "home/.claude/.geneseed-version": "0123456789ab (built 2020-01-01) [release 0.1]\n",
+        "home/.claude/agents/advocate.md": "# owned agent\n",
         "repo/.keep": ""
       }
     },

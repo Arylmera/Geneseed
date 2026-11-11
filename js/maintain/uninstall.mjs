@@ -720,7 +720,8 @@ export function projectQualifies(root, host) {
  *   2. `--target` IS a project marker dir itself (…/.claude) — root is its parent.
  *   3. `--target` (as a root) carries a Geneseed project install.
  *   4. `--target` given and unrecognised — null, and the caller reports it.
- *   5. No `--target`: the cwd, then the OpenCode global config dir.
+ *   5. No `--target`: the cwd, then the one global install on the machine, else the OpenCode
+ *      global config dir (`cmdUninstall` refuses when there are several).
  */
 export function uninstallResolve(targetArg) {
   const globalHit = (p) => {
@@ -754,7 +755,28 @@ export function uninstallResolve(targetArg) {
   // would otherwise return a root that LOOKS different from the identical directory.
   const hit = projectHit(resolvePath(process.cwd()));
   if (hit) return hit;
+  // The one global install on this machine, whatever its host: a Claude-only machine used to
+  // resolve to the empty OpenCode dir. With none, or several, the OpenCode dir stays the
+  // answer; `cmdUninstall` refuses the several case before it acts on it.
+  const globals = globalInstalls();
+  if (globals.length === 1) return [globals[0][0], 'global', globals[0][1]];
   return ['opencode', 'global', opencodeConfigDir()];
+}
+
+/**
+ * `[host, configDir]` for each host's global dir that `has` accepts, in `HOSTS` order — the
+ * candidates a verb run with no `--target` chooses from. The default `has` is "an install is
+ * there" (`installState` not absent); `version` and `diff` pass the marker they read.
+ */
+export function globalInstalls(has = (host, dir) => installState(dir, host, 'global') !== 'absent') {
+  const out = [];
+  for (const { host, configDir } of HOSTS) {
+    try {
+      const dir = configDir();
+      if (has(host, dir)) out.push([host, dir]);
+    } catch { /* a host with no resolvable dir has no install */ }
+  }
+  return out;
 }
 
 /**
@@ -831,6 +853,17 @@ export function cmdUninstall(args) {
     return 1;
   }
   const [host, scope, root] = hit;
+  // No `--target` and more than one global install: which one is meant is a guess, and this
+  // verb deletes. Refused before anything is printed as a target, `--yes` or not.
+  if (!args.target && scope === 'global') {
+    const globals = globalInstalls();
+    if (globals.length > 1) {
+      printErr(`[uninstall] ${globals.length} global installs found, and no --target names one. `
+        + 'Run one of:\n'
+        + globals.map(([h, d]) => `  geneseed uninstall --target "${d}"   (${h}:global)\n`).join(''));
+      return 2;
+    }
+  }
   if (installState(root, host, scope) === 'absent') {
     const where = scope === 'project' && host !== 'opencode'
       ? ` under ${hostSpec(host).projectMarker}/` : '';

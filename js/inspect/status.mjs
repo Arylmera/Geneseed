@@ -57,7 +57,8 @@ import { pendingDrafts } from '../hosts/hooks-context.mjs';
 import { factCount } from '../hosts/memory-files.mjs';
 import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
-import { printOut } from '../lib/fs.mjs';
+import { printErr, printOut } from '../lib/fs.mjs';
+import { globalInstalls } from '../maintain/uninstall.mjs';
 import { readDefaultInstall, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { renamedFilesIn } from '../build/stubs.mjs';
@@ -88,6 +89,15 @@ export function cmdVersion(args) {
       path.join(process.cwd(), 'Harness'), process.cwd()]) {
       const v = readVersion(base);
       if (v) { installed = v; target = base; break; }
+    }
+  }
+  // The walk above already finds a Claude-only machine's install; with several, it shows the
+  // first, and says so rather than letting the reader take it for the only one.
+  if (!args.target) {
+    const globals = globalInstalls((_h, d) => readVersion(d) !== null);
+    if (globals.length > 1) {
+      printErr(`[version] ${globals.length} global installs found; showing ${target}. `
+        + 'Pass --target for another.\n');
     }
   }
   printOut(`[version] source:    ${current}   (${ROOT})\n`);
@@ -391,8 +401,12 @@ function colorEnabled() {
  * `_TUI_ASCII` is read from the environment at CALL time, not import time. Same value for a
  * process that runs one verb and exits; spelled this way because a module-level constant in
  * a file the tests import would freeze at whatever the test runner's environment was.
+ *
+ * `boxed` false is the face off a terminal: the title, the rows and the verdict, with no frame
+ * and no padding to the widest row. A long `installs` row made every boxed line ~210 columns,
+ * which a pipe, a log or an agent reads as 4–5 kB of spaces.
  */
-export function statusLines(d, color = false) {
+export function statusLines(d, color = false, boxed = true) {
   const asc = Boolean(process.env.GENESEED_TUI_ASCII);
   const [H, V] = asc ? ['-', '|'] : ['─', '│'];
   const [TL, TR, BL, BR, LT, RT] = asc
@@ -429,7 +443,10 @@ export function statusLines(d, color = false) {
       + `doctrine rules in ${d.packs}/${d.packs_total} packs`]);
   }
   if (d.agent_md) {
-    rows.push(['AGENT.md',
+    // The row is the OpenCode global's health, shown whichever install the `install` row names;
+    // under another host's install it says whose AGENT.md it is, so the two rows cannot be read
+    // as one install.
+    rows.push([d.emit === 'opencode-global' ? 'AGENT.md' : 'opencode AGENT.md',
       `${d.agent_md}  (${d.agent_md_present ? 'present' : 'MISSING'})`]);
   }
   // Conditional for the same recording reason as `constitution` above: the 30 recorded
@@ -496,6 +513,7 @@ export function statusLines(d, color = false) {
   const body = rows.map(([k, v]) => `  ${padEndToWidth(k, labelW)}   ${v}`);
   const verdict = `  ${mark} ${d.version_verdict}`;
   const title = ` ${badge} Geneseed ${emdash} status `;
+  if (!boxed) return [title.trim(), ...body, verdict];
   const width = Math.max(...body.map(codePointLength), codePointLength(verdict), codePointLength(title) + 2);
 
   const ac = ANSI_CODES[d.accent] ?? '36';
@@ -524,6 +542,7 @@ export function cmdStatus(args) {
     printOut(`${JSON.stringify(d, null, 2)}\n`);
     return 0;
   }
-  for (const line of statusLines(d, colorEnabled())) printOut(`${line}\n`);
+  // The box only on a terminal; NO_COLOR on a terminal still gets it, so this is not `color`.
+  for (const line of statusLines(d, colorEnabled(), Boolean(process.stdout.isTTY))) printOut(`${line}\n`);
   return 0;
 }
