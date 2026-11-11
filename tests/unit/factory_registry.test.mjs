@@ -66,6 +66,9 @@ test('activeFactories reads FACTORY.md back into a running row', () => {
         lane: null, tasks: null, history: [],
         // The graph FACTORY.md was started from, whole: the console draws a run from it.
         graph: FACTORY,
+        // D7: the board's numbers, `runMetrics` of the state: this run has recorded nothing, and
+        // its FACTORY.md carries no `started` (the fixture passes no `now`), so that is unknown.
+        metrics: { started: null, stages: [], workMs: 0, waitMs: 0, tokens: null, transitions: 0, entries: [] },
       }]);
     });
   } finally { sb.cleanup(); }

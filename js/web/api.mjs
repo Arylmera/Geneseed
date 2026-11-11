@@ -646,6 +646,12 @@ export function apiFactoriesCatalog(state) {
  * `apiLoopsActive`), each with the loop running in its worktree as `loop` (the root is the join
  * key, `js/factory/registry.mjs`), or null. `runningLoops`, not `activeLoops`: it is read-only,
  * so this poll never prunes or stamps `loops.json` behind the Loops page's back.
+ *
+ * It is the board's read too (D7). A live row carries what `FACTORY.md` holds — `status`, `stage`,
+ * `awaiting`, `tasks`, `counters` beside the graph's cycles and their `max`, `history` — and
+ * `metrics`, `runMetrics` of that state. A `FACTORY.md` that does not parse is a row with status
+ * `unreadable`, and a missing one `finished`: identity only, never a throw. Nothing here writes
+ * a run; `factories.json` alone loses the finished runs older than 7 days.
  */
 export function apiFactoriesActive() {
   const loops = runningLoops();

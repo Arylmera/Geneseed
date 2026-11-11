@@ -376,13 +376,23 @@ screen the run list stacks above the detail.
   factory's rules. It reads `GET /api/factories/catalog` for the install the *Install:* picker
   names. **Active** is every run `geneseed factory init` registered on this machine
   (`GET /api/factories/active`, polled every 5 s, the graph read from each run's `FACTORY.md`),
-  grouped as Loops › Active is; the reader shows the run's stage, transitions, task number, its
+  shown as a **board** while no run is selected: three columns of cards, **Waits for you** (a
+  held gate, or a `FACTORY.md` that cannot be read), **Running**, and **Ended** (stopped, closed,
+  or its `FACTORY.md` gone). A card gives the run's title, its factory, where it stands, its task
+  number, the laps spent against each cycle's `max`, and its work time and waiting time. The
+  list beside it groups the runs under the same three names. A card opens the run: the reader
+  shows the run's stage, transitions, task number, its
   child loop's step and iteration, what it awaits, and its graph with the current stage lit,
   the lane its last fork took (the run's `lane`, else read from its `history`) lit, the child
   loop's node named under the current stage (`at <node>`) and each cycle's laps as `n / max`. A
   run carries its graph but no bricks or loops: the graph borrows those from the catalogue of the
   install the Templates tab's picker names, which the run's project may not share, and the reader
-  says which. No run reports tab: a run's report lives in its own worktree.
+  says which. Under the graph, a **timeline** has one row per history entry: the stage, its
+  outcome or your answer at a gate, the time it was recorded (UTC), its duration (waiting time on
+  an answer) and a rework mark. A held run names its gate's stage, its outcome and the path of
+  its note; the console does not read the note. The numbers are the ones `geneseed factory report`
+  prints, and a time nobody recorded reads `unknown`. The board changes nothing: you answer a gate
+  in the agent's session. No run reports tab: a run's report lives in its own worktree.
 - **Profile** (`#/profile`) — `PROFILE.md`: who you are and how you like to work, one card
   per file: the shared one every global install reads, tagged `shared`, and each project
   install's own. Opens rendered; **Edit** is a whole-file editor. The save carries

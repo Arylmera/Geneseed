@@ -122,7 +122,7 @@ Red CI does not stop for you: it sends the work back to the run's loop (`bugfix`
 
 ## When it ends
 
-On success the agent reports the PR (merged on your yes, or open), every stage with its outcome, each rework and why, and the run report at `.geneseed/factory-runs/<slug>.md`. The run report has a table with one row per stage: its runs, its reworks, its work time and its tokens, where the host reports them. It also gives the time the run waited for you. To read the same numbers while a run is going, run `geneseed factory report` in its worktree. On a stop it reports the reason and still writes the run report; the branch and `FACTORY.md` stay as they were, so you can see where it stopped. After a crash, ask the agent to resume: it runs `geneseed factory next` in the worktree.
+On success the agent reports the PR (merged on your yes, or open), every stage with its outcome, each rework and why, and the run report at `.geneseed/factory-runs/<slug>.md`. The run report has a table with one row per stage: its runs, its reworks, its work time and its tokens, where the host reports them. It also gives the time the run waited for you. To read the same numbers while a run is going, run `geneseed factory report` in its worktree, or open the console's **Factories › Active** board: the runs that wait for you come first, and a card opens the run's timeline. On a stop it reports the reason and still writes the run report; the branch and `FACTORY.md` stay as they were, so you can see where it stopped. After a crash, ask the agent to resume: it runs `geneseed factory next` in the worktree.
 
 ---
 

@@ -210,9 +210,12 @@ graph: its stages top to bottom, a fork's lanes side by side, a `loop:` stage as
 that names its loop over `whole loop`, each route back as a rail on the left with its cycle and
 `max`, and `close` and `stop` as end caps.
 Each factory shows how to start it: the request to give the agent, and the commands to start it
-by hand, the worktree first and then `geneseed factory init`. Its **Active** tab lists every
-registered run, with the current stage lit, the laps spent on each cycle and the child loop's
-current step, written `at <node>` in the current stage's box. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
+by hand, the worktree first and then `geneseed factory init`. Its **Active** tab is a board of every
+registered run, in three columns: **Waits for you**, **Running** and **Ended**. A card shows where
+the run stands, its task, the laps spent on each cycle, and its work and waiting time. A card
+opens the run: its graph with the current stage lit, the laps spent on each cycle, the child
+loop's current step, written `at <node>` in the current stage's box, and a timeline of every
+stage with its outcome, its time, its duration and each rework. The page changes nothing in a run (its poll only drops finished runs older than 7 days from `factories.json`, as Loops does); you answer a run in the
 agent's session.
 
 ## Your own factories

@@ -450,3 +450,57 @@ test('GET /api/factories/active joins each run to the loop running in its worktr
     });
   } finally { sb.cleanup(); }
 });
+
+// D7: the board's read. A held run carries its gate, its counters and `runMetrics` of its state:
+// started 10:00, `plan` recorded at 10:01 (1 minute of work), the loop at 10:11 (10 minutes), the
+// review that failed at 10:13 (2 minutes) and still held, so it has spent no cycle. A FACTORY.md
+// that does not parse is a row with status `unreadable`, and a run whose FACTORY.md is gone is
+// `finished`: identity only, and the read does not throw. The read changes no FACTORY.md.
+test('GET /api/factories/active carries the board fields, and survives an unparsable or a missing FACTORY.md', () => {
+  const sb = makeSandbox();
+  try {
+    withLoopsXdg(sb, () => {
+      const factory = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '../fixtures/factories/fixture-fix.json'), 'utf8'));
+      const at = (hhmm) => `2026-11-11T${hhmm}:00.000Z`;
+      const roots = Object.fromEntries(['held', 'broken', 'gone'].map((name) => {
+        const root = path.join(sb.path, name);
+        fs.mkdirSync(root, { recursive: true });
+        recordFactory({ root, branch: `loop/factory-${name}`, factory: 'fixture-fix', title: name, now: new Date('2026-11-11T10:00:00Z') });
+        return [name, root];
+      }));
+      const held = {
+        ...initFactory({ title: 'T', requirement: 'R', factory, now: at('10:00') }),
+        stage: 'review', status: 'awaiting', awaiting: { kind: 'gate', stage: 'review', outcome: 'fail', note: 'review.md' },
+        transitions: 2, runTransitions: 2,
+        history: [
+          { stage: 'plan', outcome: 'pass', task: 0, tokens: 300, at: at('10:01') },
+          { stage: 'loop:bugfix', outcome: 'pass', task: 0, at: at('10:11') },
+          { stage: 'review', outcome: 'fail', task: 0, carry: 'review.md', at: at('10:13') },
+        ],
+      };
+      const heldFile = renderFactoryFile(held);
+      fs.writeFileSync(path.join(roots.held, 'FACTORY.md'), heldFile);
+      fs.writeFileSync(path.join(roots.broken, 'FACTORY.md'), '# Factory\n\nno state block here\n');
+      const { factories } = apiFactoriesActive();
+      const row = (name) => factories.find((r) => r.root === roots[name]);
+      const { status, stage, awaiting, counters, tasks, metrics } = row('held');
+      assert.deepEqual({ status, stage, awaiting, counters, tasks }, {
+        status: 'awaiting', stage: 'review', awaiting: { kind: 'gate', stage: 'review', outcome: 'fail', note: 'review.md' }, counters: {}, tasks: null,
+      });
+      assert.deepEqual(metrics, {
+        started: at('10:00'),
+        stages: [
+          { stage: 'plan', runs: 1, reworks: 0, workMs: 60000, tokens: 300 },
+          { stage: 'loop:bugfix', runs: 1, reworks: 0, workMs: 600000, tokens: null },
+          { stage: 'review', runs: 1, reworks: 0, workMs: 120000, tokens: null },
+        ],
+        workMs: 780000, waitMs: 0, tokens: 300, transitions: 2,
+        entries: [{ ms: 60000, wait: false, rework: false }, { ms: 600000, wait: false, rework: false }, { ms: 120000, wait: false, rework: false }],
+      });
+      const id = (name) => ({ root: roots[name], branch: `loop/factory-${name}`, factory: 'fixture-fix', title: name, started: '2026-11-11T10:00:00.000Z', loop: null });
+      assert.deepEqual(row('broken'), { ...id('broken'), status: 'unreadable' });
+      assert.deepEqual(row('gone'), { ...id('gone'), status: 'finished' });
+      assert.equal(fs.readFileSync(path.join(roots.held, 'FACTORY.md'), 'utf8'), heldFile);
+    });
+  } finally { sb.cleanup(); }
+});

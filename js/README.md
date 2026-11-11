@@ -219,7 +219,7 @@ brick or a whole loop; a fork's named outcomes pick its lane), persisted as a JS
 | `state.mjs` | The engine itself: `initFactory`, `nextStage`, `recordStage`, `decideFactory`, `renderFactoryFile`/`parseFactoryFile`, `validateFactoryState`, `countSpecTasks` |
 | `metrics.mjs` | `runMetrics(state)` — pure: per stage its runs, reworks, work time and tokens, and per run its work time, waiting time, tokens and transitions, from the history's `at` stamps. Unknown is `null`, never 0. The one writer of those numbers: `factory report` prints it, and the console reads it through `registry.mjs` |
 | `cli.mjs` | `geneseed factory check\|list\|init\|next\|record\|decide\|report` — the only face of this engine. It reads the clock; the engine stays pure |
-| `registry.mjs` | `factories.json` beside `loops.json`: `recordFactory` (called by `factory init`) and `activeFactories`, on the loop registry's own `loadRows`/`saveRows`/`sweepRows`. A run and its child loop share a root, which is how a reader groups them |
+| `registry.mjs` | `factories.json` beside `loops.json`: `recordFactory` (called by `factory init`) and `activeFactories` (each live row with its `metrics`), on the loop registry's own `loadRows`/`saveRows`/`sweepRows`. A run and its child loop share a root, which is how a reader groups them |
 
 **Before editing:** `FACTORY.md` is in `js/loop/state.mjs`'s `ENGINE_FILES`, so a child loop never
 scores it; the clean-tree check after a stage outside a loop filters with that same list. `cli.mjs`

@@ -18,6 +18,7 @@ import path from 'node:path';
 import { userLoopsDir } from '../loop/catalog.mjs';
 import { loadRows, saveRows, sweepRows, normalize, sameRoot } from '../loop/registry.mjs';
 import { FACTORY_FILE, parseFactoryFile } from './state.mjs';
+import { runMetrics } from './metrics.mjs';
 
 export function factoryRegistryPath() {
   return path.join(userLoopsDir(), 'factories.json');
@@ -54,6 +55,9 @@ function runningRow(entry, state) {
     // The graph the run was started from, as the loop row carries its `graph`: the console draws
     // it, and a run started in another project names a factory this install may not have.
     graph: state.factory,
+    // D7: the board's numbers, from the one function `factory report` prints (it never throws on
+    // a state that parsed, and nothing here validated this one).
+    metrics: runMetrics(state),
   };
 }
 
