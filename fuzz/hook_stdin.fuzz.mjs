@@ -79,6 +79,21 @@ for (const verb of ['git-gate', 'rule-gate']) {
   });
 }
 
+// A command past the gates' 64 KB bound, of a random shape, asks and never defers: on 5.2.0 a
+// 270 KB `git -C x …` took 9.8 s, and a gate past the host's hook timeout lets the call run.
+// The 200 ms timing is held in process (tests/unit/hook_gates.test.mjs); a spawn is not timed here.
+test('git-gate and tool-gate ask on any command over 64 KB', () => {
+  fc.assert(fc.property(fc.array(fragment, { minLength: 1, maxLength: 6 }), fc.constantFrom('git-gate', 'tool-gate'),
+    (parts, verb) => {
+      const unit = `${parts.join(' ')} `;
+      const big = unit.repeat(Math.ceil((1024 * 1024) / unit.length));
+      const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: big } });
+      const r = gate(verb, input);
+      assertWellFormed(verb, unit, r);
+      assert.equal(JSON.parse(r.out || '{}').hookSpecificOutput?.permissionDecision, 'ask', `${verb} on ${JSON.stringify(unit)}`);
+    }), { numRuns: Math.min(RUNS, 10) });
+});
+
 // The ownership first-write gate (js/hosts/ownership-gate.mjs) rides `rule-gate`, and fires only
 // in an application repo, on a payload with a session and a path — so the cwd here IS one (a
 // `.git` and a `package.json`, no AGENTS.md), and the payloads carry both, with random types.

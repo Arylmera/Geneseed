@@ -416,6 +416,66 @@ test('Law IV fails closed with the `unverified` text when it cannot read the sta
   } finally { ws.cleanup(); }
 });
 
+// A gate that has not answered when the host's hook timeout fires lets the call run unjudged, so
+// the command readers must be linear and an oversized command must ask, not defer. On 5.2.0 the
+// git-verb scans rescanned the line from every `git`: 270 KB of `git -C x ` took 9.8 s, 540 KB
+// 80.8 s. The bound is 64 KB: past it the command is not read at all and asks with the
+// `unverified` text (law-4, so Bob refuses it too). Timed in process — a spawn's own start-up on
+// a loaded Windows runner is noise next to 200 ms.
+const repeated = (unit, n) => unit.repeat(Math.ceil(n / unit.length)).slice(0, n);
+function decideInProcess(command, host = null) {
+  return import('../../js/hosts/hooks.mjs').then(({ gitDecide }) => {
+    const chunks = [];
+    const realWrite = process.stdout.write;
+    process.stdout.write = (s) => { chunks.push(String(s)); return true; };
+    const t = performance.now();
+    let rc;
+    try {
+      rc = gitDecide({ root: null, host }, { tool_name: 'Bash', tool_input: { command }, cwd: PLAIN });
+    } finally { process.stdout.write = realWrite; }
+    return { rc, ms: performance.now() - t, out: chunks.join('') };
+  });
+}
+
+test('a 1 MB command asks within 200 ms, in process and through the real entry', async () => {
+  const big = repeated('git -C x ', 1024 * 1024);
+  const r = await decideInProcess(big);
+  assert.ok(r.ms < 200, `1 MB took ${r.ms.toFixed(0)} ms`);
+  assert.equal(r.rc, 0);
+  assert.match(JSON.parse(r.out).hookSpecificOutput.permissionDecisionReason, /could not work out what it removes/);
+  // The real entry: the same ask, not an exit with nothing on stdout.
+  askDecision(hookRun('git-gate', { stdin: bashPayload(big), cwd: PLAIN }), '1 MB git-gate');
+  askDecision(hookRun('tool-gate', { stdin: bashPayload(big), cwd: PLAIN }), '1 MB tool-gate');
+});
+
+test('commands just under the 64 KB bound are read in linear time, with their usual verdict', async () => {
+  // Each row is a shape that rescanned to the end of the line once per occurrence on 5.2.0.
+  for (const [unit, verdict] of [['git -C x ', 'defer'], ['git status && ', 'defer'],
+    ['git -C x commit ', 'ask'], ['GIT -C x\r', 'defer']]) {
+    const r = await decideInProcess(repeated(unit, 63 * 1024));
+    assert.ok(r.ms < 200, `${JSON.stringify(unit)}: ${r.ms.toFixed(0)} ms`);
+    assert.equal(r.out ? JSON.parse(r.out).hookSpecificOutput.permissionDecision : 'defer', verdict, unit);
+  }
+});
+
+test('the git-verb scans keep their truth set: one line, the first `git`, a word boundary', async () => {
+  const { LOSS_CANDIDATE_RE } = await import('../../js/hosts/loss.mjs');
+  // A verb on the NEXT line is another command; `gitcommit` and `pushy` are not words; a later
+  // `git` on the line changes nothing. Commit verbs only, so no loss ask can answer first.
+  for (const [cmd, asks] of [['git commit', true], ['gitcommit', false], ['echo git; git commit -m x', true],
+    ['git status\necho commit', false], ['a git b git commit', true], ['git x commits', false]]) {
+    const r = await decideInProcess(cmd);
+    assert.equal(/commits or pushes/.test(r.out), asks, cmd);
+  }
+  for (const [cmd, named] of [['gitpush', false], ['echo git; git push', true], ['git status\necho reset', false],
+    ['echo x\ngit -C y reset --hard', true], ['git x pushy', false], ['a git b git push', true], ['GIT RESET', true]]) {
+    assert.equal(LOSS_CANDIDATE_RE.test(cmd), named, cmd);
+  }
+  const t = performance.now();
+  LOSS_CANDIDATE_RE.test(repeated('git -C x ', 1024 * 1024));
+  assert.ok(performance.now() - t < 200, 'LOSS_CANDIDATE_RE over 1 MB');
+});
+
 // User decision (2026-10-17): removing a worktree, forced or not, is routine agent housekeeping,
 // not a Law IV deletion — so `worktree remove -f`/`--force` passes the git gate like a plain
 // `worktree remove`, on Claude (defer: rc 0, no stdout) and on Bob (rc 0, no BLOCKED line).

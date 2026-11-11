@@ -81,7 +81,20 @@ import { WRITE_NAME_RE, ownershipBlock } from './ownership-gate.mjs';
 // (`git add . && git commit … && git push`) and `-C <path>` forms, so a compound
 // one-liner can never slip a commit past the prompt. `[^\n]*` is the boundary: a `git` on
 // one line and a `commit` on the next are two commands, not one.
-const GIT_GATE_RE = /\bgit\b[^\n]*\b(?:commit|push)\b/;
+//
+// LINEAR, ON PURPOSE. The plain `\bgit\b[^\n]*\b(?:commit|push)\b` rescanned to the end of the
+// line from EVERY `git`, so `git -C x ` repeated to 270 KB took 7.8 s here alone, and past the
+// host's hook timeout the call ran unguarded. A match can start only at the input's start or at
+// a `\n` (never `^` with `m`, whose `\r`/`U+2028` line starts would bring the rescan back), and
+// it tries only the line's FIRST `git`: if any `git` on a line precedes a verb, the first one
+// does too, so the truth set is unchanged and each line is read once.
+const GIT_GATE_RE = /(?:^|\n)(?:(?!\bgit\b)[^\n])*\bgit\b[^\n]*\b(?:commit|push)\b/;
+
+// Past this many characters a command is not read at all: it asks. Every reader on the path
+// (`shellReading`, the splitters, `catastrophic`) is at least linear, some worse, and a gate
+// that has not finished when the host's hook timeout fires lets the call through unjudged. No
+// real command line comes near it; a generated one that does is worth a human look.
+const MAX_COMMAND_CHARS = 64 * 1024;
 
 // Law IV's boundary half lives in `./loss.mjs`: it asks only when a command would really lose
 // data — a protected branch deleted or force-pushed, an unpushed unmerged branch deleted,
@@ -901,9 +914,16 @@ function consentBenign(command) {
   return true;
 }
 
-function gitDecide(args, payload) {
+// Exported for the in-process timing rows (tests/unit/hook_gates.test.mjs): a spawn's own start-up
+// on a loaded Windows host is noise next to a 200 ms bound.
+export function gitDecide(args, payload) {
   const ti = (payload && payload.tool_input) || {};
   if (typeof ti.command !== 'string') return 0;
+  // Before any switch: the catastrophic class below runs whatever the install turned off, so
+  // every gate verb reads the command. `unverified` under law-4, so Bob refuses it as well.
+  if (ti.command.length > MAX_COMMAND_CHARS) {
+    return ask(args, 'git-gate', 'law-4', 'unverified', {});
+  }
   const tool = payload && payload.tool_name;
   const command = shellReading(ti.command, tool === 'Bash' ? 'bash' : tool === 'PowerShell' ? 'powershell' : null);
   // The agent's own words, for the asks where they are no conflict of interest (`gateText`'s `quote`).
