@@ -1060,8 +1060,8 @@ for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
 // it is for a moment mid-`git pull` under the shared shim), a gate exited 1 with empty stdout,
 // and Claude let the call through. Now a gate verb gives `guardGate`'s gate-error verdict: an ask
 // on Claude, a stderr warning with rc 0 on Bob (gate-error is never a block there). Every other
-// verb stays silent with rc 0. The module is broken by a resolve hook, so no file in the
-// checkout is touched.
+// verb exits 0 with nothing on stdout and one stderr line. The module is broken by a resolve
+// hook, so no file in the checkout is touched.
 const BREAK_HOOKS = 'export async function resolve(s, c, next) {'
   + ' if (new RegExp(process.env.GS_BREAK).test(s)) throw new Error("broken module path: " + s);'
   + ' return next(s, c); }';
@@ -1077,7 +1077,7 @@ function brokenRun(argv, broken, input) {
   } finally { sb.cleanup(); }
 }
 
-test('a gate whose module fails to load asks; any other verb stays silent', () => {
+test('a gate whose module fails to load asks; any other verb exits 0 and says so on stderr', () => {
   const payload = JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'git push' } });
   for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
     const r = brokenRun([verb], 'loss\\.mjs$', payload);
@@ -1090,9 +1090,14 @@ test('a gate whose module fails to load asks; any other verb stays silent', () =
     assert.equal(bob.stdout, '', `${verb} on bob`);
     assert.match(bob.stderr, /\[geneseed\] Geneseed gate error/, `${verb} on bob`);
   }
-  const ctx = brokenRun(['context'], 'hooks-context\\.mjs$', '{}');
-  assert.equal(ctx.status, 0, `context: ${ctx.stderr.slice(0, 300)}`);
-  assert.equal(ctx.stdout, '', 'context');
+  // A non-gate verb decides nothing, so stdout stays empty and the exit 0; one stderr line names
+  // the failure, so a broken context hook shows in the host's hook log. Same on Bob.
+  for (const host of [[], ['--host', 'bob']]) {
+    const ctx = brokenRun(['context', ...host], 'hooks-context\\.mjs$', '{}');
+    assert.equal(ctx.status, 0, `context ${host}: ${ctx.stderr.slice(0, 300)}`);
+    assert.equal(ctx.stdout, '', `context ${host}`);
+    assert.match(ctx.stderr, /^\[geneseed-hook\] context failed: broken module path: .*hooks-context\.mjs\r?\n$/, `context ${host}`);
+  }
   // The control: without the broken path the same gate decides as usual, so the ask above is the
   // missing module's, not the loader's.
   const ok = brokenRun(['git-gate'], 'no-such-module$', payload);

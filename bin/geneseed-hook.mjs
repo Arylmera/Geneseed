@@ -170,14 +170,20 @@ async function trackActivity(verb, args) {
  * deferred". So a gate verb gives the gate-error verdict `guardGate` gives — an ask on Claude and
  * OpenClaude, a stderr warning on Bob, where gate-error is never a block — built from
  * `./hooks-prims.mjs`, which the entry has already loaded. Not ledgered: the ledger's writer is
- * in the module that failed. Every other verb stays silent and exits 0. The residual limit: a
+ * in the module that failed. Every other verb exits 0 with stdout empty and one stderr line, so a
+ * broken context hook shows in the host's hook log: stdout is the only channel any host reads as
+ * a decision, and on Bob too a stderr line with exit 0 is a log entry (the gates' Bob warnings
+ * already are). The residual limit: a
  * module this file imports statically (`fs.mjs`, `hooks-prims.mjs`) fails at link time, before
  * any of this runs.
  */
 function verbFailed(verb, args, e) {
-  if (!GATE_VERBS.has(verb)) return 0;
   let name = e;
   try { name = e.message || e; } catch { /* `gateSafe` meets `e` as it is */ }
+  if (!GATE_VERBS.has(verb)) {
+    try { printErr(`[geneseed-hook] ${verb} failed: ${name}\n`); } catch { /* an unprintable error says nothing */ }
+    return 0;
+  }
   if (args.host === 'bob') {
     printErr(`[geneseed] ${gateSafe('gate-error', 'warned', { name })}\n`);
     return 0;
