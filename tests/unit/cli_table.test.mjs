@@ -23,6 +23,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { choicesFor } from '../../js/build/args.mjs';
 import { cliCommand, cliReference, cliSpec, helpWidth } from '../../js/ui/cli.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
 import { makeSandbox, cellEnv } from '../helpers/sandbox.mjs';
@@ -214,6 +215,25 @@ test('`geneseed --help` lists every verb the entry dispatches, and exits 0', () 
   const listed = [...r.stdout.matchAll(/^ {2}([a-z][a-z-]*) /gm)].map((m) => m[1]);
   // `validate` and `help` are the two names `main` answers before the VERBS lookup.
   assert.deepEqual(listed.sort(), [...entryVerbs(), 'validate', 'help'].sort());
+  // One short line per verb: a paragraph belongs in the verb's own `--help` (the row's
+  // `description`), not in a listing of 30 verbs. 100 columns is the line the listing may use.
+  const long = r.stdout.split(/\r?\n/).filter((l) => l.length > 100);
+  assert.deepEqual(long, [], 'a verb carries paragraph help at top level');
+});
+
+test("every `geneseed build` option has help, and its choices are the generator's", () => {
+  // The choices are NOT in the table: `js/ui/cli.mjs` lays `choicesFor` over the rows, so a
+  // posture added to `src/postures/` appears in `build --help` with no edit here.
+  const build = cliCommand('build');
+  const empty = build.options.filter((o) => !o.hidden && !o.help).map((o) => o.names[0]);
+  assert.deepEqual(empty, [], 'a build option prints a bare flag with no help');
+  const choices = choicesFor();
+  for (const [flag, list] of Object.entries(choices)) {
+    assert.deepEqual(build.options.find((o) => o.names[0] === flag)?.choices, list, flag);
+  }
+  const onDisk = JSON.parse(readFileSync(TABLE, 'utf8')).commands.find((c) => c.name === 'build');
+  assert.ok(onDisk.options.every((o) => o.choices === null),
+    'the table holds a copy of a generator choice list; derive it instead');
 });
 
 test('the front door answers --version, help and a mistyped verb', () => {

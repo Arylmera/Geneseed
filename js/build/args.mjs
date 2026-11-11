@@ -155,7 +155,7 @@ const FLAG_BY_NAME = Object.fromEntries(
  * advertised a metavar that lies. It is validated by `parseDoctrines` instead and prints the
  * plain `DOCTRINES` metavar, exactly as `--theme` (also open-ended) already does.
  */
-function choicesFor() {
+export function choicesFor() {
   return {
     '--emit': EMITS,
     '--footprint': ['lean', 'full'],

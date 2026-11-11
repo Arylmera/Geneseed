@@ -66,8 +66,8 @@
     },
     {
       "name": "build",
-      "help": "render the harness (same flags as geneseed-build; an omitted flag takes the generator default, not the install's — see geneseed status --json for an install's own; dry run: geneseed validate)",
-      "description": "",
+      "help": "render the harness with the generator's flags (dry run: geneseed validate)",
+      "description": "render the harness (same flags as geneseed-build; an omitted flag takes the generator default, not the install's — see geneseed status --json for an install's own; dry run: geneseed validate)",
       "positionals": [],
       "options": [
         {
@@ -76,7 +76,7 @@
           ],
           "dest": "theme",
           "metavar": null,
-          "help": "",
+          "help": "theme to render (default: harness.config.json's, else neutral)",
           "choices": null,
           "default": null,
           "required": false,
@@ -90,8 +90,8 @@
             "--emit"
           ],
           "dest": "emit",
-          "metavar": null,
-          "help": "",
+          "metavar": "EMIT",
+          "help": "what to write: a plain bundle (files), a project install for a host, or a -global one",
           "choices": null,
           "default": null,
           "required": false,
@@ -106,7 +106,7 @@
           ],
           "dest": "footprint",
           "metavar": null,
-          "help": "",
+          "help": "lean (the default) carries each rule in brief; full carries the whole text",
           "choices": null,
           "default": null,
           "required": false,
@@ -121,7 +121,7 @@
           ],
           "dest": "posture",
           "metavar": null,
-          "help": "",
+          "help": "the register the agent holds (default: harness.config.json's, else peer)",
           "choices": null,
           "default": null,
           "required": false,
@@ -136,7 +136,7 @@
           ],
           "dest": "mode",
           "metavar": null,
-          "help": "",
+          "help": "how work runs (default: harness.config.json's, else direct)",
           "choices": null,
           "default": null,
           "required": false,
@@ -166,7 +166,7 @@
           ],
           "dest": "doctrines",
           "metavar": null,
-          "help": "",
+          "help": "doctrine packs to switch on, comma-separated, or 'none' (default: every pack)",
           "choices": null,
           "default": null,
           "required": false,
@@ -181,7 +181,7 @@
           ],
           "dest": "exclude_rules",
           "metavar": null,
-          "help": "",
+          "help": "rules to switch off, comma-separated ('process 7,craft 3'), or 'none'",
           "choices": null,
           "default": null,
           "required": false,
@@ -196,7 +196,7 @@
           ],
           "dest": "exclude_skills",
           "metavar": null,
-          "help": "",
+          "help": "skills to leave out, comma-separated, or 'none'",
           "choices": null,
           "default": null,
           "required": false,
@@ -241,7 +241,7 @@
           ],
           "dest": "out",
           "metavar": null,
-          "help": "",
+          "help": "output dir (default: Harness); a project emit installs into it unless --root is given",
           "choices": null,
           "default": null,
           "required": false,
@@ -256,7 +256,7 @@
           ],
           "dest": "root",
           "metavar": null,
-          "help": "",
+          "help": "the repo a project emit installs into (default: --out)",
           "choices": null,
           "default": null,
           "required": false,
@@ -405,8 +405,8 @@
     },
     {
       "name": "catalog",
-      "help": "list what this harness ships: every agent, skill and constitutional rule, with its one-line purpose and lifecycle status",
-      "description": "",
+      "help": "list every agent, skill and constitutional rule this harness ships",
+      "description": "list what this harness ships: every agent, skill and constitutional rule, with its one-line purpose and lifecycle status",
       "positionals": [
         {
           "names": [],
@@ -572,8 +572,8 @@
     },
     {
       "name": "doctor",
-      "help": "validate the build: unresolved tokens, dead links, non-hermetic escapes, theme-key parity, and that a committed bundle matches src. Defaults to the INSTALLED theme (--theme NAME for one, --all to sweep every theme)",
-      "description": "",
+      "help": "validate the build (the installed theme; --all sweeps every theme, slowly)",
+      "description": "validate the build: unresolved tokens, dead links, non-hermetic escapes, theme-key parity, and that a committed bundle matches src. Defaults to the INSTALLED theme (--theme NAME for one, --all to sweep every theme). --all renders every theme through every emit, so it takes minutes rather than seconds; it prints one progress line per theme on stderr.",
       "positionals": [],
       "options": [
         {
@@ -582,7 +582,7 @@
           ],
           "dest": "theme",
           "metavar": null,
-          "help": "",
+          "help": "theme to check (default: the installed theme)",
           "choices": null,
           "default": null,
           "required": false,
@@ -597,7 +597,7 @@
           ],
           "dest": "all",
           "metavar": null,
-          "help": "sweep EVERY theme (maintainer full check / CI), not just the installed one — the default scopes to the installed theme",
+          "help": "sweep EVERY theme (maintainer full check / CI), not just the installed one — the default scopes to the installed theme; it renders every theme through every emit, so it takes minutes and prints one progress line per theme on stderr",
           "choices": null,
           "default": false,
           "required": false,
@@ -656,8 +656,8 @@
     },
     {
       "name": "exclude",
-      "help": "manage sovereign-repo exclusions: folders where the GLOBAL installs go dormant (hooks silent, preamble suppressed); stored in the shared tier's excludes.json, with the repo-side wiring per host",
-      "description": "",
+      "help": "manage the folders where the global installs go dormant",
+      "description": "manage sovereign-repo exclusions: folders where the GLOBAL installs go dormant (hooks silent, preamble suppressed); stored in the shared tier's excludes.json, with the repo-side wiring per host",
       "positionals": [
         {
           "names": [],
@@ -695,8 +695,8 @@
     },
     {
       "name": "export",
-      "help": "write the skills, the agents and the constitution as catalogue entities for a shared library: one folder each with SKILL.md or AGENT.md (frontmatter name and description only) and a metadata.yaml. One way: the source stays src/. Not an install: no carrier, hooks or settings",
-      "description": "",
+      "help": "write the skills, agents and constitution as entities for a shared library",
+      "description": "write the skills, the agents and the constitution as catalogue entities for a shared library: one folder each with SKILL.md or AGENT.md (frontmatter name and description only) and a metadata.yaml. One way: the source stays src/. Not an install: no carrier, hooks or settings",
       "positionals": [],
       "options": [
         {
@@ -764,8 +764,8 @@
     },
     {
       "name": "factory",
-      "help": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide)",
-      "description": "",
+      "help": "run a factory: carry one work item through bricks and loops to an open PR",
+      "description": "run a factory: carry one work item through a graph of bricks and whole loops to an open PR (check/list/init/next/record/decide)",
       "positionals": [
         {
           "names": [],
@@ -1025,8 +1025,8 @@
     },
     {
       "name": "home",
-      "help": "default entry for a bare ./geneseed: open the web UI when possible (interactive + GUI browser), else the TUI menu",
-      "description": "",
+      "help": "default for a bare geneseed: the web UI when possible, else the menu",
+      "description": "default entry for a bare `geneseed`: open the web UI when possible (an interactive terminal and a GUI browser), else print the menu",
       "positionals": [],
       "options": [],
       "mutex": []
@@ -1138,8 +1138,8 @@
     },
     {
       "name": "loop",
-      "help": "run a loop: check graphs, start one in LOOP.md, and step its state machine (next/score/record/decide)",
-      "description": "",
+      "help": "run a loop: check graphs, start one in LOOP.md, and step its state machine",
+      "description": "run a loop: check graphs, start one in LOOP.md, and step its state machine (next/score/record/decide)",
       "positionals": [
         {
           "names": [],
@@ -1405,8 +1405,8 @@
     },
     {
       "name": "memory",
-      "help": "manage the memory store: list the facts the agent reads, remove one by name (archived into memory/archive/; --purge deletes), or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
-      "description": "",
+      "help": "manage the memory store: list, remove, or rebuild the index",
+      "description": "manage the memory store: list the facts the agent reads, remove one by name (archived into memory/archive/; --purge deletes), or rebuild the index by hand with consolidate (MEMORY.md and topics/, from the fact files on disk). A global install's store is the shared tier, ~/.config/geneseed/memory; a project install keeps its own",
       "positionals": [
         {
           "names": [],
@@ -1490,7 +1490,7 @@
     },
     {
       "name": "menu",
-      "help": "interactive main menu (the default for ./geneseed)",
+      "help": "print the main command list",
       "description": "",
       "positionals": [],
       "options": [],
@@ -1498,8 +1498,8 @@
     },
     {
       "name": "migrate",
-      "help": "move this machine from the git-checkout install shape to the npm one: run from the npm package, it re-emits every registered install, which points the hook shim at that package, and reports what must be fixed by hand. A git clone or a bundle is refused with exit 3. Use --dry-run alone, from anywhere, to preview the shared-tier fold",
-      "description": "",
+      "help": "move this machine from the git-checkout install shape to the npm one",
+      "description": "move this machine from the git-checkout install shape to the npm one: run from the npm package, it re-emits every registered install, which points the hook shim at that package, and reports what must be fixed by hand. A git clone or a bundle is refused with exit 3. Use --dry-run alone, from anywhere, to preview the shared-tier fold",
       "positionals": [],
       "options": [
         {
@@ -1522,7 +1522,7 @@
     },
     {
       "name": "prompt",
-      "help": "emit a self-contained install prompt (no Python needed to use it)",
+      "help": "emit a self-contained install prompt",
       "description": "",
       "positionals": [],
       "options": [
@@ -1532,7 +1532,7 @@
           ],
           "dest": "theme",
           "metavar": null,
-          "help": "",
+          "help": "theme of the prompt (default: harness.config.json's, else neutral)",
           "choices": null,
           "default": null,
           "required": false,
@@ -1561,8 +1561,8 @@
     },
     {
       "name": "rebuild-all",
-      "help": "rebuild every active install in place (each in its own theme+emit), best-effort — continue past failures",
-      "description": "",
+      "help": "rebuild every active install in place, each in its own theme and emit",
+      "description": "rebuild every active install in place (each in its own theme+emit), best-effort — continue past failures",
       "positionals": [],
       "options": [],
       "mutex": []
@@ -1668,8 +1668,8 @@
     },
     {
       "name": "scorecard",
-      "help": "grade a repo with the AI Harness Scorecard (31 checks, five pillars) — scores the repo itself (CI, tests, docs), not the harness files; a reading, never a gate",
-      "description": "",
+      "help": "grade a repo with the AI Harness Scorecard (a reading, never a gate)",
+      "description": "grade a repo with the AI Harness Scorecard (31 checks, five pillars) — scores the repo itself (CI, tests, docs), not the harness files; a reading, never a gate",
       "positionals": [
         {
           "names": [],
@@ -1729,8 +1729,8 @@
     },
     {
       "name": "status",
-      "help": "print the install dashboard as text (theme, mode, counts, memory, version)",
-      "description": "",
+      "help": "print the install dashboard (theme, installs, memory, version, gates)",
+      "description": "print the install dashboard: theme, every install with its settings, components, memory, version, and the state of the tool-boundary gates. --json prints the same payload for a script. Off a terminal the rows are plain, with no box.",
       "positionals": [],
       "options": [
         {
@@ -1751,8 +1751,8 @@
     },
     {
       "name": "theme",
-      "help": "create a user OpenCode colour theme (solid + transparent) in the live themes dir; survives rebuilds",
-      "description": "",
+      "help": "create a user OpenCode colour theme in the live themes dir",
+      "description": "create a user OpenCode colour theme (solid + transparent) in the live themes dir; survives rebuilds",
       "positionals": [
         {
           "names": [],
@@ -2007,8 +2007,8 @@
     },
     {
       "name": "uninstall",
-      "help": "remove a global or project-scoped Geneseed install (manifest-tracked); memory/notebook are never deleted (--archive-memory moves them aside), and the shared tier, ~/.config/geneseed, is left alone",
-      "description": "",
+      "help": "remove a global or project install (memory and notebook are kept)",
+      "description": "remove a global or project-scoped Geneseed install (manifest-tracked); memory/notebook are never deleted (--archive-memory moves them aside), and the shared tier, ~/.config/geneseed, is left alone",
       "positionals": [],
       "options": [
         {
@@ -2106,8 +2106,8 @@
     },
     {
       "name": "upgrade",
-      "help": "self-update: git pull the install's origin (ff-only), validate, then rebuild the bundle + every install",
-      "description": "",
+      "help": "self-update: git pull (ff-only), validate, then rebuild every install",
+      "description": "self-update: git pull the install's origin (ff-only), validate, then rebuild the bundle + every install",
       "positionals": [
         {
           "names": [],
@@ -2128,7 +2128,7 @@
     },
     {
       "name": "version",
-      "help": "show installed vs current-source fingerprint and whether they match",
+      "help": "compare the installed build's fingerprint with this source",
       "description": "",
       "positionals": [],
       "options": [
@@ -2152,8 +2152,8 @@
     },
     {
       "name": "web",
-      "help": "serve the deployed harness as a local web UI (browse agents/skills/laws/memory + run actions)",
-      "description": "",
+      "help": "serve the deployed harness as a local web UI",
+      "description": "serve the deployed harness as a local web UI (browse agents/skills/laws/memory + run actions)",
       "positionals": [
         {
           "names": [],
