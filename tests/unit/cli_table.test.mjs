@@ -106,6 +106,33 @@ test('the table is the document the entry reads, and the page is derived from it
   assert.ok(checked >= 1, `only ${checked} hidden arguments were checked`);
 });
 
+test("an option's description reaches the docs page payload", () => {
+  // The web console's CLI page renders an argument's `description` when the payload carries it.
+  // No shipped option has one yet, so a COPY plants one and reads `cliReference()` from it; the
+  // live table then shows the key present and null on every argument the page receives.
+  const sb = makeSandbox('clitable-desc-');
+  try {
+    const co = path.join(sb.path, 'checkout');
+    const table = JSON.parse(readFileSync(TABLE, 'utf8'));
+    table.commands.find((c) => c.name === 'version').options[0].description = 'PLANTED paragraph';
+    copyCheckout(co, { 'js/cli-table.json': `${JSON.stringify(table, null, 2)}\n` });
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e',
+      "const { cliReference } = await import('file://' + process.argv[1]);"
+      + "const v = cliReference().commands.find((c) => c.name === 'version');"
+      + 'process.stdout.write(JSON.stringify(v.options[0]));',
+    '--', path.join(co, 'js', 'ui', 'cli.mjs')], { encoding: 'utf8', windowsHide: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(r.stdout).description, 'PLANTED paragraph');
+  } finally {
+    sb.cleanup();
+  }
+  for (const c of cliReference().commands) {
+    for (const a of [...c.positionals, ...c.options]) {
+      assert.ok('description' in a, `${c.name} ${a.dest}: the page payload has no description key`);
+    }
+  }
+});
+
 test('the help width is the terminal width less two, and COLUMNS wins', () => {
   // `helpWidth()` against `shutil.get_terminal_size().columns - 2`. THE THIRD CALLER `parseIntStrict`'s
   // docblock did not have: `$COLUMNS` arrives however the shell set it, so this one strips

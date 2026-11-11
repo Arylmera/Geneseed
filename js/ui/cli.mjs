@@ -42,9 +42,12 @@ import { parseIntStrict, stripWhitespace } from '../lib/text.mjs';
 
 const CLI_JSON = path.join(ROOT, 'js', 'cli-table.json');
 
-/** The keys the docs page has always carried, per argument — `type` and `hidden` are ours. */
+/**
+ * The keys the docs page carries, per argument — `type` and `hidden` are ours. `description` is
+ * an argument's own paragraph, when the table gives one; `null` when it does not.
+ */
 const PAGE_ARG_KEYS = ['names', 'dest', 'metavar', 'help', 'choices', 'default',
-  'required', 'nargs', 'is_flag'];
+  'required', 'nargs', 'is_flag', 'description'];
 
 /**
  * `js/cli-table.json`, parsed. An unreadable file is the empty reference; the entry points
