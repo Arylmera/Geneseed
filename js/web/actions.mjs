@@ -234,6 +234,8 @@ export function targetView(base, [host, scope, root]) {
     v = webState(null, target);
     v.selectView(target, root, emitOf(host, scope));
     v.pinned = true;
+    // A serving daemon runs no doctor on the event loop, for a named install either (`warmDoctor`).
+    Object.defineProperty(v, 'warm', { get: () => base.warm });
     // The daemon's one memo: a render is keyed on what it read, not on who asked for it.
     v.renderMemo = (base.renderMemo ??= renderMemo());
     v.refresh = base.refresh;

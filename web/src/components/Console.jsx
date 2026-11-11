@@ -122,7 +122,9 @@ export default function Console({ runs, open, onToggle, onClear, onCancel, busy,
                         <span className="cx-run-main">
                           <span className="cx-run-act">{r.action}</span>
                           {parsed[i].detail && (
-                            <span className="cx-run-sub">{parsed[i].detail}</span>
+                            <span className="cx-run-sub" title={parsed[i].detail}>
+                              {parsed[i].detail}
+                            </span>
                           )}
                         </span>
                         <span className="cx-run-dur">

@@ -5,7 +5,7 @@ const FOCUSABLE =
 
 // The popover the two topbar menus (Appearance, Voice) each wrote for themselves, with the
 // keyboard half they were missing. On open, focus moves to the first focusable inside (or
-// the box itself); Escape and a mousedown outside close it; on close, focus goes back to the
+// the box itself); Escape, a mousedown outside and Tab out of it close it; on close, focus goes back to the
 // trigger (`anchorRef`) when it was inside, so a keyboard user is not dropped on <body>.
 // A mousedown on the trigger is not "outside": the trigger's own click toggles it, and
 // closing here first would make that click reopen it. Positioning is the caller's
@@ -39,6 +39,15 @@ export default function Popover({ open, onClose, anchorRef, label, className, ch
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
   if (!open) return null
+  // Focus that leaves for the page closes it. Focus that goes nowhere (null) is left to the
+  // mousedown rule: on Safari and on Firefox for macOS a click on an item moves focus there, or to
+  // the box, before the click lands, and closing here would lose the pick. Back to the trigger is
+  // not leaving: its own click toggles.
+  const leave = (e) => {
+    const to = e.relatedTarget
+    if (!to || ref.current?.contains(to) || anchorRef?.current?.contains(to)) return
+    onClose()
+  }
   return (
     <div
       ref={ref}
@@ -46,6 +55,7 @@ export default function Popover({ open, onClose, anchorRef, label, className, ch
       role="dialog"
       aria-label={label}
       tabIndex={-1}
+      onBlur={leave}
     >
       {children}
     </div>

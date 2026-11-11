@@ -24,7 +24,7 @@ import Seg from '../components/Seg.jsx'
 import Garden from './Activity/Garden.jsx'
 import { cardKey, detailHref, installNames, placeCards } from '../lib/garden.js'
 import { useFlip } from '../lib/motion.js'
-import { usePoll } from '../hooks/usePoll.js'
+import { sameOr, usePoll } from '../hooks/usePoll.js'
 import { useAsync } from '../hooks/useAsync.js'
 
 // A failed read degrades its own card to a line of text; it never blanks the page.
@@ -345,7 +345,7 @@ export default function Activity() {
       api.activity().then(
         (d) => {
           if (alive()) {
-            setData(d)
+            setData(sameOr(d))
             setError('')
             const said = enteredNeedsYou(seen, d?.activity)
             // An identical sentence would leave the text unchanged and unread: vary its tail.

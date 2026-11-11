@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { api } from '../api/index.js'
 import { useAsync } from '../hooks/useAsync.js'
-import { usePoll } from '../hooks/usePoll.js'
+import { sameOr, usePoll } from '../hooks/usePoll.js'
 import ErrorState from '../components/ErrorState.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import CopyButton from '../components/CopyButton.jsx'
@@ -258,7 +258,7 @@ function useActiveFactories() {
   usePoll(
     (alive) =>
       api.activeFactories().then(
-        (d) => alive() && (setData(d), setError(null)),
+        (d) => alive() && (setData(sameOr(d)), setError(null)),
         (e) => alive() && setError(e.message),
       ),
     POLL_MS,

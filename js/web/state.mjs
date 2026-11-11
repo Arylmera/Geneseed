@@ -95,7 +95,7 @@ export function stampMinute(ms) {
  * THE CACHING IS BEHAVIOUR, NOT AN OPTIMISATION: `doctorCollect` renders a theme per call
  * and the console GETs `/api/overview` on mount and again after every mutation, so an
  * uncached `doctor` would put a full build on each of those requests. `refresh()` is what a mutation calls to
- * drop both — except where the mutation cannot change anything the doctor reads (the checkout,
+ * drop both (a serving daemon then re-runs the doctor on its thread at once, `warmDoctor`) — except where the mutation cannot change anything the doctor reads (the checkout,
  * the hook shim, the hook shell, the OpenCode config dirs, the deployed install): a memory
  * delete passes `{ doctor: false }` and keeps the ~3.6 s verdict. Rule and profile writes do not
  * call `refresh()` at all. Every other caller keeps the default, so a new one is slow, never stale.
@@ -124,6 +124,8 @@ export function webState(theme = null, target = null) {
     _doctorRun: null,
     // The warm-up run still in flight, a promise settled when its thread ends (`warmDoctor`).
     _doctorJob: null,
+    // The thread of the latest warm-up, so the next one can stop it once a refresh dropped its job.
+    _doctorWorker: null,
     // `diffCollect`'s memo of `expected` renders, made on first use by `api.mjs` (`memoOf`);
     // it re-renders on its own key change, so `refresh()` leaves it alone.
     renderMemo: null,
@@ -139,6 +141,10 @@ export function webState(theme = null, target = null) {
     // The per-install views made off this daemon's state, keyed `[host, root]` — see
     // `installView`. Kept here, not at module level, so each handler (each test's) has its own.
     _views: new Map(),
+    // Set by `serve()` once it listens: from then on no request runs the doctor on the event loop.
+    // A cold cache starts `warmDoctor` and reads as pending; tests and one-shot reads keep the
+    // inline run, which answers at once.
+    warm: false,
   };
   // The INSTALL ROOT (== build --out). For globals it IS the data dir; a claude/bob/openclaude
   // PROJECT install keeps its data under <repo>/.claude|.bob|.openclaude while the markers
@@ -172,7 +178,8 @@ export function webState(theme = null, target = null) {
     // NULL WHILE THE WARM-UP RUNS, and only then: a pending verdict, which the console draws as
     // "checking" and asks again for. Blocking here would put the run back on the event loop.
     get() {
-      if (st._doctor === null && st._doctorJob === null) st.runDoctor();
+      // A worker that cannot start (`warmDoctor` returns null) falls back to the inline run.
+      if (st._doctor === null && st._doctorJob === null && !(st.warm && warmDoctor(st))) st.runDoctor();
       return st._doctor;
     },
   });
@@ -260,6 +267,9 @@ export function webState(theme = null, target = null) {
   st.refresh = (opts = {}) => {
     st.refreshOwn(opts);
     for (const v of st._views.values()) v.refreshOwn(opts);
+    // Every job ends here, and the console asks the overview right after: start the new verdict
+    // now, on its thread, rather than inside that request (~12 s of a frozen console).
+    if (st.warm && opts.doctor !== false) warmDoctor(st);
   };
   return st;
 }
@@ -268,43 +278,54 @@ export function webState(theme = null, target = null) {
 const WARM_DOCTOR_LIMIT_MS = 180_000;
 
 /**
- * Run the doctor once right after the server binds, ON ITS OWN THREAD. On the event loop this run
- * held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s. Until it
- * lands `st.doctor` is null and `/api/doctor` waits on the promise this returns.
+ * Run the doctor ON ITS OWN THREAD: right after the server binds, and on a serving daemon
+ * (`st.warm`) after every refresh, on a cold cache and for `/api/doctor?fresh=1`. On the event loop
+ * this run held every request of a cold daemon for 13-24 s, past `BootSplash`'s stall at 8 s, and
+ * froze the console ~12 s after every job. Until it lands `st.doctor` is null and `/api/doctor`
+ * waits on the promise this returns. A new run stops the thread of the one it replaces: its
+ * verdict would be dropped anyway, and a burst of writes must not stack CPU-bound threads.
  *
  * A verdict is stamped only while its job is still the current one: `refresh`, `selectView` and a
  * newer run all clear `_doctorJob`, and the daemon must not serve what a mutation made stale. A
- * failed warm-up, like the old one, just leaves the cache cold: the next ask runs in line. The
- * `error` listener is not optional, an unheard worker error is uncaught and kills the daemon.
- * `unref`: a stopping daemon does not wait for it.
+ * thread that dies (an `error`, or an exit with no verdict) is stamped as a FAILED verdict too:
+ * left cold, a serving daemon's getter would start a new thread on every overview poll and read
+ * "checking" for good. The `error` listener is not optional, an unheard worker error is uncaught
+ * and kills the daemon. `unref`: a stopping daemon does not wait for it. `script` is the worker's
+ * module, for a test that needs a thread that dies.
  *
  * A HUNG run would leave `/api/doctor` unanswered and the console polling for good, so past
  * `limitMs` it is stopped and stamped as a FAILED verdict: unknown is never a green. Re-run clears it.
  */
-export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS) {
+export function warmDoctor(st, limitMs = WARM_DOCTOR_LIMIT_MS,
+  script = new URL('./doctor-worker.mjs', import.meta.url)) {
   if (st._doctor !== null || st._doctorJob !== null) return st._doctorJob;
+  st._doctorWorker?.terminate();
+  st._doctorWorker = null;
   let worker;
   try {
-    worker = new Worker(new URL('./doctor-worker.mjs', import.meta.url),
-      { workerData: { theme: st.theme } });
+    worker = new Worker(script, { workerData: { theme: st.theme } });
   } catch { return null; }
   worker.unref();
+  st._doctorWorker = worker;
   const job = new Promise((done) => {
-    const limit = setTimeout(() => {
+    const failed = (said) => {
       if (st._doctorJob === job) {
-        const said = `[doctor] the warm-up run did not finish in ${limitMs / 1000} s, so nothing was checked`;
         st.stampDoctor([said], [], [{ check: 'warm_up', label: 'Warm-up run', problems: [said] }]);
       }
+    };
+    const limit = setTimeout(() => {
+      failed(`[doctor] the warm-up run did not finish in ${limitMs / 1000} s, so nothing was checked`);
       worker.terminate();
     }, limitMs);
     limit.unref();
     worker.once('message', (r) => {
       if (st._doctorJob === job) st.stampDoctor(r.problems, r.themes, r.groups);
     });
-    worker.once('error', () => { /* cold cache, computed on demand */ });
-    worker.once('exit', () => {
+    worker.once('error', (e) => failed(`[doctor] the warm-up run failed: ${e?.message ?? e}`));
+    worker.once('exit', (code) => {
       clearTimeout(limit);
-      if (st._doctorJob === job) st._doctorJob = null;
+      failed(`[doctor] the warm-up run ended (code ${code}) without a verdict, so nothing was checked`);
+      if (st._doctorWorker === worker) st._doctorWorker = null;
       done();
     });
   });

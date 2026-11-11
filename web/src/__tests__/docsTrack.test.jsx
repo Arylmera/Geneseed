@@ -9,9 +9,8 @@ import {
   placeOf,
   trackNav,
   markSeen,
-  readSeen,
-  SEEN_KEY,
 } from '../pages/Docs/Track.jsx'
+import { readSeen, SEEN_KEY } from '../lib/track.js'
 
 // The Understand track: four pages, then Guides. A step is "done" when read before and
 // "on" when open; prev/next walk the track, and next on the last step leaves it for the

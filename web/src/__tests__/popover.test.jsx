@@ -61,4 +61,20 @@ describe('Popover', () => {
     fireEvent.mouseDown(screen.getByRole('button', { name: 'elsewhere' }))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
+
+  // Tab out of the box closes it, and focus stays where Tab took it. Focus that goes nowhere
+  // (a mouse click on Safari) or back to the trigger (whose own click toggles) is not leaving.
+  it('closes when focus leaves for the page, and only then', () => {
+    render(<Harness />)
+    fireEvent.click(trigger())
+    const inside = screen.getByRole('button', { name: 'Dark' })
+    fireEvent.focusOut(inside, { relatedTarget: null })
+    fireEvent.focusOut(inside, { relatedTarget: trigger() })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    const elsewhere = screen.getByRole('button', { name: 'elsewhere' })
+    elsewhere.focus()
+    fireEvent.focusOut(inside, { relatedTarget: elsewhere })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(elsewhere)
+  })
 })

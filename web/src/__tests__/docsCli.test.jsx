@@ -53,3 +53,45 @@ describe('CliPage copy', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+// A verb's or an option's `description` (the long help) renders under its one-line help, a
+// paragraph per blank-line block; an empty or absent one draws nothing.
+describe('CliPage description', () => {
+  const WITH = {
+    title: 'CLI',
+    prog: 'geneseed',
+    commands: [
+      {
+        name: 'update',
+        help: 'Pull and rebuild.',
+        description: 'Pulls the checkout.\n\nThen rebuilds every active install.',
+        options: [
+          {
+            names: ['--check'],
+            help: 'Only look.',
+            description: 'Asks origin without pulling.',
+            is_flag: true,
+          },
+        ],
+      },
+      { name: 'setup', help: 'Set up.', description: '' },
+    ],
+  }
+
+  it('draws each paragraph of a description, and nothing for an empty one', () => {
+    const { container } = render(<CliPage page={WITH} />)
+    const cards = container.querySelectorAll('.cli-card')
+    expect(
+      [...cards[0].querySelectorAll(':scope > .cli-desc p')].map((p) => p.textContent),
+    ).toEqual(['Pulls the checkout.', 'Then rebuilds every active install.'])
+    expect(cards[0].querySelector('.cli-arg .cli-desc').textContent).toBe(
+      'Asks origin without pulling.',
+    )
+    expect(cards[1].querySelector('.cli-desc')).toBeNull()
+  })
+
+  it('draws no description for a table that has none', () => {
+    const { container } = render(<CliPage page={PAGE} />)
+    expect(container.querySelector('.cli-desc')).toBeNull()
+  })
+})
