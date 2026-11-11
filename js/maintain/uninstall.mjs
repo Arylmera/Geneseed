@@ -72,6 +72,7 @@ import { printOut, printErr, readText, writeText, isFile, isDir, isOsError } fro
 import { indexOfDeepEqual, isDict, jsonDumps, deepEquals } from '../lib/json.mjs';
 import { sharedPaths } from '../lib/machine-dir.mjs';
 import { archiveStore } from '../hosts/memory-files.mjs';
+import { hostGlobalInstalls } from '../inspect/excludes.mjs';
 import { comparePaths, isAbsolutePath } from '../lib/paths.mjs';
 
 const hostSpec = (host) => HOSTS.find((h) => h.host === host);
@@ -764,19 +765,12 @@ export function uninstallResolve(targetArg) {
 }
 
 /**
- * `[host, configDir]` for each host's global dir that `has` accepts, in `HOSTS` order — the
- * candidates a verb run with no `--target` chooses from. The default `has` is "an install is
- * there" (`installState` not absent); `version` and `diff` pass the marker they read.
+ * `[host, configDir]` for each host's global dir that holds an install (`installState` not
+ * absent) — the candidates a bare `uninstall` chooses from. The walk is `hostGlobalInstalls`
+ * (`inspect/excludes.mjs`), its one owner; `version` and `diff` call it with their own marker.
  */
-export function globalInstalls(has = (host, dir) => installState(dir, host, 'global') !== 'absent') {
-  const out = [];
-  for (const { host, configDir } of HOSTS) {
-    try {
-      const dir = configDir();
-      if (has(host, dir)) out.push([host, dir]);
-    } catch { /* a host with no resolvable dir has no install */ }
-  }
-  return out;
+export function globalInstalls() {
+  return hostGlobalInstalls((host, dir) => installState(dir, host, 'global') !== 'absent');
 }
 
 /**

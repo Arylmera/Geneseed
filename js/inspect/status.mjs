@@ -58,7 +58,7 @@ import { factCount } from '../hosts/memory-files.mjs';
 import { lastStoreReport } from '../hosts/store-watch.mjs';
 import { hookShimPath, shimDead } from '../hosts/shim.mjs';
 import { printErr, printOut } from '../lib/fs.mjs';
-import { globalInstalls } from '../maintain/uninstall.mjs';
+import { hostGlobalInstalls as globalInstalls } from './excludes.mjs';
 import { readDefaultInstall, sharedPaths } from '../lib/machine-dir.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { renamedFilesIn } from '../build/stubs.mjs';

@@ -46,7 +46,7 @@ import {
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
 } from '../hosts/installs.mjs';
 import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
-import { globalInstalls } from '../maintain/uninstall.mjs';
+import { hostGlobalInstalls as globalInstalls } from './excludes.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
 import { NOTES_DIRS, sharedPaths } from '../lib/machine-dir.mjs';

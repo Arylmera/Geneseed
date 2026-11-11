@@ -55,19 +55,31 @@ function worktreeNote(host, cfg, repo) {
     + `to the repo's ${marker}/settings.json: "claudeMdExcludes": ["${claudeMdEntry(cfg)}"]`;
 }
 
-/** `_global_installs` — every host whose GLOBAL config dir carries a Geneseed manifest. */
-function globalInstalls() {
+/**
+ * `[host, configDir]` for each host whose GLOBAL config dir `has` accepts, in `HOSTS` order —
+ * THE one walk over the hosts' global dirs. `exclude` tests for the manifest; `uninstall`,
+ * `version` and `diff` pass their own test to pick a no-`--target` default.
+ *
+ * HERE, not in `maintain/uninstall.mjs`: every global emit runs the fold, the fold reaches this
+ * module, and `tests/unit/hook_cli.test.mjs` keeps js/maintain out of the fold's import graph.
+ */
+export function hostGlobalInstalls(has) {
   const out = [];
   for (const { host, configDir } of HOSTS) {
-    let cfg;
     try {
-      cfg = configDir();
+      const dir = configDir();
+      if (has(host, dir)) out.push([host, dir]);
     } catch {
-      continue;   // a broken resolver must not kill the CLI
+      continue;   // a broken resolver, or an unreadable dir, must not kill the CLI
     }
-    if (isFile(path.join(cfg, GLOBAL_MANIFEST))) out.push({ host, cfg });
   }
   return out;
+}
+
+/** `_global_installs` — every host whose GLOBAL config dir carries a Geneseed manifest. */
+function globalInstalls() {
+  return hostGlobalInstalls((_host, cfg) => isFile(path.join(cfg, GLOBAL_MANIFEST)))
+    .map(([host, cfg]) => ({ host, cfg }));
 }
 
 /** `_read_excludes` — the file, or the seeded stub's shape when it is absent or unusable. */
