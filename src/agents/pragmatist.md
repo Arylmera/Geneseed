@@ -3,7 +3,7 @@
 > {{DESC_PRAGMATIST}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — convened to weigh whether the motion is *worth it*, in its own isolated context.
+- A council debate (the council {{SKILL}}) needs a judgement of whether the motion is worth its cost.
 - The user wants the real cost, effort, and complexity of a change surfaced against its payoff.
 
 ## When NOT to dispatch

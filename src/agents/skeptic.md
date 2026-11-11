@@ -3,7 +3,7 @@
 > {{DESC_SKEPTIC}}
 
 ## When to dispatch
-- As a seat in a council debate (the council {{SKILL}}) — the devil's advocate, convened to attack the motion in its own isolated context.
+- A council debate (the council {{SKILL}}) needs a devil's advocate to attack the motion.
 - The user wants a change, plan, or claim stress-tested for how it fails before committing.
 
 ## When NOT to dispatch

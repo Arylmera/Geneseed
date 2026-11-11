@@ -52,7 +52,9 @@ Each one removes a dependency on a dropped file. Re-apply them on update.
 - `SKILL.md` §12: the "Exporting to PNG / SVG" body is replaced by one paragraph: this copy ships no
   export helpers, so an `.svg` is the `<svg>` node copied out of the `.html`, and a `.png` cannot be
   made.
-- `SKILL.md` frontmatter: the description says "HTML/SVG" where upstream says "HTML/SVG/PNG".
+- `SKILL.md` frontmatter: the description is cut from upstream's ~850-character list of diagram
+  types to a short summary plus a "Use when" trigger, because it is loaded in every session's
+  skill catalogue. It says "HTML/SVG" where upstream says "HTML/SVG/PNG".
 - `SKILL.md` §10: the Consultant-special row points at `type-quadrant.md` instead of the dropped
   `example-quadrant-consultant.html`.
 - `SKILL.md` §11: the Format dial marks `png` and `html+png` as not available.
