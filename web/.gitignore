@@ -1,1 +1,3 @@
 node_modules/
+# vitest run output (a 206 KB result was committed by mistake in #390)
+.vitest/
