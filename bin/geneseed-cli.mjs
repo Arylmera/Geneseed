@@ -364,12 +364,12 @@ async function main(argv) {
   if (verb === 'validate') {
     // Lazy for the same reason the table rows are — `parseDriverArgs` alone drags the whole
     // generator driver in, and every OTHER verb was paying for it.
-    const [{ cmdValidate, VALIDATE_USAGE }, { parseDriverArgs }] = await Promise.all([
+    const [{ cmdValidate, validateUsage }, { parseDriverArgs }] = await Promise.all([
       import('../js/inspect/validate.mjs'), import('../js/build/driver.mjs'),
     ]);
     // Before the borrowed parser, whose own `-h` prints the GENERATOR's usage.
     if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
-      printOut(VALIDATE_USAGE);
+      printOut(validateUsage());
       return 0;
     }
     try {

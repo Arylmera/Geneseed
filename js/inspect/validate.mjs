@@ -7,6 +7,7 @@
  * reached — see its row in `tests/ported.json`.
  */
 import path from 'node:path';
+import { FLAGS, VALUED } from '../build/args.mjs';
 import { buildInto, emitGlobalInto, emitProjectInto } from '../build/driver.mjs';
 import { GATE_SWITCHES } from '../build/source.mjs';
 import { resolvePath } from '../hosts/hosts.mjs';
@@ -17,6 +18,7 @@ import { validateIsVendored } from '../hosts/native.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
 import { comparePaths } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
+import { cliCommand, formatHelp, helpWidth } from '../ui/cli.mjs';
 import { checkBuild } from './checks-build.mjs';
 import { cmdDoctor } from './doctor.mjs';
 import { isDir, isFile, rglob, withTempDir, within } from './scan.mjs';
@@ -25,23 +27,45 @@ import { isDir, isFile, rglob, withTempDir, within } from './scan.mjs';
 // validate  —  the generator's `--validate-only`, on this binary because it runs the doctor
 // --------------------------------------------------------------------------------------
 
+/** The generator flags `validate` refuses (`cmdValidate`) or has no use for. */
+const NOT_VALIDATE = ['--sync-themes', '--config-dir', '--validate-only'];
+
 /**
- * `validate --help`. Its own text, because the parser it borrows is the generator's and that
- * parser's `-h` prints `usage: geneseed-build …` — naming `--sync-themes`/`--config-dir`, which
- * this verb refuses, under a program name the user did not type.
+ * `validate --help`. Not the borrowed parser's own `-h`, which prints `usage: geneseed-build …`
+ * under a program name the user did not type.
+ *
+ * DERIVED FROM THE GENERATOR'S FLAG TABLES (`VALUED`, `FLAGS`), never typed out: the hand-kept
+ * copy it replaces had already lost `--no-ownership-gate`, `--prune-gates` and `--force`. Each
+ * flag's help and choices are `geneseed build`'s (`cliCommand`), so the two verbs say one thing.
  */
-export const VALIDATE_USAGE = [
-  'usage: geneseed validate [-h] [--theme THEME] [--emit EMIT] [--out OUT] [--root ROOT]',
-  '                         [--footprint {lean,full}] [--posture POSTURE] [--mode MODE]',
-  '                         [--trust TRUST] [--doctrines DOCTRINES] [--exclude-rules RULES]',
-  '                         [--exclude-skills SKILLS] [--kits KITS] [--shared-tier on|off] [--no-secrets-gate]',
-  '                         [--no-done-gate] [--no-deletion-gate] [--no-external-gate] [--no-test-note] [-v]',
-  '',
-  "Render and emit into a throwaway sandbox, run the doctor's checks, and write nothing real.",
-  "Takes the generator's render flags (see geneseed-build --help) except --sync-themes and",
-  '--config-dir.',
-  '',
-].join('\n');
+export function validateUsage(width = helpWidth()) {
+  const build = new Map(cliCommand('build').options.map((o) => [o.names[0], o]));
+  const byDest = new Map();
+  for (const [table, isFlag] of [[VALUED, false], [FLAGS, true]]) {
+    for (const [flag, dest] of Object.entries(table)) {
+      if (NOT_VALIDATE.includes(flag)) continue;
+      if (byDest.has(dest)) { byDest.get(dest).names.push(flag); continue; }
+      const row = build.get(flag);
+      const choices = row?.choices ?? null;
+      // argparse's metavar is the dest upper-cased; the driver's dests are camelCase, so the
+      // flag spells it (`EXCLUDE_RULES`, as `build --help` shows), unless choices stand in.
+      const metavar = row?.metavar ?? (isFlag || choices ? null
+        : flag.slice(2).toUpperCase().replace(/-/g, '_'));
+      byDest.set(dest, {
+        names: [flag], dest, metavar, help: row?.help ?? '',
+        choices, required: false, nargs: isFlag ? '0' : null, is_flag: isFlag,
+      });
+    }
+  }
+  // `-v`/`--verbose` is the one flag `build` does not forward, so the table has no help for it.
+  const verbose = byDest.get('verbose');
+  if (verbose && !verbose.help) verbose.help = 'list every file the dry run would write';
+  return formatHelp({
+    options: [...byDest.values()],
+    description: "Render and emit into a throwaway sandbox, run the doctor's checks, and write "
+      + `nothing real. Takes the generator's render flags except ${NOT_VALIDATE.slice(0, 2).join(' and ')}.`,
+  }, 'geneseed validate', width);
+}
 
 /**
  * Capture the streams of an IN-PROCESS call.
@@ -149,13 +173,12 @@ export function cmdValidate(args) {
     } catch (e) {
       // A DELIBERATE refusal from the render (an unknown theme, an incomplete source).
       //
-      // THE EXIT CODE AND NOT THE MESSAGE: every refusal that crosses the seam arrives
-      // here as an INTEGER exit code, not the sentence `loadTheme` wrote on stderr on the
-      // way out, and the printed line is part of the verb's output. Printing `e.message`
-      // would say `unknown theme 'x'` where the output says `1`.
+      // The refusal already explained itself on stderr (`loadTheme`'s sentence) on the way out;
+      // what crosses the seam is only its exit code. So this line names what failed and adds
+      // nothing after it: it used to end in that bare code (`: 1`), which read as a message
+      // cut short. The code is the process's exit status, where it belongs.
       if (e && e.exitCode !== undefined) {
-        printOut(`[validate-only] render/emit FAILED for theme '${args.theme}' `
-          + `emit '${emit}': ${e.exitCode}\n`);
+        printOut(`[validate-only] render/emit FAILED for theme '${args.theme}' emit '${emit}'\n`);
         return null;
       }
       throw e;

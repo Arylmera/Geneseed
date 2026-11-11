@@ -42,7 +42,7 @@ import {
 import {
   ROOT, makeCfg, discoverNames, knownRuleIds, PACK_ORDER, resolveRuleIds, reusedRuleAddresses, ruleCanon,
 } from '../../js/build/source.mjs';
-import { configDefaults, parseExcludeRules, warnReusedRules } from '../../js/build/args.mjs';
+import { FLAGS, VALUED, configDefaults, parseExcludeRules, warnReusedRules } from '../../js/build/args.mjs';
 import { parseDriverArgs, emitGlobalInto, emitProjectInto } from '../../js/build/driver.mjs';
 import {
   makeSandbox, homeOverrides, sandboxProcessHome, restoreProcessHome,
@@ -560,6 +560,10 @@ test('an unknown theme exits non-zero and says so', () => {
     const r = validateRun(d, ['--theme', 'not-a-real-theme', '--emit', 'files']);
     assert.notEqual(r.status, 0);
     assert.match(r.stdout + r.stderr, /unknown theme/);
+    // The failure line names what failed and stops: it used to end in the bare exit code
+    // (`…emit 'files': 1`), which read as a message cut short. The code is the exit status.
+    assert.match(r.stdout, /render\/emit FAILED for theme 'not-a-real-theme' emit 'files'\r?\n/);
+    assert.doesNotMatch(r.stdout, /FAILED for theme .*: \d+\r?$/m);
   });
 });
 
@@ -644,6 +648,17 @@ test('validate --help prints its own usage, not the generator\'s', () => {
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /^usage: geneseed validate /);
     assert.ok(!r.stdout.includes('geneseed-build ['), r.stdout);
+    // EVERY render flag the generator parses is listed, and none of the three it refuses or
+    // ignores. The hand-kept text this replaced had lost --no-ownership-gate, --prune-gates
+    // and --force; the list here is read off the parser's own tables, not typed.
+    const refused = ['--sync-themes', '--config-dir', '--validate-only'];
+    for (const flag of [...Object.keys(VALUED), ...Object.keys(FLAGS)]) {
+      if (refused.includes(flag)) {
+        assert.ok(!new RegExp(`\\[${flag}[ \\]]`).test(r.stdout), `validate --help offers ${flag}`);
+      } else {
+        assert.ok(r.stdout.includes(flag), `validate --help leaves out ${flag}`);
+      }
+    }
   });
 });
 
