@@ -774,6 +774,28 @@ test('headCommit reads the HEAD commit git names, without spawning it', () => {
   } finally { sb.cleanup(); }
 });
 
+// D12, D13 through the CLI, on the shipped bricks: each shipped factory passes `check` with its
+// `intake --reject--> $stop` edge, a `reject` holds the gate with the finding as its note, and
+// `ok` accepts the refusal: the run stops, and `next` says why.
+test('D12: every shipped factory routes intake reject to $stop; reject holds, and ok stops the run', () => {
+  const sb = repo([]);
+  try {
+    assert.deepEqual(run(sb.path, ['check']),
+      { code: 0, out: { ok: true, problems: [], factories: ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr'] } });
+    for (const name of ['analysis-to-build', 'bug-report-to-fix', 'issue-to-pr']) {
+      const { edges } = JSON.parse(readFileSync(path.resolve(import.meta.dirname, `../../src/factories/${name}.json`), 'utf8'));
+      assert.deepEqual(edges.filter((e) => e.on === 'reject'), [{ from: 'intake', on: 'reject', to: '$stop' }], name);
+    }
+    run(sb.path, [...INIT, '--factory', 'issue-to-pr']);
+    assert.deepEqual(run(sb.path, ['next']).out.outcomes, ['pass', 'fail', 'needs-info', 'reject']);
+    assert.deepEqual(run(sb.path, ['record', '--outcome', 'reject', '--carry', 'refusal.md'], ''),
+      { code: 0, out: { awaiting: { kind: 'gate', stage: 'intake', outcome: 'reject', note: 'refusal.md' } } });
+    assert.deepEqual(run(sb.path, ['decide', '--verdict', 'ok']), { code: 0, out: { stopped: 'intake reported reject' } });
+    const end = run(sb.path, ['next']).out;
+    assert.deepEqual([end.terminal, end.reason], ['$stop', 'intake reported reject']);
+  } finally { sb.cleanup(); }
+});
+
 // D2, D3, D5 through the CLI. `init` stamps `started` and `record` stamps `at`, both the ISO time
 // of the call, so the expected values are their form, and the order: `at` is not before `started`.
 // `--tokens` takes digits that make a positive integer and nothing else; a refusal leaves

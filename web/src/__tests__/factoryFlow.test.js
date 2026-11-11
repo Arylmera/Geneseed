@@ -373,6 +373,23 @@ describe('forksOf — the engine fork', () => {
     expect(at(layoutFactory(review, REVIEW), 'review').kind).toBe('brick')
   })
 
+  // `needs-info` and `reject` are intake's gates, not lanes: the engine's plain outcomes, mirrored.
+  it('never makes intake a fork for needs-info or reject', () => {
+    const intake = {
+      stages: ['intake', 'C'],
+      start: 'intake',
+      edges: [
+        { from: 'intake', on: 'pass', to: 'C' },
+        { from: 'intake', on: 'needs-info', to: 'C' },
+        { from: 'intake', on: 'reject', to: '$stop' },
+        { from: 'intake', on: 'fail', to: '$stop' },
+      ],
+    }
+    const INTAKE = [{ name: 'intake', outcomes: ['pass', 'fail', 'needs-info', 'reject'] }]
+    expect(forksOf(intake, INTAKE).size).toBe(0)
+    expect(forksOf(intake).size).toBe(0)
+  })
+
   // The catalogue's brick is the word: a declared named outcome makes the fork.
   it('reads a catalogued brick by its declared outcomes', () => {
     const bricks = [{ name: 'triage', outcomes: ['bug', 'feature', 'deps', 'refactor', 'docs'] }]

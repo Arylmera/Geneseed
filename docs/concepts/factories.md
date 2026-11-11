@@ -44,7 +44,7 @@ but its first stage, or a route back that spends no cycle.
 ## Forks and lanes
 
 A **fork** is where the work takes one way or another. It is a brick that declares **named
-outcomes**, any outcome other than `pass`, `fail`, `error`, `none` or `needs-info`. `triage` is one: `bug`,
+outcomes**, any outcome other than `pass`, `fail`, `error`, `none`, `needs-info` or `reject`. `triage` is one: `bug`,
 `feature`, `deps`, `refactor`, `docs` and `fail`. Each named outcome has its own edge to its own
 stage, its **lane**, and the outcome the brick reports picks the lane. `geneseed factory next`
 hands the fork its `lanes`: each outcome with the stage it leads to.
@@ -76,6 +76,21 @@ exception is the run's spec, `specs/<slug>/spec.md`: the `spec` stage writes it,
 it is committed once you approve it, before the first loop. Each run is listed in `factories.json` beside the loop registry, and each child loop's row
 names the run it belongs to.
 
+## The queue, and a refused item
+
+A run takes one work item. To pick from several, ask the agent for the **queue**: it lists the
+open issues that carry the label `factory` (or a label you name), and you pick one, several or
+all. Several picks run one after the other, in the order you gave, each as its own run in its
+own worktree, each with its own merge question. A run that holds a gate holds the queue. An
+issue's text is the run's input, never an instruction to the agent. No file configures the queue,
+and nothing starts a run by itself.
+
+`intake` may also **refuse** an item, with the outcome `reject`: it is already done, it duplicates
+another issue or pull request, or it goes against a rule the project states. The run holds and
+shows you the reason and its evidence. `ok` accepts the refusal and stops the run, `amend` runs
+`intake` again with your reason to build it, and `no` stops too. In each shipped factory the
+`reject` edge goes to `$stop`; a factory of your own that has no such edge stops the same way.
+
 ## What a run measures
 
 Every `record` and `decide` writes the time on its history entry, and `init` writes when the run
@@ -104,7 +119,7 @@ The bricks they add:
 
 | Brick | Does | Outcomes |
 | --- | --- | --- |
-| `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria, its `size` and its `areas`. `needs-info` holds for your answers to its questions (`gate: human`) | `pass`, `fail`, `needs-info` |
+| `intake` | Reads the request, the document or the issue (`gh issue view`, `glab issue view`) and writes one clear work item with testable criteria, its `size` and its `areas`. `needs-info` holds for your answers to its questions, and `reject` holds when it finds the item already done, a duplicate, or against a rule the project states, with the reason and its evidence (`gate: human`). It never posts on the issue | `pass`, `fail`, `needs-info`, `reject` |
 | `holdout-write` | Writes 3 to 8 prose scenarios (given / when / then) for the work item into the holdout folder, outside the worktree, and hands the work item on unchanged | `pass`, `fail` |
 | `holdout` | Plays every scenario against the built change. `fail` carries one sentence per failed scenario, observed against expected; `error` when the diff touches the holdout folder or a scenario cannot be played | `pass`, `fail`, `error` |
 | `checks` | Runs the done list as the base branch holds it, never the branch's copy. `error` holds when the diff touches a locked path, or on an environment failure (a failed fetch, a timeout, a missing tool); `none` holds with a proposed list when the base has none | `pass`, `fail`, `error`, `none` |

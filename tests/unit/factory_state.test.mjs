@@ -23,7 +23,7 @@ const CATALOG = {
     brick('probe', ['pass', 'error']),
     brick('spec', ['pass', 'fail'], { effect: 'mutate', agent: 'architect', gate: 'human' }),
     brick('lint', ['pass', 'fail']),
-    brick('intake', ['pass', 'fail', 'needs-info'], { gate: 'human', gateOn: ['needs-info'] }),
+    brick('intake', ['pass', 'fail', 'needs-info', 'reject'], { gate: 'human', gateOn: ['needs-info', 'reject'] }),
     brick('checks', ['pass', 'fail', 'error', 'none'], { agent: 'tester', gate: 'human', gateOn: ['error', 'none'] }),
     brick('review-panel', ['pass', 'fail'], { agent: null, skill: 'factory' }),
   ]),
@@ -873,7 +873,7 @@ test('D16 + D13: checks error and none hold the gate; ok continues or re-runs ch
 
 // F1, backward compatibility: `bug-report-to-fix` as it shipped before intake could ask (5.0.4),
 // written out here. It has no needs-info edge. Against today's shipped catalogue, where intake
-// declares needs-info, it must (1) still pass check, (2) still validate when a FACTORY.md embeds
+// declares needs-info and reject, it must (1) still pass check, (2) still validate when a FACTORY.md embeds
 // it, and (3) on needs-info, hold, and on ok go where intake's pass goes: holdout-write.
 const OLD_BUG_REPORT_TO_FIX = {
   name: 'bug-report-to-fix', description: 'd', category: 'development',
@@ -896,9 +896,11 @@ const OLD_BUG_REPORT_TO_FIX = {
   ],
 };
 
-test('F1: a factory with no needs-info edge still checks, validates, and goes on along pass', () => {
+// and (4) on reject, hold, and on ok stop: a refused item needs no edge to reach $stop (D12).
+test('F1: a factory with no needs-info or reject edge still checks, validates, goes on along pass, and stops on a refusal', () => {
   const shipped = loadCatalog({ projectRoot: null, globalLevel: false });
-  assert.deepEqual(shipped.bricks.get('intake').outcomes, ['pass', 'fail', 'needs-info']);
+  assert.deepEqual(shipped.bricks.get('intake').outcomes, ['pass', 'fail', 'needs-info', 'reject']);
+  assert.deepEqual(shipped.bricks.get('intake').gateOn, ['needs-info', 'reject']);
   assert.deepEqual(checkFactory(OLD_BUG_REPORT_TO_FIX, shipped), []);
   const s = initFactory({ title: 'T', requirement: 'R', factory: structuredClone(OLD_BUG_REPORT_TO_FIX), input: null });
   validateFactoryState(parseFactoryFile(renderFactoryFile(s)), shipped);
@@ -907,6 +909,11 @@ test('F1: a factory with no needs-info edge still checks, validates, and goes on
   validateFactoryState(parseFactoryFile(renderFactoryFile(s)), shipped);
   assert.deepEqual(decideFactory(s, shipped, 'ok'), { stage: 'holdout-write' });
   assert.deepEqual(s.counters, {});
+  const r = initFactory({ title: 'T', requirement: 'R', factory: structuredClone(OLD_BUG_REPORT_TO_FIX), input: null });
+  assert.deepEqual(recordStage(r, shipped, 'reject', { ...CLEAN, carry: 'refusal.md' }),
+    { awaiting: { kind: 'gate', stage: 'intake', outcome: 'reject', note: 'refusal.md' } });
+  validateFactoryState(parseFactoryFile(renderFactoryFile(r)), shipped);
+  assert.deepEqual(decideFactory(r, shipped, 'ok'), { stopped: 'intake reported reject' });
 });
 
 // D2 + D3: `init` stamps the time it is given as `started`, `record` and `decide` stamp it as `at`
@@ -943,4 +950,32 @@ test('D2 + D3: started, at and tokens are stamped when given, optional on read, 
     const x = structuredClone(s); edit(x);
     assert.throws(() => validateFactoryState(x, CATALOG), new RegExp(`FACTORY.md is unreadable: ${says}`));
   }
+});
+
+// D12: `reject` is intake's refusal. It holds the gate. `ok` accepts the refusal: the reject edge
+// goes to $stop, so the run stops with the outcome as its reason. `amend` re-runs intake with the
+// user's reason to build it as the carry, and a pass then goes on. `no` stops as at any gate.
+// reject is no lane: intake gets no `lanes` and nothing records one. The edge is written out here,
+// as the shipped factories write it; F1 above covers a factory without it.
+test('D12: intake reject holds, ok stops, amend re-runs intake, no stops, and no lane is set', () => {
+  const rejecting = () => {
+    const f = reviewFactory();
+    f.edges.push({ from: 'intake', on: 'reject', to: '$stop' });
+    return f;
+  };
+  assert.deepEqual(checkFactory(rejecting(), CATALOG), []);
+  const HELD = { awaiting: { kind: 'gate', stage: 'intake', outcome: 'reject', note: 'refusal.md' } };
+  const held = () => { const s = start(rejecting()); assert.deepEqual(recordStage(s, CATALOG, 'reject', { ...CLEAN, carry: 'refusal.md' }), HELD); return s; };
+  const s = held();
+  assert.equal('lanes' in { ...nextStage(start(rejecting()), CATALOG) }, false);
+  assert.deepEqual([s.status, s.lane, s.stage], ['awaiting', null, 'intake']);
+  assert.deepEqual(decideFactory(s, CATALOG, 'ok'), { stopped: 'intake reported reject' });
+  assert.deepEqual([s.status, s.reason, s.lane], ['stopped', 'intake reported reject', null]);
+  const a = held();
+  assert.deepEqual(decideFactory(a, CATALOG, 'amend', 'build it: the duplicate was closed unfixed'), { resumed: true });
+  assert.deepEqual([a.status, a.stage, nextStage(a, CATALOG).carry], ['running', 'intake', 'build it: the duplicate was closed unfixed']);
+  assert.deepEqual(recordStage(a, CATALOG, 'pass', CLEAN), { stage: 'loop:bugfix' });
+  assert.equal(a.lane, null);
+  const n = held();
+  assert.deepEqual(decideFactory(n, CATALOG, 'no'), { stopped: 'gate rejected at intake' });
 });

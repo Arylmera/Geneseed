@@ -15,7 +15,7 @@ committed or counted against a ring budget while it waits.
 
 A [factory](factories.md) stage holds the same way, answered with `geneseed factory decide`.
 Three shipped bricks do: `intake` (holds on `needs-info` — it has questions only you can
-answer), `checks` (holds on `error` — the branch changed a locked path — and on `none` — the
+answer — and on `reject` — it refuses the item as already done, a duplicate or against a rule), `checks` (holds on `error` — the branch changed a locked path — and on `none` — the
 base branch has no done list yet) and `merge-gate` (holds on `none` — the repo runs no CI on the
 PR).
 

@@ -359,7 +359,7 @@ screen the run list stacks above the detail.
   grey block, a fork amber, a `loop:` stage a teal box that names its loop (without `loop:`)
   over `whole loop`, or `not in catalogue` when this install lacks it; the ring itself is on the
   Loops page. A fork is what the engine calls one: a brick that declares a named outcome
-  (one outside `pass`, `fail`, `error`, `none` and `needs-info`), never a `loop:` stage, however
+  (one outside `pass`, `fail`, `error`, `none`, `needs-info` and `reject`), never a `loop:` stage, however
   many stages its edges reach. The targets of a fork share a row, side by side, each lane labelled with its outcome,
   and join again at the first stage every lane reaches. Each route back (an edge into a cycle's
   first stage, the edge that spends a lap, `$lane` included) is a rail on the left labelled

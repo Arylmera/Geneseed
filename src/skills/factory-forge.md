@@ -60,7 +60,8 @@ to the loop three times, not two".
    ```
 
    The edge `intake --needs-info--> <stage>` is optional: without it, a `needs-info` the user
-   answers `ok` follows intake's `pass` edge. `protected` is optional. `review.seats` is what a
+   answers `ok` follows intake's `pass` edge. The edge `intake --reject--> $stop` is optional
+   too: without it, a refusal the user accepts stops the run. `protected` is optional. `review.seats` is what a
    `review-panel` stage seats; copy the shipped table unless the user wants other seats.
 
    A cycle's `nodes[0]` is where every lap starts, and every route back targets it. A factory
@@ -81,8 +82,9 @@ to the loop three times, not two".
    - `no brick named` / `no loop template named` / `brick unavailable` — a stage that does not
      exist or cannot run here: fix the name, or step 4.
    - `is not an outcome of` / `no edge for outcome` / `edges for outcome` — every outcome of a
-     stage has exactly one edge, and an edge uses only outcomes the stage declares (`error` may
-     go without one: it stops the run; so may `needs-info`: it follows the `pass` edge).
+     stage has exactly one edge, and an edge uses only outcomes the stage declares (`error` and
+     `reject` may go without one: each stops the run; so may `needs-info`: it follows the
+     `pass` edge).
    - `protected: must be a list of non-empty paths` — `protected` is a list of path strings.
    - `review: must be an object with a seats table` / `review.seats.<size>: must be a non-empty
      list of agent names` / `review.seats.areas: must map each area to a list of agents` — the
