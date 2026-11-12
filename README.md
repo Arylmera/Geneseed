@@ -39,9 +39,9 @@ A hand-written instructions file is prose the model may or may not honour, copie
 
 - **Laws are enforced, not suggested.** A force-push to `main`, a `reset --hard` that abandons unpushed commits, or a credential written into a tracked file is caught by a hook *before* the tool runs, in the host's own dialect — a prompt on Claude Code and OpenClaude, a hard block on OpenCode, exit 2 on Bob. The gates fail closed, and every catch is one line in a ledger that `geneseed status` counts.
 - **The developer stays the owner of the code.** In a production application the agent proposes and the developer decides — per feature, per file or per function, as the team sets in a committed `AGENTS.md`. Interfaces and sensitive zones are always a checkpoint, complex parts are explained before they land, and a hook stops the first write in an application that has not chosen yet. [Ownership →](#-ownership-of-production-code)
-- **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 263 emit configurations, and a second emit into the same tree must change nothing.
+- **One source, five targets.** Skills are byte-identical on every host; only the wiring differs. Every commit renders all 268 emit configurations, and a second emit into the same tree must change nothing.
 - **Costs are measured, not guessed.** Zero runtime dependencies. The hook path loads in about 14 ms per tool call. The default *lean* footprint keeps the always-on context small and puts the full rationale one read away — the numbers are in [docs/token-footprint.md](docs/token-footprint.md).
-- **It follows you.** Install once, globally; every repo inherits it. One `git pull` or `npm install -g geneseed@latest` rebuilds every active install.
+- **It follows you.** Install once, globally; every repo inherits it. One `geneseed upgrade` (a `git pull`), or `npm install -g geneseed@latest` then `geneseed rebuild-all`, rebuilds every active install.
 
 This page is the overview. **New to agent harnesses?** Start with [Understand](docs/understand/harness.md) — a short course on what a harness is, what lands on your machine, what changes in your day, and what is enforced versus only asked. Everything else — every install path, configuration knob, and troubleshooting step — is in the **[documentation](docs/README.md)**, which the web console also renders.
 
@@ -82,7 +82,7 @@ The harness is published on npm as **[`geneseed`](https://www.npmjs.com/package/
 npx geneseed setup            # the guided wizard
 ```
 
-The wizard asks for a **theme** (each one previewed live — tagline, sigil, voice) and an **install mode** — *OpenCode global* (recommended; every repo inherits it), *per-repo `.opencode/`*, or *plain bundle* for any `AGENT.md` tool — then builds and offers a health check. It works the same on macOS, Linux and Windows (cmd, PowerShell, or a POSIX shell).
+The wizard asks for a **theme** (each one listed with a one-line description) and an **install mode** — a host (OpenCode, Claude Code, IBM Bob or OpenClaude) installed globally or per repo, *OpenCode global* being the recommended one (every repo inherits it), or the *plain bundle* for any `AGENT.md` tool — then builds and offers a health check. It works the same on macOS, Linux and Windows (cmd, PowerShell, or a POSIX shell).
 
 Keeping it around is the same command with `npm`:
 
@@ -158,7 +158,7 @@ geneseed web stop            # stop the daemon
 geneseed web status          # is it running, and where
 ```
 
-The sidebar has eight pages: **Overview** (what's deployed, health, recent jobs), **Constitution** (the rules and doctrine switches), **Library** (skills, agents, the wiki), **Kits** (opt-in stack bundles), **Loops** (the loop catalogue), **Personal** (your rules, profile, memory, notebook), **Installs** (hosts, local edits, doctor, server) and **Docs** — this documentation, opening on the Understand track, with a map of what Geneseed put on your machine.
+The sidebar has eleven pages: **Overview** (what's deployed, health, recent jobs), **Constitution** (the rules and doctrine switches), **Library** (skills, agents, the wiki), **Kits** (opt-in stack bundles), **Loops** (the loop catalogue), **Personal** (your rules, profile, memory, notebook), **Installs** (hosts, local edits, doctor, server), **Factories** (the factory catalogue and its runs), **Activity** (what the sessions did), **Settings** and **Docs** — this documentation, opening on the Understand track, with a map of what Geneseed put on your machine.
 
 It binds to `127.0.0.1` only and runs entirely offline — no npm needed at runtime; the UI build ships in `web/dist/`. Mutating actions run in the background and report back as toasts (fire-and-notify), guarded by a per-session token so other sites can't trigger them. A global **Spotlight** search in the topbar jumps to any agent, skill, rule, doc, or MCP server. Rebuild the UI after changing anything under `web/src/` with `cd web && npm install && npm run build`. If `web/dist/` is missing (fresh clone, never built), `geneseed web` offers to run that build for you — answer `Y` and it installs, builds, and starts the server; in non-interactive shells it prints the manual recipe instead.
 
@@ -172,7 +172,7 @@ No browser? Every action the console offers is also a verb: `build`, `doctor`, `
 
 ## 📦 4 · What you get
 
-The harness ships as a small set of layers, and the web console's rail is the same shape — Constitution, Skills and Agents each have their own entry; Memory, Notebook and the wiki sit under Library:
+The harness ships as a small set of layers, and the web console's rail is the same shape — Constitution has its own entry; skills, agents and the wiki sit under Library; memory and notebook under Personal:
 
 | Layer | What it is |
 | --- | --- |
@@ -306,11 +306,11 @@ Geneseed/
 ## 🧪 Validate & test
 
 ```bash
-node bin/geneseed-cli.mjs doctor      # every theme + parity + authoring + drift
+node bin/geneseed-cli.mjs doctor --all   # every theme + parity + authoring + drift
 node --test --test-reporter=tap "tests/**/*.test.mjs"   # the suites (node expands the glob)
 ```
 
-`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every push and PR, on both Linux and Windows. Publishing is a separate workflow (`.github/workflows/publish.yml`) that runs when CI finishes green on `main` and releases only a version npm does not have yet — see [Contributing](#-contributing).
+`doctor` checks each theme for unresolved tokens, dead/non-hermetic links, theme-key parity, author-time gates (every spec has a purpose line, the plugins parse, the learn-prompt literal stays extractable), and that a committed bundle still matches a fresh render of `src/`. CI (`.github/workflows/ci.yml`) runs both on every PR and on every push to `main`, on both Linux and Windows. Publishing is a separate workflow (`.github/workflows/publish.yml`) that runs when CI finishes green on `main` and releases only a version npm does not have yet — see [Contributing](#-contributing).
 
 ### AI Harness Scorecard
 
@@ -325,7 +325,7 @@ geneseed scorecard --json     # every check with its evidence
 
 ## 🔄 Keeping it current
 
-**Installed from npm** — one command, and it rebuilds every active install for you:
+**Installed from npm** — two commands: the second rebuilds every active install for you:
 
 ```bash
 npm install -g geneseed@latest
@@ -335,9 +335,9 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 **Installed from a clone** — the `git pull` route, which also refreshes the launchers:
 
 ```bash
-./geneseed update      # everything in one: refresh the scripts + content, then rebuild
-./geneseed upgrade --setup   # update everything, then drop into the setup wizard (was: bootstrap)
-./geneseed upgrade     # just the content refresh (remembers theme + emit mode)
+./geneseed upgrade          # git pull, validate, then rebuild every install (remembers theme + emit mode)
+./geneseed upgrade --setup  # the same, then drop into the setup wizard (was: bootstrap)
+./geneseed update           # an alias of upgrade
 ```
 
 **Local edits survive.** The self-improvement loops write to notes under `notebook/`, which no rebuild touches. If you or the agent edited deployed agent/skill files in place anyway, an upgrade exports those edits to an `improvements/` file inside the install; the rebuild then keeps each edited file instead of overwriting it. Details: [Upgrade](docs/guides/upgrade.md).
@@ -365,7 +365,7 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 
 ## 🤝 Contributing
 
-Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI is dependency-free and runs on every push — keep `doctor` green and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
+Issues and PRs welcome at [github.com/Arylmera/Geneseed](https://github.com/Arylmera/Geneseed). The CI runs on every PR and on `main`, and the package has zero runtime dependencies — keep `doctor` green and the test suites passing. Adding a new theme is one JSON file in `themes/` with the same voice-token keys; `doctor` will tell you if any are missing.
 
 Start with [`AGENTS.md`](AGENTS.md), the repo's working guide (`CLAUDE.md` imports it). Three things that bite when you don't know them:
 
