@@ -58,13 +58,15 @@ import {
   CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
-import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
+import { mcpLoad } from '../hosts/mcp.mjs';
 import {
   SRC_DIRS_MARKER, bundleFiles, hashesOf, ownedState, ownedWithin, recordedDenies, recordedEdit,
+  recordedGates,
 } from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
+  OWNED_VERDICT,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes,
   unwireClaudeSettings, wireClaudeEnv, unwireClaudeEnv,
 } from '../hosts/settings.mjs';
@@ -246,12 +248,24 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
  * deactivate, which removed the entry but kept the denies (PR #241 review) — so either half
  * alone is a change, and only "neither" declines.
  *
- * A COMMENTED `.jsonc` is not rewritten and the user is told to do it by hand — the entry AND
- * the recorded denies still set to `"deny"`, each named: rewriting it
+ * `gates` is the manifest's `bash_gates` — the `permission.bash` keys an emit itself ADDED,
+ * because they were absent when it ran. Uninstall once left all of them (some 45 keys:
+ * `"git commit*": "ask"` and the push chain) in a file whose harness was gone, although the
+ * record of having written them was right there. A recorded key goes only while it still reads
+ * the verdict Geneseed writes for it (`OWNED_VERDICT`): the same two conditions under which a
+ * pack-off rebuild takes one back (`reconcileOpencodePermission`), so a key the user re-scoped,
+ * and any key that is not in the record — theirs from the start, or from an install older than
+ * 5.2.0 — stays. An emptied `bash` object is dropped, as an emptied `skill` is; `permission`
+ * itself is left, empty or not, as those two sweeps leave it. `[]` (deactivate) sweeps nothing:
+ * a paused install keeps its gates, which is the fail-closed direction.
+ *
+ * A COMMENTED file — `opencode.json` or `.jsonc`, the extension does not matter — is not
+ * rewritten and the user is told to do it by hand — the entry, the recorded denies still set
+ * to `"deny"` AND the recorded gates still at Geneseed's verdict, each named: rewriting it
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
  */
-export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
+export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null, gates = []) {
   const target = opencodeTarget(p);
   // Absent, unreadable (the Python's `except OSError: return False`) or not an object: decline.
   const { state, data: cfg, hadComments } = loadJsonObject(target);
@@ -267,20 +281,28 @@ export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
   // back only when nothing but its `"*"` is left — a key the user added since keeps the object.
   const editObj = edit && isDict(cfg.permission) && isDict(cfg.permission.edit) ? cfg.permission.edit : null;
   const asks = editObj ? edit.asks.filter((k) => editObj[k] === 'ask') : [];
-  if (!hasEntry && !denies.length && !asks.length) return false;
-  if (path.extname(target) === '.jsonc' && hadComments) {
+  const bash = isDict(cfg.permission) && isDict(cfg.permission.bash) ? cfg.permission.bash : null;
+  const ours = bash
+    ? gates.filter((k) => OWNED_VERDICT.has(k) && bash[k] === OWNED_VERDICT.get(k))
+    : [];
+  if (!hasEntry && !denies.length && !asks.length && !ours.length) return false;
+  if (hadComments) {
     printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it.`
       + (hasEntry ? ` Remove this from its "instructions" by hand: ${jsonDumps(entry)}` : '')
       + (denies.length ? ` Remove these from its "permission.skill" by hand: `
         + `${denies.map((n) => jsonDumps(n)).join(', ')}` : '')
       + (asks.length ? ` Remove these from its "permission.edit" by hand: `
         + `${asks.map((k) => jsonDumps(k)).join(', ')}` : '')
+      + (ours.length ? ` Remove these from its "permission.bash" by hand: `
+        + `${ours.map((k) => jsonDumps(k)).join(', ')}` : '')
       + '\n');
     return false;
   }
   if (hasEntry) cfg.instructions = instr.filter((i) => i !== entry);
   for (const name of denies) delete skill[name];
   if (skill && denies.length && !Object.keys(skill).length) delete cfg.permission.skill;
+  for (const k of ours) delete bash[k];
+  if (ours.length && !Object.keys(bash).length) delete cfg.permission.bash;
   for (const k of asks) delete editObj[k];
   if (asks.length) {
     const left = Object.keys(editObj);
@@ -324,7 +346,7 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
   if (kept.length) warnKept(kept);
   const hooks = managed.settings_hooks || [];
   const sf = settingsFile(cfg, managed);
-  const unwired = unwireClaudeSettings(sf, hooks);
+  const unwired = unwireClaudeSettings(sf, hooks, cfg);
   unwireClaudeExcludes(sf, managed.settings_excludes || []);
   unwireClaudeEnv(sf, managed.settings_env);
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
@@ -361,7 +383,8 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode', force 
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
-    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man), recordedEdit(man));
+    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man), recordedEdit(man),
+    recordedGates(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
@@ -488,7 +511,8 @@ function opencodeProjectUninstall(root, force = false) {
     }
   }
   const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
-    man ? recordedDenies(man) : [], man ? recordedEdit(man) : null);
+    man ? recordedDenies(man) : [], man ? recordedEdit(man) : null,
+    man ? recordedGates(man) : []);
   const result = { removed, unmerged, archived: null, userOnly };
   if (failed.length) result.failed = failed;
   if (kept.length) result.kept = kept;
@@ -1010,7 +1034,7 @@ function installMoveList(root, kind) {
  *
  * Deliberately a minimal inline re-add rather than the emit's own merge, whose side effects
  * (adding `permission` and `lsp: true` when absent) would clobber values the user may have
- * set since the install was disabled. A commented `.jsonc` is not rewritten — the same
+ * set since the install was disabled. A commented file is not rewritten — the same
  * refusal `unmergeOpencodeJson` makes — but here the files have ALREADY been restored, so it
  * tells the operator what to add rather than failing the whole reactivate. That asymmetry is
  * the reference's and is gated per side.
@@ -1024,7 +1048,7 @@ function installReaddEntry(target, entry) {
   if (state !== 'ok') return false;            // unreadable (except OSError), or not an object
   const instr = Array.isArray(cfg.instructions) ? cfg.instructions : [];
   if (indexOfDeepEqual(instr, entry) >= 0) return false;
-  if (path.extname(target) === '.jsonc' && hadComments) {
+  if (hadComments) {
     printOut(`[activate] ${path.basename(target)} has comments — not rewriting it. Add this `
       + `to its "instructions" by hand: ${jsonDumps(entry)}\n`);
     return false;
@@ -1138,12 +1162,14 @@ export function installDeactivate(root, host = 'opencode', scope = 'global') {
   }
   const kind = installKind(root);
   const target = opencodeTarget(path.join(root, 'opencode.json'));
-  // Caught UP FRONT, before any file moves: a commented `.jsonc` cannot be rewritten without
-  // dropping the user's comments, so refuse and move NOTHING.
-  if (mcpCommented(target)) {
+  // Caught UP FRONT, before any file moves: a commented file cannot be rewritten without
+  // dropping the user's comments, so refuse and move NOTHING. By comments, not by extension:
+  // the unmerge below refuses a commented `opencode.json` too, and a guard that let one
+  // through would move every file and leave the `instructions` entry pointing at nothing.
+  if (loadJsonObject(target).hadComments) {
     return { ok: false,
       error: `${path.basename(target)} has comments — refusing to rewrite it. `
-        + 'Disable by hand or convert it to plain .json first.' };
+        + 'Disable by hand or remove the comments first.' };
   }
   const stash = path.join(root, DISABLED_STASH);
   const { done, failed } = moveAll(root, stash, installMoveList(root, kind));
@@ -1275,7 +1301,7 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
     cleanHostStash(cfg, host);
     return { ok: false, failed, rolled_back: done.length };
   }
-  unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || []);
+  unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || [], cfg);
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   unwireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
   // The same integrity check the uninstall path runs: a deactivate that silently failed to

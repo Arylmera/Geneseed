@@ -8,13 +8,23 @@ self-discipline.
 
 ## Install
 
-Merge [`settings.json`](settings.json) into your repo's `.claude/settings.json`.
-(Not your *user* settings: the hook commands are repo-relative — `node
-bin/geneseed-hook.mjs …` — so at user scope they would fire and fail in every
-repo that doesn't vendor the harness. A generated global install wires
-absolute-path hooks instead — `geneseed setup` does that for you.) It:
+`geneseed setup` (or a `--emit claude` build) merges the hooks into the install's settings
+file: `.claude/settings.local.json` for a project install, `~/.claude/settings.json` for a
+global one. There is no sample file to copy: each command carries this machine's shim path, the
+install's own `--root` and the gate flags the build chose, so only the emit can write it. When
+the settings file has comments the emit does not rewrite it, and prints the exact `hooks` object
+to merge by hand instead.
 
-- on **PreToolUse** (matcher `Bash|PowerShell`), runs `geneseed-hook git-gate` — the tool-boundary
+A re-emit recognises its own handlers by that signature (the shim, a hook verb, this install's
+`--root`), replaces them where they sit and leaves everything else as found: your own hooks, a
+hook you added inside one of these groups, and a field you set on one of ours, such as
+`timeout`. Uninstall removes the same handlers and nothing else. A hook you write yourself that
+runs the shim with this install's `--root` counts as Geneseed's.
+
+The wiring:
+
+- on **PreToolUse** (matcher `Bash|PowerShell|Monitor`, the three tools that run a shell
+  command), runs `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking (excluding process 1 or ops 2,
@@ -32,15 +42,16 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   next time regardless. Every other Bash command (and any unreadable payload) is
   deferred to the normal permission flow — the hook never blocks unrelated work.
 
-  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` and `PowerShell` tools
-  only. If your session has the GitHub MCP server, an agent can commit/push via
-  `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass both. To
-  gate those too, widen the matcher to `"Bash|PowerShell|mcp__github__.*"` —
+  **Caveat — the GitHub MCP vector.** The hook matches the `Bash`, `PowerShell` and `Monitor`
+  tools only. If your session has the GitHub MCP server, an agent can commit/push via
+  `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass all three. To
+  gate those too, widen the matcher to `"Bash|PowerShell|Monitor|mcp__github__.*"` —
   `git-gate` ignores any payload it doesn't recognise as a commit/push, so
-  over-matching the tool surface is harmless.
+  over-matching the tool surface is harmless. A re-emit puts the matcher back as it
+  wrote it, so widen it again after a rebuild.
 - on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
-  `geneseed-hook rule-gate` — refuses a write that would put a credential into a tracked
-  file, and asks first on a write to `user-rules.md` or the rule draft (a standing rule is
+  `geneseed-hook rule-gate` — asks first on a write that would put a credential into a tracked
+  file, and on a write to `user-rules.md` or the rule draft (a standing rule is
   your call; memory is written freely, and you see it afterwards in the web console). In an application repo (a git
   root holding a build manifest) whose root `AGENTS.md` has no `## Ownership` section, it also
   denies the session's first write once, with a reason addressed to the agent: propose the
@@ -54,12 +65,9 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
 - on **SessionStart**, every source (`startup`, `resume`, `clear`, `compact`, `fork`), runs
   `geneseed-hook context` to **inject the project context** directly into the session — so
   the project-context load is by the hook, not left to the agent to remember (lazy entries
-  are only listed). This is one matcher-less group, exactly as a generated install wires it:
-  a matcher list is one more place to miss a source (`fork` once was). A second group,
-  `startup`/`clear` only — a fresh context — prints `AGENT.md` so the vendored harness is in
-  context from the first turn. A generated install has no such group: its root file is
-  `CLAUDE.md`, which Claude Code loads by itself. A resumed or forked conversation already
-  carries the harness, so re-printing the static file there is pure token waste;
+  are only listed). This is one matcher-less group: a matcher list is one more place to miss
+  a source (`fork` once was). The harness itself is not printed here: the install's root file
+  is `CLAUDE.md`, which Claude Code loads by itself;
 - on **Stop**, runs `geneseed-hook learn` over the session to capture durable memories.
   Claude Code pipes the hook payload (with the session's `transcript_path`) to the
   command on stdin; `learn` reads that, flattens the transcript, distils new
@@ -95,9 +103,6 @@ absolute-path hooks instead — `geneseed setup` does that for you.) It:
   A global install writes to the shared store, `~/.config/geneseed/memory/`. A hand-run
   `learn` finds a project install or bundle in the cwd or `./Harness`. Any other `memory/` is not a store until it is named:
   `--memory <dir>` or `GENESEED_MEMORY=/abs/path/to/memory`.
-
-Adjust the paths if your harness bundle is not at the repository root. On Windows
-the commands are identical (`node bin/geneseed-hook.mjs …`).
 
 Why inject rather than instruct? The constitution tells the agent to read the project
 context at startup, but startup rituals are exactly what agents skip. The

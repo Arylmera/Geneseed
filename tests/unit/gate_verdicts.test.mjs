@@ -416,7 +416,7 @@ const ROWS = [
       rule: 'A cd to the previous dir, the home dir, or a path that does not resolve asks.',
       claude: 'ask', bob: 'warn', v1: null, v2: null })),
   { id: 'process-5 with consent off', kind: 'shell', cmd: () => 'git commit -m x', extra: ['--no-consent'],
-    rule: '--no-consent drops the commit and push ask on the hooks.',
+    rule: '--no-consent drops the commit and push consent on every hook host: the ask on Claude and OpenClaude, and the warning on Bob, whose tool-gate takes the flag when the build leaves process 5 out.',
     claude: 'pass', bob: 'pass', v1: null, v2: null },
   // ---- a rule excluded drops its hook (owner decision, 2026-11-08), each row beside its included
   // twin above. `build` names the install's selection: the hook argv is what `claudeHookGroups` emits

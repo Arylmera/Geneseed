@@ -21,7 +21,8 @@ import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { claudeHookGroups } from '../../js/hosts/settings.mjs';
 import { claudeGitBashPath, hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import {
-  BAD_COMMAND, GOOD_COMMAND, gateProbe, guardPluginPath, guardProbe, isOurGate, probeVerdict, refused,
+  BAD_COMMAND, GOOD_COMMAND, gateProbe, guardPluginPath, guardProbe, isOurGate, probeVerdict, probesFor,
+  refused,
 } from '../../js/inspect/checks-probe.mjs';
 import { makeSandbox, withGeneseedHome } from '../helpers/sandbox.mjs';
 
@@ -162,7 +163,7 @@ test('a recorded command that is not ours is reported and never run', { skip: NO
 test('an install with no live gate is a problem, not a silent pass', () => {
   withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
-    writeInstall(cfg, 'claude', (g) => ({ ...g, PreToolUse: g.PreToolUse.filter((x) => x.matcher !== 'Bash|PowerShell') }));
+    writeInstall(cfg, 'claude', (g) => ({ ...g, PreToolUse: g.PreToolUse.filter((x) => x.matcher !== 'Bash|PowerShell|Monitor') }));
     const { problems } = gateProbe([['claude', 'global', cfg]]);
     assert.equal(problems.length, 1, problems.join('\n'));
     assert.match(problems[0], /no live git-gate hook/);
@@ -273,4 +274,123 @@ test('OpenCode: GENESEED_GUARD=off|warn is a note; a missing or foreign plugin i
     rmSync(guardPluginPath(sb.path, 'global'));
     assert.match((await guardProbe(target, {})).problems[0], /no guard plugin/);
   } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Bob, in Bob's own shapes (`probesFor`). A Claude-shaped Bash call is not what Bob sends, and
+// `tool-gate` finds a `command` wherever it sits, so that one pair could pass on a gate blind
+// to Bob's real payloads.
+//
+// THE RULE, written out:
+//   claude, openclaude  one probe: the Claude-shaped pair, shape ''.
+//   bob                 three, in this order: the Claude-shaped pair (shape ''), the legacy
+//                       `{event, tool, input:{command}}` pair ("Bob's legacy payload"), and a
+//                       `write_file` carrying a credential, refusal only ("Bob's write_file").
+//   --no-secrets-gate   the third is left out: that gate passes the write by design.
+//   --no-deletion-gate  both command pairs ask `find / -name geneseed-probe` instead.
+// The good command is `git status` in both command shapes. A failing probe after the first
+// names its shape in brackets at the end of the problem line.
+
+const keysOf = (json) => Object.keys(JSON.parse(json)).sort();
+
+test('probesFor: one probe for the Claude dialect, three for Bob, in Bob\'s shapes', () => {
+  const cmd = '"/x/geneseed-hook" tool-gate --root "/cfg" --host bob';
+  for (const host of ['claude', 'openclaude']) {
+    assert.deepEqual(probesFor(host, cmd, '/t').map((p) => [p.shape, p.name]), [['', BAD_COMMAND]]);
+  }
+  const bob = probesFor('bob', cmd, '/t');
+  assert.deepEqual(bob.map((p) => [p.shape, p.name, p.good === null]), [
+    ['', 'git reflog expire --expire=now --all', false],
+    ["Bob's legacy payload", 'git reflog expire --expire=now --all', false],
+    ["Bob's write_file", 'write_file with a credential', true],
+  ]);
+  assert.deepEqual(JSON.parse(bob[0].bad), {
+    session_id: 'geneseed-probe', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+    tool_input: { command: 'git reflog expire --expire=now --all' }, cwd: '/t',
+  });
+  assert.deepEqual(JSON.parse(bob[1].bad), {
+    event: 'PreToolUse', session_id: 'geneseed-probe', tool: 'execute_command',
+    input: { command: 'git reflog expire --expire=now --all' },
+  });
+  assert.deepEqual(JSON.parse(bob[1].good), {
+    event: 'PreToolUse', session_id: 'geneseed-probe', tool: 'execute_command',
+    input: { command: 'git status' },
+  });
+  // The write: Bob 2.2.3's keys, `path` (not Claude's `file_path`), and a credential-shaped
+  // value that exists only at run time.
+  const write = JSON.parse(bob[2].bad);
+  assert.deepEqual(keysOf(bob[2].bad), ['cwd', 'hook_event_name', 'session_id', 'tool_input', 'tool_name']);
+  assert.equal(write.tool_name, 'write_file');
+  assert.deepEqual(Object.keys(write.tool_input).sort(), ['content', 'path']);
+  assert.equal(write.tool_input.path, 'geneseed-probe.txt');
+  assert.match(write.tool_input.content, /\bAKIA[0-9A-Z]{16}\b/);
+});
+
+test('probesFor: each switch on the wired command drops or swaps exactly its own probe', () => {
+  const base = '"/x/geneseed-hook" tool-gate --root "/cfg" --host bob';
+  assert.deepEqual(probesFor('bob', `${base} --no-secrets-gate`, '/t').map((p) => [p.shape, p.name]), [
+    ['', 'git reflog expire --expire=now --all'],
+    ["Bob's legacy payload", 'git reflog expire --expire=now --all'],
+  ]);
+  assert.deepEqual(probesFor('bob', `${base} --no-deletion-gate`, '/t').map((p) => [p.shape, p.name]), [
+    ['', 'find / -name geneseed-probe'],
+    ["Bob's legacy payload", 'find / -name geneseed-probe'],
+    ["Bob's write_file", 'write_file with a credential'],
+  ]);
+});
+
+test('the probe source never spells the credential it sends', () => {
+  const src = readFileSync(path.join(ROOT, 'js', 'inspect', 'checks-probe.mjs'), 'utf8');
+  assert.doesNotMatch(src, /AKIA[0-9A-Z]{16}/);
+});
+
+// Fixture gates for the two broken twins. Each refuses by exit 2, as Bob reads it.
+const READ_STDIN = "import { readFileSync } from 'node:fs';\nconst p = JSON.parse(readFileSync(0, 'utf8'));\n";
+// Reads only Claude's keys: blind to the legacy shape.
+const CLAUDE_ONLY = `${READ_STDIN}const c = (p.tool_input || {}).command || '';\n`
+  + "process.exit(/reflog|find \\//.test(c) ? 2 : 0);\n";
+// Reads a command in either shape, and no file content at all: blind to a credential write.
+const COMMANDS_ONLY = `${READ_STDIN}const c = (p.tool_input || p.input || {}).command || '';\n`
+  + "process.exit(/reflog|find \\//.test(c) ? 2 : 0);\n";
+
+const BOB_SKIP = NO_SHELL && process.platform !== 'win32' ? NO_SHELL : false;
+
+test('Bob: a gate blind to the legacy payload fails, and the line names the shape', { skip: BOB_SKIP }, () => {
+  withGeneseedHome((home) => {
+    const cfg = path.join(home, 'bob');
+    writeInstall(cfg, 'bob', swapGate('tool-gate', fixtureGate(home, 'geneseed-hook-claude-only', CLAUDE_ONLY, 'tool-gate', cfg)));
+    const { problems, probed } = gateProbe([['bob', 'global', cfg]]);
+    assert.deepEqual(probed, []);
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.ok(problems[0].endsWith('registered but not refusing — `git reflog expire --expire=now --all` '
+      + "went through (Bob's legacy payload)"), problems[0]);
+  });
+});
+
+test('Bob: a gate blind to a credential write fails; wired --no-secrets-gate, the same gate passes', { skip: BOB_SKIP }, () => {
+  withGeneseedHome((home) => {
+    const cfg = path.join(home, 'bob');
+    const gate = fixtureGate(home, 'geneseed-hook-commands-only', COMMANDS_ONLY, 'tool-gate', cfg);
+    writeInstall(cfg, 'bob', swapGate('tool-gate', gate));
+    const blind = gateProbe([['bob', 'global', cfg]]);
+    assert.equal(blind.problems.length, 1, blind.problems.join('\n'));
+    assert.ok(blind.problems[0].endsWith('registered but not refusing — `write_file with a credential` '
+      + "went through (Bob's write_file)"), blind.problems[0]);
+    writeInstall(cfg, 'bob', swapGate('tool-gate', () => `${gate()} --no-secrets-gate`));
+    const off = gateProbe([['bob', 'global', cfg]]);
+    assert.deepEqual(off.problems, [], off.problems.join('\n'));
+    assert.equal(off.probed.length, 1);
+  });
+});
+
+test('Bob: the shipped gate, wired --no-secrets-gate or --no-deletion-gate, still passes every probe it gets', { skip: BOB_SKIP }, () => {
+  withGeneseedHome((home) => {
+    const cfg = path.join(home, 'bob');
+    for (const flag of [' --no-secrets-gate', ' --no-deletion-gate']) {
+      writeInstall(cfg, 'bob', swapGate('tool-gate', (c) => `${c}${flag}`));
+      const { problems, probed } = gateProbe([['bob', 'global', cfg]]);
+      assert.deepEqual(problems, [], `${flag}: ${problems.join('\n')}`);
+      assert.equal(probed.length, 1, flag);
+    }
+  });
 });

@@ -133,13 +133,10 @@ test('writeGeneseedGitignore: created, exact-* upgraded, custom kept, never thro
 });
 
 // One allowlist, four homes: this Node constant, the two OpenCode copies (a plugin cannot share
-// a file — V2 loads every .js in plugins/ as a plugin) and the Rites' block. Read as text.
-test('the Node .gitignore constant is the same string as both OpenCode copies and the Rites block', () => {
-  for (const rel of ['adapters/opencode/plugins/geneseed-workflow.js', 'adapters/opencode/workflows/_runtime.js']) {
-    const m = /const GENESEED_GITIGNORE = ("(?:[^"\\]|\\.)*")/.exec(readFileSync(path.join(ROOT, rel), 'utf8'));
-    assert.ok(m, `${rel} lost its GENESEED_GITIGNORE literal`);
-    assert.equal(JSON.parse(m[1]), GENESEED_GITIGNORE, `${rel} drifted from js/hosts/geneseed-dir.mjs`);
-  }
+// a file — V2 loads every .js in plugins/ as a plugin) and the Rites' block. The OpenCode copies
+// are twin rows (tests/twins.mjs writes them, tests/plugins/helper_parity.test.mjs fails on a
+// drift); the Rites' block is prose nobody can copy, so it is read as text here.
+test('the Node .gitignore constant is the same string as the Rites block', () => {
   const block = /```gitignore\r?\n([\s\S]*?)```/.exec(readFileSync(path.join(ROOT, 'src/skills/_checkpoints.md'), 'utf8'));
   assert.equal(block[1].split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n') + '\n', GENESEED_GITIGNORE);
 });

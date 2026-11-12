@@ -18,7 +18,7 @@ geneseed build --emit openclaude --out /path/to/repo --root /path/to/repo # one 
 - Per repo, the preamble is written to `.openclaude/CLAUDE.md` rather than a root file, and the hooks go into `.openclaude/settings.local.json`.
 - `$OPENCLAUDE_CONFIG_DIR` moves the global directory (default `~/.openclaude`).
 
-OpenClaude support has not yet been verified against a live install.
+For what was checked against OpenClaude itself, see [What is verified](../concepts/host-matrix.md#what-is-verified).
 
 ---
 

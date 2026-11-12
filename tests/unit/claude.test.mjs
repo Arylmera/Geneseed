@@ -42,7 +42,7 @@ import {
   openclaudeConfigDir, globalHookStandingDown,
 } from '../../js/hosts/hosts.mjs';
 import { BOB_RULES_STUB, SESSION_SEEDS } from '../../js/build/stubs.mjs';
-import { WIKI_NAMES, sharedPaths } from '../../js/lib/machine-dir.mjs';
+import { sharedPaths } from '../../js/lib/machine-dir.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
@@ -121,11 +121,22 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     for (const foreign of ['mode: subagent', 'color:', 'permission:']) {
       assert.ok(!reviewer.includes(foreign), `the Claude agent carries OpenCode's ${foreign}`);
     }
-    // A read-only agent maps the deny-tree onto Claude's own key.
-    assert.ok(read(cfg, 'agents', 'explorer.md').includes('disallowedTools:'));
-    // The webfetch marker lifts exactly WebFetch from the denylist; Bash stays denied.
-    const researcher = read(cfg, 'agents', 'researcher.md');
-    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash, PowerShell$/m);
+    // A read-only agent maps the deny-tree onto Claude's own key, one line, written out for
+    // each kind of spec. Always denied: the three write tools, and `Agent`/`Task` (one tool,
+    // two names), because a read-only agent that can dispatch can spawn a writer. `WebFetch`,
+    // unless the spec carries the webfetch marker. The three shells (`Bash`, `PowerShell`, and
+    // `Monitor`, which runs a command in the background), unless it carries the bash marker.
+    const denied = (name) => read(cfg, 'agents', `${name}.md`).match(/^disallowedTools: .*$/m)?.[0];
+    // skeptic: no marker.
+    assert.equal(denied('skeptic'),
+      'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch, Bash, PowerShell, Monitor');
+    // researcher: the webfetch marker lifts exactly WebFetch; the shells stay denied.
+    assert.equal(denied('researcher'),
+      'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, Bash, PowerShell, Monitor');
+    // explorer: the bash marker lifts the three shells together, and never the dispatch.
+    assert.equal(denied('explorer'), 'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch');
+    // tester writes test files: not read-only, no denylist.
+    assert.equal(denied('tester'), undefined);
 
     // THE HOOK PATH IS THE POINT OF THE CLASS. A hook's cwd is the user's project, so nothing
     // relative resolves — it must be absolute, and it must be the STABLE SHIM rather than this
@@ -835,15 +846,42 @@ test('the emitted git-gate hook carries --root with the install path', () => {
   });
 });
 
-test('the git gate matches PowerShell too, not only Bash (Claude verdict I1)', () => {
+test('the git gate matches every tool that runs a shell command: Bash, PowerShell and Monitor', () => {
   // Docs `hooks.md`: "Match `Bash|PowerShell` in hooks that inspect shell commands … A hook
   // that matches only `Bash` never fires there." On Windows without Git Bash, Bash is not even
   // registered, so a `Bash`-only matcher leaves Law IV and the push/commit consent gate off by
-  // default. `tool_input.command` is the same field on both tools, so the gate code is unchanged.
+  // default. Monitor is the third: it runs a shell `command` in the background, and unmatched
+  // it was a way to push with no gate looking. `tool_input.command` is the same field on all
+  // three, so the gate code is unchanged. The same matcher on OpenClaude, which takes Claude's set.
   withDir((d) => {
     const cfg = path.join(d, 'dotclaude');
-    const group = claudeHookGroups(cfg, hookRunnerEntry()).PreToolUse[0];
-    assert.equal(group.matcher, 'Bash|PowerShell');
+    for (const host of ['claude', 'openclaude']) {
+      const group = claudeHookGroups(cfg, hookRunnerEntry(), null, [], host).PreToolUse[0];
+      assert.equal(group.matcher, 'Bash|PowerShell|Monitor', host);
+    }
+  });
+});
+
+test('a Monitor call that force-pushes main is asked about, like the same command in Bash', () => {
+  // The matcher only routes the call; this is the gate answering it. `git-gate` reads
+  // `tool_input.command` and never the tool's name, so the Monitor payload gets the Bash verdict.
+  withDir((d) => {
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    const run = (tool) => spawnSync(process.execPath,
+      [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'git-gate', '--root', path.join(d, 'dotclaude')],
+      {
+        cwd: repo,
+        encoding: 'utf8',
+        env: { ...process.env, ...homeOverrides(path.join(d, 'home')), GENESEED_ACTIVITY: 'off' },
+        input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: tool, cwd: repo,
+          tool_input: { command: 'git push --force origin main' } }),
+        windowsHide: true,
+      });
+    const [monitor, bash] = [run('Monitor'), run('Bash')];
+    assert.equal(monitor.status, 0, monitor.stderr);
+    assert.equal(JSON.parse(monitor.stdout).hookSpecificOutput.permissionDecision, 'ask');
+    assert.equal(monitor.stdout, bash.stdout);
   });
 });
 
@@ -915,8 +953,9 @@ test('an install from before I1/I4 upgrades its matchers instead of double-wirin
   // into `startup|clear` / `resume|compact`. Both are recorded as managed (`priorHooks`), the
   // way an upgrade really finds them. If `mergeClaudeSettings` compared only the command string
   // it would see these as "already wired" and never add the fixed matchers — every upgraded
-  // install would keep missing PowerShell and `fork` forever. Deep equality on the WHOLE group
-  // (matcher included) is what makes a changed matcher look like a new group to prune-and-add.
+  // install would keep missing PowerShell and `fork` forever. The matcher is part of a handler's
+  // slot (event, matcher, verb), so one under a stale matcher fills none: removed, and the
+  // canonical group added.
   withDir((d) => {
     const cfg = path.join(d, 'settings_test');
     fs.mkdirSync(cfg);
@@ -948,7 +987,7 @@ test('an install from before I1/I4 upgrades its matchers instead of double-wirin
     const data = readJson(settings);
     const gateGroups = data.hooks.PreToolUse.filter((g) => g.hooks[0].command.includes('git-gate'));
     assert.equal(gateGroups.length, 1, `expected 1 git-gate group, got ${gateGroups.length}`);
-    assert.equal(gateGroups[0].matcher, 'Bash|PowerShell',
+    assert.equal(gateGroups[0].matcher, 'Bash|PowerShell|Monitor',
       `the stale Bash-only matcher survived the upgrade: ${JSON.stringify(gateGroups)}`);
 
     const startGroups = data.hooks.SessionStart;
@@ -1002,6 +1041,37 @@ test('the process pack off drops the consent half of the git gate and keeps Law 
       assert.ok(off.some((c) => c.includes(verb)), `${verb} went with the process pack: ${off}`);
     }
     assert.equal(off.length, on.length, `no hook should have gone, only a flag changed: ${off}`);
+  });
+});
+
+test('Bob: process 5 off drops the commit warning too, through --no-consent on tool-gate', () => {
+  // Bob has no ask tier, so process 5 there is a stderr line and the call runs. With the rule
+  // excluded that line had no rule behind it, yet it kept printing: `tool-gate` did not take the
+  // flag and the emit did not write it. The flag is written only when the rule is off, so an
+  // install that keeps the rule has the command it had before.
+  withDir((d) => {
+    const cfg = path.join(d, 'dotbob');
+    const run = hookPrefix(hookRunnerEntry());
+    const pre = (excluded) => claudeHookGroups(cfg, hookRunnerEntry(), null, excluded, 'bob')
+      .PreToolUse[0].hooks[0].command;
+    assert.equal(pre([]), `${run} tool-gate --root "${cfg}" --host bob`);
+    assert.equal(pre(['process.5']), `${run} tool-gate --root "${cfg}" --host bob --no-consent`);
+    const repo = path.join(d, 'repo');
+    fs.mkdirSync(repo, { recursive: true });
+    const hook = (flags) => spawnSync(process.execPath,
+      [path.join(ROOT, 'bin', 'geneseed-hook.mjs'), 'tool-gate', '--root', cfg, '--host', 'bob', ...flags],
+      {
+        cwd: repo,
+        encoding: 'utf8',
+        env: { ...process.env, ...homeOverrides(path.join(d, 'home')), GENESEED_ACTIVITY: 'off' },
+        input: JSON.stringify({ event: 'PreToolUse', tool: 'execute_command', cwd: repo,
+          input: { command: 'git commit -m wip' } }),
+        windowsHide: true,
+      });
+    const [warned, quiet] = [hook([]), hook(['--no-consent'])];
+    assert.match(warned.stderr, /^\[geneseed\] /, 'the control: with the rule on, Bob is warned');
+    assert.deepEqual([quiet.status, quiet.stdout, quiet.stderr], [0, '', '']);
+    assert.equal(warned.status, 0, 'a commit is never blocked on Bob');
   });
 });
 
@@ -1423,7 +1493,7 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
     assert.ok(!('claude_md' in managed));
     assert.equal(manifestIsClaude(cfg), true);
-    // BOB'S OWN CONTRACT (docs/reviews/bob-global-injection-2026-09.md): the global hooks
+    // BOB'S OWN CONTRACT (its hooks doc and 2.0.2 changelog): the global hooks
     // file is the NESTED `settings/settings.json`; Bob has five events and Geneseed uses three
     // — SessionStart (context, plain stdout), PreToolUse (ONE `tool-gate` group, deliberately
     // NO matcher — host-compat O1, revisited: an allow-list from Bob's own tool list would
@@ -2426,10 +2496,9 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
   assert.ok(files, 'the plugin no longer declares SESSION_FILES');
   assert.deepEqual(files[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)),
     SESSION_FILES.filter((f) => f !== 'geneseed-wiki.jsonc'));
-  // B5: one list of wiki names on both families, and the plugin's copy of the tier's address.
-  const names = plugin.match(/const WIKI_NAMES = \[([^\]]*)\]/);
-  assert.ok(names, 'the plugin no longer declares WIKI_NAMES');
-  assert.deepEqual(names[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)), WIKI_NAMES);
+  // B5: one list of wiki names on both families (the plugin's WIKI_NAMES line is a twin row,
+  // tests/twins.mjs, held by tests/plugins/helper_parity.test.mjs), and the plugin's copy of the
+  // tier's address.
   assert.ok(plugin.includes('path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")'),
     'the plugin machineDir no longer spells js/lib/machine-dir.mjs');
   for (const name of Object.keys(SESSION_SEEDS)) {

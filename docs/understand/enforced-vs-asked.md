@@ -33,7 +33,7 @@ On Claude Code and OpenClaude the hooks never block silently. They make the host
 
 If a gate crashes, it asks instead of letting the call through. If it cannot start at all (a deleted or broken shim) or times out, Claude Code blocks the call instead: see [Troubleshoot hooks](../reference/troubleshoot-hooks.md) to recover. Other shell commands go through Claude Code's normal permission flow; an `rm` of files git cannot restore is the real-loss case above.
 
-**Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules that admit no judgement call: credentials, destructive git, a scan of a whole filesystem, a write under a project's own protected-checks list, and writes that would switch a gate off. The commit/push and memory checks become a log line, and the call goes through. The ownership gate also refuses with exit 2, but once: the same write passes after you answer. Bob's hook wiring follows its documentation but has not been tested on a live Bob install.
+**Bob** runs one combined gate and has no "ask": it refuses with exit code 2, and only for the rules whose Bob cell says *block* in [Rule enforcement, by host](../concepts/enforcement-table.md). The commit/push check becomes a log line, and the call goes through. The ownership gate also refuses with exit 2, but once: the same write passes after you answer. For what was checked against Bob itself, see [What is verified](../concepts/host-matrix.md#what-is-verified).
 
 <!--/harness-->
 <!--harness:opencode-->

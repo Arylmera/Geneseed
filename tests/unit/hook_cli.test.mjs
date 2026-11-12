@@ -696,6 +696,25 @@ test('the only spawn in the hook entry is the model CLI', () => {
     'hooks.mjs must reach lossReason (and its spawn) only behind the LOSS_CANDIDATE_RE prefilter');
 });
 
+// THE TAP (js/hosts/hook-tap.mjs) is the one hook-path module no verb needs. THE RULE: the
+// entry reaches it, by its single dynamic import; it imports exactly two modules of this repo,
+// `./gitref.mjs` and `./hooks-prims.mjs`, both of which every gate already loads; and it brings
+// nothing that can start a process. So a tapped hook parses one small file more, and an
+// untapped one parses none (tests/unit/hook_tap.test.mjs holds the guard on the variable).
+test('the hook tap is in the hook entry\'s closure, and brings two modules the gates already load', () => {
+  const tap = path.join(ROOT, 'js', 'hosts', 'hook-tap.mjs');
+  assert.ok(importClosure(path.join(ROOT, ...HOOK.split('/'))).has(tap), 'the hook entry no longer reaches the tap');
+  const text = readFileSync(tap, 'utf8');
+  assert.deepEqual([...text.matchAll(/from\s+'(\.[^']+)'/g)].map((m) => m[1]).sort(),
+    ['./gitref.mjs', './hooks-prims.mjs']);
+  assert.deepEqual([...text.matchAll(/import\(\s*'([^']+)'\s*\)/g)].map((m) => m[1]), [], 'the tap loads a module lazily');
+  const gates = importClosure(path.join(ROOT, 'js', 'hosts', 'hooks.mjs'));
+  for (const f of importClosure(tap)) {
+    if (f !== tap) assert.ok(gates.has(f), `${path.relative(ROOT, f)} is on the hook path only because of the tap`);
+    assert.ok(!importsChildProcess(readFileSync(f, 'utf8')), `${path.relative(ROOT, f)} can start a process`);
+  }
+});
+
 test('the CLI entry reaches child_process only where it is declared', () => {
   // STATIC and transitive, for the same reason the driver's is. The CLI reaches
   // `js/web/server.mjs` through its `web` row's lazy thunk, so this equality covers the daemon
@@ -1042,19 +1061,50 @@ test('no verb at all refuses, non-blocking', () => {
 // I3/B1: PreToolUse exit 2 BLOCKS the tool call. The machine-wide, last-writer-wins shim means a
 // stale checkout can receive a flag it does not recognise (e.g. a newer install's
 // `--no-consent`), and the old argv-error path answered that with exit 2 — turning a flag
-// mismatch into every Bash/Write call being blocked. A gate's own decision still exits 0 and
-// signals through stdout (`askDecision`); only the ARGV-parsing failure is at issue here.
+// mismatch into every Bash/Write call being blocked. The path after it exited 0 with stdout
+// empty, which Claude reads as "the gate deferred": every call ran unjudged and nobody was told.
+// So a gate that cannot parse its argv asks, with the gate-error text naming the argv error: rc 0,
+// and stdout is exactly the document written out below — the person can allow the call, so it is
+// no lockout. On Bob, in either `--host` spelling and wherever it sits in the argv, stdout stays
+// empty and the rc 0: Bob's PreToolUse runs for every tool, so exit 2 would refuse reads too, and
+// gate-error is never a block there. Its stderr carries the warning after the argv line.
+const ARGV_ERROR_ASK = '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", '
+  + '"permissionDecisionReason": "Geneseed gate error: the check failed with '
+  + '\\"unrecognized arguments: --frobnicate\\", so nothing judged this call.\\n'
+  + 'Safe choice: Deny, then run geneseed doctor.\\n'
+  + 'It asks because a gate that crashed cannot say this call is safe.\\n'
+  + 'If you allow it, this call runs with no check at all."}}\n';
+const ARGV_ERROR_LINE = 'geneseed-hook: error: unrecognized arguments: --frobnicate\n';
+const ARGV_ERROR_BOB = `${ARGV_ERROR_LINE}[geneseed] Geneseed gate error: the check failed with `
+  + '"unrecognized arguments: --frobnicate", so nothing judged this call.\n'
+  + 'This ran without a prompt, because Bob has no approval step.\n';
+const lf = (text) => text.replace(/\r\n/g, '\n');
 for (const verb of ['git-gate', 'rule-gate', 'tool-gate']) {
-  test(`${verb} survives an unknown flag with rc 0 and empty stdout`, () => {
-    const r = run(HOOK, [verb, '--root', ROOT, '--frobnicate'], process.env, ROOT);
-    assert.equal(r.status, 0,
-      `an argv error on a gate verb must never exit 2 — that blocks the tool call it was `
-      + `guarding. stderr: ${r.stderr.slice(0, 200)}`);
-    assert.equal(r.stdout, '',
-      'a non-blocking argv error prints nothing on stdout: that is the channel the host parses '
-      + 'as a verdict');
+  test(`${verb} asks on an unknown flag with rc 0; on Bob it warns on stderr and stdout stays empty`, () => {
+    for (const [argv, out, err] of [
+      [['--root', ROOT, '--frobnicate'], ARGV_ERROR_ASK, ARGV_ERROR_LINE],
+      [['--host', 'openclaude', '--frobnicate'], ARGV_ERROR_ASK, ARGV_ERROR_LINE],
+      [['--root', ROOT, '--host', 'bob', '--frobnicate'], '', ARGV_ERROR_BOB],
+      [['--frobnicate', '--host=bob'], '', ARGV_ERROR_BOB],
+    ]) {
+      const r = run(HOOK, [verb, ...argv], process.env, ROOT);
+      assert.equal(r.status, 0,
+        `${argv}: an argv error on a gate verb must never exit 2 — that blocks the tool call it was `
+        + `guarding. stderr: ${r.stderr.slice(0, 200)}`);
+      assert.equal(lf(r.stdout), out, `${argv}`);
+      assert.equal(lf(r.stderr), err, `${argv}`);
+    }
   });
 }
+
+// `activity` decides nothing, and it runs on UserPromptSubmit, where exit 2 erases the user's
+// prompt: its argv error is the stderr line alone, rc 0, stdout empty.
+test('activity survives an unknown flag with rc 0 and empty stdout', () => {
+  const r = run(HOOK, ['activity', '--frobnicate'], process.env, ROOT);
+  assert.equal(r.status, 0, r.stderr.slice(0, 200));
+  assert.equal(r.stdout, '');
+  assert.equal(lf(r.stderr), ARGV_ERROR_LINE);
+});
 
 // A verb module that fails to load must not read as a defer. On 5.2.0, with `loss.mjs` gone (as
 // it is for a moment mid-`git pull` under the shared shim), a gate exited 1 with empty stdout,

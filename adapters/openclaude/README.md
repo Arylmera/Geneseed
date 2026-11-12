@@ -55,22 +55,32 @@ global config file.
 
 ## Hooks
 
-The Claude group set, unchanged: `PreToolUse` (git gate on `Bash|PowerShell`, rule gate on
-writes), `SessionStart` (context on every source — one matcher-less group covers
+The Claude group set: `PreToolUse` (git gate on `Bash|PowerShell|Monitor`, rule gate on
+writes, and a counter on `Skill|Agent|Task` that judges nothing), `SessionStart` (context on every source — one matcher-less group covers
 `startup`, `resume`, `clear`, `compact` and `fork` alike), `Stop`,
 `SubagentStop` and `PreCompact` (learn), `SubagentStart` (`context`, which hands a sub-agent
 your `user-rules.md` layers as `hookSpecificOutput.additionalContext`; OpenClaude 0.32.0's
 bundle reads that field for this event), and `UserPromptSubmit` and `SessionEnd`
 (`activity`, which feeds the web console's Activity view). OpenClaude reads Claude's
 `hookSpecificOutput.permissionDecision`, so the gates **ask** where Claude asks.
-The context hook carries `--host openclaude` for one reason. It tells the hook
-which root file OpenClaude already loads (`AGENTS.md` when present, else
-`CLAUDE.md`), so that file is not injected a second time.
+
+**When a gate cannot start** (the shim is gone, node will not load), Claude Code blocks the
+call through `onFailure: "block"`. OpenClaude forked before that field existed and reads the
+empty stdout as "nothing to say", so every call would go through unjudged. Its two gate
+commands therefore end in `|| printf '%s' '<ask>'`: when the gate did not exit 0, the shell
+itself prints a fixed ask, and you are prompted. OpenClaude always runs hooks under Git Bash or
+sh, where that spelling is valid. The counter has no such tail: a counter that cannot start
+must not ask.
+
+The context hook carries `--host openclaude` to tell the hook which root file OpenClaude
+already loads (`AGENTS.md` when present, else `CLAUDE.md`), so that file is not injected a
+second time. The other hooks carry it so a relocated install stands down correctly and its
+activity is filed under OpenClaude, not Claude.
 
 ## Not supported
 
 - **Workflows.** OpenClaude ships its `WorkflowTool` disabled, so the `workflow`
   skill falls back to parallel agents, as on Bob.
-- **Live verification.** The emit follows OpenClaude's source (`src/utils/envUtils.ts`,
-  `src/utils/claudemd.ts`, `src/utils/config.ts`, `src/types/hooks.ts`) as of
-  2026-09. It has not been run against an installed OpenClaude yet.
+- **Hooks that need a model turn** are checked on no host. What was checked against
+  OpenClaude itself, how and when, is in one place:
+  [What is verified](../../docs/concepts/host-matrix.md#what-is-verified).

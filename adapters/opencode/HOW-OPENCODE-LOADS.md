@@ -103,7 +103,12 @@ changed for each plugin:
 The note exists only for the two asks the guard hands to the host: a rule write that reaches a host prompt, and a gate configuration file. Every other outcome here is a refusal, and a refusal goes to the model. A V2 refusal is the renamed tool, and core quotes that name in its `No tool named` error. The history keeps the original tool name, so several lines of text there reach no provider as a name (seen on 2.2.6 with a fake model, through `opencode run`).
 
 None of this is checked by a mock alone: `node tests/host_canary.mjs` starts the real V1 and V2
-and fails on the host's own `failed to load plugin` log line.
+and fails on the host's own `failed to load plugin` log line. It then runs that refusal on both:
+a scripted model on loopback (`tests/helpers/fake_model.mjs`) asks `opencode run` to write
+`.ssh/id_rsa`, and the canary fails unless the file is absent, the next write lands, and the
+model is sent the refusal — V1's thrown `[geneseed-guard] blocked:`, V2's `No tool named
+"BLOCKED, not a missing tool: …"`. So a V2 that resolves the tool before `execute.before`, or
+drops an unknown name without telling the model, turns the canary red.
 
 ## 4. Subagents, skills & commands
 
@@ -127,8 +132,8 @@ to native **skills**, not slash commands (same `SKILL.md` shape as Claude Code).
 | --- | --- |
 | `instructions` → `AGENT.md` | the rules, loaded every session |
 | `.opencode/agents/`, `.opencode/skills/` | capability agents and native skills |
-| plugin on `session.created` | **context plugin (v2)** — auto-discovers & injects the repo's `eager` docs |
-| plugin on `experimental.session.compacting` | **context plugin** — re-pushes the `eager` docs so they survive compaction |
+| plugin on `experimental.chat.messages.transform` (V1) / `session.hook("context")` (V2) | **context plugin** — the default delivery: auto-discovers the repo's `eager` docs and prepends them to every request as one synthetic user message, so nothing shows in the conversation and compaction cannot drop it |
+| plugin on `session.created` + `experimental.session.compacting` | **context plugin** — the visible delivery, only with `GENESEED_CONTEXT_VISIBLE=1` or when a V1 build lacks the transform hook: one visible message per session, re-pushed into the compaction context |
 | plugin on `session.idle` | **learn plugin** — distils memory into `memory/` (debounced to fire once, at session end) |
 | plugin on `experimental.chat.messages.transform` (V1) | **context plugin** — also adds the done gate's reminder when a check in `.geneseed/done-checks.txt` (or, without it, a check inferred from the root manifests) has not passed since the last edit (Verify Before Asserting); OpenCode 2 turns are not judged |
 | plugin on `tool.execute.before` | **guard plugin** — blocks secret-file writes and credential-shaped write content (Sealed Secrets), writes to a protected check or the done list (External Gate), catastrophic shell and every other real data loss, judged against the repository's state (Deletion Is Deliberate), a recursive whole-filesystem scan (Commands Must Return), a rule-store write the host cannot prompt for (Persist Insight), protected wiki folders, and the session's first write in an application repo with no `## Ownership` section in its root `AGENTS.md` (the ownership gate, once; a child session defers; off with `--no-ownership-gate` or a personal `Setup: declined <date>` line in `.geneseed/ownership.md`); logs each block to the gate ledger and counts skill/subagent use (`GENESEED_GUARD=off\|warn`) |

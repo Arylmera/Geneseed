@@ -35,7 +35,7 @@ import { hostCatalogsNatively } from '../../js/hosts/hosts.mjs';
 import { STRUCTURE } from '../../js/build/render.mjs';
 import { walkFiles } from '../helpers/golden.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
-import { CARRIER_CEILING } from '../../js/inspect/cost.mjs';
+import { CARRIER_CEILING, SKILL_LISTING_CEILING, alwaysOnCost } from '../../js/inspect/cost.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const DRIVER = path.join(ROOT, 'bin', 'build-driver.mjs');
@@ -655,6 +655,33 @@ test('the carrier stays under the footprint ceiling', () => {
         `--emit ${mode} --footprint ${footprint}: carrier is only ${n} chars — the ceiling is `
         + 'satisfied by a render that collapsed, so the floor is what says it did not');
     }
+  }
+});
+
+// THE SKILL LISTING HAS A CEILING TOO (`SKILL_LISTING_CEILING`, js/inspect/cost.mjs, which
+// carries the reason and the measurement). THE RULE: on a Claude Code emit with every skill
+// on, the names plus descriptions of the skills the model lists weigh at most 8 881 characters
+// — the 8 706 measured on 2026-11-12, plus 2 %, rounded up — and more than half of that. The
+// listing does not depend on the footprint, so one footprint per scope is measured. Aliases and
+// user-only skills are hidden from the model by `disable-model-invocation` and count 0, which
+// is why this is far below the folder count times the description cap.
+test('the skill listing stays under its ceiling on a full Claude emit', () => {
+  assert.equal(SKILL_LISTING_CEILING, 8_881);
+  for (const mode of ['claude', 'claude-global']) {
+    const spec = EXPECTED[mode];
+    const b = ok(mode, 'full');
+    const dir = path.join(b.bases[spec.native[0]], ...spec.native[1].split('/'));
+    const root = mode === 'claude' ? b.bases.out : dir;
+    const cost = alwaysOnCost({ host: 'claude', root, dir, footprint: 'full' });
+    assert.ok(cost, `--emit ${mode}: the carrier was not found, so nothing was measured`);
+    assert.ok(cost.skills <= SKILL_LISTING_CEILING,
+      `--emit ${mode}: the skill listing is ${cost.skills} chars, over the ${SKILL_LISTING_CEILING} `
+      + 'ceiling — every session carries it, and the host trims descriptions past its own budget. '
+      + 'Shorten a description before raising the ceiling');
+    // The other direction, as for the carrier: an emit that listed almost nothing passes a
+    // ceiling. Half of it (4 440) is far below the measured 8 706.
+    assert.ok(cost.skills > SKILL_LISTING_CEILING / 2,
+      `--emit ${mode}: the skill listing is only ${cost.skills} chars — the emit dropped skills`);
   }
 });
 

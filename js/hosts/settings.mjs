@@ -20,10 +20,11 @@
  * STDOUT, every other message to stderr) is inherited from `_build_settings.py` and kept
  * deliberately rather than tidied.
  *
- * HOOKS ARE APPEND-ONLY AND FAIL-CLOSED. Nothing here rewrites a hook group in place:
- * `mergeClaudeSettings` appends what is missing and removes only groups the manifest
- * recorded, and cleanup goes through `GENESEED_HOOK_SNIFF`, which recognises the shim form. A
- * 1.x install, wired before the shim, must rebuild first.
+ * ONLY GENESEED'S OWN HANDLERS ARE EVER REWRITTEN. `mergeClaudeSettings` and
+ * `unwireClaudeSettings` know one by its signature (`ownHandler`: the shim, a hook verb, this
+ * install's root), replace or remove exactly those, and leave every other handler as found,
+ * even inside a group Geneseed wrote. `GENESEED_HOOK_SNIFF` recognises the shim form for the
+ * integrity check's warning. A 1.x install, wired before the shim, must rebuild first.
  *
  * ONE KNOWN DIVERGENCE, recorded rather than reproduced. JS objects order integer-like
  * keys first, so a settings.json carrying a `"1"` or `"2"` at any level comes back from
@@ -42,8 +43,9 @@ import {
   indexOfDeepEqual, get, has, isDict, readJsonc,
 } from '../lib/json.mjs';
 import { SHIM_MARK, claudeHookShell, hookPrefix, shimHome } from './shim.mjs';
-import { GLOBAL_MANIFEST } from './hosts.mjs';
+import { GLOBAL_MANIFEST, ownHookVerb } from './hosts.mjs';
 import { gitRootOf } from './gitref.mjs';
+import { askDecision } from './hooks-prims.mjs';
 
 // `readJsonc` moved to ../lib/json.mjs so the hook path can parse a settings file (A2 L2).
 export { readJsonc };
@@ -273,8 +275,12 @@ function defaultPermission(doctrines = null, excluded = [], deletionGate = true)
 const OWNED_BASH = ['git commit*', 'git push*',
   ...PUSH_CHAIN.flatMap(([keys]) => keys)];
 
-/** The verdict Geneseed itself writes for each owned key — what "still reads as ours" means. */
-const OWNED_VERDICT = new Map([['git commit*', 'ask'], ['git push*', 'ask']]);
+/**
+ * The verdict Geneseed itself writes for each owned key — what "still reads as ours" means.
+ * Exported for `unmergeOpencodeJson`, which takes a recorded gate back at uninstall under the
+ * same two conditions a pack-off rebuild does: recorded, and still at this verdict.
+ */
+export const OWNED_VERDICT = new Map([['git commit*', 'ask'], ['git push*', 'ask']]);
 for (const [keys, verdict] of PUSH_CHAIN) for (const k of /** @type {string[]} */ (keys)) OWNED_VERDICT.set(k, /** @type {string} */ (verdict));
 
 /**
@@ -571,7 +577,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  *
  * `permission` is THREE-STATE, not a boolean: `'add'` for a file with no `permission` key,
  * `'reconcile'` for one that has a block this build would have wired gates into, and falsy for
- * neither. A commented `.jsonc` is never rewritten — that is what "your edits are kept" buys —
+ * neither. A commented file (`.json` or `.jsonc`) is never rewritten — that is what "your edits are kept" buys —
  * so the only thing this branch can do about a stale block is SAY SO, and telling a file that
  * already has a `permission` key to add one is not saying so. Any other truthy value is read as
  * `'add'`, which is what the boolean callers this replaced meant.
@@ -646,7 +652,7 @@ export function atomicWriteJson(p, config) {
  *
  * `result.skillsAdded` is set to the `permission.skill` denies this call added ONLY when the
  * file on disk now matches what it computed (written, or nothing to change). Left unset on
- * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
+ * every path that wrote nothing — unreadable, not an object, commented, write
  * failure — so the caller keeps its previous record rather than claiming denies never written.
  * `result.bashGates` (the next `bash_gates`, from `oldGates`) follows the same rule.
  * `pruneGates` is `--prune-gates`: see `reconcileOpencodePermission`. */
@@ -771,7 +777,10 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     result.bashGates = [...gates];
     return target;
   }
-  if (path.extname(target) === '.jsonc' && hadComments) {
+  // ⚠ THE COMMENTS DECIDE, NOT THE EXTENSION. OpenCode reads `opencode.json` as JSONC too, so a
+  // commented plain `.json` is as much the user's prose as a `.jsonc`; this once tested the
+  // extension as well, and such a file was rewritten with its comments dropped.
+  if (hadComments) {
     // Named, since this branch cannot take them out; `bash_gates` keeps its old value (the
     // caller's rule for a merge that wrote nothing), so they are still ours on the next emit.
     if (gatesRemoved.length) {
@@ -787,7 +796,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // whole one; `reconcile` = there is a block and it is missing gates this build wires, and
     // this branch cannot write them because rewriting would drop the user's comments.
     //
-    // DECIDED, NOT DEFERRED: a commented `.jsonc` is never rewritten and never will be. A
+    // DECIDED, NOT DEFERRED: a commented file is never rewritten and never will be. A
     // comment-preserving JSONC writer is a parser, an AST and a printer — a dependency-free
     // one, since this package ships zero — to keep formatting nobody asked us to touch, in a
     // file Geneseed co-owns rather than owns. The advice above is the whole remedy: the exact
@@ -818,6 +827,17 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
 // injectable failure instead and compares everything except the OS's own wording.
 
 /**
+ * What an OpenClaude gate prints when it could not start: the ask the gates themselves print
+ * (`askDecision`), with a fixed reason. It is written into a hook command between single quotes
+ * (`claudeHookGroups`), so the text may hold no `'`, and no `$` or backtick either, which a
+ * later edit to double quotes would expand. `tests/unit/hook_form.test.mjs` holds it to that.
+ */
+export const GATE_DOWN = askDecision('Geneseed gate error: the gate did not start, so nothing judged this call.\n'
+  + 'Safe choice: Deny, then run geneseed doctor.\n'
+  + 'It asks because a gate that did not run cannot say this call is safe.\n'
+  + 'If you allow it, this call runs with no check at all.').trimEnd();
+
+/**
  * `_build_settings._claude_hook_groups` — Geneseed's Claude hooks, keyed by event.
  *
  * ⚠ `doctrines` IS WHERE PROMPT AND BOUNDARY ARE KEPT IN AGREEMENT. The `git-gate` group
@@ -828,8 +848,8 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * and gains `--no-consent`, which skips only the process-5 branch. It once DROPPED the whole
  * group instead, and Law IV went with it — on Claude only, since Bob carries it
  * through `tool-gate`. The command changing is also what re-wires an existing install:
- * `mergeClaudeSettings` prunes every previously-managed group that is not in this return
- * value.
+ * `mergeClaudeSettings` replaces this install's handler in each slot with the one returned
+ * here, and removes a handler of ours that no slot here accounts for.
  *
  * ⚠ WHAT THIS DOES **NOT** CLAIM, because it was written here once and it was false: that the
  * string `process 5` is absent from a pack-off bundle. It is not — 18 emitted files still cite
@@ -865,8 +885,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // `git-gate` read it, `learn` reads `--memory`'s parent. `rule-gate` and Bob's `tool-gate`
   // do not stand down: both still run once per install (host-compat B4 fixed only the three).
   if (host === 'bob') {
-    // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog (docs/reviews/
-    // bob-global-injection-2026-09.md): FIVE events — SessionStart, UserPromptSubmit,
+    // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog:
+    // FIVE events — SessionStart, UserPromptSubmit,
     // PreToolUse, PostToolUse, Stop — Claude's names, but NOT Claude's protocol. stdout is
     // read as context on SessionStart only; on PreToolUse it is ignored and the one way to
     // refuse a call is EXIT CODE 2. The groups this emit wrote before were Claude's whole
@@ -874,18 +894,18 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // here; the activity writer counts a compaction on SessionStart `compact`), and the gates answered with a
     // stdout JSON Bob never reads — permissive on every call. `--host bob` makes the gates
     // speak exit codes (js/hosts/hooks.mjs). DELIBERATELY no matcher on PreToolUse
-    // (host-compat O1, revisited): bob-docs.md §2's tool list is already stale against the
+    // (host-compat O1, revisited): the tool list in Bob's docs is already stale against the
     // changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an
     // allow-list matcher built from it fails OPEN on every tool Bob adds between one
     // docs read and the next — the exact failure mode a gate must not have. A deny-list
     // with a negative-lookahead was the other shape considered; it depends on an unverified
-    // regex DIALECT (bob-docs.md never states whether its "regex on the tool name" supports
+    // regex DIALECT (Bob's docs never state whether their "regex on the tool name" supports
     // lookahead at all), and a dialect mismatch there would silence the WHOLE gate rather than
-    // merely skip spawning it. bob-verdict.md O1 itself rates the matcher's upside "low,
-    // performance only" — not worth either risk. So `tool-gate` reads the payload's shape
-    // instead. Which tool payload fields Bob sends is equally undocumented; the gates read
-    // Claude's (`command`, `file_path`/`path`, `content`/`new_string`) and defer on anything
-    // else. Unverified live: no Bob install on the authoring machine. Revisit a matcher only
+    // merely skip spawning it. The matcher's upside is low,
+    // performance only — not worth either risk. So `tool-gate` reads the payload's shape
+    // instead. The gates read Claude's fields (`command`, `file_path`/`path`,
+    // `content`/`new_string`) and defer on anything else. What was checked against Bob itself:
+    // docs/concepts/host-matrix.md, "What is verified". Revisit a matcher only
     // once a live Bob session can confirm both the current tool list and the regex dialect.
     const b = ' --host bob';
     // `--no-deletion-gate` only when the install switched Law IV's gate off, so an armed
@@ -900,15 +920,21 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // External Gate's hook and the weakened-test note, the same contract.
     const eg = externalGate === false ? ' --no-external-gate' : '';
     const tn = testNote === false ? ' --no-test-note' : '';
+    const nc = consentRuleOn(doctrines, excluded) ? '' : ' --no-consent';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
-      // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
-      // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
-      // `tool-gate` only ever EXITS 2 for Laws I and IV (unless built `--no-secrets-gate` /
-      // `--no-deletion-gate`), and for a
-      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
-      // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}${eg}${tn}${ruleFlags('tool-gate', doctrines, excluded)}` }] }],
+      // One group, both gates. `tool-gate` EXITS 2 for Laws I and IV (unless built
+      // `--no-secrets-gate` / `--no-deletion-gate`), a write to the rule store (process 1), a
+      // write under a project's own `.geneseed/protected-checks.txt` (the project opted in)
+      // and a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
+      // Process 5's consent is only a stderr line here, since Bob has no ask tier; with the
+      // rule off that line had no rule behind it, so `--no-consent` drops it as it drops
+      // Claude's ask. Only then: an armed install's command stays byte-identical, and an older
+      // shim, which refuses the flag on this verb, never sees it.
+      // NO LAUNCH-FAILURE TAIL, unlike OpenClaude's gates below. Bob ignores a PreToolUse hook's
+      // stdout, so a printed ask says nothing; the one refusal is exit 2, and a tail that exits
+      // 2 whenever the shim cannot start would lock out every tool with no prompt to lift it.
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${nc}${sg}${dg}${og}${eg}${tn}${ruleFlags('tool-gate', doctrines, excluded)}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
@@ -928,9 +954,20 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // `--host` on `git-gate` but not on `learn`, which then exits 1 under `|| exit 0` and skips.
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
+  // A GATE THAT CANNOT START MUST NOT READ AS "NOTHING TO SAY". Claude Code blocks on it
+  // (`onFailure` below). OpenClaude predates that field: a shim that is gone or a node that
+  // will not load exits non-zero with stdout empty, which it takes as a deferral, and every
+  // call goes through unjudged. So its two gates print a static ask in that case
+  // (`GATE_DOWN`). `||` and `printf` are safe to write because OpenClaude always runs its hooks
+  // under Git Bash or sh; a gate that ran has exited 0 on every path, so the tail never adds to
+  // a verdict. Never on Claude (byte-identical, and PowerShell 5.1 cannot parse `||`), never on
+  // the `Skill|Agent|Task` counter (a counter that cannot start must not ask), never on Bob
+  // (see its PreToolUse above).
+  const down = host === 'openclaude' ? ` || printf '%s' '${GATE_DOWN}'` : '';
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
     + (deletionGate === false ? ' --no-deletion-gate' : '')
-    + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded);
+    + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded)
+    + down;
   // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
   // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
@@ -940,7 +977,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`
     + (ownershipGate === false ? ' --no-ownership-gate' : '')
     + (externalGate === false ? ' --no-external-gate' : '')
-    + (testNote === false ? ' --no-test-note' : '') + ruleFlags('rule-gate', doctrines, excluded);
+    + (testNote === false ? ' --no-test-note' : '') + ruleFlags('rule-gate', doctrines, excluded)
+    + down;
   // `--no-rule-store` on learn: with process 1 off a rule write runs with no prompt, so the change
   // report must not count it as approved (`storeReport`). Bob's learn reports every change already.
   const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
@@ -960,9 +998,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
       // that matches only `Bash` never fires on the PowerShell tool, which is Windows' default
       // shell whenever Git Bash is absent — and on Windows without Git Bash, Bash is not even
-      // registered. `tool_input.command` is the same field on both tools, so `GIT_GATE_RE`
-      // needs no change.
-      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
+      // registered. `|Monitor` because Claude Code's Monitor tool runs a shell `command` in the
+      // background, and unmatched it was a shell no gate saw. `tool_input.command` is the same
+      // field on all three, so `GIT_GATE_RE` needs no change; a host without the tool never
+      // sends the name.
+      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
       {
         // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
         // matcher entry (Claude verdict R2).
@@ -971,8 +1011,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       },
       // Usage counting (js/hosts/usage.mjs): `tool-gate` records a Skill or subagent call and
       // judges nothing else about it. `Task` is the subagent tool's older name. No
-      // `onFailure: 'block'`: a counter that cannot start must never stop a skill.
-      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"` }] },
+      // `onFailure: 'block'`: a counter that cannot start must never stop a skill. `--host` on
+      // OpenClaude, or the activity view files its skill and agent calls under Claude.
+      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${h}` }] },
     ],
     // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
     // I4): every SessionStart source — `startup`, `resume`, `clear`, `compact` and `fork` —
@@ -1076,14 +1117,96 @@ function readSettingsForMerge(p, consequence) {
   return [data, hadComments];
 }
 
+/** Is this handler Geneseed's, for the install at `cfg`? `ownHookVerb` (./hosts.mjs) says how. */
+export function ownHandler(h, cfg) {
+  return isDict(h) && ownHookVerb(get(h, 'command'), cfg) !== null;
+}
+
+/** A handler whose command names the shim, whatever root it carries. */
+const shimMarked = (h) => isDict(h) && typeof get(h, 'command') === 'string'
+  && h.command.includes(SHIM_MARK);
+
+/** A group's handler list, or null for a value that is not a group. */
+const handlersOf = (g) => (isDict(g) && Array.isArray(get(g, 'hooks')) ? g.hooks : null);
+
+/**
+ * Take one RECORDED group out of `hooks`, found as the manifest recorded it. True when something
+ * went.
+ *
+ * A claim is the group as it sat on file, so it can hold a handler the user put inside our
+ * group. That one stays: only the handlers naming the shim go (minus those `keep` spares), and
+ * the group goes when nothing is left. A recorded group with no shim handler at all is an older
+ * form (a 1.x interpreter command) and goes whole, as the manifest says.
+ */
+function dropRecorded(hooks, rec, keep) {
+  const event = get(rec, 'event');
+  const arr = get(hooks, event);
+  if (!Array.isArray(arr)) return false;
+  const at = indexOfDeepEqual(arr, get(rec, 'group'));
+  if (at < 0) return false;
+  const hs = handlersOf(arr[at]);
+  const left = hs && hs.some(shimMarked) ? hs.filter((h) => !shimMarked(h) || keep(h)) : [];
+  if (left.length && left.length === hs.length) return false;
+  if (left.length) arr[at].hooks = left;
+  else arr.splice(at, 1);
+  if (!arr.length) delete hooks[event];
+  return true;
+}
+
+/**
+ * Walk every handler of the install at `cfg` (`ownHandler`) and put `decide(event, group, h)` in
+ * its place: the handler itself (unchanged), a replacement, or null to remove it. A group goes
+ * only when this emptied it, an event only when its last group went. No other handler is read
+ * past the ownership test, in our group or out of it. True when anything changed.
+ */
+function rewriteOwn(hooks, cfg, decide) {
+  let changed = false;
+  for (const [event, arr] of Object.entries(hooks)) {
+    if (!Array.isArray(arr)) continue;
+    const emptied = new Set();
+    for (const g of arr) {
+      const hs = handlersOf(g);
+      if (!hs) continue;
+      const next = [];
+      for (const h of hs) {
+        const to = ownHandler(h, cfg) ? decide(event, g, h) : h;
+        if (to) next.push(to);
+        if (to !== h) changed = true;
+      }
+      if (next.length === hs.length && next.every((h, i) => h === hs[i])) continue;
+      g.hooks = next;
+      if (!next.length) emptied.add(g);
+    }
+    if (!emptied.size) continue;
+    const kept = arr.filter((g) => !emptied.has(g));
+    if (kept.length) hooks[event] = kept;
+    else delete hooks[event];
+  }
+  return changed;
+}
+
 /**
  * `_build_settings._merge_claude_settings` — returns `[target, managed]`.
  *
- * Surgical: every other key and the user's own hook entries survive. `priorHooks` is the
- * manifest's previously-recorded managed groups; any still in the file but no longer
- * canonical (a moved checkout, the pre-`|| exit 0` hook form) is PRUNED, because without
- * that a re-emit stacks the new group beside the stale one and `learn` runs twice per Stop.
- * `managed` is the complete current claim set, so unwire removes exactly those.
+ * Surgical, and PER HANDLER: every other key, the user's own groups and a user's handler inside
+ * one of our groups survive. Each canonical group is one slot (event, matcher, verb). The
+ * handler of this install that fills a slot (`ownHandler`) is replaced where it sits, as
+ * `{...existing, ...canonical}`, so a field the user added to it (`timeout`) stays; `shell` and
+ * `onFailure` are ours and go when the canonical handler has none. A handler of ours that fills
+ * no slot, or a slot already filled, is removed: that is what stops a re-emit with other gate
+ * flags, a retired event or a widened matcher from leaving the old handler beside the new one,
+ * with or without a manifest. A slot nothing fills is appended as the canonical group.
+ *
+ * `managed` is the claim set: every group that now holds one of our handlers, AS IT SITS ON FILE
+ * after the merge, so a group that was already there is claimed too and unwire removes it.
+ *
+ * `priorHooks` is the manifest's previously-recorded groups. One no longer canonical and still
+ * on file loses its shim handlers that are not this root's — a moved `--root`, which the
+ * signature cannot see, since another root reads as another install.
+ *
+ * REFUSED, NEVER OVERWRITTEN: a `hooks` that is not an object, or a canonical event whose value
+ * is not an array (`"Stop": {}`). Both are the user's, however wrong, and writing our groups
+ * there would replace them — `readSettingsForMerge`'s rule, one level down.
  *
  * `cfgDir` is the install's own dir — what the hooks carry as `--root` and under which
  * `memory/` lives. It is NOT always `dirname(p)`: Bob's global settings file is nested
@@ -1097,80 +1220,98 @@ export function mergeClaudeSettings(p, priorHooks = null, hookOpts = {},
   const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
   if (!loaded) return [p, prior];
   const [config, hadComments] = loaded;
-  let hooks = get(config, 'hooks');
-  if (!isDict(hooks)) hooks = {};
   const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, gates);
+  const refuse = (what) => {
+    process.stderr.write(`[geneseed] ${what} in ${path.basename(p)} — NOT rewriting it `
+      + '(fix the file, then re-run). Hooks were not wired.\n');
+    return [p, prior];
+  };
+  if (has(config, 'hooks') && !isDict(config.hooks)) return refuse('"hooks" is not an object');
+  const hooks = has(config, 'hooks') ? config.hooks : {};
+  const bad = Object.keys(canonical).find((e) => has(hooks, e) && !Array.isArray(hooks[e]));
+  if (bad) return refuse(`"hooks.${bad}" is not an array`);
+
+  // One slot per canonical group: `claudeHookGroups` puts exactly one handler in each.
+  const slots = [];
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
-    for (const g of groups) canonFlat.push({ event, group: g });
+    for (const g of groups) {
+      canonFlat.push({ event, group: g });
+      slots.push({ event, canon: g, matcher: get(g, 'matcher'), handler: g.hooks[0],
+        verb: ownHookVerb(g.hooks[0].command, cfgDir), group: null });
+    }
   }
-  let pruned = false;
+  let changed = false;
   for (const rec of prior) {
     if (indexOfDeepEqual(canonFlat, rec) >= 0) continue;
-    const event = get(rec, 'event');
-    const group = get(rec, 'group');
-    const arr = get(hooks, event);
-    if (Array.isArray(arr)) {
-      const at = indexOfDeepEqual(arr, group);
-      if (at >= 0) {
-        arr.splice(at, 1);
-        pruned = true;
-        if (!arr.length) delete hooks[event];
-      }
-    }
+    if (dropRecorded(hooks, rec, (h) => ownHandler(h, cfgDir))) changed = true;
   }
-  const added = [];
-  for (const [event, newGroups] of Object.entries(canonical)) {
-    let arr = get(hooks, event);
-    if (!Array.isArray(arr)) arr = [];
-    for (const g of newGroups) {
-      if (indexOfDeepEqual(arr, g) >= 0) continue;
-      arr.push(g);
-      added.push({ event, group: g });
+  if (rewriteOwn(hooks, cfgDir, (event, g, h) => {
+    const verb = ownHookVerb(h.command, cfgDir);
+    const slot = slots.find((s) => !s.group && s.event === event && s.verb === verb
+      && s.matcher === get(g, 'matcher'));
+    if (!slot) return null;
+    slot.group = g;
+    const merged = { ...h, ...slot.handler };
+    for (const k of ['shell', 'onFailure']) if (!has(slot.handler, k)) delete merged[k];
+    return deepEquals(merged, h) ? h : merged;
+  })) changed = true;
+  for (const s of slots) {
+    if (s.group) continue;
+    let arr = get(hooks, s.event);
+    if (!Array.isArray(arr)) arr = hooks[s.event] = [];
+    // A command the signature cannot read (no shim could be written and the fallback entry is
+    // not named after it) is still found by equality, the old test.
+    const at = s.verb ? -1 : indexOfDeepEqual(arr, s.canon);
+    if (at < 0) {
+      arr.push(s.canon);
+      changed = true;
     }
-    hooks[event] = arr;
+    s.group = at < 0 ? s.canon : arr[at];
   }
-  const survivors = prior.filter((r) => indexOfDeepEqual(canonFlat, r) >= 0);
-  const managedNow = survivors.concat(added.filter((a) => indexOfDeepEqual(survivors, a) < 0));
-  if (!added.length && !pruned) return [p, managedNow];
+  const claimed = [...new Set(slots.map((s) => s.group))];
+  const managedNow = claimed.map((group) => ({
+    event: slots.find((s) => s.group === group).event, group }));
+  if (!changed) return [p, managedNow];
   if (hadComments) {
+    // The exact groups, not a pointer to a sample: a sample cannot carry this install's shim
+    // path, root or gate flags, and the one that shipped had drifted from the emitter.
     process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
-      + "(your edits are kept). Add Geneseed's hooks by hand from "
-      + 'adapters/claude-code/settings.json.\n');
+      + '(your edits are kept). Merge this into it by hand:\n'
+      + `${JSON.stringify({ hooks: canonical }, null, 2)}\n`);
     return [p, prior];
   }
-  // Never empty here: `canonical` always carries at least three events, and every one of them
-  // was just written into `hooks`.
   config.hooks = hooks;
   atomicWriteJson(p, config);
   return [p, managedNow];
 }
 
 /**
- * `_build_settings._unwire_claude_settings` — remove exactly the recorded groups.
+ * `_build_settings._unwire_claude_settings` — remove the recorded groups (`dropRecorded`), then,
+ * given the install's `cfg`, every handler of that install still on file (`ownHandler`).
+ *
+ * The second pass is what a manifest alone could not do: a handler the user gave a `timeout`
+ * after the emit no longer equals its claim, and one wired by an emit whose manifest was lost
+ * was never claimed. Both would keep running after an uninstall. A handler that is not ours
+ * stays, in our group or out of it; a hook naming our shim with another root is another
+ * install's. With nothing recorded and nothing of ours on file, the file is not rewritten.
  *
  * Returns true when the file was actually rewritten, false when it bailed, so uninstall
  * can report reality instead of assuming success.
  */
-export function unwireClaudeSettings(p, added) {
-  if (!added || !added.length) return false;
+export function unwireClaudeSettings(p, added, cfg = null) {
+  const recs = (added || []).filter(isDict);
+  if (!recs.length && !cfg) return false;
   // Every state but a comment-free object declines: an unwire never rewrites what it could not
   // read whole, and a commented file would lose its comments.
   const { state, data: loaded, hadComments } = loadJsonObject(p);
   if (state !== 'ok' || hadComments) return false;
   const hooks = get(loaded, 'hooks');
   if (!isDict(hooks)) return false;
-  for (const rec of added) {
-    const event = get(rec, 'event');
-    const group = get(rec, 'group');
-    let arr = get(hooks, event);
-    if (Array.isArray(arr)) {
-      const at = indexOfDeepEqual(arr, group);
-      if (at >= 0) arr.splice(at, 1);
-    }
-    arr = get(hooks, event);
-    if (Array.isArray(arr) && !arr.length) delete hooks[event];
-  }
+  let changed = false;
+  for (const rec of recs) if (dropRecorded(hooks, rec, () => false)) changed = true;
+  if (cfg && rewriteOwn(hooks, cfg, () => null)) changed = true;
+  if (!recs.length && !changed) return false;
   if (!Object.keys(hooks).length) delete loaded.hooks;
   try {
     atomicWriteJson(p, loaded);
@@ -1350,18 +1491,25 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
 
   const presentGroups = settingsHookGroups(loaded);
   const recordedHooks = (get(m, 'settings_hooks') || []).filter(isDict);
-  // Plain deep equality here (not the sorted-dump key the orphan scan below uses) is
-  // deliberate: both sides came out of a JSON parse, so it is already order-independent.
-  // The orphan scan needs the dumped-string form because it builds a set for O(1)
-  // membership, which a dict cannot join.
+  // BY HANDLER, not by group: a recorded group is on file when each of its Geneseed handlers'
+  // commands still runs under that event, whatever else the user did to the group (a `timeout`
+  // on our handler, a hook of their own beside it). A recorded group naming no shim — an older
+  // form — keeps the whole-group comparison.
+  const key = (event, h) => `${formatRepr(event ?? null)}\u0000${h.command}`;
+  const onFile = new Set(presentGroups.flatMap(([event, g]) => (handlersOf(g) || [])
+    .filter((h) => isDict(h) && typeof get(h, 'command') === 'string').map((h) => key(event, h))));
+  const recordedCommands = new Set();
   for (const rec of recordedHooks) {
     const event = get(rec, 'event');
     const group = get(rec, 'group');
-    const hit = presentGroups.some(([e, g]) => deepEquals(e, event) && deepEquals(g, group));
-    if (expect === 'present' && !hit) {
+    const ours = (handlersOf(group) || []).filter(shimMarked);
+    for (const h of ours) recordedCommands.add(key(event, h));
+    const whole = () => presentGroups.some(([e, g]) => deepEquals(e, event) && deepEquals(g, group));
+    const live = ours.filter((h) => onFile.has(key(event, h))).length;
+    if (expect === 'present' && !(ours.length ? live === ours.length : whole())) {
       problems.push(`${p}: recorded hook group missing — event=${formatRepr(event ?? null)} `
         + `group=${jsonDumpsCompact(group ?? null)}`);
-    } else if (expect === 'absent' && hit) {
+    } else if (expect === 'absent' && (ours.length ? live > 0 : whole())) {
       problems.push(`${p}: recorded hook group still present after unwire — `
         + `event=${formatRepr(event ?? null)} group=${jsonDumpsCompact(group ?? null)}`);
     }
@@ -1379,19 +1527,13 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
     }
   }
 
-  // Geneseed-PATTERN entries present but not in the recorded claim set — warn only, never
+  // Geneseed-PATTERN handlers present but not among the recorded commands — warn only, never
   // auto-delete (they may be user-authored, or a claim this run legitimately did not
   // inherit).
-  const recordedSet = new Set(recordedHooks.map(
-    (r) => `${formatRepr(get(r, 'event') ?? null)}\u0000`
-      + `${jsonDumpsCompact(get(r, 'group') ?? null, { sortKeys: true })}`));
   for (const [event, group] of presentGroups) {
-    const key = `${formatRepr(event)}\u0000${jsonDumpsCompact(group, { sortKeys: true })}`;
-    if (recordedSet.has(key)) continue;
-    const cmds = (get(group, 'hooks') || []).filter(isDict)
-      .map((h) => (has(h, 'command') ? h.command : ''));
-    if (cmds.some((c) => typeof c === 'string'
-      && GENESEED_HOOK_SNIFF.some((mk) => c.includes(mk)))) {
+    if ((handlersOf(group) || []).some((h) => isDict(h) && typeof get(h, 'command') === 'string'
+      && GENESEED_HOOK_SNIFF.some((mk) => h.command.includes(mk))
+      && !recordedCommands.has(key(event, h)))) {
       problems.push(`${p}: Geneseed-pattern hook present but NOT recorded in the manifest `
         + `(event=${formatRepr(event)}) — possibly user-authored; left alone`);
     }

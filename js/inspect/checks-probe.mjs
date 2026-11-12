@@ -9,6 +9,8 @@
  * (`git reflog expire --expire=now --all`, Law IV in Bob's `BLOCK_RULES`) and one that must pass (`git status`).
  * A gate wired `--no-deletion-gate` passes the Law IV call by design, so `badCommandFor` swaps in a
  * root-wide scan (ops 2) it must still refuse — a disarmed install is not a gate that stopped working.
+ * Bob is asked in Bob's own shapes as well (`probesFor`): the legacy payload, and a `write_file`
+ * carrying a credential.
  * Both directions are judged, because "allows everything" and "refuses everything" (the
  * PowerShell-fallback case `hookShellProblems` can only infer) are both broken gates.
  *
@@ -44,7 +46,7 @@ import { spawnSync } from 'node:child_process';
  * runs everything through `tool-gate --host bob`. OpenCode's guard is an in-process plugin with
  * no command: `guardProbe` below imports it instead.
  */
-const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gate' };
+export const PROBED_VERB = { claude: 'git-gate', openclaude: 'git-gate', bob: 'tool-gate' };
 
 // A Law IV act that loses data in EVERY state: since the gate asks only on real loss
 // (2026-10-17), a state-dependent act such as `reset --hard` would pass on a clean tree.
@@ -66,6 +68,61 @@ function probePayload(command, cwd) {
     session_id: 'geneseed-probe', hook_event_name: 'PreToolUse', tool_name: 'Bash',
     tool_input: { command }, cwd,
   });
+}
+
+/** The older Bob shape, `{event, tool, input}`, which `tool-gate` normalises at its entry. */
+function legacyBobPayload(command) {
+  return JSON.stringify({
+    event: 'PreToolUse', session_id: 'geneseed-probe', tool: 'execute_command', input: { command },
+  });
+}
+
+/**
+ * A credential-shaped string, put together at run time: the literal would trip this repo's own
+ * secret scans, and Law I's hook on whoever edits this file. It is the documented AWS example
+ * key id, which opens no account.
+ */
+const probeCredential = () => ['AK', 'IA', 'IOSFODNN7', 'EXAMPLE'].join('');
+
+/** Bob's `write_file`, in the keys Bob 2.2.3 sends, carrying `probeCredential()`. */
+function bobSecretWritePayload(cwd) {
+  return JSON.stringify({
+    session_id: 'geneseed-probe', hook_event_name: 'PreToolUse', tool_name: 'write_file',
+    tool_input: { path: 'geneseed-probe.txt', content: `aws_access_key_id = ${probeCredential()}\n` },
+    cwd,
+  });
+}
+
+/** What the Bob credential probe is called in a problem line. Never the credential itself. */
+export const SECRET_PROBE_NAME = 'write_file with a credential';
+
+/**
+ * The probes for one gate command: `{ shape, name, bad, good }`, each a payload pair. `shape`
+ * is '' for the first, so a Claude or OpenClaude problem line reads as it always did; `good` is
+ * null where only the refusal is asked.
+ *
+ * Claude and OpenClaude get the one Claude-shaped pair. BOB GETS THREE, because a Claude-shaped
+ * Bash call is not what Bob sends: `tool-gate` reads a `command` field wherever it sits, so
+ * that pair alone could pass while the gate was blind to Bob's own payloads. The second pair is
+ * the legacy `{event, tool, input}` shape, which `normaliseBobPayload` must still lift; the
+ * third is a `write_file`, Bob's own edit tool, carrying a credential, which reaches Law I
+ * through the rule half of the gate. A gate wired `--no-secrets-gate` passes that write by
+ * design, so the third probe is left out, the way `badCommandFor` swaps the Law IV command.
+ */
+export function probesFor(host, command, cwd) {
+  const badCommand = badCommandFor(command);
+  const probes = [{
+    shape: '', name: badCommand, bad: probePayload(badCommand, cwd), good: probePayload(GOOD_COMMAND, cwd),
+  }];
+  if (host !== 'bob') return probes;
+  probes.push({
+    shape: "Bob's legacy payload", name: badCommand,
+    bad: legacyBobPayload(badCommand), good: legacyBobPayload(GOOD_COMMAND),
+  });
+  if (!/ --no-secrets-gate(?:\s|$)/.test(command)) {
+    probes.push({ shape: "Bob's write_file", name: SECRET_PROBE_NAME, bad: bobSecretWritePayload(cwd), good: null });
+  }
+  return probes;
 }
 
 /**
@@ -170,10 +227,14 @@ export function gateProbe(targets = installTargets(), { platform = process.platf
       }
       const verdict = withTempDir((tmp) => {
         const runEnv = { ...env, GENESEED_GATE_PROBE: '1', CLAUDE_PROJECT_DIR: tmp };
-        const badCommand = badCommandFor(handler.command);
-        const bad = runOnce(shell, probePayload(badCommand, tmp), tmp, runEnv);
-        const good = runOnce(shell, probePayload(GOOD_COMMAND, tmp), tmp, runEnv);
-        return probeVerdict(host, bad, good, badCommand);
+        // The first probe that fails is the verdict: one line per gate, naming the shape.
+        for (const p of probesFor(host, handler.command, tmp)) {
+          const bad = runOnce(shell, p.bad, tmp, runEnv);
+          const good = p.good ? runOnce(shell, p.good, tmp, runEnv) : { status: 0, stdout: '', stderr: '' };
+          const v = probeVerdict(host, bad, good, p.name);
+          if (v) return p.shape ? `${v} (${p.shape})` : v;
+        }
+        return null;
       }, 'geneseed-probe-');
       if (verdict) problems.push(`${label} under ${shell.label} ${verdict}`);
       else probed.push(`${path.normalize(cfg)} (${verb}, ${shell.label})`);

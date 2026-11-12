@@ -103,6 +103,7 @@ user co-owns, and the hook verbs those emitted configs then run.
 | `hooks-prims.mjs` | The Python path/text primitives the hook verbs share (`splitLines`, `readStdin`, a never-throwing `isFile`), plus the activity off switch (`activityOn`) and the do-nothing `activity` verb |
 | `store-watch.mjs` | The change report: a session's baseline of the rule and memory files (`writeBaseline`, from the hook entry after `context`), the compare at Stop (`storeReport`, from `learn`), and `recordOwnWrites`, around Geneseed's own writers. It detects; it prevents nothing. The OpenCode guard holds the twin |
 | `activity.mjs` | The hook-side activity writer and the owner of snapshot liveness: `recordActivity` (one payload into `<root>/activity/`), `readTranscriptDelta`, `sweepActivity` (archive, newest 50, 7 days). Loaded only when tracking is on; never prints |
+| `hook-tap.mjs` | The opt-in tap: with `GENESEED_HOOK_TAP=<dir>` set, one file per hook call recording the payload's SHAPE (keys kept, every string replaced by its type and length), for fixtures from a host the canary cannot run. Refuses a directory inside a git worktree. Imported only when the variable is set; never prints, never throws |
 | `usage.mjs` | The usage counter `tool-gate` runs: one `{day, kind, name}` line per Skill or subagent call into `notebook/usage.jsonl`. Hook path: builtins only, silent, never throws |
 | `memory-files.mjs` | The memory store's file format — `frontmatter`, `MEMORY.md` index writes, agent lessons, consolidate — the `user-rules.md` parser, the draft's format and the fold's ledger reader. No spawn: the CLI, web console and fold import it |
 | `geneseed-dir.mjs` | The Node writers into a project's `<git root>/.geneseed/`: the personal-by-default `.gitignore` (`GENESEED_GITIGNORE`, pinned to the two OpenCode copies), and the protected-checks seed every project emit runs (`seedProtectedChecks`: seed once when absent, then the user's — never recorded, rewritten or uninstalled). Never throws, never writes through a link. Spawn-free |
@@ -141,7 +142,7 @@ Everything that inspects an already-built or already-deployed harness and report
 | `validate.mjs` | The `validate` verb (the generator's old `--validate-only`): renders a sandbox, scans it for tokens and dead links, own exit contract |
 | `inventory.mjs` | The one catalog walk and its taxonomy tables, read by status, the TUI and the web console |
 | `status.mjs` | `geneseed status` and `version` — the panel data, counts, accent colour, version verdict |
-| `cost.mjs` | What one install injects every session, by part (root file, skill and agent lists, session files), in characters; owns `CARRIER_CEILING`, which the smoke test gates and the console draws |
+| `cost.mjs` | What one install injects every session, by part (root file, skill and agent lists, session files), in characters; owns `CARRIER_CEILING`, which the smoke test gates and the console draws, and `SKILL_LISTING_CEILING`, which the smoke test gates and the console draws on a Claude Code install |
 | `diff.mjs` | `geneseed diff` — what a deployed install has that a fresh render of `src/` does not |
 | `excludes.mjs` | `geneseed exclude add|remove|list` — the WRITER for `excludes.json` and the shared list in the machine tier; `hosts.mjs` `sovereignBypass` reads both |
 | `registry.mjs` | `installs.json` under XDG — the persistent deploy-root list `rebuild-all` re-emits into |
@@ -172,7 +173,7 @@ into files users have committed, so change the test that states it in the same c
 | `prompt.mjs` | The line-mode stdin readers — `ask`, `promptLine`, `confirm`, `askChoice` — read a byte at a time so they stop where Enter stops. Shared by `setup`, `uninstall` and `web` without dragging in the wizard |
 | `managed-block.mjs` | Where the `<!-- BEGIN/END GENESEED -->` block is in a co-owned file: whole-line markers, the first END with the last BEGIN above it. One definition for the writer (`settings.mjs`) and the hook-side readers; no imports, so the hook path may load it. The OpenCode plugins carry `BLOCK_RE_SOURCE` by value |
 | `machine-dir.mjs` | `machineDir()`, `sharedPaths()`, `readDefaultInstall()` and `WIKI_NAMES`: the one home of `$XDG_CONFIG_HOME/geneseed`, the names beneath it, the reader of the chosen default install, and the wiki manifest's names. Spawn-free, so the hook and driver may import it |
-| `node-floor.mjs` | The first import of all three binaries: below Node 22.7, one sentence on stderr and exit 1 (0 in the hook) instead of a stack trace |
+| `node-floor.mjs` | The first import of all three binaries: below Node 22.7, one sentence on stderr and exit 1 (0 in the hook, where a gate verb also asks) instead of a stack trace |
 
 **Before editing:** parse with `parseJson`, never `JSON.parse` — the latter collapses int `1` and
 float `1.0` into one double, and that value gets written into a user's file. Do not swap in a diff

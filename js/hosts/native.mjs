@@ -356,21 +356,30 @@ const WEBFETCH_MARKER = '<!-- webfetch: allow -->';
 
 /**
  * `_build_emit._claude_agent_frontmatter`. A read-only spec gets a `disallowedTools` DENYLIST;
- * each opt-in marker takes its tool back off the list. Order is emit order: WebFetch before
- * Bash keeps the unmarked line byte-identical to what it was before the webfetch marker existed.
+ * each opt-in marker takes its tools back off the list. Order is emit order.
+ *
+ * `Agent` and `Task` (the same tool, new name and old) are denied to EVERY read-only agent and
+ * no marker lifts them: a read-only agent that can dispatch can spawn a writer, and the denylist
+ * of the child, not the parent's, is what that writer runs under. The specs already say a seat
+ * dispatches no sub-agents; this is the boundary under the sentence.
+ *
+ * STILL OPEN: an MCP tool that writes (`mcp__github__push_files`, a database server). A denylist
+ * cannot name tools it has never seen, so a read-only agent in a session with such a server can
+ * still write through it, until this becomes an allowlist (`tools:`).
  */
 function claudeAgentFrontmatter(stem, text, overrides) {
   const fm = [`name: ${stem}`, `description: ${jsonDumps(agentDescription(text))}`];
   const ov = agentOverride(overrides, stem);
   if (isTruthy(ov.model)) fm.push(`model: ${formatValue(ov.model)}`);
   if (isReadonly(text)) {
-    const list = ['Write', 'Edit', 'NotebookEdit'];
+    const list = ['Write', 'Edit', 'NotebookEdit', 'Agent', 'Task'];
     if (!text.includes(WEBFETCH_MARKER)) list.push('WebFetch');
     // Bash AND PowerShell: docs `tools-reference.md` says denying Bash turns PowerShell off
     // only for settings rules and `--disallowedTools` — agent frontmatter is not named there,
     // so a "read-only" agent on Windows could still run shell commands via PowerShell
-    // (Claude verdict R1). The one opt-in marker lifts both together.
-    if (!text.includes(BASH_MARKER)) list.push('Bash', 'PowerShell');
+    // (Claude verdict R1). Monitor is the third shell: it runs a `command` in the background.
+    // The one opt-in marker lifts all three together.
+    if (!text.includes(BASH_MARKER)) list.push('Bash', 'PowerShell', 'Monitor');
     fm.push(`disallowedTools: ${list.join(', ')}`);
   }
   return fm;

@@ -387,6 +387,10 @@ function globalReemit(d, cfg, extraArgs = []) {
  * separately rather than joined, because "which stream said it" is part of the claim — a
  * refusal on stdout would be invisible to a caller checking for errors.
  */
+// The CLI's line writer ends a line with the platform EOL (`\r\n` on Windows). A row that states a
+// whole message compares it after this fold, so the same written-out text holds on every OS.
+const lf = (s) => String(s).replace(/\r\n/g, '\n');
+
 function captured(fn) {
   const outw = process.stdout.write.bind(process.stdout);
   const errw = process.stderr.write.bind(process.stderr);
@@ -769,6 +773,54 @@ test('the unmerge warns and skips a JSONC file carrying comments', () => {
   });
 });
 
+// THE RULE IS "COMMENTED", NOT ".jsonc". OpenCode parses `opencode.json` as JSONC too, so a
+// user may keep notes in the plain-named file, and a rewrite drops them whatever the name is.
+// All three opencode writers on the reversal side therefore refuse on `hadComments` alone:
+// the unmerge leaves the bytes and names what to remove, a deactivate refuses before it moves
+// a single file, and the reactivate re-add leaves the bytes and names what to add. `// mine`
+// above an otherwise plain object is the smallest file that says so.
+test('a commented opencode.json is refused by the unmerge exactly as a .jsonc is', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const original = '// mine\n{\n  "instructions": ["AGENT.md", "other.md"]\n}\n';
+    fs.writeFileSync(p, original, 'utf8');
+    const [changed, said] = captured(() => unmergeOpencodeJson(p, 'AGENT.md'));
+    assert.equal(changed, false, 'a refused file was reported as changed');
+    assert.equal(lf(said), '[uninstall] opencode.json has comments — not rewriting it. '
+      + 'Remove this from its "instructions" by hand: "AGENT.md"\n');
+    assert.equal(fs.readFileSync(p, 'utf8'), original, 'the comments were rewritten away');
+  });
+});
+
+test('a commented opencode.json stops a deactivate before any move, and a reactivate re-add', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const p = path.join(cfg, 'opencode.json');
+    const plain = fs.readFileSync(p, 'utf8');
+    const commented = `// mine\n${plain}`;
+    fs.writeFileSync(p, commented, 'utf8');
+    const off = installDeactivate(cfg, 'opencode', 'global');
+    assert.equal(off.ok, false, JSON.stringify(off));
+    assert.equal(off.error, 'opencode.json has comments — refusing to rewrite it. '
+      + 'Disable by hand or remove the comments first.');
+    assert.ok(fs.existsSync(path.join(cfg, 'AGENT.md')), 'a refused deactivate moved files');
+    assert.equal(fs.readFileSync(p, 'utf8'), commented);
+
+    // The re-add: deactivate for real on the plain file, then the user adds a comment while
+    // the install is off. Reactivate restores the files and must only SAY what to add.
+    fs.writeFileSync(p, plain, 'utf8');
+    assert.ok(installDeactivate(cfg, 'opencode', 'global').ok);
+    const disabled = `// mine\n${fs.readFileSync(p, 'utf8')}`;
+    fs.writeFileSync(p, disabled, 'utf8');
+    const [on, said] = captured(() => installReactivate(cfg, 'opencode', 'global'));
+    assert.ok(on.ok, JSON.stringify(on));
+    const entry = path.join(cfg, 'AGENT.md').split(path.sep).join('/');
+    assert.equal(lf(said), '[activate] opencode.json has comments — not rewriting it. Add this '
+      + `to its "instructions" by hand: ${JSON.stringify(entry)}\n`);
+    assert.equal(fs.readFileSync(p, 'utf8'), disabled, 'the re-add rewrote a commented file');
+  });
+});
+
 test('the unmerge edits a comment-free JSONC file', () => {
   // The other half, and the reason the test above is not just "never touch .jsonc": the
   // refusal is about COMMENTS, not about the extension.
@@ -781,7 +833,7 @@ test('the unmerge edits a comment-free JSONC file', () => {
   });
 });
 
-// Task 4 / O-1: `permission.skill` denies are reversible, unlike the Law IV bash gates — a
+// Task 4 / O-1: `permission.skill` denies are reversible — a
 // true uninstall takes back the ones it owns. `denyNames` is `unmergeOpencodeJson`'s 3rd,
 // optional argument; ownership is by NAME (the manifest's `skill_denies` record), the
 // value check on top guards a user's own unrelated policy for a colliding name.
@@ -831,6 +883,86 @@ test('a commented opencode.jsonc is refused, and the message names the recorded 
     assert.ok(said.includes('"instructions"') && said.includes('"herdr"'), said);
     assert.ok(!said.includes('"quiz"'), `a non-deny value is not ours to remove: ${said}`);
     assert.equal(fs.readFileSync(jc, 'utf8'), original);
+  });
+});
+
+// THE BASH GATES GO BY THE SAME RULE AS A PACK-OFF REBUILD: RECORDED, AND STILL AS WRITTEN.
+// `gates` is `unmergeOpencodeJson`'s 5th argument, the manifest's `bash_gates` — the keys an
+// emit added because they were absent. Three rows, one per way a key can stand:
+//   recorded, value unchanged ("git commit*": "ask", Geneseed's own verdict)  → removed
+//   recorded, value the user changed ("git push*": "allow")                    → kept
+//   not recorded ("npm publish*", and a "git push --force*" the record omits)  → kept
+// The third row is two keys on purpose: a key Geneseed never writes, and one it does write but
+// did not write HERE (the user's own, or an install older than the record) — the value alone
+// is never the ownership record.
+test('the unmerge takes back a recorded bash gate still as written, and nothing else', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    fs.writeFileSync(p, JSON.stringify({
+      instructions: ['AGENT.md'],
+      permission: { bash: {
+        'git commit*': 'ask', 'git push*': 'allow', 'git push --force*': 'deny', 'npm publish*': 'ask',
+      } },
+    }));
+    const changed = unmergeOpencodeJson(p, 'AGENT.md', [], null, ['git commit*', 'git push*']);
+    assert.equal(changed, true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')).permission.bash,
+      { 'git push*': 'allow', 'git push --force*': 'deny', 'npm publish*': 'ask' });
+  });
+});
+
+test('the unmerge drops an emptied permission.bash, and a deactivate sweeps no gate', () => {
+  // An emptied `bash` object goes, as an emptied `skill` does; `permission` stays, as those
+  // sweeps leave it. No 5th argument is `installDeactivate`'s call: a paused install keeps
+  // every gate, the fail-closed direction.
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const seed = { instructions: ['AGENT.md', 'other.md'], permission: { bash: { 'git commit*': 'ask' } } };
+    fs.writeFileSync(p, JSON.stringify(seed));
+    assert.equal(unmergeOpencodeJson(p, 'AGENT.md'), true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')).permission, seed.permission);
+    assert.equal(unmergeOpencodeJson(p, 'AGENT.md', [], null, ['git commit*']), true,
+      'the gate sweep hangs off the instructions entry, which a deactivate already removed');
+    assert.deepEqual(JSON.parse(fs.readFileSync(p, 'utf8')),
+      { instructions: ['other.md'], permission: {} });
+  });
+});
+
+test('a commented file names the recorded gates still as written, and only those', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const original = '// mine\n{\n  "instructions": [],\n'
+      + '  "permission": { "bash": { "git commit*": "ask", "git push*": "allow" } }\n}\n';
+    fs.writeFileSync(p, original, 'utf8');
+    const [changed, said] = captured(
+      () => unmergeOpencodeJson(p, 'AGENT.md', [], null, ['git commit*', 'git push*']));
+    assert.equal(changed, false);
+    assert.equal(lf(said), '[uninstall] opencode.json has comments — not rewriting it. '
+      + 'Remove these from its "permission.bash" by hand: "git commit*"\n');
+    assert.equal(fs.readFileSync(p, 'utf8'), original);
+  });
+});
+
+test('a real global uninstall removes every bash gate its manifest recorded', () => {
+  // End to end, so the record and the sweep are the emit's own: a fresh install writes the
+  // whole block and records every key of it, the user re-scopes one and adds one, and what is
+  // left after the uninstall is exactly those two.
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const target = path.join(cfg, 'opencode.json');
+    const before = JSON.parse(fs.readFileSync(target, 'utf8'));
+    const man = JSON.parse(fs.readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    assert.deepEqual([...man.bash_gates].sort(), Object.keys(before.permission.bash).sort(),
+      'a fresh install must record every gate it wrote');
+    assert.equal(before.permission.bash['git commit*'], 'ask');
+    before.permission.bash['git commit*'] = 'allow';
+    before.permission.bash['npm publish*'] = 'ask';
+    fs.writeFileSync(target, JSON.stringify(before));
+
+    uninstallGlobal(cfg, false);
+
+    assert.deepEqual(JSON.parse(fs.readFileSync(target, 'utf8')).permission.bash,
+      { 'git commit*': 'allow', 'npm publish*': 'ask' });
   });
 });
 

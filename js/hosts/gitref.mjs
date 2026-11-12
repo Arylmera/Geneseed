@@ -13,10 +13,12 @@
  * import. A module that is fs/path only is importable from anywhere.
  *
  * The OpenCode guard plugin (`adapters/opencode/plugins/geneseed-guard.js`) is copied whole
- * into an install and cannot import this, so it carries twins of `gitRootOf`, `gitDirOf`,
+ * into an install and cannot import this, so it carries copies of `gitRootOf`, `gitDirOf`,
  * `gitCommonDirOf`, `currentBranch`, `protectedBranches` and `stashExists` for its Law IV and
- * protected-checks gates. `tests/plugins/guard.test.mjs` compares each with the original here;
- * change one, change both.
+ * protected-checks gates, and the activity plugin of `gitRootOf`, `gitDirOf` and
+ * `mainWorktreeOf`. After changing one here, `node tests/twins.mjs --write` — so those
+ * functions may use nothing the plugins do not import (`existsSync`, `statSync`,
+ * `readFileSync`, `readdirSync`, `path`).
  */
 import { existsSync, statSync, lstatSync, readFileSync, readdirSync, openSync, readSync, closeSync } from 'node:fs';
 import path from 'node:path';

@@ -7,7 +7,8 @@
 // - OpenCode's `skill` tool names the skill `name`, `task` the subagent `subagent_type`;
 //   OpenCode 2 hands its hook `subagent` (the pre-alias name, @opencode/cli 2.0.32
 //   packages/core/src/tool/plugin/subagent.ts) with the type under `agent`;
-// - Bob is best-effort: any non-MCP tool whose name contains "skill" (its tool name is unverified);
+// - Bob's skill tool is best-effort: any non-MCP tool whose name contains "skill" (its tool name
+//   is unverified); its two spawn tools have their own table below;
 // - a leading `/` is dropped (a slash-command spelling), and a name that is not a plain
 //   identifier — a path, a sentence, an empty string — is not counted at all;
 // - an MCP tool that merely has "skill" in its name is not a skill call;
@@ -44,8 +45,23 @@ const TABLE = [
 
 const lines = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
+// BOB'S TWO SPAWN TOOLS, read by the hook alone: OpenCode has neither, so the plugin's copy of the
+// rules does not carry them and these rows stay out of the shared table.
+// - `spawn_subagent` names the agent in `name`;
+// - `start_subtask` has no agent name, only a `mode` and a `title`. The mode is counted. The
+//   title never is, even with no mode: it is free text the agent wrote, and the ledger records
+//   no prompt.
+const BOB_TABLE = [
+  [{ tool: 'spawn_subagent', input: { name: 'explorer', prompt: 'find the caller' } }, { kind: 'agent', name: 'explorer' }],
+  [{ tool: 'start_subtask', input: { mode: 'code', title: 'Fix the login bug' } }, { kind: 'agent', name: 'code' }],
+  [{ tool: 'start_subtask', input: { title: 'review' } }, null],
+  [{ tool: 'spawn_subagent', input: { mode: 'code' } }, null],
+];
+
 test('the hook reads each host\'s skill and subagent payloads, and nothing else', () => {
-  for (const [payload, want] of TABLE) assert.deepEqual(usageOf(payload), want, JSON.stringify(payload));
+  for (const [payload, want] of [...TABLE, ...BOB_TABLE]) {
+    assert.deepEqual(usageOf(payload), want, JSON.stringify(payload));
+  }
 });
 
 test('the OpenCode plugin counts the same table into its own install', async () => {

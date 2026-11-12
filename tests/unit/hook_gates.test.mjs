@@ -960,7 +960,7 @@ test('the Claude dialect is unchanged when --host is absent, and tool-gate speak
 });
 
 // ---------------------------------------------------------------------------------------------
-// Bob's REAL payload shape (bob-verdict.md I1): `{event, session_id, tool, input:{...}}` — no
+// Bob's LEGACY payload shape (Bob 2.2.3 sends Claude's keys): `{event, session_id, tool, input:{...}}` — no
 // `tool_input`, `tool_name` or `hook_event_name`. `tool-gate` is the only verb Bob's settings.json
 // ever invokes (settings.mjs:519), so normalising must happen there. Before the fix, `toolGate`
 // reads `payload.tool_input` (absent -> `{}`), always falls through to `ruleDecide`, which reads
@@ -1615,6 +1615,45 @@ test('bob: a read of gate config passes, and so does a write to opencode.json', 
       assert.equal(r.rc, 0, `${p}: ${r.err}`);
     }
   } finally { sb.cleanup(); }
+});
+
+// On Bob a write is told by what the call carries, not only by its name: Bob's tool names are
+// undocumented, and a tool outside the write-name list (`create_file`, `append_to_file`,
+// `apply_patch`, `save_file`) that carries `content` writes the file all the same. So each one
+// is refused (exit 2) on the rule store and on gate configuration, with the wording a
+// `write_file` gets, while `read_file`, which carries no text, still passes on both.
+test('bob: a tool that carries text is a write, whatever its name', () => {
+  const sb = makeSandbox();
+  try {
+    const f = gateConfigFixture(sb);
+    const store = path.join(f.root, 'user-rules.md');
+    const config = path.join(f.root, 'excludes.json');
+    for (const [tool, p, rc, said] of [
+      ['create_file', store, 2, /your standing rules[\s\S]*\(Persist Insight\)/],
+      ['append_to_file', store, 2, /your standing rules[\s\S]*\(Persist Insight\)/],
+      ['apply_patch', store, 2, /your standing rules[\s\S]*\(Persist Insight\)/],
+      ['save_file', store, 2, /your standing rules[\s\S]*\(Persist Insight\)/],
+      ['create_file', config, 2, /controls the gates that watch the agent[\s\S]*\(External Gate\)/],
+      ['append_to_file', config, 2, /controls the gates that watch the agent[\s\S]*\(External Gate\)/],
+      ['apply_patch', config, 2, /controls the gates that watch the agent[\s\S]*\(External Gate\)/],
+      ['save_file', config, 2, /controls the gates that watch the agent[\s\S]*\(External Gate\)/],
+      ['read_file', store, 0, /^$/],
+      ['read_file', config, 0, /^$/],
+    ]) {
+      const r = bobGate(f, tool, rc ? { path: p, content: 'x' } : { path: p });
+      assert.equal(r.rc, rc, `${tool} ${p}: expected exit ${rc}, got ${r.rc}, stderr=${r.err}`);
+      assert.match(r.err, said, `${tool} ${p}`);
+      assert.equal(r.out, '', `${tool} ${p}: Bob ignores stdout`);
+    }
+  } finally { sb.cleanup(); }
+});
+
+// The folders whose settings are gate configuration are every host's project dir, in the host
+// table's order: OpenCode, Claude, Bob, OpenClaude. The list is derived from that table, so it is
+// written out here: a host added without its marker landing in this list fails this row.
+test('the gate-config markers are the four host project dirs', async () => {
+  const { GATE_CONFIG_MARKERS } = await import('../../js/hosts/hooks.mjs');
+  assert.deepEqual(GATE_CONFIG_MARKERS, ['.opencode', '.claude', '.bob', '.openclaude']);
 });
 
 // The shim dir the gate inlines is the one `shimHome` resolves, so the copy cannot drift.

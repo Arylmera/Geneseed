@@ -15,7 +15,10 @@
  *              `disable-model-invocation` on Claude Code and OpenClaude; on OpenCode, which
  *              ignores that key, the `permission.skill` deny in `opencode.json`; on Bob no
  *              SKILL.md exists for one, so there is nothing to skip.
- * - `agents`   the same for native agents; Bob has none, its agents table is in the carrier.
+ * - `agents`   the same for native agents. Bob counts 0: it has native `agents/<name>.md`
+ *              files, but whether Bob lists them to the model is unverified, so its agents
+ *              table stays in the carrier (`catalog.agents`, js/hosts/hosts.mjs) and is
+ *              counted there.
  * - `context`  the session files the context hook injects (untouched seeds already skipped).
  *              The per-repo project context is NOT counted: it changes with the working dir.
  */
@@ -37,6 +40,31 @@ import { isFile, readText } from '../lib/fs.mjs';
  * exactly the measured overrun and say why in that test's docblock, which keeps its history.
  */
 export const CARRIER_CEILING = { full: 66_432, lean: 40_312 };
+
+/**
+ * THE CEILING ON THE SKILL LISTING: the most the names and descriptions of the skills the model
+ * lists may weigh on a Claude Code install with every skill on. It is `alwaysOnCost(...).skills`
+ * for a `claude` emit: user-only skills and aliases are on disk but out of the listing, so they
+ * count 0. The footprint does not change it: a description is the same text in both.
+ *
+ * WHY A CEILING. The listing is always-on context, and unlike the carrier nothing bounded its
+ * total. Each description has its own cap (`DESCRIPTION_CAP`, js/hosts/native.mjs), which
+ * bounds one skill and says nothing about fifty: the catalogue once reached 22k characters
+ * before anyone measured it (that docblock has the history). And the host has a listing budget
+ * of its own, past which it trims descriptions without a word, so growth here ends as routing
+ * text the model never sees. A new skill, or a longer trigger sentence, now has to fit, or the
+ * number is raised in the open.
+ *
+ * MEASURED 2026-11-12: 8 706 characters over 48 listed skills, the same for
+ * `claude` and `claude-global`, full and lean. The ceiling is that figure plus 2 %, rounded up
+ * (the headroom the lean carrier ceiling was given). `tests/unit/emit_smoke.test.mjs` gates it.
+ * Raise it by the measured overrun and say why here, after trying a shorter description first.
+ *
+ * `alwaysOnCost` returns it as `skillCeiling` for a `claude` install only, the one host it was
+ * measured on and is gated for, and the console draws it under that install's cost breakdown.
+ * Every other host answers `null`: no bar, not a bar against a number nobody measured there.
+ */
+export const SKILL_LISTING_CEILING = 8_881;
 
 /**
  * THE TRADE OF `--shared-tier on`, stated once. `--help` (js/cli-table.json), the console's toggle
@@ -118,7 +146,11 @@ export function alwaysOnCost({ host, root, dir, footprint }) {
   const { skills, agents } = catalogueChars(host, root, dir);
   let context = 0;
   for (const s of sessionLayers(dir, host)) context += s.text.length;
-  return { carrier, skills, agents, context, ceiling: CARRIER_CEILING[footprint] ?? null };
+  return {
+    carrier, skills, agents, context,
+    ceiling: CARRIER_CEILING[footprint] ?? null,
+    skillCeiling: host === 'claude' ? SKILL_LISTING_CEILING : null,
+  };
 }
 
 /** The install's root instruction file, or undefined: the first of the host's carriers on disk. */

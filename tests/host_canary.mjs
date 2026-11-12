@@ -8,10 +8,13 @@
  *   node tests/host_canary.mjs --opencode-v2 2.0.27 --claude-code 2.1.296   # pin a version
  *   node tests/host_canary.mjs --plugins <dir>     # OpenCode: load another plugin dir
  *   node tests/host_canary.mjs --break             # Claude engines: emit, then corrupt one hook
+ *   node tests/host_canary.mjs --no-guard          # OpenCode: install every plugin but the guard
  *   node tests/host_canary.mjs --keep              # keep each throwaway home, to read its logs
  *   node tests/host_canary.mjs --kits spring-boot  # Claude engines: emit with these kits on (spec T3)
  *
- * `--plugins` and `--break` are the mutation proofs: each must turn its hosts red.
+ * `--plugins`, `--break` and `--no-guard` are the mutation proofs: each must turn its hosts red.
+ * `--no-guard` is the proof for the deny step alone: the six other plugins still load, and the
+ * key file the guard would have refused is written (seen on 1.19.5 and 2.2.7, 2026-11-12).
  *
  * WHY THIS EXISTS. OpenCode 2 rewrote the plugin API, refused all seven plugins (the guard
  * included), and carried on without a word to the user (4.0.2, c6a17d9). Nothing in this repo
@@ -27,6 +30,11 @@
  *                   finds nothing to look at also finds nothing wrong: V2 logs `loading plugin` per
  *                   file; V1 names none, so its evidence is the workflow plugin's banner, printed
  *                   from `.server`. ponytail: one banner stands for seven on V1.
+ *                   THEN THE GUARD'S DENY, against a scripted model (below): loading proves the
+ *                   guard was reached, not that the host lets it refuse. On V2 the refusal is a
+ *                   RENAMED tool call, which works only while the host runs `execute.before`
+ *                   ahead of tool resolution and settles an unknown name as a tool error the
+ *                   model reads. Neither is ours to keep, so each run asks the host.
  *   claude-code     `claude-global` is emitted into the sandbox. `claude doctor` reads settings
  *                   offline and lists every `Invalid settings` entry (an unknown hook type, a bad
  *                   matcher) — Claude then IGNORES that entry silently, so this is the only place a
@@ -38,15 +46,20 @@
  *                   0.0.2 placeholder), so there is nothing to install here or in CI. Reported as
  *                   `skip`, never as a pass. Live check on a machine with Bob: `/hooks` in Bob Shell.
  *
- * NO MODEL IS EVER CALLED. The Claude engines run with no credentials in a sandboxed home AND with
- * every provider base URL pointed at a closed local port, so even a machine whose OS keychain
- * holds a login cannot spend it. That is also the ceiling: hooks that need a model turn
- * (PreToolUse, the guard's deny) load but are not exercised.
+ * NO REAL MODEL IS EVER CALLED. The Claude engines run with no credentials in a sandboxed home AND
+ * with every provider base URL pointed at a closed local port, so even a machine whose OS keychain
+ * holds a login cannot spend it. That is also their ceiling: a hook that needs a model turn
+ * (PreToolUse, a gate's verdict) loads but is not exercised on Claude Code or OpenClaude.
+ *
+ * OpenCode is the one exception, and it is a loopback stub: `tests/helpers/fake_model.mjs`, a
+ * child process on 127.0.0.1 speaking OpenAI's chat-completions, is the project's only provider
+ * (`model` and `small_model` both name it, so the title request goes there too). It asks for two
+ * writes and stops; `opencode run` carries them out for real, through the installed guard.
  *
  * Spawns npm and the host binaries, so it lives beside golden.mjs, outside the unit glob: it
  * downloads ~600 MB and needs the network.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -64,9 +77,11 @@ const opt = (name, dflt) => {
 };
 const ONLY = opt('--only', '').split(',').filter(Boolean);
 const BREAK = argv.includes('--break');
+const NO_GUARD = argv.includes('--no-guard');
 const KITS = opt('--kits', '');
 const PLUGINS = path.resolve(opt('--plugins', path.join(ROOT, 'adapters', 'opencode', 'plugins')));
-const IDS = fs.readdirSync(PLUGINS).filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3)).sort();
+const IDS = fs.readdirSync(PLUGINS).filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3))
+  .filter((id) => !(NO_GUARD && id === 'geneseed-guard')).sort();
 if (IDS.length === 0) {
   console.error(`no plugin files in ${PLUGINS}`);
   process.exit(2);
@@ -86,6 +101,11 @@ const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 function run(cmd, args, { cwd, env, timeout = 180_000 } = {}) {
   // npm is a .cmd shim on Windows, which spawn cannot start without a shell. stdin is closed:
   // OpenClaude otherwise waits 3 s for piped input before it starts.
+  // PWD follows `cwd`, as it would from a shell: OpenCode 2.2.7 takes its project directory from
+  // $PWD, not from the process's working directory, and spawn's `cwd` leaves the parent's $PWD in
+  // place — so `opencode run` read THIS checkout's config, found no stub provider and picked a
+  // Bedrock model from ambient AWS variables (seen 2026-11-12; the placeholder token was refused).
+  if (cwd && env) env = { ...env, PWD: cwd };
   const r = spawnSync(cmd, args, {
     cwd, env, timeout, encoding: 'utf8', windowsHide: true, shell: WIN && cmd === 'npm', stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -122,7 +142,7 @@ function v2Diagnostics(home, listed, logFile) {
 }
 
 function checkOpencode(major) {
-  return ({ exec, home, project, env }) => {
+  return ({ exec, home, project, env, work }) => {
     const problems = [];
     const pluginDir = path.join(home, '.config', 'opencode', 'plugins');
     fs.mkdirSync(pluginDir, { recursive: true });
@@ -178,8 +198,92 @@ function checkOpencode(major) {
       const id = IDS.find((i) => line.includes(`${i}.js`) || line.includes(`plugin.id=${i} `));
       if (id) problems.push(`${id}: ${(line.match(/(cause|error)=.*$/)?.[0] ?? line).slice(0, 300)}`);
     }
-    return { problems, summary: `${IDS.length} plugin(s) loaded` };
+    // A host that loaded nothing has no guard to ask; its load failure is the finding.
+    if (problems.length > 0) return { problems };
+    problems.push(...guardDeny(major, { exec, project, env, work }));
+    return { problems, summary: `${IDS.length} plugin(s) loaded, the guard refused a key file and let a plain one through` };
   };
+}
+
+/**
+ * THE GUARD'S DENY, ON THE REAL HOST. A scripted model asks `opencode run` for two writes inside
+ * the throwaway project, and the answer is read from the disk and from what the host sent back
+ * to the model.
+ *
+ * The rule, and the three expectations it gives:
+ *   A secret or key file is never the agent's to write (the guard's `SECRET_RE`: a file named
+ *   `id_rsa`, and anything under `.ssh/`), and a refusal is the model's to read; any other file
+ *   in the project is written, since `permission.edit` is `allow` and nothing else stands in
+ *   the way.
+ *     1. `<project>/.ssh/id_rsa` does not exist after the run.
+ *     2. `<project>/allowed.txt` holds exactly `ok` — the turn went on after the refusal, and
+ *        the guard refuses by rule, not everything.
+ *     3. A later request to the model carries a tool result with the refusal: on V1 the thrown
+ *        error, `[geneseed-guard] blocked: …`; on V2 the renamed call quoted in core's unknown-tool
+ *        error, `BLOCKED, not a missing tool: [geneseed-guard] blocked: …`.
+ * Without the guard both files are written and no request carries either text (`--no-guard`).
+ */
+const PROVIDER_CREDENTIAL = /^(?:AWS|ANTHROPIC|OPENAI|AZURE|GOOGLE|GEMINI|VERTEX|OPENROUTER|GROQ|MISTRAL|XAI|DEEPSEEK|GITHUB|GH|OPENCODE)_.*(?:KEY|TOKEN|SECRET|CREDENTIALS|PROFILE)(?:_ID|_FILE)?$/i;
+const REFUSAL = { V1: '[geneseed-guard] blocked: ', V2: 'BLOCKED, not a missing tool: [geneseed-guard] blocked: ' };
+
+function guardDeny(major, { exec, project, env, work }) {
+  const refused = path.join(project, '.ssh', ['id', 'rsa'].join('_'));
+  const allowed = path.join(project, 'allowed.txt');
+  const portFile = path.join(work, 'fake-model.port');
+  const requestsFile = path.join(work, 'fake-model.requests.jsonl');
+  const writes = [{ path: refused, content: 'not a key' }, { path: allowed, content: 'ok' }];
+  // Detached and unwatched: `spawnSync` below blocks this process, so the stub answers from its
+  // own. It is killed in `finally`, and exits by itself after its ttl if this process dies first.
+  const stub = spawn(process.execPath, [path.join(ROOT, 'tests', 'helpers', 'fake_model.mjs'),
+    '--port-file', portFile, '--requests', requestsFile, '--writes', JSON.stringify(writes), '--ttl', '300'],
+  { detached: true, stdio: 'ignore', windowsHide: true });
+  stub.unref();
+  let r;
+  try {
+    for (let tick = 0; tick < 100 && !fs.existsSync(portFile); tick++) sleep(100);
+    if (!fs.existsSync(portFile)) return ['guard deny: the fake model never listened (no port file after 10 s)'];
+    const port = fs.readFileSync(portFile, 'utf8').trim();
+    // One config shape for both majors (accepted by 1.19.5 and 2.2.7). `@ai-sdk/openai-compatible`
+    // ships inside both binaries, so nothing is downloaded for it. `apiKey` is a placeholder the
+    // SDK wants to see; the stub reads no header.
+    fs.writeFileSync(path.join(project, 'opencode.json'), JSON.stringify({
+      model: 'canary/fake', small_model: 'canary/fake',
+      provider: { canary: { npm: '@ai-sdk/openai-compatible', name: 'canary',
+        options: { baseURL: `http://127.0.0.1:${port}/v1`, apiKey: 'none' }, models: { fake: { name: 'fake' } } } },
+      enabled_providers: ['canary'],
+      permission: { edit: 'allow' },
+    }, null, 2));
+    // No ambient login may stand in for the stub. The config above is the first lock (the only
+    // enabled provider), `--model` the second (a host that did not read it fails on an unknown
+    // model instead of choosing its own), and this the third: no provider credential in the env.
+    const runEnv = Object.fromEntries(Object.entries(env).filter(([k]) => !PROVIDER_CREDENTIAL.test(k)));
+    // V2: a private server, not the background service the load check just stopped — it reads
+    // this project's config fresh and ends with the command.
+    r = exec(['run', ...(major === 'V2' ? ['--standalone'] : []), '--model', 'canary/fake', 'write the two files'],
+      { cwd: project, env: runEnv, timeout: 120_000 });
+  } finally {
+    try { process.kill(stub.pid); } catch { /* already gone */ }
+  }
+
+  const requests = (fs.existsSync(requestsFile) ? fs.readFileSync(requestsFile, 'utf8') : '')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  // Every request repeats the history before it, so one result arrives several times: once each.
+  const toolResults = [...new Set(requests.flatMap((b) => (b.messages ?? []).filter((m) => m.role === 'tool'))
+    .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))))];
+  const problems = [];
+  if (fs.existsSync(refused)) problems.push(`guard deny: ${refused} was WRITTEN — the host ran a write the guard must refuse`);
+  const got = fs.existsSync(allowed) ? fs.readFileSync(allowed, 'utf8') : null;
+  if (got !== 'ok') problems.push(`guard deny: allowed.txt is ${got === null ? 'missing' : JSON.stringify(got)}, expected "ok"`);
+  if (!toolResults.some((t) => t.includes(REFUSAL[major]))) {
+    problems.push(`guard deny: no tool result sent to the model contains ${JSON.stringify(REFUSAL[major])}`);
+  }
+  if (problems.length > 0) {
+    const out = r.out.replace(/\x1b\[[0-9;]*m/g, '').trim().slice(-1500);
+    problems.push(`guard deny diagnostics: \`opencode run\` exited ${r.status}${r.error ? ` (${r.error.message})` : ''}; `
+      + `${requests.length} request(s) reached the fake model, ${toolResults.length} distinct tool result(s):\n`
+      + `${toolResults.map((t) => `    tool result: ${t.slice(0, 200)}`).join('\n')}\n--- run output\n${out}`);
+  }
+  return problems;
 }
 
 // ---- Claude engines (Claude Code, OpenClaude) ------------------------------------------------

@@ -267,7 +267,9 @@ test('the hook commands carry --no-secrets-gate / --no-done-gate only when off',
       const writeGate = (c) => (host === 'bob' ? / tool-gate /.test(c.command) : / rule-gate /.test(c.command));
       assert.ok(cmds(host).every((c) => !c.command.includes('--no-ownership-gate')), `${host}: armed grew the flag`);
       const off = cmds(host, { ownershipGate: false });
-      assert.ok(off.filter(writeGate).length && off.filter(writeGate).every((c) => / --no-ownership-gate$/.test(c.command)),
+      // Last of the flags: only OpenClaude's launch-failure tail (`|| printf …`) may follow it.
+      const last = host === 'openclaude' ? / --no-ownership-gate \|\| printf '%s' '[^']*'$/ : / --no-ownership-gate$/;
+      assert.ok(off.filter(writeGate).length && off.filter(writeGate).every((c) => last.test(c.command)),
         `${host}: ${off.filter(writeGate).map((c) => c.command).join(' | ')}`);
       assert.ok(off.filter((c) => !writeGate(c)).every((c) => !c.command.includes('--no-ownership-gate')),
         `${host}: the ownership flag leaked past the write gate`);

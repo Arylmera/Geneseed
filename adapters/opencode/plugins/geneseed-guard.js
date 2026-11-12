@@ -52,15 +52,20 @@
 // upgrade path there is still a session-level `permission` ruleset set by the loop launcher
 // when it creates the loop session (`session.create` accepts one).
 
-import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs"
+import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
-import { homedir, tmpdir } from "node:os"
+import { homedir, tmpdir, userInfo } from "node:os"
 import { createHash } from "node:crypto"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
+// The helpers this plugin shares with its siblings (`norm`, `resolvePath`, `sovereignBypass`,
+// `mainWorktreeOf`, `stripJsonc`, `isFile`, `isDir`, `patchSections`, `machineDir`, `readsTier`,
+// `storeScan`) have their HOME in this file: edit one here, then `node tests/twins.mjs --write`
+// copies it into the others (the list of who carries what is that file's `PLUGIN_HELPERS`).
+//
 // Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
@@ -293,59 +298,71 @@ const SHELL_BLOCK_RE = [
 // on state is decided here. `tool.execute.before` has no ask tier, so a real loss is BLOCKED —
 // the Bob behaviour — and `GENESEED_GUARD=warn` downgrades it to a log line.
 //
-// The fs-only readers below are the twins of js/hosts/gitref.mjs (gitRootOf, gitDirOf,
-// gitCommonDirOf, currentBranch, protectedBranches, stashExists) — tests/plugins/guard.test.mjs
-// compares each with its gitref.mjs original, quotes, semicolons and layout aside; the block
-// between the twin markers is js/hosts/loss.mjs verbatim, and the same file diffs it.
+// The fs-only readers below are js/hosts/gitref.mjs's (gitRootOf, gitDirOf, gitCommonDirOf,
+// currentBranch, protectedBranches, stashExists) and the block between the twin markers is
+// js/hosts/loss.mjs, all verbatim: `node tests/twins.mjs --write` copies them, so edit the
+// original. Their house style (semicolons, single quotes) is the original's.
 function gitRootOf(cwd) {
   try {
-    let dir = path.resolve(cwd)
+    let dir = path.resolve(cwd);
     for (;;) {
-      if (existsSync(path.join(dir, ".git"))) return dir
-      const up = path.dirname(dir)
-      if (up === dir) return null
-      dir = up
+      if (existsSync(path.join(dir, '.git'))) return dir;
+      const up = path.dirname(dir);
+      if (up === dir) return null;
+      dir = up;
     }
-  } catch { return null }
+  } catch {
+    return null;
+  }
 }
 function gitDirOf(root) {
-  const dotgit = path.join(root, ".git")
+  const dotgit = path.join(root, '.git');
   if (statSync(dotgit).isFile()) {
-    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
-    if (!m) throw new Error(`${dotgit} does not name a gitdir`)
-    return path.resolve(root, m[1])
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
+    if (!m) throw new Error(`${dotgit} does not name a gitdir`);
+    return path.resolve(root, m[1]);
   }
-  return dotgit
+  return dotgit;
 }
 function gitCommonDirOf(root) {
-  const gitdir = gitDirOf(root)
-  try { return path.resolve(gitdir, readFileSync(path.join(gitdir, "commondir"), "utf8").trim()) } catch { return gitdir }
+  const gitdir = gitDirOf(root);
+  try {
+    return path.resolve(gitdir, readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+  } catch {
+    return gitdir;
+  }
 }
 function currentBranch(cwd) {
   try {
-    const root = gitRootOf(cwd)
-    if (!root) return null
-    const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitDirOf(root), "HEAD"), "utf8"))
-    return ref ? ref[1] : null
-  } catch { return null }
+    const root = gitRootOf(cwd);
+    if (!root) return null;
+    const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitDirOf(root), 'HEAD'), 'utf8'));
+    return ref ? ref[1] : null;
+  } catch {
+    return null;
+  }
 }
 function protectedBranches(root) {
-  const names = new Set(["main", "master"])
-  const remotes = path.join(gitCommonDirOf(root), "refs", "remotes")
-  let dirs = []
-  try { dirs = readdirSync(remotes) } catch { /* no remotes */ }
+  const names = new Set(['main', 'master']);
+  const remotes = path.join(gitCommonDirOf(root), 'refs', 'remotes');
+  let dirs = [];
+  try { dirs = readdirSync(remotes); } catch { /* no remotes */ }
   for (const r of dirs) {
     try {
-      const m = /^ref:\s*refs\/remotes\/[^/]+\/(.+?)\s*$/m.exec(readFileSync(path.join(remotes, r, "HEAD"), "utf8"))
-      if (m) names.add(m[1])
+      const m = /^ref:\s*refs\/remotes\/[^/]+\/(.+?)\s*$/m.exec(readFileSync(path.join(remotes, r, 'HEAD'), 'utf8'));
+      if (m) names.add(m[1]);
     } catch { /* this remote has no HEAD symref */ }
   }
-  return names
+  return names;
 }
 function stashExists(root) {
-  const common = gitCommonDirOf(root)
-  if (existsSync(path.join(common, "refs", "stash"))) return true
-  try { return /^[0-9a-f]+ refs\/stash$/m.test(readFileSync(path.join(common, "packed-refs"), "utf8")) } catch { return false }
+  const common = gitCommonDirOf(root);
+  if (existsSync(path.join(common, 'refs', 'stash'))) return true;
+  try {
+    return /^[0-9a-f]+ refs\/stash$/m.test(readFileSync(path.join(common, 'packed-refs'), 'utf8'));
+  } catch {
+    return false;
+  }
 }
 
 // ---- loss twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything down to
@@ -1436,13 +1453,19 @@ function plainPaths(args) {
   // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
   return PATH_KEYS.map((k) => args?.[k]).filter((v) => typeof v === "string" && v).map((v) => v.replace(/\\/g, "/"))
 }
-// Returns every candidate path for this call, normalized (backslashes -> `/`): every path key, and
-// every patch marker resolved against `cwd` (the session's `ctx.directory` — the same root
-// `apply_patch.ts:72` resolves against upstream) since a patch marker is worktree-relative.
+// A multi-edit call's entries: `edits[]`, each carrying its new text and, on some tools, a file of
+// its own. UNVERIFIED against a live OpenCode: the shape is its V1 `multiedit` tool's as its
+// source reads (`filePath` beside `edits: [{ filePath, oldString, newString }]`), and no host was
+// run here to see whether that tool still ships under that name on either major.
+const editsOf = (args) => (Array.isArray(args?.edits) ? args.edits.filter((e) => e && typeof e === "object") : [])
+// Returns every candidate path for this call, normalized (backslashes -> `/`): every path key, the
+// path keys of each `edits[]` entry, and every patch marker resolved against `cwd` (the session's
+// `ctx.directory` — the same root `apply_patch.ts:72` resolves against upstream) since a patch
+// marker is worktree-relative.
 function pickPath(args, cwd) {
   const marked = args && typeof args.patchText === "string" ? parsePatchPaths(args.patchText)
     .map((p) => path.resolve(cwd || process.cwd(), p).replace(/\\/g, "/")) : []
-  return [...new Set([...marked, ...plainPaths(args)])]
+  return [...new Set([...marked, ...plainPaths(args), ...editsOf(args).flatMap(plainPaths)])]
 }
 // Per-FILE added content for an `apply_patch` call: `parsePatchPaths` flattens every marker
 // path into one list (right for the path-only gates, which must catch a secret/protected name
@@ -1488,7 +1511,9 @@ function patchSections(patchText) {
 // (OpenCode tool Parameters, packages/opencode/src/tool/{write,edit}.ts) — both single-path, so
 // one pair. For `apply_patch`, one pair per marker section; only the `+`-prefixed hunk lines are
 // NEW content — a `-` line is text being REMOVED, so a secret there is leaving the file, not
-// landing in it, and must not block the call.
+// landing in it, and must not block the call. A multi-edit carries one `newString` (or
+// `new_string`) per `edits[]` entry, each attributed to the entry's own file, else the call's
+// (the twin read: `ruleDecide` in js/hosts/hooks.mjs joins `edits[].new_string` the same way).
 function pickAddedContentByPath(args, cwd) {
   const found = args && typeof args.patchText === "string" ? parsePatchSections(args.patchText)
     .filter((s) => s.added.length)
@@ -1498,9 +1523,39 @@ function pickAddedContentByPath(args, cwd) {
     })) : []
   // Beside a patch too: a decoy `patchText` must not hide the content a call also carries.
   const [p] = plainPaths(args)
-  if (!p) return found
-  for (const text of [args.content, args.newString]) if (typeof text === "string") found.push({ path: p, content: text })
+  if (p) for (const text of [args.content, args.newString]) if (typeof text === "string") found.push({ path: p, content: text })
+  for (const edit of editsOf(args)) {
+    const own = plainPaths(edit)[0] ?? p
+    if (!own) continue
+    for (const text of [edit.newString, edit.new_string]) if (typeof text === "string") found.push({ path: own, content: text })
+  }
   return found
+}
+// The calls a tool carries inside its own arguments: `tool_calls[]` or `calls[]`, each entry
+// `{ tool | name, parameters | args | input }`. A tool outside the write and shell classes was
+// read for rule-store paths only, so a `batch` holding a nested `bash rm -rf /` or a nested write
+// of a key passed every other gate. Each entry now runs the whole gate pipeline as its own call.
+// An entry with no tool name is no call, and its strings still reach the rule-store walk.
+//
+// UNVERIFIED against a live OpenCode, all of it: whether a `batch` tool ships under that name on
+// either major, whether its entries have this shape (V1's source reads `tool_calls: [{ tool,
+// parameters }]`), and whether the host fires `tool.execute.before` again for each nested call. If
+// it does, nothing is refused twice (the outer call is refused first, and then no entry runs),
+// but a gate ERROR is ledgered once for the outer call and once more for the nested one.
+const NESTED_KEYS = ["tool_calls", "calls"]
+// A batch inside a batch is already unusual; past this, what cannot be read is refused.
+const NESTED_DEPTH = 8
+function nestedCalls(args) {
+  const out = []
+  for (const key of NESTED_KEYS) {
+    for (const call of Array.isArray(args?.[key]) ? args[key] : []) {
+      if (!call || typeof call !== "object") continue
+      const tool = [call.tool, call.name].find((v) => typeof v === "string" && v)
+      const inner = [call.parameters, call.args, call.input].find((v) => v && typeof v === "object")
+      if (tool) out.push({ tool: tool.toLowerCase(), args: inner ?? {} })
+    }
+  }
+  return out
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -1577,8 +1632,8 @@ function machineDir() {
   return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
 }
 
-// The wiki manifest's names, newest first: WIKI_NAMES in js/lib/machine-dir.mjs.
-const WIKI_NAMES = ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]
+// The wiki manifest's names, newest first: js/lib/machine-dir.mjs's line (node tests/twins.mjs).
+const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json'];
 
 // The host's own config dir counts as global too, whatever its marker says (the hook's
 // isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
@@ -2290,36 +2345,69 @@ const noProgramWord = (command) => scanSegments(command).some((seg) => seg.inclu
     .some((t) => !/^\w+=/.test(t)))
 
 // ---- the ownership first-write gate --------------------------------------------
-// Twin of js/hosts/ownership-gate.mjs's `ownershipBlock` — keep in step (same manifests, same
-// managed-block strip, same section match, same reason). In an application repo (a git root
+// Twin of js/hosts/ownership-gate.mjs's `ownershipBlock`, by hand: this one reads OpenCode's
+// call, not a hook payload, so the function cannot be a copy. Its constants are (the two twin
+// blocks and the one-line `WRITE_NAME_RE`, `safeStem`, `DECLINED_RE`, kept by
+// `node tests/twins.mjs --write`), so the reason cannot drift again. In an application repo (a git root
 // holding a build manifest) whose root AGENTS.md has no `## Ownership` section outside the
 // Geneseed block, the first write of a session is refused once, so the agent proposes the setup
 // to the developer; the session and root are recorded BEFORE the refusal, so the next write
-// passes. The marker is this module Set: the plugin lives as long as the OpenCode process.
+// passes. The record is the hook's marker file, in the hook's own scheme (`ownershipBlock` in the
+// twin): `<tmpdir>/geneseed-ownership-<user>/<session id>`, one root per line. This module Set was
+// once the only record, so a session resumed after OpenCode restarted was refused again on every
+// restart; it stays as a cache in front of the file.
 const OWNERSHIP_SEEN = new Set()
-const OWNERSHIP_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
-  "composer.json", "Gemfile"])
-const isManifest = (n) => OWNERSHIP_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
+// The twin's `WRITE_NAME_RE`: the tool names the gate reads as a write, wider than WRITE_TOOLS
+// by the verbs that move, copy or remove a file (an MCP server's `move_file`, `delete_file`).
+const WRITE_NAME_RE = /write|edit|diff|replace|insert|move|rename|delete|remove|trash|copy/i;
+// The twin's `safeStem`, `userTag` and `normcase`, so both hosts name one marker the same way: a
+// hostile session id cannot steer the join, and the folder is per user on a shared /tmp.
+const safeStem = (sid) => String(sid).replace(/[^A-Za-z0-9_.-]/gu, '_').slice(0, 128);
+function ownershipUser() {
+  if (typeof process.getuid === "function") return String(process.getuid())
+  try { return safeStem(userInfo().username) } catch { return "user" }
+}
+const ownershipKey = (root) => (process.platform === "win32" ? root.replaceAll("/", "\\").toLowerCase() : root)
+// ---- ownership shape twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js and
+// geneseed-context.js carry everything down to the END marker verbatim (node tests/twins.mjs
+// --write keeps it), and the one-line `WRITE_NAME_RE`, `safeStem` and `DECLINED_RE` below too.
+
+// D5: the build manifests that make a git root an "application". Exact names, plus two families.
+const MANIFESTS = new Set(['package.json', 'pom.xml', 'pyproject.toml', 'go.mod', 'Cargo.toml',
+  'composer.json', 'Gemfile']);
+const isManifest = (n) => MANIFESTS.has(n) || n.startsWith('build.gradle') || n.endsWith('.csproj');
+
+// On a Bob project install the managed block holds the whole carrier, `#### Ownership` included —
+// hence the strip (`withoutBlocks`) and the exact `##` heading match. `\r?`: a CRLF file's `$`
+// sits after the `\r`.
+const SECTION_RE = /^## Ownership[ \t]*\r?$/m;
+
+// ---- ownership shape twin: END
 const MANAGED_BLOCK_RE = /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/gm
-const OWNERSHIP_SECTION_RE = /^## Ownership[ \t]*\r?$/m
-const OWNERSHIP_TAIL = "Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per " +
-  "install: rebuild with `--no-ownership-gate`. Offer the full documentation " +
-  "(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only " +
-  "after they answer. This gate fires once per session and repo."
-const OWNERSHIP_SKIP = "skip this session; or skip in this repo until they ask — only on that third answer, " +
-  "write the line `Setup: declined <YYYY-MM-DD>` (today) into `.geneseed/ownership.md` at the " +
-  "MAIN worktree's root (in a linked git worktree, the main checkout's, so it outlives this " +
-  "worktree), which is personal and never committed (if `.geneseed/.gitignore` is absent there, " +
-  "create it first, as the ownership skill's checkpoint rules say)"
-const OWNERSHIP_REASON_NONE = "Geneseed (Ownership) — this application has no `AGENTS.md` with " +
-  "`## Ownership`. Before writing, propose three answers to the developer: set it up now " +
-  `(ownership skill); ${OWNERSHIP_SKIP}. ${OWNERSHIP_TAIL}`
-const OWNERSHIP_REASON_NO_SECTION = "Geneseed (Ownership) — this application's `AGENTS.md` has no " +
-  "`## Ownership` section. Before writing, ask the developer: add the Ownership section now " +
-  `(ownership skill); ${OWNERSHIP_SKIP}? ${OWNERSHIP_TAIL}`
+// ---- ownership text twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything
+// down to the END marker verbatim (node tests/twins.mjs --write keeps it).
+
+const TAIL = 'Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per '
+  + 'install: rebuild with `--no-ownership-gate`. Offer the full documentation '
+  + '(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only '
+  + 'after they answer. This gate fires once per session and repo.';
+// D5: three answers. Only the third writes anything — the durable, personal decline below.
+const SKIP = 'skip this session; or skip in this repo until they ask — only on that third answer, '
+  + 'write the line `Setup: declined <YYYY-MM-DD>` (today) into `.geneseed/ownership.md` at the '
+  + 'MAIN worktree\'s root (in a linked git worktree, the main checkout\'s, so it outlives this '
+  + 'worktree), which is personal and never committed (if `.geneseed/.gitignore` is absent there, '
+  + 'create it first, as the ownership skill\'s checkpoint rules say)';
+const REASON_NONE = 'Geneseed (Ownership) — this application has no `AGENTS.md` with '
+  + '`## Ownership`. Before writing, propose three answers to the developer: set it up now '
+  + `(ownership skill); ${SKIP}. ${TAIL}`;
+const REASON_NO_SECTION = 'Geneseed (Ownership) — this application\'s `AGENTS.md` has no '
+  + '`## Ownership` section. Before writing, ask the developer: add the Ownership section now '
+  + `(ownership skill); ${SKIP}? ${TAIL}`;
+
+// ---- ownership text twin: END
 // The developer's durable, personal decline (`DECLINED_RE` in the hook twin; geneseed-context.js
 // carries it too): with no section, this line in `.geneseed/ownership.md` defers the gate.
-const OWNERSHIP_DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m
+const DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m;
 // The reason to refuse this write, or null. `p` is absolute. Never throws.
 function ownershipBlock(p, sessionID) {
   try {
@@ -2337,7 +2425,7 @@ function ownershipBlock(p, sessionID) {
     let text = null
     try { text = readFileSync(path.join(root, "AGENTS.md"), "utf8") } catch { /* none: gate */ }
     const own = text === null ? "" : text.replace(MANAGED_BLOCK_RE, "")
-    if (OWNERSHIP_SECTION_RE.test(own)) return null
+    if (SECTION_RE.test(own)) return null
     let personal = ""
     // In the MAIN worktree (the hook twin's `mainWorktreeOf(root) ?? root`): the shared `.git`'s
     // parent, else this root (a main worktree, a submodule, a bare common dir, a bad link).
@@ -2346,11 +2434,21 @@ function ownershipBlock(p, sessionID) {
     let home = root
     try { const c = gitCommonDirOf(root); if (path.basename(c) === ".git") home = path.dirname(c) } catch { /* this root */ }
     try { personal = readFileSync(path.join(home, ".geneseed", "ownership.md"), "utf8") } catch { /* none: gate */ }
-    if (OWNERSHIP_DECLINED_RE.test(personal.replace(/^\uFEFF/, ""))) return null
-    const key = `${sessionID}|${nocase(root)}`
-    if (OWNERSHIP_SEEN.has(key)) return null
-    OWNERSHIP_SEEN.add(key)
-    return own.trim() ? OWNERSHIP_REASON_NO_SECTION : OWNERSHIP_REASON_NONE
+    if (DECLINED_RE.test(personal.replace(/^\uFEFF/, ""))) return null
+    const key = ownershipKey(root)
+    const memo = `${sessionID}|${key}`
+    if (OWNERSHIP_SEEN.has(memo)) return null
+    const dir = path.join(tmpdir(), `geneseed-ownership-${ownershipUser()}`)
+    const marker = path.join(dir, safeStem(sessionID))
+    let seen = ""
+    try { seen = readFileSync(marker, "utf8") } catch { /* first gated write of the session */ }
+    if (seen.split("\n").includes(key)) { OWNERSHIP_SEEN.add(memo); return null }
+    // Recorded BEFORE refusing, as in the twin: a marker that cannot be written throws to the
+    // catch below and defers, or every write of the session would be refused.
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(marker, `${key}\n`)
+    OWNERSHIP_SEEN.add(memo)
+    return own.trim() ? REASON_NO_SECTION : REASON_NONE
   } catch { return null }
 }
 
@@ -2390,8 +2488,9 @@ function argPaths(v, key = "", out = [], depth = 0) {
 // from the repo (V2 loads every .js in plugins/ as a plugin). One line per skill or subagent
 // call, the day and the name only, under <cfg>/notebook/usage.jsonl. Silent and never throws:
 // a counter must not change, slow or fail a tool call. tests/unit/usage.test.mjs holds this
-// copy and the hook's to one table.
-const USAGE_NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/
+// copy and the hook's to one table. `usageOf` is by hand (no Bob shapes here); `NAME_RE` is the
+// hook's line, kept by `node tests/twins.mjs --write`.
+const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/;
 function usageOf(tool, args) {
   const t = String(tool || "").toLowerCase()
   const a = args || {}
@@ -2401,7 +2500,7 @@ function usageOf(tool, args) {
   else if (t === "agent" || t === "task" || t === "subagent") { kind = "agent"; name = a.subagent_type ?? a.agent }
   if (!kind || typeof name !== "string") return null
   name = name.trim().replace(/^\/+/, "")
-  return USAGE_NAME_RE.test(name) ? { kind, name } : null
+  return NAME_RE.test(name) ? { kind, name } : null
 }
 async function recordUse(tool, args) {
   try {
@@ -2416,19 +2515,45 @@ async function recordUse(tool, args) {
   } catch { /* a counter never fails a tool call */ }
 }
 
+// ---- a gate that fails -----------------------------------------------------------
+// An error's text, from anything a gate can throw: reading it must not throw in turn.
+const errorText = (err) => { try { return String(err?.message ?? err) } catch { return "an error that cannot be read" } }
+// Our own refusal, the one error that must leave the hook.
+const isDeny = (err) => errorText(err).startsWith("[geneseed-guard]")
+// How many unanswered marks `setupV2`'s `gateErrors` keeps before the oldest goes.
+const GATE_ERRORS_HELD = 256
+// Where the host cannot ask (V1, and a V2 with no permission domain) a gate error lets the call
+// run (ADR 0007), so the user is told: once per gate for the life of the process, because a
+// fault in a gate repeats on every call and a notice per call would bury the session. `tell` is
+// the instance's `say`: a V1 toast (nothing without a TUI client, and the log line stands
+// alone), a V2 synthetic message.
+const GATE_ERRORS_TOLD = new Set()
+async function tellGateError(tell, sid, name, what) {
+  if (GATE_ERRORS_TOLD.has(name)) return
+  GATE_ERRORS_TOLD.add(name)
+  try {
+    await tell(sid, `Geneseed gate error: the ${name} check failed with "${what}", so it did not judge a tool call, and the call ran. `
+      + "The other checks still ran. Run geneseed doctor to find the fault.", "Geneseed gate error")
+  } catch (err) { log(`gate error not shown: ${errorText(err)}`) }
+}
+
 export const GeneseedGuard = async (ctx) => {
   if (ctx?.client) LOG_CLIENT = ctx.client
   // The session's working directory, the same resolution the context plugin uses.
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
-  // Whether a session has a parent (a subagent's child session). V2 hands in `sessionMeta`
-  // (`ctx.session.get`); V1 asks its client. Read only on the rare would-block path; a failed
-  // lookup reads as a top-level session.
-  const isChildSession = async (sid) => {
+  // Whether a session has no user to ask: a subagent's child session (it has a parent), or a
+  // headless one Geneseed started itself. A workflow's agents run in sessions titled
+  // `geneseed-wf:…` with NO parent (adapters/opencode/workflows/_runtime.js), so the parent test
+  // alone had the ownership gate refuse each one's first write with "ask the developer". The rule
+  // is `isSkippedSession`'s in geneseed-context.js. V2 hands in `sessionMeta` (`ctx.session.get`);
+  // V1 asks its client. Read only on the rare would-block path; a failed lookup reads as a
+  // session with a user.
+  const cannotAsk = async (sid) => {
     try {
       const info = ctx?.sessionMeta ? await ctx.sessionMeta(sid)
         : await ctx?.client?.session?.get?.({ path: { id: sid } })
       const meta = info?.data ?? info
-      return Boolean(meta?.parentID ?? meta?.parentId)
+      return Boolean(meta?.parentID ?? meta?.parentId) || String(meta?.title ?? "").startsWith("geneseed-")
     } catch { return false }
   }
   // Whether the host itself will ask the user about this write once this hook lets it run. V2
@@ -2464,7 +2589,7 @@ export const GeneseedGuard = async (ctx) => {
   const unwatched = new Set()
   const watch = async (sid) => {
     if (OFF || !sid || watched.has(sid) || unwatched.has(sid)) return
-    if (await sovereignBypass(root()) || await isChildSession(sid)) { unwatched.add(sid); return }
+    if (await sovereignBypass(root()) || await cannotAsk(sid)) { unwatched.add(sid); return }
     watched.set(sid, scanAllStores(root()))
   }
   const compare = async (sid) => {
@@ -2525,144 +2650,205 @@ export const GeneseedGuard = async (ctx) => {
       if (OFF) return
       // A session that predates this plugin never sent `session.created`. Once per session.
       try { await watch(input?.sessionID) } catch { /* the report never decides a tool call */ }
-      const tool = (input?.tool || input?.name || "").toLowerCase()
+      const tool = String(input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
       // `law-4`, `process-1`) plus `wiki`, so status counts one vocabulary across hosts.
       // The model reads this text. It never names the GENESEED_GUARD switch: a weak model read
       // "set GENESEED_GUARD=off to allow" as leave to route the write through a shell (4.27.1).
-      // A refusal's words, through `gateSafe` (the ownership reason is the agent's, so it keeps its own): the catch below lets a call through on any error
-      // but a deny. No count: no `editPairs` here, and the line reads whole without one.
+      // A refusal's words, through `gateSafe` (the ownership reason is the agent's, so it keeps its
+      // own): `runGate` below lets a call past any error but a deny, so the words must not throw.
+      // No count: no `editPairs` here, and the line reads whole without one.
       const refused = (id, facts) => gateSafe(id, "refused", facts)
       // V1's explanations, held to the end of this hook: a later gate may still refuse the call, and a
       // note about a dialog that never comes is a false one. V2 posts from `evaluate` instead.
       const notes = []
+      // GENESEED_GUARD=warn: the first would-be block is logged and ends the inspection.
+      let warned = false
       const deny = async (why, rule) => {
-        if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
+        if (WARN_ONLY) { log(`WARN (would block): ${why}`); warned = true; return false }
         log(`BLOCKED: ${why}`)
         await ledger(rule)
         throw new Error(`[geneseed-guard] blocked: ${why}`)
       }
-      try {
-        // `apply_patch`'s own tool resolves every marker path against `instance.directory`
-        // (`apply_patch.ts:72` in the verdict's evidence), NOT the worktree root `root()`
-        // uses for the sovereign-repo bypass above — a worktree session started in a
-        // subdirectory of its git root must see the same (narrower) root the write
-        // actually lands under, or a protected-check/wiki/secret hit one directory up
-        // would be missed.
-        const cwd = ctx?.directory || process.cwd()
-        if (hasAny(tool, WRITE_TOOLS)) {
-          // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
-          // one of them is a write target, so every one runs every gate; the first hit
-          // blocks the whole call (see `pickPath` for why this is not a single path).
-          const paths = pickPath(args, cwd)
-          for (const raw of paths) {
-            if (namesStream(raw)) { await deny(refused("stream", { name: repoRel(path.resolve(cwd, raw)) }), "rigor-5"); return }
-            // Once, here: under `opencode serve` this process's cwd is not the session's directory, and
-            // every gate below resolves a relative path against it.
-            const p = landsOn(raw, cwd)[0].replace(/\\/g, "/")
-            if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(refused("secret-file", { name: repoRel(p) }), "law-1"); return }
-            if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
-            const sensor = protectedCheck(p)
-            if (sensor) { await deny(refused("check", { name: sensor }), "rigor-5"); return }
-            if (gateConfig(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            // V1 after an "always": the `permission.edit` ask on these files is gone too.
-            if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            const store = ruleTarget(raw, cwd)
-            const prompted = (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
-            if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
-            if (store && !prompted) {
-              await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
-              return
+      // Each gate runs alone. Our own deny propagates. Any other error is that gate's alone: it is
+      // logged, the call is ledgered once as `gate-error`, and the NEXT gate still runs, so a fault
+      // in an early gate no longer switches off the secret scan, the loss gate and the wiki gate
+      // behind it. `failure` is the first gate that failed on this call; what it would have said
+      // is lost, and `unjudged` below answers that once every gate has run.
+      let failure = null
+      const runGate = async (name, gate) => {
+        try { await gate() } catch (err) {
+          if (isDeny(err)) throw err
+          const what = errorText(err).slice(0, 200)
+          log(`gate error in ${name} (the other gates still run): ${what}`)
+          if (failure) return
+          failure = { name, what }
+          await ledger("gate-error")
+        }
+      }
+      // A call no gate refused and one gate could not judge: each host answers to its own ceiling
+      // (ADR 0007). A V2 that can ask marks the call by its id, and `evaluate` raises it to a
+      // prompt. V1 and a V2 with no prompt let it run, and tell the user once per gate.
+      const unjudged = async () => {
+        if (!failure) return
+        if (!ctx?.gateErrors || !input?.callID) { await tellGateError(say, input?.sessionID, failure.name, failure.what); return }
+        ctx.gateErrors.set(input.callID, `${failure.name}: ${failure.what}`)
+        // A call that asserts nothing is never asked about, so its mark would stay for good.
+        if (ctx.gateErrors.size > GATE_ERRORS_HELD) ctx.gateErrors.delete(ctx.gateErrors.keys().next().value)
+      }
+      // `apply_patch`'s own tool resolves every marker path against `instance.directory`
+      // (`apply_patch.ts:72` in the verdict's evidence), NOT the worktree root `root()`
+      // uses for the sovereign-repo bypass above — a worktree session started in a
+      // subdirectory of its git root must see the same (narrower) root the write
+      // actually lands under, or a protected-check/wiki/secret hit one directory up
+      // would be missed.
+      const cwd = ctx?.directory || process.cwd()
+      // The gates of one call, in order. Each reads the arguments for itself: a gate that shared
+      // another's reading would fail with it. A gate's `return` after `deny` is the warn mode's.
+      // `depth` is 0 for the call the host handed in, and counts up through `nestedCalls`. A nested
+      // call has no prompt of its own that this hook can count on (the mark for `evaluate` is the
+      // OUTER call's id, and whether the host asks about a nested edit is unverified), so a nested
+      // rule-store write is refused where a direct one would be handed to the host's prompt.
+      const gatesFor = (tool, args, depth) => {
+        const nested = depth > 0
+        const writes = hasAny(tool, WRITE_TOOLS)
+        return [
+          ["paths", async () => {
+            if (!writes) return
+            // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
+            // one of them is a write target, so every one runs every gate; the first hit
+            // blocks the whole call (see `pickPath` for why this is not a single path).
+            for (const raw of pickPath(args, cwd)) {
+              if (namesStream(raw)) { await deny(refused("stream", { name: repoRel(path.resolve(cwd, raw)) }), "rigor-5"); return }
+              // Once, here: under `opencode serve` this process's cwd is not the session's directory, and
+              // every gate below resolves a relative path against it.
+              const p = landsOn(raw, cwd)[0].replace(/\\/g, "/")
+              if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(refused("secret-file", { name: repoRel(p) }), "law-1"); return }
+              if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
+              const sensor = protectedCheck(p)
+              if (sensor) { await deny(refused("check", { name: sensor }), "rigor-5"); return }
+              if (gateConfig(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+              if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+              // V1 after an "always": the `permission.edit` ask on these files is gone too.
+              if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+              const store = ruleTarget(raw, cwd)
+              const prompted = !nested && (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
+              if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
+              if (store && !prompted) {
+                await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) && !nested ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
+                return
+              }
             }
-          }
+          }],
           // Content scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide): per
           // FILE, not pooled — a patch touching `.env` AND an ordinary file must still catch a
           // secret in the ordinary file; only the hunk whose OWN path is `.env`-shaped is
           // exempt, same as the path WARN tier above.
-          for (const { path: cp, content } of SECRETS_GATE_OFF ? [] : pickAddedContentByPath(args, cwd)) {
-            if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
-            if (SECRET_CONTENT_RE.test(content)) {
-              await deny(refused("secret", { name: repoRel(path.resolve(cwd, cp)) }), "law-1")
-              return
+          ["content", async () => {
+            if (!writes || SECRETS_GATE_OFF) return
+            for (const { path: cp, content } of pickAddedContentByPath(args, cwd)) {
+              if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
+              if (SECRET_CONTENT_RE.test(content)) {
+                await deny(refused("secret", { name: repoRel(path.resolve(cwd, cp)) }), "law-1")
+                return
+              }
             }
-          }
-          // The ownership first-write gate, last, as in js/hosts/hooks.mjs's ruleDecide. A child
-          // session is a subagent (ruling D29): it cannot ask the user, so it never spends a block.
-          if (!OWNERSHIP_GATE_OFF) {
-            for (const p of paths) {
+          }],
+          // The ownership first-write gate, after the write gates, as in js/hosts/hooks.mjs's
+          // ruleDecide, and over the twin's own tool class (`WRITE_NAME_RE`): a move, a copy
+          // or a delete is a first write too. A session that cannot ask the user (`cannotAsk`: a
+          // subagent, ruling D29, or a headless workflow agent) is never refused.
+          ["ownership", async () => {
+            if (OWNERSHIP_GATE_OFF || !(writes || WRITE_NAME_RE.test(tool))) return
+            for (const p of pickPath(args, cwd)) {
               const why = ownershipBlock(path.resolve(cwd, p), input?.sessionID)
-              if (why && !(await isChildSession(input.sessionID))) { await deny(why, "ownership"); return }
+              if (why && !(await cannotAsk(input.sessionID))) { await deny(why, "ownership"); return }
             }
-          }
-        }
-        // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
-        // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
-        if (!RULE_STORE_OFF && !NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
-          const named = argPaths(args)
-          if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
-          for (const v of named) {
-            const store = ruleTarget(v, cwd)
-            if (store) {
-              await deny(`${refused("store", { name: store })}\n${PERSIST_EDIT_TOOL}`, "process-1")
+          }],
+          // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
+          // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
+          ["store-args", async () => {
+            if (RULE_STORE_OFF || NATIVE_EDIT_TOOLS.has(tool) || readsOnly(tool) || (hasAny(tool, SHELL_TOOLS) && pickCommand(args))) return
+            const named = argPaths(args)
+            if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
+            for (const v of named) {
+              const store = ruleTarget(v, cwd)
+              if (store) {
+                await deny(`${refused("store", { name: store })}\n${PERSIST_EDIT_TOOL}`, "process-1")
+                return
+              }
+            }
+          }],
+          ["wiki", async () => {
+            if (!hasAny(tool, WIKI_MUTATE_TOOLS)) return
+            for (const p of pickPath(args, cwd)) {
+              const abs = landsOn(p, cwd)[0].replace(/\\/g, "/").toLowerCase()
+              const hit = (await protectedPrefixes()).find(
+                (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
+              if (hit) { await deny(refused("wiki", { name: hit.label }), "wiki"); return }
+            }
+          }],
+          // Its own gate, never an else of the write gates: a compound tool name (e.g.
+          // exec_and_save) can match both classes, and the shell check must still run.
+          ["shell", async () => {
+            if (!hasAny(tool, SHELL_TOOLS)) return
+            // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
+            const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
+            // One reading for every check below: continuations joined, escaped quotes inert (`shellReading`).
+            const picked = pickCommand(args)
+            const c = typeof picked === "string" && picked ? shellReading(picked, /powershell|pwsh/i.test(tool) ? "powershell" : null) : picked
+            const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
+            if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
+            const scan = c && !ROOT_SCAN_OFF && rootScan(c)
+            if (scan) {
+              await deny(refused("root-scan", { name: scan }), "ops-2")
               return
             }
-          }
-        }
-        if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
-          for (const p of pickPath(args, cwd)) {
-            const abs = landsOn(p, cwd)[0].replace(/\\/g, "/").toLowerCase()
-            const hit = (await protectedPrefixes()).find(
-              (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
-            if (hit) { await deny(refused("wiki", { name: hit.label }), "wiki"); return }
-          }
-        }
-        // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
-        // classes, and the shell check must still run after the write check.
-        if (hasAny(tool, SHELL_TOOLS)) {
-          // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
-          const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
-          // One reading for every check below: continuations joined, escaped quotes inert (`shellReading`).
-          const picked = pickCommand(args)
-          const c = typeof picked === "string" && picked ? shellReading(picked, /powershell|pwsh/i.test(tool) ? "powershell" : null) : picked
-          const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
-          if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
-          const scan = c && !ROOT_SCAN_OFF && rootScan(c)
-          if (scan) {
-            await deny(refused("root-scan", { name: scan }), "ops-2")
-            return
-          }
-          if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
-            const loss = lossReason(cut(c), wd, { always: false, split: cut })
-            if (loss) { const facts = gateLoss(loss); await deny(refused(facts.id, facts), "law-4"); return }
-          }
-          // External Gate over a shell write: the same paths as a write tool, no content scan. A
-          // throw fails open through the catch below, as the twin's `shellWriteReason` does.
-          for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
-            const sensor = protectedCheck(p)
-            if (sensor) { await deny(refused("check", { name: sensor, shell: true }), "rigor-5"); return }
-            if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
-            // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
-            // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
-            const store = ruleTarget(p, wd)
-            if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
-            if (store) {
-              await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
-              return
+            if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
+              const loss = lossReason(cut(c), wd, { always: false, split: cut })
+              if (loss) { const facts = gateLoss(loss); await deny(refused(facts.id, facts), "law-4"); return }
             }
-          }
+            // External Gate over a shell write: the same paths as a write tool, no content scan. A
+            // throw here is this gate's error (`runGate`), where the twin's `shellWriteReason` fails open.
+            for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
+              const sensor = protectedCheck(p)
+              if (sensor) { await deny(refused("check", { name: sensor, shell: true }), "rigor-5"); return }
+              if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
+              // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
+              // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
+              const store = ruleTarget(p, wd)
+              if (store && !nested && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
+              if (store) {
+                await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
+                return
+              }
+            }
+          }],
+          // Last, so the call's own gates have spoken: every call it carries, as a call of its own.
+          ["nested", async () => {
+            for (const call of nestedCalls(args)) {
+              if (depth >= NESTED_DEPTH) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
+              await judge(call.tool, call.args, depth + 1)
+              if (warned) return
+            }
+          }],
+        ]
+      }
+      const judge = async (tool, args, depth) => {
+        for (const [name, gate] of gatesFor(tool, args, depth)) {
+          await runGate(name, gate)
+          if (warned) return
         }
-        for (const note of notes) {
-          // No count here, as in a refusal. 120 s, because the dialog stays until it is answered.
-          try {
-            await ctx?.client?.tui?.showToast?.({ body: { title: "Geneseed", message: gateNote(note), variant: "warning", duration: 120000 }, query: { directory: cwd } })
-          } catch (err) { log(`note not shown: ${err?.message ?? err}`) }
-        }
-      } catch (err) {
-        // Our own deny must propagate; any inspection error must never break a tool call.
-        if (err && String(err.message || "").startsWith("[geneseed-guard]")) throw err
-        log(`inspect error (ignored): ${err?.message ?? err}`)
+      }
+      await judge(tool, args, 0)
+      await unjudged()
+      if (warned) return
+      for (const note of notes) {
+        // No count here, as in a refusal. 120 s, because the dialog stays until it is answered.
+        try {
+          await ctx?.client?.tui?.showToast?.({ body: { title: "Geneseed", message: gateNote(note), variant: "warning", duration: 120000 }, query: { directory: cwd } })
+        } catch (err) { log(`note not shown: ${err?.message ?? err}`) }
       }
     },
   }
@@ -2690,10 +2876,16 @@ export const GeneseedGuard = async (ctx) => {
 // and an unattended session turns the ask into a deny. A V2 without the domain has no `hostAsks`,
 // so the guard refuses those writes.
 //
+// The same hook asks about a call a gate FAILED on (`runGate`, ADR 0007 as amended 2026-11): the
+// tool hook marks the call's id in `gateErrors`, and the first `evaluate` whose `source.id` is that
+// call becomes an ask with the `gate-error` text. Unverified against a live host: `source.id` is
+// seen on the shell tool's assert (2.2.5), and is assumed, not observed, on `edit` and on an MCP
+// tool's. A call that asserts nothing, or whose assert names no call, runs unasked, as on V1.
+//
 // The dialog shows no plugin text, so each ask posts a note first. The TUI renders a synthetic item's
 // `description` and the model gets its `text`, so the block goes in the first and the second must read
 // true whether the user allows or denies (spec 2026-11-07-gate-prompts-5.0.3, S0 result).
-async function askOnRuleStore(ctx, shellAsks) {
+async function askOnRuleStore(ctx, shellAsks, gateErrors) {
   const dir = ctx?.location?.directory || process.cwd()
   const note = async (event) => {
     try {
@@ -2705,6 +2897,22 @@ async function askOnRuleStore(ctx, shellAsks) {
     await ctx.permission.hook("evaluate", async (event) => {
       try {
         if (OFF || event.effect === "deny") return
+        // A call one of the tool hook's gates could not judge (`runGate`), by its id, whatever the
+        // action: the user decides in the gate's place. The first assert of the call carries it.
+        const failed = gateErrors.get(event.source?.id)
+        if (gateErrors.delete(event.source?.id)) {
+          if (WARN_ONLY) log(`WARN (would ask): a gate failed (${failed})`)
+          else {
+            // A store write the same call was marked for is said first: it is what the call does.
+            const shellStore = shellAsks.get(event.source?.id)
+            shellAsks.delete(event.source?.id)
+            event.effect = "ask"
+            event.message = [...(shellStore ? [gateSafe("store", "ask", { name: shellStore, shell: true })] : []),
+              gateSafe("gate-error", "ask", { name: failed })].join("\n")
+            await note(event)
+            return
+          }
+        }
         if (event.action === "shell") {
           // The shell tool's assert: action `shell`, one resource per parsed command, `source.id` the
           // call the tool hook marked. A command the host's parser finds no command in asserts nothing.
@@ -2736,14 +2944,15 @@ async function askOnRuleStore(ctx, shellAsks) {
 }
 
 async function setupV2(ctx) {
-  // Call id to the store it writes, for the prompt's text.
+  // Call id to the store it writes, for the prompt's text; call id to the gate that failed on it.
   const shellAsks = new Map()
-  const hostAsks = await askOnRuleStore(ctx, shellAsks)
+  const gateErrors = new Map()
+  const hostAsks = await askOnRuleStore(ctx, shellAsks, gateErrors)
   const hooks = await GeneseedGuard({
     worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory,
     sessionMeta: (sessionID) => ctx.session.get({ sessionID }),
-    hostAsks, shellAsks: hostAsks ? shellAsks : null,
-    say: (sessionID, text) => ctx.session.synthetic({ sessionID, text, description: "Geneseed change report", resume: false }),
+    hostAsks, shellAsks: hostAsks ? shellAsks : null, gateErrors: hostAsks ? gateErrors : null,
+    say: (sessionID, text, description = "Geneseed change report") => ctx.session.synthetic({ sessionID, text, description, resume: false }),
   })
   const report = (type, properties) => hooks.event({ event: { type, properties } })
   // V2's turn edges, as geneseed-notify reads them. `say` above is the only way out to the user.
@@ -2767,11 +2976,14 @@ async function setupV2(ctx) {
       // `sessionID` rides on every V2 execute.before event (@opencode/plugin 2.1.4 `ToolHooks`).
       await hooks["tool.execute.before"]({ tool: event.tool, sessionID: event.sessionID, callID: event.id }, { args: event.input })
     } catch (err) {
-      const why = String(err?.message || "")
-      if (!why.startsWith("[geneseed-guard]")) return
+      if (!isDeny(err)) return
       // Core prints `No tool named "<this>"`, so the name must say first that nothing is missing.
-      event.tool = `BLOCKED, not a missing tool: ${why}`
-      event.input = {}
+      // In their own try: an event that cannot be written (frozen, a setter that throws) must not
+      // fail the step. The refusal is then only logged, and the call runs.
+      try {
+        event.tool = `BLOCKED, not a missing tool: ${errorText(err)}`
+        event.input = {}
+      } catch (failed) { log(`refusal not applied, the call runs: ${errorText(failed)}`) }
     }
   })
   return () => controller.abort()

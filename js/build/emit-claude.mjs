@@ -283,7 +283,7 @@ function claudeWire(job, claudeMdText, hasAgentText, doctrines = null, excludeRu
   // recorded claims there, or they linger (and run) forever.
   const oldSf = get(old, 'settings_file') || 'settings.json';
   if (oldSf !== settingsName) {
-    unwireClaudeSettings(path.join(cfgDir, oldSf), get(old, 'settings_hooks') || []);
+    unwireClaudeSettings(path.join(cfgDir, oldSf), get(old, 'settings_hooks') || [], cfgDir);
     unwireClaudeExcludes(path.join(cfgDir, oldSf), get(old, 'settings_excludes') || []);
     unwireClaudeEnv(path.join(cfgDir, oldSf), get(old, 'settings_env'));
   }

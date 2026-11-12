@@ -37,7 +37,7 @@ import { GATE_SWITCHES, makeCfg, PACK_ORDER } from './source.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
+  EMIT_FOR, EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
   excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, sharedTierOfDir, gatesOfDir, installState, installTargets,
   modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
 } from '../hosts/installs.mjs';
@@ -185,18 +185,9 @@ export function setupBuildArgs(theme, emit, out = null, root = null, footprint =
   return argv;
 }
 
-/**
- * `_harness_build._DEFAULT_EMIT` — the emit to use for an install carrying NO marker.
- *
- * A pre-marker install still has a (host, scope), which is what the walk found it by, so it
- * is rebuilt in its own mode rather than defaulted to OpenCode.
- */
-const DEFAULT_EMIT = new Map([
-  ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
-  ['claude global', 'claude-global'], ['claude project', 'claude'],
-  ['bob global', 'bob-global'], ['bob project', 'bob'],
-  ['openclaude global', 'openclaude-global'], ['openclaude project', 'openclaude'],
-]);
+// The emit for an install carrying NO marker is `EMIT_FOR` (`js/hosts/installs.mjs`): a
+// pre-marker install still has a (host, scope), which is what the walk found it by, so it is
+// rebuilt in its own mode rather than defaulted to OpenCode.
 
 /**
  * Everything `rebuild-all` reads back off one install, and the argv that re-emits it unchanged.
@@ -216,7 +207,7 @@ export function installProfile(host, scope, root, notify = null) {
   const raw = readMaybe(path.join(root, '.geneseed-emit'));
   let marker = raw === null ? '' : raw.trim();
   if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
-  const emit = marker || DEFAULT_EMIT.get(`${host} ${scope}`) || 'opencode-global';
+  const emit = marker || EMIT_FOR.get(`${host} ${scope}`) || 'opencode-global';
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1): in a repo
   // shared with another Claude-style host, an un-narrowed scan answers with WHICHEVER host's
   // carrier the shared `CARRIERS` order favours — the wrong carrier for every host but one.

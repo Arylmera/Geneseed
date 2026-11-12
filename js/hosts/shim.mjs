@@ -20,7 +20,7 @@ import {
 import path from 'node:path';
 import os from 'node:os';
 import { readText, isOsError } from '../lib/fs.mjs';
-import { expanduser } from './hosts.mjs';
+import { SHIM_MARK, expanduser } from './hosts.mjs';
 import { isFile } from './hooks-prims.mjs';
 
 /** The checkout this module ships in — `js/build/source.mjs`'s `ROOT`, computed locally so the
@@ -34,9 +34,9 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 // echo, a "created ~/.geneseed" notice — corrupts that JSON and the gate stops gating
 // while still reporting success. Hence `@echo off`, and a shim that prints nothing.
 //
-// The marker lives in the FILENAME, not the directory: GENESEED_HOME relocates the dir,
-// and a relocated install's hooks must stay recognisable to `GENESEED_HOOK_SNIFF`.
-export const SHIM_MARK = 'geneseed-hook';
+// `SHIM_MARK` is declared in ./hosts.mjs, beside the handler test that reads it (`ownHookVerb`):
+// this module imports hosts.mjs, never the reverse.
+export { SHIM_MARK };
 
 /**
  * `_build_settings._SHIM_ARGV` — the tokens in a shim body that are NOT paths.

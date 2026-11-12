@@ -12,7 +12,7 @@
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt; the one `"deny"` (the ownership first-write gate, `./ownership-gate.mjs`) carries
  * its reason to the MODEL instead. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5 and ops-2) exit 2 with the reason on stderr,
+ * EXIT CODE 2, so the rules in `BLOCK_RULES` (below) exit 2 with the reason on stderr,
  * as does the ownership gate (through `deny`, with a one-time tail in place of `BOB_FINAL`),
  * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
  * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
@@ -42,9 +42,9 @@
  * THE CONTRACT EVERY VERB HOLDS. Exit 0 on every path, and signal through stdout. A hook
  * that fails is a tool call that fails, so an unreadable payload, a missing file, a
  * malformed user config and a bypass all end the same way: quietly, with 0. The single
- * exception is `learn`, which returns the model CLI's own exit code — an auth or quota
- * failure has to be diagnosable, and its hook command carries `|| exit 0` for exactly that
- * reason.
+ * exception is `learn` run BY HAND, which returns the model CLI's own exit code so a script can
+ * test it. On a hook call `learn` returns 0 like every other verb — exit 2 on Stop or PreCompact
+ * would block the turn's end — and an auth or quota failure is diagnosable from its stderr.
  *
  * The gate is `tests/helpers/cli_golden.mjs` replaying `tests/helpers/matrix/cli.{posix,win32}.json`:
  * each verb run in a seeded sandbox, with ABSOLUTE assertions on stdout, stderr, the exit code
@@ -59,7 +59,7 @@ import { machineDir } from '../lib/machine-dir.mjs';
 import { markerLines } from '../lib/managed-block.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
-  GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
+  GATE_LEDGER, HOSTS, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
   resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import {
@@ -304,7 +304,7 @@ const BOB_FINAL = ' Bob has no approval step for this gate: neither a confirmati
  * credential in a tracked file and a history-discarding git act are wrong in every context,
  * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
- * only", see bob-code.md B3. process-1 too (owner decision, 2026-11): with no prompt, a warning
+ * only". process-1 too (owner decision, 2026-11): with no prompt, a warning
  * let the agent write the user's rules on its own say. Memory is written freely (owner decision,
  * 2026-11-08), so a memory write reaches no rule here. Process 5 is the USER's call
  * as well, but a hard block would make Bob unable to commit at all, so it stays a warning the
@@ -1122,7 +1122,9 @@ function protectedIn(target) {
  * not gated. Reached from a shell command too, with the same limit as `protectedCheck`.
  */
 const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'rules/geneseed.md', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
-const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
+// Every host's project dir, read from the host table so a new host's settings are gate
+// configuration the day it gets a row. Exported for the tests that write the list out.
+export const GATE_CONFIG_MARKERS = HOSTS.map((h) => h.projectMarker);
 function gateConfig(p, root) {
   let bin = null;
   try {
@@ -1378,7 +1380,7 @@ export function ruleDecide(args, payload) {
   // settings matcher that routes here (Claude verdict R2); the `edits[]` read stays as a
   // cheap, harmless guard in case that ever changes.
   // `diff` (Bob's `apply_diff`) and `replace`/`search` (`search_and_replace`) are Roo-lineage
-  // field names the Bob docs never confirm (bob-verdict.md I1) — accepted when present, never
+  // field names the Bob docs never confirm — accepted when present, never
   // required, same as every field above. Only WRITTEN text is scanned: `search` and a diff's
   // SEARCH halves are text leaving the file (like Claude's `old_string`), so a secret there is
   // being removed — blocking it would stop the agent cleaning up a leak.
@@ -1392,9 +1394,12 @@ export function ruleDecide(args, payload) {
     return ask(args, 'rule-gate', 'law-1', 'secret', { name: repoRel(carrier, payload) });
   }
   // Bob routes reads here too (`read_file` carries a path): only a write is External Gate's business.
-  // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
-  // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
-  const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
+  // A call that carries text to write is a write whatever its tool is called (`create_file`,
+  // `append_to_file`, `apply_patch`, `save_file`): Bob's tool names are undocumented, so the name
+  // alone let those past the store and gate-config checks. `ownershipBlock` reads a write the same way.
+  // shortcut: a write that carries no text under a name outside WRITE_NAME_RE still reads as a
+  // read; switch to an allowlist of Bob's read tools if Bob adds one.
+  const bobRead = HOST === 'bob' && !body && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
   for (const q of bobRead ? [] : paths) {
     // The carrier rule is a write tool's alone: a shell call reaches `externalGate` with nothing to replay.
     const hit = externalGate(args, q, payload)
@@ -1424,8 +1429,9 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 // ======================================================================================
 
 /**
- * Bob's documented PreToolUse payload (bob-verdict.md I1) is `{event, session_id, tool,
- * input:{...}}` — none of `tool_input`, `tool_name` or `hook_event_name` exist. Normalised
+ * The LEGACY Bob PreToolUse payload is `{event, session_id, tool, input:{...}}`, with none of
+ * `tool_input`, `tool_name` or `hook_event_name`; Bob 2.2.3 sends Claude's keys (bundle read
+ * 2026-10, docs/concepts/host-matrix.md "What is verified"), and both are read. Normalised
  * HERE, once, at Bob's one entry point (`toolGate` is the only verb its settings.json invokes
  * for PreToolUse), so `gitDecide`/`ruleDecide` keep reading the Claude shape unchanged and
  * never learn Bob exists. A no-op for an already-Claude-shaped payload: every field it sets

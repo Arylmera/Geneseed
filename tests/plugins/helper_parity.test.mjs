@@ -1,66 +1,37 @@
 // The OpenCode plugins ship standalone — each is one file copied into a plugins dir, with no
-// imports from js/ and none from each other — so a helper several of them need is COPIED into
-// each. A copy that drifts is a plugin that answers differently from its siblings: a folder
-// excluded for the guard but not for context. These tests hold every copy to the first one,
-// byte for byte, and hold every plugin file to OpenCode's loader contract.
+// imports from js/ and none from each other — so what the hook path owns is COPIED into a
+// plugin, and a helper several plugins need is copied into each. A copy that drifts is a plugin
+// that answers differently from the hook or from its siblings: a folder excluded for the guard
+// but not for context. The rule: every row of tests/twins.mjs is byte-identical to its source,
+// a leading `export ` aside. The rows are the list — a copy added to another plugin goes there,
+// and `node tests/twins.mjs --write` repairs what these tests report. They also hold every
+// plugin file to OpenCode's loader contract.
 //
 // js/hosts/hosts.mjs's `sovereignBypass` is the same RULE in the harness's own idiom, so it is
-// not compared byte for byte: both follow symlinks on both sides, and tests/unit/
-// excludes_guard.test.mjs holds the harness to a linked entry.
+// not a row: both follow symlinks on both sides, and tests/unit/excludes_guard.test.mjs holds
+// the harness to a linked entry.
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync, readdirSync } from "node:fs"
+import { readdirSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { TWINS, twinState } from "../twins.mjs"
 
 const PLUGINS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../adapters/opencode/plugins")
-const read = (name) => readFileSync(path.join(PLUGINS, `geneseed-${name}.js`), "utf8")
 
-// A helper's source: from its declaration to the first `}` at column 0 — every copied helper
-// is a top-level declaration whose body closes there.
-function helperSource(src, name) {
-  const start = [`const ${name} = `, `async function ${name}(`, `function ${name}(`]
-    .map((d) => src.search(new RegExp(`^${d.replace(/[()]/g, "[$&]")}`, "m")))
-    .find((i) => i >= 0)
-  if (start === undefined) return null
-  const rest = src.slice(start)
-  const close = /^}/m.exec(rest)
-  return close ? rest.slice(0, close.index + 1) : null
-}
-
-// helper -> the plugins that carry a copy. A helper added to another plugin goes in its row.
-const COPIES = {
-  norm: ["context", "guard", "learn", "activity"],
-  resolvePath: ["context", "guard", "learn", "activity"],
-  sovereignBypass: ["context", "guard", "learn"],
-  mainWorktreeOf: ["context", "guard", "learn"],
-  stripJsonc: ["context", "guard"],
-  isFile: ["context", "guard"],
-  isDir: ["context", "guard", "learn"],
-  patchSections: ["guard", "context"],
-  machineDir: ["context", "guard", "learn"],
-  readsTier: ["context", "guard", "learn"],
-  storeScan: ["guard", "learn"],
-}
-
-for (const [helper, plugins] of Object.entries(COPIES)) {
-  test(`${helper} is the same in ${plugins.join(", ")}`, () => {
-    const [first, ...others] = plugins.map((p) => [p, helperSource(read(p), helper)])
-    assert.ok(first[1], `${helper} not found in geneseed-${first[0]}.js`)
-    for (const [plugin, src] of others) {
-      assert.equal(src, first[1], `geneseed-${plugin}.js's ${helper} drifted from geneseed-${first[0]}.js's`)
-    }
+for (const t of twinState()) {
+  test(`${t.kind} twin '${t.name}': ${path.basename(t.target)} carries ${t.source} verbatim`, () => {
+    assert.ok(t.at, `'${t.name}' is missing from ${t.source} or ${t.target}`)
+    assert.ok(t.same, `${t.target}'s '${t.name}' drifted from ${t.source} — node tests/twins.mjs --write`)
   })
 }
 
-// A one-line array has no closing brace at column 0, so it is compared by value, with the module's own.
-test("WIKI_NAMES is the same in context, guard and js/lib/machine-dir.mjs", async () => {
-  const { WIKI_NAMES } = await import("../../js/lib/machine-dir.mjs")
-  for (const p of ["context", "guard"]) {
-    const m = /^const WIKI_NAMES = \[([^\]]*)\]/m.exec(read(p))
-    assert.ok(m, `geneseed-${p}.js no longer declares WIKI_NAMES`)
-    assert.deepEqual(m[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)), WIKI_NAMES, p)
-  }
+// A row listed twice would be written twice and reported once; a row whose source is its own
+// target compares a file with itself and can never fail.
+test("no twin row is repeated, and none copies a file into itself", () => {
+  const keys = TWINS.map(([kind, name, , target]) => `${kind} ${name} -> ${target}`)
+  assert.deepEqual(keys.filter((k, i) => keys.indexOf(k) !== i), [])
+  assert.deepEqual(TWINS.filter(([, , source, target]) => source === target), [])
 })
 
 // Both OpenCode majors read the DEFAULT export, and each ignores the other's key: V1

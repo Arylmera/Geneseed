@@ -780,25 +780,5 @@ test("event hook: a path outside the root, or with no root, is null", async () =
   }
 })
 
-// The plugin's fs-only readers are twins of js/hosts/gitref.mjs (a plugin cannot import js/).
-// Compared like the guard's twins (tests/plugins/guard.test.mjs): each function cut out by
-// brace matching, with comments, semicolons, quote style and whitespace folded away.
-test("the activity plugin's repository readers match their js/hosts/gitref.mjs originals", () => {
-  const fn = (src, name) => {
-    const b = src.indexOf(`function ${name}(`)
-    assert.ok(b >= 0, `${name} missing`)
-    let i = src.indexOf("{", b), depth = 0
-    for (; i < src.length; i++) {
-      if (src[i] === "{") depth++
-      else if (src[i] === "}" && --depth === 0) break
-    }
-    return src.slice(b, i + 1)
-      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
-      .replace(/'/g, '"').replace(/;/g, "").replace(/\s+/g, "")
-  }
-  const ref = fs.readFileSync(path.join(process.cwd(), "js/hosts/gitref.mjs"), "utf8")
-  const mine = fs.readFileSync(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-activity.js"), "utf8")
-  for (const name of ["gitRootOf", "gitDirOf", "mainWorktreeOf"]) {
-    assert.equal(fn(mine, name), fn(ref, name), `the activity plugin's ${name} drifted from js/hosts/gitref.mjs`)
-  }
-})
+// The plugin's fs-only readers are js/hosts/gitref.mjs's, copied verbatim: twin rows in
+// tests/twins.mjs, held byte for byte by tests/plugins/helper_parity.test.mjs.

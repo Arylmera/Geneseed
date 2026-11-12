@@ -62,6 +62,10 @@ Installs the real hosts from npm (~600 MB): OpenCode V1 and V2, Claude Code, and
 points each at a throwaway home holding what this checkout installs, and fails on the host's own
 verdict:
 - OpenCode logs `failed to load plugin` for one of ours.
+- OpenCode writes a key file the guard must refuse. A scripted model on loopback
+  (`tests/helpers/fake_model.mjs`) asks `opencode run` for `.ssh/id_rsa` and then `allowed.txt`:
+  the first must be absent, the second must hold `ok`, and the model must be sent the refusal.
+  `--no-guard` is the mutation proof.
 - `claude doctor` lists an invalid setting in our `settings.json`. Claude otherwise ignores a bad
   hook entry silently.
 - A logged-out `-p` run shows no SessionStart running our context hook.
@@ -71,9 +75,11 @@ narrows it. It is the only check that meets the hosts themselves: every other ga
 code with itself or with a mock, which is why OpenCode 2 refusing all seven plugins survived a
 whole-repo refactor pass. CI runs it weekly against `latest` (`.github/workflows/host-canary.yml`).
 
-It proves what *loads*, not the hooks that need a model turn. No model is ever called: there are
-no credentials in the sandbox, and every provider URL points at a closed port. Bob is not covered,
-because IBM does not publish Bob Shell on npm.
+No real model is ever called, and there are no credentials in the sandbox. On OpenCode the only
+provider is that loopback stub, so the guard's deny runs for real on V1 (a thrown error) and on V2
+(a renamed tool call, which depends on the host). On Claude Code and OpenClaude every provider URL
+points at a closed port: the canary proves what *loads* there, and no gate verdict that needs a
+model turn is exercised. Bob is not covered, because IBM does not publish Bob Shell on npm.
 
 ```bash
 node bin/geneseed-cli.mjs doctor --all
@@ -139,10 +145,21 @@ lines, inside its own budget: its lazy listing folds and cuts with a count, and 
 headings.
 
 **Gate logic is copied into the OpenCode plugins by a tool.** A plugin is one self-contained
-file and cannot import `js/`, so the loss gate, the gate texts, the shell-write reader (with
-`shellReading`), the test-weakening rules and `runsUnpiped` live in `js/hosts/` and are copied
-between marker comments. After changing one, `node tests/twins.mjs --write`; `--check` names a
-copy that drifted, and the plugin tests fail on it.
+file and cannot import `js/` or a sibling, so whatever can be byte-identical to its original is
+a row of `TWINS` in `tests/twins.mjs` — that table is the list, do not restate it. Three kinds:
+a block between marker comments (the loss gate, the gate texts, the shell-write reader with
+`shellReading`, the test-weakening rules, the done-check tables, the ownership manifests and
+refusal texts), one named declaration (`runsUnpiped`, the fs-only git readers of
+`js/hosts/gitref.mjs`) and a one-line constant (`.geneseed/.gitignore`'s text, `WIKI_NAMES`).
+The original is in `js/`, except for the helpers the plugins share among themselves
+(`resolvePath`, `sovereignBypass`, `readsTier`, …), whose home is `geneseed-guard.js`. After
+changing an original, `node tests/twins.mjs --write`; `--check` names a copy that drifted, and
+`tests/plugins/helper_parity.test.mjs` fails on it. A copy carries its source's house style, so
+semicolons inside a plugin mark tool-kept text: edit the original, never the copy. What cannot
+be byte-identical stays a hand twin that names its original in a comment — another payload
+shape, async where the hook is sync, or deliberately narrower (`ownershipBlock`, `gateConfig`,
+`protectedCheck`, `inferDoneChecks`, `usageOf`) — and a behaviour table in `tests/plugins/`
+holds it.
 
 **Every OpenCode plugin serves two plugin APIs from one file.** OpenCode 2 loads only
 `export default { id, setup }`; V1 (>= 1.3.4) loads `{ id, server }`; each ignores the other's

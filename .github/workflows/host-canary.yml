@@ -4,12 +4,15 @@ name: host-canary
 # Claude Code and OpenClaude from npm, points each at a throwaway home holding this checkout's
 # install, and fails on the host's own verdict: OpenCode's "failed to load plugin", Claude's
 # `doctor` listing an invalid setting of ours, or a SessionStart that never ran our context hook.
+# On both OpenCode majors it also runs the guard's deny: a scripted model on loopback asks for a
+# key file, and the run fails if the host writes it.
 # Every other gate in this repo compares the code with itself, so none of them could see OpenCode 2
 # refuse all seven plugins (4.0.2, c6a17d9). Bob is skipped: IBM does not publish it on npm.
 #
 # Weekly against `latest`, so a host release that breaks our contract turns this red within a
-# week; and on any PR that changes what we install or how a hook starts. No model is ever called:
-# no credentials exist in the sandbox and every provider URL points at a closed port.
+# week; and on any PR that changes what we install or how a hook starts. No real model is ever
+# called: no credentials exist in the sandbox, OpenCode's only provider is the loopback stub
+# (`tests/helpers/fake_model.mjs`), and every Claude-engine provider URL points at a closed port.
 # Not part of ci.yml: it downloads ~600 MB and depends on npm being up, which a PR's verdict
 # should not.
 on:
@@ -23,6 +26,7 @@ on:
       - "bin/geneseed-hook.mjs"
       - "bin/build-driver.mjs"
       - "tests/host_canary.mjs"
+      - "tests/helpers/fake_model.mjs"
       - ".github/workflows/host-canary.yml"
   workflow_dispatch:
 

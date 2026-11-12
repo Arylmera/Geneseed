@@ -97,7 +97,7 @@ const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor',
 // The OpenCode context plugin carries the same rule for AGENT.md/AGENTS.md/CLAUDE.md.
 // OpenClaude's root file is AGENTS.md, or CLAUDE.md when AGENTS.md is absent — resolved
 // per repo in `discoverContext`, since which one it loads depends on what is on disk.
-const NATIVE_ROOT = {
+export const NATIVE_ROOT = {
   claude: ['CLAUDE.md'], bob: ['AGENTS.md'],
   openclaude: ['AGENTS.md', 'CLAUDE.md'],
 };
@@ -848,6 +848,8 @@ export function cmdContext(args) {
   // Discovery (and the stand-down) runs against the SESSION's project root, not the harness
   // package dir: `$CLAUDE_PROJECT_DIR` when the host sets it (`hookProjectDir`), because
   // SessionStart also fires on resume/compact/clear, after the agent may have `cd`'d away.
+  // `args.cwd` is the payload's `cwd`, which the hook entry already parsed: Bob sets no such
+  // variable, and its payload names the root workspace.
   // The only two `resolvePath` calls in this file whose argument can be a `~user` path the
   // user typed — `$GENESEED_ROOT` and `--root` — and `resolvePath` expands, so both can now
   // throw. Every other caller either builds its argument by `path.join` from an absolute
@@ -857,7 +859,7 @@ export function cmdContext(args) {
   let hookRoot;
   try {
     ({ root, hookRoot } = withDiscardableStderr(() => ({
-      root: resolvePath(process.env.GENESEED_ROOT || hookProjectDir()),
+      root: resolvePath(process.env.GENESEED_ROOT || hookProjectDir(args && args.cwd)),
       hookRoot: args.root ? resolvePath(args.root) : null,
     })));
   } catch {

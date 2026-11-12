@@ -197,8 +197,9 @@ async function runChildSession(client, { prompt, agent, model, title, directory 
 // so neither the worktrees nor the traces show up as untracked files, with the team paths
 // (bricks, loops, check lists) allowed back. Anchored `/*`, because a bare `*` matches at
 // every depth and would hide `bricks/x.md` even under `!bricks/`. Same string as
-// GENESEED_GITIGNORE in plugins/geneseed-workflow.js; both are pinned by tests.
-const GENESEED_GITIGNORE = "/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n"
+// GENESEED_GITIGNORE in plugins/geneseed-workflow.js: both are js/hosts/geneseed-dir.mjs's
+// line, kept by `node tests/twins.mjs --write`.
+const GENESEED_GITIGNORE = '/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n';
 // Create-if-absent; a file holding only `*` is Geneseed's former output (it hid team bricks),
 // never a user edit, so it is upgraded. Any other content is the user's. Never throws.
 async function writeGitignore(file) {

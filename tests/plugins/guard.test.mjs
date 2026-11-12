@@ -273,29 +273,8 @@ test("the gate text twin block is byte-identical to js/hosts/hooks-prims.mjs", a
   assert.equal(cut(guardSrc), cut(hookSrc), "the guard's gate text block drifted from js/hosts/hooks-prims.mjs")
 })
 
-// The guard's fs-only git readers are twins of js/hosts/gitref.mjs (the plugin cannot import it).
-// The two files differ in house style — gitref.mjs has semicolons and single quotes, the guard
-// neither — so each function is cut out of both by brace matching and compared once comments,
-// semicolons, quote style and whitespace are folded away. Anything else that differs is drift.
-test("the guard's git readers match their js/hosts/gitref.mjs originals", async () => {
-  const fn = (src, name) => {
-    const b = src.indexOf(`function ${name}(`)
-    assert.ok(b >= 0, `${name} missing`)
-    let i = src.indexOf("{", b), depth = 0
-    for (; i < src.length; i++) {
-      if (src[i] === "{") depth++
-      else if (src[i] === "}" && --depth === 0) break
-    }
-    return src.slice(b, i + 1)
-      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
-      .replace(/'/g, '"').replace(/;/g, "").replace(/\s+/g, "")
-  }
-  const ref = await fs.readFile(path.join(process.cwd(), "js/hosts/gitref.mjs"), "utf8")
-  const guard = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-guard.js"), "utf8")
-  for (const name of ["gitRootOf", "gitDirOf", "gitCommonDirOf", "currentBranch", "protectedBranches", "stashExists"]) {
-    assert.equal(fn(guard, name), fn(ref, name), `the guard's ${name} drifted from js/hosts/gitref.mjs`)
-  }
-})
+// The guard's fs-only git readers are js/hosts/gitref.mjs's, copied verbatim: twin rows in
+// tests/twins.mjs, held byte for byte by tests/plugins/helper_parity.test.mjs.
 
 // Not a verb, or not a loss: `--staged` ALONE only unstages, an un-forced `branch --delete`
 // refuses on an unmerged branch exactly like `-d`, a word in a commit message or a file name is
@@ -553,10 +532,10 @@ test("the guard's gate-config lists are js/hosts/hooks.mjs's minus OpenCode's ow
   const list = (src, name) => JSON.parse(pick(src, name).replace(/'/g, '"'))
   assert.deepEqual(list(guardSrc, "GATE_CONFIG_FILES"),
     list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode|rules\//.test(f)))
-  assert.deepEqual(list(guardSrc, "GATE_CONFIG_MARKERS"), list(hookSrc, "GATE_CONFIG_MARKERS").filter((m) => m !== ".opencode"))
-  // The hook's markers are every host's project dir, as js/hosts/hosts.mjs names them.
-  const { HOSTS } = await import("../../js/hosts/hosts.mjs")
-  assert.deepEqual([...list(hookSrc, "GATE_CONFIG_MARKERS")].sort(), HOSTS.map((h) => h.projectMarker).sort())
+  // The hook derives its markers from the host table (tests/unit/hook_gates.test.mjs writes the
+  // four out), so the list is read from the module; the guard's stays a literal in its one file.
+  const { GATE_CONFIG_MARKERS } = await import("../../js/hosts/hooks.mjs")
+  assert.deepEqual([...list(guardSrc, "GATE_CONFIG_MARKERS")].sort(), GATE_CONFIG_MARKERS.filter((m) => m !== ".opencode").sort())
 })
 
 // The manifest was `wiki.jsonc` before the `geneseed-` prefix; an install not yet re-emitted still
@@ -917,5 +896,103 @@ test("the shared exclude list is denied; a global install stands down in a folde
     assert.equal(await blocked("write", { filePath: key }), false, "the shared list did not silence a global install")
   } finally {
     restore("XDG_CONFIG_HOME", saved.x); restore("OPENCODE_CONFIG_DIR", saved.o); process.chdir(here)
+  }
+})
+
+// ---- edits[] and nested calls ------------------------------------------------------
+// The content scan reads every text a call lands on disk, not only `content` / `newString`: each
+// `edits[]` entry's `newString` (or `new_string`) is scanned and attributed to the entry's own
+// file, else the call's, and an entry's own path runs the path gates. Text leaving the file
+// (`oldString`) is not scanned. A call carried inside another's arguments (`tool_calls[]` or
+// `calls[]`, each `{ tool | name, parameters | args | input }`) runs every gate as its own call,
+// so a tool outside the write and shell classes cannot carry a refused call past them; a nested
+// read is still a read. Nesting past eight levels cannot be read, and is refused as `process-1`
+// with the deep-arguments text. The rule is the ledger key the refusal was recorded under; null
+// is a call that ran. Every credential-shaped string is assembled at run time, so this file holds
+// none for the repo's own scan to find.
+const AWS_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"
+const nest = (depth, call) => (depth ? { tool_calls: [{ tool: "batch", parameters: nest(depth - 1, call) }] } : { tool_calls: [call] })
+const NESTED_ROWS = [
+  // [label, tool, args, rule]
+  ["multiedit: a secret in the second edit", "multiedit",
+    { filePath: "src/a.js", edits: [{ oldString: "a", newString: "b" }, { oldString: "c", newString: `k = '${AWS_KEY}'` }] }, "law-1"],
+  ["multiedit: the snake_case spelling", "multiedit",
+    { filePath: "src/a.js", edits: [{ old_string: "c", new_string: `k = '${AWS_KEY}'` }] }, "law-1"],
+  ["multiedit: a secret only in text that leaves the file", "multiedit",
+    { filePath: "src/a.js", edits: [{ oldString: `k = '${AWS_KEY}'`, newString: "k = load()" }] }, null],
+  ["multiedit: an edit's own .env file is exempt, as a write to it is", "multiedit",
+    { filePath: "src/a.js", edits: [{ filePath: ".env", oldString: "", newString: `KEY=${AWS_KEY}` }] }, null],
+  ["multiedit: an edit's own file is a key file", "multiedit",
+    { filePath: "src/a.js", edits: [{ filePath: "/home/me/.ssh/id_rsa", oldString: "a", newString: "b" }] }, "law-1"],
+  ["batch: a nested write to a key file", "batch",
+    { tool_calls: [{ tool: "read", parameters: { filePath: "src/a.js" } }, { tool: "write", parameters: { filePath: "/home/me/.ssh/id_rsa", content: "k" } }] }, "law-1"],
+  ["batch: a nested write whose content is a secret", "batch",
+    { tool_calls: [{ tool: "write", parameters: { filePath: "src/a.js", content: AWS_KEY } }] }, "law-1"],
+  ["batch: a nested rm -rf /, in the calls[] / name / args spelling", "batch",
+    { calls: [{ name: "bash", args: { command: "rm -rf /" } }] }, "law-4"],
+  ["batch: a nested rm -rf /, in the input spelling", "batch",
+    { tool_calls: [{ tool: "Bash", input: { command: "rm -rf /" } }] }, "law-4"],
+  ["batch: a nested read of a key file", "batch",
+    { tool_calls: [{ tool: "read", parameters: { filePath: "/home/me/.ssh/id_rsa" } }] }, null],
+  ["batch: a nested ordinary write and command", "batch",
+    { tool_calls: [{ tool: "write", parameters: { filePath: "src/a.js", content: "x" } }, { tool: "bash", parameters: { command: "echo hi" } }] }, null],
+  ["batch: a refused call eight batches down is still read", "batch", nest(7, { tool: "bash", parameters: { command: "rm -rf /" } }), "law-4"],
+  ["batch: a call nine batches down cannot be read", "batch", nest(8, { tool: "read", parameters: { filePath: "src/a.js" } }), "process-1"],
+]
+test("edits[] and nested calls run the gates a direct call runs", async () => {
+  const harness = path.join(tmp, "nested")
+  const ledger = path.join(harness, "notebook", "gates.jsonl")
+  await fs.mkdir(path.dirname(ledger), { recursive: true })
+  const saved = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  try {
+    for (const [label, tool, args, rule] of NESTED_ROWS) {
+      await fs.rm(ledger, { force: true })
+      const why = await denial(tool, args)
+      const rules = (await isFileAt(ledger)) ? (await fs.readFile(ledger, "utf8")).trim().split("\n").map((l) => JSON.parse(l).rule) : []
+      assert.deepEqual(rules, rule ? [rule] : [], `${label}: ${why}`)
+      assert.equal(why !== null, rule !== null, label)
+    }
+    const deep = await denial("batch", nest(8, { tool: "read", parameters: { filePath: "src/a.js" } }))
+    assert.match(deep, /The arguments of batch nest too deep to read/)
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = saved
+  }
+})
+
+// ---- a gate that fails (ADR 0007) ------------------------------------------------
+// Each gate runs alone. An argument whose getter throws fails every gate that reads a path, and
+// the shell gate, which reads only the command, still refuses: one gate's fault no longer
+// switches off the gates behind it. The call is ledgered ONCE as `gate-error`, however many
+// gates failed on it, and before the refusal's own line. V1 has no prompt to raise, so a call no
+// gate refuses still runs, and the user is told by toast: only of a call that ran (the refused
+// one says nothing), and once per gate for the life of the process, so a third failing call adds
+// a ledger line and no toast.
+const poisoned = (rest) => Object.defineProperty({ ...rest }, "filePath",
+  { enumerable: true, get() { throw new Error("poisoned") } })
+test("a gate that throws does not stop the next one; the error is ledgered, and told once", async () => {
+  const harness = path.join(tmp, "gate-error")
+  await fs.mkdir(path.join(harness, "notebook"), { recursive: true })
+  const saved = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  const toasts = []
+  const client = { tui: { showToast: async (req) => { toasts.push(req.body.message) } } }
+  const v1 = (await GeneseedGuard({ client, directory: tmp }))["tool.execute.before"]
+  try {
+    // `exec_and_save` is in both classes: a write tool (`save`) and a shell tool (`exec`).
+    await assert.rejects(v1({ tool: "exec_and_save", args: poisoned({ command: "rm -rf /" }) }, {}),
+      /^Error: \[geneseed-guard\] blocked: [\s\S]*would destroy a filesystem root/)
+    assert.deepEqual(toasts, [], "a refused call did not run")
+    await v1({ tool: "exec_and_save", args: poisoned({ command: "echo hi" }) }, {})
+    await v1({ tool: "exec_and_save", args: poisoned({ command: "echo hi" }) }, {})
+    const rules = (await fs.readFile(path.join(harness, "notebook", "gates.jsonl"), "utf8")).trim().split("\n")
+      .map((l) => JSON.parse(l).rule)
+    assert.deepEqual(rules, ["gate-error", "law-4", "gate-error", "gate-error"])
+    assert.deepEqual(toasts, ['Geneseed gate error: the paths check failed with "poisoned", so it did not judge a tool call, '
+      + "and the call ran. The other checks still ran. Run geneseed doctor to find the fault."])
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = saved
   }
 })

@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 
 import { hookRunnerEntry } from '../../js/hosts/shim.mjs';
 import {
-  GENESEED_HOOK_SNIFF, loadJsonObject, mergeClaudeSettings, readJsonc, unwireClaudeSettings,
+  GENESEED_HOOK_SNIFF, loadJsonObject, mergeClaudeSettings, mergeOpencodeJson, readJsonc,
+  unwireClaudeSettings,
   unwireClaudeEnv, wireClaudeEnv, wireClaudeExcludes,
 } from '../../js/hosts/settings.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
@@ -160,6 +161,35 @@ test('the unwires decline every state but a comment-free object, and touch nothi
     });
   } finally {
     sb.cleanup();
+  }
+});
+
+test('the OpenCode merge refuses a commented file whatever its extension', () => {
+  // THE RULE IS "COMMENTED", NOT ".jsonc": OpenCode parses `opencode.json` as JSONC as well, so
+  // the plain name may carry comments and a rewrite would drop them. Both names therefore take
+  // the same branch — bytes untouched, and the paste-in advice on stdout naming the file and the
+  // `instructions` entry it is missing. The `.json` row is the one that used to be rewritten.
+  for (const name of ['opencode.json', 'opencode.jsonc']) {
+    const sb = makeSandbox('jsonc-oc-');
+    try {
+      const p = path.join(sb.path, name);
+      const original = '// mine\n{\n  "instructions": []\n}\n';
+      writeFileSync(p, original, 'utf8');
+      const real = process.stdout.write.bind(process.stdout);
+      let out = '';
+      process.stdout.write = (c) => { out += String(c); return true; };
+      try {
+        mergeOpencodeJson(path.join(sb.path, 'opencode.json'), 'AGENT.md');
+      } finally {
+        process.stdout.write = real;
+      }
+      assert.equal(readFileSync(p, 'utf8'), original, `${name}: the comments were rewritten away`);
+      assert.ok(out.startsWith(`[geneseed] ${name} has comments — not rewriting it (your edits `
+        + 'are kept). Add this to its "instructions" array by hand:\n[geneseed]     "AGENT.md"\n'),
+      `${name}: no paste-in advice: ${out.slice(0, 300)}`);
+    } finally {
+      sb.cleanup();
+    }
   }
 });
 

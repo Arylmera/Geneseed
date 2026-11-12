@@ -17,7 +17,7 @@ import path from 'node:path';
 /**
  * The wiki manifest's names, newest first. The last two are earlier seeds', read with no end date:
  * nothing yet tells a user an install missed the rename, so dropping one would lose a wiki in
- * silence. The OpenCode plugins carry a copy (tests/unit/claude.test.mjs holds the context one equal).
+ * silence. The OpenCode plugins carry this line (`node tests/twins.mjs --write` after changing it).
  */
 export const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json'];
 

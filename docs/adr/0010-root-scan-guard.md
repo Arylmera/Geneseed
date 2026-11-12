@@ -38,6 +38,10 @@ since `ops-2` is one of the four rules in Bob's `BLOCK_RULES` and a warning woul
 scan start anyway. The check stays narrow by construction, trading a few missed edge cases for
 never surprising an ordinary command with an unexpected prompt.
 
+*Note, 2026-11-12:* "one of the four rules" was the count when this was decided. `BLOCK_RULES`
+has changed since; the current set is the Bob column of the
+[enforcement table](../concepts/enforcement-table.md), which `geneseed doctor` holds to the code.
+
 ## Consequences
 
 - `tests/unit/hook_gates.test.mjs` carries the reference's refuse/pass self-check for `rootScan`;

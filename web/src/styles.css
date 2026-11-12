@@ -2706,6 +2706,8 @@ a.ldg-kpi-aside { color: var(--accent-text); }
 .ldg-detail-col:first-child { flex-basis: 380px; }
 .ldg-detail-col .stackbar-box { width: 100%; }
 .ldg-detail-col .stackbar { height: 14px; }
+.ldg-detail-col .ldg-rootbar { margin-bottom: 0; }
+.ldg-detail-col .ldg-rootbar .stackbar { height: 8px; }
 .ldg-lbl { font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: .07em;
   text-transform: uppercase; color: var(--text-3); }
 .ldg-ring { width: 34px; height: 34px; flex: none; transform: rotate(-90deg); }

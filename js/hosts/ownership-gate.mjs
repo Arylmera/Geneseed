@@ -17,7 +17,9 @@
  * and become a gate-error ask on every write in every repo; any surprise is a defer.
  *
  * The OpenCode guard (`adapters/opencode/plugins/geneseed-guard.js`, `ownershipBlock`) is this
- * file's twin and cannot import it — keep the two in step.
+ * file's twin and cannot import it. Its constants are copied from here by `tests/twins.mjs`
+ * (the two marked blocks and three one-line constants); the function reads another payload
+ * and is kept in step by hand.
  */
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import os from 'node:os';
@@ -25,6 +27,10 @@ import path from 'node:path';
 import { withoutBlocks } from '../lib/managed-block.mjs';
 import { normcase } from '../lib/paths.mjs';
 import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
+
+// ---- ownership shape twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js and
+// geneseed-context.js carry everything down to the END marker verbatim (node tests/twins.mjs
+// --write keeps it), and the one-line `WRITE_NAME_RE`, `safeStem` and `DECLINED_RE` below too.
 
 // D5: the build manifests that make a git root an "application". Exact names, plus two families.
 const MANIFESTS = new Set(['package.json', 'pom.xml', 'pyproject.toml', 'go.mod', 'Cargo.toml',
@@ -35,6 +41,8 @@ const isManifest = (n) => MANIFESTS.has(n) || n.startsWith('build.gradle') || n.
 // hence the strip (`withoutBlocks`) and the exact `##` heading match. `\r?`: a CRLF file's `$`
 // sits after the `\r`.
 const SECTION_RE = /^## Ownership[ \t]*\r?$/m;
+
+// ---- ownership shape twin: END
 
 // Write-shaped tool names (Bob's `tool-gate` also routes reads here: `read_file` carries a path).
 export const WRITE_NAME_RE = /write|edit|diff|replace|insert|move|rename|delete|remove|trash|copy/i;
@@ -50,6 +58,9 @@ function userTag() {
   if (typeof process.getuid === 'function') return String(process.getuid());
   try { return safeStem(os.userInfo().username); } catch { return 'user'; }
 }
+
+// ---- ownership text twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything
+// down to the END marker verbatim (node tests/twins.mjs --write keeps it).
 
 const TAIL = 'Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per '
   + 'install: rebuild with `--no-ownership-gate`. Offer the full documentation '
@@ -67,6 +78,8 @@ const REASON_NONE = 'Geneseed (Ownership) — this application has no `AGENTS.md
 const REASON_NO_SECTION = 'Geneseed (Ownership) — this application\'s `AGENTS.md` has no '
   + '`## Ownership` section. Before writing, ask the developer: add the Ownership section now '
   + `(ownership skill); ${SKIP}? ${TAIL}`;
+
+// ---- ownership text twin: END
 
 // D2: the developer's durable, personal, per-repo decline, in `.geneseed/ownership.md`. It holds
 // until the line is deleted or the setup runs (which removes it); a `## Ownership` section in
