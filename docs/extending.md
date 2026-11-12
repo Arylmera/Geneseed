@@ -6,7 +6,7 @@ doctrine rule, one skill, one plugin, one hook verb, one doc page, one theme, on
 It exists because the answer is never one file. Every user-visible noun in Geneseed has
 *satellites* — a themed title in fourteen voices, a class in a hand-written map, a count in a
 badge, a row in a ledger, a page in the console — and the gates that keep them in step are spread
-across `doctor`, the Node suite and four CI jobs. A contributor who knows the satellites ships in
+across `doctor`, the Node suite and the CI jobs (§1). A contributor who knows the satellites ships in
 one pass; one who does not discovers them one red gate at a time.
 
 The governance surface is three tiers and they cost very different amounts. **Adding a doctrine
@@ -53,12 +53,13 @@ literally, on the screen, as those nine characters.
 
 Typing a literal number into a `docs/web` page is caught by `proseMirrorProblems`. The README
 badges and prose, and the `N laws, N agents, N skills` line in `SHIPPED.md`, are the hand-written
-exceptions — and each has its own arm in `js/inspect/doctor.mjs` (`countTableProblems` walks the five
-badge keys `agents`/`skills`/`laws`/`themes`/`plugins`; `proseMirrorProblems` holds the prose).
+exceptions — and each has its own arm in `js/inspect/checks-counts.mjs` (`countTableProblems` walks
+the six badge keys `agents`/`skills`/`laws`/`doctrines`/`themes`/`plugins`, `doctrines` riding the
+laws badge as `+ N doctrines`; `proseMirrorProblems` holds the prose).
 
 ---
 
-## 1 — The baseline, and the seven commands that reproduce CI
+## 1 — The baseline, and the commands that reproduce CI
 
 The baseline is whatever these commands report on your checkout — run them; no count is
 written here, because a typed count is stale by the next commit.
@@ -69,11 +70,27 @@ Windows (the suite in shards, which `suite-count` sums), `node-cells` on Linux *
 the repo root — never from a worktree, see §5.3:
 
 ```bash
+npm run lint
+```
+
+```bash
+npm run typecheck
+```
+
+```bash
 node bin/geneseed-cli.mjs doctor --all
 ```
 
 ```bash
 node --test --test-reporter=tap "tests/**/*.test.mjs"
+```
+
+```bash
+node tests/shim_intact.mjs
+```
+
+```bash
+node --test --test-reporter=tap "fuzz/*.fuzz.mjs"
 ```
 
 ```bash
@@ -114,12 +131,12 @@ Notes that matter:
   a `find` that stops matching exactly once fails the cell loudly.
 - `--deletion` is the only thing that exercises the write-before-delete prune. Anyone renaming or
   removing a plugin, a skill or an emitted file needs it.
-- **A local pass is weaker than CI.** ~18 tests in `tests/unit/package_manifest.test.mjs` carry
-  `{ skip: NO_NPM }` (`:83`) — every tarball, install and rename gate. On a machine without `npm`
+- **A local pass is weaker than CI.** The tests in `tests/unit/package_manifest.test.mjs` that carry
+  `{ skip: NO_NPM }` are every tarball, install and rename gate. On a machine without `npm`
   on PATH they report *skipped* and the run is green.
 - CI additionally re-runs the packaging suite under `npm@11`, the release's npm (Linux, last in the job), and
   packs the tarball into a `node:22-slim` container with no interpreter. Neither is reproducible
-  from the seven commands; the container one is reachable locally through
+  from the commands above; the container one is reachable locally through
   `tests/helpers/no-python-container.sh` with a docker daemon.
 - **Two assertions in `tests/unit/claude.test.mjs` silently stand down** on any machine where an
   ancestor of the temp sandbox is a `.claude`/`.bob`/`.openclaude` install — which is every developer machine
@@ -128,9 +145,10 @@ Notes that matter:
 
 ### The gates CI does not run
 
-- **The mutation matrix itself.** `tests/mutate.mjs` — 35 rows, each a one-string edit to a
-  product file with a written argument for which gate should catch it. The full run is **in no
-  workflow** and should not be: it mutates the product tree 33 times and runs a gate per edit.
+- **The mutation matrix itself.** `tests/mutate.mjs` — a table of rows (`--list` prints them), each a
+  one-string edit to a product file with a written argument for which gate should catch it. The
+  full run is **in no workflow** and should not be: it mutates the product tree once per row and
+  runs a gate per edit.
   Run `node tests/mutate.mjs --all` (or `--only M7`) by hand when you change something a gate is
   supposed to be watching. ⚠ An interrupted run leaves the **product tree mutated** — check
   `git status` before doing anything else.
@@ -148,7 +166,8 @@ Notes that matter:
   gate `publish.yml`'s shape (found by `publishWorkflow`), and the test *every workflow that
   count-gates `node --test` pins the TAP reporter* discovers every workflow with a test-count gate
   and pins `--test-reporter=tap` on each `node --test` line. A unit test gates the CI files.
-- **Adding any tracked file** — `tests/unit/package_manifest.test.mjs:401` demands every tracked
+- **Adding any tracked file** — `tests/unit/package_manifest.test.mjs` (*every tracked file matches
+  exactly one side of the partition*) demands every tracked
   path fall on exactly one side of a declared partition, *with a written reason*. Adding this very
   document required a `SHIPS` row; without one the tarball test fails, and it fails **before** the
   file is committed too, because npm packs by glob while the partition reads `git ls-files`.
@@ -181,7 +200,7 @@ not.
 
 ### 2a — Adding a DOCTRINE RULE (the common case)
 
-Four files, plus the written-out rule totals in four test files. This is the slot most new
+Five steps, plus the written-out rule totals in the test files named below. This is the slot most new
 material belongs in, and it is cheap on purpose so that the invariant slot stays scarce.
 
 1. `src/doctrines/<pack>.md` — add `### {{DOCTRINE:<new-id>}} <Principle Name>` plus the body,
@@ -211,13 +230,17 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
    `cmdBuild` (`BUILD_FORWARD`) does not forward `--sync-themes`. Then restyle all
    fourteen by hand: `--sync-themes` writes the template's placeholder and only *prints*
    `RESTYLE these`; a shipped placeholder passes every gate.
-4. `CHANGELOG.md`.
+4. `README.md` — the `+ N doctrines` half of the laws badge (`badge/laws-N%20%2B%20N%20doctrines`).
+   `countTableProblems` holds it to the rule count across every pack, so `doctor` is red until it
+   is bumped.
+5. `CHANGELOG.md`.
 
 **What a doctrine rule does *not* cost**, and each of these is a deliberate asymmetry:
 
 - **No class entry.** There is no `LAW_CLASS` analogue: a doctrine rule's class *is* its pack, and
   there is no second taxonomy over it.
-- **No count in the product.** No badge, no `SHIPPED.md` triple, no prose mirror. The console spends
+- **One count in the product, and only one.** The README laws badge (step 4); no `SHIPPED.md`
+  triple, no prose mirror. The console spends
   `{N_PACKS}` / `{N_PACKS_ACTIVE}` / `{N_DOCTRINE_RULES}`, all computed at request time.
 - **No citation to rewire.** But there *are* written-out rule totals to bump — expected values are
   written out, never recorded — in `tests/unit/emit_smoke.test.mjs`, `harness.test.mjs`,
@@ -355,8 +378,8 @@ candidate for routing to choose between, so add only what no sharpened existing 
 
 **Order matters at the first two steps.** `missingReferencedSpecs` (in `js/build/bundle.mjs`) *aborts the
 build* when `AGENT.md.tmpl` names a spec with no file — so the file comes before the table row, or
-nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs:265` proves a refused
-emit leaves the prior install intact.
+nothing builds at all. The refusal is clean: `tests/unit/emit_gates.test.mjs` (*a missing agent aborts a
+global emit and leaves the install intact*) proves a refused emit leaves the prior install intact.
 
 1. `src/skills/<name>.md` or `src/agents/<name>.md`. The shape is load-bearing: `# {{SKILL}}: <name>`,
    a blank line, then a `>` blockquote holding `{{DESC_<NAME>}}` — title, blockquote, nothing
@@ -383,8 +406,8 @@ emit leaves the prior install intact.
    never fires. Hand-run, spends model calls on your own login, not part of the suite.
 
 **A vendored skill folder** (`src/skills/<name>/SKILL.md`) is a different shape: add it to
-`VENDORED_SKILL_DIRS` (`js/hosts/native.mjs:48` — the literal is frozen in
-`tests/unit/authoring_gates.test.mjs:421`), add a `src/upstreams.json` entry (`repo`, `commit` —
+`VENDORED_SKILL_DIRS` (`js/hosts/native.mjs` — the literal is frozen in
+`tests/unit/authoring_gates.test.mjs`), add a `src/upstreams.json` entry (`repo`, `commit` —
 a 40-hex commit, never a moving branch — `author`, `license`, and `licenseFile`, a path under
 `src/` or `null`; an optional `"frozen": true` marks text left at its pin on purpose: the weekly drift job skips it, `creditProblems` still validates it), write a `VENDOR.md` carrying `**Upstream key:** <that key>` and a
 `{{CREDIT:<key>:<upstream path>}}` line, which renders the attribution into every install (the
@@ -412,8 +435,8 @@ distinguishes it from first-party text.
 Two traps worth knowing before you write the spec:
 
 - **The word "Read-only" anywhere in an agent spec locks its emit.** It is a bare substring test
-  (`js/hosts/native.mjs:148`). The escape hatches are explicit markers: `<!-- bash: allow -->`
-  re-opens bash on all three hosts (OpenCode gates it to `ask`), and `<!-- webfetch: allow -->`
+  (`isReadonly` in `js/hosts/native.mjs`). The escape hatches are explicit markers: `<!-- bash: allow -->`
+  re-opens bash on every host (OpenCode gates it to `ask`), and `<!-- webfetch: allow -->`
   re-opens web fetch — the researcher is the one spec that carries it.
 - **The console has a fourth, ungated copy of the skill taxonomy.** `SKILL_CATS` in
   `web/src/lib/lawCats.js` mirrors `SKILL_CLASS` with nothing comparing them (contrast the
@@ -553,7 +576,8 @@ The `geneseed-` prefix and the `.js` suffix are mechanically load-bearing: the b
 4. `docs/concepts/host-matrix.md` — check the capability matrix still tells the truth.
 5. `README.md` — **three** sites: the badge, the `N plugins` prose, and the 🔌 Plugins row.
 6. `SHIPPED.md` — the bare name inside `plugins (…)`; that list must equal the directory exactly,
-   in both directions (`tests/unit/web_api_docs.test.mjs:329`).
+   in both directions (`tests/unit/web_api_docs.test.mjs`, *every plugin ships a reference page and
+   its README/SHIPPED rows*).
 7. `adapters/opencode/README.md` and `docs/opencode-plugin-setup.md` — spelled-out counts, in
    **word form** ("seven" → "eight"), the second file twice.
 8. `tests/plugins/<name>.test.mjs`. Auto-discovered; no workflow edit.
@@ -668,7 +692,8 @@ rather than assumed:
    `git ls-files --cached --others --exclude-standard`, which honours `.gitignore`, and
    `.gitignore` ignores `/node_modules/`. The copy is written outside the repository, under the OS
    temp root, and the product is run out of it as a real child process — so Node's upward resolver
-   walk starts in temp and finds nothing. Eleven test files build such a copy. And this is not a
+   walk starts in temp and finds nothing. Every test file that calls `copyCheckout` builds such a
+   copy. And this is not a
    fixture defect to work around: a user's fresh `git clone` has no `node_modules` either. **The
    fixture is that clone.** Giving the fixture something the real install lacks makes it stop
    reproducing the failure it exists to catch.
@@ -721,7 +746,7 @@ anything owns **every** install's hooks. Emitting from a git worktree or a temp 
 repoint the shim at that disposable path; removing the worktree then killed hooks for every
 install on the machine.
 
-**`hookPrefix` now refuses the claim** (`js/hosts/settings.mjs`, `ephemeralCheckout`): an emit whose
+**`hookPrefix` now refuses the claim** (`js/hosts/shim.mjs`, `ephemeralCheckout`): an emit whose
 checkout is under the OS temp root, or is a linked git worktree (`.git` is a *file*), leaves a
 shim that still resolves exactly as it is and wires the emitted hooks to it anyway. The bundle it
 writes is byte-identical to a normal emit — the install simply keeps running the durable
@@ -739,7 +764,7 @@ CI's `.suite-fence`, any file in the tier.
 
 This is not hypothetical — it happened while this file was being written. Several agents were
 verifying gates out of copied checkouts (the `copyCheckout` fixture pattern
-`tests/unit/harness.test.mjs:173` uses), one of them emitted, and the shim ended up pointing at
+`tests/unit/harness.test.mjs` uses), one of them emitted, and the shim ended up pointing at
 `…/Temp/gs-fix-8DYuJP/bin/geneseed-hook.mjs` — a directory that no longer existed. Every hook in
 every install on the machine was dead and nothing said so.
 
@@ -764,7 +789,7 @@ The CLI surface is no longer the most expensive thing in the repo to change. Edi
 text or flags is now an ordinary edit: `js/cli-table.json` is the owned document, and
 `tests/unit/text_layout.test.mjs` renders every verb through `formatHelp` to check the layout
 holds. Three hand-written equalities still converge on it and are cheap to keep in step — the
-29-command count and the hidden-argument rule (`tests/unit/cli_table.test.mjs`), and
+command count and the hidden-argument rule (`tests/unit/cli_table.test.mjs`), and
 `tests/unit/docs.test.mjs`, which validates every fenced `geneseed <verb> <flags>` line in
 `README.md`, `SHIPPED.md` and every page under `docs/{understand,guides,concepts,reference}/` against the table.
 
@@ -779,7 +804,7 @@ only, at best, on its presence.
 |---|---|---|
 | `§N` cross-references into `AGENT.md`'s anatomy | `src/skills/*`, `src/agents/*`, `adapters/**` | **range only.** `constitutionProblems` refuses a `§N` the template declares no section for — which catches a pointer past the end, the shape *removing* a section leaves. It cannot catch one that still resolves and now means something else, which is the shape *inserting* a section leaves, and is what actually happened when `## 2. Doctrines` pushed every later section down one. **Renumbering the anatomy means `grep -rn '§' src/ adapters/` and reading every hit.** Four satellites and a live OpenCode deny message shipped stale because the sweep stopped at `AGENT.md.tmpl` |
 | Per-rule Principle lines | the `<!-- note: summary: … -->` line under each rule heading in `src/laws/universal.md` and `src/doctrines/*.md` | presence and placement only (`ruleSummaryProblems`), never accuracy |
-| 588 themed constitution titles (42 keys × 14 voices) — `LEX_<ID>` (one per law), `DOC_<ID>` (one per doctrine rule), `PACK_<NAME>` | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
+| The themed constitution titles, one key per rule and per pack in each of the 14 voices — `LEX_<ID>` (one per law), `DOC_<ID>` (one per doctrine rule), `PACK_<NAME>` | `themes/*.json` | key presence only — a shipped placeholder is green. `LEX_*` and `DOC_*` are held across the template too, and in both directions; `PACK_*` only across the voices |
 | The README keyword enumerations | `README.md`, `docs/concepts/rules.md` | nothing |
 | The per-host map of what lands on a machine | `docs/understand/machine-opencode.md`, `docs/understand/machine-claude.md` | table shape only, never accuracy |
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
@@ -814,7 +839,7 @@ gated. Every other appearance is derived at runtime (`.geneseed-version` markers
 why no test pins a version string and none should.
 
 Do not run `npm version`. Bump the two files by hand, add the `CHANGELOG` section, update
-`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the seven commands from §1, and merge to
+`SHIPPED.md`, rebuild `web/dist` if `web/src` moved, run the commands from §1, and merge to
 `main`. **The bump is the release** (since 2026-10-23): when CI finishes green on that push,
 `publish.yml` sees a version npm does not have, re-runs its gates, publishes it, and creates the
 `v<version>` tag and the GitHub release from the version's CHANGELOG section. A push that does not
