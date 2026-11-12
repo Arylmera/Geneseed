@@ -103,7 +103,12 @@ changed for each plugin:
 The note exists only for the two asks the guard hands to the host: a rule write that reaches a host prompt, and a gate configuration file. Every other outcome here is a refusal, and a refusal goes to the model. A V2 refusal is the renamed tool, and core quotes that name in its `No tool named` error. The history keeps the original tool name, so several lines of text there reach no provider as a name (seen on 2.2.6 with a fake model, through `opencode run`).
 
 None of this is checked by a mock alone: `node tests/host_canary.mjs` starts the real V1 and V2
-and fails on the host's own `failed to load plugin` log line.
+and fails on the host's own `failed to load plugin` log line. It then runs that refusal on both:
+a scripted model on loopback (`tests/helpers/fake_model.mjs`) asks `opencode run` to write
+`.ssh/id_rsa`, and the canary fails unless the file is absent, the next write lands, and the
+model is sent the refusal — V1's thrown `[geneseed-guard] blocked:`, V2's `No tool named
+"BLOCKED, not a missing tool: …"`. So a V2 that resolves the tool before `execute.before`, or
+drops an unknown name without telling the model, turns the canary red.
 
 ## 4. Subagents, skills & commands
 
