@@ -23,6 +23,10 @@ export function readDoneChecks(root) {
   }
 }
 
+// ---- done-check tables twin: BEGIN — adapters/opencode/plugins/geneseed-context.js carries
+// everything down to the END marker verbatim, with `export ` dropped (node tests/twins.mjs --write
+// keeps it). Its `inferDoneChecks` is the async reading of the one below, kept by hand.
+
 // The package manager a lockfile names; first hit wins, npm without one. Exported for the gate that
 // holds the factory `checks` brick's restatement of these rules to this list (factory_graph test).
 export const PM_LOCKS = [['bun.lockb', 'bun'], ['bun.lock', 'bun'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn']];
@@ -58,6 +62,8 @@ const MANIFEST_CHECKS = [
   ['Cargo.toml', { label: 'cargo test', forms: ['cargo test'], refuse: /(?:^|\s)--no-run(?=\s|$)/ }],
   ['go.mod', { label: 'go test', forms: ['go test'] }],
 ];
+
+// ---- done-check tables twin: END
 /**
  * Every root manifest the checks are inferred from — what an emit seeds into the protected list.
  * @type {string[]}

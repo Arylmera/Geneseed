@@ -199,41 +199,40 @@ function ownRowsDeduped(turns, launchedIn) {
     d.by != null || !since.has(d.raw) || order(key) < since.get(d.raw)))
 }
 
-// The fs-only readers below are twins of js/hosts/gitref.mjs (gitRootOf, gitDirOf,
-// mainWorktreeOf): a plugin is copied whole into an install and cannot import js/.
-// tests/plugins/activity.test.mjs compares each with its original, quotes, semicolons and
-// layout aside; change one, change both.
+// The fs-only readers below are js/hosts/gitref.mjs's (gitRootOf, gitDirOf, mainWorktreeOf),
+// verbatim: a plugin is copied whole into an install and cannot import js/. Edit the original;
+// `node tests/twins.mjs --write` copies it here, house style included.
 function gitRootOf(cwd) {
   try {
-    let dir = path.resolve(cwd)
+    let dir = path.resolve(cwd);
     for (;;) {
-      if (existsSync(path.join(dir, ".git"))) return dir
-      const up = path.dirname(dir)
-      if (up === dir) return null
-      dir = up
+      if (existsSync(path.join(dir, '.git'))) return dir;
+      const up = path.dirname(dir);
+      if (up === dir) return null;
+      dir = up;
     }
   } catch {
-    return null
+    return null;
   }
 }
 function gitDirOf(root) {
-  const dotgit = path.join(root, ".git")
+  const dotgit = path.join(root, '.git');
   if (statSync(dotgit).isFile()) {
-    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
-    if (!m) throw new Error(`${dotgit} does not name a gitdir`)
-    return path.resolve(root, m[1])
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
+    if (!m) throw new Error(`${dotgit} does not name a gitdir`);
+    return path.resolve(root, m[1]);
   }
-  return dotgit
+  return dotgit;
 }
 function mainWorktreeOf(cwd) {
   try {
-    const root = gitRootOf(cwd)
-    if (!root || !statSync(path.join(root, ".git")).isFile()) return null
-    const gitdir = gitDirOf(root)
-    const common = path.resolve(gitdir, readFileSync(path.join(gitdir, "commondir"), "utf8").trim())
-    return path.basename(common) === ".git" ? path.dirname(common) : null
+    const root = gitRootOf(cwd);
+    if (!root || !statSync(path.join(root, '.git')).isFile()) return null;
+    const gitdir = gitDirOf(root);
+    const common = path.resolve(gitdir, readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+    return path.basename(common) === '.git' ? path.dirname(common) : null;
   } catch {
-    return null
+    return null;
   }
 }
 

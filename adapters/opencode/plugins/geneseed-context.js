@@ -225,8 +225,8 @@ async function isDir(p) {
 // context.json is not here: it is a manifest, honoured by resolveSource. geneseed-wiki.jsonc
 // is not here either: the MACHINE WIKI block below already renders it in full.
 const SESSION_FILES = ["user-rules.md", "PROFILE.md", "memory/MEMORY.md", "notebook/NOTEBOOK.md"]
-// The wiki manifest's names, newest first: WIKI_NAMES in js/lib/machine-dir.mjs.
-const WIKI_NAMES = ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]
+// The wiki manifest's names, newest first: js/lib/machine-dir.mjs's line (node tests/twins.mjs).
+const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json'];
 const SEED_SHA256 = new Set([
   "5c2e92fb1acde041e02d9ebf158460d8ff7a07cbc2b447859631604610130721", // user-rules.md
   "29e012c3c4349ea62a9082cbd04bb25599a0ec280d62c33f6e10742809471816", // PROFILE.md
@@ -1145,7 +1145,8 @@ function takeWeakened(sid) {
 // (`messages.transform`, whose tool parts carry `state.status` and the shell's
 // `metadata.exit`); OpenCode 2's message shape for tool calls is unverified, so V2 is not
 // judged and says so once. Fails open on every shape it does not recognise (ADR 0007).
-// `runsUnpiped` is a hand-mirrored twin; tests/plugins/context_done.test.mjs runs both on one table.
+// `runsUnpiped` is js/hosts/hooks-done.mjs's, copied by `node tests/twins.mjs --write`;
+// tests/plugins/context_done.test.mjs runs both on one table.
 const DONE_LIST = ".geneseed/done-checks.txt"
 const DONE_EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch", "multiedit"])
 const DONE_SHELL_TOOLS = new Set(["bash", "shell"])
@@ -1189,30 +1190,50 @@ async function readDoneChecks(root) {
 // The inference twin of js/hosts/done-checks.mjs (user decision 2026-10-29): with no list, the
 // root manifests imply the checks, each a GROUP of accepted forms. Here they only shape the
 // reminder's wording ("advisory"); OpenCode never blocks either way.
-// tests/plugins/context_done.test.mjs runs both copies over the same fixtures.
-const PM_LOCKS = [["bun.lockb", "bun"], ["bun.lock", "bun"], ["pnpm-lock.yaml", "pnpm"], ["yarn.lock", "yarn"]]
-const PM_SCRIPTS = ["test", "lint", "typecheck"]
+// tests/plugins/context_done.test.mjs runs both copies over the same fixtures. The tables are
+// the hook's own (the twin block); `inferDoneChecks` and `doneChecksOf` are by hand, because
+// they await where the hook reads synchronously.
+// ---- done-check tables twin: BEGIN — adapters/opencode/plugins/geneseed-context.js carries
+// everything down to the END marker verbatim, with `export ` dropped (node tests/twins.mjs --write
+// keeps it). Its `inferDoneChecks` is the async reading of the one below, kept by hand.
+
+// The package manager a lockfile names; first hit wins, npm without one. Exported for the gate that
+// holds the factory `checks` brick's restatement of these rules to this list (factory_graph test).
+const PM_LOCKS = [['bun.lockb', 'bun'], ['bun.lock', 'bun'], ['pnpm-lock.yaml', 'pnpm'], ['yarn.lock', 'yarn']];
+const PM_SCRIPTS = ['test', 'lint', 'typecheck'];
+
+/** One package.json script as a check: the lockfile's own spellings, plus npm's (npm runs any). */
 function scriptCheck(pm, s) {
-  const npm = s === "test" ? ["npm test", "npm run test", "npm t"] : [`npm run ${s}`]
-  const own = pm === "npm" ? [] : pm === "bun" ? [`bun run ${s}`] : [`${pm} ${s}`, `${pm} run ${s}`]
-  return { label: own[0] ?? npm[0], forms: [...own, ...npm] }
+  const npm = s === 'test' ? ['npm test', 'npm run test', 'npm t'] : [`npm run ${s}`];
+  // `bun test` is bun's own runner, not the `test` script: only `bun run` runs the script.
+  const own = pm === 'npm' ? [] : pm === 'bun' ? [`bun run ${s}`] : [`${pm} ${s}`, `${pm} run ${s}`];
+  return { label: own[0] ?? npm[0], forms: [...own, ...npm] };
 }
+
+// Each wrapper spelling (POSIX and Windows) times each task that runs the tests, with and without
+// a leading `clean`. `refuse` names the flags that make the same command skip the tests: a
+// segment carrying one is no pass (`hooks-done.mjs`'s `groupPasses`).
 const wrapped = (label, bins, tasks, refuse) => ({
   label, refuse, forms: bins.flatMap((b) => tasks.flatMap((t) => [`${b} ${t}`, `${b} clean ${t}`])),
-})
-const MAVEN = wrapped("mvn test", ["mvn", "./mvnw", ".\\mvnw", "mvnw", "mvnw.cmd"], ["test", "verify", "install"],
-  /(?:^|\s)-D(?:skipTests|maven\.test\.skip)(?=[=\s]|$)/)
-const GRADLE = wrapped("gradle test", ["gradle", "./gradlew", ".\\gradlew", "gradlew", "gradlew.bat"], ["test", "build", "check"],
-  /(?:^|\s)(?:-x|--exclude-task)[ =](?:\S*:)?test(?=\s|$)/)
-const PYTEST = { label: "pytest", forms: ["pytest", "python -m pytest", "python3 -m pytest", "py -m pytest", "poetry run pytest"] }
+});
+const MAVEN = wrapped('mvn test', ['mvn', './mvnw', '.\\mvnw', 'mvnw', 'mvnw.cmd'], ['test', 'verify', 'install'],
+  /(?:^|\s)-D(?:skipTests|maven\.test\.skip)(?=[=\s]|$)/);
+const GRADLE = wrapped('gradle test', ['gradle', './gradlew', '.\\gradlew', 'gradlew', 'gradlew.bat'], ['test', 'build', 'check'],
+  /(?:^|\s)(?:-x|--exclude-task)[ =](?:\S*:)?test(?=\s|$)/);
+// shortcut: no `uv`-prefixed form — that spelling trips the no-Python gates in
+// tests/unit/package_manifest.test.mjs (user decision 2026-10-29: no exemption), so a uv user's
+// run reads as unproven, which is only an advisory.
+const PYTEST = { label: 'pytest', forms: ['pytest', 'python -m pytest', 'python3 -m pytest', 'py -m pytest', 'poetry run pytest'] };
 const MANIFEST_CHECKS = [
-  ["pom.xml", MAVEN],
-  ["build.gradle", GRADLE],
-  ["build.gradle.kts", GRADLE],
-  ["pyproject.toml", PYTEST],
-  ["Cargo.toml", { label: "cargo test", forms: ["cargo test"], refuse: /(?:^|\s)--no-run(?=\s|$)/ }],
-  ["go.mod", { label: "go test", forms: ["go test"] }],
-]
+  ['pom.xml', MAVEN],
+  ['build.gradle', GRADLE],
+  ['build.gradle.kts', GRADLE],
+  ['pyproject.toml', PYTEST],
+  ['Cargo.toml', { label: 'cargo test', forms: ['cargo test'], refuse: /(?:^|\s)--no-run(?=\s|$)/ }],
+  ['go.mod', { label: 'go test', forms: ['go test'] }],
+];
+
+// ---- done-check tables twin: END
 const exists = (p) => fs.access(p).then(() => true, () => false)
 // The Node hook's `gitRootOf`: the nearest ancestor holding `.git` (a dir, or a worktree's file).
 async function gitRootOf(dir) {
@@ -1274,15 +1295,26 @@ async function doneLine(dir, judged = true) {
 // In an application repo (a git root holding a build manifest) whose root AGENTS.md has no
 // `## Ownership` section outside the Geneseed block, the developer's `Setup: declined <date>`
 // line in `.geneseed/ownership.md` gets one context line, so the decline stays visible. Same
-// manifests, strip, section and decline patterns as the hook (and geneseed-guard.js, whose gate
-// defers on that line). `--no-ownership-gate` (`Ownership gate: off` in AGENT.md) prints nothing.
-const OWN_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
-  "composer.json", "Gemfile"])
-const isOwnManifest = (n) => OWN_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
+// manifests, section and decline patterns as the hook (and geneseed-guard.js, whose gate defers
+// on that line): they are its own lines, kept by `node tests/twins.mjs --write`. `--no-ownership-gate` (`Ownership gate: off` in AGENT.md) prints nothing.
+// ---- ownership shape twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js and
+// geneseed-context.js carry everything down to the END marker verbatim (node tests/twins.mjs
+// --write keeps it), and the one-line `WRITE_NAME_RE`, `safeStem` and `DECLINED_RE` below too.
+
+// D5: the build manifests that make a git root an "application". Exact names, plus two families.
+const MANIFESTS = new Set(['package.json', 'pom.xml', 'pyproject.toml', 'go.mod', 'Cargo.toml',
+  'composer.json', 'Gemfile']);
+const isManifest = (n) => MANIFESTS.has(n) || n.startsWith('build.gradle') || n.endsWith('.csproj');
+
+// On a Bob project install the managed block holds the whole carrier, `#### Ownership` included —
+// hence the strip (`withoutBlocks`) and the exact `##` heading match. `\r?`: a CRLF file's `$`
+// sits after the `\r`.
+const SECTION_RE = /^## Ownership[ \t]*\r?$/m;
+
+// ---- ownership shape twin: END
 // Whole-line markers: js/lib/managed-block.mjs BLOCK_RE_SOURCE, by value (a plugin imports nothing).
 const OWN_BLOCK_RE = /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/gm
-const OWN_SECTION_RE = /^## Ownership[ \t]*\r?$/m
-const OWN_DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m
+const DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m;
 let ownershipGateOffOnce = null
 function ownershipGateOff() {
   ownershipGateOffOnce ??= (async () => {
@@ -1295,13 +1327,13 @@ function ownershipGateOff() {
 }
 async function ownershipLine(dir) {
   const root = await gitRootOf(dir)
-  if (!root || !(await fs.readdir(root)).some(isOwnManifest)) return null
+  if (!root || !(await fs.readdir(root)).some(isManifest)) return null
   const agents = await fs.readFile(path.join(root, "AGENTS.md"), "utf8").catch(() => "")
-  if (OWN_SECTION_RE.test(agents.replace(OWN_BLOCK_RE, ""))) return null
+  if (SECTION_RE.test(agents.replace(OWN_BLOCK_RE, ""))) return null
   // The decline lives in the MAIN worktree (a fresh linked worktree per session must not lose it).
   const home = (await mainWorktreeOf(root)) ?? root
   const personal = await fs.readFile(path.join(home, ".geneseed", "ownership.md"), "utf8").catch(() => "")
-  const since = OWN_DECLINED_RE.exec(personal.replace(/^\uFEFF/, ""))?.[1]
+  const since = DECLINED_RE.exec(personal.replace(/^\uFEFF/, ""))?.[1]
   return since ? `Ownership: setup declined since ${since} — not set up; say "set up ownership" to run it` : null
 }
 

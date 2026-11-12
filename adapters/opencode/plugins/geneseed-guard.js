@@ -61,6 +61,11 @@ import { createHash } from "node:crypto"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 
+// The helpers this plugin shares with its siblings (`norm`, `resolvePath`, `sovereignBypass`,
+// `mainWorktreeOf`, `stripJsonc`, `isFile`, `isDir`, `patchSections`, `machineDir`, `readsTier`,
+// `storeScan`) have their HOME in this file: edit one here, then `node tests/twins.mjs --write`
+// copies it into the others (the list of who carries what is that file's `PLUGIN_HELPERS`).
+//
 // Sovereign-repo bypass — twin of the harness's own `sovereignBypass()`.
 // <cfg>/excludes.json (user-owned, managed by `harness exclude`) lists folders where
 // this GLOBAL install goes dormant. Any error degrades to "not excluded".
@@ -293,59 +298,71 @@ const SHELL_BLOCK_RE = [
 // on state is decided here. `tool.execute.before` has no ask tier, so a real loss is BLOCKED —
 // the Bob behaviour — and `GENESEED_GUARD=warn` downgrades it to a log line.
 //
-// The fs-only readers below are the twins of js/hosts/gitref.mjs (gitRootOf, gitDirOf,
-// gitCommonDirOf, currentBranch, protectedBranches, stashExists) — tests/plugins/guard.test.mjs
-// compares each with its gitref.mjs original, quotes, semicolons and layout aside; the block
-// between the twin markers is js/hosts/loss.mjs verbatim, and the same file diffs it.
+// The fs-only readers below are js/hosts/gitref.mjs's (gitRootOf, gitDirOf, gitCommonDirOf,
+// currentBranch, protectedBranches, stashExists) and the block between the twin markers is
+// js/hosts/loss.mjs, all verbatim: `node tests/twins.mjs --write` copies them, so edit the
+// original. Their house style (semicolons, single quotes) is the original's.
 function gitRootOf(cwd) {
   try {
-    let dir = path.resolve(cwd)
+    let dir = path.resolve(cwd);
     for (;;) {
-      if (existsSync(path.join(dir, ".git"))) return dir
-      const up = path.dirname(dir)
-      if (up === dir) return null
-      dir = up
+      if (existsSync(path.join(dir, '.git'))) return dir;
+      const up = path.dirname(dir);
+      if (up === dir) return null;
+      dir = up;
     }
-  } catch { return null }
+  } catch {
+    return null;
+  }
 }
 function gitDirOf(root) {
-  const dotgit = path.join(root, ".git")
+  const dotgit = path.join(root, '.git');
   if (statSync(dotgit).isFile()) {
-    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, "utf8"))
-    if (!m) throw new Error(`${dotgit} does not name a gitdir`)
-    return path.resolve(root, m[1])
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dotgit, 'utf8'));
+    if (!m) throw new Error(`${dotgit} does not name a gitdir`);
+    return path.resolve(root, m[1]);
   }
-  return dotgit
+  return dotgit;
 }
 function gitCommonDirOf(root) {
-  const gitdir = gitDirOf(root)
-  try { return path.resolve(gitdir, readFileSync(path.join(gitdir, "commondir"), "utf8").trim()) } catch { return gitdir }
+  const gitdir = gitDirOf(root);
+  try {
+    return path.resolve(gitdir, readFileSync(path.join(gitdir, 'commondir'), 'utf8').trim());
+  } catch {
+    return gitdir;
+  }
 }
 function currentBranch(cwd) {
   try {
-    const root = gitRootOf(cwd)
-    if (!root) return null
-    const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitDirOf(root), "HEAD"), "utf8"))
-    return ref ? ref[1] : null
-  } catch { return null }
+    const root = gitRootOf(cwd);
+    if (!root) return null;
+    const ref = /^ref:\s*refs\/heads\/(.+?)\s*$/m.exec(readFileSync(path.join(gitDirOf(root), 'HEAD'), 'utf8'));
+    return ref ? ref[1] : null;
+  } catch {
+    return null;
+  }
 }
 function protectedBranches(root) {
-  const names = new Set(["main", "master"])
-  const remotes = path.join(gitCommonDirOf(root), "refs", "remotes")
-  let dirs = []
-  try { dirs = readdirSync(remotes) } catch { /* no remotes */ }
+  const names = new Set(['main', 'master']);
+  const remotes = path.join(gitCommonDirOf(root), 'refs', 'remotes');
+  let dirs = [];
+  try { dirs = readdirSync(remotes); } catch { /* no remotes */ }
   for (const r of dirs) {
     try {
-      const m = /^ref:\s*refs\/remotes\/[^/]+\/(.+?)\s*$/m.exec(readFileSync(path.join(remotes, r, "HEAD"), "utf8"))
-      if (m) names.add(m[1])
+      const m = /^ref:\s*refs\/remotes\/[^/]+\/(.+?)\s*$/m.exec(readFileSync(path.join(remotes, r, 'HEAD'), 'utf8'));
+      if (m) names.add(m[1]);
     } catch { /* this remote has no HEAD symref */ }
   }
-  return names
+  return names;
 }
 function stashExists(root) {
-  const common = gitCommonDirOf(root)
-  if (existsSync(path.join(common, "refs", "stash"))) return true
-  try { return /^[0-9a-f]+ refs\/stash$/m.test(readFileSync(path.join(common, "packed-refs"), "utf8")) } catch { return false }
+  const common = gitCommonDirOf(root);
+  if (existsSync(path.join(common, 'refs', 'stash'))) return true;
+  try {
+    return /^[0-9a-f]+ refs\/stash$/m.test(readFileSync(path.join(common, 'packed-refs'), 'utf8'));
+  } catch {
+    return false;
+  }
 }
 
 // ---- loss twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything down to
@@ -1615,8 +1632,8 @@ function machineDir() {
   return path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")
 }
 
-// The wiki manifest's names, newest first: WIKI_NAMES in js/lib/machine-dir.mjs.
-const WIKI_NAMES = ["geneseed-wiki.jsonc", "wiki.jsonc", "wiki.json"]
+// The wiki manifest's names, newest first: js/lib/machine-dir.mjs's line (node tests/twins.mjs).
+const WIKI_NAMES = ['geneseed-wiki.jsonc', 'wiki.jsonc', 'wiki.json'];
 
 // The host's own config dir counts as global too, whatever its marker says (the hook's
 // isHostGlobalDir accepts both): OPENCODE_CONFIG_DIR, else <XDG config>/opencode.
@@ -2328,8 +2345,10 @@ const noProgramWord = (command) => scanSegments(command).some((seg) => seg.inclu
     .some((t) => !/^\w+=/.test(t)))
 
 // ---- the ownership first-write gate --------------------------------------------
-// Twin of js/hosts/ownership-gate.mjs's `ownershipBlock` — keep in step (same manifests, same
-// managed-block strip, same section match, same reason). In an application repo (a git root
+// Twin of js/hosts/ownership-gate.mjs's `ownershipBlock`, by hand: this one reads OpenCode's
+// call, not a hook payload, so the function cannot be a copy. Its constants are (the two twin
+// blocks and the one-line `WRITE_NAME_RE`, `safeStem`, `DECLINED_RE`, kept by
+// `node tests/twins.mjs --write`), so the reason cannot drift again. In an application repo (a git root
 // holding a build manifest) whose root AGENTS.md has no `## Ownership` section outside the
 // Geneseed block, the first write of a session is refused once, so the agent proposes the setup
 // to the developer; the session and root are recorded BEFORE the refusal, so the next write
@@ -2340,38 +2359,55 @@ const noProgramWord = (command) => scanSegments(command).some((seg) => seg.inclu
 const OWNERSHIP_SEEN = new Set()
 // The twin's `WRITE_NAME_RE`: the tool names the gate reads as a write, wider than WRITE_TOOLS
 // by the verbs that move, copy or remove a file (an MCP server's `move_file`, `delete_file`).
-const OWNERSHIP_WRITE_RE = /write|edit|diff|replace|insert|move|rename|delete|remove|trash|copy/
+const WRITE_NAME_RE = /write|edit|diff|replace|insert|move|rename|delete|remove|trash|copy/i;
 // The twin's `safeStem`, `userTag` and `normcase`, so both hosts name one marker the same way: a
 // hostile session id cannot steer the join, and the folder is per user on a shared /tmp.
-const ownershipStem = (sid) => String(sid).replace(/[^A-Za-z0-9_.-]/gu, "_").slice(0, 128)
+const safeStem = (sid) => String(sid).replace(/[^A-Za-z0-9_.-]/gu, '_').slice(0, 128);
 function ownershipUser() {
   if (typeof process.getuid === "function") return String(process.getuid())
-  try { return ownershipStem(userInfo().username) } catch { return "user" }
+  try { return safeStem(userInfo().username) } catch { return "user" }
 }
 const ownershipKey = (root) => (process.platform === "win32" ? root.replaceAll("/", "\\").toLowerCase() : root)
-const OWNERSHIP_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
-  "composer.json", "Gemfile"])
-const isManifest = (n) => OWNERSHIP_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
+// ---- ownership shape twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js and
+// geneseed-context.js carry everything down to the END marker verbatim (node tests/twins.mjs
+// --write keeps it), and the one-line `WRITE_NAME_RE`, `safeStem` and `DECLINED_RE` below too.
+
+// D5: the build manifests that make a git root an "application". Exact names, plus two families.
+const MANIFESTS = new Set(['package.json', 'pom.xml', 'pyproject.toml', 'go.mod', 'Cargo.toml',
+  'composer.json', 'Gemfile']);
+const isManifest = (n) => MANIFESTS.has(n) || n.startsWith('build.gradle') || n.endsWith('.csproj');
+
+// On a Bob project install the managed block holds the whole carrier, `#### Ownership` included —
+// hence the strip (`withoutBlocks`) and the exact `##` heading match. `\r?`: a CRLF file's `$`
+// sits after the `\r`.
+const SECTION_RE = /^## Ownership[ \t]*\r?$/m;
+
+// ---- ownership shape twin: END
 const MANAGED_BLOCK_RE = /^<!-- BEGIN GENESEED -->[ \t]*\r?\n[\s\S]*?^<!-- END GENESEED -->[ \t]*\r?$/gm
-const OWNERSHIP_SECTION_RE = /^## Ownership[ \t]*\r?$/m
-const OWNERSHIP_TAIL = "Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per " +
-  "install: rebuild with `--no-ownership-gate`. Offer the full documentation " +
-  "(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only " +
-  "after they answer. This gate fires once per session and repo."
-const OWNERSHIP_SKIP = "skip this session; or skip in this repo until they ask — only on that third answer, " +
-  "write the line `Setup: declined <YYYY-MM-DD>` (today) into `.geneseed/ownership.md` at the " +
-  "MAIN worktree's root (in a linked git worktree, the main checkout's, so it outlives this " +
-  "worktree), which is personal and never committed (if `.geneseed/.gitignore` is absent there, " +
-  "create it first, as the ownership skill's checkpoint rules say)"
-const OWNERSHIP_REASON_NONE = "Geneseed (Ownership) — this application has no `AGENTS.md` with " +
-  "`## Ownership`. Before writing, propose three answers to the developer: set it up now " +
-  `(ownership skill); ${OWNERSHIP_SKIP}. ${OWNERSHIP_TAIL}`
-const OWNERSHIP_REASON_NO_SECTION = "Geneseed (Ownership) — this application's `AGENTS.md` has no " +
-  "`## Ownership` section. Before writing, ask the developer: add the Ownership section now " +
-  `(ownership skill); ${OWNERSHIP_SKIP}? ${OWNERSHIP_TAIL}`
+// ---- ownership text twin: BEGIN — adapters/opencode/plugins/geneseed-guard.js carries everything
+// down to the END marker verbatim (node tests/twins.mjs --write keeps it).
+
+const TAIL = 'Opt out per repo: `## Ownership` with `mode: off` in the root `AGENTS.md`; per '
+  + 'install: rebuild with `--no-ownership-gate`. Offer the full documentation '
+  + '(`/document-project`) as yes / later. Stop and ask the developer now; re-issue the write only '
+  + 'after they answer. This gate fires once per session and repo.';
+// D5: three answers. Only the third writes anything — the durable, personal decline below.
+const SKIP = 'skip this session; or skip in this repo until they ask — only on that third answer, '
+  + 'write the line `Setup: declined <YYYY-MM-DD>` (today) into `.geneseed/ownership.md` at the '
+  + 'MAIN worktree\'s root (in a linked git worktree, the main checkout\'s, so it outlives this '
+  + 'worktree), which is personal and never committed (if `.geneseed/.gitignore` is absent there, '
+  + 'create it first, as the ownership skill\'s checkpoint rules say)';
+const REASON_NONE = 'Geneseed (Ownership) — this application has no `AGENTS.md` with '
+  + '`## Ownership`. Before writing, propose three answers to the developer: set it up now '
+  + `(ownership skill); ${SKIP}. ${TAIL}`;
+const REASON_NO_SECTION = 'Geneseed (Ownership) — this application\'s `AGENTS.md` has no '
+  + '`## Ownership` section. Before writing, ask the developer: add the Ownership section now '
+  + `(ownership skill); ${SKIP}? ${TAIL}`;
+
+// ---- ownership text twin: END
 // The developer's durable, personal decline (`DECLINED_RE` in the hook twin; geneseed-context.js
 // carries it too): with no section, this line in `.geneseed/ownership.md` defers the gate.
-const OWNERSHIP_DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m
+const DECLINED_RE = /^Setup:[ \t]*declined[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*\r?$/m;
 // The reason to refuse this write, or null. `p` is absolute. Never throws.
 function ownershipBlock(p, sessionID) {
   try {
@@ -2389,7 +2425,7 @@ function ownershipBlock(p, sessionID) {
     let text = null
     try { text = readFileSync(path.join(root, "AGENTS.md"), "utf8") } catch { /* none: gate */ }
     const own = text === null ? "" : text.replace(MANAGED_BLOCK_RE, "")
-    if (OWNERSHIP_SECTION_RE.test(own)) return null
+    if (SECTION_RE.test(own)) return null
     let personal = ""
     // In the MAIN worktree (the hook twin's `mainWorktreeOf(root) ?? root`): the shared `.git`'s
     // parent, else this root (a main worktree, a submodule, a bare common dir, a bad link).
@@ -2398,12 +2434,12 @@ function ownershipBlock(p, sessionID) {
     let home = root
     try { const c = gitCommonDirOf(root); if (path.basename(c) === ".git") home = path.dirname(c) } catch { /* this root */ }
     try { personal = readFileSync(path.join(home, ".geneseed", "ownership.md"), "utf8") } catch { /* none: gate */ }
-    if (OWNERSHIP_DECLINED_RE.test(personal.replace(/^\uFEFF/, ""))) return null
+    if (DECLINED_RE.test(personal.replace(/^\uFEFF/, ""))) return null
     const key = ownershipKey(root)
     const memo = `${sessionID}|${key}`
     if (OWNERSHIP_SEEN.has(memo)) return null
     const dir = path.join(tmpdir(), `geneseed-ownership-${ownershipUser()}`)
-    const marker = path.join(dir, ownershipStem(sessionID))
+    const marker = path.join(dir, safeStem(sessionID))
     let seen = ""
     try { seen = readFileSync(marker, "utf8") } catch { /* first gated write of the session */ }
     if (seen.split("\n").includes(key)) { OWNERSHIP_SEEN.add(memo); return null }
@@ -2412,7 +2448,7 @@ function ownershipBlock(p, sessionID) {
     mkdirSync(dir, { recursive: true })
     appendFileSync(marker, `${key}\n`)
     OWNERSHIP_SEEN.add(memo)
-    return own.trim() ? OWNERSHIP_REASON_NO_SECTION : OWNERSHIP_REASON_NONE
+    return own.trim() ? REASON_NO_SECTION : REASON_NONE
   } catch { return null }
 }
 
@@ -2452,8 +2488,9 @@ function argPaths(v, key = "", out = [], depth = 0) {
 // from the repo (V2 loads every .js in plugins/ as a plugin). One line per skill or subagent
 // call, the day and the name only, under <cfg>/notebook/usage.jsonl. Silent and never throws:
 // a counter must not change, slow or fail a tool call. tests/unit/usage.test.mjs holds this
-// copy and the hook's to one table.
-const USAGE_NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/
+// copy and the hook's to one table. `usageOf` is by hand (no Bob shapes here); `NAME_RE` is the
+// hook's line, kept by `node tests/twins.mjs --write`.
+const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/;
 function usageOf(tool, args) {
   const t = String(tool || "").toLowerCase()
   const a = args || {}
@@ -2463,7 +2500,7 @@ function usageOf(tool, args) {
   else if (t === "agent" || t === "task" || t === "subagent") { kind = "agent"; name = a.subagent_type ?? a.agent }
   if (!kind || typeof name !== "string") return null
   name = name.trim().replace(/^\/+/, "")
-  return USAGE_NAME_RE.test(name) ? { kind, name } : null
+  return NAME_RE.test(name) ? { kind, name } : null
 }
 async function recordUse(tool, args) {
   try {
@@ -2719,11 +2756,11 @@ export const GeneseedGuard = async (ctx) => {
             }
           }],
           // The ownership first-write gate, after the write gates, as in js/hosts/hooks.mjs's
-          // ruleDecide, and over the twin's own tool class (`OWNERSHIP_WRITE_RE`): a move, a copy
+          // ruleDecide, and over the twin's own tool class (`WRITE_NAME_RE`): a move, a copy
           // or a delete is a first write too. A session that cannot ask the user (`cannotAsk`: a
           // subagent, ruling D29, or a headless workflow agent) is never refused.
           ["ownership", async () => {
-            if (OWNERSHIP_GATE_OFF || !(writes || OWNERSHIP_WRITE_RE.test(tool))) return
+            if (OWNERSHIP_GATE_OFF || !(writes || WRITE_NAME_RE.test(tool))) return
             for (const p of pickPath(args, cwd)) {
               const why = ownershipBlock(path.resolve(cwd, p), input?.sessionID)
               if (why && !(await cannotAsk(input.sessionID))) { await deny(why, "ownership"); return }

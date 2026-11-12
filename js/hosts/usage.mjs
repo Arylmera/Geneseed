@@ -11,7 +11,8 @@
  * must never block, slow or change a tool call. It rides `tool-gate`, the verb Bob already runs
  * on every tool and Claude/OpenClaude route their `Skill|Agent|Task` matcher to, so no host pays
  * an extra process for it. The OpenCode guard plugin carries the same rules inline (a plugin
- * cannot import from here); `tests/unit/usage.test.mjs` holds both to one table.
+ * cannot import from here): `NAME_RE` by `tests/twins.mjs`, `usageOf` by hand, since it reads
+ * no Bob shape. `tests/unit/usage.test.mjs` holds both to one table.
  *
  * Off when `GENESEED_NO_USAGE` is set or the install holds a `.usage-off` marker.
  */

@@ -24,8 +24,9 @@ import { gitRootOf } from './gitref.mjs';
 /**
  * The `.geneseed/.gitignore` every writer creates: personal by default, the team paths allowed
  * back. Anchored `/*`: a bare `*` matches at every depth and would hide `bricks/x.md` even under
- * `!bricks/`. The same string lives in `adapters/opencode/plugins/geneseed-workflow.js`,
- * `adapters/opencode/workflows/_runtime.js` and `src/skills/_checkpoints.md`; tests pin them.
+ * `!bricks/`. `adapters/opencode/plugins/geneseed-workflow.js` and
+ * `adapters/opencode/workflows/_runtime.js` carry this line (`node tests/twins.mjs --write`
+ * after changing it); `src/skills/_checkpoints.md` restates it by hand, and a test pins that.
  */
 export const GENESEED_GITIGNORE = '/*\n!/.gitignore\n!/bricks/\n!/loops/\n!/factories/\n!/protected-checks.txt\n!/done-checks.txt\n';
 

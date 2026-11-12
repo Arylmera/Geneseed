@@ -42,7 +42,7 @@ import {
   openclaudeConfigDir, globalHookStandingDown,
 } from '../../js/hosts/hosts.mjs';
 import { BOB_RULES_STUB, SESSION_SEEDS } from '../../js/build/stubs.mjs';
-import { WIKI_NAMES, sharedPaths } from '../../js/lib/machine-dir.mjs';
+import { sharedPaths } from '../../js/lib/machine-dir.mjs';
 import {
   uninstallGlobal, installDeactivate, installReactivate,
 } from '../../js/maintain/uninstall.mjs';
@@ -2496,10 +2496,9 @@ test('both copies of the seed hashes are the stubs, and the two file lists agree
   assert.ok(files, 'the plugin no longer declares SESSION_FILES');
   assert.deepEqual(files[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)),
     SESSION_FILES.filter((f) => f !== 'geneseed-wiki.jsonc'));
-  // B5: one list of wiki names on both families, and the plugin's copy of the tier's address.
-  const names = plugin.match(/const WIKI_NAMES = \[([^\]]*)\]/);
-  assert.ok(names, 'the plugin no longer declares WIKI_NAMES');
-  assert.deepEqual(names[1].match(/"[^"]+"/g).map((s) => s.slice(1, -1)), WIKI_NAMES);
+  // B5: one list of wiki names on both families (the plugin's WIKI_NAMES line is a twin row,
+  // tests/twins.mjs, held by tests/plugins/helper_parity.test.mjs), and the plugin's copy of the
+  // tier's address.
   assert.ok(plugin.includes('path.join(process.env.XDG_CONFIG_HOME || path.join(homedir(), ".config"), "geneseed")'),
     'the plugin machineDir no longer spells js/lib/machine-dir.mjs');
   for (const name of Object.keys(SESSION_SEEDS)) {

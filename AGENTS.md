@@ -145,10 +145,21 @@ lines, inside its own budget: its lazy listing folds and cuts with a count, and 
 headings.
 
 **Gate logic is copied into the OpenCode plugins by a tool.** A plugin is one self-contained
-file and cannot import `js/`, so the loss gate, the gate texts, the shell-write reader (with
-`shellReading`), the test-weakening rules and `runsUnpiped` live in `js/hosts/` and are copied
-between marker comments. After changing one, `node tests/twins.mjs --write`; `--check` names a
-copy that drifted, and the plugin tests fail on it.
+file and cannot import `js/` or a sibling, so whatever can be byte-identical to its original is
+a row of `TWINS` in `tests/twins.mjs` — that table is the list, do not restate it. Three kinds:
+a block between marker comments (the loss gate, the gate texts, the shell-write reader with
+`shellReading`, the test-weakening rules, the done-check tables, the ownership manifests and
+refusal texts), one named declaration (`runsUnpiped`, the fs-only git readers of
+`js/hosts/gitref.mjs`) and a one-line constant (`.geneseed/.gitignore`'s text, `WIKI_NAMES`).
+The original is in `js/`, except for the helpers the plugins share among themselves
+(`resolvePath`, `sovereignBypass`, `readsTier`, …), whose home is `geneseed-guard.js`. After
+changing an original, `node tests/twins.mjs --write`; `--check` names a copy that drifted, and
+`tests/plugins/helper_parity.test.mjs` fails on it. A copy carries its source's house style, so
+semicolons inside a plugin mark tool-kept text: edit the original, never the copy. What cannot
+be byte-identical stays a hand twin that names its original in a comment — another payload
+shape, async where the hook is sync, or deliberately narrower (`ownershipBlock`, `gateConfig`,
+`protectedCheck`, `inferDoneChecks`, `usageOf`) — and a behaviour table in `tests/plugins/`
+holds it.
 
 **Every OpenCode plugin serves two plugin APIs from one file.** OpenCode 2 loads only
 `export default { id, setup }`; V1 (>= 1.3.4) loads `{ id, server }`; each ignores the other's
