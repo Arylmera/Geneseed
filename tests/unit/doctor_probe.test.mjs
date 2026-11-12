@@ -163,7 +163,7 @@ test('a recorded command that is not ours is reported and never run', { skip: NO
 test('an install with no live gate is a problem, not a silent pass', () => {
   withGeneseedHome((home) => {
     const cfg = path.join(home, 'claude');
-    writeInstall(cfg, 'claude', (g) => ({ ...g, PreToolUse: g.PreToolUse.filter((x) => x.matcher !== 'Bash|PowerShell') }));
+    writeInstall(cfg, 'claude', (g) => ({ ...g, PreToolUse: g.PreToolUse.filter((x) => x.matcher !== 'Bash|PowerShell|Monitor') }));
     const { problems } = gateProbe([['claude', 'global', cfg]]);
     assert.equal(problems.length, 1, problems.join('\n'));
     assert.match(problems[0], /no live git-gate hook/);

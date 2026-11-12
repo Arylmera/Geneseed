@@ -27,8 +27,10 @@ const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/;
  * `{kind, name}` for a skill or subagent call, else null. Reads the Claude shape (`tool_name` /
  * `tool_input`: `Skill` → `skill`, `Agent` or the older `Task` → `subagent_type`), OpenCode's
  * (`skill` → `name`, `task` → `subagent_type`; V2 hooks see the pre-alias `subagent` → `agent`)
- * and, best-effort, Bob's (`tool` / `input`, any tool whose name contains "skill"): Bob's skill
- * tool name is unverified, no Bob runs here.
+ * and Bob's (`tool` / `input`): `spawn_subagent` → `name`, `start_subtask` → `mode`, and,
+ * best-effort, any tool whose name contains "skill" (Bob's skill tool name is unverified, no Bob
+ * runs here). A subtask's `title` is never read: it is free text the agent wrote, and this
+ * ledger records no prompt. Its mode is the nearest thing Bob has to an agent's name.
  */
 export function usageOf(payload) {
   if (!payload || typeof payload !== 'object') return null;
@@ -42,6 +44,9 @@ export function usageOf(payload) {
   } else if (tool === 'agent' || tool === 'task' || tool === 'subagent') {
     kind = 'agent';
     name = ti.subagent_type ?? ti.agent;
+  } else if (tool === 'spawn_subagent' || tool === 'start_subtask') {
+    kind = 'agent';
+    name = tool === 'spawn_subagent' ? ti.name : ti.mode;
   }
   if (!kind || typeof name !== 'string') return null;
   name = name.trim().replace(/^\/+/, '');

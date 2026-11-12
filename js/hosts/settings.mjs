@@ -45,6 +45,7 @@ import {
 import { SHIM_MARK, claudeHookShell, hookPrefix, shimHome } from './shim.mjs';
 import { GLOBAL_MANIFEST, ownHookVerb } from './hosts.mjs';
 import { gitRootOf } from './gitref.mjs';
+import { askDecision } from './hooks-prims.mjs';
 
 // `readJsonc` moved to ../lib/json.mjs so the hook path can parse a settings file (A2 L2).
 export { readJsonc };
@@ -826,6 +827,17 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
 // injectable failure instead and compares everything except the OS's own wording.
 
 /**
+ * What an OpenClaude gate prints when it could not start: the ask the gates themselves print
+ * (`askDecision`), with a fixed reason. It is written into a hook command between single quotes
+ * (`claudeHookGroups`), so the text may hold no `'`, and no `$` or backtick either, which a
+ * later edit to double quotes would expand. `tests/unit/hook_form.test.mjs` holds it to that.
+ */
+export const GATE_DOWN = askDecision('Geneseed gate error: the gate did not start, so nothing judged this call.\n'
+  + 'Safe choice: Deny, then run geneseed doctor.\n'
+  + 'It asks because a gate that did not run cannot say this call is safe.\n'
+  + 'If you allow it, this call runs with no check at all.').trimEnd();
+
+/**
  * `_build_settings._claude_hook_groups` — Geneseed's Claude hooks, keyed by event.
  *
  * ⚠ `doctrines` IS WHERE PROMPT AND BOUNDARY ARE KEPT IN AGREEMENT. The `git-gate` group
@@ -908,15 +920,21 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // External Gate's hook and the weakened-test note, the same contract.
     const eg = externalGate === false ? ' --no-external-gate' : '';
     const tn = testNote === false ? ' --no-test-note' : '';
+    const nc = consentRuleOn(doctrines, excluded) ? '' : ' --no-consent';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
-      // One group, both gates: process 5's consent is a stderr line here (Bob has no ask
-      // tier), so the pack toggle that drops Claude's git-gate group has nothing to drop —
-      // `tool-gate` only ever EXITS 2 for Laws I and IV (unless built `--no-secrets-gate` /
-      // `--no-deletion-gate`), and for a
-      // write under a project's own `.geneseed/protected-checks.txt` — the project opted in —
-      // and for a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
-      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${sg}${dg}${og}${eg}${tn}${ruleFlags('tool-gate', doctrines, excluded)}` }] }],
+      // One group, both gates. `tool-gate` EXITS 2 for Laws I and IV (unless built
+      // `--no-secrets-gate` / `--no-deletion-gate`), a write to the rule store (process 1), a
+      // write under a project's own `.geneseed/protected-checks.txt` (the project opted in)
+      // and a recursive scan rooted at a whole filesystem (ops 2, the root-scan check).
+      // Process 5's consent is only a stderr line here, since Bob has no ask tier; with the
+      // rule off that line had no rule behind it, so `--no-consent` drops it as it drops
+      // Claude's ask. Only then: an armed install's command stays byte-identical, and an older
+      // shim, which refuses the flag on this verb, never sees it.
+      // NO LAUNCH-FAILURE TAIL, unlike OpenClaude's gates below. Bob ignores a PreToolUse hook's
+      // stdout, so a printed ask says nothing; the one refusal is exit 2, and a tail that exits
+      // 2 whenever the shim cannot start would lock out every tool with no prompt to lift it.
+      PreToolUse: [{ hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${b}${nc}${sg}${dg}${og}${eg}${tn}${ruleFlags('tool-gate', doctrines, excluded)}` }] }],
       // Bob's Stop payload never carries `transcript_path` (I2) — `learn` reads `--host bob`
       // and returns immediately rather than wasting a model call on the bare envelope. KEPT
       // rather than DROPPED: the stand-down costs nothing (no transcript read, no spawn), and
@@ -936,9 +954,20 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // `--host` on `git-gate` but not on `learn`, which then exits 1 under `|| exit 0` and skips.
   const h = host === 'openclaude' ? ' --host openclaude' : '';
   const context = `${run} context --root "${cfg}"${h} || exit 0`;
+  // A GATE THAT CANNOT START MUST NOT READ AS "NOTHING TO SAY". Claude Code blocks on it
+  // (`onFailure` below). OpenClaude predates that field: a shim that is gone or a node that
+  // will not load exits non-zero with stdout empty, which it takes as a deferral, and every
+  // call goes through unjudged. So its two gates print a static ask in that case
+  // (`GATE_DOWN`). `||` and `printf` are safe to write because OpenClaude always runs its hooks
+  // under Git Bash or sh; a gate that ran has exited 0 on every path, so the tail never adds to
+  // a verdict. Never on Claude (byte-identical, and PowerShell 5.1 cannot parse `||`), never on
+  // the `Skill|Agent|Task` counter (a counter that cannot start must not ask), never on Bob
+  // (see its PreToolUse above).
+  const down = host === 'openclaude' ? ` || printf '%s' '${GATE_DOWN}'` : '';
   const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
     + (deletionGate === false ? ' --no-deletion-gate' : '')
-    + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded);
+    + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded)
+    + down;
   // `--no-secrets-gate` skips only rule-gate's credential scan (rigor 5 and process 1 still
   // run); `--no-done-gate` only learn's done check, never the distillation. One `learn` string
   // feeds Stop, SubagentStop and PreCompact, and the flag sits before `|| exit 0`.
@@ -948,7 +977,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   const ruleGate = `${run} rule-gate --root "${cfg}"${secretsGate === false ? ' --no-secrets-gate' : ''}`
     + (ownershipGate === false ? ' --no-ownership-gate' : '')
     + (externalGate === false ? ' --no-external-gate' : '')
-    + (testNote === false ? ' --no-test-note' : '') + ruleFlags('rule-gate', doctrines, excluded);
+    + (testNote === false ? ' --no-test-note' : '') + ruleFlags('rule-gate', doctrines, excluded)
+    + down;
   // `--no-rule-store` on learn: with process 1 off a rule write runs with no prompt, so the change
   // report must not count it as approved (`storeReport`). Bob's learn reports every change already.
   const learn = `${run} learn ${mem}${h}${doneGate === false ? ' --no-done-gate' : ''}`
@@ -968,9 +998,11 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       // `Bash|PowerShell`, not `Bash` alone (Claude verdict I1): docs `hooks.md` says a hook
       // that matches only `Bash` never fires on the PowerShell tool, which is Windows' default
       // shell whenever Git Bash is absent — and on Windows without Git Bash, Bash is not even
-      // registered. `tool_input.command` is the same field on both tools, so `GIT_GATE_RE`
-      // needs no change.
-      { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
+      // registered. `|Monitor` because Claude Code's Monitor tool runs a shell `command` in the
+      // background, and unmatched it was a shell no gate saw. `tool_input.command` is the same
+      // field on all three, so `GIT_GATE_RE` needs no change; a host without the tool never
+      // sends the name.
+      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command', command: gate, ...onFailureBlock }] },
       {
         // No `MultiEdit`: it is not in Claude Code's tool table (tools-reference.md) — a dead
         // matcher entry (Claude verdict R2).
@@ -979,8 +1011,9 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
       },
       // Usage counting (js/hosts/usage.mjs): `tool-gate` records a Skill or subagent call and
       // judges nothing else about it. `Task` is the subagent tool's older name. No
-      // `onFailure: 'block'`: a counter that cannot start must never stop a skill.
-      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"` }] },
+      // `onFailure: 'block'`: a counter that cannot start must never stop a skill. `--host` on
+      // OpenClaude, or the activity view files its skill and agent calls under Claude.
+      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}"${h}` }] },
     ],
     // One matcher-less group, not a `startup|clear` / `resume|compact` split (Claude verdict
     // I4): every SessionStart source — `startup`, `resume`, `clear`, `compact` and `fork` —

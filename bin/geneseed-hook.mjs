@@ -102,6 +102,8 @@ const VERBS = {
       '--no-deletion-gate': 'noDeletionGate', '--no-secrets-gate': 'noSecretsGate',
       '--no-ownership-gate': 'noOwnershipGate', '--no-external-gate': 'noExternalGate',
       '--no-test-note': 'noTestNote', '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
+      // Bob's commit/push warning, when process 5 is off: `gitDecide` reads it as on git-gate.
+      '--no-consent': 'noConsent',
     },
   },
   learn: {

@@ -23,7 +23,8 @@ runs the shim with this install's `--root` counts as Geneseed's.
 
 The wiring:
 
-- on **PreToolUse** (matcher `Bash|PowerShell`), runs `geneseed-hook git-gate` — the tool-boundary
+- on **PreToolUse** (matcher `Bash|PowerShell|Monitor`, the three tools that run a shell
+  command), runs `geneseed-hook git-gate` — the tool-boundary
   half of Doctrine process 5 (*consent before every commit and push*) and of the
   destructive-git Rule. Drop the `process` pack (or exclude process 5) and the hook stays,
   wired with `--no-consent`: commits and pushes pass without asking (excluding process 1 or ops 2,
@@ -41,12 +42,13 @@ The wiring:
   next time regardless. Every other Bash command (and any unreadable payload) is
   deferred to the normal permission flow — the hook never blocks unrelated work.
 
-  **Caveat — the GitHub MCP vector.** The hook matches the `Bash` and `PowerShell` tools
-  only. If your session has the GitHub MCP server, an agent can commit/push via
-  `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass both. To
-  gate those too, widen the matcher to `"Bash|PowerShell|mcp__github__.*"` —
+  **Caveat — the GitHub MCP vector.** The hook matches the `Bash`, `PowerShell` and `Monitor`
+  tools only. If your session has the GitHub MCP server, an agent can commit/push via
+  `push_files` / `create_or_update_file` / `merge_pull_request`, which bypass all three. To
+  gate those too, widen the matcher to `"Bash|PowerShell|Monitor|mcp__github__.*"` —
   `git-gate` ignores any payload it doesn't recognise as a commit/push, so
-  over-matching the tool surface is harmless.
+  over-matching the tool surface is harmless. A re-emit puts the matcher back as it
+  wrote it, so widen it again after a rebuild.
 - on **PreToolUse** (matcher `Write|Edit|NotebookEdit`), runs
   `geneseed-hook rule-gate` — asks first on a write that would put a credential into a tracked
   file, and on a write to `user-rules.md` or the rule draft (a standing rule is

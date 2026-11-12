@@ -142,8 +142,20 @@ that admit no judgement call are refused outright, and the commit/push consent b
 warning. Which rules those are is written in one place, the Bob column of the
 [enforcement table](../../docs/concepts/enforcement-table.md); `geneseed doctor` holds that
 column to `BLOCK_RULES` in `js/hosts/hooks.mjs`. A build without the `process` pack carries
-`--no-rule-store`, which drops the standing-rule block; a warning is all process 5 can be
-here, so the toggle changes nothing else in Bob's hooks.
+`--no-rule-store`, which drops the standing-rule block, and `--no-consent` (also when process 5
+alone is excluded): the commit/push warning stops, as Claude's ask does. Nothing else in the
+group changes.
+
+**When the hook cannot start** (the shim is gone, node will not load), Bob sees a non-zero
+exit that is not 2 and lets the call through; nothing is added to the command to change that.
+The two ways a command could answer are both wrong here: Bob ignores a `PreToolUse` hook's
+stdout, so a printed ask says nothing, and a tail that exits 2 would refuse every tool call
+with no prompt through which you could lift it. `geneseed doctor --probe` runs the gate and
+reports one that does not start.
+
+**What fires.** `tool-gate` also counts skill and sub-agent calls for the web console's
+Overview: `spawn_subagent` by its `name`, `start_subtask` by its `mode`. A subtask's `title` is
+never recorded: it is free text, and the count keeps no prompt.
 
 **Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the

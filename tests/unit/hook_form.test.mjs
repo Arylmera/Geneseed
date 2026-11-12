@@ -33,7 +33,9 @@ import test, { after } from 'node:test';
 
 import { shimProblems } from '../../js/inspect/checks-repo.mjs';
 import { gateSummary, statusData, statusLines } from '../../js/inspect/status.mjs';
-import { GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings } from '../../js/hosts/settings.mjs';
+import {
+  GATE_DOWN, GENESEED_HOOK_SNIFF, claudeHookGroups, mergeClaudeSettings,
+} from '../../js/hosts/settings.mjs';
 import {
   SHIM_ARGV, claudeHookShell, ephemeralCheckout, hookPrefix, hookRunnerEntry, hookShimBody,
   hookShimPath, writeHookShim,
@@ -159,6 +161,72 @@ test('every non-gate hook ends with its shell-specific exit 0 swallow', () => {
     assert.ok(checked > 0,
       'every emitted hook was treated as a gate, so the never-block rule was checked against '
       + 'nothing — the exemption has swallowed the partition');
+  });
+});
+
+// A GATE THAT CANNOT START (the shim is gone, node will not load) exits non-zero with stdout
+// empty. What a host makes of that differs, so the emit differs, and all three are written out:
+//   Claude Code  blocks, through `onFailure: "block"` on the handler. No tail.
+//   OpenClaude   predates that field and reads the empty stdout as a deferral, so every call
+//                went through unjudged. Its two gates end `|| printf '%s' '<ask>'`: the shell
+//                prints a fixed ask when the gate did not exit 0. It always runs Git Bash or sh.
+//   Bob          ignores stdout on PreToolUse, and its one refusal is exit 2: a tail that exits
+//                2 whenever the shim cannot start would lock out every tool. Nothing is added.
+// The usage counter (`Skill|Agent|Task`) never gets the tail: a counter that cannot start must
+// not ask. It carries `--host` on OpenClaude so the activity view does not file it under Claude.
+const DOWN = '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", '
+  + '"permissionDecisionReason": "Geneseed gate error: the gate did not start, so nothing judged this call.\\n'
+  + 'Safe choice: Deny, then run geneseed doctor.\\n'
+  + 'It asks because a gate that did not run cannot say this call is safe.\\n'
+  + 'If you allow it, this call runs with no check at all."}}';
+
+test('a gate that cannot start: Claude blocks, OpenClaude asks through a printf tail, Bob adds nothing', () => {
+  withGeneseedHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    const run = hookPrefix(HOOK_OPTS());
+    const pre = (host) => claudeHookGroups(cfg, HOOK_OPTS(), null, [], host).PreToolUse;
+    assert.equal(GATE_DOWN, DOWN);
+    // It sits between single quotes in the command, so it may hold none; and no `$` or backtick,
+    // which double quotes would expand.
+    assert.doesNotMatch(GATE_DOWN, /['$`]/);
+    assert.equal(JSON.parse(GATE_DOWN).hookSpecificOutput.permissionDecision, 'ask');
+    assert.deepEqual(pre('openclaude'), [
+      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command',
+        command: `${run} git-gate --root "${cfg}" --host openclaude || printf '%s' '${DOWN}'` }] },
+      { matcher: 'Write|Edit|NotebookEdit', hooks: [{ type: 'command',
+        command: `${run} rule-gate --root "${cfg}" || printf '%s' '${DOWN}'` }] },
+      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command',
+        command: `${run} tool-gate --root "${cfg}" --host openclaude` }] },
+    ]);
+    assert.deepEqual(pre('claude'), [
+      { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command',
+        command: `${run} git-gate --root "${cfg}"`, onFailure: 'block' }] },
+      { matcher: 'Write|Edit|NotebookEdit', hooks: [{ type: 'command',
+        command: `${run} rule-gate --root "${cfg}"`, onFailure: 'block' }] },
+      { matcher: 'Skill|Agent|Task', hooks: [{ type: 'command',
+        command: `${run} tool-gate --root "${cfg}"` }] },
+    ]);
+    assert.deepEqual(pre('bob'), [
+      { hooks: [{ type: 'command', command: `${run} tool-gate --root "${cfg}" --host bob` }] },
+    ]);
+  });
+});
+
+test('the OpenClaude tail prints the ask when the shim is gone, and nothing when the gate ran', {
+  skip: spawnSync('sh', ['-c', 'exit 0']).status === 0 ? false : 'no sh on this machine',
+}, () => {
+  withGeneseedHome((home) => {
+    const cfg = path.join(home, 'cfg');
+    const gate = claudeHookGroups(cfg, HOOK_OPTS(), null, [], 'openclaude').PreToolUse[0].hooks[0].command;
+    const sh = (command) => spawnSync('sh', ['-c', command], { encoding: 'utf8', input: '{}' });
+    // The shim's path swapped for one that does not exist: sh answers 127, the tail prints.
+    const gone = sh(gate.replace(hookPrefix(HOOK_OPTS()), `"${path.join(home, 'no-such-shim')}"`));
+    assert.equal(gone.stdout, DOWN);
+    assert.equal(gone.status, 0);
+    // A gate that ran and exited 0 with nothing to say: the tail stays silent.
+    const ran = sh(gate.replace(hookPrefix(HOOK_OPTS()), 'true'));
+    assert.equal(ran.stdout, '');
+    assert.equal(ran.status, 0);
   });
 });
 
@@ -662,7 +730,7 @@ test('the PowerShell form is emitted for Claude on win32 without Git Bash, and o
     const hGate = (command) => ({ hooks: [{ type: 'command', command, shell: 'powershell', onFailure: 'block' }] });
     assert.deepEqual(ps, {
       PreToolUse: [
-        { matcher: 'Bash|PowerShell', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
+        { matcher: 'Bash|PowerShell|Monitor', ...hGate(`& ${run} git-gate --root "${cfg}"`) },
         { matcher: 'Write|Edit|NotebookEdit', ...hGate(`& ${run} rule-gate --root "${cfg}"`) },
         // The usage counter (js/hosts/usage.mjs) rides tool-gate WITHOUT onFailure: a counter
         // that cannot start must never block a skill, so it is a plain handler like context's.
