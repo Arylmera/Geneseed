@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import {
-  buildLearnPrompt, learnPromptHead, readNotes, resolveAgentName,
+  buildLearnPrompt, learnPromptHead, readNotes, resolveAgentName, subagentNameOf,
 } from '../../js/hosts/hooks-learn.mjs';
 import { tailReader } from '../../js/hosts/hooks-prims.mjs';
 import {
@@ -434,6 +434,26 @@ test('runLlm sets GENESEED_LEARN_CHILD=1 on the model CLI it spawns', () => {
       { ...baseEnv(d), GENESEED_LLM: `node ${stub}` }, d);
     assert.equal(proc.status, 0, proc.stderr);
     assert.equal(proc.stdout.trim(), '1', 'the spawned model CLI did not see GENESEED_LEARN_CHILD=1');
+  });
+});
+
+// The model call is bounded. A CLI that hangs (a login prompt, a dead network) is stopped after
+// `$GENESEED_LLM_TIMEOUT` seconds (120 by default) and the run ends as if it had answered nothing:
+// rc 0, stdout empty, and exactly the one stderr line written out below. The stub prints half a
+// reply and then sleeps for a minute, so the test passes only if it was stopped, and the half
+// reply — which a manual run with no store would print — is dropped, never used.
+test('a model CLI that gives no answer in time is stopped, with one stderr line and rc 0', () => {
+  withDir((d) => {
+    const stub = path.join(d, 'sleeper.mjs');
+    fs.writeFileSync(stub, "process.stdout.write('half a rep'); setTimeout(() => {}, 60000);\n");
+    const began = Date.now();
+    const proc = runLearn([], 'a note worth distilling\n',
+      { ...baseEnv(d), GENESEED_LLM: `node ${stub}`, GENESEED_LLM_TIMEOUT: '1' }, d);
+    assert.equal(proc.status, 0, proc.stderr);
+    assert.equal(proc.stdout, '');
+    assert.equal(proc.stderr.replace(/\r\n/g, '\n'),
+      '[learn] node gave no answer in 1 s and was stopped - nothing learned.\n');
+    assert.ok(Date.now() - began < 30000, 'the model CLI ran past its limit');
   });
 });
 
@@ -1777,6 +1797,28 @@ test('an agent name is normalised or refused, never interpolated blind', () => {
   assert.equal(resolveAgentName('has space'), null);
   assert.equal(resolveAgentName(''), null);
   assert.equal(resolveAgentName(null), null);
+});
+
+// Which agent a SubagentStop payload names. The first name field present decides — `agent_name`,
+// `agent_type`, `subagent_type`, `agent`, in that order — and a value that is no slug yields no
+// lesson rather than a look at the next field. `agent_id` is never a name: it is one dispatch's
+// id, so a lesson filed under it is a file per dispatch that no later dispatch reads. That is why
+// a plugin's namespaced agent (`plug:rev`) gets no lesson even with an id beside it.
+test('a subagent is named by the first name field present, and never by agent_id', () => {
+  for (const [meta, want] of [
+    [{ agent_type: 'plug:rev', agent_id: 'a1b2c3' }, null],
+    [{ agent_type: 'Reviewer' }, 'reviewer'],
+    [{ agent_id: 'a1b2c3' }, null],
+    [{ agent_type: 'Reviewer', agent_id: 'a1b2c3' }, 'reviewer'],
+    [{ agent_name: 'plug:rev', agent_type: 'reviewer' }, null],
+    [{ agent_name: 'scout', agent_type: 'reviewer' }, 'scout'],
+    [{ agent_name: null, subagent_type: 'Explore' }, 'explore'],
+    [{ agent_name: '', agent: 'user-advocate' }, 'user-advocate'],
+    [{ agent_type: 7 }, null],
+    [{}, null],
+  ]) {
+    assert.equal(subagentNameOf(meta), want, JSON.stringify(meta));
+  }
 });
 
 /**

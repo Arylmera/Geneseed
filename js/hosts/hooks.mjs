@@ -42,9 +42,9 @@
  * THE CONTRACT EVERY VERB HOLDS. Exit 0 on every path, and signal through stdout. A hook
  * that fails is a tool call that fails, so an unreadable payload, a missing file, a
  * malformed user config and a bypass all end the same way: quietly, with 0. The single
- * exception is `learn`, which returns the model CLI's own exit code — an auth or quota
- * failure has to be diagnosable, and its hook command carries `|| exit 0` for exactly that
- * reason.
+ * exception is `learn` run BY HAND, which returns the model CLI's own exit code so a script can
+ * test it. On a hook call `learn` returns 0 like every other verb — exit 2 on Stop or PreCompact
+ * would block the turn's end — and an auth or quota failure is diagnosable from its stderr.
  *
  * The gate is `tests/helpers/cli_golden.mjs` replaying `tests/helpers/matrix/cli.{posix,win32}.json`:
  * each verb run in a seeded sandbox, with ABSOLUTE assertions on stdout, stderr, the exit code

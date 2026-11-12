@@ -195,6 +195,42 @@ test('with process 1 excluded a rule write the transcript shows is still reporte
   } finally { w.sb.cleanup(); }
 });
 
+// On Stop, stdout holds at most one JSON document. The change report is that document, so nothing
+// the model CLI does may add to it: a reply of NOTHING is dropped, a reply that is no memory
+// stores nothing and says so on stderr, and a model CLI that exits 2 neither blocks the Stop nor changes stdout. In
+// every row stdout is exactly the one line written out below, and rc is 0. Before this, the raw
+// reply followed the report on stdout: two documents, which no host parses, so the report was lost.
+test('Stop with a changed store prints the change report alone, whatever the model CLI says', () => {
+  const w = world('sw-llm-');
+  try {
+    const stub = path.join(w.sb.path, 'llm.mjs');
+    fs.writeFileSync(stub, 'process.stdout.write(process.env.SAYS); process.stderr.write(process.env.FAILS ?? "");'
+      + ' process.exit(Number(process.env.RC ?? 0));\n');
+    const log = path.join(w.sb.path, 't.jsonl');
+    fs.writeFileSync(log, `${JSON.stringify({ message: { role: 'user', content: 'a turn worth distilling' } })}\n`);
+    w.start();
+    const ONE = '{"systemMessage":"Geneseed change report: 1 rule or memory file changed outside this session\'s approved writes '
+      + '(another session, or a decision of yours in the web console, may have made it): install/user-rules.md. '
+      + 'This detects a change; it prevented nothing."}\n';
+    for (const [says, extra, stderr] of [
+      ['NOTHING\n', {}, ''],
+      ['nothing', {}, ''],
+      ['I could not find anything durable.\n', {}, '[learn] nothing new to store (all duplicates).\n'],
+      ['NOTHING\n', { RC: '2', FAILS: 'quota exceeded\n' }, 'quota exceeded\n'],
+    ]) {
+      // A report is said once, so each row changes the rule file again before its Stop.
+      fs.appendFileSync(path.join(w.root, 'user-rules.md'), ' changed');
+      const r = spawnHook(['learn', '--memory', path.join(w.root, 'memory'), '--no-done-gate'],
+        JSON.stringify({ hook_event_name: 'Stop', session_id: 's1', cwd: w.sb.path, transcript_path: log }),
+        { env: { ...w.env, GENESEED_LLM: `node ${stub}`, SAYS: says, ...extra }, cwd: w.sb.path });
+      const what = JSON.stringify([says, extra]);
+      assert.equal(r.status, 0, `${what}: ${r.stderr}`);
+      assert.equal(r.stdout.replace(/\r\n/g, '\n'), ONE, what);
+      assert.equal(r.stderr.replace(/\r\n/g, '\n'), stderr, what);
+    }
+  } finally { w.sb.cleanup(); }
+});
+
 test('V1 with process 1 excluded: a native edit of a rule file is still reported; memory is still excused', async () => {
   const sb = makeSandbox('sw-v1-norule-');
   const saved = { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };

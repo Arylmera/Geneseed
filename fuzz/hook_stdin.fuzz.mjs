@@ -22,6 +22,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import fc from 'fast-check';
+import { homeOverrides } from '../tests/helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOK = path.join(ROOT, 'bin', 'geneseed-hook.mjs');
@@ -145,7 +146,10 @@ test('rule-gate keeps its output contract in an application repo, on session-bea
 
 // The done gate (#289) rides `learn` on Stop, where stdout is a verdict too: whatever the
 // transcript holds — torn lines, wrong types, random tool calls — `learn` exits 0 and prints
-// nothing or exactly one `{"decision":"block"}`. `$GENESEED_LLM` is unset, so nothing spawns.
+// nothing or exactly one `{"decision":"block"}`. With `$GENESEED_LLM` unset nothing spawns. With
+// it set to a stub that prints `reply` and exits `rc`, the model CLI's words and exit code are
+// not the hook's either: `learn` still exits 0, and stdout is empty or one JSON document.
+const LLM_STUB = 'process.stdout.write(process.env.FUZZ_LLM_REPLY); process.exit(Number(process.env.FUZZ_LLM_RC));\n';
 const toolLine = fc.record({
   name: fc.constantFrom('Edit', 'Write', 'Bash', 'PowerShell', 'Read', 'NotebookEdit'),
   input: fc.oneof(fc.jsonValue(), command.map((c) => ({ command: c })),
@@ -159,7 +163,9 @@ const transcript = fc.array(fc.oneof(toolLine, fc.string(), fc.jsonValue().map((
   { maxLength: 12 }).map((lines) => lines.join('\n'));
 
 test('learn keeps its Stop contract with the done gate armed, on any transcript', () => {
-  fc.assert(fc.property(transcript, fc.boolean(), (text, active) => {
+  fc.assert(fc.property(transcript, fc.boolean(), fc.option(fc.record({ reply: fc.oneof(fc.string(),
+    fc.constantFrom('NOTHING', 'NOTHING\n', '{"decision":"block"}', '---\nname: x\n---\nbody\n')),
+  rc: fc.constantFrom(0, 1, 2) })), (text, active, llm) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
     try {
       fs.mkdirSync(path.join(dir, '.git'));
@@ -168,10 +174,19 @@ test('learn keeps its Stop contract with the done gate armed, on any transcript'
       fs.writeFileSync(path.join(dir, 't.jsonl'), text);
       const inFile = path.join(dir, 'stdin');
       fs.writeFileSync(inFile, JSON.stringify({ hook_event_name: 'Stop', cwd: dir,
-        transcript_path: path.join(dir, 't.jsonl'), stop_hook_active: active }));
+        transcript_path: path.join(dir, 't.jsonl'), stop_hook_active: active,
+        // The host's copy of the final turn: with it the notes are never empty, so the stub runs.
+        ...(llm ? { last_assistant_message: 'the turn is finished' } : {}) }));
       const env = { ...process.env };
       delete env.GENESEED_LLM;
       delete env.GENESEED_LEARN_CHILD;
+      if (llm) {
+        // A real store, so a reply that parses as a memory is written, and only under `dir`.
+        fs.mkdirSync(path.join(dir, 'install', 'memory'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'llm.mjs'), LLM_STUB);
+        Object.assign(env, homeOverrides(dir), { GENESEED_LLM: `node ${path.join(dir, 'llm.mjs')}`,
+          FUZZ_LLM_REPLY: llm.reply, FUZZ_LLM_RC: String(llm.rc) });
+      }
       const fd = fs.openSync(inFile, 'r');
       let p;
       try {
@@ -180,8 +195,14 @@ test('learn keeps its Stop contract with the done gate armed, on any transcript'
       } finally { fs.closeSync(fd); }
       assert.equal(p.status, 0, `learn exited ${p.status}\nstderr: ${p.stderr}`);
       if (p.stdout === '') return;
+      // `JSON.parse` refuses a second document, so this is "exactly one" as well as "JSON".
+      const doc = JSON.parse(p.stdout);
+      if (llm && doc.decision === undefined) {
+        assert.equal(typeof doc.systemMessage, 'string', `stdout is no hook document: ${p.stdout}`);
+        return;
+      }
       assert.equal(active, false, 'a block after a block: the cap must let the turn end');
-      assert.equal(JSON.parse(p.stdout).decision, 'block');
+      assert.equal(doc.decision, 'block');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }), { numRuns: RUNS });
 });

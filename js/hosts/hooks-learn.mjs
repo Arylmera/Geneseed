@@ -24,9 +24,9 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 
 const AGENT_NAME_RE = /^[a-z][a-z0-9-]{1,40}$/;
 const MAX_NOTES_CHARS = 16000;
-// Host payloads name the finished subagent inconsistently; try each.
-const SUBAGENT_NAME_FIELDS = ['agent_name', 'agent_type', 'subagent_type', 'agent',
-  'agent_id'];
+// Host payloads name the finished subagent inconsistently. Never `agent_id`: it is one dispatch's
+// id, so a lesson keyed on it is a file per dispatch that no later dispatch ever reads.
+const SUBAGENT_NAME_FIELDS = ['agent_name', 'agent_type', 'subagent_type', 'agent'];
 
 const PLUGIN_LEARN = path.join(ROOT, 'adapters', 'opencode', 'plugins', 'geneseed-learn.js');
 
@@ -72,6 +72,17 @@ const agentLessonPrompt = () => pluginLiteral('AGENT_LESSON_PROMPT',
 export function resolveAgentName(raw) {
   const name = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
   return name && AGENT_NAME_RE.test(name) ? name : null;
+}
+
+/**
+ * The agent a SubagentStop payload names, as a safe slug, or null. The FIRST field present
+ * decides, and a value that is no slug yields no lesson: a plugin's agent arrives namespaced
+ * (`plug:rev`), and falling through to a later field would file its lesson under another name.
+ * Exported for the unit tier, like `readNotes` below.
+ */
+export function subagentNameOf(meta) {
+  const field = SUBAGENT_NAME_FIELDS.find((f) => meta[f] !== undefined && meta[f] !== null && meta[f] !== '');
+  return field ? resolveAgentName(meta[field]) : null;
 }
 
 /** The lifecycle-hook payload if stdin is one, else `{}`. */
@@ -216,9 +227,22 @@ export function buildLearnPrompt(notes, facts) {
  * distilled memory carrying an accent or an em dash is WRITTEN to the store, so a
  * mis-decode outlives the process. `maxBuffer` is lifted off Node's 1 MB default, which
  * would truncate a long reply into a silently-half-parsed set of memory files.
+ *
+ * BOUNDED: a model CLI that hangs (a login prompt, a dead network) used to hold Stop until the
+ * host's own hook timeout killed the hook, and that kill loses whatever the hook had still to
+ * say. `$GENESEED_LLM_TIMEOUT` is the limit in seconds, 120 unless it names a positive number.
+ * A CLI stopped at the limit has said nothing usable, so its partial reply is dropped, never
+ * parsed into half a memory file: one stderr line, and the run ends as if it answered nothing.
  */
+const LLM_TIMEOUT_S = 120;
+function llmTimeoutSeconds() {
+  const n = Number(process.env.GENESEED_LLM_TIMEOUT);
+  return Number.isFinite(n) && n > 0 ? n : LLM_TIMEOUT_S;
+}
+
 function runLlm(llm, prompt) {
   const argv = splitWords(llm);
+  const seconds = llmTimeoutSeconds();
   // `NO_WINDOW` folds in `CREATE_NO_WINDOW`; a model CLI invoked from the windowless daemon
   // otherwise pops a console for as long as it takes to answer.
   //
@@ -228,8 +252,12 @@ function runLlm(llm, prompt) {
   // killing the outermost call. The marker rides in the child's own environment (inherited by
   // every grandchild too), and `cmdLearn`'s first line stands down the instant it sees it.
   const proc = spawnSync(argv[0], [...argv.slice(1), prompt],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: seconds * 1000, killSignal: 'SIGKILL',
       env: { ...process.env, GENESEED_LEARN_CHILD: '1' }, ...NO_WINDOW });
+  if (proc.error && /** @type {NodeJS.ErrnoException} */ (proc.error).code === 'ETIMEDOUT') {
+    err(`[learn] ${argv[0]} gave no answer in ${seconds} s and was stopped - nothing learned.\n`);
+    return { stdout: '', stderr: '', returncode: 0, error: null };
+  }
   // Universal newlines, because Python reads the pipe in TEXT mode: a model CLI that is
   // itself a Python script emits CRLF on Windows, `subprocess` folds it to `\n`, and
   // `write_text` expands it again on the way into the memory file. Node hands back the raw
@@ -253,11 +281,7 @@ function runLlm(llm, prompt) {
  * parity of mechanism, degrading to a no-op, never a crash.
  */
 function learnAgentLesson(meta, notes, args) {
-  let agent = null;
-  for (const field of SUBAGENT_NAME_FIELDS) {
-    agent = resolveAgentName(meta[field]);
-    if (agent) break;
-  }
+  const agent = subagentNameOf(meta);
   if (!agent) return 0;
   const memDir = resolveMemoryDir(args.memory);
   if (!memDir) return 0;
@@ -283,7 +307,9 @@ function learnAgentLesson(meta, notes, args) {
     }
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
-  return proc.returncode;
+  // Only a SubagentStop hook reaches this, and the model CLI's code is not the hook's: exit 2
+  // there sends the subagent back to work. The failure is on stderr above.
+  return 0;
 }
 
 /** `--memory` of a global install's hook, swapped for the shared store when that exists. */
@@ -428,13 +454,18 @@ export function cmdLearn(args) {
     if (!created.length && !updated.length && !archived.length) {
       err('[learn] nothing new to store (all duplicates).\n');
     }
-  } else if (verdict === 'advisory') {
-    err(output);
-  } else {
+  } else if (!hookEvent) {
+    // A person running `learn` by hand with no store: the reply is what they asked to see.
     out(output);
+  } else if (output.trim() && output.trim().toUpperCase() !== 'NOTHING') {
+    // On a hook call stdout is the host's: it holds at most ONE JSON document (the change report
+    // or an advisory above), and the model's raw words after it made two, which no host parses,
+    // so the report was lost. A bare NOTHING says nothing and is dropped.
+    err(output);
   }
   if (proc.returncode !== 0 && proc.stderr) err(proc.stderr);
-  // After an advisory, the model CLI's code is not this hook's: exit 2 on Stop would turn the
-  // advisory into a block, and any non-zero drops the JSON already on stdout.
-  return verdict === 'advisory' ? 0 : proc.returncode;
+  // On a hook call the model CLI's code is not this hook's: exit 2 on Stop or PreCompact blocks
+  // the turn's end or the compaction, and any non-zero drops the JSON already on stdout. The
+  // failure is on stderr above. A manual run keeps the code, so a script can test it.
+  return hookEvent ? 0 : proc.returncode;
 }
