@@ -17,8 +17,9 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | Event | When | Command | What it does | Conditional? |
 | --- | --- | --- | --- | --- |
 | `SessionStart` | `startup`, `resume`, `clear`, `compact`, `fork` | `geneseed-hook context` | injects your harness files and the repo's docs, or re-injects them after a resume, a fork, or an auto-compaction summarised them away | no |
-| `PreToolUse` | `Bash`, `PowerShell` | `geneseed-hook git-gate` | asks before a command that would really lose data, and before a recursive scan of a whole filesystem; asks before every commit and push | the commit/push question only |
+| `PreToolUse` | `Bash`, `PowerShell`, `Monitor` | `geneseed-hook git-gate` | asks before a command that would really lose data, and before a recursive scan of a whole filesystem; asks before every commit and push | the commit/push question only |
 | `PreToolUse` | `Write`, `Edit`, `NotebookEdit` | `geneseed-hook rule-gate` | asks before a secret lands in a file, or a write to your standing rules; stops the session's first write once in an application repo with no `## Ownership` section | no |
+| `PreToolUse` | `Skill`, `Agent`, `Task` | `geneseed-hook tool-gate` | records the skill or subagent call in the usage count; judges nothing and never blocks | no |
 | `Stop` | the agent finishes a reply | `geneseed-hook learn` | distils durable facts into the memory store | needs `GENESEED_LLM` |
 | `SubagentStop` | a subagent finishes | `geneseed-hook learn` | records a lesson for that agent in the store's `agents/<name>.md` | needs `GENESEED_LLM` |
 | `PreCompact` | before auto-compaction | `geneseed-hook learn` | captures memory before the transcript is summarised | needs `GENESEED_LLM` |

@@ -36,7 +36,7 @@ Ten read-only debaters — `advocate`, `skeptic`, `pragmatist`, `steward`, `oper
 
 An agent is picked by **what the work needs**, not by **where the file lives**. There is no "agent for `src/api/`": a change to any folder goes to the `developer`, and its review to the `reviewer`. You can name one ("have the reviewer look at this"), or let the main session route the request to the right specialist itself.
 
-In [foreman mode](foreman-mode.md) the session chains several of them into a pipeline — explorer, developer and tester, plus whatever specialists the task needs.
+In [foreman mode](foreman-mode.md) the session hands each task that would block it to one background `developer` worker. A pipeline crew — explorer, developer and tester, plus whatever specialists the task needs — runs only when you ask for one.
 
 ### Agents learn too
 

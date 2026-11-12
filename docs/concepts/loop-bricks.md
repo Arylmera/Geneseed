@@ -43,6 +43,6 @@ the repository.
 - **`fitness-define`** (`enforce-architecture-rule`) reaches for ArchUnit first on Java — a
   `FreezingArchRule`, whose violation store doubles as the allowlist of today's violations —
   before dependency-cruiser, import-linter, eslint-plugin-boundaries or size-limit elsewhere.
-- **`migration-plan`** (`update-contract`) treats Pact or Spring Cloud Contract, where the repo
-  already records consumer contracts, as the check `compat-check` runs against each step rather
-  than only the consumers' own test suites.
+- **`compat-check`** (`update-contract`) treats Pact or Spring Cloud Contract, where the repo
+  already records consumer contracts, as the check it runs against each step rather than only
+  the consumers' own test suites.

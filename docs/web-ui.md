@@ -75,9 +75,9 @@ Every `/api/*` read takes and checks the pair, with these exceptions:
 - `/api/ping` and `/api/jobs` ignore it.
 - The machine-wide reads also ignore it: `/api/update`, `/api/installs`, `/api/fleet`, `/api/migrate/preview`,
   `/api/kits`, `/api/usage`, `/api/gates`, `/api/excludes`, `/api/mcp`, `/api/loops/active`,
-  `/api/factories/active`, `/api/activity`, and the Library's skill, agent, memory and notebook lists,
-  `/api/catalog/skills`, `/api/catalog/agents`, `/api/catalog/memory` and
-  `/api/catalog/notebook`. Such a read does not check the pair, and its answer does not change
+  `/api/factories/active`, `/api/activity`, and the Library's skill, agent, memory, notebook, wiki and config lists,
+  `/api/catalog/skills`, `/api/catalog/agents`, `/api/catalog/memory`,
+  `/api/catalog/notebook`, `/api/catalog/wiki` and `/api/catalog/config`. Such a read does not check the pair, and its answer does not change
   with the pair. The Activity detail (`/api/activity/<id>`) and the Activity toggle still take
   the pair.
 
@@ -88,7 +88,7 @@ tier hold one memory store: it is listed under the first of them, and `/api/cata
 them all in `sharedInstalls`. Each row is one id (kind and name), and
 its `installs` field names the installs that have it, as `host:scope:root` keys (the same keys
 as `/api/usage`). An id that only some installs have lists only those installs, so an exclusion
-stays visible. The other catalog sections stay install-scoped. `/api/item/skill/<name>` and
+stays visible. The laws section stays install-scoped. `/api/item/skill/<name>` and
 `/api/item/agent/<name>` stay install-scoped too, because each install renders its own copy in
 its own theme and footprint. With a pair, the item is that install's copy, and an id that
 install lacks gets a 404. Without a pair, the item is the copy of the first install that has
@@ -505,7 +505,7 @@ screen the run list stacks above the detail.
   - "Deploy to folder…" and "Rebuild all" apply to the whole set. An **Excluded folders**
     card (shown once a global install exists) manages sovereign repos — folders where every
     global harness goes dormant (hooks stay silent, the global preamble never loads);
-    add or remove one here, the web mirror of `harness exclude add|remove|list`.
+    add or remove one here, the web mirror of `geneseed exclude add|remove|list`.
 - **Settings** (`#/settings`; `#/about` and `#/installs/server` resolve here) — a rail entry of its
   own, about the tool and never one install: a sheet with a section index. **Machine**:
   version + Update (labelled by how this copy updates: git pull, npm install -g, or the command

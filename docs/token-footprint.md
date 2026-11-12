@@ -94,12 +94,12 @@ until 2026-09 it did, and the whole harness was paid twice per session.
 - **User-only skills leave the catalogue.** A skill whose source carries
   `<!-- invocation: user -->` renders `disable-model-invocation: true`; Claude
   Code and Bob then drop its description from the always-on skill metadata and
-  only `/name` opens it. The two teaching skills (`teach`, `learn-mode`)
+  only `/name` opens it. Three skills (`teach`, `learn-mode`, `adhd`)
   carry it today.
 - **Aliases cost 0 always-on.** A merged skill's old names (`<!-- aliases: -->`)
   ship as user-only stubs on Claude Code, Bob and OpenClaude, and as `/name` commands
   on OpenCode — never in the model's catalogue, so a rename or merge is free.
-- Plugin JavaScript (OpenCode, ~26k on disk) runs in the host runtime and
+- Plugin JavaScript (OpenCode, about 380 KB on disk) runs in the host runtime and
   never enters the context window.
 
 ## Why there is no chat mode

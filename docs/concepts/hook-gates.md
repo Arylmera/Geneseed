@@ -10,7 +10,7 @@ How Geneseed's [hooks](hooks.md) behave when something goes wrong, where they ar
 
 ## Gates fail closed, and leave a trace
 
-If a gate cannot evaluate a call — an unreadable payload, a bug — it asks, with the error as its reason, rather than silently letting the call through. Every prompt a gate raises adds one line to `notebook/gates.jsonl` in the install: the rule and the time, never the command or content. `geneseed status` counts them by rule.
+If a gate cannot evaluate a call — an unreadable payload, a bug — it asks, with the error as its reason, rather than silently letting the call through. Every prompt a gate raises adds one line to `notebook/gates.jsonl` in the install: the time, the verb, the rule and the working directory, never the command or content. `geneseed status` counts them by rule.
 
 ```bash
 geneseed status
@@ -34,10 +34,10 @@ The merge is surgical. Every other key and every hook of your own survive, and t
 
 **OpenClaude** is a Claude Code fork: it gets the same hooks and the same prompts, unchanged.
 
-**Bob** has its own contract. It uses Claude's event names but ignores a hook's output before a tool call — the only way to refuse is exit code 2 — and it has no tool matcher or `SubagentStop`. Bob 2.2.3 does have `PreCompact` and `PostCompact`, but Geneseed does not wire them yet. So Bob gets four hooks:
+**Bob** has its own contract. It uses Claude's event names but ignores a hook's output before a tool call — the only way to refuse is exit code 2 — and it has no `SubagentStop`. Bob does document a regex matcher on the tool name, but Geneseed wires none: Bob's tool list and regex dialect are unverified, and a wrong matcher would silence the gate. Bob 2.2.3 does have `PreCompact` and `PostCompact`, but Geneseed does not wire them yet. So Bob gets four hooks:
 
 - `SessionStart` → `geneseed-hook context`.
-- `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. It **blocks** (exit 2) exactly the rules whose Bob cell says *block* in [Rule enforcement, by host](enforcement-table.md). The commit/push check and a shell write to a rule store become a warning line, because a hard block would leave Bob unable to commit at all. The [ownership](ownership.md) gate also exits 2, but only once per session and repo: the same write passes after the developer answers.
+- `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. (On Claude Code and OpenClaude the same verb only counts skill and subagent calls: see [Hooks](hooks.md).) It **blocks** (exit 2) exactly the rules whose Bob cell says *block* in [Rule enforcement, by host](enforcement-table.md). The commit/push check and a shell write to a rule store become a warning line, because a hard block would leave Bob unable to commit at all. The [ownership](ownership.md) gate also exits 2, but only once per session and repo: the same write passes after the developer answers.
 - `Stop` → `geneseed-hook learn`. Bob's `Stop` carries no transcript, so nothing is learned there; the [change report](hooks.md#the-change-report) still runs.
 - `UserPromptSubmit` → `geneseed-hook activity`, which records the turn for the Activity view.
 

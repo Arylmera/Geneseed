@@ -23,7 +23,7 @@ Every [host](hosts.md) gets the same content. This table is what each one lets G
 | User-only skills hidden from the model | 🔒 `permission.skill` deny | ✅ `disable-model-invocation` | ✅ `/`-command, no skill | ✅ `disable-model-invocation` |
 | Sovereign-repo exclusions⁵ | ⚙️ plugins stand down | ✅ `claudeMdExcludes` | ✅ rules shadow stub | ✅ `claudeMdExcludes` |
 | Subagent depth capped at two ([Foreman mode](foreman-mode.md)) | ✅ `subagent_depth` | ✅ `env` setting | ➖ undocumented | ➖ no cap in the host |
-| MCP server wiring | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcpServers` |
+| MCP servers (Geneseed reads and lists them, never writes them) | ✅ `mcp` | ✅ `mcpServers` | ✅ `mcp.json` | ✅ `mcpServers` |
 | Colour themes · LSP · workflow runner · primary agent · `/`-commands | ✅ | ➖ | ➖ | ➖ |
 
 ✅ native · ⚙️ OpenCode plugin · 🔒 `permission` entry in `opencode.json` · 🪝 `settings.json` hook · ➖ no host mechanism (the rule still applies as prose).
