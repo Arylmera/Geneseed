@@ -8,6 +8,33 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.3.1] — 2026-11-12
+
+**Upgrade note.** The fixed hook commands, matchers and plugins reach an install only when it is emitted again: run `geneseed rebuild-all` after the update.
+
+### Fixed
+- **A gate that cannot run asks instead of letting the call through.** A gate verb that cannot parse its arguments, or runs on a Node below the floor, asks (Bob warns and exits 0, because an exit 2 there refuses every tool). An OpenClaude gate that cannot start asks. On OpenCode each guard gate runs alone, and a gate error asks on OpenCode 2.
+- **A Bob call that carries text is a write, whatever the tool is called.** The check went by tool name only, so `create_file` to `user-rules.md` passed.
+- **The OpenCode content scan reads `edits[]` and nested calls.** The ownership gate skips headless `geneseed-*` sessions, and its marker survives a restart.
+- **A read-only agent cannot dispatch or open a shell monitor.** `Monitor` joins the shell matcher, and Bob spawns are counted.
+- **Geneseed's hook handlers are recognised by signature** (shim, verb and this install's root), not by deep equality. A flag change no longer stacks a second group, a field you added such as `timeout` survives, and uninstall removes what it finds. A commented settings file gets the canonical groups printed.
+- **A commented `opencode.json` is refused whatever its extension**, and uninstall removes the bash gates the manifest recorded.
+- **Stop prints one document.** The change report was lost behind raw model output. The `learn` model call is bounded (`GENESEED_LLM_TIMEOUT`, default 120 s), and no lesson is keyed on a dispatch id.
+- **The OpenCode context plugin keeps the prompt prefix stable**: reminders are appended, and the model line is pinned per session.
+- Host docs: one dated "What is verified" block, and Bob's `learn` and `process-1` wording corrected.
+
+### Added
+- **`GENESEED_HOOK_TAP`**, opt-in, records what a host really sends, every string redacted to its type and length. `doctor --probe` sends Bob its own payload shapes.
+- **A ceiling on the skill listing**, gated by the doctor and drawn in the console on a Claude Code install's details row.
+- `tool-gate` takes `--no-consent`.
+
+### Changed
+- The host canary runs the OpenCode guard's deny on the real hosts against a scripted model on loopback. The twins tool writes every plugin copy that can be byte-identical (6 -> 48 rows).
+- Console dependencies: marked 18.1.3, vite 8.3.7, @vitejs/plugin-react 6.3.0, vitest 5.1.0, jsdom 31.0.0, with `web/dist` rebuilt.
+
+### Removed
+- The drifted `adapters/claude-code/settings.json` sample.
+
 ## [5.3.0] — 2026-11-11
 
 ### Added
