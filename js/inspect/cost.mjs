@@ -15,7 +15,10 @@
  *              `disable-model-invocation` on Claude Code and OpenClaude; on OpenCode, which
  *              ignores that key, the `permission.skill` deny in `opencode.json`; on Bob no
  *              SKILL.md exists for one, so there is nothing to skip.
- * - `agents`   the same for native agents; Bob has none, its agents table is in the carrier.
+ * - `agents`   the same for native agents. Bob counts 0: it has native `agents/<name>.md`
+ *              files, but whether Bob lists them to the model is unverified, so its agents
+ *              table stays in the carrier (`catalog.agents`, js/hosts/hosts.mjs) and is
+ *              counted there.
  * - `context`  the session files the context hook injects (untouched seeds already skipped).
  *              The per-repo project context is NOT counted: it changes with the working dir.
  */

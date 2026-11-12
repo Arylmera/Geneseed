@@ -296,8 +296,14 @@ async function main(argv) {
   // `context` answers SessionStart and SubagentStart (settings.mjs), told apart by the payload's
   // event name. Read here, not in the verb, so an in-process caller never blocks on fd 0; the read
   // is cached, so `trackActivity` reuses it. A terminal sends no payload.
+  // The same parse hands `context` the payload's `cwd`, its project root on a host that sets no
+  // `$CLAUDE_PROJECT_DIR` (`hookProjectDir`).
   if (verb === 'context' && !isatty(0)) {
-    try { parsed.args.event = JSON.parse(readStdin() || '{}').hook_event_name ?? null; } catch { /* not JSON: SessionStart */ }
+    try {
+      const payload = JSON.parse(readStdin() || '{}');
+      parsed.args.event = payload.hook_event_name ?? null;
+      parsed.args.cwd = typeof payload.cwd === 'string' ? payload.cwd : null;
+    } catch { /* not JSON: SessionStart */ }
   }
   let rc;
   try {

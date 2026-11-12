@@ -554,6 +554,13 @@ export const EMIT_HOST_SCOPE = new Map(HOSTS.flatMap(({ host }) => [
   [host, [host, 'project']], [`${host}-global`, [host, 'global']],
 ]));
 
+/**
+ * The inverse: `'<host> <scope>'` -> the emit name that installs it. One map for the two
+ * readers that had a hand copy each: `rebuild-all`'s default for an install with no marker
+ * (`js/build/generate.mjs`) and the console's install command (`js/web/actions.mjs`).
+ */
+export const EMIT_FOR = new Map([...EMIT_HOST_SCOPE].map(([emit, [host, scope]]) => [`${host} ${scope}`, emit]));
+
 /** `root`'s own marker, resolved, or null. */
 export function emitHostScopeOf(root) {
   const emit = readMaybe(path.join(root, '.geneseed-emit'));

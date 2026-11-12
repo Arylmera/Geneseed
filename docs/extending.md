@@ -535,7 +535,7 @@ every pack, so a kit there would switch itself on in every install built before 
 
 ---
 
-## 4 — Adding a PLUGIN, a HOOK verb, or a doc page
+## 4 — Adding a PLUGIN, a HOOK verb, a doc page, or a HOST
 
 ### 4a — An OpenCode plugin
 
@@ -605,6 +605,54 @@ Inline `<!-- harness:claude -->` blocks strip per host and **fail open** on an u
 the page renders, wrong, with nothing red.
 
 ---
+
+### 4d — A host
+
+**A host is not one row.** `HOSTS` (`js/hosts/hosts.mjs`) is the table two maps are derived
+from (`EMIT_HOST_SCOPE` and `EMIT_FOR` in `js/hosts/installs.mjs`, and `CLAUDE_STYLE`). Every
+other site below is typed by hand. `tests/unit/host_tables.test.mjs` fails for the tables marked
+*(pinned)*; the rest have no gate, which is why this list exists.
+
+Decide first: is the host **Claude-shaped** (a settings file that runs hook commands, a root
+instruction file, `SKILL.md` skills) or does it need its own engine, as OpenCode does? A
+Claude-shaped host rides `js/build/emit-claude.mjs`; anything else is a new emitter and a much
+larger change than this list.
+
+1. `HOSTS` in `js/hosts/hosts.mjs`: the row (`host`, `family`, `configDir`, `projectMarker`,
+   `agentFile`, `catalog`), a `<host>ConfigDir()` beside the others, and `CARRIERS` /
+   `carriersFor` if the root file sits somewhere new. Set `catalog.agents` only for what you
+   have seen the host list to the model by itself.
+2. `EMITS` in `js/build/args.mjs` *(pinned)*: `<host>` and `<host>-global`.
+3. `CLAUDE_SHAPED` and the two dispatch tables under it in `js/build/driver.mjs`: one row per
+   scope, with the summary line the emit prints. Name the settings file by its real path.
+4. `claudeHookGroups` in `js/hosts/settings.mjs`: the hook groups in the host's own events and
+   verdict dialect, and `--host <id>` on each command. A host that cannot ask (Bob) needs its
+   block set decided in `BLOCK_RULES` (`js/hosts/hooks.mjs`).
+5. `js/hosts/native.mjs`: the agent and skill frontmatter dialect, and how a user-only skill
+   is hidden from the model.
+6. The gate-config markers: `GATE_CONFIG_MARKERS` in `js/hosts/hooks.mjs` *(pinned)* and its
+   hand copy in `adapters/opencode/plugins/geneseed-guard.js`, which leaves out `.opencode`.
+   A write under the new host's project layer can switch a gate off.
+7. `NATIVE_ROOT` in `js/hosts/hooks-context.mjs` *(pinned)*: the root file the host loads by
+   itself, so the context hook does not inject it a second time.
+8. `mcpConfigFor` in `js/hosts/mcp.mjs` *(pinned)*: where the host reads MCP servers from.
+9. `PROBED_VERB` and `probeShell` in `js/inspect/checks-probe.mjs` *(pinned)*: which verb
+   refuses on this host, under which shell, and `probesFor` if the host sends its own payload
+   shapes.
+10. `HOST_LABELS` in `js/inspect/checks-repo.mjs` *(pinned)*, then a column in
+    `docs/concepts/host-matrix.md` and `docs/concepts/enforcement-table.md` (`geneseed doctor`
+    fails without them), and a row in `## What is verified` saying how the host was checked.
+11. `DOC_HOSTS` in `js/web/docs.mjs` *(pinned)*: the Docs selector's entry and family.
+12. The setup menu, `js/maintain/setup.mjs`: `EMIT_OPTIONS` *(pinned)*, appended after the
+    last entry because the menu is answered by number; the host's display name, and its row in
+    the "is it installed" detection table.
+13. `js/inspect/cost.mjs` (`userOnlyTest`, `catalogueChars`), `js/inspect/excludes.mjs` and
+    `js/inspect/status.mjs`: each branches on the host id.
+14. `tests/host_canary.mjs`: a `HOSTS` entry if the host is on npm. If it is not, say so in
+    the docblock and in `## What is verified`, and write the by-hand steps into
+    `docs/guides/verify.md`. `GENESEED_HOOK_TAP` records what the host really sends.
+15. `tests/golden.mjs`: the emit cells. `adapters/<host>/README.md`, a
+    `docs/guides/install-<host>.md`, and the README's matrix.
 
 ## 4bis — Adding a RUNTIME DEPENDENCY
 

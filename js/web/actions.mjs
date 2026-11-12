@@ -48,7 +48,7 @@ import {
   opencodeConfigDir, resolvePath,
 } from '../hosts/hosts.mjs';
 import {
-  EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
+  EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
   installState, installTargets, modeOfDir, postureOfDir, themeOfDir,
   trustOfDir,
@@ -715,14 +715,6 @@ export function apiRestore(state, files) {
   state.refresh();
   return { restored, deleted, errors, archive };
 }
-
-/** (host, scope) -> the emit name that installs it. */
-const EMIT_FOR = new Map([
-  ['opencode global', 'opencode-global'], ['opencode project', 'opencode'],
-  ['claude global', 'claude-global'], ['claude project', 'claude'],
-  ['bob global', 'bob-global'], ['bob project', 'bob'],
-  ['openclaude global', 'openclaude-global'], ['openclaude project', 'openclaude'],
-]);
 
 /**
  * The build command that installs Geneseed into a DETECTED location, or re-themes an

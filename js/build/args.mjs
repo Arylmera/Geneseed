@@ -19,7 +19,7 @@ import {
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 
 /** The nine `--emit` choices: a plain bundle, then a project and a global emit per host. */
-const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
+export const EMITS = ['files', 'opencode', 'opencode-global', 'claude', 'claude-global',
   'bob', 'bob-global', 'openclaude', 'openclaude-global'];
 
 /**

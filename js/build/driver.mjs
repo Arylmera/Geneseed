@@ -576,7 +576,7 @@ const CLAUDE_SHAPED = {
     summary: (at, r) => `[geneseed] bob-global -> ${at}: ${r.nAgents} subagents, `
       + `${r.nSkills} skills, rules/geneseed.md (Bob's always-injected channel; a global `
       + 'AGENTS.md is not auto-loaded, so none is written), '
-      + `${r.nHooks} hook group(s), settings.json, ${r.memStatus}, ${r.nbStatus}.\n`,
+      + `${r.nHooks} hook group(s), settings/settings.json, ${r.memStatus}, ${r.nbStatus}.\n`,
   },
   // Per-repo: AGENTS.md at the root + a `.bob/` layer.
   bob: {

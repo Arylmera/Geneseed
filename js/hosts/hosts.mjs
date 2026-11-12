@@ -304,10 +304,20 @@ export function isCanonical(cfgDir, host) {
 /**
  * The project root a hook judges against: `$CLAUDE_PROJECT_DIR` (Claude Code and OpenClaude set
  * it for every hook — the session's root, where its project hooks were loaded from), else the
- * cwd. Bob documents no such variable, so under Bob this is the cwd.
+ * payload's `cwd` when the caller has one, else the process cwd.
+ *
+ * Bob documents no such variable, but its payload carries `cwd`, the root workspace (2.2.3
+ * bundle read; docs/concepts/host-matrix.md, "What is verified"). `payloadCwd` is optional and
+ * only a caller that ALREADY holds the parsed payload passes it: `context` does, through the
+ * hook entry. The gate verbs do not, because their stand-down runs before they read stdin, and
+ * a second read on every tool call is not worth a fallback. A value that is not an absolute
+ * path is ignored: the payload is the host's text, and a relative one would resolve against
+ * the very cwd it was meant to replace.
  */
-export function hookProjectDir() {
-  return process.env.CLAUDE_PROJECT_DIR || process.cwd();
+export function hookProjectDir(payloadCwd) {
+  if (process.env.CLAUDE_PROJECT_DIR) return process.env.CLAUDE_PROJECT_DIR;
+  if (typeof payloadCwd === 'string' && path.isAbsolute(payloadCwd)) return payloadCwd;
+  return process.cwd();
 }
 
 /**
@@ -449,8 +459,10 @@ export function openclaudeConfigDir() {
 
 /**
  * `_build_global.HOSTS` — one row per host, IN ITS ORDER: opencode, claude, bob, openclaude.
- * A new host is one row here; `EMIT_HOST_SCOPE` (`js/hosts/installs.mjs`) and `CLAUDE_STYLE`
- * below are derived from it.
+ * `EMIT_HOST_SCOPE` and `EMIT_FOR` (`js/hosts/installs.mjs`) and `CLAUDE_STYLE` below are
+ * derived from it, but A NEW HOST IS NOT ONE ROW HERE: a dozen hand tables name the hosts
+ * too. `docs/extending.md` §4d is the checklist, and `tests/unit/host_tables.test.mjs` fails
+ * for each table that falls behind this one.
  *
  * An array rather than an object because the order is observable output, not an
  * implementation detail: `harness exclude add` walks it and prints one message per host, so
@@ -580,12 +592,17 @@ export const CLAUDE_STYLE = HOSTS.filter((h) => h.family === 'claude').map((h) =
  * user-editable `.geneseed-emit` marker, so an unrecognised one must degrade to the portable
  * bundle rather than raise.
  *
- * SPLIT PER KIND (2026-09): Bob reads `.bob/skills/<name>/SKILL.md` natively — verified
- * against its docs in the Bob injection review — but has no markdown agents directory, so a
- * single boolean was wrong both ways: `false` shipped the §4 Skills table on top of a
- * catalogue Bob already had (~1.7k tokens twice), `true` would have stripped the §3 Agents
- * table that is Bob's ONLY agent catalogue. Each CATALOG block in AGENT.md names its kind and
- * resolves against its own flag.
+ * SPLIT PER KIND (2026-09): Bob reads `.bob/skills/<name>/SKILL.md` natively (its skills
+ * docs), so a single boolean was wrong both ways: `false` shipped the §4 Skills table on top
+ * of a catalogue Bob already had (~1.7k tokens twice), `true` would have stripped the §3
+ * Agents table. Each CATALOG block in AGENT.md names its kind and resolves against its own flag.
+ *
+ * BOB'S `agents: false` IS NOT "Bob has no agents directory". The emit writes native
+ * `agents/<name>.md` in Bob's dialect (`bobAgentFrontmatter`, `js/hosts/native.mjs`), and Bob
+ * 2.2.3 reads them. What is NOT verified is whether Bob lists those agents to the model by
+ * itself, so the §3 Agents table stays in Bob's carrier and the flag stays false until someone
+ * sees Bob's own listing. Flipping it on a guess would remove the only agent catalogue the
+ * model is known to get.
  *
  * Returns `{ skills, agents }` for a known host, `false` for an unknown one.
  */

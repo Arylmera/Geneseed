@@ -44,7 +44,7 @@ settings spell it, through the host's own shell, on `git reflog expire --expire=
 and `git status` (which must go through). A gate wired with `--no-deletion-gate` lets the first one
 through by design, so it is probed on `find / -name geneseed-probe` instead — a root-wide scan it
 must still refuse. `--no-secrets-gate`, `--no-done-gate`, `--no-ownership-gate`, `--no-external-gate` and
-`--no-test-note` change nothing here: none judges either probe command. An OpenCode install's guard plugin has no command to
+`--no-test-note` change nothing here: none judges either probe command. A Bob gate is asked twice more, in Bob's own shapes: the same two commands in its older `{event, tool, input}` payload, and a `write_file` carrying a made-up credential, which it must refuse. A problem line from one of those ends with the shape in brackets, and a gate wired `--no-secrets-gate` is not asked the last one. An OpenCode install's guard plugin has no command to
 run: the probe imports it and calls its hook through both plugin APIs (V1 and V2), with `rm -rf /`
 as the call it must refuse. `GENESEED_GUARD=off` or `warn` in your terminal makes that a note,
 not a failure.

@@ -549,7 +549,7 @@ export function moduleMapProblems() {
  * machine-facing table (config dirs, project markers, catalog flags), and a doc-table LABEL is
  * a fact about two Markdown files, not about an install.
  */
-const HOST_LABELS = { opencode: 'OpenCode', claude: 'Claude Code', bob: 'Bob', openclaude: 'OpenClaude' };
+export const HOST_LABELS = { opencode: 'OpenCode', claude: 'Claude Code', bob: 'Bob', openclaude: 'OpenClaude' };
 
 /**
  * The two hand-written, one-column-per-host tables, and the non-host columns each one carries
