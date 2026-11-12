@@ -561,6 +561,10 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
   const total = costTotal(i.cost)
   // A zero or absent ceiling has no percentage; dividing by it printed "Infinity%" or "NaN%".
   const ceilPct = i.cost?.ceiling ? Math.round((i.cost.carrier / i.cost.ceiling) * 100) : null
+  // The skill list against its own ceiling, which only a Claude Code install carries.
+  const skillPct = i.cost?.skillCeiling
+    ? Math.round((i.cost.skills / i.cost.skillCeiling) * 100)
+    : null
   return (
     <>
       <tr className={open ? 'ldg-open' : ''}>
@@ -650,6 +654,22 @@ function FleetRow({ i, n, onRebuild, onOpen, busy }) {
                   <>
                     <span className="ldg-lbl">{`What rides every turn · ${approxTokens(total)} tokens`}</span>
                     <StackBar parts={costParts(i.cost)} label={label} />
+                    {/* Drawn as the row's root-file bar is: the part, its ceiling, the share. */}
+                    {skillPct === null ? null : (
+                      <>
+                        <span className="ldg-rootbar">
+                          <Bar
+                            value={tok(i.cost.skills)}
+                            max={tok(i.cost.skillCeiling)}
+                            label={`Skill list, ${label}`}
+                            tone={skillPct > 100 ? 'bad' : 'skill'}
+                          />
+                        </span>
+                        <span className="mono dim ldg-sub">
+                          {`Skill list · ${approxTokens(i.cost.skills)} / ${approxTokens(i.cost.skillCeiling)} ceiling · ${skillPct}%`}
+                        </span>
+                      </>
+                    )}
                   </>
                 ) : (
                   <span className="dim">Always-on cost not measured.</span>

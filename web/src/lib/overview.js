@@ -201,7 +201,8 @@ export function fleetVerdict(fleet) {
 }
 
 // What an install injects every session, as chart segments (characters). The console
-// shows ≈ chars ÷ 4 tokens; the ceiling applies to the root file alone.
+// shows ≈ chars ÷ 4 tokens; `ceiling` applies to the root file alone, and `skillCeiling` to the
+// skill list of a Claude Code install (null on every other host).
 export const COST_PARTS = [
   ['carrier', 'Root file'],
   ['skills', 'Skill list'],

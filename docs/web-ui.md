@@ -191,6 +191,11 @@ budget, measured without project context, for the install whose content was cut,
 largest. It turns amber at 85% of the budget or whenever content was cut, and Needs you adds one
 suggestion at the same point.
 
+A row's details draw the skill list against its own ceiling (`SKILL_LISTING_CEILING`,
+`js/inspect/cost.mjs`) under the cost breakdown, as the row draws the root file against its
+ceiling: a bar, then `part / ceiling · share`, red past 100%. Only a Claude Code install has that
+ceiling, so no other host's details show the bar.
+
 A global **Spotlight** search lives in the topbar — press <kbd>/</kbd> to focus it (or
 <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>, which also works from inside a text field), type
 to jump to any agent, skill, doc, MCP server, or constitutional rule — the `laws`

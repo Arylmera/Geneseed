@@ -47,12 +47,14 @@ const install = (host, verdict, cost) => ({
 // claude: 33600 / 40000 = 84 % of its ceiling, 62000 chars always-on (≈15.5k tokens).
 // bob:    34000 / 40000 = 85 % of its ceiling, 48000 chars always-on (≈12.0k tokens).
 // opencode: no cost, so it is in neither figure.
+// Only claude carries a skill-list ceiling: 20400 / 24000 = 85 % (≈5.1k of ≈6.0k tokens).
 const CLAUDE = install('claude', 'behind', {
   carrier: 33600,
   skills: 20400,
   agents: 4800,
   context: 3200,
   ceiling: 40000,
+  skillCeiling: 24000,
 })
 const BOB = install('bob', 'synced', {
   carrier: 34000,
@@ -137,6 +139,37 @@ describe('Ledger fleet details row', () => {
     ).toBe('false')
     fireEvent.click(toggle)
     expect(screen.queryByText(/What rides every turn/)).toBeNull()
+  })
+
+  // The skill list is drawn against its ceiling as the root file is: a bar in tokens, then
+  // part / ceiling · share. An install with no skill ceiling (every host but Claude Code)
+  // draws no such bar, and one past its ceiling fills the bar and rounds its share up past 100.
+  it('draws the skill list against its ceiling, only where the install has one', async () => {
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const table = within(await screen.findByRole('table', { name: 'Installs' }))
+    fireEvent.click(table.getByRole('button', { name: 'Details for Claude Code · global' }))
+    expect(table.getByText('Skill list · ≈5.1k / ≈6.0k ceiling · 85%')).toBeTruthy()
+    expect(
+      table.getByRole('img', { name: 'Skill list, Claude Code · global: 5100 of 6000' }),
+    ).toBeTruthy()
+    fireEvent.click(table.getByRole('button', { name: 'Details for BOB (IBM) · global' }))
+    expect(table.getAllByText(/What rides every turn/)).toHaveLength(2)
+    expect(table.getAllByText(/^Skill list · /)).toHaveLength(1)
+    expect(table.queryByRole('img', { name: /^Skill list, BOB/ })).toBeNull()
+  })
+
+  it('reads a skill list past its ceiling as over, on a full bar', async () => {
+    api.fleet.mockResolvedValue({
+      ...FLEET,
+      installs: [{ ...CLAUDE, cost: { ...CLAUDE.cost, skills: 26400 } }],
+    })
+    render(<Ledger overview={null} onAction={vi.fn()} />)
+    const table = within(await screen.findByRole('table', { name: 'Installs' }))
+    fireEvent.click(table.getByRole('button', { name: 'Details for Claude Code · global' }))
+    expect(table.getByText('Skill list · ≈6.6k / ≈6.0k ceiling · 110%')).toBeTruthy()
+    const bar = table.getByRole('img', { name: /^Skill list, Claude Code · global: / })
+    expect(bar.getAttribute('aria-label')).toContain('6000 of 6000')
+    expect(bar.querySelector('.tone-bad')).toBeTruthy()
   })
 })
 

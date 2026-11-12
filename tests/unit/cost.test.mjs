@@ -14,7 +14,10 @@
 //   drop it on its `disable-model-invocation: true` and count 4; OpenCode ignores that key and
 //   drops it only on a `permission.skill` `"mine": "deny"` in `opencode.json` — 13 without the
 //   row, 4 with it, 13 again under a blanket `"skill": "deny"` (the user's policy, no name);
-//   Bob documents no such key, so a flagged file there still counts: 13.
+//   Bob documents no such key, so a flagged file there still counts: 13;
+// - the skill-listing ceiling rides along as `skillCeiling` on a `claude` install only, where it
+//   is 8 881 (`SKILL_LISTING_CEILING`); it was measured and is gated on that host alone, so
+//   OpenClaude, OpenCode and Bob answer null and the console draws them no skill bar.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -37,7 +40,7 @@ test('an install costs its carrier, its listed skills and agents, and its sessio
   try {
     seed(sb.path, 'AGENT.md');
     assert.deepEqual(alwaysOnCost({ host: 'opencode', root: sb.path, dir: sb.path, footprint: 'lean' }),
-      { carrier: 6, skills: 4, agents: 5, context: 0, ceiling: CARRIER_CEILING.lean });
+      { carrier: 6, skills: 4, agents: 5, context: 0, ceiling: CARRIER_CEILING.lean, skillCeiling: null });
   } finally { sb.cleanup(); }
 });
 
@@ -47,7 +50,7 @@ test('Bob lists no agents natively, and a missing carrier is not measured', () =
     assert.equal(alwaysOnCost({ host: 'opencode', root: sb.path, dir: sb.path, footprint: 'lean' }), null);
     seed(sb.path, 'AGENTS.md');
     assert.deepEqual(alwaysOnCost({ host: 'bob', root: sb.path, dir: sb.path, footprint: 'full' }),
-      { carrier: 6, skills: 4, agents: 0, context: 0, ceiling: CARRIER_CEILING.full });
+      { carrier: 6, skills: 4, agents: 0, context: 0, ceiling: CARRIER_CEILING.full, skillCeiling: null });
   } finally { sb.cleanup(); }
 });
 
@@ -70,5 +73,17 @@ test('a user-only skill costs nothing where the host hides it, and only there', 
     assert.equal(skills('opencode'), 4);
     fs.writeFileSync(oc, JSON.stringify({ permission: { skill: 'deny' } }));
     assert.equal(skills('opencode'), 13);
+  } finally { sb.cleanup(); }
+});
+
+test('only a Claude Code install carries the skill-listing ceiling', () => {
+  const sb = makeSandbox('cost-');
+  try {
+    for (const carrier of ['CLAUDE.md', 'AGENT.md', 'AGENTS.md']) seed(sb.path, carrier);
+    const ceiling = (host) => alwaysOnCost({ host, root: sb.path, dir: sb.path, footprint: 'lean' }).skillCeiling;
+    assert.equal(ceiling('claude'), 8_881);
+    assert.equal(ceiling('openclaude'), null);
+    assert.equal(ceiling('opencode'), null);
+    assert.equal(ceiling('bob'), null);
   } finally { sb.cleanup(); }
 });

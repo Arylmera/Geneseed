@@ -267,6 +267,23 @@ test('the fleet serves its session-file reads from a memo for 30 s, and until a 
   });
 });
 
+// THE FLEET CARRIES BOTH CEILINGS ON AN INSTALL'S COST, so the console draws them without a table
+// of its own. A root with no footprint marker reads as full, so both rows carry the full
+// carrier ceiling, 66 432 (`CARRIER_CEILING.full`). The skill-listing ceiling, 8 881
+// (`SKILL_LISTING_CEILING`), is measured and gated on Claude Code alone: the claude row carries
+// it and the opencode row carries null, which the console draws as no skill bar.
+test('the fleet cost carries the carrier ceiling, and the skill ceiling on Claude Code only', () => {
+  withTwoViews(({ st, oc, cl }) => {
+    for (const [d, carrier] of [[oc, 'AGENT.md'], [cl, 'CLAUDE.md']]) {
+      fs.writeFileSync(path.join(d, GLOBAL_MANIFEST), JSON.stringify({ owned: [] }));
+      fs.writeFileSync(path.join(d, carrier), 'a carrier\n');
+    }
+    assert.deepEqual(
+      apiFleet(st).installs.map((r) => [r.host, r.cost.ceiling, r.cost.skillCeiling]),
+      [['opencode', 66_432, null], ['claude', 66_432, 8_881]]);
+  });
+});
+
 // GET /api/fleet — every INSTALLED harness, each judged by its OWN version marker. Three seeded
 // hosts cover the three verdicts: bob's marker carries the source fingerprint (synced),
 // opencode's an older one (behind), openclaude has none (unknown — never "synced" by default).

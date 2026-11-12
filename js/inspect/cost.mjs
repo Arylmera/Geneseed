@@ -60,8 +60,9 @@ export const CARRIER_CEILING = { full: 66_432, lean: 40_312 };
  * (the headroom the lean carrier ceiling was given). `tests/unit/emit_smoke.test.mjs` gates it.
  * Raise it by the measured overrun and say why here, after trying a shorter description first.
  *
- * Not drawn in the console: `alwaysOnCost` does not return it, so the cost chart shows the
- * carrier ceiling only.
+ * `alwaysOnCost` returns it as `skillCeiling` for a `claude` install only, the one host it was
+ * measured on and is gated for, and the console draws it under that install's cost breakdown.
+ * Every other host answers `null`: no bar, not a bar against a number nobody measured there.
  */
 export const SKILL_LISTING_CEILING = 8_881;
 
@@ -145,7 +146,11 @@ export function alwaysOnCost({ host, root, dir, footprint }) {
   const { skills, agents } = catalogueChars(host, root, dir);
   let context = 0;
   for (const s of sessionLayers(dir, host)) context += s.text.length;
-  return { carrier, skills, agents, context, ceiling: CARRIER_CEILING[footprint] ?? null };
+  return {
+    carrier, skills, agents, context,
+    ceiling: CARRIER_CEILING[footprint] ?? null,
+    skillCeiling: host === 'claude' ? SKILL_LISTING_CEILING : null,
+  };
 }
 
 /** The install's root instruction file, or undefined: the first of the host's carriers on disk. */
