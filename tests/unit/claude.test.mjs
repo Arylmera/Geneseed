@@ -121,11 +121,22 @@ test('the global emit writes the Claude layout, and its hooks name the shim not 
     for (const foreign of ['mode: subagent', 'color:', 'permission:']) {
       assert.ok(!reviewer.includes(foreign), `the Claude agent carries OpenCode's ${foreign}`);
     }
-    // A read-only agent maps the deny-tree onto Claude's own key.
-    assert.ok(read(cfg, 'agents', 'explorer.md').includes('disallowedTools:'));
-    // The webfetch marker lifts exactly WebFetch from the denylist; Bash stays denied.
-    const researcher = read(cfg, 'agents', 'researcher.md');
-    assert.match(researcher, /disallowedTools: Write, Edit, NotebookEdit, Bash, PowerShell$/m);
+    // A read-only agent maps the deny-tree onto Claude's own key, one line, written out for
+    // each kind of spec. Always denied: the three write tools, and `Agent`/`Task` (one tool,
+    // two names), because a read-only agent that can dispatch can spawn a writer. `WebFetch`,
+    // unless the spec carries the webfetch marker. The three shells (`Bash`, `PowerShell`, and
+    // `Monitor`, which runs a command in the background), unless it carries the bash marker.
+    const denied = (name) => read(cfg, 'agents', `${name}.md`).match(/^disallowedTools: .*$/m)?.[0];
+    // skeptic: no marker.
+    assert.equal(denied('skeptic'),
+      'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch, Bash, PowerShell, Monitor');
+    // researcher: the webfetch marker lifts exactly WebFetch; the shells stay denied.
+    assert.equal(denied('researcher'),
+      'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, Bash, PowerShell, Monitor');
+    // explorer: the bash marker lifts the three shells together, and never the dispatch.
+    assert.equal(denied('explorer'), 'disallowedTools: Write, Edit, NotebookEdit, Agent, Task, WebFetch');
+    // tester writes test files: not read-only, no denylist.
+    assert.equal(denied('tester'), undefined);
 
     // THE HOOK PATH IS THE POINT OF THE CLASS. A hook's cwd is the user's project, so nothing
     // relative resolves — it must be absolute, and it must be the STABLE SHIM rather than this
