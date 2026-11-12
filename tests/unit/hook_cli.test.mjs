@@ -696,6 +696,25 @@ test('the only spawn in the hook entry is the model CLI', () => {
     'hooks.mjs must reach lossReason (and its spawn) only behind the LOSS_CANDIDATE_RE prefilter');
 });
 
+// THE TAP (js/hosts/hook-tap.mjs) is the one hook-path module no verb needs. THE RULE: the
+// entry reaches it, by its single dynamic import; it imports exactly two modules of this repo,
+// `./gitref.mjs` and `./hooks-prims.mjs`, both of which every gate already loads; and it brings
+// nothing that can start a process. So a tapped hook parses one small file more, and an
+// untapped one parses none (tests/unit/hook_tap.test.mjs holds the guard on the variable).
+test('the hook tap is in the hook entry\'s closure, and brings two modules the gates already load', () => {
+  const tap = path.join(ROOT, 'js', 'hosts', 'hook-tap.mjs');
+  assert.ok(importClosure(path.join(ROOT, ...HOOK.split('/'))).has(tap), 'the hook entry no longer reaches the tap');
+  const text = readFileSync(tap, 'utf8');
+  assert.deepEqual([...text.matchAll(/from\s+'(\.[^']+)'/g)].map((m) => m[1]).sort(),
+    ['./gitref.mjs', './hooks-prims.mjs']);
+  assert.deepEqual([...text.matchAll(/import\(\s*'([^']+)'\s*\)/g)].map((m) => m[1]), [], 'the tap loads a module lazily');
+  const gates = importClosure(path.join(ROOT, 'js', 'hosts', 'hooks.mjs'));
+  for (const f of importClosure(tap)) {
+    if (f !== tap) assert.ok(gates.has(f), `${path.relative(ROOT, f)} is on the hook path only because of the tap`);
+    assert.ok(!importsChildProcess(readFileSync(f, 'utf8')), `${path.relative(ROOT, f)} can start a process`);
+  }
+});
+
 test('the CLI entry reaches child_process only where it is declared', () => {
   // STATIC and transitive, for the same reason the driver's is. The CLI reaches
   // `js/web/server.mjs` through its `web` row's lazy thunk, so this equality covers the daemon

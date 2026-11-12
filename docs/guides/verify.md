@@ -52,6 +52,18 @@ Start a session with `GENESEED_DEBUG=1` set. The context plugin then logs what i
 At session start, the context hook adds the repo's docs to the conversation. Ask the agent what project context it received. It should name your `README.md` and list your `docs/`.
 <!--/harness-->
 
+## Bob, by hand
+
+No automated check runs IBM Bob: it is not published on npm, so the host canary cannot install it ([What is verified](../concepts/host-matrix.md#what-is-verified)). `geneseed doctor --probe` runs Bob's installed gate through Bob's shell, which proves the gate. Only Bob can prove that Bob calls it. Five steps, in a scratch repository:
+
+1. **The hooks are loaded.** Type `/hooks` in Bob Shell. For a global install it lists four groups from `~/.bob/settings/settings.json`: `SessionStart`, `PreToolUse`, `Stop` and `UserPromptSubmit`. If Geneseed's are missing, Bob is reading another file.
+2. **A credential write is refused.** Ask Bob to write a file holding an AWS access key id (the example one from the AWS documentation will do). The write does not happen, and Bob shows the gate's reason, which says that no confirmation in the chat lifts it.
+3. **A destructive git command is refused.** Ask Bob to run `git reflog expire --expire=now --all`. It is refused the same way.
+4. **A commit warns.** Ask Bob to commit a change. The commit goes through, and Bob's hook log has a Geneseed line about consent: Bob cannot ask, so this rule is a warning there.
+5. **Record what Bob sends.** Start Bob with `GENESEED_HOOK_TAP` set to an absolute directory outside any repository, for example `GENESEED_HOOK_TAP=$HOME/geneseed-tap`. Then start a session, send a prompt, let Bob run one command and edit one file, and let the turn end. Each hook call writes one file, `bob-<event>-<n>.json`.
+
+A tap file holds the payload's shape and not its content. Every key is kept; every string is replaced by its type and length, except the event name and the tool name. Your prompt, file contents, commands and paths are not in it. Read the files before you send them all the same, then attach them to an issue at <https://github.com/Arylmera/Geneseed/issues>, with your Bob version. One file per event is enough. Unset the variable afterwards: nothing is written without it, and Geneseed never puts it in a settings file. The tap works the same way on Claude Code and OpenClaude.
+
 ## Dry-run a build before you write it
 
 `geneseed validate` takes the same flags as `geneseed build`. It renders into a throwaway sandbox and runs every doctor check against the result. Nothing is written under the real `--out` or `--root`: no marker files, no settings merge, no registry record.

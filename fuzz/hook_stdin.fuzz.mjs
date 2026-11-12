@@ -277,3 +277,50 @@ test('context on SubagentStart prints nothing or one JSON object, under budget, 
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }), { numRuns: RUNS });
 });
+
+// ---------------------------------------------------------------------------------------------
+// THE TAP (js/hosts/hook-tap.mjs, `GENESEED_HOOK_TAP=<dir>`) runs after the verdict, on the same
+// stdin. Whatever arrives — raw bytes, torn JSON, a payload nested or typed any way — the gate's
+// exit code and stdout are the ones it gives with the tap off, and what the tap wrote is JSON,
+// under a name of its own form, inside its directory. The tap dir sits in the OS temp root,
+// outside any repository, so the tap really writes.
+const TAP_FILE_RE = /^[A-Za-z0-9_-]+-[A-Za-z0-9_-]+-\d+\.json$/;
+
+test('the tap never changes a gate\'s exit code or stdout, and writes only JSON files, on any stdin', () => {
+  const variants = fc.constantFrom(['git-gate'], ['tool-gate', '--host', 'bob'], ['activity', '--host', 'bob']);
+  fc.assert(fc.property(fc.oneof(payload, sessionWrite), variants, (input, argv) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      const work = path.join(dir, 'work');
+      const tap = path.join(dir, 'tap');
+      const home = path.join(dir, 'home');
+      for (const d of [work, home]) fs.mkdirSync(d);
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, input);
+      const base = { ...process.env, HOME: home, USERPROFILE: home, GENESEED_HOME: path.join(home, '.geneseed'),
+        GENESEED_ACTIVITY: 'off', GENESEED_GATE_PROBE: '1', TMP: dir, TEMP: dir, TMPDIR: dir };
+      for (const k of ['GENESEED_HOOK_TAP', 'GENESEED_LEARN_CHILD', 'CLAUDE_PROJECT_DIR']) delete base[k];
+      const once = (env) => {
+        const fd = fs.openSync(inFile, 'r');
+        try {
+          const p = spawnSync(process.execPath, [HOOK, ...argv],
+            { cwd: work, encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], env });
+          return { rc: p.status, out: p.stdout, err: p.stderr };
+        } finally { fs.closeSync(fd); }
+      };
+      const off = once(base);
+      const on = once({ ...base, GENESEED_HOOK_TAP: tap });
+      const show = JSON.stringify([argv, input]).slice(0, 200);
+      assert.equal(on.rc, off.rc, `the tap changed the exit code on ${show}\nstderr: ${on.err}`);
+      assert.equal(on.out, off.out, `the tap changed stdout on ${show}`);
+      assert.ok(!/hook-tap/.test(on.err), `the tap wrote to stderr on ${show}: ${on.err.slice(0, 200)}`);
+      const written = fs.existsSync(tap) ? fs.readdirSync(tap) : [];
+      assert.ok(written.length <= 1, `one call wrote ${written.length} tap files on ${show}`);
+      for (const name of written) {
+        assert.match(name, TAP_FILE_RE, `a tap file of another form on ${show}`);
+        const doc = JSON.parse(fs.readFileSync(path.join(tap, name), 'utf8'));
+        assert.deepEqual(Object.keys(doc), ['tap', 'payload'], show);
+      }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS });
+});

@@ -164,6 +164,21 @@ async function trackActivity(verb, args) {
 }
 
 /**
+ * The tap (js/hosts/hook-tap.mjs): with `GENESEED_HOOK_TAP=<dir>` in the host's environment,
+ * the payload the verb just answered is written there as a fixture, values replaced by their
+ * shape. After the verdict, like `trackActivity`, and on the same cached stdin. The caller tests
+ * the variable, so an untapped hook never imports the module; a terminal sends no payload.
+ * Never prints, never changes the exit code.
+ */
+async function tapHook(verb, args) {
+  try {
+    if (isatty(0)) return;
+    const { tapPayload } = await import('../js/hosts/hook-tap.mjs');
+    tapPayload(process.env.GENESEED_HOOK_TAP, readStdin(), { verb, host: args.host || 'claude' });
+  } catch { /* a capture is a favour to a maintainer; a hook that fails is a tool call that fails */ }
+}
+
+/**
  * A verb whose module failed to load, or threw past its own guard. `guardGate` only covers a gate
  * once its module has loaded; a module that cannot (a file missing mid-`git pull` under the shared
  * shim, a syntax error) used to exit 1 with nothing on stdout, which Claude reads as "the gate
@@ -313,6 +328,7 @@ async function main(argv) {
   }
   await trackActivity(verb, parsed.args);
   await baselineStores(verb, parsed.args);
+  if (process.env.GENESEED_HOOK_TAP) await tapHook(verb, parsed.args);
   return rc;
 }
 
