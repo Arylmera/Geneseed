@@ -179,9 +179,13 @@ const VISIBLE =
     (process.env.GENESEED_CONTEXT_TRANSFORM || "").toLowerCase())
 const TRANSFORM = !VISIBLE
 // Fallback state (module-level — OpenCode keeps ONE copy of the plugin loaded):
-// `transformSeen` flips the first time the experimental hook fires; if a request
-// completes (session.idle) while it is still false, the build lacks the hook and
-// `fallbackVisible` switches delivery to the classic visible injection.
+// `transformSeen` flips the first time the experimental hook fires; if a MODEL REQUEST
+// completes (session.idle, with an assistant message in that session's transcript) while
+// it is still false, the build lacks the hook and `fallbackVisible` switches delivery to
+// the classic visible injection. The latch is not for life: the hook firing later clears
+// it, because that is the proof the build has the hook after all. It once latched on any
+// idle seen before the first transform call — an idle with no request behind it was
+// enough — and stayed latched for the whole process, visible delivery in every session.
 let transformSeen = false
 let fallbackVisible = false
 function log(msg) { if (DEBUG) console.error(`[geneseed-context] ${msg}`) }
@@ -456,22 +460,52 @@ function repoRoot(ctx) {
 
 // ---- model self-awareness (best-effort) --------------------------------------
 // Surface the model the session is actually using so the agent reasons within its
-// real limits (awesome-opencode "Model Announcer"). Sources, first hit wins: an
-// assistant message's info.providerID/modelID in the outgoing transcript — the same
-// fields the learn plugin reads — then $GENESEED_MODEL ("provider/model"). Unknown ->
-// no line (graceful: the first turn often has no assistant message yet). It is added
-// per request, OUTSIDE the cached block, so one cache serves every model.
+// real limits (awesome-opencode "Model Announcer"). Sources, first hit wins: the outgoing
+// transcript — an assistant message's info.providerID/modelID (the fields the learn plugin
+// reads) or a user message's info.model.{providerID,modelID} — then $GENESEED_MODEL
+// ("provider/model"). Unknown -> no line. It is added per request, OUTSIDE the cached
+// block, so one cache serves every model.
+//
+// THE DECISION IS PINNED PER SESSION (`pinnedModel`), "no line" included. The block is the
+// first message of every request, so it is the head of the provider's prompt-cache prefix:
+// a line that appears on request 2 — the first with an assistant message — rewrites message
+// 0 and re-bills the whole transcript once per session. The user message is read so that
+// request 1 can already answer; where it cannot, the session gets no line rather than a
+// late one. A model switched mid-session is therefore not announced, by design.
+// UNVERIFIED ON A REAL HOST: that OpenCode 1 fills `info.model` on the user message of the
+// first request. No run here has shown it set; where it is absent, a session with no
+// $GENESEED_MODEL simply has no model line.
 function modelFromMessages(messages) {
   if (!Array.isArray(messages)) return null
   let found = null
   for (const m of messages) {
     const info = m?.info ?? {}
-    if (info.role !== "assistant") continue
-    const providerID = info.providerID ?? info.provider
-    const modelID = info.modelID ?? info.model
-    if (providerID && modelID) found = `${providerID}/${modelID}`   // last wins (latest turn)
+    let providerID, modelID
+    if (info.role === "assistant") {
+      providerID = info.providerID ?? info.provider
+      modelID = info.modelID ?? info.model
+    } else if (info.role === "user" && info.model && typeof info.model === "object") {
+      providerID = info.model.providerID
+      modelID = info.model.modelID
+    }
+    if (typeof providerID === "string" && providerID && typeof modelID === "string" && modelID) {
+      found = `${providerID}/${modelID}`   // last wins (latest turn)
+    }
   }
   return found
+}
+// The model line for this session: decided once, then repeated. `pins` is the instance's own
+// Map (session id -> "provider/model" or null); it drops a session on `session.deleted` and
+// is capped, oldest first, so a long-lived process cannot grow it without bound — a session
+// evicted and still running re-decides once, which costs one rewrite of the block.
+const MODEL_PIN_CAP = 256
+function pinnedModel(pins, sid, decide) {
+  if (!sid) return decide() || null
+  if (pins.has(sid)) return pins.get(sid)
+  const model = decide() || null
+  if (pins.size >= MODEL_PIN_CAP) pins.delete(pins.keys().next().value)
+  pins.set(sid, model)
+  return model
 }
 function envModelStr() {
   const v = process.env.GENESEED_MODEL
@@ -1094,9 +1128,20 @@ function takeWeakened(sid) {
 }
 
 // ---- The done gate (#289): the OpenCode twin of js/hosts/hooks-done.mjs ----------------
-// OpenCode has no turn-end event a plugin can block on, so its ceiling is a reminder: on the
-// request AFTER a turn that edited files without the project's declared checks passing
-// (`.geneseed/done-checks.txt`), one invisible user message says which checks are owed. Only V1
+// OpenCode has no turn-end event a plugin can block on, so its ceiling is a reminder: on
+// EVERY request — mid-turn, between two tool calls, as much as at the next prompt — whose
+// transcript holds an edit with the project's declared checks (`.geneseed/done-checks.txt`)
+// not passed since, one invisible user message says which checks are owed. It is judged over
+// the previous turn and the current one (`doneOwed`), so it starts on the request right after
+// the edit and stops when the checks pass or a second prompt has gone by.
+//
+// It is the LAST message of the request, never the first. It comes and goes from one request
+// to the next, and a message put at the front shifts every message behind it: the provider's
+// prompt cache, which matches on the prefix, is thrown away each time the reminder toggles.
+// At the end it changes nothing before it, and it is also where a model weighs an instruction
+// most. The same holds for the weakened-test reminder below, on both majors.
+// UNVERIFIED ON A REAL HOST: that every provider accepts a synthetic user message after the
+// tool results of an unfinished tool loop (the mid-turn case). Only V1
 // (`messages.transform`, whose tool parts carry `state.status` and the shell's
 // `metadata.exit`); OpenCode 2's message shape for tool calls is unverified, so V2 is not
 // judged and says so once. Fails open on every shape it does not recognise (ADR 0007).
@@ -1416,6 +1461,19 @@ export const GeneseedContext = async (ctx) => {
   const blockCache = { text: null, at: 0 }
   const bypassed = ttlMemo(sovereignBypass)
   const doneChecks = ttlMemo(doneChecksOf)
+  const modelPins = new Map()
+
+  // Did a model request really run in this session? An assistant message in its transcript
+  // is the evidence; an unreadable transcript is not, and the next idle asks again.
+  async function sawModelRequest(sid) {
+    try {
+      const msgs = await client.session.messages({ path: { id: sid } })
+      const list = Array.isArray(msgs) ? msgs : (msgs?.data ?? [])
+      return list.some((m) => m?.info?.role === "assistant")
+    } catch {
+      return false
+    }
+  }
 
   // Visible delivery — post the block as a noReply session message. Used when
   // GENESEED_CONTEXT_VISIBLE forces it, and by the transform fallback below.
@@ -1473,21 +1531,26 @@ export const GeneseedContext = async (ctx) => {
     },
 
     event: async ({ event }) => {
-      if (!event || INJECT_OFF) return
-      if (await bypassed(root)) return
+      if (!event) return
       const sid =
         event.properties?.sessionID ?? event.payload?.sessionID ??
         event.properties?.info?.id ?? event.payload?.info?.id
+      if (event.type === "session.deleted") { modelPins.delete(sid); return }
+      if (INJECT_OFF) return
+      if (await bypassed(root)) return
       if (event.type === "session.created") {
         if (TRANSFORM && !fallbackVisible) return   // invisible delivery handles it
         await injectVisible(sid)
         return
       }
-      // Transform fallback: the session went idle (a request completed) yet the
-      // experimental hook never fired in this process — this build lacks it. Engage
-      // the visible delivery so context still arrives, injecting into THIS session
-      // right away (one turn late) rather than waiting for the next session.
+      // Transform fallback: the session went idle after a model request (its transcript
+      // holds an assistant message) yet the experimental hook never fired in this
+      // process — this build lacks it. Engage the visible delivery so context still
+      // arrives, injecting into THIS session right away (one turn late) rather than
+      // waiting for the next session. An idle with no request behind it proves nothing
+      // about the hook and latches nothing.
       if (event.type === "session.idle" && TRANSFORM && !transformSeen && !fallbackVisible) {
+        if (!(await sawModelRequest(sid)) || transformSeen) return
         fallbackVisible = true
         log("transform hook absent on this build — falling back to visible injection")
         await injectVisible(sid)
@@ -1522,14 +1585,21 @@ export const GeneseedContext = async (ctx) => {
     // detects that and takes over with the visible delivery.
     "experimental.chat.messages.transform": async (_input, output) => {
       transformSeen = true                  // the hook exists on this build
+      // …so a fallback latched before it first fired was a wrong guess: back to invisible.
+      // A session that already got the visible block keeps it; the MARKER check below is
+      // what stops a second one.
+      fallbackVisible = false
       // One scope decision per request, shared by the done gate and the context block:
       // both end on an empty request, an excluded repo, or a skipped session.
       if (!output || !Array.isArray(output.messages) || !output.messages.length) return
       const sid = output.messages[0]?.info?.sessionID
       if (await bypassed(root) || await skipSession(sid)) return
-      // The done gate's reminder: FIRST, and independent of the context block:
+      // The done gate's reminder: decided FIRST, and independent of the context block:
       // INJECT_OFF and the visible delivery leave it on, and no early return below can skip it.
       // Its own function, so its early returns end the reminder, never the context injection.
+      // Both reminders are PUSHED — the last messages of the request — and the context block
+      // alone is unshifted, so message 0 is the same on every request (see the done gate's
+      // docblock for why).
       await (async () => {
         if (await doneGateOff()) return
         const { root: gitRoot, source, blocking, checks } = await doneChecks(root)
@@ -1537,7 +1607,7 @@ export const GeneseedContext = async (ctx) => {
         const owed = doneOwed(output.messages, checks, gitRoot)
         if (!owed.length) return
         const stamp = Date.now()
-        output.messages.unshift({
+        output.messages.push({
           info: { id: `geneseed-done-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
           parts: [{ id: `geneseed-done-part-${stamp}`, type: "text", text:
             `Geneseed (Verify Before Asserting) — files were edited, and these checks ${blocking ? "from" : "(advisory) inferred from"} `
@@ -1550,7 +1620,7 @@ export const GeneseedContext = async (ctx) => {
       const weakened = !(await doneGateOff()) && takeWeakened(sid)
       if (weakened) {
         const stamp = Date.now()
-        output.messages.unshift({
+        output.messages.push({
           info: { id: `geneseed-weakened-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
           parts: [{ id: `geneseed-weakened-part-${stamp}`, type: "text", text: weakened }],
         })
@@ -1564,9 +1634,11 @@ export const GeneseedContext = async (ctx) => {
         if (present) return
         const cached = await cachedBlockText(root, blockCache)
         if (!cached) return
-        // Model line is request-specific (kept out of the cache): prefer the live
-        // transcript on this request, fall back to $GENESEED_MODEL.
-        const text = withModel(cached, modelFromMessages(output.messages) || envModelStr())
+        // The model line is kept out of the cache and decided ONCE per session — the live
+        // transcript of the session's first request, else $GENESEED_MODEL, else no line —
+        // so no later request rewrites the block.
+        const text = withModel(cached,
+          pinnedModel(modelPins, sid, () => modelFromMessages(output.messages) || envModelStr()))
         const stamp = Date.now()
         output.messages.unshift({
           info: { id: `geneseed-context-${stamp}`, role: "user", sessionID: sid, time: { created: stamp } },
@@ -1608,6 +1680,7 @@ async function setupV2(ctx) {
   const blockCache = { text: null, at: 0, judged: false }
   const bypassed = ttlMemo(sovereignBypass)
   const doneChecks = ttlMemo(doneChecksOf)
+  const modelPins = new Map()
   // Same scope rule as V1's skipSession. V2's info names the parent `parentID` only, so only
   // that and the title are passed on.
   const skipSession = sessionSkipper(async (sid) => {
@@ -1621,7 +1694,8 @@ async function setupV2(ctx) {
     console.error(`[geneseed-context] done gate: ${DONE_LIST} found, but OpenCode 2 turns are not judged.`)
   }
 
-  // The weakened-test reminder, which INJECT_OFF and visible delivery leave on, as on V1. A V2
+  // The weakened-test reminder, which INJECT_OFF and visible delivery leave on, as on V1 —
+  // and, as on V1, the LAST message of the request, so the context block stays message 0. A V2
   // callback that throws fails the agent step, so both swallow their errors.
   await ctx.tool?.hook?.("execute.before", async (event) => {
     await noteWeakened(root, event?.sessionID, event?.tool, event?.input)
@@ -1631,7 +1705,7 @@ async function setupV2(ctx) {
       if (!Array.isArray(event?.messages) || await bypassed(root) || await doneGateOff()) return
       if (await skipSession(event.sessionID)) return
       const weakened = takeWeakened(event.sessionID)
-      if (weakened) event.messages.unshift(v2UserMessage(event.messages, weakened))
+      if (weakened) event.messages.push(v2UserMessage(event.messages, weakened))
     } catch (err) {
       log(`test-weakening error: ${err?.message ?? err}`)
     }
@@ -1649,7 +1723,8 @@ async function setupV2(ctx) {
         if (await skipSession(event.sessionID)) return
         const cached = await cachedBlockText(root, blockCache)
         if (!cached) return
-        event.messages.unshift(v2UserMessage(event.messages, withModel(cached, v2Model(event.model) || envModelStr())))
+        const model = pinnedModel(modelPins, event.sessionID, () => v2Model(event.model) || envModelStr())
+        event.messages.unshift(v2UserMessage(event.messages, withModel(cached, model)))
         log("context hook: injected context invisibly")
       } catch (err) {
         log(`context hook error: ${err?.message ?? err}`)

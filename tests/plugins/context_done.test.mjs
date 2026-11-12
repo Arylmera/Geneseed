@@ -70,6 +70,56 @@ test("the V1 transform reminds after an unproven edit, and only then", async () 
   for (const [what, messages, want] of rows) assert.equal(await reminded(messages), want, what)
 })
 
+// THE PROMPT PREFIX IS STABLE: message 0 is the context block, byte for byte the same on every
+// request of a session, and a reminder is the LAST message. The provider's prompt cache matches
+// on the prefix, so anything that toggles must sit behind everything that does not. Three
+// requests of one turn, as the tool loop sends them:
+//   1. the prompt alone                       → [block, u1]                  no reminder
+//   2. after the edit                         → [block, u1, edit, reminder]  reminder last
+//   3. after the check passed                 → [block, u1, edit, lint]      no reminder
+// Two sessions, because the model line is the other thing that used to rewrite the block:
+//   "plain"  — request 1 names no model; the assistant messages of requests 2 and 3 do. The
+//              decision is pinned at request 1, so the block has NO model line in all three.
+//   "named"  — request 1's user message carries info.model, so the line is there from the
+//              start; a later assistant message naming another model does not change it.
+test("message 0 is identical across three requests while the reminder toggles, and the reminder is last", async () => {
+  const hooks = await GeneseedContext({ client, directory: repo, worktree: repo })
+  const textOf = (m) => (m.parts ?? []).map((p) => String(p.text ?? "")).join("\n")
+  for (const [sid, userModel, wantLine] of [
+    ["plain", undefined, null],
+    ["named", { providerID: "anthropic", modelID: "m1" }, "current model: anthropic/m1"],
+  ]) {
+    const u1 = { info: { id: "u1", role: "user", sessionID: sid, ...(userModel ? { model: userModel } : {}) },
+      parts: [{ type: "text", text: "go" }] }
+    const asst = (name, input, metadata = {}) => ({
+      info: { id: `a-${name}`, role: "assistant", sessionID: sid, providerID: "openai", modelID: "m2" },
+      parts: [{ type: "tool", tool: name, state: { status: "completed", input, metadata } }] })
+    const edit = asst("edit", { filePath: path.join(repo, "a.js") })
+    const lint = asst("bash", { command: "npm run lint" }, { exit: 0 })
+    const requests = [[u1], [u1, edit], [u1, edit, lint]]
+    const sent = []
+    for (const messages of requests) {
+      const output = { messages: [...messages] }
+      await hooks["experimental.chat.messages.transform"]({}, output)
+      sent.push(output.messages)
+    }
+    assert.deepEqual(sent.map((m) => m.length), [2, 4, 4], sid)
+    const head = sent.map((m) => textOf(m[0]))
+    assert.ok(head[0].startsWith("<!-- geneseed-context:"), `${sid}: message 0 is not the context block`)
+    assert.equal(head[1], head[0], `${sid}: the block changed on request 2`)
+    assert.equal(head[2], head[0], `${sid}: the block changed on request 3`)
+    assert.equal(head[0].includes("current model:"), Boolean(wantLine), sid)
+    if (wantLine) assert.ok(head[0].includes(wantLine), head[0].slice(0, 200))
+    assert.ok(textOf(sent[1].at(-1)).startsWith(MARK), `${sid}: the reminder is not the last message`)
+    assert.equal(sent[1].at(-1).info.role, "user")
+    for (const i of [0, 2]) {
+      assert.equal(sent[i].some((m) => textOf(m).includes(MARK)), false, `${sid}: request ${i + 1} reminded`)
+    }
+    // Everything between the block and the reminder is the request as it came, in order.
+    assert.deepEqual(sent[1].slice(1, -1), requests[1], sid)
+  }
+})
+
 test("no done list: the transform adds nothing for the done gate", async () => {
   const bare = path.join(tmp, "bare")
   await fs.mkdir(bare, { recursive: true })
@@ -280,9 +330,13 @@ const said = (messages) => messages.filter((m) => (m.parts ?? m.content ?? []).s
 test("OpenCode 1: a weakened test is one reminder on the next request, in a repo with no checks", async () => {
   const dir = await gitRepo("weak-v1", { "tests/old.test.js": "it.skip('a')\n" })
   const hooks = await GeneseedContext({ client, directory: dir, worktree: dir })
+  // The reminder is the last message of its request (the prefix rule, stated above
+  // "message 0 is identical…"); `lastText` is what the latest request ended on.
+  let lastText = ""
   const next = async () => {
     const output = { messages: [user("u1")] }
     await hooks["experimental.chat.messages.transform"]({}, output)
+    lastText = String(output.messages.at(-1).parts[0].text)
     return said(output.messages)
   }
   const call = (tool, args) => hooks["tool.execute.before"]({ tool, sessionID: "s1" }, { args })
@@ -301,6 +355,7 @@ test("OpenCode 1: a weakened test is one reminder on the next request, in a repo
     await call(tool, args)
     const got = await next()
     assert.equal(got.length, want ? 1 : 0, `${tool} ${JSON.stringify(args)}`)
+    if (want) assert.ok(lastText.includes(WEAK), "the reminder is not the last message")
     if (want) assert.ok(got[0].includes(want), got[0])
     assert.deepEqual(await next(), [], "said once")
   }
@@ -321,6 +376,10 @@ test("OpenCode 2: the same reminder through tool.hook and session.hook", async (
   await hooks.session.context(first)
   assert.equal(said(first.messages).length, 1)
   assert.ok(said(first.messages)[0].includes("tests/a.test.js (.skip added)"))
+  // The same prefix rule on OpenCode 2: the block first, the reminder last.
+  assert.equal(first.messages.length, 3)
+  assert.ok(first.messages[0].content[0].text.startsWith("<!-- geneseed-context:"))
+  assert.ok(first.messages[2].content[0].text.includes(WEAK), "the reminder is not the last message")
   const second = ev()
   await hooks.session.context(second)
   assert.deepEqual(said(second.messages), [], "said once")
