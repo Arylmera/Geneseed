@@ -12,7 +12,7 @@ One of the [OpenCode plugins](opencode-plugins.md). Its switches are also listed
 
 **When it runs.** After the session goes quiet. OpenCode signals "idle" after every turn, so each idle re-arms a timer and the distil runs once nothing has happened for `GENESEED_LEARN_DEBOUNCE_MS` (default 60 s). Trivial sessions are skipped.
 
-**What you see.** On stderr: `[geneseed-learn] wrote N memory file(s): …` (or `updated` / `archived`), or `skipped: <reason>`. Total silence means it did not load.
+**What you see.** `wrote N memory file(s): …` (or `updated` / `archived`), or `skipped: <reason>`: in OpenCode's own log on OpenCode 1 (service `geneseed-learn`), on stderr as `[geneseed-learn] …` on OpenCode 2. Total silence in that place means it did not load.
 
 **Where it writes** — the first that resolves:
 1. `GENESEED_MEMORY` — an explicit memory dir;

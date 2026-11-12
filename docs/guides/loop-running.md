@@ -20,7 +20,7 @@ Each iteration is one commit on `loop/<slug>`, pushed as it lands. Work done bef
 
 The agent ends its turn and shows you what it is waiting on:
 
-- **A blocking score**: the change it plans (before it runs) or the staged diff (after), with the reasons for the score. One file outside the declared write set, more than 20 deleted lines, or a file that matches the loop's `contracts` is enough.
+- **A blocking score**: the change it plans (before it runs) or the staged diff (after), with the reasons for the score. One file outside the declared write set, more than 20 deleted lines, or a file that matches the loop's `contracts` is enough under `prudent` and `balanced`; under `aggressive` each of these lands as a soft score, and a template can lower the deletion weight (`remove-dead-code` does).
 - **A human gate**: some bricks always stop for you, whatever the preset. An ADR that survived its skeptic (`adr-challenge`), an architecture rule and its allowlist (`fitness-define`), a contract migration plan (`migration-plan`) and a feature spec (`spec`) are all gated.
 - **Launch**, under `prudent`: the graph it is about to run.
 
@@ -29,8 +29,8 @@ Answer in the agent's session, in your own words:
 | You say | What happens |
 | --- | --- |
 | ok / go ahead | It continues. On a gate held on a failure, ok follows that failure's edge, which usually stops the loop. |
-| no | The loop stops at that node. |
-| amend, with a note ("keep the old field until v3") | The same brick runs again with your note added to `LOOP.md`. A gate can be amended three times per iteration; a fourth amend stops the loop. |
+| no | At a gate, at the launch prompt or during a setup unit, the loop stops. On a blocking score, that iteration's change is dropped (the planned one) or discarded (the diff), and the loop goes on from the iteration head. |
+| amend, with a note ("keep the old field until v3") | Your note is added to `LOOP.md`. At a gate the same brick runs again; on a blocking score the brick that changes code runs with your note. A gate can be amended three times per iteration; a fourth amend stops the loop. |
 | amend, at the `prudent` launch prompt | The loop stops ("graph to amend") with your note: nothing has run yet, so ask again for the loop you want. |
 
 The agent passes your answer on as `geneseed loop decide --verdict ok|no|amend --note "<your words>"`. The console never answers for you.
@@ -57,7 +57,7 @@ A loop ends one of two ways:
 | End | When |
 | --- | --- |
 | `$close` | The iteration head reports nothing left to do. Some templates first run an independent `done-check`. |
-| `$stop` | A brick reported an outcome wired to stop (a red baseline in `baseline-green`, say), you answered no, a gate was amended a fourth time, two iterations in a row produced no diff, an inner retry ring ran out twice in one iteration, a read-only brick changed files, or the iteration ceiling was reached (the template's `max`, never above 20). |
+| `$stop` | A brick reported an outcome wired to stop (a red baseline in `baseline-green`, say), you answered no at a gate, at launch or during setup, a gate was amended a fourth time, two iterations in a row produced no diff, an inner retry ring ran out twice in one iteration, a read-only brick changed files, or the iteration ceiling was reached (the template's `max`, never above 20). |
 
 On `$stop` the agent reports the reason and leaves the branch as it is.
 

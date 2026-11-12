@@ -31,7 +31,7 @@ geneseed build
 git add Harness
 ```
 
-If the drift is your own edits, export them first — `geneseed diff` (or the console's **Changes** page) writes them up so they can be folded back into `src/`.
+If the drift is your own edits, export them first — `geneseed diff --out` (or the **Local edits** tab of the console's **Installs** page) writes them up so they can be folded back into `src/`.
 
 **Confirm.** `geneseed doctor` no longer reports the bundle.
 

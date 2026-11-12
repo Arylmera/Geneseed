@@ -21,7 +21,7 @@ The context step sorts every doc it finds into one of two lists:
 
 With no configuration, the context step finds these files:
 
-- **Eager:** root `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `.cursorrules`, plus `README.md` and `CONTRIBUTING.md` (or their AsciiDoc `.adoc` twins). The root file your tool already loads by itself is skipped, so you never pay for it twice. On Claude Code that covers `AGENTS.md` too, when `CLAUDE.md` imports it with `@AGENTS.md`, or when the repo has no `CLAUDE.md` and Claude Code is 2.1.277 or newer. If the hook cannot read the version, it injects the file.
+- **Eager:** root `AGENTS.md`, `AGENT.md`, `CLAUDE.md` and `.cursorrules`, plus `README.md` and `CONTRIBUTING.md` (or their AsciiDoc `.adoc` twins), and a repo-root `user-rules.md` and `PROFILE.md`. The root file your tool already loads by itself is skipped, so you never pay for it twice. On Claude Code that covers `AGENTS.md` too, when `CLAUDE.md` imports it with `@AGENTS.md`, or when the repo has no `CLAUDE.md` and Claude Code is 2.1.277 or newer. If the hook cannot read the version, it injects the file.
 - **Lazy:** `docs/`, `doc/`, `documentation/`, `architecture/`, `adr/` and `ADR/`, monorepo `packages/*/README.md` and `apps/*/README.md`, and any other root `*.md`. AsciiDoc docs (`.adoc`) are found everywhere a `.md` is.
 - **Never scanned:** `node_modules`, `.git`, `dist`, `build`, `vendor`, `.next`, `target`, `.venv`, `__pycache__`, `.opencode` and `.harness`.
 

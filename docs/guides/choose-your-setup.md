@@ -14,7 +14,7 @@ All of these choices are made **at build time**. The build writes them into the 
 
 ## Theme: the voice
 
-A theme changes how the harness *sounds*: the banner, the readiness sigil the agent opens with, and the vocabulary of its prose. It never changes which rules apply or which files ship. The wizard previews each theme live as you move through the list.
+A theme changes how the harness *sounds*: the banner, the readiness sigil the agent opens with, and the vocabulary of its prose. It never changes which rules apply or which files ship. The wizard lists each theme with a one-line description.
 
 `neutral` is plain English. The others are `imperial`, `military`, `pirate`, `wizard`, `cyberpunk`, `gamer`, `sports`, `biker`, `commentator`, `joker`, `marvin`, `mean` and `verstappen`.
 

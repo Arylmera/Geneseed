@@ -22,7 +22,7 @@ export GENESEED_MODEL=provider/model
 
 ## A read-only agent won't run a command
 
-**Cause.** By design: read-only agents are denied the shell. The few that must run read-only commands (the reviewer, security) are allowed it in their own spec.
+**Cause.** By design: read-only agents are denied the shell. Those that must run read-only commands (the reviewer, security and explorer, for example) are allowed it in their own spec.
 
 **Fix.** Hand the task to an agent that can run commands, or run it yourself. See [Agents](../concepts/agents.md).
 

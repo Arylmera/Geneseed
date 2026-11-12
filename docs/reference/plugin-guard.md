@@ -48,7 +48,7 @@ There is no DYNAMIC loop/* exemption on OpenCode — OpenCode 1 declares a `perm
 
 [What a prompt says](../concepts/hooks.md#what-a-prompt-says) lists what this text can and cannot tell you.
 
-The guard's reasons are the same words as the hooks'. The reason never names the switches below: the agent reads it, and a switch named there reads as leave to get round the block. The *Persist Insight* reason tells the agent to ask you and that a re-issue changes nothing — never to write the file another way (through a shell command, say). Warnings go to stderr.
+The guard's reasons are the same words as the hooks'. The reason never names the switches below: the agent reads it, and a switch named there reads as leave to get round the block. The *Persist Insight* reason tells the agent to ask you and that a re-issue changes nothing — never to write the file another way (through a shell command, say). Warnings go to OpenCode's own log on OpenCode 1 (service `geneseed-guard`) and to stderr on OpenCode 2.
 
 **Switches.**
 - `GENESEED_GUARD=warn` — log every block, allow the call.
