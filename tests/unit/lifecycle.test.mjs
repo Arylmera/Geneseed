@@ -387,6 +387,10 @@ function globalReemit(d, cfg, extraArgs = []) {
  * separately rather than joined, because "which stream said it" is part of the claim — a
  * refusal on stdout would be invisible to a caller checking for errors.
  */
+// The CLI's line writer ends a line with the platform EOL (`\r\n` on Windows). A row that states a
+// whole message compares it after this fold, so the same written-out text holds on every OS.
+const lf = (s) => String(s).replace(/\r\n/g, '\n');
+
 function captured(fn) {
   const outw = process.stdout.write.bind(process.stdout);
   const errw = process.stderr.write.bind(process.stderr);
@@ -782,7 +786,7 @@ test('a commented opencode.json is refused by the unmerge exactly as a .jsonc is
     fs.writeFileSync(p, original, 'utf8');
     const [changed, said] = captured(() => unmergeOpencodeJson(p, 'AGENT.md'));
     assert.equal(changed, false, 'a refused file was reported as changed');
-    assert.equal(said, '[uninstall] opencode.json has comments — not rewriting it. '
+    assert.equal(lf(said), '[uninstall] opencode.json has comments — not rewriting it. '
       + 'Remove this from its "instructions" by hand: "AGENT.md"\n');
     assert.equal(fs.readFileSync(p, 'utf8'), original, 'the comments were rewritten away');
   });
@@ -811,7 +815,7 @@ test('a commented opencode.json stops a deactivate before any move, and a reacti
     const [on, said] = captured(() => installReactivate(cfg, 'opencode', 'global'));
     assert.ok(on.ok, JSON.stringify(on));
     const entry = path.join(cfg, 'AGENT.md').split(path.sep).join('/');
-    assert.equal(said, '[activate] opencode.json has comments — not rewriting it. Add this '
+    assert.equal(lf(said), '[activate] opencode.json has comments — not rewriting it. Add this '
       + `to its "instructions" by hand: ${JSON.stringify(entry)}\n`);
     assert.equal(fs.readFileSync(p, 'utf8'), disabled, 'the re-add rewrote a commented file');
   });
@@ -933,7 +937,7 @@ test('a commented file names the recorded gates still as written, and only those
     const [changed, said] = captured(
       () => unmergeOpencodeJson(p, 'AGENT.md', [], null, ['git commit*', 'git push*']));
     assert.equal(changed, false);
-    assert.equal(said, '[uninstall] opencode.json has comments — not rewriting it. '
+    assert.equal(lf(said), '[uninstall] opencode.json has comments — not rewriting it. '
       + 'Remove these from its "permission.bash" by hand: "git commit*"\n');
     assert.equal(fs.readFileSync(p, 'utf8'), original);
   });
