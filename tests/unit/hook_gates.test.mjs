@@ -960,7 +960,7 @@ test('the Claude dialect is unchanged when --host is absent, and tool-gate speak
 });
 
 // ---------------------------------------------------------------------------------------------
-// Bob's REAL payload shape (bob-verdict.md I1): `{event, session_id, tool, input:{...}}` — no
+// Bob's LEGACY payload shape (Bob 2.2.3 sends Claude's keys): `{event, session_id, tool, input:{...}}` — no
 // `tool_input`, `tool_name` or `hook_event_name`. `tool-gate` is the only verb Bob's settings.json
 // ever invokes (settings.mjs:519), so normalising must happen there. Before the fix, `toolGate`
 // reads `payload.tool_input` (absent -> `{}`), always falls through to `ruleDecide`, which reads

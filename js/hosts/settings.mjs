@@ -872,8 +872,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // `git-gate` read it, `learn` reads `--memory`'s parent. `rule-gate` and Bob's `tool-gate`
   // do not stand down: both still run once per install (host-compat B4 fixed only the three).
   if (host === 'bob') {
-    // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog (docs/reviews/
-    // bob-global-injection-2026-09.md): FIVE events — SessionStart, UserPromptSubmit,
+    // BOB'S OWN HOOK CONTRACT, per its hooks doc and 2.0.2 changelog:
+    // FIVE events — SessionStart, UserPromptSubmit,
     // PreToolUse, PostToolUse, Stop — Claude's names, but NOT Claude's protocol. stdout is
     // read as context on SessionStart only; on PreToolUse it is ignored and the one way to
     // refuse a call is EXIT CODE 2. The groups this emit wrote before were Claude's whole
@@ -881,18 +881,18 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // here; the activity writer counts a compaction on SessionStart `compact`), and the gates answered with a
     // stdout JSON Bob never reads — permissive on every call. `--host bob` makes the gates
     // speak exit codes (js/hosts/hooks.mjs). DELIBERATELY no matcher on PreToolUse
-    // (host-compat O1, revisited): bob-docs.md §2's tool list is already stale against the
+    // (host-compat O1, revisited): the tool list in Bob's docs is already stale against the
     // changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an
     // allow-list matcher built from it fails OPEN on every tool Bob adds between one
     // docs read and the next — the exact failure mode a gate must not have. A deny-list
     // with a negative-lookahead was the other shape considered; it depends on an unverified
-    // regex DIALECT (bob-docs.md never states whether its "regex on the tool name" supports
+    // regex DIALECT (Bob's docs never state whether their "regex on the tool name" supports
     // lookahead at all), and a dialect mismatch there would silence the WHOLE gate rather than
-    // merely skip spawning it. bob-verdict.md O1 itself rates the matcher's upside "low,
-    // performance only" — not worth either risk. So `tool-gate` reads the payload's shape
-    // instead. Which tool payload fields Bob sends is equally undocumented; the gates read
-    // Claude's (`command`, `file_path`/`path`, `content`/`new_string`) and defer on anything
-    // else. Unverified live: no Bob install on the authoring machine. Revisit a matcher only
+    // merely skip spawning it. The matcher's upside is low,
+    // performance only — not worth either risk. So `tool-gate` reads the payload's shape
+    // instead. The gates read Claude's fields (`command`, `file_path`/`path`,
+    // `content`/`new_string`) and defer on anything else. What was checked against Bob itself:
+    // docs/concepts/host-matrix.md, "What is verified". Revisit a matcher only
     // once a live Bob session can confirm both the current tool list and the regex dialect.
     const b = ' --host bob';
     // `--no-deletion-gate` only when the install switched Law IV's gate off, so an armed

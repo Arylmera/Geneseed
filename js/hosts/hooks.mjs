@@ -12,7 +12,7 @@
  * (the default) reads `hookSpecificOutput.permissionDecision: "ask"` and shows the user a
  * prompt; the one `"deny"` (the ownership first-write gate, `./ownership-gate.mjs`) carries
  * its reason to the MODEL instead. `--host bob` is Bob's own protocol: PreToolUse ignores stdout and refuses only on
- * EXIT CODE 2, so `BLOCK_RULES` (Laws I and IV, plus rigor-5 and ops-2) exit 2 with the reason on stderr,
+ * EXIT CODE 2, so the rules in `BLOCK_RULES` (below) exit 2 with the reason on stderr,
  * as does the ownership gate (through `deny`, with a one-time tail in place of `BOB_FINAL`),
  * and the rest is a stderr line with exit 0; SessionStart context is plain stdout, as on
  * Claude. `--host openclaude` speaks Claude's dialect verbatim (OpenClaude is a Claude Code
@@ -304,7 +304,7 @@ const BOB_FINAL = ' Bob has no approval step for this gate: neither a confirmati
  * credential in a tracked file and a history-discarding git act are wrong in every context,
  * so refusing them costs nothing. rigor-5 (External Gate) joins them: a protected check the
  * agent can edit is not a check, so it is as unconditional as the two Laws — NOT "Laws I/IV
- * only", see bob-code.md B3. process-1 too (owner decision, 2026-11): with no prompt, a warning
+ * only". process-1 too (owner decision, 2026-11): with no prompt, a warning
  * let the agent write the user's rules on its own say. Memory is written freely (owner decision,
  * 2026-11-08), so a memory write reaches no rule here. Process 5 is the USER's call
  * as well, but a hard block would make Bob unable to commit at all, so it stays a warning the
@@ -1378,7 +1378,7 @@ export function ruleDecide(args, payload) {
   // settings matcher that routes here (Claude verdict R2); the `edits[]` read stays as a
   // cheap, harmless guard in case that ever changes.
   // `diff` (Bob's `apply_diff`) and `replace`/`search` (`search_and_replace`) are Roo-lineage
-  // field names the Bob docs never confirm (bob-verdict.md I1) — accepted when present, never
+  // field names the Bob docs never confirm — accepted when present, never
   // required, same as every field above. Only WRITTEN text is scanned: `search` and a diff's
   // SEARCH halves are text leaving the file (like Claude's `old_string`), so a secret there is
   // being removed — blocking it would stop the agent cleaning up a leak.
@@ -1424,8 +1424,9 @@ export const cmdRuleGate = guardGate(ruleGate, 'rule-gate');
 // ======================================================================================
 
 /**
- * Bob's documented PreToolUse payload (bob-verdict.md I1) is `{event, session_id, tool,
- * input:{...}}` — none of `tool_input`, `tool_name` or `hook_event_name` exist. Normalised
+ * The LEGACY Bob PreToolUse payload is `{event, session_id, tool, input:{...}}`, with none of
+ * `tool_input`, `tool_name` or `hook_event_name`; Bob 2.2.3 sends Claude's keys (bundle read
+ * 2026-10, docs/concepts/host-matrix.md "What is verified"), and both are read. Normalised
  * HERE, once, at Bob's one entry point (`toolGate` is the only verb its settings.json invokes
  * for PreToolUse), so `gitDecide`/`ruleDecide` keep reading the Claude shape unchanged and
  * never learn Bob exists. A no-op for an already-Claude-shaped payload: every field it sets

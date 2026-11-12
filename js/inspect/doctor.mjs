@@ -44,7 +44,10 @@ import { gateProbe, guardProbe } from './checks-probe.mjs';
 import {
   checkBuild, colorThemeProblems, renderedPathNotes, renderedProblems, themeParityProblems,
 } from './checks-build.mjs';
-import { hostMatrixProblems, moduleMapProblems, scorecardProblems, shimProblems } from './checks-repo.mjs';
+import {
+  bobBlockProblems, hostMatrixProblems, localNoteProblems, moduleMapProblems, scorecardProblems,
+  shimProblems, strayClaimProblems,
+} from './checks-repo.mjs';
 import { NOTE, isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
 
 /**
@@ -264,6 +267,8 @@ export function doctorCollect({
   problems = problems.concat(ran('shared_paths', 'Rendered shared paths', renderedPathNotes()));
   problems = problems.concat(ran('map', 'Module map', moduleMapProblems()));
   problems = problems.concat(ran('host_matrix', 'Host tables', hostMatrixProblems()));
+  problems = problems.concat(ran('host_claims', 'Host claims',
+    [...bobBlockProblems(), ...strayClaimProblems(), ...localNoteProblems()]));
   problems = problems.concat(ran('scorecard', 'Scorecard floor', scorecardProblems()));
   // There is no `cli` check: the table is the OWNED document (`js/cli-table.json`), so
   // there is no generator to fall behind and no second file to hash. What gates it is

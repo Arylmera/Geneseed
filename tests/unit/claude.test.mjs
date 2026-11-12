@@ -1423,7 +1423,7 @@ test('a Bob global emit puts the FULL preamble in rules and writes no AGENTS.md'
     const managed = readJson(cfg, GLOBAL_MANIFEST).managed;
     assert.ok(!('claude_md' in managed));
     assert.equal(manifestIsClaude(cfg), true);
-    // BOB'S OWN CONTRACT (docs/reviews/bob-global-injection-2026-09.md): the global hooks
+    // BOB'S OWN CONTRACT (its hooks doc and 2.0.2 changelog): the global hooks
     // file is the NESTED `settings/settings.json`; Bob has five events and Geneseed uses three
     // — SessionStart (context, plain stdout), PreToolUse (ONE `tool-gate` group, deliberately
     // NO matcher — host-compat O1, revisited: an allow-list from Bob's own tool list would

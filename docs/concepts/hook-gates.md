@@ -37,11 +37,11 @@ The merge is surgical. Every other key and every hook of your own survive, and t
 **Bob** has its own contract. It uses Claude's event names but ignores a hook's output before a tool call — the only way to refuse is exit code 2 — and it has no tool matcher or `SubagentStop`. Bob 2.2.3 does have `PreCompact` and `PostCompact`, but Geneseed does not wire them yet. So Bob gets four hooks:
 
 - `SessionStart` → `geneseed-hook context`.
-- `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. It **blocks** (exit 2) only for the checks that admit no judgement call: secrets, destructive git, a recursive scan of a whole filesystem, a write under a project's own protected-checks list, and writes that would switch a gate off. The commit/push check and a shell write to a rule store become a warning line, because a hard block would leave Bob unable to commit at all. The [ownership](ownership.md) gate also exits 2, but only once per session and repo: the same write passes after the developer answers.
-- `Stop` → `geneseed-hook learn`.
+- `PreToolUse` → `geneseed-hook tool-gate`, the git gate and the rule gate fused into one command that decides from the shape of the call. It **blocks** (exit 2) exactly the rules whose Bob cell says *block* in [Rule enforcement, by host](enforcement-table.md). The commit/push check and a shell write to a rule store become a warning line, because a hard block would leave Bob unable to commit at all. The [ownership](ownership.md) gate also exits 2, but only once per session and repo: the same write passes after the developer answers.
+- `Stop` → `geneseed-hook learn`. Bob's `Stop` carries no transcript, so nothing is learned there; the [change report](hooks.md#the-change-report) still runs.
 - `UserPromptSubmit` → `geneseed-hook activity`, which records the turn for the Activity view.
 
-Neither host has been verified live on the authoring machine. If a hook does not fire, the same rules still reach the agent through the instructions file.
+What was checked against each host itself is in [What is verified](host-matrix.md#what-is-verified). If a hook does not fire, the same rules still reach the agent through the instructions file.
 
 ## The hook shim
 

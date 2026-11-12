@@ -1,7 +1,8 @@
 /**
  * The checks over the REPO's own records — the registry, committed secrets, the hook shim,
  * the vendored skill folders (their pins and their SKILL.md frontmatter), skill aliases and
- * side files, the `js/README.md` module map, the host tables, and the scorecard ratchet.
+ * side files, the `js/README.md` module map, the host tables (their columns, Bob's block set,
+ * the one place a verified claim may sit, citations nobody can open), and the scorecard ratchet.
  *
  * Same contract as `checks-build.mjs`: an array of problem strings, empty when clean, one
  * planted fault per check in the gate. This is the group that reads what the repo SAYS about
@@ -20,6 +21,7 @@ import { hookShimPath, shimDeadPaths } from '../hosts/shim.mjs';
 import { readText } from '../lib/fs.mjs';
 import { formatRepr, formatValue } from '../lib/json.mjs';
 import { splitLines } from '../lib/udiff.mjs';
+import { HOOK_PINNED } from './checks-constitution.mjs';
 import { ENTITY_STATUSES } from './inventory.mjs';
 import { assessRepo } from './scorecard.mjs';
 import { badgeUrl, renderSvg } from './scorecard-svg.mjs';
@@ -611,6 +613,198 @@ export function hostMatrixProblems(root = ROOT) {
           + 'a known non-host column — a stale or misspelled label');
       }
     }
+  }
+  return problems;
+}
+
+/** `I`..`X` as the hook ledger numbers a law: the canon's label to the `law-N` key. */
+const ROMAN = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+
+/** `HOOK_PINNED`'s label (`IV`, `process 1`) as the hook's ledger key (`law-4`, `process-1`). */
+const ledgerKey = (label) => (ROMAN[label] ? `law-${ROMAN[label]}` : label.replace(' ', '-'));
+
+/** The ids inside `BLOCK_RULES = new Set([...])`, read off the source text; null when not found. */
+function blockRulesOf(text) {
+  const m = /const BLOCK_RULES = new Set\(\[([^\]]*)\]\)/.exec(text);
+  return m ? new Set([...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])) : null;
+}
+
+/** Every `| … |` row of `text` as trimmed cells, the edge cells dropped. */
+function tableRows(text) {
+  return text.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|'))
+    .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+}
+
+/**
+ * The Bob column of `docs/concepts/enforcement-table.md` says "block" exactly for the rules in
+ * `BLOCK_RULES` (`js/hosts/hooks.mjs`).
+ *
+ * WHY. Eight pages restated that set in prose, and when `process-1` joined it (2026-11) one
+ * was updated. The pages now point at the table, so the table is the one copy left to hold to
+ * the code. A rule's Bob cell that STARTS with `block` is a block; anything else (`log only`,
+ * `not judged`) is not. The rows are the `HOOK_PINNED` ids, whose labels give the ledger key.
+ *
+ * `BLOCK_RULES` is read by a regex over the source, never imported: `hooks.mjs` reaches
+ * `loss.mjs`, which starts a process, and the doctor runs inside the CLI, which may not
+ * (`tests/unit/hook_cli.test.mjs`). A source line the regex no longer finds is its own problem,
+ * so a refactor cannot turn this arm into one that checks nothing.
+ */
+export function bobBlockProblems(root = ROOT) {
+  const rel = 'docs/concepts/enforcement-table.md';
+  let table; let hooks;
+  try {
+    table = readText(path.join(root, ...rel.split('/')));
+    hooks = readText(path.join(root, 'js', 'hosts', 'hooks.mjs'));
+  } catch (e) {
+    return [`[authoring] the Bob block check cannot read its inputs: ${e.message}`];
+  }
+  const blocked = blockRulesOf(hooks);
+  if (!blocked) {
+    return ['[authoring] js/hosts/hooks.mjs no longer declares `const BLOCK_RULES = new Set([…])` '
+      + 'on one line — the Bob block check (js/inspect/checks-repo.mjs) reads that line'];
+  }
+  const rows = tableRows(table);
+  const header = rows.find((r) => r[0] === 'id');
+  const bob = header ? header.indexOf('Bob') : -1;
+  if (bob < 0) return [`[authoring] ${rel} has no \`id\` table with a Bob column`];
+  const problems = [];
+  for (const [id, label] of Object.entries(HOOK_PINNED)) {
+    const row = rows.find((r) => r[0] === `\`${id}\``);
+    if (!row) { problems.push(`[authoring] ${rel} has no row for \`${id}\`, a rule the hooks gate`); continue; }
+    const says = /^block\b/.test(row[bob] || '');
+    const does = blocked.has(ledgerKey(label));
+    if (says !== does) {
+      problems.push(`[authoring] ${rel}: the Bob cell of \`${id}\` ${says ? 'says' : 'does not say'} `
+        + `"block", but BLOCK_RULES (js/hosts/hooks.mjs) ${does ? 'has' : 'does not have'} `
+        + `${ledgerKey(label)} — the table is the one statement of what Bob refuses`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Directories a walk of the checkout must not enter: the VCS directory, installed packages,
+ * build output, and the local working trees `.gitignore` names. The doctor cannot ask which
+ * files are tracked (no spawn in the CLI), so this list stands in for it; `docs/reviews` is
+ * here because a maintainer's machine has one.
+ */
+const WALK_SKIP = new Set([
+  '.git', 'node_modules', 'web/node_modules', 'web/dist', 'Harness', 'archived-Harness',
+  'improvements', 'coverage', 'reports', '.stryker-tmp', '.superpowers', '.geneseed',
+  '.claude/worktrees', 'docs/specs', 'docs/reviews', 'docs/superpowers',
+  'agents', 'doctrines', 'laws', 'memory', 'modes', 'ontology', 'postures', 'skills', 'notebook',
+]);
+
+/** The text files a claim or a citation can sit in. */
+const TEXT_EXT = new Set(['.md', '.mjs', '.js', '.cjs', '.ts', '.tsx', '.json', '.yml', '.yaml', '.txt', '.tmpl']);
+
+/** Every text file under `root` outside `WALK_SKIP`, as sorted `/`-separated relative paths. */
+function checkoutTextFiles(root) {
+  const out = [];
+  const walk = (dir, rel) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (WALK_SKIP.has(r)) continue;
+      if (e.isDirectory()) walk(path.join(dir, e.name), r);
+      else if (e.isFile() && TEXT_EXT.has(path.extname(e.name))) out.push(r);
+    }
+  };
+  walk(root, '');
+  return out.sort();
+}
+
+/** The heading that opens the one block allowed to say what is verified, and its file. */
+const VERIFIED_FILE = 'docs/concepts/host-matrix.md';
+const VERIFIED_HEADING = '## What is verified';
+
+/**
+ * A verified/unverified claim about a host, in the words this repo used for one. Two shapes:
+ * "verified live" / "unverified live", and "not (yet) (been) run|verified|tested against".
+ */
+const STRAY_CLAIM_RE = /(un)?verified live|not (yet )?(been )?(run|verified|tested) against/i;
+
+/** `text` with the What-is-verified block (heading to the next `## `) blanked, lines kept. */
+function withoutVerifiedBlock(text) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((l) => l.trim() === VERIFIED_HEADING);
+  if (start < 0) return text;
+  let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+  if (end < 0) end = lines.length;
+  return lines.map((l, i) => (i >= start && i < end ? '' : l)).join('\n');
+}
+
+/**
+ * What is verified about a host is said in ONE place, `## What is verified` in
+ * `docs/concepts/host-matrix.md`; a Markdown file that says it anywhere else fails.
+ *
+ * WHY. Nine pages each carried their own sentence, written at different times, and they
+ * disagreed: two said OpenClaude had never been run while the canary ran it weekly, and three
+ * said nothing about Bob had been seen live after two live sessions. A claim with a date can
+ * only stay true where someone will look for it. `CHANGELOG.md` and `docs/adr/` are dated
+ * records of what was true then, so they are exempt; the block itself is where the words belong.
+ */
+export function strayClaimProblems(root = ROOT) {
+  const problems = [];
+  const block = path.join(root, ...VERIFIED_FILE.split('/'));
+  if (!(isFile(block) && readText(block).split('\n').some((l) => l.trim() === VERIFIED_HEADING))) {
+    problems.push(`[authoring] ${VERIFIED_FILE} has no \`${VERIFIED_HEADING}\` section — the one `
+      + 'place that says what was checked against each host');
+  }
+  for (const rel of checkoutTextFiles(root)) {
+    if (!rel.endsWith('.md') || rel === 'CHANGELOG.md' || rel.startsWith('docs/adr/')) continue;
+    let text;
+    try { text = readText(path.join(root, ...rel.split('/'))); } catch { continue; }
+    if (rel === VERIFIED_FILE) text = withoutVerifiedBlock(text);
+    text.split('\n').forEach((line, i) => {
+      const m = STRAY_CLAIM_RE.exec(line);
+      if (m) {
+        problems.push(`[authoring] ${rel}:${i + 1} says "${m[0]}" — what is verified about a host `
+          + `is said only under \`${VERIFIED_HEADING}\` in ${VERIFIED_FILE}; link there instead`);
+      }
+    });
+  }
+  return problems;
+}
+
+/** A citation of the local review notes: the directory, or one of the three files by name. */
+const LOCAL_NOTE_RE = /docs\/reviews\/|bob-(verdict|docs|code)\.md/;
+
+/**
+ * Files that may name `docs/reviews/`: this arm and its test (the pattern and its fixtures),
+ * the changelog (a dated record) and the packaging test (it records that the directory must
+ * never ship). `.gitignore`, which is what makes the directory local, has no text extension
+ * and is never read.
+ */
+const LOCAL_NOTE_EXEMPT = new Set([
+  'js/inspect/checks-repo.mjs', 'tests/unit/doctor_host_claims.test.mjs', 'CHANGELOG.md',
+  'tests/unit/package_manifest.test.mjs',
+]);
+
+/**
+ * No tracked file cites `docs/reviews/`, which `.gitignore` keeps off every machine but the
+ * author's.
+ *
+ * WHY. Docblocks and the Bob adapter page justified decisions with "see bob-verdict.md I1":
+ * a reference nobody else can open, so the reason was lost exactly where it was needed. A
+ * citation names something in the repo (the What-is-verified block), a dated observation
+ * ("Bob 2.2.3 bundle, read 2026-10"), or the host's public docs.
+ */
+export function localNoteProblems(root = ROOT) {
+  const problems = [];
+  for (const rel of checkoutTextFiles(root)) {
+    if (LOCAL_NOTE_EXEMPT.has(rel)) continue;
+    let text;
+    try { text = readText(path.join(root, ...rel.split('/'))); } catch { continue; }
+    text.split('\n').forEach((line, i) => {
+      const m = LOCAL_NOTE_RE.exec(line);
+      if (m) {
+        problems.push(`[authoring] ${rel}:${i + 1} cites ${m[0]} — docs/reviews/ is gitignored, so `
+          + 'nobody else can open it; cite the What-is-verified block, a dated observation or '
+          + "the host's own docs");
+      }
+    });
   }
   return problems;
 }

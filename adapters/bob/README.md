@@ -9,7 +9,7 @@ Claude engine** verbatim — only the marker dir (`.bob`) and the instructions
 filename (`AGENTS.md`) change. There is nothing to install by hand: `geneseed
 setup` (or `geneseed build --emit bob` / `--emit bob-global`) writes everything.
 
-This page documents the two verified **Bob-isms** the engine handles, and one
+This page documents the **Bob-isms** the engine handles, and one
 limitation to be aware of on a shared repo.
 
 ## What the emit writes
@@ -86,8 +86,7 @@ and fell back to searching the filesystem. The Bob emit therefore writes the dir
 
 ## Hooks — Bob's own protocol
 
-Bob documents lifecycle hooks (its hooks page and the 2.0.2 changelog; see
-`docs/reviews/bob-global-injection-2026-09.md` for the reading): **five events** —
+Bob documents lifecycle hooks (its hooks page and the 2.0.2 changelog): **five events** —
 `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop` — with Claude's
 names but **not Claude's protocol**, and the global file at the **nested**
 `~/.bob/settings/settings.json`. Two differences decide the emit:
@@ -105,8 +104,8 @@ What the global emit writes into `~/.bob/settings/settings.json`:
 | event | verb | how the verdict travels |
 | --- | --- | --- |
 | `SessionStart` | `context --host bob` | plain stdout, as on Claude |
-| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | Laws I/IV, rigor-5 and ops-2: **exit 2**, reason on stderr — it says no chat confirmation lifts the block, since Bob has no ask tier; process 1/5: a stderr line, exit 0; the ownership gate (the session's first write in an application repo with no `## Ownership` section in its root `AGENTS.md`): **exit 2 once**, the same write then passes — off with `--no-ownership-gate`, `mode: off`, or a personal `Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md` |
-| `Stop` | `learn` | never a verdict |
+| `PreToolUse` | `tool-gate --host bob` — one group, no matcher | the rules whose Bob cell says *block* in the [enforcement table](../../docs/concepts/enforcement-table.md): **exit 2**, reason on stderr — it says no chat confirmation lifts the block, since Bob has no ask tier; the commit/push consent (process 5) and a parsed shell write to a rule store: a stderr line, exit 0; the ownership gate (the session's first write in an application repo with no `## Ownership` section in its root `AGENTS.md`): **exit 2 once**, the same write then passes — off with `--no-ownership-gate`, `mode: off`, or a personal `Setup: declined <YYYY-MM-DD>` line in `.geneseed/ownership.md` |
+| `Stop` | `learn` | never a verdict. **Wired but inert:** Bob's `Stop` carries no transcript, so nothing is distilled; only the [change report](../../docs/concepts/hooks.md#the-change-report) runs (on stderr). The group is kept so that learning starts if Bob ever sends a transcript |
 | `UserPromptSubmit` | `activity --host bob` | never a verdict; records the turn for the web console's Activity view |
 
 Every hook also feeds the Activity view after it decides (off with `GENESEED_ACTIVITY=off`).
@@ -135,24 +134,26 @@ id), `cwd` (the root workspace, with a lower-case drive letter on Windows), and 
 No matcher on `PreToolUse`, deliberately: Bob's tools page already drifts from its own
 changelog (`web_fetch`, the 2.1.0 Office/IBM-docs tools are undocumented there), so an
 allow-list built from it would fail open on the next tool Bob adds, and a deny-list needs a
-regex dialect (lookahead) the docs never confirm — bob-verdict.md O1 rates the matcher's own
-upside "low, performance only", not worth either risk. `tool-gate` reads the payload's shape
+regex dialect (lookahead) the docs never confirm — and the matcher's own upside is low,
+performance only, not worth either risk. `tool-gate` reads the payload's shape
 instead — a `command` field gets the git checks, a path gets the rule checks — and defers on
-anything it does not recognise. Bob has **no "ask the user" tier**, so the Laws and checks
-that admit no judgement call — Laws I and IV, rigor-5 (External Gate, when a project
-opts in) and ops-2 (Commands Must Return: a recursive scan rooted at a whole filesystem) —
-are refused outright, and the two consent rules become a warning. Because that
-warning is all process 5 can be here, the `process` pack toggle changes nothing in Bob's
-hooks: the one group only ever exits 2 for Laws I and IV, rigor-5 and ops-2, which every build
-carries.
+anything it does not recognise. Bob has **no "ask the user" tier**, so the rules
+that admit no judgement call are refused outright, and the commit/push consent becomes a
+warning. Which rules those are is written in one place, the Bob column of the
+[enforcement table](../../docs/concepts/enforcement-table.md); `geneseed doctor` holds that
+column to `BLOCK_RULES` in `js/hosts/hooks.mjs`. A build without the `process` pack carries
+`--no-rule-store`, which drops the standing-rule block; a warning is all process 5 can be
+here, so the toggle changes nothing else in Bob's hooks.
 
 **Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the
 nested file.
 
-**Partly verified.** The payload field names are Claude's: Bob 2.2.3's bundle shows them,
-and a live Activity check on 2026-10-25 recorded a Bob session from them. The gates' own
-verdicts are still Bob's documented contract. If a field
+**What is verified** about Bob — the bundle read, the two live sessions, and what neither
+covers — is in one place:
+[What is verified](../../docs/concepts/host-matrix.md#what-is-verified). To check your own
+install by hand, and to record what your Bob really sends (`GENESEED_HOOK_TAP`), see
+[Verify it works](../../docs/guides/verify.md). If a field
 name differs the gate defers rather than misfires, and the harness still holds through
 the `rules/geneseed.md` preamble — the same behaviour-contract parity every
 non-OpenCode host gets. `/hooks` in Bob Shell 2.0.2+ lists the hooks it loaded and
@@ -180,7 +181,7 @@ servers from ([Bob docs](https://bob.ibm.com/docs/ide/configuration/mcp/mcp-in-b
 ## Slash commands
 
 Bob documents `.bob/commands/*.md` (project) and `~/.bob/commands/*.md` (global), with
-`description` frontmatter (bob-docs.md §6 — no use for `argument-hint` yet: no Geneseed
+`description` frontmatter (Bob's slash-commands docs page — no use for `argument-hint` yet: no Geneseed
 skill takes positional arguments). Geneseed writes one command per merged skill's OLD name
 (`/old-name`, the same alias problem OpenCode's `command/` layer solves) and one per
 genuinely user-only skill (host-compat O2/R1): Bob's skills page documents only

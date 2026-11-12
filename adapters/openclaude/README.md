@@ -71,6 +71,6 @@ which root file OpenClaude already loads (`AGENTS.md` when present, else
 
 - **Workflows.** OpenClaude ships its `WorkflowTool` disabled, so the `workflow`
   skill falls back to parallel agents, as on Bob.
-- **Live verification.** The emit follows OpenClaude's source (`src/utils/envUtils.ts`,
-  `src/utils/claudemd.ts`, `src/utils/config.ts`, `src/types/hooks.ts`) as of
-  2026-09. It has not been run against an installed OpenClaude yet.
+- **Hooks that need a model turn** are checked on no host. What was checked against
+  OpenClaude itself, how and when, is in one place:
+  [What is verified](../../docs/concepts/host-matrix.md#what-is-verified).
