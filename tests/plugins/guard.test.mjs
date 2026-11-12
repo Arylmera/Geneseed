@@ -920,6 +920,68 @@ test("the shared exclude list is denied; a global install stands down in a folde
   }
 })
 
+// ---- edits[] and nested calls ------------------------------------------------------
+// The content scan reads every text a call lands on disk, not only `content` / `newString`: each
+// `edits[]` entry's `newString` (or `new_string`) is scanned and attributed to the entry's own
+// file, else the call's, and an entry's own path runs the path gates. Text leaving the file
+// (`oldString`) is not scanned. A call carried inside another's arguments (`tool_calls[]` or
+// `calls[]`, each `{ tool | name, parameters | args | input }`) runs every gate as its own call,
+// so a tool outside the write and shell classes cannot carry a refused call past them; a nested
+// read is still a read. Nesting past eight levels cannot be read, and is refused as `process-1`
+// with the deep-arguments text. The rule is the ledger key the refusal was recorded under; null
+// is a call that ran. Every credential-shaped string is assembled at run time, so this file holds
+// none for the repo's own scan to find.
+const AWS_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"
+const nest = (depth, call) => (depth ? { tool_calls: [{ tool: "batch", parameters: nest(depth - 1, call) }] } : { tool_calls: [call] })
+const NESTED_ROWS = [
+  // [label, tool, args, rule]
+  ["multiedit: a secret in the second edit", "multiedit",
+    { filePath: "src/a.js", edits: [{ oldString: "a", newString: "b" }, { oldString: "c", newString: `k = '${AWS_KEY}'` }] }, "law-1"],
+  ["multiedit: the snake_case spelling", "multiedit",
+    { filePath: "src/a.js", edits: [{ old_string: "c", new_string: `k = '${AWS_KEY}'` }] }, "law-1"],
+  ["multiedit: a secret only in text that leaves the file", "multiedit",
+    { filePath: "src/a.js", edits: [{ oldString: `k = '${AWS_KEY}'`, newString: "k = load()" }] }, null],
+  ["multiedit: an edit's own .env file is exempt, as a write to it is", "multiedit",
+    { filePath: "src/a.js", edits: [{ filePath: ".env", oldString: "", newString: `KEY=${AWS_KEY}` }] }, null],
+  ["multiedit: an edit's own file is a key file", "multiedit",
+    { filePath: "src/a.js", edits: [{ filePath: "/home/me/.ssh/id_rsa", oldString: "a", newString: "b" }] }, "law-1"],
+  ["batch: a nested write to a key file", "batch",
+    { tool_calls: [{ tool: "read", parameters: { filePath: "src/a.js" } }, { tool: "write", parameters: { filePath: "/home/me/.ssh/id_rsa", content: "k" } }] }, "law-1"],
+  ["batch: a nested write whose content is a secret", "batch",
+    { tool_calls: [{ tool: "write", parameters: { filePath: "src/a.js", content: AWS_KEY } }] }, "law-1"],
+  ["batch: a nested rm -rf /, in the calls[] / name / args spelling", "batch",
+    { calls: [{ name: "bash", args: { command: "rm -rf /" } }] }, "law-4"],
+  ["batch: a nested rm -rf /, in the input spelling", "batch",
+    { tool_calls: [{ tool: "Bash", input: { command: "rm -rf /" } }] }, "law-4"],
+  ["batch: a nested read of a key file", "batch",
+    { tool_calls: [{ tool: "read", parameters: { filePath: "/home/me/.ssh/id_rsa" } }] }, null],
+  ["batch: a nested ordinary write and command", "batch",
+    { tool_calls: [{ tool: "write", parameters: { filePath: "src/a.js", content: "x" } }, { tool: "bash", parameters: { command: "echo hi" } }] }, null],
+  ["batch: a refused call eight batches down is still read", "batch", nest(7, { tool: "bash", parameters: { command: "rm -rf /" } }), "law-4"],
+  ["batch: a call nine batches down cannot be read", "batch", nest(8, { tool: "read", parameters: { filePath: "src/a.js" } }), "process-1"],
+]
+test("edits[] and nested calls run the gates a direct call runs", async () => {
+  const harness = path.join(tmp, "nested")
+  const ledger = path.join(harness, "notebook", "gates.jsonl")
+  await fs.mkdir(path.dirname(ledger), { recursive: true })
+  const saved = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  try {
+    for (const [label, tool, args, rule] of NESTED_ROWS) {
+      await fs.rm(ledger, { force: true })
+      const why = await denial(tool, args)
+      const rules = (await isFileAt(ledger)) ? (await fs.readFile(ledger, "utf8")).trim().split("\n").map((l) => JSON.parse(l).rule) : []
+      assert.deepEqual(rules, rule ? [rule] : [], `${label}: ${why}`)
+      assert.equal(why !== null, rule !== null, label)
+    }
+    const deep = await denial("batch", nest(8, { tool: "read", parameters: { filePath: "src/a.js" } }))
+    assert.match(deep, /The arguments of batch nest too deep to read/)
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = saved
+  }
+})
+
 // ---- a gate that fails (ADR 0007) ------------------------------------------------
 // Each gate runs alone. An argument whose getter throws fails every gate that reads a path, and
 // the shell gate, which reads only the command, still refuses: one gate's fault no longer

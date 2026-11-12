@@ -1436,13 +1436,19 @@ function plainPaths(args) {
   // as the segment separator) match `C:\Users\me\.ssh\id_rsa` the same as a POSIX path.
   return PATH_KEYS.map((k) => args?.[k]).filter((v) => typeof v === "string" && v).map((v) => v.replace(/\\/g, "/"))
 }
-// Returns every candidate path for this call, normalized (backslashes -> `/`): every path key, and
-// every patch marker resolved against `cwd` (the session's `ctx.directory` — the same root
-// `apply_patch.ts:72` resolves against upstream) since a patch marker is worktree-relative.
+// A multi-edit call's entries: `edits[]`, each carrying its new text and, on some tools, a file of
+// its own. UNVERIFIED against a live OpenCode: the shape is its V1 `multiedit` tool's as its
+// source reads (`filePath` beside `edits: [{ filePath, oldString, newString }]`), and no host was
+// run here to see whether that tool still ships under that name on either major.
+const editsOf = (args) => (Array.isArray(args?.edits) ? args.edits.filter((e) => e && typeof e === "object") : [])
+// Returns every candidate path for this call, normalized (backslashes -> `/`): every path key, the
+// path keys of each `edits[]` entry, and every patch marker resolved against `cwd` (the session's
+// `ctx.directory` — the same root `apply_patch.ts:72` resolves against upstream) since a patch
+// marker is worktree-relative.
 function pickPath(args, cwd) {
   const marked = args && typeof args.patchText === "string" ? parsePatchPaths(args.patchText)
     .map((p) => path.resolve(cwd || process.cwd(), p).replace(/\\/g, "/")) : []
-  return [...new Set([...marked, ...plainPaths(args)])]
+  return [...new Set([...marked, ...plainPaths(args), ...editsOf(args).flatMap(plainPaths)])]
 }
 // Per-FILE added content for an `apply_patch` call: `parsePatchPaths` flattens every marker
 // path into one list (right for the path-only gates, which must catch a secret/protected name
@@ -1488,7 +1494,9 @@ function patchSections(patchText) {
 // (OpenCode tool Parameters, packages/opencode/src/tool/{write,edit}.ts) — both single-path, so
 // one pair. For `apply_patch`, one pair per marker section; only the `+`-prefixed hunk lines are
 // NEW content — a `-` line is text being REMOVED, so a secret there is leaving the file, not
-// landing in it, and must not block the call.
+// landing in it, and must not block the call. A multi-edit carries one `newString` (or
+// `new_string`) per `edits[]` entry, each attributed to the entry's own file, else the call's
+// (the twin read: `ruleDecide` in js/hosts/hooks.mjs joins `edits[].new_string` the same way).
 function pickAddedContentByPath(args, cwd) {
   const found = args && typeof args.patchText === "string" ? parsePatchSections(args.patchText)
     .filter((s) => s.added.length)
@@ -1498,9 +1506,39 @@ function pickAddedContentByPath(args, cwd) {
     })) : []
   // Beside a patch too: a decoy `patchText` must not hide the content a call also carries.
   const [p] = plainPaths(args)
-  if (!p) return found
-  for (const text of [args.content, args.newString]) if (typeof text === "string") found.push({ path: p, content: text })
+  if (p) for (const text of [args.content, args.newString]) if (typeof text === "string") found.push({ path: p, content: text })
+  for (const edit of editsOf(args)) {
+    const own = plainPaths(edit)[0] ?? p
+    if (!own) continue
+    for (const text of [edit.newString, edit.new_string]) if (typeof text === "string") found.push({ path: own, content: text })
+  }
   return found
+}
+// The calls a tool carries inside its own arguments: `tool_calls[]` or `calls[]`, each entry
+// `{ tool | name, parameters | args | input }`. A tool outside the write and shell classes was
+// read for rule-store paths only, so a `batch` holding a nested `bash rm -rf /` or a nested write
+// of a key passed every other gate. Each entry now runs the whole gate pipeline as its own call.
+// An entry with no tool name is no call, and its strings still reach the rule-store walk.
+//
+// UNVERIFIED against a live OpenCode, all of it: whether a `batch` tool ships under that name on
+// either major, whether its entries have this shape (V1's source reads `tool_calls: [{ tool,
+// parameters }]`), and whether the host fires `tool.execute.before` again for each nested call. If
+// it does, nothing is refused twice (the outer call is refused first, and then no entry runs),
+// but a gate ERROR is ledgered once for the outer call and once more for the nested one.
+const NESTED_KEYS = ["tool_calls", "calls"]
+// A batch inside a batch is already unusual; past this, what cannot be read is refused.
+const NESTED_DEPTH = 8
+function nestedCalls(args) {
+  const out = []
+  for (const key of NESTED_KEYS) {
+    for (const call of Array.isArray(args?.[key]) ? args[key] : []) {
+      if (!call || typeof call !== "object") continue
+      const tool = [call.tool, call.name].find((v) => typeof v === "string" && v)
+      const inner = [call.parameters, call.args, call.input].find((v) => v && typeof v === "object")
+      if (tool) out.push({ tool: tool.toLowerCase(), args: inner ?? {} })
+    }
+  }
+  return out
 }
 function pickCommand(args) {
   for (const k of ["command", "cmd", "script"]) {
@@ -2603,7 +2641,12 @@ export const GeneseedGuard = async (ctx) => {
       const cwd = ctx?.directory || process.cwd()
       // The gates of one call, in order. Each reads the arguments for itself: a gate that shared
       // another's reading would fail with it. A gate's `return` after `deny` is the warn mode's.
-      const gatesFor = (tool, args) => {
+      // `depth` is 0 for the call the host handed in, and counts up through `nestedCalls`. A nested
+      // call has no prompt of its own that this hook can count on (the mark for `evaluate` is the
+      // OUTER call's id, and whether the host asks about a nested edit is unverified), so a nested
+      // rule-store write is refused where a direct one would be handed to the host's prompt.
+      const gatesFor = (tool, args, depth) => {
+        const nested = depth > 0
         const writes = hasAny(tool, WRITE_TOOLS)
         return [
           ["paths", async () => {
@@ -2625,10 +2668,10 @@ export const GeneseedGuard = async (ctx) => {
               // V1 after an "always": the `permission.edit` ask on these files is gone too.
               if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
               const store = ruleTarget(raw, cwd)
-              const prompted = (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
+              const prompted = !nested && (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
               if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
               if (store && !prompted) {
-                await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
+                await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) && !nested ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
                 return
               }
             }
@@ -2709,22 +2752,30 @@ export const GeneseedGuard = async (ctx) => {
               // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
               // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
               const store = ruleTarget(p, wd)
-              if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
+              if (store && !nested && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
               if (store) {
                 await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
                 return
               }
             }
           }],
+          // Last, so the call's own gates have spoken: every call it carries, as a call of its own.
+          ["nested", async () => {
+            for (const call of nestedCalls(args)) {
+              if (depth >= NESTED_DEPTH) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
+              await judge(call.tool, call.args, depth + 1)
+              if (warned) return
+            }
+          }],
         ]
       }
-      const judge = async (tool, args) => {
-        for (const [name, gate] of gatesFor(tool, args)) {
+      const judge = async (tool, args, depth) => {
+        for (const [name, gate] of gatesFor(tool, args, depth)) {
           await runGate(name, gate)
           if (warned) return
         }
       }
-      await judge(tool, args)
+      await judge(tool, args, 0)
       await unjudged()
       if (warned) return
       for (const note of notes) {
