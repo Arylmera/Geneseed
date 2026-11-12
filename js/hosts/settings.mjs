@@ -273,8 +273,12 @@ function defaultPermission(doctrines = null, excluded = [], deletionGate = true)
 const OWNED_BASH = ['git commit*', 'git push*',
   ...PUSH_CHAIN.flatMap(([keys]) => keys)];
 
-/** The verdict Geneseed itself writes for each owned key — what "still reads as ours" means. */
-const OWNED_VERDICT = new Map([['git commit*', 'ask'], ['git push*', 'ask']]);
+/**
+ * The verdict Geneseed itself writes for each owned key — what "still reads as ours" means.
+ * Exported for `unmergeOpencodeJson`, which takes a recorded gate back at uninstall under the
+ * same two conditions a pack-off rebuild does: recorded, and still at this verdict.
+ */
+export const OWNED_VERDICT = new Map([['git commit*', 'ask'], ['git push*', 'ask']]);
 for (const [keys, verdict] of PUSH_CHAIN) for (const k of /** @type {string[]} */ (keys)) OWNED_VERDICT.set(k, /** @type {string} */ (verdict));
 
 /**

@@ -61,10 +61,12 @@ import {
 import { mcpLoad } from '../hosts/mcp.mjs';
 import {
   SRC_DIRS_MARKER, bundleFiles, hashesOf, ownedState, ownedWithin, recordedDenies, recordedEdit,
+  recordedGates,
 } from '../hosts/owned.mjs';
 import {
   atomicWriteJson, managedBlockRead, managedBlockRemove, managedBlockWrite,
   loadJsonObject, mergeClaudeSettings, opencodeTarget, OPENCODE_SENTINEL, opencodeSentinelWrite,
+  OWNED_VERDICT,
   settingsIntegrityCheck, wireClaudeExcludes, unwireClaudeExcludes,
   unwireClaudeSettings, wireClaudeEnv, unwireClaudeEnv,
 } from '../hosts/settings.mjs';
@@ -246,13 +248,24 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
  * deactivate, which removed the entry but kept the denies (PR #241 review) — so either half
  * alone is a change, and only "neither" declines.
  *
+ * `gates` is the manifest's `bash_gates` — the `permission.bash` keys an emit itself ADDED,
+ * because they were absent when it ran. Uninstall once left all of them (some 45 keys:
+ * `"git commit*": "ask"` and the push chain) in a file whose harness was gone, although the
+ * record of having written them was right there. A recorded key goes only while it still reads
+ * the verdict Geneseed writes for it (`OWNED_VERDICT`): the same two conditions under which a
+ * pack-off rebuild takes one back (`reconcileOpencodePermission`), so a key the user re-scoped,
+ * and any key that is not in the record — theirs from the start, or from an install older than
+ * 5.2.0 — stays. An emptied `bash` object is dropped, as an emptied `skill` is; `permission`
+ * itself is left, empty or not, as those two sweeps leave it. `[]` (deactivate) sweeps nothing:
+ * a paused install keeps its gates, which is the fail-closed direction.
+ *
  * A COMMENTED file — `opencode.json` or `.jsonc`, the extension does not matter — is not
- * rewritten and the user is told to do it by hand — the entry AND
- * the recorded denies still set to `"deny"`, each named: rewriting it
+ * rewritten and the user is told to do it by hand — the entry, the recorded denies still set
+ * to `"deny"` AND the recorded gates still at Geneseed's verdict, each named: rewriting it
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
  */
-export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
+export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null, gates = []) {
   const target = opencodeTarget(p);
   // Absent, unreadable (the Python's `except OSError: return False`) or not an object: decline.
   const { state, data: cfg, hadComments } = loadJsonObject(target);
@@ -268,7 +281,11 @@ export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
   // back only when nothing but its `"*"` is left — a key the user added since keeps the object.
   const editObj = edit && isDict(cfg.permission) && isDict(cfg.permission.edit) ? cfg.permission.edit : null;
   const asks = editObj ? edit.asks.filter((k) => editObj[k] === 'ask') : [];
-  if (!hasEntry && !denies.length && !asks.length) return false;
+  const bash = isDict(cfg.permission) && isDict(cfg.permission.bash) ? cfg.permission.bash : null;
+  const ours = bash
+    ? gates.filter((k) => OWNED_VERDICT.has(k) && bash[k] === OWNED_VERDICT.get(k))
+    : [];
+  if (!hasEntry && !denies.length && !asks.length && !ours.length) return false;
   if (hadComments) {
     printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it.`
       + (hasEntry ? ` Remove this from its "instructions" by hand: ${jsonDumps(entry)}` : '')
@@ -276,12 +293,16 @@ export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
         + `${denies.map((n) => jsonDumps(n)).join(', ')}` : '')
       + (asks.length ? ` Remove these from its "permission.edit" by hand: `
         + `${asks.map((k) => jsonDumps(k)).join(', ')}` : '')
+      + (ours.length ? ` Remove these from its "permission.bash" by hand: `
+        + `${ours.map((k) => jsonDumps(k)).join(', ')}` : '')
       + '\n');
     return false;
   }
   if (hasEntry) cfg.instructions = instr.filter((i) => i !== entry);
   for (const name of denies) delete skill[name];
   if (skill && denies.length && !Object.keys(skill).length) delete cfg.permission.skill;
+  for (const k of ours) delete bash[k];
+  if (ours.length && !Object.keys(bash).length) delete cfg.permission.bash;
   for (const k of asks) delete editObj[k];
   if (asks.length) {
     const left = Object.keys(editObj);
@@ -362,7 +383,8 @@ export function uninstallGlobal(target, archiveMemory, host = 'opencode', force 
     if (isDir(p) && isEmptyDir(p)) rmdirQuiet(p);
   }
   const unmerged = unmergeOpencodeJson(path.join(target, 'opencode.json'),
-    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man), recordedEdit(man));
+    path.join(target, 'AGENT.md').split(path.sep).join('/'), recordedDenies(man), recordedEdit(man),
+    recordedGates(man));
   managedBlockRemove(path.join(target, OPENCODE_SENTINEL));
   if (failed.length) warnMarkersKept();
   else for (const m of REVERSAL_MARKERS) unlinkQuiet(path.join(target, m));
@@ -489,7 +511,8 @@ function opencodeProjectUninstall(root, force = false) {
     }
   }
   const unmerged = unmergeOpencodeJson(path.join(root, 'opencode.json'), entry,
-    man ? recordedDenies(man) : [], man ? recordedEdit(man) : null);
+    man ? recordedDenies(man) : [], man ? recordedEdit(man) : null,
+    man ? recordedGates(man) : []);
   const result = { removed, unmerged, archived: null, userOnly };
   if (failed.length) result.failed = failed;
   if (kept.length) result.kept = kept;

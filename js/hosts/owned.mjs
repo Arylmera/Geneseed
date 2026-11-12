@@ -176,9 +176,9 @@ export function hashesOf(doc) {
  * An OpenCode manifest's `skill_denies` — the `permission.skill` denies Geneseed itself added
  * (`opencodeLayer` records them; a deny the user wrote, even on a Geneseed skill, is never in
  * it) — or `[]` when the manifest, or the key, is absent or malformed, which sweeps nothing.
- * Unlike the `permission.bash` gates (left in place at uninstall, which fails closed — see
- * `reconcileOpencodePermission`), a skill-visibility deny is reversible: once uninstalled there
- * is no skill left to hide, and the name is the user's to reuse. One home because rebuild's
+ * A skill-visibility deny is reversible: once uninstalled there is no skill left to hide, and
+ * the name is the user's to reuse — uninstall takes the recorded ones back, as it does the
+ * recorded `permission.bash` gates (`recordedGates`). One home because rebuild's
  * deny sweep and uninstall must agree on what Geneseed owns.
  */
 export function recordedDenies(doc) {
@@ -202,9 +202,10 @@ export function recordedEdit(doc) {
 
 /**
  * An OpenCode manifest's `bash_gates` — the `permission.bash` keys Geneseed itself added, which
- * a later build may take back once their rule is off (`reconcileOpencodePermission`). Absent or
- * malformed reads as nothing owned, like `recordedDenies`: a manifest from before 5.2.0 has no
- * such key, so its gates stay until `--prune-gates` or a hand edit.
+ * a later build may take back once their rule is off (`reconcileOpencodePermission`) and an
+ * uninstall takes back outright (`unmergeOpencodeJson`). Absent or malformed reads as nothing
+ * owned, like `recordedDenies`: a manifest from before 5.2.0 has no such key, so its gates stay
+ * until `--prune-gates` or a hand edit.
  */
 export function recordedGates(doc) {
   const g = doc && doc.bash_gates;
