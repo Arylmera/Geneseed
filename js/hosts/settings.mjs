@@ -20,10 +20,11 @@
  * STDOUT, every other message to stderr) is inherited from `_build_settings.py` and kept
  * deliberately rather than tidied.
  *
- * HOOKS ARE APPEND-ONLY AND FAIL-CLOSED. Nothing here rewrites a hook group in place:
- * `mergeClaudeSettings` appends what is missing and removes only groups the manifest
- * recorded, and cleanup goes through `GENESEED_HOOK_SNIFF`, which recognises the shim form. A
- * 1.x install, wired before the shim, must rebuild first.
+ * ONLY GENESEED'S OWN HANDLERS ARE EVER REWRITTEN. `mergeClaudeSettings` and
+ * `unwireClaudeSettings` know one by its signature (`ownHandler`: the shim, a hook verb, this
+ * install's root), replace or remove exactly those, and leave every other handler as found,
+ * even inside a group Geneseed wrote. `GENESEED_HOOK_SNIFF` recognises the shim form for the
+ * integrity check's warning. A 1.x install, wired before the shim, must rebuild first.
  *
  * ONE KNOWN DIVERGENCE, recorded rather than reproduced. JS objects order integer-like
  * keys first, so a settings.json carrying a `"1"` or `"2"` at any level comes back from
@@ -42,7 +43,7 @@ import {
   indexOfDeepEqual, get, has, isDict, readJsonc,
 } from '../lib/json.mjs';
 import { SHIM_MARK, claudeHookShell, hookPrefix, shimHome } from './shim.mjs';
-import { GLOBAL_MANIFEST } from './hosts.mjs';
+import { GLOBAL_MANIFEST, ownHookVerb } from './hosts.mjs';
 import { gitRootOf } from './gitref.mjs';
 
 // `readJsonc` moved to ../lib/json.mjs so the hook path can parse a settings file (A2 L2).
@@ -835,8 +836,8 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
  * and gains `--no-consent`, which skips only the process-5 branch. It once DROPPED the whole
  * group instead, and Law IV went with it — on Claude only, since Bob carries it
  * through `tool-gate`. The command changing is also what re-wires an existing install:
- * `mergeClaudeSettings` prunes every previously-managed group that is not in this return
- * value.
+ * `mergeClaudeSettings` replaces this install's handler in each slot with the one returned
+ * here, and removes a handler of ours that no slot here accounts for.
  *
  * ⚠ WHAT THIS DOES **NOT** CLAIM, because it was written here once and it was false: that the
  * string `process 5` is absent from a pack-off bundle. It is not — 18 emitted files still cite
@@ -1083,14 +1084,96 @@ function readSettingsForMerge(p, consequence) {
   return [data, hadComments];
 }
 
+/** Is this handler Geneseed's, for the install at `cfg`? `ownHookVerb` (./hosts.mjs) says how. */
+export function ownHandler(h, cfg) {
+  return isDict(h) && ownHookVerb(get(h, 'command'), cfg) !== null;
+}
+
+/** A handler whose command names the shim, whatever root it carries. */
+const shimMarked = (h) => isDict(h) && typeof get(h, 'command') === 'string'
+  && h.command.includes(SHIM_MARK);
+
+/** A group's handler list, or null for a value that is not a group. */
+const handlersOf = (g) => (isDict(g) && Array.isArray(get(g, 'hooks')) ? g.hooks : null);
+
+/**
+ * Take one RECORDED group out of `hooks`, found as the manifest recorded it. True when something
+ * went.
+ *
+ * A claim is the group as it sat on file, so it can hold a handler the user put inside our
+ * group. That one stays: only the handlers naming the shim go (minus those `keep` spares), and
+ * the group goes when nothing is left. A recorded group with no shim handler at all is an older
+ * form (a 1.x interpreter command) and goes whole, as the manifest says.
+ */
+function dropRecorded(hooks, rec, keep) {
+  const event = get(rec, 'event');
+  const arr = get(hooks, event);
+  if (!Array.isArray(arr)) return false;
+  const at = indexOfDeepEqual(arr, get(rec, 'group'));
+  if (at < 0) return false;
+  const hs = handlersOf(arr[at]);
+  const left = hs && hs.some(shimMarked) ? hs.filter((h) => !shimMarked(h) || keep(h)) : [];
+  if (left.length && left.length === hs.length) return false;
+  if (left.length) arr[at].hooks = left;
+  else arr.splice(at, 1);
+  if (!arr.length) delete hooks[event];
+  return true;
+}
+
+/**
+ * Walk every handler of the install at `cfg` (`ownHandler`) and put `decide(event, group, h)` in
+ * its place: the handler itself (unchanged), a replacement, or null to remove it. A group goes
+ * only when this emptied it, an event only when its last group went. No other handler is read
+ * past the ownership test, in our group or out of it. True when anything changed.
+ */
+function rewriteOwn(hooks, cfg, decide) {
+  let changed = false;
+  for (const [event, arr] of Object.entries(hooks)) {
+    if (!Array.isArray(arr)) continue;
+    const emptied = new Set();
+    for (const g of arr) {
+      const hs = handlersOf(g);
+      if (!hs) continue;
+      const next = [];
+      for (const h of hs) {
+        const to = ownHandler(h, cfg) ? decide(event, g, h) : h;
+        if (to) next.push(to);
+        if (to !== h) changed = true;
+      }
+      if (next.length === hs.length && next.every((h, i) => h === hs[i])) continue;
+      g.hooks = next;
+      if (!next.length) emptied.add(g);
+    }
+    if (!emptied.size) continue;
+    const kept = arr.filter((g) => !emptied.has(g));
+    if (kept.length) hooks[event] = kept;
+    else delete hooks[event];
+  }
+  return changed;
+}
+
 /**
  * `_build_settings._merge_claude_settings` — returns `[target, managed]`.
  *
- * Surgical: every other key and the user's own hook entries survive. `priorHooks` is the
- * manifest's previously-recorded managed groups; any still in the file but no longer
- * canonical (a moved checkout, the pre-`|| exit 0` hook form) is PRUNED, because without
- * that a re-emit stacks the new group beside the stale one and `learn` runs twice per Stop.
- * `managed` is the complete current claim set, so unwire removes exactly those.
+ * Surgical, and PER HANDLER: every other key, the user's own groups and a user's handler inside
+ * one of our groups survive. Each canonical group is one slot (event, matcher, verb). The
+ * handler of this install that fills a slot (`ownHandler`) is replaced where it sits, as
+ * `{...existing, ...canonical}`, so a field the user added to it (`timeout`) stays; `shell` and
+ * `onFailure` are ours and go when the canonical handler has none. A handler of ours that fills
+ * no slot, or a slot already filled, is removed: that is what stops a re-emit with other gate
+ * flags, a retired event or a widened matcher from leaving the old handler beside the new one,
+ * with or without a manifest. A slot nothing fills is appended as the canonical group.
+ *
+ * `managed` is the claim set: every group that now holds one of our handlers, AS IT SITS ON FILE
+ * after the merge, so a group that was already there is claimed too and unwire removes it.
+ *
+ * `priorHooks` is the manifest's previously-recorded groups. One no longer canonical and still
+ * on file loses its shim handlers that are not this root's — a moved `--root`, which the
+ * signature cannot see, since another root reads as another install.
+ *
+ * REFUSED, NEVER OVERWRITTEN: a `hooks` that is not an object, or a canonical event whose value
+ * is not an array (`"Stop": {}`). Both are the user's, however wrong, and writing our groups
+ * there would replace them — `readSettingsForMerge`'s rule, one level down.
  *
  * `cfgDir` is the install's own dir — what the hooks carry as `--root` and under which
  * `memory/` lives. It is NOT always `dirname(p)`: Bob's global settings file is nested
@@ -1104,80 +1187,98 @@ export function mergeClaudeSettings(p, priorHooks = null, hookOpts = {},
   const loaded = readSettingsForMerge(p, 'Hooks were not wired.');
   if (!loaded) return [p, prior];
   const [config, hadComments] = loaded;
-  let hooks = get(config, 'hooks');
-  if (!isDict(hooks)) hooks = {};
   const canonical = claudeHookGroups(cfgDir, hookOpts, doctrines, excluded, host, gates);
+  const refuse = (what) => {
+    process.stderr.write(`[geneseed] ${what} in ${path.basename(p)} — NOT rewriting it `
+      + '(fix the file, then re-run). Hooks were not wired.\n');
+    return [p, prior];
+  };
+  if (has(config, 'hooks') && !isDict(config.hooks)) return refuse('"hooks" is not an object');
+  const hooks = has(config, 'hooks') ? config.hooks : {};
+  const bad = Object.keys(canonical).find((e) => has(hooks, e) && !Array.isArray(hooks[e]));
+  if (bad) return refuse(`"hooks.${bad}" is not an array`);
+
+  // One slot per canonical group: `claudeHookGroups` puts exactly one handler in each.
+  const slots = [];
   const canonFlat = [];
   for (const [event, groups] of Object.entries(canonical)) {
-    for (const g of groups) canonFlat.push({ event, group: g });
+    for (const g of groups) {
+      canonFlat.push({ event, group: g });
+      slots.push({ event, canon: g, matcher: get(g, 'matcher'), handler: g.hooks[0],
+        verb: ownHookVerb(g.hooks[0].command, cfgDir), group: null });
+    }
   }
-  let pruned = false;
+  let changed = false;
   for (const rec of prior) {
     if (indexOfDeepEqual(canonFlat, rec) >= 0) continue;
-    const event = get(rec, 'event');
-    const group = get(rec, 'group');
-    const arr = get(hooks, event);
-    if (Array.isArray(arr)) {
-      const at = indexOfDeepEqual(arr, group);
-      if (at >= 0) {
-        arr.splice(at, 1);
-        pruned = true;
-        if (!arr.length) delete hooks[event];
-      }
-    }
+    if (dropRecorded(hooks, rec, (h) => ownHandler(h, cfgDir))) changed = true;
   }
-  const added = [];
-  for (const [event, newGroups] of Object.entries(canonical)) {
-    let arr = get(hooks, event);
-    if (!Array.isArray(arr)) arr = [];
-    for (const g of newGroups) {
-      if (indexOfDeepEqual(arr, g) >= 0) continue;
-      arr.push(g);
-      added.push({ event, group: g });
+  if (rewriteOwn(hooks, cfgDir, (event, g, h) => {
+    const verb = ownHookVerb(h.command, cfgDir);
+    const slot = slots.find((s) => !s.group && s.event === event && s.verb === verb
+      && s.matcher === get(g, 'matcher'));
+    if (!slot) return null;
+    slot.group = g;
+    const merged = { ...h, ...slot.handler };
+    for (const k of ['shell', 'onFailure']) if (!has(slot.handler, k)) delete merged[k];
+    return deepEquals(merged, h) ? h : merged;
+  })) changed = true;
+  for (const s of slots) {
+    if (s.group) continue;
+    let arr = get(hooks, s.event);
+    if (!Array.isArray(arr)) arr = hooks[s.event] = [];
+    // A command the signature cannot read (no shim could be written and the fallback entry is
+    // not named after it) is still found by equality, the old test.
+    const at = s.verb ? -1 : indexOfDeepEqual(arr, s.canon);
+    if (at < 0) {
+      arr.push(s.canon);
+      changed = true;
     }
-    hooks[event] = arr;
+    s.group = at < 0 ? s.canon : arr[at];
   }
-  const survivors = prior.filter((r) => indexOfDeepEqual(canonFlat, r) >= 0);
-  const managedNow = survivors.concat(added.filter((a) => indexOfDeepEqual(survivors, a) < 0));
-  if (!added.length && !pruned) return [p, managedNow];
+  const claimed = [...new Set(slots.map((s) => s.group))];
+  const managedNow = claimed.map((group) => ({
+    event: slots.find((s) => s.group === group).event, group }));
+  if (!changed) return [p, managedNow];
   if (hadComments) {
+    // The exact groups, not a pointer to a sample: a sample cannot carry this install's shim
+    // path, root or gate flags, and the one that shipped had drifted from the emitter.
     process.stderr.write(`[geneseed] ${path.basename(p)} has comments — not rewriting it `
-      + "(your edits are kept). Add Geneseed's hooks by hand from "
-      + 'adapters/claude-code/settings.json.\n');
+      + '(your edits are kept). Merge this into it by hand:\n'
+      + `${JSON.stringify({ hooks: canonical }, null, 2)}\n`);
     return [p, prior];
   }
-  // Never empty here: `canonical` always carries at least three events, and every one of them
-  // was just written into `hooks`.
   config.hooks = hooks;
   atomicWriteJson(p, config);
   return [p, managedNow];
 }
 
 /**
- * `_build_settings._unwire_claude_settings` — remove exactly the recorded groups.
+ * `_build_settings._unwire_claude_settings` — remove the recorded groups (`dropRecorded`), then,
+ * given the install's `cfg`, every handler of that install still on file (`ownHandler`).
+ *
+ * The second pass is what a manifest alone could not do: a handler the user gave a `timeout`
+ * after the emit no longer equals its claim, and one wired by an emit whose manifest was lost
+ * was never claimed. Both would keep running after an uninstall. A handler that is not ours
+ * stays, in our group or out of it; a hook naming our shim with another root is another
+ * install's. With nothing recorded and nothing of ours on file, the file is not rewritten.
  *
  * Returns true when the file was actually rewritten, false when it bailed, so uninstall
  * can report reality instead of assuming success.
  */
-export function unwireClaudeSettings(p, added) {
-  if (!added || !added.length) return false;
+export function unwireClaudeSettings(p, added, cfg = null) {
+  const recs = (added || []).filter(isDict);
+  if (!recs.length && !cfg) return false;
   // Every state but a comment-free object declines: an unwire never rewrites what it could not
   // read whole, and a commented file would lose its comments.
   const { state, data: loaded, hadComments } = loadJsonObject(p);
   if (state !== 'ok' || hadComments) return false;
   const hooks = get(loaded, 'hooks');
   if (!isDict(hooks)) return false;
-  for (const rec of added) {
-    const event = get(rec, 'event');
-    const group = get(rec, 'group');
-    let arr = get(hooks, event);
-    if (Array.isArray(arr)) {
-      const at = indexOfDeepEqual(arr, group);
-      if (at >= 0) arr.splice(at, 1);
-    }
-    arr = get(hooks, event);
-    if (Array.isArray(arr) && !arr.length) delete hooks[event];
-  }
+  let changed = false;
+  for (const rec of recs) if (dropRecorded(hooks, rec, () => false)) changed = true;
+  if (cfg && rewriteOwn(hooks, cfg, () => null)) changed = true;
+  if (!recs.length && !changed) return false;
   if (!Object.keys(hooks).length) delete loaded.hooks;
   try {
     atomicWriteJson(p, loaded);
@@ -1357,18 +1458,25 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
 
   const presentGroups = settingsHookGroups(loaded);
   const recordedHooks = (get(m, 'settings_hooks') || []).filter(isDict);
-  // Plain deep equality here (not the sorted-dump key the orphan scan below uses) is
-  // deliberate: both sides came out of a JSON parse, so it is already order-independent.
-  // The orphan scan needs the dumped-string form because it builds a set for O(1)
-  // membership, which a dict cannot join.
+  // BY HANDLER, not by group: a recorded group is on file when each of its Geneseed handlers'
+  // commands still runs under that event, whatever else the user did to the group (a `timeout`
+  // on our handler, a hook of their own beside it). A recorded group naming no shim — an older
+  // form — keeps the whole-group comparison.
+  const key = (event, h) => `${formatRepr(event ?? null)}\u0000${h.command}`;
+  const onFile = new Set(presentGroups.flatMap(([event, g]) => (handlersOf(g) || [])
+    .filter((h) => isDict(h) && typeof get(h, 'command') === 'string').map((h) => key(event, h))));
+  const recordedCommands = new Set();
   for (const rec of recordedHooks) {
     const event = get(rec, 'event');
     const group = get(rec, 'group');
-    const hit = presentGroups.some(([e, g]) => deepEquals(e, event) && deepEquals(g, group));
-    if (expect === 'present' && !hit) {
+    const ours = (handlersOf(group) || []).filter(shimMarked);
+    for (const h of ours) recordedCommands.add(key(event, h));
+    const whole = () => presentGroups.some(([e, g]) => deepEquals(e, event) && deepEquals(g, group));
+    const live = ours.filter((h) => onFile.has(key(event, h))).length;
+    if (expect === 'present' && !(ours.length ? live === ours.length : whole())) {
       problems.push(`${p}: recorded hook group missing — event=${formatRepr(event ?? null)} `
         + `group=${jsonDumpsCompact(group ?? null)}`);
-    } else if (expect === 'absent' && hit) {
+    } else if (expect === 'absent' && (ours.length ? live > 0 : whole())) {
       problems.push(`${p}: recorded hook group still present after unwire — `
         + `event=${formatRepr(event ?? null)} group=${jsonDumpsCompact(group ?? null)}`);
     }
@@ -1386,19 +1494,13 @@ export function settingsIntegrityCheck(p, managed, expect = 'present') {
     }
   }
 
-  // Geneseed-PATTERN entries present but not in the recorded claim set — warn only, never
+  // Geneseed-PATTERN handlers present but not among the recorded commands — warn only, never
   // auto-delete (they may be user-authored, or a claim this run legitimately did not
   // inherit).
-  const recordedSet = new Set(recordedHooks.map(
-    (r) => `${formatRepr(get(r, 'event') ?? null)}\u0000`
-      + `${jsonDumpsCompact(get(r, 'group') ?? null, { sortKeys: true })}`));
   for (const [event, group] of presentGroups) {
-    const key = `${formatRepr(event)}\u0000${jsonDumpsCompact(group, { sortKeys: true })}`;
-    if (recordedSet.has(key)) continue;
-    const cmds = (get(group, 'hooks') || []).filter(isDict)
-      .map((h) => (has(h, 'command') ? h.command : ''));
-    if (cmds.some((c) => typeof c === 'string'
-      && GENESEED_HOOK_SNIFF.some((mk) => c.includes(mk)))) {
+    if ((handlersOf(group) || []).some((h) => isDict(h) && typeof get(h, 'command') === 'string'
+      && GENESEED_HOOK_SNIFF.some((mk) => h.command.includes(mk))
+      && !recordedCommands.has(key(event, h)))) {
       problems.push(`${p}: Geneseed-pattern hook present but NOT recorded in the manifest `
         + `(event=${formatRepr(event)}) — possibly user-authored; left alone`);
     }

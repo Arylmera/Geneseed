@@ -197,6 +197,50 @@ export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
   }
 }
 
+// The marker lives in the shim's FILENAME, not its directory: GENESEED_HOME relocates the dir,
+// and a relocated install's hooks must stay recognisable to `GENESEED_HOOK_SNIFF`. Declared here
+// rather than in ./shim.mjs because `ownHookVerb` below reads it, and shim.mjs imports this module.
+export const SHIM_MARK = 'geneseed-hook';
+
+/** The verbs `bin/geneseed-hook.mjs` answers (its `VERBS` table). */
+const HOOK_VERBS = 'context|git-gate|rule-gate|tool-gate|learn|activity';
+/** A command that runs one of them: every emitted form is `<runner> <verb> --root|--memory …`. */
+const RUNS_HOOK_VERB = new RegExp(` (?:${HOOK_VERBS}) --`);
+/** The verb token after the shim's name: the rest of its path, a closing quote, then the verb. */
+const VERB_AFTER_SHIM = new RegExp(`^[^"]*"? (${HOOK_VERBS})(?= |$)`);
+
+/**
+ * The hook verb `command` runs FOR THE INSTALL AT `cfg`, or null when the handler is not that
+ * install's. The one test of "is this handler Geneseed's", shared by the settings merge, the
+ * unwire and the integrity check (`js/hosts/settings.mjs`).
+ *
+ * A SIGNATURE, not deep equality with what this build would emit. Equality broke four ways: a
+ * re-emit with other gate flags and no manifest stacked a second group beside the first; a group
+ * already on file was never claimed, so uninstall left it running; a user's own `"timeout": 30`
+ * on our handler made it a stranger; and the integrity check then reported that handler missing.
+ * So a handler is ours when its command names the shim (`SHIM_MARK`), then a hook verb, and
+ * carries exactly `--root "<cfg>"` or `--memory "<cfg>/memory"`. Flags, `--host` and every other
+ * field are free to differ. The closing quote makes the root exact: `<cfg>-old` is another
+ * install, and a global and a project install differ by root, so neither claims the other's.
+ *
+ * A hand-written hook that runs our binary with our root therefore counts as ours (the maintainer
+ * accepted that, 2026-11): a re-emit replaces it and uninstall removes it.
+ *
+ * The PowerShell form backtick-escapes `$` and a backtick inside the path (`powershellForm`), so
+ * the command is read both as written and with those undone; Windows compares paths case-folded.
+ */
+export function ownHookVerb(command, cfg) {
+  if (typeof command !== 'string' || typeof cfg !== 'string' || !cfg) return null;
+  const at = command.indexOf(SHIM_MARK);
+  if (at < 0) return null;
+  const verb = VERB_AFTER_SHIM.exec(command.slice(at + SHIM_MARK.length))?.[1];
+  if (!verb) return null;
+  const fold = (s) => (process.platform === 'win32' ? s.toLowerCase() : s);
+  const wanted = [` --root "${cfg}"`, ` --memory "${path.join(cfg, 'memory')}"`].map(fold);
+  const readings = [command, command.replace(/`([`$])/g, '$1')].map(fold);
+  return readings.some((c) => wanted.some((w) => c.includes(w))) ? verb : null;
+}
+
 /**
  * The hook handlers the install at `cfg` both RECORDS and still RUNS: `[event, handler]` pairs
  * from its manifest's `managed.settings_hooks` whose command the settings file that manifest
@@ -204,13 +248,20 @@ export function globalHookStandingDown(hookRoot, projectDir, host, verb) {
  * the host runs. A user who deletes `hooks` by hand keeps the manifest (re-review, Important).
  * Absent, unparseable or COMMENTED settings fail `JSON.parse` and answer `[]`. Shared by
  * `projectWiresVerb` and the hook-shell drift check (`hookShellProblems`).
+ *
+ * Only a recorded handler that runs a hook verb: a claim is the whole group as it sat on file,
+ * so it can hold a hook the user added to our group, and that one is not this install's. The
+ * shim is NOT required here, unlike `ownHookVerb`: doctor's probe must still be handed a
+ * recorded gate that names another binary, to report it. Liveness compares the command alone,
+ * so a field the user set on our handler (`timeout`) does not make it read as gone.
  */
 export function liveRecordedHooks(cfg) {
   const readJson = (p) => { try { return JSON.parse(readText(p)); } catch { return null; } };
   const managed = readJson(path.join(cfg, GLOBAL_MANIFEST))?.managed;
   const recorded = Array.isArray(managed?.settings_hooks) ? managed.settings_hooks : [];
   const wanted = recorded.flatMap((r) => (Array.isArray(r?.group?.hooks) ? r.group.hooks : [])
-    .filter((h) => typeof h?.command === 'string').map((h) => [r.event, h]));
+    .filter((h) => typeof h?.command === 'string' && RUNS_HOOK_VERB.test(h.command))
+    .map((h) => [r.event, h]));
   if (!wanted.length) return [];
   const hooks = readJson(settingsFile(cfg, managed))?.hooks;
   const live = (event, command) => Array.isArray(hooks?.[event]) && hooks[event]

@@ -785,7 +785,6 @@ only, at best, on its presence.
 | Section labels and page subtitles | `web/src/lib/sections.js`, `web/src/pages/Docs/index.jsx` | nothing |
 | `THEME_BLURBS` (8 of 14), `ART` (8 of 14) | `js/maintain/setup.mjs`, `js/ui/anim.mjs` | nothing — missing entries fall back silently |
 | `LOADED_SIGIL` uniqueness | `themes/*.json` | nothing, and it is load-bearing for theme detection |
-| The hand-wiring copy of the Claude hooks | `adapters/claude-code/settings.json` — it ships (`files[]` takes `adapters/` whole), and `js/hosts/settings.mjs` sends a user whose `settings.json` has comments to it | nothing compares it with what `claudeHookGroups` emits (§7) |
 | The emit-size `CEILING` | `tests/unit/emit_smoke.test.mjs` (`const CEILING`) | a hand-transcribed measurement |
 
 ---
@@ -795,11 +794,6 @@ only, at best, on its presence.
 Each is small, and each costs a contributor a wrong turn until it is done. What was found and
 fixed here before is recorded in [design history](design-history.md).
 
-- **`adapters/claude-code/settings.json` has no gate.** It ships, and the refusal for a commented
-  `settings.json` tells users to copy hooks from it. It writes `node bin/geneseed-hook.mjs <verb>`,
-  a path that resolves only from a checkout root, and none of the `--no-*-gate` flags
-  `claudeHookGroups` emits. Nothing compares the two. Either gate it against the emitter, or point
-  the refusal at an emitted file and delete it.
 - **`AGENT_LESSON_PROMPT` has no drift gate.** Its sibling `LEARN_PROMPT_HEAD` is checked for
   extractability; this one's parity test was retired. Reformat the declaration in
   `geneseed-learn.js` and the per-agent lesson prompt silently degrades to a two-line fallback.

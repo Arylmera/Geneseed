@@ -17,7 +17,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { settingsIntegrityCheck, unwireClaudeSettings } from '../../js/hosts/settings.mjs';
+import {
+  claudeHookGroups, mergeClaudeSettings, ownHandler, settingsIntegrityCheck, unwireClaudeSettings,
+} from '../../js/hosts/settings.mjs';
+import { hookRunnerEntry, hookShimPath } from '../../js/hosts/shim.mjs';
 import { claudeUninstall } from '../../js/maintain/uninstall.mjs';
 import { GLOBAL_MANIFEST } from '../../js/hosts/hosts.mjs';
 import { ROOT } from '../../js/build/source.mjs';
@@ -225,5 +228,247 @@ test('a commented settings file the unwire refused to touch is still checked', (
     // READ-ONLY. The checker looked at the user's commented file and did not rewrite it either.
     assert.ok(fs.readFileSync(sp, 'utf8').includes('my precious comments'),
       'the integrity check rewrote the commented file the unwire had declined to touch');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// WHICH HANDLERS ARE GENESEED'S — the signature, and what the merge and the unwire do with it.
+//
+// THE RULE. A handler is this install's when its command names the hook shim, then a hook verb,
+// and carries exactly `--root "<cfg>"` or `--memory "<cfg>/memory"`. Nothing else about it is
+// compared: not the flags, not `--host`, not a field beside `command`. It was deep equality with
+// what this build would emit, and that failed four ways, one row each below: other gate flags
+// with no manifest stacked a second group; a group already on file was never claimed, so
+// uninstall left it running; a user's `"timeout": 30` made our handler a stranger; and a
+// non-array event value was overwritten.
+//
+// Rows are written for Bob: its canonical set is the smallest (four groups, one handler each),
+// so a whole file fits in a row, and the merge does not read the host. In a row `@` is the
+// quoted shim path, `~` the install dir and `~/memory` its memory dir, the three parts of a
+// command that differ per machine; `sub` puts the real ones in.
+
+const BOB = {
+  SessionStart: [{ hooks: [{ type: 'command', command: '@ context --root "~" --host bob || exit 0' }] }],
+  PreToolUse: [{ hooks: [{ type: 'command', command: '@ tool-gate --root "~" --host bob' }] }],
+  Stop: [{ hooks: [{ type: 'command', command: '@ learn --memory "~/memory" --host bob || exit 0' }] }],
+  UserPromptSubmit: [{ hooks: [{ type: 'command', command: '@ activity --root "~" --host bob || exit 0' }] }],
+};
+/** `BOB` with one event's groups replaced. */
+const bobWith = (event, groups) => ({ ...BOB, [event]: groups });
+
+// Each row: the file `before`; `after` the emit (default gates, NO prior manifest); and `gone`,
+// the file after the unwire that uninstall runs, given the claims that emit returned.
+// `after: 'same'` means the emit must not write at all.
+const MERGE_ROWS = [
+  {
+    name: 'other gate flags, no manifest: the handler is replaced where it sits, one group',
+    before: { hooks: bobWith('PreToolUse', [{ hooks: [
+      { type: 'command', command: '@ tool-gate --root "~" --host bob --no-deletion-gate' }] }]) },
+    after: { hooks: BOB },
+    gone: {},
+  },
+  {
+    name: 'identical groups, no manifest: nothing written, all four claimed, uninstall removes them',
+    before: { model: 'opus', hooks: BOB },
+    after: 'same',
+    gone: { model: 'opus' },
+  },
+  {
+    name: 'a field the user set on our handler stays, and no second group appears',
+    before: { hooks: bobWith('PreToolUse', [{ hooks: [
+      { type: 'command', command: '@ tool-gate --root "~" --host bob', timeout: 30 }] }]) },
+    after: 'same',
+    gone: {},
+  },
+  {
+    name: 'the same handler with stale flags: replaced, timeout kept, a shell we no longer set dropped',
+    before: { hooks: bobWith('PreToolUse', [{ hooks: [
+      { type: 'command', command: '@ tool-gate --root "~" --host bob --no-secrets-gate', timeout: 30,
+        shell: 'powershell', onFailure: 'block' }] }]) },
+    after: { hooks: bobWith('PreToolUse', [{ hooks: [
+      { type: 'command', command: '@ tool-gate --root "~" --host bob', timeout: 30 }] }]) },
+    gone: {},
+  },
+  {
+    name: "a user's hook inside our group is never touched, and survives uninstall",
+    before: { hooks: bobWith('PreToolUse', [{ hooks: [
+      { type: 'command', command: '@ tool-gate --root "~" --host bob' },
+      { type: 'command', command: 'echo mine' }] }]) },
+    after: 'same',
+    gone: { hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'echo mine' }] }] } },
+  },
+  {
+    name: "another root's group is another install's: ours is added beside it, theirs outlives ours",
+    before: { hooks: { Stop: [{ hooks: [
+      { type: 'command', command: '@ learn --memory "/elsewhere/memory" --host bob || exit 0' }] }] } },
+    after: { hooks: bobWith('Stop', [
+      { hooks: [{ type: 'command', command: '@ learn --memory "/elsewhere/memory" --host bob || exit 0' }] },
+      BOB.Stop[0]]) },
+    gone: { hooks: { Stop: [{ hooks: [
+      { type: 'command', command: '@ learn --memory "/elsewhere/memory" --host bob || exit 0' }] }] } },
+    // The check's one warning here: a hook naming our shim that this manifest did not record.
+    warns: /Geneseed-pattern hook present but NOT recorded .*event='Stop'/,
+  },
+  {
+    name: 'two copies of our handler (what the old merge left): the second goes',
+    before: { hooks: bobWith('Stop', [BOB.Stop[0], { hooks: [
+      { type: 'command', command: '@ learn --memory "~/memory" --host bob --no-done-gate || exit 0' }] }]) },
+    after: { hooks: BOB },
+    gone: {},
+  },
+  {
+    name: 'our handler under an event this host no longer wires is removed',
+    before: { hooks: { ...BOB, SubagentStop: [{ hooks: [
+      { type: 'command', command: '@ learn --memory "~/memory" --host bob || exit 0' }] }] } },
+    after: { hooks: BOB },
+    gone: {},
+  },
+  {
+    name: 'an event value that is not an array refuses the whole wire',
+    before: { hooks: { Stop: {} } },
+    after: 'same',
+    refused: /"hooks\.Stop" is not an array in settings\.json — NOT rewriting it .*Hooks were not wired/,
+  },
+  {
+    name: 'a hooks value that is not an object refuses the whole wire',
+    before: { hooks: [] },
+    after: 'same',
+    refused: /"hooks" is not an object in settings\.json — NOT rewriting it .*Hooks were not wired/,
+  },
+];
+
+function mergeFixture(d) {
+  const cfg = path.join(d, 'dotbob');
+  fs.mkdirSync(cfg, { recursive: true });
+  const real = { '@': `"${hookShimPath()}"`, '~': cfg, '~/memory': path.join(cfg, 'memory') };
+  const sub = (v) => (typeof v === 'string' ? v.replace(/~\/memory|~|@/g, (t) => real[t])
+    : Array.isArray(v) ? v.map(sub)
+      : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sub(x)]))
+        : v);
+  return { cfg, sub, p: path.join(cfg, 'settings.json') };
+}
+
+for (const row of MERGE_ROWS) {
+  test(`hook merge: ${row.name}`, () => {
+    withDir((d) => {
+      const { cfg, sub, p } = mergeFixture(d);
+      const seed = `${JSON.stringify(sub(row.before), null, 2)}\n`;
+      fs.writeFileSync(p, seed, 'utf8');
+      const [[, returned], err] = capturedErr(
+        () => mergeClaudeSettings(p, null, hookRunnerEntry(), null, [], 'bob', cfg));
+      // Through JSON, as the manifest stores them (the reader wraps a number it parsed).
+      const claims = JSON.parse(JSON.stringify(returned));
+      if (row.after === 'same') assert.equal(fs.readFileSync(p, 'utf8'), seed, 'the file was rewritten');
+      else assert.deepEqual(readJson(p), sub(row.after));
+      if (row.refused) {
+        assert.match(err, row.refused);
+        assert.deepEqual(claims, [], 'a refused wire claimed something');
+        return;
+      }
+      assert.equal(err, '');
+      // THE CLAIM IS THE GROUP AS IT SITS ON FILE: the four groups holding our handlers, in
+      // canonical order, whatever else the user put in them.
+      const onFile = readJson(p).hooks;
+      assert.deepEqual(claims, Object.keys(BOB).map((event) => ({
+        event, group: onFile[event].find((g) => g.hooks.some((h) => ownHandler(h, cfg))) })));
+      // A second emit over its own output, now with its manifest, changes nothing.
+      const settled = fs.readFileSync(p, 'utf8');
+      const [, again] = mergeClaudeSettings(p, claims, hookRunnerEntry(), null, [], 'bob', cfg);
+      assert.equal(fs.readFileSync(p, 'utf8'), settled, 'the second emit rewrote the file');
+      assert.deepEqual(JSON.parse(JSON.stringify(again)), claims);
+      // The check agrees with the merge: nothing recorded is missing.
+      const [warnings] = capturedErr(() => settingsIntegrityCheck(p, { settings_hooks: claims }, 'present'));
+      if (row.warns) assert.match(warnings.join('\n'), row.warns);
+      else assert.deepEqual(warnings, []);
+      assert.equal(warnings.length, row.warns ? 1 : 0);
+      assert.equal(unwireClaudeSettings(p, claims, cfg), true);
+      assert.deepEqual(readJson(p), sub(row.gone));
+    });
+  });
+}
+
+test('a field the user adds AFTER the emit raises no "missing", and uninstall still removes the handler', () => {
+  // The claim was recorded before the user's edit, so the group no longer equals it. Both
+  // readers go by the handler's command: the check sees it present, the unwire finds it by
+  // signature. By group equality the check said "missing" and the handler outlived uninstall.
+  withDir((d) => {
+    const { cfg, sub, p } = mergeFixture(d);
+    const [, claims] = mergeClaudeSettings(p, null, hookRunnerEntry(), null, [], 'bob', cfg);
+    const edited = readJson(p);
+    edited.hooks.PreToolUse[0].hooks[0].timeout = 30;
+    edited.hooks.PreToolUse[0].hooks.push({ type: 'command', command: 'echo mine' });
+    writeJson(p, edited);
+    assert.deepEqual(settingsIntegrityCheck(p, { settings_hooks: claims }, 'present'), []);
+    assert.equal(unwireClaudeSettings(p, claims, cfg), true);
+    assert.deepEqual(readJson(p),
+      sub({ hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: 'echo mine' }] }] } }));
+    assert.deepEqual(settingsIntegrityCheck(p, { settings_hooks: claims }, 'absent'), []);
+  });
+});
+
+test('a commented settings file is told the exact hooks to merge, not sent to a sample', () => {
+  // The emit cannot rewrite a commented file, so it prints what it would have written. A sample
+  // file cannot carry this machine's shim path, the install's root or the build's gate flags;
+  // the one that shipped (`adapters/claude-code/settings.json`) had drifted and is gone.
+  withDir((d) => {
+    const { cfg, sub, p } = mergeFixture(d);
+    const seed = '// mine\n{ "model": "opus" }\n';
+    fs.writeFileSync(p, seed, 'utf8');
+    const [[, claims], err] = capturedErr(
+      () => mergeClaudeSettings(p, null, hookRunnerEntry(), null, [], 'bob', cfg));
+    assert.equal(fs.readFileSync(p, 'utf8'), seed);
+    assert.deepEqual(claims, []);
+    assert.equal(err, '[geneseed] settings.json has comments — not rewriting it (your edits are '
+      + `kept). Merge this into it by hand:\n${JSON.stringify(sub({ hooks: BOB }), null, 2)}\n`);
+    assert.ok(!fs.existsSync(path.join(ROOT, 'adapters', 'claude-code', 'settings.json')));
+  });
+});
+
+// `ownHandler`, one command per row, for the install at `~`. A yes needs all three parts; each
+// no lacks exactly one, and says which.
+const OWN_ROWS = [
+  ['@ git-gate --root "~"', true, 'the emitted form'],
+  ['@ learn --memory "~/memory" --host bob --no-done-gate || exit 0', true, 'learn names the install by --memory'],
+  ['& @ context --root "~"; exit 0', true, 'the PowerShell form'],
+  ['geneseed-hook rule-gate --no-secrets-gate --root "~"', true, 'hand-written, unquoted, flags first'],
+  ['@ git-gate --root "~-old"', false, 'another root: the closing quote makes it exact'],
+  ['@ learn --memory "~/memory/agents"', false, 'another memory dir'],
+  ['@ bogus --root "~"', false, 'no hook verb'],
+  ['@ --root "~"', false, 'no verb at all'],
+  ['"/opt/other/bin/gate" git-gate --root "~"', false, 'not the shim'],
+  ['@ git-gate', false, 'no root'],
+];
+
+test('ownHandler: the shim, a hook verb and this install\'s root, all three', () => {
+  withDir((d) => {
+    const { cfg, sub } = mergeFixture(d);
+    for (const [command, want, why] of OWN_ROWS) {
+      assert.equal(ownHandler({ type: 'command', command: sub(command) }, cfg), want, `${why}: ${command}`);
+    }
+    // PowerShell backtick-escapes `$` and a backtick inside the quoted path; read back undone.
+    const odd = path.join(d, 'a$b`c');
+    assert.equal(ownHandler({ command: `& "x/geneseed-hook.cmd" git-gate --root "${
+      odd.replace(/[`$]/g, '`$&')}"` }, odd), true);
+    for (const notOne of [null, 'x', {}, { command: 7 }]) assert.equal(ownHandler(notOne, cfg), false);
+  });
+});
+
+test('every handler the emitter writes carries the signature, one to a group', () => {
+  // The merge keys a slot on its group's single handler, and can only replace what `ownHandler`
+  // recognises: a verb added to `claudeHookGroups` but not to the signature's verb list would be
+  // appended again on every emit.
+  withDir((d) => {
+    const cfg = path.join(d, 'cfg');
+    for (const host of ['claude', 'openclaude', 'bob']) {
+      for (const platform of ['linux', 'win32']) {
+        const groups = claudeHookGroups(cfg, { ...hookRunnerEntry(), platform }, null, [], host);
+        for (const [event, gs] of Object.entries(groups)) {
+          for (const g of gs) {
+            assert.equal(g.hooks.length, 1, `${host} ${event}: a group with ${g.hooks.length} handlers`);
+            assert.equal(ownHandler(g.hooks[0], cfg), true, `${host} ${event}: ${g.hooks[0].command}`);
+          }
+        }
+      }
+    }
   });
 });

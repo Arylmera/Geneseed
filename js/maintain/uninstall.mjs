@@ -346,7 +346,7 @@ export function claudeUninstall(cfg, archiveMemory, force = false) {
   if (kept.length) warnKept(kept);
   const hooks = managed.settings_hooks || [];
   const sf = settingsFile(cfg, managed);
-  const unwired = unwireClaudeSettings(sf, hooks);
+  const unwired = unwireClaudeSettings(sf, hooks, cfg);
   unwireClaudeExcludes(sf, managed.settings_excludes || []);
   unwireClaudeEnv(sf, managed.settings_env);
   // The unwire is VERIFIED, not assumed: a commented settings file is never rewritten, so a
@@ -1301,7 +1301,7 @@ function claudeDeactivate(root, scope = 'global', host = 'claude') {
     cleanHostStash(cfg, host);
     return { ok: false, failed, rolled_back: done.length };
   }
-  unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || []);
+  unwireClaudeSettings(settingsFile(cfg, managed), managed.settings_hooks || [], cfg);
   unwireClaudeExcludes(settingsFile(cfg, managed), managed.settings_excludes || []);
   unwireClaudeEnv(settingsFile(cfg, managed), managed.settings_env);
   // The same integrity check the uninstall path runs: a deactivate that silently failed to
