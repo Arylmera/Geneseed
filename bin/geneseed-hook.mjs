@@ -69,9 +69,10 @@ const gates = () => import('../js/hosts/hooks.mjs');
 // Verbs PreToolUse/PostToolUse actually gate a tool call with. The machine-wide, last-writer-wins
 // shim (this file's header) means a stale checkout can be handed a flag only a newer install
 // knows (e.g. `--no-consent`); on Claude Code, exit 2 from one of THESE verbs blocks the tool
-// outright, with no ask. `main` below answers an argv error on a gate verb with exit 0 instead —
-// a gate's own decision still exits 0 and signals through stdout (`askDecision`), so this only
-// changes what used to be a hard lockout into "the gate is silent this one call" (see I3/B1).
+// outright, with no ask. `main` below answers an argv error on a gate verb with exit 0 and the
+// gate-error ask instead (a stderr warning on Bob) — a gate's own decision exits 0 and signals
+// through stdout too (`askDecision`), so what used to be a hard lockout is a question the person
+// can answer, never "the gate is silent this one call" (see I3/B1).
 const GATE_VERBS = new Set(['git-gate', 'rule-gate', 'tool-gate']);
 const VERBS = {
   context: { load: () => import('../js/hosts/hooks-context.mjs'), fn: 'cmdContext', flags: HOSTED },
@@ -215,6 +216,20 @@ function die(code, msg) {
 }
 
 /**
+ * The `--host` an argv names, in both spellings `parse` takes, the last one winning as it does
+ * there. For the argv-error path only: `parse` returns no args with an error, and the gate-error
+ * answer still has to know whether its reader is Bob.
+ */
+function hostNamed(argv) {
+  let host = null;
+  argv.forEach((tok, i) => {
+    if (tok.startsWith('--host=')) host = tok.slice('--host='.length);
+    else if (tok === '--host' && argv[i + 1] !== undefined) host = argv[i + 1];
+  });
+  return host;
+}
+
+/**
  * `argparse`'s surface for these verbs, and only theirs: `--flag VALUE`, the
  * `--flag=VALUE` spelling it also accepts, store_true switches, and one optional
  * positional.
@@ -293,11 +308,20 @@ async function main(argv) {
   const parsed = parse(spec, argv.slice(1));
   if (parsed.error) {
     // A gate verb must never exit 2 on an argv error: that is indistinguishable, to Claude's
-    // PreToolUse, from the gate deliberately blocking (see I3/B1 above). Print the same message
-    // to stderr for a human debugging the shim, but return 0 with no stdout, exactly like a gate
-    // that chose not to act.
-    // `activity` too: it runs on UserPromptSubmit, where exit 2 erases the user's prompt.
-    if (GATE_VERBS.has(verb) || verb === 'activity') {
+    // PreToolUse, from the gate deliberately blocking (see I3/B1 above). It must not exit 0 with
+    // stdout empty either: that reads as "the gate deferred", so a stale shim handed a newer flag
+    // let every call through unjudged. It answers as a gate whose module failed to load does
+    // (`verbFailed`): an ask on Claude and OpenClaude, where the person can still allow the call —
+    // so no lockout — and is told the gate is broken; a stderr warning and exit 0 on Bob, whose
+    // PreToolUse has no matcher, so exit 2 there would refuse every tool, reads included. The
+    // stderr line stays for a human debugging the shim.
+    if (GATE_VERBS.has(verb)) {
+      printErr(`geneseed-hook: error: ${parsed.error}\n`);
+      return verbFailed(verb, { host: hostNamed(argv.slice(1)) }, new Error(parsed.error));
+    }
+    // `activity` decides nothing, and it runs on UserPromptSubmit, where exit 2 erases the
+    // user's prompt: the stderr line, exit 0, stdout empty.
+    if (verb === 'activity') {
       printErr(`geneseed-hook: error: ${parsed.error}\n`);
       return 0;
     }
