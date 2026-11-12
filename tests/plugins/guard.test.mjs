@@ -919,3 +919,39 @@ test("the shared exclude list is denied; a global install stands down in a folde
     restore("XDG_CONFIG_HOME", saved.x); restore("OPENCODE_CONFIG_DIR", saved.o); process.chdir(here)
   }
 })
+
+// ---- a gate that fails (ADR 0007) ------------------------------------------------
+// Each gate runs alone. An argument whose getter throws fails every gate that reads a path, and
+// the shell gate, which reads only the command, still refuses: one gate's fault no longer
+// switches off the gates behind it. The call is ledgered ONCE as `gate-error`, however many
+// gates failed on it, and before the refusal's own line. V1 has no prompt to raise, so a call no
+// gate refuses still runs, and the user is told by toast: only of a call that ran (the refused
+// one says nothing), and once per gate for the life of the process, so a third failing call adds
+// a ledger line and no toast.
+const poisoned = (rest) => Object.defineProperty({ ...rest }, "filePath",
+  { enumerable: true, get() { throw new Error("poisoned") } })
+test("a gate that throws does not stop the next one; the error is ledgered, and told once", async () => {
+  const harness = path.join(tmp, "gate-error")
+  await fs.mkdir(path.join(harness, "notebook"), { recursive: true })
+  const saved = process.env.GENESEED_HARNESS
+  process.env.GENESEED_HARNESS = harness
+  const toasts = []
+  const client = { tui: { showToast: async (req) => { toasts.push(req.body.message) } } }
+  const v1 = (await GeneseedGuard({ client, directory: tmp }))["tool.execute.before"]
+  try {
+    // `exec_and_save` is in both classes: a write tool (`save`) and a shell tool (`exec`).
+    await assert.rejects(v1({ tool: "exec_and_save", args: poisoned({ command: "rm -rf /" }) }, {}),
+      /^Error: \[geneseed-guard\] blocked: [\s\S]*would destroy a filesystem root/)
+    assert.deepEqual(toasts, [], "a refused call did not run")
+    await v1({ tool: "exec_and_save", args: poisoned({ command: "echo hi" }) }, {})
+    await v1({ tool: "exec_and_save", args: poisoned({ command: "echo hi" }) }, {})
+    const rules = (await fs.readFile(path.join(harness, "notebook", "gates.jsonl"), "utf8")).trim().split("\n")
+      .map((l) => JSON.parse(l).rule)
+    assert.deepEqual(rules, ["gate-error", "law-4", "gate-error", "gate-error"])
+    assert.deepEqual(toasts, ['Geneseed gate error: the paths check failed with "poisoned", so it did not judge a tool call, '
+      + "and the call ran. The other checks still ran. Run geneseed doctor to find the fault."])
+  } finally {
+    if (saved === undefined) delete process.env.GENESEED_HARNESS
+    else process.env.GENESEED_HARNESS = saved
+  }
+})

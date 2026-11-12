@@ -2416,6 +2416,28 @@ async function recordUse(tool, args) {
   } catch { /* a counter never fails a tool call */ }
 }
 
+// ---- a gate that fails -----------------------------------------------------------
+// An error's text, from anything a gate can throw: reading it must not throw in turn.
+const errorText = (err) => { try { return String(err?.message ?? err) } catch { return "an error that cannot be read" } }
+// Our own refusal, the one error that must leave the hook.
+const isDeny = (err) => errorText(err).startsWith("[geneseed-guard]")
+// How many unanswered marks `setupV2`'s `gateErrors` keeps before the oldest goes.
+const GATE_ERRORS_HELD = 256
+// Where the host cannot ask (V1, and a V2 with no permission domain) a gate error lets the call
+// run (ADR 0007), so the user is told: once per gate for the life of the process, because a
+// fault in a gate repeats on every call and a notice per call would bury the session. `tell` is
+// the instance's `say`: a V1 toast (nothing without a TUI client, and the log line stands
+// alone), a V2 synthetic message.
+const GATE_ERRORS_TOLD = new Set()
+async function tellGateError(tell, sid, name, what) {
+  if (GATE_ERRORS_TOLD.has(name)) return
+  GATE_ERRORS_TOLD.add(name)
+  try {
+    await tell(sid, `Geneseed gate error: the ${name} check failed with "${what}", so it did not judge a tool call, and the call ran. `
+      + "The other checks still ran. Run geneseed doctor to find the fault.", "Geneseed gate error")
+  } catch (err) { log(`gate error not shown: ${errorText(err)}`) }
+}
+
 export const GeneseedGuard = async (ctx) => {
   if (ctx?.client) LOG_CLIENT = ctx.client
   // The session's working directory, the same resolution the context plugin uses.
@@ -2525,144 +2547,191 @@ export const GeneseedGuard = async (ctx) => {
       if (OFF) return
       // A session that predates this plugin never sent `session.created`. Once per session.
       try { await watch(input?.sessionID) } catch { /* the report never decides a tool call */ }
-      const tool = (input?.tool || input?.name || "").toLowerCase()
+      const tool = String(input?.tool || input?.name || "").toLowerCase()
       const args = output?.args || input?.args || {}
       // `rule` is the ledger key, spelled as js/hosts/hooks.mjs spells it (`law-1`,
       // `law-4`, `process-1`) plus `wiki`, so status counts one vocabulary across hosts.
       // The model reads this text. It never names the GENESEED_GUARD switch: a weak model read
       // "set GENESEED_GUARD=off to allow" as leave to route the write through a shell (4.27.1).
-      // A refusal's words, through `gateSafe` (the ownership reason is the agent's, so it keeps its own): the catch below lets a call through on any error
-      // but a deny. No count: no `editPairs` here, and the line reads whole without one.
+      // A refusal's words, through `gateSafe` (the ownership reason is the agent's, so it keeps its
+      // own): `runGate` below lets a call past any error but a deny, so the words must not throw.
+      // No count: no `editPairs` here, and the line reads whole without one.
       const refused = (id, facts) => gateSafe(id, "refused", facts)
       // V1's explanations, held to the end of this hook: a later gate may still refuse the call, and a
       // note about a dialog that never comes is a false one. V2 posts from `evaluate` instead.
       const notes = []
+      // GENESEED_GUARD=warn: the first would-be block is logged and ends the inspection.
+      let warned = false
       const deny = async (why, rule) => {
-        if (WARN_ONLY) { log(`WARN (would block): ${why}`); return false }
+        if (WARN_ONLY) { log(`WARN (would block): ${why}`); warned = true; return false }
         log(`BLOCKED: ${why}`)
         await ledger(rule)
         throw new Error(`[geneseed-guard] blocked: ${why}`)
       }
-      try {
-        // `apply_patch`'s own tool resolves every marker path against `instance.directory`
-        // (`apply_patch.ts:72` in the verdict's evidence), NOT the worktree root `root()`
-        // uses for the sovereign-repo bypass above — a worktree session started in a
-        // subdirectory of its git root must see the same (narrower) root the write
-        // actually lands under, or a protected-check/wiki/secret hit one directory up
-        // would be missed.
-        const cwd = ctx?.directory || process.cwd()
-        if (hasAny(tool, WRITE_TOOLS)) {
-          // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
-          // one of them is a write target, so every one runs every gate; the first hit
-          // blocks the whole call (see `pickPath` for why this is not a single path).
-          const paths = pickPath(args, cwd)
-          for (const raw of paths) {
-            if (namesStream(raw)) { await deny(refused("stream", { name: repoRel(path.resolve(cwd, raw)) }), "rigor-5"); return }
-            // Once, here: under `opencode serve` this process's cwd is not the session's directory, and
-            // every gate below resolves a relative path against it.
-            const p = landsOn(raw, cwd)[0].replace(/\\/g, "/")
-            if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(refused("secret-file", { name: repoRel(p) }), "law-1"); return }
-            if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
-            const sensor = protectedCheck(p)
-            if (sensor) { await deny(refused("check", { name: sensor }), "rigor-5"); return }
-            if (gateConfig(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            // V1 after an "always": the `permission.edit` ask on these files is gone too.
-            if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
-            const store = ruleTarget(raw, cwd)
-            const prompted = (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
-            if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
-            if (store && !prompted) {
-              await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
-              return
+      // Each gate runs alone. Our own deny propagates. Any other error is that gate's alone: it is
+      // logged, the call is ledgered once as `gate-error`, and the NEXT gate still runs, so a fault
+      // in an early gate no longer switches off the secret scan, the loss gate and the wiki gate
+      // behind it. `failure` is the first gate that failed on this call; what it would have said
+      // is lost, and `unjudged` below answers that once every gate has run.
+      let failure = null
+      const runGate = async (name, gate) => {
+        try { await gate() } catch (err) {
+          if (isDeny(err)) throw err
+          const what = errorText(err).slice(0, 200)
+          log(`gate error in ${name} (the other gates still run): ${what}`)
+          if (failure) return
+          failure = { name, what }
+          await ledger("gate-error")
+        }
+      }
+      // A call no gate refused and one gate could not judge: each host answers to its own ceiling
+      // (ADR 0007). A V2 that can ask marks the call by its id, and `evaluate` raises it to a
+      // prompt. V1 and a V2 with no prompt let it run, and tell the user once per gate.
+      const unjudged = async () => {
+        if (!failure) return
+        if (!ctx?.gateErrors || !input?.callID) { await tellGateError(say, input?.sessionID, failure.name, failure.what); return }
+        ctx.gateErrors.set(input.callID, `${failure.name}: ${failure.what}`)
+        // A call that asserts nothing is never asked about, so its mark would stay for good.
+        if (ctx.gateErrors.size > GATE_ERRORS_HELD) ctx.gateErrors.delete(ctx.gateErrors.keys().next().value)
+      }
+      // `apply_patch`'s own tool resolves every marker path against `instance.directory`
+      // (`apply_patch.ts:72` in the verdict's evidence), NOT the worktree root `root()`
+      // uses for the sovereign-repo bypass above — a worktree session started in a
+      // subdirectory of its git root must see the same (narrower) root the write
+      // actually lands under, or a protected-check/wiki/secret hit one directory up
+      // would be missed.
+      const cwd = ctx?.directory || process.cwd()
+      // The gates of one call, in order. Each reads the arguments for itself: a gate that shared
+      // another's reading would fail with it. A gate's `return` after `deny` is the warn mode's.
+      const gatesFor = (tool, args) => {
+        const writes = hasAny(tool, WRITE_TOOLS)
+        return [
+          ["paths", async () => {
+            if (!writes) return
+            // `apply_patch` (gpt-5*) can carry several marker paths in one call — every
+            // one of them is a write target, so every one runs every gate; the first hit
+            // blocks the whole call (see `pickPath` for why this is not a single path).
+            for (const raw of pickPath(args, cwd)) {
+              if (namesStream(raw)) { await deny(refused("stream", { name: repoRel(path.resolve(cwd, raw)) }), "rigor-5"); return }
+              // Once, here: under `opencode serve` this process's cwd is not the session's directory, and
+              // every gate below resolves a relative path against it.
+              const p = landsOn(raw, cwd)[0].replace(/\\/g, "/")
+              if (!SECRETS_GATE_OFF && SECRET_RE.some((re) => re.test(p))) { await deny(refused("secret-file", { name: repoRel(p) }), "law-1"); return }
+              if (SECRET_WARN_RE.some((re) => re.test(p))) log(`WARN: writing ${p} — keep secrets out of tracked files (Sealed Secrets)`)
+              const sensor = protectedCheck(p)
+              if (sensor) { await deny(refused("check", { name: sensor }), "rigor-5"); return }
+              if (gateConfig(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+              if (carrierBlockChange(path.resolve(cwd, raw), tool, args)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+              // V1 after an "always": the `permission.edit` ask on these files is gone too.
+              if (everyEditApproved && !ctx?.hostAsks && nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p) }), "rigor-5"); return }
+              const store = ruleTarget(raw, cwd)
+              const prompted = (store || nativeAskFile(p)) && await hostPrompts(tool, raw, cwd)
+              if (prompted && !ctx?.hostAsks) notes.push(gateSafe(store ? "store" : "config", "ask", { name: store || repoRel(p) }))
+              if (store && !prompted) {
+                await deny(`${refused("store", { name: store })}\n${NATIVE_EDIT_TOOLS.has(tool) ? PERSIST_NO_PROMPT : PERSIST_EDIT_TOOL}`, "process-1")
+                return
+              }
             }
-          }
+          }],
           // Content scan (Sealed Secrets, the twin of js/hosts/hooks.mjs's ruleDecide): per
           // FILE, not pooled — a patch touching `.env` AND an ordinary file must still catch a
           // secret in the ordinary file; only the hunk whose OWN path is `.env`-shaped is
           // exempt, same as the path WARN tier above.
-          for (const { path: cp, content } of SECRETS_GATE_OFF ? [] : pickAddedContentByPath(args, cwd)) {
-            if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
-            if (SECRET_CONTENT_RE.test(content)) {
-              await deny(refused("secret", { name: repoRel(path.resolve(cwd, cp)) }), "law-1")
-              return
+          ["content", async () => {
+            if (!writes || SECRETS_GATE_OFF) return
+            for (const { path: cp, content } of pickAddedContentByPath(args, cwd)) {
+              if (SECRET_WARN_RE.some((re) => re.test(cp))) continue
+              if (SECRET_CONTENT_RE.test(content)) {
+                await deny(refused("secret", { name: repoRel(path.resolve(cwd, cp)) }), "law-1")
+                return
+              }
             }
-          }
-          // The ownership first-write gate, last, as in js/hosts/hooks.mjs's ruleDecide. A child
-          // session is a subagent (ruling D29): it cannot ask the user, so it never spends a block.
-          if (!OWNERSHIP_GATE_OFF) {
-            for (const p of paths) {
+          }],
+          // The ownership first-write gate, after the write gates, as in js/hosts/hooks.mjs's
+          // ruleDecide. A child session is a subagent (ruling D29): it cannot ask the user, so it
+          // never spends a block.
+          ["ownership", async () => {
+            if (!writes || OWNERSHIP_GATE_OFF) return
+            for (const p of pickPath(args, cwd)) {
               const why = ownershipBlock(path.resolve(cwd, p), input?.sessionID)
               if (why && !(await isChildSession(input.sessionID))) { await deny(why, "ownership"); return }
             }
-          }
-        }
-        // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
-        // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
-        if (!RULE_STORE_OFF && !NATIVE_EDIT_TOOLS.has(tool) && !readsOnly(tool) && !(hasAny(tool, SHELL_TOOLS) && pickCommand(args))) {
-          const named = argPaths(args)
-          if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
-          for (const v of named) {
-            const store = ruleTarget(v, cwd)
-            if (store) {
-              await deny(`${refused("store", { name: store })}\n${PERSIST_EDIT_TOOL}`, "process-1")
+          }],
+          // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,
+          // because SHELL_TOOLS is a substring class: `mcp_prune_write` holds "run".
+          ["store-args", async () => {
+            if (RULE_STORE_OFF || NATIVE_EDIT_TOOLS.has(tool) || readsOnly(tool) || (hasAny(tool, SHELL_TOOLS) && pickCommand(args))) return
+            const named = argPaths(args)
+            if (named.overflow) { await deny(refused("deep-args", { name: tool }), "process-1"); return }
+            for (const v of named) {
+              const store = ruleTarget(v, cwd)
+              if (store) {
+                await deny(`${refused("store", { name: store })}\n${PERSIST_EDIT_TOOL}`, "process-1")
+                return
+              }
+            }
+          }],
+          ["wiki", async () => {
+            if (!hasAny(tool, WIKI_MUTATE_TOOLS)) return
+            for (const p of pickPath(args, cwd)) {
+              const abs = landsOn(p, cwd)[0].replace(/\\/g, "/").toLowerCase()
+              const hit = (await protectedPrefixes()).find(
+                (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
+              if (hit) { await deny(refused("wiki", { name: hit.label }), "wiki"); return }
+            }
+          }],
+          // Its own gate, never an else of the write gates: a compound tool name (e.g.
+          // exec_and_save) can match both classes, and the shell check must still run.
+          ["shell", async () => {
+            if (!hasAny(tool, SHELL_TOOLS)) return
+            // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
+            const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
+            // One reading for every check below: continuations joined, escaped quotes inert (`shellReading`).
+            const picked = pickCommand(args)
+            const c = typeof picked === "string" && picked ? shellReading(picked, /powershell|pwsh/i.test(tool) ? "powershell" : null) : picked
+            const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
+            if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
+            const scan = c && !ROOT_SCAN_OFF && rootScan(c)
+            if (scan) {
+              await deny(refused("root-scan", { name: scan }), "ops-2")
               return
             }
-          }
-        }
-        if (hasAny(tool, WIKI_MUTATE_TOOLS)) {
-          for (const p of pickPath(args, cwd)) {
-            const abs = landsOn(p, cwd)[0].replace(/\\/g, "/").toLowerCase()
-            const hit = (await protectedPrefixes()).find(
-              (x) => abs.startsWith(x.prefix) || abs === x.prefix.slice(0, -1))
-            if (hit) { await deny(refused("wiki", { name: hit.label }), "wiki"); return }
-          }
-        }
-        // NOT else-if: a compound tool name (e.g. exec_and_save) can match both
-        // classes, and the shell check must still run after the write check.
-        if (hasAny(tool, SHELL_TOOLS)) {
-          // OpenCode's bash tool may run in `workdir`, resolved against the session directory.
-          const wd = typeof args.workdir === "string" && args.workdir ? path.resolve(cwd, args.workdir) : cwd
-          // One reading for every check below: continuations joined, escaped quotes inert (`shellReading`).
-          const picked = pickCommand(args)
-          const c = typeof picked === "string" && picked ? shellReading(picked, /powershell|pwsh/i.test(tool) ? "powershell" : null) : picked
-          const cut = (t) => scanSegments(t).map((seg) => seg.match(SCAN_TOKEN_RE) || [])
-          if (c && (SHELL_BLOCK_RE.some((re) => re.test(c)) || catastrophic(c, cut))) { await deny(refused("catastrophic", { name: c }), "law-4"); return }
-          const scan = c && !ROOT_SCAN_OFF && rootScan(c)
-          if (scan) {
-            await deny(refused("root-scan", { name: scan }), "ops-2")
-            return
-          }
-          if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
-            const loss = lossReason(cut(c), wd, { always: false, split: cut })
-            if (loss) { const facts = gateLoss(loss); await deny(refused(facts.id, facts), "law-4"); return }
-          }
-          // External Gate over a shell write: the same paths as a write tool, no content scan. A
-          // throw fails open through the catch below, as the twin's `shellWriteReason` does.
-          for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
-            const sensor = protectedCheck(p)
-            if (sensor) { await deny(refused("check", { name: sensor, shell: true }), "rigor-5"); return }
-            if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
-            // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
-            // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
-            const store = ruleTarget(p, wd)
-            if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
-            if (store) {
-              await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
-              return
+            if (c && !DELETION_GATE_OFF && LOSS_CANDIDATE_RE.test(c)) {
+              const loss = lossReason(cut(c), wd, { always: false, split: cut })
+              if (loss) { const facts = gateLoss(loss); await deny(refused(facts.id, facts), "law-4"); return }
             }
-          }
+            // External Gate over a shell write: the same paths as a write tool, no content scan. A
+            // throw here is this gate's error (`runGate`), where the twin's `shellWriteReason` fails open.
+            for (const p of c ? shellWriteTargets(c, wd, /powershell|pwsh/i.test(tool)) : []) {
+              const sensor = protectedCheck(p)
+              if (sensor) { await deny(refused("check", { name: sensor, shell: true }), "rigor-5"); return }
+              if (gateConfig(p) || nativeAskFile(p)) { await deny(refused("config", { name: repoRel(p), shell: true }), "rigor-5"); return }
+              // A parsed form that lands in a store. V2 can ask: `evaluate` runs for the shell tool's own
+              // `permission.assert`, so the call is marked by its id and the host prompts. V1 cannot.
+              const store = ruleTarget(p, wd)
+              if (store && ctx?.shellAsks && input?.callID && !noProgramWord(c)) { ctx.shellAsks.set(input.callID, store); continue }
+              if (store) {
+                await deny(`${refused("store", { name: store, shell: true })}\n${PERSIST_EDIT_TOOL}`, "process-1")
+                return
+              }
+            }
+          }],
+        ]
+      }
+      const judge = async (tool, args) => {
+        for (const [name, gate] of gatesFor(tool, args)) {
+          await runGate(name, gate)
+          if (warned) return
         }
-        for (const note of notes) {
-          // No count here, as in a refusal. 120 s, because the dialog stays until it is answered.
-          try {
-            await ctx?.client?.tui?.showToast?.({ body: { title: "Geneseed", message: gateNote(note), variant: "warning", duration: 120000 }, query: { directory: cwd } })
-          } catch (err) { log(`note not shown: ${err?.message ?? err}`) }
-        }
-      } catch (err) {
-        // Our own deny must propagate; any inspection error must never break a tool call.
-        if (err && String(err.message || "").startsWith("[geneseed-guard]")) throw err
-        log(`inspect error (ignored): ${err?.message ?? err}`)
+      }
+      await judge(tool, args)
+      await unjudged()
+      if (warned) return
+      for (const note of notes) {
+        // No count here, as in a refusal. 120 s, because the dialog stays until it is answered.
+        try {
+          await ctx?.client?.tui?.showToast?.({ body: { title: "Geneseed", message: gateNote(note), variant: "warning", duration: 120000 }, query: { directory: cwd } })
+        } catch (err) { log(`note not shown: ${err?.message ?? err}`) }
       }
     },
   }
@@ -2690,10 +2759,16 @@ export const GeneseedGuard = async (ctx) => {
 // and an unattended session turns the ask into a deny. A V2 without the domain has no `hostAsks`,
 // so the guard refuses those writes.
 //
+// The same hook asks about a call a gate FAILED on (`runGate`, ADR 0007 as amended 2026-11): the
+// tool hook marks the call's id in `gateErrors`, and the first `evaluate` whose `source.id` is that
+// call becomes an ask with the `gate-error` text. Unverified against a live host: `source.id` is
+// seen on the shell tool's assert (2.2.5), and is assumed, not observed, on `edit` and on an MCP
+// tool's. A call that asserts nothing, or whose assert names no call, runs unasked, as on V1.
+//
 // The dialog shows no plugin text, so each ask posts a note first. The TUI renders a synthetic item's
 // `description` and the model gets its `text`, so the block goes in the first and the second must read
 // true whether the user allows or denies (spec 2026-11-07-gate-prompts-5.0.3, S0 result).
-async function askOnRuleStore(ctx, shellAsks) {
+async function askOnRuleStore(ctx, shellAsks, gateErrors) {
   const dir = ctx?.location?.directory || process.cwd()
   const note = async (event) => {
     try {
@@ -2705,6 +2780,22 @@ async function askOnRuleStore(ctx, shellAsks) {
     await ctx.permission.hook("evaluate", async (event) => {
       try {
         if (OFF || event.effect === "deny") return
+        // A call one of the tool hook's gates could not judge (`runGate`), by its id, whatever the
+        // action: the user decides in the gate's place. The first assert of the call carries it.
+        const failed = gateErrors.get(event.source?.id)
+        if (gateErrors.delete(event.source?.id)) {
+          if (WARN_ONLY) log(`WARN (would ask): a gate failed (${failed})`)
+          else {
+            // A store write the same call was marked for is said first: it is what the call does.
+            const shellStore = shellAsks.get(event.source?.id)
+            shellAsks.delete(event.source?.id)
+            event.effect = "ask"
+            event.message = [...(shellStore ? [gateSafe("store", "ask", { name: shellStore, shell: true })] : []),
+              gateSafe("gate-error", "ask", { name: failed })].join("\n")
+            await note(event)
+            return
+          }
+        }
         if (event.action === "shell") {
           // The shell tool's assert: action `shell`, one resource per parsed command, `source.id` the
           // call the tool hook marked. A command the host's parser finds no command in asserts nothing.
@@ -2736,14 +2827,15 @@ async function askOnRuleStore(ctx, shellAsks) {
 }
 
 async function setupV2(ctx) {
-  // Call id to the store it writes, for the prompt's text.
+  // Call id to the store it writes, for the prompt's text; call id to the gate that failed on it.
   const shellAsks = new Map()
-  const hostAsks = await askOnRuleStore(ctx, shellAsks)
+  const gateErrors = new Map()
+  const hostAsks = await askOnRuleStore(ctx, shellAsks, gateErrors)
   const hooks = await GeneseedGuard({
     worktree: ctx?.location?.project?.directory, directory: ctx?.location?.directory,
     sessionMeta: (sessionID) => ctx.session.get({ sessionID }),
-    hostAsks, shellAsks: hostAsks ? shellAsks : null,
-    say: (sessionID, text) => ctx.session.synthetic({ sessionID, text, description: "Geneseed change report", resume: false }),
+    hostAsks, shellAsks: hostAsks ? shellAsks : null, gateErrors: hostAsks ? gateErrors : null,
+    say: (sessionID, text, description = "Geneseed change report") => ctx.session.synthetic({ sessionID, text, description, resume: false }),
   })
   const report = (type, properties) => hooks.event({ event: { type, properties } })
   // V2's turn edges, as geneseed-notify reads them. `say` above is the only way out to the user.
@@ -2767,11 +2859,14 @@ async function setupV2(ctx) {
       // `sessionID` rides on every V2 execute.before event (@opencode/plugin 2.1.4 `ToolHooks`).
       await hooks["tool.execute.before"]({ tool: event.tool, sessionID: event.sessionID, callID: event.id }, { args: event.input })
     } catch (err) {
-      const why = String(err?.message || "")
-      if (!why.startsWith("[geneseed-guard]")) return
+      if (!isDeny(err)) return
       // Core prints `No tool named "<this>"`, so the name must say first that nothing is missing.
-      event.tool = `BLOCKED, not a missing tool: ${why}`
-      event.input = {}
+      // In their own try: an event that cannot be written (frozen, a setter that throws) must not
+      // fail the step. The refusal is then only logged, and the call runs.
+      try {
+        event.tool = `BLOCKED, not a missing tool: ${errorText(err)}`
+        event.input = {}
+      } catch (failed) { log(`refusal not applied, the call runs: ${errorText(failed)}`) }
     }
   })
   return () => controller.abort()

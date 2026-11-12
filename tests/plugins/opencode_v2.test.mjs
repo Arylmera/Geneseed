@@ -318,6 +318,62 @@ test("guard: a V2 with no permission domain has no prompt, so the write is refus
   }
 })
 
+// A V2 callback never throws, the refusal's own two assignments included: an event that cannot be
+// written (frozen here) is left as it came, and the step goes on.
+test("guard: a refusal that cannot be written onto the event does not throw", async () => {
+  const { ctx, hooks } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const frozen = Object.freeze({ tool: "write", input: { path: "/home/u/.ssh/id_rsa", content: "k" } })
+  await hooks.tool["execute.before"](frozen)
+  assert.equal(frozen.tool, "write")
+})
+
+// A gate that fails judges nothing (ADR 0007, amended 2026-11). Where V2 can ask, the call is marked
+// by its id and `evaluate` raises its first assert to a prompt that names the gate and its error,
+// whatever the action; one ask per call, and no other call is touched. A call a later gate refuses is
+// renamed as ever and leaves no mark. A V2 with no permission domain has no prompt: the call runs,
+// and the user is told once per gate for the life of the process.
+const poisoned = (rest) => Object.defineProperty({ ...rest }, "filePath",
+  { enumerable: true, get() { throw new Error("poisoned") } })
+test("guard: a gate error becomes a prompt where V2 can ask, and one notice where it cannot", async () => {
+  const { ctx, hooks, calls } = fakeCtx()
+  await (await load("guard")).setup(ctx)
+  const before = hooks.tool["execute.before"]
+  const ev = (id, action = "shell") => ({ sessionID: "s", action, resources: ["x"], effect: "allow", source: { type: "tool", messageID: "m", id } })
+  // `exec_and_save` is a write tool and a shell tool: the path gates fail, the shell gate still reads.
+  const call = { tool: "exec_and_save", id: "g1", sessionID: "s", input: poisoned({ command: "echo hi" }) }
+  await before(call)
+  assert.equal(call.tool, "exec_and_save", "nothing is refused here")
+  const other = ev("g0"); await hooks.permission.evaluate(other)
+  assert.equal(other.effect, "allow", "another call")
+  const mine = ev("g1", "edit"); await hooks.permission.evaluate(mine)
+  assert.equal(mine.effect, "ask")
+  assert.equal(mine.message, 'Geneseed gate error: the check failed with "paths: poisoned", so nothing judged this call.\n'
+    + "Safe choice: Deny, then run geneseed doctor.\n"
+    + "It asks because a gate that crashed cannot say this call is safe.\n"
+    + "If you allow it, this call runs with no check at all.")
+  const again = ev("g1", "edit"); await hooks.permission.evaluate(again)
+  assert.equal(again.effect, "allow", "one ask per call")
+  const refused = { tool: "exec_and_save", id: "g2", sessionID: "s", input: poisoned({ command: "rm -rf /" }) }
+  await before(refused)
+  assert.match(refused.tool, new RegExp(`${REFUSED}[\\s\\S]*would destroy a filesystem root`))
+  const gone = ev("g2"); await hooks.permission.evaluate(gone)
+  assert.equal(gone.effect, "allow", "a refused call leaves no mark")
+  assert.deepEqual(notes(calls).map((n) => n.description.split("\n")[1]),
+    ['Geneseed gate error: the check failed with "paths: poisoned", so nothing judged this call.'], "the ask's own note, and no other")
+
+  const bare = fakeCtx({ permission: false })
+  await (await load("guard")).setup(bare.ctx)
+  for (const id of ["h1", "h2"]) {
+    const run = { tool: "exec_and_save", id, sessionID: "s2", input: poisoned({ command: "echo hi" }) }
+    await bare.hooks.tool["execute.before"](run)
+    assert.equal(run.tool, "exec_and_save", "no prompt to raise, so the call runs")
+  }
+  assert.deepEqual(notes(bare.calls), [{ sessionID: "s2", resume: false, description: "Geneseed gate error",
+    text: 'Geneseed gate error: the paths check failed with "poisoned", so it did not judge a tool call, and the call ran. '
+      + "The other checks still ran. Run geneseed doctor to find the fault." }])
+})
+
 // A drafted rule has no other reminder. Both families, one line: the hook's output is the reference.
 test("context: pending fold items add one line, the hook's; none add nothing", async () => {
   const xdg = path.join(tmp, "draft-xdg")
