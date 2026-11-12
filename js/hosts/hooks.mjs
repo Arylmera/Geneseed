@@ -59,7 +59,7 @@ import { machineDir } from '../lib/machine-dir.mjs';
 import { markerLines } from '../lib/managed-block.mjs';
 import { isDict, isTruthy, parseJson, readJsonc } from '../lib/json.mjs';
 import {
-  GATE_LEDGER, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
+  GATE_LEDGER, HOSTS, carrierBlock, carrierName, globalHookStandingDown, hookProjectDir, isSharedCarrier,
   resolvePath, sovereignBypass,
 } from './hosts.mjs';
 import {
@@ -1122,7 +1122,9 @@ function protectedIn(target) {
  * not gated. Reached from a shell command too, with the same limit as `protectedCheck`.
  */
 const GATE_CONFIG_FILES = ['settings.json', 'settings.local.json', 'settings/settings.json', 'rules/geneseed.md', 'excludes.json', 'AGENT.md', '.geneseed-manifest.json', '.geneseed-emit', 'opencode.json', 'opencode.jsonc'];
-const GATE_CONFIG_MARKERS = ['.claude', '.openclaude', '.bob', '.opencode'];
+// Every host's project dir, read from the host table so a new host's settings are gate
+// configuration the day it gets a row. Exported for the tests that write the list out.
+export const GATE_CONFIG_MARKERS = HOSTS.map((h) => h.projectMarker);
 function gateConfig(p, root) {
   let bin = null;
   try {
@@ -1392,9 +1394,12 @@ export function ruleDecide(args, payload) {
     return ask(args, 'rule-gate', 'law-1', 'secret', { name: repoRel(carrier, payload) });
   }
   // Bob routes reads here too (`read_file` carries a path): only a write is External Gate's business.
-  // shortcut: a write is told by its tool name, so a Bob write tool named outside WRITE_NAME_RE
-  // passes both gates; switch to an allowlist of Bob's read tools if Bob adds or renames one.
-  const bobRead = HOST === 'bob' && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
+  // A call that carries text to write is a write whatever its tool is called (`create_file`,
+  // `append_to_file`, `apply_patch`, `save_file`): Bob's tool names are undocumented, so the name
+  // alone let those past the store and gate-config checks. `ownershipBlock` reads a write the same way.
+  // shortcut: a write that carries no text under a name outside WRITE_NAME_RE still reads as a
+  // read; switch to an allowlist of Bob's read tools if Bob adds one.
+  const bobRead = HOST === 'bob' && !body && !WRITE_NAME_RE.test(String((payload && payload.tool_name) || ''));
   for (const q of bobRead ? [] : paths) {
     // The carrier rule is a write tool's alone: a shell call reaches `externalGate` with nothing to replay.
     const hit = externalGate(args, q, payload)

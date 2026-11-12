@@ -553,10 +553,10 @@ test("the guard's gate-config lists are js/hosts/hooks.mjs's minus OpenCode's ow
   const list = (src, name) => JSON.parse(pick(src, name).replace(/'/g, '"'))
   assert.deepEqual(list(guardSrc, "GATE_CONFIG_FILES"),
     list(hookSrc, "GATE_CONFIG_FILES").filter((f) => !/settings|opencode|rules\//.test(f)))
-  assert.deepEqual(list(guardSrc, "GATE_CONFIG_MARKERS"), list(hookSrc, "GATE_CONFIG_MARKERS").filter((m) => m !== ".opencode"))
-  // The hook's markers are every host's project dir, as js/hosts/hosts.mjs names them.
-  const { HOSTS } = await import("../../js/hosts/hosts.mjs")
-  assert.deepEqual([...list(hookSrc, "GATE_CONFIG_MARKERS")].sort(), HOSTS.map((h) => h.projectMarker).sort())
+  // The hook derives its markers from the host table (tests/unit/hook_gates.test.mjs writes the
+  // four out), so the list is read from the module; the guard's stays a literal in its one file.
+  const { GATE_CONFIG_MARKERS } = await import("../../js/hosts/hooks.mjs")
+  assert.deepEqual([...list(guardSrc, "GATE_CONFIG_MARKERS")].sort(), GATE_CONFIG_MARKERS.filter((m) => m !== ".opencode").sort())
 })
 
 // The manifest was `wiki.jsonc` before the `geneseed-` prefix; an install not yet re-emitted still
