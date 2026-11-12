@@ -9,14 +9,13 @@
 // The expected host sets are written out, so adding a host fails here first, on purpose: the
 // fix is the new id in the list below AND in every table that then fails.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { EMITS } from '../../js/build/args.mjs';
-import { ROOT } from '../../js/build/source.mjs';
 import { NATIVE_ROOT } from '../../js/hosts/hooks-context.mjs';
+import { GATE_CONFIG_MARKERS } from '../../js/hosts/hooks.mjs';
 import { HOSTS, hookProjectDir } from '../../js/hosts/hosts.mjs';
 import { EMIT_FOR, EMIT_HOST_SCOPE } from '../../js/hosts/installs.mjs';
 import { mcpConfigFor } from '../../js/hosts/mcp.mjs';
@@ -79,16 +78,12 @@ test('the emit names: --emit, the setup menu, and the (host, scope) map', () => 
 });
 
 // THE RULE: a write under any host's project layer can switch a gate off, so the gate-config
-// markers are every host's `projectMarker`. Read off the source line: `hooks.mjs` does not
-// export the list, and the OpenCode guard's copy leaves out its own `.opencode`, which
-// OpenCode's `permission.edit` covers instead.
+// markers are every host's `projectMarker`. `hooks.mjs` derives the list from `HOSTS`, so the
+// written-out row is what a new host changes; the OpenCode guard's copy leaves out its own
+// `.opencode`, which OpenCode's `permission.edit` covers instead.
 test('the gate-config markers are every host\'s project marker', () => {
-  const src = readFileSync(path.join(ROOT, 'js', 'hosts', 'hooks.mjs'), 'utf8');
-  const m = /const GATE_CONFIG_MARKERS = \[([^\]]*)\]/.exec(src);
-  assert.ok(m, 'js/hosts/hooks.mjs no longer declares GATE_CONFIG_MARKERS on one line');
-  const markers = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
-  assert.deepEqual(sorted(markers), ['.bob', '.claude', '.openclaude', '.opencode']);
-  assert.deepEqual(sorted(markers), sorted(HOSTS.map((h) => h.projectMarker)));
+  assert.deepEqual(sorted(GATE_CONFIG_MARKERS), ['.bob', '.claude', '.openclaude', '.opencode']);
+  assert.deepEqual(sorted(GATE_CONFIG_MARKERS), sorted(HOSTS.map((h) => h.projectMarker)));
 });
 
 // THE RULE of `hookProjectDir`, in order: `$CLAUDE_PROJECT_DIR` when set; else the payload's
