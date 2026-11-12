@@ -8,8 +8,9 @@ chars/4 estimates and shift a little with theme and version.
 the default doctrine packs, 47 skills (plus 12 alias stubs) and 18 agents, and nothing
 re-measures this page automatically. For a
 live figure on your own install, ask the agent for the `token-report` skill —
-that is what it is for. A `--footprint full` build runs roughly 5k tokens
-heavier on the root file.
+that is what it is for. A `--footprint full` build ran about 7k tokens heavier
+when the whole request was captured on 2026-11-12 (see
+[Why there is no chat mode](#why-there-is-no-chat-mode)).
 
 ## Always-on cost per session
 
@@ -100,6 +101,69 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   on OpenCode — never in the model's catalogue, so a rename or merge is free.
 - Plugin JavaScript (OpenCode, ~26k on disk) runs in the host runtime and
   never enters the context window.
+
+## Why there is no chat mode
+
+A "chat mode" would switch the harness off for a quick question, so a "hey, how are you?"
+does not load the rules. It was measured on 2026-11-12 and turned down: the harness stays
+loaded in every session.
+
+**What was measured.** Each host was installed from npm and pointed at a local endpoint that
+captured the request it sent for one short prompt, in an empty folder, with and without a
+default global install. Sizes are characters of the request; tokens are chars/4.
+
+| Host | No harness | Lean (default) | Full | Harness share, lean | Harness share, full |
+|---|---|---|---|---|---|
+| Claude Code 2.1.322 | 45,964 | 89,935 | 118,486 | ~11k tokens | ~18k tokens |
+| OpenClaude 0.32.0 | 86,122 | 128,457 | 157,003 | ~11k tokens | ~18k tokens |
+| OpenCode 1.19.5 | 30,435 | 86,811 | 115,599 | ~14k tokens | ~21k tokens |
+| OpenCode 2.2.7 | 22,654 | 70,506 | 99,054 | ~12k tokens | ~19k tokens |
+
+Bob was not measured: IBM does not publish Bob Shell on npm.
+
+**Why the saving is small.** The harness share is 5–10% of a 200k window. The host re-sends
+it with every message, but where the provider caches prompts it is billed at the full input
+price once per session and at the cached rate after that. A chat mode would save that one
+payment on sessions that stay small talk, and nothing else.
+
+**Why it cannot be a command inside the chat.** The harness is in the context before the
+first message, and no host can take text back out of a running conversation. A slash command
+can only tell the model to ignore the rules, which saves no tokens. Switching on a resumed
+conversation was measured too (harness on, resumed without it, resumed with it again):
+
+| Host | Resumed without the harness | Resumed with it again |
+|---|---|---|
+| OpenClaude | sheds it (86,390) | back to normal (128,963) |
+| OpenCode 1 | sheds it (30,606) | back to normal (87,250) |
+| Claude Code | keeps it in the history (91,213) | loads it a second time (126,697) |
+| OpenCode 2 | keeps it in the system prompt (68,273) | loads it a second time (118,720) |
+
+On Claude Code and OpenCode 2 a toggle therefore costs more than it saves. A plain resume,
+with the same configuration, adds only the new message on all four hosts.
+
+**Why not a ready-made excluded folder.** An [excluded folder](concepts/exclusions.md) is for a
+repo that brings its own setup, not for saving tokens. On Claude Code and OpenClaude it
+removes the instructions file but leaves the skill and agent listings (about 3k tokens). On
+OpenCode the request was byte-identical with and without the exclusion.
+
+**If you want a session without the harness anyway**, each host has its own launch switch.
+These are the hosts' options, not Geneseed's: they were checked on the versions above, in
+non-interactive mode with an API key, and a host update can change them.
+
+| Host | Launch line | Measured |
+|---|---|---|
+| Claude Code | `claude --setting-sources project,local` | 45,963 — the no-harness size |
+| OpenClaude | `openclaude --setting-sources project,local` | 86,124 — the no-harness size |
+| OpenCode 1 | `XDG_CONFIG_HOME=<empty dir> opencode` | 30,435 — the no-harness size |
+| OpenCode 2 | `OPENCODE_CONFIG_DIR=<empty dir> opencode --standalone` | 22,654 — the no-harness size |
+
+Such a session has no rules and no gates, and on Claude Code and OpenCode 2 they cannot be
+added back to the same conversation cleanly. `XDG_CONFIG_HOME` is inherited by every program
+the session starts, so git and other tools lose their own configuration too. On OpenCode 1,
+`OPENCODE_CONFIG_DIR` changes nothing. Whether a subscription login survives
+`--setting-sources` on Claude Code was not checked.
+
+The decision is recorded in [Considered and refused](design-history.md#considered-and-refused).
 
 ## Why your session may show more
 

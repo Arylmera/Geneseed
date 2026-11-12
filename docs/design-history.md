@@ -1347,6 +1347,14 @@ Geneseed did make are listed in [Why Geneseed works this way](understand/design-
   anchor stays. A runtime toggle that works beside the anchor, without replacing it, remains
   possible. See
   [Foreman mode](concepts/foreman-mode.md).
+- **A chat mode that switches the harness off for a quick question** (2026-11-12): a slash
+  command, a ready-made excluded folder, or a `geneseed chat` verb. Measured on the real hosts,
+  the harness adds 11–14k tokens per session at lean and 18–21k at full, billed in full once
+  where the provider caches prompts. No host can unload it inside a conversation, an excluded
+  folder leaves the skill listings (and removes nothing on OpenCode), and on Claude Code and
+  OpenCode 2 a toggle on resume loads the harness twice. The hosts' own launch switches differ
+  per host and per version, so a verb would have to track them. See
+  [Token footprint](token-footprint.md#why-there-is-no-chat-mode).
 
 ---
 

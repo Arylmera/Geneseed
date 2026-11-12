@@ -32,6 +32,16 @@ Everything else is identical at both settings — the same agents, skills, plugi
 
 For measured numbers per host, see [docs/token-footprint.md](../token-footprint.md).
 
+### There is no chat mode
+
+Footprint is the only token dial. There is no command that switches the harness off for a quick question, and that is deliberate.
+
+- **What it costs.** Measured on 2026-11-12, the harness adds about 11–14k tokens to a session at lean and 18–21k at full, depending on the host. Where the provider caches prompts, that is billed at the full price once per session and at the cached rate on every later message.
+- **Why not a command in the chat.** The harness is in the context before your first message, and no host can take it back out of a running conversation. A command could only tell the agent to ignore the rules, which saves nothing.
+- **Why not a toggle on resume.** On Claude Code and OpenCode 2, resuming a conversation without the harness keeps it in the history, and resuming with it again loads it a second time.
+
+So the harness stays in place in every session. For a single session without it, each host has its own launch option; the launch lines, their limits and every measurement are in [Why there is no chat mode](../token-footprint.md#why-there-is-no-chat-mode).
+
 ### How to set it
 
 Footprint is stored in a `.geneseed-footprint` marker in the install and kept across every rebuild and upgrade, on every host.
