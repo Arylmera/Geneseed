@@ -52,11 +52,11 @@
 // upgrade path there is still a session-level `permission` ruleset set by the loop launcher
 // when it creates the loop session (`session.create` accepts one).
 
-import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs"
+import { promises as fs, realpathSync, existsSync, readFileSync, readdirSync, readlinkSync, statSync, lstatSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
-import { homedir, tmpdir } from "node:os"
+import { homedir, tmpdir, userInfo } from "node:os"
 import { createHash } from "node:crypto"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -2333,8 +2333,22 @@ const noProgramWord = (command) => scanSegments(command).some((seg) => seg.inclu
 // holding a build manifest) whose root AGENTS.md has no `## Ownership` section outside the
 // Geneseed block, the first write of a session is refused once, so the agent proposes the setup
 // to the developer; the session and root are recorded BEFORE the refusal, so the next write
-// passes. The marker is this module Set: the plugin lives as long as the OpenCode process.
+// passes. The record is the hook's marker file, in the hook's own scheme (`ownershipBlock` in the
+// twin): `<tmpdir>/geneseed-ownership-<user>/<session id>`, one root per line. This module Set was
+// once the only record, so a session resumed after OpenCode restarted was refused again on every
+// restart; it stays as a cache in front of the file.
 const OWNERSHIP_SEEN = new Set()
+// The twin's `WRITE_NAME_RE`: the tool names the gate reads as a write, wider than WRITE_TOOLS
+// by the verbs that move, copy or remove a file (an MCP server's `move_file`, `delete_file`).
+const OWNERSHIP_WRITE_RE = /write|edit|diff|replace|insert|move|rename|delete|remove|trash|copy/
+// The twin's `safeStem`, `userTag` and `normcase`, so both hosts name one marker the same way: a
+// hostile session id cannot steer the join, and the folder is per user on a shared /tmp.
+const ownershipStem = (sid) => String(sid).replace(/[^A-Za-z0-9_.-]/gu, "_").slice(0, 128)
+function ownershipUser() {
+  if (typeof process.getuid === "function") return String(process.getuid())
+  try { return ownershipStem(userInfo().username) } catch { return "user" }
+}
+const ownershipKey = (root) => (process.platform === "win32" ? root.replaceAll("/", "\\").toLowerCase() : root)
 const OWNERSHIP_MANIFESTS = new Set(["package.json", "pom.xml", "pyproject.toml", "go.mod", "Cargo.toml",
   "composer.json", "Gemfile"])
 const isManifest = (n) => OWNERSHIP_MANIFESTS.has(n) || n.startsWith("build.gradle") || n.endsWith(".csproj")
@@ -2385,9 +2399,19 @@ function ownershipBlock(p, sessionID) {
     try { const c = gitCommonDirOf(root); if (path.basename(c) === ".git") home = path.dirname(c) } catch { /* this root */ }
     try { personal = readFileSync(path.join(home, ".geneseed", "ownership.md"), "utf8") } catch { /* none: gate */ }
     if (OWNERSHIP_DECLINED_RE.test(personal.replace(/^\uFEFF/, ""))) return null
-    const key = `${sessionID}|${nocase(root)}`
-    if (OWNERSHIP_SEEN.has(key)) return null
-    OWNERSHIP_SEEN.add(key)
+    const key = ownershipKey(root)
+    const memo = `${sessionID}|${key}`
+    if (OWNERSHIP_SEEN.has(memo)) return null
+    const dir = path.join(tmpdir(), `geneseed-ownership-${ownershipUser()}`)
+    const marker = path.join(dir, ownershipStem(sessionID))
+    let seen = ""
+    try { seen = readFileSync(marker, "utf8") } catch { /* first gated write of the session */ }
+    if (seen.split("\n").includes(key)) { OWNERSHIP_SEEN.add(memo); return null }
+    // Recorded BEFORE refusing, as in the twin: a marker that cannot be written throws to the
+    // catch below and defers, or every write of the session would be refused.
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(marker, `${key}\n`)
+    OWNERSHIP_SEEN.add(memo)
     return own.trim() ? OWNERSHIP_REASON_NO_SECTION : OWNERSHIP_REASON_NONE
   } catch { return null }
 }
@@ -2480,15 +2504,19 @@ export const GeneseedGuard = async (ctx) => {
   if (ctx?.client) LOG_CLIENT = ctx.client
   // The session's working directory, the same resolution the context plugin uses.
   const root = () => ctx?.worktree || ctx?.directory || process.cwd()
-  // Whether a session has a parent (a subagent's child session). V2 hands in `sessionMeta`
-  // (`ctx.session.get`); V1 asks its client. Read only on the rare would-block path; a failed
-  // lookup reads as a top-level session.
-  const isChildSession = async (sid) => {
+  // Whether a session has no user to ask: a subagent's child session (it has a parent), or a
+  // headless one Geneseed started itself. A workflow's agents run in sessions titled
+  // `geneseed-wf:…` with NO parent (adapters/opencode/workflows/_runtime.js), so the parent test
+  // alone had the ownership gate refuse each one's first write with "ask the developer". The rule
+  // is `isSkippedSession`'s in geneseed-context.js. V2 hands in `sessionMeta` (`ctx.session.get`);
+  // V1 asks its client. Read only on the rare would-block path; a failed lookup reads as a
+  // session with a user.
+  const cannotAsk = async (sid) => {
     try {
       const info = ctx?.sessionMeta ? await ctx.sessionMeta(sid)
         : await ctx?.client?.session?.get?.({ path: { id: sid } })
       const meta = info?.data ?? info
-      return Boolean(meta?.parentID ?? meta?.parentId)
+      return Boolean(meta?.parentID ?? meta?.parentId) || String(meta?.title ?? "").startsWith("geneseed-")
     } catch { return false }
   }
   // Whether the host itself will ask the user about this write once this hook lets it run. V2
@@ -2524,7 +2552,7 @@ export const GeneseedGuard = async (ctx) => {
   const unwatched = new Set()
   const watch = async (sid) => {
     if (OFF || !sid || watched.has(sid) || unwatched.has(sid)) return
-    if (await sovereignBypass(root()) || await isChildSession(sid)) { unwatched.add(sid); return }
+    if (await sovereignBypass(root()) || await cannotAsk(sid)) { unwatched.add(sid); return }
     watched.set(sid, scanAllStores(root()))
   }
   const compare = async (sid) => {
@@ -2691,13 +2719,14 @@ export const GeneseedGuard = async (ctx) => {
             }
           }],
           // The ownership first-write gate, after the write gates, as in js/hosts/hooks.mjs's
-          // ruleDecide. A child session is a subagent (ruling D29): it cannot ask the user, so it
-          // never spends a block.
+          // ruleDecide, and over the twin's own tool class (`OWNERSHIP_WRITE_RE`): a move, a copy
+          // or a delete is a first write too. A session that cannot ask the user (`cannotAsk`: a
+          // subagent, ruling D29, or a headless workflow agent) is never refused.
           ["ownership", async () => {
-            if (!writes || OWNERSHIP_GATE_OFF) return
+            if (OWNERSHIP_GATE_OFF || !(writes || OWNERSHIP_WRITE_RE.test(tool))) return
             for (const p of pickPath(args, cwd)) {
               const why = ownershipBlock(path.resolve(cwd, p), input?.sessionID)
-              if (why && !(await isChildSession(input.sessionID))) { await deny(why, "ownership"); return }
+              if (why && !(await cannotAsk(input.sessionID))) { await deny(why, "ownership"); return }
             }
           }],
           // Any tool the host's prompt does not cover, whatever it calls its arguments. `pickCommand`,

@@ -1,20 +1,33 @@
 // The OpenCode guard's ownership first-write gate, the twin of js/hosts/ownership-gate.mjs. Written
 // out, not recorded. V1 refuses by THROWING `[geneseed-guard] blocked: <reason>` (no guard
 // switch named: no refusal names one); V2 cannot throw, so the call is renamed
-// to that text. Once per (session, repo); a child session (a subagent, ruling D29) never spends
-// the block; a `## Ownership` section defers. The reason is the hook's, word for word.
+// to that text. Once per (session, repo); a session with no user to ask (a subagent, ruling D29,
+// or a headless `geneseed-*` session) is never refused; a `## Ownership` section defers. The
+// reason is the hook's, word for word, and so is the marker that makes "once" outlive a restart.
 import { test, after } from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs"
 import path from "node:path"
 import { randomUUID } from "node:crypto"
+import { pathToFileURL, fileURLToPath } from "node:url"
 import guardDefault, { GeneseedGuard } from "../../adapters/opencode/plugins/geneseed-guard.js"
 import { GeneseedContext } from "../../adapters/opencode/plugins/geneseed-context.js"
 import { ownershipBlock as hookBlock, ownershipLine as hookLine } from "../../js/hosts/ownership-gate.mjs"
+import { normcase } from "../../js/lib/paths.mjs"
 import { makeSandbox } from "../helpers/sandbox.mjs"
 
 const boxes = []
 after(() => boxes.forEach((b) => b.cleanup()))
+// The guard writes the hook's session marker under the OS temp dir, read at each call from the
+// variables `os.tmpdir()` honours. The whole file points them at a sandbox, so no run leaves a
+// marker in the real one.
+const TMP_VARS = ["TMP", "TEMP", "TMPDIR"]
+const realTmp = TMP_VARS.map((k) => process.env[k])
+const setTmp = (values) => TMP_VARS.forEach((k, i) => { if (values[i] === undefined) delete process.env[k]; else process.env[k] = values[i] })
+const markers = makeSandbox("gsown-oc-markers-")
+boxes.push(markers)
+setTmp(TMP_VARS.map(() => markers.path))
+after(() => setTmp(realTmp))
 function app(files = { "package.json": "{}" }) {
   const sb = makeSandbox("gsown-oc-")
   boxes.push(sb)
@@ -40,9 +53,9 @@ function hookReason(file) {
   }
 }
 
-async function v1(hook, sessionID, filePath) {
+async function v1(hook, sessionID, filePath, tool = "write", args = { filePath, content: "x" }) {
   try {
-    await hook({ tool: "write", sessionID }, { args: { filePath, content: "x" } })
+    await hook({ tool, sessionID }, { args })
     return null
   } catch (err) {
     if (String(err?.message || "").startsWith("[geneseed-guard]")) return String(err.message)
@@ -81,6 +94,66 @@ test("V1: a child session (a subagent) never spends the block", async () => {
   const hook = (await GeneseedGuard({ directory: repo, client }))["tool.execute.before"]
   assert.equal(await v1(hook, "child", path.join(repo, "a.js")), null)
   assert.match(await v1(hook, "root", path.join(repo, "a.js")), /Geneseed \(Ownership\)/)
+})
+
+// A session with no user to ask is never refused: a child (a parent id), and a headless session
+// Geneseed started itself, which has NO parent and a title that starts `geneseed-` (a workflow's
+// agents are created as `geneseed-wf:<label>`). The rule is the context plugin's
+// `isSkippedSession`. Any other title is a user's session: refused once.
+test("a headless geneseed-* session is not asked; a user's session is, once", async () => {
+  const repo = app()
+  const titles = { wf: "geneseed-wf:x", mine: "my work" }
+  const hook = (await GeneseedGuard({ directory: repo, sessionMeta: async (sid) => ({ title: titles[sid] }) }))["tool.execute.before"]
+  assert.equal(await v1(hook, "wf", path.join(repo, "a.js")), null, "a workflow agent's first write")
+  assert.equal(await v1(hook, "wf", path.join(repo, "b.js")), null)
+  assert.match(await v1(hook, "mine", path.join(repo, "a.js")), /Geneseed \(Ownership\)/)
+  assert.equal(await v1(hook, "mine", path.join(repo, "b.js")), null, "once")
+})
+
+// "Once" is the hook's marker file, in the hook's scheme, not only this module's memory:
+// `<tmpdir>/geneseed-ownership-<user>/<session id>`, one case-folded root per line. So a resumed
+// session is not refused again after OpenCode restarts (a fresh import of the plugin stands in for
+// the restart: its in-memory record is empty), and the hook defers for a session and repo the
+// guard has already asked about. A marker that cannot be written defers, as in the hook: the
+// alternative is a refusal on every write of the session.
+test("the session marker is the hook's file: it survives a restart, and a failed write defers", async () => {
+  const repo = app()
+  const file = path.join(repo, "a.js")
+  const sid = randomUUID()
+  const hook = (await GeneseedGuard({ directory: repo }))["tool.execute.before"]
+  assert.match(await v1(hook, sid, file), /Geneseed \(Ownership\)/)
+  const dirs = fs.readdirSync(markers.path).filter((n) => n.startsWith("geneseed-ownership-"))
+  assert.equal(dirs.length, 1, "one per-user marker folder")
+  assert.ok(fs.readFileSync(path.join(markers.path, dirs[0], sid), "utf8").split("\n").includes(normcase(repo)))
+  const plugin = pathToFileURL(fileURLToPath(new URL("../../adapters/opencode/plugins/geneseed-guard.js", import.meta.url)))
+  const restarted = await import(`${plugin.href}?restarted`)
+  assert.notEqual(restarted.GeneseedGuard, GeneseedGuard, "a fresh module, with an empty in-memory record")
+  const again = (await restarted.GeneseedGuard({ directory: repo }))["tool.execute.before"]
+  assert.equal(await v1(again, sid, file), null, "refused again after a restart")
+  assert.equal(hookBlock(file, { session_id: sid, tool_name: "Write" }, "x"), null, "the hook reads the same marker")
+  assert.match(await v1(again, randomUUID(), file), /Geneseed \(Ownership\)/, "another session is still asked")
+
+  // A temp dir that is a file: the marker folder cannot be made.
+  const blocker = path.join(markers.path, "not-a-dir")
+  fs.writeFileSync(blocker, "")
+  setTmp(TMP_VARS.map(() => blocker))
+  try {
+    assert.equal(await v1(hook, randomUUID(), file), null, "no marker, no refusal")
+  } finally { setTmp(TMP_VARS.map(() => markers.path)) }
+})
+
+// The gate reads the hook's tool class (`WRITE_NAME_RE`), not only the guard's write class: a
+// move, a rename, a copy or a delete is a first write to the repo too. A read is not.
+test("a move, copy or delete tool spends the block like a write; a read does not", async () => {
+  for (const tool of ["mcp_move_file", "fs_rename", "copy_file", "delete_file", "mcp_trash", "apply_diff"]) {
+    const repo = app()
+    const hook = (await GeneseedGuard({ directory: repo }))["tool.execute.before"]
+    const args = { source: path.join(repo, "a.js"), destination: path.join(repo, "b.js") }
+    assert.match(String(await v1(hook, randomUUID(), null, tool, args)), /Geneseed \(Ownership\)/, tool)
+  }
+  const repo = app()
+  const hook = (await GeneseedGuard({ directory: repo }))["tool.execute.before"]
+  assert.equal(await v1(hook, randomUUID(), null, "read_file", { path: path.join(repo, "a.js") }), null)
 })
 
 test("V2: the refused call is renamed to the reason and emptied; the next one is untouched", async () => {
