@@ -769,6 +769,54 @@ test('the unmerge warns and skips a JSONC file carrying comments', () => {
   });
 });
 
+// THE RULE IS "COMMENTED", NOT ".jsonc". OpenCode parses `opencode.json` as JSONC too, so a
+// user may keep notes in the plain-named file, and a rewrite drops them whatever the name is.
+// All three opencode writers on the reversal side therefore refuse on `hadComments` alone:
+// the unmerge leaves the bytes and names what to remove, a deactivate refuses before it moves
+// a single file, and the reactivate re-add leaves the bytes and names what to add. `// mine`
+// above an otherwise plain object is the smallest file that says so.
+test('a commented opencode.json is refused by the unmerge exactly as a .jsonc is', () => {
+  withDir((d) => {
+    const p = path.join(d, 'opencode.json');
+    const original = '// mine\n{\n  "instructions": ["AGENT.md", "other.md"]\n}\n';
+    fs.writeFileSync(p, original, 'utf8');
+    const [changed, said] = captured(() => unmergeOpencodeJson(p, 'AGENT.md'));
+    assert.equal(changed, false, 'a refused file was reported as changed');
+    assert.equal(said, '[uninstall] opencode.json has comments — not rewriting it. '
+      + 'Remove this from its "instructions" by hand: "AGENT.md"\n');
+    assert.equal(fs.readFileSync(p, 'utf8'), original, 'the comments were rewritten away');
+  });
+});
+
+test('a commented opencode.json stops a deactivate before any move, and a reactivate re-add', () => {
+  withDir((d) => {
+    const cfg = globalInstall(d);
+    const p = path.join(cfg, 'opencode.json');
+    const plain = fs.readFileSync(p, 'utf8');
+    const commented = `// mine\n${plain}`;
+    fs.writeFileSync(p, commented, 'utf8');
+    const off = installDeactivate(cfg, 'opencode', 'global');
+    assert.equal(off.ok, false, JSON.stringify(off));
+    assert.equal(off.error, 'opencode.json has comments — refusing to rewrite it. '
+      + 'Disable by hand or remove the comments first.');
+    assert.ok(fs.existsSync(path.join(cfg, 'AGENT.md')), 'a refused deactivate moved files');
+    assert.equal(fs.readFileSync(p, 'utf8'), commented);
+
+    // The re-add: deactivate for real on the plain file, then the user adds a comment while
+    // the install is off. Reactivate restores the files and must only SAY what to add.
+    fs.writeFileSync(p, plain, 'utf8');
+    assert.ok(installDeactivate(cfg, 'opencode', 'global').ok);
+    const disabled = `// mine\n${fs.readFileSync(p, 'utf8')}`;
+    fs.writeFileSync(p, disabled, 'utf8');
+    const [on, said] = captured(() => installReactivate(cfg, 'opencode', 'global'));
+    assert.ok(on.ok, JSON.stringify(on));
+    const entry = path.join(cfg, 'AGENT.md').split(path.sep).join('/');
+    assert.equal(said, '[activate] opencode.json has comments — not rewriting it. Add this '
+      + `to its "instructions" by hand: ${JSON.stringify(entry)}\n`);
+    assert.equal(fs.readFileSync(p, 'utf8'), disabled, 'the re-add rewrote a commented file');
+  });
+});
+
 test('the unmerge edits a comment-free JSONC file', () => {
   // The other half, and the reason the test above is not just "never touch .jsonc": the
   // refusal is about COMMENTS, not about the extension.

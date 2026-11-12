@@ -571,7 +571,7 @@ export function loadJsonObject(p, { strict = false } = {}) {
  *
  * `permission` is THREE-STATE, not a boolean: `'add'` for a file with no `permission` key,
  * `'reconcile'` for one that has a block this build would have wired gates into, and falsy for
- * neither. A commented `.jsonc` is never rewritten — that is what "your edits are kept" buys —
+ * neither. A commented file (`.json` or `.jsonc`) is never rewritten — that is what "your edits are kept" buys —
  * so the only thing this branch can do about a stale block is SAY SO, and telling a file that
  * already has a `permission` key to add one is not saying so. Any other truthy value is read as
  * `'add'`, which is what the boolean callers this replaced meant.
@@ -646,7 +646,7 @@ export function atomicWriteJson(p, config) {
  *
  * `result.skillsAdded` is set to the `permission.skill` denies this call added ONLY when the
  * file on disk now matches what it computed (written, or nothing to change). Left unset on
- * every path that wrote nothing — unreadable, not an object, commented `.jsonc`, write
+ * every path that wrote nothing — unreadable, not an object, commented, write
  * failure — so the caller keeps its previous record rather than claiming denies never written.
  * `result.bashGates` (the next `bash_gates`, from `oldGates`) follows the same rule.
  * `pruneGates` is `--prune-gates`: see `reconcileOpencodePermission`. */
@@ -771,7 +771,10 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     result.bashGates = [...gates];
     return target;
   }
-  if (path.extname(target) === '.jsonc' && hadComments) {
+  // ⚠ THE COMMENTS DECIDE, NOT THE EXTENSION. OpenCode reads `opencode.json` as JSONC too, so a
+  // commented plain `.json` is as much the user's prose as a `.jsonc`; this once tested the
+  // extension as well, and such a file was rewritten with its comments dropped.
+  if (hadComments) {
     // Named, since this branch cannot take them out; `bash_gates` keeps its old value (the
     // caller's rule for a merge that wrote nothing), so they are still ours on the next emit.
     if (gatesRemoved.length) {
@@ -787,7 +790,7 @@ export function mergeOpencodeJson(p, agentPath, doctrines = null, excluded = [],
     // whole one; `reconcile` = there is a block and it is missing gates this build wires, and
     // this branch cannot write them because rewriting would drop the user's comments.
     //
-    // DECIDED, NOT DEFERRED: a commented `.jsonc` is never rewritten and never will be. A
+    // DECIDED, NOT DEFERRED: a commented file is never rewritten and never will be. A
     // comment-preserving JSONC writer is a parser, an AST and a printer — a dependency-free
     // one, since this package ships zero — to keep formatting nobody asked us to touch, in a
     // file Geneseed co-owns rather than owns. The advice above is the whole remedy: the exact

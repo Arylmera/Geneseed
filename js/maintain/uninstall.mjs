@@ -58,7 +58,7 @@ import {
   CLAUDE_STYLE, DISABLED_STASH, GLOBAL_MANIFEST, HOSTS, VERSION_MARKER, expanduser, isHostGlobalDir, opencodeConfigDir,
   resolvePath, settingsFile,
 } from '../hosts/hosts.mjs';
-import { mcpCommented, mcpLoad } from '../hosts/mcp.mjs';
+import { mcpLoad } from '../hosts/mcp.mjs';
 import {
   SRC_DIRS_MARKER, bundleFiles, hashesOf, ownedState, ownedWithin, recordedDenies, recordedEdit,
 } from '../hosts/owned.mjs';
@@ -246,7 +246,8 @@ const REVERSAL_MARKERS = [GLOBAL_MANIFEST, '.geneseed-theme', '.geneseed-emit',
  * deactivate, which removed the entry but kept the denies (PR #241 review) — so either half
  * alone is a change, and only "neither" declines.
  *
- * A COMMENTED `.jsonc` is not rewritten and the user is told to do it by hand — the entry AND
+ * A COMMENTED file — `opencode.json` or `.jsonc`, the extension does not matter — is not
+ * rewritten and the user is told to do it by hand — the entry AND
  * the recorded denies still set to `"deny"`, each named: rewriting it
  * would drop the comments. That branch returns False, so the caller's `unmerged` reports
  * REALITY rather than intent.
@@ -268,7 +269,7 @@ export function unmergeOpencodeJson(p, entry, denyNames = [], edit = null) {
   const editObj = edit && isDict(cfg.permission) && isDict(cfg.permission.edit) ? cfg.permission.edit : null;
   const asks = editObj ? edit.asks.filter((k) => editObj[k] === 'ask') : [];
   if (!hasEntry && !denies.length && !asks.length) return false;
-  if (path.extname(target) === '.jsonc' && hadComments) {
+  if (hadComments) {
     printOut(`[uninstall] ${path.basename(target)} has comments — not rewriting it.`
       + (hasEntry ? ` Remove this from its "instructions" by hand: ${jsonDumps(entry)}` : '')
       + (denies.length ? ` Remove these from its "permission.skill" by hand: `
@@ -1010,7 +1011,7 @@ function installMoveList(root, kind) {
  *
  * Deliberately a minimal inline re-add rather than the emit's own merge, whose side effects
  * (adding `permission` and `lsp: true` when absent) would clobber values the user may have
- * set since the install was disabled. A commented `.jsonc` is not rewritten — the same
+ * set since the install was disabled. A commented file is not rewritten — the same
  * refusal `unmergeOpencodeJson` makes — but here the files have ALREADY been restored, so it
  * tells the operator what to add rather than failing the whole reactivate. That asymmetry is
  * the reference's and is gated per side.
@@ -1024,7 +1025,7 @@ function installReaddEntry(target, entry) {
   if (state !== 'ok') return false;            // unreadable (except OSError), or not an object
   const instr = Array.isArray(cfg.instructions) ? cfg.instructions : [];
   if (indexOfDeepEqual(instr, entry) >= 0) return false;
-  if (path.extname(target) === '.jsonc' && hadComments) {
+  if (hadComments) {
     printOut(`[activate] ${path.basename(target)} has comments — not rewriting it. Add this `
       + `to its "instructions" by hand: ${jsonDumps(entry)}\n`);
     return false;
@@ -1138,12 +1139,14 @@ export function installDeactivate(root, host = 'opencode', scope = 'global') {
   }
   const kind = installKind(root);
   const target = opencodeTarget(path.join(root, 'opencode.json'));
-  // Caught UP FRONT, before any file moves: a commented `.jsonc` cannot be rewritten without
-  // dropping the user's comments, so refuse and move NOTHING.
-  if (mcpCommented(target)) {
+  // Caught UP FRONT, before any file moves: a commented file cannot be rewritten without
+  // dropping the user's comments, so refuse and move NOTHING. By comments, not by extension:
+  // the unmerge below refuses a commented `opencode.json` too, and a guard that let one
+  // through would move every file and leave the `instructions` entry pointing at nothing.
+  if (loadJsonObject(target).hadComments) {
     return { ok: false,
       error: `${path.basename(target)} has comments — refusing to rewrite it. `
-        + 'Disable by hand or convert it to plain .json first.' };
+        + 'Disable by hand or remove the comments first.' };
   }
   const stash = path.join(root, DISABLED_STASH);
   const { done, failed } = moveAll(root, stash, installMoveList(root, kind));
