@@ -37,7 +37,7 @@ If you moved the shim itself with `GENESEED_HOME`, set it the same way before re
 
 ## A Bash/Write/Edit call is refused with `onFailure is "block"`
 
-Claude Code refuses a `Bash`, `PowerShell`, `Write`, `Edit` or `NotebookEdit` call outright, and the transcript carries wording like:
+Claude Code refuses a `Bash`, `PowerShell`, `Monitor`, `Write`, `Edit` or `NotebookEdit` call outright, and the transcript carries wording like:
 
 > `PreToolUse:Bash hook error: [...]: failed; blocking because onFailure is "block"`
 
@@ -127,7 +127,7 @@ export GENESEED_MEMORY=/abs/path/to/memory
 
 This variable and `GENESEED_HARNESS` win over the shared store, so leave them unset on a global install. Both are deprecated, with removal planned for 6.0.
 
-**Confirm.** About a minute after the session goes quiet, stderr shows `[geneseed-learn] wrote N memory file(s): …` or a `skipped:` reason. Total silence means the plugin did not load.
+**Confirm.** About a minute after the session goes quiet, OpenCode's own log (OpenCode 1, service `geneseed-learn`) or stderr (OpenCode 2, as `[geneseed-learn] …`) shows `wrote N memory file(s): …` or a `skipped:` reason. Total silence in that place means the plugin did not load.
 <!--/harness-->
 
 Model, read-only agent, document and MCP problems are on [their own page](troubleshoot-tools.md).

@@ -28,13 +28,13 @@ geneseed loop next                                 # what to do now, as one JSON
 
 Then repeat `geneseed loop next` and act on what it prints:
 
-| `next` prints | You run |
+| The engine prints | You run |
 | --- | --- |
 | `{node, validate: true}` | `geneseed loop score --declared` (or, for a setup brick, `--actions … --write-set '…' --intent …`) |
 | `{node}` | the brick's prompt, then `git status --porcelain \| geneseed loop record --outcome <outcome>` (the iteration head adds `--card '<json>'` when it reports `more`) |
 | `{verify, run}` | exactly the printed `run` command, which pipes the staged numstat into `geneseed loop score --diff` |
 | `{awaiting}` | `geneseed loop decide --verdict ok\|no\|amend --note "…"` |
-| `{commit: true, message_file}` | `git add -A && git commit -F <message_file> && git push -u origin HEAD:loop/<slug>` |
+| `{commit: true, message_file}` (from `score --diff` or `decide`, never from `next`) | `git add -A && git commit -F <message_file> && git push -u origin HEAD:loop/<slug>` |
 | `{terminal}` | nothing more: `$close` or `$stop` |
 
 Every flag is in `geneseed loop --help`. The full cycle, including discards and notes, is in [Loops](../concepts/loops.md).
@@ -43,7 +43,7 @@ Every flag is in `geneseed loop --help`. The full cycle, including discards and 
 
 | Symptom | Cause and fix |
 | --- | --- |
-| It stopped as blocking on a small change | The diff touched a file outside the iteration's declared write set, which raises the score to at least the API weight. Check the reasons it shows. Answer ok if the file belongs to the change, or amend with a note to keep it out. |
+| It stopped as blocking on a small change | The diff touched a file outside the iteration's declared write set, which raises the score to at least 0.8 (the default API weight). Check the reasons it shows. Answer ok if the file belongs to the change, or amend with a note to keep it out. |
 | The git gate asks on every iteration's commit | Only one exact shape is exempt. A `cd …` prefix, `git -C`, a quoted refspec (`"HEAD:loop/x"`), `git commit -m` or a message-file path with a space all fall back to asking. Make sure the session works from the worktree itself. |
 | The final `close` commit asks | Expected. The loop is over, and that ask is your consent to close it. |
 | `mutation-check` reported `unavailable` | No mutation tool is configured. The loop continues and records the gap in `LOOP.md`'s notes. Add PIT, Stryker, mutmut or cargo-mutants to make it bite. |

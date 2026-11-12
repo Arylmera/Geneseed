@@ -11,12 +11,12 @@ description: "Remove an install, and what stays behind."
 ## Remove an install
 
 ```
-geneseed uninstall                          # the project install in this folder, else the OpenCode global one
+geneseed uninstall                          # the project install in this folder, else the one global install
 geneseed uninstall --target /path/to/repo   # a project install
 geneseed uninstall --target ~/.claude       # a global install: pass its config directory
 ```
 
-Without `--target`, the command picks the project install in the current folder if there is one, and the OpenCode global install otherwise. It prints what it will remove and asks before going on. Pass `--yes` to skip the question. In a shell without an interactive terminal, `--yes` is required: without it, the command refuses and exits 1.
+Without `--target`, the command picks the project install in the current folder if there is one, and the one global install on the machine otherwise, whatever its host. With several global installs it refuses (exit code 2) and prints the `--target` command for each. It prints what it will remove and asks before going on. Pass `--yes` to skip the question. In a shell without an interactive terminal, `--yes` is required: without it, the command refuses and exits 1.
 
 To see where each install lives, run `geneseed status`. The web console's **Installs** page can also uninstall.
 
@@ -24,7 +24,7 @@ To see where each install lives, run `geneseed status`. The web console's **Inst
 
 Each install keeps a manifest, a list of the files Geneseed wrote. **Uninstall deletes exactly those files and nothing else**, then removes any folders they leave empty. A file of yours that sits in the same folder stays.
 
-- **OpenCode global:** `AGENT.md`, `agents/`, `skills/`, `plugins/`, the marker files, and the `instructions` entry in `opencode.json`.
+- **OpenCode global:** `AGENT.md`, Geneseed's managed block in `AGENTS.md`, `agents/`, `skills/`, `plugins/`, the marker files, and the `instructions` entry in `opencode.json`.
 - **OpenCode per repo:** `AGENT.md`, `.opencode/`, `laws/`, `agents/`, `skills/`, and the `instructions` entry in `opencode.json`.
 - **Claude Code, Bob, OpenClaude:** `agents/`, `skills/`, the marker files, Geneseed's managed block in the instructions file (`CLAUDE.md` or `AGENTS.md`), and Geneseed's own hooks and exclusions in `settings.json`. Your own settings keys and hooks stay.
 

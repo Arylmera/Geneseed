@@ -20,6 +20,8 @@ Where Geneseed writes an install, and what an upgrade re-renders.
 | --- | --- | --- |
 | `GENESEED_HOME` | build / hooks | Directory holding the hook shim `bin/geneseed-hook` (default `~/.geneseed`). Change it, then rebuild, so the emitted hooks point at the new location. |
 | `GENESEED_ACTIVITY` | hooks, OpenCode plugin | `off` (or `0`, `false`, `no`) stops the activity writer; the hooks then load none of its code. Absent means on. See [geneseed-activity](plugin-activity.md). |
+| `GENESEED_NO_USAGE` | hooks, OpenCode guard plugin, web console | Any value stops the usage counter: no skill or subagent call is appended to `notebook/usage.jsonl`, and the console reports the counter as off. |
+| `GENESEED_LLM_TIMEOUT` | `learn` hook | Seconds the `learn` hook waits for the model CLI before it stops it and drops the partial reply (default 120; anything but a positive number means the default). |
 | `GENESEED_HOOK_TAP` | hooks | An absolute directory outside any repository. Every hook call then writes one file there, `<host>-<event>-<n>.json`, holding the payload's shape: keys kept, every string replaced by its type and length. For recording what a host really sends; unset, nothing is written. A directory inside a git worktree is refused. See [Verify it works](../guides/verify.md#bob-by-hand). |
 | `GENESEED_NO_SHIM_CHECK` | CLI | `1` silences the warning every `geneseed` command prints when the hook shim points at a path that no longer exists. For scripted callers; the `status` gates row still says `DEAD`. |
 | `OPENCODE_CONFIG_DIR` | OpenCode emits, `diff`, plugins | OpenCode's config dir — where the global install is written. OpenCode still loads `$XDG_CONFIG_HOME/opencode` beside it, so `status` and `doctor` warn when both hold a Geneseed install. |
@@ -36,7 +38,7 @@ Where Geneseed writes an install, and what an upgrade re-renders.
 
 ## OpenCode plugin variables
 
-Each OpenCode plugin's page lists its own switches: [guard](plugin-guard.md) (`GENESEED_GUARD`), [notify](plugin-notify.md) (`GENESEED_NOTIFY`, `GENESEED_NOTIFY_MIN_SECONDS`, `GENESEED_NOTIFY_TITLE`), [ponytail](plugin-ponytail.md) (`GENESEED_PONYTAIL`), [workflow](plugin-workflow.md) (`GENESEED_WORKFLOWS_DIR`) and [activity](plugin-activity.md) (`GENESEED_ACTIVITY`). `GENESEED_DEBUG=1` makes every plugin but guard and learn (which always log) say what it decided on stderr. `OPENCODE_DISABLE_LSP_DOWNLOAD` belongs to OpenCode itself: see [Language servers](../concepts/lsp.md).
+Each OpenCode plugin's page lists its own switches: [guard](plugin-guard.md) (`GENESEED_GUARD`), [notify](plugin-notify.md) (`GENESEED_NOTIFY`, `GENESEED_NOTIFY_MIN_SECONDS`, `GENESEED_NOTIFY_TITLE`), [ponytail](plugin-ponytail.md) (`GENESEED_PONYTAIL`), [workflow](plugin-workflow.md) (`GENESEED_WORKFLOWS_DIR`) and [activity](plugin-activity.md) (`GENESEED_ACTIVITY`). `GENESEED_DEBUG=1` makes every plugin but guard and learn (which always log) say what it decided. Context, notify, ponytail and activity write to stderr; guard, learn and workflow write to OpenCode's own log on OpenCode 1 (service `geneseed-<name>`) and to stderr on OpenCode 2. `OPENCODE_DISABLE_LSP_DOWNLOAD` belongs to OpenCode itself: see [Language servers](../concepts/lsp.md).
 
 ## Web console and CLI
 
@@ -44,7 +46,7 @@ How the `geneseed` command behaves and prints.
 
 | Variable | Read by | Effect |
 | --- | --- | --- |
-| `GENESEED_NO_WEB` | `geneseed` (bare) | `1` stops bare `geneseed` opening the web console; it falls back to the terminal menu. |
+| `GENESEED_NO_WEB` | `geneseed` (bare) | Any value stops bare `geneseed` opening the web console; it prints the command list instead. |
 | `GENESEED_NODE` | `./geneseed`, `geneseed.cmd`, `install` scripts | Node interpreter to run (default `node` on PATH). |
 | `GENESEED_TUI_ASCII` | CLI output | Pure-ASCII output: no box-drawing or emoji. |
 | `GENESEED_TUI_PLAIN` | CLI output | Drop emoji and animation. |

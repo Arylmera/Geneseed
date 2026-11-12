@@ -20,6 +20,6 @@ One of the [OpenCode plugins](opencode-plugins.md). [Environment variables](envi
 
 **Switches.**
 - `GENESEED_WORKFLOWS_DIR` — load scripts from another directory.
-- `GENESEED_DEBUG=1` — log to stderr.
+- `GENESEED_DEBUG=1` — log to OpenCode's own log on OpenCode 1 (service `geneseed-workflow`), to stderr on OpenCode 2.
 
 Ask the agent to *"list available workflows"* to check it loaded.

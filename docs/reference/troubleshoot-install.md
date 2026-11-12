@@ -32,7 +32,7 @@ Run without the installer — `npx geneseed`, a global npm install, or a hook �
 
 > `geneseed needs Node 22.7 or newer; this is Node 20.18.1. Install a current Node from https://nodejs.org (or your package manager), then run the command again.`
 
-**Cause.** The `node` on PATH is older than 22.7. npm only *warns* about the engine requirement, so a global install succeeds anyway. A hook prints the same sentence and lets the tool call through rather than block it, so on Claude Code, Bob or OpenClaude the hooks are off until Node is upgraded.
+**Cause.** The `node` on PATH is older than 22.7. npm only *warns* about the engine requirement, so a global install succeeds anyway. A hook prints the same sentence on stderr and judges nothing: on Claude Code and OpenClaude each gated tool call then asks you, since no gate checked it, and on Bob the call passes. The other hooks (context, learn, activity) do nothing until Node is upgraded.
 
 **Fix.** Install the current Node.js LTS (see above), open a **new** terminal, and run the command again.
 
@@ -59,7 +59,7 @@ See [Install](../guides/install.md) for the emit target that matches your tool.
 
 Setup opens with `AI coding tools on this machine:` and an `ok` or `--` per tool.
 
-**Cause.** The check only asks whether the command (`opencode`, `claude`, `bob`, `openclaude`) is on your PATH. A desktop-only install with no command shows as missing; an unrelated program with the same name shows as present.
+**Cause.** The check looks for the command (`opencode`, `claude`, `bob`, `openclaude`) on your PATH, then in the usual per-user folders, where a hit shows as `ok … (<where>, not on PATH)`. When it finds none of the four, it asks "Installed somewhere else?" and takes a path. An install in a folder it does not search shows as missing; an unrelated program with the same name shows as present.
 
 **Fix.** Nothing to fix — the line is advisory. Pick the install mode for the tool you actually use; a missing tool among several present is just a line, and you can continue without one.
 
