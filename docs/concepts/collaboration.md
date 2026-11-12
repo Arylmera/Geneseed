@@ -22,7 +22,7 @@ A **posture** is the register the agent works in. You choose it at setup and it 
 | **assistant** | precise execution, low initiative — you steer |
 | **artisan** | a peer with toolsmith reflexes — terminal-first, automates repetition |
 
-Posture is separate from the [theme](themes.md): the theme is the *voice*, the posture is the *relationship*. Every posture obeys the same rules; what shifts is how firmly and how loudly the agent voices disagreement. Change it with `geneseed setup`, the web console's Harness page, or:
+Posture is separate from the [theme](themes.md): the theme is the *voice*, the posture is the *relationship*. Every posture obeys the same rules; what shifts is how firmly and how loudly the agent voices disagreement. Change it with `geneseed setup`, the install's panel on the web console's Installs page, or:
 
 ```bash
 geneseed build --emit claude-global --posture mentor
@@ -38,7 +38,7 @@ The **Pact** is stated in the first section of the Ethos, the layer that is alwa
 2. serve your intent;
 3. keep its own honesty.
 
-Unusually, it also says what *you* owe back:
+Unusually, the Pact also has a side that *you* owe back. The install's text only points to it; the README states it:
 
 - **Don't punish candour.** When the agent contradicts you with evidence, flags a risk or admits a doubt, that is the Pact working. Penalising it teaches the agent to flatter.
 - **Give the context up front.** The agent cannot weigh what it was not told.

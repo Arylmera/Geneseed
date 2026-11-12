@@ -104,7 +104,7 @@ sequenceDiagram
 | NFR-002 | The hook is cheap: it loads on every tool call. | ~14 ms to load | Stated in `AGENTS.md`; no automated budget found, `⚠ to confirm` | ◐ | `bin/geneseed-hook.mjs` |
 | NFR-003 | Context hook output stays under the host's cap. | 9 000 characters | `OUTPUT_BUDGET` | ✅ | `js/hosts/hooks-context.mjs` |
 | NFR-004 | The rules file stays within its size ceiling. | 40 312 lean, 66 432 full | `CARRIER_CEILING` | ✅ | `js/inspect/cost.mjs` |
-| NFR-005 | The generator and hook path cannot spawn beyond what is declared. | No `child_process` on the generator; one spawn site on the hook path | Closure walks | ✅ | `tests/unit/hook_cli.test.mjs` |
+| NFR-005 | The generator and hook path cannot spawn beyond what is declared. | No `child_process` on the generator; two spawn sites on the hook path (`learn`'s model CLI, `loss.mjs`'s one `git` read) | Closure walks | ✅ | `tests/unit/hook_cli.test.mjs` |
 | NFR-006 | The upgrade doctor gate is bounded. | 300 s | A timeout reports a gate that did not finish | ✅ | `js/maintain/update.mjs` |
 | NFR-007 | The console serves only this machine. | Local port 4747 by default, with request guards | [Web console security](web-ui.md#security-model) | ✅ | `js/web/server.mjs` |
 | NFR-008 | Runs on Windows, macOS and Linux with no build step. | CI: Ubuntu and Windows. macOS: `⚠ to confirm`, no CI row | `web/dist/` tracked; `install`, `install.cmd`, `install.command` | ◐ | `.github/workflows/ci.yml` |

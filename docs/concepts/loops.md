@@ -27,10 +27,12 @@ array names every cycle that is allowed to exist, each with a `max` number of ti
 it may be re-entered. Picture it as rings: the outer ring is the iteration itself (plan, apply,
 test, review, back to plan), and inner rings sit inside it for retries (apply failed its test, try
 `apply` again without going all the way back around). The shipped templates that center on
-`apply` — `bugfix`, `feature`, `refactor`, `tdd`, `legacy-refactor`, `deps-upgrade` — all nest a
-short `apply`↔`test` retry ring inside the iteration ring, and most nest a second, wider
-`review-fix` ring around that. `legacy-tests` and `ci-repair` have no `apply` at all: the first
-only ever writes tests, the second repairs CI directly through `ci-fix`.
+`apply` — `bugfix`, `feature`, `refactor`, `tdd`, `legacy-refactor`, `deps-upgrade` among them —
+all nest a short retry ring inside the iteration ring (`apply`↔`test`; `apply`↔`flake-check` in
+`fix-flaky-tests`), and most nest a second, wider `review-fix` ring around that. `legacy-tests`,
+`ci-repair` and `architecture-decision` have no `apply` at all: the first only ever writes
+tests, the second repairs CI directly through `ci-fix`, the third drafts a decision record and
+challenges it.
 
 Work closes into a commit whenever the graph re-enters the iteration loop's head — so any setup
 work before the loop starts (reproducing a bug, say) is its own unit, numbered iteration 0, kept

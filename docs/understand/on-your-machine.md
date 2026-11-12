@@ -13,7 +13,7 @@ An install writes a handful of files into your host's config folder and, where t
 - **asked**: text the model reads every session. It usually follows it, but nothing makes it.
 - **on demand**: loads only when you or the agent call it by name.
 
-Token costs are for the default *lean* footprint. Before you type anything, a session carries about 12k tokens of harness. That is roughly 6% of a 200k window. A `--footprint full` build adds about 5k on the rules file. For a live figure on your own install, ask the agent to use the `token-report` skill.
+Token costs are for the default *lean* footprint. Before you type anything, a session carries about 12k tokens of harness. That is roughly 6% of a 200k window. A `--footprint full` build adds about 7k on the rules file. For a live figure on your own install, ask the agent to use the `token-report` skill.
 
 ## One folder for the whole machine
 
