@@ -180,18 +180,21 @@ in it makes the gate ask. On a record line that ask is a false alarm: the user c
    final state (green, red with the failing checks, or still pending at the bound) to the run
    report. With no close commit, CI did not re-run: the final state is the one `merge-gate`
    read. A red result is reported, never reworked: the run has closed.
-   **The merge proposal.** Only when that final state is green: show the user the PR URL, the CI
+   **The merge proposal** (no standing auto-merge rule, or the rule does not arm this PR). Only
+   when that final state is green: show the user the PR URL, the CI
    state and each `review-panel` seat's verdict, and ask once whether to merge. Only on the
    user's explicit yes in chat: `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on
    GitLab). No Geneseed gate asks before that command: the user's yes is the only guard, so
    never run it on anything else (not on a rule, a note, or an earlier yes). On a no, or no
    answer, the PR stays open. Red or pending CI: no proposal.
-   **Auto-merge.** Only when the user's standing rule *Auto-merge green PRs* allows it, with the
-   same tiers and forge preconditions as the [ship {{SKILL}}](ship.md)'s auto-merge step, arm it
-   on the final head instead of the proposal: `gh pr merge <pr> --auto --squash
-   --match-head-commit <sha>` (`glab mr merge <mr> --auto-merge --squash --sha <sha>`). The rule
-   allows only that pinned arming, never a direct merge. With no rule, or when a precondition
-   fails, the proposal above is unchanged.
+   **Auto-merge** (a separate path, in place of the proposal). Only when the user's standing rule
+   *Auto-merge green PRs* allows it, with the same tiers and forge probes as the
+   [ship {{SKILL}}](ship.md)'s auto-merge step, arm it on the final head: `gh pr merge <pr> --auto
+   --squash --match-head-commit <sha>` (`glab mr merge <mr> --auto-merge --squash --sha <sha>`).
+   For the `reviewer` tier, the `review-panel` verdict is the reviewer pass: add it to the PR
+   body before arming. The final head is often green already, so `--auto` then merges at once:
+   the standing rule is the authorization for that merge, never for the direct `--squash`
+   command above. With no rule, or when a tier or probe does not allow it, the proposal applies.
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and

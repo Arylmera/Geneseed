@@ -556,7 +556,7 @@ test('M9: rule 10 refuses an environment outcome routed to a loop or $lane', () 
 // leaves out the engine files the loops commit. retro and the $stop report read a closed loop's
 // notes from git (the removal commit's parent). The merge waits for the user's yes in chat, and
 // no text claims a Geneseed gate asks before `gh pr merge`. Auto-merge is armed only under the
-// user's standing rule, pinned to the final head, so a later push cannot ride an earlier arming.
+// user's standing rule, on the final head after the close commit, the last push of the run.
 test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and the merge consent', () => {
   const gate = shipped('bricks/merge-gate.md').replace(/\s+/g, ' ');
   assert.ok(gate.includes('never the exit code'), 'merge-gate reads the verdict from the exit code');

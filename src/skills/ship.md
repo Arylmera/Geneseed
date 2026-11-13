@@ -36,27 +36,43 @@ request or merge the branch.
    it is wrong — consumers, layout, data), and any follow-up. Link the
    issue it closes; keep the title an imperative one-line summary.
 6. **Auto-merge.** It is off unless the user's standing rule *Auto-merge green PRs* in
-   `user-rules.md` arms it (the later layer wins: project over host over shared). With no such
-   rule, say once, on the first PR you open in this repo: "Auto-merge is off; say 'turn on
-   auto-merge' to set a standing rule" — the [rule {{SKILL}}](rule.md) writes it. With the rule,
-   arm it only when all of these hold; otherwise leave the merge to the user:
-   - **Tier**, from the PR's diff. Any file in a sensitive zone → `never`. Sensitive is each
-     `sensitive:` zone of the repo's `AGENTS.md` ownership block, plus by default: auth and
-     authz, secrets and credentials, data migrations and schema, CI and deploy config,
-     dependency manifests and lockfiles, release and versioning, gate and hook config. Else any
-     code → `normal`. Else (docs and tests only) → `docs-tests`. The rule's line for the tier
-     decides: `auto` arms; `human` arms only when the forge also requires one approving review;
-     `reviewer` arms only after the [fresh-eyes {{SKILL}}](fresh-eyes.md) passes, its verdict in
-     the PR body; `never` does not arm. A missing or unreadable value counts as `human`.
-   - **Forge.** The base branch has required checks (GitHub: a ruleset or branch protection,
-     `gh api repos/{owner}/{repo}/rules/branches/<base>`; GitLab: *Pipelines must succeed*), and
-     the repo allows auto-merge. A requirement you cannot read counts as absent. Never judge
-     green yourself: the forge's checks are the gate ({{DOCTRINE:external-gate}}).
-   Arm with the reviewed head pinned: `gh pr merge <pr> --auto --squash --match-head-commit
+   `user-rules.md` arms it (the later layer wins: project over host over shared). That rule is
+   the durable authorization {{LAW:deletion-is-deliberate}} permits for the forge's merge; it
+   arms only that merge, and every push still asks. With no such rule, say once per session in
+   each repo, when you open a PR there: "Auto-merge is off; say 'turn on auto-merge' to set a
+   standing rule" — the [rule {{SKILL}}](rule.md) writes it. With the rule, arm only when all of
+   these hold; otherwise leave the merge to the user:
+   - **Tier**, from the PR's diff. Any sensitive file → `sensitive`. Else, when every file is
+     docs (prose that is neither shipped nor executed) or tests → `docs-tests`. Anything else →
+     `normal`. Sensitive is each `sensitive:` zone of the ownership block in the *base* branch's
+     `AGENTS.md` (never the head's), plus by default: auth and authz, secrets and credentials,
+     data migrations and schema, CI and deploy config, dependency manifests and lockfiles,
+     release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any
+     `user-rules.md`, agent, skill and instruction files, and test files that CI runs as a gate.
+   - **The rule's line for the tier.** `sensitive` never arms, whatever the rule says.
+     `docs-tests` accepts `auto | human | reviewer | never`; `normal` accepts `human | reviewer
+     | never` (`auto` is not valid there). A missing or other value counts as `human`. `auto`
+     arms. `human` arms only when the forge requires one approving review. `reviewer` arms only
+     after the [fresh-eyes {{SKILL}}](fresh-eyes.md) passes: first add its verdict to the PR
+     body (`gh pr edit <pr> --body-file <file>`, `glab mr update <mr> --description <text>`).
+     `never` does not arm.
+   - **Forge**, one probe each; a result you cannot read counts as absent. Required checks on
+     the base: a `required_status_checks` rule in `gh api repos/{owner}/{repo}/rules/branches/<base>`,
+     or `required_status_checks` in `gh api repos/{owner}/{repo}/branches/<base>/protection`;
+     GitLab: `only_allow_merge_if_pipeline_succeeds` in `glab api projects/:id`. One approving
+     review (`human`): a `pull_request` rule with `required_approving_review_count` of 1 or more,
+     or the same count under `required_pull_request_reviews` in the protection. Auto-merge
+     allowed: `gh repo view --json autoMergeAllowed`. Never judge green yourself: the forge's
+     checks are the gate ({{DOCTRINE:external-gate}}).
+   Arm with the reviewed head named: `gh pr merge <pr> --auto --squash --match-head-commit
    <sha>`, or `glab mr merge <mr> --auto-merge --squash --sha <sha>` (a plain `glab mr merge`
-   arms it too, so always name the flag). The rule arms only the forge's merge; every push still
-   asks. Recommend CODEOWNERS with required code-owner review on sensitive paths, as the forge's
-   own backstop.
+   arms it too, so always name the flag). On GitHub the pin is checked only when you arm: an
+   armed PR stays armed after a later push. So before any further push to an armed PR, disarm
+   it (`gh pr merge <pr> --disable-auto`; GitLab: `glab api --method POST
+   projects/:id/merge_requests/<iid>/cancel_merge_when_pipeline_succeeds`), then classify,
+   review and arm again on the new head. Recommend CODEOWNERS with required code-owner review on
+   sensitive paths, and *Dismiss stale pull request approvals* for the `human` tier, as the
+   forge's own backstops.
 7. If the project merges locally instead, merge into the base branch only after
    review/approval.
 8. Once the branch is merged — locally or through the PR — delete it, local and remote
@@ -74,9 +90,9 @@ request or merge the branch.
 ## Done when
 - The diff passed review with no `blocking` finding, and the PR is open (or the branch is merged) with a Summary / Evidence / Merge danger
   body, and nothing unrelated rides along.
-- Auto-merge is armed only under the user's standing rule, for its tier, on a forge that
-  requires checks, with the reviewed head pinned — or it is off and, on the repo's first PR,
-  the user was told how to turn it on.
+- Auto-merge is armed only under the user's standing rule, never for a sensitive diff, on a
+  forge that requires checks, on the reviewed head, and disarmed before any later push — or it
+  is off and the user was told once this session how to turn it on.
 - A branch merged while you are still working is deleted, local and remote, or the user
   declined.
 

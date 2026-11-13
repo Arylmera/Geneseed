@@ -28,22 +28,25 @@ Arm auto-merge on a PR I open, only when the forge has required checks.
 The rule files are layered: shared, then host, then project, and the later layer wins. So a
 global rule sets the default and a project's own copy overrides it. To turn it off, say **"turn
 off auto-merge"**: the agent removes the rule, or writes a project copy with all three lines
-`never`. The first time the agent opens a PR in a repo with no rule, it tells you once that
-auto-merge is off and how to turn it on.
+`never`. When a repo has no rule, the agent tells you once per session in that repo, when it
+opens a PR there, that auto-merge is off and how to turn it on.
 
-The rule arms only the forge's merge. Every push still asks you (`consent-before-push`).
+The rule is your durable authorization for the forge's merge (`deletion-is-deliberate`). It arms
+only that merge: every push still asks you (`consent-before-push`).
 
 ## The tiers
 
 The agent sorts each PR by its diff, the first match wins:
 
-| Tier | When | What the rule line does |
+| Tier | When | Accepted values |
 |---|---|---|
-| `sensitive` | Any file in a sensitive zone: each `sensitive:` zone of the repo's `AGENTS.md` ownership block (see [Set up ownership](set-up-ownership.md)), plus auth and authz, secrets and credentials, data migrations and schema, CI and deploy config, dependency manifests and lockfiles, release and versioning, gate and hook config | `never`: the PR stays open for you |
-| `normal` | Any code | `human`: arms only when the forge also requires one approving review. `reviewer`: arms after the agent's blind reviewer passes, with its verdict in the PR body |
-| `docs-tests` | Docs and tests only | `auto`: arms |
+| `sensitive` | Any file in a sensitive zone: each `sensitive:` zone of the ownership block in the **base** branch's `AGENTS.md` (see [Set up ownership](set-up-ownership.md)), plus auth and authz, secrets and credentials, data migrations and schema, CI and deploy config, dependency manifests and lockfiles, release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any `user-rules.md`, agent, skill and instruction files, and test files that CI runs as a gate | None: it never arms, whatever the rule says |
+| `docs-tests` | Every file is docs (prose that is neither shipped nor executed) or tests | `auto`, `human`, `reviewer`, `never` |
+| `normal` | Anything else | `human`, `reviewer`, `never` (`auto` is not valid) |
 
-A missing or unreadable value counts as `human`. Use `reviewer` only in a solo repo: GitHub does not
+`auto` arms. `human` arms only when the forge also requires one approving review. `reviewer` arms
+after the agent's blind reviewer passes, with its verdict added to the PR body first (in a factory,
+the `review-panel` verdict). `never` does not arm. A missing or other value counts as `human`. Use `reviewer` only in a solo repo: GitHub does not
 let you approve your own PR, and a PR the agent opens carries your identity, so `human` would never
 merge there.
 
@@ -52,23 +55,28 @@ merge there.
 The agent arms auto-merge only when it can read all of these. When it cannot, it does not arm, and
 the merge stays yours.
 
-| Setting | GitHub | GitLab |
+| Setting | GitHub (how the agent reads it) | GitLab |
 |---|---|---|
-| Auto-merge allowed | Settings › General › *Allow auto-merge* | Settings › Merge requests: check that the merge method allows it |
-| Required checks on the base branch | A ruleset or branch protection with required status checks | Settings › Merge requests › *Pipelines must succeed* |
-| One approving review (`normal: human`) | Required approvals in the ruleset or branch protection | An approval rule |
+| Auto-merge allowed | Settings › General › *Allow auto-merge* (`gh repo view --json autoMergeAllowed`) | Settings › Merge requests: check that the merge method allows it |
+| Required checks on the base branch | A ruleset (`required_status_checks` in `gh api repos/{owner}/{repo}/rules/branches/<base>`) or branch protection (`required_status_checks` in `.../branches/<base>/protection`) | *Pipelines must succeed* (`only_allow_merge_if_pipeline_succeeds` in `glab api projects/:id`) |
+| One approving review (`human`) | A ruleset `pull_request` rule, or branch protection, with `required_approving_review_count` of 1 or more | An approval rule |
+| Stale approvals (recommended for `human`) | *Dismiss stale pull request approvals when new commits are pushed* | *Remove all approvals when commits are added* |
 | Backstop on sensitive paths (recommended) | `CODEOWNERS` plus *Require review from Code Owners* | `CODEOWNERS` plus code owner approval on the protected branch |
 
-The agent arms with the reviewed head pinned, so a later push cannot ride an earlier arming:
+The agent arms on the head it classified and reviewed:
 
 ```bash
 gh pr merge <pr> --auto --squash --match-head-commit <sha>
 glab mr merge <mr> --auto-merge --squash --sha <sha>
 ```
 
-GitLab cancels auto-merge on a new push. GitHub keeps it armed for a pusher with write access,
-which is why the head is pinned. `glab mr merge` arms auto-merge by default, so the agent always
-names the flag.
+`glab mr merge` arms auto-merge by default, so the agent always names the flag. On GitHub the
+pinned head is checked only when auto-merge is armed: an armed PR stays armed after a later push by
+someone with write access. So before any further push to an armed PR, the agent disarms it
+(`gh pr merge <pr> --disable-auto`; on GitLab, `POST
+projects/:id/merge_requests/:iid/cancel_merge_when_pipeline_succeeds` through `glab api`), then
+classifies, reviews and arms again on the new head. If the head is already green when the agent
+arms, the forge merges at once.
 
 ## On each host
 
