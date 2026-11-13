@@ -21,7 +21,7 @@ import { pruneRetiredSkills } from './retired-skills.mjs';
 import {
   claimAndWrite, globalMemory, globalNotebook, shipLeanLaws, stripCapabilityLinks,
 } from './emit-common.mjs';
-import { kitsBody, pathTokens, renderAll, renderFile } from './render.mjs';
+import { kitsBody, modeBody, pathTokens, renderAll, renderFile } from './render.mjs';
 import {
   BOB_RULES_STUB, bobFirstReply, ensureContextStub, ensureExcludesStub, ensureNotebookIndex,
   ensureProfileStub,
@@ -91,6 +91,8 @@ export function emitClaudeRender(cfg, job) {
     Object.assign(ptheme, pathTokens(ptheme, sharedRoot));
     // The Kits block was substituted with the unprefixed DIR_* tokens; rebuild it, or its links dangle.
     ptheme.KITS_BODY = kitsBody(cfg, ptheme, '');
+    // The Foreman mode names its ledger under DIR_NOTEBOOK: rebuilt for the same reason.
+    ptheme.MODE_BODY = modeBody(cfg, ptheme);
     // Same catalogue decision as the renderAll above — a re-render that forgot it would
     // quietly put the stripped tables back.
     return renderFile(cfg, tmplItem.src, ptheme, footprint, '', new Set(), nativeCatalog);

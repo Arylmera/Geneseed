@@ -387,6 +387,13 @@ async function main(argv) {
     // A hook verb (`context`, `tool-gate`, …) is in the table but not here: the emitted
     // settings call it through `geneseed-hook`, and saying so beats "unknown command".
     if (cliCommand(verb) !== null) {
+      // Its help is a fair question, and `help context` arrives here as `context --help`: answer
+      // it with the hook binary's own help, under a line naming the binary that runs it.
+      if (argv.slice(1).some((t) => t === '-h' || t === '--help')) {
+        printOut(`'${verb}' is a hook verb: the host runs it as \`geneseed-hook ${verb}\` `
+          + '(bin/geneseed-hook.mjs), not through this command.\n\n');
+        return printHelp('geneseed-hook', verb);
+      }
       return die(2, `'${verb}' is a hook verb: the host runs it through geneseed-hook `
         + '(bin/geneseed-hook.mjs), not this command. See geneseed --help.');
     }

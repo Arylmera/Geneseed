@@ -450,6 +450,15 @@ function registerBody(cfg, theme, dir, selected, fallback) {
 }
 
 /**
+ * The selected mode's body. Exported because it names `{{DIR_NOTEBOOK}}` paths: the root file's
+ * re-render with prefixed DIR_* tokens (`prefixedAgentText`, js/build/emit-claude.mjs) rebuilds
+ * it as it rebuilds KITS_BODY, or the Foreman ledger points at `notebook/` beside `.claude/`.
+ */
+export function modeBody(cfg, theme) {
+  return registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
+}
+
+/**
  * The doctrine packs this build actually renders, in `PACK_ORDER` — and the two gates
  * that stand between `cfg.doctrines` and a silently wrong AGENT.md.
  *
@@ -619,6 +628,11 @@ export function effectiveTheme(cfg, themeName, {
 } = {}) {
   const theme = { ...loadTheme(cfg, themeName), ...(cfg.structure ?? STRUCTURE) };
   Object.assign(theme, pathTokens(theme, sharedRoot));
+  // A skill or agent names its notes file as a path the agent opens from the project root, and
+  // on an install whose harness sits a level down (`.claude/`) the notebook is there too. Only
+  // the relative form takes the prefix; the root file's re-render (`prefixedAgentText`) derives
+  // its own from its prefixed DIR_NOTEBOOK.
+  if (!sharedRoot) theme.PATH_NOTES = `${lawsPrefix}${theme.PATH_NOTES}`;
   // Empty without a tier, so a project emit and a default build stay byte-identical (the
   // `EXCLUDED_SKILLS_LINE` contract). Each rides the end of a template line, so its value carries
   // the blank line. C1 lives in this text: the readers only concatenate, shared first.
@@ -630,7 +644,7 @@ export function effectiveTheme(cfg, themeName, {
     + 'holds this convention, and any fact\n> that landed here waits for the next emit to move it.'
     : '';
   theme.POSTURE_BODY = registerBody(cfg, theme, 'postures', cfg.posture ?? 'peer', 'peer');
-  theme.MODE_BODY = registerBody(cfg, theme, 'modes', cfg.mode ?? 'direct', 'direct');
+  theme.MODE_BODY = modeBody(cfg, theme);
   // The loop skill's default trust preset (`--trust`), raw for `--preset` and capitalised for
   // the `Default trust preset: **<Label>**` line `trustOfDir` reads back off an install.
   theme.TRUST = cfg.trust ?? DEFAULT_PRESET;

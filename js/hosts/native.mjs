@@ -194,12 +194,16 @@ export function agentDescription(text) {
   return withWhen(firstBlockquote(text), dispatchOf(text));
 }
 
-/** Purpose + ` Use when: ` + the first sentence of `trig`, capped — see `skillDescription`. */
+/**
+ * Purpose + ` Use when: ` + the first sentence of `trig`, capped — see `skillDescription`.
+ * A `;` ends the cut clause as a `.` does, but the clause is the END of the description, so it
+ * is written as a `.`: a trailing `;` reads as text that was cut short.
+ */
 function withWhen(desc, trig) {
   if (!trig) return desc;
   const first = trig.match(/^.*?[.;](?=\s|$)/);
   const full = `${desc} Use when: ${first ? first[0] : trig}`;
-  if (full.length <= DESCRIPTION_CAP) return full;
+  if (full.length <= DESCRIPTION_CAP) return full.replace(/;$/, '.');
   const cut = full.slice(0, DESCRIPTION_CAP);
   const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('; '));
   return end > desc.length ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '…';

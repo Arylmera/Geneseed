@@ -341,8 +341,10 @@ export function parsePrecedence(text) {
   const lines = String(text).split(/\r?\n/)
   const at = lines.findIndex((l) => l.startsWith('**Precedence.**'))
   if (at === -1) return []
+  // The lead may be hard-wrapped over several lines: walk past it and the blank lines to the
+  // first `|` line. A heading or a rule comes first only when the table is gone.
   let i = at + 1
-  while (i < lines.length && !lines[i].trim()) i++
+  while (i < lines.length && !lines[i].startsWith('|') && !/^(#|---)/.test(lines[i])) i++
   const rows = []
   // The table is the run of `|` lines after the heading; the first other line ends it.
   for (; i < lines.length && lines[i].startsWith('|'); i++) {

@@ -292,6 +292,13 @@ test('the front door answers --version, help and a mistyped verb', () => {
   const hook = run('context');
   assert.equal(hook.status, 2);
   assert.match(hook.stderr, /'context' is a hook verb/);
+  // Its help is answered, not refused: one line naming the binary that runs it, then that
+  // binary's own help for the verb, exit 0. `help context` is `context --help`, byte for byte.
+  const hookHelp = run('help', 'context');
+  assert.equal(hookHelp.status, 0, hookHelp.stderr);
+  assert.match(hookHelp.stdout, /^'context' is a hook verb: the host runs it as `geneseed-hook context`/);
+  assert.match(hookHelp.stdout, /usage: geneseed-hook context /);
+  assert.equal(hookHelp.stdout, run('context', '--help').stdout);
 });
 
 test('a bare `geneseed` runs `home`, as both launchers do', () => {
