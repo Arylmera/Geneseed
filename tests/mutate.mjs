@@ -597,8 +597,8 @@ export const MUTATIONS = [
     id: 'M35',
     name: 'the done gate never blocks',
     file: 'js/hosts/hooks-done.mjs',
-    find: '    if (!missing.length) return null;\n',
-    replace: '    return null;\n',
+    find: '    if (!owed.length) return settle();\n',
+    replace: '    return settle();\n',
     gate: UNIT_HOOK_DONE,
     why: 'A gate that never fires satisfies every "allows" row, and on Stop an allow is silence: '
       + 'nothing anywhere would show the turn was let through unproven. `hook_done.test.mjs` runs '
@@ -637,6 +637,19 @@ export const MUTATIONS = [
       + 'deleted. The rule draft is the half of the rule store a user-rules.md row never reaches: a '
       + 'draft written unasked becomes a standing rule on the next approval. Only the draft rows of '
       + 'the verdict table see it.',
+  },
+  {
+    id: 'M39',
+    name: 'a background launch counts as a pass',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '    if (background.has(c.id) && finished.get(c.id) !== true) return;\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'A `run_in_background` call returns at once, not an error, while the check is still '
+      + 'running: it proves the command started, nothing more. Without this line 76 of 112 '
+      + 'accepted passes in 30 days of real transcripts were such launches. The background rows '
+      + 'in `hook_done.test.mjs` require a launch alone, or one whose notification failed, to owe '
+      + 'its check.',
   },
 ];
 
