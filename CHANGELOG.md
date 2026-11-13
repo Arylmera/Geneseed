@@ -8,6 +8,8 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+## [5.4.0] — 2026-11-13
+
 **Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the
 update. An install that excluded *Consent Before Push* because it asked on every commit can switch
 it back on (`--exclude-rules` without it, or its row on the console's Constitution page). A repo
@@ -15,6 +17,8 @@ whose remote was added by hand has no default branch recorded, and every commit 
 `git remote set-head origin --auto` records it.
 
 ### Changed
+- **An edited deployed file reads as kept or diverged, and only a diverged one alerts.** "Kept" means the source still renders what the last emit wrote; it shows as neutral in the console and in `geneseed diff`. The base hash survives rebuilds (manifest `kept_hashes`). An edited `.md` file still alerts when kept. The self-improvement text no longer claims the doctor reports such an edit.
+- **Worker briefs never open a command with `cd` into the worktree.** The Foreman worker brief and the pipeline crew brief tell workers to run from the worktree or with absolute paths (`git -C`, `npm --prefix`), because Claude Code asks the user to approve a compound command that opens with `cd` into another folder. Text only; reaches an install on its next emit.
 - **The README opens with a hero image and each main section with a banner.** Seven new SVGs under `docs/assets/` share one dark panel, the brand teal and a gene-seed helix; the terminal demo is redrawn to match, says five targets, types no counts and shows each gate's first two ask lines as the hook prints them. Repository page only: none of it ships in the package.
 - **`herdr` is a skill name again.** It left `RETIRED_SKILL_IDS`, where it sat since its removal in 2026-10: the kit skill drives the same tool, so an install whose `Excluded skills:` line names `herdr` now excludes the kit skill, which is what that line meant. It is listed in the new `REVIVED_SKILL_IDS`, so an old herdr skill folder that no manifest owns is still moved to `archived-skills/` on a global emit: with the kit off nothing replaces it, and with the kit on the current kit copy is written in its place. A herdr skill you edited, and that an emit already kept as yours, is never moved, with the kit on or off.
 - **Consent Before Push guards the main branch, not every commit.** The main branch (`main`,
