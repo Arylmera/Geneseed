@@ -5,7 +5,7 @@
 
 {{CREDIT:mattpocock-skills-2509:skills/engineering/retro/SKILL.md}}
 
-**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…". Anything the user wants to outlive this session counts: a standing rule ("make that a
+**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…", or "turn on auto-merge" / "turn off auto-merge". Anything the user wants to outlive this session counts: a standing rule ("make that a
 rule") or a durable fact ("note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
@@ -112,11 +112,12 @@ the user picks "rule" out of impatience and the set inflates.
 **Auto-merge flow** (the user says "turn on auto-merge", or "turn it off"). The wording is fixed
 so the [ship {{SKILL}}](ship.md) reads it reliably: skip reformulation and the counter-example,
 never the consent. Ask one question — every repo (`global`) or this project (`project`) — then
-show this text, with the next free `R<n>` and today's date, and append it on explicit consent:
+show this text, with the next free `R<n>`, the scope chosen and today's date, and append it to the
+file Branch B step 5 names for that scope, on explicit consent:
 
 ```
 ## R<n> — Auto-merge green PRs
-(scope: global | source: user, <date>)
+(scope: <global|project> | source: user, <date>)
 Arm auto-merge on a PR I open, only when the forge has required checks.
 - docs-tests: auto
 - normal: human        # human | reviewer

@@ -54,7 +54,7 @@ the merge stays yours.
 
 | Setting | GitHub | GitLab |
 |---|---|---|
-| Auto-merge allowed | Settings › General › *Allow auto-merge* | On by default |
+| Auto-merge allowed | Settings › General › *Allow auto-merge* | Settings › Merge requests: check that the merge method allows it |
 | Required checks on the base branch | A ruleset or branch protection with required status checks | Settings › Merge requests › *Pipelines must succeed* |
 | One approving review (`normal: human`) | Required approvals in the ruleset or branch protection | An approval rule |
 | Backstop on sensitive paths (recommended) | `CODEOWNERS` plus *Require review from Code Owners* | `CODEOWNERS` plus code owner approval on the protected branch |

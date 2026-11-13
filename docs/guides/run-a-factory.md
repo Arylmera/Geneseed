@@ -6,7 +6,7 @@ kind: "concept"
 section: "Factories"
 description: "Carry a bug report, an issue or an analysis to an open PR with green CI: what you need, how to ask, and where it stops for you."
 ---
-A **factory** carries one work item to an open pull request with green CI. Each stage is a brick or a whole loop, and a red CI run sends the work back to the loop, a bounded number of times. You ask in plain words. The agent drives `geneseed factory`, which decides every step. No stage merges: at the end the agent asks you once whether to merge, and merges only on your yes.
+A **factory** carries one work item to an open pull request with green CI. Each stage is a brick or a whole loop, and a red CI run sends the work back to the loop, a bounded number of times. You ask in plain words. The agent drives `geneseed factory`, which decides every step. No stage merges: at the end the agent asks you once whether to merge, and merges only on your yes. With your standing auto-merge rule it arms the forge's auto-merge instead ([Auto-merge green PRs](auto-merge.md)).
 
 This page is the how-to. For how the engine works (stages, cycles, state files), see [Factories](../concepts/factories.md).
 
