@@ -34,7 +34,7 @@ import { themeParityProblems, renderedProblems, descriptionProblems } from '../.
 import {
   themesToCheck, globalEmitProblems, claudeBobEmitProblems,
 } from '../../js/inspect/doctor.mjs';
-import { stripSkillBodyLinks, agentDescription } from '../../js/hosts/native.mjs';
+import { stripSkillBodyLinks, agentDescription, skillDescription } from '../../js/hosts/native.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
 import { LAW_CLASS } from '../../js/inspect/inventory.mjs';
@@ -702,6 +702,20 @@ test('agentDescription appends the first dispatch bullet as "Use when:"', () => 
     + '- A fix needs [coverage](x.md) before\n  it merges. Then more.\n- Second bullet.\n';
   assert.equal(agentDescription(spec), 'Writes tests. Use when: A fix needs coverage before it merges.');
   assert.equal(agentDescription('# Agent: t\n\n> Writes tests.\n'), 'Writes tests.');
+});
+
+// A `;` ends the first clause as a `.` does, and the clause it ends is the end of the
+// description, so it is written as a `.`: a trailing `;` reads as text cut short. A `;` inside
+// the kept clause, with no space after it, is not a clause end and stays.
+test('a description cut at a `;` ends with a `.`', () => {
+  const skill = '# Skill: s\n\n> Audits things.\n\n**Trigger:** the user asks to audit; or to plan '
+    + 'an upgrade.\n';
+  assert.equal(skillDescription(skill), 'Audits things. Use when: the user asks to audit.');
+  const agent = '# Agent: t\n\n> Writes tests.\n\n## When to dispatch\n'
+    + '- A fix needs coverage; then more.\n';
+  assert.equal(agentDescription(agent), 'Writes tests. Use when: A fix needs coverage.');
+  const inner = '# Skill: s\n\n> Audits things.\n\n**Trigger:** a;b list. More.\n';
+  assert.equal(skillDescription(inner), 'Audits things. Use when: a;b list.');
 });
 
 // ---------------------------------------------------------------------------------------------
