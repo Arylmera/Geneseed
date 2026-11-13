@@ -43,8 +43,9 @@ request or merge the branch.
    standing rule" — the [rule {{SKILL}}](rule.md) writes it. With the rule, arm only when all of
    these hold; otherwise leave the merge to the user:
    - **Tier**, from the PR's diff. Any sensitive file → `sensitive`. Else, when every file is
-     docs (prose that is neither shipped nor executed) or tests → `docs-tests`. Anything else →
-     `normal`. Sensitive is each `sensitive:` zone of the ownership block in the *base* branch's
+     docs (prose that is neither shipped nor executed) or tests → `docs-tests`, unless the diff
+     removes, skips or loosens a test or an assertion: CI cannot see a weakened test, so that diff
+     is `normal`. Anything else → `normal`. Sensitive is each `sensitive:` zone of the ownership block in the *base* branch's
      `AGENTS.md` (never the head's), plus by default: auth and authz, secrets and credentials,
      data migrations and schema, CI and deploy config, dependency manifests and lockfiles,
      release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any
@@ -53,20 +54,24 @@ request or merge the branch.
    - **The rule's line for the tier.** `sensitive` never arms, whatever the rule says.
      `docs-tests` accepts `auto | human | reviewer | never`; `normal` accepts `human | reviewer
      | never` (`auto` is not valid there). A missing or other value counts as `human`. `auto`
-     arms. `human` arms only when the forge requires one approving review. `reviewer` arms only
+     arms. `human` arms only when the forge requires one approving review and dismisses it on a
+     new push. `reviewer` arms only
      after the [fresh-eyes {{SKILL}}](fresh-eyes.md) passes: first add its verdict to the PR
      body (`gh pr edit <pr> --body-file <file>`, `glab mr update <mr> --description <text>`).
      `never` does not arm.
    - **Forge**, one probe each; a result you cannot read counts as absent. Required checks on
      the base: a `required_status_checks` rule in `gh api repos/{owner}/{repo}/rules/branches/<base>`,
-     or `required_status_checks` in `gh api repos/{owner}/{repo}/branches/<base>/protection`;
-     GitLab: `only_allow_merge_if_pipeline_succeeds` in `glab api projects/:id`. One approving
-     review (`human`): a `pull_request` rule with `required_approving_review_count` of 1 or more,
-     or the same count under `required_pull_request_reviews` in the protection; GitLab: an
-     approval rule with `approvals_required` of 1 or more in `glab api
-     projects/:id/approval_rules`, or the project's `approvals_before_merge`. Auto-merge
-     allowed: `gh repo view --json autoMergeAllowed`. Never judge green yourself: the forge's
-     checks are the gate ({{DOCTRINE:external-gate}}).
+     or `required_status_checks` in `gh api repos/{owner}/{repo}/branches/<base>/protection`,
+     with a non-empty list of checks (`contexts` or `checks`): an empty list requires nothing,
+     and `--auto` then merges at once; GitLab: `only_allow_merge_if_pipeline_succeeds` in
+     `glab api projects/:id`. One approving review dismissed on a new push (`human`): a
+     `pull_request` rule with `required_approving_review_count` of 1 or more and
+     `dismiss_stale_reviews_on_push`, or the same under `required_pull_request_reviews`
+     (`dismiss_stale_reviews`) in the protection; GitLab: an approval rule with
+     `approvals_required` of 1 or more in `glab api projects/:id/approval_rules`, and
+     `reset_approvals_on_push` in `glab api projects/:id/approvals`. Auto-merge allowed:
+     `gh repo view --json autoMergeAllowed` (GitHub only; GitLab has no such switch). Never judge
+     green yourself: the forge's checks are the gate ({{DOCTRINE:external-gate}}).
    Arm with the reviewed head named: `gh pr merge <pr> --auto --squash --match-head-commit
    <sha>`, or `glab mr merge <mr> --auto-merge --squash --sha <sha>` (a plain `glab mr merge`
    arms it too, so always name the flag). On GitHub the pin is checked only when you arm: an
@@ -74,8 +79,7 @@ request or merge the branch.
    it (`gh pr merge <pr> --disable-auto`; GitLab: `glab api --method POST
    projects/:id/merge_requests/<iid>/cancel_merge_when_pipeline_succeeds`), then classify,
    review and arm again on the new head. Recommend CODEOWNERS with required code-owner review on
-   sensitive paths, and *Dismiss stale pull request approvals* for the `human` tier, as the
-   forge's own backstops.
+   sensitive paths as the forge's own backstop.
 7. If the project merges locally instead, merge into the base branch only after
    review/approval.
 8. Once the branch is merged — locally or through the PR — delete it, local and remote

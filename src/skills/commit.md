@@ -33,7 +33,10 @@
    that is not a dedicated feature branch) apply the same gate with extra care.
 6. Push only when the user has explicitly approved *that push* ({{DOCTRINE:consent-before-push}} / {{LAW:deletion-is-deliberate}})
    — never push on your own initiative, on any branch, and never treat one approval as
-   consent for the next.
+   consent for the next. If the branch's PR has auto-merge armed, disarm it before the push
+   (`gh pr merge <pr> --disable-auto`; GitLab: `glab api --method POST
+   projects/:id/merge_requests/<iid>/cancel_merge_when_pipeline_succeeds`): an armed PR would
+   merge the new head unreviewed. Re-arm only through the [ship {{SKILL}}](ship.md).
 
 ## Done when
 - The commit contains only the intended change and the working tree is clean of it,
