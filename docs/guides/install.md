@@ -18,7 +18,7 @@ npx geneseed setup
 
 The command is the same on macOS, Linux and Windows (cmd, PowerShell or any POSIX shell). The setup wizard lists the AI coding tools it found on your `PATH` or in the usual per-user folders, then asks for a theme, a posture, a mode, the doctrine packs, the kits, an install mode and a footprint. Each one has a safe default, so you can hold Enter through all of them. [Choose your setup](choose-your-setup.md) explains each question. **OpenCode global** is the recommended install mode: you install once and every repo inherits it, with nothing committed into your projects. The wizard then builds the harness and ends with a short summary: the root file your tool loads and where it was written, the hooks it wired (Claude Code, Bob and OpenClaude), whether memory learning is on, which tool to restart, and a link to what was installed. It then offers to run a health check.
 
-To keep the command on your machine:
+`npx geneseed setup` puts no `geneseed` command in your terminal, and its summary ends with a note that says so. To keep the command on your machine:
 
 ```
 npm install -g geneseed

@@ -47,7 +47,7 @@ import path from 'node:path';
 
 import { main as driverMain, resolveOut } from '../build/driver.mjs';
 import { playLine } from '../ui/anim.mjs';
-import { discoverNames, GATE_SWITCHES, PACK_ORDER, loadKits } from '../build/source.mjs';
+import { discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
@@ -58,7 +58,7 @@ import {
   readJsonMaybe, sharedTierOfDir, themeFiles,
 } from '../hosts/installs.mjs';
 import { printOut, printErr } from '../lib/fs.mjs';
-import { which } from '../lib/paths.mjs';
+import { inNpxCache, which } from '../lib/paths.mjs';
 import { ask, askChoice, confirm } from '../lib/prompt.mjs';
 import { parseIntStrict } from '../lib/text.mjs';
 import { NO_WINDOW } from '../lib/proc.mjs';
@@ -489,6 +489,22 @@ export function setupSummaryLines(theme, emit, out, root, ok) {
 // --------------------------------------------------------------------------------------
 
 /**
+ * The note a setup run from the npx cache ends with; empty anywhere else.
+ *
+ * `npx geneseed setup` puts no `geneseed` command on PATH, and `link` must not: its launcher would
+ * name the npx cache, which npm prunes (`inNpxCache`). A global install is the lasting copy, so
+ * the note points there. A hint, not an act: running npm from here would breach the CLI's spawn
+ * ban and reach the network (decided 2026-11-13, O1 over an offered `npm i -g`).
+ */
+export function npxPathHint(root = ROOT) {
+  if (!inNpxCache(root)) return [];
+  return [
+    'This setup ran from the npx cache, so there is no `geneseed` command in your terminal.',
+    'For a lasting one: npm install -g geneseed, then run geneseed setup again.',
+  ];
+}
+
+/**
  * Gather, export drift, build, summarise, offer the doctor.
  *
  * THE BUILD IS AN IMPORT, NOT A SPAWN, for the reason P5e established for `harness build`:
@@ -558,6 +574,7 @@ export function setupLines() {
   for (const [kind, text] of setupSummaryLines(theme, emit, out, root, true)) {
     printOut(`${{ ok: '✓', warn: '!', info: '-' }[kind] ?? '-'} ${text}\n`);
   }
+  for (const line of npxPathHint()) printOut(`! ${line}\n`);
   if (confirm('\nRun a health check (doctor) now?', true)) {
     // Scoped to the theme just installed — no full-sweep noise post-install.
     return cmdDoctor({ theme, all: false, bundle: null, noBundle: false });

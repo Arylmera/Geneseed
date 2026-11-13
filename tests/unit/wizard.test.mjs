@@ -754,3 +754,16 @@ test('readLine waits through EAGAIN and stops on any other error', () => {
   assert.equal(readLine(reader([again(), again(), 'y', '\n'])), 'y');
   assert.equal(readLine(reader([Object.assign(new Error('EOF'), { code: 'EOF' })])), null);
 });
+
+// A setup run from the npx cache ends with a note, because it puts no `geneseed` on PATH and
+// `link` must not point a launcher into a cache npm prunes. Any other root (a clone, a global
+// install) gets no note: there the command is already reachable or `link` is the answer.
+test('npxPathHint speaks only for a root inside the npx cache', async () => {
+  const { npxPathHint } = await import('../../js/maintain/setup.mjs');
+  const npx = path.join('C:', 'npm-cache', '_npx', 'ab12', 'node_modules', 'geneseed');
+  const hint = npxPathHint(npx);
+  assert.equal(hint.length, 2);
+  assert.match(hint[1], /npm install -g geneseed/);
+  assert.deepEqual(npxPathHint(path.join('C:', 'npm', 'node_modules', 'geneseed')), []);
+  assert.deepEqual(npxPathHint(path.join('home', 'me', 'git', 'Geneseed')), []);
+});
