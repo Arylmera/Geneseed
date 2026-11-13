@@ -410,9 +410,11 @@ const GATE_ASKS = {
     impact: 'the scan can run for hours', tail: 'search one named directory',
     can: 'You can name the directory to search.' }),
   // Routine and frequent, so one line: three more would train the user to stop reading all of them.
-  commit: () => ({ rule: 'Consent Before Push', quote: true, short: true,
-    line: 'This command commits or pushes with git, which needs your approval each time.',
-    why: 'every commit and push is your decision', can: GATE_RUN_IT }),
+  // `strict`: the install asks for every commit and push (`--strict-consent`), not only main's.
+  commit: (f) => ({ rule: 'Consent Before Push', quote: true, short: true,
+    line: f.strict ? 'This command commits or pushes with git, which needs your approval each time.'
+      : 'This command commits or pushes onto the main branch, forces a push, or takes a form the gate cannot read, so it needs your approval.',
+    why: f.strict ? 'every commit and push is your decision' : 'the main branch changes only through a pull request', can: GATE_RUN_IT }),
   // The next four are the OpenCode guard's alone: no hook reads a key path, a stream, a wiki manifest
   // or an unknown tool's arguments, and the guard only refuses them. `wiki` has no rule to name.
   'secret-file': (f) => ({ rule: 'Sealed Secrets', line: `This edit writes to ${gateName(gatePath(f.name))}, a file that holds a secret or key.`,

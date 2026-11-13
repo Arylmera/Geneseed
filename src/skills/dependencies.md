@@ -37,9 +37,9 @@ code needs to move onto a new API, framework, or language version.
    Nothing is upgraded by the audit itself.
 7. **Before executing any bump, read the upstream migration guide and changelog first**
    ({{DOCTRINE:read-the-docs-first}}); list the breaking changes that actually touch this
-   codebase. Work on a dedicated branch, never directly on a shared one, so a failed migration
-   rolls back cleanly ({{DOCTRINE:consent-before-push}} applies its shared-branch care to
-   anything that does land there).
+   codebase. Work on a dedicated branch, never directly on the main branch, so a failed
+   migration rolls back cleanly; it reaches main only through a green pull request
+   ({{DOCTRINE:consent-before-push}}).
 8. **Execute one change at a time** — one dependency, or one breaking change — never batching
    unrelated bumps into a single step ({{LAW:one-intent-one-act}}). Run the project's checks
    after *each* step: a green suite between steps is what lets you bisect a later failure to

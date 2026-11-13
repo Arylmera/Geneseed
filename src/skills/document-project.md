@@ -112,8 +112,9 @@ write; with none, step 5 proposes them.
    sizes and weights; spacing, radius and shadow on sample squares; components as cards
    (variants, states, path) — no live rendering, which would need the project's framework; and
    the hard-coded-value drift in a separate callout.
-10. **Do not auto-publish.** Leave the changes for the user to review; stage and commit only
-   on consent, via the [commit {{SKILL}}](commit.md) ({{DOCTRINE:consent-before-push}}).
+10. **Do not auto-publish.** Commit on your own branch via the [commit {{SKILL}}](commit.md)
+   and leave the change for the user to review before it reaches the main branch
+   ({{DOCTRINE:consent-before-push}}).
 
 ## The doc set
 

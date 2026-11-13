@@ -372,6 +372,21 @@
         },
         {
           "names": [
+            "--strict-consent"
+          ],
+          "dest": "strict_consent",
+          "metavar": null,
+          "help": "Consent Before Push asks for every git commit and push, own branch included (records `Own-branch pass: off`); default: only the main branch asks",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--prune-gates"
           ],
           "dest": "prune_gates",
@@ -955,7 +970,7 @@
     },
     {
       "name": "git-gate",
-      "help": "PreToolUse hook: ASK before a history-discarding git act (Deletion Is Deliberate), a recursive scan of a whole filesystem (Commands Must Return) and every git commit/push (Consent Before Push backstop)",
+      "help": "PreToolUse hook: ASK before a history-discarding git act (Deletion Is Deliberate), a recursive scan of a whole filesystem (Commands Must Return) and a git commit or push onto the main branch (Consent Before Push backstop)",
       "description": "",
       "positionals": [],
       "options": [
@@ -995,7 +1010,22 @@
           ],
           "dest": "no_consent",
           "metavar": null,
-          "help": "skip the Consent Before Push commit/push ask (set by the emit when the process pack or that rule is off); Deletion Is Deliberate still asks",
+          "help": "skip the Consent Before Push main-branch commit/push ask (set by the emit when the process pack or that rule is off); Deletion Is Deliberate still asks",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--strict-consent"
+          ],
+          "dest": "strict_consent",
+          "metavar": null,
+          "help": "ask on every git commit and push, own branch included (set by the emit for a strict-consent install); the main-branch ask is the same either way",
           "choices": null,
           "default": false,
           "required": false,

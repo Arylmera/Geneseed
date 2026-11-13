@@ -22,11 +22,10 @@ request or merge the branch.
    before pushing.
 3. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
-4. Push the branch only with the user's explicit, per-push acceptance — on every
-   branch, feature branches included ({{DOCTRINE:consent-before-push}}); present the change summary + commit
-   message and wait, and never treat an earlier approval as consent for this push.
-   Opening a PR or merging is **outward-facing** — get explicit confirmation first too,
-   unless already authorized ({{LAW:deletion-is-deliberate}}).
+4. Push the branch with a plain push and open the pull request: the pull request is
+   the consent the main branch needs ({{DOCTRINE:consent-before-push}}). Merge only once its
+   required checks are green — never red, pending or absent. A forced push, or a push
+   straight onto the main branch, asks ({{LAW:deletion-is-deliberate}}).
 5. Open the PR with a three-part body. **Summary**: what changed and why, with the
    smallest visual that makes the point (a call tree, diff sketch, file tree or
    Mermaid diagram). **Evidence**: how it was tested, as before/after — the test that
@@ -38,7 +37,7 @@ request or merge the branch.
 6. **Auto-merge.** It is off unless the user's standing rule *Auto-merge green PRs* in
    `user-rules.md` arms it (the later layer wins: project over host over shared). That rule is
    the durable authorization {{LAW:deletion-is-deliberate}} permits for the forge's merge; it
-   arms only that merge, and every push still asks. With no such rule, say once per session in
+   arms only that merge, and pushes still follow {{DOCTRINE:consent-before-push}}. With no such rule, say once per session in
    each repo, when you open a PR there: "Auto-merge is off; say 'turn on auto-merge' to set a
    standing rule" — the [rule {{SKILL}}](rule.md) writes it. With the rule, arm only when all of
    these hold; otherwise leave the merge to the user:

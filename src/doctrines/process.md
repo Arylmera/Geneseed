@@ -28,8 +28,8 @@ context window and lets the user correct course before effort is spent. When a
 session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE:persist-insight}}), open
 blockers and irreversible changes included. Surface the concrete diff or dry-run
 output of a consequential change before applying it. Before a risky step, lay down a
-recovery point — a stash, a branch, a worktree, a copy — never an unconsented commit
-({{DOCTRINE:consent-before-push}}). On a long task, re-read the worklog and re-verify ground
+recovery point — a stash, a branch, a worktree, a copy — never a commit on the main
+branch ({{DOCTRINE:consent-before-push}}). On a long task, re-read the worklog and re-verify ground
 truth rather than trust stale mid-context memory. Trivial edits need no plan.
 <!-- LEAN:else -->
 For any non-trivial task, write a short numbered plan before executing, keep a running
@@ -37,7 +37,7 @@ worklog. One line:
 `Done: 1-2. Current: 3 (tests). Next: 4. Blockers: none. Irreversible: none.`
 When a session ends mid-task, persist it to {{MEMORY}} ({{DOCTRINE:persist-insight}}) with open
 blockers and irreversibles. Show the diff or dry-run before a consequential change. Before
-a risky step, lay down a recovery point — stash or branch — never an unconsented commit
+a risky step, lay down a recovery point — stash or branch — never a commit on main
 ({{DOCTRINE:consent-before-push}}). Trivial edits need no plan.
 <!-- LEAN:end -->
 
@@ -84,41 +84,45 @@ the stale page and fix it in the same change ({{DOCTRINE:documentation-in-step}}
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:consent-before-push}} Consent Before Push
-<!-- note: summary: Every commit and push needs explicit, repeated consent. -->
+<!-- note: summary: Main changes only through a green PR; your own branch is free. -->
 <!-- LEAN:begin -->
-Recording and sharing code is consented, never unilateral. **Every** `git commit`
-and `git push` needs the user's **explicit acceptance**, on every branch, every
-time — a personal feature branch included. A one-time approval is not standing
-consent. Consent may cover a **named batch**: "commit as you go on this branch"
-stands for commits on that branch until the session ends or the scope changes; a
-new session, a new branch, or a widened scope re-asks. Push earns no such default
-and stays per-ask unless granted in the same named form. A launched loop's batch
-covers commit and push on its own `loop/*` branch; merging that branch into a
-shared one never is. A dispatched worker, crew or slice (a Foreman worker, a pipeline
-crew, a parallel-agents slice) holds a batch that covers commit, and merge of its own
-sub-workers, in its own worktree, off any shared branch; it never pushes. Outside a
-batch, before each commit, present in order (1) a plain-language
-summary of what changed and why and (2) the exact commit message you intend to use,
-then wait. Never push on your own initiative.
-On a **shared branch** — `main`, `master`, `develop`, `development`, a
-`release`/`hotfix` branch, or anything that is not a dedicated feature branch —
-the same gate applies with extra care; when unsure, treat the branch as shared.
-Never force-push, hard-reset, or rebase a shared branch: undo a published mistake
-with a new revert commit, not a history rewrite — the rare legitimate rewrite goes
-through the git-history {{SKILL}} behind a backup. The host gates commit and push at
-the tool boundary too, so this consent cannot be lost to a sticky allowlist.
+A push onto the main branch needs consent, and the pull request is that consent. The
+main branch is `main`, `master`, the remote's default branch, or, from a linked
+worktree, the branch the main checkout holds; when unsure whether a branch is one of them
+— a remote with no default recorded, or no remote at all — treat it as main. It
+changes only through a pull request whose required checks are green: never commit on
+it, push to it, or merge into it directly, and never merge a pull request whose
+checks are red, pending or absent. A green pull request is merged on the user's
+acceptance of that merge, or under their standing auto-merge rule (the ship {{SKILL}}
+says when it arms). Where the
+repository has no remote, no CI or no branch protection, a change to the main branch
+needs the user's explicit acceptance of that change. Any other branch you work on is
+your own: commit as the work advances and push it with a plain push, without asking.
+Each commit still holds one intent ({{LAW:one-intent-one-act}}) and passes the commit
+{{SKILL}}'s checks; a forced push asks, even on your own branch. A tag, a release or a
+publish faces outward and asks ({{LAW:deletion-is-deliberate}}). A dispatched worker,
+crew or slice commits, and merges its own sub-workers, only in its own worktree, and
+never pushes: the session that dispatched it pushes the branch and opens the pull
+request. Never force-push,
+hard-reset, or rebase the main branch: undo a published mistake with a revert commit;
+the rare legitimate rewrite goes through the git-history {{SKILL}} behind a backup,
+with the user's acceptance. The host gates commits and pushes onto the main branch at
+the tool boundary, so this consent cannot be lost to a sticky allowlist. (On OpenCode,
+whose permission rules cannot see the branch, every commit and push asks.){{STRICT_CONSENT}}
 <!-- LEAN:else -->
-Recording and sharing code is consented, never unilateral: **every** `git commit` and
-`git push` needs **explicit acceptance**, every branch, every time — a personal feature
-branch included; one-time approval is not standing consent. A named batch ("commit as
-you go") stands until the session ends or scope changes; push earns no default. Never
-push on your own initiative. A launched loop's batch covers commit and push on its own
-`loop/*` branch only; merging it never. A dispatched worker, crew or slice's covers commit
-and merge in its own worktree, off any shared branch, never pushed. Outside a batch, show
-the plain summary and the exact commit message before each, then wait. Shared branches — `main`, `master`, `develop`, `development`,
-`release`/`hotfix`, any unsure — take the same gate. Never force-push, hard-reset, or
-rebase one: undo with a revert commit (git-history {{SKILL}} for a legitimate rewrite).
-The host gates both at the tool boundary.
+A push onto the main branch needs consent; the pull request is that consent. Main is
+`main`, `master`, the remote's default, or, from a linked worktree, the main checkout's
+branch; unsure (no remote, or no default recorded), treat it as main. It changes only
+through a pull request with green checks: never commit, push or merge directly onto it,
+never merge a red, pending or unchecked one; a green one on the user's yes or their
+standing auto-merge rule (ship {{SKILL}}). With no remote, CI or protection, a change to
+main needs explicit acceptance.
+Your own branch: commit and plain-push freely; a forced push asks. Tags, releases and
+publishes ask ({{LAW:deletion-is-deliberate}}). A dispatched worker, crew or slice commits
+and merges only in its own worktree, never pushes. Never force-push, hard-reset or
+rebase main: revert instead (git-history {{SKILL}}, with acceptance, for a real rewrite).
+The host gates both at the tool boundary (on OpenCode, which cannot see the branch, every
+commit and push asks).{{STRICT_CONSENT}}
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:bound-the-loop}} Bound the Loop

@@ -13,6 +13,7 @@ import {
   GATE_COPY,
   GATE_HOOK,
   GATE_SWITCH,
+  CONSENT_SWITCH,
   ALWAYS_ASKS,
   WITH_TEXT,
   PRECEDENCE,
@@ -628,6 +629,50 @@ function LawsOf({
         {gateSwitch(addr)}
       </div>
     ) : null
+
+  // Strict consent (CONSENT_SWITCH): on only for an explicit `ownBranchPass: false`, so an older
+  // daemon that reports no key reads as the default own-branch pass. Shown only while process 5
+  // is DEPLOYED: excluded, or with its pack off, no commit or push asks, and strict would tighten
+  // nothing. Deployed, not staged, because this rebuild carries the deployed rules (`install` is
+  // spread). Hidden too with the gates unread: the install's answer is then unknown, and a switch
+  // drawn off would guess it. Same one-click confirm and rebuild as a gate switch.
+  const strict = overview?.install?.[CONSENT_SWITCH.key] === false
+  const toggleStrict = async () => {
+    const next = !strict
+    const where = installTag(install)
+    const stays = sel.dirty
+      ? ' Your staged doctrine changes are not part of this rebuild; they stay staged.'
+      : ''
+    const ok = await confirm(
+      (next
+        ? `Switch strict consent on for ${where}? ${CONSENT_SWITCH.on} It rebuilds in place, non-destructive.`
+        : `Switch strict consent off on ${where}? ${CONSENT_SWITCH.off} It rebuilds in place, non-destructive.`) +
+        stays,
+      {
+        title: next ? 'Switch strict consent on?' : 'Switch strict consent off?',
+        confirmLabel: next ? 'Switch on' : 'Switch off',
+      },
+    )
+    // `ownBranchPass` is the pass, so strict on sends `false`.
+    if (ok) onAction('install', { ...install, [CONSENT_SWITCH.key]: !next })
+  }
+  const strictLine = () =>
+    canApply && !gatesUnread && deployedRules.includes(CONSENT_SWITCH.addr) ? (
+      <div className="law-gate">
+        <span className="law-name">
+          <span>{CONSENT_SWITCH.label}</span>
+          <span className="law-princ">{CONSENT_SWITCH.desc}</span>
+        </span>
+        <button
+          type="button"
+          className={`sw-toggle${strict ? ' on' : ''}`}
+          role="switch"
+          aria-checked={strict}
+          aria-label={CONSENT_SWITCH.label}
+          onClick={toggleStrict}
+        />
+      </div>
+    ) : null
   // What the hook does, folded, in any row a hook gates. Shown with or without an install to act
   // on: it explains, it switches nothing. The switch line, where there is one, stays last.
   const hookNote = (addr) => {
@@ -834,7 +879,16 @@ function LawsOf({
                         rev={dataRev}
                         isOpen={open === r.addr}
                         onToggle={() => toggle(r.addr)}
-                        after={hookNote(r.addr)}
+                        after={
+                          r.addr === CONSENT_SWITCH.addr ? (
+                            <>
+                              {hookNote(r.addr)}
+                              {strictLine()}
+                            </>
+                          ) : (
+                            hookNote(r.addr)
+                          )
+                        }
                         toggleCol={
                           canApply
                             ? cells(

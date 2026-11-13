@@ -57,7 +57,7 @@ All of them are on by default. This install built in {N_PACKS_ACTIVE}, carrying 
 
 A pack you leave out **still ships**: every pack file lands under `doctrines/` beside the instructions file whether or not it was built in. A rule that cites an inactive pack still resolves on disk, and you can read the alternatives before turning one on. An inactive pack loses its binding force, not its availability.
 
-**process** is the one pack whose removal changes what the machine does, not only what the agent reads: it holds *Consent Before Push*, which a hook enforces. Without it, commits and pushes are no longer stopped for a question — destructive git still is, because that is a Rule ([Hooks](hooks.md)).
+**process** is the one pack whose removal changes what the machine does, not only what the agent reads: it holds *Consent Before Push*, which a hook enforces: the main branch changes only through a pull request with green checks, and your own branch takes commits and plain pushes freely (or every commit and push asks, with `--strict-consent`). Without it, commits and pushes are no longer stopped for a question — destructive git still is, because that is a Rule ([Hooks](hooks.md)).
 
 ### Themes do not move rules
 

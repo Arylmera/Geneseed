@@ -64,7 +64,7 @@ The install records it (`Excluded rules: process 7` beside its pack list) and ev
 
 | Rule | What stops | Flag |
 | --- | --- | --- |
-| process 5, *Consent Before Push* | the commit/push ask of `git-gate` and OpenCode's `git commit*`/`git push*` keys. Bob keeps its warning line | `--no-consent` |
+| process 5, *Consent Before Push* | the main-branch commit/push ask of `git-gate` (every commit and push under `--strict-consent`) and OpenCode's `git commit*`/`git push*` keys. Bob keeps its warning line | `--no-consent` |
 | process 1, *Persist Insight* | the ask (on Bob the block or warning) on a write to `user-rules.md` or `user-rules.draft.md`, by write tool or parsed shell write, the hard-link check included: `rule-gate`, `git-gate`, Bob's `tool-gate`, the OpenCode guard, and OpenCode's `permission.edit` keys on those files | `--no-rule-store` |
 | ops 2, *Commands Must Return* | the root-scan check of `git-gate`, Bob's `tool-gate` and the OpenCode guard | `--no-root-scan` |
 
@@ -116,6 +116,18 @@ What stops, per host:
 - **`--no-done-gate`**: the done check `learn` runs on Stop and SubagentStop, listed or inferred (Claude Code, OpenClaude; on Bob, the "turn not judged" log line), and on OpenCode the context plugin's reminder (OpenCode 1), its one-line notice (OpenCode 2), and on every host the `Done gate:` line at session start. Learning itself still runs, and `.geneseed/done-checks.txt` stays protected by *External Gate*.
 
 Limits: OpenCode reads both switches from the install's `AGENT.md` when it starts, so restart it after flipping one. A global install beside a project install: `rule-gate` and Bob's `tool-gate` do not stand down for a project install on any host, and neither does the OpenCode guard, so an armed global install still asks about (or blocks) a credential write inside a project whose own install has the secrets gate off. `learn` does stand down on Claude Code and OpenClaude, so there the project's done gate switch decides. And the older-shim limit above is sharper for the done gate: its flag rides on `learn`, so while the shim points at an older checkout an install with the done gate off **loses learning too**, not only the gate. Run `geneseed rebuild-all` before switching either gate off.
+
+### Strict consent — every commit and push asks
+
+By default *Consent Before Push* asks only for a commit or push onto the main branch: your own branch takes commits, local merges and plain pushes without a prompt. Strict consent brings back the ask on every commit and push.
+
+```bash
+geneseed build --emit claude-global --strict-consent
+```
+
+The console's Constitution page has the same switch on the rule's row (*Strict consent*). The install records `Own-branch pass: off` beside the other gate markers, the carrier adds one sentence under the rule, and rebuilds, upgrades and `geneseed status` carry it. The switch adds asks, so its flag does not read `--no-*`; the marker still follows the gate-switch contract: written only when the pass is off.
+
+What changes, per host: `git-gate` on Claude Code and OpenClaude asks for every commit and push again (the `loop/*` and Foreman worker passes stay), and Bob's `tool-gate` prints its warning line for each. OpenCode is unchanged: its `git commit*`/`git push*` keys already ask for every one. With process 5 excluded, the switch does nothing, because no consent check runs.
 
 ### External Gate and the test note — on or off
 

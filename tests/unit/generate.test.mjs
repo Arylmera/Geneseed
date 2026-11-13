@@ -2373,7 +2373,7 @@ const PACK_MARK = {
   craft: 'perform by hand what the machine can perform a thousand times.',
   rigor: 'Make actions safe to run twice.',
   ops: 'The tools available to you are not fixed, and they are not only the obvious ones.',
-  process: 'Recording and sharing code is consented, never unilateral.',
+  process: 'A push onto the main branch needs consent, and the pull request is that consent.',
   comms: 'Prose and structure are distinct',
 };
 
@@ -2453,14 +2453,16 @@ test('with process off, every surviving Consent Before Push citation resolves an
     assert.ok(!agentText(out).includes(PACK_MARK.process),
       "the pack's rule BODY is what narrowing removes, and it did not");
 
-    // 2. The commit skill keeps its operative consent step, deliberately. The BOUNDARY follows
-    //    the pack (see `claudeHookGroups`); the ASKING does not have to, because a skill that
-    //    asks before committing when nothing compelled it is never unsafe, while the reverse —
-    //    a skill that stops asking — is. Asymmetric risk, asymmetric answer.
+    // 2. The commit skill keeps its operative main-branch step, deliberately. The BOUNDARY
+    //    follows the pack (see `claudeHookGroups`); the skill's refusal to commit on the main
+    //    branch does not have to, because a skill that keeps work off main when nothing compelled
+    //    it is never unsafe, while the reverse — a skill that commits there — is. Asymmetric
+    //    risk, asymmetric answer (the own-branch rework of 2026-11-13 moved the step from "ask
+    //    before every commit" to "never on the main branch"; the pin moved with it).
     const commit = fs.readFileSync(path.join(out, 'skills', 'commit.md'), 'utf8');
-    assert.ok(/Get explicit consent before committing/.test(commit),
-      'the commit skill stopped asking for consent when the pack went off — never do this by '
-      + 'accident: it is the only consent step left once the hook is unwired');
+    assert.ok(/Commit on your own branch; never on the main branch/.test(commit),
+      'the commit skill stopped keeping commits off the main branch when the pack went off — '
+      + 'never do this by accident: it is the only consent step left once the hook is unwired');
   });
 });
 

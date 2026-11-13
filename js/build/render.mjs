@@ -641,6 +641,10 @@ export function effectiveTheme(cfg, themeName, {
   // than two positional params keeps the existing two-arg call sites — every test, and
   // `renderAll` — compiling unchanged, and defaults to the full text if a caller forgets.
   const active = activeDoctrines(cfg);
+  // Consent Before Push under strict consent (`--strict-consent`): one sentence after the rule, at
+  // both footprints. Set before the doctrine body, which substitutes it.
+  theme.STRICT_CONSENT = cfg.ownBranchPass === false ? ' This install runs strict consent: every\n'
+    + 'commit and push, your own branch included, needs the user\'s explicit acceptance.' : '';
   theme.DOCTRINES_BODY = doctrinesBody(cfg, theme, active, footprint, lawsPrefix);
   theme.DOCTRINES_LIST = active.length ? active.join(', ') : 'none';
   // ⚠ EMITTED ONLY WHEN SOMETHING IS EXCLUDED, and that is not cosmetic. An unconditional

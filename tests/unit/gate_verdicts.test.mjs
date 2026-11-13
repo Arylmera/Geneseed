@@ -104,6 +104,18 @@ fs.writeFileSync(path.join(wtRepo, '.git', 'HEAD'), 'ref: refs/heads/trunk\n');
 mk('wtrepo', 'src');
 mk('wtrepo', '.git', 'refs', 'remotes', 'origin');
 fs.writeFileSync(path.join(wtRepo, '.git', 'refs', 'remotes', 'origin', 'HEAD'), 'ref: refs/remotes/origin/stable\n');
+// The remote itself, as a clone writes it: the own-branch pass needs every remote named in the
+// config to record its default branch (`defaultBranchKnown`).
+fs.writeFileSync(path.join(wtRepo, '.git', 'config'), '[remote "origin"]\n\turl = https://example.invalid/r.git\n');
+// Two repositories on a feature branch whose default branch is unknown: one with no remote at
+// all, one whose remote was added by hand (`git remote add` records no HEAD symref).
+const noRemote = mk('noremote');
+mk('noremote', '.git', 'refs', 'heads');
+fs.writeFileSync(path.join(noRemote, '.git', 'HEAD'), 'ref: refs/heads/feat/x\n');
+const noHead = mk('nohead');
+mk('nohead', '.git', 'refs', 'heads');
+fs.writeFileSync(path.join(noHead, '.git', 'HEAD'), 'ref: refs/heads/feat/x\n');
+fs.writeFileSync(path.join(noHead, '.git', 'config'), '[remote "origin"]\n\turl = https://example.invalid/r.git\n');
 const linked = (name, branch) => {
   const gd = mk('wtrepo', '.git', 'worktrees', name);
   fs.writeFileSync(path.join(gd, 'HEAD'), `ref: refs/heads/${branch}\n`);
@@ -368,38 +380,86 @@ const ROWS = [
   { id: 'process-5 commit -F outside a loop', kind: 'shell', cmd: () => 'git commit -F msg.txt',
     rule: 'The same form anywhere else is an ordinary commit: it asks on Claude and warns on Bob.',
     claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // The own-branch pass (user decision 2026-11-13): off the main branch, a session's commits,
+  // local merges and plain pushes of the current branch go through. `wt` is a linked worktree on
+  // `feat/x`; its main checkout holds `trunk`. Each pass has twins that must ask: a push to
+  // main, a bare push, a forced push, a push of another branch, and strict consent.
+  { id: 'process-5 session push of its own branch', kind: 'shell', at: () => wt, cmd: () => 'git push -u origin feat/x',
+    rule: 'A plain push of the branch checked out, off the main branch, passes on every hook host.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'process-5 session push HEAD to its own branch', kind: 'shell', at: () => wt, cmd: () => 'git add -A && git commit -m x && git push origin HEAD:feat/x',
+    rule: 'A commit with a push of HEAD to the same branch passes as a whole.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'process-5 session push onto main', kind: 'shell', at: () => wt, cmd: () => 'git push origin HEAD:main',
+    rule: 'A push onto the main branch asks: main changes only through a pull request.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session push of another branch', kind: 'shell', at: () => wt, cmd: () => 'git push origin trunk',
+    rule: 'A push of a branch other than the one checked out asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session bare push', kind: 'shell', at: () => wt, cmd: () => 'git push',
+    rule: 'A bare push asks: push.default and the user config decide where it lands, and the gate cannot read them.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session forced push of its own branch', kind: 'shell', at: () => wt, cmd: () => 'git push -f origin feat/x',
+    rule: 'A forced push asks, even on the own branch of the session.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // Review F1: when the default branch is unknown, the branch may be it ("unsure, treat it as main").
+  { id: 'process-5 session commit, no remote', kind: 'shell', at: () => noRemote, cmd: () => 'git commit -m x',
+    rule: 'With no remote, nothing names the default branch, so a commit on any branch asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session push, remote with no HEAD', kind: 'shell', at: () => noHead, cmd: () => 'git push origin feat/x',
+    rule: 'A remote added by hand records no default branch, so a push of any branch asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // Review F3: a quoted message is data, so a Conventional Commits subject or a bash heredoc with a
+  // quoted delimiter commits freely; a message that can still run something keeps the ask.
+  { id: 'process-5 session Conventional Commits message', kind: 'shell', at: () => wt, cmd: () => 'git commit -m "fix(hooks): x @ y"',
+    rule: 'Parentheses and @ inside a quoted message run nothing: it passes.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'process-5 session message with a substitution', kind: 'shell', at: () => wt, cmd: () => 'git commit -m "fix: $(id)"',
+    rule: 'A $( inside double quotes still runs in both shells: it asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session -F heredoc, quoted delimiter', kind: 'shell', at: () => wt, cmd: () => "git commit -F - <<'EOF'\nfix(hooks): x\n\nbody with $HOME\nEOF",
+    rule: 'Under bash a quoted heredoc delimiter leaves the body literal: it passes.',
+    claude: 'pass', bob: null, v1: null, v2: null },
+  { id: 'process-5 session -F heredoc, unquoted delimiter', kind: 'shell', at: () => wt, cmd: () => 'git commit -F - <<EOF\nfix: $(id)\nEOF',
+    rule: 'An unquoted delimiter expands the body: it asks.',
+    claude: 'ask', bob: null, v1: null, v2: null },
+  { id: 'process-5 strict consent: session commit in a worktree', kind: 'shell', at: () => wt, cmd: () => 'git commit -m x', extra: ['--strict-consent'],
+    rule: 'With --strict-consent the own-branch pass is off: every commit asks again.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
   // The Foreman worktree batch (user decision 2026-11-08): a dispatched sub-agent's local commit or
   // merge in a LINKED worktree, on a branch that is not shared, is the worker's own named batch.
-  // `agent: true` sends Claude Code's subagent fields; Bob sends none, so Bob always warns. Each
-  // pass has twins that must ask: no sub-agent, the main checkout, a shared branch, a push, a
-  // second command smuggled into an argument, a `cd` that leaves the worktree.
+  // `agent: true` sends Claude Code's subagent fields. Bob sends none, so on Bob every row below
+  // is a session's command and gets the own-branch verdict: a pass off the main branch. Each
+  // Claude pass has twins that must ask: the main checkout, a shared branch, a push, a second
+  // command smuggled into an argument, a `cd` that leaves the worktree.
   { id: 'process-5 worker commit in its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git add -A && git commit -m "merge sub-worker"',
-    rule: 'A sub-agent commit in a linked worktree on a feature branch passes; Bob, with no sub-agent field, warns.',
-    claude: 'pass', bob: 'warn', v1: null, v2: null },
+    rule: 'A sub-agent commit in a linked worktree on a feature branch passes; on Bob it is a session commit off main, which passes too.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
   { id: 'process-5 worker merge then commit in its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git merge --no-ff feat/x-sub && git commit --amend --no-edit',
     rule: 'A sub-agent merge of a sub-worker branch, with its commit, passes in the same worktree.',
-    claude: 'pass', bob: 'warn', v1: null, v2: null },
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
   { id: 'process-5 worker cd into its worktree, then commit', kind: 'shell', agent: true, cmd: () => `cd ${wt.split(path.sep).join('/')} && git commit -m x`,
     rule: 'One leading cd into the worktree counts: an agent shell starts in the parent checkout.',
-    claude: 'pass', bob: 'warn', v1: null, v2: null },
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
   { id: 'process-5 session commit in a worktree', kind: 'shell', at: () => wt, cmd: () => 'git add -A && git commit -m "merge sub-worker"',
-    rule: 'The same commit with no sub-agent field is a session that runs in a worktree: it asks.',
-    claude: 'ask', bob: 'warn', v1: null, v2: null },
+    rule: 'The same commit with no sub-agent field is a session on its own branch: it passes.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
   { id: 'process-5 worker commit in the main checkout', kind: 'shell', agent: true, at: () => wtRepo, cmd: () => 'git add -A && git commit -m "merge sub-worker"',
-    rule: 'A sub-agent commit in the main checkout of that repository still asks.',
-    claude: 'ask', bob: 'warn', v1: null, v2: null },
+    rule: 'A sub-agent commit in the main checkout of that repository still asks; on Bob it is a session commit on trunk, which is not main, and passes.',
+    claude: 'ask', bob: 'pass', v1: null, v2: null },
   ...[['main', () => wtMain], ['Main, by case', () => wtCase], ['develop', () => wtDevelop], ['release/1.2', () => wtRelease],
     ['a remote HEAD', () => wtStable], ['the main worktree branch', () => wtTrunk],
     ['a symref alias of develop', () => wtSym]].map(([what, at]) => (
     { id: `process-5 worker commit in a worktree on ${what}`, kind: 'shell', agent: true, at, cmd: () => 'git commit -m x',
-      rule: 'A worktree on a shared branch is no worker branch: it asks, whatever the case of the name, and through a symref alias.',
-      claude: 'ask', bob: 'warn', v1: null, v2: null })),
+      rule: 'A worktree on a shared branch is no worker branch: it asks, whatever the case of the name, and through a symref alias. '
+        + 'On Bob, a session\'s verdict: develop and release/1.2 are not the main branch and pass; the rest are main and warn.',
+      claude: 'ask', bob: ['develop', 'release/1.2'].includes(what) ? 'pass' : 'warn', v1: null, v2: null })),
   { id: 'process-5 worker push from its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git push origin HEAD:feat/x',
-    rule: 'A push from a worker worktree asks: the batch covers commit and merge, never push.',
-    claude: 'ask', bob: 'warn', v1: null, v2: null },
+    rule: 'A push from a worker worktree asks: a worker never pushes. Bob cannot tell a worker from a session, so it passes there.',
+    claude: 'ask', bob: 'pass', v1: null, v2: null },
   { id: 'process-5 worker commit and push in its worktree', kind: 'shell', agent: true, at: () => wt, cmd: () => 'git commit -m x && git push origin HEAD:feat/x',
-    rule: 'A command that mixes a commit with a push asks as a whole.',
-    claude: 'ask', bob: 'warn', v1: null, v2: null },
+    rule: 'A worker command that mixes a commit with a push asks as a whole; on Bob it is a session\'s own-branch push and passes.',
+    claude: 'ask', bob: 'pass', v1: null, v2: null },
   { id: 'process-5 worker commit with a PowerShell subexpression', kind: 'shell', ps: true, agent: true, at: () => wt,
     cmd: () => `git commit -m x (git -C ${wtRepo.split(path.sep).join('/')} commit -am y)`,
     rule: 'PowerShell runs a parenthesised argument as a command, so it asks.',
@@ -409,8 +469,8 @@ const ROWS = [
     rule: 'An @(...) argument runs too, so it asks.',
     claude: 'ask', bob: null, v1: null, v2: null },
   { id: 'process-5 worker cd through a junction to the main checkout', kind: 'shell', agent: true, at: () => wt, cmd: () => 'cd jx && git commit -m x',
-    rule: 'A cd is judged by its physical target: a junction into the main checkout asks.',
-    claude: 'ask', bob: 'warn', v1: null, v2: null },
+    rule: 'A cd is judged by its physical target: a junction into the main checkout asks. On Bob the main checkout holds trunk, not main, so it passes.',
+    claude: 'ask', bob: 'pass', v1: null, v2: null },
   ...['cd -', 'cd ~', 'cd nowhere'].map((cd) => (
     { id: `process-5 worker ${cd} then commit`, kind: 'shell', agent: true, at: () => wt, cmd: () => `${cd} && git commit -m x`,
       rule: 'A cd to the previous dir, the home dir, or a path that does not resolve asks.',

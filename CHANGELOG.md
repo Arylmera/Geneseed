@@ -8,6 +8,34 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+**Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the
+update. An install that excluded *Consent Before Push* because it asked on every commit can switch
+it back on (`--exclude-rules` without it, or its row on the console's Constitution page). A repo
+whose remote was added by hand has no default branch recorded, and every commit there asks:
+`git remote set-head origin --auto` records it.
+
+### Changed
+- **Consent Before Push guards the main branch, not every commit.** The main branch (`main`,
+  `master`, a remote's default, and from a linked worktree the main checkout's branch) changes
+  only through a pull request with green checks; a green one is merged on the user's yes or
+  under the standing auto-merge rule below, a red, pending or unchecked one never. On any other branch, commits, local merges and plain
+  pushes of the checked-out branch run without a prompt, a quoted Conventional Commits message
+  (`fix(x): y`) or a bash `-F -` heredoc with a quoted delimiter included.
+- **The git gate follows on Claude Code, OpenClaude and Bob.** It asks for a commit or push onto
+  the main branch, a forced push, a bare `git push`, a push of another branch, or a command it
+  cannot read; and for everything in a repo with no remote, or a remote with no default branch
+  recorded. On Claude Code and OpenClaude a sub-agent's push asks too. Bob sends no sub-agent
+  field, so there a worker's push of its own branch passes like a session's; dispatched workers
+  are still told never to push. OpenCode keeps its static `git commit*`/`git push*` asks,
+  since a glob cannot read the branch, and its carrier says so. The rule id and name stay. The
+  `loop/*` exemption now matters only under strict consent.
+
+### Added
+- **`--strict-consent`** (the *Strict consent* switch on the console's Constitution page)
+  brings back the old behaviour: every commit and push asks, own branch included. The install
+  records it (`Own-branch pass: off`), every rebuild and upgrade keeps it, and the carrier
+  says so under the rule.
+
 ### Fixed
 - **A background launch is not a pass.** A check started with `run_in_background`, or moved to the background after its foreground timeout, counts only when its task notification says it completed with exit code 0. Before, the launch itself counted, which was 76 of 112 accepted passes in 30 days of real transcripts. A task notification no longer opens a turn.
 

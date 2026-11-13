@@ -28,7 +28,7 @@ test('the laws catalog carries each rule summary', () => {
   assert.equal(items.find((it) => it.name === 'I').summary,
     'Secrets never touch tracked files; only .env or a manager.');
   assert.equal(items.find((it) => it.name === 'process.5').summary,
-    'Every commit and push needs explicit, repeated consent.');
+    'Main changes only through a green PR; your own branch is free.');
 });
 
 // Only the constitution has tier nouns to name: every other section keeps its two keys.

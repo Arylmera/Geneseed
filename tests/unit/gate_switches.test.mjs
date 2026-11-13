@@ -54,23 +54,26 @@ const agentLines = (dir) => fs.readFileSync(path.join(dir, 'AGENT.md'), 'utf8').
 // The ownership row (`law: null`, ruling D25) is a fourth switch under the same contract.
 // `externalGate` and `testNote` are the fifth and sixth; neither flag nor marker ends in the old
 // `-gate` / ` gate:` spelling alone (`--no-test-note`), so the filters below read every switch.
-const ARMED = { secretsGate: true, doneGate: true, deletionGate: true, ownershipGate: true, externalGate: true, testNote: true };
-const MARKER_RE = /^(Secrets gate|Done gate|Deletion gate|Ownership gate|External gate|Test note):/;
-const isSwitchFlag = (t) => /^--no-.*-(gate|note)$/.test(t);
+// `ownBranchPass` is the seventh (2026-11-13): off is STRICT consent, so its flag is
+// `--strict-consent`, not a `--no-*` disarm, and the filter names it on its own.
+const ARMED = { secretsGate: true, doneGate: true, deletionGate: true, ownershipGate: true, externalGate: true, testNote: true,
+  ownBranchPass: true };
+const MARKER_RE = /^(Secrets gate|Done gate|Deletion gate|Ownership gate|External gate|Test note|Own-branch pass):/;
+const isSwitchFlag = (t) => /^--no-.*-(gate|note)$/.test(t) || t === '--strict-consent';
 
 test('each marker is written only when off, in law order under Active packs:, and reads back fail-closed', () => {
   withDir((d) => {
     const all = path.join(d, 'all');
     quiet(() => build(makeCfg({ noSecretsGate: true, noDoneGate: true, noDeletionGate: true,
-      noOwnershipGate: true, noExternalGate: true, noTestNote: true }), 'neutral', all));
+      noOwnershipGate: true, noExternalGate: true, noTestNote: true, strictConsent: true }), 'neutral', all));
     const lines = agentLines(all);
     const at = lines.indexOf('Secrets gate: off');
     assert.ok(at > 0, 'the Secrets gate: off line is missing or misspelled');
     assert.match(lines[at - 1], /^Active packs: /, 'the markers left the Active packs: block');
-    assert.deepEqual(lines.slice(at, at + 6), ['Secrets gate: off', 'Done gate: off', 'Deletion gate: off',
-      'Ownership gate: off', 'External gate: off', 'Test note: off']);
+    assert.deepEqual(lines.slice(at, at + 7), ['Secrets gate: off', 'Done gate: off', 'Deletion gate: off',
+      'Ownership gate: off', 'External gate: off', 'Test note: off', 'Own-branch pass: off']);
     assert.deepEqual(gatesOfDir(all), { secretsGate: false, doneGate: false, deletionGate: false, ownershipGate: false,
-      externalGate: false, testNote: false });
+      externalGate: false, testNote: false, ownBranchPass: false });
 
     // One gate off writes that one line and reads back that one gate.
     const done = path.join(d, 'done');

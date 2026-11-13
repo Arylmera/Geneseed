@@ -479,7 +479,8 @@ export function apiOverview(state, counts = machineCounts(state, [{ install: nul
       if (samePath(viewCfg(host, scope, root), state.target)) {
         // `deletionGate`/`secretsGate`/`doneGate`/`testNote`/`ownershipGate`/`externalGate`: the gate
         // switches, for the Constitution page's toggles on rows IV, I, III, VIII, inside the Credo's
-        // Ownership row and inside doctrine rigor 5's row.
+        // Ownership row and inside doctrine rigor 5's row. `ownBranchPass` too: false is strict
+        // consent, the switch inside doctrine process 5's row.
         install = { host, scope, path: root, footprint: footprintOfDir(root),
           ...gatesOfDir(root, host) };
         break;

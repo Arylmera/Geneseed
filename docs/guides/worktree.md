@@ -46,4 +46,4 @@ It cannot ride Geneseed's install. Geneseed's plugins are single dependency-free
 
 ## Consent
 
-`worktree_delete` **commits before it removes the worktree.** The harness's *Consent Before Push* rule (when the `process` pack is built in) asks before a *shell* `git commit` through `opencode.json` permissions. This plugin commits through its own tool, so that gate never sees the commit. Before you call delete, review what it will commit, or keep the worktree and commit yourself.
+`worktree_delete` **commits before it removes the worktree.** The harness's *Consent Before Push* rule (when the `process` pack is built in) asks before a *shell* `git commit` through `opencode.json` permissions (OpenCode asks for every commit: its globs cannot see the branch). This plugin commits through its own tool, so that gate never sees the commit. Before you call delete, review what it will commit, or keep the worktree and commit yourself.

@@ -47,8 +47,8 @@ task that would block it to one background task worker, and keeps answering the 
   worker serves one task and retires when that task is merged or dropped.
 - **Merge on proof you re-ran.** A worker hands back its branch, its local commits and any
   uncommitted work, with raw test + lint output. The parent re-runs those commands itself —
-  a worker's log is the worker's account, not the state — shows the user the diff from BASE
-  and the green output, and commits and merges only once the user accepts
+  a worker's log is the worker's account, not the state — merges the branch into its own,
+  and lands it on the main branch only through a pull request with green checks
   ({{DOCTRINE:consent-before-push}}). Surface completions, failures and merges as they
   happen; watch workers as the pipeline {{SKILL}}'s step 2 watches a crew.
 - **Crews are opt-in.** Run the `pipeline` {{SKILL}} only when the user asks for a

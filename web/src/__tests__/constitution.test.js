@@ -90,16 +90,33 @@ describe('HOOK_GATED', () => {
 
   // GATE_SWITCH is transcribed from the server's GATE_SWITCHES (js/build/source.mjs), the one
   // table of switchable gates: a gate added or renamed there fails here until the
-  // Constitution's toggles agree.
+  // Constitution's toggles agree. One row is named out, each with its reason, and only here:
+  // `ownBranchPass` is armed by default and `false` is the STRICTER install (strict consent), so
+  // in GATE_SWITCH it would read "Gate off" and couple to process 5's text. It is CONSENT_SWITCH.
+  const SEPARATE = { ownBranchPass: C.CONSENT_SWITCH }
   it('matches GATE_SWITCHES in js/build/source.mjs', () => {
     // Every row, the law-less one included: a law's gate sits on its law, the gate with no law
     // on its own row, addressed by its ledger key.
     expect(GATE_SWITCHES.length).toBeGreaterThan(0)
+    // An exception must name a real row, so a removed or renamed one cannot hide here.
+    for (const key of Object.keys(SEPARATE)) {
+      expect(GATE_SWITCHES.map((g) => g.key)).toContain(key)
+    }
     expect(
       Object.values(GATE_SWITCH)
         .map((g) => g.key)
         .sort(),
-    ).toEqual(GATE_SWITCHES.map((g) => g.key).sort())
+    ).toEqual(
+      GATE_SWITCHES.map((g) => g.key)
+        .filter((k) => !(k in SEPARATE))
+        .sort(),
+    )
+    // The separate switch is process 5's, under the server's own key and flag.
+    expect(C.CONSENT_SWITCH.key).toBe('ownBranchPass')
+    expect(C.CONSENT_SWITCH.addr).toBe('process.5')
+    expect(GATE_SWITCHES.find((g) => g.key === 'ownBranchPass').flag).toBe('--strict-consent')
+    expect(HOOK_GATED.has(C.CONSENT_SWITCH.addr)).toBe(true)
+    expect(Object.keys(GATE_SWITCH)).not.toContain(C.CONSENT_SWITCH.addr)
     for (const g of GATE_SWITCHES.filter((row) => row.law)) {
       expect(GATE_SWITCH[g.law].key).toBe(g.key)
     }
@@ -130,7 +147,11 @@ describe('HOOK_GATED', () => {
   it('GATE_HOOK covers exactly the hooked rows, each with four non-empty lines', () => {
     const pinned = Object.values(HOOK_PINNED).map((l) => l.replace(' ', '.'))
     const switched = GATE_SWITCHES.map((g) =>
-      g.law ? g.law : Object.keys(GATE_SWITCH).find((a) => GATE_SWITCH[a].key === g.key),
+      g.law
+        ? g.law
+        : g.key === C.CONSENT_SWITCH.key
+          ? C.CONSENT_SWITCH.addr
+          : Object.keys(GATE_SWITCH).find((a) => GATE_SWITCH[a].key === g.key),
     )
     const hooked = [...new Set([...pinned, ...switched])].sort()
     expect(hooked).toContain('VIII')
