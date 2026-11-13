@@ -884,9 +884,11 @@ test('learn on SubagentStop: no agent transcript is not judged, said only where 
 test('nextBlock: the cap, written out', () => {
   const T = 'turn-1';
   // A record and a Stop, in full: `notes` is the turn's count of distinct notifications, `verdict`
-  // the owed checks' background states (`label=pending|failed`, '' when none ran in the background).
-  const rec = (lastEdit, blocks, notes = 0, verdict = '', opening = T) => ({ opening, lastEdit, notes, verdict, blocks });
-  const stop = (active, lastEdit, notes = 0, verdict = '', opening = T) => ({ active, opening, lastEdit, notes, verdict });
+  // the owed checks' background states (`label=pending|failed`, '' when none ran in the background),
+  // `blocks` the count in this continuation, `total` the count over the whole human turn.
+  const rec = (lastEdit, blocks, { notes = 0, verdict = '', opening = T, total = blocks } = {}) =>
+    ({ opening, lastEdit, notes, verdict, blocks, total });
+  const stop = (active, lastEdit, { notes = 0, verdict = '', opening = T } = {}) => ({ active, opening, lastEdit, notes, verdict });
   // Each row: the saved state, the Stop, then the state saved with a block (null: the turn ends).
   const rows = [
     ['first stop, no record: block, count 1', null, stop(false, 'e1'), rec('e1', 1)],
@@ -897,25 +899,39 @@ test('nextBlock: the cap, written out', () => {
     ['fourth stop, even with a new edit: ends', rec('e3', 3), stop(true, 'e4'), null],
     // The record decides once it exists, whatever the flag says.
     ['a record with the flag cleared and no new edit: ends', rec('e1', 1), stop(false, 'e1'), null],
-    // Another opening prompt is another turn: the old record counts as none.
-    ['a new turn after a capped one: block, count 1',
-      rec('e3', 3), stop(false, 'e9', 0, '', 'turn-2'), rec('e9', 1, 0, '', 'turn-2')],
-    ['a new turn with the flag set and no record of it: ends', rec('e1', 1), stop(true, 'e9', 0, '', 'turn-2'), null],
+    // Another opening prompt is another turn: the old record counts as none, its total included.
+    ['a new turn after a capped one: block, count 1, total 1',
+      rec('e3', 3, { total: 10 }), stop(false, 'e9', { opening: 'turn-2' }), rec('e9', 1, { opening: 'turn-2' })],
+    ['a new turn with the flag set and no record of it: ends', rec('e1', 1), stop(true, 'e9', { opening: 'turn-2' }), null],
     // PER CONTINUATION: a notification since the last block starts a new count, even at the cap
-    // and with no new edit; the same count of notifications does not.
-    ['capped, then a notification drives a new continuation: block, count 1',
-      rec('e3', 3, 2), stop(false, 'e3', 3), rec('e3', 1, 3)],
-    ['...and with the flag still set: block, count 1', rec('e3', 3, 2), stop(true, 'e3', 3), rec('e3', 1, 3)],
-    ['no notification since the cap: ends', rec('e3', 3, 2), stop(false, 'e3', 2), null],
+    // and with no new edit; the same count of notifications does not. The total keeps counting.
+    ['capped, then a notification drives a new continuation: block, count 1, total 4',
+      rec('e3', 3, { notes: 2 }), stop(false, 'e3', { notes: 3 }), rec('e3', 1, { notes: 3, total: 4 })],
+    ['...and with the flag still set: block, count 1, total 4',
+      rec('e3', 3, { notes: 2 }), stop(true, 'e3', { notes: 3 }), rec('e3', 1, { notes: 3, total: 4 })],
+    ['no notification since the cap: ends', rec('e3', 3, { notes: 2 }), stop(false, 'e3', { notes: 2 }), null],
     // A changed background verdict re-arms the block like a new edit, inside the bound.
     ['the owed suite went from pending to failed, no new edit: blocks, count 2',
-      rec('e1', 1, 0, 'suite=pending'), stop(true, 'e1', 0, 'suite=failed'), rec('e1', 2, 0, 'suite=failed')],
+      rec('e1', 1, { verdict: 'suite=pending' }), stop(true, 'e1', { verdict: 'suite=failed' }),
+      rec('e1', 2, { verdict: 'suite=failed' })],
     ['the same verdict and no new edit: ends',
-      rec('e1', 1, 0, 'suite=failed'), stop(true, 'e1', 0, 'suite=failed'), null],
-    ['a changed verdict at the cap: ends', rec('e1', 3, 0, 'suite=pending'), stop(true, 'e1', 0, 'suite=failed'), null],
-    // A record saved before these fields existed reads as no notifications and no verdict.
-    ['an old record with no notes or verdict: a new edit blocks, count 2',
-      { opening: T, lastEdit: 'e1', blocks: 1 }, stop(true, 'e2'), rec('e2', 2)],
+      rec('e1', 1, { verdict: 'suite=failed' }), stop(true, 'e1', { verdict: 'suite=failed' }), null],
+    ['a changed verdict at the cap: ends',
+      rec('e1', 3, { verdict: 'suite=pending' }), stop(true, 'e1', { verdict: 'suite=failed' }), null],
+    // THE TURN CEILING: 10 blocks over the whole human turn. Below it, a notification and a changed
+    // verdict still block; at it, neither does, nor a new edit.
+    ['total 9, a notification: block, count 1, total 10',
+      rec('e1', 2, { notes: 4, total: 9 }), stop(true, 'e1', { notes: 5 }), rec('e1', 1, { notes: 5, total: 10 })],
+    ['total 9, a changed verdict: block, count 2, total 10',
+      rec('e1', 1, { verdict: 'suite=failed', total: 9 }), stop(true, 'e1', { verdict: 'suite=pending' }),
+      rec('e1', 2, { verdict: 'suite=pending', total: 10 })],
+    ['total 10, a notification: ends', rec('e1', 1, { notes: 5, total: 10 }), stop(false, 'e1', { notes: 6 }), null],
+    ['total 10, a changed verdict: ends',
+      rec('e1', 1, { verdict: 'suite=pending', total: 10 }), stop(true, 'e1', { verdict: 'suite=failed' }), null],
+    ['total 10, a new edit: ends', rec('e1', 1, { total: 10 }), stop(true, 'e2'), null],
+    // A record saved before these fields existed reads as no notifications, no verdict, total 0.
+    ['an old record with no notes, verdict or total: a new edit blocks, count 2, total 1',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, stop(true, 'e2'), rec('e2', 2, { total: 1 })],
   ];
   for (const [what, state, s, want] of rows) assert.deepEqual(nextBlock(state, s), want, what);
 });
@@ -1024,6 +1040,24 @@ test('learn on Stop: a background run that fails after the cap blocks again, and
   assert.equal(second, 'cap', 'no new edit and no new verdict ends the turn');
   assert.match(third, /Run in the background and reported a failure: npm run lint\./);
   assert.doesNotMatch(third, /Still running/);
+});
+
+// The loop the turn ceiling ends: a red suite relaunched in the background with no edit. Each
+// failure is a notification (a new continuation) and each relaunch turns the verdict back to
+// pending, so both re-arm the block. Ten blocks over the turn, then the eleventh Stop ends it.
+test('learn on Stop: a relaunched red suite stops at the turn ceiling', () => {
+  const e0 = once(editWorker);
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const launches = Array.from({ length: 6 }, () => once(() => bgBash('npm run lint')));
+  const fails = launches.map((l) => once((w) => noteAttachment(l(w)[0].message.content[0].id, 'failed',
+    'Background command "lint" failed with exit code 1')));
+  // Stop k sees: the edit, then launch 1, fail 1, launch 2, fail 2, ... — one more step each Stop.
+  const steps = launches.flatMap((l, i) => [l, fails[i]]);
+  const stops = Array.from({ length: 11 }, (_, k) => ({ rows: [p1, e0, ...steps.slice(0, k + 1)], active: k > 0 }));
+  const runs = subagentStops({ event: 'Stop', stops });
+  const got = outcomes(runs).map((o) => (o.startsWith('Geneseed') ? 'block' : o));
+  assert.deepEqual(got, [...Array(10).fill('block'), 'cap']);
+  assert.match(runs[10].err, /\[done-gate\] total ceiling reached \(10 blocks this turn\) — turn ends with unproven checks: npm run lint/);
 });
 
 test('learn on SubagentStop: the cap counts per sub-agent', () => {

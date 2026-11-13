@@ -76,7 +76,9 @@
  * a new one. Inside one, a Stop is blocked again only when an edit landed since the last block or
  * an owed check's background verdict changed (pending -> failed), and at most 3 times; a Stop past
  * that ends the turn and leaves a `done-gate-cap` ledger line, so a gate that cries wolf gets
- * found. The count lives in a per-session file under the install; without one,
+ * found. Over the whole human turn, across continuations, at most 10 blocks (`TURN_BLOCKS`):
+ * past it no notification, verdict or edit blocks again until the next human prompt, and the
+ * stderr line says the total ceiling was reached. The count lives in a per-session file under the install; without one,
  * `stop_hook_active` (true when this Stop follows a block) ends the turn at once.
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -391,6 +393,11 @@ function lastEditId({ calls, results }, roots, cwd) {
 // not run the checks, and blocking it again only spins (Claude Code itself ends a run of 8 Stop
 // continuations, reset by a tool call — too late to be the gate's bound).
 const CAP_BLOCKS = 3;
+// The ceiling over a whole human turn, across its continuations. Each notification restarts the
+// per-continuation count, so without it a red suite relaunched in the background loops for ever:
+// it fails (a notification: new count, block), the relaunch turns the verdict back to pending
+// (block), and again — a full suite run per cycle. Reset only by a new human prompt.
+const TURN_BLOCKS = 10;
 const CAP_DIR = path.join('notebook', 'done-gate');
 const CAP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -412,13 +419,19 @@ const CAP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
  */
 export function nextBlock(state, { active, opening, lastEdit, notes = 0, verdict = '' }) {
   const mine = state && state.opening === opening ? state : null;
-  const fresh = { opening, lastEdit, notes, verdict, blocks: 1 };
-  if (!mine) return active ? null : fresh;
-  if (notes > (mine.notes ?? 0)) return fresh;
+  if (!mine) return active ? null : { opening, lastEdit, notes, verdict, blocks: 1, total: 1 };
+  // The ceiling first: no notification and no verdict reopens a turn that has spent it.
+  const total = mine.total ?? 0;
+  if (total >= TURN_BLOCKS) return null;
+  if (notes > (mine.notes ?? 0)) return { opening, lastEdit, notes, verdict, blocks: 1, total: total + 1 };
   if (mine.blocks >= CAP_BLOCKS) return null;
   if (mine.lastEdit === lastEdit && (mine.verdict ?? '') === verdict) return null;
-  return { opening, lastEdit, notes, verdict, blocks: mine.blocks + 1 };
+  return { opening, lastEdit, notes, verdict, blocks: mine.blocks + 1, total: total + 1 };
 }
+
+/** True when `state` is this turn's record and has spent the per-turn ceiling: `nextBlock`'s first refusal, named. */
+export const turnCeilingReached = (state, opening) =>
+  Boolean(state && state.opening === opening && (state.total ?? 0) >= TURN_BLOCKS);
 
 /**
  * Each owed check's background state since the turn's last edit, `label -> 'pending' | 'failed'`:
@@ -562,13 +575,16 @@ export function doneGate(meta, args, install, read = tailReader()) {
       .map(([l, st]) => [`${tag(r)}${l}`, st]));
     const verdict = bg.map(([l, st]) => `${l}=${st}`).sort().join('\n');
     // Without an install or a session id there is nowhere to count: one block per turn, as before.
+    const record = capPath ? readCap(capPath) : null;
     const next = capPath
-      ? nextBlock(readCap(capPath), { active, opening: turn.opening, notes: turn.notes, verdict,
+      ? nextBlock(record, { active, opening: turn.opening, notes: turn.notes, verdict,
         lastEdit: lastEditId(turn, owed.map((r) => r.root), at) })
       : (active ? null : true);
     if (!next) {
       recordGate(install, 'done-gate-cap', 'law-3');
-      err(`[done-gate] cap reached — turn ends with unproven checks: ${list(owed)}\n`);
+      const why = turnCeilingReached(record, turn.opening)
+        ? `total ceiling reached (${TURN_BLOCKS} blocks this turn)` : 'cap reached';
+      err(`[done-gate] ${why} — turn ends with unproven checks: ${list(owed)}\n`);
       return settle();
     }
     if (capPath) saveCap(capPath, next);

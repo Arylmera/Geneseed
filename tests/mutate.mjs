@@ -666,7 +666,7 @@ export const MUTATIONS = [
     id: 'M41',
     name: 'the cap is never reset by a notification',
     file: 'js/hosts/hooks-done.mjs',
-    find: '  if (notes > (mine.notes ?? 0)) return fresh;\n',
+    find: '  if (notes > (mine.notes ?? 0)) return { opening, lastEdit, notes, verdict, blocks: 1, total: total + 1 };\n',
     replace: '',
     gate: UNIT_HOOK_DONE,
     why: 'A turn spans every continuation its notifications drive. Without the reset, three early '
@@ -693,6 +693,17 @@ export const MUTATIONS = [
     gate: UNIT_HOOK_DONE,
     why: 'Each new edit would re-block forever inside one continuation, bounded only by the host. '
       + 'The `nextBlock` rows and the real-Stop sequence require the fourth Stop to end the turn.',
+  },
+  {
+    id: 'M44',
+    name: 'the turn ceiling is removed',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '  if (total >= TURN_BLOCKS) return null;\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'Each notification restarts the per-continuation count, so a red suite relaunched in the '
+      + 'background with no edit re-blocks for ever, one full suite run per cycle. The `nextBlock` '
+      + 'ceiling rows and the relaunch sequence require the eleventh Stop to end the turn.',
   },
 ];
 
