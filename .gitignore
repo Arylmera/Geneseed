@@ -3,10 +3,12 @@
 # scopes. Running a pipeline inside this checkout would otherwise leave it untracked.
 # `/*`, not `/`: git cannot re-include a file inside an ignored DIRECTORY, only inside one whose
 # contents are ignored. `**/` keeps the old any-depth match (a mid-slash anchors to the root).
-# The one exception is the root's protected-checks list, tracked so every clone protects the
-# same judges (External Gate).
+# Two exceptions, both at the root and tracked so every clone shares them: the protected-checks
+# list, so every clone protects the same judges (External Gate), and the done-checks list, so
+# every clone's turns are judged by the same proof (Verify Before Asserting).
 **/.geneseed/*
 !/.geneseed/protected-checks.txt
+!/.geneseed/done-checks.txt
 *.log
 
 # Generated build output — derivable from src/ via `geneseed build`, never committed.

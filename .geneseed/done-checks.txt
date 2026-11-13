@@ -1,0 +1,7 @@
+# The proof a turn that edits this repo must show (Verify Before Asserting): each line must run,
+# unpiped and green, after the turn's last edit, or the done gate blocks the turn's end. A line
+# matches as a PREFIX of the command, so list each command whole. AGENTS.md "Proving a change"
+# has the rest of the gates; these are the ones every edit owes.
+npm run lint
+npm run typecheck
+node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"
