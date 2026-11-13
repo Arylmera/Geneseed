@@ -1,0 +1,13 @@
+{
+  "description": "Terminal programs the agent drives through their own CLI: Herdr panes and agents from inside a Herdr pane, and OpenCode V2 from another session.",
+  "skills": ["herdr", "opencode-cli"],
+  "agents": [],
+  "rules": "kits/terminal-tools/rules.md",
+  "rulesWordBudget": 300,
+  "catalogue": {
+    "skills": [
+      "| [herdr]({{DIR_SKILLS}}/herdr.md) | the user names Herdr and the session runs in a Herdr pane (`HERDR_ENV=1`): inspect or control its workspaces, tabs, panes, commands or another agent |",
+      "| [opencode-cli]({{DIR_SKILLS}}/opencode-cli.md) | driving OpenCode V2 from another session through its CLI: a headless `opencode run`, its sessions, the background service, MCP servers, plugins, models, stats, debug |"
+    ]
+  }
+}

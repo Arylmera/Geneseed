@@ -54,12 +54,22 @@ The fourth kit is `docker`, for Docker and Compose operations on any stack. It a
 
 It does not overlap the spring-boot kit's `docker-expert` agent: that agent builds a Spring Boot service's own image (Buildpacks, layered or native) and its local-dev Compose file, and `compose-ops` operates any Compose stack. Either kit works without the other. `compose-ops` is adapted in part from the `docker-patterns` skill of [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT), rewritten for operations; its skill folder ships `LICENSE-everything-claude-code.txt`.
 
+The fifth kit is `terminal-tools`, for terminal programs the agent drives through their own CLI. It adds two skills:
+
+| Member | Kind | What it is for |
+|---|---|---|
+| `herdr` | skill | Herdr workspaces, tabs, panes and agents, from inside a Herdr pane (`HERDR_ENV=1`) and only when the user names Herdr: split a sibling pane, start and prompt another agent, wait on state, read output. It carries the Windows notes of herdr's own docs page (signed binaries unsupported, so SmartScreen may warn) |
+| `opencode-cli` | skill | OpenCode V2 from another session: headless `opencode run` (JSON output, model, agent, continue and fork), the background service against `--standalone` and `--server`, `serve` and `pair`, sessions, MCP, plugins, models, stats, debug |
+
+Its rules gate each tool on its environment, read live state before acting, close only what the agent opened, never stop the user's server or service, and leave every login and credential to the user. `herdr` is adapted from the official skill of [herdrdev/herdr](https://github.com/herdrdev/herdr) by herdrdev (Apache-2.0), condensed into house format; its skill folder ships `LICENSE-herdr.txt`. `opencode-cli` is first-party and targets OpenCode V2 only, verified against the V2 source at v2.3.0: the V1 commands top-level `export` and `import`, `attach`, `agent create` and `mcp debug` are not in its command table.
+
 ### Switching kits on and off
 
 ```bash
 geneseed build --emit claude-global --kits spring-boot
 geneseed build --emit claude-global --kits react,spring-boot
 geneseed build --emit claude-global --kits ci-pipelines,docker
+geneseed build --emit claude-global --kits terminal-tools
 geneseed build --emit claude-global --kits none
 ```
 

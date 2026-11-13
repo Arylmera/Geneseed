@@ -387,6 +387,7 @@ Some skills and agents are adapted from other open-source skill collections, und
 - `vibe-wise` — [nykooi1/vibe-wise](https://github.com/nykooi1/vibe-wise) by Noah Kim (MIT): the state file, levels and checkpoints of learn-mode, and the checkpoint rules ownership shares.
 - `piomin-spring-boot` — [piomin/claude-ai-spring-boot](https://github.com/piomin/claude-ai-spring-boot) by Piotr Mińkowski (Apache-2.0): the Spring Boot kit's skills and agents, rewritten and condensed for Boot 4.
 - `everything-claude-code` — [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) by Affaan Mustafa (MIT): the React kit's skills and agents, rewritten and condensed for Vite and Jest, and part of the docker kit's compose-ops skill, rewritten for operations.
+- `herdr` — [herdrdev/herdr](https://github.com/herdrdev/herdr) by herdrdev (Apache-2.0): the terminal-tools kit's herdr skill, condensed into house format with a Windows note.
 - `i-have-adhd` — [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) by Ayoub Ghriss (MIT): the rules, rule-breaking cases and pre-send check of the adhd mode.
 
 ## 📄 License

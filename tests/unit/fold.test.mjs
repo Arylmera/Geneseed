@@ -1288,15 +1288,17 @@ test('M6: claude-global moves an unowned old render aside, writes the alias, and
   assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'ci-fix')), [stamp]);
 }));
 
+// The authoring-comment seed is `tickets`, a name that is still retired. It was `herdr` until the
+// terminal-tools kit revived that name; a revived name has its own two cases below.
 test('M6: bob-global prunes a CRLF render and one with a leading authoring comment, and recreates neither', () => withHome((home) => {
   const cfg = path.join(home, '.bob');
   seedSkill(cfg, 'ci-fix', oldRender('ci-fix', { crlf: true }));
-  seedSkill(cfg, 'herdr', oldRender('herdr', { comment: true, extra: 'compatibility: opencode\n' }));
+  seedSkill(cfg, 'tickets', oldRender('tickets', { comment: true, extra: 'compatibility: opencode\n' }));
   const r = emit(home, 'bob-global');
   assert.equal(pruneLines(r.stdout).length, 2, r.stdout);
-  assert.deepEqual(archivedSkills(cfg), ['ci-fix', 'herdr']);
+  assert.deepEqual(archivedSkills(cfg), ['ci-fix', 'tickets']);
   assert.ok(!exists(cfg, 'skills', 'ci-fix'), 'Bob writes aliases as commands, never as a skill folder');
-  assert.ok(!exists(cfg, 'skills', 'herdr'));
+  assert.ok(!exists(cfg, 'skills', 'tickets'));
 }));
 
 test('M6: opencode-global prunes an old render too (host parity)', () => withHome((home) => {
@@ -1306,6 +1308,81 @@ test('M6: opencode-global prunes an old render too (host parity)', () => withHom
   assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
   assert.match(pruneLines(r.stdout)[0], /^\[geneseed\] opencode: pruned retired skill skills\/repo-map /);
   assert.deepEqual(archivedSkills(cfg), ['repo-map']);
+}));
+
+// A REVIVED name (`herdr`: retired 2026-10, a terminal-tools kit skill since 2026-11) is live
+// again, but an unowned render under it is an older build's copy. With the kit off, the emit moves
+// it aside exactly as it did while the name was retired, and writes no herdr folder back.
+test('M6: a revived name with its kit off — the old unowned herdr render is archived, nothing replaces it', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  seedSkill(cfg, 'herdr', oldRender('herdr', { comment: true }));
+  const r = emit(home);
+  assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
+  assert.match(pruneLines(r.stdout)[0], /^\[geneseed\] claude: pruned retired skill skills\/herdr /);
+  assert.deepEqual(archivedSkills(cfg), ['herdr']);
+  assert.ok(!exists(cfg, 'skills', 'herdr'), 'a kit-off emit wrote a herdr folder');
+  assert.ok(!ownedOf(cfg).some((p) => p.startsWith('skills/herdr')));
+}));
+
+// With the kit on, the same old copy is archived first, and the freed folder takes the CURRENT
+// render: the kit's skill, with its credit line and its licence beside it, owned by the manifest.
+// Without the revived entry `claimer` would keep the stale file as the user's and skip the kit's
+// copy. A second kit-on emit moves nothing: the folder is owned now, so it is the ordinary prune's.
+test('M6: a revived name with its kit on — the old herdr render is archived and the kit copy installed', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  const old = oldRender('herdr', { comment: true });
+  seedSkill(cfg, 'herdr', old);
+  const r = emit(home, 'claude-global', ['--kits', 'terminal-tools']);
+  assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
+  assert.deepEqual(archivedSkills(cfg), ['herdr']);
+  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-skills', 'herdr'));
+  assert.equal(read(cfg, 'archived-skills', 'herdr', stamp, 'SKILL.md'), old);
+  const now = read(cfg, 'skills', 'herdr', 'SKILL.md');
+  assert.notEqual(now, old);
+  assert.ok(now.includes('*Adapted from [herdrdev/herdr](https://github.com/herdrdev/herdr)'), now.slice(0, 400));
+  assert.ok(exists(cfg, 'skills', 'herdr', 'LICENSE-herdr.txt'));
+  assert.ok(ownedOf(cfg).includes('skills/herdr/SKILL.md'));
+  const r2 = emit(home, 'claude-global', ['--kits', 'terminal-tools']);
+  assert.deepEqual(pruneLines(r2.stdout), [], r2.stdout);
+  assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'herdr')), [stamp]);
+}));
+
+// A user's edit of the revived skill is theirs, as an edit of compose-ops is. Once an emit has
+// declined to overwrite it (`kept` in the manifest, out of `owned`), no emit may archive it: not
+// the first kit-off emit, not the second (by then the owned LICENSE is pruned, so nothing owned is
+// left under the folder and only the `kept` record protects it), and not a kit-on emit after that.
+// Each emit records `skills/herdr/SKILL.md` in `kept` again, so the record never lapses.
+test('M6: a kept edit of a revived skill survives kit off twice and kit on again', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  const on = ['--kits', 'terminal-tools'];
+  emit(home, 'claude-global', on);
+  const file = path.join(cfg, 'skills', 'herdr', 'SKILL.md');
+  const edited = `${fs.readFileSync(file, 'utf8')}\nMy own herdr note.\n`;
+  fs.writeFileSync(file, edited);
+  const keptOf = () => JSON.parse(read(cfg, '.geneseed-manifest.json')).kept ?? [];
+  emit(home, 'claude-global', on);
+  assert.ok(keptOf().includes('skills/herdr/SKILL.md'), 'the kit-on emit did not record the edit as kept');
+  assert.ok(!ownedOf(cfg).includes('skills/herdr/SKILL.md'));
+  for (const [i, args] of [[1, []], [2, []], [3, on]]) {
+    const r = emit(home, 'claude-global', args);
+    assert.deepEqual(pruneLines(r.stdout), [], `emit ${i}: ${r.stdout}`);
+    assert.equal(fs.readFileSync(file, 'utf8'), edited, `emit ${i} changed the user's edit`);
+    assert.deepEqual(archivedSkills(cfg), [], `emit ${i} archived something`);
+    assert.ok(keptOf().includes('skills/herdr/SKILL.md'), `emit ${i} let the kept record lapse`);
+  }
+  // The record ends with the edit: once the user deletes the file (as the "kept your edited"
+  // line tells them to), a kit-on emit writes Geneseed's copy and owns it, and `kept` must drop
+  // the entry, or the manifest would call one file both Geneseed's and the user's. Two emits, so
+  // a record carried by `held` in the first would still show in the second.
+  fs.rmSync(file);
+  for (const i of [4, 5]) {
+    const r = emit(home, 'claude-global', on);
+    assert.deepEqual(pruneLines(r.stdout), [], `emit ${i}: ${r.stdout}`);
+    assert.deepEqual(keptOf(), [], `emit ${i} kept a record of a deleted edit`);
+    assert.ok(ownedOf(cfg).includes('skills/herdr/SKILL.md'), `emit ${i} did not own the fresh copy`);
+    assert.notEqual(fs.readFileSync(file, 'utf8'), edited);
+  }
+  assert.ok(!exists(cfg, 'skills', 'herdr', 'LICENSE-herdr.txt') || ownedOf(cfg).includes('skills/herdr/LICENSE-herdr.txt'));
 }));
 
 test('M6: a same-name folder without the fingerprint, or holding a link, stays', () => withHome((home) => {

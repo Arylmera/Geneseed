@@ -459,7 +459,10 @@ OpenClaude and Bob get a user-only `skills/<alias>/SKILL.md`, and OpenCode gets 
 now excludes the merged skill (`resolveSkillNames` in `js/build/source.mjs`), so a rebuild still
 works. A skill removed with no successor goes into `RETIRED_SKILL_IDS` in the same file: its
 exclusion is dropped with a notice instead of failing the rebuild, and the name can never be
-used for a new skill. The doctor (`aliasProblems`) refuses an alias that is malformed, duplicated,
+used for a new skill. The one exception is a skill that comes back for the same tool, where an
+old exclusion keeps its meaning: `herdr` left the list when the terminal-tools kit brought it
+back. Such a name moves to `REVIVED_SKILL_IDS`, so an older build's unowned render under it is
+still moved aside on a canonical global emit, with the kit on or off. The doctor (`aliasProblems`) refuses an alias that is malformed, duplicated,
 already a skill, retired, or the name of an OpenCode command.
 
 **A rarely-needed half goes in a side file.** A skill body is paid in full every time the skill

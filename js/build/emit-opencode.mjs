@@ -232,7 +232,8 @@ export function emitOpencodeGlobalRender(cfg, job) {
   opencodeSentinelWrite(cfgDir);
 
   // As in `emitClaudeRender`: before the skill layer claims anything.
-  if (sharedRoot !== null) pruneRetiredSkills('opencode', cfgDir, oldOwned);
+  // `held`: the user's kept edits under a revived name, recorded again so they never lapse.
+  const held = sharedRoot !== null ? pruneRetiredSkills('opencode', cfgDir, oldOwned) : [];
 
   // `manifestExisted` is deliberately not passed, so
   // the pre-manifest header line is unreachable from this emit.
@@ -269,6 +270,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     editRecord,
     editRefused,
     bashGates,
-    kept,
+    kept: [...new Set([...kept, ...held])],
   };
 }

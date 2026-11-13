@@ -6,11 +6,25 @@
  *
  * An alias is a plain word, so a folder under one may be the user's own (`grill-me` on this very
  * machine is a user skill, and a link). A folder moves only when ALL of these hold:
- *   (a) its name is retired and not a live skill;
+ *   (a) its name is retired and not a live skill, or it is a REVIVED name (below);
  *   (b) no manifest owns a path under it — an owned one is the ordinary prune's;
  *   (c) it, the `skills/` root, and everything inside it are real entries, never a link;
  *   (d) its SKILL.md carries the render's fingerprint (`isRendered`).
  * Anything else stays where it is and `migrate --dry-run` keeps calling it an orphan.
+ *
+ * A revived name (`REVIVED_SKILL_IDS`) is live again. An unowned render under it is one of two
+ * things: the copy an older build wrote before it retired the name, or a file the user edited and
+ * a later emit declined to overwrite (`claimer` records that refusal in the manifest's `kept` and
+ * drops the file from `owned`). The `kept` record tells them apart:
+ *   - nothing under the folder is in `kept`: the older build's copy. It moves aside whether or
+ *     not this emit ships the skill. Kit off, that is the cleanup it got while the name was
+ *     retired. Kit on, the emit then claims a free folder and writes the current copy, where
+ *     `claimer` would otherwise keep the stale file as the user's;
+ *   - a path under it is in `kept`: the user's edit. It stays, and `held` hands those `kept`
+ *     entries back to the emit, which records them again. A kit-off emit claims nothing under
+ *     the folder, so without that carry the record would lapse and the next emit would take the
+ *     edit for an old copy.
+ * Only revived names get this: an unowned render of any other live skill is never a candidate.
  *
  * Moved, not deleted: to `<cfg>/archived-skills/<name>/<stamp>/`, outside the `skills/` root a
  * host scans (`archiveStore`'s sibling would sit inside it and load again).
@@ -18,13 +32,17 @@
 import { lstatSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 
-import { RETIRED_SKILL_IDS, THEMES, knownSkillIds, skillAliases } from './source.mjs';
-import { isCanonical } from '../hosts/hosts.mjs';
+import { RETIRED_SKILL_IDS, REVIVED_SKILL_IDS, THEMES, knownSkillIds, skillAliases } from './source.mjs';
+import { GLOBAL_MANIFEST, isCanonical } from '../hosts/hosts.mjs';
 import { archiveStore } from '../hosts/memory-files.mjs';
 
-/** Every name an earlier build shipped a skill folder under and this one does not. */
-export function retiredSkillNames({ live = knownSkillIds(), aliases = skillAliases() } = {}) {
-  return [...new Set([...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)])].filter((n) => !live.includes(n));
+/**
+ * Every name an earlier build shipped a skill folder under and this one does not, plus every
+ * revived name, whose unowned render is an older build's copy whether or not it ships today.
+ */
+export function retiredSkillNames({ live = knownSkillIds(), aliases = skillAliases(), revived = REVIVED_SKILL_IDS } = {}) {
+  const gone = [...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)].filter((n) => !live.includes(n));
+  return [...new Set([...gone, ...Object.keys(revived)])];
 }
 
 /** Whether a manifest `owned` list holds `rel` or a path under it. */
@@ -103,26 +121,50 @@ export function isRendered(dir, name, { aliases = skillAliases(), labels = skill
  * The retired folders of `cfg` split by what the next canonical emit does with them:
  * `prune` (a-d all hold) and `keep` (unowned, present, but failing c or d). Paths are absolute.
  * `unreadable` names each folder kept because it could not be listed, with the reason.
+ * `held` lists the manifest `kept` entries under a revived folder that stays as the user's edit
+ * (see the module docblock); the emit records them again. Neither pruned nor an orphan.
  * `opts.readdir` is the listing call, injectable so a test can make a folder unreadable.
+ * `opts.kept` is the manifest's `kept` from BEFORE this emit; by default it is read from `cfg`.
  */
 export function retiredSkillFolders(cfg, owned, opts = {}) {
-  const { readdir = readdirSync } = opts;
+  const { readdir = readdirSync, kept = recordedKept(cfg), revived = REVIVED_SKILL_IDS } = opts;
   const prune = [];
   const keep = [];
   const unreadable = [];
+  const held = [];
   const root = path.join(cfg, 'skills');
   const rootStat = lstat(root);
-  if (!rootStat) return { prune, keep, unreadable };
+  if (!rootStat) return { prune, keep, unreadable, held };
   // A linked `skills/` root (a dotfiles setup) is the user's whole tree: nothing in it moves.
   const linkedRoot = rootStat.isSymbolicLink();
   const aliases = opts.aliases ?? skillAliases();
-  for (const name of retiredSkillNames({ ...opts, aliases })) {
-    if (ownsRel(owned, `skills/${name}`)) continue;
+  for (const name of retiredSkillNames({ ...opts, aliases, revived })) {
+    const rel = `skills/${name}`;
     const dir = path.join(root, name);
+    // Before the `owned` skip: an owned side file (a LICENSE) must not hide the kept SKILL.md
+    // beside it, or the record lapses in that emit and the next one archives the edit.
+    // Only an entry whose own file is still there and not owned is held: once the user deletes
+    // the edit, the record must lapse, or the manifest would call Geneseed's new copy theirs.
+    const live = Object.hasOwn(revived, name)
+      ? kept.filter((k) => (k === rel || k.startsWith(`${rel}/`)) && !owned.includes(k) && lstat(path.join(cfg, k)))
+      : [];
+    if (live.length) {
+      held.push(...live);
+      continue;
+    }
+    if (ownsRel(owned, rel)) continue;
     if (!lstat(dir)) continue;
     (!linkedRoot && plainTree(dir, readdir, unreadable) && isRendered(dir, name, { aliases }) ? prune : keep).push(dir);
   }
-  return { prune, keep, unreadable };
+  return { prune, keep, unreadable, held };
+}
+
+/** The manifest's `kept` list in `cfg`, or `[]` when there is no readable manifest. */
+function recordedKept(cfg) {
+  try {
+    const man = JSON.parse(readFileSync(path.join(cfg, GLOBAL_MANIFEST), 'utf8'));
+    return Array.isArray(man?.kept) ? man.kept.filter((k) => typeof k === 'string') : [];
+  } catch { return []; }
 }
 
 /** Where `pruneRetiredSkills` moves `skills/<name>`: the stamp folder goes under it. */
@@ -135,13 +177,17 @@ export const retiredArchiveOf = (cfg, name) => path.join(cfg, 'archived-skills',
  * A folder it cannot read, or a failed move, warns and leaves the folder; it never fails the emit.
  * Raw stream writes, as `pruneOwned`'s: the driver's `withPlatformNewlines` already translates,
  * and `printOut` on top of it would print `\r\r\n` on Windows.
+ * Returns `held`: the `kept` entries of user edits under revived names, for the emit to record
+ * again in its manifest (`[]` off the canonical path, where nothing is ever pruned). A survey that
+ * throws moves nothing and holds every recorded `kept` entry under a revived name, so a failed
+ * run never lapses one.
  */
 export function pruneRetiredSkills(host, cfg, oldOwned) {
-  if (!isCanonical(cfg, host)) return;
+  if (!isCanonical(cfg, host)) return [];
   let found;
   try { found = retiredSkillFolders(cfg, oldOwned); } catch (e) {
     process.stderr.write(`[geneseed] WARN: ${host}: could not survey retired skills (${e.message}); nothing moved\n`);
-    return;
+    return recordedKept(cfg).filter((k) => Object.keys(REVIVED_SKILL_IDS).some((n) => k.startsWith(`skills/${n}/`)));
   }
   for (const u of found.unreadable) {
     process.stderr.write(`[geneseed] WARN: ${host}: could not read retired skill folder ${u}; it stays\n`);
@@ -155,4 +201,5 @@ export function pruneRetiredSkills(host, cfg, oldOwned) {
       process.stderr.write(`[geneseed] WARN: ${host}: could not move retired skill skills/${name} aside (${e.message}); it stays\n`);
     }
   }
+  return found.held;
 }
