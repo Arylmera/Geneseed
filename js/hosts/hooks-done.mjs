@@ -67,9 +67,12 @@
  * such lines in this machine's transcripts, 2026-11), and as a prompt it would open a new turn
  * and hide the edit before it.
  *
- * At most one block per turn: `stop_hook_active` is true when this Stop follows a block, and the
- * gate then lets the turn end and leaves a ledger line, so a gate that cries wolf gets found.
+ * THE CAP (`nextBlock`). A turn is blocked again only when an edit landed since its last block,
+ * and at most 3 times; a Stop past that ends the turn and leaves a `done-gate-cap` ledger line,
+ * so a gate that cries wolf gets found. The count lives in a per-session file under the install;
+ * without one, `stop_hook_active` (true when this Stop follows a block) ends the turn at once.
  */
+import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
@@ -222,6 +225,10 @@ function turnOf(transcript, whole, sidechain = false) {
     if (!whole) return null;
     start = 0;
   }
+  // Which turn this is, for the block cap's state: the prompt line's `uuid`, else its text.
+  const first = entries[start - 1];
+  const opening = !first ? '' : typeof first.uuid === 'string' ? first.uuid
+    : JSON.stringify(first.message && first.message.content).slice(0, 300);
   const calls = [];                      // tool_use blocks, in order
   const results = new Map();             // tool_use_id -> is_error
   const originals = new Map();           // tool_use_id -> the file before a Write
@@ -250,7 +257,7 @@ function turnOf(transcript, whole, sidechain = false) {
       }
     }
   }
-  return { calls, results, originals, background, finished, cwd };
+  return { calls, results, originals, background, finished, cwd, opening };
 }
 
 /**
@@ -326,6 +333,65 @@ function missingChecks({ calls, results, background, finished }, checks, root, c
     for (const g of groups) if (groupPasses(command, g)) passed.add(g.label);
   });
   return groups.map((g) => g.label).filter((l) => !passed.has(l));
+}
+
+/** The id of the turn's last landed write under any of `roots`, or null. */
+function lastEditId({ calls, results }, roots, cwd) {
+  let id = null;
+  for (const c of calls) if (roots.some((r) => editTarget(c, results, r, cwd))) id = c.id;
+  return id;
+}
+
+// ---- the block cap -------------------------------------------------------------------------
+// A block may repeat within a turn, but only when it can change something: an edit landed since
+// the last block (the agent is working, and its new edit owes the proof again), and fewer than
+// CAP_BLOCKS blocks were given this turn. A repeat with no new edit is the agent saying it will
+// not run the checks, and blocking it again only spins (Claude Code itself ends a run of 8 Stop
+// continuations, reset by a tool call — too late to be the gate's bound).
+const CAP_BLOCKS = 3;
+const CAP_DIR = path.join('notebook', 'done-gate');
+const CAP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The cap's decision, pure: the state to save with a block, or null when the turn ends. `state` is
+ * what the last block of this session (and sub-agent) saved, `{ opening, lastEdit, blocks }`, or
+ * null; a different `opening` is another turn, so it counts as none. With no state for this turn,
+ * `active` (`stop_hook_active`) alone decides, as before the cap: a Stop that follows a block we
+ * have no record of ends the turn. Once a block is on record, the record decides whatever `active`
+ * says, so a host that clears the flag mid-turn cannot loop the gate.
+ */
+export function nextBlock(state, { active, opening, lastEdit }) {
+  const mine = state && state.opening === opening ? state : null;
+  if (!mine) return active ? null : { opening, lastEdit, blocks: 1 };
+  if (mine.blocks >= CAP_BLOCKS || mine.lastEdit === lastEdit) return null;
+  return { opening, lastEdit, blocks: mine.blocks + 1 };
+}
+
+/**
+ * The cap's state file, one per session (and sub-agent), under the install's notebook — the
+ * store-watch baseline pattern (`./store-watch.mjs`). Read and written only on a Stop with owed
+ * checks, so an allowed Stop costs nothing here. Unreadable reads as none.
+ */
+function capFile(install, meta) {
+  const key = [meta.session_id, meta.hook_event_name === 'SubagentStop' ? meta.agent_id : null]
+    .filter((k) => typeof k === 'string' && k).join('~');
+  return key ? path.join(install, CAP_DIR, `${key.replace(/[^\w.~-]/g, '_').slice(0, 160)}.json`) : null;
+}
+function readCap(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; }
+}
+function saveCap(file, state) {
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    if (state.blocks === 1) {
+      // A turn's first block: drop other sessions' stale files, as the baselines do.
+      for (const n of readdirSync(path.dirname(file))) {
+        const old = path.join(path.dirname(file), n);
+        if (Date.now() - statSync(old).mtimeMs > CAP_STALE_MS) unlinkSync(old);
+      }
+    }
+    writeFileSync(file, JSON.stringify(state));
+  } catch { /* unwritable: the next Stop finds no record, and ends the turn as before the cap */ }
 }
 
 /**
@@ -411,11 +477,18 @@ export function doneGate(meta, args, install, read = tailReader()) {
       return said.length || weakened.length ? advise(...said) : null;
     };
     if (!owed.length) return settle();
-    if (meta.stop_hook_active === true) {
+    const active = meta.stop_hook_active === true;
+    const capPath = install ? capFile(install, meta) : null;
+    // Without an install or a session id there is nowhere to count: one block per turn, as before.
+    const next = capPath
+      ? nextBlock(readCap(capPath), { active, opening: turn.opening, lastEdit: lastEditId(turn, owed.map((r) => r.root), at) })
+      : (active ? null : true);
+    if (!next) {
       recordGate(install, 'done-gate-cap', 'law-3');
       err(`[done-gate] cap reached — turn ends with unproven checks: ${list(owed)}\n`);
       return settle();
     }
+    if (capPath) saveCap(capPath, next);
     // The turn goes on, so a weakened test is said at the Stop that really ends it.
     recordGate(install, 'done-gate', 'law-3');
     out(`${JSON.stringify({

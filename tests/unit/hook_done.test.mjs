@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { doneDecide, groupPasses, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
+import { doneDecide, groupPasses, nextBlock, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
 import { doneLine, inferDoneChecks } from '../../js/hosts/done-checks.mjs';
 import { isTestPath, tailReader, weakenedBy } from '../../js/hosts/hooks-prims.mjs';
 import { readTail } from '../../js/lib/fs.mjs';
@@ -757,7 +757,7 @@ test('doneDecide: a sub-agent transcript is judged only in sidechain mode', () =
  * `{ rows, active }`: each stop rewrites the transcript, all share one install (S5's state).
  */
 function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {}, parentChecks = null,
-  withPath = true, llm = false }) {
+  withPath = true, llm = false, event = 'SubagentStop' }) {
   const sb = makeSandbox();
   try {
     const parent = path.join(sb.path, 'parent');
@@ -787,8 +787,11 @@ function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {
     }
     const ledgerFile = path.join(install, 'notebook', 'gates.jsonl');
     return stops.map(({ rows, active = false }) => {
-      fs.writeFileSync(transcript, jsonl(side(rows.map((r) => (typeof r === 'function' ? r(worker) : r)))));
-      const payload = { hook_event_name: 'SubagentStop', session_id: 's', agent_id: 'w', agent_type: 'developer',
+      const resolved = rows.map((r) => (typeof r === 'function' ? r(worker) : r));
+      fs.writeFileSync(transcript, jsonl(...(event === 'Stop' ? resolved : side(resolved))));
+      const payload = event === 'Stop'
+        ? { hook_event_name: 'Stop', session_id: 's', cwd: worker, transcript_path: transcript, stop_hook_active: active }
+        : { hook_event_name: 'SubagentStop', session_id: 's', agent_id: 'w', agent_type: 'developer',
         cwd: parent, transcript_path: path.join(sb.path, 'parent.jsonl'), stop_hook_active: active,
         ...(withPath ? { agent_transcript_path: transcript } : {}) };
       const p = spawnHook(['learn', '--memory', path.join(install, 'memory')], JSON.stringify(payload), { cwd: parent, env });
@@ -848,4 +851,76 @@ test('learn on SubagentStop: no agent transcript is not judged, said only where 
   assert.match(listed.err, /\[done-gate\] no agent transcript — sub-agent turn not judged\./);
   const quiet = subagentStop({ withPath: false, rows: [prompt(), editWorker] });
   assert.equal(quiet.err.includes('[done-gate]'), false, quiet.err);
+});
+
+// ---- the block cap: a repeat block needs a new edit, and stops at 3 per turn -----------------
+
+test('nextBlock: the cap, written out', () => {
+  const T = 'turn-1';
+  // Each row: the saved state, the Stop, then the state saved with a block (null: the turn ends).
+  const rows = [
+    ['first stop, no record: block, count 1',
+      null, { active: false, opening: T, lastEdit: 'e1' }, { opening: T, lastEdit: 'e1', blocks: 1 }],
+    ['a stop after a block we have no record of: ends, as before the cap',
+      null, { active: true, opening: T, lastEdit: 'e1' }, null],
+    ['second stop, no new edit: ends',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: true, opening: T, lastEdit: 'e1' }, null],
+    ['second stop, a new edit: blocks again, count 2',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: true, opening: T, lastEdit: 'e2' },
+      { opening: T, lastEdit: 'e2', blocks: 2 }],
+    ['third stop, a new edit: blocks, count 3',
+      { opening: T, lastEdit: 'e2', blocks: 2 }, { active: true, opening: T, lastEdit: 'e3' },
+      { opening: T, lastEdit: 'e3', blocks: 3 }],
+    ['fourth stop, even with a new edit: ends',
+      { opening: T, lastEdit: 'e3', blocks: 3 }, { active: true, opening: T, lastEdit: 'e4' }, null],
+    // The record decides once it exists, whatever the flag says.
+    ['a record with the flag cleared and no new edit: ends',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: false, opening: T, lastEdit: 'e1' }, null],
+    // Another opening prompt is another turn: the old record counts as none.
+    ['a new turn after a capped one: block, count 1',
+      { opening: T, lastEdit: 'e3', blocks: 3 }, { active: false, opening: 'turn-2', lastEdit: 'e9' },
+      { opening: 'turn-2', lastEdit: 'e9', blocks: 1 }],
+    ['a new turn with the flag set and no record of it: ends',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: true, opening: 'turn-2', lastEdit: 'e9' }, null],
+  ];
+  for (const [what, state, stop, want] of rows) assert.deepEqual(nextBlock(state, stop), want, what);
+});
+
+/** A row factory that builds its rows once, so every Stop of a sequence sees the same tool ids. */
+const once = (f) => { let v; return (w) => (v ??= f(w)); };
+
+test('learn on Stop: the cap across real Stops of one session', () => {
+  const ed = [once(editWorker), once(editWorker), once(editWorker), once(editWorker)];
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const verdicts = (stops) => subagentStops({ event: 'Stop', stops }).map((r) => {
+    assert.equal(r.rc, 0, r.err);
+    return r.out ? JSON.parse(r.out).decision : (/"verb":"done-gate-cap"/.test(r.ledger) ? 'cap' : `none: ${r.err}`);
+  });
+  // Second stop with no new edit ends the turn, with the cap's ledger line.
+  assert.deepEqual(verdicts([
+    { rows: [p1, ed[0]] },
+    { rows: [p1, ed[0], bash('ls')], active: true },
+  ]), ['block', 'cap']);
+  // A new edit before each stop: blocks three times, then the fourth stop ends the turn.
+  // A new prompt is a new turn, and blocks again.
+  const e = [once(editWorker), once(editWorker), once(editWorker), once(editWorker), once(editWorker)];
+  const p2 = { uuid: 'p2', ...prompt('two') };
+  assert.deepEqual(verdicts([
+    { rows: [p1, e[0]] },
+    { rows: [p1, e[0], e[1]], active: true },
+    { rows: [p1, e[0], e[1], e[2]], active: true },
+    { rows: [p1, e[0], e[1], e[2], e[3]], active: true },
+    { rows: [p1, e[0], e[1], e[2], e[3], p2, e[4]] },
+  ]), ['block', 'block', 'block', 'cap', 'block']);
+});
+
+test('learn on SubagentStop: the cap counts per sub-agent', () => {
+  const e = [once(editWorker), once(editWorker)];
+  const runs = subagentStops({ stops: [
+    { rows: [prompt('brief'), e[0]] },
+    { rows: [prompt('brief'), e[0]], active: true },
+    { rows: [prompt('brief'), e[0], e[1]], active: true },
+  ] });
+  assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : '?')),
+    ['block', 'cap', 'block']);
 });
