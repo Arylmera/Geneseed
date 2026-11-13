@@ -118,6 +118,10 @@ export const FLAGS = {
   // One build's instruction, never recorded: Geneseed's copy replaces a file the user edited
   // or put at a name Geneseed ships. `claimer` (js/hosts/native.mjs) holds the rule.
   '--force': 'force',
+  // One build's consent: the settings this build does not pass return to their defaults on the
+  // install it targets. Without it the preserve guard (js/build/profile.mjs) refuses such a
+  // build. Never recorded, never replayed.
+  '--reset': 'reset',
   '-v': 'verbose', '--verbose': 'verbose',
 };
 
@@ -374,9 +378,14 @@ export function parseArgs(argv, defaults) {
     kits: defaults.kits ?? [],
     sharedTier: 'off',
     out: 'Harness', emit: 'files', footprint: 'lean', root: null,
-    syncThemes: false, validateOnly: false, verbose: false, pruneGates: false, force: false,
+    syncThemes: false, validateOnly: false, verbose: false, pruneGates: false, force: false, reset: false,
     ...Object.fromEntries(GATE_SWITCHES.map((g) => [g.arg, false])),
   };
+  // The keys the caller PASSED, for the preserve guard: after this walk a default and a value
+  // typed equal to it look the same, and only the second is intent. Non-enumerable, so
+  // `makeCfg(args)`'s rest spread never sees it.
+  const given = new Set();
+  Object.defineProperty(args, 'given', { value: given, enumerable: false });
   const { tokens } = nodeParseArgs({
     args: argv, options: PARSE_OPTIONS, allowPositionals: true, strict: false, tokens: true,
   });
@@ -393,6 +402,7 @@ export function parseArgs(argv, defaults) {
     if (tok.kind === 'option' && VALUED_BY_NAME[tok.name] !== undefined) {
       if (tok.value === undefined) die(2, `argument ${tok.rawName}: expected one argument`);
       args[VALUED_BY_NAME[tok.name]] = tok.value;
+      given.add(VALUED_BY_NAME[tok.name]);
       continue;
     }
     // `tok.value === undefined` excludes `--sync-themes=x` from matching here — a store_true
@@ -402,6 +412,7 @@ export function parseArgs(argv, defaults) {
     // given), so this must compare the VALUE, not `'value' in tok` — the key is always there.
     if (tok.kind === 'option' && tok.value === undefined && FLAG_BY_NAME[tok.name] !== undefined) {
       args[FLAG_BY_NAME[tok.name]] = true;
+      given.add(FLAG_BY_NAME[tok.name]);
       continue;
     }
     // Every other shape — an unrecognized option, a bare positional, or `--` (which `parseArgs`

@@ -689,3 +689,17 @@ test('Build refuses a project emit when no install of it is in view', () => {
   assert.match(refused.error, /^bob installs into a folder you choose/);
   assert.ok(Array.isArray(buildActionCmds(st, { theme: 'neutral', emit: 'bob-global' })));
 });
+
+// A re-target (another emit than the viewed install's) or a Build with nothing deployed is a
+// FRESH target by decision (2026-10-18): it carries the viewed dir's few axes and elides the
+// rest at their defaults. So its argv ends on `--reset`, as `apiInstallCmd` and `apiDeployCmd`
+// do, or an install already at that target is refused by the preserve guard for every axis
+// the argv did not spell.
+test('a re-target Build is a whole selection: its argv ends on --reset', () => {
+  const st = { theme: 'neutral', emit: 'opencode-global', target: path.join(os.tmpdir(), 'gs-none'),
+    root: path.join(os.tmpdir(), 'gs-none'), footprint: 'full', posture: 'peer', mode: 'direct',
+    trust: 'balanced' };
+  const [cmd] = buildActionCmds(st, { theme: 'neutral', emit: 'bob-global' });
+  assert.equal(cmd.at(-1), '--reset', cmd.join(' '));
+  assert.equal(cmd.filter((a) => a === '--reset').length, 1);
+});

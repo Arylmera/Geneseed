@@ -749,7 +749,9 @@ async function drainStdout() {
 
 /**
  * The flags that re-emit the install at `dir` on its OWN axes — footprint, posture, mode,
- * trust, doctrine packs, excluded rules — or `[]` when no build ever wrote a marker there.
+ * trust, doctrine packs, excluded rules, excluded skills, gates, kits, shared tier — or `[]`
+ * when no build ever wrote a marker there. Every axis the preserve guard compares
+ * (js/build/profile.mjs) has to be here, or `upgrade` is refused on the one it left out.
  *
  * WITHOUT THEM THE REBUILD RESETS THE INSTALL. The generator's defaults are not the install's:
  * a missing `--footprint` is `lean`, and posture, mode, packs and excluded rules come from
@@ -770,7 +772,7 @@ export async function installAxes(dir, { installProfile, setupBuildArgs }, notif
   if (!existsSync(path.join(String(dir), '.geneseed-emit'))) return [];
   const p = installProfile('opencode', 'global', String(dir), notify);
   return setupBuildArgs('', 'files', null, null, p.footprint, p.posture, p.mode, p.doctrines,
-    undefined, p.excludeRules, p.trust, p.excludeSkills, p, p.kits).slice(4);
+    undefined, p.excludeRules, p.trust, p.excludeSkills, p, p.kits, p.sharedTier).slice(4);
 }
 
 /**

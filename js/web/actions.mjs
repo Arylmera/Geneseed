@@ -563,12 +563,16 @@ export function buildActionCmds(state, body) {
     return { error: `${emit} installs into a folder you choose — use Deploy with a folder, `
       + 'not Build' };
   }
-  return actionCommands('build', {
+  const [step] = actionCommands('build', {
     theme, emit, footprint: deployed(state) ? state.footprint : 'lean',
     posture: state.posture, mode: state.mode,
     trust: state.trust,
     doctrines: doctrinesForBuild(state.target),
   });
+  // `--reset`, as in `apiInstallCmd`: a fresh target's argv is a whole selection that elides
+  // axes at their defaults, so an install already there must not be refused by the preserve
+  // guard (js/build/profile.mjs) for every axis it did not spell.
+  return [[...step, '--reset']];
 }
 
 /**
@@ -737,7 +741,7 @@ export function apiInstallCmd(state, body) {
   const emit = EMIT_FOR.get(`${host} ${scope}`);
   if (emit === undefined) return { error: `no install mode for ${host}:${scope}` };
   // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1) — see the
-  // comment at `installProfile` in `js/build/generate.mjs`.
+  // comment at `installProfile` in `js/build/profile.mjs`.
   // The theme default is THIS install's own, not the viewed one's: the Kits page acts on any row.
   // An ABSENT row has no footprint of its own (`footprintOfDir` answers its no-marker `full`),
   // so a new install takes the CLI's default, lean — see `apiDeployCmd` below.
@@ -780,6 +784,10 @@ export function apiInstallCmd(state, body) {
   const argv = setupBuildArgs(theme || 'neutral', emit, out, out, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates,
     kits ?? kitsOfDir(root, host), sharedTier);
+  // `--reset`: this argv is a WHOLE selection — every axis is the body's or the install's own —
+  // and `setupBuildArgs` elides an axis at its default, so returning one to it (a mode back to
+  // direct, a gate re-armed) would otherwise trip the preserve guard (js/build/profile.mjs).
+  argv.push('--reset');
   // `--force` only on a literal `true`: the panel's "Replace with Geneseed's copies", which
   // names the files first. It is this one build's instruction and is never recorded.
   if (bget(body, 'force') === true) argv.push('--force');
@@ -919,5 +927,7 @@ export function apiDeployCmd(state, body) {
   const argv = setupBuildArgs(theme || 'neutral', host, root, root, fp, pos, mode, doctrines,
     PACK_ORDER, excludeRules, trust, excludedSkillsOfDir(root, host), gates, kitsOfDir(root, host),
     bodySharedTier(body, root, host));
+  // `--reset`, as in `apiInstallCmd`: the form's answers plus the folder's own are a whole selection.
+  argv.push('--reset');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }

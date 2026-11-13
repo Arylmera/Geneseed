@@ -75,7 +75,7 @@ geneseed build --emit claude-global --kits none
 
 `--kits` takes a comma-separated list. `none` and an empty value both mean no kits. An unknown kit name is refused with exit code 2, and the error lists the kits this Geneseed ships. `none` is reserved and can never name a kit. The flag's row is in the [CLI reference](../reference/cli.md), under `build`.
 
-A build does exactly what its flags say. A plain `build` without `--kits` therefore turns off a kit the install has on. Before it does, it warns: `this install has kit <k>; this build turns it off — pass --kits <k> to keep it`.
+A build does exactly what its flags say, so a plain `build` without `--kits` would turn off a kit the install has on. Over an existing install it refuses instead: it names the change (`kits: <k> -> none`) and prints the command that keeps the kit. With `--reset` it goes ahead and first warns: `this install has kit <k>; this build turns it off — pass --kits <k> to keep it`.
 
 The setup wizard asks one yes/no question per kit, each defaulting to whether the install has that kit on. It asks them only when at least one kit exists.
 
@@ -83,7 +83,7 @@ The setup wizard asks one yes/no question per kit, each defaulting to whether th
 
 An install with a kit on records it in its instructions file, under the skill section: `Active kits: spring-boot`. The line is written only when at least one kit is on. A missing line means no kits, so an install built before kits existed reads as having none.
 
-`geneseed rebuild-all`, `geneseed update` and `geneseed migrate` read the line back and rebuild with the same kits. `geneseed diff` and the web console read it too, so they compare against or rebuild that same set. `geneseed validate` does not read it: pass `--kits` to dry-run a kit build. A plain `build` does not read it; it only warns, as above. If the line names a kit this Geneseed no longer ships, the rebuild drops that kit with a notice and keeps the others. It never fails `rebuild-all`. A retired kit name is never reused for a new kit.
+`geneseed rebuild-all`, `geneseed update` and `geneseed migrate` read the line back and rebuild with the same kits. `geneseed diff` and the web console read it too, so they compare against or rebuild that same set. `geneseed validate` does not read it: pass `--kits` to dry-run a kit build. A plain `build` does not read it; it refuses or warns, as above. If the line names a kit this Geneseed no longer ships, the rebuild drops that kit with a notice and keeps the others. It never fails `rebuild-all`. A retired kit name is never reused for a new kit.
 
 `geneseed status` shows `kits: spring-boot` on the install's row, and `status --json` carries the same list.
 

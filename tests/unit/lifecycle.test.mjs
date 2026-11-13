@@ -564,7 +564,9 @@ test('excluding process 1 sweeps the rule-file edit asks; including it again res
     globalReemit(d, cfg, ['--exclude-rules', 'process.1']);
     for (const k of RULE_KEYS) assert.ok(!(k in edit()) && !man().edit_asks.includes(k), `excluded: ${k} stayed`);
     assert.equal(edit()[`${path.basename(cfg)}/excludes.json`], 'ask', 'the other asks stay');
-    globalReemit(d, cfg);
+    // `none` said out loud: a re-emit that omitted the flag would now be refused by the preserve
+    // guard (js/build/profile.mjs), because it would hand the rule back without being asked to.
+    globalReemit(d, cfg, ['--exclude-rules', 'none']);
     for (const k of RULE_KEYS) assert.ok(edit()[k] === 'ask' && man().edit_asks.includes(k), `re-included: ${k}`);
   });
 });
@@ -1729,7 +1731,7 @@ test('uninstalling one host does not erase the shared root marker a sibling inst
   + 'needs (host-compat B2)', () => {
   // `registryRoots` (`js/inspect/registry.mjs`) keeps a registered root only while
   // `.geneseed-emit` exists there — ONE marker per shared project root, last deploy wins
-  // (`generate.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST"). Installing opencode then
+  // (`profile.mjs`'s "THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST"). Installing opencode then
   // claude leaves the marker naming claude; uninstalling opencode (which qualifies through its
   // OWN `.opencode/` manifest, not the marker) must leave that marker alone, because claude's
   // install is still live and the registry's self-prune does not know the difference between
