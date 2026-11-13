@@ -72,10 +72,12 @@
  * file, so a Stop's read is no longer constant. It is bounded by the file, never by the session's
  * age alone.
  *
- * THE CAP (`nextBlock`). A turn is blocked again only when an edit landed since its last block,
- * and at most 3 times; a Stop past that ends the turn and leaves a `done-gate-cap` ledger line,
- * so a gate that cries wolf gets found. The count lives in a per-session file under the install;
- * without one, `stop_hook_active` (true when this Stop follows a block) ends the turn at once.
+ * THE CAP (`nextBlock`). Counted per CONTINUATION: a task notification since the last block starts
+ * a new one. Inside one, a Stop is blocked again only when an edit landed since the last block or
+ * an owed check's background verdict changed (pending -> failed), and at most 3 times; a Stop past
+ * that ends the turn and leaves a `done-gate-cap` ledger line, so a gate that cries wolf gets
+ * found. The count lives in a per-session file under the install; without one,
+ * `stop_hook_active` (true when this Stop follows a block) ends the turn at once.
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -268,11 +270,15 @@ function turnOf(transcript, whole, sidechain = false) {
   const background = new Set();          // tool_use_id of a run_in_background launch
   const finished = new Map();            // tool_use_id -> its notification proved it
   let cwd = null;
+  // Distinct notifications in the turn, by text: the host writes each twice (an attachment and a
+  // user line holding the same text), and a set counts it once. The cap reads its size.
+  const notes = new Set();
   for (const obj of entries.slice(start)) {
     if (obj.isSidechain && !sidechain) continue;
     if (typeof obj.cwd === 'string' && obj.cwd) cwd = obj.cwd;
     const note = notificationText(obj);
     const said = note && notified(note);
+    if (note) notes.add(note.trim());
     // The last notification wins: an agent's task may notify more than once.
     if (said) finished.set(said[0], said[1]);
     const content = obj.message && obj.message.content;
@@ -292,7 +298,7 @@ function turnOf(transcript, whole, sidechain = false) {
       }
     }
   }
-  return { calls, results, originals, background, finished, cwd, opening };
+  return { calls, results, originals, background, finished, cwd, opening, notes: notes.size };
 }
 
 /**
@@ -378,9 +384,10 @@ function lastEditId({ calls, results }, roots, cwd) {
 }
 
 // ---- the block cap -------------------------------------------------------------------------
-// A block may repeat within a turn, but only when it can change something: an edit landed since
-// the last block (the agent is working, and its new edit owes the proof again), and fewer than
-// CAP_BLOCKS blocks were given this turn. A repeat with no new edit is the agent saying it will
+// A block may repeat within a continuation, but only when it can change something: an edit landed
+// since the last block (the agent is working, and its new edit owes the proof again) or a
+// background verdict changed, and fewer than CAP_BLOCKS blocks were given in this continuation. A
+// repeat with neither is the agent saying it will
 // not run the checks, and blocking it again only spins (Claude Code itself ends a run of 8 Stop
 // continuations, reset by a tool call — too late to be the gate's bound).
 const CAP_BLOCKS = 3;
@@ -389,17 +396,49 @@ const CAP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * The cap's decision, pure: the state to save with a block, or null when the turn ends. `state` is
- * what the last block of this session (and sub-agent) saved, `{ opening, lastEdit, blocks }`, or
- * null; a different `opening` is another turn, so it counts as none. With no state for this turn,
- * `active` (`stop_hook_active`) alone decides, as before the cap: a Stop that follows a block we
- * have no record of ends the turn. Once a block is on record, the record decides whatever `active`
- * says, so a host that clears the flag mid-turn cannot loop the gate.
+ * what the last block of this session (and sub-agent) saved, `{ opening, lastEdit, notes, verdict,
+ * blocks }`, or null; a different `opening` is another turn, so it counts as none. With no state
+ * for this turn, `active` (`stop_hook_active`) alone decides, as before the cap: a Stop that follows
+ * a block we have no record of ends the turn. Once a block is on record, the record decides
+ * whatever `active` says, so a host that clears the flag mid-turn cannot loop the gate.
+ *
+ * PER CONTINUATION. A notification opens no turn, so one turn may span many continuations an
+ * unattended session's notifications drive. The count is per continuation: a notification since
+ * the last block (`notes`, the turn's count of distinct notifications, grew) starts a new one at
+ * count 1, so three early blocks cannot spend the cap for the rest of the turn. Inside one
+ * continuation the bound is CAP_BLOCKS, and a repeat needs a reason: a new edit, or a changed
+ * background `verdict` for an owed check (`pending` -> `failed`), since a failed proof with no new
+ * edit must still block.
  */
-export function nextBlock(state, { active, opening, lastEdit }) {
+export function nextBlock(state, { active, opening, lastEdit, notes = 0, verdict = '' }) {
   const mine = state && state.opening === opening ? state : null;
-  if (!mine) return active ? null : { opening, lastEdit, blocks: 1 };
-  if (mine.blocks >= CAP_BLOCKS || mine.lastEdit === lastEdit) return null;
-  return { opening, lastEdit, blocks: mine.blocks + 1 };
+  const fresh = { opening, lastEdit, notes, verdict, blocks: 1 };
+  if (!mine) return active ? null : fresh;
+  if (notes > (mine.notes ?? 0)) return fresh;
+  if (mine.blocks >= CAP_BLOCKS) return null;
+  if (mine.lastEdit === lastEdit && (mine.verdict ?? '') === verdict) return null;
+  return { opening, lastEdit, notes, verdict, blocks: mine.blocks + 1 };
+}
+
+/**
+ * Each owed check's background state since the turn's last edit, `label -> 'pending' | 'failed'`:
+ * the last background run of one of its forms, launched with no completion seen, or completed with
+ * anything but exit 0. A check never run in the background has no entry.
+ */
+function backgroundOwed({ calls, results, background, finished }, checks, owedLabels, lastEdit) {
+  const states = new Map();
+  let after = lastEdit === null;
+  for (const c of calls) {
+    if (!after) { after = c.id === lastEdit; continue; }
+    const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
+    if (typeof command !== 'string' || results.get(c.id) !== false || !background.has(c.id)) continue;
+    for (const g of checks) {
+      if (!owedLabels.has(g.label) || !groupPasses(command, g)) continue;
+      states.set(g.label, finished.has(c.id) ? (finished.get(c.id) ? 'passed' : 'failed') : 'pending');
+    }
+  }
+  for (const [l, s] of states) if (s === 'passed') states.delete(l);
+  return states;
 }
 
 /**
@@ -518,9 +557,14 @@ export function doneGate(meta, args, install, read = tailReader()) {
     if (!owed.length) return settle();
     const active = meta.stop_hook_active === true;
     const capPath = install ? capFile(install, meta) : null;
+    // The owed checks whose proof is a background run still pending, or one that reported a failure.
+    const bg = owed.flatMap((r) => [...backgroundOwed(turn, r.checks, new Set(r.missing), lastEditId(turn, [r.root], at))]
+      .map(([l, st]) => [`${tag(r)}${l}`, st]));
+    const verdict = bg.map(([l, st]) => `${l}=${st}`).sort().join('\n');
     // Without an install or a session id there is nowhere to count: one block per turn, as before.
     const next = capPath
-      ? nextBlock(readCap(capPath), { active, opening: turn.opening, lastEdit: lastEditId(turn, owed.map((r) => r.root), at) })
+      ? nextBlock(readCap(capPath), { active, opening: turn.opening, notes: turn.notes, verdict,
+        lastEdit: lastEditId(turn, owed.map((r) => r.root), at) })
       : (active ? null : true);
     if (!next) {
       recordGate(install, 'done-gate-cap', 'law-3');
@@ -530,11 +574,17 @@ export function doneGate(meta, args, install, read = tailReader()) {
     if (capPath) saveCap(capPath, next);
     // The turn goes on, so a weakened test is said at the Stop that really ends it.
     recordGate(install, 'done-gate', 'law-3');
+    const named = (st) => bg.filter(([, s]) => s === st).map(([l]) => l).join('; ');
+    const pending = named('pending');
+    const failed = named('failed');
     out(`${JSON.stringify({
       decision: 'block',
       reason: `${REASON_OPEN} — ${who} edited files, and these `
         + `checks from ${DONE_LIST} have not passed since the last edit: ${list(owed)}. `
-        + 'Run them unpiped, or say plainly that they were not run and why.',
+        + (pending ? `Still running in the background, with no completion seen: ${pending}; a launch is no pass. ` : '')
+        + (failed ? `Run in the background and reported a failure: ${failed}. ` : '')
+        + 'Run them unpiped, or wait for the background run to complete with exit 0, '
+        + 'or say plainly that they were not run and why.',
     })}\n`);
     return 'block';
   } catch (e) {

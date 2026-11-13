@@ -16,7 +16,7 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **Sub-agents are judged at SubagentStop.** The done gate reads the sub-agent's own transcript and judges each git root it wrote under against that root's own list. A block keeps the sub-agent working; an inferred check there is a stderr line and a ledger entry only.
 
 ### Changed
-- **The done gate may block up to 3 times per turn, each time only after a new edit.** It used to block once. A Stop with no new edit since the last block ends the turn with the `done-gate-cap` ledger line. The count is kept per session (and per sub-agent) in the install's `notebook/done-gate/`.
+- **The done gate may block up to 3 times per continuation, each time only after a new edit or a changed background verdict.** It used to block once per turn. A task notification starts a new continuation with a fresh count. A Stop with no new edit and no new verdict since the last block ends the turn with the `done-gate-cap` ledger line. A block names the checks whose background run is still running or reported a failure. The count is kept per session (and per sub-agent) in the install's `notebook/done-gate/`.
 
 ## [5.3.1] — 2026-11-12
 

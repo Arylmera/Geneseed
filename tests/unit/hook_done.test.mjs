@@ -883,33 +883,41 @@ test('learn on SubagentStop: no agent transcript is not judged, said only where 
 
 test('nextBlock: the cap, written out', () => {
   const T = 'turn-1';
+  // A record and a Stop, in full: `notes` is the turn's count of distinct notifications, `verdict`
+  // the owed checks' background states (`label=pending|failed`, '' when none ran in the background).
+  const rec = (lastEdit, blocks, notes = 0, verdict = '', opening = T) => ({ opening, lastEdit, notes, verdict, blocks });
+  const stop = (active, lastEdit, notes = 0, verdict = '', opening = T) => ({ active, opening, lastEdit, notes, verdict });
   // Each row: the saved state, the Stop, then the state saved with a block (null: the turn ends).
   const rows = [
-    ['first stop, no record: block, count 1',
-      null, { active: false, opening: T, lastEdit: 'e1' }, { opening: T, lastEdit: 'e1', blocks: 1 }],
-    ['a stop after a block we have no record of: ends, as before the cap',
-      null, { active: true, opening: T, lastEdit: 'e1' }, null],
-    ['second stop, no new edit: ends',
-      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: true, opening: T, lastEdit: 'e1' }, null],
-    ['second stop, a new edit: blocks again, count 2',
-      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: true, opening: T, lastEdit: 'e2' },
-      { opening: T, lastEdit: 'e2', blocks: 2 }],
-    ['third stop, a new edit: blocks, count 3',
-      { opening: T, lastEdit: 'e2', blocks: 2 }, { active: true, opening: T, lastEdit: 'e3' },
-      { opening: T, lastEdit: 'e3', blocks: 3 }],
-    ['fourth stop, even with a new edit: ends',
-      { opening: T, lastEdit: 'e3', blocks: 3 }, { active: true, opening: T, lastEdit: 'e4' }, null],
+    ['first stop, no record: block, count 1', null, stop(false, 'e1'), rec('e1', 1)],
+    ['a stop after a block we have no record of: ends, as before the cap', null, stop(true, 'e1'), null],
+    ['second stop, no new edit: ends', rec('e1', 1), stop(true, 'e1'), null],
+    ['second stop, a new edit: blocks again, count 2', rec('e1', 1), stop(true, 'e2'), rec('e2', 2)],
+    ['third stop, a new edit: blocks, count 3', rec('e2', 2), stop(true, 'e3'), rec('e3', 3)],
+    ['fourth stop, even with a new edit: ends', rec('e3', 3), stop(true, 'e4'), null],
     // The record decides once it exists, whatever the flag says.
-    ['a record with the flag cleared and no new edit: ends',
-      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: false, opening: T, lastEdit: 'e1' }, null],
+    ['a record with the flag cleared and no new edit: ends', rec('e1', 1), stop(false, 'e1'), null],
     // Another opening prompt is another turn: the old record counts as none.
     ['a new turn after a capped one: block, count 1',
-      { opening: T, lastEdit: 'e3', blocks: 3 }, { active: false, opening: 'turn-2', lastEdit: 'e9' },
-      { opening: 'turn-2', lastEdit: 'e9', blocks: 1 }],
-    ['a new turn with the flag set and no record of it: ends',
-      { opening: T, lastEdit: 'e1', blocks: 1 }, { active: true, opening: 'turn-2', lastEdit: 'e9' }, null],
+      rec('e3', 3), stop(false, 'e9', 0, '', 'turn-2'), rec('e9', 1, 0, '', 'turn-2')],
+    ['a new turn with the flag set and no record of it: ends', rec('e1', 1), stop(true, 'e9', 0, '', 'turn-2'), null],
+    // PER CONTINUATION: a notification since the last block starts a new count, even at the cap
+    // and with no new edit; the same count of notifications does not.
+    ['capped, then a notification drives a new continuation: block, count 1',
+      rec('e3', 3, 2), stop(false, 'e3', 3), rec('e3', 1, 3)],
+    ['...and with the flag still set: block, count 1', rec('e3', 3, 2), stop(true, 'e3', 3), rec('e3', 1, 3)],
+    ['no notification since the cap: ends', rec('e3', 3, 2), stop(false, 'e3', 2), null],
+    // A changed background verdict re-arms the block like a new edit, inside the bound.
+    ['the owed suite went from pending to failed, no new edit: blocks, count 2',
+      rec('e1', 1, 0, 'suite=pending'), stop(true, 'e1', 0, 'suite=failed'), rec('e1', 2, 0, 'suite=failed')],
+    ['the same verdict and no new edit: ends',
+      rec('e1', 1, 0, 'suite=failed'), stop(true, 'e1', 0, 'suite=failed'), null],
+    ['a changed verdict at the cap: ends', rec('e1', 3, 0, 'suite=pending'), stop(true, 'e1', 0, 'suite=failed'), null],
+    // A record saved before these fields existed reads as no notifications and no verdict.
+    ['an old record with no notes or verdict: a new edit blocks, count 2',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, stop(true, 'e2'), rec('e2', 2)],
   ];
-  for (const [what, state, stop, want] of rows) assert.deepEqual(nextBlock(state, stop), want, what);
+  for (const [what, state, s, want] of rows) assert.deepEqual(nextBlock(state, s), want, what);
 });
 
 /** A row factory that builds its rows once, so every Stop of a sequence sees the same tool ids. */
@@ -976,6 +984,46 @@ test('learn on Stop: a stale entry the sweep cannot remove does not lose the cap
     stops: [{ rows: [p1, e[0]] }, { rows: [p1, e[0], e[1]], active: true }] });
   assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : r.err)),
     ['block', 'block']);
+});
+
+/** What each Stop of a sequence did: the block's reason, 'cap', or the stderr when neither. */
+const outcomes = (runs) => runs.map((r) => (r.out ? JSON.parse(r.out).reason
+  : r.ledger.includes('done-gate-cap') ? 'cap' : `none: ${r.err}`));
+
+// An unattended session: notifications drive continuations of one human turn. Three early blocks
+// must not spend the cap for the rest of it — a notification since the last block starts a new count.
+test('learn on Stop: a notification starts a new continuation, with its own cap', () => {
+  const e = [once(editWorker), once(editWorker), once(editWorker)];
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const note = noteAttachment('toolu_elsewhere', 'completed', 'Background command "build" completed (exit code 0)');
+  const got = outcomes(subagentStops({ event: 'Stop', stops: [
+    { rows: [p1, e[0]] },
+    { rows: [p1, e[0], e[1]], active: true },
+    { rows: [p1, e[0], e[1], e[2]], active: true },
+    { rows: [p1, e[0], e[1], e[2], note], active: true },
+    { rows: [p1, e[0], e[1], e[2], note], active: true },
+  ] })).map((o) => (o.startsWith('Geneseed') ? 'block' : o));
+  assert.deepEqual(got, ['block', 'block', 'block', 'block', 'cap']);
+});
+
+// A background proof that changes verdict with no new edit: pending at the first block, failed
+// later. The failure must block, and each reason must say what the background run is doing.
+test('learn on Stop: a background run that fails after the cap blocks again, and the reason says so', () => {
+  const e0 = once(editWorker);
+  const launch = once(() => bgBash('npm run lint'));
+  const failed = once((w) => noteAttachment(launch(w)[0].message.content[0].id, 'failed',
+    'Background command "lint" failed with exit code 1'));
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const [first, second, third] = outcomes(subagentStops({ event: 'Stop', stops: [
+    { rows: [p1, e0, launch] },
+    { rows: [p1, e0, launch], active: true },
+    { rows: [p1, e0, launch, failed], active: true },
+  ] }));
+  assert.match(first, /Still running in the background, with no completion seen: npm run lint; a launch is no pass\./);
+  assert.doesNotMatch(first, /reported a failure/);
+  assert.equal(second, 'cap', 'no new edit and no new verdict ends the turn');
+  assert.match(third, /Run in the background and reported a failure: npm run lint\./);
+  assert.doesNotMatch(third, /Still running/);
 });
 
 test('learn on SubagentStop: the cap counts per sub-agent', () => {
