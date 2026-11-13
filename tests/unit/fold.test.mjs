@@ -1347,6 +1347,32 @@ test('M6: a revived name with its kit on — the old herdr render is archived an
   assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'herdr')), [stamp]);
 }));
 
+// A user's edit of the revived skill is theirs, as an edit of compose-ops is. Once an emit has
+// declined to overwrite it (`kept` in the manifest, out of `owned`), no emit may archive it: not
+// the first kit-off emit, not the second (by then the owned LICENSE is pruned, so nothing owned is
+// left under the folder and only the `kept` record protects it), and not a kit-on emit after that.
+// Each emit records `skills/herdr/SKILL.md` in `kept` again, so the record never lapses.
+test('M6: a kept edit of a revived skill survives kit off twice and kit on again', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  const on = ['--kits', 'terminal-tools'];
+  emit(home, 'claude-global', on);
+  const file = path.join(cfg, 'skills', 'herdr', 'SKILL.md');
+  const edited = `${fs.readFileSync(file, 'utf8')}\nMy own herdr note.\n`;
+  fs.writeFileSync(file, edited);
+  const keptOf = () => JSON.parse(read(cfg, '.geneseed-manifest.json')).kept ?? [];
+  emit(home, 'claude-global', on);
+  assert.ok(keptOf().includes('skills/herdr/SKILL.md'), 'the kit-on emit did not record the edit as kept');
+  assert.ok(!ownedOf(cfg).includes('skills/herdr/SKILL.md'));
+  for (const [i, args] of [[1, []], [2, []], [3, on]]) {
+    const r = emit(home, 'claude-global', args);
+    assert.deepEqual(pruneLines(r.stdout), [], `emit ${i}: ${r.stdout}`);
+    assert.equal(fs.readFileSync(file, 'utf8'), edited, `emit ${i} changed the user's edit`);
+    assert.deepEqual(archivedSkills(cfg), [], `emit ${i} archived something`);
+    assert.ok(keptOf().includes('skills/herdr/SKILL.md'), `emit ${i} let the kept record lapse`);
+  }
+  assert.ok(!exists(cfg, 'skills', 'herdr', 'LICENSE-herdr.txt') || ownedOf(cfg).includes('skills/herdr/LICENSE-herdr.txt'));
+}));
+
 test('M6: a same-name folder without the fingerprint, or holding a link, stays', () => withHome((home) => {
   const cfg = path.join(home, '.bob');
   // The upstream grill-me: unquoted description, no `# <Label>:` heading.
