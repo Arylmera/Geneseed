@@ -783,6 +783,9 @@ export function apiInstallCmd(state, body) {
   // `--force` only on a literal `true`: the panel's "Replace with Geneseed's copies", which
   // names the files first. It is this one build's instruction and is never recorded.
   if (bget(body, 'force') === true) argv.push('--force');
+  // `--prune-gates` the same way, and only where it means something: OpenCode's opencode.json
+  // is the one file with `permission.bash` gates. One build's instruction, never recorded.
+  if (bget(body, 'pruneGates') === true && host === 'opencode') argv.push('--prune-gates');
   return { cmd: [process.execPath, path.join(ROOT, 'bin', 'build-driver.mjs'), ...argv] };
 }
 

@@ -62,9 +62,9 @@ function McpList({ targets, onReveal }) {
 // What a rebuild leaves alone here and a forced one would not: files that are the user's at a
 // path Geneseed ships (`kept`), and retired skills an older build left behind (`stale`). The
 // server reads both off the emit's own record (`leftoversOf`, js/hosts/installs.mjs). Shown
-// only when there is one, with the files named, because the button below it overwrites them.
+// only when there is one, with the files named, because "Force rebuild…" overwrites them.
 const SHOWN = 6
-function Leftovers({ leftovers, canAct, busy, onForce }) {
+function Leftovers({ leftovers }) {
   const kept = leftovers?.kept || []
   const stale = leftovers?.stale || []
   const all = [...kept, ...stale]
@@ -95,15 +95,51 @@ function Leftovers({ leftovers, canAct, busy, onForce }) {
         ))}
         {all.length > SHOWN ? <li className="dim">and {all.length - SHOWN} more</li> : null}
       </ul>
-      {canAct ? (
-        <button type="button" className="btn ghost danger-line" disabled={busy} onClick={onForce}>
-          Replace with Geneseed’s copies…
+      <p className="sub">
+        <strong>Force rebuild…</strong> below replaces them with Geneseed’s copies. Skills and
+        agents under your own names, memory, notebook, rules and profile are never touched. To keep
+        a file of yours for good, exclude that skill instead.
+      </p>
+    </div>
+  )
+}
+
+// OpenCode only: `permission.bash` gates in opencode.json whose rule this install has off (a
+// doctrine, or the deletion gate), still as Geneseed writes them, and written before Geneseed
+// recorded its own gates (5.2.0) — so a rebuild keeps them and warns. The server lists them
+// (`strandedGatesOf`, js/hosts/installs.mjs); the button runs the one rebuild that removes them
+// (`--prune-gates`). A commented file is never rewritten, so there the keys are for a hand edit.
+function StrandedGates({ stranded, canAct, busy, onPrune }) {
+  const keys = stranded?.keys || []
+  if (!keys.length) return null
+  return (
+    <div className="ip-block ip-leftovers" role="group" aria-label="Stranded permission gates">
+      <span className="ip-label">
+        Stranded gates <span className="mono dim">{keys.length}</span>
+      </span>
+      <p className="sub">
+        These <code>permission.bash</code> entries in <code>opencode.json</code> still ask, but the
+        rule behind them is off in this install. Geneseed has no record that it wrote them, so a
+        rebuild leaves them.
+      </p>
+      <ul className="ip-files">
+        {keys.slice(0, SHOWN).map((k) => (
+          <li key={k}>
+            <code title={k}>{k}</code>
+          </li>
+        ))}
+        {keys.length > SHOWN ? <li className="dim">and {keys.length - SHOWN} more</li> : null}
+      </ul>
+      {stranded.commented ? (
+        <p className="sub">
+          This file has comments, so Geneseed does not rewrite it: delete these entries by hand.
+        </p>
+      ) : canAct ? (
+        <button type="button" className="btn ghost" disabled={busy} onClick={onPrune}>
+          Remove stranded gates…
         </button>
       ) : null}
-      <p className="sub">
-        Skills and agents under your own names, memory, notebook, rules and profile are never
-        touched. To keep a file of yours for good, exclude that skill instead.
-      </p>
+      <p className="sub">An entry you changed yourself is kept.</p>
     </div>
   )
 }
@@ -135,6 +171,7 @@ export default function InstallPanel({
   onRemove,
   onRevealMcp,
   onForce,
+  onPrune,
 }) {
   const who = `${hostInfo(inst.host).label} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
@@ -190,8 +227,14 @@ export default function InstallPanel({
         </div>
       ) : null}
 
+      {active ? <Leftovers leftovers={inst.leftovers} /> : null}
       {active ? (
-        <Leftovers leftovers={inst.leftovers} canAct={canAct} busy={busy} onForce={onForce} />
+        <StrandedGates
+          stranded={inst.strandedGates}
+          canAct={canAct}
+          busy={busy}
+          onPrune={onPrune}
+        />
       ) : null}
       {active && targets.length ? <McpList targets={targets} onReveal={onRevealMcp} /> : null}
       {active && inst.scope === 'global' ? <ExclusionsCard /> : null}
@@ -216,9 +259,19 @@ export default function InstallPanel({
               Install
             </button>
           ) : active ? (
-            <button type="button" className="btn" disabled={unchanged} onClick={onApply}>
-              Apply and rebuild
-            </button>
+            <>
+              <button type="button" className="btn" disabled={unchanged} onClick={onApply}>
+                Apply and rebuild
+              </button>
+              <button
+                type="button"
+                className="btn ghost danger-line"
+                disabled={busy}
+                onClick={onForce}
+              >
+                Force rebuild…
+              </button>
+            </>
           ) : null}
           {!absent ? (
             <>

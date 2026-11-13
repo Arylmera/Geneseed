@@ -224,6 +224,46 @@ test('the install command forces only on a literal true', () => {
   });
 });
 
+// `--prune-gates` the same way: a literal `true` only, and only on OpenCode — the one host whose
+// config holds `permission.bash` gates. On Claude the flag would be a silent no-op, so it is
+// never sent at all.
+test('the install command prunes gates only on a literal true, on OpenCode', () => {
+  withThreeInstalls(({ st, oc, cl }) => {
+    const argv = (host, p, body) => apiInstallCmd(st, { host, path: p, ...body }).cmd.map(String);
+    assert.ok(argv('opencode', oc, { pruneGates: true }).includes('--prune-gates'));
+    for (const pruneGates of [undefined, false, 'true', 1]) {
+      assert.ok(!argv('opencode', oc, { pruneGates }).includes('--prune-gates'),
+        `pruneGates=${JSON.stringify(pruneGates)} pruned`);
+    }
+    assert.ok(!argv('claude', cl, { pruneGates: true }).includes('--prune-gates'),
+      'a Claude build was sent --prune-gates');
+  });
+});
+
+// The row names the gates a `--prune-gates` rebuild would remove. The rule of each case is the
+// build's own (`reconcileOpencodePermission`): with the process pack's push rule excluded,
+// `git commit*`/`git push*` at "ask" are stranded; the one a user re-scoped to "allow" is
+// theirs and is not listed; once `bash_gates` records a key, a plain rebuild takes it, so it is
+// not listed either.
+test('an OpenCode row lists the gates a prune rebuild would remove', () => {
+  withGlobalRoot(({ root }) => {
+    seedGlobal(root);
+    const agent = path.join(root, 'AGENT.md');
+    fs.appendFileSync(agent, '\nActive packs: craft, rigor, ops, process, comms\nExcluded rules: process 5\n');
+    const cfg = JSON.parse(fs.readFileSync(path.join(root, 'opencode.json'), 'utf8'));
+    cfg.permission = { bash: { 'git commit*': 'ask', 'git push*': 'allow', 'ls*': 'allow' } };
+    fs.writeFileSync(path.join(root, 'opencode.json'), JSON.stringify(cfg));
+    let row = rowFor(neutral(), root);
+    assert.deepEqual(row.strandedGates, { keys: ['git commit*'], commented: false });
+
+    const man = path.join(root, GLOBAL_MANIFEST);
+    const doc = JSON.parse(fs.readFileSync(man, 'utf8'));
+    fs.writeFileSync(man, JSON.stringify({ ...doc, bash_gates: ['git commit*'] }));
+    row = rowFor(neutral(), root);
+    assert.deepEqual(row.strandedGates.keys, [], 'a recorded gate was listed as stranded');
+  });
+});
+
 test('an active install rebuilds in place with the same build command', () => {
   withThreeInstalls(({ st, oc }) => {
     const plan = apiInstallCmd(st, { host: 'opencode', path: oc, theme: 'imperial' });

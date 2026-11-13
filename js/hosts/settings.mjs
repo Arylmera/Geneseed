@@ -379,6 +379,30 @@ function reconcileOpencodePermission(perm, want, record = new Set(), pruneAll = 
 }
 
 /**
+ * The gates a `--prune-gates` build of this selection would take out of `jsonPath`, read without
+ * writing — the console's notice and its "Remove stranded gates" button (Installs page).
+ *
+ * It runs `reconcileOpencodePermission` itself on a copy, so it cannot disagree with the build
+ * about what is stranded: the keys it declines to remove, minus the ones a user re-scoped (a
+ * value that is no longer `OWNED_VERDICT`), which `--prune-gates` keeps too. A recorded gate
+ * never shows here: a plain rebuild already takes it back. `commented` says the file has
+ * comments, where a build names the keys but cannot write — the console says "by hand" then.
+ * Nothing to read, no `permission`, or a shape the build cannot wire into: no keys.
+ * @returns {{ keys: string[], commented: boolean }}
+ */
+export function prunableGates(jsonPath, doctrines = null, excluded = [], deletionGate = true,
+  record = []) {
+  const { state, data, hadComments } = loadJsonObject(opencodeTarget(jsonPath));
+  if (state !== 'ok' || !has(data, 'permission')) return { keys: [], commented: false };
+  const perm = structuredClone(get(data, 'permission'));
+  const [, stranded] = reconcileOpencodePermission(perm,
+    defaultPermission(doctrines, excluded, deletionGate), new Set(record));
+  const bash = isDict(perm) && isDict(get(perm, 'bash')) ? get(perm, 'bash') : {};
+  const keys = stranded.filter((k) => bash[k] === OWNED_VERDICT.get(k));
+  return { keys, commented: keys.length > 0 && !!hadComments };
+}
+
+/**
  * `permission.skill` rows for OpenCode's O-1 fix (opencode-verdict.md): a skill marked
  * `<!-- invocation: user -->` is still model-invocable there (Claude Code's
  * `disable-model-invocation` has no OpenCode equivalent), so each one gets an explicit

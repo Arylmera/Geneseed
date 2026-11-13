@@ -498,8 +498,8 @@ describe('Installs / Hosts', () => {
   // THE FORCED REBUILD. An install can hold files that are the user's where Geneseed ships its
   // own (`leftovers.kept`: an edited shipped skill, or a file of theirs under a shipped name)
   // and retired skills an older version left (`leftovers.stale`). A rebuild keeps both. The
-  // panel names them and offers the one rebuild that replaces them, behind a danger confirm
-  // that names each file again; with nothing left over it shows neither.
+  // panel names them; "Force rebuild…", offered on every active install, is the one rebuild
+  // that replaces them, behind a danger confirm that names each file again.
   it('names the files a rebuild keeps, and a forced rebuild asks before replacing them', async () => {
     vi.mocked(api.installs).mockResolvedValueOnce({
       installs: [
@@ -532,7 +532,7 @@ describe('Installs / Hosts', () => {
     expect(within(box).getByText('skills/domain-modeling.md')).toBeTruthy()
     expect(within(box).getByText(/under your own names.*are never\s+touched/)).toBeTruthy()
     askConfirm.mockClear()
-    fireEvent.click(within(box).getByRole('button', { name: 'Replace with Geneseed’s copies…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Force rebuild…' }))
     await answered()
     const [msg, opts] = askConfirm.mock.calls[0]
     expect(msg).toContain('.claude/skills/plan/SKILL.md')
@@ -549,11 +549,76 @@ describe('Installs / Hosts', () => {
     )
   })
 
-  it('an install with nothing left over shows no such block', async () => {
+  // Nothing left over: no block, but Force rebuild is still there, and its confirm says what
+  // force does without a list, rather than an empty "Replace with Geneseed's copy: .".
+  it('an install with nothing left over shows no such block, and can still force', async () => {
     const onAction = vi.fn()
     render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
     await screen.findByRole('button', { name: 'Apply and rebuild' })
     expect(screen.queryByRole('group', { name: 'Files a rebuild keeps' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Stranded permission gates' })).toBeNull()
+    askConfirm.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Force rebuild…' }))
+    await answered()
+    const [msg, opts] = askConfirm.mock.calls[0]
+    expect(msg).toMatch(/^No file of yours is recorded here\./)
+    expect(opts.tone).toBe('danger')
+    expect(onAction).toHaveBeenCalledWith('install', expect.objectContaining({ force: true }))
+  })
+
+  // OPENCODE'S STRANDED GATES. `strandedGates.keys` are permission.bash entries whose rule is
+  // off and that a plain rebuild keeps (no record that Geneseed wrote them). The panel lists
+  // them and runs the one rebuild that removes them (`pruneGates`), after a confirm naming
+  // them; a commented opencode.json is never rewritten, so there it says "by hand" and offers
+  // no button.
+  const ocRow = (strandedGates) => ({
+    installs: [
+      {
+        id: 'opencode:C:/Users/me/.config/opencode',
+        host: 'opencode',
+        scope: 'global',
+        path: 'C:/Users/me/.config/opencode',
+        state: 'active',
+        theme: 'neutral',
+        footprint: 'lean',
+        posture: 'peer',
+        mode: 'direct',
+        trust: 'balanced',
+        sharedTier: false,
+        leftovers: { kept: [], stale: [] },
+        strandedGates,
+      },
+    ],
+    postures: ['peer'],
+    modes: ['direct'],
+    trusts: ['balanced'],
+  })
+
+  it('lists stranded gates and prunes them after a confirm', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(
+      ocRow({ keys: ['git commit*', 'git push*'], commented: false }),
+    )
+    const onAction = vi.fn()
+    render(<Hosts onAction={onAction} themes={[{ name: 'neutral' }]} />)
+    const box = await screen.findByRole('group', { name: 'Stranded permission gates' })
+    expect(within(box).getByText('git commit*')).toBeTruthy()
+    askConfirm.mockClear()
+    fireEvent.click(within(box).getByRole('button', { name: 'Remove stranded gates…' }))
+    await answered()
+    expect(askConfirm.mock.calls[0][0]).toContain('git commit*, git push*')
+    expect(onAction).toHaveBeenCalledWith(
+      'install',
+      expect.objectContaining({ host: 'opencode', pruneGates: true }),
+    )
+    expect(onAction.mock.calls[0][1].force).toBeUndefined()
+  })
+
+  it('a commented opencode.json gets the list and no prune button', async () => {
+    vi.mocked(api.installs).mockResolvedValueOnce(ocRow({ keys: ['git commit*'], commented: true }))
+    render(<Hosts onAction={vi.fn()} themes={[{ name: 'neutral' }]} />)
+    const box = await screen.findByRole('group', { name: 'Stranded permission gates' })
+    expect(within(box).getByText(/delete these entries by hand/)).toBeTruthy()
+    expect(within(box).queryByRole('button')).toBeNull()
   })
 
   it('a global install has no shared-tier switch and never sends the key', async () => {
