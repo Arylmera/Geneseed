@@ -629,7 +629,11 @@ describe('Rules', () => {
     fireEvent.click(await screen.findByText('No emoji in commits'))
     fireEvent.click(screen.getByRole('button', { name: 'Retire R1' }))
     expect(await screen.findByText('No rules yet')).toBeTruthy()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add rule' }))
+    // The focus move is a passive effect, flushed on its own task after the empty state commits:
+    // a slow runner reaches the next line first (CI, PR #561). Wait for it, as the tests above do.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add rule' })),
+    )
   })
 
   it('returns focus to the row head after a graduate', async () => {
