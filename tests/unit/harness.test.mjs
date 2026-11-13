@@ -922,6 +922,28 @@ test('the gate refuses a doctrine citation inside an always-on tier', () => {
   '{{DOCTRINES}}, the section noun, was read as a rule citation');
 });
 
+test('the gate refuses a carrier parenthetical that mixes a doctrine citation with words', () => {
+  // D3: the render removes an excluded rule's citation only when its parentheses hold citations
+  // alone, so a mixed group would keep invoking a rule the install switched off. Planted in a
+  // pack and in the template, the two places the carrier inlines; a skill is not carrier text
+  // and carries the same words in silence. A list of citations, law beside doctrine, is legal.
+  const mixed = '\n\nNever push (and {{DOCTRINE:consent-before-push}} holds).\n';
+  for (const rel of ['src/doctrines/craft.md', 'src/AGENT.md.tmpl']) {
+    const before = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const problems = withFault({ [rel]: before + mixed }, (root) => gate(root, 'm.constitutionProblems()'));
+    const short = rel.slice('src/'.length);
+    assert.ok(problems.some((p) => p.includes(short) && p.includes('mixes a doctrine citation')),
+      `${rel}: no mixed-citation problem in ${JSON.stringify(problems)}`);
+  }
+  const skill = fs.readFileSync(path.join(SRC, 'skills', 'commit.md'), 'utf8');
+  const craft = fs.readFileSync(path.join(SRC, 'doctrines', 'craft.md'), 'utf8');
+  assert.deepEqual(withFault({
+    'src/skills/commit.md': skill + mixed,
+    'src/doctrines/craft.md': `${craft}\n\nSo it holds ({{LAW:surface-failures}}, {{DOCTRINE:consent-before-push}}).\n`,
+  }, (root) => gate(root, 'm.constitutionProblems()')), [],
+  'a skill, or a list made of citations only, was refused');
+});
+
 // ---------------------------------------------------------------------------------------------
 // The LEAN-block gate. `resolveLean` is a REPLACE over a marker pair, so it is a no-op on text
 // that carries no markers: a rule whose block was dropped ships its full body at the default

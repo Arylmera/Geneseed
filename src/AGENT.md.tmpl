@@ -24,19 +24,17 @@ Tool-agnostic: where the host has no sub-agents, each {{AGENT}} below is a
 <!-- LEAN:end -->
 
 <!-- LEAN:begin -->
-**Readiness sigil — required.** Before your first reply, complete the startup
-ritual: read this file and its {{LAWS}}, then **load the project context**
-(**Session start**, below). Only then emit your first reply, which MUST begin with the
-exact line below, before any other text. Do not paraphrase it and do not skip it —
-a first reply that omits the sigil signals the harness was not read, and emitting
-it certifies you have loaded the {{LAWS}} *and* the project context. **{{SKILLS}}
-first:** when a request matches a {{SKILL}}, invoke it as your first tool
-call — before loading context or touching files.
+**Readiness sigil.** Before your first reply, read this file and its {{LAWS}}, then
+load the project context (**Session start**, below). Begin that reply with the line
+below, as written, before any other text. The user reads it as the sign that you
+loaded the {{LAWS}} and the project context; a first reply without it tells them the
+harness was not read. **{{SKILLS}} first:** when a request matches a {{SKILL}}, invoke
+it as your first tool call, before you load context or touch files.
 <!-- LEAN:else -->
-**Readiness sigil — required.** Your first reply MUST begin with the exact line below,
-verbatim — it certifies you have read this file and its {{LAWS}} and loaded `context.json`
-and its `eager` entries (§9). **{{SKILLS}} first:** when the request matches a {{SKILL}}, invoke
-it as your very first tool call — before loading context, reading files, or searching.
+**Readiness sigil.** Before your first reply, read this file and its {{LAWS}} and load
+`context.json` and its `eager` entries (§9); begin that reply with the line below, as
+written. **{{SKILLS}} first:** when the request matches a {{SKILL}}, invoke it as your first
+tool call, before you load context, read files or search.
 <!-- LEAN:end -->
 
 > {{LOADED_SIGIL}}
@@ -205,7 +203,7 @@ decompose it into independent subtasks, route each to the single owning {{AGENT}
 above, and converge the results yourself. Every handoff carries an **envelope** —
 the subtask goal, the inputs the {{AGENT}} needs, and its output contract — and the
 constraints travel with it: dispatched {{AGENTS}} commit only in their own worktree, never
-push, and never merge outside their own branch ({{DOCTRINE:consent-before-push}} stays with you), and an unfulfilled contract returns as a stated gap, never invented
+push, and never merge outside their own branch, so the push stays with you ({{DOCTRINE:consent-before-push}}), and an unfulfilled contract returns as a stated gap, never invented
 content. Where the host exposes a `workflow` tool, prefer the saved `dispatch`
 workflow ([workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md)); where it does not, run
 the same shape model-driven via the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md).
@@ -217,7 +215,7 @@ dispatched alone; the [council {{SKILL}}]({{DIR_SKILLS}}/council.md) convenes th
 subset that productively clashes on a given motion.
 <!-- LEAN:else -->
 Dispatched {{AGENTS}} commit only in their worktree, never push, never merge outside
-their own branch ({{DOCTRINE:consent-before-push}} stays with you), and an unfulfilled contract returns as a stated gap, never invented content. A
+their own branch, so the push stays with you ({{DOCTRINE:consent-before-push}}), and an unfulfilled contract returns as a stated gap, never invented content. A
 multi-part goal goes through the [parallel-agents {{SKILL}}]({{DIR_SKILLS}}/parallel-agents.md)
 (or the [workflow {{SKILL}}]({{DIR_SKILLS}}/workflow.md) where the host has a workflow tool);
 the ten council seats are convened by the [council {{SKILL}}]({{DIR_SKILLS}}/council.md).
@@ -359,7 +357,7 @@ tool you build for yourself — belongs in `{{DIR_NOTEBOOK}}/`, never in the hos
 tree. `NOTEBOOK.md`, a session file, recalls what you keep here; keep the space referable across sessions — the seeded index
 is one way; replace it with whatever scheme serves you better. When a note
 hardens into a durable fact worth recalling verbatim, write it to {{MEMORY}}
-(§5, {{DOCTRINE:persist-insight}}). Keep the two stores distinct by *role*, not just by
+in §5 ({{DOCTRINE:persist-insight}}). Keep the two stores distinct by *role*, not just by
 format: {{MEMORY}} holds durable insight for future sessions, the {{NOTEBOOK}}
 holds your working artifacts. The one fixed law: `{{DIR_NOTEBOOK}}/` is **personal and
 git-ignored** — never committed or shared, and the `.gitignore` that guarantees
@@ -457,7 +455,7 @@ new note linked in. Cross-project facts go here via the
 *{{EPI_CONTEXT}}*
 
 <!-- LEAN:begin -->
-**Load `context.json` before your first reply — this is not a suggestion.** The
+Load `context.json` before your first reply. The
 harness carries no project-specific knowledge; this manifest is how the project hands
 you its own: the repo's own (`context.json` or `.harness/context.json` at its root),
 else `{{AT_HARNESS}}context.json`. The hook injects its `eager` entries (**Session
@@ -475,7 +473,7 @@ comment carries its schema and setup notes.
 **Reviewing code** — with any review command, built-in or not — first apply the nearest
 `REVIEW.md` above each changed file. It overrides the review defaults, never a {{LAW}}.
 <!-- LEAN:else -->
-**Load `context.json` before your first reply — not deferrable.** The repo's own
+Load `context.json` before your first reply. The repo's own
 (`context.json` or `.harness/context.json` at its root), else `{{AT_HARNESS}}context.json`,
 is how the project hands you its own knowledge; the hook injects its `eager` entries
 (**Session start**). `"eager"` entries are read now and are

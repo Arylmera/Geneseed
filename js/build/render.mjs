@@ -427,7 +427,15 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
   text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? [], cfg);
   text = resolveLean(text, footprint);
   if (footprint === 'lean') text = leanVoice(text, cfg.src);
-  return substitute(text, theme);
+  text = substitute(text, theme);
+  // D3 lives HERE, not in `renderAll`: every root file is rendered by this function, and the
+  // Claude/Bob emitters re-render the template with prefixed DIR_* tokens (`prefixedAgentText`)
+  // without going through `renderAll`'s items. Top-level template only; an include is flattened
+  // into it first.
+  if (!visiting.size && normcase(here) === normcase(path.resolve(cfg.src, 'AGENT.md.tmpl'))) {
+    text = dropCarrierCitations(cfg, text);
+  }
+  return text;
 }
 
 /** `_build_render._posture_body` / `_mode_body` — one helper, both registers. */
@@ -524,6 +532,58 @@ function dropExcludedRules(text, pack, excluded) {
       return !m || !excluded.has(`${m[1]}.${Number(m[2])}`);
     })
     .join('');
+}
+
+/**
+ * A parenthetical made of rule citations only — `(*A*)`, `(*A*, *B*)` — with the blanks before
+ * it: spaces, and at most one line break, so a citation wrapped onto its own line leaves no
+ * orphaned punctuation at the start of the next.
+ */
+const CITE_GROUP_RE = /([ \t]*(?:\r?\n[ \t]*)?)\((\*[^*()\n]+\*(?:,[ \t]*\*[^*()\n]+\*)*)\)/g;
+
+/**
+ * Remove the citations of excluded rules from rendered carrier text (owner decision D3,
+ * 2026-11-11: an excluded rule is OFF, so the text read every turn stops invoking it).
+ *
+ * ⚠ AFTER SUBSTITUTION, ON THE RENDERED TEXT, the opposite of `dropExcludedRules` and for the
+ * opposite reason: a citation renders as the rule's English principle in italics, identical in
+ * every voice (`resolveRuleIds`), so here the rendered form is the one literal, and a cited
+ * rule's include chain (template, mode, posture, packs) is already flat.
+ *
+ * Only a group whose every item is a rule name is touched. The doctor holds every carrier
+ * source to that shape (`citationGroupProblems`), so each removal leaves a sentence that still
+ * reads. A prose mention ("Where *X* refuses …") and a group with any other italic stay: the
+ * first binds nothing, the second may be plain emphasis. `offNames` empty is the identity, which
+ * keeps a build with no exclusion byte-identical.
+ * @param {string} text
+ * @param {Set<string>} offNames principle names of the excluded rules
+ * @param {Set<string>} allNames principle names of every rule in the canon
+ */
+export function dropExcludedCitations(text, offNames, allNames) {
+  if (!offNames.size) return text;
+  return text.replace(CITE_GROUP_RE, (whole, lead, inner) => {
+    const names = inner.match(/\*[^*]+\*/g).map((s) => s.slice(1, -1));
+    if (!names.every((n) => allNames.has(n))) return whole;
+    const kept = names.filter((n) => !offNames.has(n));
+    if (kept.length === names.length) return whole;
+    return kept.length ? `${lead}(${kept.map((n) => `*${n}*`).join(', ')})` : '';
+  });
+}
+
+/**
+ * `dropExcludedCitations` with this build's names: the excluded doctrine rules of
+ * `cfg.excludeRules`. The bundle's other files — the complete packs on disk included — never
+ * pass through here, so they keep every citation.
+ * @param {any} cfg
+ * @param {string} text
+ */
+function dropCarrierCitations(cfg, text) {
+  const offRules = new Set(cfg.excludeRules ?? []);
+  if (!offRules.size) return text;
+  const canonRules = ruleCanon(cfg.src).rules;
+  const offNames = new Set(canonRules.filter((r) => r.kind === 'DOCTRINE' && offRules.has(`${r.pack}.${r.n}`))
+    .map((r) => r.name));
+  return dropExcludedCitations(text, offNames, new Set(canonRules.map((r) => r.name)));
 }
 
 function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
@@ -694,7 +754,7 @@ export function renderAll(cfg, themeName, {
     // accident, which is a different thing from shipping whole by contract.
     // Keyed on the SOURCE rel, not the themed one, so a DIR_* rename cannot un-exempt them.
     const fp = /^(?:laws|ontology|doctrines)[\\/]/.test(rel) ? 'full' : footprint;
-    const text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
+    let text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
       ? renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog) : null;
     items.push({ rel: outRel, text, src: file });
     // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The

@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   substitute, effectiveTheme, themedRel, destRel, renderAll, renderFile, sourceGeneration, STRUCTURE,
+  dropExcludedCitations,
 } from '../../js/build/render.mjs';
 import { build } from '../../js/build/bundle.mjs';
 import { sourceFingerprint } from '../../js/build/version.mjs';
@@ -2819,6 +2820,55 @@ test('excluding a rule removes that rule and nothing else', () => {
     assert.ok(read(out, 'doctrines', 'process.md').includes(ruleHead('process', 7)),
       'the excluded rule left the bundle too — citations of it now dangle');
   });
+});
+
+// AN EXCLUDED RULE IS OFF, SO THE CARRIER STOPS INVOKING IT (owner decision D3, 2026-11-11).
+// A citation is how a rule is invoked: `(*Consent Before Push*)` after a sentence says "this
+// sentence binds because of that rule". With the rule excluded the sentence still reads, the
+// reason does not, so the citation goes. Only a parenthetical made of citations alone is
+// removed — the doctor holds every carrier source to that shape. A prose mention ("Where
+// *X* refuses …") describes a relation and binds nothing, so it stays, as does any group with
+// an italic that is not a rule name: it might be ordinary emphasis.
+test('an excluded rule\'s citations leave the carrier, and only those', () => {
+  const all = new Set(['Kept Rule', 'Off Rule', 'Edit the Source, Not the Surface']);
+  const off = new Set(['Off Rule', 'Edit the Source, Not the Surface']);
+  for (const [text, want] of [
+    // A lone citation goes with the space before it; the punctuation after it stays.
+    ['domain (*Off Rule*), and', 'domain, and'],
+    // A citation wrapped onto its own line goes with that one line break and its indent.
+    ['never up front\n  (*Off Rule*). Large', 'never up front. Large'],
+    // In a list of citations only the excluded one goes, from either end.
+    ['remains (*Kept Rule*, *Off Rule*).', 'remains (*Kept Rule*).'],
+    ['remains (*Off Rule*, *Kept Rule*).', 'remains (*Kept Rule*).'],
+    // A rule name may hold a comma; it is still one citation.
+    ['rendered (*Edit the Source, Not the Surface*).', 'rendered.'],
+    // Untouched: a kept rule, a prose mention, a mixed group, a group with a non-rule italic.
+    ['done (*Kept Rule*).', 'done (*Kept Rule*).'],
+    ['Where *Off Rule* refuses it', 'Where *Off Rule* refuses it'],
+    ['(*Off Rule* stays with you)', '(*Off Rule* stays with you)'],
+    ['(*role*, *Off Rule*)', '(*role*, *Off Rule*)'],
+  ]) assert.equal(dropExcludedCitations(text, off, all), want, JSON.stringify(text));
+  // Nothing excluded: the text comes back as it went in, which keeps a default build identical.
+  assert.equal(dropExcludedCitations('a (*Off Rule*) b', new Set(), all), 'a (*Off Rule*) b');
+});
+
+test('excluding a rule drops its citations from AGENT.md, never from the bundle', () => {
+  // Consent Before Push is cited from §3 and from three process rules. Both footprints, because
+  // a full carrier inlines the full halves, which cite it too.
+  for (const footprint of ['lean', 'full']) {
+    withDir((d) => {
+      const on = path.join(d, 'on');
+      const off = path.join(d, 'off');
+      buildInto(on, {}, { footprint });
+      buildInto(off, { excludeRules: ['process.5'] }, { footprint });
+      assert.ok(agentText(on).includes('(*Consent Before Push*)'),
+        `${footprint}: the control lost the citation, so the cell below proves nothing`);
+      assert.ok(!agentText(off).includes('Consent Before Push'),
+        `${footprint}: an excluded rule is still cited by name in AGENT.md`);
+      assert.ok(read(off, 'doctrines', 'process.md').includes('(*Consent Before Push*)'),
+        `${footprint}: the on-disk pack lost a citation — it is the complete text, and keeps them`);
+    });
+  }
 });
 
 test('a pack whose every rule is excluded leaves the marker', () => {
