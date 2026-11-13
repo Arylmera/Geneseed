@@ -85,7 +85,7 @@ reports `version "21` or higher.
 
 ## `geneseed: command not found`
 
-**Cause.** The `geneseed` launcher is not on your PATH. A git clone is not put there automatically (an `npm install -g geneseed` install is).
+**Cause.** The `geneseed` launcher is not on your PATH. The clone's installer (`./install`, `install.cmd`) runs `link` for you, but a clone set up with `geneseed setup` alone is not linked, and a terminal opened before `link` ran does not see the change (an `npm install -g geneseed` install is put on PATH by npm).
 
 **Fix.** From the cloned folder:
 

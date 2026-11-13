@@ -6,7 +6,8 @@ rem
 rem It installs NOTHING itself. On a managed PC a silent Node or Git install is exactly
 rem what IT forbids, and winget is often blocked too - so a missing prerequisite is
 rem named, with where to get it, and the script stops. Re-run it once that is fixed.
-rem No PowerShell anywhere: .ps1 is blocked by policy on the machines this is for.
+rem No .ps1 anywhere: it is blocked by policy on the machines this is for. The one
+rem PowerShell use is `geneseed link`'s inline -Command, and its failure is not fatal.
 rem
 rem ASCII only, on purpose. cmd.exe reads a .cmd in the console's OEM codepage, so an
 rem em dash or an accent here prints as mojibake on a stock corporate console.
@@ -45,6 +46,20 @@ echo.
 "%NODE%" "%HERE%bin\geneseed-cli.mjs" setup
 if errorlevel 1 goto :failed
 
+rem Put `geneseed` on PATH unless it already is, as ./install does. Without it a fresh clone
+rem had no `geneseed` command until the user found `geneseed.cmd link` (reported 2026-11).
+rem `link` writes %LOCALAPPDATA%\Geneseed\bin\geneseed.cmd and adds that dir to the user Path
+rem through an inline `powershell -Command` (no .ps1 file). Not fatal: if that is blocked,
+rem link prints the dir to add by hand, and geneseed.cmd still works from this folder.
+rem `$PATH:` because a bare `where` searches the current folder first, and finds this
+rem clone's own geneseed.cmd when install.cmd is run from here.
+where $PATH:geneseed >nul 2>nul
+if not errorlevel 1 goto :linked
+echo.
+"%NODE%" "%HERE%bin\geneseed-cli.mjs" link
+if errorlevel 1 echo   !!  Could not put geneseed on PATH - geneseed.cmd works from this folder.
+:linked
+
 echo.
 choice /c YN /m "Open the Geneseed web console now"
 if errorlevel 2 goto :done
@@ -70,6 +85,6 @@ exit /b 1
 
 :done
 echo.
-echo Done. Next time, run geneseed.cmd from this folder (or `geneseed.cmd link` to put it on PATH).
+echo Done. Run geneseed.cmd from this folder, or geneseed from a NEW terminal once it is on your PATH.
 pause
 exit /b 0
