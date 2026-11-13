@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 200" width="1280" height="200" role="img" aria-label="Why Geneseed — rules compiled, then enforced: one tool call passes the gate, one is refused">
+<title>Why Geneseed — rules compiled, then enforced: one tool call passes the gate, one is refused</title>
+<style>
+.w{font-family:"Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;fill:#E8EEF2}
+.m{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+.pu{fill:none;stroke:#B6F5EC;stroke-linecap:round;opacity:0;stroke-width:1.6;stroke-dasharray:3 197;stroke-dashoffset:5}
+@media (prefers-reduced-motion:no-preference){
+.pu{opacity:.95;animation:run 4.5s cubic-bezier(.4,0,.3,1) infinite}
+.d2{animation-delay:1s}
+@keyframes run{to{stroke-dashoffset:-102}}
+}
+</style>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#11161C"/><stop offset="1" stop-color="#0C0E11"/></linearGradient>
+<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r="1" fill="#303C49"/></pattern>
+<radialGradient id="fade" cx="0.83" cy="0.5" r="0.5"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<mask id="mk"><rect width="1280" height="200" fill="url(#fade)"/></mask>
+</defs>
+<rect x=".5" y=".5" width="1279" height="199" rx="16" fill="url(#bg)" stroke="#1E2630"/>
+<rect width="1280" height="200" fill="url(#dots)" mask="url(#mk)"/>
+<path d="M28,18H18V28M1252,18H1262V28M28,182H18V172M1252,182H1262V172" fill="none" stroke="#2C3743"/>
+<text class="m" x="56" y="68" font-size="17" fill="#3AD4C4" letter-spacing="2.4">01 / WHY</text>
+<text class="w" x="54" y="124" font-size="36" font-weight="600">Rules compiled, then enforced.</text>
+<g fill="none" stroke="#3AD4C4" stroke-linecap="round" stroke-linejoin="round"><path d="M61,164.2L61,155.8M69,164.2L69,155.8M77,155.8L77,164.2M85,155.8L85,164.2M93,164.2L93,155.8M101,164.2L101,155.8M109,155.8L109,164.2M117,155.8L117,164.2M125,164.2L125,155.8M133,164.2L133,155.8M141,155.8L141,164.2M149,155.8L149,164.2M157,164.2L157,155.8M165,164.2L165,155.8M173,155.8L173,164.2M181,155.8L181,164.2" stroke-width="1" opacity=".3"/><g stroke-width="1.3"><path d="M57,160L59,162.3L61,164.2L63,165.5L65,166L67,165.5" opacity="1"/><path d="M67,165.5L69,164.2L71,162.3L73,160L75,157.7L77,155.8L79,154.5L81,154L83,154.5" opacity="0.38"/><path d="M83,154.5L85,155.8L87,157.7L89,160L91,162.3L93,164.2L95,165.5L97,166L99,165.5" opacity="1"/><path d="M99,165.5L101,164.2L103,162.3L105,160L107,157.7L109,155.8L111,154.5L113,154L115,154.5" opacity="0.38"/><path d="M115,154.5L117,155.8L119,157.7L121,160L123,162.3L125,164.2L127,165.5L129,166L131,165.5" opacity="1"/><path d="M131,165.5L133,164.2L135,162.3L137,160L139,157.7L141,155.8L143,154.5L145,154L147,154.5" opacity="0.38"/><path d="M147,154.5L149,155.8L151,157.7L153,160L155,162.3L157,164.2L159,165.5L161,166" opacity="1"/><path d="M161,166L163,165.5L165,164.2L167,162.3L169,160L171,157.7L173,155.8L175,154.5L177,154L179,154.5" opacity="0.38"/><path d="M179,154.5L181,155.8L183,157.7L185,160" opacity="1"/><path d="M57,160L59,157.7L61,155.8L63,154.5L65,154L67,154.5" opacity="0.38"/><path d="M67,154.5L69,155.8L71,157.7L73,160L75,162.3L77,164.2L79,165.5L81,166L83,165.5" opacity="1"/><path d="M83,165.5L85,164.2L87,162.3L89,160L91,157.7L93,155.8L95,154.5L97,154L99,154.5" opacity="0.38"/><path d="M99,154.5L101,155.8L103,157.7L105,160L107,162.3L109,164.2L111,165.5L113,166L115,165.5" opacity="1"/><path d="M115,165.5L117,164.2L119,162.3L121,160L123,157.7L125,155.8L127,154.5L129,154L131,154.5" opacity="0.38"/><path d="M131,154.5L133,155.8L135,157.7L137,160L139,162.3L141,164.2L143,165.5L145,166L147,165.5" opacity="1"/><path d="M147,165.5L149,164.2L151,162.3L153,160L155,157.7L157,155.8L159,154.5L161,154" opacity="0.38"/><path d="M161,154L163,154.5L165,155.8L167,157.7L169,160L171,162.3L173,164.2L175,165.5L177,166L179,165.5" opacity="1"/><path d="M179,165.5L181,164.2L183,162.3L185,160" opacity="0.38"/></g></g>
+<defs><path id="a0" pathLength="100" d="M912,76H1226"/><path id="a1" pathLength="100" d="M912,128H1078"/></defs>
+<g fill="none" stroke-width="1.4" stroke="#3AD4C4" stroke-linecap="round" stroke-linejoin="round"><use href="#a0"/><path d="M1217,69l10,7l-10,7"/></g>
+<g fill="none" stroke="#F2695C" stroke-width="1.4" stroke-linecap="round"><use href="#a1"/><path d="M1072,121l12,14M1084,121l-12,14" stroke-width="1.6"/></g>
+<use href="#a0" class="pu"/><use href="#a1" class="pu d2" style="stroke:#FBC4BD"/>
+<g fill="#0F1419" stroke="#8A97A3" stroke-width="1.2"><rect x="1091" y="28" width="10" height="32" rx="2"/><rect x="1091" y="92" width="10" height="80" rx="2"/></g>
+<circle cx="912" cy="76" r="3.5" fill="#3AD4C4"/><circle cx="912" cy="128" r="3" fill="#F2695C"/>
+<text class="m" x="1110" y="46" font-size="17" fill="#8A97A3" text-anchor="start">gate</text><text class="m" x="912" y="58" font-size="17" fill="#8A97A3" text-anchor="start">tool call</text><text class="m" x="1226" y="104" font-size="17" fill="#3AD4C4" text-anchor="end">runs</text><text class="m" x="1064" y="158" font-size="17" fill="#F2695C" text-anchor="end">refused</text>
+</svg>

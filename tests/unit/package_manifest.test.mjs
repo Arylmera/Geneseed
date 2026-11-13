@@ -384,8 +384,8 @@ const WITHHELD = [
     + 'the published CLI, which an npm install already is'],
   ['CONTRIBUTING.md', 'the GitHub-side pointer at README §Contributing and docs/extending.md; an '
     + 'install never needs it and the README already carries the substance'],
-  ['docs/assets/', 'README media (the animated terminal demo). `docs/*.md` ships the prose; the '
-    + 'picture is for the repository page only'],
+  ['docs/assets/', 'README media (the hero, the section banners, the animated terminal demo, the scorecard '
+    + 'card). `docs/*.md` ships the prose; the pictures are for the repository page only'],
   ['CLAUDE.md', "a one-line `@AGENTS.md` import of this repository's OWN contributor guide — the same reason `.claude/` is withheld, "
     + 'plus a sharper one: this tool EMITS a CLAUDE.md into a user\'s project, and shipping one in '
     + 'the tarball would put a file that talks about editing Geneseed next to the files that are '

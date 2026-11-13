@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧬 Geneseed
+<h1 align="center"><img src="docs/assets/hero.svg" alt="Geneseed" width="880"></h1>
 
 **A portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent.**
 
@@ -51,7 +51,7 @@ This page is the overview. **New to agent harnesses?** Start with [Understand](d
 
 <p align="center"><sub>31 deterministic checks, no LLM — <a href="#ai-harness-scorecard">how this is scored, and how to score your own repo</a></sub></p>
 
----
+<p align="center"><img src="docs/assets/banner-why.svg" alt="" width="880"></p>
 
 ## 🧬 1 · Why Geneseed
 
@@ -70,7 +70,7 @@ geneseed-build                   # default theme (neutral)
 geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 ```
 
----
+<p align="center"><img src="docs/assets/banner-setup.svg" alt="" width="880"></p>
 
 ## 🚀 2 · Setup
 
@@ -137,7 +137,7 @@ Node ≥ 22.7 is the entire dependency list — every command, all six hook verb
 - **Run it from anywhere** — a global `npm install -g geneseed` already does this; from a checkout see [Run geneseed from anywhere](docs/guides/run-anywhere.md).
 - **Something wrong?** [Troubleshooting](docs/reference/troubleshooting.md) is organised by what you see.
 
----
+<p align="center"><img src="docs/assets/banner-console.svg" alt="" width="880"></p>
 
 ## 🖥 3 · Web & terminal
 
@@ -168,7 +168,7 @@ Full reference — every view, the launch/daemon/PWA surface, the security model
 
 No browser? Every action the console offers is also a verb: `build`, `doctor`, `diff`, `rebuild-all`, `status`, `memory`, `catalog`, `exclude`, `mcp`, `link`/`unlink`, `uninstall` (global **or** per-repo). `geneseed setup` runs the install wizard — plain text prompts, every console, every OS; see [Setup](#-2--setup) above for the walkthrough. `geneseed --help` lists every command, and bare `geneseed` (or `./geneseed`) opens the web console when it can, else prints the command list. There is no full-screen panel: `menu` prints the command list (`tui` is retired, and says so).
 
----
+<p align="center"><img src="docs/assets/banner-contents.svg" alt="" width="880"></p>
 
 ## 📦 4 · What you get
 
@@ -222,7 +222,7 @@ Pick with `--theme NAME` or via the setup wizard; upgrades remember it. More in 
 
 A second per-install dial sets how much of the constitution the root file carries *inline* every turn — a token-cost knob, not a change to which Rules apply. **lean** (the default) carries each rule's hand-written short form and points to the full text on disk; **full** inlines every rule with its rationale. Every rule is in force either way. More in [Footprint](docs/concepts/footprint.md) and [Footprint, loop trust and changing later](docs/guides/setup-footprint.md).
 
----
+<p align="center"><img src="docs/assets/banner-harnesses.svg" alt="" width="880"></p>
 
 ## 🔌 Supported harnesses
 
@@ -341,6 +341,8 @@ geneseed rebuild-all   # re-render every registered install in its own theme + m
 ```
 
 **Local edits survive.** The self-improvement loops write to notes under `notebook/`, which no rebuild touches. If you or the agent edited deployed agent/skill files in place anyway, an upgrade exports those edits to an `improvements/` file inside the install; the rebuild then keeps each edited file instead of overwriting it. Details: [Upgrade](docs/guides/upgrade.md).
+
+<p align="center"><img src="docs/assets/banner-docs.svg" alt="" width="880"></p>
 
 ## 📚 Documentation
 
