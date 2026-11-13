@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import test, { after } from 'node:test';
+import test, { after, before } from 'node:test';
 
 import {
   autostartFile, autostartInstall, autostartPathProblem, autostartRemove, autostartState,
@@ -63,7 +63,15 @@ const EXPECTED = { win32: vbs(EXE, ENTRY), darwin: plist(EXE, ENTRY) };
 const read = (f) => readFileSync(f, 'utf8');
 /** A state as the row receives it: the file, its state, the checkout it runs, and whether that copy may go. */
 const S = (file, state) => ({ file, state, root: ROOT, transient: transientRoot(ROOT) });
-const clear = () => { for (const p of PLATFORMS) rmSync(path.dirname(autostartFile(p)), { recursive: true, force: true }); };
+/** Empty both launcher folders. Refuses any folder outside the temp root: a real Startup folder
+ * holds the developer's other login items, and `rmSync` skips the Recycle Bin. */
+const clear = () => {
+  for (const p of PLATFORMS) {
+    const dir = path.dirname(autostartFile(p));
+    if (!dir.startsWith(TMP_ROOT)) throw new Error(`refusing to clear ${dir}: it is outside the temp root`);
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
 
 test('the launcher paths are inside the sandbox home, never the real one', () => {
   for (const p of PLATFORMS) {
@@ -231,9 +239,13 @@ test('a write the OS refuses comes back with its own error text', () => {
 
 // ---- the route ----------------------------------------------------------------------------
 
+// The server starts in a `before` hook, never in a top-level `await`. Node runs the root `after`
+// hooks as soon as the tests queued so far finish, so a test registered after a top-level
+// `await` ran once `webFixtureTeardown` had put the real home back. Its `clear()` then deleted
+// the developer's real Startup folder and every login item in it (2026-11-12).
 const TOKEN = 'autostart-token';
 const srv = http.createServer(makeHandler(webState('neutral'), new JobManager(), TOKEN, 'nowhere', {}));
-await new Promise((r) => { srv.listen(0, '127.0.0.1', r); });
+before(() => new Promise((r) => { srv.listen(0, '127.0.0.1', r); }));
 after(() => { srv.closeAllConnections(); srv.close(); });
 
 async function post(body, token = TOKEN) {
