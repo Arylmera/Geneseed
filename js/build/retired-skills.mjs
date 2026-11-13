@@ -143,8 +143,13 @@ export function retiredSkillFolders(cfg, owned, opts = {}) {
     const dir = path.join(root, name);
     // Before the `owned` skip: an owned side file (a LICENSE) must not hide the kept SKILL.md
     // beside it, or the record lapses in that emit and the next one archives the edit.
-    if (Object.hasOwn(revived, name) && ownsRel(kept, rel) && lstat(dir)) {
-      held.push(...kept.filter((k) => k === rel || k.startsWith(`${rel}/`)));
+    // Only an entry whose own file is still there and not owned is held: once the user deletes
+    // the edit, the record must lapse, or the manifest would call Geneseed's new copy theirs.
+    const live = Object.hasOwn(revived, name)
+      ? kept.filter((k) => (k === rel || k.startsWith(`${rel}/`)) && !owned.includes(k) && lstat(path.join(cfg, k)))
+      : [];
+    if (live.length) {
+      held.push(...live);
       continue;
     }
     if (ownsRel(owned, rel)) continue;

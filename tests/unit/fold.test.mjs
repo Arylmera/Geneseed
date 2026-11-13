@@ -1370,6 +1370,18 @@ test('M6: a kept edit of a revived skill survives kit off twice and kit on again
     assert.deepEqual(archivedSkills(cfg), [], `emit ${i} archived something`);
     assert.ok(keptOf().includes('skills/herdr/SKILL.md'), `emit ${i} let the kept record lapse`);
   }
+  // The record ends with the edit: once the user deletes the file (as the "kept your edited"
+  // line tells them to), a kit-on emit writes Geneseed's copy and owns it, and `kept` must drop
+  // the entry, or the manifest would call one file both Geneseed's and the user's. Two emits, so
+  // a record carried by `held` in the first would still show in the second.
+  fs.rmSync(file);
+  for (const i of [4, 5]) {
+    const r = emit(home, 'claude-global', on);
+    assert.deepEqual(pruneLines(r.stdout), [], `emit ${i}: ${r.stdout}`);
+    assert.deepEqual(keptOf(), [], `emit ${i} kept a record of a deleted edit`);
+    assert.ok(ownedOf(cfg).includes('skills/herdr/SKILL.md'), `emit ${i} did not own the fresh copy`);
+    assert.notEqual(fs.readFileSync(file, 'utf8'), edited);
+  }
   assert.ok(!exists(cfg, 'skills', 'herdr', 'LICENSE-herdr.txt') || ownedOf(cfg).includes('skills/herdr/LICENSE-herdr.txt'));
 }));
 
