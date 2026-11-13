@@ -2,7 +2,7 @@
 // fetched and returns plain rows for a chart or a list. Kept out of the component so a
 // table of inputs -> rows can pin them (__tests__/overview.test.js), and so the component
 // is only layout.
-import { driftTotal, relTime } from './format.js'
+import { driftTotal, keptCount, relTime } from './format.js'
 import { hostInfo, installTag } from './hosts.js'
 import { SKILL_CATS, SKILL_CAT_ORDER } from './lawCats.js'
 import { gateFallback, gateAddress, parseRuleTitle } from './constitution.js'
@@ -50,19 +50,8 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
     })
   }
   const diff = overview?.diff
-  const drift = driftTotal(diff)
-  if (drift) {
-    out.push({
-      id: 'drift',
-      tag: 'Local edits',
-      tone: 'warn',
-      title: plural(drift, 'local edit'),
-      detail: `${diff.edited} edited, ${diff.added} added, ${diff.missing} missing`,
-      where: 'installs/edits',
-      verb: 'Review',
-      href: '#/installs/edits',
-    })
-  }
+  const drift = driftRow('drift', diff, '')
+  if (drift) out.push(drift)
   if (profile?.seeded) {
     out.push({
       id: 'profile',
@@ -154,6 +143,42 @@ export function needsAttention({ overview, setup, rules, activity, profile, skil
 // ---- the Ledger: every installed harness at once (/api/fleet, /api/usage, /api/gates) ----
 
 const driftOf = (i) => driftTotal(i.drift)
+const keptOf = (i) => keptCount(i.drift)
+
+// One install's local-edits row for either "Needs you" builder, or null. Edits that alert make a
+// problem (the edited figure leaves the kept ones out, and names them); when only kept edits
+// remain (spec 2026-11-13 §5), a muted suggestion with the same Review link.
+function driftRow(id, diff, prefix) {
+  const n = driftTotal(diff)
+  const kept = keptCount(diff)
+  const base = {
+    id,
+    tag: 'Local edits',
+    where: 'installs/edits',
+    verb: 'Review',
+    href: '#/installs/edits',
+  }
+  if (n) {
+    return {
+      ...base,
+      tone: 'warn',
+      title: `${prefix}${plural(n, 'local edit')}`,
+      detail:
+        `${diff.edited - kept} edited, ${diff.added} added, ${diff.missing} missing` +
+        (kept ? `, ${kept} kept` : ''),
+    }
+  }
+  if (kept) {
+    return {
+      ...base,
+      tone: '',
+      sugg: true,
+      title: `${prefix}${plural(kept, 'kept edit')}`,
+      detail: 'edited in place, source unchanged — nothing missed',
+    }
+  }
+  return null
+}
 // Unedited files a rebuild updates: the install is behind, nobody edited them.
 const staleOf = (i) => i.drift?.stale ?? 0
 
@@ -176,6 +201,7 @@ export function fleetVerdict(fleet) {
   const behind = act.filter((i) => i.verdict === 'behind').length
   const edited = act.reduce((n, i) => n + driftOf(i), 0)
   const stale = act.reduce((n, i) => n + staleOf(i), 0)
+  const kept = act.reduce((n, i) => n + keptOf(i), 0)
   const d = fleet?.doctor
   // No verdict yet (a cold daemon's doctor still running) vouches for nothing: neither good nor bad.
   const tone = d && !d.ok ? 'bad' : behind || edited || stale ? 'warn' : d ? 'good' : 'unknown'
@@ -193,7 +219,8 @@ export function fleetVerdict(fleet) {
         ? 'doctor clean'
         : `doctor found ${plural(d.problems.length, 'problem')}`,
     behind ? `${plural(behind, 'install')} behind source` : 'all in sync with source',
-    edited ? plural(edited, 'local edit') : 'no local edits',
+    (edited ? plural(edited, 'local edit') : 'no local edits') +
+      (kept ? `, ${plural(kept, 'kept edit')}` : ''),
   ]
   // Its own fact, only when there is one, so a fleet with nothing stale reads as before.
   if (stale) facts.push(`${plural(stale, 'file')} behind source`)
@@ -293,19 +320,8 @@ export function ledgerNeeds({ fleet, usage, defaultLabel = null, ...rest }) {
         installs: [rebuildTarget(i)],
       })
     }
-    const n = driftOf(i)
-    if (n) {
-      out.push({
-        id: `drift:${i.id}`,
-        tag: 'Local edits',
-        tone: 'warn',
-        title: `${installLabel(i)}: ${plural(n, 'local edit')}`,
-        detail: `${i.drift.edited} edited, ${i.drift.added} added, ${i.drift.missing} missing`,
-        where: 'installs/edits',
-        verb: 'Review',
-        href: '#/installs/edits',
-      })
-    }
+    const drift = driftRow(`drift:${i.id}`, i.drift, `${installLabel(i)}: `)
+    if (drift) out.push(drift)
   }
   if (usage && usage.days_counted >= 30 && usage.never?.length) {
     const { skills, agents } = neverFired(usage)

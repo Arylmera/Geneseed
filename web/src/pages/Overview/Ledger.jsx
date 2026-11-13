@@ -4,7 +4,7 @@ import { useAsync } from '../../hooks/useAsync.js'
 import { useConfirm } from '../../hooks/useConfirm.jsx'
 import { storeInstallPick, useInstalls } from '../../hooks/useInstalls.js'
 import { useRules } from '../../hooks/useRules.js'
-import { driftTotal, relTime } from '../../lib/format.js'
+import { driftTotal, keptCount, relTime } from '../../lib/format.js'
 import { hostInfo, installTag } from '../../lib/hosts.js'
 import ErrorState from '../../components/ErrorState.jsx'
 import Loading from '../../components/Loading.jsx'
@@ -446,15 +446,18 @@ function SyncCell({ i }) {
   const drift = driftTotal(i.drift)
   // Unedited files the source has moved past: part of being behind, never a hand edit.
   const stale = i.drift?.stale ?? 0
+  // Edits the source has not moved past (spec 2026-11-13): shown, neutral, never alerting.
+  const kept = keptCount(i.drift)
   return (
     <>
       {/* A bar only for something to draw: an empty track beside a final word reads as pending. */}
-      {stale || drift ? (
+      {stale || drift || kept ? (
         <span className="ldg-syncbar">
           <StackBar
             parts={[
               { key: 'stale', label: 'Behind source', n: stale, tone: 'warn' },
               { key: 'edited', label: 'Local edits', n: drift, tone: 'bad' },
+              ...(kept ? [{ key: 'kept', label: 'Kept edits', n: kept, tone: 'muted' }] : []),
             ]}
             label={`Sync with source, ${labelOf(i)}`}
             legend={false}
@@ -463,6 +466,13 @@ function SyncCell({ i }) {
       ) : null}
       {drift ? (
         <span className="mono t-bad">{drift} edited</span>
+      ) : kept ? (
+        <span
+          className="mono dim"
+          title="Edited in place; the source is unchanged, so nothing is missed"
+        >
+          {kept} kept
+        </span>
       ) : i.drift?.linked ? (
         // The user's own links: shown, so their absence from the count is explained, but
         // muted and with no Rebuild, because no rebuild clears them.
@@ -487,7 +497,8 @@ function differs(i) {
   const d = i.drift || {}
   const parts = [
     d.stale ? `${d.stale} behind` : null,
-    d.edited ? `${d.edited} edited` : null,
+    d.edited - (d.kept ?? 0) ? `${d.edited - (d.kept ?? 0)} edited` : null,
+    d.kept ? `${d.kept} kept (source unchanged)` : null,
     d.added ? `${d.added} added` : null,
     d.missing ? `${d.missing} missing` : null,
     d.linked ? `${d.linked} linked (yours)` : null,

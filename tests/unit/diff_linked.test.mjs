@@ -75,7 +75,7 @@ test('the fleet counts the hand edit and keeps the link out of the edited figure
   st.stampDoctor([]);
   const fleet = apiFleet(st);
   assert.deepEqual(fleet.installs.map((i) => i.drift),
-    [{ edited: 1, added: 0, missing: 0, linked: 1, stale: 0 }]);
+    [{ edited: 1, added: 0, missing: 0, linked: 1, stale: 0, kept: 0 }]);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -132,7 +132,7 @@ test('the improvements report and the fleet leave stale files out of the drift',
   const st = webState();
   st.stampDoctor([]);
   assert.deepEqual(apiFleet(st).installs.map((i) => i.drift),
-    [{ edited: 1, added: 0, missing: 1, linked: 1, stale: 3 }]);
+    [{ edited: 1, added: 0, missing: 1, linked: 1, stale: 3, kept: 0 }]);
 });
 
 test('diff prints stale files apart and keeps them out of the edited summary', () => {

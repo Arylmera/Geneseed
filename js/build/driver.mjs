@@ -260,6 +260,18 @@ function pruneOwned(oc, oldOwned, owned, oldHashes = {}, editRefused = [], force
 const keptKey = (kept) => (kept && kept.length ? { kept: [...kept].sort() } : {});
 
 /**
+ * The manifest's `kept_hashes` (spec 2026-11-13 §1): for each rel an emit left to the user after
+ * an edit, the hash the last emit that WROTE it recorded — the base `diffCollect` needs to tell a
+ * kept edit from a diverged one after the rel has left `owned`. Read with `hashesOf`, so a
+ * malformed map empties as `hashes` does; written only when non-empty, so a clean manifest is
+ * byte-identical (`golden.mjs --idempotent`). Keys sorted, like `hashes`.
+ */
+const keptHashesOf = (doc) => hashesOf({ hashes: doc && doc.kept_hashes });
+const keptHashesKey = (h) => (h && Object.keys(h).length
+  ? { kept_hashes: Object.fromEntries(Object.entries(h).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) }
+  : {});
+
+/**
  * Whether this PROJECT emit seeds `<git root>/.geneseed/protected-checks.txt`. A real emit does;
  * a sandbox emit must not, because the seed walks UP to the git root and a sandbox under a temp
  * dir that sits inside a repo would write into that repo. In-process sandbox callers
@@ -334,6 +346,7 @@ function emitOpencode(cfg, args, out) {
   const oldEdit = recordedEdit(doc);
   const oldGates = recordedGates(doc);
   const oldHashes = hashesOf(doc);
+  const oldKeptHashes = keptHashesOf(doc);
 
   const agentPathRel = relUnder(out, root);
   const agentPath = agentPathRel ? `${agentPathRel}/AGENT.md` : 'AGENT.md';
@@ -345,9 +358,9 @@ function emitOpencode(cfg, args, out) {
     {
       theme: args.theme, out, root, footprint: args.footprint,
       nativeCatalog: hostCatalogsNatively('opencode'), oldOwned, manifestExisted, agentPath,
-      oldDenies, oldEdit, oldHashes, oldGates,
+      oldDenies, oldEdit, oldHashes, oldGates, oldKeptHashes,
     });
-  const { owned, stats, cfgName, skillDenies, editRecord, editRefused, bashGates, kept } = rendered;
+  const { owned, stats, cfgName, skillDenies, editRecord, editRefused, bashGates, kept, keptHashes } = rendered;
   // Seed once: absent -> created, then the user's (never recorded, rewritten or removed).
   if (seeds(args)) seedProtectedChecks(root);
 
@@ -362,6 +375,7 @@ function emitOpencode(cfg, args, out) {
     owned: [...owned].sort(),
     hashes: ownedHashes(oc, owned),
     ...keptKey(kept),
+    ...keptHashesKey(keptHashes),
     scope: 'project',
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
     ...editRecordKeys(editRecord),
@@ -402,6 +416,7 @@ function emitOpencodeGlobal(cfg, args, out) {
   const oldEdit = recordedEdit(doc);
   const oldGates = recordedGates(doc);
   const oldHashes = hashesOf(doc);
+  const oldKeptHashes = keptHashesOf(doc);
 
   const agentPath = path.join(cfgDir, 'AGENT.md').split(path.sep).join('/');
 
@@ -410,9 +425,9 @@ function emitOpencodeGlobal(cfg, args, out) {
     {
       theme: args.theme, cfgDir, out, sharedRoot: args.sharedRoot,
       footprint: args.footprint, nativeCatalog: hostCatalogsNatively('opencode'),
-      oldOwned, agentPath, oldDenies, oldEdit, oldHashes, oldGates,
+      oldOwned, agentPath, oldDenies, oldEdit, oldHashes, oldGates, oldKeptHashes,
     });
-  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRecord, editRefused, bashGates, kept } = rendered;
+  const { owned, stats, memStatus, nbStatus, cfgName, skillDenies, editRecord, editRefused, bashGates, kept, keptHashes } = rendered;
 
   phaseLog('PRUNE');
   pruneOwned(cfgDir, oldOwned, owned, oldHashes, editRefused, cfg.force);
@@ -425,6 +440,7 @@ function emitOpencodeGlobal(cfg, args, out) {
     owned: [...owned].sort(),
     hashes: ownedHashes(cfgDir, owned),
     ...keptKey(kept),
+    ...keptHashesKey(keptHashes),
     ...(skillDenies.length ? { skill_denies: skillDenies } : {}),
     ...editRecordKeys(editRecord),
     ...(bashGates.length ? { bash_gates: bashGates } : {}),
@@ -456,6 +472,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
   const oldManaged = (doc && doc.managed && typeof doc.managed === 'object'
     && !Array.isArray(doc.managed)) ? doc.managed : {};
   const oldHashes = hashesOf(doc);
+  const oldKeptHashes = keptHashesOf(doc);
 
   // RENDER + WIRE in one child's worth of work. `preambleExclude` is null for every
   // carrier but `CLAUDE.md`, so Bob's `AGENTS.md` does not resolve to one; for a `CLAUDE.md`
@@ -467,9 +484,9 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     out,
     footprint: args.footprint, nativeCatalog: hostCatalogsNatively(host),
     oldOwned, oldManaged, preambleExclude: preambleExclude(claudeMd, host),
-    hookOpts, oldHashes,
+    hookOpts, oldHashes, oldKeptHashes,
   });
-  const { owned, stats, memStatus, nbStatus, managed, editRefused, kept } = rendered;
+  const { owned, stats, memStatus, nbStatus, managed, editRefused, kept, keptHashes } = rendered;
   // `root` is null on a global emit: it has no project to seed.
   if (root && seeds(args)) seedProtectedChecks(root);
 
@@ -486,6 +503,7 @@ function emitClaudeCore(cfg, args, { cfgDir, claudeMd, scope, host, out, hookOpt
     owned: [...owned].sort(),
     hashes: ownedHashes(cfgDir, owned),
     ...keptKey(kept),
+    ...keptHashesKey(keptHashes),
     managed,
     scope,
   });

@@ -78,10 +78,15 @@ export function readiness(ov, setup, tone) {
 // Largest section count (floored at 1) — the denominator for proportional bars.
 export const maxCount = (counts) => Math.max(...SECTION_ORDER.map((k) => counts?.[k] ?? 0), 1)
 
-// Local edits awaiting export = edited + added files from the diff summary.
-export const editCount = (diff) => (diff?.edited ?? 0) + (diff?.added ?? 0)
+// Kept edits: edited side files whose source still renders what the last emit wrote, so the
+// edit loses nothing (spec 2026-11-13 D1). `driftCounts` (js/web/api.mjs) counts them, and leaves
+// a `.md` out (D11). Neutral everywhere: shown, never alerting, never asking for a rebuild.
+export const keptCount = (diff) => diff?.kept ?? 0
 
-// Every drifted file = edited + added + missing; 0 when there is no diff.
+// Local edits that alert = edited + added files from the diff summary, minus the kept ones.
+export const editCount = (diff) => (diff?.edited ?? 0) + (diff?.added ?? 0) - keptCount(diff)
+
+// Every drifted file that alerts = editCount + missing; 0 when there is no diff.
 export const driftTotal = (diff) => editCount(diff) + (diff?.missing ?? 0)
 
 // THE ONE RULE COUNT: every rule the Constitution page lists, the rail's badge, the "All" tab and

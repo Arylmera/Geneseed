@@ -45,7 +45,7 @@ import {
   trustOfDir,
   readJsonMaybe, readMaybe, renderedTier, themeOfDir,
 } from '../hosts/installs.mjs';
-import { hashesOf, ownedState, safeLeaf } from '../hosts/owned.mjs';
+import { hashesOf, ownedState, safeLeaf, textHash } from '../hosts/owned.mjs';
 import { hostGlobalInstalls as globalInstalls } from './excludes.mjs';
 import { unifiedDiff, splitLines } from '../lib/udiff.mjs';
 import { printOut, printErr, readText, writeText, isFile } from '../lib/fs.mjs';
@@ -280,6 +280,8 @@ export function diffCollect({
   const manifest = readJsonMaybe(path.join(dir, GLOBAL_MANIFEST));
   const deployedOwned = ownedSet(dir, manifest);
   const hashes = hashesOf(manifest);
+  // The bases of the files an emit left to the user, read with `hashes`' own defensive reader.
+  const keptHashes = hashesOf({ hashes: manifest?.kept_hashes });
   // STALE IS NOT AN EDIT. A file whose bytes still match the hash its emit recorded was never
   // touched: it differs only because the source moved on, and the next rebuild overwrites it.
   // Reporting it as "edited" told every install behind its source that it was hand-edited.
@@ -303,7 +305,18 @@ export function diffCollect({
         // being behind, never an edit, with or without hashes.
         const stale = rel === VERSION_MARKER
           || (hashed && ownedState(dir, rel, hashes) === 'unmodified');
-        rec = { rel, status: stale ? 'stale' : 'edited', diff };
+        // KEPT OR DIVERGED (spec 2026-11-13, D1/D6). The base is what the last emit wrote here:
+        // `hashes[rel]` while the rel is still owned, else the `kept_hashes[rel]` the emit that
+        // refused it carried forward. The edit loses nothing while the fresh render still hashes
+        // to that base. `tb` is the LOCATED render read through `readText` (CRLF folded), so
+        // `textHash` of it is the manifest's `fileHash` of the same bytes. No base: diverged.
+        let diverged;
+        if (!stale) {
+          const base = Object.hasOwn(hashes, rel) ? hashes[rel]
+            : Object.hasOwn(keptHashes, rel) ? keptHashes[rel] : null;
+          diverged = base === null || textHash(tb) !== base;
+        }
+        rec = { rel, status: stale ? 'stale' : 'edited', diff, ...(diverged !== undefined && { diverged }) };
       }
     } else if (isFile(a)) {
       const body = splitLines(readText(a));
@@ -570,7 +583,12 @@ export function cmdDiff(args) {
   if (stale.length) printOut(`[diff] ${stale.length} file(s) behind source — rebuild to update them\n`);
   const notes = collectNotes(target);
   if (notes.length) printOut(`[diff] ${notes.length} self-improvement note(s) to back-port\n`);
-  for (const f of edited) printOut(`  ~ ${f.rel}   (edited in deployed — review to back-port)\n`);
+  // The two states of an edit (spec 2026-11-13 §4): kept loses nothing, diverged misses an update.
+  for (const f of edited) {
+    printOut(`  ~ ${f.rel}   (edited in deployed — ${'diverged' in f && f.diverged === false
+      ? 'source unchanged, nothing missed'
+      : 'the source has moved; review to back-port, or restore'})\n`);
+  }
   for (const f of added) printOut(`  + ${f.rel}   (only in deployed — your addition)\n`);
   for (const f of missing) printOut(`  - ${f.rel}   (in source, not deployed — re-emit to add)\n`);
   for (const f of linked) printOut(`  = ${f.rel}   (a link — yours, left alone)\n`);

@@ -87,13 +87,16 @@ describe('maxCount / editCount', () => {
     expect(maxCount(null)).toBe(1)
     expect(maxCount({})).toBe(1)
   })
-  it('editCount sums edited + added, defaulting to 0', () => {
+  it('editCount sums edited + added - kept (D1), defaulting to 0', () => {
     expect(editCount({ edited: 3, added: 1 })).toBe(4)
+    expect(editCount({ edited: 3, added: 1, kept: 1 })).toBe(3)
     expect(editCount({ edited: 2 })).toBe(2)
+    expect(editCount({ edited: 2, kept: 2 })).toBe(0)
     expect(editCount(null)).toBe(0)
   })
-  it('driftTotal adds missing to editCount, defaulting to 0', () => {
+  it('driftTotal adds missing to editCount (D1), defaulting to 0', () => {
     expect(driftTotal({ edited: 3, added: 1, missing: 2 })).toBe(6)
+    expect(driftTotal({ edited: 3, added: 1, missing: 2, kept: 1 })).toBe(5)
     expect(driftTotal({ missing: 1 })).toBe(1)
     expect(driftTotal(null)).toBe(0)
   })

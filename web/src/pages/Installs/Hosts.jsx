@@ -13,7 +13,7 @@ import InstallPanel from './InstallPanel.jsx'
 import MigrationPreview from './MigrationPreview.jsx'
 import StackBar from '../../components/StackBar.jsx'
 import { hostInfo, installName, removeLayer } from '../../lib/hosts.js'
-import { editCount } from '../../lib/format.js'
+import { editCount, keptCount } from '../../lib/format.js'
 
 // Join key for the MCP-target -> install pairing: an install owns the targets the API tags
 // with its (host, root). Keying on the install identity (not the config's dirname) is what
@@ -45,7 +45,8 @@ function syncLine(row, version) {
     unknown: 'Not checked',
   }[row.verdict]
   const edits = row.diffable ? editCount(row.drift) : 0
-  return edits ? `${head} · ${edits} edited` : head
+  const kept = row.diffable ? keptCount(row.drift) : 0
+  return head + (edits ? ` · ${edits} edited` : '') + (kept ? ` · ${kept} kept` : '')
 }
 
 // The "Sync with source" cell. The fleet is its own, slower fetch (it re-renders each global
@@ -56,14 +57,17 @@ function SyncCell({ inst, fleet, version, onEdits }) {
   if (!fleet) return <span className="dim">—</span>
   const stale = fleet.drift?.stale ?? 0
   const edits = fleet.diffable ? editCount(fleet.drift) : 0
+  // Edits the source has not moved past (spec 2026-11-13): their own neutral segment.
+  const kept = fleet.diffable ? keptCount(fleet.drift) : 0
   return (
     <div className="sync-cell">
-      {fleet.diffable && stale + edits > 0 ? (
+      {fleet.diffable && stale + edits + kept > 0 ? (
         <StackBar
           label={`Sync with source of ${installName(inst)}`}
           parts={[
             { key: 'stale', label: 'behind source', n: stale, tone: 'warn' },
             { key: 'edited', label: 'local edits', n: edits, tone: 'bad' },
+            ...(kept ? [{ key: 'kept', label: 'kept edits', n: kept, tone: 'muted' }] : []),
           ]}
         />
       ) : null}
@@ -74,7 +78,7 @@ function SyncCell({ inst, fleet, version, onEdits }) {
           · not checkable
         </span>
       ) : null}
-      {edits ? (
+      {edits || kept ? (
         <>
           {' '}
           <a
