@@ -410,15 +410,19 @@ function readCap(file) {
 function saveCap(file, state) {
   try {
     mkdirSync(path.dirname(file), { recursive: true });
-    if (state.blocks === 1) {
-      // A turn's first block: drop other sessions' stale files, as the baselines do.
-      for (const n of readdirSync(path.dirname(file))) {
-        const old = path.join(path.dirname(file), n);
-        if (Date.now() - statSync(old).mtimeMs > CAP_STALE_MS) unlinkSync(old);
-      }
-    }
     writeFileSync(file, JSON.stringify(state));
-  } catch { /* unwritable: the next Stop finds no record, and ends the turn as before the cap */ }
+  } catch { return; /* unwritable: the next Stop finds no record, and ends the turn as before the cap */ }
+  if (state.blocks !== 1) return;
+  // A turn's first block: drop other sessions' stale files, as the baselines do. After the write,
+  // and one entry at a time: a file another Stop removed (ENOENT) or holds (EPERM) costs only itself.
+  let names = [];
+  try { names = readdirSync(path.dirname(file)); } catch { /* nothing to sweep */ }
+  for (const n of names) {
+    try {
+      const old = path.join(path.dirname(file), n);
+      if (Date.now() - statSync(old).mtimeMs > CAP_STALE_MS) unlinkSync(old);
+    } catch { /* gone or held: the next sweep tries it again */ }
+  }
 }
 
 /**

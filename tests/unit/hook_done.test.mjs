@@ -775,7 +775,7 @@ test('doneDecide: a sub-agent transcript is judged only in sidechain mode', () =
  * `{ rows, active }`: each stop rewrites the transcript, all share one install (S5's state).
  */
 function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {}, parentChecks = null,
-  withPath = true, llm = false, event = 'SubagentStop' }) {
+  withPath = true, llm = false, event = 'SubagentStop', before = null }) {
   const sb = makeSandbox();
   try {
     const parent = path.join(sb.path, 'parent');
@@ -794,6 +794,7 @@ function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {
     const install = path.join(sb.path, 'install');
     fs.mkdirSync(path.join(install, 'notebook'), { recursive: true });
     fs.mkdirSync(path.join(install, 'memory'), { recursive: true });   // where an agent lesson lands
+    if (before) before(install);
     const transcript = path.join(sb.path, 'agent-w.jsonl');
     const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) };
     delete env.GENESEED_LLM;
@@ -951,6 +952,23 @@ test('learn on Stop: a block\'s feedback line opens no turn, so a new edit re-bl
     assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : r.err)),
       ['block', 'block'], text);
   }
+});
+
+// The stale sweep cannot cost the save: an old entry it fails to remove (here a FOLDER, which
+// `unlinkSync` refuses) must leave the record written, so the next Stop still re-blocks.
+test('learn on Stop: a stale entry the sweep cannot remove does not lose the cap record', () => {
+  const e = [once(editWorker), once(editWorker)];
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const runs = subagentStops({ event: 'Stop',
+    before: (install) => {
+      const stale = path.join(install, 'notebook', 'done-gate', 'old-session');
+      fs.mkdirSync(stale, { recursive: true });
+      const long = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      fs.utimesSync(stale, long, long);
+    },
+    stops: [{ rows: [p1, e[0]] }, { rows: [p1, e[0], e[1]], active: true }] });
+  assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : r.err)),
+    ['block', 'block']);
 });
 
 test('learn on SubagentStop: the cap counts per sub-agent', () => {
