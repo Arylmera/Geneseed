@@ -60,15 +60,13 @@ never changes history; Part B does. To write a new commit, use the
    you were asked to resolve. Before concluding, run the project's checks (typecheck,
    tests, format) and fix what the merge broke.
 5. **Deliberate rewrite** (interactive rebase, squash, fixup, amend): on a dedicated
-   branch, never a shared one, as the only change in flight ({{LAW:one-intent-one-act}}). A
-   rewrite *creates commits*, so present what will change and get the user's
-   acceptance first, as for any commit ({{DOCTRINE:consent-before-push}}).
+   branch, never the main branch, as the only change in flight ({{LAW:one-intent-one-act}}).
+   Present what will change first ({{DOCTRINE:consent-before-push}}).
 6. Verify against `git log --oneline`, `git status` and the diff to the intended state
    — read the output, do not assume the rewrite landed ({{LAW:verify-before-asserting}}).
-7. Push only with the user's explicit per-push consent. A rewrite needs a
-   `--force-with-lease` push, doubly outward-facing: present what changed and wait for
-   acceptance ({{DOCTRINE:consent-before-push}} / {{LAW:deletion-is-deliberate}}). Never force-push a shared
-   branch without confirming it is safe.
+7. A rewrite needs a `--force-with-lease` push, and a forced push asks: present what
+   changed and wait for acceptance ({{DOCTRINE:consent-before-push}} / {{LAW:deletion-is-deliberate}}).
+   Never force-push the main branch.
 
 ## Done when
 - **Part A:** the question is answered with specific commit(s) and the output that

@@ -15,15 +15,12 @@
 3. Update the changelog: a dated section for the new version summarising the
    user-visible changes, grouped (added / changed / fixed), derived from the commits
    since the last tag.
-4. Commit the version bump and changelog as one focused commit, through the
-   [commit {{SKILL}}](commit.md) — summary and exact message presented for
-   acceptance ({{LAW:one-intent-one-act}}, {{DOCTRINE:consent-before-push}}).
+4. Commit the version bump and changelog as one focused commit on a release branch,
+   through the [commit {{SKILL}}](commit.md) ({{LAW:one-intent-one-act}}), and land it on
+   the main branch through a pull request with green checks ({{DOCTRINE:consent-before-push}}).
 5. Tag the release (annotated, matching the version). Tagging and publishing are
-   **outward-facing** ({{LAW:deletion-is-deliberate}}), and the push itself needs explicit
-   per-push acceptance — a release lands on a shared branch, where {{DOCTRINE:consent-before-push}}
-   applies with extra care and grants no standing consent.
-6. With that acceptance, push the commit and the tag together; trigger or verify
-   the publish/release pipeline.
+   **outward-facing** and need the user's explicit acceptance ({{LAW:deletion-is-deliberate}}).
+6. With that acceptance, push the tag; trigger or verify the publish/release pipeline.
 
 ## Done when
 - Version, changelog, and tag all name the same number, and the release is pushed

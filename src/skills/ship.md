@@ -22,11 +22,10 @@ request or merge the branch.
    before pushing.
 3. Confirm the branch carries only this change's commits and is rebased/updated on
    the base branch; resolve any divergence before opening.
-4. Push the branch only with the user's explicit, per-push acceptance — on every
-   branch, feature branches included ({{DOCTRINE:consent-before-push}}); present the change summary + commit
-   message and wait, and never treat an earlier approval as consent for this push.
-   Opening a PR or merging is **outward-facing** — get explicit confirmation first too,
-   unless already authorized ({{LAW:deletion-is-deliberate}}).
+4. Push the branch with a plain push and open the pull request: the pull request is
+   the consent the main branch needs ({{DOCTRINE:consent-before-push}}). Merge only once its
+   required checks are green — never red, pending or absent. A forced push, or a push
+   straight onto the main branch, asks ({{LAW:deletion-is-deliberate}}).
 5. Open the PR with a three-part body. **Summary**: what changed and why, with the
    smallest visual that makes the point (a call tree, diff sketch, file tree or
    Mermaid diagram). **Evidence**: how it was tested, as before/after — the test that

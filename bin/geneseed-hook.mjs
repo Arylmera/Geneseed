@@ -82,7 +82,7 @@ const VERBS = {
     flags: HOSTED,
     switches: {
       '--no-consent': 'noConsent', '--no-deletion-gate': 'noDeletionGate', '--no-external-gate': 'noExternalGate',
-      '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
+      '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan', '--strict-consent': 'strictConsent',
     },
   },
   'rule-gate': {
@@ -103,7 +103,7 @@ const VERBS = {
       '--no-ownership-gate': 'noOwnershipGate', '--no-external-gate': 'noExternalGate',
       '--no-test-note': 'noTestNote', '--no-rule-store': 'noRuleStore', '--no-root-scan': 'noRootScan',
       // Bob's commit/push warning, when process 5 is off: `gitDecide` reads it as on git-gate.
-      '--no-consent': 'noConsent',
+      '--no-consent': 'noConsent', '--strict-consent': 'strictConsent',
     },
   },
   learn: {
@@ -238,7 +238,7 @@ function hostNamed(argv) {
  */
 function parse(spec, argv) {
   const args = {
-    root: null, host: null, event: null, memory: null, consolidate: false, noConsent: false,
+    root: null, host: null, event: null, memory: null, consolidate: false, noConsent: false, strictConsent: false,
     noDeletionGate: false, noSecretsGate: false, noDoneGate: false, noOwnershipGate: false,
     noExternalGate: false, noTestNote: false, noRuleStore: false, noRootScan: false, file: null,
   };

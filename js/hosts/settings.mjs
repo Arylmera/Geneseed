@@ -900,7 +900,7 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   gates = {}) {
   // One object keyed as `GATE_SWITCHES` keys it; only an explicit `false` disarms a gate.
   const { secretsGate = true, doneGate = true, deletionGate = true, ownershipGate = true,
-    externalGate = true, testNote = true } = gates ?? {};
+    externalGate = true, testNote = true, ownBranchPass = true } = gates ?? {};
   const run = hookPrefix(hookOpts);
   const mem = `--memory "${path.join(cfg, 'memory')}"`;
   // --root carries the install's own dir so a GLOBAL hook can stand down when a live, wired
@@ -944,7 +944,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
     // External Gate's hook and the weakened-test note, the same contract.
     const eg = externalGate === false ? ' --no-external-gate' : '';
     const tn = testNote === false ? ' --no-test-note' : '';
-    const nc = consentRuleOn(doctrines, excluded) ? '' : ' --no-consent';
+    // Strict consent (`ownBranchPass` off) rides only while the rule is on: off, nothing asks.
+    const nc = consentRuleOn(doctrines, excluded) ? (ownBranchPass === false ? ' --strict-consent' : '') : ' --no-consent';
     return {
       SessionStart: [{ hooks: [{ type: 'command', command: `${run} context --root "${cfg}"${b} || exit 0` }] }],
       // One group, both gates. `tool-gate` EXITS 2 for Laws I and IV (unless built
@@ -988,7 +989,8 @@ export function claudeHookGroups(cfg, hookOpts, doctrines = null, excluded = [],
   // the `Skill|Agent|Task` counter (a counter that cannot start must not ask), never on Bob
   // (see its PreToolUse above).
   const down = host === 'openclaude' ? ` || printf '%s' '${GATE_DOWN}'` : '';
-  const gate = `${run} git-gate --root "${cfg}"${h}${consentRuleOn(doctrines, excluded) ? '' : ' --no-consent'}`
+  const consent = consentRuleOn(doctrines, excluded) ? (ownBranchPass === false ? ' --strict-consent' : '') : ' --no-consent';
+  const gate = `${run} git-gate --root "${cfg}"${h}${consent}`
     + (deletionGate === false ? ' --no-deletion-gate' : '')
     + (externalGate === false ? ' --no-external-gate' : '') + ruleFlags('git-gate', doctrines, excluded)
     + down;

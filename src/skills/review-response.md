@@ -20,7 +20,7 @@ to be acted on; or the user wants a review criterion recorded ("add a review rul
 4. Respond to each comment: the change you will make and why, or a reasoned decline
    with evidence.
 5. Apply the accepted changes — one intent per commit ({{LAW:one-intent-one-act}}), each through the
-   [commit {{SKILL}}](commit.md) so {{DOCTRINE:consent-before-push}}'s per-commit consent holds — then
+   [commit {{SKILL}}](commit.md), on the pull request's own branch ({{DOCTRINE:consent-before-push}}) — then
    re-run the checks ({{LAW:verify-before-asserting}}). If the PR has auto-merge armed, disarm it
    before you push the fixes (the commit {{SKILL}}'s push step says how), then re-arm through the
    [ship {{SKILL}}](ship.md) on the new head.

@@ -19,28 +19,25 @@
    repo has no discernible convention, default to **Conventional Commits**:
    `type(scope): subject` (`feat`, `fix`, `docs`, `refactor`, `test`, `chore`…),
    with a `!` before the colon or a `BREAKING CHANGE:` footer for a breaking change.
-5. **Get explicit consent before committing ({{DOCTRINE:consent-before-push}}).** On *every*
-   branch — feature branches included — first show the user a plain-language summary of
-   the change *and* the exact commit message, then wait for explicit acceptance before
-   committing. For a non-trivial change, offer the `explain-changes` skill's visual
-   walkthrough before asking — an offer, never a condition of the commit. A previous
-   approval is not standing consent; ask again each commit, unless a batch that
-   {{DOCTRINE:consent-before-push}} names covers it: a named batch, a launched loop on its
-   own `loop/*` branch, or a dispatched worker, crew or slice (a Foreman worker, a
-   pipeline crew, a parallel-agents slice) in its own worktree, off any shared branch —
-   which commits there without asking, since it cannot reach the user, and never pushes. On a *shared branch*
-   (`main`, `master`, `develop`/`development`, a release/hotfix branch, or any branch
-   that is not a dedicated feature branch) apply the same gate with extra care.
-6. Push only when the user has explicitly approved *that push* ({{DOCTRINE:consent-before-push}} / {{LAW:deletion-is-deliberate}})
-   — never push on your own initiative, on any branch, and never treat one approval as
-   consent for the next. If the branch's PR has auto-merge armed, disarm it before the push
-   (`gh pr merge <pr> --disable-auto`; GitLab: `glab api --method POST
-   projects/:id/merge_requests/<iid>/cancel_merge_when_pipeline_succeeds`): an armed PR would
-   merge the new head unreviewed. Re-arm only through the [ship {{SKILL}}](ship.md).
+5. **Commit on your own branch; never on the main branch ({{DOCTRINE:consent-before-push}}).**
+   On your own branch, commit without asking once steps 1–4 hold. The main branch
+   (`main`, `master`, the remote's default, the main checkout's branch) takes no direct
+   commit: move the work to a branch first and land it through a pull request. Where the
+   repository has no remote or no CI, a commit on the main branch needs explicit
+   acceptance: show a plain-language summary and the exact message, then wait. For a
+   non-trivial change, offer the `explain-changes` skill's visual walkthrough — an
+   offer, never a condition. A dispatched worker, crew or slice commits only in its own
+   worktree.
+6. Push your own branch with a plain push when the work is ready for review; a forced
+   push asks, and a push onto the main branch asks ({{DOCTRINE:consent-before-push}} /
+   {{LAW:deletion-is-deliberate}}). A dispatched worker, crew or slice never pushes. If the
+   branch's PR has auto-merge armed, disarm it before the push (`gh pr merge <pr> --disable-auto`;
+   GitLab: `glab api --method POST projects/:id/merge_requests/<iid>/cancel_merge_when_pipeline_succeeds`):
+   an armed PR would merge the new head unreviewed. Re-arm only through the [ship {{SKILL}}](ship.md).
 
 ## Done when
 - The commit contains only the intended change and the working tree is clean of it,
-  and every commit and push went out only with the user's explicit, per-action consent
-  or inside a batch that covers it.
+  and nothing was committed or pushed onto the main branch without a green pull
+  request or the user's explicit acceptance.
 
 <!-- INCLUDE: skills/_self-improvement.md -->

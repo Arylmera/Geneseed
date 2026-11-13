@@ -584,6 +584,10 @@ export const GATE_SWITCHES = [
   // Cure the Cause's weakened-test note, edit time and turn end. Advisory, so no gate the doctor
   // pins (`HOOK_PINNED`; ledger key `cure-the-cause`): `law: null`, though the console shows it on Rule VIII.
   { key: 'testNote', flag: '--no-test-note', arg: 'noTestNote', marker: 'Test note', law: null },
+  // Consent Before Push's own-branch pass (user decision 2026-11-13): off is STRICT consent, every
+  // commit and push asks again. A switch that adds asks, so its flag does not read `--no-*`; the
+  // contract is the others' all the same: armed by default, a marker line only when off.
+  { key: 'ownBranchPass', flag: '--strict-consent', arg: 'strictConsent', marker: 'Own-branch pass', law: null },
 ];
 
 /**

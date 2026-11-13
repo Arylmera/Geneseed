@@ -32,8 +32,8 @@ not make.
    state (a global config, a hook shim) run from the worktree only when they resolve
    the repo through it; verify with the tool's own status command rather than assume.
 5. **Integrate through the normal gate** — commit via the [commit {{SKILL}}](commit.md),
-   ship via [ship](ship.md). A worktree earns no exemption from per-commit and
-   per-push consent ({{DOCTRINE:consent-before-push}}). Expect conflicts with a sibling tree that
+   ship via [ship](ship.md). The worktree's branch is your own; the main branch still
+   changes only through a green pull request ({{DOCTRINE:consent-before-push}}). Expect conflicts with a sibling tree that
    touched the same files; resolve them on the branch, not in the other tree.
 6. **Clean up when the branch is merged or abandoned** — with consent, since removal
    is deletion ({{LAW:deletion-is-deliberate}}):
