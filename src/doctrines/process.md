@@ -101,9 +101,9 @@ your own: commit as the work advances and push it with a plain push, without ask
 Each commit still holds one intent ({{LAW:one-intent-one-act}}) and passes the commit
 {{SKILL}}'s checks; a forced push asks, even on your own branch. A tag, a release or a
 publish faces outward and asks ({{LAW:deletion-is-deliberate}}). A dispatched worker,
-crew or slice (a Foreman worker, a pipeline crew, a parallel-agents slice) commits, and
-merges its own sub-workers, only in its own worktree, and never pushes: the session
-that dispatched it pushes the branch and opens the pull request. Never force-push,
+crew or slice commits, and merges its own sub-workers, only in its own worktree, and
+never pushes: the session that dispatched it pushes the branch and opens the pull
+request. Never force-push,
 hard-reset, or rebase the main branch: undo a published mistake with a revert commit;
 the rare legitimate rewrite goes through the git-history {{SKILL}} behind a backup,
 with the user's acceptance. The host gates commits and pushes onto the main branch at
