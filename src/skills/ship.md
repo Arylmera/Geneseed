@@ -37,7 +37,7 @@ request or merge the branch.
 6. **Auto-merge.** It is off unless the user's standing rule *Auto-merge green PRs* in
    `user-rules.md` arms it (the later layer wins: project over host over shared). That rule is
    the durable authorization {{LAW:deletion-is-deliberate}} permits for the forge's merge; it
-   arms only that merge, and every push still asks. With no such rule, say once per session in
+   arms only that merge, and pushes still follow {{DOCTRINE:consent-before-push}}. With no such rule, say once per session in
    each repo, when you open a PR there: "Auto-merge is off; say 'turn on auto-merge' to set a
    standing rule" — the [rule {{SKILL}}](rule.md) writes it. With the rule, arm only when all of
    these hold; otherwise leave the merge to the user:

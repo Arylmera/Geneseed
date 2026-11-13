@@ -33,7 +33,8 @@ off auto-merge"**: the agent removes the rule, or writes a project copy with all
 opens a PR there, that auto-merge is off and how to turn it on.
 
 The rule is your durable authorization for the forge's merge (`deletion-is-deliberate`). It arms
-only that merge: every push still asks you (`consent-before-push`).
+only that merge. Pushes still follow `consent-before-push`: a plain push of your own branch goes
+through, and a push onto the main branch asks you.
 
 ## The tiers
 

@@ -17,8 +17,8 @@ whose remote was added by hand has no default branch recorded, and every commit 
 ### Changed
 - **Consent Before Push guards the main branch, not every commit.** The main branch (`main`,
   `master`, a remote's default, and from a linked worktree the main checkout's branch) changes
-  only through a pull request with green checks; a pull request with green checks may be merged,
-  a red, pending or unchecked one never. On any other branch, commits, local merges and plain
+  only through a pull request with green checks; a green one is merged on the user's yes or
+  under the standing auto-merge rule below, a red, pending or unchecked one never. On any other branch, commits, local merges and plain
   pushes of the checked-out branch run without a prompt, a quoted Conventional Commits message
   (`fix(x): y`) or a bash `-F -` heredoc with a quoted delimiter included.
 - **The git gate follows on Claude Code, OpenClaude and Bob.** It asks for a commit or push onto

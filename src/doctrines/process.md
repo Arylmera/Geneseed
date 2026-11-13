@@ -92,7 +92,9 @@ worktree, the branch the main checkout holds; when unsure whether a branch is on
 — a remote with no default recorded, or no remote at all — treat it as main. It
 changes only through a pull request whose required checks are green: never commit on
 it, push to it, or merge into it directly, and never merge a pull request whose
-checks are red, pending or absent. A green pull request may be merged. Where the
+checks are red, pending or absent. A green pull request is merged on the user's
+acceptance of that merge, or under their standing auto-merge rule (the ship {{SKILL}}
+says when it arms). Where the
 repository has no remote, no CI or no branch protection, a change to the main branch
 needs the user's explicit acceptance of that change. Any other branch you work on is
 your own: commit as the work advances and push it with a plain push, without asking.
@@ -112,7 +114,9 @@ A push onto the main branch needs consent; the pull request is that consent. Mai
 `main`, `master`, the remote's default, or, from a linked worktree, the main checkout's
 branch; unsure (no remote, or no default recorded), treat it as main. It changes only
 through a pull request with green checks: never commit, push or merge directly onto it,
-never merge a red, pending or unchecked one; a green one may be merged. With no remote, CI or protection, a change to main needs explicit acceptance.
+never merge a red, pending or unchecked one; a green one on the user's yes or their
+standing auto-merge rule (ship {{SKILL}}). With no remote, CI or protection, a change to
+main needs explicit acceptance.
 Your own branch: commit and plain-push freely; a forced push asks. Tags, releases and
 publishes ask ({{LAW:deletion-is-deliberate}}). A dispatched worker, crew or slice commits
 and merges only in its own worktree, never pushes. Never force-push, hard-reset or
