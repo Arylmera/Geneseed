@@ -4,7 +4,7 @@
 
 **Trigger:** you drive OpenCode V2 from another session or a script through its `opencode` CLI: a headless run, its sessions, the background service or a server, MCP servers, plugins, models, usage stats, or debug output. Not for work inside an OpenCode session itself.
 
-**Targets OpenCode V2 only.** Gate first: `opencode --version` must print `2.x`; on 1.x, say so and stop. The V1 commands top-level `export`/`import`, `attach`, `agent create` and `mcp debug` do not exist in V2. The installed `opencode --help` (and `opencode <command> --help`) is the live authority; references: https://opencode.ai/docs/cli/ and https://opencode.ai/docs/migrate-v1/.
+**Targets OpenCode V2 only.** Gate first: `opencode --version` must print `2.x`; on 1.x, say so and stop. The V1 commands top-level `export`/`import`, `attach`, `agent create` and `mcp debug` are not in the V2 command table: use `session export|import` instead of the first two. The installed `opencode --help` (and `opencode <command> --help`) is the live authority. General references: https://opencode.ai/docs/cli/ and https://opencode.ai/docs/migrate-v1/.
 
 ## Servers: service, standalone, explicit
 
@@ -23,7 +23,7 @@ By default the CLI finds or starts one shared **background service** per user ac
 | `opencode serve [--hostname H] [--port N] [--cors <origin>]` | A foreground V2 API and web server; stop it yourself when done |
 | `opencode pair [--url <url>]` | One-time links for a browser or app. `--remote` exposes the server to the internet: only on the user's ask, and never add `--yes` for them |
 
-The server password comes from `OPENCODE_PASSWORD` (V1's `OPENCODE_SERVER_PASSWORD` still works; the username is always `opencode`).
+The server password comes from `OPENCODE_PASSWORD` (V1's `OPENCODE_SERVER_PASSWORD` still works). It is the user's secret: never print it or write it to a file.
 
 ## Headless run
 
@@ -77,6 +77,6 @@ opencode run --format json --title "review" "Review the diff in this repo and li
 
 - The run's output was read from its JSON or text, a server you started with `serve` or `--standalone` is stopped, a service you started is named to the user, and every session you created for a throwaway run is deleted or handed over by ID.
 
-Verified against the V2 CLI source (`packages/cli/src/commands/commands.ts`, `packages/cli/src/run/`) of anomalyco/opencode at v2.3.0, commit `a6b15d33daf6ab7d35569f6d711fdb630b9f04e7`.
+Verified against the V2 CLI source of anomalyco/opencode at v2.3.0, commit `a6b15d33daf6ab7d35569f6d711fdb630b9f04e7`: `packages/cli/src/commands/commands.ts` (commands and flags), `commands/handlers/` (which commands start the service), `run/` (JSON events, permissions, stdin), `env.ts` (password variables); `--version` and `--help` are built into its `effect/cli` runner.
 
 <!-- INCLUDE: skills/_self-improvement.md -->
