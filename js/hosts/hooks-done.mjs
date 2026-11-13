@@ -188,15 +188,19 @@ function notificationText(obj) {
 }
 
 /**
- * `[tool-use id, proven]` for one notification: proven only by `<status>completed</status>` with
- * the summary ENDING `completed (exit code 0)`. The summary quotes the launched command, so a
- * match anywhere else (`"echo exit code 0" failed with exit code 1`) would be the command's text.
+ * `[tool-use id, proven]` for one notification: proven only when its FIRST `<status>` is
+ * `completed` and the notification ENDS `completed (exit code 0)</summary></task-notification>`.
+ * The summary quotes the call's `description` (or, without one, its command: both seen here,
+ * 2026-11), which the agent writes freely, so a match anywhere else — a description holding
+ * `completed (exit code 0)</summary>` on a call that exited 1 — would be the agent's own text.
+ * The host's status tag precedes the summary, so the first one is the host's.
  */
 function notified(text) {
   const id = /<tool-use-id>([^<]+)<\/tool-use-id>/.exec(text);
   if (!id) return null;
-  return [id[1].trim(), /<status>completed<\/status>/.test(text)
-    && /completed \(exit code 0\)<\/summary>/.test(text)];
+  const status = /<status>([^<]*)<\/status>/.exec(text);
+  return [id[1].trim(), Boolean(status) && status[1] === 'completed'
+    && /completed \(exit code 0\)<\/summary>\s*<\/task-notification>\s*$/.test(text)];
 }
 
 /**
