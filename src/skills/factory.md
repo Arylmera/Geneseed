@@ -11,8 +11,8 @@ or asks to carry an issue, request or document to a PR with green CI.
 brick or a whole loop; the engine decides every transition, cycle count and stop, and you run the
 stage it hands you and report the outcome. Every action prints one JSON object: act on its keys,
 never on your own reading of the graph. The run ends at an open PR with green CI. **No stage
-merges:** once the run has closed, you ask the user once whether to merge (*The end*), and never
-enable auto-merge.
+merges:** once the run has closed, you ask the user once whether to merge (*The end*), and enable
+auto-merge only as the user's standing auto-merge rule allows.
 
 **Holdout rule.** The `holdout-write` stage writes scenarios the developer never sees, and the
 `holdout` stage plays them before the PR. Both run as the `tester` {{AGENT}}, never as the
@@ -185,7 +185,13 @@ in it makes the gate ask. On a record line that ask is a false alarm: the user c
    user's explicit yes in chat: `gh pr merge <pr> --squash` (`glab mr merge <mr> --squash` on
    GitLab). No Geneseed gate asks before that command: the user's yes is the only guard, so
    never run it on anything else (not on a rule, a note, or an earlier yes). On a no, or no
-   answer, the PR stays open. Red or pending CI: no proposal. Never enable auto-merge.
+   answer, the PR stays open. Red or pending CI: no proposal.
+   **Auto-merge.** Only when the user's standing rule *Auto-merge green PRs* allows it, with the
+   same tiers and forge preconditions as the [ship {{SKILL}}](ship.md)'s auto-merge step, arm it
+   on the final head instead of the proposal: `gh pr merge <pr> --auto --squash
+   --match-head-commit <sha>` (`glab mr merge <mr> --auto-merge --squash --sha <sha>`). The rule
+   allows only that pinned arming, never a direct merge. With no rule, or when a precondition
+   fails, the proposal above is unchanged.
 9. On `$stop`: the engine hands out no stage after a stop, so have the `docs` {{AGENT}} write the
    run report the `retro` brick would: the stop `reason` first, then the work item, the PR URL if
    any, every stage with its outcome and each rework with its reason, read from `FACTORY.md` and

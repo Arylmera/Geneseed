@@ -109,6 +109,26 @@ The asymmetry is deliberate: Branch A costs no question, Branch B costs several.
 The price is the safeguard — make remembering cheap and legislating expensive, or
 the user picks "rule" out of impatience and the set inflates.
 
+**Auto-merge flow** (the user says "turn on auto-merge", or "turn it off"). The wording is fixed
+so the [ship {{SKILL}}](ship.md) reads it reliably: skip reformulation and the counter-example,
+never the consent. Ask one question — every repo (`global`) or this project (`project`) — then
+show this text, with the next free `R<n>` and today's date, and append it on explicit consent:
+
+```
+## R<n> — Auto-merge green PRs
+(scope: global | source: user, <date>)
+Arm auto-merge on a PR I open, only when the forge has required checks.
+- docs-tests: auto
+- normal: human        # human | reviewer
+- sensitive: never
+```
+
+`human` waits for one approving review on the forge. `reviewer` is for a solo repo, where the
+forge forbids approving your own PR: the blind reviewer must pass first. The rule arms only the
+forge's merge; every push still asks ({{DOCTRINE:consent-before-push}}). To turn it off, remove
+the rule with the same consent; to turn it off for one project only, write the rule into that
+project's file with all three lines `never` (the later layer wins).
+
 **Review flow** (on request, or when a `trial until:` date has passed): for each rule
 due, ask whether it actually fired since adoption — graduate it (drop the trial
 marker), demote it back to a {{MEMORY}} fact, or delete it. Same consent gate as

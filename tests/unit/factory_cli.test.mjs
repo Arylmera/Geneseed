@@ -302,7 +302,7 @@ test('issue-to-pr: triage gets its lanes, and the outcome it reports names the l
     assert.deepEqual(run(sb.path, ['record', '--outcome', 'bug', '--carry', 'triage.md']), { code: 0, out: { stage: 'loop:bugfix' } });
     assert.deepEqual(run(sb.path, ['next']).out, {
       stage: 'loop:bugfix', loop: 'bugfix', notes: ['triage.md'],
-      rules: ["Never merge or enable auto-merge without the user's yes, asked once at the end of the run.", "Push only this worktree's own branch."],
+      rules: ["Never merge without the user's yes, asked once at the end of the run; enable auto-merge only as the user's standing auto-merge rule allows.", "Push only this worktree's own branch."],
     });
   } finally { sb.cleanup(); }
 });
@@ -606,7 +606,7 @@ test('analysis-to-build: spec, three tasks, red CI as one extra task, then $clos
   const sb = gitRepo([]);
   const porcelain = () => git(sb.path, 'status', '--porcelain', '--untracked-files=all');
   const commit = (msg) => git(sb.path, 'commit', '-q', '--allow-empty', '-m', msg);
-  const RULES = ["Never merge or enable auto-merge without the user's yes, asked once at the end of the run.", "Push only this worktree's own branch."];
+  const RULES = ["Never merge without the user's yes, asked once at the end of the run; enable auto-merge only as the user's standing auto-merge rule allows.", "Push only this worktree's own branch."];
   const TASK = { path: 'specs/build/spec.md', count: 3 };
   // checks then review-panel, both green: what every pass of the loop goes through on its way to holdout
   const gated = () => {

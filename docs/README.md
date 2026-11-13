@@ -30,6 +30,7 @@
 | Set up | [MCP servers](guides/mcp.md) · [MarkItDown](guides/mcp-markitdown.md) · [GitLab](guides/mcp-gitlab.md) · [Filesystem](guides/mcp-filesystem.md) · [Reading non-markdown docs](guides/read-non-markdown.md) | Where the config lives, the three presets, and reading PDF and Office files |
 | Loops | [Run a loop](guides/run-a-loop.md) · [Which loop template](guides/loop-which-template.md) · [While a loop runs](guides/loop-running.md) · [Finish a loop](guides/loop-finish.md) | Working a requirement as small, validated, committed iterations |
 | Factories | [Run a factory](guides/run-a-factory.md) | Carrying one bug report or issue to an open PR with green CI |
+| Factories | [Auto-merge green PRs](guides/auto-merge.md) | Letting the forge merge a PR the agent opens once its required checks pass |
 | Keep it running | [Upgrade](guides/upgrade.md) | Getting a new version onto every install |
 | Keep it running | [Upgrade to 5.0](guides/upgrade-to-5.md) | A 4.x machine reaching 5.0: what moves, what to check, how to go back |
 | Keep it running | [Migrate from a clone to npm](guides/migrate.md) | Moving an old clone install to the npm package |

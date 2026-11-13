@@ -3,7 +3,7 @@
   "description": "Take one issue, let triage pick the lane that fits (the bugfix, feature, deps-upgrade or refactor loop, or a docs-only update), run the base branch's checks and a review panel, play the holdout scenarios it never saw, open the pull request and wait for green CI; a failed check, review or scenario, or red CI, sends the work back to that lane, twice at most each. At the end it asks you once whether to merge.",
   "category": "development",
   "rules": [
-    "Never merge or enable auto-merge without the user's yes, asked once at the end of the run.",
+    "Never merge without the user's yes, asked once at the end of the run; enable auto-merge only as the user's standing auto-merge rule allows.",
     "Push only this worktree's own branch."
   ],
   "stages": [

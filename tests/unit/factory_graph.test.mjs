@@ -555,7 +555,8 @@ test('M9: rule 10 refuses an environment outcome routed to a loop or $lane', () 
 // checks' buckets, never the exit code (1 red and 8 pending are verdicts). review-panel's diff
 // leaves out the engine files the loops commit. retro and the $stop report read a closed loop's
 // notes from git (the removal commit's parent). The merge waits for the user's yes in chat, and
-// no text claims a Geneseed gate asks before `gh pr merge`.
+// no text claims a Geneseed gate asks before `gh pr merge`. Auto-merge is armed only under the
+// user's standing rule, pinned to the final head, so a later push cannot ride an earlier arming.
 test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and the merge consent', () => {
   const gate = shipped('bricks/merge-gate.md').replace(/\s+/g, ' ');
   assert.ok(gate.includes('never the exit code'), 'merge-gate reads the verdict from the exit code');
@@ -570,6 +571,8 @@ test('M12-M15: merge-gate verdicts, the review diff, loop notes from git, and th
   const skill = shipped('skills/factory.md').replace(/\s+/g, ' ');
   assert.ok(skill.includes("Only on the user's explicit yes in chat: `gh pr merge <pr> --squash`"));
   assert.ok(skill.includes('No Geneseed gate asks before that command'));
+  assert.ok(skill.includes("Only when the user's standing rule *Auto-merge green PRs* allows it"), 'auto-merge is not tied to the standing rule');
+  assert.ok(skill.includes('`gh pr merge <pr> --auto --squash --match-head-commit <sha>`'), 'auto-merge is not pinned to the reviewed head');
   const guide = readFileSync(path.resolve(import.meta.dirname, '../../docs/guides/run-a-factory.md'), 'utf8');
   assert.doesNotMatch(`${skill}\n${guide}`, /which asks too\)|permission prompt also guards/);
 });

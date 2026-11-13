@@ -3,7 +3,7 @@
   "description": "Turn an analysis (a document, pasted text or a request) into a spec whose task list you approve, build each task in turn with the feature loop in one worktree, run the base branch's checks and a review panel, play the holdout scenarios it never saw, then open one pull request and wait for green CI; a failed check, review or scenario, or red CI, sends the work back to the loop as one more task, twice at most each. At the end it asks you once whether to merge.",
   "category": "development",
   "rules": [
-    "Never merge or enable auto-merge without the user's yes, asked once at the end of the run.",
+    "Never merge without the user's yes, asked once at the end of the run; enable auto-merge only as the user's standing auto-merge rule allows.",
     "Push only this worktree's own branch."
   ],
   "stages": ["intake", "spec", "holdout-write", "loop:feature", "checks", "review-panel", "holdout", "pr-open", "merge-gate", "retro"],
