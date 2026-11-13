@@ -8,8 +8,15 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Fixed
+- **A background launch is not a pass.** A check started with `run_in_background`, or moved to the background after its foreground timeout, counts only when its task notification says it completed with exit code 0. Before, the launch itself counted, which was 76 of 112 accepted passes in 30 days of real transcripts. A task notification no longer opens a turn.
+
 ### Added
 - **Auto-merge green PRs, off by default.** Say "turn on auto-merge" and the `rule` skill writes a standing rule into `user-rules.md` (global or per project; the project layer wins). With it, the `ship` skill and a factory's close step arm the forge's auto-merge on a PR the agent opens, on the reviewed head, only when the base branch has required checks: docs and tests only can arm at once, other code waits for one approving review (or the blind reviewer, for a solo repo), and a sensitive diff never arms, whatever the rule says. An armed PR is disarmed before any later push. Without the rule nothing changes, and the agent says once per session in a repo how to turn it on. No host gates a merge command, so the rule is text on every host; see `docs/guides/auto-merge.md`.
+- **Sub-agents are judged at SubagentStop.** The done gate reads the sub-agent's own transcript and judges each git root it wrote under against that root's own list. A block keeps the sub-agent working; an inferred check there is a stderr line and a ledger entry only.
+
+### Changed
+- **The done gate may block up to 3 times per turn, each time only after a new edit.** It used to block once. A Stop with no new edit since the last block ends the turn with the `done-gate-cap` ledger line. The count is kept per session (and per sub-agent) in the install's `notebook/done-gate/`.
 
 ## [5.3.1] — 2026-11-12
 
