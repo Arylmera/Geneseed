@@ -22,20 +22,20 @@ text{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-s
 
 <path d="M1,34h758" stroke="#1E2630"/>
 <g fill="none" stroke="#8A97A3" opacity=".8"><circle cx="38" cy="18" r="4"/><circle cx="54" cy="18" r="4"/><circle cx="70" cy="18" r="4"/></g>
-<text x="380" y="22" text-anchor="middle" class="d" style="font-size:12px">geneseed — one source, five hosts</text>
-<text xml:space="preserve" x="30" y="62" class="l c t0"><tspan fill="#3AD4C4">$</tspan> npx geneseed setup</text>
-<text xml:space="preserve" x="30" y="82" class="l d t1">  theme ........ neutral</text>
-<text xml:space="preserve" x="30" y="102" class="l d t2">  install ...... opencode-global   (every repo inherits it)</text>
-<text xml:space="preserve" x="30" y="122" class="l k t3">  ✓ built  ·  laws · agents · skills  ·  gates armed</text>
-<text xml:space="preserve" x="30" y="162" class="l c t4"><tspan fill="#3AD4C4">$</tspan> geneseed doctor</text>
-<text xml:space="preserve" x="30" y="182" class="l k t5">  [doctor] ok — no unresolved tokens, no dead links, rendered bundle in sync</text>
-<text xml:space="preserve" x="30" y="222" class="l i t6"># later, in any repo — the agent reaches for:</text>
-<text xml:space="preserve" x="30" y="242" class="l c t7"><tspan fill="#3AD4C4">&gt;</tspan> git push --force origin main</text>
-<text xml:space="preserve" x="30" y="262" class="l x t8">  ✗ Deletion Is Deliberate — this command force-pushes the protected</text>
-<text xml:space="preserve" x="30" y="282" class="l x t8">    branch main on the remote. Deny, then push without --force.</text>
-<text xml:space="preserve" x="30" y="322" class="l c t9"><tspan fill="#3AD4C4">&gt;</tspan> Write config.js   const key = &quot;sk-ant-api03-…&quot;</text>
-<text xml:space="preserve" x="30" y="342" class="l x t10">  ✗ Sealed Secrets — this edit puts a credential-shaped string in config.js.</text>
-<text xml:space="preserve" x="30" y="362" class="l x t10">    Deny, then keep the value in .env or a secret manager.</text>
-<text xml:space="preserve" x="30" y="402" class="l d t11">  one source · five hosts · the rules hold at the tool boundary</text>
-<rect class="bl" x="30" y="391" width="8" height="14" fill="#3AD4C4"/>
+<text x="380" y="22" text-anchor="middle" class="d" style="font-size:12px">geneseed — one source, five targets</text>
+<text xml:space="preserve" x="26" y="62" class="l c t0"><tspan fill="#3AD4C4">$</tspan> npx geneseed setup</text>
+<text xml:space="preserve" x="26" y="82" class="l d t1">  theme ........ neutral</text>
+<text xml:space="preserve" x="26" y="102" class="l d t2">  install ...... opencode-global   (every repo inherits it)</text>
+<text xml:space="preserve" x="26" y="122" class="l k t3">  ✓ built  ·  laws · agents · skills  ·  gates armed</text>
+<text xml:space="preserve" x="26" y="162" class="l c t4"><tspan fill="#3AD4C4">$</tspan> geneseed doctor</text>
+<text xml:space="preserve" x="26" y="182" class="l k t5">  [doctor] ok — 1 theme(s) clean: no unresolved tokens, no dead links, …</text>
+<text xml:space="preserve" x="26" y="222" class="l i t6"># later, in any repo — the agent reaches for:</text>
+<text xml:space="preserve" x="26" y="242" class="l c t7"><tspan fill="#3AD4C4">&gt;</tspan> git push --force origin main</text>
+<text xml:space="preserve" x="26" y="262" class="l x t8">  This command force-pushes the protected branch main on the remote.</text>
+<text xml:space="preserve" x="26" y="282" class="l d t8">  Safe choice: Deny, then push without --force. (Deletion Is Deliberate)</text>
+<text xml:space="preserve" x="26" y="322" class="l c t9"><tspan fill="#3AD4C4">&gt;</tspan> Write config.js   const key = &quot;sk-ant-api03-…&quot;</text>
+<text xml:space="preserve" x="26" y="342" class="l x t10">  This edit puts a credential-shaped string in config.js.</text>
+<text xml:space="preserve" x="26" y="362" class="l d t10">  Safe choice: Deny, then keep the value in .env or a secret manager. (Sealed Secrets)</text>
+<text xml:space="preserve" x="26" y="402" class="l d t11">  one source · five targets · the rules hold at the tool boundary</text>
+<rect class="bl" x="26" y="391" width="8" height="14" fill="#3AD4C4"/>
 </svg>

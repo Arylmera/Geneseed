@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1 align="center"><img src="docs/assets/hero.svg" alt="Geneseed — a portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent" width="880"></h1>
+<h1 align="center"><img src="docs/assets/hero.svg" alt="Geneseed" width="880"></h1>
 
 **A portable, theme-able harness you implant once and use everywhere to grow a disciplined AI coding agent.**
 

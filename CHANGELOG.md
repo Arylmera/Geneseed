@@ -15,7 +15,7 @@ whose remote was added by hand has no default branch recorded, and every commit 
 `git remote set-head origin --auto` records it.
 
 ### Changed
-- **The README opens with a hero image and each main section with a banner.** Seven new SVGs under `docs/assets/` share one dark panel, the brand teal and a gene-seed helix; the terminal demo is redrawn to match, says five hosts, types no counts and quotes the gates' current wording. Repository page only: none of it ships in the package.
+- **The README opens with a hero image and each main section with a banner.** Seven new SVGs under `docs/assets/` share one dark panel, the brand teal and a gene-seed helix; the terminal demo is redrawn to match, says five targets, types no counts and shows each gate's first two ask lines as the hook prints them. Repository page only: none of it ships in the package.
 - **`herdr` is a skill name again.** It left `RETIRED_SKILL_IDS`, where it sat since its removal in 2026-10: the kit skill drives the same tool, so an install whose `Excluded skills:` line names `herdr` now excludes the kit skill, which is what that line meant. It is listed in the new `REVIVED_SKILL_IDS`, so an old herdr skill folder that no manifest owns is still moved to `archived-skills/` on a global emit: with the kit off nothing replaces it, and with the kit on the current kit copy is written in its place. A herdr skill you edited, and that an emit already kept as yours, is never moved, with the kit on or off.
 - **Consent Before Push guards the main branch, not every commit.** The main branch (`main`,
   `master`, a remote's default, and from a linked worktree the main checkout's branch) changes
