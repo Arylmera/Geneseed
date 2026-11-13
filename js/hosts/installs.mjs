@@ -45,7 +45,8 @@ import { registryRoots } from '../inspect/registry.mjs';
 import { printErr, readText, isFile, isDir } from '../lib/fs.mjs';
 import { formatRepr, isDict } from '../lib/json.mjs';
 import { comparePaths } from '../lib/paths.mjs';
-import { bundleLeftovers, ownedWithin } from './owned.mjs';
+import { bundleLeftovers, ownedWithin, recordedGates } from './owned.mjs';
+import { prunableGates } from './settings.mjs';
 import { claudeHookShell, hookShimPath } from './shim.mjs';
 
 export { carriersFor };
@@ -619,6 +620,23 @@ export function leftoversOf(root, host = 'opencode', scope = 'global') {
     stale = bundle.stale;
   }
   return { kept: kept.sort(), stale };
+}
+
+/**
+ * The `permission.bash` gates a `--prune-gates` rebuild of this OpenCode install would remove:
+ * owned keys whose rule this install has off, still at Geneseed's verdict, and absent from its
+ * `bash_gates` record (an `opencode.json` written before 5.2.0). The console shows them beside
+ * the leftovers and offers that rebuild. Read with the install's OWN choices — packs, excluded
+ * rules, the deletion gate — so it names what the console's prune would take, not a guess.
+ * Every other host has no such block: `{ keys: [] }`.
+ */
+export function strandedGatesOf(root, host = 'opencode', scope = 'global') {
+  if (host !== 'opencode') return { keys: [], commented: false };
+  const manifest = scope === 'project' ? path.join(root, '.opencode', GLOBAL_MANIFEST)
+    : path.join(root, GLOBAL_MANIFEST);
+  return prunableGates(path.join(root, 'opencode.json'), doctrinesForBuild(root, host),
+    excludedRulesOfDir(root, host), gatesOfDir(root, host).deletionGate,
+    recordedGates(readJsonMaybe(manifest)));
 }
 
 /** 'active' | 'disabled' | 'absent'. */

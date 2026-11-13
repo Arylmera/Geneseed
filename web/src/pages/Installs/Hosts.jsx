@@ -402,38 +402,60 @@ export default function Hosts({
       })
   }
 
-  // The forced rebuild: the install's own choices, plus `force`. The confirm names every file
-  // it replaces or removes, because this is the one rebuild that overwrites the user's work.
-  const forceRebuild = async (inst) => {
+  // A rebuild of an active install with its own choices, plus one build's instruction
+  // (`force`, `pruneGates`). Neither is recorded, so the next plain rebuild is plain again.
+  const rebuildWith = (inst, extra) => {
     const { theme, footprint, posture, mode, trust, sharedTier } = choiceFor(inst)
+    onAction?.('install', {
+      host: inst.host,
+      scope: inst.scope,
+      path: inst.path,
+      theme,
+      footprint,
+      posture,
+      mode,
+      trust,
+      ...(inst.scope === 'global' ? {} : { sharedTier }),
+      ...extra,
+    })
+  }
+  const list = (rels) =>
+    rels.slice(0, 8).join(', ') + (rels.length > 8 ? `, and ${rels.length - 8} more` : '')
+
+  // The forced rebuild, offered on every active install. The confirm names every file it is
+  // known to replace or remove, because this is the one rebuild that overwrites the user's work;
+  // with none recorded it says what force still does, since a build can meet a new one.
+  const forceRebuild = async (inst) => {
     const kept = inst.leftovers?.kept || []
     const stale = inst.leftovers?.stale || []
-    const list = (rels) =>
-      rels.slice(0, 8).join(', ') + (rels.length > 8 ? `, and ${rels.length - 8} more` : '')
     const msg =
-      (kept.length
-        ? `Replace with Geneseed’s copy: ${list(kept)}. Your version of each is overwritten. `
-        : '') +
-      (stale.length ? `Remove: ${list(stale)}. ` : '') +
-      'Nothing else is touched.'
+      kept.length || stale.length
+        ? (kept.length
+            ? `Replace with Geneseed’s copy: ${list(kept)}. Your version of each is overwritten. `
+            : '') +
+          (stale.length ? `Remove: ${list(stale)}. ` : '') +
+          'Nothing else is touched.'
+        : 'No file of yours is recorded here. A forced rebuild overwrites any file it finds at a ' +
+          'path Geneseed ships, and removes retired leftovers. Skills and agents under your own ' +
+          'names, memory, notebook, rules and profile are never touched.'
     const ok = await confirm(msg, {
-      title: 'Replace your files with Geneseed’s?',
-      confirmLabel: 'Replace and rebuild',
+      title: 'Force rebuild this install?',
+      confirmLabel: 'Force rebuild',
       tone: 'danger',
     })
-    if (ok)
-      onAction?.('install', {
-        host: inst.host,
-        scope: inst.scope,
-        path: inst.path,
-        theme,
-        footprint,
-        posture,
-        mode,
-        trust,
-        ...(inst.scope === 'global' ? {} : { sharedTier }),
-        force: true,
-      })
+    if (ok) rebuildWith(inst, { force: true })
+  }
+
+  // OpenCode's `--prune-gates` rebuild: removes the stranded `permission.bash` gates the panel
+  // lists. The confirm names them; an entry the user changed is kept by the build itself.
+  const pruneRebuild = async (inst) => {
+    const keys = inst.strandedGates?.keys || []
+    const ok = await confirm(
+      `Remove from opencode.json: ${list(keys)}. Their rule is off in this install. ` +
+        'An entry you changed yourself is kept; nothing else is touched.',
+      { title: 'Remove stranded gates?', confirmLabel: 'Remove and rebuild' },
+    )
+    if (ok) rebuildWith(inst, { pruneGates: true })
   }
 
   const toggleInstall = async (inst) => {
@@ -711,6 +733,7 @@ export default function Hosts({
           onRemove={() => confirmRemove(current)}
           onRevealMcp={revealMcp}
           onForce={() => forceRebuild(current)}
+          onPrune={() => pruneRebuild(current)}
         />
       ) : null}
     </div>

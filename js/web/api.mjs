@@ -24,7 +24,7 @@ import { factCount } from '../hosts/memory-files.mjs';
 import { autostartState } from '../hosts/shim.mjs';
 import {
   footprintOfDir, gatesOfDir, installState, installTargets, leftoversOf, modeOfDir,
-  trustOfDir, sharedTierOfDir,
+  trustOfDir, sharedTierOfDir, strandedGatesOf,
   postureOfDir, readJsonMaybe, readMaybe, themeOfDir,
 } from '../hosts/installs.mjs';
 import { PRESETS } from '../loop/score.mjs';
@@ -243,6 +243,8 @@ export function apiInstalls(state) {
       // Files here that are the user's where Geneseed ships one, and retired leftovers: what a
       // forced rebuild would replace or remove (`leftoversOf`). Read off the emit's own record.
       leftovers: leftoversOf(root, host, scope),
+      // OpenCode only: the bash gates a `--prune-gates` rebuild would take out (`strandedGatesOf`).
+      strandedGates: strandedGatesOf(root, host, scope),
       // The install a request naming none reads (`defaultView`): the console's pickers start on it.
       default: !!def && samePath(viewCfg(host, scope, root), def[0]),
     });
