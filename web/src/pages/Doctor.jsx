@@ -95,7 +95,7 @@ function DoctorOf({ install, dataRev }) {
           <h2 className="h">Doctor</h2>
           <p className="sub">
             Builds this install’s voice in a sandbox and validates the result: token resolution,
-            link integrity, parity, and local edits.
+            link integrity, and parity.
           </p>
         </div>
         <button className="btn" onClick={rerun} disabled={!data}>

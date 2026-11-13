@@ -52,7 +52,7 @@ export function emitClaudeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, claudeMd, scope, out, footprint, host, nativeCatalog,
-    oldOwned, oldHashes = {},
+    oldOwned, oldHashes = {}, oldKeptHashes = {},
   } = job;
 
   // Relative to the CLAUDE.md directory, so the argument order is cfg-from-claude_md; an
@@ -210,6 +210,7 @@ export function emitClaudeRender(cfg, job) {
     managed,
     editRefused: [...claim.editRefused],
     kept: [...new Set([...claim.kept, ...held])],
+    keptHashes: claim.keptHashes(oldKeptHashes),
   };
 }
 

@@ -78,10 +78,10 @@ test('two overview + fleet refreshes on an unchanged source render the install o
   apiOverview(b);
   assert.equal(b.renderMemo.renders, 1);
   // And the memo changes nothing anyone reads: a fresh install has no drift either way.
-  assert.deepEqual(ov1.diff, { edited: 0, added: 0, missing: 0, linked: 0, stale: 0 });
+  assert.deepEqual(ov1.diff, { edited: 0, added: 0, missing: 0, linked: 0, stale: 0, kept: 0 });
   assert.deepEqual(ov2.diff, ov1.diff);
   assert.deepEqual(fl2.installs.map((i) => i.drift), fl1.installs.map((i) => i.drift));
-  assert.deepEqual(fl1.installs.map((i) => i.drift), [{ edited: 0, added: 0, missing: 0, linked: 0, stale: 0 }]);
+  assert.deepEqual(fl1.installs.map((i) => i.drift), [{ edited: 0, added: 0, missing: 0, linked: 0, stale: 0, kept: 0 }]);
 });
 
 test('a per-install view reads the render its daemon already holds', () => {

@@ -56,7 +56,7 @@ import { mkdirSync } from 'node:fs';
 function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
   const {
     oldOwned, manifestExisted, agentPath, wireBase, overridesDir, oldDenies = [], oldEdit = { asks: [], shorthand: null },
-    oldHashes = {}, oldGates = [],
+    oldHashes = {}, oldGates = [], oldKeptHashes = {},
   } = opts;
   ensureAgentOverridesStub(cfg, overridesDir);
   const overrides = loadAgentOverrides(overridesDir);
@@ -114,6 +114,7 @@ function opencodeLayer(cfg, items, themeName, theme, dir, owned, opts) {
     // As `skillDenies`: a merge that wrote nothing keeps the old record whole.
     bashGates: wired.bashGates ? [...wired.bashGates].sort() : oldGates,
     kept: [...claim.kept],
+    keptHashes: claim.keptHashes(oldKeptHashes),
   };
 }
 
@@ -137,7 +138,7 @@ export function emitOpencodeRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: _theme, out, root, footprint, nativeCatalog, oldOwned, manifestExisted, agentPath,
-    oldDenies, oldEdit, oldHashes = {}, oldGates = [],
+    oldDenies, oldEdit, oldHashes = {}, oldGates = [], oldKeptHashes = {},
   } = job;
   const oc = path.join(root, '.opencode');
 
@@ -156,9 +157,9 @@ export function emitOpencodeRender(cfg, job) {
   const { theme, items } = renderAll(cfg, _theme, { footprint, nativeCatalog });
 
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept, keptHashes,
   } = opencodeLayer(cfg, items, _theme, theme, oc, owned, {
-    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes, oldGates,
+    oldOwned, manifestExisted, agentPath, wireBase: root, overridesDir: out, oldDenies, oldEdit, oldHashes, oldGates, oldKeptHashes,
   });
 
   return {
@@ -172,6 +173,7 @@ export function emitOpencodeRender(cfg, job) {
     editRefused,
     bashGates,
     kept,
+    keptHashes,
   };
 }
 
@@ -206,7 +208,7 @@ export function emitOpencodeGlobalRender(cfg, job) {
   phaseLog('RENDER');
   const {
     theme: themeName, cfgDir, out, footprint, nativeCatalog, oldOwned, agentPath, oldDenies, oldEdit,
-    oldHashes = {}, oldGates = [],
+    oldHashes = {}, oldGates = [], oldKeptHashes = {},
   } = job;
 
   // No `lawsPrefix`: the standalone laws dir sits beside AGENT.md in <cfg>, so the lean
@@ -238,9 +240,9 @@ export function emitOpencodeGlobalRender(cfg, job) {
   // `manifestExisted` is deliberately not passed, so
   // the pre-manifest header line is unreachable from this emit.
   const {
-    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept,
+    nAgents, nSkills, nPlugins, nWorkflows, primary, nCommands, cfgName, skillDenies, editRecord, editRefused, bashGates, kept, keptHashes,
   } = opencodeLayer(cfg, items, themeName, theme, cfgDir, owned, {
-    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes, oldGates,
+    oldOwned, agentPath, wireBase: cfgDir, overridesDir: cfgDir, oldDenies, oldEdit, oldHashes, oldGates, oldKeptHashes,
   });
 
   const memStatus = globalMemory(cfgDir, items, out, cfg.src);
@@ -271,5 +273,6 @@ export function emitOpencodeGlobalRender(cfg, job) {
     editRefused,
     bashGates,
     kept: [...new Set([...kept, ...held])],
+    keptHashes,
   };
 }

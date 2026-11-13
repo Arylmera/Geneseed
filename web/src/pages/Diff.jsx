@@ -255,10 +255,26 @@ function DiffOf({ install, onMutated, onAction, dataRev, overview }) {
   // One file's card. Only a local change is selectable for Restore; a stale file is updated by
   // the rebuild, so it carries no checkbox and a neutral badge, as does an added file: a
   // difference, not a success, so it never wears the good colour.
+  // D11: .md files keep warn tone even when source unchanged.
   function fileCard(f, selectable) {
     const isOpen = open.has(f.rel)
+    const isKept = f.status === 'edited' && f.diverged === false
+    const isMdKept = isKept && f.rel.endsWith('.md')
     const statusClass =
-      f.status === 'stale' || f.status === 'added' ? '' : f.status === 'missing' ? 'bad' : 'warn'
+      f.status === 'stale' || f.status === 'added'
+        ? ''
+        : f.status === 'missing'
+          ? 'bad'
+          : isMdKept
+            ? 'warn'
+            : isKept
+              ? ''
+              : 'warn'
+    const badgeText = isKept
+      ? 'source unchanged'
+      : f.status === 'stale'
+        ? 'behind source'
+        : f.status
     return (
       <div className={`card diff-file${isOpen ? ' open' : ''}`} key={f.rel}>
         <div className="diff-head">
@@ -275,7 +291,7 @@ function DiffOf({ install, onMutated, onAction, dataRev, overview }) {
           <span className="fname">{f.rel}</span>
           <span className={`badge ${statusClass}`}>
             <span className="dot" />
-            {f.status === 'stale' ? 'behind source' : f.status}
+            {badgeText}
           </span>
           <span className="dim mono diff-lines">{f.diff.length} lines</span>
           <button

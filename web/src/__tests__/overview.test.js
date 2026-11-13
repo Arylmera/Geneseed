@@ -266,6 +266,25 @@ describe('fleetVerdict', () => {
       facts: ['1 active install', 'doctor clean', 'all in sync with source', 'no local edits'],
     })
   })
+  // KEPT EDITS (spec 2026-11-13). `kept` counts edited side files whose source still renders
+  // what the last emit wrote: shown beside the local-edit fact, never turning the line amber. A
+  // diverged edit keeps today's verdict. A kept `.md` is not in `kept` (D11, `driftCounts`), so
+  // its drift arrives as a plain edit and warns.
+  const withDrift = (drift) => ({
+    doctor: { ok: true, problems: [] },
+    installs: [
+      { ...FLEET.installs[1], drift: { added: 0, missing: 0, linked: 0, stale: 0, ...drift } },
+    ],
+  })
+  it.each([
+    ['kept only', { edited: 1, kept: 1 }, 'good', 'no local edits, 1 kept edit'],
+    ['one diverged', { edited: 1, kept: 0 }, 'warn', '1 local edit'],
+    ['one diverged, two kept', { edited: 3, kept: 2 }, 'warn', '1 local edit, 2 kept edits'],
+    ['one kept .md', { edited: 1, kept: 0 }, 'warn', '1 local edit'],
+  ])('%s', (_, drift, tone, fact) => {
+    const v = fleetVerdict(withDrift(drift))
+    expect([v.tone, v.facts[3]]).toEqual([tone, fact])
+  })
 })
 
 // A fleet row's session-start figure; 85 % of the 9 000 budget is 7 650.
@@ -368,6 +387,41 @@ describe('ledgerNeeds session start', () => {
 describe('ledgerNeeds', () => {
   beforeEach(() => vi.useFakeTimers({ now: NOW }))
   afterEach(() => vi.useRealTimers())
+  // Kept edits (spec 2026-11-13 §5): still one row per install. Only kept edits left make a muted
+  // suggestion with the same Review link; any edit that alerts keeps the problem row, which names
+  // the kept ones in its detail.
+  it('gives kept-only edits a suggestion and keeps alerting edits a problem', () => {
+    const inst = (id, drift) => ({
+      ...FLEET.installs[1],
+      id,
+      drift: { added: 0, missing: 0, linked: 0, stale: 0, ...drift },
+    })
+    const rows = ledgerNeeds({
+      fleet: {
+        doctor: { ok: true, problems: [] },
+        installs: [inst('a', { edited: 2, kept: 2 }), inst('b', { edited: 2, kept: 1 })],
+      },
+      usage: null,
+    }).filter((r) => r.id.startsWith('drift:'))
+    expect(rows.map((r) => [r.id, r.tone, !!r.sugg, r.title, r.detail, r.href])).toEqual([
+      [
+        'drift:a',
+        '',
+        true,
+        'Claude Code · global: 2 kept edits',
+        'edited in place, source unchanged — nothing missed',
+        '#/installs/edits',
+      ],
+      [
+        'drift:b',
+        'warn',
+        false,
+        'Claude Code · global: 1 local edit',
+        '1 edited, 0 added, 0 missing, 1 kept',
+        '#/installs/edits',
+      ],
+    ])
+  })
   // Every suggestion names its install (D6): a fleet carrying `facts` gives one memory nudge per
   // install with none (not the old one-install `setup.facts`), and the profile and rules nudges,
   // read off the default install, are prefixed with it.
@@ -565,6 +619,24 @@ describe('needsRebuild', () => {
     ['in step', { state: 'active', verdict: 'synced', drift: zero }, false],
     ['in step, no drift read', { state: 'active', verdict: 'synced', drift: null }, false],
     ['disabled', { state: 'disabled', verdict: 'behind', drift: { ...zero, edited: 3 } }, false],
+    // Kept edits (spec 2026-11-13, D9): a rebuild changes nothing there, so none is offered.
+    [
+      'kept only',
+      { state: 'active', verdict: 'synced', drift: { ...zero, edited: 2, kept: 2 } },
+      false,
+    ],
+    // One kept, one diverged: the diverged one still asks for the rebuild.
+    [
+      'kept + diverged',
+      { state: 'active', verdict: 'synced', drift: { ...zero, edited: 2, kept: 1 } },
+      true,
+    ],
+    // A kept `.md` is never counted in `kept` (D11, `driftCounts`), so it reads as an edit.
+    [
+      'kept .md',
+      { state: 'active', verdict: 'synced', drift: { ...zero, edited: 1, kept: 0 } },
+      true,
+    ],
   ])('%s', (_, install, want) => {
     expect(needsRebuild(install)).toBe(want)
   })

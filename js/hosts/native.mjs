@@ -590,6 +590,19 @@ export function claimer(oldOwned, cfg, manifestExisted = true, oldHashes = {}, f
   };
   claim.editRefused = editRefused;
   claim.kept = kept;
+  // The manifest's next `kept_hashes` (spec 2026-11-13 §1), read once every writer has claimed.
+  // A rel refused for an edit NOW records the hash its last write left (`oldHashes`). From the
+  // next emit on it is no longer in `owned`, so the claim refuses it as pre-existing and it lands
+  // in `kept`, not `editRefused`: the entry the previous manifest held is carried forward. A rel
+  // claimed again (restored, deleted, `--force`) or no longer shipped is in neither set, and drops.
+  claim.keptHashes = (oldKeptHashes = {}) => {
+    const out = {};
+    for (const rel of editRefused) if (Object.hasOwn(oldHashes, rel)) out[rel] = oldHashes[rel];
+    for (const rel of kept) {
+      if (!Object.hasOwn(out, rel) && Object.hasOwn(oldKeptHashes, rel)) out[rel] = oldKeptHashes[rel];
+    }
+    return out;
+  };
   // Did the previous emit write `dest`? Read by `writeNativeLayer` for a skill's side files.
   claim.owned = (dest) => oldSet !== null && cfg != null && oldSet.has(relPosix(cfg, dest));
   return claim;

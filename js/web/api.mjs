@@ -174,6 +174,8 @@ const driftCounts = (files) => ({
   missing: files.filter((f) => f.status === 'missing').length,
   linked: files.filter((f) => f.status === 'linked').length,
   stale: files.filter((f) => f.status === 'stale').length,
+  // D11: .md files keep alert tone even when kept, so don't count them in kept
+  kept: files.filter((f) => f.status === 'edited' && f.diverged === false && !f.rel.endsWith('.md')).length,
 });
 
 /**

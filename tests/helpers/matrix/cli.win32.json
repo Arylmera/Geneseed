@@ -4317,7 +4317,7 @@
       "expect": [
         "[diff] deployed ",
         "(theme: neutral)",
-        "~ AGENT.md   (edited in deployed — review to back-port)",
+        "~ AGENT.md   (edited in deployed — the source has moved; review to back-port, or restore)",
         "- .geneseed-version   (in source, not deployed — re-emit to add)",
         "- workflows/council.js   (in source, not deployed — re-emit to add)",
         "Run with --full to see the line-level diffs"
