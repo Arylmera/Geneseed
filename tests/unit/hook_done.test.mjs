@@ -730,3 +730,122 @@ test('learn on Stop: no weakened test prints nothing; --no-done-gate and Bob say
   assert.equal(project({ checks: null, extra: ['--no-done-gate'], transcriptRows: [prompt(), weakenIn] }).out, '');
   assert.equal(project({ checks: null, host: 'bob', transcriptRows: [prompt(), weakenIn] }).out, '', 'Bob has no transcript');
 });
+
+// ---- SubagentStop: the sub-agent's own turn ----------------------------------------------
+// A sub-agent's transcript (`agent_transcript_path`) marks every message line `isSidechain: true`
+// — the Agent call's prompt included — so it is read in sidechain mode, and the projects judged
+// are the git roots of the files it wrote, not the parent's cwd.
+
+/** Transcript rows as a sub-agent's transcript holds them: the same lines, `isSidechain: true`. */
+const side = (rows) => rows.flat().map((o) => ({ ...o, isSidechain: true }));
+
+test('doneDecide: a sub-agent transcript is judged only in sidechain mode', () => {
+  const reminder = { type: 'user', isMeta: true, isSidechain: true,
+    message: { role: 'user', content: '<system-reminder>report through SubagentHandback</system-reminder>' } };
+  const t = jsonl(side([prompt('the brief'), reminder, edit(), bash('npm run lint')]));
+  assert.deepEqual(doneDecide(t, CHECKS, R, R, true, false), [], 'main mode reads no line of it: nothing judged');
+  assert.deepEqual(doneDecide(t, CHECKS, R, R, true, true), ['node --test'],
+    'sidechain mode: the brief opens the turn, the isMeta reminder does not, lint passed after the edit');
+  // A main transcript is unchanged: its sidechain lines are still not its own.
+  assert.deepEqual(doneDecide(jsonl(prompt(), edit(), side([bash('npm run lint')])), CHECKS, R), CHECKS);
+});
+
+/**
+ * One SubagentStop through the real binary. The parent sits in `parent/` (a git root); the worker
+ * in `parent/.claude/worktrees/w`, its own git root (a `.git` FILE, as a worktree has), with
+ * `workerChecks` as its list (null: none) and `workerFiles` beside it. `stops` is a list of
+ * `{ rows, active }`: each stop rewrites the transcript, all share one install (S5's state).
+ */
+function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {}, parentChecks = null,
+  withPath = true, llm = false }) {
+  const sb = makeSandbox();
+  try {
+    const parent = path.join(sb.path, 'parent');
+    const worker = path.join(parent, '.claude', 'worktrees', 'w');
+    fs.mkdirSync(path.join(parent, '.git'), { recursive: true });
+    fs.mkdirSync(worker, { recursive: true });
+    fs.writeFileSync(path.join(worker, '.git'), 'gitdir: ../../../.git/worktrees/w\n');
+    for (const [rel, text] of Object.entries(workerFiles)) fs.writeFileSync(path.join(worker, rel), text);
+    const list = (dir, text) => {
+      if (text === null) return;
+      fs.mkdirSync(path.join(dir, '.geneseed'), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.geneseed', 'done-checks.txt'), text);
+    };
+    list(worker, workerChecks);
+    list(parent, parentChecks);
+    const install = path.join(sb.path, 'install');
+    fs.mkdirSync(path.join(install, 'notebook'), { recursive: true });
+    fs.mkdirSync(path.join(install, 'memory'), { recursive: true });   // where an agent lesson lands
+    const transcript = path.join(sb.path, 'agent-w.jsonl');
+    const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) };
+    delete env.GENESEED_LLM;
+    delete env.GENESEED_LEARN_CHILD;
+    if (llm) {
+      const stub = path.join(sb.path, 'llm.mjs');
+      fs.writeFileSync(stub, 'process.stdout.write("Always run the listed checks before handing back.");\n');
+      env.GENESEED_LLM = `node ${stub}`;
+    }
+    const ledgerFile = path.join(install, 'notebook', 'gates.jsonl');
+    return stops.map(({ rows, active = false }) => {
+      fs.writeFileSync(transcript, jsonl(side(rows.map((r) => (typeof r === 'function' ? r(worker) : r)))));
+      const payload = { hook_event_name: 'SubagentStop', session_id: 's', agent_id: 'w', agent_type: 'developer',
+        cwd: parent, transcript_path: path.join(sb.path, 'parent.jsonl'), stop_hook_active: active,
+        ...(withPath ? { agent_transcript_path: transcript } : {}) };
+      const p = spawnHook(['learn', '--memory', path.join(install, 'memory')], JSON.stringify(payload), { cwd: parent, env });
+      const ledger = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8') : '';
+      if (fs.existsSync(ledgerFile)) fs.unlinkSync(ledgerFile);
+      const lesson = fs.existsSync(path.join(install, 'memory', 'agents', 'developer.md'));
+      return { rc: p.status, out: p.stdout, err: p.stderr, ledger, lesson };
+    });
+  } finally {
+    sb.cleanup();
+  }
+}
+const subagentStop = ({ rows = [], active = false, ...opts } = {}) => subagentStops({ ...opts, stops: [{ rows, active }] })[0];
+const editWorker = (w) => edit(path.join(w, 'a.js'));
+
+test('learn on SubagentStop: the worker\'s own root and list judge its turn', () => {
+  const r = subagentStop({ rows: [prompt('brief'), editWorker] });
+  assert.equal(r.rc, 0, r.err);
+  const verdict = JSON.parse(r.out);
+  assert.equal(verdict.decision, 'block');
+  assert.match(verdict.reason, /this sub-agent edited files/);
+  assert.match(verdict.reason, /npm run lint/);
+  assert.match(r.ledger, /"verb":"done-gate","rule":"law-3"/);
+
+  // Proven after the edit: nothing on stdout, nothing in the ledger.
+  const ok = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint')] });
+  assert.equal(ok.out, '', ok.err);
+  assert.equal(ok.ledger, '');
+
+  // The parent's list is not the worker's: the worker's write owes the parent's check nothing.
+  const parentOnly = subagentStop({ workerChecks: null, parentChecks: 'npm run typecheck\n',
+    rows: [prompt('brief'), editWorker] });
+  assert.equal(parentOnly.out, '', parentOnly.err);
+  assert.equal(parentOnly.ledger, '');
+});
+
+test('learn on SubagentStop: a block returns before the agent lesson is distilled', () => {
+  const blocked = subagentStop({ rows: [prompt('brief'), editWorker], llm: true });
+  assert.equal(JSON.parse(blocked.out).decision, 'block');
+  assert.equal(blocked.lesson, false, 'a blocked sub-agent got a lesson written');
+  const proven = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint')], llm: true });
+  assert.equal(proven.lesson, true, `the allowed sub-agent learned nothing: ${proven.err}`);
+});
+
+test('learn on SubagentStop: an inferred check is a stderr line and a ledger entry, never stdout', () => {
+  const r = subagentStop({ workerChecks: null, workerFiles: { 'package.json': '{"scripts":{"test":"x"}}' },
+    rows: [prompt('brief'), editWorker] });
+  assert.equal(r.rc, 0);
+  assert.equal(r.out, '', 'nobody reads a sub-agent\'s systemMessage: stdout must stay empty');
+  assert.match(r.err, /\[done-gate\] advisory \(sub-agent\) — unproven since the last edit: npm test/);
+  assert.match(r.ledger, /"rule":"law-3"/);
+});
+
+test('learn on SubagentStop: no agent transcript is not judged, said only where a list exists', () => {
+  const listed = subagentStop({ withPath: false, parentChecks: 'npm run lint\n', rows: [prompt(), editWorker] });
+  assert.equal(listed.out, '');
+  assert.match(listed.err, /\[done-gate\] no agent transcript — sub-agent turn not judged\./);
+  const quiet = subagentStop({ withPath: false, rows: [prompt(), editWorker] });
+  assert.equal(quiet.err.includes('[done-gate]'), false, quiet.err);
+});

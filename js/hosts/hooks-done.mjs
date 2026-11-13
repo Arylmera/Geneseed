@@ -186,8 +186,8 @@ function notified(text) {
 }
 
 /** A user line that opens a turn: the user typed it, it is not a tool result, a meta note or a task notification. */
-function isPrompt(obj) {
-  if (obj.type !== 'user' || obj.isMeta || obj.isSidechain) return false;
+function isPrompt(obj, sidechain = false) {
+  if (obj.type !== 'user' || obj.isMeta || (obj.isSidechain && !sidechain)) return false;
   if (notificationText(obj)) return false;
   const c = obj.message && obj.message.content;
   if (typeof c === 'string') return true;
@@ -199,8 +199,16 @@ function isPrompt(obj) {
  * old text the host recorded for a write. `whole` false means the text is only the file's tail:
  * with no prompt in it the turn may start earlier, so the answer is null ("read more") — a turn
  * judged from its middle could miss its edit and wrongly pass.
+ *
+ * `sidechain` true reads a SUB-AGENT's own transcript (`agent_transcript_path` on SubagentStop).
+ * Every message line there carries `isSidechain: true` — seen in 300 of 300 transcripts under
+ * `~/.claude/projects/<p>/<session>/subagents/` here (2026-11) — and the turn opens on ONE user
+ * line, the Agent call's prompt as a string; the `isMeta` system reminder after it opens nothing.
+ * Read as a main transcript, it would hold no prompt and no call, and every sub-agent would pass.
+ * `cwd` is the last `cwd` the turn's lines name: a sub-agent's is its own (its worktree), where
+ * the payload's `cwd` is its parent's.
  */
-function turnOf(transcript, whole) {
+function turnOf(transcript, whole, sidechain = false) {
   const entries = [];
   for (const line of splitLines(transcript)) {
     if (!line.trim()) continue;
@@ -208,7 +216,7 @@ function turnOf(transcript, whole) {
   }
   let start = -1;
   for (let i = entries.length - 1; i >= 0; i -= 1) {
-    if (isPrompt(entries[i])) { start = i + 1; break; }
+    if (isPrompt(entries[i], sidechain)) { start = i + 1; break; }
   }
   if (start === -1) {
     if (!whole) return null;
@@ -219,8 +227,10 @@ function turnOf(transcript, whole) {
   const originals = new Map();           // tool_use_id -> the file before a Write
   const background = new Set();          // tool_use_id of a run_in_background launch
   const finished = new Map();            // tool_use_id -> its notification proved it
+  let cwd = null;
   for (const obj of entries.slice(start)) {
-    if (obj.isSidechain) continue;
+    if (obj.isSidechain && !sidechain) continue;
+    if (typeof obj.cwd === 'string' && obj.cwd) cwd = obj.cwd;
     const note = notificationText(obj);
     const said = note && notified(note);
     // The last notification wins: an agent's task may notify more than once.
@@ -240,7 +250,27 @@ function turnOf(transcript, whole) {
       }
     }
   }
-  return { calls, results, originals, background, finished };
+  return { calls, results, originals, background, finished, cwd };
+}
+
+/**
+ * The git roots a sub-agent's landed writes fall under, in first-write order: each target's own
+ * root (`gitRootOf` of its folder), so a worker in `.claude/worktrees/x` is judged as its own
+ * project, against its own list. A target outside every repository is no project's.
+ */
+function editRoots({ calls, results }, cwd) {
+  const roots = [];
+  const byDir = new Map();
+  for (const c of calls) {
+    if (!EDIT_TOOLS.has(c.name) || results.get(c.id) === true) continue;
+    const p = c.input && (c.input.file_path || c.input.notebook_path || c.input.path);
+    if (typeof p !== 'string' || !p) continue;
+    const dir = path.dirname(path.resolve(cwd, p));
+    if (!byDir.has(dir)) byDir.set(dir, gitRootOf(dir));
+    const root = byDir.get(dir);
+    if (root && !roots.includes(root)) roots.push(root);
+  }
+  return roots;
 }
 
 /** The target of a landed write under `root`, absolute, or null. A denied write changed nothing. */
@@ -271,10 +301,10 @@ function weakenedTests({ calls, results, originals }, root, cwd) {
  * edit, or [] when the turn may end (no edit, or every check passed after it); null when `whole`
  * is false and the tail holds no prompt (`turnOf`). Exported for the unit tier — a transcript is
  * text no CLI cell can vary cheaply. A check is a line (one form) or a `{ label, forms }` group;
- * the answer lists labels.
+ * the answer lists labels. `sidechain` reads a sub-agent's transcript (`turnOf`).
  */
-export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
-  const turn = turnOf(transcript, whole);
+export function doneDecide(transcript, checks, root, cwd = root, whole = true, sidechain = false) {
+  const turn = turnOf(transcript, whole, sidechain);
   return turn && missingChecks(turn, checks, root, cwd);
 }
 
@@ -299,74 +329,99 @@ function missingChecks({ calls, results, background, finished }, checks, root, c
 }
 
 /**
- * The Stop-side wrapper `cmdLearn` calls first. Returns 'block' when it printed a block (the
- * turn goes on, so `learn` must not distil yet); 'advisory' when it printed the advisory
- * `systemMessage` (the turn ends and learning runs, but `learn` must print nothing more on
- * stdout, or the JSON stops parsing); null in every other case, with nothing on stdout.
- * `install` is the root `cmdLearn` already derived from `--memory` (null without one), so the
- * ledger lands in the same root its sovereignty check read. `read` is `cmdLearn`'s per-Stop
+ * The Stop-side wrapper `cmdLearn` calls first, on Stop and on SubagentStop. Returns 'block' when
+ * it printed a block (the turn goes on, so `learn` must not distil yet); 'advisory' when it
+ * printed the advisory `systemMessage` (the turn ends and learning runs, but `learn` must print
+ * nothing more on stdout, or the JSON stops parsing); null in every other case, with nothing on
+ * stdout. `install` is the root `cmdLearn` already derived from `--memory` (null without one), so
+ * the ledger lands in the same root its sovereignty check read. `read` is `cmdLearn`'s per-Stop
  * transcript reader, so the distillation after an allow reuses the windows read here.
+ *
+ * SUBAGENTSTOP. The turn judged is the sub-agent's own, from `agent_transcript_path` (no path: not
+ * judged, and a stderr line when the cwd's project lists checks, as on Bob). The payload's `cwd`
+ * is the PARENT's, so the projects are the git roots of the files the sub-agent wrote
+ * (`editRoots`), each judged against its own `doneChecksOf`. A block keeps the sub-agent running
+ * with the reason as its next instruction (Claude Code hooks doc, SubagentStop). An advisory is
+ * a stderr line and a ledger entry only: nobody sees a sub-agent's `systemMessage`, so it returns
+ * null and prints nothing on stdout.
  */
 export function doneGate(meta, args, install, read = tailReader()) {
   try {
+    const sub = meta.hook_event_name === 'SubagentStop';
     const cwd = typeof meta.cwd === 'string' && meta.cwd ? meta.cwd : process.cwd();
-    const root = gitRootOf(cwd);
-    if (!root) return null;
-    const { source, blocking, checks } = doneChecksOf(root);
+    const cwdRoot = gitRootOf(cwd);
+    if (!sub && !cwdRoot) return null;
+    const here = cwdRoot ? doneChecksOf(cwdRoot) : null;
+    const listed = Boolean(here && here.blocking && here.checks.length);
+    const file = sub ? meta.agent_transcript_path : meta.transcript_path;
     // Bob's Stop payload carries no transcript (learn's I2): nothing to judge, and a listed gate
     // says so. Inferred checks stay quiet there: every repo with a manifest would log it.
-    if (args.host === 'bob' || typeof meta.transcript_path !== 'string') {
-      if (blocking && checks.length) err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
+    if (args.host === 'bob' || typeof file !== 'string' || (sub && !file)) {
+      if (listed) {
+        err(sub ? '[done-gate] no agent transcript — sub-agent turn not judged.\n'
+          : `[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
+      }
       return null;
     }
-    let verdict;
+    let turn;
     try {
-      verdict = read(meta.transcript_path, (text, whole) => {
-        const turn = turnOf(text, whole);
-        return turn && {
-          missing: missingChecks(turn, checks, root, cwd), weakened: weakenedTests(turn, root, cwd),
-        };
-      });
+      turn = read(file, (text, whole) => turnOf(text, whole, sub));
     } catch {
       // No ask tier on Stop: blocking on an unreadable transcript would trap the user.
-      if (checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
+      if (sub ? listed : here.checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
       return null;
     }
-    const { missing } = verdict;
+    const at = sub ? turn.cwd || cwd : cwd;
+    const judged = (sub ? editRoots(turn, at) : [cwdRoot]).map((root) => {
+      const d = root === cwdRoot ? here : doneChecksOf(root);
+      return { root, ...d, missing: missingChecks(turn, d.checks, root, at), weakened: weakenedTests(turn, root, at) };
+    });
+    // One project names nothing; several say whose each entry is.
+    const tag = (r) => (judged.length > 1 ? `${r.root}: ` : '');
+    const list = (rs) => rs.flatMap((r) => r.missing.map((m) => `${tag(r)}${m}`)).join('; ');
     // `--no-test-note`: the line goes, the done checks do not.
-    const weakened = args.noTestNote ? [] : verdict.weakened;
+    const weakened = args.noTestNote ? [] : judged.flatMap((r) => r.weakened.map((w) => `${tag(r)}${w}`));
+    const owed = judged.filter((r) => r.blocking && r.missing.length);
+    const inferred = judged.filter((r) => !r.blocking && r.missing.length);
+    const who = sub ? 'this sub-agent' : 'this turn';
     // One JSON document on stdout, whatever the advisories: Stop reads no second one.
     const advise = (...said) => {
       if (weakened.length) {
         // A stable id, not a law number: an advisory is no hook-pinned rule (`HOOK_PINNED`).
         recordGate(install, ADVISORY_VERB, 'cure-the-cause');
-        const line = `[done-gate] advisory — test weakened this turn: ${weakened.join('; ')}`;
+        const line = `[done-gate] advisory — test weakened ${sub ? 'by a sub-agent' : 'this turn'}: ${weakened.join('; ')}`;
         err(`${line}\n`);
         said.push(`${line}. Cure the Cause: fix the code, not the test.`);
       }
+      if (sub) return null;
       out(`${JSON.stringify({ systemMessage: said.join(' ') })}\n`);
       return 'advisory';
     };
-    if (!missing.length && weakened.length) return advise();
-    if (!missing.length) return null;
-    if (!blocking) {
+    const inferredSaid = () => {
+      if (!inferred.length) return [];
       recordGate(install, ADVISORY_VERB, 'law-3');
-      err(`[done-gate] advisory — unproven since the last edit: ${missing.join('; ')}\n`);
-      return advise('Geneseed done gate (advisory) — this turn edited files, and these checks '
-        + `inferred from ${source} have not passed since the last edit: ${missing.join('; ')}. `
-        + `List your own in ${DONE_LIST} to make the gate block.`);
-    }
+      err(`[done-gate] advisory${sub ? ' (sub-agent)' : ''} — unproven since the last edit: ${list(inferred)}\n`);
+      const sources = [...new Set(inferred.map((r) => r.source))].join(', ');
+      return [`Geneseed done gate (advisory) — ${who} edited files, and these checks `
+        + `inferred from ${sources} have not passed since the last edit: ${list(inferred)}. `
+        + `List your own in ${DONE_LIST} to make the gate block.`];
+    };
+    const settle = () => {
+      const said = inferredSaid();
+      return said.length || weakened.length ? advise(...said) : null;
+    };
+    if (!owed.length) return settle();
     if (meta.stop_hook_active === true) {
       recordGate(install, 'done-gate-cap', 'law-3');
-      err(`[done-gate] cap reached — turn ends with unproven checks: ${missing.join('; ')}\n`);
-      return weakened.length ? advise() : null;
+      err(`[done-gate] cap reached — turn ends with unproven checks: ${list(owed)}\n`);
+      return settle();
     }
     // The turn goes on, so a weakened test is said at the Stop that really ends it.
     recordGate(install, 'done-gate', 'law-3');
     out(`${JSON.stringify({
       decision: 'block',
-      reason: 'Geneseed (Verify Before Asserting) — this turn edited files, and these '
-        + `checks from ${DONE_LIST} have not passed since the last edit: ${missing.join('; ')}. `
+      reason: `Geneseed (Verify Before Asserting) — ${who} edited files, and these `
+        + `checks from ${DONE_LIST} have not passed since the last edit: ${list(owed)}. `
         + 'Run them unpiped, or say plainly that they were not run and why.',
     })}\n`);
     return 'block';
