@@ -299,10 +299,16 @@ test("guard: four instances that all see one change report it once between them"
     await turn("session.execution.started")
     await fs.writeFile(fact, "planted")
     await turn("session.execution.succeeded")
+    // The report crosses several fs awaits, so a fixed settle loses the race under a parallel suite
+    // (0 reports seen, 2026-11-13): wait for the first, then one settle more for any duplicate.
+    await until(() => said().length >= 1)
+    await settle()
     assert.equal(said().length, 1, `four instances posted ${said().length} reports of one change`)
     assert.equal(said()[0].sessionID, "multi-1")
     await fs.writeFile(fact, "planted again, and longer")
     await turn("session.execution.succeeded")
+    await until(() => said().length >= 2)
+    await settle()
     assert.equal(said().length, 2, "a second, different change is reported, once")
   } finally { await fs.rm(fact, { force: true }) }
 })

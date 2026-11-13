@@ -8,21 +8,27 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
-**Upgrade note.** *Consent Before Push* (process 5) changes meaning: run `geneseed rebuild-all`
-after the update. An install that excluded process 5 because it asked on every commit can switch
-it back on (`--exclude-rules` without it, or its row on the console's Constitution page).
+**Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the
+update. An install that excluded *Consent Before Push* because it asked on every commit can switch
+it back on (`--exclude-rules` without it, or its row on the console's Constitution page). A repo
+whose remote was added by hand has no default branch recorded, and every commit there asks:
+`git remote set-head origin --auto` records it.
 
 ### Changed
 - **Consent Before Push guards the main branch, not every commit.** The main branch (`main`,
-  `master`, a remote's default, the main checkout's branch) changes only through a pull request
-  with green checks; a pull request with green checks may be merged, a red, pending or unchecked
-  one never. On any other branch, commits, local merges and plain pushes of the checked-out
-  branch run without a prompt. The git gate on Claude Code, OpenClaude and Bob follows: it asks
-  for a commit or push onto the main branch, a forced push, a bare `git push`, a push of
-  another branch, a sub-agent's push, or a command it cannot read. Dispatched workers still
-  never push. OpenCode keeps its static `git commit*`/`git push*` asks, since a glob cannot
-  read the branch. The rule id and name stay. The `loop/*` exemption now matters only under
-  strict consent.
+  `master`, a remote's default, and from a linked worktree the main checkout's branch) changes
+  only through a pull request with green checks; a pull request with green checks may be merged,
+  a red, pending or unchecked one never. On any other branch, commits, local merges and plain
+  pushes of the checked-out branch run without a prompt, a quoted Conventional Commits message
+  (`fix(x): y`) or a bash `-F -` heredoc with a quoted delimiter included.
+- **The git gate follows on Claude Code, OpenClaude and Bob.** It asks for a commit or push onto
+  the main branch, a forced push, a bare `git push`, a push of another branch, or a command it
+  cannot read; and for everything in a repo with no remote, or a remote with no default branch
+  recorded. On Claude Code and OpenClaude a sub-agent's push asks too. Bob sends no sub-agent
+  field, so there a worker's push of its own branch passes like a session's; dispatched workers
+  are still told never to push. OpenCode keeps its static `git commit*`/`git push*` asks,
+  since a glob cannot read the branch, and its carrier says so. The rule id and name stay. The
+  `loop/*` exemption now matters only under strict consent.
 
 ### Added
 - **`--strict-consent`** (the *Strict consent* switch on the console's Constitution page)

@@ -283,23 +283,80 @@ function pushRedirected(common, branch) {
 }
 
 /**
+ * Whether every remote names its default branch: at least one `[remote "<r>"]`, each with a
+ * readable `refs/remotes/<r>/HEAD` symref (`git clone` writes it; `git remote add` does not, and
+ * `git remote set-head <r> --auto` repairs it). Without it, the default branch may be any name
+ * (`trunk`), and the own-branch pass cannot tell it from the session's own branch, so it asks
+ * (review F1: "when unsure, treat it as main"). An `[include]` may add a remote: asks too.
+ */
+function defaultBranchKnown(common) {
+  let text = '';
+  try { text = readFileSync(path.join(common, 'config'), 'utf8'); } catch { return false; }
+  if (/^\s*\[include/im.test(text)) return false;
+  const remotes = [...text.matchAll(/^\s*\[\s*remote\s+"([^"]+)"\s*\]/gim)].map((m) => m[1]);
+  if (!remotes.length) return false;
+  return remotes.every((r) => {
+    try {
+      return /^ref:\s*refs\/remotes\//.test(readFileSync(path.join(common, 'refs', 'remotes', ...r.split('/'), 'HEAD'), 'utf8'));
+    } catch {
+      return false;
+    }
+  });
+}
+
+// One commit message, quoted, after `-m`/`-am`/`--message`, masked before the character checks so
+// a Conventional Commits subject (`fix(hooks): x`) or an `@` does not ask (review F3). Single quotes
+// are literal in bash and PowerShell alike. Inside double quotes both shells still expand `$` (and
+// `$(`), a backtick, and bash a `\`: the class refuses those, so such a message keeps the ask.
+const QUOTED_MSG_RE = /(\s(?:-[a-zA-Z]*m|--message)\s+)(?:'[^'\n]*'|"[^"$`\\\n]*")/g;
+// A bash heredoc message: `git commit -F - <<'EOF'` … `EOF`, last in the command. Only a QUOTED
+// delimiter, which leaves the body literal; and no body line may equal the delimiter, or the shell
+// would end the heredoc there and run the rest as commands.
+const HEREDOC_RE = /\s<<-?[ \t]*(['"])([A-Za-z_][A-Za-z0-9_]*)\1[ \t]*\n([\s\S]*)\n\t*\2[ \t]*\n?$/;
+
+/**
+ * The command with what cannot run anything masked out — quoted messages always, a quoted-
+ * delimiter heredoc feeding `git commit -F -` under bash only — or null when a heredoc is there
+ * but not that safe shape. The masked text is what the character checks and the segment
+ * whitelist then read.
+ */
+function maskMessages(command, shell) {
+  let text = command;
+  const doc = HEREDOC_RE.exec(text);
+  if (doc) {
+    const head = text.slice(0, doc.index);
+    if (shell !== 'bash' || head.includes('<<') || !/\bgit\s+commit\b[^\n]*\s-F\s+-$/.test(head)) return null;
+    if (doc[3].split('\n').some((l) => l.replace(/^\t+/, '').trimEnd() === doc[2])) return null;
+    text = head;
+  }
+  return text.replace(QUOTED_MSG_RE, "$1'M'");
+}
+
+/**
  * Consent Before Push's own-branch pass (user decision 2026-11-13): the main branch changes only
  * through a pull request, so every other branch is the session's own, and its commits, local
  * merges and plain pushes go through without a prompt. Every clause must hold, or the ask stands:
  * - No `agentId`: a sub-agent never pushes, and its local commits are `worktreeExempt`'s to judge.
- * - The command: none of `UNSAFE_CHARS_RE` or `SUBSHELL_CHARS_RE`; every segment an add, a
+ * - The command, with its messages masked (`maskMessages`): none of `UNSAFE_CHARS_RE` or
+ *   `SUBSHELL_CHARS_RE`; every segment an add, a
  *   read-only look, a plain commit or merge (`SEG_LOCAL_RE`, or the loop's `-F` commit), or a
  *   plain push (`SEG_PUSH_RE`) of THIS branch, spelled `<branch>`, `HEAD:<branch>` or
  *   `HEAD:refs/heads/<branch>`; after at most one leading `cd <path>`. Bare `git push` asks:
  *   `push.default` and the global config decide where it goes, and this read cannot see them.
+ * - The repository: every remote names its default branch (`defaultBranchKnown`); no remote, or
+ *   one with no HEAD symref, asks for everything.
  * - The branch: known, not a symref, and, compared case-insensitively, none of `main`, `master`,
  *   a remote's default (`protectedBranches`), or the branch the main worktree holds when `cwd` is
- *   a linked worktree. A bare `<branch>` refspec also needs `pushRedirected` to be false.
+ *   a linked worktree. In the main checkout itself the checked-out branch is judged by name, as
+ *   the doctrine says ("in a linked worktree, the branch the main checkout holds"). A bare
+ *   `<branch>` refspec also needs `pushRedirected` to be false.
  */
-export function ownBranchExempt(command, cwd, agentId) {
+export function ownBranchExempt(command, cwd, agentId, shell = null) {
   if (typeof agentId === 'string' && agentId) return false;
-  if (typeof command !== 'string' || UNSAFE_CHARS_RE.test(command) || SUBSHELL_CHARS_RE.test(command)) return false;
-  const segments = command.split(/&&|\|\||[;|]/).map((x) => x.trim()).filter(Boolean);
+  if (typeof command !== 'string') return false;
+  const masked = maskMessages(command, shell);
+  if (masked === null || UNSAFE_CHARS_RE.test(masked) || SUBSHELL_CHARS_RE.test(masked)) return false;
+  const segments = masked.split(/&&|\|\||[;|]/).map((x) => x.trim()).filter(Boolean);
   try {
     let dir = realpathSync(cwd);
     const cd = segments.length ? SEG_CD_RE.exec(segments[0]) : null;
@@ -313,6 +370,7 @@ export function ownBranchExempt(command, cwd, agentId) {
     const branch = root && currentBranch(dir);
     if (!branch || branch.includes('..')) return false;
     const common = gitCommonDirOf(root);
+    if (!defaultBranchKnown(common)) return false;
     // The branch may itself be a symref (`git symbolic-ref refs/heads/sym refs/heads/main`), and a
     // commit then moves its target: as in `worktreeExempt`, a loose ref starting `ref:` asks.
     let loose = '';
@@ -992,7 +1050,8 @@ export function gitDecide(args, payload) {
     return ask(args, 'git-gate', 'law-4', 'unverified', {});
   }
   const tool = payload && payload.tool_name;
-  const command = shellReading(ti.command, tool === 'Bash' ? 'bash' : tool === 'PowerShell' ? 'powershell' : null);
+  const shell = tool === 'Bash' ? 'bash' : tool === 'PowerShell' ? 'powershell' : null;
+  const command = shellReading(ti.command, shell);
   // The agent's own words, for the asks where they are no conflict of interest (`gateText`'s `quote`).
   const says = typeof ti.description === 'string' ? ti.description : '';
   // Law IV's catastrophic class (a root, a drive, the home dir, a disk): no state makes it safe,
@@ -1033,7 +1092,7 @@ export function gitDecide(args, payload) {
   const cwd = (payload && payload.cwd) || process.cwd();
   // Consent Before Push: off the main branch, commits, local merges and plain pushes are the
   // session's own. `--strict-consent` turns this pass off, and every commit and push asks again.
-  if (!args.strictConsent && ownBranchExempt(command, cwd, payload && payload.agent_id)) return 0;
+  if (!args.strictConsent && ownBranchExempt(command, cwd, payload && payload.agent_id, shell)) return 0;
   // Strict consent keeps the narrower passes: a loop launched on its own `loop/*` branch is a
   // named batch for a fixed set of commit/push forms on that branch only.
   if (loopExempt(command, cwd)) return 0;

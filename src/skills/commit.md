@@ -21,7 +21,7 @@
    with a `!` before the colon or a `BREAKING CHANGE:` footer for a breaking change.
 5. **Commit on your own branch; never on the main branch ({{DOCTRINE:consent-before-push}}).**
    On your own branch, commit without asking once steps 1–4 hold. The main branch
-   (`main`, `master`, the remote's default, the main checkout's branch) takes no direct
+   (`main`, `master`, the remote's default, and from a linked worktree the main checkout's branch) takes no direct
    commit: move the work to a branch first and land it through a pull request. Where the
    repository has no remote or no CI, a commit on the main branch needs explicit
    acceptance: show a plain-language summary and the exact message, then wait. For a

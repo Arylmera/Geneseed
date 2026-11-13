@@ -87,8 +87,9 @@ the stale page and fix it in the same change ({{DOCTRINE:documentation-in-step}}
 <!-- note: summary: Main changes only through a green PR; your own branch is free. -->
 <!-- LEAN:begin -->
 A push onto the main branch needs consent, and the pull request is that consent. The
-main branch is `main`, `master`, the remote's default branch, or the branch the main
-checkout holds; when unsure whether a branch is one of them, treat it as main. It
+main branch is `main`, `master`, the remote's default branch, or, from a linked
+worktree, the branch the main checkout holds; when unsure whether a branch is one of them
+— a remote with no default recorded, or no remote at all — treat it as main. It
 changes only through a pull request whose required checks are green: never commit on
 it, push to it, or merge into it directly, and never merge a pull request whose
 checks are red, pending or absent. A green pull request may be merged. Where the
@@ -104,18 +105,20 @@ that dispatched it pushes the branch and opens the pull request. Never force-pus
 hard-reset, or rebase the main branch: undo a published mistake with a revert commit;
 the rare legitimate rewrite goes through the git-history {{SKILL}} behind a backup,
 with the user's acceptance. The host gates commits and pushes onto the main branch at
-the tool boundary, so this consent cannot be lost to a sticky allowlist.{{STRICT_CONSENT}}
+the tool boundary, so this consent cannot be lost to a sticky allowlist. (On OpenCode,
+whose permission rules cannot see the branch, every commit and push asks.){{STRICT_CONSENT}}
 <!-- LEAN:else -->
 A push onto the main branch needs consent; the pull request is that consent. Main is
-`main`, `master`, the remote's default, or the main checkout's branch; unsure, treat it
-as main. It changes only through a pull request with green checks: never commit, push or
-merge directly onto it, never merge a red, pending or unchecked one; a green one may be
-merged. With no remote, CI or protection, a change to main needs explicit acceptance.
+`main`, `master`, the remote's default, or, from a linked worktree, the main checkout's
+branch; unsure (no remote, or no default recorded), treat it as main. It changes only
+through a pull request with green checks: never commit, push or merge directly onto it,
+never merge a red, pending or unchecked one; a green one may be merged. With no remote, CI or protection, a change to main needs explicit acceptance.
 Your own branch: commit and plain-push freely; a forced push asks. Tags, releases and
 publishes ask ({{LAW:deletion-is-deliberate}}). A dispatched worker, crew or slice commits
 and merges only in its own worktree, never pushes. Never force-push, hard-reset or
 rebase main: revert instead (git-history {{SKILL}}, with acceptance, for a real rewrite).
-The host gates both at the tool boundary.{{STRICT_CONSENT}}
+The host gates both at the tool boundary (on OpenCode, which cannot see the branch, every
+commit and push asks).{{STRICT_CONSENT}}
 <!-- LEAN:end -->
 
 ### {{DOCTRINE:bound-the-loop}} Bound the Loop

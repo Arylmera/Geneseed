@@ -104,6 +104,18 @@ fs.writeFileSync(path.join(wtRepo, '.git', 'HEAD'), 'ref: refs/heads/trunk\n');
 mk('wtrepo', 'src');
 mk('wtrepo', '.git', 'refs', 'remotes', 'origin');
 fs.writeFileSync(path.join(wtRepo, '.git', 'refs', 'remotes', 'origin', 'HEAD'), 'ref: refs/remotes/origin/stable\n');
+// The remote itself, as a clone writes it: the own-branch pass needs every remote named in the
+// config to record its default branch (`defaultBranchKnown`).
+fs.writeFileSync(path.join(wtRepo, '.git', 'config'), '[remote "origin"]\n\turl = https://example.invalid/r.git\n');
+// Two repositories on a feature branch whose default branch is unknown: one with no remote at
+// all, one whose remote was added by hand (`git remote add` records no HEAD symref).
+const noRemote = mk('noremote');
+mk('noremote', '.git', 'refs', 'heads');
+fs.writeFileSync(path.join(noRemote, '.git', 'HEAD'), 'ref: refs/heads/feat/x\n');
+const noHead = mk('nohead');
+mk('nohead', '.git', 'refs', 'heads');
+fs.writeFileSync(path.join(noHead, '.git', 'HEAD'), 'ref: refs/heads/feat/x\n');
+fs.writeFileSync(path.join(noHead, '.git', 'config'), '[remote "origin"]\n\turl = https://example.invalid/r.git\n');
 const linked = (name, branch) => {
   const gd = mk('wtrepo', '.git', 'worktrees', name);
   fs.writeFileSync(path.join(gd, 'HEAD'), `ref: refs/heads/${branch}\n`);
@@ -390,6 +402,27 @@ const ROWS = [
   { id: 'process-5 session forced push of its own branch', kind: 'shell', at: () => wt, cmd: () => 'git push -f origin feat/x',
     rule: 'A forced push asks, even on the own branch of the session.',
     claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // Review F1: when the default branch is unknown, the branch may be it ("unsure, treat it as main").
+  { id: 'process-5 session commit, no remote', kind: 'shell', at: () => noRemote, cmd: () => 'git commit -m x',
+    rule: 'With no remote, nothing names the default branch, so a commit on any branch asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session push, remote with no HEAD', kind: 'shell', at: () => noHead, cmd: () => 'git push origin feat/x',
+    rule: 'A remote added by hand records no default branch, so a push of any branch asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  // Review F3: a quoted message is data, so a Conventional Commits subject or a bash heredoc with a
+  // quoted delimiter commits freely; a message that can still run something keeps the ask.
+  { id: 'process-5 session Conventional Commits message', kind: 'shell', at: () => wt, cmd: () => 'git commit -m "fix(hooks): x @ y"',
+    rule: 'Parentheses and @ inside a quoted message run nothing: it passes.',
+    claude: 'pass', bob: 'pass', v1: null, v2: null },
+  { id: 'process-5 session message with a substitution', kind: 'shell', at: () => wt, cmd: () => 'git commit -m "fix: $(id)"',
+    rule: 'A $( inside double quotes still runs in both shells: it asks.',
+    claude: 'ask', bob: 'warn', v1: null, v2: null },
+  { id: 'process-5 session -F heredoc, quoted delimiter', kind: 'shell', at: () => wt, cmd: () => "git commit -F - <<'EOF'\nfix(hooks): x\n\nbody with $HOME\nEOF",
+    rule: 'Under bash a quoted heredoc delimiter leaves the body literal: it passes.',
+    claude: 'pass', bob: null, v1: null, v2: null },
+  { id: 'process-5 session -F heredoc, unquoted delimiter', kind: 'shell', at: () => wt, cmd: () => 'git commit -F - <<EOF\nfix: $(id)\nEOF',
+    rule: 'An unquoted delimiter expands the body: it asks.',
+    claude: 'ask', bob: null, v1: null, v2: null },
   { id: 'process-5 strict consent: session commit in a worktree', kind: 'shell', at: () => wt, cmd: () => 'git commit -m x', extra: ['--strict-consent'],
     rule: 'With --strict-consent the own-branch pass is off: every commit asks again.',
     claude: 'ask', bob: 'warn', v1: null, v2: null },

@@ -1076,6 +1076,12 @@ function repoOn(branch, { worktree = false, loop = 'none' } = {}) {
     gitRoot = root;
     cwd = path.join(root, 'sub');
   }
+  // A remote whose default branch is recorded, as a clone leaves it: without one the own-branch
+  // pass asks for everything, and the default-mode rows below would test that instead.
+  const common = worktree ? path.join(root, 'main-repo', '.git') : path.join(root, '.git');
+  fs.writeFileSync(path.join(common, 'config'), '[remote "origin"]\n\turl = https://example.invalid/r.git\n');
+  fs.mkdirSync(path.join(common, 'refs', 'remotes', 'origin'), { recursive: true });
+  fs.writeFileSync(path.join(common, 'refs', 'remotes', 'origin', 'HEAD'), 'ref: refs/remotes/origin/main\n');
   if (loop === 'valid') fs.writeFileSync(path.join(gitRoot, 'LOOP.md'), LOOP_MARKER);
   if (loop === 'invalid') fs.writeFileSync(path.join(gitRoot, 'LOOP.md'), '# a loop file with no state block\n');
   return { cleanup: sb.cleanup, cwd, gitRoot };
