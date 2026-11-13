@@ -49,6 +49,7 @@ import {
   shimProblems, strayClaimProblems,
 } from './checks-repo.mjs';
 import { NOTE, isDoctorNote, sortedProblems, sortedUnique, stemOf, withTempDir } from './scan.mjs';
+import { shippedProfileProblems } from '../maintain/profiles.mjs';
 
 /**
  * Which themes doctor validates.
@@ -245,6 +246,8 @@ export function doctorCollect({
   problems = problems.concat(ran('authoring', 'Authoring gates', authoringProblems()));
   problems = problems.concat(ran('loops', 'Loop catalogue', loopProblems()));
   problems = problems.concat(ran('factories', 'Factory catalogue', factoryProblems()));
+  // Every `profiles/*.json` through the loader `setup --profile` uses (install profiles, D10).
+  problems = problems.concat(ran('profiles', 'Install profiles', shippedProfileProblems()));
   problems = problems.concat(ran('shim', 'Hook shim', shimProbs));
   // Windows: a Claude install's hooks emitted for Git Bash on a machine that no longer has it
   // misbehave under PowerShell — context/learn fail open, and the two gates fail CLOSED
