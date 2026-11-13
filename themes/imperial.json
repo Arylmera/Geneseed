@@ -165,6 +165,8 @@
   "DESC_JENKINS_PIPELINE": "Forge and mend a declarative Jenkinsfile or shared library.",
   "DESC_GITLAB_CI": "Forge and mend .gitlab-ci.yml: rules, needs, cache.",
   "DESC_COMPOSE_OPS": "Muster and command a Compose stack; not image builds.",
+  "DESC_HERDR": "Command Herdr panes and agents from within; only when Herdr is named.",
+  "DESC_OPENCODE_CLI": "Command OpenCode V2 through its CLI: run, sessions, server, MCP, plugins.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

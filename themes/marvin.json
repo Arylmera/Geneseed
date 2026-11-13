@@ -165,6 +165,8 @@
   "DESC_JENKINS_PIPELINE": "Write or fix a Jenkinsfile, which will fail anyway.",
   "DESC_GITLAB_CI": "Write or fix .gitlab-ci.yml, which will fail anyway.",
   "DESC_COMPOSE_OPS": "Write or run a Compose stack; not image builds. It'll fail.",
+  "DESC_HERDR": "Drive Herdr panes from inside it, if the user names Herdr. Rarely.",
+  "DESC_OPENCODE_CLI": "Drive OpenCode V2 from its CLI. It will not thank you.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

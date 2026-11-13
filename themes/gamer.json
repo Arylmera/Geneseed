@@ -165,6 +165,8 @@
   "DESC_JENKINS_PIPELINE": "Write or fix a declarative Jenkinsfile or shared library.",
   "DESC_GITLAB_CI": "Write or fix .gitlab-ci.yml before the boss fight.",
   "DESC_COMPOSE_OPS": "Write, review or run a Compose stack; not image builds.",
+  "DESC_HERDR": "Drive Herdr panes and agents from inside it; only when the user names Herdr.",
+  "DESC_OPENCODE_CLI": "Drive OpenCode V2 from its CLI: run, sessions, server, MCP, plugins.",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

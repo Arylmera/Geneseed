@@ -523,10 +523,11 @@ export function skillAliases(src = SRC) {
  * the whole rebuild. A retired name is dropped with a notice instead (excluding a skill that
  * no longer ships is already true), and the doctor refuses it as a new skill or alias name, so
  * it never comes back meaning something else — `RETIRED_RULE_IDS`' contract, for skills.
+ * The one name taken back out is `herdr` (retired 2026-10, back 2026-11 as a terminal-tools kit
+ * skill): it drives the same tool, so an old `--exclude-skills herdr` still means what it meant.
  */
 export const RETIRED_SKILL_IDS = {
   tickets: 'removed in the 2026-10 sharpen; plan slices the work now',
-  herdr: 'removed 2026-10; Orca covers multi-pane and multi-agent work',
 };
 
 /**

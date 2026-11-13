@@ -70,6 +70,13 @@
     "license": "MIT",
     "licenseFile": "licenses/everything-claude-code.txt"
   },
+  "herdr": {
+    "repo": "herdrdev/herdr",
+    "commit": "1cbd794559fb139f95f1bdb4b2a8998082017d0e",
+    "author": "herdrdev",
+    "license": "Apache-2.0",
+    "licenseFile": "licenses/herdr.txt"
+  },
   "i-have-adhd": {
     "repo": "ayghri/i-have-adhd",
     "commit": "1ecea1993b7fce257ffbd686c070948b5e07eda6",

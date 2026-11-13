@@ -165,6 +165,8 @@
   "DESC_JENKINS_PIPELINE": "<one-line description: write or fix a declarative Jenkinsfile or shared library — stages, when, parallel, credentials, CPS and @NonCPS, sandbox approval, JenkinsPipelineUnit>",
   "DESC_GITLAB_CI": "<one-line description: write or fix .gitlab-ci.yml — rules, needs DAG, include and extends, cache and artifacts, protected and masked variables, environments, CI lint>",
   "DESC_COMPOSE_OPS": "<one-line description: write, review or run any Compose stack — healthchecks, volumes, pinned images, secrets, limits, logs, networks, safe update and rollback; not a Spring Boot image build (docker-expert)>",
+  "DESC_HERDR": "<one-line description: control Herdr workspaces, tabs, panes and agents from inside a Herdr pane (HERDR_ENV=1); only when the user names Herdr>",
+  "DESC_OPENCODE_CLI": "<one-line description: drive OpenCode V2 from another session through its CLI — headless run, sessions, background service, MCP, plugins, models, stats, debug; never auth login>",
   "AGENT_COLORS": {
     "architect": "primary",
     "reviewer": "warning",

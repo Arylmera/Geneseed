@@ -307,7 +307,7 @@ test('GET /api/kits lists the shipped kits and each present install with its own
   withKitInstalls(({ oc, proj }) => {
     const res = apiKits(neutral());
     assert.equal(res.error, undefined);
-    assert.deepEqual(res.kits.map((k) => k.name), ['ci-pipelines', 'docker', 'react', 'spring-boot']);
+    assert.deepEqual(res.kits.map((k) => k.name), ['ci-pipelines', 'docker', 'react', 'spring-boot', 'terminal-tools']);
     const spring = res.kits.find((k) => k.name === 'spring-boot');
     assert.equal(spring.skills.length, 3);
     assert.equal(spring.agents.length, 6);

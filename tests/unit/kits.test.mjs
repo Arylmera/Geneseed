@@ -99,11 +99,11 @@ test('parseKits refuses an unknown kit with exit 2 and names every known kit', (
   assert.equal(r.msg, "argument --kits: unknown kit 'gamma' (choose from alpha, beta, or 'none')");
 });
 
-// The shipped tree has four kits, `ci-pipelines`, `docker`, `react` and `spring-boot`, listed sorted: no flag, `none` and an
+// The shipped tree has five kits, `ci-pipelines`, `docker`, `react`, `spring-boot` and `terminal-tools`, listed sorted: no flag, `none` and an
 // empty value all mean no kits; `--kits spring-boot` selects one, `--kits react,spring-boot` both; any
 // other name is refused with exit 2, naming the real kits and the reserved `none`.
-test('the shipped tree has the ci-pipelines, docker, react and spring-boot kits: --kits none passes, each name selects its kit, any other name is refused', () => {
-  assert.deepEqual([...loadKits().keys()], ['ci-pipelines', 'docker', 'react', 'spring-boot']);
+test('the shipped tree has the ci-pipelines, docker, react, spring-boot and terminal-tools kits: --kits none passes, each name selects its kit, any other name is refused', () => {
+  assert.deepEqual([...loadKits().keys()], ['ci-pipelines', 'docker', 'react', 'spring-boot', 'terminal-tools']);
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits', 'spring-boot']).kits, ['spring-boot']);
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits', 'react,spring-boot']).kits, ['react', 'spring-boot']);
   assert.deepEqual(parseDriverArgs(['--emit', 'files']).kits, []);
@@ -111,7 +111,7 @@ test('the shipped tree has the ci-pipelines, docker, react and spring-boot kits:
   assert.deepEqual(parseDriverArgs(['--emit', 'files', '--kits=']).kits, []);
   const r = refusal(() => parseDriverArgs(['--emit', 'files', '--kits', 'foo']));
   assert.equal(r.code, 2);
-  assert.equal(r.msg, "argument --kits: unknown kit 'foo' (choose from ci-pipelines, docker, react, spring-boot, or 'none')");
+  assert.equal(r.msg, "argument --kits: unknown kit 'foo' (choose from ci-pipelines, docker, react, spring-boot, terminal-tools, or 'none')");
 });
 
 test('makeCfg carries kits as a copy, and defaults to none', () => {

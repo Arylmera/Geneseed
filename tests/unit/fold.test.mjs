@@ -1291,12 +1291,12 @@ test('M6: claude-global moves an unowned old render aside, writes the alias, and
 test('M6: bob-global prunes a CRLF render and one with a leading authoring comment, and recreates neither', () => withHome((home) => {
   const cfg = path.join(home, '.bob');
   seedSkill(cfg, 'ci-fix', oldRender('ci-fix', { crlf: true }));
-  seedSkill(cfg, 'herdr', oldRender('herdr', { comment: true, extra: 'compatibility: opencode\n' }));
+  seedSkill(cfg, 'tickets', oldRender('tickets', { comment: true, extra: 'compatibility: opencode\n' }));
   const r = emit(home, 'bob-global');
   assert.equal(pruneLines(r.stdout).length, 2, r.stdout);
-  assert.deepEqual(archivedSkills(cfg), ['ci-fix', 'herdr']);
+  assert.deepEqual(archivedSkills(cfg), ['ci-fix', 'tickets']);
   assert.ok(!exists(cfg, 'skills', 'ci-fix'), 'Bob writes aliases as commands, never as a skill folder');
-  assert.ok(!exists(cfg, 'skills', 'herdr'));
+  assert.ok(!exists(cfg, 'skills', 'tickets'));
 }));
 
 test('M6: opencode-global prunes an old render too (host parity)', () => withHome((home) => {
