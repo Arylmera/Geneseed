@@ -1288,6 +1288,8 @@ test('M6: claude-global moves an unowned old render aside, writes the alias, and
   assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'ci-fix')), [stamp]);
 }));
 
+// The authoring-comment seed is `tickets`, a name that is still retired. It was `herdr` until the
+// terminal-tools kit revived that name; a revived name has its own two cases below.
 test('M6: bob-global prunes a CRLF render and one with a leading authoring comment, and recreates neither', () => withHome((home) => {
   const cfg = path.join(home, '.bob');
   seedSkill(cfg, 'ci-fix', oldRender('ci-fix', { crlf: true }));
@@ -1306,6 +1308,43 @@ test('M6: opencode-global prunes an old render too (host parity)', () => withHom
   assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
   assert.match(pruneLines(r.stdout)[0], /^\[geneseed\] opencode: pruned retired skill skills\/repo-map /);
   assert.deepEqual(archivedSkills(cfg), ['repo-map']);
+}));
+
+// A REVIVED name (`herdr`: retired 2026-10, a terminal-tools kit skill since 2026-11) is live
+// again, but an unowned render under it is an older build's copy. With the kit off, the emit moves
+// it aside exactly as it did while the name was retired, and writes no herdr folder back.
+test('M6: a revived name with its kit off — the old unowned herdr render is archived, nothing replaces it', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  seedSkill(cfg, 'herdr', oldRender('herdr', { comment: true }));
+  const r = emit(home);
+  assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
+  assert.match(pruneLines(r.stdout)[0], /^\[geneseed\] claude: pruned retired skill skills\/herdr /);
+  assert.deepEqual(archivedSkills(cfg), ['herdr']);
+  assert.ok(!exists(cfg, 'skills', 'herdr'), 'a kit-off emit wrote a herdr folder');
+  assert.ok(!ownedOf(cfg).some((p) => p.startsWith('skills/herdr')));
+}));
+
+// With the kit on, the same old copy is archived first, and the freed folder takes the CURRENT
+// render: the kit's skill, with its credit line and its licence beside it, owned by the manifest.
+// Without the revived entry `claimer` would keep the stale file as the user's and skip the kit's
+// copy. A second kit-on emit moves nothing: the folder is owned now, so it is the ordinary prune's.
+test('M6: a revived name with its kit on — the old herdr render is archived and the kit copy installed', () => withHome((home) => {
+  const cfg = path.join(home, '.claude');
+  const old = oldRender('herdr', { comment: true });
+  seedSkill(cfg, 'herdr', old);
+  const r = emit(home, 'claude-global', ['--kits', 'terminal-tools']);
+  assert.equal(pruneLines(r.stdout).length, 1, r.stdout);
+  assert.deepEqual(archivedSkills(cfg), ['herdr']);
+  const [stamp] = fs.readdirSync(path.join(cfg, 'archived-skills', 'herdr'));
+  assert.equal(read(cfg, 'archived-skills', 'herdr', stamp, 'SKILL.md'), old);
+  const now = read(cfg, 'skills', 'herdr', 'SKILL.md');
+  assert.notEqual(now, old);
+  assert.ok(now.includes('*Adapted from [herdrdev/herdr](https://github.com/herdrdev/herdr)'), now.slice(0, 400));
+  assert.ok(exists(cfg, 'skills', 'herdr', 'LICENSE-herdr.txt'));
+  assert.ok(ownedOf(cfg).includes('skills/herdr/SKILL.md'));
+  const r2 = emit(home, 'claude-global', ['--kits', 'terminal-tools']);
+  assert.deepEqual(pruneLines(r2.stdout), [], r2.stdout);
+  assert.deepEqual(fs.readdirSync(path.join(cfg, 'archived-skills', 'herdr')), [stamp]);
 }));
 
 test('M6: a same-name folder without the fingerprint, or holding a link, stays', () => withHome((home) => {

@@ -6,11 +6,18 @@
  *
  * An alias is a plain word, so a folder under one may be the user's own (`grill-me` on this very
  * machine is a user skill, and a link). A folder moves only when ALL of these hold:
- *   (a) its name is retired and not a live skill;
+ *   (a) its name is retired and not a live skill, or it is a REVIVED name (below);
  *   (b) no manifest owns a path under it — an owned one is the ordinary prune's;
  *   (c) it, the `skills/` root, and everything inside it are real entries, never a link;
  *   (d) its SKILL.md carries the render's fingerprint (`isRendered`).
  * Anything else stays where it is and `migrate --dry-run` keeps calling it an orphan.
+ *
+ * A revived name (`REVIVED_SKILL_IDS`) is live again, but an unowned render under it can only be
+ * the copy an older build wrote before it retired the name: no build that ships it today leaves
+ * it unowned. So it moves aside whether or not this emit ships the skill. Kit off, that is the
+ * cleanup it got while the name was retired. Kit on, the emit then claims a free folder and
+ * writes the current copy, where `claimer` would otherwise keep the stale file as the user's.
+ * Only revived names get this: an unowned render of any other live skill stays the user's.
  *
  * Moved, not deleted: to `<cfg>/archived-skills/<name>/<stamp>/`, outside the `skills/` root a
  * host scans (`archiveStore`'s sibling would sit inside it and load again).
@@ -18,13 +25,17 @@
 import { lstatSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 
-import { RETIRED_SKILL_IDS, THEMES, knownSkillIds, skillAliases } from './source.mjs';
+import { RETIRED_SKILL_IDS, REVIVED_SKILL_IDS, THEMES, knownSkillIds, skillAliases } from './source.mjs';
 import { isCanonical } from '../hosts/hosts.mjs';
 import { archiveStore } from '../hosts/memory-files.mjs';
 
-/** Every name an earlier build shipped a skill folder under and this one does not. */
-export function retiredSkillNames({ live = knownSkillIds(), aliases = skillAliases() } = {}) {
-  return [...new Set([...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)])].filter((n) => !live.includes(n));
+/**
+ * Every name an earlier build shipped a skill folder under and this one does not, plus every
+ * revived name, whose unowned render is an older build's copy whether or not it ships today.
+ */
+export function retiredSkillNames({ live = knownSkillIds(), aliases = skillAliases(), revived = REVIVED_SKILL_IDS } = {}) {
+  const gone = [...aliases.keys(), ...Object.keys(RETIRED_SKILL_IDS)].filter((n) => !live.includes(n));
+  return [...new Set([...gone, ...Object.keys(revived)])];
 }
 
 /** Whether a manifest `owned` list holds `rel` or a path under it. */

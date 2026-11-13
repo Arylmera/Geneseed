@@ -8,7 +8,7 @@
 
 ## Servers: service, standalone, explicit
 
-By default the CLI finds or starts one shared **background service** per user account. Two global flags change that on the commands that take them (`run`, `session`, `models`, `stats`, `mcp list|auth|logout`, `plugin list|check|update`, `debug config|agents`, `api`, `mini`, `reload`):
+By default the CLI finds or starts one shared **background service** per user account. Two global flags change that on the commands that take them (the root TUI `opencode`, `run`, `mini`, `session`, `auth`, `models`, `stats`, `mcp list|auth|logout`, `plugin list|check|update`, `debug config|agents`, `api`, `reload`; `debug heap-dump` takes `--server` only):
 
 - `--standalone`: a private server for this one command, gone when it exits.
 - `--server <url>`: an existing server, for example one from `opencode serve`.
@@ -19,7 +19,9 @@ By default the CLI finds or starts one shared **background service** per user ac
 |---|---|
 | `opencode service status` | Read whether the background service runs |
 | `opencode service start` | Start it, only when the task needs a lasting service |
-| `opencode service stop\|restart\|get\|set\|unset` | The user's settings; `get` is read-only, the rest only on the user's ask |
+| `opencode service get disabled\|remote\|hostname\|port\|cors` | Read one non-secret service setting |
+| `opencode service stop\|restart\|set\|unset` | The user's service and settings: only on the user's ask |
+| `opencode service get password`, `get env [name]`, bare `get` | **Never**: they print the server password or the service environment, which can hold provider keys (bare `get` prints `env` too) |
 | `opencode serve [--hostname H] [--port N] [--cors <origin>]` | A foreground V2 API and web server; stop it yourself when done |
 | `opencode pair [--url <url>]` | One-time links for a browser or app. `--remote` exposes the server to the internet: only on the user's ask, and never add `--yes` for them |
 
@@ -34,7 +36,7 @@ opencode run --format json --title "review" "Review the diff in this repo and li
 | Flag | Effect |
 |---|---|
 | `[message..]` | The prompt; stdin is read too (in full when no message is given, as extra context when one is) |
-| `--format default\|json` | `json`: one JSON object per line, each with `type`, `timestamp`, `sessionID`. Types: `text`, `reasoning` (with `--thinking`), `tool_use`, `step-start`, `step-finish`, `retry`, `background_wait`, `error` |
+| `--format default\|json` | `json`: one JSON object per line, each with `type`, `timestamp`, `sessionID`. Types: `text`, `reasoning` (with `--thinking`), `tool_use`, `step_start`, `step_finish`, `retry`, `background_wait`, `error` |
 | `-m, --model provider/model[#variant]` | Model; list them with `opencode models` |
 | `--agent <name>` | Agent; list them with `opencode debug agents` |
 | `-c, --continue` / `-s, --session <id>` | Continue the last session / a given one (created when it does not exist) |
@@ -64,7 +66,7 @@ opencode run --format json --title "review" "Review the diff in this repo and li
 | `opencode mcp add <name> [--url U] [--header k=v] [--env k=v] [--global] [-- <command...>]` | Writes the project config (or global with `--global`): a config change, on the user's ask |
 | `opencode mcp auth [name]` / `opencode mcp logout <name>` | OAuth for a remote MCP server: the user completes it |
 | `opencode plugin list [--builtin]` / `opencode plugin check [target]` | Read-only plugin state and available updates |
-| `opencode plugin add <pkg>` / `update [target]` / `remove <pkg>` | Change the global config: on the user's ask |
+| `opencode plugin add <pkg>` / `update [target]` / `remove <pkg>` | Install, update or remove plugins (`add` and `remove` edit the global config): on the user's ask |
 | `opencode models` | Available models |
 | `opencode stats [--days N\|--year Y\|--all] [--project .] [--models] [--tools] [--cost] [--json]` | Usage statistics |
 | `opencode debug config` / `debug agents` / `debug paths [name]` | Config sources, agents, and paths (`db`, `config`, `log`, ...) |

@@ -16,7 +16,7 @@ Before any control command, verify that this agent runs inside a Herdr-managed p
 test "${HERDR_ENV:-}" = 1
 ```
 
-On native Windows (PowerShell): `$env:HERDR_ENV -eq '1'`. Native Windows is supported: the release ships `herdr-windows-x86_64.zip` only, and the binary is unsigned, so SmartScreen may warn on first run.
+On native Windows (PowerShell): `$env:HERDR_ENV -eq '1'`. Herdr's v0.9.5 "Windows support" docs page says native Windows support is generally available, with some capabilities that differ from Linux and macOS. The same page lists "Signed binary / SmartScreen avoidance" as unsupported, so SmartScreen may warn. The v0.9.5 release ships `herdr-windows-x86_64.zip` as its only Windows asset.
 
 If the check fails, say that you are not running inside Herdr and stop. Do not inspect or control the focused Herdr session from outside Herdr. When the check passes, the `herdr` binary on `PATH` talks to the current session.
 
