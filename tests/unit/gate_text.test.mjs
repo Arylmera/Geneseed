@@ -43,12 +43,16 @@ const EXAMPLES = [
     'If you allow it, commits that exist only on the remote can be lost for everyone.',
     'The agent says (not checked): "Force push rebased branch"')],
   ['commit', { says: 'Commit the gate text' }, lines(
+    'This command commits or pushes onto the main branch, forces a push, or takes a form the gate cannot read, so it needs your approval. (Consent Before Push)',
+    'The agent says (not checked): "Commit the gate text"')],
+  // Strict consent (`--strict-consent`) asks on every commit and push, so the line says so.
+  ['commit', { says: 'Commit the gate text', strict: true }, lines(
     'This command commits or pushes with git, which needs your approval each time. (Consent Before Push)',
     'The agent says (not checked): "Commit the gate text"')],
 ];
 
 for (const [id, facts, want] of EXAMPLES) {
-  test(`the ${id} example renders verbatim`, () => assert.equal(gateText(id, 'ask', facts), want));
+  test(`the ${id}${facts.strict ? ' (strict)' : ''} example renders verbatim`, () => assert.equal(gateText(id, 'ask', facts), want));
 }
 
 // Every other ask. A shell write has no count, and says so by starting "This command".
@@ -250,7 +254,7 @@ for (const [id, facts, want] of REFUSED) {
 // `warned`: Bob's non-blocking rules, where the call has already gone through.
 const WARNED = [
   ['commit', {}, lines(
-    'This command commits or pushes with git, which needs your approval each time. (Consent Before Push)',
+    'This command commits or pushes onto the main branch, forces a push, or takes a form the gate cannot read, so it needs your approval. (Consent Before Push)',
     'This ran without a prompt, because Bob has no approval step.')],
   ['store', { name: 'user-rules.md', shell: true }, lines(
     'This command writes to user-rules.md, your standing rules, which the agent obeys in every session. (Persist Insight)',

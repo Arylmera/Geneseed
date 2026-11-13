@@ -938,7 +938,7 @@ test('bob: Laws I and IV exit 2 with the reason on stderr; consent rules warn an
   const commit = hookRun('tool-gate', { stdin: bashPayload('git commit -m x'), host: 'bob', cwd: PLAIN });
   assertDefers(commit, 'commit');
   // One line and the fact that nothing asked: a routine warning, with no agent tail and no pointer.
-  assert.equal(commit.err.replace(/\r\n/g, '\n'), '[geneseed] This command commits or pushes with git, which needs your approval each time. (Consent Before Push)\n'
+  assert.equal(commit.err.replace(/\r\n/g, '\n'), '[geneseed] This command commits or pushes onto the main branch, forces a push, or takes a form the gate cannot read, so it needs your approval. (Consent Before Push)\n'
     + 'This ran without a prompt, because Bob has no approval step.\n');
   assertDefers(hookRun('tool-gate', { stdin: bashPayload('git status'), host: 'bob' }), 'status');
 });
@@ -1043,7 +1043,11 @@ test('a dotenv target and ordinary content defer', () => {
 // Consent Before Push's loop/* exemption is a WHITELIST, not a blacklist: it holds only for a
 // fixed set of command forms, on a branch a loop was actually LAUNCHED on (LOOP.md's state
 // marker — not just a name starting with `loop/`, which anyone can type). The gate learns the
-// branch from .git/HEAD — through a worktree's .git FILE too — and never spawns git.
+// branch from .git/HEAD — through a worktree's .git FILE too — and never spawns git. Since the
+// own-branch pass (2026-11-13) a `loop/*` branch is an ordinary own branch by default, so the
+// exemption is what STRICT consent keeps: the rows that pin it run with `--strict-consent`.
+
+const STRICT = ['--strict-consent'];
 
 const LOOP_MARKER = '<!-- loop-state:begin -->\n{}\n<!-- loop-state:end -->\n';
 
@@ -1096,7 +1100,7 @@ test('on a loop/* branch with a launched loop, the whitelisted commit/push forms
   }
 });
 
-test('every escape the review found still asks, on that same loop/launched branch', () => {
+test('every escape the review found still asks under strict consent, on that same loop/launched branch', () => {
   const { cleanup, cwd } = repoOn('loop/x', { loop: 'valid' });
   try {
     for (const cmd of [
@@ -1144,10 +1148,17 @@ test('every escape the review found still asks, on that same loop/launched branc
       'git add {a,b} && git commit -F m',
       'git add * && git push -u origin HEAD:loop/x',
     ]) {
-      askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), cmd);
+      askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd, extra: STRICT }), cmd);
+      // Without strict consent, loop/x is the session's own branch: a plain push of it, a plain
+      // commit and an amend pass (OWN_BRANCH_NOW_PASSES); every other escape still asks.
+      const def = hookRun('git-gate', { stdin: bashPayload(cmd), cwd });
+      if (OWN_BRANCH_NOW_PASSES.includes(cmd)) assertDefers(def, `${cmd} (default)`);
+      else askDecision(def, `${cmd} (default)`);
     }
   } finally { cleanup(); }
 });
+
+const OWN_BRANCH_NOW_PASSES = ['git push origin loop/x', 'git commit -m "x"', 'git commit --amend -F m'];
 
 test('LOOP.md as a symlink is not launched evidence — asks', (t) => {
   const { cleanup, cwd, gitRoot } = repoOn('loop/x', { loop: 'none' });
@@ -1161,11 +1172,11 @@ test('LOOP.md as a symlink is not launched evidence — asks', (t) => {
       throw e;
     }
     askDecision(hookRun('git-gate',
-      { stdin: bashPayload('git push -u origin HEAD:loop/x'), cwd }), 'symlink LOOP.md');
+      { stdin: bashPayload('git push -u origin HEAD:loop/x'), cwd, extra: STRICT }), 'symlink LOOP.md');
   } finally { cleanup(); }
 });
 
-test('also asks: no LOOP.md, a LOOP.md without the state marker, or a shared branch with a valid one', () => {
+test('under strict consent, also asks: no LOOP.md, a LOOP.md without the state marker, or a shared branch with a valid one', () => {
   // Each row's command is otherwise the one exempt shape — an explicit HEAD:<branch> refspec
   // for that row's own branch — so the ask proves the LOOP.md/branch check, not the shape.
   for (const [branch, loop, cmd] of [
@@ -1174,7 +1185,7 @@ test('also asks: no LOOP.md, a LOOP.md without the state marker, or a shared bra
     ['main', 'valid', 'git push -u origin HEAD:main'],
   ]) {
     const { cleanup, cwd } = repoOn(branch, { loop });
-    try { askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd }), `${branch}/${loop}`); }
+    try { askDecision(hookRun('git-gate', { stdin: bashPayload(cmd), cwd, extra: STRICT }), `${branch}/${loop}`); }
     finally { cleanup(); }
   }
 });
@@ -1309,7 +1320,7 @@ test('the agent\'s description is quoted on a commit, a loss and a scan, and nev
   const call = (command) => toolCall('Bash', { command, description: says });
   const quote = `The agent says (not checked): "${says}"`;
   const commit = reasonOf(hookRun('git-gate', { stdin: call('git commit -m x'), cwd: PLAIN }), 'commit');
-  assert.equal(commit, `This command commits or pushes with git, which needs your approval each time. (Consent Before Push)\n${quote}`);
+  assert.equal(commit, `This command commits or pushes onto the main branch, forces a push, or takes a form the gate cannot read, so it needs your approval. (Consent Before Push)\n${quote}`);
   assert.ok(reasonOf(hookRun('git-gate', { stdin: call(LAW4_ALWAYS) }), 'loss').endsWith(quote));
   assert.ok(reasonOf(hookRun('git-gate', { stdin: call('find / -name x') }), 'scan').includes(quote));
   const sb = makeSandbox();
@@ -2268,7 +2279,7 @@ test('a destructive command behind an escaped quote or a continuation still asks
     assert.match(r.out, /destroy a filesystem root/, cmd);
   }
   const split = hookRun('git-gate', { stdin: bashPayload('git \\\n commit -m x'), cwd: PLAIN });
-  assert.match(split.out, /commits or pushes with git/);
+  assert.match(split.out, /commits or pushes onto the main branch/);
 });
 
 // CONSENT BEFORE PUSH ASKS FOR A COMMIT OR A PUSH, not for the words. The prefilter reads words,
@@ -2286,6 +2297,6 @@ test('anything that could commit, push or run the words still asks', () => {
     'git log > push.txt', 'git -c alias.x=push x', 'git ci -m "push it"', 'git log $(git push)',
     'sudo git push', 'git rebase --exec "git commit" HEAD~1']) {
     const r = hookRun('git-gate', { stdin: bashPayload(cmd), cwd: PLAIN });
-    assert.match(r.out, /commits or pushes with git/, cmd);
+    assert.match(r.out, /commits or pushes onto the main branch/, cmd);
   }
 });
