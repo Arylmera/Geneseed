@@ -51,9 +51,10 @@
  *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), and whose
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
  *     14 000+ real Claude Code results, 2026-10-17);
- *   - a BACKGROUND run (`run_in_background: true`) is pending, not passed: its result comes at
- *     once, `is_error` false, with `toolUseResult.backgroundTaskId` set — it says the command
- *     STARTED. It passes only when a later task notification names its tool-use id with
+ *   - a BACKGROUND run (`run_in_background: true`, or moved there after its foreground timeout)
+ *     is pending, not passed: its result is `is_error` false, with
+ *     `toolUseResult.backgroundTaskId` set (or, in a sub-agent's transcript, only the host's
+ *     `BACKGROUNDED` text) — it says the command STARTED. It passes only when a later task notification names its tool-use id with
  *     `<status>completed</status>` and `completed (exit code 0)` (`notificationText`); any other
  *     status or code leaves it owed. Before this, 76 of 112 accepted passes in 30 days of real
  *     transcripts here were launches. The pass is still placed by the CALL: a launch before the
@@ -188,6 +189,17 @@ function notified(text) {
     && /completed \(exit code 0\)<\/summary>/.test(text)];
 }
 
+/**
+ * The text Claude Code gives a call that runs on in the background: started so
+ * (`run_in_background`), or moved there after its foreground timeout. A sub-agent's transcript
+ * records no `toolUseResult` at all (none on any line of one read here, 2026-11), so a call MOVED
+ * to the background — `run_in_background` absent from its input — shows only in this text. A
+ * command that prints such a line itself reads as pending: an owed check, never a false pass.
+ */
+const BACKGROUNDED = /^(?:Command running in background with ID: |Command was moved to the background |Command did not complete within [^.\n]{0,40}? and was moved to the background)/;
+const resultText = (b) => (typeof b.content === 'string' ? b.content
+  : Array.isArray(b.content) && b.content[0] && typeof b.content[0].text === 'string' ? b.content[0].text : '');
+
 /** A user line that opens a turn: the user typed it, it is not a tool result, a meta note or a task notification. */
 function isPrompt(obj, sidechain = false) {
   if (obj.type !== 'user' || obj.isMeta || (obj.isSidechain && !sidechain)) return false;
@@ -253,7 +265,9 @@ function turnOf(transcript, whole, sidechain = false) {
         results.set(b.tool_use_id, b.is_error === true);
         const before = obj.toolUseResult && obj.toolUseResult.originalFile;
         if (typeof before === 'string') originals.set(b.tool_use_id, before);
-        if (obj.toolUseResult && obj.toolUseResult.backgroundTaskId) background.add(b.tool_use_id);
+        if ((obj.toolUseResult && obj.toolUseResult.backgroundTaskId) || BACKGROUNDED.test(resultText(b))) {
+          background.add(b.tool_use_id);
+        }
       }
     }
   }

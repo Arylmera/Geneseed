@@ -123,6 +123,24 @@ test('doneDecide: a background launch passes only on a completed, exit-0 notific
   const [use, result] = bash('npm run lint');
   use.message.content[0].input.run_in_background = true;
   assert.deepEqual(doneDecide(jsonl(prompt(), edit(), [use, result]), C, R), C, 'input flag alone');
+  // A call MOVED to the background after its timeout, in a sub-agent's transcript: no input flag
+  // and no `toolUseResult` there, only the host's text (seen 2026-11). Each row: the result text,
+  // whether a completed exit-0 notification follows, the checks owed.
+  const moved = [
+    ['Command was moved to the background (ID: b0bg5s9zn) after running for 180s. Output is being written to: x', false, C],
+    ['Command did not complete within its 120s timeout and was moved to the background (ID: b664tiy7t). Output: x', false, C],
+    ['Command running in background with ID: bd5606fh4. Output is being written to: x', false, C],
+    ['Command was moved to the background (ID: b0bg5s9zn) after running for 180s.', true, []],
+    // An ordinary result that only mentions the words later is a finished run.
+    ['ok: the Command was moved to the background docs page', false, []],
+  ];
+  for (const [text, notified, owed] of moved) {
+    const [u, r] = bash('npm run lint');
+    const id = lastId();
+    r.message.content[0].content = [{ type: 'text', text }];
+    const rows = side([prompt('brief'), edit(), [u, r], ...(notified ? [noteAttachment(id, 'completed', ok)] : [])]);
+    assert.deepEqual(doneDecide(jsonl(rows), C, R, R, true, true), owed, text);
+  }
 });
 
 test('runsUnpiped: the segment rule, written out', () => {
