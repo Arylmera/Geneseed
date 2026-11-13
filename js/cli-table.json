@@ -372,6 +372,21 @@
         },
         {
           "names": [
+            "--strict-consent"
+          ],
+          "dest": "strict_consent",
+          "metavar": null,
+          "help": "Consent Before Push asks for every git commit and push, own branch included (records `Own-branch pass: off`); default: only the main branch asks",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--prune-gates"
           ],
           "dest": "prune_gates",
