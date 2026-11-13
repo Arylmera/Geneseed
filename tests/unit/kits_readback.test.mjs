@@ -133,7 +133,14 @@ test('B3 on a global target: claude-global --config-dir warns once, and not with
   const keep = build('--kits', 'fx');
   assert.equal(keep.value, 0);
   assert.ok(!keep.err.includes('WARN: this install has kit'), keep.err);
-  const drop = build();
+  // A build that omits `--kits` over this install is now refused by the preserve guard
+  // (js/build/profile.mjs) before B3's warning can speak: it names the change and writes nothing.
+  const refused = build();
+  assert.equal(refused.value, 1);
+  assert.ok(refused.err.includes('  kits: fx -> none'), refused.err);
+  assert.ok(!refused.err.includes('WARN: this install has kit'), refused.err);
+  // With `--reset` the build goes ahead, and B3 warns once before it turns the kit off.
+  const drop = build('--reset');
   assert.equal(drop.value, 0);
   assert.deepEqual(drop.err.split(/\r?\n/).filter((l) => l.includes('WARN: this install has kit')), [WARN]);
 });
@@ -147,7 +154,8 @@ test('R6: an edited member of a kit turned off is kept, and status names it', ()
   assert.ok(!('keptKitFiles' in row()), 'a kit that is on keeps nothing');
   const agent = path.join(claudeDir, 'agents', 'fx-agent.md');
   fs.appendFileSync(agent, '\nmy own note\n');
-  const off = build();
+  // `--kits none` said out loud: an omitted `--kits` is refused by the preserve guard.
+  const off = build('--kits', 'none');
   assert.equal(off.value, 0);
   assert.ok(fs.existsSync(agent), 'the edited member was deleted');
   assert.ok(!fs.existsSync(path.join(claudeDir, 'skills', 'fx-skill')), 'an unedited member was kept');

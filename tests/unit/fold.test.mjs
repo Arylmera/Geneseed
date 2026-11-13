@@ -1352,6 +1352,8 @@ test('M6: a revived name with its kit on — the old herdr render is archived an
 // the first kit-off emit, not the second (by then the owned LICENSE is pruned, so nothing owned is
 // left under the folder and only the `kept` record protects it), and not a kit-on emit after that.
 // Each emit records `skills/herdr/SKILL.md` in `kept` again, so the record never lapses.
+// A kit-off emit says `--kits none`: a bare emit over a kit-on install is refused by the
+// preserve guard (js/build/profile.mjs), which asks for the change to be named.
 test('M6: a kept edit of a revived skill survives kit off twice and kit on again', () => withHome((home) => {
   const cfg = path.join(home, '.claude');
   const on = ['--kits', 'terminal-tools'];
@@ -1363,7 +1365,7 @@ test('M6: a kept edit of a revived skill survives kit off twice and kit on again
   emit(home, 'claude-global', on);
   assert.ok(keptOf().includes('skills/herdr/SKILL.md'), 'the kit-on emit did not record the edit as kept');
   assert.ok(!ownedOf(cfg).includes('skills/herdr/SKILL.md'));
-  for (const [i, args] of [[1, []], [2, []], [3, on]]) {
+  for (const [i, args] of [[1, ['--kits', 'none']], [2, ['--kits', 'none']], [3, on]]) {
     const r = emit(home, 'claude-global', args);
     assert.deepEqual(pruneLines(r.stdout), [], `emit ${i}: ${r.stdout}`);
     assert.equal(fs.readFileSync(file, 'utf8'), edited, `emit ${i} changed the user's edit`);

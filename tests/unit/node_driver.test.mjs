@@ -117,6 +117,8 @@ const BARE_FLAGS = [
   ['--prune-gates', 'pruneGates'],
   // One build's instruction, not a gate switch: nothing records it or replays it.
   ['--force', 'force'],
+  // One build's consent to the defaults over an existing install (the preserve guard): not recorded.
+  ['--reset', 'reset'],
   ['-v', 'verbose'],
   ['--verbose', 'verbose'],
 ];

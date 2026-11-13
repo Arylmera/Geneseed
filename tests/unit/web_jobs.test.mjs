@@ -223,10 +223,12 @@ test('the deploy argv resolves the body it is handed', () => {
     // off the deployment (`excludedRulesOfDir`), and an OMITTED flag would fall through to
     // `harness.config.json` — so an empty target has to say "exclude nothing" out loud rather
     // than say nothing at all.
+    // `--reset` last: the form's answers plus the folder's own are a whole selection, so a deploy
+    // over an install must not be refused by the preserve guard for the axes the argv elides.
     assert.deepEqual(plan.cmd.slice(2).map(String).map((s) => s.split(td).join('<TARGET>')),
       ['--theme', 'imperial', '--emit', 'opencode', '--out', '<TARGET>', '--root', '<TARGET>',
         '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman',
-        '--doctrines', 'craft,rigor,ops,process,comms', '--exclude-rules', 'none']);
+        '--doctrines', 'craft,rigor,ops,process,comms', '--exclude-rules', 'none', '--reset']);
   } finally {
     sb.cleanup();
   }

@@ -73,6 +73,7 @@ as a per-host install at project or global scope.
 | `driver.mjs` | The generator driver: the nine emit targets, per-host emit orchestration, the prune and the manifest. `bin/build-driver.mjs` is only its entry |
 | `args.mjs` | The generator's flag surface: `harness.config.json` defaults, the `--emit`/`--theme`/`--footprint` parse tables and choices, `-h`, and `die` (a throw, so `rebuild-all` survives one bad install) |
 | `generate.mjs` | CLI verbs `build`, `prompt`, `theme`, `rebuild-all` — the thin face over `driver.mjs` |
+| `profile.mjs` | An install's profile (`installProfile`, `setupBuildArgs`, `rebuildCommand`: every setting read back, and the argv that re-emits it) and the preserve guard: a build over an existing install refuses to change a setting it was not given, unless `--reset`. A leaf the driver may import; `generate.mjs` re-exports the three |
 | `catalog.mjs` | `geneseed catalog` — prints the shipped roster. Classifies nothing itself |
 | `export.mjs` | `geneseed export` — skills, agents and the constitution as catalogue entities for a shared library (`SKILL.md`/`AGENT.md` + `metadata.yaml`), shaped by a profile kept outside the repo. One way, claim-on-create, not an install |
 | `themes.mjs` | Maintainer-only `--sync-themes`: inserts `_TEMPLATE.json`'s missing keys into the committed themes |

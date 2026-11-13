@@ -336,7 +336,7 @@ export function collectSetupLines(kitMap = null) {
   const gated = Object.values(gates).some((on) => on === false);
   printOut(`\nAbout to run:  geneseed build ${
     setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines, allPacks,
-      excludeRules, undefined, excludeSkills, gates, kits, sharedTier).join(' ')}\n`);
+      excludeRules, undefined, excludeSkills, gates, kits, sharedTier).join(' ')} --reset\n`);
   if (!confirm('Proceed?', true)) return null;
   // The key only when there is something to carry, so a selection that excludes no skill and
   // switches off no gate is the same object it was before either existed.
@@ -542,6 +542,10 @@ export function setupLines() {
   // one command and run another.
   const argv = setupBuildArgs(theme, emit, out, root, footprint, posture, mode, doctrines,
     doctrineOptions().map(([n]) => n), excludeRules, undefined, excludeSkills, gates, kits, sharedTier);
+  // `--reset`: the wizard's answers are a WHOLE selection, and `setupBuildArgs` elides an axis at
+  // its default, so answering one back to it (mode direct, posture peer) over an install would
+  // otherwise trip the preserve guard (js/build/profile.mjs). The plan line above says the same.
+  argv.push('--reset');
   printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
   const rc = driverMain(argv);
   if (rc !== 0) {

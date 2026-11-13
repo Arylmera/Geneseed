@@ -67,7 +67,7 @@
     {
       "name": "build",
       "help": "render the harness with the generator's flags (dry run: geneseed validate)",
-      "description": "render the harness (same flags as geneseed-build; an omitted flag takes the generator default, not the install's — see geneseed status --json for an install's own; dry run: geneseed validate)",
+      "description": "render the harness (same flags as geneseed-build; an omitted flag takes the generator default, not the install's, so a build over an existing install that would change a setting it was not given refuses and prints the install's own rebuild command, as geneseed status --json shows it — --reset accepts the defaults; dry run: geneseed validate)",
       "positionals": [],
       "options": [
         {
@@ -407,6 +407,21 @@
           "dest": "force",
           "metavar": null,
           "help": "for this one build, take Geneseed's copy of every file it ships: replaces a shipped file you edited and a file of yours at a shipped name, removes a retired file you edited, and removes retired skills an older build left in a bundle. Each file is named. A skill or agent under a name Geneseed does not ship is never touched, nor is memory, the notebook, your rules or your profile. Not recorded: the next build is an ordinary one",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--reset"
+          ],
+          "dest": "reset",
+          "metavar": null,
+          "help": "for this one build, return every setting this build does not pass to its default on the install it targets. Without it, a build over an existing install that would change a setting it was not given refuses, lists each change and prints the command that keeps them (the install's own rebuild, as geneseed status --json shows it). Not recorded",
           "choices": null,
           "default": false,
           "required": false,

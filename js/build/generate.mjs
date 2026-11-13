@@ -33,14 +33,10 @@ import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { main as driverMain } from './driver.mjs';
-import { GATE_SWITCHES, makeCfg, PACK_ORDER } from './source.mjs';
-import { DEFAULT_PRESET } from '../loop/score.mjs';
+import { GATE_SWITCHES, makeCfg } from './source.mjs';
 import { opencodeConfigDir, resolvePath } from '../hosts/hosts.mjs';
-import {
-  EMIT_FOR, EMIT_HOST_SCOPE, defaultMode, defaultPosture, defaultTheme, doctrinesForBuild,
-  excludedRulesOfDir, excludedSkillsOfDir, footprintOfDir, kitsOfDir, sharedTierOfDir, gatesOfDir, installState, installTargets,
-  modeOfDir, postureOfDir, readMaybe, themeOfDir, trustOfDir,
-} from '../hosts/installs.mjs';
+import { installState, installTargets } from '../hosts/installs.mjs';
+import { installProfile } from './profile.mjs';
 import { colorThemeFiles, colorThemeJson, PALETTE_ROLES } from '../hosts/opencode.mjs';
 import { renderAll } from './render.mjs';
 import { renamedFilesIn } from './stubs.mjs';
@@ -108,161 +104,19 @@ export function cmdBuild(args) {
   if (args.force) argv.push('--force');
   // Forwarded like `--force`: a one-shot flag of the generator, with no `GATE_SWITCHES` row.
   if (args.pruneGates) argv.push('--prune-gates');
+  // Forwarded like `--force`: one build's consent to return the omitted settings to their defaults.
+  if (args.reset) argv.push('--reset');
   return driverMain(argv);
 }
+
+// An install's profile — `setupBuildArgs`, `installProfile`, `rebuildCommand` — lives in
+// `./profile.mjs`, a leaf the driver can import for its preserve guard without reaching this
+// module's lazy `update.mjs` (a spawner). Re-exported so every caller keeps its import.
+export { installProfile, rebuildCommand, setupBuildArgs } from './profile.mjs';
 
 // --------------------------------------------------------------------------------------
 // rebuild-all
 // --------------------------------------------------------------------------------------
-
-/**
- * `_harness_setup._setup_build_args` — the generator argv for one selection. Pure.
- *
- * The elision rules are not symmetric: `footprint` is ALWAYS passed,
- * because omitting it when it matched the generator's default silently coupled the answer to
- * whatever that default happened to be — the moment the default moved, picking the old one
- * produced the new one. `posture`, `mode` and `trust` still elide at theirs, and none has moved.
- *
- * ⚠ `doctrines` DOES NOT ELIDE, AND THAT IS THE SAFETY DECISION, NOT A STYLE ONE. It used to
- * elide on the full set, by analogy with posture and mode — but those two compare against a
- * FROZEN LITERAL (`'peer'`, `'direct'`), while the default a missing `--doctrines` actually
- * lands on is `configDefaults()`, which reads `harness.config.json`. With `{"doctrines":
- * ["craft"]}` in that file, an install carrying all four packs re-emitted by `upgrade` was
- * silently narrowed to one — and the narrowing takes the commit/push consent gate off an
- * install whose owner never asked for that. Same trap as `footprint`, one axis over, with a
- * boundary behind it. A caller that knows the selection now always says so.
- *
- * `allPacks` survives the elision's removal because it is still what CANONICALISES the value:
- * the flag is emitted in the checkout's pack order, not the order handed in, and this function
- * is pure and has no discovery of its own.
- *
- * Two states: `null` means "the caller expressed no opinion" and emits no flag at all, so the
- * generator falls back to `harness.config.json` — the only route left to that fallback, and it
- * is reached only where nothing was read back off an install; `[]` is a deliberate empty
- * selection and emits `--doctrines none`, which is the spelling the driver's `parseDoctrines`
- * accepts (an empty `--doctrines ` is a usage error there, so it can never be produced here).
- */
-export function setupBuildArgs(theme, emit, out = null, root = null, footprint = 'lean',
-  posture = 'peer', mode = 'direct', doctrines = null, allPacks = PACK_ORDER,
-  excludeRules = null, trust = DEFAULT_PRESET, excludeSkills = null, gates = {}, kits = null, sharedTier = false) {
-  const argv = ['--theme', theme, '--emit', emit];
-  if (!emit.endsWith('-global')) {
-    if (out) argv.push('--out', out);
-    if (root) argv.push('--root', root);
-  }
-  if (footprint) argv.push('--footprint', footprint);
-  if (posture && posture !== 'peer') argv.push('--posture', posture);
-  if (mode && mode !== 'direct') argv.push('--mode', mode);
-  if (trust && trust !== DEFAULT_PRESET) argv.push('--trust', trust);
-  if (Array.isArray(doctrines)) {
-    // Emitted in `allPacks` order, not the order handed in: a caller may legitimately pass an
-    // unsorted list, and the flag has to be canonical for the same reason the driver
-    // re-normalises on parse — the `Active packs:` marker is compared against itself.
-    const picked = allPacks.filter((p) => doctrines.includes(p));
-    argv.push('--doctrines', picked.length ? picked.join(',') : 'none');
-  }
-  // The second axis, emitted the same way and for the same reason — but ALWAYS when the
-  // caller passed a list, empty included. An omitted flag reads as "no opinion" and the
-  // driver's config fallback fills it in; `none` is the caller saying "exclude nothing",
-  // which is exactly what a rebuild that just re-enabled the last rule has to say.
-  if (Array.isArray(excludeRules)) {
-    argv.push('--exclude-rules', excludeRules.length ? excludeRules.join(',') : 'none');
-  }
-  // Skills elide when nothing is excluded: the driver's default IS nothing (no config key
-  // feeds it), so the flag's absence and `none` are the same answer, and every argv that
-  // excludes nothing stays the bytes it was before the flag existed.
-  if (excludeSkills?.length) argv.push('--exclude-skills', excludeSkills.join(','));
-  // The gate switches elide when armed: the driver's default IS armed (no config key feeds
-  // them), so only an explicit `false` speaks, and every armed argv stays the bytes it was.
-  // `gates` is one object keyed as `GATE_SWITCHES` keys it (`gatesOfDir`, a profile, a body).
-  // Law order, so a Law IV-only install still ends on `--no-deletion-gate` as it did.
-  for (const g of GATE_SWITCHES) if (gates?.[g.key] === false) argv.push(g.flag);
-  // Kits elide when none is on, as skills do: no config key feeds them, so absence and `none`
-  // are the same answer. Last, so an argv naming no kit is the bytes it always was.
-  if (kits?.length) argv.push('--kits', [...kits].sort().join(','));
-  // The shared tier elides when off, like the kits: the default is off, so only `on` speaks.
-  if (sharedTier) argv.push('--shared-tier', 'on');
-  return argv;
-}
-
-// The emit for an install carrying NO marker is `EMIT_FOR` (`js/hosts/installs.mjs`): a
-// pre-marker install still has a (host, scope), which is what the walk found it by, so it is
-// rebuilt in its own mode rather than defaulted to OpenCode.
-
-/**
- * Everything `rebuild-all` reads back off one install, and the argv that re-emits it unchanged.
- *
- * EXTRACTED SO `status` SHOWS WHAT A REBUILD WOULD USE, not a second reading of the same
- * markers that could drift from this one. An agent changing one setting takes `argv`, edits one
- * flag and runs it; every flag it did not touch has to be the install's own, or the "one
- * change" silently resets the rest — which is exactly the failure the seven read-backs below
- * exist to prevent.
- *
- * THE MARKER IS TRUSTED ONLY FOR ITS OWN HOST. There is one `.geneseed-emit` per root and the
- * last deploy wins, so in a dual-host repo (`.opencode/` and `.claude/` in one cwd) the other
- * host's row would otherwise rebuild with the WRONG emit — turning a Claude install into an
- * OpenCode one. `rebuild-all/a-dual-host-repo-rebuilds-each-row-in-its-own-emit` is the cell.
- */
-export function installProfile(host, scope, root, notify = null) {
-  const raw = readMaybe(path.join(root, '.geneseed-emit'));
-  let marker = raw === null ? '' : raw.trim();
-  if (marker && (EMIT_HOST_SCOPE.get(marker) ?? ['', ''])[0] !== host) marker = '';
-  const emit = marker || EMIT_FOR.get(`${host} ${scope}`) || 'opencode-global';
-  // Every read-back below is narrowed to `host`'s OWN carrier (host-compat B1): in a repo
-  // shared with another Claude-style host, an un-narrowed scan answers with WHICHEVER host's
-  // carrier the shared `CARRIERS` order favours — the wrong carrier for every host but one.
-  const theme = themeOfDir(root, host) || defaultTheme();
-  const footprint = footprintOfDir(root);
-  const posture = postureOfDir(root, host) || defaultPosture();
-  const mode = modeOfDir(root, host) || defaultMode();
-  // Read off the deployed loop skill; no config fallback — `DEFAULT_PRESET` is the engine's.
-  const trust = trustOfDir(root, host) || DEFAULT_PRESET;
-  // A rebuild that defaulted the pack selection would re-emit an install into a constitution
-  // its owner did not choose — and in one direction that is not merely surprising: dropping
-  // the process pack takes the commit/push consent RULES out of AGENT.md while
-  // `claudeHookGroups` keeps the gate wired, or the reverse. ⚠ AND THE FALLBACK IS NOT
-  // `harness.config.json`: a pre-migration carrier has no marker, and resolving that silence
-  // out of a machine-wide config narrows every such install on its first upgrade.
-  // `doctrinesForBuild` resolves unknown to ALL packs — see its docblock.
-  const doctrines = doctrinesForBuild(root, host);
-  // The per-rule axis is preserved for the same reason and with sharper teeth: an upgrade that
-  // dropped it would quietly hand back every rule its owner switched off, and `process 5` is
-  // one of them. `null` (no marker) stays `null` so the argv omits the flag, as it always did.
-  const excludeRules = excludedRulesOfDir(root, host);
-  // Skills left out stay left out: an upgrade that forgot them would put them all back.
-  const excludeSkills = excludedSkillsOfDir(root, host, notify);
-  // The gate switches: a rebuild that forgot one would silently re-arm (or, read wrong, disarm)
-  // the install. A missing marker reads as armed.
-  const gates = gatesOfDir(root, host);
-  // Kits on stay on (spec A3); one this checkout no longer ships drops with a notice (R2).
-  const kits = kitsOfDir(root, host, notify);
-  // A project install's `Shared tier: on` stays on across a rebuild; a global install never has it.
-  const sharedTier = sharedTierOfDir(root, host);
-  const out = scope === 'global' ? null : root;
-  const argv = setupBuildArgs(theme, emit, out, out, footprint, posture, mode, doctrines,
-    PACK_ORDER, excludeRules, trust, excludeSkills, gates, kits, sharedTier);
-  // A GLOBAL ROW NAMES ITS OWN DIR. `root` came from the host's config-dir resolver, which
-  // honours env overrides (`OPENCODE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`…); without the flag the
-  // same argv run from a shell lacking that variable re-emits into the DEFAULT dir — a second
-  // install beside the one it was meant to rebuild. Appended, so the argv's head is unchanged.
-  if (scope === 'global') argv.push('--config-dir', root);
-  return {
-    host, scope, root, state: installState(root, host, scope),
-    emit, theme, footprint, posture, mode, trust, doctrines, excludeRules, excludeSkills,
-    kits, sharedTier, ...gates, argv,
-  };
-}
-
-/**
- * `argv` as one pasteable command, using the `geneseed build` launcher rather than the raw
- * generator: `geneseed-build` is only on PATH for an npm global install, while a git-clone
- * install has only the `geneseed` launcher, and `geneseed build` now forwards every flag
- * `setupBuildArgs` produces. Only whitespace is quoted — a path holding shell metacharacters
- * (`$`, `&`) would need quoting by hand.
- */
-export function rebuildCommand(argv) {
-  return ['geneseed', 'build', ...argv.map((a) => (/\s/.test(a) ? `"${a}"` : a))].join(' ');
-}
 
 /**
  * `_harness_build.cmd_rebuild_all` — re-emit every ACTIVE install in place, best-effort.

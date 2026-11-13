@@ -73,6 +73,7 @@ import { kitsOfDir } from '../hosts/installs.mjs';
 // maintainer pair that needs nothing this driver is banned from having.
 import { syncThemes } from './themes.mjs';
 import { configDefaults, die, parseArgs } from './args.mjs';
+import { preserveRefusal, preserveRefusalText } from './profile.mjs';
 
 export { parseDriverArgs } from './args.mjs';
 
@@ -843,6 +844,14 @@ function run(argv) {
   if (args.sharedTier === 'on' && (args.emit === 'files' || args.emit.endsWith('-global'))) {
     die(2, `argument --shared-tier: only applies to a per-repo host emit (got --emit ${args.emit}); `
       + 'a global install already owns the shared tier');
+  }
+  // The preserve guard, before anything is written: a build over an existing install that would
+  // change a setting it was not given refuses, naming each change and the command that keeps
+  // them. `--reset` is the caller's consent. See `preserveRefusal` (js/build/profile.mjs).
+  const refusal = preserveRefusal(args, args.given, out, args.root ? resolveOut(args.root) : null);
+  if (refusal) {
+    process.stderr.write(preserveRefusalText(refusal));
+    throw Object.assign(new Error('preserve guard'), { exitCode: 1 });
   }
   const cfg = makeCfg(args);
   warnDroppedKits(args, out);

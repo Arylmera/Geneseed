@@ -517,8 +517,9 @@ test('a re-run keeps the GATES an install switched off, without asking about the
       ownBranchPass: true },
     emit: 'claude-global', out: null, root: null, footprint: 'full',
   }], 'a re-run over an install with switched-off gates did not carry them back');
-  // ...and into the plan line, in law order, Law I still armed.
-  assert.ok(/--no-done-gate --no-deletion-gate\r?\n/.test(gated.text),
+  // ...and into the plan line, in law order, Law I still armed, then the `--reset` the plan line
+  // ends on (the wizard's answers are a whole selection the preserve guard must not refuse).
+  assert.ok(/--no-done-gate --no-deletion-gate --reset\r?\n/.test(gated.text),
     `the plan line dropped the switches:\n${gated.text}`);
   assert.ok(!gated.text.includes('--no-secrets-gate'), 'an armed gate was disarmed');
   // THE MATCHED HALF: an all-armed install carries no `gates` key and spells no flag.

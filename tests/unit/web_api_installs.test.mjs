@@ -436,8 +436,10 @@ test('a kits body REPLACES the install kits: [] and "none" drop them, a name set
     assert.equal(kitsFlag(replay), 'spring-boot', 'an omitted key must keep the install kits');
   });
   withThreeInstalls(({ st, oc }) => {
+    // The kits flag is the last setting; `--reset` follows it on every install command, because
+    // the argv is a whole selection the preserve guard must not read as omissions.
     const cmd = apiInstallCmd(st, { host: 'opencode', path: oc, kits: ['spring-boot'] }).cmd.map(String);
-    assert.deepEqual(cmd.slice(-2), ['--kits', 'spring-boot']);
+    assert.deepEqual(cmd.slice(-3), ['--kits', 'spring-boot', '--reset']);
   });
 });
 
@@ -570,11 +572,13 @@ test('a bogus rule list poisons the whole value and falls back to the install', 
 // Law IV's gate switch across the same boundary (the Constitution page's toggle on row IV). Only a
 // real JSON boolean counts; anything else falls back to the install's own `Deletion gate:` line,
 // so a malformed body can never disarm a gate — and a body that says nothing (the pack Apply, the
-// footprint switch) keeps the switch exactly as deployed, in both directions.
+// footprint switch) keeps the switch exactly as deployed, in both directions. The switch is the
+// last setting of the argv, just before the `--reset` every install command ends on (the argv is a
+// whole selection, so the preserve guard must not read its elisions as omissions).
 test('the deletion gate switch reaches the install command only as a boolean, else the install keeps it', () => {
   withThreeInstalls(({ st, cl }) => {
     const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
-    assert.equal(argv({ deletionGate: false }).at(-1), '--no-deletion-gate', 'false did not disarm');
+    assert.deepEqual(argv({ deletionGate: false }).slice(-2), ['--no-deletion-gate', '--reset'], 'false did not disarm');
     for (const bad of ['false', 0, null, 'off', {}]) {
       assert.ok(!argv({ deletionGate: bad }).includes('--no-deletion-gate'),
         `a non-boolean ${JSON.stringify(bad)} disarmed an armed install`);
@@ -583,8 +587,8 @@ test('the deletion gate switch reaches the install command only as a boolean, el
     // A disarmed install: its carrier says so, and a body that says nothing keeps it off.
     fs.mkdirSync(cl, { recursive: true });
     fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\nActive packs: craft\nDeletion gate: off\n<!-- END GENESEED -->\n');
-    assert.equal(argv({}).at(-1), '--no-deletion-gate', 'a plain rebuild re-armed a disarmed install');
-    assert.equal(argv({ deletionGate: 'true' }).at(-1), '--no-deletion-gate', 'a string re-armed it');
+    assert.deepEqual(argv({}).slice(-2), ['--no-deletion-gate', '--reset'], 'a plain rebuild re-armed a disarmed install');
+    assert.deepEqual(argv({ deletionGate: 'true' }).slice(-2), ['--no-deletion-gate', '--reset'], 'a string re-armed it');
     assert.ok(!argv({ deletionGate: true }).includes('--no-deletion-gate'), 'true did not re-arm');
   });
 });

@@ -32,6 +32,22 @@ whose remote was added by hand has no default branch recorded, and every commit 
   `loop/*` exemption now matters only under strict consent.
 - **The done gate may block up to 3 times per continuation, each time only after a new edit or a changed background verdict.** It used to block once per turn. A task notification starts a new continuation with a fresh count. Over the whole turn, up to the next human prompt, it blocks at most 10 times, so a red suite relaunched in the background cannot loop. A Stop with no new edit and no new verdict since the last block ends the turn with the `done-gate-cap` ledger line. A block names the checks whose background run is still running or reported a failure. The count is kept per session (and per sub-agent) in the install's `notebook/done-gate/`.
 - **The startup text states its order without shouting.** The readiness-sigil paragraph loses "required", "MUST", "verbatim" and "do not paraphrase"; §9 loses "not deferrable" and "this is not a suggestion". Every ordering clause stays: read the rules and load the project context before the first reply, begin it with the sigil line, and a matching skill is still the first tool call. Strong current models over-apply emphatic wording; a weak model keeps the same sequence. The sigil line itself is unchanged, so theme detection and Bob's own first-reply override are untouched. Reaches an install on its next emit.
+- **A build no longer resets an install's settings in silence; a bare build over one now exits 1.**
+  A `geneseed build` (or `geneseed-build`) over an existing install of the same host compares
+  each setting it was not given — theme, footprint, posture, mode, trust, packs, excluded rules
+  and skills, kits, shared tier, gate switches — with the install's own. If one would change, it
+  refuses before writing anything, exit 1: it lists each change as `name: current -> new` and
+  prints the install's own rebuild command with the flags you passed applied on top. A flag you
+  pass is never compared. A build that ran before and reset a setting now stops there; the new
+  `--reset` flag accepts the defaults for one build. `rebuild-all`, `upgrade`, `migrate` and
+  the console's rebuild replay an install's whole profile and run as before; the console's
+  install and deploy forms, its Build onto another emit, and the setup wizard, which compose a
+  whole selection, pass `--reset`. A rebuild command now spells `--posture` and `--mode`
+  unless they equal `harness.config.json`'s default, not the literal `peer`/`direct`. The first
+  `geneseed upgrade` into this version still replays with the old code, so an OpenCode project
+  bundle with the shared tier on can be refused once: run `geneseed upgrade` again.
+  `installProfile`, `setupBuildArgs` and `rebuildCommand` moved to `js/build/profile.mjs` so the
+  generator can read an install without reaching a module that spawns.
 
 ### Added
 - **A new opt-in kit, `terminal-tools`, for terminal programs the agent drives through their own CLI.** It adds two skills and no agent. `herdr` controls Herdr workspaces, tabs, panes and agents from inside a Herdr pane, gated on `HERDR_ENV=1` and on the user naming Herdr; it is adapted from the official skill of [herdrdev/herdr](https://github.com/herdrdev/herdr) (Apache-2.0), pinned at the v0.9.4 metadata sync, and carries the Windows notes of herdr's own docs page (native support generally available; signed binaries and SmartScreen avoidance unsupported; one x86_64 Windows asset in v0.9.5). `opencode-cli` drives OpenCode V2 from another session: headless `opencode run` with JSON output, the background service against `--standalone` and `--server`, sessions, MCP, plugins, models, stats and debug; it is first-party, verified against the V2 source at v2.3.0, and leaves every credential command to the user. The kit's rules gate on the environment, read live state before acting, close only what the agent opened, and never stop the user's server or service. It is off by default; turn it on with `--kits terminal-tools`.
@@ -41,6 +57,10 @@ whose remote was added by hand has no default branch recorded, and every commit 
   says so under the rule.
 - **Auto-merge green PRs, off by default.** Say "turn on auto-merge" and the `rule` skill writes a standing rule into `user-rules.md` (global or per project; the project layer wins). With it, the `ship` skill and a factory's close step arm the forge's auto-merge on a PR the agent opens, on the reviewed head, only when the base branch has required checks: docs and tests only can arm at once, other code waits for one approving review (or the blind reviewer, for a solo repo), and a sensitive diff never arms, whatever the rule says. An armed PR is disarmed before any later push. Without the rule nothing changes, and the agent says once per session in a repo how to turn it on. No host gates a merge command, so the rule is text on every host; see `docs/guides/auto-merge.md`.
 - **Sub-agents are judged at SubagentStop.** The done gate reads the sub-agent's own transcript and judges each git root it wrote under against that root's own list. A block keeps the sub-agent working; an inferred check there is a stderr line and a ledger entry only.
+- **The `geneseed` skill covers a reinstall.** Its trigger now names reinstalling, updating,
+  upgrading, repairing and re-running the install, and it opens with the rule: start from the
+  install's `rebuild` command, change only the named flag, run the command a refusal prints, and
+  add `--reset` only when the user asked for the defaults.
 
 ### Fixed
 - **`install.cmd` puts `geneseed` on PATH, as `./install` does.** After the setup wizard, when `geneseed` is not on PATH, the Windows installer now runs `geneseed link`, which writes `%LOCALAPPDATA%\Geneseed\bin\geneseed.cmd` and adds that folder to the user Path. Before, a fresh Windows clone had no `geneseed` command until the user found `geneseed.cmd link`. The check is `where $PATH:geneseed`: a bare `where` also searches the current folder and would find the clone's own launcher. A failed link only warns; `geneseed.cmd` still works from the clone. npm installs are unchanged, since npm already puts `geneseed` on PATH.

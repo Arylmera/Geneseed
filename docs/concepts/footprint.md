@@ -59,6 +59,6 @@ Footprint is stored in a `.geneseed-footprint` marker in the install and kept ac
   geneseed build --emit claude-global --footprint full
   ```
 
-  On the command line, a flag you leave out takes the generator's default, not the install's current value. `geneseed status --json` shows what an install currently has.
+  On the command line, a flag you leave out takes the generator's default, not the install's current value. A build that would change a setting of an existing install that you did not pass refuses: it lists each change and prints the command that keeps them. `geneseed status --json` shows that command for every install. Add `--reset` only to accept the defaults.
 
 The walkthrough for all build-time choices is [Choose your setup](../guides/choose-your-setup.md).

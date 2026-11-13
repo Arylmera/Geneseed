@@ -41,7 +41,7 @@ You have three ways to change a choice:
 
 - **Re-run the wizard** with `geneseed setup`. It pre-selects what the install already has, so holding Enter cannot widen a set you narrowed on purpose. The wizard does not ask about single rules, but it keeps any rule exclusions already in place.
 - **Use the web console** (`geneseed web`). the **Installs** page changes theme, footprint and the rest per install. **Constitution** toggles packs and rules.
-- **Run the build yourself.** Watch out: a flag you leave out takes the *generator's* default, not your install's current value. `geneseed status --json` prints, for every install, the exact `geneseed build` command that rebuilds it as it is. Start from that command and change the one flag you want.
+- **Run the build yourself.** Watch out: a flag you leave out takes the *generator's* default, not your install's current value. So a build over an existing install that would change a setting you did not pass refuses, names each change, and prints the command that keeps them. `geneseed status --json` prints, for every install, the exact `geneseed build` command that rebuilds it as it is. Start from that command and change the one flag you want. `--reset` returns the settings you left out to their defaults, for that one build.
 
 ---
 
