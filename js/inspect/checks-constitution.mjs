@@ -98,8 +98,9 @@ const BARE_CITE_RE = /\{\{LAW\}\}\s+[IVXLCDM]+\b|\{\{DOCTRINE\}\}\s+[a-z]+\s+\d+
 // legal everywhere, including in an invariant that points at the tier as a whole.
 const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE(?:\}\}|:)/;
 
-// The sources the carrier inlines, where an excluded rule's citations are removed at render.
-const CARRIER_SOURCE_RE = /^(?:AGENT\.md\.tmpl$|modes\/|postures\/|doctrines\/)/;
+// The sources the carrier inlines, where an excluded rule's citations are removed at render. A
+// kit's rules file is inlined too (`kitsBody`); the rest of a kit folder ships beside it.
+const CARRIER_SOURCE_RE = /^(?:AGENT\.md\.tmpl$|modes\/|postures\/|doctrines\/|kits\/[^/]+\/rules\.md$)/;
 const PAREN_RE = /\(([^()]*)\)/g;
 const CITE_TOKEN_RE = /\{\{(?:LAW|DOCTRINE):[^}]*\}\}/g;
 

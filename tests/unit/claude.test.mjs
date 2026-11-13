@@ -2769,3 +2769,50 @@ for (const [what, text] of [['a tilde fence', '~~~\n@AGENTS.md\n~~~\n'],
     assert.ok(eager.some((e) => path.basename(e.path) === 'AGENTS.md'));
   }));
 }
+
+/** Every rendered root file under `dir`: the files that carry the `Active packs:` marker line. */
+function carriersIn(dir) {
+  const found = [];
+  for (const ent of fs.readdirSync(dir, { recursive: true, withFileTypes: true })) {
+    if (!ent.isFile() || !ent.name.endsWith('.md')) continue;
+    const p = path.join(ent.parentPath ?? ent.path, ent.name);
+    const text = readTextPy(p);
+    if (text.split('\n').some((l) => l.startsWith('Active packs:'))) found.push([p, text]);
+  }
+  return found;
+}
+
+test('every host and scope drops an excluded rule\'s citations from its root file', () => {
+  // D3 through the real emitters, not the plain bundle: the Claude-shaped emits re-render the
+  // template with prefixed DIR_* tokens (`prefixedAgentText`) instead of taking renderAll's item,
+  // and that path once put `(*Consent Before Push*)` back. Full footprint, because a full carrier
+  // inlines the process pack's full halves, which cite it from three more rules.
+  const emit = (host, scope, d, excludeRules) => {
+    const out = path.join(d, 'bundle');
+    const opts = { theme: 'neutral', out, footprint: 'full', excludeRules };
+    if (scope === 'global') {
+      const cfgDir = path.join(d, 'cfg');
+      captured(() => emitGlobalInto(host, { ...opts, cfgDir }));
+      return d;
+    }
+    const root = path.join(d, 'repo');
+    fs.mkdirSync(root, { recursive: true });
+    captured(() => emitProjectInto(host, { ...opts, root }));
+    return d;   // the repo AND the bundle: OpenCode's root file is the bundle's AGENT.md
+  };
+  for (const host of ['claude', 'bob', 'openclaude', 'opencode']) {
+    for (const scope of ['project', 'global']) {
+      const cell = `${host} ${scope}`;
+      withDir((d) => {
+        const on = carriersIn(emit(host, scope, path.join(d, 'on'), null));
+        assert.ok(on.some(([, t]) => t.includes('(*Consent Before Push*)')),
+          `${cell}: the control carries no citation, so the cell below proves nothing`);
+        const off = carriersIn(emit(host, scope, path.join(d, 'off'), ['process.5']));
+        assert.ok(off.length, `${cell}: no root file found`);
+        for (const [p, t] of off) {
+          assert.ok(!t.includes('Consent Before Push'), `${cell}: ${p} still cites the excluded rule`);
+        }
+      });
+    }
+  }
+});

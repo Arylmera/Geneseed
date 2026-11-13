@@ -253,7 +253,7 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
   move did.
 
 ⚠ **A doctrine citation in carrier text stands alone in its parentheses.** In
-`src/AGENT.md.tmpl`, `src/modes/`, `src/postures/` and `src/doctrines/`, write `… so X
+`src/AGENT.md.tmpl`, `src/modes/`, `src/postures/`, `src/doctrines/` and a kit's `rules.md`, write `… so X
 ({{DOCTRINE:<id>}})`, never `({{DOCTRINE:<id>}} says X)`. `dropExcludedCitations`
 (`js/build/render.mjs`) removes an excluded rule's citation from the carrier only when its group
 holds citations alone; `citationGroupProblems` (`js/inspect/checks-constitution.mjs`) refuses

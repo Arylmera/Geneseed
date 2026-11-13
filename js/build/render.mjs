@@ -427,7 +427,15 @@ export function renderFile(cfg, filePath, theme, footprint = 'full', lawsPrefix 
   text = resolveCatalogs(text, nativeCatalog, cfg.excludeSkills ?? [], cfg);
   text = resolveLean(text, footprint);
   if (footprint === 'lean') text = leanVoice(text, cfg.src);
-  return substitute(text, theme);
+  text = substitute(text, theme);
+  // D3 lives HERE, not in `renderAll`: every root file is rendered by this function, and the
+  // Claude/Bob emitters re-render the template with prefixed DIR_* tokens (`prefixedAgentText`)
+  // without going through `renderAll`'s items. Top-level template only; an include is flattened
+  // into it first.
+  if (!visiting.size && normcase(here) === normcase(path.resolve(cfg.src, 'AGENT.md.tmpl'))) {
+    text = dropCarrierCitations(cfg, text);
+  }
+  return text;
 }
 
 /** `_build_render._posture_body` / `_mode_body` — one helper, both registers. */
@@ -560,6 +568,22 @@ export function dropExcludedCitations(text, offNames, allNames) {
     if (kept.length === names.length) return whole;
     return kept.length ? `${lead}(${kept.map((n) => `*${n}*`).join(', ')})` : '';
   });
+}
+
+/**
+ * `dropExcludedCitations` with this build's names: the excluded doctrine rules of
+ * `cfg.excludeRules`. The bundle's other files — the complete packs on disk included — never
+ * pass through here, so they keep every citation.
+ * @param {any} cfg
+ * @param {string} text
+ */
+function dropCarrierCitations(cfg, text) {
+  const offRules = new Set(cfg.excludeRules ?? []);
+  if (!offRules.size) return text;
+  const canonRules = ruleCanon(cfg.src).rules;
+  const offNames = new Set(canonRules.filter((r) => r.kind === 'DOCTRINE' && offRules.has(`${r.pack}.${r.n}`))
+    .map((r) => r.name));
+  return dropExcludedCitations(text, offNames, new Set(canonRules.map((r) => r.name)));
 }
 
 function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
@@ -715,13 +739,6 @@ export function renderAll(cfg, themeName, {
   // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.
   const off = kitMembers(new Map([...kitsOf(cfg)].filter(([k]) => !(cfg.kits ?? []).includes(k))));
   const licences = new Map();   // `<stem>/LICENSE-<key>.txt` -> the upstream's licence file
-  // D3: the carrier stops citing an excluded rule. Every host's root file is cut from this one
-  // item, so the bundle's other files — the complete packs on disk included — keep them all.
-  const offRules = new Set(cfg.excludeRules ?? []);
-  const canonRules = offRules.size ? ruleCanon(cfg.src).rules : [];
-  const offNames = new Set(canonRules.filter((r) => r.kind === 'DOCTRINE' && offRules.has(`${r.pack}.${r.n}`))
-    .map((r) => r.name));
-  const allNames = new Set(canonRules.map((r) => r.name));
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
     // `--exclude-skills`: the one filter every host's emit and the plain bundle read through.
@@ -739,7 +756,6 @@ export function renderAll(cfg, themeName, {
     const fp = /^(?:laws|ontology|doctrines)[\\/]/.test(rel) ? 'full' : footprint;
     let text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
       ? renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog) : null;
-    if (text !== null && rel === 'AGENT.md.tmpl') text = dropExcludedCitations(text, offNames, allNames);
     items.push({ rel: outRel, text, src: file });
     // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The
     // token is gone from `text`, so the raw source is scanned; an unknown key or a null
