@@ -60,13 +60,17 @@
  *     transcripts here were launches. The pass is still placed by the CALL: a launch before the
  *     last edit proves nothing, even when it completes after it.
  *
- * READ FROM THE END (constant-cost Stop). Only the current turn matters, so the transcript is read
+ * READ FROM THE END. Only the current turn matters, so the transcript is read
  * backward in growing windows (`tailReader`) until the turn's opening prompt is inside one; a
  * turn longer than every window falls back to the whole file. Never judged on a truncated turn:
  * a window without a prompt answers "read more", not "no edit". A task notification is no prompt:
  * Claude Code writes it as a `type: "user"` line whose text opens `<task-notification>` (4 258
  * such lines in this machine's transcripts, 2026-11), and as a prompt it would open a new turn
- * and hide the edit before it.
+ * and hide the edit before it. So a turn now spans every continuation a notification drives, up
+ * to the last HUMAN prompt, and so does the cap's count. The cost follows: in a long session that
+ * a stream of notifications kept going, `tailReader` may read back that far, up to the whole
+ * file, so a Stop's read is no longer constant. It is bounded by the file, never by the session's
+ * age alone.
  *
  * THE CAP (`nextBlock`). A turn is blocked again only when an edit landed since its last block,
  * and at most 3 times; a Stop past that ends the turn and leaves a `done-gate-cap` ledger line,
