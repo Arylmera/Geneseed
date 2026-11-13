@@ -122,15 +122,17 @@ Arm auto-merge on a PR I open, only when the forge has required checks.
 - docs-tests: auto
 - normal: human        # human | reviewer
 - sensitive: never
+- Before any further push to a PR with auto-merge armed, disarm it first, then classify, review and arm again on the new head.
 ```
 
 `sensitive` never arms, whatever its line says. `docs-tests` accepts `auto | human | reviewer |
 never`, `normal` accepts `human | reviewer | never`; any other value counts as `human`. `human`
-waits for one approving review on the forge. `reviewer` is for a solo repo, where the
+waits for one approving review on the forge. The last line is part of the fixed text: the rule is
+loaded every session, so every path that pushes sees it. `reviewer` is for a solo repo, where the
 forge forbids approving your own PR: the blind reviewer must pass first. The rule arms only the
 forge's merge; every push still asks ({{DOCTRINE:consent-before-push}}). To turn it off, remove
 the rule with the same consent; to turn it off for one project only, write the rule into that
-project's file with all three lines `never` (the later layer wins).
+project's file with all three tier lines `never` (the later layer wins).
 
 **Review flow** (on request, or when a `trial until:` date has passed): for each rule
 due, ask whether it actually fired since adoption — graduate it (drop the trial

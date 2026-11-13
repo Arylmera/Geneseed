@@ -23,11 +23,12 @@ Arm auto-merge on a PR I open, only when the forge has required checks.
 - docs-tests: auto
 - normal: human        # human | reviewer
 - sensitive: never
+- Before any further push to a PR with auto-merge armed, disarm it first, then classify, review and arm again on the new head.
 ```
 
 The rule files are layered: shared, then host, then project, and the later layer wins. So a
 global rule sets the default and a project's own copy overrides it. To turn it off, say **"turn
-off auto-merge"**: the agent removes the rule, or writes a project copy with all three lines
+off auto-merge"**: the agent removes the rule, or writes a project copy with all three tier lines
 `never`. When a repo has no rule, the agent tells you once per session in that repo, when it
 opens a PR there, that auto-merge is off and how to turn it on.
 
@@ -40,7 +41,7 @@ The agent sorts each PR by its diff, the first match wins:
 
 | Tier | When | Accepted values |
 |---|---|---|
-| `sensitive` | Any file in a sensitive zone: each `sensitive:` zone of the ownership block in the **base** branch's `AGENTS.md` (see [Set up ownership](set-up-ownership.md)), plus auth and authz, secrets and credentials, data migrations and schema, CI and deploy config, dependency manifests and lockfiles, release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any `user-rules.md`, agent, skill and instruction files, and test files that CI runs as a gate | None: it never arms, whatever the rule says |
+| `sensitive` | Any file in a sensitive zone: each `sensitive:` zone of the ownership block in the **base** branch's `AGENTS.md` (see [Set up ownership](set-up-ownership.md)), plus auth and authz, secrets and credentials, data migrations and schema, CI and deploy config, dependency manifests and lockfiles, release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any `user-rules.md`, agent, skill and instruction files, and gate machinery (check scripts, CI-only harnesses, coverage thresholds; not ordinary unit tests) | None: it never arms, whatever the rule says |
 | `docs-tests` | Every file is docs (prose that is neither shipped nor executed) or tests | `auto`, `human`, `reviewer`, `never` |
 | `normal` | Anything else | `human`, `reviewer`, `never` (`auto` is not valid) |
 
@@ -59,7 +60,7 @@ the merge stays yours.
 |---|---|---|
 | Auto-merge allowed | Settings › General › *Allow auto-merge* (`gh repo view --json autoMergeAllowed`) | Settings › Merge requests: check that the merge method allows it |
 | Required checks on the base branch | A ruleset (`required_status_checks` in `gh api repos/{owner}/{repo}/rules/branches/<base>`) or branch protection (`required_status_checks` in `.../branches/<base>/protection`) | *Pipelines must succeed* (`only_allow_merge_if_pipeline_succeeds` in `glab api projects/:id`) |
-| One approving review (`human`) | A ruleset `pull_request` rule, or branch protection, with `required_approving_review_count` of 1 or more | An approval rule |
+| One approving review (`human`) | A ruleset `pull_request` rule, or branch protection, with `required_approving_review_count` of 1 or more | An approval rule with `approvals_required` of 1 or more (`glab api projects/:id/approval_rules`), or the project's `approvals_before_merge` |
 | Stale approvals (recommended for `human`) | *Dismiss stale pull request approvals when new commits are pushed* | *Remove all approvals when commits are added* |
 | Backstop on sensitive paths (recommended) | `CODEOWNERS` plus *Require review from Code Owners* | `CODEOWNERS` plus code owner approval on the protected branch |
 

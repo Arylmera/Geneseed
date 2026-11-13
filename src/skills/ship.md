@@ -48,7 +48,8 @@ request or merge the branch.
      `AGENTS.md` (never the head's), plus by default: auth and authz, secrets and credentials,
      data migrations and schema, CI and deploy config, dependency manifests and lockfiles,
      release and versioning, gate and hook config, `AGENTS.md`, `CLAUDE.md`, `CODEOWNERS`, any
-     `user-rules.md`, agent, skill and instruction files, and test files that CI runs as a gate.
+     `user-rules.md`, agent, skill and instruction files, and gate machinery (check scripts, CI-only
+     harnesses, coverage thresholds; not ordinary unit tests).
    - **The rule's line for the tier.** `sensitive` never arms, whatever the rule says.
      `docs-tests` accepts `auto | human | reviewer | never`; `normal` accepts `human | reviewer
      | never` (`auto` is not valid there). A missing or other value counts as `human`. `auto`
@@ -61,7 +62,9 @@ request or merge the branch.
      or `required_status_checks` in `gh api repos/{owner}/{repo}/branches/<base>/protection`;
      GitLab: `only_allow_merge_if_pipeline_succeeds` in `glab api projects/:id`. One approving
      review (`human`): a `pull_request` rule with `required_approving_review_count` of 1 or more,
-     or the same count under `required_pull_request_reviews` in the protection. Auto-merge
+     or the same count under `required_pull_request_reviews` in the protection; GitLab: an
+     approval rule with `approvals_required` of 1 or more in `glab api
+     projects/:id/approval_rules`, or the project's `approvals_before_merge`. Auto-merge
      allowed: `gh repo view --json autoMergeAllowed`. Never judge green yourself: the forge's
      checks are the gate ({{DOCTRINE:external-gate}}).
    Arm with the reviewed head named: `gh pr merge <pr> --auto --squash --match-head-commit
