@@ -1905,3 +1905,107 @@ describe('Constitution page — its own install picker', () => {
     expect(onAction.mock.calls).toEqual([['install', { ...CL, deletionGate: false }]])
   })
 })
+
+// ---------------------------------------------------------------------------------------------
+// Strict consent, on process 5's open row (CONSENT_SWITCH; `--strict-consent`). The server row is
+// `ownBranchPass`, armed by default, so the switch reads ON only for an explicit `false`: every
+// commit and push then asks, the own branch included. A click asks, then rebuilds once with the
+// opposite pass. With process 5 not deployed nothing asks at all, so there is no switch.
+
+const strictSwitch = (c) => c.querySelector('[aria-label="Strict consent"]')
+const consentRow = (c) => c.querySelector('[data-addr="process.5"]')
+const consentPage = (install, onAction = () => {}) => (
+  <Laws selected="process.5" overview={{ install }} onAction={onAction} />
+)
+// The fixture's process pack with some fields overridden: process 5 excluded, or the pack off.
+const withProcess = (patch) =>
+  DOC.map((it) => (it.pack === 'process' ? { ...it, ...patch(it) } : it))
+
+describe('Constitution page — strict consent on process 5', () => {
+  beforeEach(() => {
+    askConfirm.mockClear()
+  })
+
+  it('is off by default: no key, or the pass armed', async () => {
+    for (const install of [INSTALL, { ...INSTALL, ownBranchPass: true }]) {
+      const { container, unmount } = render(consentPage(install))
+      await waitFor(() => expect(strictSwitch(container)).toBeTruthy())
+      expect(strictSwitch(container).getAttribute('role')).toBe('switch')
+      expect(strictSwitch(container).getAttribute('aria-checked')).toBe('false')
+      const line = strictSwitch(container).closest('.law-gate')
+      expect([...line.querySelector('.law-name').children].map((e) => e.textContent)).toEqual([
+        'Strict consent',
+        'Ask before every commit and push, your own branch included.',
+      ])
+      unmount()
+    }
+  })
+
+  it('is on when the install reports ownBranchPass: false', async () => {
+    const { container } = render(consentPage({ ...INSTALL, ownBranchPass: false }))
+    await waitFor(() => expect(strictSwitch(container)).toBeTruthy())
+    expect(strictSwitch(container).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('switching it on asks, then rebuilds once with ownBranchPass: false', async () => {
+    const onAction = vi.fn()
+    const { container } = render(consentPage(INSTALL, onAction))
+    await waitFor(() => expect(strictSwitch(container)).toBeTruthy())
+    fireEvent.click(strictSwitch(container))
+    await answered()
+    expect(askConfirm).toHaveBeenCalledTimes(1)
+    expect(askConfirm.mock.calls[0][1].title).toBe('Switch strict consent on?')
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0]).toEqual(['install', { ...INSTALL, ownBranchPass: false }])
+  })
+
+  it('switching it off asks, then rebuilds once with ownBranchPass: true', async () => {
+    const onAction = vi.fn()
+    const { container } = render(consentPage({ ...INSTALL, ownBranchPass: false }, onAction))
+    await waitFor(() => expect(strictSwitch(container)).toBeTruthy())
+    fireEvent.click(strictSwitch(container))
+    await answered()
+    expect(askConfirm.mock.calls[0][1].title).toBe('Switch strict consent off?')
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0]).toEqual(['install', { ...INSTALL, ownBranchPass: true }])
+  })
+
+  it('a no answer rebuilds nothing', async () => {
+    askConfirm.mockResolvedValueOnce(false)
+    const onAction = vi.fn()
+    const { container } = render(consentPage(INSTALL, onAction))
+    await waitFor(() => expect(strictSwitch(container)).toBeTruthy())
+    fireEvent.click(strictSwitch(container))
+    await answered()
+    expect(onAction).not.toHaveBeenCalled()
+  })
+
+  // The row is open and its hook note is there in both cases: only the switch is gone.
+  it('is hidden when process 5 is excluded, or its pack is off', async () => {
+    const cases = [
+      withProcess((it) => (it.name === 'process.5' ? { active: false } : {})),
+      withProcess(() => ({ active: false, packActive: false })),
+    ]
+    for (const items of cases) {
+      api.catalog.mockResolvedValue({ section: 'laws', items: [...INV, ...items] })
+      clearAsyncCache()
+      const { container, unmount } = render(consentPage({ ...INSTALL, ownBranchPass: false }))
+      await waitFor(() => expect(container.querySelector('.law-expand .law-hook')).toBeTruthy())
+      expect(strictSwitch(container)).toBeNull()
+      unmount()
+    }
+  })
+
+  it('is hidden with no install to rebuild', async () => {
+    const { container } = render(<Laws selected="process.5" />)
+    await waitFor(() => expect(container.querySelector('.law-expand .law-hook')).toBeTruthy())
+    expect(strictSwitch(container)).toBeNull()
+  })
+
+  // Not a GATE_SWITCH row: strict is the tighter install, so the row never reads "Gate off".
+  it('leaves the row reading Hook gate when strict', async () => {
+    const { container } = render(consentPage({ ...INSTALL, ownBranchPass: false }))
+    await waitFor(() => expect(strictSwitch(container)).toBeTruthy())
+    expect(consentRow(container).querySelector('.law-enf').textContent).toBe('Hook gate')
+  })
+})

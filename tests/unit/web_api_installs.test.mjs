@@ -620,6 +620,30 @@ test('the secrets and done gate switches each reach the install command only as 
   });
 });
 
+// Strict consent (the Constitution page's switch on process 5's row) crosses the same boundary:
+// `ownBranchPass` is a `GATE_SWITCHES` row, so `bodyGates` reads it with no code of its own. Its
+// sense is inverted, though: `false` is the STRICTER install and adds `--strict-consent`. A
+// non-boolean keeps the install's own `Own-branch pass:` line, in both directions.
+test('strict consent reaches the install command only as a boolean false, else the install keeps it', () => {
+  withThreeInstalls(({ st, cl }) => {
+    const argv = (body) => apiInstallCmd(st, { host: 'claude', path: cl, ...body }).cmd.map(String);
+    const strict = (a) => a.filter((t) => t === '--strict-consent');
+    fs.mkdirSync(cl, { recursive: true });
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '# x\n\nActive packs: process\n');
+    assert.deepEqual(strict(argv({})), [], 'a default install turned strict on a plain rebuild');
+    assert.deepEqual(strict(argv({ ownBranchPass: false })), ['--strict-consent'], 'false did not turn strict on');
+    for (const bad of ['false', 0, null, 'off', {}]) {
+      assert.deepEqual(strict(argv({ ownBranchPass: bad })), [],
+        `a non-boolean ${JSON.stringify(bad)} turned strict consent on`);
+    }
+    // A strict install: its carrier says so, and a body that says nothing keeps it strict.
+    fs.writeFileSync(path.join(cl, 'CLAUDE.md'), '<!-- BEGIN GENESEED -->\n# x\n\nActive packs: process\nOwn-branch pass: off\n<!-- END GENESEED -->\n');
+    assert.deepEqual(strict(argv({})), ['--strict-consent'], 'a plain rebuild dropped strict consent');
+    assert.deepEqual(strict(argv({ ownBranchPass: 'true' })), ['--strict-consent'], 'a string turned it off');
+    assert.deepEqual(strict(argv({ ownBranchPass: true })), [], 'true did not turn strict off');
+  });
+});
+
 test('a named install reads its own target, theme and emit', () => {
   withTwoViews(({ st, cl }) => {
     const v = installView(st, { host: 'claude', path: cl });

@@ -86,6 +86,23 @@ export const GATE_SWITCH = {
 // reach every host, the OpenCode guard through the carrier's `Excluded rules:` line.
 export const WITH_TEXT = new Set(['process.1', 'process.5', 'ops.2'])
 
+// Strict consent: process 5's own-branch pass, the one GATE_SWITCHES row (js/build/source.mjs:
+// `ownBranchPass`, `--strict-consent`) that is NOT in GATE_SWITCH. Its sense is inverted there:
+// the row is armed by default, and `ownBranchPass === false` is the STRICTER install, where every
+// commit and push asks, the own branch included. In GATE_SWITCH it would read wrong twice:
+// `enforcedBy` would print "Gate off" on the strictest install, and useRuleSelection would couple
+// its switch to excluding process 5's text. So it is its own switch, on process 5's open row, and
+// shown only while that rule is deployed: with it excluded, no commit or push asks at all.
+// __tests__/constitution.test.js names this key as the one exception to the GATE_SWITCH pin.
+export const CONSENT_SWITCH = {
+  addr: 'process.5',
+  key: 'ownBranchPass',
+  label: 'Strict consent',
+  desc: 'Ask before every commit and push, your own branch included.',
+  on: 'Every commit and push asks again, on your own branch too.',
+  off: 'Commits and pushes on your own branch pass again; the main branch still asks.',
+}
+
 // The hooked doctrine rules with no switch that would keep asking with their text excluded: none
 // today. A hooked rule added to HOOK_GATED without a switch or a WITH_TEXT wiring lands here, and
 // the page then says its hook still asks.
