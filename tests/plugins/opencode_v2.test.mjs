@@ -71,7 +71,7 @@ function fakeCtx({ directory = tmp, session = {}, generate, permission = true } 
       subscribe: ({ signal } = {}) => {
         const queue = []
         let wake = null
-        const sub = { push: (ev) => { queue.push(ev); wake?.() } }
+        const sub = { queue, push: (ev) => { queue.push(ev); wake?.() } }
         subs.add(sub)
         signal?.addEventListener("abort", () => wake?.())
         return {
@@ -89,7 +89,11 @@ function fakeCtx({ directory = tmp, session = {}, generate, permission = true } 
     },
   }
   const emit = (type, data, created = Date.now()) => { for (const s of subs) s.push({ id: "evt_x", type, created, data }) }
-  return { ctx, hooks, calls, transforms, emit }
+  // True once every subscription has pulled every event pushed to it. A consumer handles one
+  // event before it pulls the next, so a barrier pushed after an event, once pulled, proves that
+  // event's handler has finished.
+  const drained = () => [...subs].every((s) => !s.queue.length)
+  return { ctx, hooks, calls, transforms, emit, drained }
 }
 const settle = () => new Promise((r) => setTimeout(r, 30))
 // For work that crosses several fs awaits: a fixed 30 ms loses the race when the whole suite
@@ -254,13 +258,15 @@ test("guard: a shell ask posts its note too, and a refusal or a plain call posts
 
 // The change report on V2: baseline at the turn's start, compare at its end, approval from execute.after.
 test("guard: the change report tells the user of an unapproved change, once", async () => {
-  const { ctx, hooks, calls, emit } = fakeCtx()
+  const { ctx, hooks, calls, emit, drained } = fakeCtx()
   await (await load("guard")).setup(ctx)
   const fact = path.join(cfgRoot(), "memory", "w2g-report.md")
   await fs.mkdir(path.dirname(fact), { recursive: true })
   await fs.rm(fact, { force: true })
   try {
-    const turn = async (type) => { emit(type, { sessionID: "r1" }); await settle() }
+    // Each edge waits for its handler (`drained`), never for a clock: the start handler takes the
+    // baseline, and a write that lands before it is part of the baseline, not a change.
+    const turn = async (type) => { emit(type, { sessionID: "r1" }); emit("test.barrier", {}); await until(drained) }
     const said = () => calls.filter(([n]) => n === "synthetic").map(([, i]) => i)
     await turn("session.execution.started")
     await fs.writeFile(fact, "planted")
@@ -294,21 +300,18 @@ test("guard: four instances that all see one change report it once between them"
   await fs.mkdir(path.dirname(fact), { recursive: true })
   await fs.rm(fact, { force: true })
   try {
-    const turn = async (type) => { for (const one of instances) one.emit(type, { sessionID: "multi-1" }); await settle() }
+    const turn = async (type) => {
+      for (const one of instances) { one.emit(type, { sessionID: "multi-1" }); one.emit("test.barrier", {}) }
+      await until(() => instances.every((one) => one.drained()))
+    }
     const said = () => instances.flatMap((one) => one.calls.filter(([n]) => n === "synthetic").map(([, i]) => i))
     await turn("session.execution.started")
     await fs.writeFile(fact, "planted")
     await turn("session.execution.succeeded")
-    // The report crosses several fs awaits, so a fixed settle loses the race under a parallel suite
-    // (0 reports seen, 2026-11-13): wait for the first, then one settle more for any duplicate.
-    await until(() => said().length >= 1)
-    await settle()
     assert.equal(said().length, 1, `four instances posted ${said().length} reports of one change`)
     assert.equal(said()[0].sessionID, "multi-1")
     await fs.writeFile(fact, "planted again, and longer")
     await turn("session.execution.succeeded")
-    await until(() => said().length >= 2)
-    await settle()
     assert.equal(said().length, 2, "a second, different change is reported, once")
   } finally { await fs.rm(fact, { force: true }) }
 })
