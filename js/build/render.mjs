@@ -526,6 +526,42 @@ function dropExcludedRules(text, pack, excluded) {
     .join('');
 }
 
+/**
+ * A parenthetical made of rule citations only — `(*A*)`, `(*A*, *B*)` — with the blanks before
+ * it: spaces, and at most one line break, so a citation wrapped onto its own line leaves no
+ * orphaned punctuation at the start of the next.
+ */
+const CITE_GROUP_RE = /([ \t]*(?:\r?\n[ \t]*)?)\((\*[^*()\n]+\*(?:,[ \t]*\*[^*()\n]+\*)*)\)/g;
+
+/**
+ * Remove the citations of excluded rules from rendered carrier text (owner decision D3,
+ * 2026-11-11: an excluded rule is OFF, so the text read every turn stops invoking it).
+ *
+ * ⚠ AFTER SUBSTITUTION, ON THE RENDERED TEXT, the opposite of `dropExcludedRules` and for the
+ * opposite reason: a citation renders as the rule's English principle in italics, identical in
+ * every voice (`resolveRuleIds`), so here the rendered form is the one literal, and a cited
+ * rule's include chain (template, mode, posture, packs) is already flat.
+ *
+ * Only a group whose every item is a rule name is touched. The doctor holds every carrier
+ * source to that shape (`citationGroupProblems`), so each removal leaves a sentence that still
+ * reads. A prose mention ("Where *X* refuses …") and a group with any other italic stay: the
+ * first binds nothing, the second may be plain emphasis. `offNames` empty is the identity, which
+ * keeps a build with no exclusion byte-identical.
+ * @param {string} text
+ * @param {Set<string>} offNames principle names of the excluded rules
+ * @param {Set<string>} allNames principle names of every rule in the canon
+ */
+export function dropExcludedCitations(text, offNames, allNames) {
+  if (!offNames.size) return text;
+  return text.replace(CITE_GROUP_RE, (whole, lead, inner) => {
+    const names = inner.match(/\*[^*]+\*/g).map((s) => s.slice(1, -1));
+    if (!names.every((n) => allNames.has(n))) return whole;
+    const kept = names.filter((n) => !offNames.has(n));
+    if (kept.length === names.length) return whole;
+    return kept.length ? `${lead}(${kept.map((n) => `*${n}*`).join(', ')})` : '';
+  });
+}
+
 function doctrinesBody(cfg, theme, active, footprint, lawsPrefix) {
   // At lean the section still carries the one pointer with no pack active: it names the laws too.
   if (!active.length) return footprint === 'lean' ? briefPointer(theme, lawsPrefix, false) : '';
@@ -679,6 +715,13 @@ export function renderAll(cfg, themeName, {
   // Members of every kit `--kits` did not name: kit logic, not `excludeSkills`, so no marker.
   const off = kitMembers(new Map([...kitsOf(cfg)].filter(([k]) => !(cfg.kits ?? []).includes(k))));
   const licences = new Map();   // `<stem>/LICENSE-<key>.txt` -> the upstream's licence file
+  // D3: the carrier stops citing an excluded rule. Every host's root file is cut from this one
+  // item, so the bundle's other files — the complete packs on disk included — keep them all.
+  const offRules = new Set(cfg.excludeRules ?? []);
+  const canonRules = offRules.size ? ruleCanon(cfg.src).rules : [];
+  const offNames = new Set(canonRules.filter((r) => r.kind === 'DOCTRINE' && offRules.has(`${r.pack}.${r.n}`))
+    .map((r) => r.name));
+  const allNames = new Set(canonRules.map((r) => r.name));
   for (const file of sortedSourceFiles(cfg.src)) {
     const rel = path.relative(cfg.src, file);
     // `--exclude-skills`: the one filter every host's emit and the plain bundle read through.
@@ -694,8 +737,9 @@ export function renderAll(cfg, themeName, {
     // accident, which is a different thing from shipping whole by contract.
     // Keyed on the SOURCE rel, not the themed one, so a DIR_* rename cannot un-exempt them.
     const fp = /^(?:laws|ontology|doctrines)[\\/]/.test(rel) ? 'full' : footprint;
-    const text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
+    let text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
       ? renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog) : null;
+    if (text !== null && rel === 'AGENT.md.tmpl') text = dropExcludedCitations(text, offNames, allNames);
     items.push({ rel: outRel, text, src: file });
     // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The
     // token is gone from `text`, so the raw source is scanned; an unknown key or a null

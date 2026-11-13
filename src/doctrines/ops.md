@@ -65,8 +65,8 @@ form is reconciled — not the principal file alone, but the imports, hooks,
 indices, cross-links, ignore-rules, and peer configs that point to it. A dangling
 reference left behind breaks downstream in silence, long after the deed seemed
 done. Before declaring a teardown complete, hunt each integration point and sever
-or rewire it ({{DOCTRINE:search-before-creating}} finds what already exists; this finishes what you
-remove). Total teardown, or none.
+or rewire it. {{DOCTRINE:search-before-creating}} finds what already exists; this finishes what you
+remove. Total teardown, or none.
 <!-- LEAN:else -->
 A delete, a rename, or a move is finished only when every reference to the old form is
 reconciled — imports, hooks, indices, cross-links, ignore-rules, peer configs. Before

@@ -14,6 +14,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Changed
 - **The startup text states its order without shouting.** The readiness-sigil paragraph loses "required", "MUST", "verbatim" and "do not paraphrase"; §9 loses "not deferrable" and "this is not a suggestion". Every ordering clause stays: read the rules and load the project context before the first reply, begin it with the sigil line, and a matching skill is still the first tool call. Strong current models over-apply emphatic wording; a weak model keeps the same sequence. The sigil line itself is unchanged, so theme detection and Bob's own first-reply override are untouched. Reaches an install on its next emit.
 
+### Fixed
+- **An excluded rule is no longer cited by the instructions file.** Owner decision D3 (2026-11-11) made an excluded rule off, but the carrier still cited it: an install that excluded process 5 read `(*Consent Before Push*)` in §3, Foreman mode and three process rules. The render now removes a parenthetical citation of an excluded rule, and only that name from a list of citations. The rule files on disk keep every citation. `geneseed doctor` refuses a carrier parenthetical that mixes a doctrine citation with other words; the three such sites (§3 twice, §6) and one in ops 4 were rewritten. Reaches an install on its next emit; a build with no exclusion is unchanged.
+
 ## [5.3.1] — 2026-11-12
 
 **Upgrade note.** The fixed hook commands, matchers and plugins reach an install only when it is emitted again: run `geneseed rebuild-all` after the update.

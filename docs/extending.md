@@ -252,6 +252,13 @@ material belongs in, and it is cheap on purpose so that the invariant slot stays
   `full` carrier ceiling in `emit_smoke` — raise it with a dated note there, as every earlier
   move did.
 
+⚠ **A doctrine citation in carrier text stands alone in its parentheses.** In
+`src/AGENT.md.tmpl`, `src/modes/`, `src/postures/` and `src/doctrines/`, write `… so X
+({{DOCTRINE:<id>}})`, never `({{DOCTRINE:<id>}} says X)`. `dropExcludedCitations`
+(`js/build/render.mjs`) removes an excluded rule's citation from the carrier only when its group
+holds citations alone; `citationGroupProblems` (`js/inspect/checks-constitution.mjs`) refuses
+anything else. A prose mention outside parentheses is fine.
+
 ⚠ **Cite only downward.** An always-on tier may never reference a toggleable one:
 `constitutionProblems` refuses a `{{DOCTRINE:…}}` token anywhere under `src/ontology/` or
 `src/laws/`, because a `--doctrines craft` build would then ship an invariant pointing at text its

@@ -98,6 +98,36 @@ const BARE_CITE_RE = /\{\{LAW\}\}\s+[IVXLCDM]+\b|\{\{DOCTRINE\}\}\s+[a-z]+\s+\d+
 // legal everywhere, including in an invariant that points at the tier as a whole.
 const DOCTRINE_TOKEN_RE = /\{\{DOCTRINE(?:\}\}|:)/;
 
+// The sources the carrier inlines, where an excluded rule's citations are removed at render.
+const CARRIER_SOURCE_RE = /^(?:AGENT\.md\.tmpl$|modes\/|postures\/|doctrines\/)/;
+const PAREN_RE = /\(([^()]*)\)/g;
+const CITE_TOKEN_RE = /\{\{(?:LAW|DOCTRINE):[^}]*\}\}/g;
+
+/**
+ * A parenthetical in a carrier source that cites a doctrine rule holds citations only.
+ *
+ * ⚠ THIS IS WHAT MAKES D3 SAFE TO RENDER. An excluded rule is off, so `dropExcludedCitations`
+ * (`js/build/render.mjs`) removes its citations from the carrier — but only a group made of
+ * citations alone, because only then does the sentence still read with the group gone.
+ * `(*Consent Before Push* stays with you)` would survive the render and keep invoking a rule the
+ * install switched off. A prose mention outside parentheses is fine: it describes, it binds
+ * nothing. Doctrine citations only, because a law cannot be excluded.
+ * @param {string} rel path under src/, posix
+ * @param {string} text the raw source
+ */
+export function citationGroupProblems(rel, text) {
+  if (!CARRIER_SOURCE_RE.test(rel)) return [];
+  const problems = [];
+  for (const [whole, inner] of text.matchAll(PAREN_RE)) {
+    if (!inner.includes('{{DOCTRINE:')) continue;
+    if (!inner.replace(CITE_TOKEN_RE, '').replace(/[,\s]/g, '')) continue;
+    problems.push(`[authoring] ${rel} mixes a doctrine citation with other words in '${whole.replace(/\s+/g, ' ')}'`
+      + ' — an excluded rule\'s citation is removed from the carrier only when its parentheses hold'
+      + ' citations alone; move the words outside: "…, so X ({{DOCTRINE:<id>}})"');
+  }
+  return problems;
+}
+
 /**
  * The rules the hooks enforce at the tool boundary, and the address each is bound to there. The
  * hook path cannot afford to read the canon on every tool call, so its gate-ledger keys
@@ -284,6 +314,7 @@ export function constitutionProblems() {
         + 'reference a toggleable one, or a pack-off build ships a rule pointing at text '
         + 'that is not there. State the point directly instead');
     }
+    problems.push(...citationGroupProblems(rel, text));
     for (const [bare] of text.matchAll(BARE_CITE_RE)) {
       problems.push(`[authoring] ${rel} cites '${bare.replace(/\s+/g, ' ')}' by number — numbers are `
         + 'positional and move when the canon does; cite {{LAW:<id>}} / {{DOCTRINE:<id>}}');
