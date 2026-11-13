@@ -146,11 +146,14 @@ the project's own. Follow the root \`AGENTS.md\`.
  * template's sigil paragraph — below the banner — the first reply to a real request carried
  * no sigil; with this paragraph on top it did. Bob's own greeting persona outranks a rule
  * that does not say it overrides it. A bare "hi" still gets Bob's fixed welcome either way.
+ * Seen live (2026-11): told only "begin with this line", Bob also echoed the theme's fenced
+ * banner right under it — two banners per first reply — so the override forbids the echo.
  */
 export function bobFirstReply(sigil) {
   return '**First-reply override — highest priority.** Your very first reply in every '
     + 'conversation MUST begin with this exact line, before anything else and instead of any '
-    + `default greeting or self-introduction:\n\n> ${sigil}\n\n`;
+    + 'default greeting or self-introduction. Print that line once and never reproduce the '
+    + `fenced banner block below it: the line is the whole greeting:\n\n> ${sigil}\n\n`;
 }
 
 /** `_build_render.PROFILE_FILE`. */
