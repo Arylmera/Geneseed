@@ -932,6 +932,27 @@ test('learn on Stop: the cap across real Stops of one session', () => {
   ]), ['block', 'block', 'block', 'cap', 'block']);
 });
 
+// The host may write a block's feedback back as a user line (unverified: no blocked Stop exists in
+// a transcript here). As a prompt it would change the turn's opening, the record would count as
+// none, and the second Stop would end the turn instead of re-blocking after the new edit.
+test('learn on Stop: a block\'s feedback line opens no turn, so a new edit re-blocks', () => {
+  const lines = [
+    'Stop hook feedback:\nGeneseed (Verify Before Asserting) — this turn edited files, and these checks ...',
+    'Geneseed (Verify Before Asserting) — this turn edited files, and these checks ...',
+  ];
+  for (const text of lines) {
+    const e = [once(editWorker), once(editWorker)];
+    const p1 = { uuid: 'p1', ...prompt('one') };
+    const feedback = { type: 'user', message: { role: 'user', content: text } };
+    const runs = subagentStops({ event: 'Stop', stops: [
+      { rows: [p1, e[0]] },
+      { rows: [p1, e[0], feedback, e[1]], active: true },
+    ] });
+    assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : r.err)),
+      ['block', 'block'], text);
+  }
+});
+
 test('learn on SubagentStop: the cap counts per sub-agent', () => {
   const e = [once(editWorker), once(editWorker)];
   const runs = subagentStops({ stops: [

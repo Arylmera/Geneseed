@@ -159,6 +159,16 @@ export function groupPasses(command, g) {
 const NOTE_OPEN = '<task-notification>';
 
 /**
+ * The openings of a block's feedback, should the host write it back as a user line. As a prompt
+ * it would open a new turn: the cap's `opening` would change, the record would count as none, and
+ * the turn's edit would fall before the judged turn. UNVERIFIED: no blocked Stop or SubagentStop
+ * exists in any transcript on this machine (2026-11), so the host's real feedback line is unseen.
+ * Both guesses are kept: Claude Code's `Stop hook feedback` label, and the gate's own reason.
+ */
+const REASON_OPEN = 'Geneseed (Verify Before Asserting)';
+const FEEDBACK_OPENS = ['Stop hook feedback', 'SubagentStop hook feedback', REASON_OPEN];
+
+/**
  * The text of a background task's notification, or null. Claude Code writes it twice: as a
  * `queued_command` attachment (`attachment.prompt`, a string; 174 of them here are objects, not
  * notifications) and as a `type: "user"` line holding the same text. `queue-operation` lines carry
@@ -205,6 +215,9 @@ function isPrompt(obj, sidechain = false) {
   if (obj.type !== 'user' || obj.isMeta || (obj.isSidechain && !sidechain)) return false;
   if (notificationText(obj)) return false;
   const c = obj.message && obj.message.content;
+  const t = typeof c === 'string' ? c
+    : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null;
+  if (typeof t === 'string' && FEEDBACK_OPENS.some((p) => t.trimStart().startsWith(p))) return false;
   if (typeof c === 'string') return true;
   return Array.isArray(c) && c.length > 0 && !c.some((b) => b && b.type === 'tool_result');
 }
@@ -507,7 +520,7 @@ export function doneGate(meta, args, install, read = tailReader()) {
     recordGate(install, 'done-gate', 'law-3');
     out(`${JSON.stringify({
       decision: 'block',
-      reason: `Geneseed (Verify Before Asserting) — ${who} edited files, and these `
+      reason: `${REASON_OPEN} — ${who} edited files, and these `
         + `checks from ${DONE_LIST} have not passed since the last edit: ${list(owed)}. `
         + 'Run them unpiped, or say plainly that they were not run and why.',
     })}\n`);
