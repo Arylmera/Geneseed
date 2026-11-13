@@ -266,12 +266,13 @@ export const GATE_HOOK = {
   },
   'process.5': {
     on:
-      'A shell command whose text holds git, then commit or push (so git log --grep push ' +
-      'asks too).',
+      'A git commit or push onto the main branch (main, master, the remote’s default), a forced ' +
+      'push, a bare git push, or a form the gate cannot read. Under strict consent, every commit ' +
+      'and push.',
     hosts:
-      'Claude Code and OpenClaude ask you; a loop’s own commits and pushes on its loop/* ' +
-      'branch pass. OpenCode asks with its own prompt, and allows a push of HEAD to loop/*. Bob only ' +
-      'logs a warning; the command runs.',
+      'Claude Code and OpenClaude ask you; commits and plain pushes on your own branch pass. ' +
+      'OpenCode asks for every commit and push with its own prompt (its globs cannot see the ' +
+      'branch), and allows a push of HEAD to loop/*. Bob only logs a warning; the command runs.',
     blind: 'A commit or push made by another program, a script or an alias.',
     off:
       'Excluding this rule, or the process pack, is the switch: commits and pushes stop ' +

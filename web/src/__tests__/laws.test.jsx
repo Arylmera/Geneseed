@@ -1514,7 +1514,7 @@ describe('Constitution page — an opened rule', () => {
     ).toBeTruthy()
     rerender(<Laws selected="process.5" />)
     await waitFor(() => expect(hook(container)).toBeTruthy())
-    expect(hook(container).textContent).toContain('then commit or push')
+    expect(hook(container).textContent).toContain('onto the main branch')
     rerender(<Laws selected="II" />)
     await waitFor(() => expect(screen.getByText(/The canonical text/)).toBeTruthy())
     expect(container.querySelector('.law-hook')).toBeNull()
