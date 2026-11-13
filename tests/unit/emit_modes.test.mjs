@@ -567,6 +567,32 @@ test('the foreman mode body carries the ownership delegation rule, and only fore
   assert.ok(!carrier(null).includes(RULE), 'the default mode rendered the foreman ownership rule');
 });
 
+test('a notebook path names where the notebook is: .claude/notebook/ on a Claude project', () => {
+  // A Claude project's CLAUDE.md sits at the repo root and its notebook in `.claude/notebook/`,
+  // and the agent opens every path from the repo root. So the Foreman ledger (MODE_BODY), the
+  // Scriptorium link (§6) and the notes file of a skill's and an agent's self-improvement loop all
+  // say `.claude/notebook/`. A plain bundle keeps its notebook beside AGENT.md: `notebook/`.
+  withDir((d) => {
+    quiet(() => emitProjectInto('claude', {
+      theme: 'neutral', out: path.join(d, 'bundle'), root: d, footprint: 'full', mode: 'foreman',
+    }));
+    const carrier = read(d, 'CLAUDE.md');
+    assert.ok(carrier.includes('`.claude/notebook/foreman-ledger.md`, one line per live task'),
+      'the Foreman ledger lost the .claude/ prefix');
+    assert.ok(carrier.includes('[`.claude/notebook/`](.claude/notebook/)'));
+    assert.ok(!carrier.includes('`notebook/foreman'), 'an unprefixed Foreman path is left');
+    assert.ok(read(d, '.claude', 'skills', 'develop', 'SKILL.md')
+      .includes('`.claude/notebook/skill-notes/<name>.md`'), "a skill's notes path is unprefixed");
+    assert.ok(read(d, '.claude', 'agents', 'developer.md')
+      .includes('`.claude/notebook/agent-notes/<name>.md`'), "an agent's notes path is unprefixed");
+  });
+  withDir((d) => {
+    quiet(() => buildInto({ theme: 'neutral', out: d, footprint: 'full', mode: 'foreman' }));
+    assert.ok(read(d, 'AGENT.md').includes('`notebook/foreman-ledger.md`, one line per live task'));
+    assert.ok(read(d, 'skills', 'develop.md').includes('`notebook/skill-notes/<name>.md`'));
+  });
+});
+
 test("a user's own plugin, workflow and theme file survive the emit and the uninstall", () => {
   // `copyPlugins`/`copyWorkflows` (via `copyJsDir`) and `writeTheme`/`writeColorThemes` wrote and
   // pushed into `owned` with NO claim-on-create check — unlike the native layer and the command
