@@ -50,12 +50,22 @@
  *     takes the exit code of its last stage: `npm test | tail` exits 0 on a red suite), not MASKED
  *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), and whose
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
- *     14 000+ real Claude Code results, 2026-10-17).
+ *     14 000+ real Claude Code results, 2026-10-17);
+ *   - a BACKGROUND run (`run_in_background: true`) is pending, not passed: its result comes at
+ *     once, `is_error` false, with `toolUseResult.backgroundTaskId` set — it says the command
+ *     STARTED. It passes only when a later task notification names its tool-use id with
+ *     `<status>completed</status>` and `completed (exit code 0)` (`notificationText`); any other
+ *     status or code leaves it owed. Before this, 76 of 112 accepted passes in 30 days of real
+ *     transcripts here were launches. The pass is still placed by the CALL: a launch before the
+ *     last edit proves nothing, even when it completes after it.
  *
  * READ FROM THE END (constant-cost Stop). Only the current turn matters, so the transcript is read
  * backward in growing windows (`tailReader`) until the turn's opening prompt is inside one; a
  * turn longer than every window falls back to the whole file. Never judged on a truncated turn:
- * a window without a prompt answers "read more", not "no edit".
+ * a window without a prompt answers "read more", not "no edit". A task notification is no prompt:
+ * Claude Code writes it as a `type: "user"` line whose text opens `<task-notification>` (4 258
+ * such lines in this machine's transcripts, 2026-11), and as a prompt it would open a new turn
+ * and hide the edit before it.
  *
  * At most one block per turn: `stop_hook_active` is true when this Stop follows a block, and the
  * gate then lets the turn end and leaves a ledger line, so a gate that cries wolf gets found.
@@ -87,7 +97,9 @@ const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
  * Whitespace is collapsed on both sides. shortcut: the shell is not parsed — a prefix such as
  * `sudo`/`time`/`env X=1`, a subshell, or a `|` inside a quoted argument after the check all read
  * as "not run", and so does a `||` inside a quoted argument after the check. Every approximation
- * above refuses a pass, so the gate errs toward a reminder — with ONE known opening the other way:
+ * of the command line above refuses a pass, so the gate errs toward a reminder. That says nothing
+ * of the call's mode: a `run_in_background` launch is judged by its completion, not here
+ * (`missingChecks`). One known opening the other way remains:
  * `npm test; npm run lint` passes both, though `;` lets a green lint hide a red test (the line's
  * exit code is the last command's). Kept so a chained proof line still counts; upgrade by
  * requiring `&&` between checks if that opening is ever seen in a real transcript.
@@ -140,9 +152,43 @@ export function groupPasses(command, g) {
       && g.forms.some((f) => s === f || s.startsWith(`${f} `)));
 }
 
-/** A user line that opens a turn: the user typed it, it is not a tool result or a meta note. */
+const NOTE_OPEN = '<task-notification>';
+
+/**
+ * The text of a background task's notification, or null. Claude Code writes it twice: as a
+ * `queued_command` attachment (`attachment.prompt`, a string; 174 of them here are objects, not
+ * notifications) and as a `type: "user"` line holding the same text. `queue-operation` lines carry
+ * it a third time and are not read.
+ */
+function notificationText(obj) {
+  let t = null;
+  if (obj.type === 'attachment') {
+    const a = obj.attachment;
+    if (a && a.type === 'queued_command') t = a.prompt;
+  } else if (obj.type === 'user') {
+    const c = obj.message && obj.message.content;
+    t = typeof c === 'string' ? c
+      : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null;
+  }
+  return typeof t === 'string' && t.trimStart().startsWith(NOTE_OPEN) ? t : null;
+}
+
+/**
+ * `[tool-use id, proven]` for one notification: proven only by `<status>completed</status>` with
+ * the summary ENDING `completed (exit code 0)`. The summary quotes the launched command, so a
+ * match anywhere else (`"echo exit code 0" failed with exit code 1`) would be the command's text.
+ */
+function notified(text) {
+  const id = /<tool-use-id>([^<]+)<\/tool-use-id>/.exec(text);
+  if (!id) return null;
+  return [id[1].trim(), /<status>completed<\/status>/.test(text)
+    && /completed \(exit code 0\)<\/summary>/.test(text)];
+}
+
+/** A user line that opens a turn: the user typed it, it is not a tool result, a meta note or a task notification. */
 function isPrompt(obj) {
   if (obj.type !== 'user' || obj.isMeta || obj.isSidechain) return false;
+  if (notificationText(obj)) return false;
   const c = obj.message && obj.message.content;
   if (typeof c === 'string') return true;
   return Array.isArray(c) && c.length > 0 && !c.some((b) => b && b.type === 'tool_result');
@@ -171,21 +217,30 @@ function turnOf(transcript, whole) {
   const calls = [];                      // tool_use blocks, in order
   const results = new Map();             // tool_use_id -> is_error
   const originals = new Map();           // tool_use_id -> the file before a Write
+  const background = new Set();          // tool_use_id of a run_in_background launch
+  const finished = new Map();            // tool_use_id -> its notification proved it
   for (const obj of entries.slice(start)) {
     if (obj.isSidechain) continue;
+    const note = notificationText(obj);
+    const said = note && notified(note);
+    // The last notification wins: an agent's task may notify more than once.
+    if (said) finished.set(said[0], said[1]);
     const content = obj.message && obj.message.content;
     if (!Array.isArray(content)) continue;
     for (const b of content) {
       if (!b || typeof b !== 'object') continue;
-      if (b.type === 'tool_use') calls.push(b);
-      else if (b.type === 'tool_result') {
+      if (b.type === 'tool_use') {
+        calls.push(b);
+        if (b.input && b.input.run_in_background === true) background.add(b.id);
+      } else if (b.type === 'tool_result') {
         results.set(b.tool_use_id, b.is_error === true);
         const before = obj.toolUseResult && obj.toolUseResult.originalFile;
         if (typeof before === 'string') originals.set(b.tool_use_id, before);
+        if (obj.toolUseResult && obj.toolUseResult.backgroundTaskId) background.add(b.tool_use_id);
       }
     }
   }
-  return { calls, results, originals };
+  return { calls, results, originals, background, finished };
 }
 
 /** The target of a landed write under `root`, absolute, or null. A denied write changed nothing. */
@@ -226,7 +281,7 @@ export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
 /** `weakenedTests` over transcript TEXT, for the unit tier: `doneDecide`'s other question. */
 export const weakenedIn = (transcript, root, cwd = root) => weakenedTests(turnOf(transcript, true), root, cwd);
 
-function missingChecks({ calls, results }, checks, root, cwd) {
+function missingChecks({ calls, results, background, finished }, checks, root, cwd) {
   const groups = checks.map((c) => (typeof c === 'string' ? { label: c, forms: [c] } : c));
   let lastEdit = -1;
   calls.forEach((c, i) => { if (editTarget(c, results, root, cwd)) lastEdit = i; });
@@ -236,6 +291,8 @@ function missingChecks({ calls, results }, checks, root, cwd) {
     const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
     // A call with no result yet (the host has not flushed it) is not a pass.
     if (typeof command !== 'string' || results.get(c.id) !== false) return;
+    // A background launch's result only says it started: its notification is the verdict.
+    if (background.has(c.id) && finished.get(c.id) !== true) return;
     for (const g of groups) if (groupPasses(command, g)) passed.add(g.label);
   });
   return groups.map((g) => g.label).filter((l) => !passed.has(l));

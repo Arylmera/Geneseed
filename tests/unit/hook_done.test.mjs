@@ -70,6 +70,61 @@ test('doneDecide: a call with no result yet is not a pass', () => {
     ['npm run lint']);
 });
 
+// A `run_in_background` Bash call as Claude Code records it: the result comes at once, not an
+// error, with `toolUseResult.backgroundTaskId` set. The completion is a later notification,
+// written as a `queued_command` attachment AND as a user line holding the same text.
+function bgBash(command) {
+  const [use, result] = bash(command);
+  use.message.content[0].input.run_in_background = true;
+  return [use, { ...result, toolUseResult: { backgroundTaskId: 'b1' } }];
+}
+const lastId = () => `t${n}`;
+const noteText = (id, status, summary) => `<task-notification>\n<task-id>b1</task-id>\n`
+  + `<tool-use-id>${id}</tool-use-id>\n<output-file>x.output</output-file>\n<status>${status}</status>\n`
+  + `<summary>${summary}</summary>\n</task-notification>`;
+const noteAttachment = (id, status, summary) => ({ type: 'attachment',
+  attachment: { type: 'queued_command', prompt: noteText(id, status, summary), commandMode: 'task-notification' } });
+const noteUserLine = (id, status, summary) => ({ type: 'user',
+  message: { role: 'user', content: noteText(id, status, summary) } });
+
+test('doneDecide: a background launch passes only on a completed, exit-0 notification', () => {
+  const C = ['npm run lint'];
+  const ok = 'Background command "npm run lint" completed (exit code 0)';
+  const launch = () => { const rows = bgBash('npm run lint'); return { rows, id: lastId() }; };
+  // Each row: what it shows, the turn, the checks still owed.
+  const rows = [
+    ['a launch alone owes its check: the result says it started', (l) => [prompt(), edit(), l.rows], C],
+    ['a launch then its completed exit-0 notification passes',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'completed', ok)], []],
+    ['a failed notification (exit 1) owes it',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'failed',
+        'Background command "npm run lint" failed with exit code 1')], C],
+    ['a notification for another tool-use id owes it',
+      (l) => [prompt(), edit(), l.rows, noteAttachment('toolu_other', 'completed', ok)], C],
+    ['killed is not completed', (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'killed',
+      'Background command "npm run lint" was stopped')], C],
+    // The summary quotes the command: "exit code 0" inside it is the command's text.
+    ['"exit code 0" inside the quoted command is no exit code',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'completed',
+        'Background command "npm run lint; echo (exit code 0)" completed (exit code 1)')], C],
+    // The notification's user line is no prompt: as one it would open a new turn with no edit.
+    ['the notification as a user line proves it, and opens no turn',
+      (l) => [prompt(), edit(), l.rows, noteUserLine(l.id, 'completed', ok)], []],
+    ['a failed notification user line opens no turn either',
+      (l) => [prompt(), edit(), l.rows, noteUserLine(l.id, 'failed', 'failed with exit code 1')], C],
+    // Placed by the CALL: a launch before the last edit proves nothing, even completing after it.
+    ['a launch before the last edit does not count, whenever it completes',
+      (l) => [prompt(), l.rows, edit(), noteAttachment(l.id, 'completed', ok)], C],
+  ];
+  for (const [what, build, owed] of rows) {
+    assert.deepEqual(doneDecide(jsonl(...build(launch())), C, R), owed, what);
+  }
+  // `run_in_background` on the input alone marks it, with no backgroundTaskId on the result.
+  const [use, result] = bash('npm run lint');
+  use.message.content[0].input.run_in_background = true;
+  assert.deepEqual(doneDecide(jsonl(prompt(), edit(), [use, result]), C, R), C, 'input flag alone');
+});
+
 test('runsUnpiped: the segment rule, written out', () => {
   const rows = [
     ['npm test', 'npm test', true],
