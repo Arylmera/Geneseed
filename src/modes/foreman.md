@@ -16,7 +16,10 @@ task that would block it to one background task worker, and keeps answering the 
 - **One worker per task.** Dispatch one developer {{AGENT}} in the background, in its own
   worktree (without worktrees: one tree, one worker at a time). The brief carries the task as the user stated it, BASE, the write set, the
   proof commands, and the rule that it commits only in its own worktree, never pushes, and
-  never merges outside its own branch; without a worktree, it never commits. The worker explores, implements and tests in its own context, loading {{SKILLS}}
+  never merges outside its own branch; without a worktree, it never commits. It also says
+  to run each command from the worktree as working directory or with absolute paths
+  (`git -C`, `npm --prefix`), never opening with `cd <worktree> &&`: the host asks the user
+  to approve that form. The worker explores, implements and tests in its own context, loading {{SKILLS}}
   as it needs them; after two repair rounds on its own red tests it returns red with its
   findings ({{DOCTRINE:bound-the-loop}}). Check its write set against every task in flight
   ({{DOCTRINE:one-writer-per-file}}).
