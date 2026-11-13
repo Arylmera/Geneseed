@@ -1780,10 +1780,26 @@
     },
     {
       "name": "setup",
-      "help": "interactive install wizard (dependency-free, all OSes)",
-      "description": "",
+      "help": "install wizard; --profile NAME installs a profile with no questions",
+      "description": "interactive install wizard (dependency-free, all OSes). With --profile <name>, it asks nothing: it installs profiles/<name>.json globally into each AI coding tool the profile lists that is found on this machine, puts geneseed on PATH, sets the web console to start at login, starts it, and runs the doctor",
       "positionals": [],
-      "options": [],
+      "options": [
+        {
+          "names": [
+            "--profile"
+          ],
+          "dest": "profile",
+          "metavar": "NAME",
+          "help": "install profiles/NAME.json with no questions (e.g. starter); works without a terminal",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
       "mutex": []
     },
     {

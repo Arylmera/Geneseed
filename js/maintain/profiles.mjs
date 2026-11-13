@@ -163,8 +163,10 @@ export function profileDoctrines(p) {
  * as the wizard does: a profile is a whole selection and wins over the install it lands on (D14).
  */
 export function profileBuildArgs(p, host) {
+  // A stated selection, never null: `'all'` resolves to the packs, a list is the list.
+  const doctrines = PACK_ORDER.filter((d) => profileDoctrines(p).includes(d));
   const argv = setupBuildArgs(p.theme, `${host}-global`, null, null, p.footprint, p.posture, p.mode,
-    profileDoctrines(p), PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [], p.gates ?? {},
+    doctrines, PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [], p.gates ?? {},
     p.kits ?? []);
   if (!p.excludeSkills?.length) argv.push('--exclude-skills', 'none');
   argv.push('--reset');

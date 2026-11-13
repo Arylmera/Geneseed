@@ -45,7 +45,11 @@ import { existsSync, readdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { main as driverMain, resolveOut } from '../build/driver.mjs';
+import { main as driverMain, parseDriverArgs, resolveOut } from '../build/driver.mjs';
+import { preserveRefusal } from '../build/profile.mjs';
+import { cmdLink } from '../hosts/link.mjs';
+import { autostartInstall, autostartState } from '../hosts/shim.mjs';
+import { loadProfile, profileBuildArgs } from './profiles.mjs';
 import { playLine } from '../ui/anim.mjs';
 import { discoverNames, GATE_SWITCHES, PACK_ORDER, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
@@ -572,12 +576,15 @@ export function setupLines() {
  * only part of this file the acceptance matrix compares. `process.stdin.isTTY` is `undefined`
  * off a terminal rather than `false`, which is why it is negated rather than compared.
  */
-export async function cmdSetup() {
+export async function cmdSetup(args = {}) {
   const refusal = (await import('./update.mjs')).gateRefusal();
   if (refusal) {
     printErr(`[setup] not started: ${refusal}\n`);
     return 1;
   }
+  // Before the TTY refusal: a profile run asks nothing, so a script or a remote shell may run it
+  // (install profiles, D15).
+  if (args?.profile) return setupProfile(args.profile);
   if (!process.stdin.isTTY) {
     printErr('[setup] needs an interactive terminal. Non-interactive? e.g.:\n'
       + '  geneseed build --emit opencode-global --theme neutral\n');
@@ -586,6 +593,17 @@ export async function cmdSetup() {
   if (!toolsReport()) return 1;
   return setupLines();
 }
+
+/**
+ * `[label, command, install url]` per host, in HOSTS order. The command is also the host id a
+ * profile lists (`setupProfile` pairs a `hostTools` row with its host by this index).
+ */
+const HOST_TOOLS = [
+  ['OpenCode', 'opencode', 'https://opencode.ai/docs/'],
+  ['Claude Code', 'claude', 'https://code.claude.com/docs/en/setup'],
+  ['IBM Bob', 'bob', 'https://bob.ibm.com/'],
+  ['OpenClaude', 'openclaude', 'https://openclaude.gitlawb.com/'],
+];
 
 /**
  * The AI coding tools Geneseed installs into, as `[label, present, url, where]` rows in HOSTS
@@ -604,12 +622,7 @@ export async function cmdSetup() {
  * test, which cannot rely on what this machine happens to have installed.
  */
 export function hostTools({ lookup = which, userLookup = userInstall } = {}) {
-  return [
-    ['OpenCode', 'opencode', 'https://opencode.ai/docs/'],
-    ['Claude Code', 'claude', 'https://code.claude.com/docs/en/setup'],
-    ['IBM Bob', 'bob', 'https://bob.ibm.com/'],
-    ['OpenClaude', 'openclaude', 'https://openclaude.gitlawb.com/'],
-  ].map(([label, cmd, url]) => {
+  return HOST_TOOLS.map(([label, cmd, url]) => {
     if (lookup(cmd)) return [label, true, url, null];
     const where = userLookup(cmd);
     return [label, Boolean(where), url, where || null];
@@ -694,4 +707,206 @@ function toolsReport(tools = hostTools()) {
   if (confirm('Continue without one?', false)) { printOut('\n'); return true; }
   printOut('Stopped. Run setup again once a tool is installed.\n');
   return false;
+}
+
+// --------------------------------------------------------------------------------------
+// the profile run (`setup --profile <name>`)
+// --------------------------------------------------------------------------------------
+
+/**
+ * What a profile run would change back on `argv`'s target install (spec D14): the preserve
+ * guard's own comparison, run on the argv WITHOUT `--reset` (with it the guard returns null) and
+ * with no flag counted as given, so every setting that differs is listed. `[]` when there is no
+ * install there yet, or when the argv cannot be parsed (the build then refuses on its own terms).
+ */
+export function profileChanges(argv) {
+  try {
+    const args = parseDriverArgs(argv.filter((a) => a !== '--reset'));
+    return preserveRefusal(args, new Set(), null)?.changes ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The login item, as one `{ ok, text }` line for the summary. Rewritten only when it is absent
+ * or stale (spec D7); a hand-written one is left alone with a warning that names it. `null`
+ * where the platform has no login item Geneseed writes.
+ */
+function defaultAutostart() {
+  const cur = autostartState();
+  if (!cur) return null;
+  if (cur.state === 'ours') return { ok: true, text: `login item already set: ${cur.file}` };
+  const r = autostartInstall();
+  if (r.ok) return { ok: true, text: `login item written: ${cur.file}` };
+  return { ok: false, text: `login item not written: ${r.error} (see docs/guides/autostart.md)` };
+}
+
+/**
+ * Start the console without a browser, or restart it when it already runs so it serves the code
+ * just pulled (spec D21). `restartDaemon` with `onlyIfRunning` false is exactly that: it stops a
+ * live console first and starts one either way. The URL comes from the daemon record AFTER the
+ * start, because a busy port moves the console to another one. Lazy: `js/web/daemon.mjs` spawns,
+ * and only this arm of `setup` needs it.
+ */
+async function defaultConsole() {
+  const [{ readDaemon, restartDaemon }, { webState }] = await Promise.all([
+    import('../web/daemon.mjs'), import('../web/state.mjs'),
+  ]);
+  const rc = await restartDaemon(null, null, false);
+  const url = readDaemon(webState(null).target)?.url ?? null;
+  return { ok: rc === 0 && Boolean(url), url };
+}
+
+/**
+ * `geneseed setup --profile <name>` — the whole install with no question asked.
+ *
+ * The flow is the spec's ("Flow of `geneseed setup --profile <name>`"): load the profile, find
+ * the hosts it lists on this machine (D27), build each one globally (a failure is recorded and
+ * the loop goes on, D16), then `link` (always, D23), the login item and the console (warnings,
+ * never failures), the doctor scoped to the profile's theme (D22), and an ASCII summary — the
+ * install scripts run in cmd.exe, whose codepage turns an em dash into mojibake.
+ *
+ * EVERY SIDE EFFECT IS A SEAM in `deps`, because each one reaches outside the checkout: `link`
+ * writes the real user PATH (PowerShell, HKCU) or a shell rc file, the login item writes the
+ * Startup folder or a LaunchAgent, the console spawns a daemon. A test injects all of them; the
+ * defaults are the real ones and only the CLI reaches them.
+ */
+export async function setupProfile(name, deps = {}) {
+  const {
+    load = loadProfile, tools = null, build = driverMain, exportDrift = exportImprovements,
+    changes = profileChanges, link = (report) => cmdLink({ dir: null }, { unattended: true, report }),
+    autostart = defaultAutostart, startConsole = defaultConsole,
+    doctor = (theme) => cmdDoctor({ theme, all: false, bundle: null, noBundle: false }),
+    configDir = (host) => HOSTS.find((h) => h.host === host).configDir(),
+    platform = process.platform,
+  } = deps;
+  const loaded = load(name);
+  if (!loaded.ok) {
+    printErr(`[setup] ${loaded.error}\n`);
+    return 1;
+  }
+  const p = loaded.profile;
+  const rows = tools ?? hostTools();
+  const found = HOST_TOOLS.map(([label, host, url], i) => ({ label, host, url, present: Boolean(rows[i]?.[1]) }));
+  const listed = found.filter((t) => p.hosts.includes(t.host));
+  const targets = listed.filter((t) => t.present);
+  printOut(`Geneseed setup - profile '${name}'${p.description ? `: ${p.description}` : ''}\n\n`);
+  if (!targets.length) {
+    // D3: nothing installed, each listed tool's install link, a non-zero exit.
+    printOut('None of the AI coding tools this profile installs into was found on this machine:\n');
+    for (const t of listed) printOut(`  --  ${t.label} - install: ${t.url}\n`);
+    printOut('\nInstall one of them, then run this command again. Nothing was installed.\n');
+    return 1;
+  }
+
+  const results = [];
+  for (const t of targets) {
+    const argv = profileBuildArgs(p, t.host);
+    const moved = changes(argv);
+    let saved = null;
+    try {
+      [saved] = exportDrift(configDir(t.host));
+    } catch (e) {
+      printOut(`! could not export local edits of ${t.label} (${e && e.message}) - continuing.\n`);
+    }
+    printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
+    let rc;
+    try {
+      rc = build(argv);
+    } catch (e) {
+      rc = e && e.exitCode ? e.exitCode : 1;
+      printErr(`[setup] ${t.label}: ${e && e.message}\n`);
+    }
+    results.push({ ...t, argv, rc, moved, saved });
+  }
+  const built = results.filter((r) => r.rc === 0);
+
+  printOut('\n');
+  const report = {};
+  let linkRc;
+  try {
+    linkRc = link(report);
+  } catch (e) {
+    linkRc = 1;
+    printErr(`[setup] link: ${e && e.message}\n`);
+  }
+
+  let login = null;
+  let consoleUrl = null;
+  let consoleOk = true;
+  if (p.login !== false) {
+    if (platform === 'win32' || platform === 'darwin') {
+      try {
+        login = autostart();
+      } catch (e) {
+        login = { ok: false, text: `login item not written: ${e && e.message}` };
+      }
+    } else {
+      // D24: no login item here, and the console still starts now.
+      login = { ok: false, text: 'no login item exists for this platform - start the console with: geneseed web start' };
+    }
+    try {
+      const c = await startConsole();
+      consoleOk = c.ok;
+      consoleUrl = c.url;
+    } catch (e) {
+      consoleOk = false;
+      printErr(`[setup] web console: ${e && e.message}\n`);
+    }
+  }
+
+  // The doctor only over a harness that was written: with every build failed there is nothing
+  // for it to check that the failures above have not already said.
+  let doctorRc = null;
+  if (built.length) {
+    printOut('\n');
+    try {
+      doctorRc = doctor(p.theme);
+    } catch (e) {
+      doctorRc = 1;
+      printErr(`[setup] doctor: ${e && e.message}\n`);
+    }
+  }
+
+  const out = ['', `Summary - profile '${name}'`];
+  for (const r of results) {
+    if (r.rc === 0) {
+      out.push(`  ok    ${r.label}: installed (${r.host}-global)`);
+    } else {
+      // D25: no --force on a profile run. The build's own output names the file it refused.
+      out.push(`  FAIL  ${r.label}: build failed (exit ${r.rc}) - see its output above. If it names a file`,
+        '        of yours at a name Geneseed ships, move that file, or replace it with:',
+        `        geneseed build ${r.argv.join(' ')} --force`);
+    }
+    if (r.moved.length) {
+      out.push(`        changed back to the profile: ${r.moved.map((c) => `${c.name} ${c.from} -> ${c.to}`).join(', ')}`);
+    }
+    if (r.saved) out.push(`        local edits saved to ${r.saved} (hand that file to your agent to back-port them)`);
+  }
+  for (const t of listed.filter((x) => !x.present)) out.push(`  --    ${t.label}: not found - install: ${t.url}`);
+  for (const t of found.filter((x) => x.present && !p.hosts.includes(x.host))) {
+    out.push(`  --    ${t.label}: found, not in this profile - left as it is`);
+  }
+  if (report.foreign) {
+    out.push(`  !     geneseed on PATH: ${report.foreign} is not a launcher Geneseed wrote, so it was left alone`);
+  } else if (linkRc !== 0) {
+    out.push('  !     geneseed is not on PATH - run geneseed.cmd (Windows) or ./geneseed from this folder');
+  } else {
+    out.push('  ok    geneseed on PATH (open a NEW terminal to use it)');
+  }
+  if (report.rcFile) out.push(`        added the PATH block to ${report.rcFile}`);
+  if (login) out.push(`  ${login.ok ? 'ok  ' : '!   '}  ${login.text}`);
+  if (p.login !== false) {
+    out.push(consoleOk && consoleUrl ? `  ok    web console: ${consoleUrl}`
+      : '  !     web console did not start - run: geneseed web start');
+  }
+  if (doctorRc !== null) out.push(doctorRc === 0 ? '  ok    doctor' : '  FAIL  doctor reported problems - see its output above');
+  out.push('', 'Next steps:',
+    `  1. Open the web console: ${consoleUrl ?? 'geneseed web start'}`,
+    '  2. Run: geneseed --help',
+    '  3. Read the Understand docs: https://github.com/Arylmera/Geneseed/blob/main/docs/understand/',
+    '');
+  printOut(`${out.join('\n')}\n`);
+  return results.some((r) => r.rc !== 0) || (doctorRc !== null && doctorRc !== 0) ? 1 : 0;
 }
