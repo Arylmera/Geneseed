@@ -359,6 +359,8 @@ const WITHHELD = [
   ['.gitattributes', 'repo mechanics'],
   ['.geneseed/protected-checks.txt', 'arms External Gate for THIS repository\'s own CI and lint '
     + 'config; an install protects its own judges with its own list'],
+  ['.geneseed/done-checks.txt', 'arms the done gate for THIS repository: the lint, typecheck and '
+    + 'unit suite a turn here must pass; an install\'s project lists or infers its own proof'],
   ['ARCHITECTURE.md', 'the code map and invariants for someone changing THIS repository — the '
     + 'same reader CLAUDE.md and CONTRIBUTING.md are for; an install runs the code, it does not '
     + 'edit it'],

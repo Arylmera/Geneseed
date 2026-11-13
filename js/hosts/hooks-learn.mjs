@@ -367,14 +367,15 @@ export function cmdLearn(args) {
     args = { ...args, memory: sharedStoreFor(install, args) };
   }
 
-  // The done gate (#289) judges the turn BEFORE anything here spawns, and only on Stop. A block
-  // means the turn goes on, so there is nothing to distil yet: the next Stop will.
+  // The done gate (#289) judges the turn BEFORE anything here spawns, on Stop and on SubagentStop
+  // (the sub-agent's own turn). A block means the turn goes on, so there is nothing to distil
+  // yet, and no agent lesson either: the next Stop will.
   // `--no-done-gate` (the install switched Law III's gate off) skips the check, never the
   // distillation below.
   // One reader for this Stop: an allowed turn's distillation reuses the windows the gate read.
   const read = tailReader();
   // An advisory verdict already holds stdout: nothing below may print there after it.
-  const verdict = hookEvent === 'Stop' && !args.file && !args.noDoneGate
+  const verdict = (hookEvent === 'Stop' || hookEvent === 'SubagentStop') && !args.file && !args.noDoneGate
     ? doneGate(meta, args, install, read) : null;
   if (verdict === 'block') return 0;
 

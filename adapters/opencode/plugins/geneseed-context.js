@@ -1421,6 +1421,12 @@ function patchSections(patchText) {
 
 // The checks still owed, judged over the previous turn and the current one: a reminder lasts
 // one turn, not the whole session. Our own injected messages (`geneseed-*` ids) open no turn.
+// BACKGROUND RUNS: js/hosts/hooks-done.mjs holds a Claude Code `run_in_background` launch as
+// pending until its notification says exit 0. Nothing here does. OpenCode 2's bash tool takes
+// `background: true` ("Background commands return immediately", seen in the @opencode/cli 2.2.5
+// binary, 2026-11), but V2 is not judged. Whether V1's bash tool has a background mode is
+// UNVERIFIED (no V1 binary was inspected); if it has one, a launch would pass here, since only a
+// numeric non-zero `metadata.exit` refuses a completed call.
 function doneOwed(messages, checks, root) {
   const groups = checks.map((c) => (typeof c === "string" ? { label: c, forms: [c] } : c))
   const prompts = []

@@ -50,16 +50,38 @@
  *     takes the exit code of its last stage: `npm test | tail` exits 0 on a red suite), not MASKED
  *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), and whose
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
- *     14 000+ real Claude Code results, 2026-10-17).
+ *     14 000+ real Claude Code results, 2026-10-17);
+ *   - a BACKGROUND run (`run_in_background: true`, or moved there after its foreground timeout)
+ *     is pending, not passed: its result is `is_error` false, with
+ *     `toolUseResult.backgroundTaskId` set (or, in a sub-agent's transcript, only the host's
+ *     `BACKGROUNDED` text) — it says the command STARTED. It passes only when a later task notification names its tool-use id with
+ *     `<status>completed</status>` and `completed (exit code 0)` (`notificationText`); any other
+ *     status or code leaves it owed. Before this, 76 of 112 accepted passes in 30 days of real
+ *     transcripts here were launches. The pass is still placed by the CALL: a launch before the
+ *     last edit proves nothing, even when it completes after it.
  *
- * READ FROM THE END (constant-cost Stop). Only the current turn matters, so the transcript is read
+ * READ FROM THE END. Only the current turn matters, so the transcript is read
  * backward in growing windows (`tailReader`) until the turn's opening prompt is inside one; a
  * turn longer than every window falls back to the whole file. Never judged on a truncated turn:
- * a window without a prompt answers "read more", not "no edit".
+ * a window without a prompt answers "read more", not "no edit". A task notification is no prompt:
+ * Claude Code writes it as a `type: "user"` line whose text opens `<task-notification>` (4 258
+ * such lines in this machine's transcripts, 2026-11), and as a prompt it would open a new turn
+ * and hide the edit before it. So a turn now spans every continuation a notification drives, up
+ * to the last HUMAN prompt, and so does the cap's count. The cost follows: in a long session that
+ * a stream of notifications kept going, `tailReader` may read back that far, up to the whole
+ * file, so a Stop's read is no longer constant. It is bounded by the file, never by the session's
+ * age alone.
  *
- * At most one block per turn: `stop_hook_active` is true when this Stop follows a block, and the
- * gate then lets the turn end and leaves a ledger line, so a gate that cries wolf gets found.
+ * THE CAP (`nextBlock`). Counted per CONTINUATION: a task notification since the last block starts
+ * a new one. Inside one, a Stop is blocked again only when an edit landed since the last block or
+ * an owed check's background verdict changed (pending -> failed), and at most 3 times; a Stop past
+ * that ends the turn and leaves a `done-gate-cap` ledger line, so a gate that cries wolf gets
+ * found. Over the whole human turn, across continuations, at most 10 blocks (`TURN_BLOCKS`):
+ * past it no notification, verdict or edit blocks again until the next human prompt, and the
+ * stderr line says the total ceiling was reached. The count lives in a per-session file under the install; without one,
+ * `stop_hook_active` (true when this Stop follows a block) ends the turn at once.
  */
+import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
@@ -87,7 +109,9 @@ const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
  * Whitespace is collapsed on both sides. shortcut: the shell is not parsed — a prefix such as
  * `sudo`/`time`/`env X=1`, a subshell, or a `|` inside a quoted argument after the check all read
  * as "not run", and so does a `||` inside a quoted argument after the check. Every approximation
- * above refuses a pass, so the gate errs toward a reminder — with ONE known opening the other way:
+ * of the command line above refuses a pass, so the gate errs toward a reminder. That says nothing
+ * of the call's mode: a `run_in_background` launch is judged by its completion, not here
+ * (`missingChecks`). One known opening the other way remains:
  * `npm test; npm run lint` passes both, though `;` lets a green lint hide a red test (the line's
  * exit code is the last command's). Kept so a chained proof line still counts; upgrade by
  * requiring `&&` between checks if that opening is ever seen in a real transcript.
@@ -140,10 +164,72 @@ export function groupPasses(command, g) {
       && g.forms.some((f) => s === f || s.startsWith(`${f} `)));
 }
 
-/** A user line that opens a turn: the user typed it, it is not a tool result or a meta note. */
-function isPrompt(obj) {
-  if (obj.type !== 'user' || obj.isMeta || obj.isSidechain) return false;
+const NOTE_OPEN = '<task-notification>';
+
+/**
+ * The openings of a block's feedback, should the host write it back as a user line. As a prompt
+ * it would open a new turn: the cap's `opening` would change, the record would count as none, and
+ * the turn's edit would fall before the judged turn. UNVERIFIED: no blocked Stop or SubagentStop
+ * exists in any transcript on this machine (2026-11), so the host's real feedback line is unseen.
+ * Both guesses are kept: Claude Code's `Stop hook feedback` label, and the gate's own reason.
+ */
+const REASON_OPEN = 'Geneseed (Verify Before Asserting)';
+const FEEDBACK_OPENS = ['Stop hook feedback', 'SubagentStop hook feedback', REASON_OPEN];
+
+/**
+ * The text of a background task's notification, or null. Claude Code writes it twice: as a
+ * `queued_command` attachment (`attachment.prompt`, a string; 174 of them here are objects, not
+ * notifications) and as a `type: "user"` line holding the same text. `queue-operation` lines carry
+ * it a third time and are not read.
+ */
+function notificationText(obj) {
+  let t = null;
+  if (obj.type === 'attachment') {
+    const a = obj.attachment;
+    if (a && a.type === 'queued_command') t = a.prompt;
+  } else if (obj.type === 'user') {
+    const c = obj.message && obj.message.content;
+    t = typeof c === 'string' ? c
+      : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null;
+  }
+  return typeof t === 'string' && t.trimStart().startsWith(NOTE_OPEN) ? t : null;
+}
+
+/**
+ * `[tool-use id, proven]` for one notification: proven only when its FIRST `<status>` is
+ * `completed` and the notification ENDS `completed (exit code 0)</summary></task-notification>`.
+ * The summary quotes the call's `description` (or, without one, its command: both seen here,
+ * 2026-11), which the agent writes freely, so a match anywhere else — a description holding
+ * `completed (exit code 0)</summary>` on a call that exited 1 — would be the agent's own text.
+ * The host's status tag precedes the summary, so the first one is the host's.
+ */
+function notified(text) {
+  const id = /<tool-use-id>([^<]+)<\/tool-use-id>/.exec(text);
+  if (!id) return null;
+  const status = /<status>([^<]*)<\/status>/.exec(text);
+  return [id[1].trim(), Boolean(status) && status[1] === 'completed'
+    && /completed \(exit code 0\)<\/summary>\s*<\/task-notification>\s*$/.test(text)];
+}
+
+/**
+ * The text Claude Code gives a call that runs on in the background: started so
+ * (`run_in_background`), or moved there after its foreground timeout. A sub-agent's transcript
+ * records no `toolUseResult` at all (none on any line of one read here, 2026-11), so a call MOVED
+ * to the background — `run_in_background` absent from its input — shows only in this text. A
+ * command that prints such a line itself reads as pending: an owed check, never a false pass.
+ */
+const BACKGROUNDED = /^(?:Command running in background with ID: |Command was moved to the background |Command did not complete within [^.\n]{0,40}? and was moved to the background)/;
+const resultText = (b) => (typeof b.content === 'string' ? b.content
+  : Array.isArray(b.content) && b.content[0] && typeof b.content[0].text === 'string' ? b.content[0].text : '');
+
+/** A user line that opens a turn: the user typed it, it is not a tool result, a meta note or a task notification. */
+function isPrompt(obj, sidechain = false) {
+  if (obj.type !== 'user' || obj.isMeta || (obj.isSidechain && !sidechain)) return false;
+  if (notificationText(obj)) return false;
   const c = obj.message && obj.message.content;
+  const t = typeof c === 'string' ? c
+    : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null;
+  if (typeof t === 'string' && FEEDBACK_OPENS.some((p) => t.trimStart().startsWith(p))) return false;
   if (typeof c === 'string') return true;
   return Array.isArray(c) && c.length > 0 && !c.some((b) => b && b.type === 'tool_result');
 }
@@ -153,8 +239,16 @@ function isPrompt(obj) {
  * old text the host recorded for a write. `whole` false means the text is only the file's tail:
  * with no prompt in it the turn may start earlier, so the answer is null ("read more") — a turn
  * judged from its middle could miss its edit and wrongly pass.
+ *
+ * `sidechain` true reads a SUB-AGENT's own transcript (`agent_transcript_path` on SubagentStop).
+ * Every message line there carries `isSidechain: true` — seen in 300 of 300 transcripts under
+ * `~/.claude/projects/<p>/<session>/subagents/` here (2026-11) — and the turn opens on ONE user
+ * line, the Agent call's prompt as a string; the `isMeta` system reminder after it opens nothing.
+ * Read as a main transcript, it would hold no prompt and no call, and every sub-agent would pass.
+ * `cwd` is the last `cwd` the turn's lines name: a sub-agent's is its own (its worktree), where
+ * the payload's `cwd` is its parent's.
  */
-function turnOf(transcript, whole) {
+function turnOf(transcript, whole, sidechain = false) {
   const entries = [];
   for (const line of splitLines(transcript)) {
     if (!line.trim()) continue;
@@ -162,30 +256,71 @@ function turnOf(transcript, whole) {
   }
   let start = -1;
   for (let i = entries.length - 1; i >= 0; i -= 1) {
-    if (isPrompt(entries[i])) { start = i + 1; break; }
+    if (isPrompt(entries[i], sidechain)) { start = i + 1; break; }
   }
   if (start === -1) {
     if (!whole) return null;
     start = 0;
   }
+  // Which turn this is, for the block cap's state: the prompt line's `uuid`, else its text.
+  const first = entries[start - 1];
+  const opening = !first ? '' : typeof first.uuid === 'string' ? first.uuid
+    : JSON.stringify(first.message && first.message.content).slice(0, 300);
   const calls = [];                      // tool_use blocks, in order
   const results = new Map();             // tool_use_id -> is_error
   const originals = new Map();           // tool_use_id -> the file before a Write
+  const background = new Set();          // tool_use_id of a run_in_background launch
+  const finished = new Map();            // tool_use_id -> its notification proved it
+  let cwd = null;
+  // Distinct notifications in the turn, by text: the host writes each twice (an attachment and a
+  // user line holding the same text), and a set counts it once. The cap reads its size.
+  const notes = new Set();
   for (const obj of entries.slice(start)) {
-    if (obj.isSidechain) continue;
+    if (obj.isSidechain && !sidechain) continue;
+    if (typeof obj.cwd === 'string' && obj.cwd) cwd = obj.cwd;
+    const note = notificationText(obj);
+    const said = note && notified(note);
+    if (note) notes.add(note.trim());
+    // The last notification wins: an agent's task may notify more than once.
+    if (said) finished.set(said[0], said[1]);
     const content = obj.message && obj.message.content;
     if (!Array.isArray(content)) continue;
     for (const b of content) {
       if (!b || typeof b !== 'object') continue;
-      if (b.type === 'tool_use') calls.push(b);
-      else if (b.type === 'tool_result') {
+      if (b.type === 'tool_use') {
+        calls.push(b);
+        if (b.input && b.input.run_in_background === true) background.add(b.id);
+      } else if (b.type === 'tool_result') {
         results.set(b.tool_use_id, b.is_error === true);
         const before = obj.toolUseResult && obj.toolUseResult.originalFile;
         if (typeof before === 'string') originals.set(b.tool_use_id, before);
+        if ((obj.toolUseResult && obj.toolUseResult.backgroundTaskId) || BACKGROUNDED.test(resultText(b))) {
+          background.add(b.tool_use_id);
+        }
       }
     }
   }
-  return { calls, results, originals };
+  return { calls, results, originals, background, finished, cwd, opening, notes: notes.size };
+}
+
+/**
+ * The git roots a sub-agent's landed writes fall under, in first-write order: each target's own
+ * root (`gitRootOf` of its folder), so a worker in `.claude/worktrees/x` is judged as its own
+ * project, against its own list. A target outside every repository is no project's.
+ */
+function editRoots({ calls, results }, cwd) {
+  const roots = [];
+  const byDir = new Map();
+  for (const c of calls) {
+    if (!EDIT_TOOLS.has(c.name) || results.get(c.id) === true) continue;
+    const p = c.input && (c.input.file_path || c.input.notebook_path || c.input.path);
+    if (typeof p !== 'string' || !p) continue;
+    const dir = path.dirname(path.resolve(cwd, p));
+    if (!byDir.has(dir)) byDir.set(dir, gitRootOf(dir));
+    const root = byDir.get(dir);
+    if (root && !roots.includes(root)) roots.push(root);
+  }
+  return roots;
 }
 
 /** The target of a landed write under `root`, absolute, or null. A denied write changed nothing. */
@@ -216,17 +351,17 @@ function weakenedTests({ calls, results, originals }, root, cwd) {
  * edit, or [] when the turn may end (no edit, or every check passed after it); null when `whole`
  * is false and the tail holds no prompt (`turnOf`). Exported for the unit tier — a transcript is
  * text no CLI cell can vary cheaply. A check is a line (one form) or a `{ label, forms }` group;
- * the answer lists labels.
+ * the answer lists labels. `sidechain` reads a sub-agent's transcript (`turnOf`).
  */
-export function doneDecide(transcript, checks, root, cwd = root, whole = true) {
-  const turn = turnOf(transcript, whole);
+export function doneDecide(transcript, checks, root, cwd = root, whole = true, sidechain = false) {
+  const turn = turnOf(transcript, whole, sidechain);
   return turn && missingChecks(turn, checks, root, cwd);
 }
 
 /** `weakenedTests` over transcript TEXT, for the unit tier: `doneDecide`'s other question. */
 export const weakenedIn = (transcript, root, cwd = root) => weakenedTests(turnOf(transcript, true), root, cwd);
 
-function missingChecks({ calls, results }, checks, root, cwd) {
+function missingChecks({ calls, results, background, finished }, checks, root, cwd) {
   const groups = checks.map((c) => (typeof c === 'string' ? { label: c, forms: [c] } : c));
   let lastEdit = -1;
   calls.forEach((c, i) => { if (editTarget(c, results, root, cwd)) lastEdit = i; });
@@ -236,81 +371,236 @@ function missingChecks({ calls, results }, checks, root, cwd) {
     const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
     // A call with no result yet (the host has not flushed it) is not a pass.
     if (typeof command !== 'string' || results.get(c.id) !== false) return;
+    // A background launch's result only says it started: its notification is the verdict.
+    if (background.has(c.id) && finished.get(c.id) !== true) return;
     for (const g of groups) if (groupPasses(command, g)) passed.add(g.label);
   });
   return groups.map((g) => g.label).filter((l) => !passed.has(l));
 }
 
+/** The id of the turn's last landed write under any of `roots`, or null. */
+function lastEditId({ calls, results }, roots, cwd) {
+  let id = null;
+  for (const c of calls) if (roots.some((r) => editTarget(c, results, r, cwd))) id = c.id;
+  return id;
+}
+
+// ---- the block cap -------------------------------------------------------------------------
+// A block may repeat within a continuation, but only when it can change something: an edit landed
+// since the last block (the agent is working, and its new edit owes the proof again) or a
+// background verdict changed, and fewer than CAP_BLOCKS blocks were given in this continuation. A
+// repeat with neither is the agent saying it will
+// not run the checks, and blocking it again only spins (Claude Code itself ends a run of 8 Stop
+// continuations, reset by a tool call — too late to be the gate's bound).
+const CAP_BLOCKS = 3;
+// The ceiling over a whole human turn, across its continuations. Each notification restarts the
+// per-continuation count, so without it a red suite relaunched in the background loops for ever:
+// it fails (a notification: new count, block), the relaunch turns the verdict back to pending
+// (block), and again — a full suite run per cycle. Reset only by a new human prompt.
+const TURN_BLOCKS = 10;
+const CAP_DIR = path.join('notebook', 'done-gate');
+const CAP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * The Stop-side wrapper `cmdLearn` calls first. Returns 'block' when it printed a block (the
- * turn goes on, so `learn` must not distil yet); 'advisory' when it printed the advisory
- * `systemMessage` (the turn ends and learning runs, but `learn` must print nothing more on
- * stdout, or the JSON stops parsing); null in every other case, with nothing on stdout.
- * `install` is the root `cmdLearn` already derived from `--memory` (null without one), so the
- * ledger lands in the same root its sovereignty check read. `read` is `cmdLearn`'s per-Stop
+ * The cap's decision, pure: the state to save with a block, or null when the turn ends. `state` is
+ * what the last block of this session (and sub-agent) saved, `{ opening, lastEdit, notes, verdict,
+ * blocks }`, or null; a different `opening` is another turn, so it counts as none. With no state
+ * for this turn, `active` (`stop_hook_active`) alone decides, as before the cap: a Stop that follows
+ * a block we have no record of ends the turn. Once a block is on record, the record decides
+ * whatever `active` says, so a host that clears the flag mid-turn cannot loop the gate.
+ *
+ * PER CONTINUATION. A notification opens no turn, so one turn may span many continuations an
+ * unattended session's notifications drive. The count is per continuation: a notification since
+ * the last block (`notes`, the turn's count of distinct notifications, grew) starts a new one at
+ * count 1, so three early blocks cannot spend the cap for the rest of the turn. Inside one
+ * continuation the bound is CAP_BLOCKS, and a repeat needs a reason: a new edit, or a changed
+ * background `verdict` for an owed check (`pending` -> `failed`), since a failed proof with no new
+ * edit must still block.
+ */
+export function nextBlock(state, { active, opening, lastEdit, notes = 0, verdict = '' }) {
+  const mine = state && state.opening === opening ? state : null;
+  if (!mine) return active ? null : { opening, lastEdit, notes, verdict, blocks: 1, total: 1 };
+  // The ceiling first: no notification and no verdict reopens a turn that has spent it.
+  const total = mine.total ?? 0;
+  if (total >= TURN_BLOCKS) return null;
+  if (notes > (mine.notes ?? 0)) return { opening, lastEdit, notes, verdict, blocks: 1, total: total + 1 };
+  if (mine.blocks >= CAP_BLOCKS) return null;
+  if (mine.lastEdit === lastEdit && (mine.verdict ?? '') === verdict) return null;
+  return { opening, lastEdit, notes, verdict, blocks: mine.blocks + 1, total: total + 1 };
+}
+
+/** True when `state` is this turn's record and has spent the per-turn ceiling: `nextBlock`'s first refusal, named. */
+export const turnCeilingReached = (state, opening) =>
+  Boolean(state && state.opening === opening && (state.total ?? 0) >= TURN_BLOCKS);
+
+/**
+ * Each owed check's background state since the turn's last edit, `label -> 'pending' | 'failed'`:
+ * the last background run of one of its forms, launched with no completion seen, or completed with
+ * anything but exit 0. A check never run in the background has no entry.
+ */
+function backgroundOwed({ calls, results, background, finished }, checks, owedLabels, lastEdit) {
+  const states = new Map();
+  let after = lastEdit === null;
+  for (const c of calls) {
+    if (!after) { after = c.id === lastEdit; continue; }
+    const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
+    if (typeof command !== 'string' || results.get(c.id) !== false || !background.has(c.id)) continue;
+    for (const g of checks) {
+      if (!owedLabels.has(g.label) || !groupPasses(command, g)) continue;
+      states.set(g.label, finished.has(c.id) ? (finished.get(c.id) ? 'passed' : 'failed') : 'pending');
+    }
+  }
+  for (const [l, s] of states) if (s === 'passed') states.delete(l);
+  return states;
+}
+
+/**
+ * The cap's state file, one per session (and sub-agent), under the install's notebook — the
+ * store-watch baseline pattern (`./store-watch.mjs`). Read and written only on a Stop with owed
+ * checks, so an allowed Stop costs nothing here. Unreadable reads as none.
+ */
+function capFile(install, meta) {
+  const key = [meta.session_id, meta.hook_event_name === 'SubagentStop' ? meta.agent_id : null]
+    .filter((k) => typeof k === 'string' && k).join('~');
+  return key ? path.join(install, CAP_DIR, `${key.replace(/[^\w.~-]/g, '_').slice(0, 160)}.json`) : null;
+}
+function readCap(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; }
+}
+function saveCap(file, state) {
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(state));
+  } catch { return; /* unwritable: the next Stop finds no record, and ends the turn as before the cap */ }
+  if (state.blocks !== 1) return;
+  // A turn's first block: drop other sessions' stale files, as the baselines do. After the write,
+  // and one entry at a time: a file another Stop removed (ENOENT) or holds (EPERM) costs only itself.
+  let names = [];
+  try { names = readdirSync(path.dirname(file)); } catch { /* nothing to sweep */ }
+  for (const n of names) {
+    try {
+      const old = path.join(path.dirname(file), n);
+      if (Date.now() - statSync(old).mtimeMs > CAP_STALE_MS) unlinkSync(old);
+    } catch { /* gone or held: the next sweep tries it again */ }
+  }
+}
+
+/**
+ * The Stop-side wrapper `cmdLearn` calls first, on Stop and on SubagentStop. Returns 'block' when
+ * it printed a block (the turn goes on, so `learn` must not distil yet); 'advisory' when it
+ * printed the advisory `systemMessage` (the turn ends and learning runs, but `learn` must print
+ * nothing more on stdout, or the JSON stops parsing); null in every other case, with nothing on
+ * stdout. `install` is the root `cmdLearn` already derived from `--memory` (null without one), so
+ * the ledger lands in the same root its sovereignty check read. `read` is `cmdLearn`'s per-Stop
  * transcript reader, so the distillation after an allow reuses the windows read here.
+ *
+ * SUBAGENTSTOP. The turn judged is the sub-agent's own, from `agent_transcript_path` (no path: not
+ * judged, and a stderr line when the cwd's project lists checks, as on Bob). The payload's `cwd`
+ * is the PARENT's, so the projects are the git roots of the files the sub-agent wrote
+ * (`editRoots`), each judged against its own `doneChecksOf`. A block keeps the sub-agent running
+ * with the reason as its next instruction (Claude Code hooks doc, SubagentStop). An advisory is
+ * a stderr line and a ledger entry only: nobody sees a sub-agent's `systemMessage`, so it returns
+ * null and prints nothing on stdout.
  */
 export function doneGate(meta, args, install, read = tailReader()) {
   try {
+    const sub = meta.hook_event_name === 'SubagentStop';
     const cwd = typeof meta.cwd === 'string' && meta.cwd ? meta.cwd : process.cwd();
-    const root = gitRootOf(cwd);
-    if (!root) return null;
-    const { source, blocking, checks } = doneChecksOf(root);
+    const cwdRoot = gitRootOf(cwd);
+    if (!sub && !cwdRoot) return null;
+    const here = cwdRoot ? doneChecksOf(cwdRoot) : null;
+    const listed = Boolean(here && here.blocking && here.checks.length);
+    const file = sub ? meta.agent_transcript_path : meta.transcript_path;
     // Bob's Stop payload carries no transcript (learn's I2): nothing to judge, and a listed gate
     // says so. Inferred checks stay quiet there: every repo with a manifest would log it.
-    if (args.host === 'bob' || typeof meta.transcript_path !== 'string') {
-      if (blocking && checks.length) err(`[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
+    if (args.host === 'bob' || typeof file !== 'string' || (sub && !file)) {
+      if (listed) {
+        err(sub ? '[done-gate] no agent transcript — sub-agent turn not judged.\n'
+          : `[done-gate] no transcript${args.host === 'bob' ? ' (bob)' : ''} — turn not judged.\n`);
+      }
       return null;
     }
-    let verdict;
+    let turn;
     try {
-      verdict = read(meta.transcript_path, (text, whole) => {
-        const turn = turnOf(text, whole);
-        return turn && {
-          missing: missingChecks(turn, checks, root, cwd), weakened: weakenedTests(turn, root, cwd),
-        };
-      });
+      turn = read(file, (text, whole) => turnOf(text, whole, sub));
     } catch {
       // No ask tier on Stop: blocking on an unreadable transcript would trap the user.
-      if (checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
+      if (sub ? listed : here.checks.length) err('[done-gate] transcript unreadable — turn not judged.\n');
       return null;
     }
-    const { missing } = verdict;
+    const at = sub ? turn.cwd || cwd : cwd;
+    const judged = (sub ? editRoots(turn, at) : [cwdRoot]).map((root) => {
+      const d = root === cwdRoot ? here : doneChecksOf(root);
+      return { root, ...d, missing: missingChecks(turn, d.checks, root, at), weakened: weakenedTests(turn, root, at) };
+    });
+    // One project names nothing; several say whose each entry is.
+    const tag = (r) => (judged.length > 1 ? `${r.root}: ` : '');
+    const list = (rs) => rs.flatMap((r) => r.missing.map((m) => `${tag(r)}${m}`)).join('; ');
     // `--no-test-note`: the line goes, the done checks do not.
-    const weakened = args.noTestNote ? [] : verdict.weakened;
+    const weakened = args.noTestNote ? [] : judged.flatMap((r) => r.weakened.map((w) => `${tag(r)}${w}`));
+    const owed = judged.filter((r) => r.blocking && r.missing.length);
+    const inferred = judged.filter((r) => !r.blocking && r.missing.length);
+    const who = sub ? 'this sub-agent' : 'this turn';
     // One JSON document on stdout, whatever the advisories: Stop reads no second one.
     const advise = (...said) => {
       if (weakened.length) {
         // A stable id, not a law number: an advisory is no hook-pinned rule (`HOOK_PINNED`).
         recordGate(install, ADVISORY_VERB, 'cure-the-cause');
-        const line = `[done-gate] advisory — test weakened this turn: ${weakened.join('; ')}`;
+        const line = `[done-gate] advisory — test weakened ${sub ? 'by a sub-agent' : 'this turn'}: ${weakened.join('; ')}`;
         err(`${line}\n`);
         said.push(`${line}. Cure the Cause: fix the code, not the test.`);
       }
+      if (sub) return null;
       out(`${JSON.stringify({ systemMessage: said.join(' ') })}\n`);
       return 'advisory';
     };
-    if (!missing.length && weakened.length) return advise();
-    if (!missing.length) return null;
-    if (!blocking) {
+    const inferredSaid = () => {
+      if (!inferred.length) return [];
       recordGate(install, ADVISORY_VERB, 'law-3');
-      err(`[done-gate] advisory — unproven since the last edit: ${missing.join('; ')}\n`);
-      return advise('Geneseed done gate (advisory) — this turn edited files, and these checks '
-        + `inferred from ${source} have not passed since the last edit: ${missing.join('; ')}. `
-        + `List your own in ${DONE_LIST} to make the gate block.`);
-    }
-    if (meta.stop_hook_active === true) {
+      err(`[done-gate] advisory${sub ? ' (sub-agent)' : ''} — unproven since the last edit: ${list(inferred)}\n`);
+      const sources = [...new Set(inferred.map((r) => r.source))].join(', ');
+      return [`Geneseed done gate (advisory) — ${who} edited files, and these checks `
+        + `inferred from ${sources} have not passed since the last edit: ${list(inferred)}. `
+        + `List your own in ${DONE_LIST} to make the gate block.`];
+    };
+    const settle = () => {
+      const said = inferredSaid();
+      return said.length || weakened.length ? advise(...said) : null;
+    };
+    if (!owed.length) return settle();
+    const active = meta.stop_hook_active === true;
+    const capPath = install ? capFile(install, meta) : null;
+    // The owed checks whose proof is a background run still pending, or one that reported a failure.
+    const bg = owed.flatMap((r) => [...backgroundOwed(turn, r.checks, new Set(r.missing), lastEditId(turn, [r.root], at))]
+      .map(([l, st]) => [`${tag(r)}${l}`, st]));
+    const verdict = bg.map(([l, st]) => `${l}=${st}`).sort().join('\n');
+    // Without an install or a session id there is nowhere to count: one block per turn, as before.
+    const record = capPath ? readCap(capPath) : null;
+    const next = capPath
+      ? nextBlock(record, { active, opening: turn.opening, notes: turn.notes, verdict,
+        lastEdit: lastEditId(turn, owed.map((r) => r.root), at) })
+      : (active ? null : true);
+    if (!next) {
       recordGate(install, 'done-gate-cap', 'law-3');
-      err(`[done-gate] cap reached — turn ends with unproven checks: ${missing.join('; ')}\n`);
-      return weakened.length ? advise() : null;
+      const why = turnCeilingReached(record, turn.opening)
+        ? `total ceiling reached (${TURN_BLOCKS} blocks this turn)` : 'cap reached';
+      err(`[done-gate] ${why} — turn ends with unproven checks: ${list(owed)}\n`);
+      return settle();
     }
+    if (capPath) saveCap(capPath, next);
     // The turn goes on, so a weakened test is said at the Stop that really ends it.
     recordGate(install, 'done-gate', 'law-3');
+    const named = (st) => bg.filter(([, s]) => s === st).map(([l]) => l).join('; ');
+    const pending = named('pending');
+    const failed = named('failed');
     out(`${JSON.stringify({
       decision: 'block',
-      reason: 'Geneseed (Verify Before Asserting) — this turn edited files, and these '
-        + `checks from ${DONE_LIST} have not passed since the last edit: ${missing.join('; ')}. `
-        + 'Run them unpiped, or say plainly that they were not run and why.',
+      reason: `${REASON_OPEN} — ${who} edited files, and these `
+        + `checks from ${DONE_LIST} have not passed since the last edit: ${list(owed)}. `
+        + (pending ? `Still running in the background, with no completion seen: ${pending}; a launch is no pass. ` : '')
+        + (failed ? `Run in the background and reported a failure: ${failed}. ` : '')
+        + 'Run them unpiped, or wait for the background run to complete with exit 0, '
+        + 'or say plainly that they were not run and why.',
     })}\n`);
     return 'block';
   } catch (e) {

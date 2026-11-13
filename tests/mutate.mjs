@@ -597,8 +597,8 @@ export const MUTATIONS = [
     id: 'M35',
     name: 'the done gate never blocks',
     file: 'js/hosts/hooks-done.mjs',
-    find: '    if (!missing.length) return null;\n',
-    replace: '    return null;\n',
+    find: '    if (!owed.length) return settle();\n',
+    replace: '    return settle();\n',
     gate: UNIT_HOOK_DONE,
     why: 'A gate that never fires satisfies every "allows" row, and on Stop an allow is silence: '
       + 'nothing anywhere would show the turn was let through unproven. `hook_done.test.mjs` runs '
@@ -637,6 +637,73 @@ export const MUTATIONS = [
       + 'deleted. The rule draft is the half of the rule store a user-rules.md row never reaches: a '
       + 'draft written unasked becomes a standing rule on the next approval. Only the draft rows of '
       + 'the verdict table see it.',
+  },
+  {
+    id: 'M39',
+    name: 'a background launch counts as a pass',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '    if (background.has(c.id) && finished.get(c.id) !== true) return;\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'A `run_in_background` call returns at once, not an error, while the check is still '
+      + 'running: it proves the command started, nothing more. Without this line 76 of 112 '
+      + 'accepted passes in 30 days of real transcripts were such launches. The background rows '
+      + 'in `hook_done.test.mjs` require a launch alone, or one whose notification failed, to owe '
+      + 'its check.',
+  },
+  {
+    id: 'M40',
+    name: 'a task notification opens a turn',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '  if (notificationText(obj)) return false;\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'Claude Code writes each task notification as a user line too. Read as a prompt, it opens '
+      + 'a new turn after the edit, so the judged turn holds no edit and every unproven turn ends. '
+      + 'The notification-user-line rows in `hook_done.test.mjs` require the edit to stay owed.',
+  },
+  {
+    id: 'M41',
+    name: 'the cap is never reset by a notification',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '  if (notes > (mine.notes ?? 0)) return { opening, lastEdit, notes, verdict, blocks: 1, total: total + 1 };\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'A turn spans every continuation its notifications drive. Without the reset, three early '
+      + 'blocks spend the cap and every later unproven Stop of an unattended run only leaves a '
+      + 'ledger line. The `nextBlock` table and the continuation sequence pin the reset.',
+  },
+  {
+    id: 'M42',
+    name: 'a changed background verdict does not re-arm the block',
+    file: 'js/hosts/hooks-done.mjs',
+    find: "  if (mine.lastEdit === lastEdit && (mine.verdict ?? '') === verdict) return null;\n",
+    replace: '  if (mine.lastEdit === lastEdit) return null;\n',
+    gate: UNIT_HOOK_DONE,
+    why: 'A suite launched in the background is pending at the first block and may fail later with '
+      + 'no new edit. Without the verdict, that failed proof never blocks. The `nextBlock` row '
+      + '"pending to failed" requires the re-block.',
+  },
+  {
+    id: 'M43',
+    name: 'the cap has no bound',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '  if (mine.blocks >= CAP_BLOCKS) return null;\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'Each new edit would re-block forever inside one continuation, bounded only by the host. '
+      + 'The `nextBlock` rows and the real-Stop sequence require the fourth Stop to end the turn.',
+  },
+  {
+    id: 'M44',
+    name: 'the turn ceiling is removed',
+    file: 'js/hosts/hooks-done.mjs',
+    find: '  if (total >= TURN_BLOCKS) return null;\n',
+    replace: '',
+    gate: UNIT_HOOK_DONE,
+    why: 'Each notification restarts the per-continuation count, so a red suite relaunched in the '
+      + 'background with no edit re-blocks for ever, one full suite run per cycle. The `nextBlock` '
+      + 'ceiling rows and the relaunch sequence require the eleventh Stop to end the turn.',
   },
 ];
 

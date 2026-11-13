@@ -102,7 +102,7 @@ node tests/mutate.mjs --verify
 
 Answers only "does every mutation anchor still resolve", writes nothing, takes ~50 ms. **Run it
 after any refactor that moves code** — a moved anchor makes a row unappliable, which the matrix
-scores as a SURVIVOR. `--all` runs the real 36-row matrix and takes minutes, editing product files as it
+scores as a SURVIVOR. `--all` runs the real 42-row matrix and takes minutes, editing product files as it
 goes. A mode is required (`--verify`, `--list`, `--all`, `--only <id>`); anything else is refused.
 An interrupted run leaves one file **mutated**: the next start of the script, in any mode, restores
 it from its journal and says so. Check `git status` all the same before doing anything else.

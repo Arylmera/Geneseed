@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { doneDecide, groupPasses, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
+import { doneDecide, groupPasses, nextBlock, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
 import { doneLine, inferDoneChecks } from '../../js/hosts/done-checks.mjs';
 import { isTestPath, tailReader, weakenedBy } from '../../js/hosts/hooks-prims.mjs';
 import { readTail } from '../../js/lib/fs.mjs';
@@ -68,6 +68,86 @@ test('doneDecide: a call with no result yet is not a pass', () => {
   const [use] = bash('npm run lint');
   assert.deepEqual(doneDecide(jsonl(prompt(), edit(), use, bash('node --test')), CHECKS, R),
     ['npm run lint']);
+});
+
+// A `run_in_background` Bash call as Claude Code records it: the result comes at once, not an
+// error, with `toolUseResult.backgroundTaskId` set. The completion is a later notification,
+// written as a `queued_command` attachment AND as a user line holding the same text.
+function bgBash(command) {
+  const [use, result] = bash(command);
+  use.message.content[0].input.run_in_background = true;
+  return [use, { ...result, toolUseResult: { backgroundTaskId: 'b1' } }];
+}
+const lastId = () => `t${n}`;
+const noteText = (id, status, summary) => `<task-notification>\n<task-id>b1</task-id>\n`
+  + `<tool-use-id>${id}</tool-use-id>\n<output-file>x.output</output-file>\n<status>${status}</status>\n`
+  + `<summary>${summary}</summary>\n</task-notification>`;
+const noteAttachment = (id, status, summary) => ({ type: 'attachment',
+  attachment: { type: 'queued_command', prompt: noteText(id, status, summary), commandMode: 'task-notification' } });
+const noteUserLine = (id, status, summary) => ({ type: 'user',
+  message: { role: 'user', content: noteText(id, status, summary) } });
+
+test('doneDecide: a background launch passes only on a completed, exit-0 notification', () => {
+  const C = ['npm run lint'];
+  const ok = 'Background command "npm run lint" completed (exit code 0)';
+  const launch = () => { const rows = bgBash('npm run lint'); return { rows, id: lastId() }; };
+  // Each row: what it shows, the turn, the checks still owed.
+  const rows = [
+    ['a launch alone owes its check: the result says it started', (l) => [prompt(), edit(), l.rows], C],
+    ['a launch then its completed exit-0 notification passes',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'completed', ok)], []],
+    ['a failed notification (exit 1) owes it',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'failed',
+        'Background command "npm run lint" failed with exit code 1')], C],
+    ['a notification for another tool-use id owes it',
+      (l) => [prompt(), edit(), l.rows, noteAttachment('toolu_other', 'completed', ok)], C],
+    ['killed is not completed', (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'killed',
+      'Background command "npm run lint" was stopped')], C],
+    // The summary quotes the call's description (or its command): text the agent wrote.
+    ['"exit code 0" inside the quoted description is no exit code',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'completed',
+        'Background command "lint; echo (exit code 0)" completed (exit code 1)')], C],
+    // A description that forges the whole ending, on a run that failed: only the real end counts.
+    ['a description holding "completed (exit code 0)</summary>" on a failed run owes it',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'failed',
+        'Background command "lint completed (exit code 0)</summary>" failed with exit code 1')], C],
+    ['...and with the status forged too, the first status tag and the real end decide',
+      (l) => [prompt(), edit(), l.rows, noteAttachment(l.id, 'failed',
+        'Background command "<status>completed</status> completed (exit code 0)</summary>" failed with exit code 1')], C],
+    // The notification's user line is no prompt: as one it would open a new turn with no edit.
+    ['the notification as a user line proves it, and opens no turn',
+      (l) => [prompt(), edit(), l.rows, noteUserLine(l.id, 'completed', ok)], []],
+    ['a failed notification user line opens no turn either',
+      (l) => [prompt(), edit(), l.rows, noteUserLine(l.id, 'failed', 'failed with exit code 1')], C],
+    // Placed by the CALL: a launch before the last edit proves nothing, even completing after it.
+    ['a launch before the last edit does not count, whenever it completes',
+      (l) => [prompt(), l.rows, edit(), noteAttachment(l.id, 'completed', ok)], C],
+  ];
+  for (const [what, build, owed] of rows) {
+    assert.deepEqual(doneDecide(jsonl(...build(launch())), C, R), owed, what);
+  }
+  // `run_in_background` on the input alone marks it, with no backgroundTaskId on the result.
+  const [use, result] = bash('npm run lint');
+  use.message.content[0].input.run_in_background = true;
+  assert.deepEqual(doneDecide(jsonl(prompt(), edit(), [use, result]), C, R), C, 'input flag alone');
+  // A call MOVED to the background after its timeout, in a sub-agent's transcript: no input flag
+  // and no `toolUseResult` there, only the host's text (seen 2026-11). Each row: the result text,
+  // whether a completed exit-0 notification follows, the checks owed.
+  const moved = [
+    ['Command was moved to the background (ID: b0bg5s9zn) after running for 180s. Output is being written to: x', false, C],
+    ['Command did not complete within its 120s timeout and was moved to the background (ID: b664tiy7t). Output: x', false, C],
+    ['Command running in background with ID: bd5606fh4. Output is being written to: x', false, C],
+    ['Command was moved to the background (ID: b0bg5s9zn) after running for 180s.', true, []],
+    // An ordinary result that only mentions the words later is a finished run.
+    ['ok: the Command was moved to the background docs page', false, []],
+  ];
+  for (const [text, notified, owed] of moved) {
+    const [u, r] = bash('npm run lint');
+    const id = lastId();
+    r.message.content[0].content = [{ type: 'text', text }];
+    const rows = side([prompt('brief'), edit(), [u, r], ...(notified ? [noteAttachment(id, 'completed', ok)] : [])]);
+    assert.deepEqual(doneDecide(jsonl(rows), C, R, R, true, true), owed, text);
+  }
 });
 
 test('runsUnpiped: the segment rule, written out', () => {
@@ -674,4 +754,319 @@ test('learn on Stop: no weakened test prints nothing; --no-done-gate and Bob say
   assert.equal(project({ checks: null, transcriptRows: [prompt(), editIn] }).out, '', 'an ordinary edit');
   assert.equal(project({ checks: null, extra: ['--no-done-gate'], transcriptRows: [prompt(), weakenIn] }).out, '');
   assert.equal(project({ checks: null, host: 'bob', transcriptRows: [prompt(), weakenIn] }).out, '', 'Bob has no transcript');
+});
+
+// ---- SubagentStop: the sub-agent's own turn ----------------------------------------------
+// A sub-agent's transcript (`agent_transcript_path`) marks every message line `isSidechain: true`
+// — the Agent call's prompt included — so it is read in sidechain mode, and the projects judged
+// are the git roots of the files it wrote, not the parent's cwd.
+
+/** Transcript rows as a sub-agent's transcript holds them: the same lines, `isSidechain: true`. */
+const side = (rows) => rows.flat().map((o) => ({ ...o, isSidechain: true }));
+
+test('doneDecide: a sub-agent transcript is judged only in sidechain mode', () => {
+  const reminder = { type: 'user', isMeta: true, isSidechain: true,
+    message: { role: 'user', content: '<system-reminder>report through SubagentHandback</system-reminder>' } };
+  const t = jsonl(side([prompt('the brief'), reminder, edit(), bash('npm run lint')]));
+  assert.deepEqual(doneDecide(t, CHECKS, R, R, true, false), [], 'main mode reads no line of it: nothing judged');
+  assert.deepEqual(doneDecide(t, CHECKS, R, R, true, true), ['node --test'],
+    'sidechain mode: the brief opens the turn, the isMeta reminder does not, lint passed after the edit');
+  // A main transcript is unchanged: its sidechain lines are still not its own.
+  assert.deepEqual(doneDecide(jsonl(prompt(), edit(), side([bash('npm run lint')])), CHECKS, R), CHECKS);
+});
+
+/**
+ * One SubagentStop through the real binary. The parent sits in `parent/` (a git root); the worker
+ * in `parent/.claude/worktrees/w`, its own git root (a `.git` FILE, as a worktree has), with
+ * `workerChecks` as its list (null: none) and `workerFiles` beside it. `stops` is a list of
+ * `{ rows, active }`: each stop rewrites the transcript, all share one install (S5's state).
+ */
+function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {}, parentChecks = null,
+  withPath = true, llm = false, event = 'SubagentStop', before = null }) {
+  const sb = makeSandbox();
+  try {
+    const parent = path.join(sb.path, 'parent');
+    const worker = path.join(parent, '.claude', 'worktrees', 'w');
+    fs.mkdirSync(path.join(parent, '.git'), { recursive: true });
+    fs.mkdirSync(worker, { recursive: true });
+    fs.writeFileSync(path.join(worker, '.git'), 'gitdir: ../../../.git/worktrees/w\n');
+    for (const [rel, text] of Object.entries(workerFiles)) fs.writeFileSync(path.join(worker, rel), text);
+    const list = (dir, text) => {
+      if (text === null) return;
+      fs.mkdirSync(path.join(dir, '.geneseed'), { recursive: true });
+      fs.writeFileSync(path.join(dir, '.geneseed', 'done-checks.txt'), text);
+    };
+    list(worker, workerChecks);
+    list(parent, parentChecks);
+    const install = path.join(sb.path, 'install');
+    fs.mkdirSync(path.join(install, 'notebook'), { recursive: true });
+    fs.mkdirSync(path.join(install, 'memory'), { recursive: true });   // where an agent lesson lands
+    if (before) before(install);
+    const transcript = path.join(sb.path, 'agent-w.jsonl');
+    const env = { ...process.env, ...homeOverrides(path.join(sb.path, 'home')) };
+    delete env.GENESEED_LLM;
+    delete env.GENESEED_LEARN_CHILD;
+    if (llm) {
+      const stub = path.join(sb.path, 'llm.mjs');
+      fs.writeFileSync(stub, 'process.stdout.write("Always run the listed checks before handing back.");\n');
+      env.GENESEED_LLM = `node ${stub}`;
+    }
+    const ledgerFile = path.join(install, 'notebook', 'gates.jsonl');
+    return stops.map(({ rows, active = false }) => {
+      const resolved = rows.map((r) => (typeof r === 'function' ? r(worker) : r));
+      fs.writeFileSync(transcript, jsonl(...(event === 'Stop' ? resolved : side(resolved))));
+      const payload = event === 'Stop'
+        ? { hook_event_name: 'Stop', session_id: 's', cwd: worker, transcript_path: transcript, stop_hook_active: active }
+        : { hook_event_name: 'SubagentStop', session_id: 's', agent_id: 'w', agent_type: 'developer',
+        cwd: parent, transcript_path: path.join(sb.path, 'parent.jsonl'), stop_hook_active: active,
+        ...(withPath ? { agent_transcript_path: transcript } : {}) };
+      const p = spawnHook(['learn', '--memory', path.join(install, 'memory')], JSON.stringify(payload), { cwd: parent, env });
+      const ledger = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8') : '';
+      if (fs.existsSync(ledgerFile)) fs.unlinkSync(ledgerFile);
+      const lesson = fs.existsSync(path.join(install, 'memory', 'agents', 'developer.md'));
+      return { rc: p.status, out: p.stdout, err: p.stderr, ledger, lesson };
+    });
+  } finally {
+    sb.cleanup();
+  }
+}
+const subagentStop = ({ rows = [], active = false, ...opts } = {}) => subagentStops({ ...opts, stops: [{ rows, active }] })[0];
+const editWorker = (w) => edit(path.join(w, 'a.js'));
+
+test('learn on SubagentStop: the worker\'s own root and list judge its turn', () => {
+  const r = subagentStop({ rows: [prompt('brief'), editWorker] });
+  assert.equal(r.rc, 0, r.err);
+  const verdict = JSON.parse(r.out);
+  assert.equal(verdict.decision, 'block');
+  assert.match(verdict.reason, /this sub-agent edited files/);
+  assert.match(verdict.reason, /npm run lint/);
+  assert.match(r.ledger, /"verb":"done-gate","rule":"law-3"/);
+
+  // Proven after the edit: nothing on stdout, nothing in the ledger.
+  const ok = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint')] });
+  assert.equal(ok.out, '', ok.err);
+  assert.equal(ok.ledger, '');
+
+  // The parent's list is not the worker's: the worker's write owes the parent's check nothing.
+  const parentOnly = subagentStop({ workerChecks: null, parentChecks: 'npm run typecheck\n',
+    rows: [prompt('brief'), editWorker] });
+  assert.equal(parentOnly.out, '', parentOnly.err);
+  assert.equal(parentOnly.ledger, '');
+});
+
+test('learn on SubagentStop: a block returns before the agent lesson is distilled', () => {
+  const blocked = subagentStop({ rows: [prompt('brief'), editWorker], llm: true });
+  assert.equal(JSON.parse(blocked.out).decision, 'block');
+  assert.equal(blocked.lesson, false, 'a blocked sub-agent got a lesson written');
+  const proven = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint')], llm: true });
+  assert.equal(proven.lesson, true, `the allowed sub-agent learned nothing: ${proven.err}`);
+});
+
+test('learn on SubagentStop: an inferred check is a stderr line and a ledger entry, never stdout', () => {
+  const r = subagentStop({ workerChecks: null, workerFiles: { 'package.json': '{"scripts":{"test":"x"}}' },
+    rows: [prompt('brief'), editWorker] });
+  assert.equal(r.rc, 0);
+  assert.equal(r.out, '', 'nobody reads a sub-agent\'s systemMessage: stdout must stay empty');
+  assert.match(r.err, /\[done-gate\] advisory \(sub-agent\) — unproven since the last edit: npm test/);
+  assert.match(r.ledger, /"rule":"law-3"/);
+});
+
+test('learn on SubagentStop: no agent transcript is not judged, said only where a list exists', () => {
+  const listed = subagentStop({ withPath: false, parentChecks: 'npm run lint\n', rows: [prompt(), editWorker] });
+  assert.equal(listed.out, '');
+  assert.match(listed.err, /\[done-gate\] no agent transcript — sub-agent turn not judged\./);
+  const quiet = subagentStop({ withPath: false, rows: [prompt(), editWorker] });
+  assert.equal(quiet.err.includes('[done-gate]'), false, quiet.err);
+});
+
+// ---- the block cap: a repeat block needs a new edit, and stops at 3 per turn -----------------
+
+test('nextBlock: the cap, written out', () => {
+  const T = 'turn-1';
+  // A record and a Stop, in full: `notes` is the turn's count of distinct notifications, `verdict`
+  // the owed checks' background states (`label=pending|failed`, '' when none ran in the background),
+  // `blocks` the count in this continuation, `total` the count over the whole human turn.
+  const rec = (lastEdit, blocks, { notes = 0, verdict = '', opening = T, total = blocks } = {}) =>
+    ({ opening, lastEdit, notes, verdict, blocks, total });
+  const stop = (active, lastEdit, { notes = 0, verdict = '', opening = T } = {}) => ({ active, opening, lastEdit, notes, verdict });
+  // Each row: the saved state, the Stop, then the state saved with a block (null: the turn ends).
+  const rows = [
+    ['first stop, no record: block, count 1', null, stop(false, 'e1'), rec('e1', 1)],
+    ['a stop after a block we have no record of: ends, as before the cap', null, stop(true, 'e1'), null],
+    ['second stop, no new edit: ends', rec('e1', 1), stop(true, 'e1'), null],
+    ['second stop, a new edit: blocks again, count 2', rec('e1', 1), stop(true, 'e2'), rec('e2', 2)],
+    ['third stop, a new edit: blocks, count 3', rec('e2', 2), stop(true, 'e3'), rec('e3', 3)],
+    ['fourth stop, even with a new edit: ends', rec('e3', 3), stop(true, 'e4'), null],
+    // The record decides once it exists, whatever the flag says.
+    ['a record with the flag cleared and no new edit: ends', rec('e1', 1), stop(false, 'e1'), null],
+    // Another opening prompt is another turn: the old record counts as none, its total included.
+    ['a new turn after a capped one: block, count 1, total 1',
+      rec('e3', 3, { total: 10 }), stop(false, 'e9', { opening: 'turn-2' }), rec('e9', 1, { opening: 'turn-2' })],
+    ['a new turn with the flag set and no record of it: ends', rec('e1', 1), stop(true, 'e9', { opening: 'turn-2' }), null],
+    // PER CONTINUATION: a notification since the last block starts a new count, even at the cap
+    // and with no new edit; the same count of notifications does not. The total keeps counting.
+    ['capped, then a notification drives a new continuation: block, count 1, total 4',
+      rec('e3', 3, { notes: 2 }), stop(false, 'e3', { notes: 3 }), rec('e3', 1, { notes: 3, total: 4 })],
+    ['...and with the flag still set: block, count 1, total 4',
+      rec('e3', 3, { notes: 2 }), stop(true, 'e3', { notes: 3 }), rec('e3', 1, { notes: 3, total: 4 })],
+    ['no notification since the cap: ends', rec('e3', 3, { notes: 2 }), stop(false, 'e3', { notes: 2 }), null],
+    // A changed background verdict re-arms the block like a new edit, inside the bound.
+    ['the owed suite went from pending to failed, no new edit: blocks, count 2',
+      rec('e1', 1, { verdict: 'suite=pending' }), stop(true, 'e1', { verdict: 'suite=failed' }),
+      rec('e1', 2, { verdict: 'suite=failed' })],
+    ['the same verdict and no new edit: ends',
+      rec('e1', 1, { verdict: 'suite=failed' }), stop(true, 'e1', { verdict: 'suite=failed' }), null],
+    ['a changed verdict at the cap: ends',
+      rec('e1', 3, { verdict: 'suite=pending' }), stop(true, 'e1', { verdict: 'suite=failed' }), null],
+    // THE TURN CEILING: 10 blocks over the whole human turn. Below it, a notification and a changed
+    // verdict still block; at it, neither does, nor a new edit.
+    ['total 9, a notification: block, count 1, total 10',
+      rec('e1', 2, { notes: 4, total: 9 }), stop(true, 'e1', { notes: 5 }), rec('e1', 1, { notes: 5, total: 10 })],
+    ['total 9, a changed verdict: block, count 2, total 10',
+      rec('e1', 1, { verdict: 'suite=failed', total: 9 }), stop(true, 'e1', { verdict: 'suite=pending' }),
+      rec('e1', 2, { verdict: 'suite=pending', total: 10 })],
+    ['total 10, a notification: ends', rec('e1', 1, { notes: 5, total: 10 }), stop(false, 'e1', { notes: 6 }), null],
+    ['total 10, a changed verdict: ends',
+      rec('e1', 1, { verdict: 'suite=pending', total: 10 }), stop(true, 'e1', { verdict: 'suite=failed' }), null],
+    ['total 10, a new edit: ends', rec('e1', 1, { total: 10 }), stop(true, 'e2'), null],
+    // A record saved before these fields existed reads as no notifications, no verdict, total 0.
+    ['an old record with no notes, verdict or total: a new edit blocks, count 2, total 1',
+      { opening: T, lastEdit: 'e1', blocks: 1 }, stop(true, 'e2'), rec('e2', 2, { total: 1 })],
+  ];
+  for (const [what, state, s, want] of rows) assert.deepEqual(nextBlock(state, s), want, what);
+});
+
+/** A row factory that builds its rows once, so every Stop of a sequence sees the same tool ids. */
+const once = (f) => { let v; return (w) => (v ??= f(w)); };
+
+test('learn on Stop: the cap across real Stops of one session', () => {
+  const ed = [once(editWorker), once(editWorker), once(editWorker), once(editWorker)];
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const verdicts = (stops) => subagentStops({ event: 'Stop', stops }).map((r) => {
+    assert.equal(r.rc, 0, r.err);
+    return r.out ? JSON.parse(r.out).decision : (/"verb":"done-gate-cap"/.test(r.ledger) ? 'cap' : `none: ${r.err}`);
+  });
+  // Second stop with no new edit ends the turn, with the cap's ledger line.
+  assert.deepEqual(verdicts([
+    { rows: [p1, ed[0]] },
+    { rows: [p1, ed[0], bash('ls')], active: true },
+  ]), ['block', 'cap']);
+  // A new edit before each stop: blocks three times, then the fourth stop ends the turn.
+  // A new prompt is a new turn, and blocks again.
+  const e = [once(editWorker), once(editWorker), once(editWorker), once(editWorker), once(editWorker)];
+  const p2 = { uuid: 'p2', ...prompt('two') };
+  assert.deepEqual(verdicts([
+    { rows: [p1, e[0]] },
+    { rows: [p1, e[0], e[1]], active: true },
+    { rows: [p1, e[0], e[1], e[2]], active: true },
+    { rows: [p1, e[0], e[1], e[2], e[3]], active: true },
+    { rows: [p1, e[0], e[1], e[2], e[3], p2, e[4]] },
+  ]), ['block', 'block', 'block', 'cap', 'block']);
+});
+
+// The host may write a block's feedback back as a user line (unverified: no blocked Stop exists in
+// a transcript here). As a prompt it would change the turn's opening, the record would count as
+// none, and the second Stop would end the turn instead of re-blocking after the new edit.
+test('learn on Stop: a block\'s feedback line opens no turn, so a new edit re-blocks', () => {
+  const lines = [
+    'Stop hook feedback:\nGeneseed (Verify Before Asserting) — this turn edited files, and these checks ...',
+    'Geneseed (Verify Before Asserting) — this turn edited files, and these checks ...',
+  ];
+  for (const text of lines) {
+    const e = [once(editWorker), once(editWorker)];
+    const p1 = { uuid: 'p1', ...prompt('one') };
+    const feedback = { type: 'user', message: { role: 'user', content: text } };
+    const runs = subagentStops({ event: 'Stop', stops: [
+      { rows: [p1, e[0]] },
+      { rows: [p1, e[0], feedback, e[1]], active: true },
+    ] });
+    assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : r.err)),
+      ['block', 'block'], text);
+  }
+});
+
+// The stale sweep cannot cost the save: an old entry it fails to remove (here a FOLDER, which
+// `unlinkSync` refuses) must leave the record written, so the next Stop still re-blocks.
+test('learn on Stop: a stale entry the sweep cannot remove does not lose the cap record', () => {
+  const e = [once(editWorker), once(editWorker)];
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const runs = subagentStops({ event: 'Stop',
+    before: (install) => {
+      const stale = path.join(install, 'notebook', 'done-gate', 'old-session');
+      fs.mkdirSync(stale, { recursive: true });
+      const long = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      fs.utimesSync(stale, long, long);
+    },
+    stops: [{ rows: [p1, e[0]] }, { rows: [p1, e[0], e[1]], active: true }] });
+  assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : r.err)),
+    ['block', 'block']);
+});
+
+/** What each Stop of a sequence did: the block's reason, 'cap', or the stderr when neither. */
+const outcomes = (runs) => runs.map((r) => (r.out ? JSON.parse(r.out).reason
+  : r.ledger.includes('done-gate-cap') ? 'cap' : `none: ${r.err}`));
+
+// An unattended session: notifications drive continuations of one human turn. Three early blocks
+// must not spend the cap for the rest of it — a notification since the last block starts a new count.
+test('learn on Stop: a notification starts a new continuation, with its own cap', () => {
+  const e = [once(editWorker), once(editWorker), once(editWorker)];
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const note = noteAttachment('toolu_elsewhere', 'completed', 'Background command "build" completed (exit code 0)');
+  const got = outcomes(subagentStops({ event: 'Stop', stops: [
+    { rows: [p1, e[0]] },
+    { rows: [p1, e[0], e[1]], active: true },
+    { rows: [p1, e[0], e[1], e[2]], active: true },
+    { rows: [p1, e[0], e[1], e[2], note], active: true },
+    { rows: [p1, e[0], e[1], e[2], note], active: true },
+  ] })).map((o) => (o.startsWith('Geneseed') ? 'block' : o));
+  assert.deepEqual(got, ['block', 'block', 'block', 'block', 'cap']);
+});
+
+// A background proof that changes verdict with no new edit: pending at the first block, failed
+// later. The failure must block, and each reason must say what the background run is doing.
+test('learn on Stop: a background run that fails after the cap blocks again, and the reason says so', () => {
+  const e0 = once(editWorker);
+  const launch = once(() => bgBash('npm run lint'));
+  const failed = once((w) => noteAttachment(launch(w)[0].message.content[0].id, 'failed',
+    'Background command "lint" failed with exit code 1'));
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const [first, second, third] = outcomes(subagentStops({ event: 'Stop', stops: [
+    { rows: [p1, e0, launch] },
+    { rows: [p1, e0, launch], active: true },
+    { rows: [p1, e0, launch, failed], active: true },
+  ] }));
+  assert.match(first, /Still running in the background, with no completion seen: npm run lint; a launch is no pass\./);
+  assert.doesNotMatch(first, /reported a failure/);
+  assert.equal(second, 'cap', 'no new edit and no new verdict ends the turn');
+  assert.match(third, /Run in the background and reported a failure: npm run lint\./);
+  assert.doesNotMatch(third, /Still running/);
+});
+
+// The loop the turn ceiling ends: a red suite relaunched in the background with no edit. Each
+// failure is a notification (a new continuation) and each relaunch turns the verdict back to
+// pending, so both re-arm the block. Ten blocks over the turn, then the eleventh Stop ends it.
+test('learn on Stop: a relaunched red suite stops at the turn ceiling', () => {
+  const e0 = once(editWorker);
+  const p1 = { uuid: 'p1', ...prompt('one') };
+  const launches = Array.from({ length: 6 }, () => once(() => bgBash('npm run lint')));
+  const fails = launches.map((l) => once((w) => noteAttachment(l(w)[0].message.content[0].id, 'failed',
+    'Background command "lint" failed with exit code 1')));
+  // Stop k sees: the edit, then launch 1, fail 1, launch 2, fail 2, ... — one more step each Stop.
+  const steps = launches.flatMap((l, i) => [l, fails[i]]);
+  const stops = Array.from({ length: 11 }, (_, k) => ({ rows: [p1, e0, ...steps.slice(0, k + 1)], active: k > 0 }));
+  const runs = subagentStops({ event: 'Stop', stops });
+  const got = outcomes(runs).map((o) => (o.startsWith('Geneseed') ? 'block' : o));
+  assert.deepEqual(got, [...Array(10).fill('block'), 'cap']);
+  assert.match(runs[10].err, /\[done-gate\] total ceiling reached \(10 blocks this turn\) — turn ends with unproven checks: npm run lint/);
+});
+
+test('learn on SubagentStop: the cap counts per sub-agent', () => {
+  const e = [once(editWorker), once(editWorker)];
+  const runs = subagentStops({ stops: [
+    { rows: [prompt('brief'), e[0]] },
+    { rows: [prompt('brief'), e[0]], active: true },
+    { rows: [prompt('brief'), e[0], e[1]], active: true },
+  ] });
+  assert.deepEqual(runs.map((r) => (r.out ? JSON.parse(r.out).decision : r.ledger.includes('done-gate-cap') ? 'cap' : '?')),
+    ['block', 'cap', 'block']);
 });
