@@ -1,24 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" width="760" height="420" role="img" aria-label="geneseed setup, then two laws catching a force-push and a credential at the tool boundary">
+<title>geneseed setup, then two laws catching a force-push and a credential at the tool boundary</title>
 <style>
-  .cmd{fill:#e6edf3}.dim{fill:#8b949e}.ok{fill:#3fb950}.cmt{fill:#8b949e;font-style:italic}.tool{fill:#d2a8ff}.law{fill:#f85149}
+text{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:13px;white-space:pre}
+.c{fill:#E8EEF2}.d{fill:#8A97A3}.k{fill:#3AD4C4}.x{fill:#F2695C}.i{fill:#8A97A3;font-style:italic}
+@media (prefers-reduced-motion:no-preference){
+.l{opacity:0;animation:in .05s linear forwards}
+.t0{animation-delay:0.4s}.t1{animation-delay:1.4s}.t2{animation-delay:1.8s}.t3{animation-delay:2.6s}.t4{animation-delay:3.4s}.t5{animation-delay:4.2s}.t6{animation-delay:5.2s}.t7{animation-delay:6s}.t8{animation-delay:6.8s}.t9{animation-delay:8s}.t10{animation-delay:8.8s}.t11{animation-delay:10s}
+.bl{animation:bl 1.1s steps(1) infinite}
+@keyframes in{to{opacity:1}}
+@keyframes bl{50%{opacity:0}}
+}
 </style>
-<rect width="760" height="420" rx="10" fill="#0d1117"/>
-<rect width="760" height="28" rx="10" fill="#161b22"/><rect y="14" width="760" height="14" fill="#161b22"/>
-<circle cx="18" cy="14" r="5" fill="#ff5f56"/><circle cx="36" cy="14" r="5" fill="#ffbd2e"/><circle cx="54" cy="14" r="5" fill="#27c93f"/>
-<text x="380" y="18" text-anchor="middle" fill="#8b949e" font-size="12">geneseed — one source, four hosts</text>
-<text x="16" y="59" class="cmd" opacity="0">$ npx geneseed setup<animate attributeName="opacity" from="0" to="1" begin="0.4s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="79" class="dim" opacity="0">  theme ........ neutral<animate attributeName="opacity" from="0" to="1" begin="1.4s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="99" class="dim" opacity="0">  install ...... opencode-global   (every repo inherits it)<animate attributeName="opacity" from="0" to="1" begin="1.8s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="119" class="ok" opacity="0">  ✓ built  ·  11 laws · 18 agents · 49 skills  ·  gates armed<animate attributeName="opacity" from="0" to="1" begin="2.6s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="159" class="cmd" opacity="0">$ geneseed doctor<animate attributeName="opacity" from="0" to="1" begin="3.4s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="179" class="ok" opacity="0">  [doctor] ok — no unresolved tokens, no dead links, rendered bundle in sync<animate attributeName="opacity" from="0" to="1" begin="4.2s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="219" class="cmt" opacity="0"># later, in any repo — the agent reaches for:<animate attributeName="opacity" from="0" to="1" begin="5.2s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="239" class="tool" opacity="0">&gt; git push --force origin main<animate attributeName="opacity" from="0" to="1" begin="6s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="259" class="law" opacity="0">  ⛔ Law IV — a history-rewriting or discarding git act needs confirmation<animate attributeName="opacity" from="0" to="1" begin="6.8s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="279" class="law" opacity="0">     bound to this specific command<animate attributeName="opacity" from="0" to="1" begin="6.8s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="319" class="tool" opacity="0">&gt; Write config.js   const key = &quot;sk-ant-api03-…&quot;<animate attributeName="opacity" from="0" to="1" begin="8s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="339" class="law" opacity="0">  ⛔ Law I — config.js would carry a credential-shaped string.<animate attributeName="opacity" from="0" to="1" begin="8.8s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="359" class="law" opacity="0">     Secrets live in .env or a secret manager, never in a tracked file.<animate attributeName="opacity" from="0" to="1" begin="8.8s" dur="0.05s" fill="freeze"/></text>
-<text x="16" y="399" class="dim" opacity="0">  one source · four hosts · the rules hold at the tool boundary<animate attributeName="opacity" from="0" to="1" begin="10s" dur="0.05s" fill="freeze"/></text>
-<rect x="16" y="390" width="8" height="14" fill="#e6edf3"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/></rect>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#11161C"/><stop offset="1" stop-color="#0C0E11"/></linearGradient>
+<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r="1" fill="#303C49"/></pattern>
+<radialGradient id="fade" cx="0.85" cy="0.15" r="0.6"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<mask id="mk"><rect width="760" height="420" fill="url(#fade)"/></mask>
+</defs>
+<rect x=".5" y=".5" width="759" height="419" rx="16" fill="url(#bg)" stroke="#1E2630"/>
+<rect width="760" height="420" fill="url(#dots)" mask="url(#mk)"/>
+
+<path d="M1,34h758" stroke="#1E2630"/>
+<g fill="none" stroke="#8A97A3" opacity=".8"><circle cx="38" cy="18" r="4"/><circle cx="54" cy="18" r="4"/><circle cx="70" cy="18" r="4"/></g>
+<text x="380" y="22" text-anchor="middle" class="d" style="font-size:12px">geneseed — one source, five hosts</text>
+<text xml:space="preserve" x="30" y="62" class="l c t0"><tspan fill="#3AD4C4">$</tspan> npx geneseed setup</text>
+<text xml:space="preserve" x="30" y="82" class="l d t1">  theme ........ neutral</text>
+<text xml:space="preserve" x="30" y="102" class="l d t2">  install ...... opencode-global   (every repo inherits it)</text>
+<text xml:space="preserve" x="30" y="122" class="l k t3">  ✓ built  ·  laws · agents · skills  ·  gates armed</text>
+<text xml:space="preserve" x="30" y="162" class="l c t4"><tspan fill="#3AD4C4">$</tspan> geneseed doctor</text>
+<text xml:space="preserve" x="30" y="182" class="l k t5">  [doctor] ok — no unresolved tokens, no dead links, rendered bundle in sync</text>
+<text xml:space="preserve" x="30" y="222" class="l i t6"># later, in any repo — the agent reaches for:</text>
+<text xml:space="preserve" x="30" y="242" class="l c t7"><tspan fill="#3AD4C4">&gt;</tspan> git push --force origin main</text>
+<text xml:space="preserve" x="30" y="262" class="l x t8">  ✗ Deletion Is Deliberate — this command force-pushes the protected</text>
+<text xml:space="preserve" x="30" y="282" class="l x t8">    branch main on the remote. Deny, then push without --force.</text>
+<text xml:space="preserve" x="30" y="322" class="l c t9"><tspan fill="#3AD4C4">&gt;</tspan> Write config.js   const key = &quot;sk-ant-api03-…&quot;</text>
+<text xml:space="preserve" x="30" y="342" class="l x t10">  ✗ Sealed Secrets — this edit puts a credential-shaped string in config.js.</text>
+<text xml:space="preserve" x="30" y="362" class="l x t10">    Deny, then keep the value in .env or a secret manager.</text>
+<text xml:space="preserve" x="30" y="402" class="l d t11">  one source · five hosts · the rules hold at the tool boundary</text>
+<rect class="bl" x="30" y="391" width="8" height="14" fill="#3AD4C4"/>
 </svg>
