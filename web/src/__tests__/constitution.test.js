@@ -186,6 +186,24 @@ describe('PRECEDENCE', () => {
     expect(C.parsePrecedence(tmpl).slice(4)).toEqual(tail)
   })
 
+  // The lead sentence under `**Precedence.**` is prose, and prose gets hard-wrapped: a lead
+  // wrapped over three lines must yield the same rows as the template's one-line lead.
+  it('reads the same rows when the lead is wrapped over several lines', () => {
+    const wrapped = tmpl.replace(
+      /^(\*\*Precedence\.\*\* [^\n]*?here;) ([^\n]*?rank:) /m,
+      '$1\n$2\n',
+    )
+    expect(wrapped).not.toBe(tmpl)
+    expect(wrapped.split('**Precedence.**')[1].split('\n\n')[0].split('\n').length).toBe(3)
+    expect(C.parsePrecedence(wrapped)).toEqual(C.parsePrecedence(tmpl))
+    expect(C.parsePrecedence(wrapped)).toHaveLength(6)
+  })
+
+  // A heading before any `|` line means the table is gone: no rows, not the next section's table.
+  it('reads no rows when a heading comes before the table', () => {
+    expect(C.parsePrecedence('**Precedence.** Lead.\n\n## Next\n\n| 1 | x | y |\n')).toEqual([])
+  })
+
   // The gate must fail both ways: a table whose rows are swapped no longer equals the constant.
   it('no longer matches a table with two rows swapped', () => {
     const swapped = tmpl.replace(
