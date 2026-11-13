@@ -11,6 +11,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Added
 - **Auto-merge green PRs, off by default.** Say "turn on auto-merge" and the `rule` skill writes a standing rule into `user-rules.md` (global or per project; the project layer wins). With it, the `ship` skill and a factory's close step arm the forge's auto-merge on a PR the agent opens, on the reviewed head, only when the base branch has required checks: docs and tests only can arm at once, other code waits for one approving review (or the blind reviewer, for a solo repo), and a sensitive diff never arms, whatever the rule says. An armed PR is disarmed before any later push. Without the rule nothing changes, and the agent says once per session in a repo how to turn it on. No host gates a merge command, so the rule is text on every host; see `docs/guides/auto-merge.md`.
 
+### Changed
+- **The startup text states its order without shouting.** The readiness-sigil paragraph loses "required", "MUST", "verbatim" and "do not paraphrase"; §9 loses "not deferrable" and "this is not a suggestion". Every ordering clause stays: read the rules and load the project context before the first reply, begin it with the sigil line, and a matching skill is still the first tool call. Strong current models over-apply emphatic wording; a weak model keeps the same sequence. The sigil line itself is unchanged, so theme detection and Bob's own first-reply override are untouched. Reaches an install on its next emit.
+
 ## [5.3.1] — 2026-11-12
 
 **Upgrade note.** The fixed hook commands, matchers and plugins reach an install only when it is emitted again: run `geneseed rebuild-all` after the update.
