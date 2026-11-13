@@ -408,8 +408,9 @@ behaviour** — nothing changes the machine's current agent/model unless you opt
 - **Default permissions.** A fresh `opencode.json` gets a minimal policy that **asks**
   before `git reflog expire`, `git gc --prune` and a force-push or delete of `main`/`master` —
   **Rule IV**'s territory, in every build; the guard plugin decides every other data loss — and, **on an install that built the `process` pack in**, before every
-  `git commit` and `git push` (the host-level backstop for **Consent Before Push**: the
-  agent never records or shares code unprompted, on any branch). Build with
+  `git commit` and `git push` (the host-level backstop for **Consent Before Push**). The
+  rule asks only for a commit or push onto the main branch, but a permission glob cannot read
+  which branch is checked out, so OpenCode asks for every commit and push. Build with
   `--doctrines` leaving `process` out and those two entries are simply not written.
   The whole block is added only when you have no `permission` key; an existing policy is
   reconciled key by key — Geneseed adds back what a returning pack wants and removes

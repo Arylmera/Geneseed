@@ -31,7 +31,7 @@ The packs always load in the same order (craft, rigor, ops, process, comms), wha
 
 **Dropping `process` changes what the machine does, not only what the agent reads.** The *Consent Before Push* rule in that pack is enforced at the tool boundary as well as in the prose:
 
-- On Claude Code and OpenClaude, the git hook stays wired but stops asking before a commit or push.
+- On Claude Code and OpenClaude, the git hook stays wired but stops asking before a commit or push onto the main branch.
 - On OpenCode, a fresh install no longer gets the `git commit*` and `git push*` ask entries in `opencode.json`. On an existing install, the entries Geneseed recorded adding are removed. Entries you typed, and those on an install made before 5.2.0, are left in place and reported; build once with `--prune-gates` to remove the second kind.
 
 The refusals of destructive git and `rm -rf` belong to the always-on Rules, not to the pack, so they stay in every build. See [Enforced vs. asked](../understand/enforced-vs-asked.md).
@@ -48,7 +48,7 @@ geneseed build --emit opencode-global --exclude-rules none
 
 The number in an address is the rule's position in its pack, so it can change if a rule is added or removed. To see the current addresses, pass an address that does not exist: the build refuses it and lists every valid address. The web console's **Constitution** page has one switch per rule. You stage the changes there and apply them in a single rebuild.
 
-Excluding *Consent Before Push* (`process 5` today) takes the commit and push consent gate with it, exactly as dropping the whole `process` pack does. The console and the wizard both warn you before applying it. A pack whose every rule is excluded drops out of the build entirely. See [Exclusions](../concepts/exclusions.md) for excluding whole folders instead.
+Excluding *Consent Before Push* (`process 5` today) takes the commit and push consent gate with it, exactly as dropping the whole `process` pack does. To keep the rule but ask for every commit and push, not only those onto the main branch, keep it on and build with `--strict-consent` instead (the *Strict consent* switch on the Constitution page). The console and the wizard both warn you before applying it. A pack whose every rule is excluded drops out of the build entirely. See [Exclusions](../concepts/exclusions.md) for excluding whole folders instead.
 
 ---
 

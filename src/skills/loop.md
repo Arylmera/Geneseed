@@ -24,8 +24,9 @@ action prints one JSON object — act on its keys, never on your own reading of 
 1. `git worktree add ../<repo>-loop-<slug> -b loop/<slug>`, then make that worktree the session's
    working directory with its own command. Every later command runs there **as written below**:
    no `cd` prefix, no `git -C`, no quoted refspec — any of those makes the git gate ask.
-2. On a `loop/*` branch with a launched loop, the git gate lets exactly the commit form below
-   through without asking. Merging into a shared branch is never yours.
+2. A `loop/*` branch is your own: the git gate lets its commits and plain pushes through
+   without asking (under strict consent, exactly the commit form below, on a launched loop).
+   Merging into the main branch is never yours.
 
 ## Compose
 

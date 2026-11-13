@@ -76,7 +76,7 @@ A worker or crew commits only in its own worktree, never pushes, and never merge
 2. shows you the diff from the base it recorded, and the green output;
 3. commits and merges **only once you accept**.
 
-Push, and every merge beyond a worker's own branch, belong to the session alone, under *Consent Before Push* ([Rules](rules.md)). A worker or crew that cannot get to green reports back instead of landing broken work.
+Push, and every merge beyond a worker's own branch, belong to the session alone, under *Consent Before Push*: the session pushes the worker's branch and lands it on the main branch through a pull request with green checks ([Rules](rules.md)). A worker or crew that cannot get to green reports back instead of landing broken work.
 
 You can also start a pipeline without foreman mode: ask the agent to "run a pipeline" for a task, and the `pipeline` [skill](skills.md) takes it from there.
 
