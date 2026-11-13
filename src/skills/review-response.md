@@ -21,7 +21,9 @@ to be acted on; or the user wants a review criterion recorded ("add a review rul
    with evidence.
 5. Apply the accepted changes — one intent per commit ({{LAW:one-intent-one-act}}), each through the
    [commit {{SKILL}}](commit.md) so {{DOCTRINE:consent-before-push}}'s per-commit consent holds — then
-   re-run the checks ({{LAW:verify-before-asserting}}).
+   re-run the checks ({{LAW:verify-before-asserting}}). If the PR has auto-merge armed, disarm it
+   before you push the fixes (the commit {{SKILL}}'s push step says how), then re-arm through the
+   [ship {{SKILL}}](ship.md) on the new head.
 6. Surface anything the review missed that you noticed while addressing it.
 7. Upgrade the review itself. A finding that recurs, a criterion the user asks for, or a
    defect a review should have caught becomes a rule in the nearest `REVIEW.md` above the

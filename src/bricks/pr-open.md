@@ -5,8 +5,9 @@ effect: read
 skill: ship
 outcomes: pass, fail
 ---
-Follow the `ship` skill's pull-request path only: never merge, never enable auto-merge, never
-push to any branch but this worktree's own. First look for a PR already open on this branch
+Follow the `ship` skill's pull-request path only: never merge, never enable auto-merge here (the
+`factory` skill's close step arms it, only as the user's standing rule allows), never push to any
+branch but this worktree's own. First look for a PR already open on this branch
 (`gh pr view --json url,state` or `glab mr view`): after a rework lap it exists, and this stage
 only pushes the new commits to it.
 

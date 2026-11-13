@@ -45,6 +45,9 @@ not a boundary:** `bash -c`, `pwsh -c`, an interpreter and a variable stay unrea
 command permission is the backstop, and the [change report](hooks.md#the-change-report) tells you
 afterwards.
 
+No host gates a forge merge (`gh pr merge`, `glab mr merge`, an MCP merge tool): the
+[auto-merge guide](../guides/auto-merge.md) says what guards it instead.
+
 See [ADR 0008](../adr/0008-host-parity-ceiling-of-the-weakest-host.md) for why a gate that only
 one host can run still ships for every host it can.
 

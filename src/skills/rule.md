@@ -5,7 +5,7 @@
 
 {{CREDIT:mattpocock-skills-2509:skills/engineering/retro/SKILL.md}}
 
-**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…". Anything the user wants to outlive this session counts: a standing rule ("make that a
+**Trigger:** the user says "always…", "never…", "from now on…" or "remember that…", or "turn on auto-merge" / "turn off auto-merge". Anything the user wants to outlive this session counts: a standing rule ("make that a
 rule") or a durable fact ("note that…", "keep in mind…"). Also fires when a
 `feedback` {{MEMORY}} lesson keeps recurring and deserves promotion, or when
 `user-rules.md` needs review — a trial rule past its date, a stale rule, a bloated
@@ -108,6 +108,31 @@ Then take exactly one branch.
 The asymmetry is deliberate: Branch A costs no question, Branch B costs several.
 The price is the safeguard — make remembering cheap and legislating expensive, or
 the user picks "rule" out of impatience and the set inflates.
+
+**Auto-merge flow** (the user says "turn on auto-merge", or "turn it off"). The wording is fixed
+so the [ship {{SKILL}}](ship.md) reads it reliably: skip reformulation and the counter-example,
+never the consent. Ask one question — every repo (`global`) or this project (`project`) — then
+show this text, with the next free `R<n>`, the scope chosen and today's date, and append it to the
+file Branch B step 5 names for that scope, on explicit consent:
+
+```
+## R<n> — Auto-merge green PRs
+(scope: <global|project> | source: user, <date>)
+Arm auto-merge on a PR I open, only when the forge has required checks.
+- docs-tests: auto
+- normal: human        # human | reviewer
+- sensitive: never
+- Before any further push to a PR with auto-merge armed, disarm it first, then classify, review and arm again on the new head.
+```
+
+`sensitive` never arms, whatever its line says. `docs-tests` accepts `auto | human | reviewer |
+never`, `normal` accepts `human | reviewer | never`; any other value counts as `human`. `human`
+waits for one approving review on the forge. The last line is part of the fixed text: the rule is
+loaded every session, so every path that pushes sees it. `reviewer` is for a solo repo, where the
+forge forbids approving your own PR: the blind reviewer must pass first. The rule arms only the
+forge's merge; every push still asks ({{DOCTRINE:consent-before-push}}). To turn it off, remove
+the rule with the same consent; to turn it off for one project only, write the rule into that
+project's file with all three tier lines `never` (the later layer wins).
 
 **Review flow** (on request, or when a `trial until:` date has passed): for each rule
 due, ask whether it actually fired since adoption — graduate it (drop the trial
