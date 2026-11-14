@@ -79,11 +79,15 @@ test('--hosts narrows to the profile hosts it names; a host the profile lacks is
   const narrow = { ...STARTER, hosts: ['claude'] };
   const lacks = run({ hosts: 'claude,opencode' }, ['claude', 'opencode'], {}, narrow);
   assert.equal(lacks.rc, 2);
-  assert.match(lacks.out, /--hosts: 'opencode' is not in this profile \(profile 'p' lists: claude\)/);
+  assert.match(lacks.out, /--hosts: not in this profile: 'opencode' \(profile 'p' lists: claude\)/);
   assert.deepEqual(lacks.calls.build, []);
   const unknown = run({ hosts: 'vim' }, ['claude']);
   assert.equal(unknown.rc, 2);
-  assert.match(unknown.out, /--hosts: 'vim' is not a host/);
+  assert.match(unknown.out, /--hosts: not a host: 'vim' \(hosts: opencode, claude, bob, openclaude\)/);
+  // Both mistakes at once are named apart: a word that is no host, and a host the profile lacks.
+  const both = run({ hosts: 'vim,opencode' }, ['claude', 'opencode'], {}, narrow);
+  assert.equal(both.rc, 2);
+  assert.match(both.out, /--hosts: not a host: 'vim' \(hosts: [^)]*\); not in this profile: 'opencode' \(profile 'p' lists: claude\)/);
   // A host the profile does not list stays out of a default run, with its line.
   const other = run({}, ['claude', 'opencode'], {}, narrow);
   assert.ok(other.out.includes('  --    OpenCode: not in this profile - left as it is'), other.out);
@@ -185,5 +189,35 @@ test('profile apply builds a personal profile into a project, then puts a moved 
     assert.match(again.stdout, /changed back to the profile: posture expert -> peer/);
     const third = cli('profile', 'apply', 'team', '--project', proj);
     assert.doesNotMatch(third.stdout, /changed back/);
+  } finally { sb.cleanup(); }
+});
+
+// F1: `--project ~` would put a Claude Code project install INTO `~/.claude`, the global one, and
+// overwrite its manifest. The folder is refused for each host whose marker dir there IS its global
+// install, and nothing is written. Through the real CLI, in a sandboxed home, for every
+// Claude-style host (OpenCode's global lives elsewhere, in ~/.config/opencode).
+test('profile apply refuses a project folder that holds a host global install', { timeout: 300_000 }, () => {
+  const sb = makeSandbox('gs-apply-');
+  try {
+    const home = sb.path;
+    const bin = path.join(home, 'fakebin');
+    fs.mkdirSync(bin);
+    for (const t of ['claude', 'bob', 'openclaude']) {
+      for (const f of [t, `${t}.cmd`]) fs.writeFileSync(path.join(bin, f), '', { mode: 0o755 });
+    }
+    const tier = path.join(home, '.config', 'geneseed', 'profiles');
+    fs.mkdirSync(tier, { recursive: true });
+    fs.writeFileSync(path.join(tier, 'team.json'), JSON.stringify({ ...STARTER, hosts: ['claude', 'bob', 'openclaude'] }));
+    const env = cellEnv(home);
+    env.PATH = `${bin}${path.delimiter}${env.PATH ?? env.Path ?? ''}`;
+    delete env.Path;
+    for (const [host, marker] of [['claude', '.claude'], ['bob', '.bob'], ['openclaude', '.openclaude']]) {
+      const r = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'geneseed-cli.mjs'), 'profile', 'apply', 'team',
+        '--project', home, '--hosts', host], { cwd: home, env, encoding: 'utf8', windowsHide: true });
+      assert.equal(r.status, 1, r.stdout + r.stderr);
+      assert.match(r.stderr, new RegExp(`--project: .* holds the ${host} global install .* overwrite it`));
+      assert.doesNotMatch(r.stdout, /Running:/);
+      assert.equal(fs.existsSync(path.join(home, marker, '.geneseed-manifest.json')), false, host);
+    }
   } finally { sb.cleanup(); }
 });

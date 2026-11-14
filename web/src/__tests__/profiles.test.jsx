@@ -207,6 +207,115 @@ describe('Installs › Profiles', () => {
     expect(screen.getByRole('region', { name: 'Apply profile' })).toBeTruthy()
   })
 
+  // F4: useAsync keeps the last answer while the next one loads. Apply must never send the folder
+  // of that old answer (/a) while the field already names another (/b).
+  it('never applies to the previous folder while the next preview loads', async () => {
+    const row = (project) => ({
+      ...LIST,
+      preview: {
+        name: 'mine',
+        scope: 'project',
+        project,
+        rows: [{ host: 'claude', present: true, state: 'absent', changes: [], layering: null }],
+      },
+    })
+    let releaseB
+    api.profiles.mockImplementation((name, project) => {
+      if (!name) return Promise.resolve(LIST)
+      if (project === '/b') return new Promise((r) => (releaseB = () => r(row('/b'))))
+      return Promise.resolve(row(project))
+    })
+    const onAction = vi.fn(async () => null)
+    render(<Profiles onAction={onAction} />)
+    await waitFor(() => expect(card('mine', 'personal')).toBeTruthy())
+    fireEvent.click(within(card('mine', 'personal')).getByRole('button', { name: 'Apply…' }))
+    const dialog = await screen.findByRole('region', { name: 'Apply profile' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'One project' }))
+    const input = within(dialog).getByLabelText('Project folder')
+    fireEvent.change(input, { target: { value: '/a' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Apply to 1 host' }).disabled).toBe(false),
+    )
+    // F5: the panel names the folder the server resolved.
+    expect(within(dialog).getByText('/a', { selector: 'code' })).toBeTruthy()
+    fireEvent.change(input, { target: { value: '/b' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(api.profiles).toHaveBeenLastCalledWith('mine', '/b'))
+    const button = within(dialog).getByRole('button', { name: /^Apply to/ })
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(onAction).not.toHaveBeenCalled()
+    await act(async () => releaseB())
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Apply to 1 host' }).disabled).toBe(false),
+    )
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to 1 host' }))
+    await act(async () => {})
+    expect(onAction).toHaveBeenCalledWith('profile-apply', {
+      name: 'mine',
+      hosts: ['claude'],
+      project: '/b',
+    })
+  })
+
+  // F1: a host whose global install is the folder's marker dir is shown with the reason, and not
+  // offered.
+  it('does not offer a host the server refused for this folder', async () => {
+    api.profiles.mockImplementation((name, project) =>
+      Promise.resolve(
+        name && project
+          ? {
+              ...LIST,
+              preview: {
+                name,
+                scope: 'project',
+                project: '/home/u',
+                rows: [
+                  {
+                    host: 'claude',
+                    present: true,
+                    state: 'absent',
+                    changes: [],
+                    layering: null,
+                    refused: '/home/u holds the claude global install (/home/u/.claude)',
+                  },
+                  { host: 'bob', present: true, state: 'absent', changes: [], layering: null },
+                ],
+              },
+            }
+          : LIST,
+      ),
+    )
+    const onAction = vi.fn(async () => 'j1')
+    render(<Profiles onAction={onAction} />)
+    await waitFor(() => expect(card('mine', 'personal')).toBeTruthy())
+    fireEvent.click(within(card('mine', 'personal')).getByRole('button', { name: 'Apply…' }))
+    const dialog = await screen.findByRole('region', { name: 'Apply profile' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'One project' }))
+    const input = within(dialog).getByLabelText('Project folder')
+    fireEvent.change(input, { target: { value: '~' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() =>
+      expect(within(dialog).getByText(/holds the claude global install/)).toBeTruthy(),
+    )
+    expect(
+      within(dialog)
+        .getAllByRole('checkbox')
+        .map((b) => [b.checked, b.disabled]),
+    ).toEqual([
+      [false, true],
+      [true, false],
+    ])
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply to 1 host' }))
+    await act(async () => {})
+    expect(onAction).toHaveBeenCalledWith('profile-apply', {
+      name: 'mine',
+      hosts: ['bob'],
+      project: '/home/u',
+    })
+  })
+
   it('saves an install as a personal profile, showing its difference from starter, gates first', async () => {
     api.profiles.mockResolvedValue(LIST)
     const onAction = vi.fn(async () => 'j2')

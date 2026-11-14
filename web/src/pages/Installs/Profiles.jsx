@@ -135,8 +135,11 @@ function rowState(r, scope) {
   if (r.state === 'disabled') return `${where} · disabled`
   return scope === 'global' ? 'no global install yet' : 'no install in this folder'
 }
+// A row the apply can build: the tool is here, and the folder is not its global install (F1).
+const offered = (r) => r.present && !r.refused
 function rowChanges(r) {
   if (!r.present) return [{ text: `Install ${hostLabel(r.host)}, then apply again`, tone: 'dim' }]
+  if (r.refused) return [{ text: r.refused, tone: 'warn' }]
   if (r.state !== 'active') return [{ text: 'New install', tone: 'dim' }]
   if (!r.changes.length) return [{ text: 'Already matches — rebuild only', tone: 'dim' }]
   return r.changes.map((c) => ({
@@ -153,14 +156,27 @@ function ApplyPanel({ name, onAction, onClose }) {
   const [browsing, setBrowsing] = useState(false)
   const [note, setNote] = useState('')
   const asked = scope === 'project' ? project : null
+  // What the preview on screen must answer: useAsync keeps the last data while a new fetch runs,
+  // so a preview is used only when it was fetched for exactly this name, scope and folder —
+  // otherwise Apply could send the folder of the previous answer (/a while the field shows /b).
+  const want = JSON.stringify([name, scope, asked])
   const { data, error, loading } = useAsync(
-    () => (scope === 'project' && !project ? Promise.resolve(null) : api.profiles(name, asked)),
+    () =>
+      scope === 'project' && !project
+        ? Promise.resolve(null)
+        : api.profiles(name, asked).then((d) => ({ ...d, askedFor: want })),
     [name, scope, project],
   )
-  const preview = data?.preview
+  const current = !loading && data?.askedFor === want
+  const preview = current ? data.preview : null
   const rows = preview?.rows || []
-  const picked = rows.filter((r) => r.present && !off[r.host])
-  const ready = preview && !preview.error && (scope === 'global' || preview.project)
+  const picked = rows.filter((r) => offered(r) && !off[r.host])
+  const ready =
+    preview &&
+    !preview.error &&
+    preview.name === name &&
+    preview.scope === scope &&
+    (scope === 'global' || preview.project)
   const commit = (v) => {
     setProject(v.trim())
     setOff({})
@@ -188,7 +204,7 @@ function ApplyPanel({ name, onAction, onClose }) {
     })
     if (jobId) onClose()
   }
-  const layered = rows.filter((r) => r.layering && !off[r.host] && r.present)
+  const layered = rows.filter((r) => r.layering && !off[r.host] && offered(r))
   return (
     <section className="panel prof-dialog" aria-label="Apply profile">
       <div className="panel-head">
@@ -254,7 +270,7 @@ function ApplyPanel({ name, onAction, onClose }) {
           {preview.error}
         </p>
       ) : null}
-      {loading && !data ? <Loading /> : null}
+      {loading ? <Loading /> : null}
       {ready ? (
         <div className="prof-hosts" role="group" aria-label="Hosts">
           <span className="ip-label">
@@ -265,8 +281,8 @@ function ApplyPanel({ name, onAction, onClose }) {
               <label className="row gap-8">
                 <input
                   type="checkbox"
-                  checked={r.present && !off[r.host]}
-                  disabled={!r.present}
+                  checked={offered(r) && !off[r.host]}
+                  disabled={!offered(r)}
                   onChange={() => setOff((o) => ({ ...o, [r.host]: !o[r.host] }))}
                 />
                 <span>
@@ -287,8 +303,8 @@ function ApplyPanel({ name, onAction, onClose }) {
       ) : null}
       {ready && scope === 'project' ? (
         <p className="sub">
-          Project scope: the build writes into the folder for each ticked host. The profile’s{' '}
-          <code>sharedTier</code> applies here only; a global apply ignores it.
+          Project scope: the build writes into <code>{preview.project}</code> for each ticked host.
+          The profile’s <code>sharedTier</code> applies here only; a global apply ignores it.
         </p>
       ) : null}
       {ready && layered.length
@@ -437,7 +453,7 @@ function SavePanel({ data, initial, onAction, onClose }) {
 
 export default function Profiles({ onAction, dataRev, item }) {
   const request = saveRequestOf(item)
-  const { data, error, loading, reload } = useAsync(() => api.profiles(), [dataRev])
+  const { data, error, loading, reload } = useAsync(() => api.profiles(), [dataRev], 'profiles')
   // `{ kind: 'apply', name }` or `{ kind: 'save', from }`; a Save link opens the Save panel.
   const [dialog, setDialog] = useState(request ? { kind: 'save', from: request } : null)
   if (error) return <ErrorState error={error} onRetry={reload} />

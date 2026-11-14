@@ -91,7 +91,7 @@ test('a global preview lists, per profile host, the install there and what a bui
   assert.deepEqual(r.preview, {
     name: 'mine', scope: 'global', project: null, rows: [{
       host: 'claude', label: 'Claude Code', present: true, state: 'active', root: cfg,
-      changes: [{ name: 'theme', from: 'neutral', to: 'pirate' }], layering: null,
+      changes: [{ name: 'theme', from: 'neutral', to: 'pirate' }], layering: null, refused: null,
     }],
   });
   const none = apiProfiles(st, '/api/profiles?profile=starter', { src: { personalDir: personal }, tools: ALL });
@@ -190,4 +190,34 @@ test('profile-save starts the CLI verb from an active install; every refusal is 
     assert.match(r.json.error, want);
   }
   assert.deepEqual(started, []);
+});
+
+// F1 through the console: a folder whose marker dir IS a host's global install (`~` holds
+// `~/.claude`) is refused for that host. The apply job is a 400 and starts nothing; the preview
+// keeps the row and says why, and the panel does not offer it.
+test('the console refuses a project folder that holds a host global install', async () => {
+  started.length = 0;
+  for (const host of ['claude', 'bob', 'openclaude']) {
+    const r = await req('POST', '/api/actions/profile-apply', { name: 'starter', hosts: [host], project: home });
+    assert.equal(r.status, 400, host);
+    assert.match(r.json.error, new RegExp(`holds the ${host} global install .* overwrite it`));
+  }
+  assert.deepEqual(started, []);
+  const pv = apiProfiles(st, `/api/profiles?profile=starter&project=${encodeURIComponent(home)}`,
+    { src: { personalDir: personal }, tools: ALL });
+  const refused = Object.fromEntries(pv.preview.rows.map((x) => [x.host, Boolean(x.refused)]));
+  assert.deepEqual(refused, { opencode: false, claude: true, bob: true, openclaude: true });
+  assert.deepEqual(pv.preview.rows.find((x) => x.host === 'claude').changes, []);
+});
+
+// F5: a relative folder would resolve against the daemon's working directory, which the user
+// never sees, so the console refuses it — the job at 400, the preview with the same reason.
+test('the console refuses a relative project folder', async () => {
+  started.length = 0;
+  const r = await req('POST', '/api/actions/profile-apply', { name: 'starter', hosts: ['claude'], project: 'work/api' });
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /^not an absolute path: work\/api/);
+  assert.deepEqual(started, []);
+  const pv = apiProfiles(st, '/api/profiles?profile=starter&project=work%2Fapi', { src: { personalDir: personal }, tools: ALL });
+  assert.match(pv.preview.error, /^not an absolute path: work\/api/);
 });

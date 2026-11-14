@@ -29,7 +29,7 @@ On Windows, type `.\` before `install.cmd`. PowerShell does not run a program fr
 | **Shipped** | `profiles/` in this checkout, shipped in the npm package and the clone | An admin, by pull request |
 | **Personal** | `profiles/` in the machine-wide Geneseed folder (`~/.config/geneseed/profiles/`), beside your memory and rules | You, with `geneseed profile save`. An update never touches it |
 
-Both sources load the same way, and `geneseed doctor` checks every profile of both. A Personal profile may not use the name of a Shipped one: `profile save` refuses that name. A Personal file under a Shipped name that you made by hand is never loaded (the Shipped profile is), and `geneseed doctor` names that file.
+Both sources load the same way, and `geneseed doctor` checks every profile of both. A broken Shipped profile is a doctor failure. A broken Personal profile is a note only, so a file of yours never stops an update. A Personal profile may not use the name of a Shipped one: `profile save` refuses that name. A Personal file under a Shipped name that you made by hand is never loaded (the Shipped profile is), and `geneseed doctor` names that file in a note.
 
 ## What `setup --profile` does
 
@@ -56,7 +56,7 @@ geneseed profile apply <name> --hosts claude,opencode  # only these tools
 `profile apply` builds a profile without the onboarding: it puts nothing on `PATH`, writes no login item, starts no console and runs no doctor. Use it to change what an install runs, or to give one project its own setup.
 
 - **Global** builds `<host>-global` for each tool, as `setup --profile` does.
-- **`--project <dir>`** builds the per-project install of each tool into that folder (`geneseed build --emit <host> --out <dir> --root <dir>`). The folder must exist, be writable, and not be a tool's own global config folder.
+- **`--project <dir>`** builds the per-project install of each tool into that folder (`geneseed build --emit <host> --out <dir> --root <dir>`). The folder must exist, be writable, and not be a tool's own global config folder. It must also not hold that global folder as its marker folder: `--project ~` is refused for Claude Code, because `~/.claude` is its global install. In the web console the folder must be an absolute path (`~` counts).
 - **`--hosts`** narrows the run to some of the tools the profile lists. It refuses a tool the profile does not list. Without it, the run takes each tool of the profile that this machine has; a missing one is a line in the summary.
 
 It touches only the installs of the tools it builds, in the scope you chose. Every other install stays as it is. As with `setup --profile`, a failure on one tool does not stop the others, the run then exits 1, and the summary lists every setting a build put back to the profile's value.

@@ -6,6 +6,7 @@
  * and the web console's deploy and apply routes import it too, so the folder check has one home.
  */
 import { accessSync, constants } from 'node:fs';
+import path from 'node:path';
 
 import { GATE_SWITCHES } from '../build/source.mjs';
 import {
@@ -13,6 +14,7 @@ import {
 } from '../hosts/hosts.mjs';
 import { gatesOfDir, installState } from '../hosts/installs.mjs';
 import { isDir } from '../lib/fs.mjs';
+import { normcase } from '../lib/paths.mjs';
 import { stripWhitespace } from '../lib/text.mjs';
 
 /**
@@ -22,8 +24,12 @@ import { stripWhitespace } from '../lib/text.mjs';
  * host's own global config dir (a project emit there would mislabel as the global row and collide
  * on dedup). Moved out of `apiDeployCmd` (js/web/actions.mjs, which spawns) so the CLI's
  * `profile apply --project` and the console share one check; the texts are the console's own.
+ *
+ * `hosts` are the hosts about to be built there: for each, the folder is also refused when its
+ * project marker (`<folder>/.claude`, …) IS that host's global config dir (`markerCollision`) —
+ * `--project ~` for Claude Code would otherwise write a project install over the global one.
  */
-export function checkProjectFolder(rawPath) {
+export function checkProjectFolder(rawPath, hosts = []) {
   const raw = stripWhitespace(typeof rawPath === 'string' ? rawPath : '');
   if (!raw) return { error: 'no folder given' };
   let root;
@@ -47,7 +53,27 @@ export function checkProjectFolder(rawPath) {
   if (cfgdirs.has(root)) {
     return { error: "that's a host global config dir — use its existing row to build a global install" };
   }
+  for (const host of hosts) {
+    const hit = markerCollision(root, host);
+    if (hit) return { error: hit };
+  }
   return { root };
+}
+
+/**
+ * The refusal when a project install of `host` in `root` would land IN that host's global config
+ * dir — `<root>/<projectMarker>` resolves to it (`~` and `~/.claude` for Claude Code) — else
+ * null. Case-folded on Windows (`normcase`). A config dir that cannot be resolved is no collision.
+ */
+export function markerCollision(root, host) {
+  const row = HOSTS.find((h) => h.host === host);
+  if (!row) return null;
+  let cfg;
+  try { cfg = resolvePath(row.configDir()); } catch { return null; }
+  const at = resolvePath(path.join(root, row.projectMarker));
+  if (normcase(at) !== normcase(cfg)) return null;
+  return `${root} holds the ${host} global install (${cfg}): a ${host} project install there would `
+    + 'overwrite it — pick a project folder';
 }
 
 /**

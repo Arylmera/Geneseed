@@ -348,6 +348,17 @@ describe('Installs / Hosts', () => {
     )
   })
 
+  // F9: the profiles read is cached like the other machine-wide reads, so a remount at the same
+  // data revision does not fetch it again.
+  it('reads the profiles once per data revision across remounts', async () => {
+    const first = render(<Hosts onAction={() => {}} dataRev={7} />)
+    await waitFor(() => expect(panel()).toBeTruthy())
+    first.unmount()
+    render(<Hosts onAction={() => {}} dataRev={7} />)
+    await waitFor(() => expect(panel()).toBeTruthy())
+    expect(api.profiles).toHaveBeenCalledTimes(1)
+  })
+
   it('a read-only console offers no Save as profile', async () => {
     render(<Hosts />)
     await waitFor(() => expect(panel()).toBeTruthy())

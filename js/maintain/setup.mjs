@@ -1014,27 +1014,35 @@ export function cmdProfileApply(args, { src = {} } = {}, deps = {}) {
   let picked = p.hosts;
   if (args.hosts) {
     picked = [...new Set(String(args.hosts).split(',').map((h) => h.trim()).filter(Boolean))];
+    // Two different mistakes, named apart: a word that is no host at all, and a real host this
+    // profile does not list (D41: apply builds only the profile's own hosts).
     const known = profileHosts();
-    const bad = picked.filter((h) => !p.hosts.includes(h));
-    if (!picked.length || bad.length) {
-      printErr(`geneseed: error: --hosts: ${bad.length ? bad.map((h) => `'${h}'`).join(', ') : 'none given'} `
-        + `${bad.some((h) => !known.includes(h)) ? 'is not a host' : 'is not in this profile'} `
-        + `(profile '${args.name}' lists: ${p.hosts.join(', ')})\n`);
+    const quote = (xs) => xs.map((h) => `'${h}'`).join(', ');
+    const unknown = picked.filter((h) => !known.includes(h));
+    const outside = picked.filter((h) => known.includes(h) && !p.hosts.includes(h));
+    if (!picked.length || unknown.length || outside.length) {
+      const why = !picked.length ? ['none given'] : [
+        ...(unknown.length ? [`not a host: ${quote(unknown)} (hosts: ${known.join(', ')})`] : []),
+        ...(outside.length ? [`not in this profile: ${quote(outside)}`] : []),
+      ];
+      printErr(`geneseed: error: --hosts: ${why.join('; ')} (profile '${args.name}' lists: ${p.hosts.join(', ')})\n`);
       return 2;
     }
   }
+  const found = foundHosts(tools ?? hostTools());
+  const listed = found.filter((t) => picked.includes(t.host));
+  const targets = listed.filter((t) => t.present);
   let project = null;
   if (args.project) {
-    const r = checkProjectFolder(args.project);
+    // The hosts about to be built: a folder whose `.claude` (…) IS that host's global install is
+    // refused for that host (`markerCollision`), so a project build never lands on the global.
+    const r = checkProjectFolder(args.project, targets.map((t) => t.host));
     if (r.error) {
       printErr(`[profile] --project: ${r.error}\n`);
       return 1;
     }
     project = r.root;
   }
-  const found = foundHosts(tools ?? hostTools());
-  const listed = found.filter((t) => picked.includes(t.host));
-  const targets = listed.filter((t) => t.present);
   const scope = project ? `project ${project}` : 'global';
   printOut(`Geneseed profile apply - '${args.name}' (${loaded.source ?? 'shipped'}) - ${scope}\n\n`);
   if (!targets.length) {

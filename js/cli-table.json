@@ -1895,7 +1895,7 @@
     {
       "name": "setup",
       "help": "install wizard; --profile NAME installs a profile with no questions",
-      "description": "interactive install wizard (dependency-free, all OSes). With --profile <name>, it asks nothing: it installs profiles/<name>.json globally into each AI coding tool the profile lists that is found on this machine, puts geneseed on PATH, sets the web console to start at login, starts it, and runs the doctor",
+      "description": "interactive install wizard (dependency-free, all OSes). With --profile <name>, it asks nothing: it installs that profile (Shipped, from profiles/ in this checkout, or Personal, from profiles/ in the machine-wide Geneseed folder) globally into each AI coding tool the profile lists that is found on this machine, puts geneseed on PATH, sets the web console to start at login, starts it, and runs the doctor",
       "positionals": [],
       "options": [
         {

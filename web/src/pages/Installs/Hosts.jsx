@@ -289,7 +289,7 @@ export default function Hosts({
   // leaves the Sync cells blank, never the tables.
   const { data: fleetData, error: fleetErr } = useAsync(() => api.fleet(), [dataRev])
   // The install profiles each active install follows, for the panel's "matches" tag.
-  const { data: profData } = useAsync(() => api.profiles(), [dataRev])
+  const { data: profData } = useAsync(() => api.profiles(), [dataRev], 'profiles')
   const fleet = fleetErr ? null : (fleetData ?? undefined)
   // null | { text, tone }: 'bad' is a failure (an alert), 'ok' a done act, '' a progress
   // note, so "Opening…" is never painted as an error.

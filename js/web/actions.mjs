@@ -882,7 +882,7 @@ export function apiDeployCmd(state, body) {
   }
   // The folder check is `checkProjectFolder`'s (js/maintain/profile-scope.mjs), shared with
   // `geneseed profile apply --project` and the Profiles tab's apply.
-  const folder = checkProjectFolder(strOr(bget(body, 'path')));
+  const folder = checkProjectFolder(strOr(bget(body, 'path')), [host]);
   if (folder.error) return { error: folder.error };
   const { root } = folder;
   // A fresh deploy is LEAN, at the default register, mode and trust: the same default as the

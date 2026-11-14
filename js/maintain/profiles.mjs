@@ -35,6 +35,7 @@ import { HOSTS } from '../hosts/hosts.mjs';
 import { installState, themeFiles } from '../hosts/installs.mjs';
 import { isDir, printErr, printOut } from '../lib/fs.mjs';
 import { machineDir } from '../lib/machine-dir.mjs';
+import { NOTE } from '../inspect/scan.mjs';
 import { expanduser, resolvePath } from '../hosts/hosts.mjs';
 
 /** Where the shipped profiles live: `profiles/` at the checkout (or package) root. */
@@ -325,19 +326,26 @@ export function saveProfile(name, profile, { dir = PROFILES_DIR, force = false }
 
 /**
  * The doctor's arm (spec D10, D36): every profile of both sources through the same loader
- * `setup --profile` uses, one problem line per profile that would refuse, and one per Personal
- * file a Shipped name shadows, which is never loaded.
+ * `setup --profile` uses.
+ *
+ * A SHIPPED PROBLEM FAILS, A PERSONAL ONE IS A NOTE. A Shipped profile is this checkout's own
+ * file, so a broken one is a defect of the tree. A Personal file is the user's, in the machine
+ * tier: an update that retires a theme it names, or an admin who ships a name the user already
+ * has, must not fail `doctor --all` — the updater runs it on the pulled tree and rolls back on a
+ * failure (`gatePulled`), which would block every update over a file the update never touches.
+ * So a refused or shadowed Personal file is a `NOTE` line, printed and not counted.
  * @param {{ shippedDir?: string, personalDir?: string }} [src]
  */
 export function profileSetProblems(src = {}) {
   const out = [];
   for (const e of listProfiles(src)) {
+    const note = e.source === 'personal' ? NOTE : '';
     if (e.shadowed) {
-      out.push(`[profiles] ${e.file} has the name of a shipped profile, so it is never loaded — rename it`);
+      out.push(`${note}[profiles] ${e.file} has the name of a shipped profile, so it is never loaded — rename it`);
       continue;
     }
     const r = loadEntry(e);
-    if (!r.ok) out.push(`[profiles] ${r.error}`);
+    if (!r.ok) out.push(`${note}[profiles] ${r.error}`);
   }
   return out;
 }
@@ -396,6 +404,16 @@ function saveSource(args, hosts) {
  */
 export function cmdProfile(args, { shippedDir = PROFILES_DIR, personalDir = null, root = ROOT } = {}) {
   const src = { shippedDir, personalDir: personalDir ?? personalProfilesDir() };
+  // Each action takes its own flags only: one it would ignore is refused, never dropped in silence.
+  const foreign = args.action === 'apply'
+    ? [['from', '--from'], ['shipped', '--shipped'], ['force', '--force']]
+    : [['hosts', '--hosts']];
+  const given = foreign.filter(([k]) => args[k] !== undefined && args[k] !== null && args[k] !== false)
+    .map(([, flag]) => flag);
+  if (given.length && (args.action === 'apply' || args.action === 'save')) {
+    printErr(`geneseed: error: profile ${args.action} does not take ${given.join(', ')}\n`);
+    return 2;
+  }
   if (args.action === 'apply') return import('./setup.mjs').then((m) => m.cmdProfileApply(args, { src }));
   if (args.action !== 'save') {
     printErr(`geneseed: error: profile: unknown action '${args.action}' (actions: save, apply)\n`);

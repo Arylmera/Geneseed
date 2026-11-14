@@ -14,14 +14,27 @@ import path from 'node:path';
 
 import { ROOT } from '../build/source.mjs';
 import { installProfile } from '../build/profile.mjs';
-import { HOSTS } from '../hosts/hosts.mjs';
+import { HOSTS, expanduser } from '../hosts/hosts.mjs';
 import { installState, installTargets } from '../hosts/installs.mjs';
 import {
   BASE_PROFILE, isGitClone, listProfiles, loadProfile, profileBuildArgs, profileDiff, profileDirs,
   profileFromInstall, profileHosts,
 } from '../maintain/profiles.mjs';
-import { checkProjectFolder, globalLayering } from '../maintain/profile-scope.mjs';
+import { checkProjectFolder, globalLayering, markerCollision } from '../maintain/profile-scope.mjs';
 import { hostTools, profileChanges } from '../maintain/setup.mjs';
+
+/**
+ * The console's folder check: absolute (after `~` expansion) first, then `checkProjectFolder`.
+ * A RELATIVE PATH IS REFUSED HERE: it would resolve against the daemon's working directory,
+ * which the user never sees, so `api` typed in the panel could build into a folder nobody named.
+ */
+function consoleFolder(raw, hosts = []) {
+  const typed = typeof raw === 'string' ? raw.trim() : '';
+  if (typed && !path.isAbsolute(expanduser(typed))) {
+    return { error: `not an absolute path: ${typed} — give the whole folder path (or start it with ~)` };
+  }
+  return checkProjectFolder(typed, hosts);
+}
 
 /** A profile name, as `saveProfile` takes one: a file stem, never a path. */
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -62,10 +75,14 @@ function previewRows(p, project, hosts) {
       try { root = HOSTS.find((x) => x.host === h.host).configDir(); } catch { root = null; }
     }
     const state = root ? installState(root, h.host, project ? 'project' : 'global') : 'absent';
-    const changes = h.present && state === 'active' ? profileChanges(profileBuildArgs(p, h.host, project)) : [];
+    // A project folder whose marker dir IS this host's global install is refused for this host
+    // (`markerCollision`): the row says so and the panel does not offer it.
+    const refused = project ? markerCollision(project, h.host) : null;
+    const changes = h.present && !refused && state === 'active'
+      ? profileChanges(profileBuildArgs(p, h.host, project)) : [];
     return {
       host: h.host, label: h.label, present: h.present, state, root: root ? String(root) : null,
-      changes, layering: project ? globalLayering(h.host) : null,
+      changes, layering: project && !refused ? globalLayering(h.host) : null, refused,
     };
   });
 }
@@ -119,7 +136,7 @@ export function apiProfiles(state, url, { src = {}, tools = hostTools } = {}) {
     let project = null;
     const raw = q.get('project');
     if (raw !== null) {
-      const f = checkProjectFolder(raw);
+      const f = consoleFolder(raw);
       if (f.error) return { ...out, preview: { name, scope: 'project', error: f.error } };
       project = f.root;
     }
@@ -147,7 +164,7 @@ export function profileApplyCmd(body, { src = {} } = {}) {
   if (bad.length) return { error: `not in profile '${name}': ${bad.join(', ')} (it lists ${r.profile.hosts.join(', ')})` };
   const argv = ['profile', 'apply', name, '--hosts', [...new Set(hosts)].join(',')];
   if (body.project !== undefined && body.project !== null) {
-    const f = checkProjectFolder(body.project);
+    const f = consoleFolder(body.project, [...new Set(hosts)]);
     if (f.error) return { error: f.error };
     argv.push('--project', f.root);
   }

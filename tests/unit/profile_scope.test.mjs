@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { GATE_SWITCHES } from '../../js/build/source.mjs';
 import {
-  GATE_VERBS, STAND_DOWN_VERBS, checkProjectFolder, gateRunsInProject, globalLayering, layeringText,
+  GATE_VERBS, STAND_DOWN_VERBS, checkProjectFolder, gateRunsInProject, globalLayering, layeringText, markerCollision,
 } from '../../js/maintain/profile-scope.mjs';
 import { resolvePath } from '../../js/hosts/hosts.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
@@ -96,6 +96,35 @@ test('the project folder check refuses what the console refuses, and resolves th
     }
   } finally { sb.cleanup(); }
 });
+
+// F1: a folder whose marker dir IS a host's global install (`~` for Claude Code, whose `~/.claude`
+// is the global) is refused for that host: a project build there would overwrite the global
+// install. Only for the hosts about to be built, and case-folded on Windows.
+for (const [host, marker, env] of [['claude', '.claude', 'CLAUDE_CONFIG_DIR'], ['bob', '.bob', 'BOB_CONFIG_DIR'],
+  ['openclaude', '.openclaude', 'OPENCLAUDE_CONFIG_DIR']]) {
+  test(`a folder holding the ${host} global install as its ${marker} is refused for ${host}`, () => {
+    const sb = makeSandbox('gs-scope-');
+    const prev = process.env[env];
+    try {
+      fs.mkdirSync(path.join(sb.path, marker));
+      process.env[env] = path.join(sb.path, marker);
+      const r = checkProjectFolder(sb.path, [host]);
+      assert.match(r.error ?? '', new RegExp(`holds the ${host} global install .* overwrite it`));
+      assert.equal(markerCollision(resolvePath(sb.path), host), r.error);
+      // Spelled in another case on Windows, it is the same folder there.
+      if (process.platform === 'win32') {
+        assert.ok(checkProjectFolder(sb.path.toUpperCase(), [host]).error, 'case-folded');
+      }
+      // Another host, or no host named, is not refused for it.
+      assert.deepEqual(checkProjectFolder(sb.path, ['opencode']), { root: resolvePath(sb.path) });
+      assert.deepEqual(checkProjectFolder(sb.path), { root: resolvePath(sb.path) });
+    } finally {
+      if (prev === undefined) delete process.env[env];
+      else process.env[env] = prev;
+      sb.cleanup();
+    }
+  });
+}
 
 test('a global install beside a project names its armed gates that still run there (D39)', { timeout: 300_000 }, () => {
   const sb = makeSandbox('gs-scope-');

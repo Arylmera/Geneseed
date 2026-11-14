@@ -17,6 +17,7 @@ import {
   profileDiff, profileFromInstall, profileProblems, profileSetProblems, saveProfile,
 } from '../../js/maintain/profiles.mjs';
 import { cellEnv, makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
+import { isDoctorNote } from '../../js/inspect/scan.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -156,10 +157,20 @@ test('a personal profile loads beside the shipped ones; a shipped name shadows a
     assert.equal(starter.profile.theme, 'neutral');
     assert.equal(loadProfile('bad', src).error.startsWith(`${path.join(personal.path, 'bad.json')}: 'mode'`), true);
     assert.deepEqual(loadProfile('nope', src).error, "no profile 'nope' — shipped: starter; personal: bad, mine");
+    // A Personal problem is a NOTE (printed, not counted): a user's file must never fail the
+    // doctor the updater runs on a pulled tree (`gatePulled`), or it would block every update.
     assert.deepEqual(profileSetProblems(src), [
-      `[profiles] ${path.join(personal.path, 'bad.json')}: 'mode': invalid value 'auto' (valid: 'direct', 'foreman')`,
-      `[profiles] ${path.join(personal.path, 'starter.json')} has the name of a shipped profile, so it is never loaded — rename it`,
+      `[note] [profiles] ${path.join(personal.path, 'bad.json')}: 'mode': invalid value 'auto' (valid: 'direct', 'foreman')`,
+      `[note] [profiles] ${path.join(personal.path, 'starter.json')} has the name of a shipped profile, so it is never loaded — rename it`,
     ]);
+    assert.ok(profileSetProblems(src).every(isDoctorNote));
+    // A Shipped problem stays a failure: it is a defect of this tree.
+    const brokenShipped = fixtureDir({ starter: { ...STARTER, mode: 'auto' } });
+    try {
+      const probs = profileSetProblems({ shippedDir: brokenShipped.path, personalDir: personal.path });
+      assert.equal(isDoctorNote(probs[0]), false);
+      assert.match(probs[0], /^\[profiles\] profiles\/starter\.json: 'mode'/);
+    } finally { brokenShipped.cleanup(); }
   } finally {
     shipped.cleanup();
     personal.cleanup();
@@ -269,6 +280,20 @@ function captured(fn) {
     process.stderr.write = e;
   }
 }
+
+// Each action takes its own flags only: a flag the other action owns is refused, never ignored.
+test('profile apply refuses save flags, and save refuses --hosts, with exit 2', () => {
+  const seams = { shippedDir: PROFILES_DIR, personalDir: NO_PERSONAL };
+  for (const [args, flags] of [
+    [{ action: 'apply', name: 'starter', from: 'claude-global' }, '--from'],
+    [{ action: 'apply', name: 'starter', shipped: true, force: true }, '--shipped, --force'],
+    [{ action: 'save', name: 'x', from: 'claude-global', hosts: 'claude' }, '--hosts'],
+  ]) {
+    const r = captured(() => cmdProfile(args, seams));
+    assert.equal(r.rc, 2, JSON.stringify(args));
+    assert.ok(r.out.includes(`profile ${args.action} does not take ${flags}`), r.out);
+  }
+});
 
 test('a clone is a folder with .git, a file or a dir; anything else is not', () => {
   const sb = makeSandbox('gs-profiles-');
