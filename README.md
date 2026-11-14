@@ -102,7 +102,7 @@ macOS, Linux:
 git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
 ```
 
-`starter` is a neutral voice, a candid peer posture, the agent working each task itself, and every guardrail armed except the ownership gate. Run the same line again to update and repair. A team adds its own profile to [`profiles/`](profiles/) by pull request; `geneseed profile save <name> --from claude-global` writes one from your own install. See [Install profiles](docs/reference/profiles.md).
+`starter` is a neutral voice, a candid peer posture, the agent working each task itself, and every guardrail armed except the ownership gate. Run the same line again to update and repair. `geneseed profile save <name> --from claude-global` writes your own install as a Personal profile (in `~/.config/geneseed/profiles/`); with `--shipped`, from a clone, it writes [`profiles/`](profiles/) for a pull request, which is how a team adds one. `geneseed profile apply <name>` applies a profile globally, or with `--project <dir>` to one project folder. See [Install profiles](docs/reference/profiles.md).
 
 ### ⚡ The short way — `npx`
 

@@ -24,7 +24,7 @@ macOS, Linux:
 git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
 ```
 
-It asks nothing. It installs the harness globally into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check, and prints a summary with the console's address. With no tool on the machine it installs nothing and prints where to get each one. Run the same line again to update and repair. `starter` is a neutral voice, a candid peer posture, and every guardrail armed except the ownership gate. [Install profiles](../reference/profiles.md) has the details and shows how a team adds its own profile.
+It asks nothing. It installs the harness globally into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check, and prints a summary with the console's address. With no tool on the machine it installs nothing and prints where to get each one. Run the same line again to update and repair. `starter` is a neutral voice, a candid peer posture, and every guardrail armed except the ownership gate. [Install profiles](../reference/profiles.md) has the details: how to save your own setup as a Personal profile, apply a profile to one project with `geneseed profile apply`, and how a team adds a Shipped one.
 
 ## The 5-minute path
 

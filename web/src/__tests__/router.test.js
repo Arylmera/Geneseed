@@ -46,6 +46,9 @@ const TABLE = [
   ['#/installs/kits', { page: 'kits' }],
   ['#/installs/kits/x', { page: 'kits' }],
   ['#/installs/edits', { page: 'installs', tab: 'edits' }],
+  // The Profiles tab carries a Save request as its item (pages/Installs/Profiles.jsx).
+  ['#/installs/profiles', { page: 'installs', tab: 'profiles' }],
+  ['#/installs/profiles/%7B%22save%22%7D', { page: 'installs', tab: 'profiles', item: '{"save"}' }],
   ['#/installs/server', { page: 'settings' }],
   // Personal's Memory and Notebook tabs carry an entry of their own, URI-decoded.
   ['#/personal/memory/a%20b', { page: 'personal', tab: 'memory', item: 'a b' }],

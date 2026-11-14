@@ -4145,3 +4145,28 @@ button.tier.on, button.tier.on:hover { background: var(--accent-soft); }
 .loadout-rules div > ul { display: grid; gap: var(--sp-1); font-size: var(--fs-xs); }
 .loadout-rules div > ul li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .loadout-foot { border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+
+/* Installs › Profiles (pages/Installs/Profiles.jsx): a card per profile, then the Apply or Save
+   panel below the grid. Built from the console's panel, kv and tag; only the layout is new. */
+.profiles { display: flex; flex-direction: column; gap: var(--sp-4); }
+.prof-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: var(--sp-4); }
+.prof-head h3 { margin: 0; font-family: var(--font-display); font-weight: 600; }
+.prof-head .sub { margin: var(--sp-1) 0 0; }
+.prof-kv .kv { grid-template-columns: 112px 1fr; padding: var(--sp-2) 0; } /* off-scale: 112px label column */
+.prof-kv code.v { overflow-wrap: anywhere; font-size: var(--fs-xs); }
+.prof-dialog { border: 1px solid var(--accent-line); border-radius: var(--r-md); }
+.prof-dialog h2 { margin: 0; font-size: 15px; font-weight: 700; } /* off-scale: as .inst-head h2 */
+.prof-field { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; padding: 0; border: 0; }
+.prof-dialog .dp-row { display: flex; align-items: flex-end; gap: var(--sp-2); flex-wrap: wrap; }
+.prof-dialog .dp-path { flex: 1 1 260px; min-width: 0; background: var(--surface-2); color: var(--text); /* off-scale: as .deploy-pop .dp-path */
+  border: 1px solid var(--line-2); border-radius: var(--r-xs); padding: var(--sp-2);
+  font-family: var(--font-mono, monospace); font-size: var(--fs-sm); }
+.prof-hosts { display: flex; flex-direction: column; gap: var(--sp-2); }
+.prof-host { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.prof-host.missing { background: var(--surface-2); color: var(--text-3); }
+.prof-host label { cursor: pointer; }
+.prof-host.missing label { cursor: default; }
+.prof-changes { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
+.prof-changes .warn-text { color: var(--warn-text); font-weight: 600; }
+.prof-changes .dim { color: var(--text-3); }

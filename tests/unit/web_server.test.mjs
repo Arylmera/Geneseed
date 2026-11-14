@@ -54,14 +54,15 @@ const TOKEN = 'test-token';
 // message. (`/api/graph` left this list when the web graph pages were retired — the last
 // endpoint to leave it.)
 
-/** Every GET path the daemon answers — 32 (the Factories page added `/api/factories/catalog` and
- * `/api/factories/active`). Trailing `/` marks a prefix route. */
+/** Every GET path the daemon answers — 33 (the Factories page added `/api/factories/catalog` and
+ * `/api/factories/active`; the Installs page's Profiles tab added `/api/profiles`). Trailing `/`
+ * marks a prefix route. */
 const GET_SURFACE = ['/api/activity', '/api/activity/', '/api/catalog/', '/api/diff', '/api/docs',
   '/api/docs/page/', '/api/doctor', '/api/excludes', '/api/factories/active', '/api/factories/catalog',
   '/api/fleet', '/api/installs', '/api/item/',
   '/api/jobs', '/api/jobs/', '/api/kits', '/api/loadout', '/api/loadout/', '/api/loops', '/api/loops/active', '/api/mcp', '/api/migrate/preview',
   '/api/overview',
-  '/api/ping', '/api/profile', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
+  '/api/ping', '/api/profile', '/api/profiles', '/api/rules', '/api/setup', '/api/themes', '/api/recent', '/api/update',
   '/api/usage', '/api/gates'];
 
 /** Every POST path the daemon answers — 17. `/api/mcp` left it when MCP became read-only, and

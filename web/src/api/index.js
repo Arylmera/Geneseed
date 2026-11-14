@@ -58,6 +58,14 @@ const fleet = () => get('/api/fleet')
 const migratePreview = () => get('/api/migrate/preview')
 // Every kit this Geneseed ships, and per install which are on: the Kits page.
 const kits = () => get('/api/kits')
+// Install profiles from both sources, the installs that follow each, and with `profile` a preview
+// of applying it: globally, or into `project` (a folder) when one is given. Machine-wide.
+const profiles = (profile, project) => {
+  if (!profile) return get('/api/profiles')
+  const q = new URLSearchParams({ profile })
+  if (project != null) q.set('project', project)
+  return get(`/api/profiles?${q}`)
+}
 const usage = () => get('/api/usage')
 const gates = () => get('/api/gates')
 const update = () => get('/api/update')
@@ -262,6 +270,7 @@ export const api = {
   mcp,
   mcpReveal,
   installs,
+  profiles,
   installToggle,
   installRemove,
   setDefaultInstall,

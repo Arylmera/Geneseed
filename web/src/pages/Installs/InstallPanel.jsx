@@ -172,6 +172,8 @@ export default function InstallPanel({
   onRevealMcp,
   onForce,
   onPrune,
+  profileMatches,
+  onSaveProfile,
 }) {
   const who = `${hostInfo(inst.host).label} · ${inst.scope}`
   const [label, tone] = BADGE[inst.state] || BADGE.absent
@@ -190,6 +192,17 @@ export default function InstallPanel({
           : `Per-project install · ${hostInfo(inst.host).label}`}
       </span>
       <code className="ip-path">{inst.path}</code>
+      {/* The install profiles this install follows: equal on every build setting (Profiles tab). */}
+      {active && profileMatches?.length ? (
+        <div className="row gap-8 wrap" aria-label="Profile">
+          <span className="ip-label">Profile</span>
+          {profileMatches.map((n) => (
+            <span className="tag acc" key={n}>
+              matches {n}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {absent ? (
         <p className="sub">
@@ -263,6 +276,11 @@ export default function InstallPanel({
               <button type="button" className="btn" disabled={unchanged} onClick={onApply}>
                 Apply and rebuild
               </button>
+              {onSaveProfile ? (
+                <button type="button" className="btn ghost" onClick={onSaveProfile}>
+                  Save as profile…
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn ghost danger-line"

@@ -82,10 +82,11 @@ const ARGVS = {
 };
 
 /**
- * The four actions the POST routes answer INLINE, without consulting the table, and the
- * recorded cell that PROBES each. `restore` is synchronous and returns a result rather than a
- * job id; `install`/`deploy`/`rebuild` resolve their argv from the request body first.
- * `rebuild` came after the recordings were retired, so it names the live test that drives it.
+ * The actions the POST routes answer INLINE, without consulting the table, and the recorded
+ * cell that PROBES each. `restore` is synchronous and returns a result rather than a job id;
+ * `install`/`deploy`/`rebuild` and the two profile jobs resolve their argv from the request body
+ * first. `rebuild` and the profile jobs came after the recordings were retired, so each names the
+ * live test that drives it.
  *
  * NAMING A CELL IS THE STRENGTHENING. The reference cross-checked this declaration against its
  * own `action ==` comparisons read with `ast` — a second reading of the same source. These are
@@ -97,6 +98,8 @@ const INLINE_PROBES = {
   install: 'actions__install-and-deploy-refuse-every-body-they-cannot-validate.json',
   deploy: 'actions__install-and-deploy-refuse-every-body-they-cannot-validate.json',
   rebuild: 'tests/unit/web_rebuild.test.mjs',
+  'profile-apply': 'tests/unit/web_profiles.test.mjs',
+  'profile-save': 'tests/unit/web_profiles.test.mjs',
 };
 
 test('the action table is the seven rows this phase measured', () => {

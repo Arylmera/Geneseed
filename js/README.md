@@ -235,8 +235,9 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | module | owns |
 |---|---|
 | `update.mjs` | `upgrade`/`bootstrap` — git pull, doctor gate, rebuild, each via a respawn |
-| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers. `setup --profile` installs a profile with no prompt |
-| `profiles.mjs` | Install profiles (`profiles/*.json`): load and validate against the generator's own sources, the per-host argv, `profile save` |
+| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers. `setup --profile` installs a profile with no prompt; `profile apply` (`cmdProfileApply`) shares its build loop |
+| `profiles.mjs` | Install profiles from two sources, Shipped (`profiles/*.json`) and Personal (`<machine tier>/profiles/`): load and validate against the generator's own sources, the per-host argv (global or project), `profile save` |
+| `profile-scope.mjs` | The scope half of `profile apply`: the project folder check (shared with the console's deploy) and what a global install still runs inside a project (`globalLayering`) |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |
@@ -277,6 +278,7 @@ the deployed harness as JSON.
 | `update-check.mjs` | Is a newer release on npm? Answers from memory, refreshes in the background (a day when it got an answer, an hour when it did not), `null` on any failure, never asked under `node --test` |
 | `gates-api.mjs` | `GET /api/gates`: gate asks per rule per day over 30 days, read off every installed harness's `notebook/gates.jsonl` (the Overview's sparklines) |
 | `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, a fleet-wide `names` list (per-name 30-day counts, installs, daily series, last day seen), and skips lines older than 90 days in each `notebook/usage.jsonl` |
+| `profiles-api.mjs` | The Profiles tab: `GET /api/profiles` (both sources, the installs that follow each, an apply preview) and the `profile-apply` / `profile-save` jobs, which run the CLI's own verb |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
 | `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv, and `installView`, the per-request install behind the one (host, path) allowlist |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |

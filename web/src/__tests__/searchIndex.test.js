@@ -49,6 +49,7 @@ describe('useSearchIndex', () => {
       ['Personal / Memory', '#/personal/memory'],
       ['Personal / Notebook', '#/personal/notebook'],
       ['Installs / Hosts', '#/installs/hosts'],
+      ['Installs / Profiles', '#/installs/profiles'],
       ['Installs / Local edits', '#/installs/edits'],
       ['Installs / Doctor', '#/installs/doctor'],
       ['Docs', '#/docs'],

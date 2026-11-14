@@ -22,6 +22,7 @@ import { BadRequest, NotFound } from './catalog.mjs';
 import { nonceBook, openFolder, requestRestart, restartRefusal, rootId, secretProof } from './daemon.mjs';
 import { apiDocs, apiDocsPage } from './docs.mjs';
 import { actionCommands, updatePlan } from './jobs.mjs';
+import { profileApplyCmd, profileSaveCmd } from './profiles-api.mjs';
 import {
   MACHINE_GETS, POST_ROUTES, PREFIX_ROUTES, STATE_ROUTES, VIEW_POSTS, readJsonBody,
 } from './routes.mjs';
@@ -395,6 +396,13 @@ export function makeHandler(state, jm, token, dist, holder = null) {
       const plan = apiDeployCmd(state, body);
       if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
       return startJob(res, 'deploy', [plan.cmd], ae);
+    }
+    // The Profiles tab's two jobs run the CLI's own `profile apply|save` (js/web/profiles-api.mjs).
+    // The body names a profile, hosts, a folder or an install, so a refusal is the body's: 400.
+    if (action === 'profile-apply' || action === 'profile-save') {
+      const plan = action === 'profile-apply' ? profileApplyCmd(body) : profileSaveCmd(body);
+      if (Object.hasOwn(plan, 'error')) return sendJson(res, plan, 400, ae);
+      return startJob(res, action, [plan.cmd], ae);
     }
     if (action === 'rebuild') {
       const plan = rebuildCmds(body);
