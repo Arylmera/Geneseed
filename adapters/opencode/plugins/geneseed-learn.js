@@ -366,11 +366,14 @@ const feedbackKey = (bullet) => bullet.replace(DATED_TAIL_RE, '').replace(/\s+/g
  * A notes file's new text with `bullets` appended, or null when every one is already there (a
  * second run on the same report writes nothing). The old text is kept as it was, line endings
  * folded to LF; past `cap` bullets of the hook's own shape, or past `budget` characters, the
- * oldest hook bullets drop. A hand-written line is never moved or dropped.
+ * oldest hook bullets drop. A hand-written line is never moved or dropped, and neither is a bullet
+ * this call adds: when hand-written text alone fills the budget, the file goes over it rather
+ * than lose the note just written.
  */
 function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NOTE_FILE_CHARS) {
   const text = String(old || '').replace(/\r\n?/g, '\n');
   const lines = text ? text.replace(/\n$/, '').split('\n') : [];
+  let oldCount = lines.length;
   const seen = new Set(lines.filter((l) => l.startsWith('- ')).map(feedbackKey));
   let added = 0;
   for (const b of bullets) {
@@ -382,8 +385,13 @@ function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NO
   }
   if (!added) return null;
   const size = () => lines.reduce((n, l) => n + l.length + 1, 0);
-  for (let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length; hooks > 0 && (hooks > cap || size() > budget); hooks -= 1) {
-    lines.splice(lines.findIndex((l) => HOOK_BULLET_RE.test(l)), 1);
+  let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length;
+  while (hooks > cap || size() > budget) {
+    const i = lines.slice(0, oldCount).findIndex((l) => HOOK_BULLET_RE.test(l));
+    if (i < 0) break;
+    lines.splice(i, 1);
+    oldCount -= 1;
+    hooks -= 1;
   }
   return `${lines.join('\n')}\n`;
 }
@@ -405,27 +413,40 @@ async function notesRootOf(pluginDir = PLUGIN_DIR) {
 }
 
 // The file lock, a twin of js/hosts/spec-feedback.mjs `withLock` (async here): `<file>.lock` made
-// exclusively, a lock older than 10 s broken as a dead holder, at most 100 waits of 10 ms, then
-// give up silently. Parallel child sessions end together and would otherwise lose bullets.
+// exclusively and holding its owner's token, at most 100 waits of 10 ms, then give up silently.
+// Parallel child sessions end together and would otherwise lose bullets. A lock older than 10 s
+// is a dead holder's: it is broken by renaming it to a name only this caller uses (one of two
+// waiters wins), a fresh lock taken that way is linked back, and a holder removes the lock on
+// release only while it still holds its own token.
+const feedbackLockToken = () => `${process.pid}.${Math.random().toString(36).slice(2)}`
+async function breakStaleFeedbackLock(lock) {
+  const taken = `${lock}.${feedbackLockToken()}.stale`
+  try { await fs.rename(lock, taken) } catch { return }
+  try {
+    if (Date.now() - (await fs.stat(taken)).mtimeMs <= 10000) await fs.link(taken, lock) // a live lock: put it back
+  } catch { /* the slot is taken again */ }
+  await fs.unlink(taken).catch(() => {})
+}
 async function withFeedbackLock(file, fn) {
   const lock = `${file}.lock`
+  const token = feedbackLockToken()
   for (let i = 0; i < 100; i += 1) {
     let handle
     try {
       handle = await fs.open(lock, "wx")
     } catch (e) {
       if (e?.code !== "EEXIST") return false
-      try {
-        if (Date.now() - (await fs.stat(lock)).mtimeMs > 10000) { await fs.unlink(lock); continue }
-      } catch { continue }
+      let stale = false
+      try { stale = Date.now() - (await fs.stat(lock)).mtimeMs > 10000 } catch { continue }
+      if (stale) { await breakStaleFeedbackLock(lock); continue }
       await new Promise((r) => setTimeout(r, 10))
       continue
     }
     try {
-      await handle.close()
+      try { await handle.writeFile(token) } finally { await handle.close() }
       return await fn()
     } finally {
-      await fs.unlink(lock).catch(() => {})
+      try { if ((await fs.readFile(lock, "utf8")) === token) await fs.unlink(lock) } catch { /* broken as stale */ }
     }
   }
   return false

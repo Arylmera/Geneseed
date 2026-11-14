@@ -280,6 +280,21 @@ test("spec-feedback: 12 captures at once keep all 12 bullets", async () => {
   assert.deepEqual((await fs.readdir(path.join(notes, "agent-notes"))).filter((f) => !f.endsWith(".md")), [])
 })
 
+// The plugin's stale-lock break, as the hook's: a dead holder's lock (older than 10 s) is renamed
+// away and the capture goes on; nothing of it is left behind.
+test("spec-feedback: the plugin breaks a stale lock and leaves no trace", async () => {
+  const d = makeSandbox("gs-learn-").path
+  const dir = path.join(d, "notes", "agent-notes")
+  await fs.mkdir(dir, { recursive: true })
+  const lock = path.join(dir, "tester.md.lock")
+  await fs.writeFile(lock, "dead.hook")
+  const old = new Date(Date.now() - 60_000)
+  await fs.utimes(lock, old, old)
+  const got = await GeneseedLearn.captureSpecFeedback("tester", "spec-feedback: [agent] after a dead holder", path.join(d, "notes"), "2026-11-14")
+  assert.deepEqual(got.map((f) => path.basename(f)), ["tester.md"])
+  assert.deepEqual(await fs.readdir(dir), ["tester.md"])
+})
+
 // F8: a TOP-LEVEL session keeps the old order: with no memory store found, its messages are never
 // fetched (the early fetch is for a child's report only).
 test("spec-feedback: V1 fetches a top-level session's messages only once a store is known", async () => {

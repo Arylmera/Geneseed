@@ -8,7 +8,7 @@ import path from 'node:path';
 import { makeSandbox } from '../helpers/sandbox.mjs';
 import {
   captureSpecFeedback, feedbackBullets, finalAssistantText, mergeFeedback, specFeedbackOf, subagentReport, today,
-  MAX_GENERAL_BULLETS,
+  withLock, MAX_GENERAL_BULLETS,
 } from '../../js/hosts/spec-feedback.mjs';
 import { SECRET_RE, tailReader } from '../../js/hosts/hooks-prims.mjs';
 import { cmdLearn, notesRootOf } from '../../js/hosts/hooks-learn.mjs';
@@ -117,6 +117,29 @@ test('mergeFeedback: appends, keeps a hand-written file as it was, and caps only
   const b = (n) => `- [agent] ${String(n).repeat(16)} (2026-11-0${n})`;
   assert.equal(b(1).length, 39);
   assert.equal(mergeFeedback(`${b(1)}\n${b(2)}\n`, [b(3)], 100, 100), `${b(2)}\n${b(3)}\n`);
+  // A bullet this call adds never drops: when hand-written text alone is over the budget (9 000
+  // characters against 8 000), the new bullet is kept and the file goes over, rather than a write
+  // that claims a note it threw away.
+  const prose = `${'p'.repeat(8999)}`;
+  assert.equal(mergeFeedback(prose, ['- [agent] kept anyway (2026-11-14)']), `${prose}\n- [agent] kept anyway (2026-11-14)\n`);
+});
+
+// The lock's two safety rules. A lock older than the stale age is a dead hook's: it is broken and
+// the write goes on. And a holder removes the lock on release only while it holds its OWN token:
+// a lock replaced under it (here by hand, inside the critical section) belongs to someone else
+// and stays.
+test('withLock: a stale lock is broken, and a lock that is no longer yours is not removed', async () => {
+  await withDir((d) => {
+    const file = path.join(d, 'n.md');
+    fs.writeFileSync(`${file}.lock`, 'dead.hook');
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(`${file}.lock`, old, old);
+    assert.equal(withLock(file, () => 'ran'), 'ran');
+    assert.equal(fs.existsSync(`${file}.lock`), false, 'the stale lock was broken, then released');
+    assert.equal(withLock(file, () => { fs.writeFileSync(`${file}.lock`, 'someone.else'); return 'ran'; }), 'ran');
+    assert.equal(fs.readFileSync(`${file}.lock`, 'utf8'), 'someone.else');
+    assert.deepEqual(fs.readdirSync(d).sort(), ['n.md.lock'], 'no renamed stale lock is left behind');
+  });
 });
 
 // A sub-agent transcript as the host writes it: one line per content block, the final message's
@@ -143,9 +166,12 @@ test('finalAssistantText: every block of the last message, a hand-back message i
   assert.equal(finalAssistantText(line({ type: 'user', message: { role: 'user', content: 'x' } })), null);
 });
 
-// The host's `last_assistant_message` is the newer copy: when the transcript does not hold it, the
-// transcript's last message is an older one, and the report is the host's copy alone, never both.
-test('subagentReport: the transcript, or the host copy alone when the transcript lags', async () => {
+// The report is the UNION of the transcript's final message and the host's
+// `last_assistant_message` when the transcript does not hold it. The host copy may be NEWER (a
+// lagging transcript) or OLDER (the final message is a hand-back call with no text block, so the
+// host's "last text" is an earlier line): either way the side holding the report is kept, and a
+// stray earlier line costs at most a deduplicated bullet.
+test('subagentReport: the transcript plus the host copy when the transcript does not hold it', async () => {
   await withDir((d) => {
     const tp = path.join(d, 'a.jsonl');
     fs.writeFileSync(tp, `${TRANSCRIPT}\n`);
@@ -153,8 +179,17 @@ test('subagentReport: the transcript, or the host copy alone when the transcript
     assert.equal(subagentReport({ agent_transcript_path: tp }, reader), REPORT);
     assert.equal(subagentReport({ agent_transcript_path: tp, last_assistant_message: 'all green' }, reader), REPORT);
     assert.equal(subagentReport({ agent_transcript_path: tp, last_assistant_message: 'spec-feedback: [agent] a newer one' }, reader),
-      'spec-feedback: [agent] a newer one');
+      `${REPORT}\nspec-feedback: [agent] a newer one`);
     assert.equal(subagentReport({ agent_transcript_path: path.join(d, 'missing.jsonl'), last_assistant_message: 'x y' }, reader), 'x y');
+    // The hand-back case: the host's copy is an earlier text, the report sits in the tool call.
+    const handback = path.join(d, 'h.jsonl');
+    fs.writeFileSync(handback, [
+      line({ type: 'assistant', message: { id: 'e', role: 'assistant', content: [{ type: 'text', text: 'Let me read the file.' }] } }),
+      line({ type: 'assistant', message: { id: 'f', role: 'assistant', content: [{ type: 'tool_use', name: 'SubagentHandback',
+        input: { message: 'STATUS: OK\nspec-feedback: [agent] give the worktree path in the brief — seen: a guess' } }] } }),
+    ].join('\n'));
+    const got = subagentReport({ agent_transcript_path: handback, last_assistant_message: 'Let me read the file.' }, tailReader());
+    assert.deepEqual(specFeedbackOf(got, SECRET_RE), [{ scope: 'agent', body: 'give the worktree path in the brief — seen: a guess' }]);
   });
 });
 

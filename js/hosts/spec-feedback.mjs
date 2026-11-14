@@ -14,7 +14,7 @@
  */
 import { isUtf8 } from 'node:buffer';
 import {
-  closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
+  closeSync, existsSync, linkSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import { SECRET_RE, splitLines } from './hooks-prims.mjs';
@@ -101,11 +101,14 @@ export const feedbackKey = (bullet) => bullet.replace(DATED_TAIL_RE, '').replace
  * A notes file's new text with `bullets` appended, or null when every one is already there (a
  * second run on the same report writes nothing). The old text is kept as it was, line endings
  * folded to LF; past `cap` bullets of the hook's own shape, or past `budget` characters, the
- * oldest hook bullets drop. A hand-written line is never moved or dropped.
+ * oldest hook bullets drop. A hand-written line is never moved or dropped, and neither is a bullet
+ * this call adds: when hand-written text alone fills the budget, the file goes over it rather
+ * than lose the note just written.
  */
 export function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NOTE_FILE_CHARS) {
   const text = String(old || '').replace(/\r\n?/g, '\n');
   const lines = text ? text.replace(/\n$/, '').split('\n') : [];
+  let oldCount = lines.length;
   const seen = new Set(lines.filter((l) => l.startsWith('- ')).map(feedbackKey));
   let added = 0;
   for (const b of bullets) {
@@ -117,8 +120,13 @@ export function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget =
   }
   if (!added) return null;
   const size = () => lines.reduce((n, l) => n + l.length + 1, 0);
-  for (let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length; hooks > 0 && (hooks > cap || size() > budget); hooks -= 1) {
-    lines.splice(lines.findIndex((l) => HOOK_BULLET_RE.test(l)), 1);
+  let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length;
+  while (hooks > cap || size() > budget) {
+    const i = lines.slice(0, oldCount).findIndex((l) => HOOK_BULLET_RE.test(l));
+    if (i < 0) break;
+    lines.splice(i, 1);
+    oldCount -= 1;
+    hooks -= 1;
   }
   return `${lines.join('\n')}\n`;
 }
@@ -161,9 +169,11 @@ export function finalAssistantText(raw) {
 
 /**
  * The final report a SubagentStop payload points at: the sub-agent's own transcript
- * (`agent_transcript_path`), read through the Stop's shared reader. When the host's
- * `last_assistant_message` is not in what the transcript holds, the write lagged: the transcript's
- * last message is an OLDER one, so the host's copy alone is the report.
+ * (`agent_transcript_path`), read through the Stop's shared reader, plus the host's
+ * `last_assistant_message` when the transcript does not hold it. THE UNION, never one of the two:
+ * the host copy may be the newer message (a lagging transcript), or an OLDER text one (the final
+ * message is a hand-back tool call with no text block). A stray earlier line costs at most a
+ * deduplicated bullet; dropping the side that holds the report would lose the whole note.
  */
 export function subagentReport(meta, read) {
   let text = '';
@@ -172,7 +182,8 @@ export function subagentReport(meta, read) {
     try { text = read(tp, (raw, whole) => finalAssistantText(raw) ?? (whole ? '' : null)) || ''; } catch { text = ''; }
   }
   const last = typeof meta.last_assistant_message === 'string' ? meta.last_assistant_message.trim() : '';
-  return last && !text.includes(last) ? last : text;
+  if (!last || text.includes(last)) return text;
+  return text ? `${text}\n${last}` : last;
 }
 
 /** Today as `YYYY-MM-DD`, local time, as `appendAgentLesson` dates a lesson. */
@@ -183,33 +194,51 @@ export function today(now = new Date()) {
 /**
  * THE FILE LOCK. Parallel sub-agents end together, and their hooks read-merge-write one notes file:
  * without a lock the last writer drops the others' bullets (7 of 12 kept, measured). `<file>.lock`
- * is created exclusively; a holder older than LOCK_STALE_MS is a dead hook and its lock is broken.
- * The wait is bounded (LOCK_TRIES x LOCK_WAIT_MS, one second) and a hook that never gets the lock
- * gives up silently: a note is worth less than a stalled SubagentStop.
+ * is created exclusively and holds its owner's token (pid and a nonce). The wait is bounded
+ * (LOCK_TRIES x LOCK_WAIT_MS, one second) and a hook that never gets the lock gives up silently: a
+ * note is worth less than a stalled SubagentStop.
+ *
+ * A STALE LOCK (older than LOCK_STALE_MS: a dead hook) is broken by RENAMING it to a name only this
+ * hook uses, so of two waiters that both saw it stale only one rename succeeds. The one that
+ * renamed checks what it took: a fresh lock (another waiter broke the stale one and took the file
+ * between this hook's stat and its rename) is put back with a link that cannot overwrite. On
+ * release a hook removes the lock only when it still holds its own token, so a holder that outlived
+ * the stale age never removes the next holder's lock.
  */
 const LOCK_TRIES = 100;
 const LOCK_WAIT_MS = 10;
 const LOCK_STALE_MS = 10000;
 const SLEEPER = new Int32Array(new SharedArrayBuffer(4));
-function withLock(file, fn) {
+const lockToken = () => `${process.pid}.${Math.random().toString(36).slice(2)}`;
+function breakStale(lock) {
+  const taken = `${lock}.${lockToken()}.stale`;
+  try { renameSync(lock, taken); } catch { return; /* another waiter broke it first, or it was released */ }
+  try {
+    if (Date.now() - statSync(taken).mtimeMs <= LOCK_STALE_MS) linkSync(taken, lock); // a live lock: put it back
+  } catch { /* the slot is taken again: the live holder's token is in the new lock */ }
+  try { unlinkSync(taken); } catch { /* gone */ }
+}
+/** Exported for the unit tier: ownership on release is invisible through `captureSpecFeedback`. */
+export function withLock(file, fn) {
   const lock = `${file}.lock`;
+  const token = lockToken();
   for (let i = 0; i < LOCK_TRIES; i += 1) {
     let fd;
     try {
       fd = openSync(lock, 'wx');
     } catch (e) {
       if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') return false;
-      try {
-        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) { unlinkSync(lock); continue; }
-      } catch { continue; /* released between the open and the stat */ }
+      let stale = false;
+      try { stale = Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS; } catch { continue; /* released */ }
+      if (stale) { breakStale(lock); continue; }
       Atomics.wait(SLEEPER, 0, 0, LOCK_WAIT_MS);
       continue;
     }
     try {
-      closeSync(fd);
+      try { writeFileSync(fd, token); } finally { closeSync(fd); }
       return fn();
     } finally {
-      try { unlinkSync(lock); } catch { /* already broken as stale */ }
+      try { if (readFileSync(lock, 'utf8') === token) unlinkSync(lock); } catch { /* broken as stale */ }
     }
   }
   return false;
