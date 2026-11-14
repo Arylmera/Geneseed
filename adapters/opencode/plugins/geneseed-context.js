@@ -1426,29 +1426,22 @@ function groupPasses(command, g, sameProject = () => false) {
 }
 
 // The twin of hooks-done.mjs's `projectDir`, async and over a known list: the `dirs` (as
-// `normalizeRun` hands them, quotes and all) that name exactly the root of a worktree of the
-// repository at `root` — the same shared `.git` — resolved against `cwd`. A Set, so the sync
-// `normalizeRun` can ask it. Case-blind on Windows; a Git Bash `/c/...` path is not one.
+// `normalizeRun` hands them, quotes and all) that are the judged `root` ITSELF, by real path
+// (case-blind on Windows); a sibling worktree or the main checkout is not. A Set, so the sync
+// `normalizeRun` can ask it; a Git Bash `/c/...` path is not one. ONE DIFFERENCE FROM THE HOOK, in
+// the closed direction: a relative dir resolves against the git root here (the transform sees no
+// session cwd), against the session's cwd there, so `--prefix .` from a subfolder counts only in
+// the hook. The caller's probe answers true, so every dir `normalizeRun` could ask is collected,
+// a second `git -C` included.
 async function projectDirs(dirs, root, cwd) {
   const key = (p) => (process.platform === "win32" ? p.toLowerCase() : p)
-  const commonOf = async (top) => {
-    const dotgit = path.join(top, ".git")
-    if (!(await fs.stat(dotgit)).isFile()) return key(dotgit)
-    const m = /^gitdir:\s*(.+?)\s*$/m.exec(await fs.readFile(dotgit, "utf8"))
-    if (!m) throw new Error("no gitdir")
-    const gitdir = path.resolve(top, m[1])
-    const rel = await fs.readFile(path.join(gitdir, "commondir"), "utf8").catch(() => null)
-    return key(rel === null ? gitdir : path.resolve(gitdir, rel.trim()))
-  }
   const ok = new Set()
-  let common
-  try { common = await commonOf(root) } catch { return ok }
+  let me
+  try { me = key(await fs.realpath(root)) } catch { return ok }
   for (const dir of new Set(dirs)) {
     const bare = /^(["'])(.*)\1$/.exec(dir)?.[2] ?? dir
     if (!bare) continue
-    const abs = path.resolve(cwd, bare)
-    const top = await gitRootOf(abs)
-    try { if (top && key(top) === key(abs) && await commonOf(abs) === common) ok.add(dir) } catch { /* not one */ }
+    try { if (key(await fs.realpath(path.resolve(cwd, bare))) === me) ok.add(dir) } catch { /* not one */ }
   }
   return ok
 }
@@ -1527,7 +1520,7 @@ async function doneOwed(messages, checks, root) {
   }
   // The dirs `normalizeRun` would ask about, resolved once off disk (it is sync, this reads async).
   const asked = []
-  for (const c of [...runs, ...groups.flatMap((g) => g.forms)]) normalizeRun(c, (d) => { asked.push(d); return false })
+  for (const c of [...runs, ...groups.flatMap((g) => g.forms)]) normalizeRun(c, (d) => { asked.push(d); return true })
   const ok = await projectDirs(asked, root, root)
   const same = (d) => ok.has(d)
   const passed = new Set()

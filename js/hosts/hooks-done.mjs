@@ -82,11 +82,11 @@
  * stderr line says the total ceiling was reached. The count lives in a per-session file under the install; without one,
  * `stop_hook_active` (true when this Stop follows a block) ends the turn at once.
  */
-import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
-import { gitCommonDirOf, gitRootOf } from './gitref.mjs';
+import { gitRootOf } from './gitref.mjs';
 import { recordGate } from './hooks.mjs';
 import { ADVISORY_VERB } from './hosts.mjs';
 import { DONE_LIST, editPairs, isTestPath, splitLines, tailReader, weakenedBy } from './hooks-prims.mjs';
@@ -196,23 +196,21 @@ export function normalizeRun(command, sameProject) {
 
 /**
  * The `sameProject` of `normalizeRun` for the project at `root`, a dir resolved against `cwd`:
- * true when it is exactly the root of a worktree of the same repository (the same shared `.git`,
- * `gitCommonDirOf`) — `root` itself, its main worktree or another linked one. A subfolder, another
- * repository or a submodule is false. Compared case-blind on Windows. shortcut: a Git Bash path
- * (`/c/Users/...`) does not resolve to a drive path here, so it reads as another project — the
- * closed direction.
+ * true only when it is the judged root ITSELF (real paths, so a junction or symlink to it counts;
+ * case-blind on Windows). The root may be a linked worktree. A sibling worktree or the main checkout
+ * of the same repository is false (user ruling 2026-11-14): a run there never saw this tree's
+ * edits. So are a subfolder, another repository, and a dir that does not exist. shortcut: a Git
+ * Bash path (`/c/Users/...`) does not resolve to a drive path here, so it reads as another
+ * project — the closed direction.
  */
 export function projectDir(root, cwd) {
   const key = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
-  let common;
-  try { common = key(gitCommonDirOf(root)); } catch { return () => false; }
+  let me;
+  try { me = key(realpathSync(root)); } catch { return () => false; }
   return (dir) => {
     const bare = /^(["'])(.*)\1$/.exec(dir)?.[2] ?? dir;
     if (!bare) return false;
-    const abs = path.resolve(cwd, bare);
-    const top = gitRootOf(abs);
-    if (!top || key(top) !== key(abs)) return false;
-    try { return key(gitCommonDirOf(abs)) === common; } catch { return false; }
+    try { return key(realpathSync(path.resolve(cwd, bare))) === me; } catch { return false; }
   };
 }
 

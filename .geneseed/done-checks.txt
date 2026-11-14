@@ -1,7 +1,7 @@
 # The proof a turn that edits this repo must show (Verify Before Asserting): each line must run,
 # unpiped and green, after the turn's last edit, or the done gate blocks the turn's end. A line
 # matches as a PREFIX of the command, so list each command whole. Before the match, both sides
-# drop `npm --prefix <dir>` and `git -C <dir>` when <dir> is this repo or one of its worktrees,
+# drop `npm --prefix <dir>` and `git -C <dir>` when <dir> is the edited tree's own root,
 # and `--test-concurrency N`: a worktree run at the default concurrency counts. AGENTS.md "Proving a change"
 # has the rest of the gates; these are the ones every edit owes.
 npm run lint

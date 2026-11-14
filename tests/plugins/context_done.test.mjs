@@ -73,11 +73,12 @@ test("the V1 transform reminds after an unproven edit, and only then", async () 
   for (const [what, messages, want] of rows) assert.equal(await reminded(messages), want, what)
 })
 
-// `projectDirs`, the plugin's hand twin of `projectDir`: a LINKED worktree of the repo (a `.git`
-// FILE naming `<repo>/.git/worktrees/wt`, whose `commondir` is `../..`) is the same project; a
-// repository of its own is not. Built here, with plain files, so `repo/.git` stays as the other
-// tests left it until the end.
-test("the V1 transform: --prefix naming a linked worktree of the repo clears it, another repo does not", async () => {
+// `projectDirs`, the plugin's hand twin of `projectDir`: only the judged root itself counts (user
+// ruling 2026-11-14). A LINKED worktree of the repo (a `.git` FILE naming
+// `<repo>/.git/worktrees/wt`, whose `commondir` is `../..`) never saw the root's edits, so it does
+// not clear the reminder; nor does a repository of its own; a junction to the root does. Built
+// here, with plain files, so `repo/.git` stays as the other tests left it until the end.
+test("the V1 transform: --prefix clears only for the root itself, not a sibling worktree or another repo", async () => {
   const priv = path.join(repo, ".git", "worktrees", "wt")
   const wt = path.join(tmp, "wt-linked")
   await fs.mkdir(priv, { recursive: true })
@@ -88,10 +89,25 @@ test("the V1 transform: --prefix naming a linked worktree of the repo clears it,
   try {
     const edit = tool("edit", { filePath: path.join(repo, "a.js") })
     const ran = (dir) => [user("u1"), edit, tool("bash", { command: `npm --prefix "${dir}" run lint` }, "completed", { exit: 0 }), user("u2")]
-    assert.equal(await reminded(ran(wt)), false, "a linked worktree of the repo is the same project")
-    assert.equal(await reminded(ran(other)), true, "a repository of its own is not")
+    const link = path.join(tmp, "repo-link")
+    await fs.symlink(repo, link, "junction")
+    assert.equal(await reminded(ran(wt)), true, "a linked worktree of the repo never saw its edits")
+    assert.equal(await reminded(ran(other)), true, "a repository of its own is not the root")
+    assert.equal(await reminded(ran(link)), false, "a junction to the root is the root")
+    // A second `git -C` is probed too: both name the root, spelled differently (the second via the
+    // junction), so only a probe that reaches the second dir can clear it.
+    const checks = path.join(repo, ".geneseed", "done-checks.txt")
+    const before = await fs.readFile(checks, "utf8")
+    await fs.writeFile(checks, "git status\n")
+    try {
+      const git = (cmd) => [user("u1"), edit, tool("bash", { command: cmd }, "completed", { exit: 0 }), user("u2")]
+      assert.equal(await reminded(git(`git -C "${repo}" -C "${link}" status`)), false, "both -C name the root")
+    } finally {
+      await fs.writeFile(checks, before)
+    }
   } finally {
     await fs.rm(path.join(repo, ".git", "worktrees"), { recursive: true, force: true })
+    await fs.rm(path.join(tmp, "repo-link"), { force: true, recursive: true }).catch(() => {})
   }
 })
 

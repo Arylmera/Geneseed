@@ -536,27 +536,34 @@ test('groupPasses: a flag that skips the tests refuses the pass', () => {
 
 // The match normalizes both sides (`normalizeRun`, user decision 2026-11-14): `npm --prefix
 // <dir>`, `git -C <dir>` and `node --test --test-concurrency N` name where a check runs, or how
-// many workers run it, not what it tests. A `<dir>` counts only when it is exactly the root of a
-// worktree of the judged repository. Built off disk with plain files, no git: a main worktree
-// (`.git/` dir), a linked one (`.git` FILE -> `<main>/.git/worktrees/wt`, `commondir` `../..`),
-// an unrelated repository, and a subfolder of the main one.
+// many workers run it, not what it tests. A `<dir>` counts only when it is the judged root ITSELF
+// (user ruling 2026-11-14): a sibling worktree or the main checkout never saw this tree's edits.
+// Built off disk with plain files, no git: a main worktree (`.git/` dir), two linked ones (`.git`
+// FILE -> `<main>/.git/worktrees/<n>`, `commondir` `../..`), a forged dir whose `.git` names wt's
+// private gitdir, an unrelated repository, and a subfolder of the main one.
 function worktreeFixture() {
   const sb = makeSandbox();
   const main = path.join(sb.path, 'main');
-  const wt = path.join(sb.path, 'wt');
   const other = path.join(sb.path, 'other');
-  const priv = path.join(main, '.git', 'worktrees', 'wt');
-  fs.mkdirSync(priv, { recursive: true });
   fs.mkdirSync(path.join(main, 'sub'), { recursive: true });
-  fs.writeFileSync(path.join(priv, 'commondir'), '../..\n');
-  fs.mkdirSync(wt, { recursive: true });
-  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${priv}\n`);
+  const linked = (name, gitdirOf = name) => {
+    const priv = path.join(main, '.git', 'worktrees', gitdirOf);
+    fs.mkdirSync(priv, { recursive: true });
+    fs.writeFileSync(path.join(priv, 'commondir'), '../..\n');
+    const dir = path.join(sb.path, name);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '.git'), `gitdir: ${priv}\n`);
+    return dir;
+  };
+  const wt = linked('wt');
+  const sibling = linked('wt2');
+  const forged = linked('forged', 'wt');
   fs.mkdirSync(path.join(other, '.git'), { recursive: true });
-  return { sb, main, wt, other };
+  return { sb, main, wt, sibling, forged, other };
 }
 
 test('groupPasses: --prefix, -C and --test-concurrency are normalized away, nothing else', () => {
-  const { sb, main, wt, other } = worktreeFixture();
+  const { sb, main, wt, sibling, forged, other } = worktreeFixture();
   try {
     const SUITE = 'node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"';
     // Each row: the check line, the command, then whether it proves the check (judged at `wt`).
@@ -566,7 +573,6 @@ test('groupPasses: --prefix, -C and --test-concurrency are normalized away, noth
       ['npm run lint', `npm --prefix=${wt} run lint`, true],
       ['npm run lint', `npm --prefix "${wt}" run lint`, true],
       ['npm run lint', `npm run lint --prefix ${wt}`, true],
-      ['npm run typecheck', `npm --prefix ${main} run typecheck`, true],    // the main worktree: same repo
       ['npm run lint', 'npm --prefix . run lint', true],                     // relative, resolved at cwd
       ['git status', `git -C ${wt} status`, true],
       [SUITE, 'node --test --test-reporter=tap "tests/**/*.test.mjs"', true],
@@ -574,7 +580,11 @@ test('groupPasses: --prefix, -C and --test-concurrency are normalized away, noth
       [SUITE, 'node --test --test-concurrency 4 --test-reporter=tap "tests/**/*.test.mjs"', true],
       ['node --test --test-reporter=tap "tests/**/*.test.mjs"', SUITE, true],  // the line is normalized too
       [SUITE, `npm --prefix ${wt} run lint && node --test --test-reporter=tap "tests/**/*.test.mjs"`, true],
-      // A dir that is not this repository's worktree root: not the same project.
+      // A dir that is not the judged root itself: the run never saw this tree's edits.
+      ['npm run typecheck', `npm --prefix ${main} run typecheck`, false],   // the main checkout
+      ['npm run lint', `npm --prefix ${sibling} run lint`, false],           // a sibling worktree
+      ['npm run lint', `npm --prefix ${forged} run lint`, false],            // a .git forged to name wt's gitdir
+      ['git status', `git -C ${main} status`, false],
       ['npm run lint', `npm --prefix ${other} run lint`, false],
       ['npm run lint', `npm --prefix ${path.join(main, 'sub')} run lint`, false],
       ['npm run lint', `npm --prefix ${path.join(sb.path, 'missing')} run lint`, false],
@@ -583,7 +593,11 @@ test('groupPasses: --prefix, -C and --test-concurrency are normalized away, noth
       ['npm run lint', `npm --prefix ${wt} run lint:fix`, false],
       ['npm run lint', `npm --prefix ${wt} run lint | tail`, false],
       ['npm run lint', `npm --prefix ${wt} run lint || true`, false],
-      ['npm run lint', `npm run lint -- --prefix ${wt}`, true],                // after `--`: an argument, kept
+      // After `--` a flag is an argument of the script or the tests, not npm's or node's own:
+      // kept, so it must match the line as written.
+      ['npm run lint -- --fix', `npm run lint -- --prefix ${wt} --fix`, false],
+      ['npm run lint', `npm -- --prefix ${wt} run lint`, false],
+      ['node --test -- x', 'node --test -- --test-concurrency=1 x', false],
       ['npm run lint', `npm --verbose run lint`, false],                      // any other flag stays
       ['make test', `make -C ${wt} test`, false],                             // `-C` only on git
       [SUITE, 'node --test --test-reporter=tap tests/unit/a.test.mjs', false],  // the glob changed
@@ -599,6 +613,10 @@ test('groupPasses: --prefix, -C and --test-concurrency are normalized away, noth
     // With no project to compare against (the default), no dir counts: only the concurrency goes.
     assert.equal(groupPasses(`npm --prefix ${wt} run lint`, { label: 'l', forms: ['npm run lint'] }), false);
     assert.equal(groupPasses('node --test --test-reporter=tap "t"', { label: 's', forms: ['node --test --test-concurrency=8 --test-reporter=tap "t"'] }), true);
+    // A junction to the root is the root (real paths); Windows junctions need no privilege.
+    const link = path.join(sb.path, 'wt-link');
+    fs.symlinkSync(wt, link, 'junction');
+    assert.equal(groupPasses(`npm --prefix ${link} run lint`, { label: 'l', forms: ['npm run lint'] }, same), true, 'junction');
     // Through the decision: a sub-agent's prefixed run in its worktree proves the worktree's check.
     const turn = jsonl(prompt(), edit(path.join(wt, 'a.js')), bash(`npm --prefix ${wt} run lint`));
     assert.deepEqual(doneDecide(turn, ['npm run lint'], wt, wt), []);
