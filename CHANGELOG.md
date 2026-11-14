@@ -16,6 +16,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 ### Changed
 - **One brief checklist for dispatched workers.** Step 3 of the parallel-agents skill now carries a **Brief checklist** with six items: the git ref and diff state, the whole write set (other call sites, twin copies), a scratch path and a load cap per worker, long suites in the background, whether a dependency install is allowed, and the host's shell limits. The Foreman mode and the pipeline skill point to it instead of restating it. The 5.4.0 rule against opening a worker command with `cd` into the worktree moved into that checklist. Text only; reaches an install on its next emit.
 
+### Fixed
+- **The agents' self-improvement loop keeps what they report.** The `spec-feedback:` lines a subagent ends its report with were meant to be written down by the caller, which never happened, and the agents read another file anyway. Now the SubagentStop hook copies each line, with no model call and whether or not `GENESEED_LLM` is set, into `agent-notes/<name>.md` (the tier's `notes/` on a global install, else the install's `notebook/`), a `general` line into `agent-notes/_general.md` instead: one dated bullet each, appended under a file lock, no duplicates, quoted and fenced lines skipped, capped at 100 bullets an agent file, 30 in `_general.md` and 8 000 characters a file (only the hook's own bullets ever drop). Every agent's step 0 now reads those notes beside `memory/agents/<name>.md`. The OpenCode learn plugin does the same for a named child session (V1 and V2). Bob has no subagent-finished event; there the caller still copies the line. Run `geneseed rebuild-all` to get the new agent text.
+
 ## [5.4.0] — 2026-11-13
 
 **Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the

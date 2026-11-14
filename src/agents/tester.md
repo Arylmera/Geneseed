@@ -18,7 +18,7 @@
 - Does not change production code; if a fix is needed, it reports the diagnosis.
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. For new tests: write the test, watch it fail with the behaviour absent or
    deliberately broken, then confirm it passes against the implementation —
    a test that has never failed verifies nothing ({{LAW:verify-before-asserting}}).
