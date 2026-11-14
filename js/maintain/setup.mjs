@@ -48,10 +48,10 @@ import path from 'node:path';
 import { main as driverMain, parseDriverArgs, resolveOut } from '../build/driver.mjs';
 import { preserveRefusal } from '../build/profile.mjs';
 import { cmdLink } from '../hosts/link.mjs';
-import { autostartInstall, autostartState } from '../hosts/shim.mjs';
+import { autostartInstall, autostartState, transientRoot } from '../hosts/shim.mjs';
 import { loadProfile, profileBuildArgs } from './profiles.mjs';
 import { playLine } from '../ui/anim.mjs';
-import { discoverNames, GATE_SWITCHES, PACK_ORDER, loadKits } from '../build/source.mjs';
+import { discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
 import { cmdDoctor } from '../inspect/doctor.mjs';
 import { setupBuildArgs } from '../build/generate.mjs';
@@ -731,13 +731,17 @@ export function profileChanges(argv) {
 /**
  * The login item, as one `{ ok, text }` line for the summary. Rewritten only when it is absent
  * or stale (spec D7); a hand-written one is left alone with a warning that names it. `null`
- * where the platform has no login item Geneseed writes.
+ * where the platform has no login item Geneseed writes. `state` and `install` are the test's
+ * seams; the defaults are `js/hosts/shim.mjs`'s.
  */
-function defaultAutostart() {
-  const cur = autostartState();
+export function loginItem({ state = autostartState, install = autostartInstall } = {}) {
+  const cur = state();
   if (!cur) return null;
   if (cur.state === 'ours') return { ok: true, text: `login item already set: ${cur.file}` };
-  const r = autostartInstall();
+  if (cur.state === 'hand') {
+    return { ok: false, text: `login item not written: ${cur.file} was not written by Geneseed, so it is left alone` };
+  }
+  const r = install();
   if (r.ok) return { ok: true, text: `login item written: ${cur.file}` };
   return { ok: false, text: `login item not written: ${r.error} (see docs/guides/autostart.md)` };
 }
@@ -776,7 +780,7 @@ export async function setupProfile(name, deps = {}) {
   const {
     load = loadProfile, tools = null, build = driverMain, exportDrift = exportImprovements,
     changes = profileChanges, link = (report) => cmdLink({ dir: null }, { unattended: true, report }),
-    autostart = defaultAutostart, startConsole = defaultConsole,
+    autostart = loginItem, startConsole = defaultConsole, transient = transientRoot(ROOT),
     doctor = (theme) => cmdDoctor({ theme, all: false, bundle: null, noBundle: false }),
     configDir = (host) => HOSTS.find((h) => h.host === host).configDir(),
     platform = process.platform,
@@ -823,20 +827,26 @@ export async function setupProfile(name, deps = {}) {
   const built = results.filter((r) => r.rc === 0);
 
   printOut('\n');
+  // A TEMPORARY COPY (an agent worktree, the npx cache) gets neither the PATH launcher nor the
+  // login item: both would point at a folder that is about to disappear (`transientRoot`).
   const report = {};
-  let linkRc;
-  try {
-    linkRc = link(report);
-  } catch (e) {
-    linkRc = 1;
-    printErr(`[setup] link: ${e && e.message}\n`);
+  let linkRc = 0;
+  if (!transient) {
+    try {
+      linkRc = link(report);
+    } catch (e) {
+      linkRc = 1;
+      printErr(`[setup] link: ${e && e.message}\n`);
+    }
   }
 
   let login = null;
   let consoleUrl = null;
   let consoleOk = true;
   if (p.login !== false) {
-    if (platform === 'win32' || platform === 'darwin') {
+    if (transient) {
+      login = { ok: false, text: `login item not written: ${ROOT} is a temporary copy - run this from a lasting clone` };
+    } else if (platform === 'win32' || platform === 'darwin') {
       try {
         login = autostart();
       } catch (e) {
@@ -879,7 +889,8 @@ export async function setupProfile(name, deps = {}) {
         '        of yours at a name Geneseed ships, move that file, or replace it with:',
         `        geneseed build ${r.argv.join(' ')} --force`);
     }
-    if (r.moved.length) {
+    // Only a build that ran put anything back; a failed one left the install as it was.
+    if (r.rc === 0 && r.moved.length) {
       out.push(`        changed back to the profile: ${r.moved.map((c) => `${c.name} ${c.from} -> ${c.to}`).join(', ')}`);
     }
     if (r.saved) out.push(`        local edits saved to ${r.saved} (hand that file to your agent to back-port them)`);
@@ -888,10 +899,16 @@ export async function setupProfile(name, deps = {}) {
   for (const t of found.filter((x) => x.present && !p.hosts.includes(x.host))) {
     out.push(`  --    ${t.label}: found, not in this profile - left as it is`);
   }
-  if (report.foreign) {
+  if (transient) {
+    out.push(`  !     geneseed not put on PATH: ${ROOT} is a temporary copy - run this from a lasting clone`);
+  } else if (report.foreign) {
     out.push(`  !     geneseed on PATH: ${report.foreign} is not a launcher Geneseed wrote, so it was left alone`);
   } else if (linkRc !== 0) {
     out.push('  !     geneseed is not on PATH - run geneseed.cmd (Windows) or ./geneseed from this folder');
+  } else if (report.onPath === false) {
+    // `link` wrote the launcher and exits 0, but could not put its folder on PATH.
+    out.push(`  !     geneseed is not on PATH yet: add ${report.pathDir} to your PATH by hand,`,
+      '        or run geneseed.cmd (Windows) or ./geneseed from this folder');
   } else {
     out.push('  ok    geneseed on PATH (open a NEW terminal to use it)');
   }

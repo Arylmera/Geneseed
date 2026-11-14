@@ -13,7 +13,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { setupProfile } from '../../js/maintain/setup.mjs';
+import { loginItem, setupProfile } from '../../js/maintain/setup.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -50,6 +50,7 @@ async function run(profile, present, over = {}) {
       startConsole: async () => { calls.console += 1; return { ok: true, url: 'http://127.0.0.1:4747' }; },
       doctor: (theme) => { calls.doctor.push(theme); return 0; },
       platform: 'win32',
+      transient: false,
       ...over,
     });
   } finally {
@@ -135,6 +136,57 @@ test('link, login item and console failures are warnings, not failures (D16)', a
   assert.match(out, /! {5}web console did not start - run: geneseed web start/);
 });
 
+test('a link that exits 0 but could not reach PATH is a warning with the manual step', async () => {
+  const { rc, out } = await run(STARTER, ['claude'], {
+    link: (report) => { Object.assign(report, { onPath: false, pathDir: 'C:\\Users\\u\\AppData\\Local\\Geneseed\\bin' }); return 0; },
+  });
+  assert.equal(rc, 0);
+  assert.match(out, /! {5}geneseed is not on PATH yet: add C:\\Users\\u\\AppData\\Local\\Geneseed\\bin to your PATH by hand/);
+  assert.doesNotMatch(out, /ok {4}geneseed on PATH/);
+});
+
+test('a temporary copy gets neither the PATH launcher nor the login item, and says so', async () => {
+  const { rc, out, calls } = await run(STARTER, ['claude'], { transient: true });
+  assert.equal(rc, 0);
+  assert.deepEqual([calls.link, calls.autostart, calls.console], [0, 0, 1]);
+  assert.match(out, /! {5}geneseed not put on PATH: .* is a temporary copy - run this from a lasting clone/);
+  assert.match(out, /! {5}login item not written: .* is a temporary copy/);
+});
+
+test('a failed build lists no settings as changed back (it changed nothing)', async () => {
+  const { out } = await run(STARTER, ['claude'], {
+    build: () => 1,
+    changes: () => [{ name: 'theme', from: 'pirate', to: 'neutral' }],
+  });
+  assert.match(out, /FAIL {2}Claude Code: build failed/);
+  assert.doesNotMatch(out, /changed back to the profile/);
+});
+
+// The login item per launcher state, through `loginItem`'s seams: written only when absent or
+// stale (D7), a hand-written one left alone, a failed write a warning.
+const LOGIN_ROWS = [
+  ['ours', true, { ok: true, text: 'login item already set: /S/geneseed-web.vbs' }, 0],
+  ['absent', true, { ok: true, text: 'login item written: /S/geneseed-web.vbs' }, 1],
+  ['stale', true, { ok: true, text: 'login item written: /S/geneseed-web.vbs' }, 1],
+  ['hand', true, { ok: false, text: 'login item not written: /S/geneseed-web.vbs was not written by Geneseed, so it is left alone' }, 0],
+  ['absent', false, { ok: false, text: 'login item not written: the path x has a % (see docs/guides/autostart.md)' }, 1],
+];
+for (const [state, writes, want, installs] of LOGIN_ROWS) {
+  test(`login item: state ${state}${writes ? '' : ', write refused'}`, () => {
+    let n = 0;
+    const got = loginItem({
+      state: () => ({ file: '/S/geneseed-web.vbs', state }),
+      install: () => { n += 1; return writes ? { ok: true } : { ok: false, error: 'the path x has a %' }; },
+    });
+    assert.deepEqual(got, want);
+    assert.equal(n, installs);
+  });
+}
+
+test('login item: a platform with no launcher gives no line', () => {
+  assert.equal(loginItem({ state: () => null, install: () => { throw new Error('called'); } }), null);
+});
+
 test('the shell rc file the link changed is named (D26)', async () => {
   const { out } = await run(STARTER, ['claude'], {
     link: (report) => { report.rcFile = '/home/u/.zshrc'; return 0; },
@@ -211,6 +263,7 @@ const rc = await setupProfile('starter', {
   startConsole: async () => ({ ok: true, url: 'http://fake' }),
   doctor: () => 0,
   platform: 'win32',
+  transient: false,
 });
 process.exitCode = rc;
 `;
