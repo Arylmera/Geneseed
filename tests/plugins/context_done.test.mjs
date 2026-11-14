@@ -66,8 +66,49 @@ test("the V1 transform reminds after an unproven edit, and only then", async () 
     ["an apply_patch moving a file into the project", [user("u1"), tool("apply_patch", { patchText: "*** Begin Patch\n*** Update File: ../a.js\n*** Move to: a.js\n*** End Patch" }), user("u2")], true],
     // No path derivable: counted, because a missed reminder is the worse error (fail-open gate).
     ["an edit whose target cannot be derived", [user("u1"), tool("patch", { patchText: "garbage" }), user("u2")], true],
+    // `--prefix` naming the project's own root is normalized away (`normalizeRun`); another dir is not.
+    ["the proof ran with --prefix <the project root>", [user("u1"), edit, tool("bash", { command: `npm --prefix "${repo}" run lint` }, "completed", { exit: 0 }), user("u2")], false],
+    ["the proof ran with --prefix <another dir>", [user("u1"), edit, tool("bash", { command: `npm --prefix "${tmp}" run lint` }, "completed", { exit: 0 }), user("u2")], true],
   ]
   for (const [what, messages, want] of rows) assert.equal(await reminded(messages), want, what)
+})
+
+// `projectDirs`, the plugin's hand twin of `projectDir`: only the judged root itself counts (user
+// ruling 2026-11-14). A LINKED worktree of the repo (a `.git` FILE naming
+// `<repo>/.git/worktrees/wt`, whose `commondir` is `../..`) never saw the root's edits, so it does
+// not clear the reminder; nor does a repository of its own; a junction to the root does. Built
+// here, with plain files, so `repo/.git` stays as the other tests left it until the end.
+test("the V1 transform: --prefix clears only for the root itself, not a sibling worktree or another repo", async () => {
+  const priv = path.join(repo, ".git", "worktrees", "wt")
+  const wt = path.join(tmp, "wt-linked")
+  await fs.mkdir(priv, { recursive: true })
+  await fs.writeFile(path.join(priv, "commondir"), "../..\n")
+  await fs.mkdir(wt, { recursive: true })
+  await fs.writeFile(path.join(wt, ".git"), `gitdir: ${priv}\n`)
+  const other = await gitRepo("other-repo", {})
+  try {
+    const edit = tool("edit", { filePath: path.join(repo, "a.js") })
+    const ran = (dir) => [user("u1"), edit, tool("bash", { command: `npm --prefix "${dir}" run lint` }, "completed", { exit: 0 }), user("u2")]
+    const link = path.join(tmp, "repo-link")
+    await fs.symlink(repo, link, "junction")
+    assert.equal(await reminded(ran(wt)), true, "a linked worktree of the repo never saw its edits")
+    assert.equal(await reminded(ran(other)), true, "a repository of its own is not the root")
+    assert.equal(await reminded(ran(link)), false, "a junction to the root is the root")
+    // A second `git -C` is probed too: both name the root, spelled differently (the second via the
+    // junction), so only a probe that reaches the second dir can clear it.
+    const checks = path.join(repo, ".geneseed", "done-checks.txt")
+    const before = await fs.readFile(checks, "utf8")
+    await fs.writeFile(checks, "git status\n")
+    try {
+      const git = (cmd) => [user("u1"), edit, tool("bash", { command: cmd }, "completed", { exit: 0 }), user("u2")]
+      assert.equal(await reminded(git(`git -C "${repo}" -C "${link}" status`)), false, "both -C name the root")
+    } finally {
+      await fs.writeFile(checks, before)
+    }
+  } finally {
+    await fs.rm(path.join(repo, ".git", "worktrees"), { recursive: true, force: true })
+    await fs.rm(path.join(tmp, "repo-link"), { force: true, recursive: true }).catch(() => {})
+  }
 })
 
 // THE PROMPT PREFIX IS STABLE: message 0 is the context block, byte for byte the same on every
@@ -289,9 +330,9 @@ test("inferred checks: the V1 reminder says advisory, and any accepted form clea
 
 test("groupPasses stays in parity with js/hosts/hooks-done.mjs (twin), refusals included", async () => {
   const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-context.js"), "utf8")
-  const fn = (name) => src.match(new RegExp(`function ${name}\\(command, (?:line|g)\\) \\{[\\s\\S]*?\\n\\}\\n`))?.[0]
-  assert.ok(fn("runsUnpiped") && fn("groupPasses"), "runsUnpiped or groupPasses not found in geneseed-context.js")
-  const twin = new Function(`${fn("runsUnpiped")}${fn("groupPasses")}; return groupPasses`)()
+  const fn = (name) => src.match(new RegExp(`function ${name}\\(command, [^\\n]*\\) \\{[\\s\\S]*?\\n\\}\\n`))?.[0]
+  assert.ok(fn("runsUnpiped") && fn("normalizeRun") && fn("groupPasses"), "runsUnpiped, normalizeRun or groupPasses not found in geneseed-context.js")
+  const twin = new Function(`${fn("runsUnpiped")}${fn("normalizeRun")}${fn("groupPasses")}; return groupPasses`)()
   const dir = await gitRepo("infer-refuse", { "pom.xml": "", "build.gradle": "", "Cargo.toml": "" })
   const [mvn, gradle, cargo] = nodeInfer(dir).checks
   const rows = [
@@ -303,6 +344,20 @@ test("groupPasses stays in parity with js/hosts/hooks-done.mjs (twin), refusals 
   for (const [g, command, want] of rows) {
     assert.equal(nodeGroupPasses(command, g), want, `node: ${command}`)
     assert.equal(twin(command, g), want, `twin: ${command}`)
+  }
+  // The normalization (`normalizeRun`), one predicate for both: `/wt` is the project, `/other` is not.
+  const SUITE = { label: "s", forms: ['node --test --test-concurrency=8 --test-reporter=tap "t/**"'] }
+  const LINT = { label: "l", forms: ["npm run lint"] }
+  const same = (d) => d === "/wt"
+  const norm = [
+    [LINT, "npm --prefix /wt run lint", true], [LINT, "npm --prefix=/wt run lint", true],
+    [LINT, "npm --prefix /other run lint", false], [LINT, "npm --prefix /wt run lint:fix", false],
+    [SUITE, 'node --test --test-reporter=tap "t/**"', true], [SUITE, 'node --test --test-concurrency=1 --test-reporter=tap "t/**"', true],
+    [SUITE, 'node --test --test-reporter=tap "t/a"', false], [SUITE, 'node --test "t/**"', false],
+  ]
+  for (const [g, command, want] of norm) {
+    assert.equal(nodeGroupPasses(command, g, same), want, `node: ${command}`)
+    assert.equal(twin(command, g, same), want, `twin: ${command}`)
   }
   // And through the real transform: a skipped-tests run leaves the reminder standing.
   const edit = tool("edit", { filePath: path.join(dir, "a.java") })
