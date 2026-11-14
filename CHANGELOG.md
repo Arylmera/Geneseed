@@ -13,6 +13,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`profiles/<name>.json`**, shipped in the package and the clone, checked against the generator's own value lists (an unknown key is an error) and by `geneseed doctor`. Two ship: `starter` (neutral, peer, direct, all packs, every gate armed except the ownership gate, all four tools) and `guillaume-claude-global` (the author's Claude Code setup: imperial, expert, foreman, six rules excluded, the deletion, ownership and external gates off).
 - **`geneseed profile save <name> --from <host>-global`** writes a profile from an existing global install, every setting as it is, gates off included, and prints how it differs from `starter`, gates first. It refuses an existing file without `--force` and reads no personal file (user rules, profile, memory, wiki, notebook).
 
+### Changed
+- **One brief checklist for dispatched workers.** Step 3 of the parallel-agents skill now carries a **Brief checklist** with six items: the git ref and diff state, the whole write set (other call sites, twin copies), a scratch path and a load cap per worker, long suites in the background, whether a dependency install is allowed, and the host's shell limits. The Foreman mode and the pipeline skill point to it instead of restating it. The 5.4.0 rule against opening a worker command with `cd` into the worktree moved into that checklist. Text only; reaches an install on its next emit.
+
 ## [5.4.0] — 2026-11-13
 
 **Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the
