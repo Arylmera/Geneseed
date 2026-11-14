@@ -25,15 +25,16 @@
  * and only when `<install>/notebook` exists (never created here).
  *
  * ON THE HOOK PATH: builtins and sibling hook modules only, no spawn, nothing printed, and every
- * error swallowed. Parallel sub-agents end together, so the append runs under the notes lock
- * (`withLock`, ./spec-feedback.mjs); a hook that cannot get it in a second drops the line.
+ * error swallowed. Parallel sub-agents end together; each line is one `appendFileSync` of well
+ * under a page, as `usage.jsonl` is written, so each lands whole without a lock.
  */
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { GLOBAL_MANIFEST } from './hosts.mjs';
 import { SECRET_RE, splitLines } from './hooks-prims.mjs';
-import { specFeedbackOf, withLock } from './spec-feedback.mjs';
+import { specFeedbackOf } from './spec-feedback.mjs';
+import { capFile, isPrompt } from './hooks-done.mjs';
 import { USAGE_OFF } from './usage.mjs';
 
 export const RUNS_LEDGER = path.join('notebook', 'agent-runs.jsonl');
@@ -42,29 +43,36 @@ export const RUNS_LEDGER = path.join('notebook', 'agent-runs.jsonl');
 // to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
 
 /**
- * A refused tool call: the result text a host or a gate gives a call it did not run. A red test
- * or any other non-zero exit is an error, not a refusal, and matches none of these. One row each,
- * with where its text comes from:
+ * A refused tool call: the result text a host or a gate gives a call it did not run. Only the
+ * result's FIRST line is read, and every marker is anchored at its start (a host prefix of at most
+ * 80 characters allowed for Geneseed's own words): a red test or a search that QUOTES a gate's text
+ * further down its output is an error, not a refusal. One row each, with where its text comes from:
  *   - Geneseed's own refusal (`gateText` mode `refused`, js/hosts/hooks-prims.mjs), and the text
- *     said when that text fails (`GATE_UNSAID`). Matched anywhere: a host may prefix a hook's words.
+ *     said when that text fails (`GATE_UNSAID`), behind a host's prefix ("PreToolUse:Bash hook …").
+ *   - The OpenCode guard: V1 throws `[geneseed-guard] blocked: …`; V2 renames the call, and core
+ *     answers `No tool named "BLOCKED, not a missing tool: …"` (geneseed-guard.js, seen on 2.2.6).
  *   - Claude Code's auto-mode classifier, seen live 2026-11-14: "Permission for this action was
  *     denied by the Claude Code auto mode classifier."
- *   - Claude Code's worktree isolation, seen live 2026-11-14: "... Refusing to run it — a
- *     worktree-isolated agent's git operations must target its own worktree."
+ *   - Claude Code's worktree isolation, seen live 2026-11-14: "This agent is isolated in the
+ *     worktree …, but this command … Refusing to run it — …".
  *   - Claude Code's permission rule deny and a user's "no" to an ask: UNVERIFIED wording.
- *   - OpenCode 2's guard, which renames a refused call (geneseed-guard.js): the tool NAME opens so.
  */
 export const REFUSAL_MARKERS = [
-  /Tell the user this, word for word:/,
-  /Geneseed could not describe this call\./,
+  /^.{0,80}?Tell the user this, word for word:/,
+  /^.{0,80}?Geneseed could not describe this call\./,
+  /^\[geneseed-guard\] blocked:/,
+  /^No tool named "BLOCKED, not a missing tool:/,
   /^Permission for this action was denied\b/,
-  /\bRefusing to run it\b/,
-  /^Permission to use \S[^\n]{0,300}? has been denied\b/,
+  /^This agent is isolated in the worktree .{1,600}? Refusing to run it\b/,
+  /^Permission to use \S.{0,300}? has been denied\b/,
   /^The user doesn't want to (?:proceed with|take) this/,
-  /^BLOCKED, not a missing tool:/,
 ];
 
-/** True when `text` (a tool result, or an OpenCode tool name) says the call was refused. */
+/**
+ * True when the first line of `text` (a tool result) says the call was refused. Each marker is
+ * anchored with `^` (no `m` flag) and its `.` never crosses a line break, so a marker can only
+ * match on the first line.
+ */
 export function isRefusal(text) {
   const t = String(text ?? '').trimStart();
   return REFUSAL_MARKERS.some((re) => re.test(t));
@@ -98,28 +106,6 @@ export function specOf(install, agent) {
   } catch { return null; }
 }
 
-const NOTE_OPEN = '<task-notification>';
-// Hand twin of ./hooks-done.mjs `FEEDBACK_OPENS` (not exported): a block's feedback opens no turn.
-const FEEDBACK_OPENS = ['Stop hook feedback', 'SubagentStop hook feedback', 'Geneseed (Verify Before Asserting)'];
-
-/** A user line's single text, or null. */
-const userText = (c) => (typeof c === 'string' ? c
-  : Array.isArray(c) && c.length === 1 && c[0] && c[0].type === 'text' ? c[0].text : null);
-
-/**
- * Hand twin of ./hooks-done.mjs `isPrompt` with `sidechain` true: the line that opens a sub-agent's
- * turn. A resumed sub-agent (SendMessage) appends its next turn to the same file, so the counts are
- * the CURRENT turn's, as the gate judges it, and a second line never counts the first turn again.
- */
-function isPrompt(obj) {
-  if (!obj || obj.type !== 'user' || obj.isMeta) return false;
-  const c = obj.message && obj.message.content;
-  const t = userText(c);
-  if (typeof t === 'string' && (t.trimStart().startsWith(NOTE_OPEN) || FEEDBACK_OPENS.some((p) => t.trimStart().startsWith(p)))) return false;
-  if (typeof c === 'string') return true;
-  return Array.isArray(c) && c.length > 0 && !c.some((b) => b && b.type === 'tool_result');
-}
-
 /** A tool result's text: a string, or its text blocks joined. */
 function resultText(b) {
   if (typeof b.content === 'string') return b.content;
@@ -139,7 +125,9 @@ export function runCounts(raw, whole = true) {
     try { entries.push(JSON.parse(line)); } catch { /* a torn line is no call */ }
   }
   let start = -1;
-  for (let i = entries.length - 1; i >= 0; i -= 1) if (isPrompt(entries[i])) { start = i + 1; break; }
+  // The gate's own rule (./hooks-done.mjs `isPrompt`, sidechain mode). A resumed sub-agent appends
+  // its next turn to the same file, so the counts are the CURRENT turn's, as the gate judges it.
+  for (let i = entries.length - 1; i >= 0; i -= 1) if (entries[i] && isPrompt(entries[i], true)) { start = i + 1; break; }
   if (start === -1) {
     if (!whole) return null;
     start = 0;
@@ -163,15 +151,12 @@ export function runCounts(raw, whole = true) {
 
 /**
  * How many times the done gate blocked this sub-agent's turn: `total` in the cap state it saved
- * at `<install>/notebook/done-gate/<session~agent>.json`, when that state is this turn's (same
- * `opening`); 0 with no state, or another turn's. A hand twin of ./hooks-done.mjs `capFile`'s
- * path, which is not exported: tests/unit/agent_runs.test.mjs drives a real block and reads it back,
- * so a change there turns that test red.
+ * (./hooks-done.mjs `capFile`), when that state is this turn's (same `opening`); 0 with no state,
+ * or another turn's.
  */
 export function blocksOf(install, meta, opening) {
-  const key = [meta.session_id, meta.agent_id].filter((k) => typeof k === 'string' && k).join('~');
-  if (!install || !key) return 0;
-  const file = path.join(install, 'notebook', 'done-gate', `${key.replace(/[^\w.~-]/g, '_').slice(0, 160)}.json`);
+  const file = install ? capFile(install, { ...meta, hook_event_name: 'SubagentStop' }) : null;
+  if (!file) return 0;
   try {
     const state = JSON.parse(readFileSync(file, 'utf8'));
     if (!state || state.opening !== opening) return 0;
@@ -211,6 +196,9 @@ export function recordAgentRun(install, agent, meta, { done = null, report = '',
       feedback: specFeedbackOf(report, SECRET_RE).length, report: Boolean(String(report || '').trim()),
     }, now);
     const file = path.join(install, RUNS_LEDGER);
-    return withLock(file, () => { appendFileSync(file, line); return line; }) || null;
+    // One line in one `appendFileSync` (O_APPEND), as usage.jsonl is written: parallel stops each
+    // land a whole line, so there is no lock to wait on.
+    appendFileSync(file, line);
+    return line;
   } catch { return null; }
 }

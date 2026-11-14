@@ -360,7 +360,8 @@ function captureFeedback(agent, report, args) {
  * SubagentStop, past the done gate: the report's feedback lines into the notes, then the turn's
  * line into the outcome ledger (./agent-runs.mjs), both off ONE read of the report. `done` is what
  * the gate can say through its return (that file's header): null when it did not run, 'not-judged'
- * when it had no transcript to judge (or on Bob), else 'ended'. Unnamed agents get neither.
+ * when it had no transcript to judge, else 'ended'. Unnamed agents get neither. (Bob sends no
+ * SubagentStop, so no Bob case reaches this.)
  */
 function subagentEnded(meta, args, read, install) {
   const agent = subagentNameOf(meta);
@@ -369,7 +370,7 @@ function subagentEnded(meta, args, read, install) {
   try { report = subagentReport(meta, read); } catch { /* no report: nothing to capture */ }
   captureFeedback(agent, report, args);
   const ran = !args.file && !args.noDoneGate;
-  const judged = args.host !== 'bob' && typeof meta.agent_transcript_path === 'string' && meta.agent_transcript_path;
+  const judged = typeof meta.agent_transcript_path === 'string' && meta.agent_transcript_path;
   recordAgentRun(install, agent, meta, { done: !ran ? null : judged ? 'ended' : 'not-judged', report, read });
 }
 

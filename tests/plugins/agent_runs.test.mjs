@@ -13,30 +13,36 @@ import { agentRunLine as hookLine, specHashOf as hookHash } from "../../js/hosts
 
 const { toolCounts, recordAgentRun, isRefusal, specHashOf, agentRunLine } = GeneseedLearn
 
-// A session's tool calls are its `tool` parts. A refusal is an errored part whose error text is a
-// refusal (V1: the guard throws its gate text), or a V2 call the guard renamed. A plain failed
-// call (a red test) is no refusal.
-test("toolCounts: V1 and V2 tool parts, refusals apart from errors", () => {
+// A session's tool calls are its `tool` parts that name a tool. A refusal is an errored part whose
+// error text is one (V1: the guard throws `[geneseed-guard] blocked: …`; V2: core's `No tool named
+// "BLOCKED, not a missing tool: …"`), never a bare renamed name. A red test is no refusal. With no
+// recognised tool part the counts are null, not 0: the V2 shape is unverified, so "none seen" must
+// not read as "used no tools".
+test("toolCounts: V1 and V2 tool parts, refusals apart from errors, null when none is seen", () => {
   const v1 = [
     { info: { role: "user" }, parts: [{ type: "text", text: "brief" }] },
     { info: { role: "assistant" }, parts: [
       { type: "text", text: "working" },
       { type: "tool", tool: "read", state: { status: "completed" } },
-      { type: "tool", tool: "bash", state: { status: "error", error: "Tell the user this, word for word: This command deletes files." } },
-      { type: "tool", tool: "bash", state: { status: "error", error: "Exit code 1" } },
+      { type: "tool", tool: "bash", state: { status: "error", error: "[geneseed-guard] blocked: Tell the user this, word for word: x" } },
+      { type: "tool", tool: "bash", state: { status: "error", error: "Exit code 1\nexpected: \"Tell the user this, word for word: x\"" } },
     ] },
   ]
   assert.deepEqual(toolCounts(v1), { tools: 3, refused: 1 })
   const v2 = [
     { type: "user", text: "brief" },
     { type: "assistant", content: [
-      { type: "tool", name: "BLOCKED, not a missing tool: the guard refused this call" },
+      { type: "tool", name: "BLOCKED, not a missing tool: the guard refused this call",
+        state: { status: "error", error: "No tool named \"BLOCKED, not a missing tool: the guard refused this call\"" } },
+      { type: "tool", name: "BLOCKED, not a missing tool: a name alone is no refusal" },
       { type: "tool", name: "read", state: { status: "error", error: { message: "Permission for this action was denied" } } },
       { type: "tool", name: "grep" },
     ] },
   ]
-  assert.deepEqual(toolCounts(v2), { tools: 3, refused: 2 })
-  assert.deepEqual(toolCounts([]), { tools: 0, refused: 0 })
+  assert.deepEqual(toolCounts(v2), { tools: 4, refused: 2 })
+  assert.deepEqual(toolCounts([]), { tools: null, refused: null })
+  assert.deepEqual(toolCounts([{ type: "assistant", content: [{ type: "text", text: "x" }, { type: "tool" }] }]),
+    { tools: null, refused: null }, "a tool part that names no tool is no recognised shape")
 })
 
 test("the plugin's hash and line are the hook's", () => {
@@ -83,7 +89,7 @@ test("recordAgentRun: one line per child, none when switched off or with nowhere
     await recordAgentRun("s3", "mine", [], cfg)
     assert.deepEqual(await ledger(cfg), [
       `{"ts":"${TODAY()}","agent":"tester","spec":"${hookHash("# tester\n")}","done":null,"blocks":null,"tools":1,"refused":0,"feedback":1,"report":true}`,
-      `{"ts":"${TODAY()}","agent":"mine","spec":null,"done":null,"blocks":null,"tools":0,"refused":0,"feedback":0,"report":false}`,
+      `{"ts":"${TODAY()}","agent":"mine","spec":null,"done":null,"blocks":null,"tools":null,"refused":null,"feedback":0,"report":false}`,
     ])
     const bare = path.join(d, "bare")
     await fs.mkdir(bare)
@@ -162,7 +168,9 @@ test("V2: a named child session's end writes one ledger line, V2 message shape",
       session: {
         get: async () => ({ parentID: "p", agent: "tester" }),
         context: async () => [{ type: "assistant", content: [
-          { type: "tool", name: "BLOCKED, not a missing tool: the guard refused this call" }, { type: "tool", name: "read" },
+          { type: "tool", name: "BLOCKED, not a missing tool: the guard refused this call",
+            state: { status: "error", error: "No tool named \"BLOCKED, not a missing tool: the guard refused this call\"" } },
+          { type: "tool", name: "read" },
           { type: "text", text: "done\nspec-feedback: [agent] say which runner — seen: a refusal" }] }],
       },
       generate: { text: async () => ({ text: "NOTHING" }) },

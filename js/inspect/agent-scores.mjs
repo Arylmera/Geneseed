@@ -6,12 +6,12 @@
  * READ-ONLY. A hook may append at any moment, so the file is never rewritten here; a garbage line
  * is skipped, never fatal.
  *
- * WHAT A COLUMN MEANS, and what it cannot mean. UNBLOCKED is the share of the runs the done gate
- * judged (`done: "ended"`) that it never blocked: the gate's return cannot tell a pass from an
+ * WHAT A COLUMN MEANS, and what it cannot mean. UNBLOCKED is `never blocked / judged`, over the
+ * runs the done gate judged (`done: "ended"`): the gate's return cannot tell a pass from an
  * advisory or a spent cap (agent-runs.mjs header), so this is not a pass rate. REFUSED and TOOLS
- * are means per run over the runs that carry a count; FEEDBACK is the spec-feedback lines the
- * reports carried, summed; REPORTS is the runs that ended with a report. SINCE and LAST are the
- * first and last day a row was seen.
+ * are means per run over the runs that carry a count, with that count in brackets, and `-` below
+ * MEAN_FLOOR such runs; FEEDBACK is the spec-feedback lines the reports carried, summed; REPORTS is
+ * the runs that ended with a report. SINCE and LAST are the first and last day a row was seen.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -68,13 +68,15 @@ export function scoreRows(entries) {
   return [...rows.values()].sort((a, b) => (a.agent < b.agent ? -1 : a.agent > b.agent ? 1 : a.order - b.order));
 }
 
-const mean = (sum, n) => (n ? (Math.round((sum / n) * 10) / 10).toFixed(1) : '-');
+/** Below this many counted runs a mean says nothing, so it prints `-`. */
+export const MEAN_FLOOR = 3;
+const mean = (sum, n) => (n >= MEAN_FLOOR ? `${(Math.round((sum / n) * 10) / 10).toFixed(1)} (${n})` : '-');
 
 /** The table as lines: a header, then one line per row, columns padded to their widest cell. */
 export function scoreLines(rows) {
   const head = ['AGENT', 'SPEC', 'RUNS', 'UNBLOCKED', 'REFUSED', 'TOOLS', 'FEEDBACK', 'REPORTS', 'SINCE', 'LAST'];
   const cells = rows.map((r) => [r.agent, r.spec ?? '-', String(r.runs),
-    r.judged ? `${Math.round((100 * r.unblocked) / r.judged)}%` : '-',
+    r.judged ? `${r.unblocked}/${r.judged}` : '-',
     mean(r.refused, r.refusedRuns), mean(r.tools, r.toolRuns), String(r.feedback),
     `${r.reports}/${r.runs}`, r.since, r.last]);
   const widths = head.map((h, i) => Math.max(h.length, ...cells.map((c) => c[i].length)));

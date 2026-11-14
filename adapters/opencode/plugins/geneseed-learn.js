@@ -519,29 +519,36 @@ function finalAssistantText(messages) {
 // to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
 
 /**
- * A refused tool call: the result text a host or a gate gives a call it did not run. A red test
- * or any other non-zero exit is an error, not a refusal, and matches none of these. One row each,
- * with where its text comes from:
+ * A refused tool call: the result text a host or a gate gives a call it did not run. Only the
+ * result's FIRST line is read, and every marker is anchored at its start (a host prefix of at most
+ * 80 characters allowed for Geneseed's own words): a red test or a search that QUOTES a gate's text
+ * further down its output is an error, not a refusal. One row each, with where its text comes from:
  *   - Geneseed's own refusal (`gateText` mode `refused`, js/hosts/hooks-prims.mjs), and the text
- *     said when that text fails (`GATE_UNSAID`). Matched anywhere: a host may prefix a hook's words.
+ *     said when that text fails (`GATE_UNSAID`), behind a host's prefix ("PreToolUse:Bash hook …").
+ *   - The OpenCode guard: V1 throws `[geneseed-guard] blocked: …`; V2 renames the call, and core
+ *     answers `No tool named "BLOCKED, not a missing tool: …"` (geneseed-guard.js, seen on 2.2.6).
  *   - Claude Code's auto-mode classifier, seen live 2026-11-14: "Permission for this action was
  *     denied by the Claude Code auto mode classifier."
- *   - Claude Code's worktree isolation, seen live 2026-11-14: "... Refusing to run it — a
- *     worktree-isolated agent's git operations must target its own worktree."
+ *   - Claude Code's worktree isolation, seen live 2026-11-14: "This agent is isolated in the
+ *     worktree …, but this command … Refusing to run it — …".
  *   - Claude Code's permission rule deny and a user's "no" to an ask: UNVERIFIED wording.
- *   - OpenCode 2's guard, which renames a refused call (geneseed-guard.js): the tool NAME opens so.
  */
 const REFUSAL_MARKERS = [
-  /Tell the user this, word for word:/,
-  /Geneseed could not describe this call\./,
+  /^.{0,80}?Tell the user this, word for word:/,
+  /^.{0,80}?Geneseed could not describe this call\./,
+  /^\[geneseed-guard\] blocked:/,
+  /^No tool named "BLOCKED, not a missing tool:/,
   /^Permission for this action was denied\b/,
-  /\bRefusing to run it\b/,
-  /^Permission to use \S[^\n]{0,300}? has been denied\b/,
+  /^This agent is isolated in the worktree .{1,600}? Refusing to run it\b/,
+  /^Permission to use \S.{0,300}? has been denied\b/,
   /^The user doesn't want to (?:proceed with|take) this/,
-  /^BLOCKED, not a missing tool:/,
 ];
 
-/** True when `text` (a tool result, or an OpenCode tool name) says the call was refused. */
+/**
+ * True when the first line of `text` (a tool result) says the call was refused. Each marker is
+ * anchored with `^` (no `m` flag) and its `.` never crosses a line break, so a marker can only
+ * match on the first line.
+ */
 function isRefusal(text) {
   const t = String(text ?? '').trimStart();
   return REFUSAL_MARKERS.some((re) => re.test(t));
@@ -562,23 +569,25 @@ function agentRunLine(run, now = new Date()) {
 }
 // ---- agent-runs twin: END
 
-// The child's tool calls are its `tool` parts, V1 (`{ tool, state: { status, error } }`) and V2
-// alike. A refusal is an errored part whose error text `isRefusal` reads as one, or a V2 call the
-// guard renamed (its name opens `BLOCKED, not a missing tool:`; UNVERIFIED live).
+// The child's tool calls are its `tool` parts that name their tool: V1's `{ tool, state: { status,
+// error } }` (seen), and on V2 `{ name, state? }` in `session.context()`, a shape UNVERIFIED against a
+// live OpenCode 2. With no such part at all the counts are null, never a confident 0: an unknown
+// shape must not read as "used no tools". A refusal is an errored part whose error text
+// `isRefusal` reads as one: V1's `[geneseed-guard] blocked:`, V2 core's `No tool named "BLOCKED…`.
 function toolCounts(messages) {
   let tools = 0
   let refused = 0
   for (const m of messages || []) {
     for (const p of m?.parts ?? m?.content ?? []) {
-      if (p?.type !== "tool") continue
+      if (p?.type !== "tool" || typeof (p.tool ?? p.name) !== "string") continue
       tools += 1
       const state = p.state ?? {}
       const e = state.error ?? p.error
       const said = typeof e === "string" ? e : e?.message ?? e?.data?.message ?? ""
-      if (isRefusal(p.tool ?? p.name) || ((state.status ?? p.status) === "error" && isRefusal(said))) refused += 1
+      if ((state.status ?? p.status) === "error" && isRefusal(said)) refused += 1
     }
   }
-  return { tools, refused }
+  return tools ? { tools, refused } : { tools: null, refused: null }
 }
 
 // The agent's rendered spec hash when this install's manifest owns `agents/<name>.md`, else null.

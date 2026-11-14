@@ -32,7 +32,16 @@ const REFUSALS = [
   ['This agent is isolated in the worktree C:\\w, but this command names git in a form too complex to verify that it stays inside the worktree. Refusing to run it — a worktree-isolated agent must target its own worktree.', true],
   ['Permission to use Bash with command rm -rf build has been denied.', true],
   ["The user doesn't want to proceed with this tool use. The tool use was rejected.", true],
-  ['BLOCKED, not a missing tool: the guard refused this call', true],
+  // The renamed V2 call is read through core's error text (above), never its bare name.
+  ['BLOCKED, not a missing tool: the guard refused this call', false],
+  ['[geneseed-guard] blocked: the guard refused this call', true],
+  ['No tool named "BLOCKED, not a missing tool: the guard refused this call"', true],
+  // Geneseed's words count behind a host prefix of at most 80 characters, not deeper in a line.
+  ['Error: the assertion at tests/unit/hook_gates.test.mjs line 412 failed comparing the gate output: Tell the user this, word for word: x', false],
+  // A red test or a search that QUOTES a gate's text further down is an error, not a refusal.
+  ['Exit code 1\nnot ok 4 - gate text\n  expected: "Tell the user this, word for word: ..."', false],
+  ['Exit code 2\nrg: x: No such file\nsrc/a.mjs: // Refusing to run it here', false],
+  ['Exit code 1\nGeneseed could not describe this call. (quoted by a test)', false],
   ['Exit code 1\nnot ok 3 - the suite is red', false],
   ['File does not exist.', false],
   ['Error: ENOENT: no such file or directory', false],
@@ -189,7 +198,9 @@ test('blocksOf: the gate\'s total for this turn, 0 for another turn or no state'
   });
 });
 
-// Parallel sub-agents end together and append to one file: 12 processes in, 12 lines out.
+// Parallel sub-agents end together and append to one file. Each line is one O_APPEND write, as
+// usage.jsonl is, with no lock: this checks that 12 processes at once leave 12 whole, parseable
+// lines. It is a whole-lines check, not a lock proof (an append of one short line is whole anyway).
 test('recordAgentRun: 12 hooks at once write 12 whole lines', async () => {
   const { spawn } = await import('node:child_process');
   await withDir(async (d) => {
@@ -212,7 +223,7 @@ recordAgentRun(${JSON.stringify(cfg)}, 'developer', {}, { done: null, report: 'r
     const got = lines(cfg);
     assert.equal(got.length, N, got.join('\n'));
     for (const l of got) assert.equal(JSON.parse(l).agent, 'developer', l);
-    assert.deepEqual(fs.readdirSync(path.join(cfg, 'notebook')).sort(), ['agent-runs.jsonl'], 'no lock left behind');
+    assert.deepEqual(fs.readdirSync(path.join(cfg, 'notebook')).sort(), ['agent-runs.jsonl'], 'nothing but the ledger');
   });
 });
 
@@ -291,22 +302,25 @@ test('learn hook: a finished sub-agent is one line, silent on stdout; a blocked 
 });
 
 // ---- the read side ---------------------------------------------------------------------------
-// One row per agent and spec, agents by name, each agent's specs oldest first. UNBLOCKED is over
-// the judged runs only; REFUSED and TOOLS are means over the runs that carry a count.
+// One row per agent and spec, agents by name, each agent's specs oldest first. UNBLOCKED is
+// `never blocked / judged`, over the judged (`done: "ended"`) runs only, as REPORTS is a count over
+// runs. REFUSED and TOOLS are means over the runs that carry a count, with that count in brackets,
+// and `-` below 3 such runs: one or two runs make no mean worth comparing.
 const RUNS = [
-  { ts: '2026-11-10', agent: 'tester', spec: 'aaa', done: 'ended', blocks: 0, tools: 4, refused: 0, feedback: 0, report: true },
-  { ts: '2026-11-11', agent: 'developer', spec: 'old', done: 'ended', blocks: 2, tools: 10, refused: 3, feedback: 1, report: true },
-  { ts: '2026-11-12', agent: 'developer', spec: 'old', done: 'ended', blocks: 0, tools: 20, refused: 0, feedback: 0, report: false },
+  { ts: '2026-11-09', agent: 'tester', spec: 'aaa', done: 'ended', blocks: 0, tools: 4, refused: 0, feedback: 0, report: true },
+  { ts: '2026-11-10', agent: 'developer', spec: 'old', done: 'ended', blocks: 2, tools: 10, refused: 3, feedback: 1, report: true },
+  { ts: '2026-11-11', agent: 'developer', spec: 'old', done: 'ended', blocks: 0, tools: 20, refused: 0, feedback: 0, report: false },
+  { ts: '2026-11-12', agent: 'developer', spec: 'old', done: 'ended', blocks: 0, tools: 30, refused: 0, feedback: 0, report: true },
   { ts: '2026-11-13', agent: 'developer', spec: 'new', done: 'ended', blocks: 0, tools: 5, refused: 0, feedback: 0, report: true },
   { ts: '2026-11-14', agent: 'developer', spec: 'new', done: null, blocks: null, tools: null, refused: null, feedback: 2, report: true },
   { ts: '2026-11-14', agent: 'explore', spec: null, done: 'not-judged', blocks: null, tools: null, refused: null, feedback: 0, report: true },
 ];
 const TABLE = [
-  'AGENT      SPEC  RUNS  UNBLOCKED  REFUSED  TOOLS  FEEDBACK  REPORTS  SINCE       LAST',
-  'developer  old   2     50%        1.5      15.0   1         1/2      2026-11-11  2026-11-12',
-  'developer  new   2     100%       0.0      5.0    2         2/2      2026-11-13  2026-11-14',
-  'explore    -     1     -          -        -      0         1/1      2026-11-14  2026-11-14',
-  'tester     aaa   1     100%       0.0      4.0    0         1/1      2026-11-10  2026-11-10',
+  'AGENT      SPEC  RUNS  UNBLOCKED  REFUSED  TOOLS     FEEDBACK  REPORTS  SINCE       LAST',
+  'developer  old   3     2/3        1.0 (3)  20.0 (3)  1         2/3      2026-11-10  2026-11-12',
+  'developer  new   2     1/1        -        -         2         2/2      2026-11-13  2026-11-14',
+  'explore    -     1     -          -        -         0         1/1      2026-11-14  2026-11-14',
+  'tester     aaa   1     1/1        -        -         0         1/1      2026-11-09  2026-11-09',
 ];
 
 test('scoreRows + scoreLines: the per-agent, per-spec table', () => {
@@ -320,6 +334,21 @@ test('readRuns: a garbage or torn line is skipped', async () => {
     assert.deepEqual(readRuns(f), [RUNS[0]]);
     assert.deepEqual(readRuns(path.join(d, 'none.jsonl')), []);
   });
+});
+
+// `--scores` scores agents only, so the command line must name the agents section: none, or any
+// other, is refused with exit 2 and one stderr line, before any install is read.
+test('catalog --scores: refused without the agents section', async () => {
+  const { cmdCatalog } = await import('../../js/build/catalog.mjs');
+  const said = [];
+  const write = process.stderr.write;
+  process.stderr.write = (s) => { said.push(String(s)); return true; };
+  let rcs;
+  try { rcs = [await cmdCatalog({ scores: true }), await cmdCatalog({ scores: true, section: 'skills' })]; }
+  finally { process.stderr.write = write; }
+  assert.deepEqual(rcs, [2, 2]);
+  assert.deepEqual(said.join('').replace(/\r\n/g, '\n').split('\n').filter(Boolean),
+    Array(2).fill('[catalog] --scores reads agent runs: use `geneseed catalog agents --scores`.'));
 });
 
 test('cmdAgentScores: one table per install with a ledger, read-only', async () => {

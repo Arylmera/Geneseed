@@ -120,9 +120,10 @@ export function catalogLines(inv, section, width, showSource = false) {
  */
 export function cmdCatalog(args) {
   // `--scores` reads the installs' outcome ledgers, not the roster: its own module, loaded only
-  // when asked (js/inspect/agent-scores.mjs). It scores agents alone, so another section refuses.
+  // when asked (js/inspect/agent-scores.mjs). It scores agents alone, so any other section, or
+  // none, refuses: the command line must say `agents`.
   if (args.scores) {
-    if (args.section && args.section !== 'agents') {
+    if (args.section !== 'agents') {
       printErr(`[catalog] --scores reads agent runs: use \`geneseed catalog agents --scores\`.\n`);
       return 2;
     }

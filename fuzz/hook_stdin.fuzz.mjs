@@ -345,3 +345,50 @@ test('the tap never changes a gate\'s exit code or stdout, and writes only JSON 
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }), { numRuns: RUNS });
 });
+
+// `learn` on SubagentStop (the outcome ledger, js/hosts/agent-runs.mjs): whatever the payload's
+// names and the sub-agent transcript hold, it exits 0, prints nothing (no project lists checks, so
+// nothing blocks), writes at most one ledger line with exactly the ledger's keys, and writes
+// nothing outside the install's notebook. The home is sandboxed and `$GENESEED_LLM` unset.
+const RUN_KEYS = ['ts', 'agent', 'spec', 'done', 'blocks', 'tools', 'refused', 'feedback', 'report'];
+const stopPayload = fc.record({
+  agent_type: fc.oneof(fc.constantFrom('developer', 'tester', 'plug:rev', 'A', ''), fc.string(), fc.jsonValue()),
+  session_id: sid, agent_id: fc.oneof(fc.string(), fc.jsonValue()), useTranscript: fc.boolean(), text: transcript,
+  last_assistant_message: fc.oneof(fc.string(), fc.jsonValue(), fc.constant('spec-feedback: [agent] a fix — seen: x')),
+});
+
+test('learn on SubagentStop exits 0, prints nothing and writes at most one ledger line, on any payload', () => {
+  fc.assert(fc.property(stopPayload, (input) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-fuzz-'));
+    try {
+      const cfg = path.join(dir, 'cfg');
+      fs.mkdirSync(path.join(cfg, 'notebook'), { recursive: true });
+      fs.mkdirSync(path.join(cfg, 'memory'));
+      const { useTranscript, text, ...rest } = input;
+      const payload = { hook_event_name: 'SubagentStop', cwd: dir, ...rest };
+      if (useTranscript) {
+        fs.writeFileSync(path.join(dir, 'agent.jsonl'), text);
+        payload.agent_transcript_path = path.join(dir, 'agent.jsonl');
+      }
+      const inFile = path.join(dir, 'stdin');
+      fs.writeFileSync(inFile, JSON.stringify(payload));
+      // Activity tracking off: its own writes under `<root>/activity/` are the activity test's above.
+      const env = { ...process.env, ...homeOverrides(path.join(dir, 'home')), GENESEED_ACTIVITY: 'off' };
+      for (const k of ['GENESEED_LLM', 'GENESEED_LEARN_CHILD', 'GENESEED_NO_USAGE']) delete env[k];
+      const fd = fs.openSync(inFile, 'r');
+      let p;
+      try {
+        p = spawnSync(process.execPath, [HOOK, 'learn', '--memory', path.join(cfg, 'memory')],
+          { cwd: dir, encoding: 'utf8', windowsHide: true, stdio: [fd, 'pipe', 'pipe'], env });
+      } finally { fs.closeSync(fd); }
+      const show = JSON.stringify(payload).slice(0, 200);
+      assert.deepEqual([p.status, p.stdout], [0, ''], `learn on ${show}\nstderr: ${p.stderr}`);
+      let ledger = '';
+      try { ledger = fs.readFileSync(path.join(cfg, 'notebook', 'agent-runs.jsonl'), 'utf8'); } catch { /* none */ }
+      const lines = ledger.split('\n').filter(Boolean);
+      assert.ok(lines.length <= 1, `${lines.length} ledger lines on ${show}`);
+      for (const l of lines) assert.deepEqual(Object.keys(JSON.parse(l)), RUN_KEYS, show);
+      assert.deepEqual(fs.readdirSync(cfg).sort(), ['memory', 'notebook'], `wrote outside the notebook on ${show}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }), { numRuns: RUNS });
+});
