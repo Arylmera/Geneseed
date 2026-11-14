@@ -42,8 +42,9 @@
   write-capable {{AGENT}}'s spec must not contain it, or its emit is locked down.
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists in the harness, read it first —
-   it holds your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches
+   ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback
+   notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Step-by-step method this {{AGENT}} follows.
 
 ## Output contract

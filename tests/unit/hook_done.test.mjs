@@ -824,7 +824,9 @@ function subagentStops({ stops, workerChecks = 'npm run lint\n', workerFiles = {
       const ledger = fs.existsSync(ledgerFile) ? fs.readFileSync(ledgerFile, 'utf8') : '';
       if (fs.existsSync(ledgerFile)) fs.unlinkSync(ledgerFile);
       const lesson = fs.existsSync(path.join(install, 'memory', 'agents', 'developer.md'));
-      return { rc: p.status, out: p.stdout, err: p.stderr, ledger, lesson };
+      const noteFile = path.join(install, 'notebook', 'agent-notes', 'developer.md');
+      const note = fs.existsSync(noteFile) ? fs.readFileSync(noteFile, 'utf8') : null;
+      return { rc: p.status, out: p.stdout, err: p.stderr, ledger, lesson, note };
     });
   } finally {
     sb.cleanup();
@@ -869,6 +871,32 @@ test('learn on SubagentStop: an inferred check is a stderr line and a ledger ent
   assert.equal(r.out, '', 'nobody reads a sub-agent\'s systemMessage: stdout must stay empty');
   assert.match(r.err, /\[done-gate\] advisory \(sub-agent\) — unproven since the last edit: npm test/);
   assert.match(r.ledger, /"rule":"law-3"/);
+});
+
+// The spec-feedback capture (js/hosts/spec-feedback.mjs) through the real stdin entry, with
+// `$GENESEED_LLM` unset: it writes the note and prints NOTHING on stdout, whether the turn passed or
+// drew an advisory (a sub-agent's advisory is stderr only). A blocked turn is not over, so it
+// captures nothing and its one JSON verdict stays the only stdout document.
+const report = { type: 'assistant', message: { id: 'fin', role: 'assistant',
+  content: [{ type: 'text', text: 'STATUS: OK\nspec-feedback: [agent] name the base ref in the brief — seen: a guess' }] } };
+const NOTE = /^- \[agent\] name the base ref in the brief — seen: a guess \(\d{4}-\d{2}-\d{2}\)\n$/;
+test('learn on SubagentStop: spec-feedback is captured with no model, and stdout stays the verdict alone', () => {
+  const passed = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint'), report] });
+  assert.equal(passed.rc, 0);
+  assert.equal(passed.out, '', passed.err);
+  assert.match(passed.note ?? '', NOTE, passed.err);
+
+  const advisory = subagentStop({ workerChecks: null, workerFiles: { 'package.json': '{"scripts":{"test":"x"}}' },
+    rows: [prompt('brief'), editWorker, report] });
+  assert.equal(advisory.rc, 0);
+  assert.equal(advisory.out, '');
+  assert.match(advisory.err, /\[done-gate\] advisory \(sub-agent\)/);
+  assert.match(advisory.note ?? '', NOTE);
+
+  const blocked = subagentStop({ rows: [prompt('brief'), editWorker, report] });
+  assert.equal(blocked.rc, 0);
+  assert.deepEqual(Object.keys(JSON.parse(blocked.out)).sort(), ['decision', 'reason']);
+  assert.equal(blocked.note, null, 'a blocked sub-agent has not ended: nothing captured');
 });
 
 test('learn on SubagentStop: no agent transcript is not judged, said only where a list exists', () => {

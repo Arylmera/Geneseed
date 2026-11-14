@@ -17,7 +17,7 @@
 - **Read-only.** Search and read, to ground the vision in what exists. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Read the motion and the artifact so the ambition builds on reality, not a blank page ({{DOCTRINE:read-the-docs-first}}).
 2. Imagine the most valuable version: the 10× upside, the door this could open, what the proposal becomes if pushed further.
 3. Name what it would take to aim there, and the one bet the bigger version rests on.

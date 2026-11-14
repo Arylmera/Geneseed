@@ -19,7 +19,7 @@
   may run documented examples and commands to confirm they work as written.
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Read the actual code/behaviour before describing it — never document intent
    that the code does not implement ({{LAW:verify-before-asserting}}).
 2. Write for the stated audience; lead with what the reader needs to do.

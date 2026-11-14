@@ -24,7 +24,7 @@
   <!-- bash: allow -->
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Search to locate the relevant files before reading them ({{DOCTRINE:context-economy}}).
 2. Read only the slices that matter; follow references outward as needed.
 3. Synthesize — return findings, not raw dumps.

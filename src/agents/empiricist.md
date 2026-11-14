@@ -20,7 +20,7 @@
   <!-- bash: allow -->
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Read the motion and the arguments, then list the load-bearing claims on both sides ({{DOCTRINE:read-the-docs-first}}).
 2. Mark each claim evidenced or unevidenced — and call out any asserted as fact without a source ({{LAW:verify-before-asserting}}).
 3. For the decisive unknowns, name the cheapest experiment, benchmark, or check that would settle them.

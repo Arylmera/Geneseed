@@ -58,6 +58,7 @@ export const TWINS = [
   ['block', 'test-weakening', 'js/hosts/hooks-prims.mjs', plugin('context')],
   ['block', 'rules preamble', 'js/hosts/hooks-context.mjs', plugin('context')],
   ['decl', 'runsUnpiped', 'js/hosts/hooks-done.mjs', plugin('context')],
+  ['block', 'spec-feedback', 'js/hosts/spec-feedback.mjs', plugin('learn')],
   ['block', 'done-check tables', 'js/hosts/done-checks.mjs', plugin('context')],
   ['block', 'ownership shape', 'js/hosts/ownership-gate.mjs', plugin('guard')],
   ['block', 'ownership shape', 'js/hosts/ownership-gate.mjs', plugin('context')],

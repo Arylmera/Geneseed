@@ -280,6 +280,236 @@ async function appendAgentLesson(memDir, agent, lesson) {
   return file
 }
 
+// ---- spec-feedback notes (agent-notes/<name>.md) --------------------------------
+// The `spec-feedback:` lines a subagent ends its report with go into the notes its next dispatch
+// reads, with no model call: the twin of js/hosts/spec-feedback.mjs `captureSpecFeedback`, which
+// the Claude hook runs on SubagentStop. The pure part below is a tool-kept copy.
+// ---- spec-feedback twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
+// to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
+
+/**
+ * One report line: `spec-feedback: [agent|general] <fix> [— situation: …] — seen: …`, at the start
+ * of the line after an optional list marker, and optionally wrapped in backticks or bold. A line
+ * that only names the protocol ("No spec-feedback.", "The reviewer's spec-feedback: …") does not
+ * start with it, so it is no feedback; nor is a quoted (`>`) line or one inside a code fence: both
+ * show someone else's line. Real reports write the scope four ways (`[agent]`, `agent`,
+ * `agent —`, none), and some copy the template's `[agent|general]`; a missing or unchosen scope
+ * reads as `agent`.
+ */
+const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
+const FENCE_RE = /^[ \t]*(?:```|~~~)/;
+// A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
+const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+// "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
+const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
+/** The include's own template, which a report may quote: never a note. */
+const FEEDBACK_PLACEHOLDER = '<the one-line fix>';
+/**
+ * The step-0 footprint: every dispatch reads its own notes and `_general.md`. Past the bullet cap,
+ * or past the character budget, the oldest of the HOOK'S bullets drop (a hand-written line is
+ * never dropped). An agent's own file keeps 100, as `memory/agents/` does; the general file 30.
+ */
+const MAX_FEEDBACK_BULLETS = 100;
+const MAX_GENERAL_BULLETS = 30;
+const MAX_NOTE_FILE_CHARS = 8000;
+/** A body past this many characters is cut, so one runaway line cannot fill the file. */
+const MAX_FEEDBACK_CHARS = 500;
+/** The general file's name. `_` keeps it apart from every agent: an agent name starts with a letter. */
+const GENERAL_NOTES = '_general.md';
+// A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
+const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+// A bullet in the shape this capture writes: the only kind the caps may drop.
+const HOOK_BULLET_RE = /^- \[(?:agent|general)\] .*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+
+/**
+ * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
+ * I's pattern: a line that carries a credential is dropped whole, never written to a note.
+ */
+function specFeedbackOf(text, secret) {
+  const found = [];
+  let fenced = false;
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (FENCE_RE.test(line)) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    const m = FEEDBACK_LINE_RE.exec(line);
+    if (!m) continue;
+    let body = m[3].trim();
+    // `**spec-feedback:** …` closed its wrapper at the colon; `` `spec-feedback: …` `` closes it at the end.
+    if (m[1] && !m[2] && body.endsWith(m[1])) body = body.slice(0, -m[1].length).trim();
+    const s = FEEDBACK_SCOPE_RE.exec(body);
+    const scope = s && (s[1] || s[2]) ? (s[1] || s[2]).toLowerCase() : 'agent';
+    if (s) body = body.slice(s[0].length);
+    body = body.replace(/\s+/g, ' ').trim();
+    if (body.length < 10 || FEEDBACK_NONE_RE.test(body) || body.includes(FEEDBACK_PLACEHOLDER)) continue;
+    if (secret && secret.test(body)) continue;
+    if (body.length > MAX_FEEDBACK_CHARS) body = `${body.slice(0, MAX_FEEDBACK_CHARS).trimEnd()}…`;
+    if (!found.some((f) => f.body === body)) found.push({ scope, body });
+  }
+  return found;
+}
+
+/**
+ * The note bullets for one report: an `agent` line goes to the agent's own file, a `general` line
+ * to `_general.md` only (with the agent's name), which every agent reads too. One home each.
+ */
+function feedbackBullets(items, agent, day) {
+  return {
+    own: items.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${day})`),
+    general: items.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
+  };
+}
+
+/** What a bullet says, for the duplicate check: its date and agent off, spacing and case folded. */
+const feedbackKey = (bullet) => bullet.replace(DATED_TAIL_RE, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * A notes file's new text with `bullets` appended, or null when every one is already there (a
+ * second run on the same report writes nothing). The old text is kept as it was, line endings
+ * folded to LF; past `cap` bullets of the hook's own shape, or past `budget` characters, the
+ * oldest hook bullets drop. A hand-written line is never moved or dropped, and neither is a bullet
+ * this call adds: when hand-written text alone fills the budget, the file goes over it rather
+ * than lose the note just written.
+ */
+function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NOTE_FILE_CHARS) {
+  const text = String(old || '').replace(/\r\n?/g, '\n');
+  const lines = text ? text.replace(/\n$/, '').split('\n') : [];
+  let oldCount = lines.length;
+  const seen = new Set(lines.filter((l) => l.startsWith('- ')).map(feedbackKey));
+  let added = 0;
+  for (const b of bullets) {
+    const k = feedbackKey(b);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    lines.push(b);
+    added += 1;
+  }
+  if (!added) return null;
+  const size = () => lines.reduce((n, l) => n + l.length + 1, 0);
+  let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length;
+  while (hooks > cap || size() > budget) {
+    const i = lines.slice(0, oldCount).findIndex((l) => HOOK_BULLET_RE.test(l));
+    if (i < 0) break;
+    lines.splice(i, 1);
+    oldCount -= 1;
+    hooks -= 1;
+  }
+  return `${lines.join('\n')}\n`;
+}
+// ---- spec-feedback twin: END
+
+// Law I's credential pattern: a hand twin of js/hosts/hooks-prims.mjs SECRET_RE (two lines there,
+// so no tool-kept line twin); tests/plugins/learn.test.mjs holds the two sources equal.
+const FEEDBACK_SECRET_RE =
+  /\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[abprs]-[0-9A-Za-z-]{10,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----/
+
+// The notes root this install's agents read (PATH_NOTES as the render spells it): the tier's
+// notes/ for a global install once the shared store exists, else <install>/notebook. The twin of
+// js/hosts/hooks-learn.mjs `notesRootOf`, which reads the same answer off `--memory` after
+// `sharedStoreFor`. Never the repo's: a notes file is the install's, whatever the cwd holds.
+async function notesRootOf(pluginDir = PLUGIN_DIR) {
+  const own = path.resolve(pluginDir, "..")
+  if ((await readsTier(own)) && (await isDir(path.join(machineDir(), "memory")))) return path.join(machineDir(), "notes")
+  return path.join(own, "notebook")
+}
+
+// The file lock, a twin of js/hosts/spec-feedback.mjs `withLock` (async here): `<file>.lock` made
+// exclusively and holding its owner's token, at most 100 waits of 10 ms, then give up silently.
+// Parallel child sessions end together and would otherwise lose bullets. A lock older than 10 s
+// is a dead holder's: it is broken by renaming it to a name only this caller uses (one of two
+// waiters wins), a fresh lock taken that way is linked back, and a holder removes the lock on
+// release only while it still holds its own token.
+const feedbackLockToken = () => `${process.pid}.${Math.random().toString(36).slice(2)}`
+async function breakStaleFeedbackLock(lock) {
+  const taken = `${lock}.${feedbackLockToken()}.stale`
+  try { await fs.rename(lock, taken) } catch { return }
+  try {
+    if (Date.now() - (await fs.stat(taken)).mtimeMs <= 10000) await fs.link(taken, lock) // a live lock: put it back
+  } catch { /* the slot is taken again */ }
+  await fs.unlink(taken).catch(() => {})
+}
+async function withFeedbackLock(file, fn) {
+  const lock = `${file}.lock`
+  const token = feedbackLockToken()
+  for (let i = 0; i < 100; i += 1) {
+    let handle
+    try {
+      handle = await fs.open(lock, "wx")
+    } catch (e) {
+      // Windows: a lock unlinked while a handle is still open is "delete pending", and creating it
+      // again fails EPERM/EACCES, not EEXIST. A busy lock, not a fault: wait and retry.
+      if (["EPERM", "EACCES", "EBUSY"].includes(e?.code)) { await new Promise((r) => setTimeout(r, 10)); continue }
+      if (e?.code !== "EEXIST") return false
+      let stale = false
+      try { stale = Date.now() - (await fs.stat(lock)).mtimeMs > 10000 } catch { continue }
+      if (stale) { await breakStaleFeedbackLock(lock); continue }
+      await new Promise((r) => setTimeout(r, 10))
+      continue
+    }
+    try {
+      try { await handle.writeFile(token) } finally { await handle.close() }
+      return await fn()
+    } finally {
+      try { if ((await fs.readFile(lock, "utf8")) === token) await fs.unlink(lock) } catch { /* broken as stale */ }
+    }
+  }
+  return false
+}
+
+async function addFeedback(file, bullets, cap) {
+  if (!bullets.length) return false
+  return withFeedbackLock(file, async () => {
+    let old = ""
+    try {
+      const raw = await fs.readFile(file)
+      if (!raw.equals(Buffer.from(raw.toString("utf8")))) return false // not UTF-8: left whole
+      old = raw.toString("utf8")
+    } catch { /* the first note */ }
+    const next = mergeFeedback(old, bullets, cap)
+    if (next === null) return false
+    const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
+    await fs.writeFile(tmp, next, "utf8")
+    // A rename onto a file a reader holds open fails EPERM on Windows for a moment: three tries.
+    for (let i = 0; ; i += 1) {
+      try { await fs.rename(tmp, file); break } catch (e) {
+        if (i < 2 && e?.code === "EPERM") { await new Promise((r) => setTimeout(r, 10)); continue }
+        await fs.unlink(tmp).catch(() => {})
+        throw e
+      }
+    }
+    return true
+  })
+}
+
+// `report` is the child session's final assistant text. Never throws.
+async function captureSpecFeedback(agent, report, notesRoot, day = new Date().toISOString().slice(0, 10)) {
+  try {
+    if (!agent || !notesRoot || !(await isDir(path.dirname(notesRoot)))) return []
+    const items = specFeedbackOf(report, FEEDBACK_SECRET_RE)
+    if (!items.length) return []
+    const dir = path.join(notesRoot, "agent-notes")
+    await fs.mkdir(dir, { recursive: true })
+    const { own, general } = feedbackBullets(items, agent, day)
+    const written = []
+    if (await addFeedback(path.join(dir, `${agent}.md`), own, MAX_FEEDBACK_BULLETS)) written.push(path.join(dir, `${agent}.md`))
+    if (await addFeedback(path.join(dir, GENERAL_NOTES), general, MAX_GENERAL_BULLETS)) written.push(path.join(dir, GENERAL_NOTES))
+    if (written.length) say(`spec-feedback -> ${written.join(", ")}`, "info")
+    return written
+  } catch (err) {
+    say(`spec-feedback skipped: ${err?.message ?? err}`)
+    return []
+  }
+}
+
+// The last assistant message's text, V1 (`{ info: { role }, parts }`) or V2 (`{ type, content }`).
+function finalAssistantText(messages) {
+  for (let i = (messages || []).length - 1; i >= 0; i -= 1) {
+    const m = messages[i]
+    if (m?.info?.role === "assistant") return partsText(m.parts)
+    if (m?.type === "assistant") return partsText(m.content)
+  }
+  return ""
+}
+
 // Flatten a session's messages into "role: text" notes, and pick the model the
 // session actually used so we distil with the user's own provider config.
 function flatten(messages) {
@@ -596,6 +826,18 @@ export const GeneseedLearn = async (ctx) => {
       const agentName = isChild ? resolveAgentName(meta) : null
       if (isChild && !agentName) return
 
+      const fetchMessages = async () => {
+        const res = await client.session.messages({ path: { id: sid } })
+        return Array.isArray(res) ? res : res?.data ?? []
+      }
+      // A child's report feedback first: it needs no store, no model and no minimum length. A
+      // top-level session keeps the old order (no fetch before the store is known).
+      let messages = null
+      if (isChild) {
+        messages = await fetchMessages()
+        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+      }
+
       const memDir = await resolveMemoryDir()
       if (!memDir) {
         if (!warnedNoDir) {
@@ -607,9 +849,7 @@ export const GeneseedLearn = async (ctx) => {
         return
       }
 
-      const res = await client.session.messages({ path: { id: sid } })
-      const messages = Array.isArray(res) ? res : res?.data ?? []
-      let { notes, model } = flatten(messages)
+      let { notes, model } = flatten(messages ?? (await fetchMessages()))
       if (notes.length < MIN_NOTES_CHARS) return
       notes = notes.slice(-MAX_NOTES_CHARS)
       model = model ?? envModel()
@@ -684,7 +924,10 @@ export const GeneseedLearn = async (ctx) => {
 
 // OpenCode treats every export as a plugin and rejects non-functions; hang the test
 // helpers off the factory instead — reachable via import, invisible to the loader.
-Object.assign(GeneseedLearn, { resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2 })
+Object.assign(GeneseedLearn, {
+  resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2,
+  captureSpecFeedback, finalAssistantText, notesRootOf, FEEDBACK_SECRET_RE,
+})
 
 // ---- OpenCode 2 ----------------------------------------------------------------
 // `export default { id, server, setup }` serves V1 (>= 1.3.4) and V2 from one file — why, and
@@ -733,6 +976,13 @@ async function setupV2(ctx) {
       const agentName = isChild ? resolveAgentName(meta) : null
       if (isChild && !agentName) return
 
+      // As on V1: a child is read first for its report feedback, a top-level session keeps the old order.
+      let messages = null
+      if (isChild) {
+        messages = await ctx.session.context({ sessionID: sid })
+        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+      }
+
       const memDir = await resolveMemoryDir()
       if (!memDir) {
         if (!warnedNoDir) {
@@ -742,7 +992,7 @@ async function setupV2(ctx) {
         return
       }
 
-      let { notes, model } = flattenV2(await ctx.session.context({ sessionID: sid }))
+      let { notes, model } = flattenV2(messages ?? (await ctx.session.context({ sessionID: sid })))
       if (notes.length < MIN_NOTES_CHARS) return
       notes = notes.slice(-MAX_NOTES_CHARS)
       if (!model) {

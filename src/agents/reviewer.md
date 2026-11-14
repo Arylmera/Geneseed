@@ -22,7 +22,7 @@
 <!-- bash: allow -->
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Confirm the change actually does what the task required (read the spec/issue). Where
    the spec is silent, judge by what a reasonable user would expect: a crash, hang or data
    loss on an input the spec implies but never names is blocking, not a nitpick.

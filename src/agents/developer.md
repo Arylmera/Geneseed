@@ -31,7 +31,7 @@
   accepts.
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Implement the smallest change that satisfies the scoped task ({{DOCTRINE:smallest-viable-diff}}) —
    in the assigned worktree only, never touching the parent's own tree. In ownership mode,
    write only what the approved decisions cover; on a choice none of them covers, stop and

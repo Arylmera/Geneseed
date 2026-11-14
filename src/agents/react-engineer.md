@@ -22,7 +22,7 @@ Implements React features in a Vite or webpack app, TypeScript or JavaScript, fo
 - Never commits or pushes ({{DOCTRINE:consent-before-push}}).
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Read `package.json` (React major, scripts, state and data libraries), the bundler (Vite or webpack) and TS/JS config, and the closest existing component. Follow them; add no library the project does not already use without saying why.
 2. Keep the folder's language: `.tsx` with typed props and no `any`, or `.jsx`.
 3. Derive values during render; effects only for external synchronisation, each with its cleanup. Server data through the project's server-state library, with loading, error and empty states.
