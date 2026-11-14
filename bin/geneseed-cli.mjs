@@ -150,6 +150,9 @@ const VERBS = {
   // (upstream Python, pinned in the module's docblock). There is no recorded cell — its absolute gate is
   // tests/unit/scorecard.test.mjs. Lazy like every row: the 31 checks load only when asked.
   scorecard: () => import('../js/inspect/scorecard.mjs').then((m) => m.cmdScorecard),
+  // Native: writes an install profile from a global install (`setup --profile` installs one).
+  // Its absolute gate is tests/unit/profiles.test.mjs.
+  profile: () => import('../js/maintain/profiles.mjs').then((m) => m.cmdProfile),
 };
 
 /** Levenshtein distance, for the one "did you mean" an unknown verb gets. */

@@ -3,6 +3,11 @@
 #
 #   ./install         check what the machine is missing, then run the setup wizard
 #   install.command   the same, double-clickable in the macOS Finder
+#   ./install --profile starter
+#                     the same checks, then install the named profile with no questions:
+#                     setup --profile also puts geneseed on PATH, sets the web console to
+#                     start at login and starts it, so this script skips its own link and
+#                     its console question
 #
 # The twin of install.cmd. It installs NOTHING itself: a missing prerequisite is named, with
 # where to get it, and the script stops — re-run it once that is fixed. $GENESEED_NODE
@@ -60,7 +65,20 @@ else
 fi
 [ -e "$HERE/.git" ] || echo "  !!  This folder is not a git clone, so it cannot update itself. Prefer: git clone https://github.com/Arylmera/Geneseed.git"
 
+PROFILE_MODE=
+for arg in "$@"; do
+  case "$arg" in --profile|--profile=*) PROFILE_MODE=1 ;; esac
+done
+
 echo
+# The arguments reach setup only in profile mode: without --profile the script runs the wizard
+# exactly as it always did, whatever else was typed after it (install profiles, D9).
+if [ -n "$PROFILE_MODE" ]; then
+  "$NODE" "$HERE/bin/geneseed-cli.mjs" setup "$@" || { echo; echo "Install did not finish — see the lines above."; finish 1; }
+  echo
+  echo "Done. Open a new terminal to use geneseed, or run ./geneseed from this folder."
+  finish 0
+fi
 "$NODE" "$HERE/bin/geneseed-cli.mjs" setup || { echo; echo "Install did not finish — see the lines above."; finish 1; }
 
 # Put `geneseed` on PATH unless it already is. `link` writes ~/.local/bin/geneseed and, in this

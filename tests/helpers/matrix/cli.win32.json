@@ -7198,6 +7198,77 @@
     {
       "bin": "cli",
       "expect": [
+        "[setup] no profile 'nope' — shipped profiles: guillaume-claude-global, starter"
+      ],
+      "expect_absent": [
+        "Running:",
+        "needs an interactive terminal"
+      ],
+      "expect_absent_files": [
+        "home/.claude/CLAUDE.md",
+        "home/.config/opencode/AGENT.md"
+      ],
+      "expect_silent": true,
+      "id": "setup/an-unknown-profile-lists-the-shipped-ones",
+      "steps": [
+        {
+          "argv": [
+            "setup",
+            "--profile",
+            "nope"
+          ],
+          "cwd": "repo",
+          "stdin": ""
+        }
+      ],
+      "world": {
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "checkout": {},
+      "env": {
+        "PATH": "{sb}/no-tools"
+      },
+      "expect": [
+        "Geneseed setup - profile 'starter'",
+        "None of the AI coding tools this profile installs into was found on this machine:",
+        "  --  OpenCode - install: https://opencode.ai/docs/",
+        "  --  Claude Code - install: https://code.claude.com/docs/en/setup",
+        "  --  IBM Bob - install: https://bob.ibm.com/",
+        "  --  OpenClaude - install: https://openclaude.gitlawb.com/",
+        "Nothing was installed."
+      ],
+      "expect_absent": [
+        "Running:",
+        "needs an interactive terminal",
+        "Summary"
+      ],
+      "expect_absent_files": [
+        "home/.claude/CLAUDE.md",
+        "home/.config/opencode/AGENT.md"
+      ],
+      "id": "setup/a-profile-with-no-tool-on-the-machine-installs-nothing",
+      "steps": [
+        {
+          "argv": [
+            "setup",
+            "--profile",
+            "starter"
+          ],
+          "cwd": "repo",
+          "stdin": ""
+        }
+      ],
+      "world": {
+        "no-tools/.keep": "",
+        "repo/.keep": ""
+      }
+    },
+    {
+      "bin": "cli",
+      "expect": [
         "[web] not running."
       ],
       "expect_absent": [

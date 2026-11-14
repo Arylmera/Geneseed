@@ -25,6 +25,17 @@ cd Geneseed
 .\install.cmd
 ```
 
+### With no questions: a profile
+
+Add `--profile <name>` to either installer and it asks nothing. It installs that profile globally into every AI coding tool the profile lists and finds on the machine, puts `geneseed` on your `PATH`, sets the web console to start at login, starts it and runs the doctor. `starter` is the profile for a first install:
+
+```
+.\install.cmd --profile starter      # Windows
+./install --profile starter          # macOS, Linux
+```
+
+With `--profile`, the installer skips its own `link` and its "open the console now?" question, and `install.cmd` skips its final pause, so a script that runs it returns. Run the same line again to update and repair. [Install profiles](../reference/profiles.md) has the file format and what each run does.
+
 Later, run the launcher in the clone: `./geneseed setup` (Windows: `.\geneseed.cmd setup`) re-runs the wizard, and bare `./geneseed` opens the web console. Both launchers need `node` on `PATH`. If it is not there (some version managers only patch interactive shells), set `GENESEED_NODE` to the absolute path of the Node binary.
 
 From a clone, every `geneseed …` command on these pages is `./geneseed …` (Windows: `.\geneseed.cmd …`). To drop the `./`, see [Run geneseed from anywhere](run-anywhere.md).

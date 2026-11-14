@@ -1,0 +1,13 @@
+{
+  "description": "For a first install: neutral voice, every guardrail except the ownership gate.",
+  "hosts": ["opencode", "bob", "claude", "openclaude"],
+  "theme": "neutral",
+  "footprint": "lean",
+  "posture": "peer",
+  "mode": "direct",
+  "trust": "balanced",
+  "doctrines": "all",
+  "kits": [],
+  "gates": { "ownershipGate": false },
+  "login": true
+}

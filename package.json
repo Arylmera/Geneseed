@@ -39,6 +39,7 @@
     "js/",
     "src/",
     "themes/",
+    "profiles/",
     "adapters/",
     "docs/*.md",
     "docs/_groups.json",

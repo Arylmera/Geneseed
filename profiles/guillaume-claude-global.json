@@ -1,0 +1,15 @@
+{
+  "description": "Guillaume's recommended Claude Code setup: imperial voice, expert posture, foreman mode. Claude Code only.",
+  "hosts": ["claude"],
+  "theme": "imperial",
+  "footprint": "lean",
+  "posture": "expert",
+  "mode": "foreman",
+  "trust": "balanced",
+  "doctrines": ["craft", "rigor", "ops", "process", "comms"],
+  "excludeRules": ["craft.4", "ops.1", "process.3", "process.4", "process.5", "rigor.5"],
+  "excludeSkills": [],
+  "kits": [],
+  "gates": { "deletionGate": false, "ownershipGate": false, "externalGate": false },
+  "login": true
+}

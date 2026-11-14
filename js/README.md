@@ -234,7 +234,8 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | module | owns |
 |---|---|
 | `update.mjs` | `upgrade`/`bootstrap` — git pull, doctor gate, rebuild, each via a respawn |
-| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers |
+| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers. `setup --profile` installs a profile with no prompt |
+| `profiles.mjs` | Install profiles (`profiles/*.json`): load and validate against the generator's own sources, the per-host argv, `profile save` |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |

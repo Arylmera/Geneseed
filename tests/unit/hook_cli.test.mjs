@@ -194,7 +194,10 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // SessionEnd) long after the reference: its absolute gate is tests/unit/activity_writer.test.mjs.
 // `factory` is the loop engine one level up, with no Python original either: its absolute gate
 // is tests/unit/factory_cli.test.mjs.
-const NATIVE = ['activity', 'catalog', 'export', 'factory', 'loop', 'mcp', 'memory', 'scorecard', 'tool-gate'];
+// `profile` writes an install profile from a global install, born with `setup --profile`: its
+// absolute gate is tests/unit/profiles.test.mjs. A cell could not hold it, since `save` writes
+// into the checkout's own `profiles/`.
+const NATIVE = ['activity', 'catalog', 'export', 'factory', 'loop', 'mcp', 'memory', 'profile', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
   // PER BINARY, and that is the shape P5c forced. A cell declares which entry answers it, so the

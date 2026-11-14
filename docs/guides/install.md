@@ -8,6 +8,19 @@ description: "The one-command install, what it needs, and the page for each host
 ---
 Geneseed builds a harness (the rules, agents, skills and hooks your AI coding tool loads; see [What a harness is](../understand/harness.md)) and installs it into the tool you already use. Most people need one command.
 
+## New to AI agents: one line, no questions
+
+You need **git** and **Node 22.7 or newer**. Clone Geneseed where you like, then run the installer with the `starter` profile:
+
+```
+git clone https://github.com/Arylmera/Geneseed.git
+cd Geneseed
+.\install.cmd --profile starter      # Windows (cmd or PowerShell)
+./install --profile starter          # macOS, Linux
+```
+
+It asks nothing. It installs the harness globally into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check, and prints a summary with the console's address. With no tool on the machine it installs nothing and prints where to get each one. Run the same line again to update and repair. `starter` is a neutral voice, a candid peer posture, and every guardrail armed except the ownership gate. [Install profiles](../reference/profiles.md) has the details and shows how a team adds its own profile.
+
 ## The 5-minute path
 
 The only prerequisite is **Node 22.7 or newer**.

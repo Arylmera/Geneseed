@@ -283,6 +283,8 @@ const SHIPS = [
   ['js/', 'the port'],
   ['src/', 'the product: what a bundle is rendered from'],
   ['themes/', 'render.loadTheme reads these; a themeless install renders nothing'],
+  ['profiles/', 'js/maintain/profiles.mjs reads them: `geneseed setup --profile <name>` installs one, '
+    + 'and the doctor validates each (install profiles, D10/D11)'],
   ['adapters/', 'js/build/driver.mjs, js/hosts/hooks-learn.mjs and js/web/docs.mjs all read ROOT/adapters'],
   ['docs/reference/', "js/web/docs.mjs serves it; the console's Reference pages ARE these files"],
   ['docs/_groups.json', 'js/web/docs.mjs reads it; without it the Docs tab has no groups and shows nothing'],

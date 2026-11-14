@@ -6,7 +6,13 @@ kind: "concept"
 section: "Install"
 description: "The build command to run in a script, a CI job, or a shell with no terminal."
 ---
-`setup` needs an interactive terminal. In a script, a CI job, or any shell without one, it stops with exit code 1 and prints the build command to run instead:
+`setup --profile <name>` needs no terminal. It installs a named profile from `profiles/` globally into each AI coding tool the profile lists and finds, with no question, and exits 1 when a build or the doctor fails. A profile with `"login": false` skips the login item and the console, which is what a server or a CI job wants. See [Install profiles](../reference/profiles.md).
+
+```
+geneseed setup --profile starter
+```
+
+The wizard, plain `setup`, needs an interactive terminal. In a script, a CI job, or any shell without one, it stops with exit code 1 and prints the build command to run instead:
 
 ```
 geneseed build --emit opencode-global --theme neutral
