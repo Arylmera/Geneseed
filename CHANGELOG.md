@@ -8,6 +8,11 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 
 ## [Unreleased]
 
+### Added
+- **Install profiles: a one-line install with no questions.** `install.cmd --profile starter` (Windows) or `./install --profile starter` (macOS, Linux) from a fresh clone installs the `starter` profile globally into every AI coding tool found on the machine, puts `geneseed` on `PATH`, sets the web console to start at login, starts it (or restarts it when it runs), runs the doctor and prints an ASCII summary with the console address. It needs no terminal. A failure on one tool does not stop the others; the run then exits 1. A second run is an update and a repair: it puts each setting back to the profile's value and names every setting it put back. On macOS and Linux it writes the PATH block into the shell's startup file without asking and names the file. Without `--profile`, `setup` and both install scripts are unchanged. See `docs/reference/profiles.md`.
+- **`profiles/<name>.json`**, shipped in the package and the clone, checked against the generator's own value lists (an unknown key is an error) and by `geneseed doctor`. Two ship: `starter` (neutral, peer, direct, all packs, every gate armed except the ownership gate, all four tools) and `guillaume-claude-global` (the author's Claude Code setup: imperial, expert, foreman, six rules excluded, the deletion, ownership and external gates off).
+- **`geneseed profile save <name> --from <host>-global`** writes a profile from an existing global install, every setting as it is, gates off included, and prints how it differs from `starter`, gates first. It refuses an existing file without `--force` and reads no personal file (user rules, profile, memory, wiki, notebook).
+
 ## [5.4.0] — 2026-11-13
 
 **Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the

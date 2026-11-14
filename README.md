@@ -74,6 +74,19 @@ geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 
 ## 🚀 2 · Setup
 
+### 🧭 New to AI agents? One line, no questions
+
+Clone Geneseed where you like, then run one command at the root of the clone. It installs the **`starter`** profile into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check and prints the console's address. It asks nothing.
+
+```powershell
+git clone https://github.com/Arylmera/Geneseed.git
+cd Geneseed
+.\install.cmd --profile starter      # Windows (cmd or PowerShell)
+./install --profile starter          # macOS, Linux
+```
+
+`starter` is a neutral voice, a candid peer posture, the agent working each task itself, and every guardrail armed except the ownership gate. Run the same line again to update and repair. A team adds its own profile to [`profiles/`](profiles/) by pull request; `geneseed profile save <name> --from claude-global` writes one from your own install. See [Install profiles](docs/reference/profiles.md).
+
 ### ⚡ The short way — `npx`
 
 The harness is published on npm as **[`geneseed`](https://www.npmjs.com/package/geneseed)** — three commands (`geneseed`, `geneseed-hook`, `geneseed-build`), zero dependencies. One command, nothing cloned, nothing else to install. The only prerequisite is **Node ≥ 22.7**.
