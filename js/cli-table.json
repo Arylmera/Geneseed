@@ -1580,6 +1580,74 @@
       "mutex": []
     },
     {
+      "name": "profile",
+      "help": "save an existing global install as an install profile",
+      "description": "save an existing global install as profiles/NAME.json, an install profile that geneseed setup --profile NAME installs with no questions. It copies every build setting as it is, gates switched off included, and prints how the new profile differs from starter. It reads no user rules, profile, memory, wiki or notebook",
+      "positionals": [
+        {
+          "names": [],
+          "dest": "action",
+          "metavar": null,
+          "help": "save — write profiles/NAME.json from the install named by --from",
+          "choices": [
+            "save"
+          ],
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [],
+          "dest": "name",
+          "metavar": null,
+          "help": "the profile name (a file stem: letters, digits, '.', '_' and '-')",
+          "choices": null,
+          "default": null,
+          "required": true,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "options": [
+        {
+          "names": [
+            "--from"
+          ],
+          "dest": "from",
+          "metavar": "EMIT",
+          "help": "the global install to read: opencode-global, claude-global, bob-global or openclaude-global",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--force"
+          ],
+          "dest": "force",
+          "metavar": null,
+          "help": "replace profiles/NAME.json when it already exists (that file only)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        }
+      ],
+      "mutex": []
+    },
+    {
       "name": "prompt",
       "help": "emit a self-contained install prompt",
       "description": "",

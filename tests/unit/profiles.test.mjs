@@ -5,12 +5,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import {
-  BASE_PROFILE, PROFILE_KEYS, listProfiles, loadProfile, profileBuildArgs, profileDiff, profileFromInstall,
-  profileProblems, saveProfile, shippedProfileProblems,
+  BASE_PROFILE, PROFILE_KEYS, PROFILES_DIR, cmdProfile, listProfiles, loadProfile, profileBuildArgs,
+  profileDiff, profileFromInstall, profileProblems, saveProfile, shippedProfileProblems,
 } from '../../js/maintain/profiles.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import { cellEnv, makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const STARTER = {
   description: 'For a first install: neutral voice, every guardrail except the ownership gate.',
@@ -180,4 +184,61 @@ test('save writes the keys in order, refuses an existing file without force, and
       assert.equal(saveProfile(bad, p, { dir: sb.path }).ok, false, bad);
     }
   } finally { sb.cleanup(); }
+});
+
+// ---------------------------------------------------------------------------------------------
+// `geneseed profile save`, over a real Claude global install in a sandboxed home. The process
+// home is moved into the sandbox (`sandboxProcessHome`) so `installProfile` reads that install,
+// and the save writes into a temp profiles dir, never the checkout's.
+// ---------------------------------------------------------------------------------------------
+
+/** Run `fn` with stdout and stderr captured; `{ rc, out }`. */
+function captured(fn) {
+  const lines = [];
+  const [o, e] = [process.stdout.write, process.stderr.write];
+  process.stdout.write = (s) => { lines.push(String(s)); return true; };
+  process.stderr.write = (s) => { lines.push(String(s)); return true; };
+  try { return { rc: fn(), out: lines.join('').replaceAll('\r\n', '\n') }; } finally {
+    process.stdout.write = o;
+    process.stderr.write = e;
+  }
+}
+
+test('profile save writes the install as a profile and prints its difference from starter', { timeout: 300_000 }, () => {
+  const home = sandboxProcessHome();
+  const out = makeSandbox('gs-profiles-');
+  try {
+    // Refusals first: no install, no --from, a --from that is not a global emit.
+    assert.equal(captured(() => cmdProfile({ action: 'save', name: 'x', from: 'claude-global' }, { dir: out.path })).rc, 1);
+    assert.match(captured(() => cmdProfile({ action: 'save', name: 'x', from: null }, { dir: out.path })).out,
+      /profile save needs --from, one of: opencode-global, claude-global, bob-global, openclaude-global/);
+    assert.equal(captured(() => cmdProfile({ action: 'save', name: 'x', from: 'claude' }, { dir: out.path })).rc, 2);
+
+    const built = spawnSync(process.execPath, [path.join(ROOT, 'bin', 'build-driver.mjs'),
+      '--theme', 'pirate', '--emit', 'claude-global', '--footprint', 'lean', '--posture', 'expert',
+      '--doctrines', 'craft,rigor,ops,process,comms', '--exclude-rules', 'ops.1', '--no-deletion-gate'],
+    { cwd: home, env: cellEnv(home), encoding: 'utf8', windowsHide: true });
+    assert.equal(built.status, 0, built.stderr);
+    fs.copyFileSync(path.join(PROFILES_DIR, 'starter.json'), path.join(out.path, 'starter.json'));
+
+    const r = captured(() => cmdProfile({ action: 'save', name: 'team', from: 'claude-global' }, { dir: out.path }));
+    assert.equal(r.rc, 0, r.out);
+    const saved = JSON.parse(fs.readFileSync(path.join(out.path, 'team.json'), 'utf8'));
+    assert.deepEqual(saved, {
+      description: 'Saved from the claude global install.', hosts: ['claude'], theme: 'pirate',
+      footprint: 'lean', posture: 'expert', mode: 'direct', trust: 'balanced', doctrines: 'all',
+      excludeRules: ['ops.1'], excludeSkills: [], kits: [], gates: { deletionGate: false }, login: true,
+    });
+    assert.ok(r.out.indexOf('gates.deletionGate: on -> off') < r.out.indexOf('theme: neutral -> pirate'), r.out);
+    for (const line of ['gates.ownershipGate: off -> on', 'hosts: bob,claude,openclaude,opencode -> claude',
+      'posture: peer -> expert', 'excludeRules: none -> ops.1']) assert.ok(r.out.includes(line), line);
+    // A second save under the same name refuses without --force, and --force replaces.
+    assert.equal(captured(() => cmdProfile({ action: 'save', name: 'team', from: 'claude-global' }, { dir: out.path })).rc, 1);
+    assert.equal(captured(() => cmdProfile({ action: 'save', name: 'team', from: 'claude-global', force: true }, { dir: out.path })).rc, 0);
+    // D29: nothing personal can reach it — the keys are the build settings and nothing else.
+    assert.deepEqual(Object.keys(saved), PROFILE_KEYS);
+  } finally {
+    out.cleanup();
+    restoreProcessHome();
+  }
 });

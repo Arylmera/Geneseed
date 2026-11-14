@@ -61,8 +61,9 @@ test('the table is the document the entry reads, and the page is derived from it
   // test is about. The reference stated it by comparing two paths across implementations; with
   // one implementation left, what says it is that the live reader's answer tracks the FILE.
   const onDisk = JSON.parse(readFileSync(TABLE, 'utf8'));
-  // 34 = the 25 names argparse answered to (24 subparsers plus the `update` alias; `sync-self` went in 5.0.0) plus the
-  // nine verbs that never had a subparser: `catalog`, `mcp` and `memory`, each a terminal
+  // 35 = the 25 names argparse answered to (24 subparsers plus the `update` alias; `sync-self` went in 5.0.0) plus the
+  // ten verbs that never had a subparser: `profile`, which saves a global install as an install
+  // profile; `catalog`, `mcp` and `memory`, each a terminal
   // face on a capability that had reached the product only through the web console;
   // `tool-gate`, the hook verb Bob's one-command-per-event settings need; `loop`, the
   // Task 5 state-machine verb with no Python original at all; `scorecard`, a port of the
@@ -73,8 +74,8 @@ test('the table is the document the entry reads, and the page is derived from it
   // in tests/unit/hook_cli.test.mjs, which names the native population and fails a verb that
   // has neither a recorded cell nor a place there; this line is the count that says the table
   // did not quietly grow past it.
-  assert.equal(onDisk.commands.length, 34,
-    'the table is no longer the 34-row document — 25 recorded names plus nine Node-native '
+  assert.equal(onDisk.commands.length, 35,
+    'the table is no longer the 35-row document — 25 recorded names plus ten Node-native '
     + 'verbs. A new row needs a place in NATIVE (tests/unit/hook_cli.test.mjs) before it needs '
     + 'a number here');
   assert.equal(cliReference().commands.length, onDisk.commands.length,

@@ -21,10 +21,11 @@ import path from 'node:path';
 import {
   discoverNames, GATE_SWITCHES, knownRuleIds, knownSkillIds, linkedSkillIds, loadKits, PACK_ORDER, ROOT,
 } from '../build/source.mjs';
-import { setupBuildArgs } from '../build/profile.mjs';
+import { installProfile, setupBuildArgs } from '../build/profile.mjs';
 import { PRESETS } from '../loop/score.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
-import { themeFiles } from '../hosts/installs.mjs';
+import { installState, themeFiles } from '../hosts/installs.mjs';
+import { printErr, printOut } from '../lib/fs.mjs';
 
 /** Where the shipped profiles live: `profiles/` at the checkout (or package) root. */
 export const PROFILES_DIR = path.join(ROOT, 'profiles');
@@ -257,4 +258,67 @@ export function saveProfile(name, profile, { dir = PROFILES_DIR, force = false }
  */
 export function shippedProfileProblems(dir = PROFILES_DIR) {
   return listProfiles(dir).map((n) => loadProfile(n, dir)).filter((r) => !r.ok).map((r) => `[profiles] ${r.error}`);
+}
+
+/**
+ * `geneseed profile save <name> --from <host>-global [--force]` (spec D28, D29, D30).
+ *
+ * Reads the one install `--from` names through `installProfile` — the same read-back
+ * `rebuild-all` replays — and writes `profiles/<name>.json` with `hosts: [<host>]`. It refuses
+ * when there is no active install there, when the read-back would not load as a profile (a
+ * setting this checkout no longer ships), and when the file exists without `--force`. Then it
+ * prints how the new profile differs from `starter`, gates first, so the author sees what a
+ * reviewer will see before the pull request. `dir` is the test's seam.
+ */
+export function cmdProfile(args, { dir = PROFILES_DIR } = {}) {
+  if (args.action !== 'save') {
+    printErr(`geneseed: error: profile: unknown action '${args.action}' (choose from 'save')\n`);
+    return 2;
+  }
+  const hosts = profileHosts();
+  const emits = hosts.map((h) => `${h}-global`);
+  if (!args.from || !emits.includes(args.from)) {
+    printErr(`geneseed: error: profile save needs --from, one of: ${emits.join(', ')}\n`);
+    return 2;
+  }
+  const host = args.from.slice(0, -'-global'.length);
+  let root;
+  try {
+    root = HOSTS.find((h) => h.host === host).configDir();
+  } catch (e) {
+    printErr(`[profile] cannot find the ${host} config dir (${e && e.message})\n`);
+    return 1;
+  }
+  if (installState(root, host, 'global') !== 'active') {
+    printErr(`[profile] no active ${host} global install at ${root} — nothing to save\n`);
+    return 1;
+  }
+  const p = profileFromInstall(installProfile(host, 'global', root),
+    `Saved from the ${host} global install.`);
+  const errs = profileProblems(p);
+  if (errs.length) {
+    printErr(`[profile] the ${host} global install does not make a valid profile: ${errs.join('; ')}\n`);
+    return 1;
+  }
+  const r = saveProfile(args.name, p, { dir, force: Boolean(args.force) });
+  if (!r.ok) {
+    printErr(`[profile] ${r.error}\n`);
+    return 1;
+  }
+  printOut(`[profile] wrote ${r.file} from ${root}\n`);
+  const base = loadProfile(BASE_PROFILE, dir);
+  if (!base.ok) {
+    printOut(`[profile] no ${BASE_PROFILE} profile to compare with (${base.error})\n`);
+    return 0;
+  }
+  const diff = profileDiff(p, base.profile);
+  if (!diff.length) {
+    printOut(`[profile] it is the same as ${BASE_PROFILE}\n`);
+  } else {
+    printOut(`[profile] how it differs from ${BASE_PROFILE}:\n`);
+    for (const d of diff) printOut(`  ${d.key}: ${d.base} -> ${d.now}\n`);
+  }
+  printOut(`[profile] edit its description, then open a pull request; a colleague installs it with: `
+    + `install.cmd --profile ${args.name} (Windows) or ./install --profile ${args.name}\n`);
+  return 0;
 }
