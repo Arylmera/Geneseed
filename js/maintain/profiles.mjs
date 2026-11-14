@@ -272,7 +272,7 @@ export function shippedProfileProblems(dir = PROFILES_DIR) {
  */
 export function cmdProfile(args, { dir = PROFILES_DIR } = {}) {
   if (args.action !== 'save') {
-    printErr(`geneseed: error: profile: unknown action '${args.action}' (choose from 'save')\n`);
+    printErr(`geneseed: error: profile: unknown action '${args.action}' (the one action is: save)\n`);
     return 2;
   }
   const hosts = profileHosts();
