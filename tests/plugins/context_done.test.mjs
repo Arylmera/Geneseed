@@ -73,6 +73,28 @@ test("the V1 transform reminds after an unproven edit, and only then", async () 
   for (const [what, messages, want] of rows) assert.equal(await reminded(messages), want, what)
 })
 
+// `projectDirs`, the plugin's hand twin of `projectDir`: a LINKED worktree of the repo (a `.git`
+// FILE naming `<repo>/.git/worktrees/wt`, whose `commondir` is `../..`) is the same project; a
+// repository of its own is not. Built here, with plain files, so `repo/.git` stays as the other
+// tests left it until the end.
+test("the V1 transform: --prefix naming a linked worktree of the repo clears it, another repo does not", async () => {
+  const priv = path.join(repo, ".git", "worktrees", "wt")
+  const wt = path.join(tmp, "wt-linked")
+  await fs.mkdir(priv, { recursive: true })
+  await fs.writeFile(path.join(priv, "commondir"), "../..\n")
+  await fs.mkdir(wt, { recursive: true })
+  await fs.writeFile(path.join(wt, ".git"), `gitdir: ${priv}\n`)
+  const other = await gitRepo("other-repo", {})
+  try {
+    const edit = tool("edit", { filePath: path.join(repo, "a.js") })
+    const ran = (dir) => [user("u1"), edit, tool("bash", { command: `npm --prefix "${dir}" run lint` }, "completed", { exit: 0 }), user("u2")]
+    assert.equal(await reminded(ran(wt)), false, "a linked worktree of the repo is the same project")
+    assert.equal(await reminded(ran(other)), true, "a repository of its own is not")
+  } finally {
+    await fs.rm(path.join(repo, ".git", "worktrees"), { recursive: true, force: true })
+  }
+})
+
 // THE PROMPT PREFIX IS STABLE: message 0 is the context block, byte for byte the same on every
 // request of a session, and a reminder is the LAST message. The provider's prompt cache matches
 // on the prefix, so anything that toggles must sit behind everything that does not. Three
