@@ -51,9 +51,15 @@ echo       On a managed PC, ask IT or look for "Git" in Software Center / Compan
 if not exist "%HERE%.git" echo   !!  This folder is not a git clone, so it cannot update itself. Prefer: git clone https://github.com/Arylmera/Geneseed.git
 
 echo.
+rem The arguments reach setup only in profile mode: without --profile the wizard runs exactly
+rem as it always did, whatever else was typed after install.cmd.
+if not defined PROFILE_MODE goto :wizard
 "%NODE%" "%HERE%bin\geneseed-cli.mjs" setup %*
 if errorlevel 1 goto :failed
-if defined PROFILE_MODE goto :profiledone
+goto :profiledone
+:wizard
+"%NODE%" "%HERE%bin\geneseed-cli.mjs" setup
+if errorlevel 1 goto :failed
 
 rem Put `geneseed` on PATH unless it already is, as ./install does. Without it a fresh clone
 rem had no `geneseed` command until the user found `geneseed.cmd link` (reported 2026-11).

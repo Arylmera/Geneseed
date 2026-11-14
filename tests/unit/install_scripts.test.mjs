@@ -73,6 +73,12 @@ test('a failing install.cmd --profile returns 1 without waiting on a pause', { s
   assert.doesNotMatch(r.stdout, /Press any key/);
 });
 
+test('install.cmd without --profile runs the wizard with no arguments, whatever was typed (D9)', { skip: !WIN }, () => {
+  const r = runCmd(['--frobnicate'], 0, 'N\r\n\r\n');
+  assert.equal(r.calls[0], 'setup');
+  assert.ok(!r.calls.includes('home'), 'answering N still opened the console');
+});
+
 test('./install --profile passes the flag to setup and does nothing else', { skip: WIN }, () => {
   const r = runSh(['--profile', 'starter'], 0);
   assert.equal(r.status, 0, r.stdout);
@@ -88,8 +94,8 @@ test('./install --profile=NAME is profile mode too, and a failure exits 1', { sk
 });
 
 test('./install without --profile still runs the wizard and asks about the console (D9)', { skip: WIN }, () => {
-  const r = runSh([], 0, 'n\n');
+  const r = runSh(['--frobnicate'], 0, 'n\n');
   assert.equal(r.status, 0, r.stdout);
-  assert.equal(r.calls[0], 'setup');
+  assert.equal(r.calls[0], 'setup', 'an argument other than --profile reached the wizard');
   assert.ok(!r.calls.includes('home'), 'answering n still opened the console');
 });
