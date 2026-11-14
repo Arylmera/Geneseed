@@ -40,7 +40,9 @@ In [foreman mode](foreman-mode.md) the session hands each task that would block 
 
 ### Agents learn too
 
-When a subagent finishes, the learn step can record a lesson for that agent alone, in `agents/<name>.md` in the memory store (the [shared](shared-tier.md) one on a global install) — one bullet per lesson, capped so it never grows unbounded. The next time that agent runs, it starts with what it learned. See [Memory](memory.md). (Not on Bob, which has no subagent-finished event.)
+When a subagent finishes, the hook copies each `spec-feedback:` line its report ends with into `agent-notes/<name>.md` in the notes folder (a `general` line also into `agent-notes/_general.md`), with no model call. The agent reads those notes first at its next dispatch, so a spec flaw it reported is in front of it until the user folds the fix into the source. See [Hooks](hooks.md). (Not on Bob, which has no subagent-finished event: there the caller copies the line.)
+
+The learn step can also record a lesson for that agent alone, in `agents/<name>.md` in the memory store (the [shared](shared-tier.md) one on a global install) — one bullet per lesson, capped so it never grows unbounded. The next time that agent runs, it starts with what it learned. See [Memory](memory.md). (Not on Bob, which has no subagent-finished event.)
 
 <!--harness:opencode-->
 *(OpenCode only)*

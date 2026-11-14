@@ -133,8 +133,14 @@ Read and write follow one rule each:
   spec says so). This is the {{AGENT}}'s memory across dispatches.
 - **Write** — mechanical, never by the {{AGENT}} itself (most run read-only). When
   a subagent run ends, the learn step distils at most one lesson into the owning
-  {{AGENT}}'s file. A caller may also fold a returned `spec-feedback:` line in by
-  hand.
+  {{AGENT}}'s file. It needs `$GENESEED_LLM`; without one, this file is not written.
+
+The `spec-feedback:` lines an {{AGENT}} ends its report with are a second, distinct
+value, with one writer of their own: the same hook copies them, with no model call,
+into `{{PATH_NOTES}}/agent-notes/<agent-name>.md` (and a `general` line also into
+`agent-notes/_general.md`), one dated bullet each, duplicates skipped, capped like
+the files here. The {{AGENT}} reads both homes at step 0. Neither the caller nor this
+store holds a copy; folding a note into an {{AGENT}}'s source is the user's call.
 
 Same bar as {{DOCTRINE:persist-insight}}: capture only how this {{AGENT}} should work *next time* —
 a boundary that proved wrong, an input it always needs — never task residue. Files

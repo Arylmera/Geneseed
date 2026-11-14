@@ -19,6 +19,7 @@ import { recordOwnWrites, storeReport } from './store-watch.mjs';
 import {
   existingSlugs, readFacts, writeMemories, consolidateMemory, appendAgentLesson,
 } from './memory-files.mjs';
+import { captureSpecFeedback, subagentReport } from './spec-feedback.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -321,6 +322,36 @@ function sharedStoreFor(install, args) {
   } catch { return args.memory; }
 }
 
+/**
+ * The notes root an install's agents read, `PATH_NOTES` as the render spells it: the tier's
+ * `notes/` when `--memory` (after `sharedStoreFor`) is the shared store, else `<install>/notebook`,
+ * the folder the fold copies from (js/build/fold.mjs `foldNotes`). So a global install whose tier
+ * is not seeded yet keeps its notes beside its own store until the next fold, as its facts wait.
+ */
+export function notesRootOf(memory) {
+  if (!memory) return null;
+  const mem = path.resolve(toPlatformPath(memory));
+  try {
+    const shared = sharedPaths();
+    if (mem === path.resolve(shared.memory)) return shared.notes;
+  } catch { /* no home directory: no tier */ }
+  return path.join(path.dirname(mem), 'notebook');
+}
+
+/**
+ * SubagentStop: the `spec-feedback:` lines of the sub-agent's final report into the notes its next
+ * dispatch reads (./spec-feedback.mjs). No model, so `$GENESEED_LLM` does not gate it. Silent on
+ * stdout, which an advisory verdict may already hold, and a failure costs only the capture.
+ */
+function captureFeedback(meta, args, read) {
+  try {
+    const agent = subagentNameOf(meta);
+    if (!agent) return;
+    const written = captureSpecFeedback(agent, subagentReport(meta, read), notesRootOf(args.memory));
+    if (written.length) err(`[learn] spec-feedback -> ${written.join(', ')}\n`);
+  } catch { /* a note never fails the hook */ }
+}
+
 export function cmdLearn(args) {
   // B2: stand straight down inside a model-CLI child `runLlm` just spawned (see its comment).
   // Checked before anything else — a child never gets as far as reading its own stdin, let
@@ -378,6 +409,10 @@ export function cmdLearn(args) {
   const verdict = (hookEvent === 'Stop' || hookEvent === 'SubagentStop') && !args.file && !args.noDoneGate
     ? doneGate(meta, args, install, read) : null;
   if (verdict === 'block') return 0;
+
+  // The sub-agent's turn is over: its report's feedback lines are kept now, model or none. A
+  // blocked turn returned above, and the re-run of a turn that is captured twice adds nothing.
+  if (hookEvent === 'SubagentStop') captureFeedback(meta, args, read);
 
   // The change report, at the turn's real end (./store-watch.mjs). One JSON document on stdout, so an
   // advisory already there keeps it, and Bob reads no stdout here at all: those go to stderr.

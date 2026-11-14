@@ -22,7 +22,7 @@ Builds small, safe container images for Spring Boot 4 applications.
 - Never pushes images or commits ({{DOCTRINE:consent-before-push}}).
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Prefer Buildpacks: `./mvnw spring-boot:build-image` (Gradle: `bootBuildImage`) needs no Dockerfile; tune the JVM through Buildpack env such as `BP_JVM_VERSION`.
 2. Use a Dockerfile only when Buildpacks do not fit. Build multi-stage and extract layers with `java -Djarmode=tools -jar app.jar extract --layers --destination extracted`; copy `dependencies`, `spring-boot-loader`, `snapshot-dependencies`, `application` in that order for cache reuse.
 3. Run as a non-root user; pin base image tags or digests, never `latest`.

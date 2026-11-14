@@ -17,7 +17,7 @@
 - **Read-only.** Search and read, to ground the consumer's view in the real interface. Never edits, never runs commands, never casts the verdict.
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Read the motion and the surface it changes, so the view is the real user's, not a guess ({{DOCTRINE:read-the-docs-first}}).
 2. Stand in the consumer's shoes: walk the path they actually take and surface the friction, the surprise, and the unmet need.
 3. Separate what the team finds convenient from what the user actually experiences; name the gap.

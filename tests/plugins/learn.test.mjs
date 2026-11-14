@@ -166,6 +166,108 @@ test("writeMemories: the plugin matches the harness on update, archive and mixed
   assert.equal(plugin["topics/t.md"], `# t\n\n${order.map((s) => `- [${s}](../${s}.md) — ${desc[s]}`).join("\n")}\n`)
 })
 
+// ---- spec-feedback capture (twin of js/hosts/spec-feedback.mjs) ----------------------------------
+// The pure part is a tool-kept twin (tests/twins.mjs); these hold the hand-kept rest: Law I's
+// pattern, the file writes, and the V1 and V2 wiring that runs it for a child session.
+
+test("spec-feedback: the plugin's credential pattern is the hook's SECRET_RE", async () => {
+  const { SECRET_RE } = await import("../../js/hosts/hooks-prims.mjs")
+  assert.equal(GeneseedLearn.FEEDBACK_SECRET_RE.source, SECRET_RE.source)
+  assert.equal(GeneseedLearn.FEEDBACK_SECRET_RE.flags, SECRET_RE.flags)
+})
+
+test("spec-feedback: the plugin writes the same notes as the hook for the same report", async () => {
+  const { captureSpecFeedback: hookCapture } = await import("../../js/hosts/spec-feedback.mjs")
+  const report = "STATUS: OK\nspec-feedback: [agent] name the base — seen: drift\nspec-feedback: general say the runner — seen: a timeout"
+  const a = makeSandbox("gs-learn-").path
+  const b = makeSandbox("gs-learn-").path
+  const got = await GeneseedLearn.captureSpecFeedback("tester", report, path.join(a, "notes"), "2026-11-14")
+  hookCapture("tester", report, path.join(b, "notes"), "2026-11-14")
+  assert.deepEqual(got.map((f) => path.basename(f)), ["tester.md", "_general.md"])
+  for (const f of ["tester.md", "_general.md"]) {
+    const mine = await fs.readFile(path.join(a, "notes", "agent-notes", f), "utf8")
+    assert.equal(mine, (await fs.readFile(path.join(b, "notes", "agent-notes", f), "utf8")).replaceAll("\r\n", "\n"), f)
+  }
+  assert.equal(await fs.readFile(path.join(a, "notes", "agent-notes", "_general.md"), "utf8"),
+    "- [general] say the runner — seen: a timeout (tester, 2026-11-14)\n")
+  assert.deepEqual(await GeneseedLearn.captureSpecFeedback("tester", report, path.join(a, "notes"), "2026-11-15"), [],
+    "a second run on the same report adds nothing")
+})
+
+test("spec-feedback: finalAssistantText reads the last assistant message, V1 and V2 shapes", () => {
+  const { finalAssistantText } = GeneseedLearn
+  assert.equal(finalAssistantText([
+    { info: { role: "assistant" }, parts: [{ type: "text", text: "early" }] },
+    { info: { role: "user" }, parts: [{ type: "text", text: "more" }] },
+    { info: { role: "assistant" }, parts: [{ type: "text", text: "final" }, { type: "tool" }] },
+  ]), "final")
+  assert.equal(finalAssistantText([{ type: "assistant", content: [{ type: "text", text: "v2 final" }] }, { type: "user", text: "q" }]),
+    "v2 final")
+  assert.equal(finalAssistantText([]), "")
+})
+
+/** The plugin copied into a sandbox install `<d>/cfg/plugins/`, freshly imported with debounce 0. */
+async function sandboxPlugin() {
+  const d = makeSandbox("gs-learn-").path
+  const plugins = path.join(d, "cfg", "plugins")
+  await fs.mkdir(plugins, { recursive: true })
+  await fs.mkdir(path.join(d, "memory"))
+  await fs.copyFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js"), path.join(plugins, "geneseed-learn.js"))
+  const saved = Object.fromEntries(["GENESEED_LEARN_DEBOUNCE_MS", "GENESEED_MEMORY", "GENESEED_HARNESS", "XDG_CONFIG_HOME", "OPENCODE_CONFIG_DIR"]
+    .map((k) => [k, process.env[k]]))
+  Object.assign(process.env, { GENESEED_LEARN_DEBOUNCE_MS: "0", GENESEED_MEMORY: path.join(d, "memory"),
+    XDG_CONFIG_HOME: path.join(d, "xdg"), OPENCODE_CONFIG_DIR: path.join(d, "elsewhere") })
+  delete process.env.GENESEED_HARNESS
+  const { pathToFileURL } = await import("node:url")
+  const mod = (await import(pathToFileURL(path.join(plugins, "geneseed-learn.js")).href)).default
+  const restore = () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v } }
+  return { d, mod, restore, note: path.join(d, "cfg", "notebook", "agent-notes", "tester.md") }
+}
+const waitFor = async (p) => { for (let i = 0; i < 200; i += 1) { try { return await fs.readFile(p, "utf8") } catch { await new Promise((r) => setTimeout(r, 25)) } } return null }
+const REPORT = "done\nspec-feedback: [agent] say which runner the brief expects — seen: a refusal"
+
+test("spec-feedback: V1 captures a named child session's report into <install>/notebook", async () => {
+  const { mod, restore, note } = await sandboxPlugin()
+  try {
+    const client = { session: {
+      get: async () => ({ data: { parentID: "p", agent: "tester" } }),
+      messages: async () => [{ info: { role: "assistant" }, parts: [{ type: "text", text: REPORT }] }],
+    } }
+    const hooks = await mod.server({ client, directory: process.cwd() })
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "c1" } } })
+    assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(\d{4}-\d{2}-\d{2}\)\n$/)
+  } finally { restore() }
+})
+
+test("spec-feedback: V2 captures a named child session's report, and skips an unnamed one", async () => {
+  const { mod, restore, note } = await sandboxPlugin()
+  try {
+    const queue = []
+    let wake = null
+    const controller = { aborted: false }
+    const ctx = {
+      location: { directory: process.cwd() },
+      session: {
+        get: async ({ sessionID }) => (sessionID === "named" ? { parentID: "p", agent: "tester" } : { parentID: "p" }),
+        context: async () => [{ type: "assistant", content: [{ type: "text", text: REPORT }] }],
+      },
+      generate: { text: async () => ({ text: "NOTHING" }) },
+      event: { subscribe: () => ({ async *[Symbol.asyncIterator]() {
+        while (!controller.aborted) { if (queue.length) { yield queue.shift(); continue } await new Promise((r) => { wake = r }) }
+      } }) },
+    }
+    const cleanup = await mod.setup(ctx)
+    const push = (sessionID) => { queue.push({ type: "session.execution.succeeded", data: { sessionID } }); wake?.() }
+    push("unnamed")
+    push("named")
+    assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(\d{4}-\d{2}-\d{2}\)\n$/)
+    assert.deepEqual(await fs.readdir(path.dirname(note)), ["tester.md"])
+    controller.aborted = true
+    wake?.()
+    cleanup()
+  } finally { restore() }
+})
+
 test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnPrompt (twin)", async () => {
   const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js"), "utf8")
   const m = src.match(/const MAX_STORED_CHARS = \d+\nfunction buildPrompt\(notes, facts\) \{[\s\S]*?\n\}\n/)

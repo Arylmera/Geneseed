@@ -13,6 +13,9 @@ label. For the capability ↔ spec map, see [SHIPPED.md](SHIPPED.md).
 - **`profiles/<name>.json`**, shipped in the package and the clone, checked against the generator's own value lists (an unknown key is an error) and by `geneseed doctor`. Two ship: `starter` (neutral, peer, direct, all packs, every gate armed except the ownership gate, all four tools) and `guillaume-claude-global` (the author's Claude Code setup: imperial, expert, foreman, six rules excluded, the deletion, ownership and external gates off).
 - **`geneseed profile save <name> --from <host>-global`** writes a profile from an existing global install, every setting as it is, gates off included, and prints how it differs from `starter`, gates first. It refuses an existing file without `--force` and reads no personal file (user rules, profile, memory, wiki, notebook).
 
+### Fixed
+- **The agents' self-improvement loop keeps what they report.** The `spec-feedback:` lines a subagent ends its report with were meant to be written down by the caller, which never happened, and the agents read another file anyway. Now the SubagentStop hook copies each line, with no model call and whether or not `GENESEED_LLM` is set, into `agent-notes/<name>.md` (the tier's `notes/` on a global install, else the install's `notebook/`), a `general` line also into `agent-notes/_general.md`: one dated bullet each, no duplicates, capped at 100. Every agent's step 0 now reads those notes beside `memory/agents/<name>.md`. The OpenCode learn plugin does the same for a named child session (V1 and V2). Bob has no subagent-finished event; there the caller still copies the line. Run `geneseed rebuild-all` to get the new agent text.
+
 ## [5.4.0] — 2026-11-13
 
 **Upgrade note.** *Consent Before Push* changes meaning: run `geneseed rebuild-all` after the

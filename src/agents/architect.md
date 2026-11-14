@@ -22,7 +22,7 @@
   <!-- bash: allow -->
 
 ## Procedure
-0. If `{{PATH_MEMORY}}/agents/<your-name>.md` exists, read it first — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}).
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
 1. Establish the current state: data shapes, module boundaries, existing patterns.
 2. Propose 2–3 approaches with trade-offs; recommend one with reasoning.
 3. Break the chosen approach into isolated units, each with one purpose and a

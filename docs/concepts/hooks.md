@@ -21,7 +21,7 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | `PreToolUse` | `Write`, `Edit`, `NotebookEdit` | `geneseed-hook rule-gate` | asks before a secret lands in a file, or a write to your standing rules; stops the session's first write once in an application repo with no `## Ownership` section | no |
 | `PreToolUse` | `Skill`, `Agent`, `Task` | `geneseed-hook tool-gate` | records the skill or subagent call in the usage count; judges nothing and never blocks | no |
 | `Stop` | the agent finishes a reply | `geneseed-hook learn` | distils durable facts into the memory store | needs `GENESEED_LLM` |
-| `SubagentStop` | a subagent finishes | `geneseed-hook learn` | records a lesson for that agent in the store's `agents/<name>.md` | needs `GENESEED_LLM` |
+| `SubagentStop` | a subagent finishes | `geneseed-hook learn` | copies the `spec-feedback:` lines of its report into `agent-notes/<name>.md` (no model); records a lesson for that agent in the store's `agents/<name>.md` | the copy needs nothing; the lesson needs `GENESEED_LLM` |
 | `PreCompact` | before auto-compaction | `geneseed-hook learn` | captures memory before the transcript is summarised | needs `GENESEED_LLM` |
 | `UserPromptSubmit` | you send a message | `geneseed-hook activity` | records the turn's start for the web console's Activity view; prints nothing | off with `GENESEED_ACTIVITY=off` |
 | `SessionEnd` | the session closes | `geneseed-hook activity` | marks the session ended and archives it | off with `GENESEED_ACTIVITY=off` |
@@ -84,7 +84,9 @@ On Bob, a subagent's files cannot be told apart from its session's files (its ho
 export GENESEED_LLM="claude -p"
 ```
 
-Unset, `learn` does nothing useful: on a real Stop/SubagentStop/PreCompact call it returns immediately rather than reading the transcript for nothing, and on a manual run it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
+Unset, `learn` distils nothing: on a real Stop/SubagentStop/PreCompact call it returns before it reads the transcript for a distil, and on a manual run it prints the prompt it would have sent. Geneseed never stores or embeds an API key. See [Memory](memory.md).
+
+One part of `learn` needs no model. On SubagentStop it reads the subagent's final report (its last message, or the message of its hand-back call) and copies each `spec-feedback:` line into the notes that agent reads at its next dispatch: `agent-notes/<name>.md` under the tier's `notes/` on a global install once the shared store exists, else under the install's `notebook/`. A `general` line also goes into `agent-notes/_general.md`. Each note is one dated bullet; a line already there is not added again, the template placeholder and a line holding a credential are skipped, and past 100 bullets the oldest drop. The OpenCode learn plugin does the same for a child session that names its agent. Bob has no subagent-finished event, so there the caller copies the line.
 
 ## What a prompt says
 
