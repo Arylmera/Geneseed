@@ -2,6 +2,11 @@
 rem Geneseed - one-step install for a git clone on Windows (cmd.exe, or double-click).
 rem
 rem   install.cmd      check what the machine is missing, then run the setup wizard
+rem   install.cmd --profile starter
+rem                    the same checks, then install the named profile with no questions:
+rem                    setup --profile also puts geneseed on PATH, sets the web console to
+rem                    start at login and starts it, so this script skips its own link, its
+rem                    console question and its final pause (a scripted run must return).
 rem
 rem It installs NOTHING itself. On a managed PC a silent Node or Git install is exactly
 rem what IT forbids, and winget is often blocked too - so a missing prerequisite is
@@ -17,6 +22,9 @@ rem portable Node unpacked somewhere that is not on PATH.
 setlocal
 set "HERE=%~dp0"
 set "NODE=node"
+rem Profile mode when any argument is --profile. `for` splits on `=` too, so --profile=x counts.
+set "PROFILE_MODE="
+for %%a in (%*) do if /i "%%~a"=="--profile" set "PROFILE_MODE=1"
 if defined GENESEED_NODE set "NODE=%GENESEED_NODE%"
 
 echo.
@@ -43,8 +51,9 @@ echo       On a managed PC, ask IT or look for "Git" in Software Center / Compan
 if not exist "%HERE%.git" echo   !!  This folder is not a git clone, so it cannot update itself. Prefer: git clone https://github.com/Arylmera/Geneseed.git
 
 echo.
-"%NODE%" "%HERE%bin\geneseed-cli.mjs" setup
+"%NODE%" "%HERE%bin\geneseed-cli.mjs" setup %*
 if errorlevel 1 goto :failed
+if defined PROFILE_MODE goto :profiledone
 
 rem Put `geneseed` on PATH unless it already is, as ./install does. Without it a fresh clone
 rem had no `geneseed` command until the user found `geneseed.cmd link` (reported 2026-11).
@@ -80,8 +89,13 @@ goto :failed
 :failed
 echo.
 echo Install did not finish - see the lines above.
-pause
+if not defined PROFILE_MODE pause
 exit /b 1
+
+:profiledone
+echo.
+echo Done. Open a NEW terminal to use geneseed, or run geneseed.cmd from this folder.
+exit /b 0
 
 :done
 echo.
