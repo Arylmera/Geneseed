@@ -7226,18 +7226,16 @@
         "PATH": "{sb}/no-tools"
       },
       "expect": [
-        "Geneseed setup - profile 'starter'",
+        "Geneseed setup - profile 'guillaume-claude-global'",
         "None of the AI coding tools this profile installs into was found on this machine:",
-        "  --  OpenCode - install: https://opencode.ai/docs/",
         "  --  Claude Code - install: https://code.claude.com/docs/en/setup",
-        "  --  IBM Bob - install: https://bob.ibm.com/",
-        "  --  OpenClaude - install: https://openclaude.gitlawb.com/",
         "Nothing was installed."
       ],
       "expect_absent": [
         "Running:",
         "needs an interactive terminal",
-        "Summary"
+        "Summary",
+        "IBM Bob"
       ],
       "expect_absent_files": [
         "home/.claude/CLAUDE.md",
@@ -7249,7 +7247,7 @@
           "argv": [
             "setup",
             "--profile",
-            "starter"
+            "guillaume-claude-global"
           ],
           "cwd": "repo",
           "stdin": ""
