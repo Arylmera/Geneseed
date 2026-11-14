@@ -224,6 +224,15 @@ async function sandboxPlugin() {
   return { d, mod, restore, note: path.join(d, "cfg", "notebook", "agent-notes", "tester.md") }
 }
 const waitFor = async (p) => { for (let i = 0; i < 200; i += 1) { try { return await fs.readFile(p, "utf8") } catch { await new Promise((r) => setTimeout(r, 25)) } } return null }
+// The folder once no lock or temp file is left, polled up to 5 s; the listing as it stands after that.
+const settled = async (dir) => {
+  for (let i = 0; i < 200; i += 1) {
+    const names = await fs.readdir(dir)
+    if (!names.some((n) => n.endsWith(".lock") || n.endsWith(".tmp"))) return names
+    await new Promise((r) => setTimeout(r, 25))
+  }
+  return fs.readdir(dir)
+}
 const REPORT = "done\nspec-feedback: [agent] say which runner the brief expects — seen: a refusal"
 
 test("spec-feedback: V1 captures a named child session's report into <install>/notebook", async () => {
@@ -261,7 +270,10 @@ test("spec-feedback: V2 captures a named child session's report, and skips an un
     push("unnamed")
     push("named")
     assert.match(await waitFor(note), /^- \[agent\] say which runner the brief expects — seen: a refusal \(\d{4}-\d{2}-\d{2}\)\n$/)
-    assert.deepEqual(await fs.readdir(path.dirname(note)), ["tester.md"])
+    // The note appears at the atomic rename, INSIDE the lock; the lock goes at release, a few awaits
+    // later (up to ~400 ms seen under a 4-way load). So wait for the capture to settle, then require
+    // that only the note is left: a lock that outlived its write would still fail here, after 5 s.
+    assert.deepEqual(await settled(path.dirname(note)), ["tester.md"])
     controller.aborted = true
     wake?.()
     cleanup()
