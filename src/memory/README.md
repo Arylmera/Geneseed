@@ -137,10 +137,12 @@ Read and write follow one rule each:
 
 The `spec-feedback:` lines an {{AGENT}} ends its report with are a second, distinct
 value, with one writer of their own: the same hook copies them, with no model call,
-into `{{PATH_NOTES}}/agent-notes/<agent-name>.md` (and a `general` line also into
-`agent-notes/_general.md`), one dated bullet each, duplicates skipped, capped like
-the files here. The {{AGENT}} reads both homes at step 0. Neither the caller nor this
-store holds a copy; folding a note into an {{AGENT}}'s source is the user's call.
+into `{{PATH_NOTES}}/agent-notes/<agent-name>.md` (a `general` line into
+`agent-notes/_general.md` instead), one dated bullet each, duplicates skipped. They are
+capped: 100 bullets in an {{AGENT}}'s file, 30 in `_general.md`, 8 000 characters a file.
+The {{AGENT}} reads all three files at step 0. Neither the caller nor this store holds a
+copy, except on a host with no subagent-finished hook (Bob), where the caller copies the
+line into the same file by hand. Folding a note into an {{AGENT}}'s source is the user's call.
 
 Same bar as {{DOCTRINE:persist-insight}}: capture only how this {{AGENT}} should work *next time* —
 a boundary that proved wrong, an input it always needs — never task residue. Files

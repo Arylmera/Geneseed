@@ -289,26 +289,37 @@ async function appendAgentLesson(memDir, agent, lesson) {
 
 /**
  * One report line: `spec-feedback: [agent|general] <fix> [— situation: …] — seen: …`, at the start
- * of the line after an optional list marker or quote, and optionally wrapped in backticks or bold.
- * A line that only names the protocol ("No spec-feedback.", "The reviewer's spec-feedback: …")
- * does not start with it, so it is no feedback. Real reports write the scope four ways (`[agent]`,
- * `agent`, `agent —`, none); a missing scope reads as `agent`.
+ * of the line after an optional list marker, and optionally wrapped in backticks or bold. A line
+ * that only names the protocol ("No spec-feedback.", "The reviewer's spec-feedback: …") does not
+ * start with it, so it is no feedback; nor is a quoted (`>`) line or one inside a code fence: both
+ * show someone else's line. Real reports write the scope four ways (`[agent]`, `agent`,
+ * `agent —`, none), and some copy the template's `[agent|general]`; a missing or unchosen scope
+ * reads as `agent`.
  */
-const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+>][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
+const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
+const FENCE_RE = /^[ \t]*(?:```|~~~)/;
 // A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
-const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 // "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
 const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
 /** The include's own template, which a report may quote: never a note. */
 const FEEDBACK_PLACEHOLDER = '<the one-line fix>';
-/** Oldest bullets drop past this, as `memory/agents/` files do (MAX_AGENT_BULLETS). */
+/**
+ * The step-0 footprint: every dispatch reads its own notes and `_general.md`. Past the bullet cap,
+ * or past the character budget, the oldest of the HOOK'S bullets drop (a hand-written line is
+ * never dropped). An agent's own file keeps 100, as `memory/agents/` does; the general file 30.
+ */
 const MAX_FEEDBACK_BULLETS = 100;
+const MAX_GENERAL_BULLETS = 30;
+const MAX_NOTE_FILE_CHARS = 8000;
 /** A body past this many characters is cut, so one runaway line cannot fill the file. */
 const MAX_FEEDBACK_CHARS = 500;
 /** The general file's name. `_` keeps it apart from every agent: an agent name starts with a letter. */
 const GENERAL_NOTES = '_general.md';
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+// A bullet in the shape this capture writes: the only kind the caps may drop.
+const HOOK_BULLET_RE = /^- \[(?:agent|general)\] .*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
@@ -316,14 +327,17 @@ const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/
  */
 function specFeedbackOf(text, secret) {
   const found = [];
+  let fenced = false;
   for (const line of String(text || '').split(/\r?\n/)) {
+    if (FENCE_RE.test(line)) { fenced = !fenced; continue; }
+    if (fenced) continue;
     const m = FEEDBACK_LINE_RE.exec(line);
     if (!m) continue;
     let body = m[3].trim();
     // `**spec-feedback:** …` closed its wrapper at the colon; `` `spec-feedback: …` `` closes it at the end.
     if (m[1] && !m[2] && body.endsWith(m[1])) body = body.slice(0, -m[1].length).trim();
     const s = FEEDBACK_SCOPE_RE.exec(body);
-    const scope = s ? (s[1] || s[2]).toLowerCase() : 'agent';
+    const scope = s && (s[1] || s[2]) ? (s[1] || s[2]).toLowerCase() : 'agent';
     if (s) body = body.slice(s[0].length);
     body = body.replace(/\s+/g, ' ').trim();
     if (body.length < 10 || FEEDBACK_NONE_RE.test(body) || body.includes(FEEDBACK_PLACEHOLDER)) continue;
@@ -334,10 +348,13 @@ function specFeedbackOf(text, secret) {
   return found;
 }
 
-/** The note bullets for one report: `own` for the agent's file, `general` for `_general.md`. */
+/**
+ * The note bullets for one report: an `agent` line goes to the agent's own file, a `general` line
+ * to `_general.md` only (with the agent's name), which every agent reads too. One home each.
+ */
 function feedbackBullets(items, agent, day) {
   return {
-    own: items.map((f) => `- [${f.scope}] ${f.body} (${day})`),
+    own: items.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${day})`),
     general: items.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
   };
 }
@@ -346,26 +363,29 @@ function feedbackBullets(items, agent, day) {
 const feedbackKey = (bullet) => bullet.replace(DATED_TAIL_RE, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 /**
- * A notes file's new text with `bullets` added, or null when every one is already there (a second
- * run on the same report writes nothing). Lines that are not bullets stay first, in their order;
- * past `cap` the oldest bullets drop.
+ * A notes file's new text with `bullets` appended, or null when every one is already there (a
+ * second run on the same report writes nothing). The old text is kept as it was, line endings
+ * folded to LF; past `cap` bullets of the hook's own shape, or past `budget` characters, the
+ * oldest hook bullets drop. A hand-written line is never moved or dropped.
  */
-function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS) {
-  const lines = String(old || '').split(/\r?\n/);
-  const head = lines.filter((l) => l.trim() && !l.startsWith('- '));
-  let kept = lines.filter((l) => l.startsWith('- '));
-  const seen = new Set(kept.map(feedbackKey));
+function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NOTE_FILE_CHARS) {
+  const text = String(old || '').replace(/\r\n?/g, '\n');
+  const lines = text ? text.replace(/\n$/, '').split('\n') : [];
+  const seen = new Set(lines.filter((l) => l.startsWith('- ')).map(feedbackKey));
   let added = 0;
   for (const b of bullets) {
     const k = feedbackKey(b);
     if (seen.has(k)) continue;
     seen.add(k);
-    kept.push(b);
+    lines.push(b);
     added += 1;
   }
   if (!added) return null;
-  kept = kept.slice(-cap);
-  return `${[...head, ...kept].join('\n')}\n`;
+  const size = () => lines.reduce((n, l) => n + l.length + 1, 0);
+  for (let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length; hooks > 0 && (hooks > cap || size() > budget); hooks -= 1) {
+    lines.splice(lines.findIndex((l) => HOOK_BULLET_RE.test(l)), 1);
+  }
+  return `${lines.join('\n')}\n`;
 }
 // ---- spec-feedback twin: END
 
@@ -384,18 +404,49 @@ async function notesRootOf(pluginDir = PLUGIN_DIR) {
   return path.join(own, "notebook")
 }
 
-async function addFeedback(file, bullets) {
+// The file lock, a twin of js/hosts/spec-feedback.mjs `withLock` (async here): `<file>.lock` made
+// exclusively, a lock older than 10 s broken as a dead holder, at most 100 waits of 10 ms, then
+// give up silently. Parallel child sessions end together and would otherwise lose bullets.
+async function withFeedbackLock(file, fn) {
+  const lock = `${file}.lock`
+  for (let i = 0; i < 100; i += 1) {
+    let handle
+    try {
+      handle = await fs.open(lock, "wx")
+    } catch (e) {
+      if (e?.code !== "EEXIST") return false
+      try {
+        if (Date.now() - (await fs.stat(lock)).mtimeMs > 10000) { await fs.unlink(lock); continue }
+      } catch { continue }
+      await new Promise((r) => setTimeout(r, 10))
+      continue
+    }
+    try {
+      await handle.close()
+      return await fn()
+    } finally {
+      await fs.unlink(lock).catch(() => {})
+    }
+  }
+  return false
+}
+
+async function addFeedback(file, bullets, cap) {
   if (!bullets.length) return false
-  let old = ""
-  try {
-    const raw = await fs.readFile(file)
-    if (!raw.equals(Buffer.from(raw.toString("utf8")))) return false // not UTF-8: left whole
-    old = raw.toString("utf8")
-  } catch { /* the first note */ }
-  const next = mergeFeedback(old, bullets)
-  if (next === null) return false
-  await fs.writeFile(file, next, "utf8")
-  return true
+  return withFeedbackLock(file, async () => {
+    let old = ""
+    try {
+      const raw = await fs.readFile(file)
+      if (!raw.equals(Buffer.from(raw.toString("utf8")))) return false // not UTF-8: left whole
+      old = raw.toString("utf8")
+    } catch { /* the first note */ }
+    const next = mergeFeedback(old, bullets, cap)
+    if (next === null) return false
+    const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
+    await fs.writeFile(tmp, next, "utf8")
+    try { await fs.rename(tmp, file) } catch (e) { await fs.unlink(tmp).catch(() => {}); throw e }
+    return true
+  })
 }
 
 // `report` is the child session's final assistant text. Never throws.
@@ -408,8 +459,8 @@ async function captureSpecFeedback(agent, report, notesRoot, day = new Date().to
     await fs.mkdir(dir, { recursive: true })
     const { own, general } = feedbackBullets(items, agent, day)
     const written = []
-    if (await addFeedback(path.join(dir, `${agent}.md`), own)) written.push(path.join(dir, `${agent}.md`))
-    if (await addFeedback(path.join(dir, GENERAL_NOTES), general)) written.push(path.join(dir, GENERAL_NOTES))
+    if (await addFeedback(path.join(dir, `${agent}.md`), own, MAX_FEEDBACK_BULLETS)) written.push(path.join(dir, `${agent}.md`))
+    if (await addFeedback(path.join(dir, GENERAL_NOTES), general, MAX_GENERAL_BULLETS)) written.push(path.join(dir, GENERAL_NOTES))
     if (written.length) say(`spec-feedback -> ${written.join(", ")}`, "info")
     return written
   } catch (err) {
@@ -744,10 +795,17 @@ export const GeneseedLearn = async (ctx) => {
       const agentName = isChild ? resolveAgentName(meta) : null
       if (isChild && !agentName) return
 
-      const res = await client.session.messages({ path: { id: sid } })
-      const messages = Array.isArray(res) ? res : res?.data ?? []
-      // The child's report feedback first: it needs no store, no model and no minimum length.
-      if (isChild) await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+      const fetchMessages = async () => {
+        const res = await client.session.messages({ path: { id: sid } })
+        return Array.isArray(res) ? res : res?.data ?? []
+      }
+      // A child's report feedback first: it needs no store, no model and no minimum length. A
+      // top-level session keeps the old order (no fetch before the store is known).
+      let messages = null
+      if (isChild) {
+        messages = await fetchMessages()
+        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+      }
 
       const memDir = await resolveMemoryDir()
       if (!memDir) {
@@ -760,7 +818,7 @@ export const GeneseedLearn = async (ctx) => {
         return
       }
 
-      let { notes, model } = flatten(messages)
+      let { notes, model } = flatten(messages ?? (await fetchMessages()))
       if (notes.length < MIN_NOTES_CHARS) return
       notes = notes.slice(-MAX_NOTES_CHARS)
       model = model ?? envModel()
@@ -887,8 +945,12 @@ async function setupV2(ctx) {
       const agentName = isChild ? resolveAgentName(meta) : null
       if (isChild && !agentName) return
 
-      const messages = await ctx.session.context({ sessionID: sid })
-      if (isChild) await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+      // As on V1: a child is read first for its report feedback, a top-level session keeps the old order.
+      let messages = null
+      if (isChild) {
+        messages = await ctx.session.context({ sessionID: sid })
+        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+      }
 
       const memDir = await resolveMemoryDir()
       if (!memDir) {
@@ -899,7 +961,7 @@ async function setupV2(ctx) {
         return
       }
 
-      let { notes, model } = flattenV2(messages)
+      let { notes, model } = flattenV2(messages ?? (await ctx.session.context({ sessionID: sid })))
       if (notes.length < MIN_NOTES_CHARS) return
       notes = notes.slice(-MAX_NOTES_CHARS)
       if (!model) {

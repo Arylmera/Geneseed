@@ -1,7 +1,7 @@
 /**
  * The agents' self-improvement loop, captured by the hook: every `spec-feedback:` line a sub-agent
  * ends its report with (src/agents/_self-improvement.md) goes into the notes the agent reads at its
- * next dispatch, `<notes>/agent-notes/<agent>.md`, and a `general` one into `_general.md` as well.
+ * next dispatch, `<notes>/agent-notes/<agent>.md`, or for a `general` one `_general.md`, which every agent reads.
  *
  * WHY A HOOK AND NOT THE CALLER. The include used to tell the caller to write the line down. That
  * is model discipline, and it never happened: the tier's `agent-notes/` stayed empty for weeks
@@ -13,9 +13,10 @@
  * Nothing here prints. The caller swallows a throw, so a bad file never fails a hook.
  */
 import { isUtf8 } from 'node:buffer';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
-import { writeText } from '../lib/fs.mjs';
 import { SECRET_RE, splitLines } from './hooks-prims.mjs';
 
 // ---- spec-feedback twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
@@ -23,26 +24,37 @@ import { SECRET_RE, splitLines } from './hooks-prims.mjs';
 
 /**
  * One report line: `spec-feedback: [agent|general] <fix> [— situation: …] — seen: …`, at the start
- * of the line after an optional list marker or quote, and optionally wrapped in backticks or bold.
- * A line that only names the protocol ("No spec-feedback.", "The reviewer's spec-feedback: …")
- * does not start with it, so it is no feedback. Real reports write the scope four ways (`[agent]`,
- * `agent`, `agent —`, none); a missing scope reads as `agent`.
+ * of the line after an optional list marker, and optionally wrapped in backticks or bold. A line
+ * that only names the protocol ("No spec-feedback.", "The reviewer's spec-feedback: …") does not
+ * start with it, so it is no feedback; nor is a quoted (`>`) line or one inside a code fence: both
+ * show someone else's line. Real reports write the scope four ways (`[agent]`, `agent`,
+ * `agent —`, none), and some copy the template's `[agent|general]`; a missing or unchosen scope
+ * reads as `agent`.
  */
-const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+>][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
+const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
+const FENCE_RE = /^[ \t]*(?:```|~~~)/;
 // A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
-const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 // "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
 const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
 /** The include's own template, which a report may quote: never a note. */
 export const FEEDBACK_PLACEHOLDER = '<the one-line fix>';
-/** Oldest bullets drop past this, as `memory/agents/` files do (MAX_AGENT_BULLETS). */
+/**
+ * The step-0 footprint: every dispatch reads its own notes and `_general.md`. Past the bullet cap,
+ * or past the character budget, the oldest of the HOOK'S bullets drop (a hand-written line is
+ * never dropped). An agent's own file keeps 100, as `memory/agents/` does; the general file 30.
+ */
 export const MAX_FEEDBACK_BULLETS = 100;
+export const MAX_GENERAL_BULLETS = 30;
+export const MAX_NOTE_FILE_CHARS = 8000;
 /** A body past this many characters is cut, so one runaway line cannot fill the file. */
 export const MAX_FEEDBACK_CHARS = 500;
 /** The general file's name. `_` keeps it apart from every agent: an agent name starts with a letter. */
 export const GENERAL_NOTES = '_general.md';
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+// A bullet in the shape this capture writes: the only kind the caps may drop.
+const HOOK_BULLET_RE = /^- \[(?:agent|general)\] .*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
@@ -50,14 +62,17 @@ const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/
  */
 export function specFeedbackOf(text, secret) {
   const found = [];
+  let fenced = false;
   for (const line of String(text || '').split(/\r?\n/)) {
+    if (FENCE_RE.test(line)) { fenced = !fenced; continue; }
+    if (fenced) continue;
     const m = FEEDBACK_LINE_RE.exec(line);
     if (!m) continue;
     let body = m[3].trim();
     // `**spec-feedback:** …` closed its wrapper at the colon; `` `spec-feedback: …` `` closes it at the end.
     if (m[1] && !m[2] && body.endsWith(m[1])) body = body.slice(0, -m[1].length).trim();
     const s = FEEDBACK_SCOPE_RE.exec(body);
-    const scope = s ? (s[1] || s[2]).toLowerCase() : 'agent';
+    const scope = s && (s[1] || s[2]) ? (s[1] || s[2]).toLowerCase() : 'agent';
     if (s) body = body.slice(s[0].length);
     body = body.replace(/\s+/g, ' ').trim();
     if (body.length < 10 || FEEDBACK_NONE_RE.test(body) || body.includes(FEEDBACK_PLACEHOLDER)) continue;
@@ -68,10 +83,13 @@ export function specFeedbackOf(text, secret) {
   return found;
 }
 
-/** The note bullets for one report: `own` for the agent's file, `general` for `_general.md`. */
+/**
+ * The note bullets for one report: an `agent` line goes to the agent's own file, a `general` line
+ * to `_general.md` only (with the agent's name), which every agent reads too. One home each.
+ */
 export function feedbackBullets(items, agent, day) {
   return {
-    own: items.map((f) => `- [${f.scope}] ${f.body} (${day})`),
+    own: items.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${day})`),
     general: items.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
   };
 }
@@ -80,26 +98,29 @@ export function feedbackBullets(items, agent, day) {
 export const feedbackKey = (bullet) => bullet.replace(DATED_TAIL_RE, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 /**
- * A notes file's new text with `bullets` added, or null when every one is already there (a second
- * run on the same report writes nothing). Lines that are not bullets stay first, in their order;
- * past `cap` the oldest bullets drop.
+ * A notes file's new text with `bullets` appended, or null when every one is already there (a
+ * second run on the same report writes nothing). The old text is kept as it was, line endings
+ * folded to LF; past `cap` bullets of the hook's own shape, or past `budget` characters, the
+ * oldest hook bullets drop. A hand-written line is never moved or dropped.
  */
-export function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS) {
-  const lines = String(old || '').split(/\r?\n/);
-  const head = lines.filter((l) => l.trim() && !l.startsWith('- '));
-  let kept = lines.filter((l) => l.startsWith('- '));
-  const seen = new Set(kept.map(feedbackKey));
+export function mergeFeedback(old, bullets, cap = MAX_FEEDBACK_BULLETS, budget = MAX_NOTE_FILE_CHARS) {
+  const text = String(old || '').replace(/\r\n?/g, '\n');
+  const lines = text ? text.replace(/\n$/, '').split('\n') : [];
+  const seen = new Set(lines.filter((l) => l.startsWith('- ')).map(feedbackKey));
   let added = 0;
   for (const b of bullets) {
     const k = feedbackKey(b);
     if (seen.has(k)) continue;
     seen.add(k);
-    kept.push(b);
+    lines.push(b);
     added += 1;
   }
   if (!added) return null;
-  kept = kept.slice(-cap);
-  return `${[...head, ...kept].join('\n')}\n`;
+  const size = () => lines.reduce((n, l) => n + l.length + 1, 0);
+  for (let hooks = lines.filter((l) => HOOK_BULLET_RE.test(l)).length; hooks > 0 && (hooks > cap || size() > budget); hooks -= 1) {
+    lines.splice(lines.findIndex((l) => HOOK_BULLET_RE.test(l)), 1);
+  }
+  return `${lines.join('\n')}\n`;
 }
 // ---- spec-feedback twin: END
 
@@ -140,8 +161,9 @@ export function finalAssistantText(raw) {
 
 /**
  * The final report a SubagentStop payload points at: the sub-agent's own transcript
- * (`agent_transcript_path`), read through the Stop's shared reader, plus the host's
- * `last_assistant_message` when it says something the transcript does not (a write that lagged).
+ * (`agent_transcript_path`), read through the Stop's shared reader. When the host's
+ * `last_assistant_message` is not in what the transcript holds, the write lagged: the transcript's
+ * last message is an OLDER one, so the host's copy alone is the report.
  */
 export function subagentReport(meta, read) {
   let text = '';
@@ -150,7 +172,7 @@ export function subagentReport(meta, read) {
     try { text = read(tp, (raw, whole) => finalAssistantText(raw) ?? (whole ? '' : null)) || ''; } catch { text = ''; }
   }
   const last = typeof meta.last_assistant_message === 'string' ? meta.last_assistant_message.trim() : '';
-  return last && !text.includes(last) ? `${text}\n${last}` : text;
+  return last && !text.includes(last) ? last : text;
 }
 
 /** Today as `YYYY-MM-DD`, local time, as `appendAgentLesson` dates a lesson. */
@@ -158,19 +180,63 @@ export function today(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-/** Add `bullets` to one notes file. A file that is not UTF-8 is left whole (the fold's rule). */
-function addTo(file, bullets) {
-  if (!bullets.length) return false;
-  let old = '';
-  if (existsSync(file)) {
-    const raw = readFileSync(file);
-    if (!isUtf8(raw)) return false;
-    old = raw.toString('utf8');
+/**
+ * THE FILE LOCK. Parallel sub-agents end together, and their hooks read-merge-write one notes file:
+ * without a lock the last writer drops the others' bullets (7 of 12 kept, measured). `<file>.lock`
+ * is created exclusively; a holder older than LOCK_STALE_MS is a dead hook and its lock is broken.
+ * The wait is bounded (LOCK_TRIES x LOCK_WAIT_MS, one second) and a hook that never gets the lock
+ * gives up silently: a note is worth less than a stalled SubagentStop.
+ */
+const LOCK_TRIES = 100;
+const LOCK_WAIT_MS = 10;
+const LOCK_STALE_MS = 10000;
+const SLEEPER = new Int32Array(new SharedArrayBuffer(4));
+function withLock(file, fn) {
+  const lock = `${file}.lock`;
+  for (let i = 0; i < LOCK_TRIES; i += 1) {
+    let fd;
+    try {
+      fd = openSync(lock, 'wx');
+    } catch (e) {
+      if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') return false;
+      try {
+        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) { unlinkSync(lock); continue; }
+      } catch { continue; /* released between the open and the stat */ }
+      Atomics.wait(SLEEPER, 0, 0, LOCK_WAIT_MS);
+      continue;
+    }
+    try {
+      closeSync(fd);
+      return fn();
+    } finally {
+      try { unlinkSync(lock); } catch { /* already broken as stale */ }
+    }
   }
-  const next = mergeFeedback(old, bullets);
-  if (next === null) return false;
-  writeText(file, next);
-  return true;
+  return false;
+}
+
+/** LF on every platform: the tier's file is shared with the OpenCode plugin, which writes LF. */
+function writeAtomic(file, text) {
+  const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  writeFileSync(tmp, text, 'utf8');
+  try { renameSync(tmp, file); } catch (e) { try { unlinkSync(tmp); } catch { /* gone */ } throw e; }
+}
+
+/** Add `bullets` to one notes file, under its lock. A file that is not UTF-8 is left whole (the fold's rule). */
+function addTo(file, bullets, cap) {
+  if (!bullets.length) return false;
+  return withLock(file, () => {
+    let old = '';
+    if (existsSync(file)) {
+      const raw = readFileSync(file);
+      if (!isUtf8(raw)) return false;
+      old = raw.toString('utf8');
+    }
+    const next = mergeFeedback(old, bullets, cap);
+    if (next === null) return false;
+    writeAtomic(file, next);
+    return true;
+  });
 }
 
 /**
@@ -187,8 +253,8 @@ export function captureSpecFeedback(agent, report, notesRoot, day = today()) {
   const { own, general } = feedbackBullets(items, agent, day);
   const written = [];
   const ownFile = path.join(dir, `${agent}.md`);
-  if (addTo(ownFile, own)) written.push(ownFile);
+  if (addTo(ownFile, own, MAX_FEEDBACK_BULLETS)) written.push(ownFile);
   const gen = path.join(dir, GENERAL_NOTES);
-  if (addTo(gen, general)) written.push(gen);
+  if (addTo(gen, general, MAX_GENERAL_BULLETS)) written.push(gen);
   return written;
 }

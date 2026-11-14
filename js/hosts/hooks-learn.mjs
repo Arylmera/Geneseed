@@ -327,6 +327,11 @@ function sharedStoreFor(install, args) {
  * `notes/` when `--memory` (after `sharedStoreFor`) is the shared store, else `<install>/notebook`,
  * the folder the fold copies from (js/build/fold.mjs `foldNotes`). So a global install whose tier
  * is not seeded yet keeps its notes beside its own store until the next fold, as its facts wait.
+ *
+ * `notebook` IS ASSUMED, NOT DERIVED: the render's `DIR_NOTEBOOK` (js/build/render.mjs STRUCTURE)
+ * defaults to it, no theme overrides it, and the fold reads the same literal. Deriving it would mean
+ * loading the build's render module on every SubagentStop; if a theme ever renames the notebook,
+ * this line and `foldNotes` move together.
  */
 export function notesRootOf(memory) {
   if (!memory) return null;

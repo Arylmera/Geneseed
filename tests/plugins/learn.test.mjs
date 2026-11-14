@@ -268,6 +268,38 @@ test("spec-feedback: V2 captures a named child session's report, and skips an un
   } finally { restore() }
 })
 
+// The plugin's lock: child sessions end together in one OpenCode process, so 12 captures at once
+// on one file must leave 12 bullets (a read-merge-write without the lock keeps fewer).
+test("spec-feedback: 12 captures at once keep all 12 bullets", async () => {
+  const d = makeSandbox("gs-learn-").path
+  const notes = path.join(d, "notes")
+  await Promise.all(Array.from({ length: 12 }, (_, i) =>
+    GeneseedLearn.captureSpecFeedback("tester", `spec-feedback: [agent] parallel line number ${i} kept`, notes, "2026-11-14")))
+  const text = await fs.readFile(path.join(notes, "agent-notes", "tester.md"), "utf8")
+  assert.equal(text.split("\n").filter((l) => l.startsWith("- ")).length, 12, text)
+  assert.deepEqual((await fs.readdir(path.join(notes, "agent-notes"))).filter((f) => !f.endsWith(".md")), [])
+})
+
+// F8: a TOP-LEVEL session keeps the old order: with no memory store found, its messages are never
+// fetched (the early fetch is for a child's report only).
+test("spec-feedback: V1 fetches a top-level session's messages only once a store is known", async () => {
+  const { d, mod, restore } = await sandboxPlugin()
+  try {
+    await fs.rm(path.join(d, "memory"), { recursive: true })
+    delete process.env.GENESEED_MEMORY
+    const calls = []
+    const client = { session: {
+      get: async () => { calls.push("get"); return { data: { title: "work" } } },
+      messages: async () => { calls.push("messages"); return [] },
+    } }
+    const hooks = await mod.server({ client, directory: process.cwd() })
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+    for (let i = 0; i < 40 && !calls.includes("get"); i += 1) await new Promise((r) => setTimeout(r, 25))
+    await new Promise((r) => setTimeout(r, 100))
+    assert.deepEqual(calls, ["get"])
+  } finally { restore() }
+})
+
 test("buildPrompt stays in parity with js/hosts/hooks-learn.mjs's buildLearnPrompt (twin)", async () => {
   const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-learn.js"), "utf8")
   const m = src.match(/const MAX_STORED_CHARS = \d+\nfunction buildPrompt\(notes, facts\) \{[\s\S]*?\n\}\n/)
