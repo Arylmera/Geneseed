@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loginItem, setupProfile } from '../../js/maintain/setup.mjs';
+import { loadProfile } from '../../js/maintain/profiles.mjs';
 import { cellEnv, makeSandbox } from '../helpers/sandbox.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -228,10 +229,13 @@ test('an unknown profile refuses before anything runs', async () => {
   process.stderr.write = (s) => { lines.push(String(s)); return true; };
   let rc;
   try {
-    rc = await setupProfile('nope', { tools: tools('claude'), build: () => { throw new Error('built'); } });
+    // The real loader over the real Shipped dir, with a Personal dir that does not exist: the
+    // default would read the machine tier's `profiles/`.
+    const load = (n) => loadProfile(n, { personalDir: path.join(ROOT, 'tests', 'fixtures', 'no-such-personal-profiles') });
+    rc = await setupProfile('nope', { load, tools: tools('claude'), build: () => { throw new Error('built'); } });
   } finally { process.stderr.write = orig; }
   assert.equal(rc, 1);
-  assert.match(lines.join(''), /\[setup\] no profile 'nope' — shipped profiles: guillaume-claude-global, starter/);
+  assert.match(lines.join(''), /\[setup\] no profile 'nope' — shipped: guillaume-claude-global, starter; personal: none/);
 });
 
 // ---------------------------------------------------------------------------------------------

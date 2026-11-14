@@ -1581,16 +1581,17 @@
     },
     {
       "name": "profile",
-      "help": "save an existing global install as an install profile",
-      "description": "save an existing global install as profiles/NAME.json, an install profile that geneseed setup --profile NAME installs with no questions. It copies every build setting as it is, gates switched off included, and prints how the new profile differs from starter. It reads no user rules, profile, memory, wiki or notebook",
+      "help": "apply an install profile, or save an install as one",
+      "description": "apply an install profile globally or to one project folder, or save an existing install as one. Profiles come from two sources: Shipped (profiles/ in this checkout) and Personal (profiles/ in the machine-wide Geneseed folder, beside memory and rules). apply builds the profile into each host it names that this machine has (--hosts narrows it) and touches no other install; it puts nothing on PATH and starts no console. save copies every build setting of one install as it is, gates switched off included, writes a Personal profile unless --shipped, and prints how it differs from starter. It reads no user rules, profile, memory, wiki or notebook",
       "positionals": [
         {
           "names": [],
           "dest": "action",
           "metavar": null,
-          "help": "save — write profiles/NAME.json from the install named by --from",
+          "help": "save — write NAME.json from the install named by --from; apply — build profile NAME into this machine's hosts",
           "choices": [
-            "save"
+            "save",
+            "apply"
           ],
           "default": null,
           "required": true,
@@ -1620,7 +1621,7 @@
           ],
           "dest": "from",
           "metavar": "EMIT",
-          "help": "the global install to read: opencode-global, claude-global, bob-global or openclaude-global",
+          "help": "save: the install to read — opencode-global, claude-global, bob-global or openclaude-global, or a bare host (opencode, claude, bob, openclaude) with --project for a project install",
           "choices": null,
           "default": null,
           "required": false,
@@ -1631,11 +1632,56 @@
         },
         {
           "names": [
+            "--project"
+          ],
+          "dest": "project",
+          "metavar": "DIR",
+          "help": "apply: build into this project folder instead of globally; save: the folder of the project install --from names",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--hosts"
+          ],
+          "dest": "hosts",
+          "metavar": "HOSTS",
+          "help": "apply: comma-separated hosts to build, a subset of the profile's (default: each of them this machine has)",
+          "choices": null,
+          "default": null,
+          "required": false,
+          "nargs": null,
+          "is_flag": false,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
+            "--shipped"
+          ],
+          "dest": "shipped",
+          "metavar": null,
+          "help": "save: write profiles/NAME.json in this checkout (a git clone only) instead of a Personal profile",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
+        },
+        {
+          "names": [
             "--force"
           ],
           "dest": "force",
           "metavar": null,
-          "help": "replace profiles/NAME.json when it already exists (that file only)",
+          "help": "save: replace NAME.json when it already exists in the same source (that file only)",
           "choices": null,
           "default": false,
           "required": false,

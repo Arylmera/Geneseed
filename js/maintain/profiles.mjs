@@ -1,7 +1,15 @@
 /**
- * Install profiles — a whole install selection written down once, in `profiles/<name>.json`, so
- * `geneseed setup --profile <name>` installs it with no question asked, and `geneseed profile
- * save` writes one from an install that already exists.
+ * Install profiles — a whole install selection written down once, so `geneseed setup --profile
+ * <name>` installs it with no question asked, `geneseed profile apply` builds it globally or into
+ * one project, and `geneseed profile save` writes one from an install that already exists.
+ *
+ * TWO SOURCES (spec D34): Shipped, `profiles/` in this checkout (an admin adds one by pull
+ * request), and Personal, `<machine tier>/profiles/` beside the user's memory and rules. The
+ * Personal dir is resolved AT CALL TIME (`personalProfilesDir`), never as a module constant, so a
+ * test that moves the tier is honoured, and every reader takes a `{ shippedDir, personalDir }`
+ * seam so no test reads the real tier. A Personal name may not reuse a Shipped one (D36): a save
+ * refuses it, and a clash made by hand loads the Shipped profile while the doctor names the
+ * Personal file that is never read.
  *
  * A PROFILE NAMES VALUES THE GENERATOR ALREADY ACCEPTS, CHECKED AGAINST THE GENERATOR'S OWN
  * SOURCES (*One Writer Per Value*): `themes/*.json`, `discoverNames('postures'|'modes')`,
@@ -15,7 +23,7 @@
  * Under the CLI's spawn rules like the rest of `js/maintain/`: this module reads files and
  * writes one (`saveProfile`), and starts nothing.
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -25,20 +33,40 @@ import { installProfile, setupBuildArgs } from '../build/profile.mjs';
 import { PRESETS } from '../loop/score.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
 import { installState, themeFiles } from '../hosts/installs.mjs';
-import { printErr, printOut } from '../lib/fs.mjs';
+import { isDir, printErr, printOut } from '../lib/fs.mjs';
+import { machineDir } from '../lib/machine-dir.mjs';
+import { expanduser, resolvePath } from '../hosts/hosts.mjs';
 
 /** Where the shipped profiles live: `profiles/` at the checkout (or package) root. */
 export const PROFILES_DIR = path.join(ROOT, 'profiles');
+
+/** Where the Personal profiles live (spec D34): `profiles/` in the machine tier, read at call time. */
+export function personalProfilesDir() {
+  return path.join(machineDir(), 'profiles');
+}
+
+/**
+ * The two source dirs, defaults filled in. `personalDir` is computed only when the caller did
+ * not give one, so a test that injects both never reads the real tier.
+ * @param {{ shippedDir?: string, personalDir?: string }} [src]
+ */
+export function profileDirs(src = {}) {
+  return {
+    shippedDir: src.shippedDir ?? PROFILES_DIR,
+    personalDir: src.personalDir ?? personalProfilesDir(),
+  };
+}
 
 /** The profile `geneseed profile save` compares a new one against. */
 export const BASE_PROFILE = 'starter';
 
 /**
- * Every key a profile may hold, in the order `saveProfile` writes them. `sharedTier` is not one
- * (spec D18): a profile installs globally, and a global install owns the tier.
+ * Every key a profile may hold, in the order `saveProfile` writes them. `sharedTier` is one since
+ * spec D37 (which supersedes D18 on that point): a profile has no scope, so a project-only field is
+ * accepted, used by a project apply, and ignored by a global one, whose install owns the tier.
  */
 export const PROFILE_KEYS = ['description', 'hosts', 'theme', 'footprint', 'posture', 'mode', 'trust',
-  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'gates', 'login'];
+  'doctrines', 'excludeRules', 'excludeSkills', 'kits', 'sharedTier', 'gates', 'login'];
 
 /** A profile name: a file stem, never a path. */
 const NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -48,12 +76,31 @@ export function profileHosts() {
   return HOSTS.map((h) => h.host);
 }
 
-/** The shipped profile names, sorted; `[]` when the folder is missing. */
-export function listProfiles(dir = PROFILES_DIR) {
+/** The profile names in one dir, sorted; `[]` when the folder is missing. */
+function namesIn(dir) {
   let names;
   try { names = readdirSync(dir); } catch { return []; }
   return names.filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -5)).sort();
 }
+
+/**
+ * Every profile file of both sources, Shipped first, each `{ name, source, file, shadowed }`.
+ * `shadowed` marks a Personal file whose name a Shipped profile already holds (D36): it is
+ * listed, so the doctor and the console can name it, and never loaded.
+ * @param {{ shippedDir?: string, personalDir?: string }} [src]
+ */
+export function listProfiles(src = {}) {
+  const { shippedDir, personalDir } = profileDirs(src);
+  const shipped = namesIn(shippedDir);
+  return [
+    ...shipped.map((name) => ({ name, source: 'shipped', file: path.join(shippedDir, `${name}.json`), shadowed: false })),
+    ...namesIn(personalDir).map((name) => ({ name, source: 'personal', file: path.join(personalDir, `${name}.json`),
+      shadowed: shipped.includes(name) })),
+  ];
+}
+
+/** How an error names a profile file: `profiles/<name>.json` when Shipped, the full path when Personal. */
+const fileLabel = (e) => (e.source === 'shipped' ? `profiles/${e.name}.json` : e.file);
 
 const list = (xs) => xs.map((x) => `'${x}'`).join(', ');
 
@@ -124,27 +171,40 @@ export function profileProblems(p) {
     }
   }
   if (p.login !== undefined && typeof p.login !== 'boolean') errs.push("'login' must be true or false");
+  if (p.sharedTier !== undefined && typeof p.sharedTier !== 'boolean') errs.push("'sharedTier' must be true or false");
   return errs;
 }
 
-/**
- * Read and validate `profiles/<name>.json`. `{ ok: true, profile }`, or `{ ok: false, error }`
- * whose text says what to fix: an unknown name lists the shipped ones.
- */
-export function loadProfile(name, dir = PROFILES_DIR) {
-  const shipped = () => `shipped profiles: ${listProfiles(dir).join(', ') || 'none'}`;
-  if (typeof name !== 'string' || !NAME_RE.test(name)) {
-    return { ok: false, error: `'${name}' is not a profile name (a file stem in profiles/) — ${shipped()}` };
-  }
-  const file = path.join(dir, `${name}.json`);
-  if (!existsSync(file)) return { ok: false, error: `no profile '${name}' — ${shipped()}` };
+/** Read and validate one listed entry: `{ ok, profile, source, file }` or `{ ok: false, error }`. */
+function loadEntry(e) {
   let profile;
-  try { profile = JSON.parse(readFileSync(file, 'utf8')); } catch (e) {
-    return { ok: false, error: `profiles/${name}.json is not valid JSON (${e.message})` };
+  try { profile = JSON.parse(readFileSync(e.file, 'utf8')); } catch (err) {
+    return { ok: false, error: `${fileLabel(e)} is not valid JSON (${err.message})` };
   }
   const errs = profileProblems(profile);
-  if (errs.length) return { ok: false, error: `profiles/${name}.json: ${errs.join('; ')}` };
-  return { ok: true, profile };
+  if (errs.length) return { ok: false, error: `${fileLabel(e)}: ${errs.join('; ')}` };
+  return { ok: true, profile, source: e.source, file: e.file };
+}
+
+/**
+ * Read and validate profile `name` from either source. `{ ok: true, profile, source, file }`, or
+ * `{ ok: false, error }` whose text says what to fix: an unknown name lists both sources.
+ * A name both sources hold loads the Shipped one (D36; the doctor names the Personal file).
+ * @param {string} name
+ * @param {{ shippedDir?: string, personalDir?: string }} [src]
+ */
+export function loadProfile(name, src = {}) {
+  const entries = listProfiles(src);
+  const known = () => {
+    const of = (source) => entries.filter((e) => e.source === source && !e.shadowed).map((e) => e.name).join(', ') || 'none';
+    return `shipped: ${of('shipped')}; personal: ${of('personal')}`;
+  };
+  if (typeof name !== 'string' || !NAME_RE.test(name)) {
+    return { ok: false, error: `'${name}' is not a profile name (a file stem, no path) — ${known()}` };
+  }
+  const e = entries.find((x) => x.name === name && !x.shadowed);
+  if (!e) return { ok: false, error: `no profile '${name}' — ${known()}` };
+  return loadEntry(e);
 }
 
 /** `doctrines` as the pack list it means: `'all'` is every pack this checkout ships, in order. */
@@ -155,7 +215,8 @@ export function profileDoctrines(p) {
 }
 
 /**
- * The generator argv that installs profile `p` globally into `host`.
+ * The generator argv that installs profile `p` into `host`: globally, or into the folder
+ * `project` when one is given.
  *
  * EXPLICIT ON EVERY AXIS (spec D18), so the result never depends on `harness.config.json`:
  * `--exclude-rules none` and `--exclude-skills none` included. `setupBuildArgs` elides an empty
@@ -163,12 +224,14 @@ export function profileDoctrines(p) {
  * here; posture and mode elide only at the value the driver would take anyway. `--reset` last,
  * as the wizard does: a profile is a whole selection and wins over the install it lands on (D14).
  */
-export function profileBuildArgs(p, host) {
+export function profileBuildArgs(p, host, project = null) {
   // A stated selection, never null: `'all'` resolves to the packs, a list is the list.
   const doctrines = PACK_ORDER.filter((d) => profileDoctrines(p).includes(d));
-  const argv = setupBuildArgs(p.theme, `${host}-global`, null, null, p.footprint, p.posture, p.mode,
-    doctrines, PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [], p.gates ?? {},
-    p.kits ?? []);
+  // PROJECT SCOPE (spec D32, D37): `--emit <host> --out <dir> --root <dir>`, and only here the
+  // profile's `sharedTier`; a global install owns the tier, so a global apply ignores the field.
+  const argv = setupBuildArgs(p.theme, project ? host : `${host}-global`, project, project, p.footprint,
+    p.posture, p.mode, doctrines, PACK_ORDER, p.excludeRules ?? [], p.trust, p.excludeSkills ?? [],
+    p.gates ?? {}, p.kits ?? [], project ? p.sharedTier === true : false);
   if (!p.excludeSkills?.length) argv.push('--exclude-skills', 'none');
   argv.push('--reset');
   return argv;
@@ -198,6 +261,7 @@ export function profileFromInstall(info, description = '') {
     excludeRules: [...(info.excludeRules ?? [])].sort(),
     excludeSkills: [...(info.excludeSkills ?? [])].sort(),
     kits: [...(info.kits ?? [])].sort(),
+    sharedTier: info.sharedTier === true,
     gates,
     login: true,
   };
@@ -228,14 +292,20 @@ export function profileDiff(p, base) {
       if (l(p) !== l(base)) out.push({ key, base: l(base), now: l(p) });
       continue;
     }
+    if (key === 'sharedTier') {
+      const t = (prof) => (prof.sharedTier === true ? 'on' : 'off');
+      if (t(p) !== t(base)) out.push({ key, base: t(base), now: t(p) });
+      continue;
+    }
     if (norm(p) !== norm(base)) out.push({ key, base: norm(base), now: norm(p) });
   }
   return out;
 }
 
 /**
- * Write `profiles/<name>.json`. Refuses an existing file unless `force` (that flag reaches the
- * profile file only), and a name that is not a plain file stem. `{ ok, file }` or `{ ok, error }`.
+ * Write `<dir>/<name>.json`, creating `dir` (the Personal one may not exist yet). Refuses an
+ * existing file unless `force` (that flag reaches the profile file only), and a name that is not
+ * a plain file stem. `{ ok, file }` or `{ ok, error }`.
  */
 export function saveProfile(name, profile, { dir = PROFILES_DIR, force = false } = {}) {
   if (typeof name !== 'string' || !NAME_RE.test(name)) {
@@ -246,6 +316,7 @@ export function saveProfile(name, profile, { dir = PROFILES_DIR, force = false }
     return { ok: false, error: `${file} already exists — pick another name, or add --force to replace it` };
   }
   const ordered = Object.fromEntries(PROFILE_KEYS.filter((k) => profile[k] !== undefined).map((k) => [k, profile[k]]));
+  mkdirSync(dir, { recursive: true });
   // LF on every OS, not `writeText`'s platform newline: a profile is a repo file, and
   // `.gitattributes` keeps repo text LF.
   writeFileSync(file, `${JSON.stringify(ordered, null, 2)}\n`, 'utf8');
@@ -253,72 +324,136 @@ export function saveProfile(name, profile, { dir = PROFILES_DIR, force = false }
 }
 
 /**
- * The doctor's arm (spec D10): every shipped profile through the same loader `setup --profile`
- * uses, one problem line per profile that would refuse.
+ * The doctor's arm (spec D10, D36): every profile of both sources through the same loader
+ * `setup --profile` uses, one problem line per profile that would refuse, and one per Personal
+ * file a Shipped name shadows, which is never loaded.
+ * @param {{ shippedDir?: string, personalDir?: string }} [src]
  */
-export function shippedProfileProblems(dir = PROFILES_DIR) {
-  return listProfiles(dir).map((n) => loadProfile(n, dir)).filter((r) => !r.ok).map((r) => `[profiles] ${r.error}`);
+export function profileSetProblems(src = {}) {
+  const out = [];
+  for (const e of listProfiles(src)) {
+    if (e.shadowed) {
+      out.push(`[profiles] ${e.file} has the name of a shipped profile, so it is never loaded — rename it`);
+      continue;
+    }
+    const r = loadEntry(e);
+    if (!r.ok) out.push(`[profiles] ${r.error}`);
+  }
+  return out;
+}
+
+/** Whether `root` is a git clone (or a worktree: `.git` is a file there): `--shipped` needs one. */
+export function isGitClone(root = ROOT) {
+  return existsSync(path.join(root, '.git'));
 }
 
 /**
- * `geneseed profile save <name> --from <host>-global [--force]` (spec D28, D29, D30).
- *
- * Reads the one install `--from` names through `installProfile` — the same read-back
- * `rebuild-all` replays — and writes `profiles/<name>.json` with `hosts: [<host>]`. It refuses
- * when there is no active install there, when the read-back would not load as a profile (a
- * setting this checkout no longer ships), and when the file exists without `--force`. Then it
- * prints how the new profile differs from `starter`, gates first, so the author sees what a
- * reviewer will see before the pull request. `dir` is the test's seam.
+ * The (host, scope, root) a `profile save --from` names, or `{ error, rc }`. `--from <host>-global`
+ * reads that host's global install; `--from <host>` with `--project <dir>` reads the project
+ * install in that folder (the console's Save panel offers both).
  */
-export function cmdProfile(args, { dir = PROFILES_DIR } = {}) {
-  if (args.action !== 'save') {
-    printErr(`geneseed: error: profile: unknown action '${args.action}' (the one action is: save)\n`);
-    return 2;
-  }
-  const hosts = profileHosts();
-  const emits = hosts.map((h) => `${h}-global`);
+function saveSource(args, hosts) {
+  const emits = [...hosts.map((h) => `${h}-global`), ...hosts];
   if (!args.from || !emits.includes(args.from)) {
-    printErr(`geneseed: error: profile save needs --from, one of: ${emits.join(', ')}\n`);
+    return { error: `profile save needs --from, one of: ${emits.join(', ')} (a bare host needs --project <dir>)`, rc: 2 };
+  }
+  if (args.from.endsWith('-global')) {
+    const host = args.from.slice(0, -'-global'.length);
+    if (args.project) return { error: `--from ${args.from} reads a global install: drop --project, or use --from ${host}`, rc: 2 };
+    try {
+      return { host, scope: 'global', root: HOSTS.find((h) => h.host === host).configDir() };
+    } catch (e) {
+      return { error: `cannot find the ${host} config dir (${e && e.message})`, rc: 1 };
+    }
+  }
+  if (!args.project) return { error: `--from ${args.from} reads a project install: add --project <dir>`, rc: 2 };
+  let root;
+  try { root = resolvePath(expanduser(args.project)); } catch { return { error: `bad path: ${args.project}`, rc: 1 }; }
+  if (!isDir(root)) return { error: `not a folder: ${root}`, rc: 1 };
+  return { host: args.from, scope: 'project', root };
+}
+
+/**
+ * `geneseed profile <save|apply> <name> …`.
+ *
+ * `save --from <host>-global | --from <host> --project <dir> [--shipped] [--force]` (spec D28,
+ * D29, D30, D35, D36) reads the one install `--from` names through `installProfile` — the same
+ * read-back `rebuild-all` replays — and writes `<name>.json` with `hosts: [<host>]`: into the
+ * Personal dir by default, into this checkout's `profiles/` with `--shipped`, which only a git
+ * clone takes (a pull request is how a Shipped profile reaches anyone). It refuses when there is
+ * no active install there, when the read-back would not load as a profile, when the name is the
+ * other source's (D36, `--force` included: that flag replaces a file of the same source only),
+ * and when the file exists without `--force`. Then it prints how the new profile differs from
+ * `starter`, gates first.
+ *
+ * `apply` is `cmdProfileApply` (js/maintain/setup.mjs), imported lazily: it reuses the profile
+ * run's build loop, which lives there, and setup.mjs imports this module.
+ *
+ * `shippedDir`, `personalDir` and `root` are the test's seams.
+ * @param {any} args
+ * @param {{ shippedDir?: string, personalDir?: string | null, root?: string }} [seams]
+ * @returns {number | Promise<number>}
+ */
+export function cmdProfile(args, { shippedDir = PROFILES_DIR, personalDir = null, root = ROOT } = {}) {
+  const src = { shippedDir, personalDir: personalDir ?? personalProfilesDir() };
+  // (apply: S2)
+  if (args.action !== 'save') {
+    printErr(`geneseed: error: profile: unknown action '${args.action}' (actions: save, apply)\n`);
     return 2;
   }
-  const host = args.from.slice(0, -'-global'.length);
-  let root;
-  try {
-    root = HOSTS.find((h) => h.host === host).configDir();
-  } catch (e) {
-    printErr(`[profile] cannot find the ${host} config dir (${e && e.message})\n`);
+  const from = saveSource(args, profileHosts());
+  if (from.error) {
+    printErr(from.rc === 2 ? `geneseed: error: ${from.error}\n` : `[profile] ${from.error}\n`);
+    return from.rc;
+  }
+  const { host, scope, root: installRoot } = from;
+  const where = `${host} ${scope} install`;
+  if (installState(installRoot, host, scope) !== 'active') {
+    printErr(`[profile] no active ${where} at ${installRoot} — nothing to save\n`);
     return 1;
   }
-  if (installState(root, host, 'global') !== 'active') {
-    printErr(`[profile] no active ${host} global install at ${root} — nothing to save\n`);
+  if (args.shipped && !isGitClone(root)) {
+    printErr(`[profile] --shipped writes ${shippedDir}, which only a git clone takes (a shipped profile `
+      + 'reaches others by pull request) — drop --shipped to save it as personal\n');
     return 1;
   }
-  const p = profileFromInstall(installProfile(host, 'global', root),
-    `Saved from the ${host} global install.`);
+  const [dest, other, otherLabel] = args.shipped
+    ? [shippedDir, src.personalDir, 'personal'] : [src.personalDir, shippedDir, 'shipped'];
+  const clash = path.join(other, `${args.name}.json`);
+  if (typeof args.name === 'string' && NAME_RE.test(args.name) && existsSync(clash)) {
+    printErr(`[profile] '${args.name}' is already a ${otherLabel} profile (${clash}) — a personal profile `
+      + 'may not reuse a shipped name, so pick another name\n');
+    return 1;
+  }
+  const p = profileFromInstall(installProfile(host, scope, installRoot), `Saved from the ${where}.`);
   const errs = profileProblems(p);
   if (errs.length) {
-    printErr(`[profile] the ${host} global install does not make a valid profile: ${errs.join('; ')}\n`);
+    printErr(`[profile] the ${where} does not make a valid profile: ${errs.join('; ')}\n`);
     return 1;
   }
-  const r = saveProfile(args.name, p, { dir, force: Boolean(args.force) });
+  const r = saveProfile(args.name, p, { dir: dest, force: Boolean(args.force) });
   if (!r.ok) {
     printErr(`[profile] ${r.error}\n`);
     return 1;
   }
-  printOut(`[profile] wrote ${r.file} from ${root}\n`);
-  const base = loadProfile(BASE_PROFILE, dir);
+  printOut(`[profile] wrote ${r.file} (${args.shipped ? 'shipped' : 'personal'}) from ${installRoot}\n`);
+  const base = loadProfile(BASE_PROFILE, src);
   if (!base.ok) {
     printOut(`[profile] no ${BASE_PROFILE} profile to compare with (${base.error})\n`);
-    return 0;
-  }
-  const diff = profileDiff(p, base.profile);
-  if (!diff.length) {
-    printOut(`[profile] it is the same as ${BASE_PROFILE}\n`);
   } else {
-    printOut(`[profile] how it differs from ${BASE_PROFILE}:\n`);
-    for (const d of diff) printOut(`  ${d.key}: ${d.base} -> ${d.now}\n`);
+    const diff = profileDiff(p, base.profile);
+    if (!diff.length) {
+      printOut(`[profile] it is the same as ${BASE_PROFILE}\n`);
+    } else {
+      printOut(`[profile] how it differs from ${BASE_PROFILE}:\n`);
+      for (const d of diff) printOut(`  ${d.key}: ${d.base} -> ${d.now}\n`);
+    }
   }
-  printOut(`[profile] edit its description, then open a pull request; a colleague installs it with: `
-    + `install.cmd --profile ${args.name} (Windows) or ./install --profile ${args.name}\n`);
+  if (args.shipped) {
+    printOut('[profile] edit its description, then open a pull request; a colleague installs it with: '
+      + `.\\install.cmd --profile ${args.name} (Windows) or ./install --profile ${args.name}\n`);
+  } else {
+    printOut(`[profile] apply it with: geneseed profile apply ${args.name} (add --project <dir> for one project)\n`);
+  }
   return 0;
 }
