@@ -29,8 +29,10 @@ import { SECRET_RE, splitLines } from './hooks-prims.mjs';
  * `agent`, `agent —`, none); a missing scope reads as `agent`.
  */
 const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+>][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
-const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|(agent|general)\b)[ \t]*(?:[—–:-][ \t]*)?/i;
-const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)\b/i;
+// A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
+const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+// "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
+const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
 /** The include's own template, which a report may quote: never a note. */
 export const FEEDBACK_PLACEHOLDER = '<the one-line fix>';
 /** Oldest bullets drop past this, as `memory/agents/` files do (MAX_AGENT_BULLETS). */

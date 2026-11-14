@@ -39,6 +39,18 @@ const LINES = [
     [{ scope: 'general', body: 'bold label, closed at the colon' }]],
   ['spec-feedback: agents need the base ref — seen: drift',
     [{ scope: 'agent', body: 'agents need the base ref — seen: drift' }]],
+  // A bare scope word is a scope only standing alone: `agent-notes/…` and `general-purpose …` are
+  // the body's own first words. And "none" opens a no-feedback line only as a whole answer.
+  ['spec-feedback: agent-notes/<name>.md is never read — seen: empty folder',
+    [{ scope: 'agent', body: 'agent-notes/<name>.md is never read — seen: empty folder' }]],
+  ['spec-feedback: general-purpose agents need the base ref too',
+    [{ scope: 'agent', body: 'general-purpose agents need the base ref too' }]],
+  ['spec-feedback: none of the proof commands said which runner',
+    [{ scope: 'agent', body: 'none of the proof commands said which runner' }]],
+  ['spec-feedback: nothing in the brief named the base ref',
+    [{ scope: 'agent', body: 'nothing in the brief named the base ref' }]],
+  ['spec-feedback: None.', []],
+  ['spec-feedback: none — the spec held', []],
   ['spec-feedback: none', []],
   ['spec-feedback: n/a', []],
   ['No `spec-feedback`.', []],
