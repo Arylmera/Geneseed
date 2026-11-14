@@ -27,6 +27,8 @@ vi.mock('../api/index.js', () => ({
         ],
       }),
     ),
+    // The install profiles: none followed by default; the panel tests below hand in their own.
+    profiles: vi.fn(() => Promise.resolve({ profiles: [], installs: [] })),
     // In step by default; the Sync tests below hand in their own rows.
     fleet: vi.fn(() =>
       Promise.resolve({
@@ -326,6 +328,30 @@ describe('Installs / Hosts', () => {
     await waitFor(() => expect(panel()).toBeTruthy())
     expect(panel().querySelector('h2').textContent).toBe('OpenCode')
     expect(screen.getByRole('button', { name: 'OpenCode', pressed: true })).toBeTruthy()
+  })
+
+  // The Profiles tab's two marks on the panel (spec D38): the profiles this install follows, and
+  // "Save as profile…", which opens that tab's Save panel on this install.
+  it('names the profiles the install follows, and Save as profile opens the Profiles tab on it', async () => {
+    api.profiles.mockResolvedValueOnce({
+      profiles: [],
+      installs: [
+        { host: 'opencode', scope: 'global', path: 'C:/cfg', matches: ['starter'], diff: [] },
+      ],
+    })
+    window.location.hash = '#/installs/hosts'
+    render(<Hosts onAction={() => {}} />)
+    await waitFor(() => expect(within(panel()).getByText('matches starter')).toBeTruthy())
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save as profile…' }))
+    expect(decodeURIComponent(window.location.hash)).toBe(
+      '#/installs/profiles/{"save":{"host":"opencode","path":"C:/cfg"}}',
+    )
+  })
+
+  it('a read-only console offers no Save as profile', async () => {
+    render(<Hosts />)
+    await waitFor(() => expect(panel()).toBeTruthy())
+    expect(within(panel()).queryByRole('button', { name: 'Save as profile…' })).toBeNull()
   })
 
   it('installs a picked absent host, the voice defaulting to the deployed one', async () => {

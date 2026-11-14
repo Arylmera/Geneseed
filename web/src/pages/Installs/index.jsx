@@ -2,14 +2,17 @@ import React from 'react'
 import Tabs from '../../components/Tabs.jsx'
 import PageHeader from '../../components/PageHeader.jsx'
 import Hosts from './Hosts.jsx'
+import Profiles from './Profiles.jsx'
 import Diff from '../Diff.jsx'
 import Doctor from '../Doctor.jsx'
 
-// Installs: where the harness lives on this machine and how each copy is kept. Three tabs: Hosts
-// (the old Harness page), Local edits (Changes) and Doctor. The old flat routes land on their tab
+// Installs: where the harness lives on this machine and how each copy is kept. Four tabs: Hosts
+// (the old Harness page), Profiles (apply or save an install profile), Local edits (Changes) and
+// Doctor. `item` is the tab's own sub-address: Profiles reads a Save request from it. The old flat routes land on their tab
 // (lib/router.js VIEW_ALIAS), and the tabs that left, Kits and Server, on their pages.
 export default function Installs({
   tab = 'hosts',
+  item,
   overview,
   setup,
   themes,
@@ -37,6 +40,7 @@ export default function Installs({
           onMutated={onMutated}
         />
       )}
+      {tab === 'profiles' && <Profiles onAction={onAction} dataRev={dataRev} item={item} />}
       {tab === 'edits' && (
         <Diff onMutated={onMutated} onAction={onAction} dataRev={dataRev} overview={overview} />
       )}

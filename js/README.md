@@ -277,6 +277,7 @@ the deployed harness as JSON.
 | `update-check.mjs` | Is a newer release on npm? Answers from memory, refreshes in the background (a day when it got an answer, an hour when it did not), `null` on any failure, never asked under `node --test` |
 | `gates-api.mjs` | `GET /api/gates`: gate asks per rule per day over 30 days, read off every installed harness's `notebook/gates.jsonl` (the Overview's sparklines) |
 | `usage-api.mjs` | `GET /api/usage`: the 30-day skill and agent call counts across every installed harness, the never-fired list, a fleet-wide `names` list (per-name 30-day counts, installs, daily series, last day seen), and skips lines older than 90 days in each `notebook/usage.jsonl` |
+| `profiles-api.mjs` | The Profiles tab: `GET /api/profiles` (both sources, the installs that follow each, an apply preview) and the `profile-apply` / `profile-save` jobs, which run the CLI's own verb |
 | `user-files.mjs` | The fingerprint-guarded editors for `user-rules.md` (incl. memory promotion) and `PROFILE.md`, read and write |
 | `actions.mjs` | The other mutating endpoints — memory delete, MCP, excludes, installs, view, restore — plus install/deploy argv, and `installView`, the per-request install behind the one (host, path) allowlist |
 | `daemon.mjs` | Detached web start/stop/status/restart, the `.geneseed-web.json` record, and `openUrl` |

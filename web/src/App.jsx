@@ -271,6 +271,7 @@ export default function App() {
     installs: () => (
       <Installs
         tab={route.tab}
+        item={route.item}
         overview={overview}
         setup={setup}
         themes={themes}

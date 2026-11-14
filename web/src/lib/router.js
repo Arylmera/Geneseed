@@ -24,7 +24,7 @@ export const TABS = {
   loops: ['templates', 'bricks', 'active'],
   factories: ['templates', 'active'],
   personal: ['rules', 'profile', 'memory', 'notebook'],
-  installs: ['hosts', 'edits', 'doctor'],
+  installs: ['hosts', 'profiles', 'edits', 'doctor'],
 }
 export const TAB_LABELS = {
   templates: 'Templates',
@@ -35,6 +35,7 @@ export const TAB_LABELS = {
   memory: 'Memory',
   notebook: 'Notebook',
   hosts: 'Hosts',
+  profiles: 'Profiles',
   edits: 'Local edits',
   doctor: 'Doctor',
 }

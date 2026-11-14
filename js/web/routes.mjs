@@ -25,6 +25,7 @@ import {
 } from './api.mjs';
 import { FLEET_SECTIONS, NotFound, apiCatalog, apiItem, apiLoadout } from './catalog.mjs';
 import { apiUsage } from './usage-api.mjs';
+import { apiProfiles } from './profiles-api.mjs';
 import { fleetSort } from './state.mjs';
 import { apiGates } from './gates-api.mjs';
 import { migratePreview } from '../maintain/migrate.mjs';
@@ -90,6 +91,7 @@ export const VIEW_POSTS = new Set(['/api/activity', '/api/memory/delete', '/api/
  * section, and `/api/item/`, stay install-scoped (`PREFIX_ROUTES`).
  */
 export const MACHINE_GETS = new Set(['/api/update', '/api/installs', '/api/fleet', '/api/migrate/preview', '/api/kits',
+  '/api/profiles',
   '/api/usage', '/api/gates', '/api/excludes', '/api/mcp', '/api/loops/active', '/api/factories/active', '/api/activity',
   '/api/catalog/skills', '/api/catalog/agents', '/api/catalog/memory', '/api/catalog/notebook',
   '/api/catalog/wiki', '/api/catalog/config']);
@@ -212,6 +214,9 @@ export const STATE_ROUTES = {
   // Reads every global install, and writes nothing: the console's view of `migrate --dry-run`.
   '/api/migrate/preview': () => migratePreview(),
   '/api/kits': apiKits,
+  // The Profiles tab: both profile sources, the installs that follow each, and with `?profile=`
+  // (and `?project=`) what applying one would change. Machine-wide; it reads its own query.
+  '/api/profiles': (state, url) => apiProfiles(state, url),
   '/api/update': apiUpdate,
   '/api/usage': apiUsage,
   '/api/gates': apiGates,

@@ -10,6 +10,7 @@ import { storeInstallPick, takeInstallPick } from '../../hooks/useInstalls.js'
 import { FOOTPRINT_OPTIONS } from './controls.jsx'
 import DeployForm from './DeployForm.jsx'
 import InstallPanel from './InstallPanel.jsx'
+import { saveHash } from './Profiles.jsx'
 import MigrationPreview from './MigrationPreview.jsx'
 import StackBar from '../../components/StackBar.jsx'
 import { hostInfo, installName, removeLayer } from '../../lib/hosts.js'
@@ -287,6 +288,8 @@ export default function Hosts({
   // Apart from the two above, and outside their error and loading gates: a slow or failed fleet
   // leaves the Sync cells blank, never the tables.
   const { data: fleetData, error: fleetErr } = useAsync(() => api.fleet(), [dataRev])
+  // The install profiles each active install follows, for the panel's "matches" tag.
+  const { data: profData } = useAsync(() => api.profiles(), [dataRev])
   const fleet = fleetErr ? null : (fleetData ?? undefined)
   // null | { text, tone }: 'bad' is a failure (an alert), 'ok' a done act, '' a progress
   // note, so "Opening…" is never painted as an error.
@@ -738,6 +741,17 @@ export default function Hosts({
           onRevealMcp={revealMcp}
           onForce={() => forceRebuild(current)}
           onPrune={() => pruneRebuild(current)}
+          profileMatches={
+            profData?.installs?.find((i) => i.host === current.host && i.path === current.path)
+              ?.matches
+          }
+          onSaveProfile={
+            onAction
+              ? () => {
+                  window.location.hash = saveHash(current)
+                }
+              : undefined
+          }
         />
       ) : null}
     </div>
