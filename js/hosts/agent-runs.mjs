@@ -35,9 +35,9 @@ import { GLOBAL_MANIFEST } from './hosts.mjs';
 import { SECRET_RE, splitLines } from './hooks-prims.mjs';
 import { specFeedbackOf } from './spec-feedback.mjs';
 import { capFile, isPrompt } from './hooks-done.mjs';
-import { USAGE_OFF } from './usage.mjs';
+import { RUNS_LEDGER, USAGE_OFF } from './usage.mjs';
 
-export const RUNS_LEDGER = path.join('notebook', 'agent-runs.jsonl');
+export { RUNS_LEDGER };
 
 // ---- agent-runs twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
 // to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
