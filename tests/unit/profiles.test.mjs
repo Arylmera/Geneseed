@@ -94,13 +94,17 @@ test('a missing required field is named', () => {
 
 test('an unknown profile name lists the shipped ones; a path is not a name', () => {
   const sb = fixtureDir({ alpha: STARTER, beta: STARTER });
+  const broken = fixtureDir({ broken: '{ nope' });
   try {
     assert.deepEqual(loadProfile('nope', sb.path), { ok: false, error: "no profile 'nope' — shipped profiles: alpha, beta" });
     const r = loadProfile('../alpha', sb.path);
     assert.equal(r.ok, false);
     assert.match(r.error, /is not a profile name/);
-    assert.match(loadProfile('broken', fixtureDir({ broken: '{ nope' }).path).error, /is not valid JSON/);
-  } finally { sb.cleanup(); }
+    assert.match(loadProfile('broken', broken.path).error, /is not valid JSON/);
+  } finally {
+    sb.cleanup();
+    broken.cleanup();
+  }
 });
 
 // The argv per host, written out. Explicit on every axis (D18): `--exclude-rules none` and

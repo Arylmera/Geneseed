@@ -32,20 +32,20 @@ A profile run never forces a build. When one of your own skills or agents sits u
 | Key | Required | Values |
 | --- | --- | --- |
 | `description` | no | One line that says who the profile is for |
-| `hosts` | yes | A list of `opencode`, `claude`, `bob`, `openclaude` |
+| `hosts` | yes | A list of the hosts Geneseed installs into (the host ids `geneseed build --emit <host>-global` takes) |
 | `theme` | yes | A theme in `themes/` |
-| `footprint` | yes | `lean` or `full` |
-| `posture` | yes | A posture in `src/postures/` |
-| `mode` | yes | `direct` or `foreman` |
-| `trust` | yes | A loop trust preset: `prudent`, `balanced` or `aggressive` |
-| `doctrines` | yes | `"all"`, or a list of packs: `craft`, `rigor`, `ops`, `process`, `comms` |
-| `excludeRules` | no | A list of rule ids, such as `craft.4` |
-| `excludeSkills` | no | A list of skill names |
-| `kits` | no | A list of kits in `src/kits/` |
-| `gates` | no | An object that maps a gate switch to `false` to turn it off: `secretsGate`, `doneGate`, `deletionGate`, `ownershipGate`, `externalGate`, `testNote`, `ownBranchPass`. `ownBranchPass: false` is strict consent, which adds asks |
+| `footprint` | yes | `lean` or `full`, as `geneseed build --footprint` |
+| `posture` | yes | A posture in `src/postures/`, as `geneseed build --posture` |
+| `mode` | yes | A mode in `src/modes/`, as `geneseed build --mode` |
+| `trust` | yes | A loop trust preset, as `geneseed build --trust` |
+| `doctrines` | yes | `"all"`, or a list of the packs in `src/doctrines/` |
+| `excludeRules` | no | A list of rule ids, such as `craft.4` (the console's Constitution page lists them) |
+| `excludeSkills` | no | A list of skill names, as `geneseed build --exclude-skills` |
+| `kits` | no | A list of the kits in `src/kits/` |
+| `gates` | no | An object that maps a gate switch to `false` to turn it off. Each key is a gate flag of `geneseed build --help` (`deletionGate: false` is `--no-deletion-gate`); a wrong key's refusal lists them all. `ownBranchPass: false` is `--strict-consent`, which adds asks |
 | `login` | no | `true` (default) sets the console to start at login and starts it; `false` does neither, for a server or a CI machine |
 
-Every value is checked against the generator's own lists, never a copy. An unknown key is an error, not ignored: a typo must not fall back to a default in silence. `geneseed doctor` checks every shipped profile the same way.
+`geneseed build --help` prints the current choices for each build flag. Every value is checked against the generator's own lists, never a copy, so this page does not repeat them: a refusal names the field and every value it accepts. An unknown key is an error, not ignored: a typo must not fall back to a default in silence. `geneseed doctor` checks every shipped profile the same way.
 
 ## `starter`
 
