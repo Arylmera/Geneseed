@@ -72,7 +72,7 @@
  * source-level: that file asserts the spawn's shape without running it.
  */
 import {
-  chmodSync, existsSync, lstatSync, mkdirSync, readlinkSync, rmSync,
+  appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync,
 } from 'node:fs';
 import { isatty } from 'node:tty';
 import { spawnSync } from 'node:child_process';
@@ -143,19 +143,35 @@ export function withoutPathBlock(text) {
  *
  * `unattended` is `setup --profile`'s: running the profile IS the consent (install profiles,
  * D26), so it writes the block without asking and without a terminal, and records the file it
- * changed in `report.rcFile` for the run's summary. Only that caller passes it.
+ * changed in `report.rcFile` for the run's summary. Only that caller passes it. `rc` is the
+ * test's seam; every caller takes `shellRcFile()`.
+ *
+ * THE BLOCK IS APPENDED, NEVER THE FILE REWRITTEN: a rewrite of someone's startup file risks the
+ * whole file for the sake of three lines. The block takes the file's own line ending. Only a
+ * missing file reads as empty; any other read error (permissions, a directory) refuses the write,
+ * because writing over a file that could not be read is how a startup file gets lost.
  */
-function offerShellPath(dir, { unattended = false, report = null } = {}) {
-  const rc = shellRcFile();
+export function offerShellPath(dir, { unattended = false, report = null, rc = shellRcFile() } = {}) {
   if (!rc || (!unattended && !isatty(0))) return false;
-  const text = readMaybe(rc) ?? '';
+  let text;
+  try {
+    text = readFileSync(rc, 'utf8');
+  } catch (e) {
+    if (e && e.code !== 'ENOENT') {
+      printErr(`geneseed: could not read ${rc} (${asOsError(e)}) — leaving it unchanged\n`);
+      return false;
+    }
+    text = '';
+  }
   if (text.includes(RC_BEGIN)) {
     printOut(`geneseed: ${rc} already adds it — open a NEW terminal, then run 'geneseed'.\n`);
     return true;
   }
   if (!unattended && !confirm(`geneseed: add '${dir}' to your PATH in ${rc}?`, true)) return false;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const sep = text === '' || text.endsWith('\n') ? '' : eol;
   try {
-    writeText(rc, withPathBlock(text, dir));
+    appendFileSync(rc, sep + withPathBlock('', dir).replaceAll('\n', eol), 'utf8');
   } catch (e) {
     printErr(`geneseed: could not write ${rc} (${asOsError(e)})\n`);
     return false;
@@ -272,7 +288,10 @@ function isOurLauncher(f) {
 /**
  * Put `geneseed` on PATH so it runs from any directory. `opts` is `setup --profile`'s (see
  * `offerShellPath`): `unattended` writes the shell rc block without asking; `report` receives
- * `rcFile` (the startup file it changed) and `foreign` (a launcher it left alone).
+ * `rcFile` (the startup file it changed), `foreign` (a launcher it left alone), and `onPath`:
+ * false, with `pathDir`, when the launcher was written but its dir is not on PATH (PowerShell
+ * blocked, a shell whose startup file this cannot edit, an rc write that failed) — exit 0 all the
+ * same, so only `report` can tell the caller.
  */
 export function cmdLink(args, opts = {}) {
   const here = ROOT;
@@ -293,8 +312,10 @@ export function cmdLink(args, opts = {}) {
     printOut(`geneseed: wrote shim ${shim}\n`);
     if (winPathHas(process.env.PATH || '', bindir) || winUserPath('add', bindir)) {
       printOut(`geneseed: '${bindir}' is on your user PATH — open a NEW terminal, then run \`geneseed\`.\n`);
+      if (opts.report) opts.report.onPath = true;
     } else {
       printOut(`geneseed: add '${bindir}' to your PATH manually, then run \`geneseed\` from anywhere.\n`);
+      if (opts.report) Object.assign(opts.report, { onPath: false, pathDir: bindir });
     }
     return 0;
   }
@@ -349,9 +370,13 @@ export function cmdLink(args, opts = {}) {
   printOut(`geneseed: linked ${dest} -> ${entry}\n`);
   if ((process.env.PATH || '').split(path.delimiter).includes(targetDir)) {
     printOut(`geneseed: '${targetDir}' is on PATH — run 'geneseed' from anywhere.\n`);
-  } else if (!offerShellPath(targetDir, opts)) {
+    if (opts.report) opts.report.onPath = true;
+  } else if (!offerShellPath(targetDir, { unattended: opts.unattended, report: opts.report })) {
     printOut(`geneseed: NOTE '${targetDir}' is not on your PATH. Add it, e.g.:\n`);
     printOut(`  echo 'export PATH="${targetDir}:$PATH"' >> ~/.zshrc   # or ~/.bashrc\n`);
+    if (opts.report) Object.assign(opts.report, { onPath: false, pathDir: targetDir });
+  } else if (opts.report) {
+    opts.report.onPath = true;
   }
   return 0;
 }
