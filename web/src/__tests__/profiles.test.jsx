@@ -252,6 +252,18 @@ describe('Installs › Profiles', () => {
     })
   })
 
+  it('a Save link to an install that is gone picks none, says so, and saves nothing', async () => {
+    api.profiles.mockResolvedValue(LIST)
+    const onAction = vi.fn(async () => 'j4')
+    const item = JSON.stringify({ save: { host: 'bob', path: '/gone' } })
+    render(<Profiles onAction={onAction} item={item} />)
+    const dialog = await screen.findByRole('region', { name: 'Save as profile' })
+    expect(within(dialog).getByText(/no longer active here/)).toBeTruthy()
+    expect(within(dialog).getByLabelText('From install').value).toBe('')
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'x' } })
+    expect(within(dialog).getByRole('button', { name: 'Save profile' }).disabled).toBe(true)
+  })
+
   it('outside a git clone the Shipped destination is disabled', async () => {
     api.profiles.mockResolvedValue({ ...LIST, shippedWritable: false })
     render(<Profiles onAction={() => {}} />)

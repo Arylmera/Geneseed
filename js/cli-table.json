@@ -1904,7 +1904,7 @@
           ],
           "dest": "profile",
           "metavar": "NAME",
-          "help": "install profiles/NAME.json with no questions (e.g. starter); works without a terminal",
+          "help": "install profile NAME (Shipped, in profiles/, or Personal, in the machine-wide profiles/) globally with no questions (e.g. starter); works without a terminal",
           "choices": null,
           "default": null,
           "required": false,

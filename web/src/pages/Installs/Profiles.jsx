@@ -317,8 +317,10 @@ function ApplyPanel({ name, onAction, onClose }) {
 function SavePanel({ data, initial, onAction, onClose }) {
   const installs = data.installs || []
   const key = (i) => `${i.host}|${i.path}`
-  const start = installs.find((i) => initial && key(i) === key(initial)) || installs[0]
-  const [from, setFrom] = useState(start ? key(start) : '')
+  // A Save link names its install. When that install is gone, nothing is picked: falling back to
+  // another one would save from an install the user did not click.
+  const named = initial ? installs.find((i) => key(i) === key(initial)) : installs[0]
+  const [from, setFrom] = useState(named ? key(named) : '')
   const [name, setName] = useState('')
   const [dest, setDest] = useState('personal')
   const [force, setForce] = useState(false)
@@ -345,10 +347,16 @@ function SavePanel({ data, initial, onAction, onClose }) {
         <EmptyState>No active install to save. Install one on the Hosts tab first.</EmptyState>
       ) : (
         <>
+          {initial && !named ? (
+            <p className="tag warn note" role="status">
+              The install you chose is no longer active here. Pick one below.
+            </p>
+          ) : null}
           <div className="dp-row">
             <label className="field">
               <span>From install</span>
               <select className="sel" value={from} onChange={(e) => setFrom(e.target.value)}>
+                {!from ? <option value="">Pick an install…</option> : null}
                 {installs.map((i) => (
                   <option key={key(i)} value={key(i)}>
                     {installLabel(i)}
