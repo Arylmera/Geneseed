@@ -42,6 +42,12 @@ In [foreman mode](foreman-mode.md) the session hands each task that would block 
 
 When a subagent finishes, the hook copies each `spec-feedback:` line its report ends with into `agent-notes/<name>.md` in the notes folder (a `general` line into `agent-notes/_general.md` instead, which every agent reads), with no model call. The agent reads those notes first at its next dispatch, so a spec flaw it reported is in front of it until the user folds the fix into the source. See [Hooks](hooks.md). (Not on Bob, which has no subagent-finished event: there the caller copies the line.)
 
+### Did a spec change help?
+
+When a named subagent finishes, the same hook appends one line to `notebook/agent-runs.jsonl` in the install, beside `usage.jsonl`. The line holds only facts the hook can read: the day, the agent, a short hash of its rendered spec (`agents/<name>.md`, or none for an agent Geneseed does not ship), whether the done gate let the turn end and how many times it blocked it first, the number of tool calls and of refused calls (a call a host or a gate did not run; a red test is not one), the number of `spec-feedback:` lines, and whether a report came back. There is no self-score and no model call. A stop that the done gate blocks writes no line: the line comes at the stop that ends the turn.
+
+`geneseed catalog agents --scores` prints one row per agent and spec hash, so the runs before a spec edit and the runs after it are two rows to compare. The UNBLOCKED column is the share of judged runs that the gate never blocked. It is not a pass rate: the gate cannot tell a pass from an advisory, and a stop past the gate's block limit also ends the turn. The same switch as `usage.jsonl` turns the ledger off: `GENESEED_NO_USAGE`, or a `.usage-off` file in the install. On OpenCode the learn plugin writes the line for a named child session, with no done-gate fields, because that host's gate is in another plugin. Bob has no subagent-finished event, so it writes no line.
+
 The learn step can also record a lesson for that agent alone, in `agents/<name>.md` in the memory store (the [shared](shared-tier.md) one on a global install) — one bullet per lesson, capped so it never grows unbounded. The next time that agent runs, it starts with what it learned. See [Memory](memory.md). (Not on Bob, which has no subagent-finished event.)
 
 <!--harness:opencode-->

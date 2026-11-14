@@ -29,6 +29,8 @@ or when it is the host's own config dir, as the hook does.
 
 So a global install needs nothing set. `GENESEED_HARNESS` and `GENESEED_MEMORY` are deprecated, with removal planned for 6.0. If none resolves, it logs `no memory dir — this install has no memory/ folder, and neither does the shared tier or this repo.` and does nothing.
 
+**A finished child session.** For a child session that names its agent, the plugin first copies the report's `spec-feedback:` lines into `agent-notes/<name>.md`, then appends one line to `notebook/agent-runs.jsonl` beside the plugin's folder: the day, the agent, its spec hash, its tool calls and refused calls, its feedback lines and whether it reported. The done-gate fields stay empty, because that gate is in the context plugin. It writes once per child session, only when that `notebook/` exists, and not with `GENESEED_NO_USAGE` set or a `.usage-off` file in the install. `geneseed catalog agents --scores` reads it. See [Agents](../concepts/agents.md).
+
 **Switches.**
 - `GENESEED_MODEL=provider/model` — fallback when the session's model can't be read. Without it you get `could not determine a model`.
 - `GENESEED_LEARN_DEBOUNCE_MS` — the quiet period.

@@ -488,6 +488,21 @@
           "is_flag": true,
           "type": null,
           "hidden": false
+        },
+        {
+          "names": [
+            "--scores"
+          ],
+          "dest": "scores",
+          "metavar": null,
+          "help": "with the agents section: each agent's recorded runs per spec hash, from each active install's notebook/agent-runs.jsonl (read-only)",
+          "choices": null,
+          "default": false,
+          "required": false,
+          "nargs": "0",
+          "is_flag": true,
+          "type": null,
+          "hidden": false
         }
       ],
       "mutex": []

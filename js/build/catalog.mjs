@@ -26,7 +26,7 @@
 import { helpWidth } from '../ui/cli.mjs';
 import { tuiInventory } from '../inspect/inventory.mjs';
 import { defaultTheme, installedDefaults } from '../hosts/installs.mjs';
-import { printOut } from '../lib/fs.mjs';
+import { printErr, printOut } from '../lib/fs.mjs';
 import { dwidth, fit, icon, truncd, tuiEntries } from '../ui/tui.mjs';
 
 /**
@@ -119,6 +119,15 @@ export function catalogLines(inv, section, width, showSource = false) {
  * validator here, and the entry point's `exitCode` arm carries the refusal out.
  */
 export function cmdCatalog(args) {
+  // `--scores` reads the installs' outcome ledgers, not the roster: its own module, loaded only
+  // when asked (js/inspect/agent-scores.mjs). It scores agents alone, so another section refuses.
+  if (args.scores) {
+    if (args.section && args.section !== 'agents') {
+      printErr(`[catalog] --scores reads agent runs: use \`geneseed catalog agents --scores\`.\n`);
+      return 2;
+    }
+    return import('../inspect/agent-scores.mjs').then((m) => m.cmdAgentScores());
+  }
   const inst = installedDefaults();
   const theme = args.theme || inst.theme || defaultTheme();
   // The install's own pack selection, so an inactive pack's rules are listed and MARKED
