@@ -194,9 +194,9 @@ const OTHER = HERE === 'win32' ? 'posix' : 'win32';
 // SessionEnd) long after the reference: its absolute gate is tests/unit/activity_writer.test.mjs.
 // `factory` is the loop engine one level up, with no Python original either: its absolute gate
 // is tests/unit/factory_cli.test.mjs.
-// `profile` writes an install profile from a global install, born with `setup --profile`: its
-// absolute gate is tests/unit/profiles.test.mjs. A cell could not hold it, since `save` writes
-// into the checkout's own `profiles/`.
+// `profile` saves an install profile from an install, or applies one globally or to a project,
+// born with `setup --profile`: its absolute gates are tests/unit/profiles.test.mjs (save) and
+// tests/unit/profile_apply.test.mjs (apply), the second with real builds in a sandboxed child.
 const NATIVE = ['activity', 'catalog', 'export', 'factory', 'loop', 'mcp', 'memory', 'profile', 'scorecard', 'tool-gate'];
 
 test('the matrix covers every verb each entry claims', () => {
