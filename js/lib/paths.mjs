@@ -12,6 +12,9 @@ import path from 'node:path';
 /** Does `root` sit directly in a `node_modules`? Any name: an npm alias installs under its own. */
 export const inNodeModules = (root) => path.basename(path.dirname(root)).toLowerCase() === 'node_modules';
 
+/** Does `root` sit in npm's npx cache (`…/_npx/<hash>/…`)? npm prunes that cache. */
+export const inNpxCache = (root) => root.split(/[\\/]/).includes('_npx');
+
 /**
  * Is `root` a lasting install of the npm package, `…/node_modules/geneseed`? A path rule, so
  * `migrate` can answer under the CLI's spawn ban. An npx cache is not one: npm prunes it, and the
@@ -20,7 +23,7 @@ export const inNodeModules = (root) => path.basename(path.dirname(root)).toLower
  * upgrade if a project-local `migrate` ever proves real.
  */
 export const isNpmPackageDir = (root) => inNodeModules(root) && path.basename(root).toLowerCase() === 'geneseed'
-  && !root.split(/[\\/]/).includes('_npx');
+  && !inNpxCache(root);
 
 const { X_OK } = constants;
 /**
