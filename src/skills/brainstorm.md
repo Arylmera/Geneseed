@@ -27,21 +27,21 @@ the design is skipped.
    success criteria are already unambiguous, restate them in one line (naming any
    platform or language choice, and any constraint, conflict or cheaper path you found),
    get it confirmed — a handed-in spec is often incomplete — and go to step 4. Otherwise
-   ask ONE numbered round of
-   every question answerable now, each with your recommended answer so "yes" accepts it;
-   dependent questions wait a round. Drive at *why* (the outcome wanted), *scope* (in and
-   out), *done* (how success is judged) and which build choices (platform, language, key
-   libraries) the user wants to own. Existing work decides by default
-   ({{DOCTRINE:respect-conventions}}); a choice you take goes in the ledger as **your
-   call**, never as agreed. Stop when each is unambiguous. Facts are yours to find (read
-   the code, dispatch a subagent), never the user's, and so are process calls (where the
-   spec goes, writing it up, looking further): make them and say so. A pending lookup
-   holds back only the questions that depend on it. When the user did not ask to
-   brainstorm, end your first message with a one-line offer to just start; taken, the
-   size is *Quick*. A decision someone else owns gets a drafted
-   `questionnaire-<slug>.md` for them — ask the user only who and what they need back. Most
-   important first (async gets one pass), one idea per question with an empty answer stub
-   under it, and say "I don't know" is a useful answer.
+   ask ONE numbered round of every question answerable now, each with your recommended
+   answer so "yes" accepts it; dependent questions wait a round. Drive at *why* (the
+   outcome wanted), *scope* (in and out), *done* (how success is judged) and which build
+   choices (platform, language, key libraries) the user wants to own. Existing work
+   decides by default ({{DOCTRINE:respect-conventions}}); a choice you take goes in the
+   ledger as **your call**, never as agreed. Stop when each is unambiguous. Facts are
+   yours to find (read the code, dispatch a subagent), and so are process calls (where
+   the spec goes, writing it up): make them and say so. A pending lookup holds back only
+   the questions that depend on it. A decision someone else owns gets a drafted
+   `questionnaire-<slug>.md` for them — ask the user only who and what they need back.
+   Most important first (async gets one pass), one idea per question with an empty
+   answer stub under it, and say "I don't know" is a useful answer. When the skill
+   started on its own (no trigger phrase from the user), end your first message with a
+   one-line offer to just start; taken, the size is *Quick*: first state any platform,
+   language or tool you chose, in one line.
 3. **Ledger the decisions.** Name every KEY DECISION the answers imply or leave open —
    direction chosen, trade-offs accepted, load-bearing constraints, assumptions,
    non-goals. Surface each silent assumption as a decision to ratify, not a settled
@@ -51,11 +51,11 @@ the design is skipped.
 4. **Size it, then design.** Say the size; the user may override. *Quick* — exit and do
    it, no spec. *Small* — the confirmed ledger in chat is the spec; go to step 6.
    *Project* — design, spec file, builder check. If it grows mid-work, stop and step up.
-   Design only when there is something to design: propose 2–3 approaches grounded in
-   what the project does, with trade-offs, leading with your recommendation — in a
-   message of their own, and the user picks before any design is written (one sensible
-   way: say why the others do not fit). Present the chosen design in
-   sections (purpose → components → data flow → failure modes → testing), getting an
+   For a *Project*, design only when there is something to design: propose 2–3
+   approaches grounded in what the project does, with trade-offs, leading with your
+   recommendation — in a message of their own; the user picks before any design is
+   written (one sensible way: say why the others do not fit). Present the chosen design
+   in sections (purpose → components → data flow → failure modes → testing), getting an
    explicit "looks right" after each; cut anything YAGNI. For a non-design ask, skip
    this step.
 5. **Write the spec.** One file the next session can find — `SPEC.md` beside the work,
