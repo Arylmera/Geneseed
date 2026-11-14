@@ -29,9 +29,16 @@ cd Geneseed
 
 Add `--profile <name>` to either installer and it asks nothing. It installs that profile globally into every AI coding tool the profile lists and finds on the machine, puts `geneseed` on your `PATH`, sets the web console to start at login, starts it and runs the doctor. `starter` is the profile for a first install:
 
+Windows (cmd or PowerShell):
+
+```bat
+.\install.cmd --profile starter
 ```
-.\install.cmd --profile starter      # Windows
-./install --profile starter          # macOS, Linux
+
+macOS, Linux:
+
+```bash
+./install --profile starter
 ```
 
 With `--profile`, the installer skips its own `link` and its "open the console now?" question, and `install.cmd` skips its final pause, so a script that runs it returns. Run the same line again to update and repair. [Install profiles](../reference/profiles.md) has the file format and what each run does.

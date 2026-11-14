@@ -12,11 +12,16 @@ Geneseed builds a harness (the rules, agents, skills and hooks your AI coding to
 
 You need **git** and **Node 22.7 or newer**. Clone Geneseed where you like, then run the installer with the `starter` profile:
 
+Windows (cmd or PowerShell 7; on Windows PowerShell 5.1, put `;` in place of each `&&`):
+
+```bat
+git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && .\install.cmd --profile starter
 ```
-git clone https://github.com/Arylmera/Geneseed.git
-cd Geneseed
-.\install.cmd --profile starter      # Windows (cmd or PowerShell)
-./install --profile starter          # macOS, Linux
+
+macOS, Linux:
+
+```bash
+git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
 ```
 
 It asks nothing. It installs the harness globally into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check, and prints a summary with the console's address. With no tool on the machine it installs nothing and prints where to get each one. Run the same line again to update and repair. `starter` is a neutral voice, a candid peer posture, and every guardrail armed except the ownership gate. [Install profiles](../reference/profiles.md) has the details and shows how a team adds its own profile.
