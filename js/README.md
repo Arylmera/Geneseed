@@ -234,8 +234,9 @@ Verbs that change an install that already exists, as opposed to rendering one.
 | module | owns |
 |---|---|
 | `update.mjs` | `upgrade`/`bootstrap` — git pull, doctor gate, rebuild, each via a respawn |
-| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers. `setup --profile` installs a profile with no prompt |
-| `profiles.mjs` | Install profiles (`profiles/*.json`): load and validate against the generator's own sources, the per-host argv, `profile save` |
+| `setup.mjs` | The install wizard. Its prompts go through `js/lib/prompt.mjs`'s stdin readers. `setup --profile` installs a profile with no prompt; `profile apply` (`cmdProfileApply`) shares its build loop |
+| `profiles.mjs` | Install profiles from two sources, Shipped (`profiles/*.json`) and Personal (`<machine tier>/profiles/`): load and validate against the generator's own sources, the per-host argv (global or project), `profile save` |
+| `profile-scope.mjs` | The scope half of `profile apply`: the project folder check (shared with the console's deploy) and what a global install still runs inside a project (`globalLayering`) |
 | `uninstall.mjs` | Removes or disables an install: manifest-driven reversal, plus stash deactivate/reactivate |
 | `migrate.mjs` | `geneseed migrate` — all-or-nothing re-emit moving installs onto the npm install shape |
 | `memory.mjs` | `geneseed memory list|rm|consolidate` — CLI-side fact removal (archive by default, `--purge` deletes), twin of the web delete endpoint; `consolidate` rebuilds the index by hand, twin of the hook's `learn --consolidate` |

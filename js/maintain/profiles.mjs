@@ -396,7 +396,7 @@ function saveSource(args, hosts) {
  */
 export function cmdProfile(args, { shippedDir = PROFILES_DIR, personalDir = null, root = ROOT } = {}) {
   const src = { shippedDir, personalDir: personalDir ?? personalProfilesDir() };
-  // (apply: S2)
+  if (args.action === 'apply') return import('./setup.mjs').then((m) => m.cmdProfileApply(args, { src }));
   if (args.action !== 'save') {
     printErr(`geneseed: error: profile: unknown action '${args.action}' (actions: save, apply)\n`);
     return 2;

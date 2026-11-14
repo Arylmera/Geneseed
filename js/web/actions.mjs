@@ -27,8 +27,7 @@
  */
 import { spawn } from 'node:child_process';
 import {
-  accessSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync,
-  renameSync, rmSync,
+  copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,10 +42,7 @@ import { excludeAdd, excludeRemove } from '../inspect/excludes.mjs';
 import { installProfile, setupBuildArgs } from '../build/generate.mjs';
 import { DEFAULT_PRESET, PRESETS } from '../loop/score.mjs';
 import { activeLoops, setLoopPreset } from '../loop/registry.mjs';
-import {
-  HOSTS, bobConfigDir, claudeConfigDir, expanduser, openclaudeConfigDir,
-  opencodeConfigDir, resolvePath,
-} from '../hosts/hosts.mjs';
+import { HOSTS, resolvePath } from '../hosts/hosts.mjs';
 import {
   EMIT_FOR, EMIT_HOST_SCOPE, doctrinesForBuild, excludedRulesOfDir, excludedSkillsOfDir, kitsOfDir, sharedTierOfDir, renderedTier,
   footprintOfDir, gatesOfDir,
@@ -64,6 +60,7 @@ import { stripWhitespace } from '../lib/text.mjs';
 import { memoryDelete } from '../maintain/memory.mjs';
 import { autostartInstall, autostartRemove } from '../hosts/shim.mjs';
 import { installDeactivate, installReactivate, installUninstall } from '../maintain/uninstall.mjs';
+import { checkProjectFolder } from '../maintain/profile-scope.mjs';
 import { emitChoices, themeChoices, viewCfg } from './api.mjs';
 import { actionCommands } from './jobs.mjs';
 import { emitOf } from '../inspect/status.mjs';
@@ -874,39 +871,20 @@ export function apiInstallToggle(state, body) {
  * The open-ended sibling of `apiInstallCmd`, which only rebuilds a pre-detected target from
  * a tight allowlist. Scope is always `project`: a global lands in the host's config dir,
  * never a chosen folder. THIS ENDPOINT TAKES A RAW PATH, so it is the trust boundary — the
- * path is validated here as an existing, writable directory that is not a host's own global
- * config dir (deploying a `project` emit there would mislabel as the global row and collide
- * on dedup).
+ * path is validated (`checkProjectFolder`) as an existing, writable directory that is not a
+ * host's own global config dir (deploying a `project` emit there would mislabel as the global
+ * row and collide on dedup).
  */
 export function apiDeployCmd(state, body) {
   const host = stripWhitespace(strOr(bget(body, 'host')));
   if (!HOSTS.some((h) => h.host === host)) {
     return { error: `unknown host: ${host || '(none)'}` };
   }
-  const raw = stripWhitespace(strOr(bget(body, 'path')));
-  if (!raw) return { error: 'no folder given' };
-  let root;
-  try {
-    root = resolvePath(expanduser(raw));
-  } catch {
-    return { error: `bad path: ${raw}` };
-  }
-  if (!isDir(root)) return { error: `not a folder: ${root}` };
-  try {
-    accessSync(root, constants.W_OK);
-  } catch {
-    return { error: `folder not writable: ${root}` };
-  }
-  const cfgdirs = new Set();
-  for (const fn of [opencodeConfigDir, claudeConfigDir, bobConfigDir,
-    openclaudeConfigDir]) {
-    try {
-      cfgdirs.add(resolvePath(fn()));
-    } catch { /* not every host has a resolvable config dir; skip it */ }
-  }
-  if (cfgdirs.has(root)) {
-    return { error: "that's a host global config dir — use its existing row to build a global install" };
-  }
+  // The folder check is `checkProjectFolder`'s (js/maintain/profile-scope.mjs), shared with
+  // `geneseed profile apply --project` and the Profiles tab's apply.
+  const folder = checkProjectFolder(strOr(bget(body, 'path')));
+  if (folder.error) return { error: folder.error };
+  const { root } = folder;
   // A fresh deploy is LEAN, at the default register, mode and trust: the same default as the
   // CLI's `--footprint`, which the user chose (2026-10-24) over the console's old `full` — a
   // console install and a CLI install of the same folder must not differ in always-on text for

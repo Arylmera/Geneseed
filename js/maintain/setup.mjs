@@ -49,7 +49,8 @@ import { main as driverMain, parseDriverArgs, resolveOut } from '../build/driver
 import { preserveRefusal } from '../build/profile.mjs';
 import { cmdLink } from '../hosts/link.mjs';
 import { autostartInstall, autostartState, transientRoot } from '../hosts/shim.mjs';
-import { loadProfile, profileBuildArgs } from './profiles.mjs';
+import { loadProfile, profileBuildArgs, profileHosts } from './profiles.mjs';
+import { checkProjectFolder, globalLayering, layeringText } from './profile-scope.mjs';
 import { playLine } from '../ui/anim.mjs';
 import { discoverNames, GATE_SWITCHES, PACK_ORDER, ROOT, loadKits } from '../build/source.mjs';
 import { exportImprovements } from '../inspect/diff.mjs';
@@ -731,7 +732,7 @@ function toolsReport(tools = hostTools()) {
 // --------------------------------------------------------------------------------------
 
 /**
- * What a profile run would change back on `argv`'s target install (spec D14): the preserve
+ * What a profile run would change back on `argv`'s target install, global or project (spec D14): the preserve
  * guard's own comparison, run on the argv WITHOUT `--reset` (with it the guard returns null) and
  * with no flag counted as given, so every setting that differs is listed. `[]` when there is no
  * install there yet, or when the argv cannot be parsed (the build then refuses on its own terms).
@@ -739,7 +740,8 @@ function toolsReport(tools = hostTools()) {
 export function profileChanges(argv) {
   try {
     const args = parseDriverArgs(argv.filter((a) => a !== '--reset'));
-    return preserveRefusal(args, new Set(), null)?.changes ?? [];
+    // A project emit's target is its `--out` folder (`guardTarget`); a global one ignores it.
+    return preserveRefusal(args, new Set(), args.out ?? null)?.changes ?? [];
   } catch {
     return [];
   }
@@ -779,6 +781,66 @@ async function defaultConsole() {
   return { ok: rc === 0 && Boolean(url), url };
 }
 
+/** `hostTools` rows as `{ label, host, url, present }`, in HOSTS order. */
+function foundHosts(rows) {
+  return HOST_TOOLS.map(([label, host, url], i) => ({ label, host, url, present: Boolean(rows[i]?.[1]) }));
+}
+
+/**
+ * The per-host builds of a profile run, shared by `setup --profile` and `profile apply` (spec
+ * D16, D19, D33): for each target host, the settings the build will change back (D14), the local
+ * edits exported first (D19, a global install only: `diffCollect` reads no drift off a project
+ * install), then the build. A failure is recorded and the loop goes on.
+ *
+ * `project` set builds each host's project emit into that folder (D32); null builds globally.
+ */
+export function profileBuilds(p, targets, { project = null, build, exportDrift, changes, configDir }) {
+  const results = [];
+  for (const t of targets) {
+    const argv = profileBuildArgs(p, t.host, project);
+    const moved = changes(argv);
+    let saved = null;
+    if (!project) {
+      try {
+        [saved] = exportDrift(configDir(t.host));
+      } catch (e) {
+        printOut(`! could not export local edits of ${t.label} (${e && e.message}) - continuing.\n`);
+      }
+    }
+    printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
+    let rc;
+    try {
+      rc = build(argv);
+    } catch (e) {
+      rc = e && e.exitCode ? e.exitCode : 1;
+      printErr(`[setup] ${t.label}: ${e && e.message}\n`);
+    }
+    results.push({ ...t, argv, rc, moved, saved, project });
+  }
+  return results;
+}
+
+/** The summary lines of `profileBuilds`' results: each host, what it put back, what it saved. */
+export function profileBuildLines(results) {
+  const out = [];
+  for (const r of results) {
+    if (r.rc === 0) {
+      out.push(`  ok    ${r.label}: installed (${r.project ? `${r.host} project in ${r.project}` : `${r.host}-global`})`);
+    } else {
+      // D25: no --force on a profile run. The build's own output names the file it refused.
+      out.push(`  FAIL  ${r.label}: build failed (exit ${r.rc}) - see its output above. If it names a file`,
+        '        of yours at a name Geneseed ships, move that file, or replace it with:',
+        `        geneseed build ${r.argv.join(' ')} --force`);
+    }
+    // Only a build that ran put anything back; a failed one left the install as it was.
+    if (r.rc === 0 && r.moved.length) {
+      out.push(`        changed back to the profile: ${r.moved.map((c) => `${c.name} ${c.from} -> ${c.to}`).join(', ')}`);
+    }
+    if (r.saved) out.push(`        local edits saved to ${r.saved} (hand that file to your agent to back-port them)`);
+  }
+  return out;
+}
+
 /**
  * `geneseed setup --profile <name>` — the whole install with no question asked.
  *
@@ -808,8 +870,7 @@ export async function setupProfile(name, deps = {}) {
     return 1;
   }
   const p = loaded.profile;
-  const rows = tools ?? hostTools();
-  const found = HOST_TOOLS.map(([label, host, url], i) => ({ label, host, url, present: Boolean(rows[i]?.[1]) }));
+  const found = foundHosts(tools ?? hostTools());
   const listed = found.filter((t) => p.hosts.includes(t.host));
   const targets = listed.filter((t) => t.present);
   printOut(`Geneseed setup - profile '${name}'${p.description ? `: ${p.description}` : ''}\n\n`);
@@ -821,26 +882,7 @@ export async function setupProfile(name, deps = {}) {
     return 1;
   }
 
-  const results = [];
-  for (const t of targets) {
-    const argv = profileBuildArgs(p, t.host);
-    const moved = changes(argv);
-    let saved = null;
-    try {
-      [saved] = exportDrift(configDir(t.host));
-    } catch (e) {
-      printOut(`! could not export local edits of ${t.label} (${e && e.message}) - continuing.\n`);
-    }
-    printOut(`Running:  geneseed build ${argv.join(' ')}\n`);
-    let rc;
-    try {
-      rc = build(argv);
-    } catch (e) {
-      rc = e && e.exitCode ? e.exitCode : 1;
-      printErr(`[setup] ${t.label}: ${e && e.message}\n`);
-    }
-    results.push({ ...t, argv, rc, moved, saved });
-  }
+  const results = profileBuilds(p, targets, { build, exportDrift, changes, configDir });
   const built = results.filter((r) => r.rc === 0);
 
   printOut('\n');
@@ -896,22 +938,7 @@ export async function setupProfile(name, deps = {}) {
     }
   }
 
-  const out = ['', `Summary - profile '${name}'`];
-  for (const r of results) {
-    if (r.rc === 0) {
-      out.push(`  ok    ${r.label}: installed (${r.host}-global)`);
-    } else {
-      // D25: no --force on a profile run. The build's own output names the file it refused.
-      out.push(`  FAIL  ${r.label}: build failed (exit ${r.rc}) - see its output above. If it names a file`,
-        '        of yours at a name Geneseed ships, move that file, or replace it with:',
-        `        geneseed build ${r.argv.join(' ')} --force`);
-    }
-    // Only a build that ran put anything back; a failed one left the install as it was.
-    if (r.rc === 0 && r.moved.length) {
-      out.push(`        changed back to the profile: ${r.moved.map((c) => `${c.name} ${c.from} -> ${c.to}`).join(', ')}`);
-    }
-    if (r.saved) out.push(`        local edits saved to ${r.saved} (hand that file to your agent to back-port them)`);
-  }
+  const out = ['', `Summary - profile '${name}'`, ...profileBuildLines(results)];
   for (const t of listed.filter((x) => !x.present)) out.push(`  --    ${t.label}: not found - install: ${t.url}`);
   for (const t of found.filter((x) => x.present && !p.hosts.includes(x.host))) {
     out.push(`  --    ${t.label}: found, not in this profile - left as it is`);
@@ -943,4 +970,92 @@ export async function setupProfile(name, deps = {}) {
     '');
   printOut(`${out.join('\n')}\n`);
   return results.some((r) => r.rc !== 0) || (doctorRc !== null && doctorRc !== 0) ? 1 : 0;
+}
+
+// --------------------------------------------------------------------------------------
+// `geneseed profile apply <name> [--project <dir>] [--hosts a,b]`
+// --------------------------------------------------------------------------------------
+
+/**
+ * `geneseed profile apply` — build one profile, globally or into one project folder (spec D32,
+ * D33, D37, D41).
+ *
+ * THE SCOPE IS CHOSEN HERE, NOT IN THE PROFILE. Global builds `<host>-global` for each host;
+ * `--project <dir>` builds `--emit <host> --out <dir> --root <dir>`, and only there does the
+ * profile's `sharedTier` count (D37). The hosts are the profile's, narrowed by `--hosts` (which
+ * may name only the profile's own, D41), and of those the ones this machine has: a missing one is
+ * a summary line, as in `setup --profile`. Every other install is left as it is.
+ *
+ * NOT THE ONBOARDING (D33): no `link`, no login item, no console, no doctor — `setup --profile`
+ * does those. The build loop and its summary lines are `setupProfile`'s own (`profileBuilds`,
+ * `profileBuildLines`), so a failure on one host never stops the others (D16) and the settings a
+ * build changes back are listed (D14).
+ *
+ * In project scope, a host whose GLOBAL install is active gets one more line (D39): both root
+ * files load in the folder, and the global gates that still run there (`globalLayering`).
+ *
+ * `src` is the profile sources' seam; `deps` the side effects', as in `setupProfile`.
+ * @param {any} args
+ * @param {{ src?: { shippedDir?: string, personalDir?: string } }} [opts]
+ * @param {any} [deps]
+ */
+export function cmdProfileApply(args, { src = {} } = {}, deps = {}) {
+  const {
+    load = (n) => loadProfile(n, src), tools = null, build = driverMain, exportDrift = exportImprovements,
+    changes = profileChanges, configDir = (host) => HOSTS.find((h) => h.host === host).configDir(),
+    layering = (host) => globalLayering(host, { configDir }),
+  } = deps;
+  const loaded = load(args.name);
+  if (!loaded.ok) {
+    printErr(`[profile] ${loaded.error}\n`);
+    return 1;
+  }
+  const p = loaded.profile;
+  let picked = p.hosts;
+  if (args.hosts) {
+    picked = [...new Set(String(args.hosts).split(',').map((h) => h.trim()).filter(Boolean))];
+    const known = profileHosts();
+    const bad = picked.filter((h) => !p.hosts.includes(h));
+    if (!picked.length || bad.length) {
+      printErr(`geneseed: error: --hosts: ${bad.length ? bad.map((h) => `'${h}'`).join(', ') : 'none given'} `
+        + `${bad.some((h) => !known.includes(h)) ? 'is not a host' : 'is not in this profile'} `
+        + `(profile '${args.name}' lists: ${p.hosts.join(', ')})\n`);
+      return 2;
+    }
+  }
+  let project = null;
+  if (args.project) {
+    const r = checkProjectFolder(args.project);
+    if (r.error) {
+      printErr(`[profile] --project: ${r.error}\n`);
+      return 1;
+    }
+    project = r.root;
+  }
+  const found = foundHosts(tools ?? hostTools());
+  const listed = found.filter((t) => picked.includes(t.host));
+  const targets = listed.filter((t) => t.present);
+  const scope = project ? `project ${project}` : 'global';
+  printOut(`Geneseed profile apply - '${args.name}' (${loaded.source ?? 'shipped'}) - ${scope}\n\n`);
+  if (!targets.length) {
+    printOut('None of the AI coding tools this apply builds was found on this machine:\n');
+    for (const t of listed) printOut(`  --  ${t.label} - install: ${t.url}\n`);
+    printOut('\nInstall one of them, then run this command again. Nothing was built.\n');
+    return 1;
+  }
+  const results = profileBuilds(p, targets, { project, build, exportDrift, changes, configDir });
+  const out = ['', `Summary - profile '${args.name}', ${scope}`, ...profileBuildLines(results)];
+  for (const t of listed.filter((x) => !x.present)) out.push(`  --    ${t.label}: not found - install: ${t.url}`);
+  for (const t of found.filter((x) => x.present && !picked.includes(x.host))) {
+    out.push(`  --    ${t.label}: ${p.hosts.includes(t.host) ? 'not picked' : 'not in this profile'} - left as it is`);
+  }
+  if (project) {
+    for (const r of results.filter((x) => x.rc === 0)) {
+      const text = layeringText(r.label, layering(r.host), project);
+      if (text) out.push(`  note  ${text}`);
+    }
+  }
+  out.push('');
+  printOut(`${out.join('\n')}\n`);
+  return results.some((r) => r.rc !== 0) ? 1 : 0;
 }
