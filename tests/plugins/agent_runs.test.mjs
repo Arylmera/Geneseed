@@ -130,6 +130,27 @@ test("V1: a named child session's idle writes one ledger line", async () => {
   } finally { restore() }
 })
 
+// F8 of #574 holds with the ledger in: a TOP-LEVEL session (no parent link) records no run, and
+// with no memory store found its messages are never fetched. Only a child fetches early.
+test("V1: a top-level session writes no ledger line and fetches no messages without a store", async () => {
+  const { mod, restore, file } = await sandboxPlugin()
+  try {
+    delete process.env.GENESEED_MEMORY
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    const calls = []
+    const client = { session: {
+      get: async () => { calls.push("get"); return { data: { title: "work", agent: "tester" } } },
+      messages: async () => { calls.push("messages"); return MESSAGES },
+    } }
+    const hooks = await mod.server({ client, directory: path.dirname(path.dirname(file)) })
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "top" } } })
+    for (let i = 0; i < 40 && !calls.includes("get"); i += 1) await new Promise((r) => setTimeout(r, 25))
+    await new Promise((r) => setTimeout(r, 100))
+    assert.deepEqual(calls, ["get"])
+    assert.equal(await fs.readFile(file, "utf8").catch(() => null), null, "no ledger line for a top-level session")
+  } finally { restore() }
+})
+
 test("V2: a named child session's end writes one ledger line, V2 message shape", async () => {
   const { mod, restore, file } = await sandboxPlugin()
   const queue = []
