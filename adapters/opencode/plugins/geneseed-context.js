@@ -1382,14 +1382,75 @@ function runsUnpiped(command, line) {
   return false;
 }
 
-// The twin of hooks-done.mjs's `groupPasses`: a form runs unpiped, and no flag in `refuse`
-// skips the tests in the segment that ran it. Held equal by tests/plugins/context_done.test.mjs.
-function groupPasses(command, g) {
-  if (!g.forms.some((f) => runsUnpiped(command, f))) return false
+// `normalizeRun` is js/hosts/hooks-done.mjs's, copied by `node tests/twins.mjs --write`.
+function normalizeRun(command, sameProject) {
+  const cmd = String(command).replace(/[ \t]+/g, ' ');
+  return cmd.split(/(&&|\|\||[|;\n])/).map((seg, k) => {
+    if (k % 2) return seg;
+    const toks = seg.trim().match(/(?:"[^"]*"|'[^']*'|[^ "']|["'])+/g);
+    if (!toks) return seg;
+    const [tool] = toks;
+    const test = tool === 'node' && toks.includes('--test');
+    const out = [tool];
+    let opts = true;
+    for (let i = 1; i < toks.length; i += 1) {
+      const t = toks[i];
+      if (t === '--') opts = false;
+      if (opts && tool === 'npm') {
+        if (t === '--prefix' && i + 1 < toks.length && sameProject(toks[i + 1])) { i += 1; continue; }
+        if (t.startsWith('--prefix=') && sameProject(t.slice(9))) continue;
+      }
+      if (tool === 'git' && out.length === 1 && t === '-C' && i + 1 < toks.length && sameProject(toks[i + 1])) { i += 1; continue; }
+      if (opts && test) {
+        if (/^--test-concurrency=\d+$/.test(t)) continue;
+        if (t === '--test-concurrency' && /^\d+$/.test(toks[i + 1] ?? '')) { i += 1; continue; }
+      }
+      out.push(t);
+    }
+    if (out.length === toks.length) return seg;
+    return `${seg.startsWith(' ') ? ' ' : ''}${out.join(' ')}${seg.endsWith(' ') ? ' ' : ''}`;
+  }).join('');
+}
+
+// The twin of hooks-done.mjs's `groupPasses`: both sides normalized (`normalizeRun`), a form
+// runs unpiped, and no flag in `refuse` skips the tests in the segment that ran it. Held equal
+// by tests/plugins/context_done.test.mjs.
+function groupPasses(command, g, sameProject = () => false) {
+  const run = normalizeRun(command, sameProject)
+  const forms = g.forms.map((f) => normalizeRun(f, sameProject))
+  if (!forms.some((f) => runsUnpiped(run, f))) return false
   if (!g.refuse) return true
-  return String(command).replace(/[ \t]+/g, " ").split(/&&|\|\||;|\n/).map((s) => s.trim())
+  return run.split(/&&|\|\||;|\n/).map((s) => s.trim())
     .some((s) => !s.includes("|") && !g.refuse.test(s)
-      && g.forms.some((f) => s === f || s.startsWith(`${f} `)))
+      && forms.some((f) => s === f || s.startsWith(`${f} `)))
+}
+
+// The twin of hooks-done.mjs's `projectDir`, async and over a known list: the `dirs` (as
+// `normalizeRun` hands them, quotes and all) that name exactly the root of a worktree of the
+// repository at `root` — the same shared `.git` — resolved against `cwd`. A Set, so the sync
+// `normalizeRun` can ask it. Case-blind on Windows; a Git Bash `/c/...` path is not one.
+async function projectDirs(dirs, root, cwd) {
+  const key = (p) => (process.platform === "win32" ? p.toLowerCase() : p)
+  const commonOf = async (top) => {
+    const dotgit = path.join(top, ".git")
+    if (!(await fs.stat(dotgit)).isFile()) return key(dotgit)
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(await fs.readFile(dotgit, "utf8"))
+    if (!m) throw new Error("no gitdir")
+    const gitdir = path.resolve(top, m[1])
+    const rel = await fs.readFile(path.join(gitdir, "commondir"), "utf8").catch(() => null)
+    return key(rel === null ? gitdir : path.resolve(gitdir, rel.trim()))
+  }
+  const ok = new Set()
+  let common
+  try { common = await commonOf(root) } catch { return ok }
+  for (const dir of new Set(dirs)) {
+    const bare = /^(["'])(.*)\1$/.exec(dir)?.[2] ?? dir
+    if (!bare) continue
+    const abs = path.resolve(cwd, bare)
+    const top = await gitRootOf(abs)
+    try { if (top && key(top) === key(abs) && await commonOf(abs) === common) ok.add(dir) } catch { /* not one */ }
+  }
+  return ok
 }
 
 // An `apply_patch` call names its targets only in `patchText` markers. Copied from
@@ -1427,7 +1488,7 @@ function patchSections(patchText) {
 // binary, 2026-11), but V2 is not judged. Whether V1's bash tool has a background mode is
 // UNVERIFIED (no V1 binary was inspected); if it has one, a launch would pass here, since only a
 // numeric non-zero `metadata.exit` refuses a completed call.
-function doneOwed(messages, checks, root) {
+async function doneOwed(messages, checks, root) {
   const groups = checks.map((c) => (typeof c === "string" ? { label: c, forms: [c] } : c))
   const prompts = []
   messages.forEach((m, i) => {
@@ -1456,14 +1517,21 @@ function doneOwed(messages, checks, root) {
     lastEdit = i
   })
   if (lastEdit === -1) return []
-  const passed = new Set()
+  const runs = []
   for (const p of tools.slice(lastEdit + 1)) {
     const command = DONE_SHELL_TOOLS.has(String(p.tool).toLowerCase()) && p.state.input?.command
     if (typeof command !== "string" || p.state.status !== "completed") continue
     const exit = p.state.metadata?.exit
     if (typeof exit === "number" && exit !== 0) continue
-    for (const g of groups) if (groupPasses(command, g)) passed.add(g.label)
+    runs.push(command)
   }
+  // The dirs `normalizeRun` would ask about, resolved once off disk (it is sync, this reads async).
+  const asked = []
+  for (const c of [...runs, ...groups.flatMap((g) => g.forms)]) normalizeRun(c, (d) => { asked.push(d); return false })
+  const ok = await projectDirs(asked, root, root)
+  const same = (d) => ok.has(d)
+  const passed = new Set()
+  for (const command of runs) for (const g of groups) if (groupPasses(command, g, same)) passed.add(g.label)
   return groups.map((g) => g.label).filter((l) => !passed.has(l))
 }
 
@@ -1642,7 +1710,7 @@ export const GeneseedContext = async (ctx) => {
         if (await doneGateOff()) return
         const { root: gitRoot, source, blocking, checks } = await doneChecks(root)
         if (!checks.length) return
-        const owed = doneOwed(output.messages, checks, gitRoot)
+        const owed = await doneOwed(output.messages, checks, gitRoot)
         if (!owed.length) return
         const stamp = Date.now()
         output.messages.push({

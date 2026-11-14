@@ -48,7 +48,8 @@
  *     whose result is not an error (a denied write changed nothing);
  *   - a pass is a Bash/PowerShell call whose command contains one of the check's forms UNPIPED (a pipe
  *     takes the exit code of its last stage: `npm test | tail` exits 0 on a red suite), not MASKED
- *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), and whose
+ *     after it (`|| true`, `; exit 0` — see `runsUnpiped`), compared after `normalizeRun` takes
+ *     `npm --prefix <project>`, `git -C <project>` and `--test-concurrency N` off both sides, and whose
  *     result is not `is_error` — every non-zero exit, denial and timeout carries it (checked on
  *     14 000+ real Claude Code results, 2026-10-17);
  *   - a BACKGROUND run (`run_in_background: true`, or moved there after its foreground timeout)
@@ -85,7 +86,7 @@ import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSy
 import path from 'node:path';
 import { printOut as out, printErr as err } from '../lib/fs.mjs';
 import { within } from '../lib/paths.mjs';
-import { gitRootOf } from './gitref.mjs';
+import { gitCommonDirOf, gitRootOf } from './gitref.mjs';
 import { recordGate } from './hooks.mjs';
 import { ADVISORY_VERB } from './hosts.mjs';
 import { DONE_LIST, editPairs, isTestPath, splitLines, tailReader, weakenedBy } from './hooks-prims.mjs';
@@ -150,18 +151,88 @@ export function runsUnpiped(command, line) {
 }
 
 /**
+ * `command` with the flags that name WHERE a check runs, or how many workers run it, taken out,
+ * so a check line and the command that proves it compare on what is tested (user decision
+ * 2026-11-14: workers in worktrees ran `npm --prefix <worktree> run lint` and the suite at the
+ * default concurrency, all green, and the gate blocked them). Applied to both sides before the
+ * prefix match (`groupPasses`). Removed, and nothing else:
+ *   - `--prefix <dir>` / `--prefix=<dir>` in a segment opened by `npm`, before any `--`;
+ *   - `-C <dir>` right after `git` (its global options only, so `make -C` and `tar -C` stay);
+ *   - `--test-concurrency=N` / `--test-concurrency N` (N digits) in a `node` segment holding `--test`.
+ * A `<dir>` is removed only when `sameProject(dir)` says it names the judged project (`projectDir`):
+ * a check run in another project still counts as not run. Separators (`&&`, `||`, `|`, `;`,
+ * newlines) are kept as they stand, so the piping and masking rules of `runsUnpiped` read the
+ * same line. shortcut: a segment is tokenized on spaces with quoted runs kept whole; a segment
+ * left unchanged keeps its text byte for byte. Pure: the plugin twin is a copy.
+ */
+export function normalizeRun(command, sameProject) {
+  const cmd = String(command).replace(/[ \t]+/g, ' ');
+  return cmd.split(/(&&|\|\||[|;\n])/).map((seg, k) => {
+    if (k % 2) return seg;
+    const toks = seg.trim().match(/(?:"[^"]*"|'[^']*'|[^ "']|["'])+/g);
+    if (!toks) return seg;
+    const [tool] = toks;
+    const test = tool === 'node' && toks.includes('--test');
+    const out = [tool];
+    let opts = true;
+    for (let i = 1; i < toks.length; i += 1) {
+      const t = toks[i];
+      if (t === '--') opts = false;
+      if (opts && tool === 'npm') {
+        if (t === '--prefix' && i + 1 < toks.length && sameProject(toks[i + 1])) { i += 1; continue; }
+        if (t.startsWith('--prefix=') && sameProject(t.slice(9))) continue;
+      }
+      if (tool === 'git' && out.length === 1 && t === '-C' && i + 1 < toks.length && sameProject(toks[i + 1])) { i += 1; continue; }
+      if (opts && test) {
+        if (/^--test-concurrency=\d+$/.test(t)) continue;
+        if (t === '--test-concurrency' && /^\d+$/.test(toks[i + 1] ?? '')) { i += 1; continue; }
+      }
+      out.push(t);
+    }
+    if (out.length === toks.length) return seg;
+    return `${seg.startsWith(' ') ? ' ' : ''}${out.join(' ')}${seg.endsWith(' ') ? ' ' : ''}`;
+  }).join('');
+}
+
+/**
+ * The `sameProject` of `normalizeRun` for the project at `root`, a dir resolved against `cwd`:
+ * true when it is exactly the root of a worktree of the same repository (the same shared `.git`,
+ * `gitCommonDirOf`) — `root` itself, its main worktree or another linked one. A subfolder, another
+ * repository or a submodule is false. Compared case-blind on Windows. shortcut: a Git Bash path
+ * (`/c/Users/...`) does not resolve to a drive path here, so it reads as another project — the
+ * closed direction.
+ */
+export function projectDir(root, cwd) {
+  const key = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+  let common;
+  try { common = key(gitCommonDirOf(root)); } catch { return () => false; }
+  return (dir) => {
+    const bare = /^(["'])(.*)\1$/.exec(dir)?.[2] ?? dir;
+    if (!bare) return false;
+    const abs = path.resolve(cwd, bare);
+    const top = gitRootOf(abs);
+    if (!top || key(top) !== key(abs)) return false;
+    try { return key(gitCommonDirOf(abs)) === common; } catch { return false; }
+  };
+}
+
+/**
  * True when `command` proves the check group `g`: one of its forms runs unpiped and unmasked
  * (`runsUnpiped`), and — when the group names `refuse`, the flags that skip the tests
  * (`mvn install -DskipTests`, `gradle build -x test`, `cargo test --no-run`) — some unpiped
- * segment opening with a form carries none of them. shortcut: segments split on `&&`, `||`, `;`
- * and newlines without reading quotes; a quoted separator only makes a refusal more likely.
+ * segment opening with a form carries none of them. Both sides go through `normalizeRun` first;
+ * without `sameProject` no `--prefix`/`-C` dir counts, so only the concurrency flag goes.
+ * shortcut: segments split on `&&`, `||`, `;` and newlines without reading quotes; a quoted
+ * separator only makes a refusal more likely.
  */
-export function groupPasses(command, g) {
-  if (!g.forms.some((f) => runsUnpiped(command, f))) return false;
+export function groupPasses(command, g, sameProject = () => false) {
+  const run = normalizeRun(command, sameProject);
+  const forms = g.forms.map((f) => normalizeRun(f, sameProject));
+  if (!forms.some((f) => runsUnpiped(run, f))) return false;
   if (!g.refuse) return true;
-  return String(command).replace(/[ \t]+/g, ' ').split(/&&|\|\||;|\n/).map((s) => s.trim())
+  return run.split(/&&|\|\||;|\n/).map((s) => s.trim())
     .some((s) => !s.includes('|') && !g.refuse.test(s)
-      && g.forms.some((f) => s === f || s.startsWith(`${f} `)));
+      && forms.some((f) => s === f || s.startsWith(`${f} `)));
 }
 
 const NOTE_OPEN = '<task-notification>';
@@ -367,13 +438,14 @@ function missingChecks({ calls, results, background, finished }, checks, root, c
   calls.forEach((c, i) => { if (editTarget(c, results, root, cwd)) lastEdit = i; });
   if (lastEdit === -1) return [];
   const passed = new Set();
+  const same = projectDir(root, cwd);
   calls.slice(lastEdit + 1).forEach((c) => {
     const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
     // A call with no result yet (the host has not flushed it) is not a pass.
     if (typeof command !== 'string' || results.get(c.id) !== false) return;
     // A background launch's result only says it started: its notification is the verdict.
     if (background.has(c.id) && finished.get(c.id) !== true) return;
-    for (const g of groups) if (groupPasses(command, g)) passed.add(g.label);
+    for (const g of groups) if (groupPasses(command, g, same)) passed.add(g.label);
   });
   return groups.map((g) => g.label).filter((l) => !passed.has(l));
 }
@@ -438,15 +510,16 @@ export const turnCeilingReached = (state, opening) =>
  * the last background run of one of its forms, launched with no completion seen, or completed with
  * anything but exit 0. A check never run in the background has no entry.
  */
-function backgroundOwed({ calls, results, background, finished }, checks, owedLabels, lastEdit) {
+function backgroundOwed({ calls, results, background, finished }, checks, owedLabels, lastEdit, root, cwd) {
   const states = new Map();
+  const same = projectDir(root, cwd);
   let after = lastEdit === null;
   for (const c of calls) {
     if (!after) { after = c.id === lastEdit; continue; }
     const command = SHELL_TOOLS.has(c.name) && c.input && c.input.command;
     if (typeof command !== 'string' || results.get(c.id) !== false || !background.has(c.id)) continue;
     for (const g of checks) {
-      if (!owedLabels.has(g.label) || !groupPasses(command, g)) continue;
+      if (!owedLabels.has(g.label) || !groupPasses(command, g, same)) continue;
       states.set(g.label, finished.has(c.id) ? (finished.get(c.id) ? 'passed' : 'failed') : 'pending');
     }
   }
@@ -571,7 +644,7 @@ export function doneGate(meta, args, install, read = tailReader()) {
     const active = meta.stop_hook_active === true;
     const capPath = install ? capFile(install, meta) : null;
     // The owed checks whose proof is a background run still pending, or one that reported a failure.
-    const bg = owed.flatMap((r) => [...backgroundOwed(turn, r.checks, new Set(r.missing), lastEditId(turn, [r.root], at))]
+    const bg = owed.flatMap((r) => [...backgroundOwed(turn, r.checks, new Set(r.missing), lastEditId(turn, [r.root], at), r.root, at)]
       .map(([l, st]) => [`${tag(r)}${l}`, st]));
     const verdict = bg.map(([l, st]) => `${l}=${st}`).sort().join('\n');
     // Without an install or a session id there is nowhere to count: one block per turn, as before.

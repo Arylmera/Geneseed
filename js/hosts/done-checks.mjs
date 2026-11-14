@@ -82,7 +82,9 @@ export const INFERRED_FROM = ['package.json', ...MANIFEST_CHECKS.map(([f]) => /*
  *   - the git root's manifests only — a monorepo's subprojects (`pnpm -r test`,
  *     `./gradlew :app:test`, `mvn -pl core test`) are neither inferred nor matched;
  *   - a sibling script (`npm run test:unit`) or a runner called directly (`npx vitest`);
- *   - a prefix before the command (`CI=1 npm test`, `mvn -q test`): forms match verbatim.
+ *   - a prefix before the command (`CI=1 npm test`, `mvn -q test`): forms match verbatim, save
+ *     for `npm --prefix <project>`, `git -C <project>` and `--test-concurrency N`, which
+ *     `normalizeRun` (`./hooks-done.mjs`) takes off both sides.
  */
 export function inferDoneChecks(root) {
   const has = (f) => existsSync(path.join(root, f));

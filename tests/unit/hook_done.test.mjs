@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { doneDecide, groupPasses, nextBlock, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
+import { doneDecide, groupPasses, nextBlock, projectDir, runsUnpiped, weakenedIn } from '../../js/hosts/hooks-done.mjs';
 import { doneLine, inferDoneChecks } from '../../js/hosts/done-checks.mjs';
 import { isTestPath, tailReader, weakenedBy } from '../../js/hosts/hooks-prims.mjs';
 import { readTail } from '../../js/lib/fs.mjs';
@@ -532,6 +532,90 @@ test('groupPasses: a flag that skips the tests refuses the pass', () => {
     [cargo, 'cargo test --release', true],
   ];
   for (const [g, command, want] of rows) assert.equal(groupPasses(command, g), want, command);
+});
+
+// The match normalizes both sides (`normalizeRun`, user decision 2026-11-14): `npm --prefix
+// <dir>`, `git -C <dir>` and `node --test --test-concurrency N` name where a check runs, or how
+// many workers run it, not what it tests. A `<dir>` counts only when it is exactly the root of a
+// worktree of the judged repository. Built off disk with plain files, no git: a main worktree
+// (`.git/` dir), a linked one (`.git` FILE -> `<main>/.git/worktrees/wt`, `commondir` `../..`),
+// an unrelated repository, and a subfolder of the main one.
+function worktreeFixture() {
+  const sb = makeSandbox();
+  const main = path.join(sb.path, 'main');
+  const wt = path.join(sb.path, 'wt');
+  const other = path.join(sb.path, 'other');
+  const priv = path.join(main, '.git', 'worktrees', 'wt');
+  fs.mkdirSync(priv, { recursive: true });
+  fs.mkdirSync(path.join(main, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(priv, 'commondir'), '../..\n');
+  fs.mkdirSync(wt, { recursive: true });
+  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${priv}\n`);
+  fs.mkdirSync(path.join(other, '.git'), { recursive: true });
+  return { sb, main, wt, other };
+}
+
+test('groupPasses: --prefix, -C and --test-concurrency are normalized away, nothing else', () => {
+  const { sb, main, wt, other } = worktreeFixture();
+  try {
+    const SUITE = 'node --test --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"';
+    // Each row: the check line, the command, then whether it proves the check (judged at `wt`).
+    const rows = [
+      // The forms seen from worktree workers, all green, all blocked before the fix.
+      ['npm run lint', `npm --prefix ${wt} run lint`, true],
+      ['npm run lint', `npm --prefix=${wt} run lint`, true],
+      ['npm run lint', `npm --prefix "${wt}" run lint`, true],
+      ['npm run lint', `npm run lint --prefix ${wt}`, true],
+      ['npm run typecheck', `npm --prefix ${main} run typecheck`, true],    // the main worktree: same repo
+      ['npm run lint', 'npm --prefix . run lint', true],                     // relative, resolved at cwd
+      ['git status', `git -C ${wt} status`, true],
+      [SUITE, 'node --test --test-reporter=tap "tests/**/*.test.mjs"', true],
+      [SUITE, 'node --test --test-concurrency=1 --test-reporter=tap "tests/**/*.test.mjs"', true],
+      [SUITE, 'node --test --test-concurrency 4 --test-reporter=tap "tests/**/*.test.mjs"', true],
+      ['node --test --test-reporter=tap "tests/**/*.test.mjs"', SUITE, true],  // the line is normalized too
+      [SUITE, `npm --prefix ${wt} run lint && node --test --test-reporter=tap "tests/**/*.test.mjs"`, true],
+      // A dir that is not this repository's worktree root: not the same project.
+      ['npm run lint', `npm --prefix ${other} run lint`, false],
+      ['npm run lint', `npm --prefix ${path.join(main, 'sub')} run lint`, false],
+      ['npm run lint', `npm --prefix ${path.join(sb.path, 'missing')} run lint`, false],
+      ['git status', `git -C ${other} status`, false],
+      // Nothing else is loosened.
+      ['npm run lint', `npm --prefix ${wt} run lint:fix`, false],
+      ['npm run lint', `npm --prefix ${wt} run lint | tail`, false],
+      ['npm run lint', `npm --prefix ${wt} run lint || true`, false],
+      ['npm run lint', `npm run lint -- --prefix ${wt}`, true],                // after `--`: an argument, kept
+      ['npm run lint', `npm --verbose run lint`, false],                      // any other flag stays
+      ['make test', `make -C ${wt} test`, false],                             // `-C` only on git
+      [SUITE, 'node --test --test-reporter=tap tests/unit/a.test.mjs', false],  // the glob changed
+      [SUITE, 'node --test "tests/**/*.test.mjs"', false],                    // the reporter dropped
+      [SUITE, 'node --test --test-reporter=spec "tests/**/*.test.mjs"', false],  // the reporter changed
+      [SUITE, 'node --test --test-concurrency=x --test-reporter=tap "tests/**/*.test.mjs"', false],
+      [SUITE, 'node --test-concurrency=8 --test-reporter=tap "tests/**/*.test.mjs"', false],  // no --test
+    ];
+    const same = projectDir(wt, wt);
+    for (const [line, command, want] of rows) {
+      assert.equal(groupPasses(command, { label: line, forms: [line] }, same), want, `${line} <- ${command}`);
+    }
+    // With no project to compare against (the default), no dir counts: only the concurrency goes.
+    assert.equal(groupPasses(`npm --prefix ${wt} run lint`, { label: 'l', forms: ['npm run lint'] }), false);
+    assert.equal(groupPasses('node --test --test-reporter=tap "t"', { label: 's', forms: ['node --test --test-concurrency=8 --test-reporter=tap "t"'] }), true);
+    // Through the decision: a sub-agent's prefixed run in its worktree proves the worktree's check.
+    const turn = jsonl(prompt(), edit(path.join(wt, 'a.js')), bash(`npm --prefix ${wt} run lint`));
+    assert.deepEqual(doneDecide(turn, ['npm run lint'], wt, wt), []);
+    const elsewhere = jsonl(prompt(), edit(path.join(wt, 'a.js')), bash(`npm --prefix ${other} run lint`));
+    assert.deepEqual(doneDecide(elsewhere, ['npm run lint'], wt, wt), ['npm run lint']);
+  } finally {
+    sb.cleanup();
+  }
+});
+
+test('learn on Stop: a pending background run spelled with --prefix is named as still running', () => {
+  // `backgroundOwed` reads the same normalized match: without it, the block would not name it.
+  const r = project({ transcriptRows: [prompt(), editIn, (proj) => bgBash(`npm --prefix ${proj} run lint`)] });
+  assert.equal(r.rc, 0, r.err);
+  const verdict = JSON.parse(r.out);
+  assert.equal(verdict.decision, 'block');
+  assert.match(verdict.reason, /Still running in the background, with no completion seen: npm run lint;/);
 });
 
 test('learn on Stop: inferred checks are advisory — a systemMessage, never a block', () => {

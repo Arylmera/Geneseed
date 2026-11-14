@@ -66,6 +66,9 @@ test("the V1 transform reminds after an unproven edit, and only then", async () 
     ["an apply_patch moving a file into the project", [user("u1"), tool("apply_patch", { patchText: "*** Begin Patch\n*** Update File: ../a.js\n*** Move to: a.js\n*** End Patch" }), user("u2")], true],
     // No path derivable: counted, because a missed reminder is the worse error (fail-open gate).
     ["an edit whose target cannot be derived", [user("u1"), tool("patch", { patchText: "garbage" }), user("u2")], true],
+    // `--prefix` naming the project's own root is normalized away (`normalizeRun`); another dir is not.
+    ["the proof ran with --prefix <the project root>", [user("u1"), edit, tool("bash", { command: `npm --prefix "${repo}" run lint` }, "completed", { exit: 0 }), user("u2")], false],
+    ["the proof ran with --prefix <another dir>", [user("u1"), edit, tool("bash", { command: `npm --prefix "${tmp}" run lint` }, "completed", { exit: 0 }), user("u2")], true],
   ]
   for (const [what, messages, want] of rows) assert.equal(await reminded(messages), want, what)
 })
@@ -289,9 +292,9 @@ test("inferred checks: the V1 reminder says advisory, and any accepted form clea
 
 test("groupPasses stays in parity with js/hosts/hooks-done.mjs (twin), refusals included", async () => {
   const src = await fs.readFile(path.join(process.cwd(), "adapters/opencode/plugins/geneseed-context.js"), "utf8")
-  const fn = (name) => src.match(new RegExp(`function ${name}\\(command, (?:line|g)\\) \\{[\\s\\S]*?\\n\\}\\n`))?.[0]
-  assert.ok(fn("runsUnpiped") && fn("groupPasses"), "runsUnpiped or groupPasses not found in geneseed-context.js")
-  const twin = new Function(`${fn("runsUnpiped")}${fn("groupPasses")}; return groupPasses`)()
+  const fn = (name) => src.match(new RegExp(`function ${name}\\(command, [^\\n]*\\) \\{[\\s\\S]*?\\n\\}\\n`))?.[0]
+  assert.ok(fn("runsUnpiped") && fn("normalizeRun") && fn("groupPasses"), "runsUnpiped, normalizeRun or groupPasses not found in geneseed-context.js")
+  const twin = new Function(`${fn("runsUnpiped")}${fn("normalizeRun")}${fn("groupPasses")}; return groupPasses`)()
   const dir = await gitRepo("infer-refuse", { "pom.xml": "", "build.gradle": "", "Cargo.toml": "" })
   const [mvn, gradle, cargo] = nodeInfer(dir).checks
   const rows = [
@@ -303,6 +306,20 @@ test("groupPasses stays in parity with js/hosts/hooks-done.mjs (twin), refusals 
   for (const [g, command, want] of rows) {
     assert.equal(nodeGroupPasses(command, g), want, `node: ${command}`)
     assert.equal(twin(command, g), want, `twin: ${command}`)
+  }
+  // The normalization (`normalizeRun`), one predicate for both: `/wt` is the project, `/other` is not.
+  const SUITE = { label: "s", forms: ['node --test --test-concurrency=8 --test-reporter=tap "t/**"'] }
+  const LINT = { label: "l", forms: ["npm run lint"] }
+  const same = (d) => d === "/wt"
+  const norm = [
+    [LINT, "npm --prefix /wt run lint", true], [LINT, "npm --prefix=/wt run lint", true],
+    [LINT, "npm --prefix /other run lint", false], [LINT, "npm --prefix /wt run lint:fix", false],
+    [SUITE, 'node --test --test-reporter=tap "t/**"', true], [SUITE, 'node --test --test-concurrency=1 --test-reporter=tap "t/**"', true],
+    [SUITE, 'node --test --test-reporter=tap "t/a"', false], [SUITE, 'node --test "t/**"', false],
+  ]
+  for (const [g, command, want] of norm) {
+    assert.equal(nodeGroupPasses(command, g, same), want, `node: ${command}`)
+    assert.equal(twin(command, g, same), want, `twin: ${command}`)
   }
   // And through the real transform: a skipped-tests run leaves the reminder standing.
   const edit = tool("edit", { filePath: path.join(dir, "a.java") })
