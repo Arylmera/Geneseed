@@ -435,6 +435,9 @@ async function withFeedbackLock(file, fn) {
     try {
       handle = await fs.open(lock, "wx")
     } catch (e) {
+      // Windows: a lock unlinked while a handle is still open is "delete pending", and creating it
+      // again fails EPERM/EACCES, not EEXIST. A busy lock, not a fault: wait and retry.
+      if (["EPERM", "EACCES", "EBUSY"].includes(e?.code)) { await new Promise((r) => setTimeout(r, 10)); continue }
       if (e?.code !== "EEXIST") return false
       let stale = false
       try { stale = Date.now() - (await fs.stat(lock)).mtimeMs > 10000 } catch { continue }
@@ -465,7 +468,14 @@ async function addFeedback(file, bullets, cap) {
     if (next === null) return false
     const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
     await fs.writeFile(tmp, next, "utf8")
-    try { await fs.rename(tmp, file) } catch (e) { await fs.unlink(tmp).catch(() => {}); throw e }
+    // A rename onto a file a reader holds open fails EPERM on Windows for a moment: three tries.
+    for (let i = 0; ; i += 1) {
+      try { await fs.rename(tmp, file); break } catch (e) {
+        if (i < 2 && e?.code === "EPERM") { await new Promise((r) => setTimeout(r, 10)); continue }
+        await fs.unlink(tmp).catch(() => {})
+        throw e
+      }
+    }
     return true
   })
 }

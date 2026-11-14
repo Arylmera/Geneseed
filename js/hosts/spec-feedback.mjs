@@ -227,7 +227,11 @@ export function withLock(file, fn) {
     try {
       fd = openSync(lock, 'wx');
     } catch (e) {
-      if (/** @type {NodeJS.ErrnoException} */ (e).code !== 'EEXIST') return false;
+      const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+      // Windows refuses to create a file whose last holder just unlinked it while a handle was
+      // still open (delete pending): EPERM or EACCES, not EEXIST. That is a busy lock, not a fault.
+      if (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY') { Atomics.wait(SLEEPER, 0, 0, LOCK_WAIT_MS); continue; }
+      if (code !== 'EEXIST') return false;
       let stale = false;
       try { stale = Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS; } catch { continue; /* released */ }
       if (stale) { breakStale(lock); continue; }
@@ -248,7 +252,15 @@ export function withLock(file, fn) {
 function writeAtomic(file, text) {
   const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
   writeFileSync(tmp, text, 'utf8');
-  try { renameSync(tmp, file); } catch (e) { try { unlinkSync(tmp); } catch { /* gone */ } throw e; }
+  // A rename onto a file a reader (an agent at step 0, a scanner) holds open fails EPERM on
+  // Windows for a moment: three tries, 10 ms apart, then the error.
+  for (let i = 0; ; i += 1) {
+    try { renameSync(tmp, file); return; } catch (e) {
+      if (i < 2 && /** @type {NodeJS.ErrnoException} */ (e).code === 'EPERM') { Atomics.wait(SLEEPER, 0, 0, LOCK_WAIT_MS); continue; }
+      try { unlinkSync(tmp); } catch { /* gone */ }
+      throw e;
+    }
+  }
 }
 
 /** Add `bullets` to one notes file, under its lock. A file that is not UTF-8 is left whole (the fold's rule). */
