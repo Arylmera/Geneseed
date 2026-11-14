@@ -27,6 +27,18 @@
 
 **Geneseed compiles your agent's rules instead of asking you to write them.** One source in `src/` renders into a ready-made harness for OpenCode, Claude Code, Bob, OpenClaude, or any `AGENT.md` tool: a constitution of laws and doctrines, a roster of capability agents, native skills, a memory convention — and, wherever the host has a hook surface, gates that *enforce* the laws at the tool boundary instead of hoping the model remembers them.
 
+**New here? One line, no questions** — it clones Geneseed and installs the [`starter` profile](#-new-to-ai-agents-one-line-no-questions). You need git and Node ≥ 22.7.
+
+```bat
+git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && .\install.cmd --profile starter
+```
+
+```bash
+git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
+```
+
+The first line is for Windows (cmd or PowerShell 7), the second for macOS and Linux. Windows PowerShell 5.1 has no `&&`: there, put `;` in its place. Want to choose the theme, the host and the rest yourself? Run the wizard instead:
+
 ```bash
 npx geneseed setup
 ```
@@ -78,11 +90,16 @@ geneseed-build --theme imperial  # Warhammer 40k voice, identical structure
 
 Clone Geneseed where you like, then run one command at the root of the clone. It installs the **`starter`** profile into every AI coding tool it finds (OpenCode, IBM Bob, Claude Code, OpenClaude), puts `geneseed` on your `PATH`, sets the web console to start at login, starts it, runs the health check and prints the console's address. It asks nothing.
 
-```powershell
-git clone https://github.com/Arylmera/Geneseed.git
-cd Geneseed
-.\install.cmd --profile starter      # Windows (cmd or PowerShell)
-./install --profile starter          # macOS, Linux
+Windows (cmd or PowerShell 7; on Windows PowerShell 5.1, put `;` in place of each `&&`):
+
+```bat
+git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && .\install.cmd --profile starter
+```
+
+macOS, Linux:
+
+```bash
+git clone https://github.com/Arylmera/Geneseed.git && cd Geneseed && ./install --profile starter
 ```
 
 `starter` is a neutral voice, a candid peer posture, the agent working each task itself, and every guardrail armed except the ownership gate. Run the same line again to update and repair. A team adds its own profile to [`profiles/`](profiles/) by pull request; `geneseed profile save <name> --from claude-global` writes one from your own install. See [Install profiles](docs/reference/profiles.md).
