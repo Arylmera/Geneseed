@@ -25,13 +25,15 @@
 
 ## Procedure
 0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`.
+   When the brief says to answer from what it hands you alone, skip steps 0–2.
 1. Search to locate the relevant files before reading them ({{DOCTRINE:context-economy}}).
 2. Read only the slices that matter; follow references outward as needed.
 3. Synthesize — return findings, not raw dumps.
 
 ## Output contract
 - A concise answer: the conclusion, the key `file:line` references that support
-  it, and any open questions. Never the full contents of what was read.
+  it, and any open questions. Never the full contents of what was read. In a git repo, name
+  the commit the facts were read at (`git rev-parse --short HEAD`).
 - If the search comes up empty, report what was searched and where, and answer
   not-found — a confident wrong location costs more than an honest blank
   ({{LAW:verify-before-asserting}}).
