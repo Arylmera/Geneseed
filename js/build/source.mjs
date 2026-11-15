@@ -656,16 +656,17 @@ export const GATE_SWITCHES = [
  * is about 6 000 characters on a 200k model and 30 000 on a 1M one. Over budget, a skill with
  * low usage loses its description, so a fresh install on a 200k model listed none of
  * Geneseed's descriptions (measured 2026-11-15: a fresh neutral emit plus the 14 bundled skills
- * is 16 335 characters at the default 1 536-character cap).
+ * is 11 482 characters at the default 1 536-character cap, the bundled skills' long texts most
+ * of it, even with Geneseed's own lines at 80 characters or less).
  *
  * THE VALUES (simulated 2026-11-15 on a fresh emit, no usage; the docs keep the table):
- * - `200k`: `skillListingMaxDescChars` 80 fits all 46 descriptions in 5 736 of 6 000
- *   characters. That 264-character slack is too thin: one shipped kit (spring-boot) or three
- *   third-party skills push descriptions out. `skillListingBudgetFraction` 0.013 (7 800
- *   characters) keeps all of them with a kit and fifteen third-party skills beside it. The
+ * - `200k`: `skillListingMaxDescChars` 80 fits all 46 descriptions in 5 605 of 6 000
+ *   characters. That 395-character slack is too thin: with one shipped kit (spring-boot) it is
+ *   113, and five third-party skills push descriptions out. `skillListingBudgetFraction` 0.013
+ *   (7 800 characters) keeps all of them with twenty third-party skills beside them. The
  *   fraction is a ceiling, not a cost: a listing that fits uses only its own length, so the
  *   extra 1 800 characters (about 600 tokens, 0.3 % of the window) are spent only when filled.
- * - `1m`: a fresh install fits even at the default cap (16 335 of 30 000), so the fraction stays
+ * - `1m`: a fresh install fits even at the default cap (11 482 of 30 000), so the fraction stays
  *   at its default. The cap 120 is for a machine with many skills: this laptop's 143-skill
  *   listing (47 617 characters) fits whole at 19 427 with it, where today 53 lose their text.
  *
