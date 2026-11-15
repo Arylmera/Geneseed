@@ -125,6 +125,12 @@ id), `cwd` (the root workspace, with a lower-case drive letter on Windows), and 
   parent's hooks with the parent's `session_id` and no sub-agent id. Activity therefore shows
   such a sub-agent as a branch with no id, which the next `Stop` closes, and marks the session
   `attribution: false`: its files cannot be told from the parent's.
+- `spawn_subagent` is registered only when `session.subagents` is on (the default), and only
+  for a mode whose groups hold `subagent`: `agent` and `plan` get every subagent, `ask` only
+  `explore`. A subagent can never spawn another (`SUBAGENT_FORBIDDEN_TOOLS` holds
+  `spawn_subagent`), so the depth is one level. Bob Shell, which reads the same `~/.bob`
+  install, reports that it has no subagents at all (reported by Bob Shell itself, not read in
+  code). So Foreman mode on Bob runs as direct wherever the tool is absent.
 - After a compaction, Bob fires `SessionStart` with `source: "compact"`. The writer counts a
   compaction there; any other Bob `SessionStart` is not recorded, because the first prompt's
   `UserPromptSubmit` records the session right after it.

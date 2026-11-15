@@ -40,7 +40,7 @@ The minimum roster per task type. The crew lead chooses the crew from the whole 
 | Claude Code | yes — a subagent started from the main conversation runs in the background by default | yes — the install caps nesting at two layers (`env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"`; Claude Code allows three by default), and a background subagent keeps the `Agent` tool | crew lead → crew subagents. Not the `Workflow` tool: it refuses without the user's opt-in for that task, and the mode is not one |
 | OpenCode | the `task` tool starts a child session; whether the parent's turn waits is unverified | unverified — `permission.task` decides which subagents an agent may start; the install caps nesting at two (`subagent_depth: 2`) | crew lead → crew subagents where it holds `task`; else roles in turn. A saved `workflow` script (no opt-in needed) may stand in for the crew lead |
 | OpenClaude | expected as Claude Code (it reads Claude's subagent dialect); unverified | unverified | as Claude Code; else roles in turn |
-| Bob | unverified — Bob reads Claude's subagent dialect | unverified | crew lead plays the roles in turn |
+| Bob | unverified on Bob IDE, where `spawn_subagent` exists only in a mode whose groups hold `subagent`; Bob Shell has no subagents (reported by Bob Shell itself, not read in code) | no — a Bob subagent cannot spawn subagents (`spawn_subagent` is forbidden to subagents, Bob IDE 2.2.3), and Bob Shell has none | crew lead plays the roles in turn |
 
 Check, do not assume: before the first pipeline of a session on a host marked unverified, look at the tools you and the crew lead actually hold ({{DOCTRINE:tool-discovery}}). When a fact above proves wrong, report it through this {{SKILL}}'s self-improvement loop.
 

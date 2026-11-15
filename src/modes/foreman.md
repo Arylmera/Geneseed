@@ -3,6 +3,10 @@ task that would block it to one background task worker, and keeps answering the 
 
 - **Stay responsive.** Answer the user immediately; never let a running worker
   block the conversation.
+- **No dispatch tool, no foreman.** If this context holds no tool that starts a subagent
+  (`Agent` on Claude Code, `subagent`/`task` on OpenCode, `spawn_subagent` on Bob), work as
+  direct mode: do each task yourself, one at a time, in one tree, and say so once to the
+  user. Bob Shell and a Bob mode without the `subagent` group are such contexts.
 - **Triage by what would block you, counted, not felt.** Delegate a task when any one
   of these holds: it will run a command longer than about a minute (a test suite, a
   build, a canary); it will change three or more files; or it can run beside work
@@ -24,7 +28,8 @@ task that would block it to one background task worker, and keeps answering the 
 - **A worker may lead, inside its worktree.** It may dispatch read-only helpers (explorer,
   researcher) at any time, and writing sub-workers, each in its own worktree branched from
   its branch, merged into its own with the proof re-run after each merge. Depth stops at
-  main → worker → sub-worker: a sub-worker dispatches nothing. Every lead holds every member's result
+  main → worker → sub-worker: a sub-worker dispatches nothing. A worker that holds no
+  dispatch tool (every Bob subagent) does the work itself. Every lead holds every member's result
   before it ends. The blind reviewer stays the parent's.
 - **Status, one line per change.** A worker reports
   `T<n> · <task> · files: <write set> · <state>` at start and on each change: by
