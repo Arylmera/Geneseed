@@ -30,17 +30,22 @@
 import assert from 'node:assert/strict';
 
 import path from 'node:path';
-import test from 'node:test';
+import test, { after, before } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import fs from 'node:fs';
+
+import { main as driverMain } from '../../js/build/driver.mjs';
+import { claudeConfigDir } from '../../js/hosts/hosts.mjs';
 
 import {
   INLINE_ACTIONS, JobManager, PORTED_ACTIONS, actionCommands, npmUpdateCommands, updatePlan,
 } from '../../js/web/jobs.mjs';
 import { apiDeployCmd } from '../../js/web/actions.mjs';
 import { webState } from '../../js/web/state.mjs';
-import { makeSandbox } from '../helpers/sandbox.mjs';
+import {
+  RELOCATION_VARS, makeSandbox, restoreProcessHome, sandboxProcessHome,
+} from '../helpers/sandbox.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 const rel = (p) => path.relative(ROOT, p).split(path.sep).join('/');
@@ -189,6 +194,71 @@ test('a build row given no pack selection states ALL packs, not the config defau
   assert.equal(narrowed[narrowed.indexOf('--exclude-rules') + 1], 'process.5',
     'the build row drops an exclusion it was given');
 });
+
+// THE MACHINE'S GLOBAL INSTALL IS PART OF A DEPLOY'S INPUT. A project install with no
+// `--context-window` takes the window of the machine's global Claude Code install
+// (`installedDefaults().contextWindow`, read by `bodyContextWindow`), so `apiDeployCmd` answers
+// differently on a machine whose real `~/.claude` says `1m` — the first draft of this test read
+// the developer's home and failed on any such machine while CI, which has no global install,
+// stayed green. The home and every config-dir variable are therefore sandboxed for the whole
+// file, and each test says which global install it stands on.
+const SAVED_RELOCATION = {};
+before(() => {
+  sandboxProcessHome();
+  for (const v of RELOCATION_VARS) { SAVED_RELOCATION[v] = process.env[v]; delete process.env[v]; }
+});
+after(() => {
+  for (const [v, val] of Object.entries(SAVED_RELOCATION)) {
+    if (val === undefined) delete process.env[v]; else process.env[v] = val;
+  }
+  restoreProcessHome();
+});
+
+/** Build a global Claude Code install into the sandboxed home, window `cw`; undo with the returned fn. */
+function globalClaudeInstall(cw) {
+  const dir = claudeConfigDir();
+  const o = process.stdout.write; const e = process.stderr.write;
+  process.stdout.write = () => true; process.stderr.write = () => true;
+  let rc;
+  try {
+    rc = driverMain(['--emit', 'claude-global', '--theme', 'neutral', ...(cw ? ['--context-window', cw] : [])]);
+  } finally { process.stdout.write = o; process.stderr.write = e; }
+  assert.equal(rc, 0, `the sandboxed global claude install (${cw}) did not build`);
+  return () => fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/** `apiDeployCmd` for an opencode deploy into a fresh target, its argv tail with the target masked. */
+function deployTail() {
+  // `makeSandbox`, not `mkdtempSync`: see the comment in the test below.
+  const sb = makeSandbox('webjobs-');
+  const td = sb.path;
+  try {
+    const plan = apiDeployCmd(webState('neutral', td), { host: 'opencode', path: td, theme: 'imperial',
+      footprint: 'lean', posture: 'mentor', mode: 'foreman' });
+    assert.equal(plan.error, undefined, `deploy refused a body it should accept: ${plan.error}`);
+    return plan.cmd.slice(2).map(String).map((s) => s.split(td).join('<TARGET>'));
+  } finally { sb.cleanup(); }
+}
+
+const FROZEN_DEPLOY_HEAD = ['--theme', 'imperial', '--emit', 'opencode', '--out', '<TARGET>',
+  '--root', '<TARGET>', '--footprint', 'lean', '--posture', 'mentor', '--mode', 'foreman',
+  '--doctrines', 'craft,rigor,ops,process,comms', '--exclude-rules', 'none'];
+
+// Both directions, written out. A global 1m install is the one that adds the flag; a 200k one and
+// no install at all leave the argv as frozen below. Run the 1m case against the old test's
+// unsandboxed read and it is the one that failed on a 1m machine.
+for (const [machine, tail] of [
+  [null, [...FROZEN_DEPLOY_HEAD, '--reset']],
+  ['200k', [...FROZEN_DEPLOY_HEAD, '--reset']],
+  ['1m', [...FROZEN_DEPLOY_HEAD, '--context-window', '1m', '--reset']],
+]) {
+  test(`a new deploy takes the machine's window: global install ${machine ?? 'absent'}`, () => {
+    const undo = machine ? globalClaudeInstall(machine) : () => {};
+    try {
+      assert.deepEqual(deployTail(), tail);
+    } finally { undo(); }
+  });
+}
 
 test('the deploy argv resolves the body it is handed', () => {
   // `apiDeployCmd`'s `{cmd: [...]}` never reaches the wire either. Its sibling `apiInstallCmd`
