@@ -42,6 +42,16 @@ In [foreman mode](foreman-mode.md) the session hands each task that would block 
 
 When a subagent finishes, the hook copies each `spec-feedback:` line its report ends with into `agent-notes/<name>.md` in the notes folder (a `general` line into `agent-notes/_general.md` instead, which every agent reads), with no model call. The agent reads those notes first at its next dispatch, so a spec flaw it reported is in front of it until the user folds the fix into the source. See [Hooks](hooks.md). (Not on Bob, which has no subagent-finished event: there the caller copies the line.)
 
+### Did a spec change help?
+
+When a named subagent finishes, the same hook appends one line to `notebook/agent-runs.jsonl` in the install, beside `usage.jsonl`. The line holds only facts the hook can read: the day, the agent, a short hash of its rendered spec (`agents/<name>.md`, or none for an agent Geneseed does not ship), whether the done gate let the turn end and how many times it blocked it first, the number of tool calls and of refused calls (a call a host or a gate did not run; a red test is not one), the number of `spec-feedback:` lines, and whether a report came back. There is no self-score and no model call. A stop that the done gate blocks writes no line: the line comes at the stop that ends the turn.
+
+`geneseed catalog agents --scores` prints one row per agent and spec hash, so the runs before a spec edit and the runs after it are two rows to compare. The UNBLOCKED column is `never blocked / judged`, over the runs the gate judged. It is not a pass rate: the gate cannot tell a pass from an advisory, and a stop past the gate's block limit also ends the turn. REFUSED and TOOLS are means, with the number of runs behind each in brackets; below 3 runs they show `-`.
+
+The hash is of the rendered file, so anything that renders the spec differently starts a new row, even with no change to the agent's source: a theme switch, the first seeding of the shared tier, a Geneseed upgrade that changes the renderer, or an agent override. A spec you edited by hand in the install is no longer the file Geneseed shipped, so its runs read `spec: null`.
+
+The counts are per turn, as the done gate reads one. A message sent to a running subagent (SendMessage) opens a new turn, so the line written at that turn's end counts only the tools used after the message. On OpenCode the line is written at a child session's first quiet period in each OpenCode process, and it counts the whole child session on OpenCode 1. The same switch as `usage.jsonl` turns the ledger off: `GENESEED_NO_USAGE`, or a `.usage-off` file in the install. On OpenCode the learn plugin writes the line for a named child session, with no done-gate fields, because that host's gate is in another plugin. Bob has no subagent-finished event, so it writes no line.
+
 The learn step can also record a lesson for that agent alone, in `agents/<name>.md` in the memory store (the [shared](shared-tier.md) one on a global install) — one bullet per lesson, capped so it never grows unbounded. The next time that agent runs, it starts with what it learned. See [Memory](memory.md). (Not on Bob, which has no subagent-finished event.)
 
 <!--harness:opencode-->

@@ -291,8 +291,11 @@ const BACKGROUNDED = /^(?:Command running in background with ID: |Command was mo
 const resultText = (b) => (typeof b.content === 'string' ? b.content
   : Array.isArray(b.content) && b.content[0] && typeof b.content[0].text === 'string' ? b.content[0].text : '');
 
-/** A user line that opens a turn: the user typed it, it is not a tool result, a meta note or a task notification. */
-function isPrompt(obj, sidechain = false) {
+/**
+ * A user line that opens a turn: the user typed it, it is not a tool result, a meta note or a task notification.
+ * Exported for ./agent-runs.mjs, which counts the same turn the gate judges.
+ */
+export function isPrompt(obj, sidechain = false) {
   if (obj.type !== 'user' || obj.isMeta || (obj.isSidechain && !sidechain)) return false;
   if (notificationText(obj)) return false;
   const c = obj.message && obj.message.content;
@@ -528,9 +531,10 @@ function backgroundOwed({ calls, results, background, finished }, checks, owedLa
 /**
  * The cap's state file, one per session (and sub-agent), under the install's notebook — the
  * store-watch baseline pattern (`./store-watch.mjs`). Read and written only on a Stop with owed
- * checks, so an allowed Stop costs nothing here. Unreadable reads as none.
+ * checks, so an allowed Stop costs nothing here. Unreadable reads as none. Exported for
+ * ./agent-runs.mjs, which reads a finished sub-agent's block count back from it.
  */
-function capFile(install, meta) {
+export function capFile(install, meta) {
   const key = [meta.session_id, meta.hook_event_name === 'SubagentStop' ? meta.agent_id : null]
     .filter((k) => typeof k === 'string' && k).join('~');
   return key ? path.join(install, CAP_DIR, `${key.replace(/[^\w.~-]/g, '_').slice(0, 160)}.json`) : null;

@@ -39,6 +39,7 @@ import { promises as fs, realpathSync } from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
+import { createHash } from "node:crypto"
 import { readdirSync, statSync, writeFileSync as writeLogSync, mkdirSync, readFileSync as readLogSync } from "node:fs"
 
 // OpenCode 1.x paints a plugin's stderr over its TUI input box (in red); its own log API
@@ -510,6 +511,114 @@ function finalAssistantText(messages) {
   return ""
 }
 
+// ---- agent outcome ledger (notebook/agent-runs.jsonl) ---------------------------------------
+// One line per finished child session that names its agent: the twin of js/hosts/agent-runs.mjs
+// `recordAgentRun`. The marker table, the spec hash and the line are tool-kept below; the walk is
+// by hand, since a session's messages are not a JSONL transcript.
+// ---- agent-runs twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
+// to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
+
+/**
+ * A refused tool call: the result text a host or a gate gives a call it did not run. Only the
+ * result's FIRST line is read, and every marker is anchored at its start (a host prefix of at most
+ * 80 characters allowed for Geneseed's own words): a red test or a search that QUOTES a gate's text
+ * further down its output is an error, not a refusal. One row each, with where its text comes from:
+ *   - Geneseed's own refusal (`gateText` mode `refused`, js/hosts/hooks-prims.mjs), and the text
+ *     said when that text fails (`GATE_UNSAID`), behind a host's prefix ("PreToolUse:Bash hook …").
+ *   - The OpenCode guard: V1 throws `[geneseed-guard] blocked: …`; V2 renames the call, and core
+ *     answers `No tool named "BLOCKED, not a missing tool: …"` (geneseed-guard.js, seen on 2.2.6).
+ *   - Claude Code's auto-mode classifier, seen live 2026-11-14: "Permission for this action was
+ *     denied by the Claude Code auto mode classifier."
+ *   - Claude Code's worktree isolation, seen live 2026-11-14: "This agent is isolated in the
+ *     worktree …, but this command … Refusing to run it — …".
+ *   - Claude Code's permission rule deny and a user's "no" to an ask: UNVERIFIED wording.
+ */
+const REFUSAL_MARKERS = [
+  /^.{0,80}?Tell the user this, word for word:/,
+  /^.{0,80}?Geneseed could not describe this call\./,
+  /^\[geneseed-guard\] blocked:/,
+  /^No tool named "BLOCKED, not a missing tool:/,
+  /^Permission for this action was denied\b/,
+  /^This agent is isolated in the worktree .{1,600}? Refusing to run it\b/,
+  /^Permission to use \S.{0,300}? has been denied\b/,
+  /^The user doesn't want to (?:proceed with|take) this/,
+];
+
+/**
+ * True when the first line of `text` (a tool result) says the call was refused. Each marker is
+ * anchored with `^` (no `m` flag) and its `.` never crosses a line break, so a marker can only
+ * match on the first line.
+ */
+function isRefusal(text) {
+  const t = String(text ?? '').trimStart();
+  return REFUSAL_MARKERS.some((re) => re.test(t));
+}
+
+/** The short hash of a rendered spec: sha256 of its text with line endings folded to LF, 12 hex. */
+function specHashOf(text) {
+  return createHash('sha256').update(String(text).replace(/\r\n?/g, '\n'), 'utf8').digest('hex').slice(0, 12);
+}
+
+/** The ledger line, field order fixed. `ts` is the UTC day, as `usage.jsonl` stamps it. */
+function agentRunLine(run, now = new Date()) {
+  return `${JSON.stringify({
+    ts: now.toISOString().slice(0, 10), agent: run.agent, spec: run.spec ?? null, done: run.done ?? null,
+    blocks: run.blocks ?? null, tools: run.tools ?? null, refused: run.refused ?? null,
+    feedback: run.feedback ?? 0, report: Boolean(run.report),
+  })}\n`;
+}
+// ---- agent-runs twin: END
+
+// The child's tool calls are its `tool` parts that name their tool: V1's `{ tool, state: { status,
+// error } }` (seen), and on V2 `{ name, state? }` in `session.context()`, a shape UNVERIFIED against a
+// live OpenCode 2. With no such part at all the counts are null, never a confident 0: an unknown
+// shape must not read as "used no tools". A refusal is an errored part whose error text
+// `isRefusal` reads as one: V1's `[geneseed-guard] blocked:`, V2 core's `No tool named "BLOCKED…`.
+function toolCounts(messages) {
+  let tools = 0
+  let refused = 0
+  for (const m of messages || []) {
+    for (const p of m?.parts ?? m?.content ?? []) {
+      if (p?.type !== "tool" || typeof (p.tool ?? p.name) !== "string") continue
+      tools += 1
+      const state = p.state ?? {}
+      const e = state.error ?? p.error
+      const said = typeof e === "string" ? e : e?.message ?? e?.data?.message ?? ""
+      if ((state.status ?? p.status) === "error" && isRefusal(said)) refused += 1
+    }
+  }
+  return tools ? { tools, refused } : { tools: null, refused: null }
+}
+
+// The agent's rendered spec hash when this install's manifest owns `agents/<name>.md`, else null.
+async function ownedSpec(cfg, agent) {
+  try {
+    const owned = JSON.parse(await fs.readFile(path.join(cfg, ".geneseed-manifest.json"), "utf8")).owned
+    if (!Array.isArray(owned) || !owned.includes(`agents/${agent}.md`)) return null
+    return specHashOf(await fs.readFile(path.join(cfg, "agents", `${agent}.md`), "utf8"))
+  } catch { return null }
+}
+
+// `done` and `blocks` are null here: this host's done gate is geneseed-context.js, whose verdict
+// this plugin cannot read. Off as usage.jsonl is (GENESEED_NO_USAGE, `.usage-off`), and only when
+// <cfg>/notebook exists. Once per child per process: a child idles more than once. Never throws.
+const recordedRuns = new Set()
+async function recordAgentRun(sid, agent, messages, cfg = path.dirname(PLUGIN_DIR)) {
+  try {
+    if (!agent || recordedRuns.has(sid) || process.env.GENESEED_NO_USAGE) return null
+    if (await fs.stat(path.join(cfg, ".usage-off")).then(() => true, () => false)) return null
+    if (!(await isDir(path.join(cfg, "notebook")))) return null
+    recordedRuns.add(sid)
+    const report = finalAssistantText(messages)
+    const line = agentRunLine({
+      agent, spec: await ownedSpec(cfg, agent), done: null, blocks: null, ...toolCounts(messages),
+      feedback: specFeedbackOf(report, FEEDBACK_SECRET_RE).length, report: Boolean(report.trim()),
+    })
+    const file = path.join(cfg, "notebook", "agent-runs.jsonl")
+    return (await withFeedbackLock(file, async () => { await fs.appendFile(file, line); return line })) || null
+  } catch { return null }
+}
+
 // Flatten a session's messages into "role: text" notes, and pick the model the
 // session actually used so we distil with the user's own provider config.
 function flatten(messages) {
@@ -836,6 +945,7 @@ export const GeneseedLearn = async (ctx) => {
       if (isChild) {
         messages = await fetchMessages()
         await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+        await recordAgentRun(sid, agentName, messages)
       }
 
       const memDir = await resolveMemoryDir()
@@ -927,6 +1037,7 @@ export const GeneseedLearn = async (ctx) => {
 Object.assign(GeneseedLearn, {
   resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2,
   captureSpecFeedback, finalAssistantText, notesRootOf, FEEDBACK_SECRET_RE,
+  recordAgentRun, toolCounts, isRefusal, specHashOf, agentRunLine,
 })
 
 // ---- OpenCode 2 ----------------------------------------------------------------
@@ -981,6 +1092,7 @@ async function setupV2(ctx) {
       if (isChild) {
         messages = await ctx.session.context({ sessionID: sid })
         await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+        await recordAgentRun(sid, agentName, messages)
       }
 
       const memDir = await resolveMemoryDir()

@@ -21,6 +21,11 @@ import path from 'node:path';
 
 export const USAGE_LEDGER = path.join('notebook', 'usage.jsonl');
 export const USAGE_OFF = '.usage-off';
+/**
+ * The agent outcome ledger beside it (./agent-runs.mjs writes it, under the same switch). Here, not
+ * there, so the CLI's reader (js/inspect/agent-scores.mjs) never loads the done gate's module tree.
+ */
+export const RUNS_LEDGER = path.join('notebook', 'agent-runs.jsonl');
 
 const NAME_RE = /^[A-Za-z0-9][\w.:@/-]{0,99}$/;
 
