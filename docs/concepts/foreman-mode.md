@@ -26,6 +26,14 @@ The session sorts every request:
 
 When the session is unsure, it delegates. The test is still a count, because "substantial" left to judgement lost every time to the host's own default of doing small work in place. The count asks what would block the session, not how big the task looks.
 
+### No dispatch tool, no foreman
+
+Foreman needs a tool that can start a writing (`developer`) worker: `Agent` on Claude Code and OpenClaude, `subagent` (V1: `task`) on OpenCode, `spawn_subagent` on Bob. When the session holds no such tool, it works as in direct mode: it does each task itself, one at a time, in one tree, and tells you so once.
+
+The check is on the tool the session holds, not on the host, because the same install can run with and without that tool. Bob IDE and Bob Shell (the terminal CLI) read the same `~/.bob` install, so a build cannot tell them apart. Bob IDE 2.2.3 gives `spawn_subagent` only when the `session.subagents` setting is on (the default) and only to a mode whose groups hold `subagent`: the built-in `agent` and `plan` modes can start every subagent. The `ask` mode holds `spawn_subagent` too, but it may start only `explore`, so it cannot start a worker and Foreman runs as direct there. Bob Shell has no subagents, no worktrees and no parallel dispatch; this is reported by Bob Shell itself, not read in code, because IBM does not publish Bob Shell on npm.
+
+Bob's `start_subtask` (the `subtask` group, held by the `agent` mode) does not count as a Foreman dispatch tool: it appears to make the parent wait until the subtask ends, which blocks the session. That is inferred from the bundle, not observed live.
+
 ### The task worker
 
 A task worker is one `developer` agent in its own git worktree. It explores, implements and tests in a single context, loading skills as it needs them, so nothing it read is lost in a hand-off. After two repair rounds on its own failing tests it returns with its findings instead of looping.
@@ -37,9 +45,9 @@ A worker can lead a small team inside its own worktree. It can start read-only h
 | Claude Code | the install writes `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"` into its settings file, only when the key is absent (Claude Code allows three levels by default) |
 | OpenCode | the install writes a top-level `"subagent_depth": 2` into `opencode.json`, only when the key is absent |
 | OpenClaude | nothing in the host: its source has no such cap (checked on 0.31). The rule text is the only bound |
-| Bob | nothing documented. The rule text is the only bound |
+| Bob | Bob itself: a subagent cannot spawn another (`spawn_subagent` is forbidden to subagents, read in Bob IDE 2.2.3), so one level only, session → worker, and no sub-workers. A Bob worker does the work itself. Bob Shell has no subagents at all (reported by Bob Shell itself, not read in code) |
 
-A value you set yourself is kept. The value 2 is read as session → worker → sub-worker; that reading is the design's, not yet observed live on either host.
+A value you set yourself is kept. On Claude Code and OpenCode, the value 2 is read as session → worker → sub-worker; that reading is the design's, not yet observed live on either host.
 
 When a worker returns green with a diff that touches two or more files or changes logic, the session sends a `reviewer` only your request and the diff — never the worker's reasoning — for a blind check. A failing verdict goes back to the same worker.
 
