@@ -38,7 +38,9 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    says *when*, in the words a user would actually say and the situations the model
    would actually meet — the emitted `description:` is purpose + trigger, and it is
    the only text the host matches a task against. It is loaded every turn: one phrase per
-   distinct case it catches, never synonyms of one case. Then the numbered procedure (each
+   distinct case it catches, never synonyms of one case. In the Geneseed source repo the
+   description is instead the skill's line in `src/skill-descriptions.json`: purpose and
+   trigger in at most 80 characters, because the host drops long descriptions first. Then the numbered procedure (each
    step an action with a verification), and a **Done when** that a stranger could
    check. Then cut every sentence the model would obey untold, and every restatement of
    what a config file or `--help` already says. Keep it to one coherent domain; a "Requires:" line only for a hard external
@@ -58,7 +60,7 @@ apparatus, so every step ends in the user's assent ({{LAW:one-intent-one-act}}, 
    `{{DIR_SKILLS}}/`, one row in AGENT.md §4's table, then `geneseed doctor` — it fails
    if the table and the files disagree. In the *Geneseed source repo* the cost is the
    full satellite set (`docs/extending.md` §3): the file, the §4 row, `DESC_<NAME>` in
-   every theme, `SKILL_CLASS`, a `registry.json` row, the README enumeration, then
+   every theme, its `src/skill-descriptions.json` line, `SKILL_CLASS`, a `registry.json` row, the README enumeration, then
    `doctor --all` and the suites. A skill that bundles a script or several files is a
    folder skill (`<name>/SKILL.md` + `VENDOR.md`), listed in `VENDORED_SKILL_DIRS`.
    Text adapted from outside gets a `src/upstreams.json` entry and a `CREDIT` token (docs/extending.md §3, in the Geneseed source repo).

@@ -269,7 +269,7 @@ test('the fleet serves its session-file reads from a memo for 30 s, and until a 
 
 // THE FLEET CARRIES BOTH CEILINGS ON AN INSTALL'S COST, so the console draws them without a table
 // of its own. A root with no footprint marker reads as full, so both rows carry the full
-// carrier ceiling, 66 432 (`CARRIER_CEILING.full`). The skill-listing ceiling, 8 881
+// carrier ceiling, 66 432 (`CARRIER_CEILING.full`). The skill-listing ceiling, 4 051
 // (`SKILL_LISTING_CEILING`), is measured and gated on Claude Code alone: the claude row carries
 // it and the opencode row carries null, which the console draws as no skill bar.
 test('the fleet cost carries the carrier ceiling, and the skill ceiling on Claude Code only', () => {
@@ -280,7 +280,7 @@ test('the fleet cost carries the carrier ceiling, and the skill ceiling on Claud
     }
     assert.deepEqual(
       apiFleet(st).installs.map((r) => [r.host, r.cost.ceiling, r.cost.skillCeiling]),
-      [['opencode', 66_432, null], ['claude', 66_432, 8_881]]);
+      [['opencode', 66_432, null], ['claude', 66_432, 4_051]]);
   });
 });
 

@@ -57,7 +57,9 @@ English); the others range from `imperial` (Warhammer 40k) to community voices.
   `EPI_DOCTRINES`), section intros (`INTRO_*`), the nine Rule titles (`LEX_*`),
   the twenty-three doctrine rule titles (`DOC_<PACK>_<N>`), the four pack names
   (`PACK_CRAFT`, `PACK_RIGOR`, `PACK_OPS`, `PACK_PROCESS`), capability
-  descriptions (`DESC_*`), and `ROAST_PERSONA`.
+  descriptions (`DESC_*`), and `ROAST_PERSONA`. A skill's `DESC_*` opens its
+  body; the `description:` a host lists is the theme-neutral line in
+  `src/skill-descriptions.json`, the same in every theme.
 - **Themed nouns** — `ONTOLOGY`, `LAW(S)`, `DOCTRINE(S)`, `AGENT(S)`, `SKILL(S)`,
   `MEMORY`, `NOTEBOOK`, `VAULT`, `WIKI`. These read in your voice but must stay
   nouns the prose can use. ⚠ `LAW` and `DOCTRINE` must each be a **single word** —

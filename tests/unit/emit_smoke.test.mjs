@@ -326,7 +326,8 @@ const EXPECTED = {
 // as an agent, so it would register a phantom `_template` agent.
 // Aliases (an old skill name kept answering `/name`, one per name in a skill's
 // `<!-- aliases: … -->` marker — 14: the 12 old names the 2026-10 sharpen kept answering, plus
-// `slides` and `presentation`, two synonym entry names for deck) are
+// `slides` and `presentation`, two synonym entry names for deck; brainstorm's `grill-me` was
+// retired to `RETIRED_ALIASES`, so no emit writes it) are
 // extra `skills/<alias>/SKILL.md` folders on Claude and OpenClaude, and command files on
 // OpenCode AND Bob (host-compat O2/R1: Bob's skills page has no model-invocation key, so an
 // alias skill there would be a visible duplicate — it gets `.bob/commands/<alias>.md`
@@ -339,7 +340,7 @@ const EXPECTED = {
 // skills count is N_SKILLS minus N_USER_ONLY and every other host's is the full N_SKILLS.
 const N_AGENTS = 20;
 const N_SKILLS = 51;
-const N_ALIASES = 15;
+const N_ALIASES = 14;
 const N_USER_ONLY = 3;
 
 // `Path.read_text` collapses CRLF before the reference ever counts a character, and `writeText`
@@ -660,13 +661,13 @@ test('the carrier stays under the footprint ceiling', () => {
 
 // THE SKILL LISTING HAS A CEILING TOO (`SKILL_LISTING_CEILING`, js/inspect/cost.mjs, which
 // carries the reason and the measurement). THE RULE: on a Claude Code emit with every skill
-// on, the names plus descriptions of the skills the model lists weigh at most 8 881 characters
-// — the 8 706 measured on 2026-11-12, plus 2 %, rounded up — and more than half of that. The
+// on, the names plus descriptions of the skills the model lists weigh at most 4 051 characters
+// — the 3 971 measured on 2026-11-15, plus 2 %, rounded up — and more than half of that. The
 // listing does not depend on the footprint, so one footprint per scope is measured. Aliases and
 // user-only skills are hidden from the model by `disable-model-invocation` and count 0, which
 // is why this is far below the folder count times the description cap.
 test('the skill listing stays under its ceiling on a full Claude emit', () => {
-  assert.equal(SKILL_LISTING_CEILING, 8_881);
+  assert.equal(SKILL_LISTING_CEILING, 4_051);
   for (const mode of ['claude', 'claude-global']) {
     const spec = EXPECTED[mode];
     const b = ok(mode, 'full');
@@ -679,7 +680,7 @@ test('the skill listing stays under its ceiling on a full Claude emit', () => {
       + 'ceiling — every session carries it, and the host trims descriptions past its own budget. '
       + 'Shorten a description before raising the ceiling');
     // The other direction, as for the carrier: an emit that listed almost nothing passes a
-    // ceiling. Half of it (4 440) is far below the measured 8 706.
+    // ceiling. Half of it (2 025) is far below the measured 3 971.
     assert.ok(cost.skills > SKILL_LISTING_CEILING / 2,
       `--emit ${mode}: the skill listing is only ${cost.skills} chars — the emit dropped skills`);
   }

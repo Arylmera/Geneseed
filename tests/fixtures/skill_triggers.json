@@ -111,7 +111,7 @@
   ],
   "brainstorm": [
     { "query": "I want to add multi-tenant support to the billing service, help me design it before we code", "should_trigger": true },
-    { "query": "Grill me on this migration plan before I start", "should_trigger": true },
+    { "query": "Grill me on this migration plan before I start", "should_trigger": false },
     { "query": "Interview me about what the new export feature should do", "should_trigger": true },
     { "query": "Rename the variable userId to accountId in auth.ts", "should_trigger": false }
   ],

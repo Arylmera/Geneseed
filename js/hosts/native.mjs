@@ -32,7 +32,7 @@ import path from 'node:path';
 import { writeText, copyFile, readText } from '../lib/fs.mjs';
 import { jsonDumps, parseJson, formatValue, formatRepr, isTruthy, isDict } from '../lib/json.mjs';
 import { relPosix } from '../lib/text.mjs';
-import { aliasesOf } from '../build/source.mjs';
+import { aliasesOf, skillDescriptions } from '../build/source.mjs';
 import { resolvePath } from './hosts.mjs';
 import { claimLeaf, ownedState } from './owned.mjs';
 // `lstripNewlines` on spec bodies is a no-op on every input the generator produces today
@@ -147,7 +147,8 @@ function triggerOf(text) {
 }
 
 /**
- * Purpose + the trigger's FIRST sentence, the emitted `description:` of a skill. Every
+ * Purpose + the trigger's FIRST sentence: the emitted `description:` of a skill that has no
+ * catalogue line (see below), and the form every skill had until 2026-11-15. Every
  * description is always-on context on a host that catalogues natively: at the earlier
  * 900-char cap the catalogue weighed 22k chars (~5.6k tokens) across 51 skills, three times
  * the figure the footprint page quoted. The first sentence says WHEN; the later sentences
@@ -157,8 +158,44 @@ function triggerOf(text) {
  * failure, so the cure is a shorter first trigger sentence in the source, never a wider cap.
  */
 const DESCRIPTION_CAP = 320;
-export function skillDescription(text) {
-  return withWhen(firstBlockquote(text), triggerOf(text));
+/**
+ * A skill with a line in `src/skill-descriptions.json` (`skillDescriptions`) gets that line,
+ * and every shipped skill has one (`catalogueLineProblems` refuses a gap); the purpose +
+ * trigger composition above is the fallback for a fixture tree or a skill not catalogued yet.
+ */
+export function skillDescription(text, stem = null, src = undefined) {
+  const line = stem === null ? undefined : skillDescriptions(src)[stem];
+  return typeof line === 'string' ? line : withWhen(firstBlockquote(text), triggerOf(text));
+}
+
+/**
+ * A vendored skill's own SKILL.md with its frontmatter `description:` swapped for the
+ * catalogue line, the upstream description kept as the first body line, as a blockquote. The
+ * upstream lines ran to 600 characters and were the longest in the listing. Text with no
+ * catalogue line, no frontmatter or no `description:` key passes unchanged, and so does a
+ * value this cannot read whole: a block scalar (`>`, `|`), a plain scalar continued on an
+ * indented next line, or a quoted value that does not close on its line.
+ */
+export function vendoredWithCatalogueLine(text, stem, src = undefined) {
+  const line = skillDescriptions(src)[stem];
+  const m = /^---\r?\n([\s\S]*?\r?\n)?---\r?\n/.exec(text);
+  if (typeof line !== 'string' || !m) return text;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = m[0].split(/\r?\n/);
+  const at = lines.findIndex((ln) => /^description:/.test(ln));
+  const raw = at < 0 ? '' : lines[at].replace(/^description:\s*/, '');
+  if (!raw || /^[>|]/.test(raw) || /^[ \t]/.test(lines[at + 1] ?? '')) return text;
+  let upstream = raw;
+  if (raw.startsWith('"')) {
+    try { upstream = parseJson(raw); } catch { return text; }
+  } else if (raw.startsWith("'")) {
+    // YAML single quotes: `''` is an escaped quote, and the value must close on its line.
+    if (!/^'(?:[^']|'')*'$/.test(raw)) return text;
+    upstream = raw.slice(1, -1).replaceAll("''", "'");
+  }
+  lines[at] = `description: ${jsonDumps(line)}`;
+  const body = text.slice(m[0].length).replace(/^(\r?\n)+/, '');
+  return `${lines.join(eol)}${eol}> ${upstream}${eol}${eol}${body}`;
 }
 
 /**
@@ -752,7 +789,7 @@ export function writeNativeLayer(items, agentsDir, skillsDir, overrides = null, 
       // ALIASES are the one case every non-Claude dialect shares: no alias skill via
       // frontmatter exists for them either, so an alias skill there would land in the
       // model's catalogue as a duplicate; it gets a command instead (`writeAliasCommands`).
-      fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text))}`];
+      fm = [`name: ${stem}`, `description: ${jsonDumps(skillDescription(text, stem, src))}`];
       userOnly = isUserInvokedOnly(text);
       if (userOnly && !bobDialect) fm.push('disable-model-invocation: true');
       body = stripSkillBodyLinks(pointSideFiles(body, stem, skillDirOf ? skillDirOf(stem)

@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { stripCapabilityLinks } from '../build/emit-common.mjs';
 import { STRUCTURE, renderAll } from '../build/render.mjs';
-import { CONFIG, CREDIT_RE, makeCfg } from '../build/source.mjs';
+import { CONFIG, CREDIT_RE, DESCRIPTION_LIMIT, makeCfg } from '../build/source.mjs';
 import { CLAUDE_STYLE, HOSTS, hostCatalogsNatively, resolvePath } from '../hosts/hosts.mjs';
 import { EMIT_HOST_SCOPE, footprintOfDir, readMaybe, renderedTier, themeFiles } from '../hosts/installs.mjs';
 import { isVendoredPath } from '../hosts/native.mjs';
@@ -74,7 +74,14 @@ export function checkBuild(themeName, out, isVendored = isVendoredPath) {
   for (const md of rglob(outAbs)) {
     if (!md.endsWith('.md') || !isFile(md)) continue;
     const rel = path.relative(outAbs, md);
-    if (isVendored(rel)) continue;
+    if (isVendored(rel)) {
+      // Upstream docs are exempt, but a vendored SKILL.md's description is ours (the catalogue
+      // line `vendoredWithCatalogueLine` writes) and is listed like any other skill's.
+      if (path.basename(rel) === 'SKILL.md') {
+        for (const p of descriptionProblems(readText(md), rel)) problems.push(`[${themeName}] ${p}`);
+      }
+      continue;
+    }
     const text = readText(md);
     // Sorted per file: `doctorCollect` re-sorts everything anyway, but `validate` prints these
     // in the order they come back.
@@ -102,10 +109,16 @@ export function checkBuild(themeName, out, isVendored = isVendoredPath) {
  * the spec warns degrades discovery, since the text is injected into the system prompt.
  * The pronoun arm reads only the `Use when:` half, and skips quoted user phrases ("teach me
  * X" is what the user types, not the description's voice): the purpose half is the theme's
- * persona copy ("Make your own OpenCode theme"), authored per theme on purpose.
+ * persona copy ("Make your own OpenCode theme"), authored per theme on purpose. A skill's
+ * catalogue line (`src/skill-descriptions.json`) has no `Use when:` and no persona half: the
+ * pronoun arm reads all of it.
+ * A fourth arm, for a skill's `SKILL.md` only: the description is at most `DESCRIPTION_LIMIT`
+ * characters. The model's skill listing has a budget, and the host drops the descriptions of
+ * the least-used skills when it overruns; agents are listed apart and keep their own length.
  * Files without frontmatter (every bundle `.md`, AGENT.md) carry no description and pass.
  */
 const DESC_LINE_RE = /^---\n(?:.*\n)*?description: (".*")\n(?:.*\n)*?---\n/;
+const SKILL_FILE_RE = /(?:^|[\\/])skills[\\/][^\\/]+[\\/]SKILL\.md$/;
 export function descriptionProblems(text, rel) {
   const m = text.match(DESC_LINE_RE);
   if (!m) return [];
@@ -113,7 +126,10 @@ export function descriptionProblems(text, rel) {
   const problems = [];
   if (desc.endsWith('…')) problems.push(`description cut mid-sentence in ${rel} — shorten the first trigger sentence`);
   if (/<\/?[A-Za-z][^>]*>/.test(desc)) problems.push(`description carries an XML-like tag in ${rel}`);
-  const when = desc.split(' Use when: ')[1] ?? '';
+  if (SKILL_FILE_RE.test(rel) && desc.length > DESCRIPTION_LIMIT) {
+    problems.push(`description is ${desc.length} characters in ${rel}, over ${DESCRIPTION_LIMIT} — shorten its line in src/skill-descriptions.json`);
+  }
+  const when = desc.includes(' Use when: ') ? desc.split(' Use when: ')[1] : desc;
   if (/\b(I|I'm|me|my|you|you're|your)\b/i.test(when.replace(/"[^"]*"|\bI\/O\b/g, ''))) {
     problems.push(`description's "Use when" is not in the third person in ${rel}`);
   }

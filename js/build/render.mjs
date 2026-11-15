@@ -38,7 +38,7 @@ import {
   CREDIT_RE, GATE_SWITCHES, PACK_ORDER, kitMembers, loadKits, readPackText, resolveCredits, resolveRuleIds, ruleCanon, titleKey, upstreamOf,
 } from './source.mjs';
 import { SHARED_TIER_LINE } from '../hosts/hosts.mjs';
-import { VENDORED_SKILL_DIRS } from '../hosts/native.mjs';
+import { VENDORED_SKILL_DIRS, vendoredWithCatalogueLine } from '../hosts/native.mjs';
 import { DEFAULT_PRESET } from '../loop/score.mjs';
 
 /** Document STRUCTURE is theme-INDEPENDENT — mirrors `_build_render.STRUCTURE`. */
@@ -95,9 +95,10 @@ export const SRC_DIR_TOKENS = {
 };
 
 const TEXT_SUFFIXES = new Set(['.md', '.tmpl', '.json', '.txt', '.yml', '.yaml']);
-/** Top-level `src/` entries the build reads but never ships: upstream-credit provenance, and the
- * kit manifests (a kit's members ship flat from `skills/` and `agents/`). */
-const NOT_BUNDLED = new Set(['upstreams.json', 'licenses', 'kits']);
+/** Top-level `src/` entries the build reads but never ships: upstream-credit provenance, the
+ * kit manifests (a kit's members ship flat from `skills/` and `agents/`), and the skill
+ * catalogue lines (they ship inside each skill's frontmatter, `skillDescription`). */
+const NOT_BUNDLED = new Set(['upstreams.json', 'licenses', 'kits', 'skill-descriptions.json']);
 
 // Digits are legal after the first character: `DOC_<PACK>_<n>` (the doctrine rule titles) are
 // the first token names in the project to carry one, and without `0-9` here `{{DOC_CRAFT_1}}`
@@ -774,6 +775,10 @@ export function renderAll(cfg, themeName, {
     const fp = /^(?:laws|ontology|doctrines)[\\/]/.test(rel) ? 'full' : footprint;
     let text = TEXT_SUFFIXES.has(suffixOf(path.basename(file)))
       ? renderFile(cfg, file, theme, fp, lawsPrefix, new Set(), nativeCatalog) : null;
+    // A vendored skill's listed description is our catalogue line, on every host and in the
+    // bundle; here, once, so no writer applies it twice.
+    if (text !== null && sp[0] === 'skills' && sp.length === 3 && sp[2] === 'SKILL.md'
+        && VENDORED_SKILL_DIRS.has(sp[1])) text = vendoredWithCatalogueLine(text, sp[1], cfg.src);
     items.push({ rel: outRel, text, src: file });
     // A credited skill ships its upstream's licence beside it, one copy per (skill, key). The
     // token is gone from `text`, so the raw source is scanned; an unknown key or a null

@@ -2,7 +2,8 @@
 
 > {{DESC_RELEASE}}
 
-**Trigger:** cutting a release — a version bump, a changelog entry, and a tag.
+**Trigger:** the user asks to cut or publish a release — a version bump, a changelog entry,
+and a tag. Finished work is not that ask: never start a release unasked.
 
 ## Procedure
 1. Decide the version from the changes since the last tag, following the project's
@@ -18,9 +19,13 @@
 4. Commit the version bump and changelog as one focused commit on a release branch,
    through the [commit {{SKILL}}](commit.md) ({{LAW:one-intent-one-act}}), and land it on
    the main branch through a pull request with green checks ({{DOCTRINE:consent-before-push}}).
+   Land that pull request by arming the forge's auto-merge (`gh pr merge --squash --auto`);
+   never `--admin`, never a direct push to main.
 5. Tag the release (annotated, matching the version). Tagging and publishing are
    **outward-facing** and need the user's explicit acceptance ({{LAW:deletion-is-deliberate}}).
-6. With that acceptance, push the tag; trigger or verify the publish/release pipeline.
+6. With that acceptance, push the tag; trigger or verify the publish/release pipeline. Wait
+   on it with its own watch (`gh run watch --exit-status`) or the host's monitor, never a
+   sleep-then-poll loop.
 
 ## Done when
 - Version, changelog, and tag all name the same number, and the release is pushed

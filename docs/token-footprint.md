@@ -72,10 +72,15 @@ until 2026-09 it did, and the whole harness was paid twice per session.
   `tests/unit/emit_smoke.test.mjs` rather than a byte count quoted here; the
   figure moved twice while this paragraph went on stating the old one.
 - **Skill descriptions are the second bill** on a host that catalogues natively.
-  Each is the skill's purpose line plus the *first sentence* of its trigger,
-  capped at 320 characters (`skillDescription` in `js/hosts/native.mjs`); at
-  the earlier 900-character cap the catalogue weighed ~5.6k tokens. The later
-  trigger sentences still live in the body, read as soon as the skill is chosen.
+  Each is the skill's line in `src/skill-descriptions.json`: purpose and trigger
+  in at most 80 characters, theme-neutral (`skillDescription` in
+  `js/hosts/native.mjs`). The host lists skills under a budget of about 1% of
+  the context window and drops the descriptions of the least-used skills when
+  the listing overruns it. Read the listing's size off `SKILL_LISTING_CEILING`
+  in `js/inspect/cost.mjs`, which carries the measurement, rather than a figure
+  quoted here. Before the 80-character lines, the purpose line plus the first
+  trigger sentence ran to 320 characters. The themed purpose and the full
+  trigger still live in the body, read as soon as the skill is chosen.
 - **§5–§9 carry authored lean halves too** (Memory, Notebook, Workspace, Wiki,
   Context): each keeps its obligations — read `MEMORY.md`, read
   `context.json` before the first reply, the git-ignored folders — and points at

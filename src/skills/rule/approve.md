@@ -29,7 +29,8 @@ that is gone was decided.
    - A `Rule from` block whose rule the shared file now holds word for word needs no decision.
      Skip it: the next fold of that host clears it.
 3. **Decide one item at a time.** Show the item, then ask. "Later" leaves the block and the row as
-   they are. For each decision, write in this order: the target file, the ledger row, the draft.
+   they are. Approval names the items or says approve; a remark about where rules live is not
+   approval, so ask again and write nothing. For each decision, write in this order: the target file, the ledger row, the draft.
    A stop between the writes leaves the rule in force, and step 2 or the next fold finishes it.
 
 ### A `Rule from <host>` block

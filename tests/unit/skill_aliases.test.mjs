@@ -11,11 +11,11 @@
  *   4. the doctor's `aliasProblems` refuses every collision an alias could cause on disk, and a
  *      second marker line that `aliasesOf` would silently ignore
  *
- * EVERY INPUT IS SYNTHETIC but three. `src/skills/` is the content tree and changes with every
+ * EVERY INPUT IS SYNTHETIC but four. `src/skills/` is the content tree and changes with every
  * skill merge, so the resolver gets its tables as arguments, the writers get literal items, and
  * the doctor gate runs over a fixture `src/` in a sandbox. The exceptions read the live tree on
- * purpose, through the two real entry points: the retired `tickets` and the `deps-audit` alias
- * of `dependencies` (each says why it is stable). Carriers live in a sandbox, never the home.
+ * purpose: the retired `tickets`, the `deps-audit` alias of `dependencies`, and the retired
+ * alias `grill-me` of `brainstorm` (each says why it is stable). Carriers live in a sandbox, never the home.
  * If a rule below is wrong, change the row AND the sentence above it, in the same commit.
  */
 import assert from 'node:assert/strict';
@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { RETIRED_SKILL_IDS, aliasesOf, resolveSkillNames } from '../../js/build/source.mjs';
+import { RETIRED_ALIASES, RETIRED_SKILL_IDS, SRC, aliasesOf, resolveSkillNames, skillAliases } from '../../js/build/source.mjs';
 import { parseDriverArgs } from '../../js/build/driver.mjs';
 import { excludedSkillsOfDir } from '../../js/hosts/installs.mjs';
 import * as generate from '../../js/build/generate.mjs';
@@ -111,6 +111,17 @@ test('upgrade replays an old excluded name with the same notice rebuild-all prin
     assert.deepEqual(heard, [DEPS_NOTICE]);
     assert.equal(axes[axes.indexOf('--exclude-skills') + 1], 'dependencies');
   });
+});
+
+// A RETIRED alias (`RETIRED_ALIASES`) is out of its spec's marker, so no emit writes it, yet it
+// still maps to its former target for whatever reads an older install. Reads the live tree:
+// `grill-me` stays retired because the user keeps a grill-me skill of their own.
+test('a retired alias is declared by no marker but still maps to its former target', () => {
+  assert.equal(RETIRED_ALIASES['grill-me'], 'brainstorm');
+  const spec = fs.readFileSync(path.join(SRC, 'skills', 'brainstorm.md'), 'utf8');
+  assert.ok(!aliasesOf(spec).includes('grill-me'), 'the marker no longer declares it');
+  assert.equal(skillAliases().get('grill-me'), 'brainstorm');
+  assert.deepEqual(resolveSkillNames(['grill-me'], { known: ['brainstorm'], linked: [] }).ids, ['brainstorm']);
 });
 
 test('--exclude-skills maps an alias to its target and says so on stderr', () => {

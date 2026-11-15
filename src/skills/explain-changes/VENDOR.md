@@ -15,6 +15,10 @@ Consequences of riding this mechanism (deliberate):
 - exempt from the flat-skill authoring gates (theme DESC tokens, dead-link,
   hermeticity) — the SKILL.md carries its own frontmatter `description`, and it
   names no themed term: the notebook directory reaches the script as `--out`;
-- listed in AGENT.md's folder-skills section, not the main skills table.
+- listed in AGENT.md's folder-skills section, not the main skills table;
+- at emit time the `description:` of `SKILL.md` is replaced with the skill's line in
+  `src/skill-descriptions.json` (at most 80 characters: the host's skill listing has a budget),
+  and the description written here is kept as the first body line, a blockquote
+  (`vendoredWithCatalogueLine`, `js/hosts/native.mjs`).
 
 The script needs only `node` and `git`, both already present wherever Geneseed runs.
