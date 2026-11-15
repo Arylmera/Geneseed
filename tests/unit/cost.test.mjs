@@ -16,7 +16,7 @@
 //   row, 4 with it, 13 again under a blanket `"skill": "deny"` (the user's policy, no name);
 //   Bob documents no such key, so a flagged file there still counts: 13;
 // - the skill-listing ceiling rides along as `skillCeiling` on a `claude` install only, where it
-//   is 8 881 (`SKILL_LISTING_CEILING`); it was measured and is gated on that host alone, so
+//   is 4 051 (`SKILL_LISTING_CEILING`); it was measured and is gated on that host alone, so
 //   OpenClaude, OpenCode and Bob answer null and the console draws them no skill bar.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -81,7 +81,7 @@ test('only a Claude Code install carries the skill-listing ceiling', () => {
   try {
     for (const carrier of ['CLAUDE.md', 'AGENT.md', 'AGENTS.md']) seed(sb.path, carrier);
     const ceiling = (host) => alwaysOnCost({ host, root: sb.path, dir: sb.path, footprint: 'lean' }).skillCeiling;
-    assert.equal(ceiling('claude'), 8_881);
+    assert.equal(ceiling('claude'), 4_051);
     assert.equal(ceiling('openclaude'), null);
     assert.equal(ceiling('opencode'), null);
     assert.equal(ceiling('bob'), null);

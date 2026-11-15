@@ -395,7 +395,16 @@ global emit and leaves the install intact*) proves a refused emit leaves the pri
 2. One row in the hand-authored table in `src/AGENT.md.tmpl` (the `## 3.` table for agents, the `## 4.` one for skills).
    Gated both ways: a row with no file, and a file with no row.
 3. `DESC_<NAME>` in **all fourteen** themes. Theme parity catches a missing one; nothing catches
-   an unstyled placeholder.
+   an unstyled placeholder. That themed purpose opens the skill's body. **Skills only**, and
+   kit and vendored skills too: one line in `src/skill-descriptions.json`, purpose and trigger
+   in at most 80 characters, theme-neutral and in the third person. It is the emitted
+   `description:` on every host, the only text the model routes on, and a vendored skill's
+   upstream description moves to the first body line. 80 because the host lists skills under
+   a budget (about 6 000 characters on a 200k model) and drops the descriptions of the
+   least-used skills when the listing overruns it, which on a fresh install is any of them.
+   `catalogueLineProblems` refuses a missing, stale, empty or over-long line, and
+   `descriptionProblems` holds every emitted `SKILL.md` to the same limit. (This reverses the
+   2026-11-11 themed-catalogue decision for the frontmatter line only, 2026-11-15.)
 4. **Skills only** — `SKILL_CLASS` in `js/inspect/inventory.mjs`. Gated both ways, inside
    `countTableProblems`, which matters because the runtime fallback is silent: an unclassified
    skill renders as `build`.

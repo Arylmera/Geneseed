@@ -48,23 +48,24 @@ export const CARRIER_CEILING = { full: 66_432, lean: 40_312 };
  * count 0. The footprint does not change it: a description is the same text in both.
  *
  * WHY A CEILING. The listing is always-on context, and unlike the carrier nothing bounded its
- * total. Each description has its own cap (`DESCRIPTION_CAP`, js/hosts/native.mjs), which
+ * total. Each description has its own limit (`DESCRIPTION_LIMIT`, 80, js/build/source.mjs), which
  * bounds one skill and says nothing about fifty: the catalogue once reached 22k characters
  * before anyone measured it (that docblock has the history). And the host has a listing budget
  * of its own, past which it trims descriptions without a word, so growth here ends as routing
  * text the model never sees. A new skill, or a longer trigger sentence, now has to fit, or the
  * number is raised in the open.
  *
- * MEASURED 2026-11-12: 8 706 characters over 48 listed skills, the same for
- * `claude` and `claude-global`, full and lean. The ceiling is that figure plus 2 %, rounded up
- * (the headroom the lean carrier ceiling was given). `tests/unit/emit_smoke.test.mjs` gates it.
+ * MEASURED 2026-11-15: 3 971 characters over the default install's listed skills (neutral, no
+ * kits), down from 8 836 when each skill's description became its 80-character catalogue line
+ * (`src/skill-descriptions.json`). The ceiling is that figure plus 2 %, rounded up (the
+ * headroom the lean carrier ceiling was given). `tests/unit/emit_smoke.test.mjs` gates it.
  * Raise it by the measured overrun and say why here, after trying a shorter description first.
  *
  * `alwaysOnCost` returns it as `skillCeiling` for a `claude` install only, the one host it was
  * measured on and is gated for, and the console draws it under that install's cost breakdown.
  * Every other host answers `null`: no bar, not a bar against a number nobody measured there.
  */
-export const SKILL_LISTING_CEILING = 8_881;
+export const SKILL_LISTING_CEILING = 4_051;
 
 /**
  * THE TRADE OF `--shared-tier on`, stated once. `--help` (js/cli-table.json), the console's toggle

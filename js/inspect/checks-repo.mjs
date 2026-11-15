@@ -10,8 +10,8 @@
  */
 import path from 'node:path';
 import {
-  ALIASES_RE, CREDIT_RE, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES, WORKFLOW_SRC, aliasesOf,
-  knownSkillIds, upstreams,
+  ALIASES_RE, CREDIT_RE, DESCRIPTION_LIMIT, PLUGIN_SRC, RETIRED_SKILL_IDS, ROOT, SRC, THEMES,
+  WORKFLOW_SRC, aliasesOf, knownSkillIds, skillDescriptions, upstreams,
 } from '../build/source.mjs';
 import { HOSTS } from '../hosts/hosts.mjs';
 import { installTargets, installsReferencingShim } from '../hosts/installs.mjs';
@@ -340,6 +340,31 @@ export function creditProblems(src = SRC) {
       problems.push(`[authoring] ${where} names licenseFile '${u.licenseFile}', which resolves outside src/`);
     } else if (!isFile(path.join(src, u.licenseFile))) {
       problems.push(`[authoring] ${where} names licenseFile '${u.licenseFile}', which does not exist under src/`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * The doctor's arm of `src/skill-descriptions.json`, the one home of every skill's
+ * model-visible `description:` (`skillDescriptions`, `skillDescription`). Every skill id —
+ * flat, folder or vendored, kits included — has exactly one line, each line names a skill, and
+ * none is over `DESCRIPTION_LIMIT`: a skill with no line falls back to purpose + trigger, which
+ * ran to 320 characters, and a stale key is a line nobody reads. `checkBuild`'s
+ * `descriptionProblems` holds the emitted file to the same limit.
+ */
+export function catalogueLineProblems(src = SRC, lines = skillDescriptions(src)) {
+  const problems = [];
+  const known = knownSkillIds(src);
+  const where = 'src/skill-descriptions.json';
+  for (const id of known) {
+    if (!Object.hasOwn(lines, id)) problems.push(`[authoring] skill '${id}' has no line in ${where}`);
+  }
+  for (const [id, line] of Object.entries(lines)) {
+    if (!known.includes(id)) problems.push(`[authoring] ${where} has a line for '${id}', which is no skill`);
+    else if (typeof line !== 'string' || !line.trim()) problems.push(`[authoring] ${where}: '${id}' is empty`);
+    else if (line.length > DESCRIPTION_LIMIT) {
+      problems.push(`[authoring] ${where}: '${id}' is ${line.length} characters, over ${DESCRIPTION_LIMIT}`);
     }
   }
   return problems;

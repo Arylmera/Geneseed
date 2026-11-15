@@ -253,6 +253,35 @@ export function upstreams(src = SRC) {
   return entries;
 }
 
+/**
+ * The longest model-visible skill description, in characters. Claude Code lists skills under
+ * a budget of about 1% of the context window (some 6 000 characters on a 200k model) and,
+ * when the listing overruns it, drops the descriptions of the least-used skills first; a fresh
+ * install has no usage history, so every long description is at risk. 80 characters keeps the
+ * whole default catalogue far inside that budget, purpose and trigger both.
+ */
+export const DESCRIPTION_LIMIT = 80;
+
+const _descriptions = new Map();
+/**
+ * `src/skill-descriptions.json` — skill stem -> its catalogue line, the ONE home of the
+ * `description:` every host's model routes on (`skillDescription`). Theme-neutral on purpose:
+ * the themed purpose of each skill still opens its body (`{{DESC_*}}`), but the frontmatter
+ * line has to fit `DESCRIPTION_LIMIT`, which no themed purpose plus trigger did (the user
+ * reversed the 2026-11-11 themed-catalogue decision for this line only, 2026-11-15).
+ * Memoised on the raw text, as `upstreams` is. A tree without the file has no lines.
+ */
+export function skillDescriptions(src = SRC) {
+  const file = path.join(src, 'skill-descriptions.json');
+  let text;
+  try { text = readFileSync(file, 'utf8'); } catch { return {}; }
+  const hit = _descriptions.get(file);
+  if (hit && hit.text === text) return hit.entries;
+  const entries = JSON.parse(text);
+  _descriptions.set(file, { text, entries });
+  return entries;
+}
+
 /** The entry a credit key names, or null — `hasOwn`, so `constructor` is not a key. */
 export function upstreamOf(key, src = SRC) {
   const u = upstreams(src);

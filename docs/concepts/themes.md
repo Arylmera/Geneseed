@@ -17,7 +17,7 @@ A **theme** changes the agent's *voice* and the words the harness uses for its o
 | how the agent phrases its replies | which rules apply, and their order |
 | the nouns for the harness's parts — an `imperial` install calls the Rules *Dictates*, agents *Adepts*, skills *Rites* | folder names: `agents/`, `skills/`, `memory/`, `laws/`, `doctrines/`… |
 | the banner, the readiness line the agent prints when it starts, the closing lines | section layout and the links between files |
-| the names and descriptions shown for rules, agents and skills | rule addresses such as `process 5` |
+| the names and descriptions shown for rules, agents and skills, except the short description the host lists for each skill | rule addresses such as `process 5` |
 
 `neutral` keeps the plain words — Rule, Doctrine, Agent, Skill, Memory — so it is the theme to pick if you want no flavour at all. The [glossary](../reference/glossary.md) shows each themed word beside its neutral one.
 

@@ -15,7 +15,9 @@
      files disagree, so neither can silently drift.
   Geneseed source repo only (skip in an installed harness):
   4. Define the DESC_<NAME> token (hyphens -> underscores, uppercased) in ALL theme
-     JSONs under themes/ — the parity gate fails if any theme is missing it.
+     JSONs under themes/ — the parity gate fails if any theme is missing it. Add the
+     skill's line to src/skill-descriptions.json: purpose and trigger in at most 80
+     characters, theme-neutral. It is the emitted description; doctor fails without it.
   5. Bump the `skills-N` count badge in README.md (doctor checks it against the real
      file count; the test counts derive from src/ and need no edit), then run
      `./geneseed doctor --all` and the repository's test suites.

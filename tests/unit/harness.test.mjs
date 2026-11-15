@@ -34,11 +34,16 @@ import { themeParityProblems, renderedProblems, descriptionProblems } from '../.
 import {
   themesToCheck, globalEmitProblems, claudeBobEmitProblems,
 } from '../../js/inspect/doctor.mjs';
-import { stripSkillBodyLinks, agentDescription, skillDescription } from '../../js/hosts/native.mjs';
+import {
+  stripSkillBodyLinks, agentDescription, skillDescription, vendoredWithCatalogueLine,
+} from '../../js/hosts/native.mjs';
+import { catalogueLineProblems } from '../../js/inspect/checks-repo.mjs';
 import { stripCapabilityLinks } from '../../js/build/emit-common.mjs';
 import { themeOfDir } from '../../js/hosts/installs.mjs';
 import { LAW_CLASS } from '../../js/inspect/inventory.mjs';
-import { PLUGIN_SRC, ROOT, SRC, ruleSummaries, stripAuthorNotes } from '../../js/build/source.mjs';
+import {
+  PLUGIN_SRC, ROOT, SRC, ruleSummaries, skillDescriptions, stripAuthorNotes,
+} from '../../js/build/source.mjs';
 import { relPosix } from '../../js/lib/text.mjs';
 import { makeSandbox, homeOverrides } from '../helpers/sandbox.mjs';
 import { copyCheckout } from '../helpers/cli_golden.mjs';
@@ -690,6 +695,55 @@ for (const [name, desc, want] of DESCRIPTION_CASES) {
     want.forEach((w, i) => assert.ok(got[i].includes(w), got[i]));
   });
 }
+
+// The length arm: a skill's SKILL.md description is at most 80 characters (DESCRIPTION_LIMIT),
+// because the host's skill listing has a budget and drops the least-used skills' descriptions
+// when it overruns. 80 passes and 81 fails. An agent file is listed apart, so the same 81
+// characters pass there. A catalogue line has no "Use when:", so the pronoun arm reads all of it.
+test('descriptionProblems holds a SKILL.md description to 80 characters, and only a SKILL.md', () => {
+  const at = (n, rel) => descriptionProblems(fm(`${'a'.repeat(n - 1)}.`), rel);
+  assert.deepEqual(at(80, path.join('skills', 'x', 'SKILL.md')), []);
+  const over = at(81, path.join('.claude', 'skills', 'x', 'SKILL.md'));
+  assert.equal(over.length, 1);
+  assert.ok(over[0].includes('81 characters'), over[0]);
+  assert.deepEqual(at(81, 'agents/x.md'), []);
+  assert.equal(descriptionProblems(fm('Shape your replies.'), 'skills/x/SKILL.md').length, 1);
+});
+
+// The one home of every skill's description, src/skill-descriptions.json: each skill id has
+// exactly one line, each line names a skill, none is empty or over 80 characters.
+test('every skill has one catalogue line of at most 80 characters, and no line is stale', () => {
+  const lines = skillDescriptions();
+  assert.deepEqual(catalogueLineProblems(), []);
+  const ids = Object.keys(lines);
+  const [first] = ids;
+  const { [first]: _gone, ...without } = lines;
+  assert.deepEqual(catalogueLineProblems(SRC, { ...lines, [first]: 'a'.repeat(81) }),
+    [`[authoring] src/skill-descriptions.json: '${first}' is 81 characters, over 80`]);
+  assert.deepEqual(catalogueLineProblems(SRC, without),
+    [`[authoring] skill '${first}' has no line in src/skill-descriptions.json`]);
+  assert.deepEqual(catalogueLineProblems(SRC, { ...lines, 'no-such-skill': 'x.' }),
+    ["[authoring] src/skill-descriptions.json has a line for 'no-such-skill', which is no skill"]);
+});
+
+// A catalogued skill gets its line on every host; an uncatalogued one (a fixture, a skill not
+// listed yet) keeps the purpose + trigger composition. A vendored SKILL.md gets the line in
+// its frontmatter and keeps the upstream description as the first body line.
+test('skillDescription prefers the catalogue line; a vendored SKILL.md keeps the upstream text in its body', () => {
+  const spec = '# Skill: release\n\n> Cuts things.\n\n**Trigger:** the user asks.\n';
+  assert.equal(skillDescription(spec, 'release'), skillDescriptions().release);
+  assert.equal(skillDescription(spec), 'Cuts things. Use when: the user asks.');
+  assert.equal(skillDescription(spec, 'no-such-skill'), 'Cuts things. Use when: the user asks.');
+  const upstream = '---\nname: token-report\ndescription: "Long upstream text."\nlicense: MIT\n---\n\n# Body\n';
+  assert.equal(vendoredWithCatalogueLine(upstream, 'token-report'),
+    `---\nname: token-report\ndescription: ${JSON.stringify(skillDescriptions()['token-report'])}\n`
+    + 'license: MIT\n---\n\n> Long upstream text.\n\n# Body\n');
+  const plain = upstream.replace('"Long upstream text."', 'Long upstream text.');
+  assert.match(vendoredWithCatalogueLine(plain, 'token-report'), /\n> Long upstream text\.\n/);
+  assert.equal(vendoredWithCatalogueLine(upstream, 'no-such-skill'), upstream);
+  const block = upstream.replace('"Long upstream text."', '>-\n  Long upstream text.');
+  assert.equal(vendoredWithCatalogueLine(block, 'token-report'), block);
+});
 
 test('descriptionProblems ignores a file with no frontmatter', () => {
   assert.deepEqual(descriptionProblems('# AGENT.md\n\n> description: "you…"\n', 'AGENT.md'), []);

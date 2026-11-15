@@ -274,7 +274,7 @@ export function planExport({ profile = { ...PROFILE_DEFAULTS }, theme = 'neutral
     let body = forLibrary(lstripNewlines(s.it.text), s);
     let description;
     if (s.kind === 'skill') {
-      description = skillDescription(s.it.text);
+      description = skillDescription(s.it.text, s.stem, cfg.src);
       body = stripSkillBodyLinks(link(pointSideFiles(body, s.stem, 'references')));
       if (!profile.keepSkillSelfImprovement) body = dropSelfImprovement(body);
       for (const side of items) {
