@@ -8,7 +8,7 @@ import path from 'node:path';
 import { homeOverrides, makeSandbox } from '../helpers/sandbox.mjs';
 import {
   captureSpecFeedback, feedbackBullets, feedbackTargets, finalAssistantText, liveSkill, mergeFeedback, mergeNotesText,
-  skillBullets, specFeedbackOf, subagentReport, today, turnReply, withLock, MAX_GENERAL_BULLETS, PROJECT_NOTEBOOK_GITIGNORE,
+  skillBullets, specFeedbackOf, subagentReport, today, turnReply, withLock, MAX_GENERAL_BULLETS, EXCLUDE_HEAD, excludeWithNotes,
 } from '../../js/hosts/spec-feedback.mjs';
 import { spawnHook } from '../helpers/hook_run.mjs';
 import { SECRET_RE, tailReader } from '../../js/hosts/hooks-prims.mjs';
@@ -67,16 +67,26 @@ const LINES = [
     [{ scope: 'agent', body: 'give the base ref in the brief — seen: drift' }]],
   ['`spec-feedback: [agent|general] <the one-line fix> [— situation: <when it applies>] — seen:', []],
   ['spec-feedback: [agent] rotate ghp_abcdefghijklmnopqrstuvwxyz0123456789 now', []],
-  // The project scope: a fact true only in this repo. Bracketed or bare, spacing and case folded.
-  // There is no project-wide general file, so `[general:project]` is the agent's own project line.
+  // The project scope: a fact true only in this repo, for this agent (`project`) or for every agent
+  // in this repo (`project-general`). Bracketed or bare, spacing and case folded.
   ['spec-feedback: [agent:project] this repo runs its suite with --jobs 2 — seen: a timeout',
     [{ scope: 'project', body: 'this repo runs its suite with --jobs 2 — seen: a timeout' }]],
   ['spec-feedback: [ Agent : Project ] spacing and case are folded — seen: x',
     [{ scope: 'project', body: 'spacing and case are folded — seen: x' }]],
   ['spec-feedback: agent:project — the bare tag works too — seen: x',
     [{ scope: 'project', body: 'the bare tag works too — seen: x' }]],
-  ['spec-feedback: [general:project] no shared project file, so its own — seen: x',
-    [{ scope: 'project', body: 'no shared project file, so its own — seen: x' }]],
+  ['spec-feedback: [general:project] every agent here needs it — seen: x',
+    [{ scope: 'project-general', body: 'every agent here needs it — seen: x' }]],
+  ['spec-feedback: general:project — the bare general project tag — seen: x',
+    [{ scope: 'project-general', body: 'the bare general project tag — seen: x' }]],
+  // A tag that opens like an agent's but does not parse is dropped whole: filed in the machine
+  // notes with the tag in its text, a project-only fact would reach every repo.
+  ['spec-feedback: [project] a scope with no owner — seen: x', []],
+  ['spec-feedback: [agent project] a space for the colon — seen: x', []],
+  ['spec-feedback: [agent, project] a comma for the colon — seen: x', []],
+  ['spec-feedback: [agent:local] an unknown scope — seen: x', []],
+  ['spec-feedback: [agent:projects] a misspelt scope — seen: x', []],
+  ['spec-feedback: [general project] a space for the colon — seen: x', []],
   ['spec-feedback: [agent:project] none', []],
 ];
 
@@ -131,13 +141,17 @@ const SKILL_LINES = [
     [{ scope: 'project', skill: 'debug', body: 'case and spacing are folded — seen: x' }]],
   ['spec-feedback: [skill:debug|project] an unchosen alternative reads as its own',
     [{ scope: 'skill', skill: 'debug', body: 'an unchosen alternative reads as its own' }]],
-  ['spec-feedback: [skill:debug:general:project] two scopes in one tag — seen: x', []],
+  ['spec-feedback: [skill:debug:general:project] every skill here needs it — seen: x',
+    [{ scope: 'project-general', skill: 'debug', body: 'every skill here needs it — seen: x' }]],
+  ['spec-feedback: [skill:debug:project:general] the scopes the wrong way round — seen: x', []],
   ['spec-feedback: [skill:debug:local] an unknown scope — seen: x', []],
   // The bare tag carries its scope too, so a bare project line never reaches the machine notes.
   ['spec-feedback: skill:debug:project — the bare project tag — seen: x',
     [{ scope: 'project', skill: 'debug', body: 'the bare project tag — seen: x' }]],
   ['spec-feedback: skill:debug:general — the bare general tag — seen: x',
     [{ scope: 'general', skill: 'debug', body: 'the bare general tag — seen: x' }]],
+  ['spec-feedback: skill:debug:general:project — the bare project general tag — seen: x',
+    [{ scope: 'project-general', skill: 'debug', body: 'the bare project general tag — seen: x' }]],
 ];
 
 test('specFeedbackOf: a fenced skill line is an example, not a note', () => {
@@ -170,13 +184,15 @@ test('skillBullets and feedbackBullets: each line to its one home', () => {
   assert.deepEqual([...s.own], [['debug', ['- [skill] a fix (debug, 2026-11-14)', '- [skill] d fix (debug, 2026-11-14)']]]);
   assert.deepEqual(s.general, ['- [general] b fix (plan, 2026-11-14)']);
   assert.deepEqual([...s.project], []);
+  assert.deepEqual(s.projectGeneral, []);
   assert.deepEqual(feedbackBullets(items, 'tester', '2026-11-14'),
-    { own: ['- [agent] c fix (tester, 2026-11-14)'], general: [], project: [] });
+    { own: ['- [agent] c fix (tester, 2026-11-14)'], general: [], project: [], projectGeneral: [] });
 });
 
 // THE ROUTING TABLE: each tag to one file, in one of two roots. Machine (the tier's notes, every
 // repo): `[agent]`, `[general]`, `[skill:<id>]`, `[skill:<id>:general]`. Project (`<project>/notebook`,
-// this repo only): `[agent:project]`, `[skill:<id>:project]`. A project bullet has the machine
+// this repo only): `[agent:project]`, `[skill:<id>:project]`, and the project's own shared files,
+// `[general:project]` and `[skill:<id>:general:project]`. A project bullet has the machine
 // bullet's shape, so the caps and the hand-line rule read it the same way; where it sits says its
 // scope. With no agent (a Stop), an agent's line has no target at all, project or machine.
 const ROUTES = [
@@ -186,7 +202,10 @@ const ROUTES = [
   ['spec-feedback: [skill:debug] s1 fix here', 'tester', [['machine', 'skill-notes', 'debug.md', '- [skill] s1 fix here (debug, D)', 100]]],
   ['spec-feedback: [skill:debug:general] s2 fix here', 'tester', [['machine', 'skill-notes', '_general.md', '- [general] s2 fix here (debug, D)', 30]]],
   ['spec-feedback: [skill:debug:project] s3 fix here', 'tester', [['project', 'skill-notes', 'debug.md', '- [skill] s3 fix here (debug, D)', 100]]],
+  ['spec-feedback: [general:project] g2 fix here', 'tester', [['project', 'agent-notes', '_general.md', '- [general] g2 fix here (tester, D)', 30]]],
+  ['spec-feedback: [skill:debug:general:project] s4 fix here', 'tester', [['project', 'skill-notes', '_general.md', '- [general] s4 fix here (debug, D)', 30]]],
   ['spec-feedback: [agent] a1 fix here', null, []],
+  ['spec-feedback: [general:project] g2 fix here', null, []],
   ['spec-feedback: [agent:project] p1 fix here', null, []],
   ['spec-feedback: [skill:debug:project] s3 fix here', null, [['project', 'skill-notes', 'debug.md', '- [skill] s3 fix here (debug, D)', 100]]],
 ];
@@ -265,27 +284,37 @@ test('captureSpecFeedback: no agent writes skill lines only, and only for a ship
   });
 });
 
-// The migration's merge: the source's lines go after the target's, a line the target already says
-// (hook tail or hand tail, spacing and case folded) is not added twice, and NOTHING is dropped,
-// however many lines: no cap and no budget. A blank line is no note. Nothing new: null.
-test('mergeNotesText: appends what is new, drops nothing, and folds CRLF', () => {
+// The migration's merge: the source's lines go after the target's. A source line is left out only
+// when the target holds that EXACT line (a CR aside): case and inner spacing are never folded, and a
+// line the user wrote twice in the source stays twice. NOTHING is dropped, however many lines: no
+// cap and no budget. Blank lines travel with the lines around them. Nothing new: null.
+test('mergeNotesText: appends what is new, exact lines only, drops nothing, and folds CRLF', () => {
   const target = '# kept as written\n- [agent] one fix here (tester, 2026-11-01)\n';
-  const source = '- [agent] One fix  here (2026-10-01)\r\n\r\n- [agent] two fix here (tester, 2026-11-02)\r\nhand prose line\r\n';
+  const source = '- [agent] one fix here (tester, 2026-11-01)\r\n- [agent] One fix  here (2026-10-01)\r\n\r\n'
+    + '- my hand line\r\n- my hand line\r\n- My Hand Line\r\n';
   assert.equal(mergeNotesText(target, source),
-    '# kept as written\n- [agent] one fix here (tester, 2026-11-01)\n- [agent] two fix here (tester, 2026-11-02)\nhand prose line\n');
+    '# kept as written\n- [agent] one fix here (tester, 2026-11-01)\n- [agent] One fix  here (2026-10-01)\n\n'
+    + '- my hand line\n- my hand line\n- My Hand Line\n');
   assert.equal(mergeNotesText(target, target), null);
+  assert.equal(mergeNotesText(target, '\n\n- [agent] one fix here (tester, 2026-11-01)\n'), null, 'blank lines alone are nothing new');
   assert.equal(mergeNotesText('', 'only line\n'), 'only line\n');
   const many = Array.from({ length: 300 }, (_, i) => `- [agent] fix number ${i} (tester, 2026-11-01)`).join('\n');
   assert.equal(mergeNotesText('', many).split('\n').filter(Boolean).length, 300);
 });
 
-// The ignore file a capture writes into a project notebook it creates says what the notebook's own
-// source ignore file says (src/notebook/gitignore): everything but itself. Comments aside, the same rules.
-test('PROJECT_NOTEBOOK_GITIGNORE: the notebook\'s own ignore rules', () => {
-  const rules = (t) => t.split(/\r?\n/).filter((l) => l.trim() && !l.startsWith('#'));
-  const src = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'src', 'notebook', 'gitignore'), 'utf8');
-  assert.deepEqual(rules(PROJECT_NOTEBOOK_GITIGNORE), ['*', '!.gitignore']);
-  assert.deepEqual(rules(src), rules(PROJECT_NOTEBOOK_GITIGNORE));
+// The ignore entries for a project's notes, in the clone's `.git/info/exclude`: the two notes folders
+// and the migration's two archives, anchored at the git root (`rel` is the notebook's path from it).
+// The block is added once; a later call adds only a line that went missing, and nothing when none did.
+test('excludeWithNotes: the notes folders and archives, added once', () => {
+  const block = `${EXCLUDE_HEAD}\n/notebook/agent-notes/\n/notebook/skill-notes/\n/notebook/archived-agent-notes/\n/notebook/archived-skill-notes/\n`;
+  assert.equal(excludeWithNotes('', 'notebook'), block);
+  assert.equal(excludeWithNotes('# git ls-files --others --exclude-from=.git/info/exclude\n', 'notebook'),
+    `# git ls-files --others --exclude-from=.git/info/exclude\n${block}`);
+  assert.equal(excludeWithNotes('*.log', 'notebook'), `*.log\n${block}`);
+  assert.equal(excludeWithNotes(block, 'notebook'), null);
+  assert.equal(excludeWithNotes(block.replace('/notebook/skill-notes/\n', ''), 'notebook'), `${block.replace('/notebook/skill-notes/\n', '')}/notebook/skill-notes/\n`);
+  assert.equal(excludeWithNotes(block, 'app/notebook'),
+    `${block}/app/notebook/agent-notes/\n/app/notebook/skill-notes/\n/app/notebook/archived-agent-notes/\n/app/notebook/archived-skill-notes/\n`);
 });
 
 test('specFeedbackOf: a body seen twice in one report is kept once, and a runaway line is cut at 500', () => {
@@ -309,11 +338,13 @@ test('specFeedbackOf: a line inside a code fence is no feedback', () => {
 // the reader knows who raised it. A `project` line is the agent's own bullet, kept apart for the
 // project's file.
 test('feedbackBullets: an agent line to the own file, a general line to the general file only', () => {
-  const items = [{ scope: 'agent', body: 'a fix' }, { scope: 'general', body: 'b fix' }, { scope: 'project', body: 'c fix' }];
+  const items = [{ scope: 'agent', body: 'a fix' }, { scope: 'general', body: 'b fix' }, { scope: 'project', body: 'c fix' },
+    { scope: 'project-general', body: 'd fix' }];
   assert.deepEqual(feedbackBullets(items, 'tester', '2026-11-14'), {
     own: ['- [agent] a fix (tester, 2026-11-14)'],
     general: ['- [general] b fix (tester, 2026-11-14)'],
     project: ['- [agent] c fix (tester, 2026-11-14)'],
+    projectGeneral: ['- [general] d fix (tester, 2026-11-14)'],
   });
 });
 
@@ -577,18 +608,18 @@ test('learn hook: a machine line goes to the tier notes for a project install an
 });
 
 // The project scope: `<project>/notebook`, one folder for every host. A project install's project
-// is its parent (<d> for <d>/cfg); a global install's is the git root of the session's project. A
-// notebook the capture creates gets its ignore file; a global session outside any repo has no
-// project, and its project line is dropped, never sent to the machine notes.
+// is its parent (<d> for <d>/cfg); a global install's is the git root of the session's project.
+// No ignore file is written into the project: in a git repo the notes are named in the clone's own
+// `.git/info/exclude`, and outside one nothing extra is written. A global session outside any repo
+// has no project, and its project line is dropped, never sent to the machine notes.
 test('learn hook: an [agent:project] line goes to <project>/notebook, never to the machine notes', async () => {
   await withDir(async (d) => {
     const w = world(d, 'claude', { shared: true });
     projectReport(w);
     await subagentStop(w, d, { agent_type: 'tester' });
     assert.match(read(d, 'notebook', 'agent-notes', 'tester.md'), projectNote);
-    assert.equal(read(d, 'notebook', '.gitignore'), PROJECT_NOTEBOOK_GITIGNORE);
     assert.match(read(w.tier, 'agent-notes', 'tester.md'), ownNote, 'the machine line went elsewhere');
-    assert.deepEqual(fs.readdirSync(path.join(d, 'notebook')).sort(), ['.gitignore', 'agent-notes']);
+    assert.deepEqual(fs.readdirSync(path.join(d, 'notebook')).sort(), ['agent-notes'], 'a file beside the notes');
   });
   await withDir(async (d) => {
     const w = world(d, 'claude-global', { shared: true });
@@ -597,6 +628,8 @@ test('learn hook: an [agent:project] line goes to <project>/notebook, never to t
     await subagentStop(w, d, { agent_type: 'tester' }, path.join(w.project, 'src'));
     assert.match(read(w.project, 'notebook', 'agent-notes', 'tester.md'), projectNote, 'the git root, not the sub-folder');
     assert.equal(exists(w.project, 'src', 'notebook'), false);
+    assert.deepEqual(fs.readdirSync(path.join(w.project, 'notebook')), ['agent-notes'], 'a file beside the notes');
+    assert.equal(read(w.project, '.git', 'info', 'exclude'), excludeWithNotes('', 'notebook'));
     assert.match(read(w.tier, 'agent-notes', 'tester.md'), ownNote);
   });
   await withDir(async (d) => {
@@ -800,6 +833,7 @@ test('learn on Stop: an excluded folder, an unshipped skill, an alias and Bob wr
     assert.equal(w.stop([usr('fix it'), asst(`${SKILL_REPLY}\n${TWO_SCOPES_REPLY}`)]).out, '');
     assert.equal(fs.existsSync(path.join(w.notes, 'skill-notes')), false, 'an excluded folder captured a note');
     assert.equal(fs.existsSync(path.join(path.dirname(w.install), 'notebook')), false, 'an excluded folder captured a project note');
+    assert.equal(fs.existsSync(path.join(w.proj, '.git', 'info', 'exclude')), false, 'an excluded folder wrote an exclude entry');
   });
   inWorld({ skills: ['plan'] }, (w) => {
     w.stop([usr('fix it'), asst(SKILL_REPLY)]);
@@ -831,10 +865,12 @@ test('learn on Stop: a global install with the shared tier writes to the tier\'s
 // sends no transcript, so it captures nothing (the excluded-folder test above holds that row).
 const TWO_SCOPES_REPLY = ['Done.',
   'spec-feedback: [skill:debug] read the stack trace before the diff — seen: a guess',
-  'spec-feedback: [skill:debug:project] this repo pins node 20 — seen: a wrong runtime'].join('\n');
+  'spec-feedback: [skill:debug:project] this repo pins node 20 — seen: a wrong runtime',
+  'spec-feedback: [skill:debug:general:project] every skill here runs from app/ — seen: a wrong cwd'].join('\n');
 const TWO_SCOPES_REPORT = ['STATUS: OK',
   'spec-feedback: [agent] name the base ref in the brief — seen: a guess',
-  'spec-feedback: [agent:project] this repo needs --jobs 2 for its suite — seen: a timeout'].join('\n');
+  'spec-feedback: [agent:project] this repo needs --jobs 2 for its suite — seen: a timeout',
+  'spec-feedback: [general:project] every agent here runs from app/ — seen: a wrong cwd'].join('\n');
 const LAYOUTS = [
   ['claude', 'project', (sb) => path.join(sb, 'proj', '.claude'), 'claude'],
   ['openclaude', 'project', (sb) => path.join(sb, 'proj', '.openclaude'), 'openclaude'],
@@ -873,7 +909,12 @@ test('learn hook binary: machine lines to the tier, project lines to <proj>/note
       assert.match(read(proj, 'notebook', 'skill-notes', 'debug.md'),
         new RegExp(`^- \\[skill\\] this repo pins node 20 — seen: a wrong runtime \\(debug, ${DATE}\\)\\n$`), what);
       assert.match(read(proj, 'notebook', 'agent-notes', 'tester.md'), projectNote, what);
-      assert.equal(read(proj, 'notebook', '.gitignore'), PROJECT_NOTEBOOK_GITIGNORE, what);
+      assert.match(read(proj, 'notebook', 'agent-notes', '_general.md'),
+        new RegExp(`^- \\[general\\] every agent here runs from app/ — seen: a wrong cwd \\(tester, ${DATE}\\)\\n$`), what);
+      assert.match(read(proj, 'notebook', 'skill-notes', '_general.md'),
+        new RegExp(`^- \\[general\\] every skill here runs from app/ — seen: a wrong cwd \\(debug, ${DATE}\\)\\n$`), what);
+      assert.equal(fs.existsSync(path.join(proj, 'notebook', '.gitignore')), false, `${what}: a file written into the project`);
+      assert.equal(read(proj, '.git', 'info', 'exclude'), excludeWithNotes('', 'notebook'), what);
       for (const sub of ['agent-notes', 'skill-notes']) {
         assert.equal(fs.existsSync(path.join(install, 'notebook', sub)), false, `${what}: a note went to the install's own notebook`);
       }

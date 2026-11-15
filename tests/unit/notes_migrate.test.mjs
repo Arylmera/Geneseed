@@ -8,7 +8,8 @@ import path from 'node:path';
 import test, { after } from 'node:test';
 import { emitProjectInto } from '../../js/build/driver.mjs';
 import { migrateProjectNotes } from '../../js/build/notes-migrate.mjs';
-import { PROJECT_NOTEBOOK_GITIGNORE } from '../../js/hosts/spec-feedback.mjs';
+import { execFileSync } from 'node:child_process';
+import { EXCLUDE_HEAD } from '../../js/hosts/spec-feedback.mjs';
 import { makeSandbox, restoreProcessHome, sandboxProcessHome } from '../helpers/sandbox.mjs';
 
 // The emits below run in process: the home is a sandbox, or the shim writer reaches this machine's.
@@ -33,10 +34,11 @@ const archived = (notebook, sub) => {
   return fs.readdirSync(path.join(parent, stamp)).sort();
 };
 
-// A note already in the project's file is not added twice (the same words by hand or by the hook,
-// date and writer aside); every other line goes after the target's own, nothing is dropped, and a
-// hand-written line stays as written. The source moves aside, the target gets its ignore file.
-test('migrateProjectNotes: merges into <project>/notebook, dedupes, keeps hand lines, sets the source aside', () => {
+// A source line the project's file already holds EXACTLY is not added twice; every other line goes
+// after the target's own, case and spacing as written, and nothing is dropped. The source moves
+// aside beside the target (`<project>/notebook/archived-<sub>/<stamp>/`); outside a git repo no
+// ignore entry and no file other than the notes is written.
+test('migrateProjectNotes: merges into <project>/notebook, exact lines only, sets the source aside beside it', () => {
   withDir((d) => {
     const cfg = path.join(d, '.claude');
     put(path.join(cfg, 'notebook', 'agent-notes', 'tester.md'),
@@ -44,23 +46,22 @@ test('migrateProjectNotes: merges into <project>/notebook, dedupes, keeps hand l
     put(path.join(cfg, 'notebook', 'skill-notes', 'debug.md'), '- [skill] a hand line, no writer (2026-10-01)\n');
     put(path.join(cfg, 'notebook', 'NOTEBOOK.md'), '# Notebook Index\n');
     put(path.join(cfg, 'notebook', 'agent-runs.jsonl'), '{}\n');
-    put(path.join(d, 'notebook', 'agent-notes', 'tester.md'), '- [agent] One fix  here (2026-10-20)\n');
+    put(path.join(d, 'notebook', 'agent-notes', 'tester.md'), '- [agent] one fix here (tester, 2026-11-01)\n- [agent] One fix  here (2026-10-20)\n');
     const { say, lines } = said();
     const r = migrateProjectNotes(cfg, d, say);
     assert.deepEqual(r.moved, ['skill-notes/debug.md', 'agent-notes/tester.md']);
     assert.deepEqual(r.kept, []);
     assert.equal(read(d, 'notebook', 'agent-notes', 'tester.md'),
-      '- [agent] One fix  here (2026-10-20)\n# my own heading\n- [agent] two fix here (tester, 2026-11-02)\n');
+      '- [agent] one fix here (tester, 2026-11-01)\n- [agent] One fix  here (2026-10-20)\n# my own heading\n- [agent] two fix here (tester, 2026-11-02)\n');
     assert.equal(read(d, 'notebook', 'skill-notes', 'debug.md'), '- [skill] a hand line, no writer (2026-10-01)\n');
-    assert.equal(fs.existsSync(path.join(d, 'notebook', '.gitignore')), false,
-      'a notebook that was already there got an ignore file');
-    assert.deepEqual(archived(path.join(cfg, 'notebook'), 'agent-notes'), ['tester.md']);
-    assert.deepEqual(archived(path.join(cfg, 'notebook'), 'skill-notes'), ['debug.md']);
-    assert.deepEqual(fs.readdirSync(path.join(cfg, 'notebook')).sort(),
-      ['NOTEBOOK.md', 'agent-runs.jsonl', 'archived-agent-notes', 'archived-skill-notes'],
+    assert.deepEqual(archived(path.join(d, 'notebook'), 'agent-notes'), ['tester.md']);
+    assert.deepEqual(archived(path.join(d, 'notebook'), 'skill-notes'), ['debug.md']);
+    assert.deepEqual(fs.readdirSync(path.join(d, 'notebook')).sort(),
+      ['agent-notes', 'archived-agent-notes', 'archived-skill-notes', 'skill-notes'], 'no ignore file in the project');
+    assert.deepEqual(fs.readdirSync(path.join(cfg, 'notebook')).sort(), ['NOTEBOOK.md', 'agent-runs.jsonl'],
       'only the notes moved: the index and the ledger stay');
     assert.equal(lines.length, 1);
-    assert.match(lines[0], /^\[geneseed\] notes: merged 2 project note file\(s\) from \.claude\/notebook into notebook\/; the originals are set aside in \.claude\/notebook\/archived-skill-notes\/\d{8}-\d{6}, \.claude\/notebook\/archived-agent-notes\/\d{8}-\d{6}\n$/);
+    assert.match(lines[0], /^\[geneseed\] notes: merged 2 project note file\(s\) from \.claude\/notebook into notebook\/; the originals are set aside in notebook\/archived-skill-notes\/\d{8}-\d{6}, notebook\/archived-agent-notes\/\d{8}-\d{6}\n$/);
     // A second run finds nothing to move and says nothing.
     const again = said();
     assert.deepEqual(migrateProjectNotes(cfg, d, again.say), { moved: [], kept: [], archived: [] });
@@ -68,14 +69,41 @@ test('migrateProjectNotes: merges into <project>/notebook, dedupes, keeps hand l
   });
 });
 
-// A notebook the migration creates gets the notebook's ignore file, so the notes never reach a commit.
-test('migrateProjectNotes: a project notebook it creates gets its ignore file', () => {
+/** `git` in `dir`, no pager, no prompt, no user config. Its stdout. */
+const git = (dir, ...args) => execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'user.name=t', '-c', 'user.email=t@t',
+  '-c', 'commit.gpgsign=false', ...args], { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' } });
+
+// No file goes into the user's tree to keep the notes out of a commit: the clone's own
+// `.git/info/exclude` names them. A fresh repo stays clean after the move; a repo whose `notebook/`
+// is TRACKED shows its own files as before and none of the notes; a second emit adds no entry.
+test('migrateProjectNotes: the notes stay out of git status, through .git/info/exclude, once', () => {
   withDir((d) => {
+    git(d, 'init', '-q');
     const cfg = path.join(d, '.bob');
     put(path.join(cfg, 'notebook', 'agent-notes', 'tester.md'), '- [agent] a fix (tester, 2026-11-01)\n');
+    put(path.join(d, '.gitignore'), '.bob/\n');
+    git(d, 'add', '.gitignore');
+    git(d, 'commit', '-q', '-m', 'init');
     migrateProjectNotes(cfg, d, () => {});
-    assert.equal(read(d, 'notebook', '.gitignore'), PROJECT_NOTEBOOK_GITIGNORE);
     assert.equal(read(d, 'notebook', 'agent-notes', 'tester.md'), '- [agent] a fix (tester, 2026-11-01)\n');
+    assert.equal(git(d, 'status', '--porcelain', '--untracked-files=all'), '', 'a fresh repo shows the notes');
+    const exclude = read(d, '.git', 'info', 'exclude');
+    assert.equal(exclude.split(EXCLUDE_HEAD).length, 2, 'one marked block');
+    put(path.join(cfg, 'notebook', 'skill-notes', 'debug.md'), '- [skill] b fix (debug, 2026-11-01)\n');
+    migrateProjectNotes(cfg, d, () => {});
+    assert.equal(read(d, '.git', 'info', 'exclude'), exclude, 'a second run added an entry');
+  });
+  withDir((d) => {
+    git(d, 'init', '-q');
+    put(path.join(d, 'notebook', 'analysis.ipynb'), '{}\n');
+    git(d, 'add', 'notebook/analysis.ipynb');
+    git(d, 'commit', '-q', '-m', 'a tracked notebook');
+    const cfg = path.join(d, '.claude');
+    put(path.join(cfg, 'notebook', 'agent-notes', 'tester.md'), '- [agent] a fix (tester, 2026-11-01)\n');
+    put(path.join(d, 'notebook', 'new.ipynb'), '{}\n');
+    migrateProjectNotes(cfg, d, () => {});
+    assert.equal(git(d, 'status', '--porcelain', '--untracked-files=all', '--', 'notebook'), '?? notebook/new.ipynb\n',
+      "the notes showed in a tracked notebook/, or the user's own new file was hidden");
   });
 });
 
@@ -136,7 +164,12 @@ test('migrateProjectNotes: an install in a linked worktree merges into the main 
     assert.deepEqual(migrateProjectNotes(cfg, wt, say).moved, ['agent-notes/tester.md']);
     assert.equal(read(main, 'notebook', 'agent-notes', 'tester.md'), '- [agent] a fix (tester, 2026-11-01)\n');
     assert.equal(fs.existsSync(path.join(wt, 'notebook')), false);
+    // The backup sits beside the target too: removing the worktree cannot take it.
+    assert.deepEqual(archived(path.join(main, 'notebook'), 'agent-notes'), ['tester.md']);
+    assert.equal(fs.existsSync(path.join(cfg, 'notebook', 'archived-agent-notes')), false);
     assert.match(lines[0], /into \.\.\/main\/notebook\/;/);
+    // The exclude entry is the main checkout's: its `.git` is the shared one.
+    assert.equal(read(main, '.git', 'info', 'exclude').includes('/notebook/agent-notes/'), true);
   });
 });
 

@@ -24,7 +24,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { SECRET_RE, splitLines } from './hooks-prims.mjs';
-import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
+import { gitCommonDirOf, gitRootOf, mainWorktreeOf } from './gitref.mjs';
 
 // ---- spec-feedback twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
 // to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
@@ -41,14 +41,17 @@ import { gitRootOf, mainWorktreeOf } from './gitref.mjs';
 const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\*\*|`)?[ \t]*(.*)$/i;
 const FENCE_RE = /^[ \t]*(?:```|~~~)/;
 // A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
-// `[agent:project]` (or bare `agent:project`) is the agent's own line kept for this repo only. The
-// project scope has no shared file, so `[general:project]` is the agent's own project line too:
-// filed into the machine notes it would reach every repo, which is what its writer ruled out.
-const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(?:\[[ \t]*(?:agent|general)[ \t]*:[ \t]*(project)[ \t]*\]|agent:(project)(?![\w-]))|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+// `[agent:project]` (or bare `agent:project`) is the agent's own line kept for this repo only, and
+// `[general:project]` (or bare `general:project`) the line every agent reads in this repo only.
+const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(?<own>agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|\[[ \t]*(?<pw>agent|general)[ \t]*:[ \t]*project[ \t]*\]|(?<pb>agent|general):project(?![\w-])|(?<bare>agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+// What opens an agent's tag at all, parsed or not: `[project]`, `[agent project]`, `[agent:local]`
+// do not parse, and are dropped rather than filed, tag and all, in the machine notes.
+const AGENT_OPENING_RE = /^\[[ \t]*(?:agent|general|project)\b/i;
 /**
  * A skill's scope, which always names the skill: `[skill:<name>]` for that skill's own notes,
  * `[skill:<name>:general]` (or `, general` / ` general`) for the notes every skill shares, and
- * `[skill:<name>:project]` for its own notes in this repo only. The
+ * `[skill:<name>:project]` for its own notes in this repo only, and `[skill:<name>:general:project]`
+ * for the notes every skill shares in this repo only. The
  * name is required because the main session's reply, where a skill's line is read, also relays
  * sub-agents' `[agent]` and `[general]` lines: only a line naming a skill is a skill's. A `|`
  * before `general` is the template's unchosen alternative, as `[agent|general]` is: own notes.
@@ -56,7 +59,7 @@ const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t
  * path) drops the line rather than letting `[skill:…]` fall through into an agent's notes. The
  * brackets may be dropped (`skill:debug — …`), as reports drop them around `agent`, scope and all (`skill:debug:project — …`).
  */
-const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general|project)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?::(general|project))?(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general[ \t]*:[ \t]*project|general|project)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?::(general:project|general|project))?(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
 const SKILL_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
 // What opens a skill's tag at all, parsed or not.
 const SKILL_OPENING_RE = /^(?:\[[ \t]*skill\b|skill[ \t]*:)/i;
@@ -79,17 +82,30 @@ export const GENERAL_NOTES = '_general.md';
 /**
  * TWO SCOPES, chosen by the line, never by the install (the owner's ruling, 2026-11-15). A flaw of
  * the spec is true in every repo: `[agent]`, `[general]`, `[skill:<id>]`, `[skill:<id>:general]` go
- * to the MACHINE notes, the tier's `notes/`. A fact true only in this repo, `[agent:project]` or
- * `[skill:<id>:project]`, goes to the PROJECT notes, `<project root>/notebook/`, one folder for every
- * host. The render names this folder relative to the project root (`{{PATH_PROJECT_NOTES}}`).
+ * to the MACHINE notes, the tier's `notes/`. A fact true only in this repo, `[agent:project]`,
+ * `[general:project]`, `[skill:<id>:project]` or `[skill:<id>:general:project]`, goes to the
+ * PROJECT notes, `<project root>/notebook/`, one folder for every host, with its own `_general.md`
+ * files. The render names this folder relative to the project root (`{{PATH_PROJECT_NOTES}}`).
  */
 export const PROJECT_NOTES_DIR = 'notebook';
 /**
- * What a project notebook this capture CREATES holds first: the notebook's own ignore rule
- * (src/notebook/gitignore, whose rules a unit test holds equal to these), so a note never reaches
- * a commit. Never written into a folder that was already there: a repo's own `notebook/` is not ours.
+ * THE PROJECT NOTES NEVER REACH A COMMIT, and Geneseed writes no file into the user's tree to say so
+ * (the owner's ruling, 2026-11-15): the ignore entries go into the clone's own `.git/info/exclude`,
+ * per clone and never committed. That covers a fresh repo, a repo whose `notebook/` is tracked, and an
+ * unrelated `notebook/` folder alike, since only the notes folders and the migration's archives are
+ * named. `rel` is the notebook's path from the git root, `/`-separated. The exclude file's new text,
+ * or null when every entry is already there: the block is added once, and only its missing lines after.
  */
-export const PROJECT_NOTEBOOK_GITIGNORE = '# Geneseed notes: personal and local, never committed.\n*\n!.gitignore\n';
+export const EXCLUDE_HEAD = '# Geneseed: the project notes stay on this clone, never committed';
+export function excludeWithNotes(text, rel) {
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n').map((l) => l.trim());
+  const want = ['agent-notes', 'skill-notes', 'archived-agent-notes', 'archived-skill-notes'].map((sub) => `/${rel}/${sub}/`);
+  const missing = want.filter((w) => !lines.includes(w));
+  if (!missing.length) return null;
+  const old = String(text || '').replace(/\r\n?/g, '\n');
+  const add = [...(lines.includes(EXCLUDE_HEAD) ? [] : [EXCLUDE_HEAD]), ...missing];
+  return `${old}${old && !old.endsWith('\n') ? '\n' : ''}${add.join('\n')}\n`;
+}
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 // A bullet in the shape this capture writes: the only kind the caps may drop.
@@ -102,8 +118,8 @@ const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\([a-z][a-z0-9-]*, \d{4
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
  * I's pattern: a line that carries a credential is dropped whole, never written to a note. An
- * agent's scope is `agent`, `general` or `project`. A skill's line also carries `skill: <name>`,
- * its scope `skill` (own notes), `general` or `project`.
+ * agent's scope is `agent`, `general`, `project` or `project-general`. A skill's line also carries
+ * `skill: <name>`, its scope `skill` (own notes), `general`, `project` or `project-general`.
  */
 export function specFeedbackOf(text, secret) {
   const found = [];
@@ -126,15 +142,18 @@ export function specFeedbackOf(text, secret) {
       // format), not the reply's own line: the main session discusses the format, an agent's
       // report does not. A whole-line `spec-feedback:` in backticks stays an agent's line.
       if (m[1] === '`') continue;
-      const tag = k[3] && k[2] !== '|' ? k[3] : k[5];
-      scope = tag ? tag.toLowerCase() : 'skill';
+      const tag = (k[3] && k[2] !== '|' ? k[3] : k[5] ?? '').toLowerCase().replace(/[ \t]/g, '');
+      scope = tag === 'general:project' ? 'project-general' : tag || 'skill';
       body = body.slice(k[0].length);
     } else if (SKILL_OPENING_RE.test(body)) {
       continue; // a skill tag that does not parse (`[skill:a:b]`, `[skill:a, b]`) is no agent's line
     } else {
       const s = FEEDBACK_SCOPE_RE.exec(body);
-      if (s && (s[2] || s[3])) scope = 'project';
-      else if (s && (s[1] || s[4])) scope = (s[1] || s[4]).toLowerCase();
+      if (!s && AGENT_OPENING_RE.test(body)) continue;
+      const g = s ? s.groups : {};
+      const projectTag = g.pw || g.pb;
+      if (projectTag) scope = projectTag.toLowerCase() === 'general' ? 'project-general' : 'project';
+      else if (g.own || g.bare) scope = (g.own || g.bare).toLowerCase();
       if (s) body = body.slice(s[0].length);
     }
     body = body.replace(/\s+/g, ' ').trim();
@@ -155,11 +174,13 @@ export function specFeedbackOf(text, secret) {
 export function feedbackBullets(items, agent, day) {
   const mine = items.filter((f) => !f.skill);
   const own = (scope) => mine.filter((f) => f.scope === scope).map((f) => `- [agent] ${f.body} (${agent}, ${day})`);
+  const general = (scope) => mine.filter((f) => f.scope === scope).map((f) => `- [general] ${f.body} (${agent}, ${day})`);
   return {
     own: own('agent'),
-    general: mine.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
-    // The same bullet shape in the project's file: where it sits says its scope.
+    general: general('general'),
+    // The same bullet shapes in the project's files: where a bullet sits says its scope.
     project: own('project'),
+    projectGeneral: general('project-general'),
   };
 }
 
@@ -174,14 +195,18 @@ export function skillBullets(items, day) {
   const own = new Map();
   const project = new Map();
   const general = [];
+  const projectGeneral = [];
   for (const f of items) {
     if (!f.skill) continue;
-    if (f.scope === 'general') { general.push(`- [general] ${f.body} (${f.skill}, ${day})`); continue; }
+    if (f.scope === 'general' || f.scope === 'project-general') {
+      (f.scope === 'general' ? general : projectGeneral).push(`- [general] ${f.body} (${f.skill}, ${day})`);
+      continue;
+    }
     const into = f.scope === 'project' ? project : own;
     if (!into.has(f.skill)) into.set(f.skill, []);
     into.get(f.skill).push(`- [skill] ${f.body} (${f.skill}, ${day})`);
   }
-  return { own, general, project };
+  return { own, general, project, projectGeneral };
 }
 
 /**
@@ -194,15 +219,17 @@ export function feedbackTargets(items, agent, day) {
   const targets = [];
   const put = (root, sub, name, bullets, cap) => { if (bullets.length) targets.push({ root, sub, name, bullets, cap }); };
   if (agent) {
-    const { own, general, project } = feedbackBullets(items, agent, day);
+    const { own, general, project, projectGeneral } = feedbackBullets(items, agent, day);
     put('machine', 'agent-notes', `${agent}.md`, own, MAX_FEEDBACK_BULLETS);
     put('machine', 'agent-notes', GENERAL_NOTES, general, MAX_GENERAL_BULLETS);
     put('project', 'agent-notes', `${agent}.md`, project, MAX_FEEDBACK_BULLETS);
+    put('project', 'agent-notes', GENERAL_NOTES, projectGeneral, MAX_GENERAL_BULLETS);
   }
   const skills = skillBullets(items, day);
   for (const [skill, bullets] of skills.own) put('machine', 'skill-notes', `${skill}.md`, bullets, MAX_FEEDBACK_BULLETS);
   put('machine', 'skill-notes', GENERAL_NOTES, skills.general, MAX_GENERAL_BULLETS);
   for (const [skill, bullets] of skills.project) put('project', 'skill-notes', `${skill}.md`, bullets, MAX_FEEDBACK_BULLETS);
+  put('project', 'skill-notes', GENERAL_NOTES, skills.projectGeneral, MAX_GENERAL_BULLETS);
   return targets;
 }
 
@@ -440,13 +467,24 @@ export function projectNotesDir(base) {
 }
 
 /**
- * The project notebook, made on first use: a folder this call creates gets the notebook's ignore
- * file at once (`PROJECT_NOTEBOOK_GITIGNORE`); one that was already there is left as it is.
+ * The project notes, kept out of every commit: their entries in the clone's own `.git/info/exclude`
+ * (`excludeWithNotes`). A linked worktree's notes are the main checkout's, whose `.git` is the shared
+ * one; a submodule's gitdir is named by its `.git` file. Outside a git repo nothing is written. Never
+ * throws: an exclude that cannot be written costs only the ignore line, never the note.
  */
-function ensureProjectNotebook(root) {
-  if (existsSync(root)) return;
-  mkdirSync(root, { recursive: true });
-  try { writeFileSync(path.join(root, '.gitignore'), PROJECT_NOTEBOOK_GITIGNORE, { flag: 'wx' }); } catch { /* raced: someone made it */ }
+export function excludeProjectNotes(notebookDir) {
+  try {
+    const root = gitRootOf(path.dirname(notebookDir));
+    if (!root) return false;
+    const rel = path.relative(root, notebookDir).split(path.sep).join('/');
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return false;
+    const file = path.join(gitCommonDirOf(root), 'info', 'exclude');
+    const next = excludeWithNotes(existsSync(file) ? readFileSync(file, 'utf8') : '', rel);
+    if (next === null) return false;
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeAtomic(file, next);
+    return true;
+  } catch { return false; }
 }
 
 /**
@@ -470,7 +508,7 @@ export function captureSpecFeedback(agent, report, roots, day = today(), skillsD
   for (const t of feedbackTargets(items, agent, day)) {
     const root = at[t.root];
     if (!usable(root)) continue;
-    if (t.root === 'project' && typeof roots !== 'string') ensureProjectNotebook(root);
+    if (t.root === 'project' && typeof roots !== 'string') excludeProjectNotes(root);
     const dir = path.join(root, t.sub);
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, t.name);
@@ -480,21 +518,21 @@ export function captureSpecFeedback(agent, report, roots, day = today(), skillsD
 }
 
 /**
- * The migration's merge (`js/build/notes-migrate.mjs`): `source`'s lines appended to `target`'s
- * where `target` does not already say them (`feedbackKey`, so a hook bullet and the same words by
- * hand are one note). NO cap and no budget: a moved note is never dropped. null when nothing is new.
+ * The migration's merge (`js/build/notes-migrate.mjs`): `source`'s lines appended after `target`'s.
+ * A source line is left out only when the target already holds that EXACT line (a trailing CR
+ * aside): case and inner spacing are never folded, and two equal lines inside the source both stay,
+ * since the user may have written them so. Blank lines travel with the lines they sit between. NO cap
+ * and no budget: a moved note is never dropped. null when the target already holds every line.
+ * (The capture's own duplicate check, `feedbackKey` in `mergeFeedback`, folds case and spacing for
+ * the hook's bullets; it did so before the two scopes, and this merge does not use it.)
  */
 export function mergeNotesText(target, source) {
   const text = String(target || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
   const lines = text ? text.split('\n') : [];
-  const seen = new Set(lines.filter((l) => l.trim()).map(feedbackKey));
-  const add = [];
-  for (const l of String(source || '').replace(/\r\n?/g, '\n').split('\n')) {
-    if (!l.trim()) continue;
-    const k = feedbackKey(l);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    add.push(l);
-  }
-  return add.length ? `${[...lines, ...add].join('\n')}\n` : null;
+  const have = new Set(lines);
+  const src = String(source || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+  const add = (src ? src.split('\n') : []).filter((l) => !l.trim() || !have.has(l));
+  if (!add.some((l) => l.trim())) return null;
+  while (add.length && !add[0].trim()) add.shift();
+  return `${[...lines, ...add].join('\n')}\n`;
 }

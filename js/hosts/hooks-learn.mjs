@@ -358,6 +358,8 @@ export function notesRootsOf(install, host, payloadCwd) {
  * advisory verdict or the change report may hold, and a failure costs only the capture.
  */
 function captureFeedback(agent, report, args, install, meta) {
+  // Most replies hold no feedback line: then the two roots are never resolved (two fs walks).
+  if (!/spec-feedback/i.test(report || '')) return;
   try {
     const skills = install ? path.join(install, 'skills') : null;
     const written = captureSpecFeedback(agent, report, notesRootsOf(install, args.host, meta.cwd), undefined, skills);

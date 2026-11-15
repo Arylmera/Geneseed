@@ -29,7 +29,7 @@
   approved by code ({{LAW:deletion-is-deliberate}}).
 
 ## Procedure
-0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md`, which wins where they disagree.
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md` and `_general.md` there, which win where they disagree.
 1. Read the map (`MEMORY.md`), then one topic file at a time, then only the facts
    that topic needs ({{DOCTRINE:context-economy}}). On a large store, work topic by
    topic and report progress after each one (`3/14 topics: 4 merged, 2 archived`).

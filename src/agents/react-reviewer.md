@@ -22,7 +22,7 @@ React-specific review only. Generic correctness, naming and structure belong to 
 <!-- bash: allow -->
 
 ## Procedure
-0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md`, which wins where they disagree.
+0. Read first, each if it exists — your durable lessons from prior dispatches ({{DOCTRINE:persist-insight}}): `{{PATH_MEMORY}}/agents/<your-name>.md`, then the feedback notes `{{PATH_NOTES}}/agent-notes/<your-name>.md` and `{{PATH_NOTES}}/agent-notes/_general.md`, then this repo's `{{PATH_PROJECT_NOTES}}/agent-notes/<your-name>.md` and `_general.md` there, which win where they disagree.
 1. Read the changed files and `package.json` for the React major. Run lint and, for TypeScript, the typecheck; a missing `react-hooks/rules-of-hooks` or `react-hooks/exhaustive-deps` rule is itself a finding.
 2. Check, in this order:
    - Security: `dangerouslySetInnerHTML` without a sanitiser at the call site; a user-supplied URL in `href`/`src` without a scheme check; a secret in a bundler-inlined env value (`import.meta.env.VITE_*`, webpack `DefinePlugin`); a session token in `localStorage`.

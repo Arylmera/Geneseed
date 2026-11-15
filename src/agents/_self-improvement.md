@@ -5,11 +5,11 @@ that proved wrong, a step you could not execute — end your report with one lin
 `spec-feedback: [agent|general] <the one-line fix> [— situation: <when it applies>] — seen:
 <what happened, against what this spec led you to expect>`. Ask one question first: is it true
 in any repo, or only here? Any repo: `[agent]`, or `[general]` for a fix other {{AGENTS}} need
-too. Only here: `[agent:project]`. Omit the line when there is no friction. When the run ends,
-the harness hook copies each line, dated, into the machine notes
+too. Only here: `[agent:project]`, or `[general:project]`. Omit the line when there is no
+friction. When the run ends, the harness hook copies each line, dated, into the machine notes
 `{{PATH_NOTES}}/agent-notes/<name>.md` (a `general` line into `agent-notes/_general.md` there),
-or a `project` line into `{{PATH_PROJECT_NOTES}}/agent-notes/<name>.md` at the project root (in a
-linked worktree, the main checkout's) — no model call, and never into this rendered file, which
+or a `project` line into `{{PATH_PROJECT_NOTES}}/agent-notes/` at the project root, the same two
+files (in a linked worktree, the main checkout's) — no model call, and never into this rendered file, which
 a rebuild overwrites. Step 0 reads those notes at every later dispatch of this {{AGENT}}, machine
 first; the project notes win where they disagree. When a step-0 read is refused, or the brief
 forbids that path, skip it, say so in one line of the report, and go on. The caller writes no

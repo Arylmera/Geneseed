@@ -138,11 +138,11 @@ Read and write follow one rule each:
 The `spec-feedback:` lines an {{AGENT}} ends its report with are a second, distinct
 value, with one writer of their own: the same hook copies them, with no model call,
 into the machine notes `{{PATH_NOTES}}/agent-notes/<agent-name>.md` (a `general` line into
-`agent-notes/_general.md` there), or an `[agent:project]` line, true only in this repo, into
-`{{PATH_PROJECT_NOTES}}/agent-notes/<agent-name>.md` at the project root; one dated bullet each,
-duplicates skipped. They are
+`agent-notes/_general.md` there), or a line true only in this repo (`[agent:project]`,
+`[general:project]`) into the same two files under `{{PATH_PROJECT_NOTES}}/agent-notes/` at the
+project root; one dated bullet each, duplicates skipped. They are
 capped: 100 bullets in an {{AGENT}}'s file, 30 in `_general.md`, 8 000 characters a file.
-The {{AGENT}} reads all four files at step 0. Neither the caller nor this store holds a
+The {{AGENT}} reads all five files at step 0. Neither the caller nor this store holds a
 copy, except on a host with no subagent-finished hook (Bob), where the caller copies the
 line into the same file by hand. Folding a note into an {{AGENT}}'s source is the user's call.
 

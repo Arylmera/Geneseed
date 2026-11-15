@@ -477,7 +477,9 @@ test("skill feedback: a child session's [skill:…] line goes to skill-notes, no
 // install's session root's git root. A notebook the capture creates gets its ignore file.
 const SCOPES_REPORT = "STATUS: OK\nspec-feedback: [agent] name the base — seen: drift\n"
   + "spec-feedback: [agent:project] this repo needs --jobs 2 — seen: a timeout\n"
-  + "spec-feedback: [skill:debug:project] this repo pins node 20 — seen: a wrong runtime"
+  + "spec-feedback: [skill:debug:project] this repo pins node 20 — seen: a wrong runtime\n"
+  + "spec-feedback: [general:project] every agent here runs from app/ — seen: a wrong cwd"
+const PROJECT_GENERAL = /^- \[general\] every agent here runs from app\/ — seen: a wrong cwd \(tester, \d{4}-\d{2}-\d{2}\)\n$/
 const PROJECT_AGENT = /^- \[agent\] this repo needs --jobs 2 — seen: a timeout \(tester, \d{4}-\d{2}-\d{2}\)\n$/
 const PROJECT_SKILL = /^- \[skill\] this repo pins node 20 — seen: a wrong runtime \(debug, \d{4}-\d{2}-\d{2}\)\n$/
 
@@ -509,9 +511,12 @@ test("two scopes: V1 and V2 child sessions send each line to its scope, for a pr
     await v1.event({ event: { type: "session.idle", properties: { sessionID: "c1" } } })
     assert.match((await waitFor(path.join(repo, "notebook", "agent-notes", "tester.md"))) ?? "", PROJECT_AGENT)
     assert.match((await waitFor(path.join(repo, "notebook", "skill-notes", "debug.md"))) ?? "", PROJECT_SKILL)
+    assert.match((await waitFor(path.join(repo, "notebook", "agent-notes", "_general.md"))) ?? "", PROJECT_GENERAL)
     assert.match((await waitFor(sb.note)) ?? "", /^- \[agent\] name the base — seen: drift \(tester, \d{4}-\d{2}-\d{2}\)\n$/)
-    assert.equal(await fs.readFile(path.join(repo, "notebook", ".gitignore"), "utf8"),
-      "# Geneseed notes: personal and local, never committed.\n*\n!.gitignore\n")
+    // No file goes into the project: the clone's own .git/info/exclude names the notes, once.
+    await assert.rejects(fs.stat(path.join(repo, "notebook", ".gitignore")))
+    const { excludeWithNotes } = await import("../../js/hosts/spec-feedback.mjs")
+    assert.equal(await fs.readFile(path.join(repo, ".git", "info", "exclude"), "utf8"), excludeWithNotes("", "notebook"))
     await assert.rejects(fs.stat(path.join(repo, ".opencode", "notebook")), "a note went to the plugin layer's notebook")
 
     // V2, a global install (its marker says so): the session root's git root is the project.

@@ -608,13 +608,13 @@ test('the notes paths a skill and an agent read: machine then project, the same 
         const what = `${host} ${footprint}`;
         assert.ok(skill.includes(`\`${MACHINE}/skill-notes/develop.md\``), `${what}: machine skill notes`);
         assert.ok(skill.includes(`\`${MACHINE}/skill-notes/_general.md\``), `${what}: machine general notes`);
-        assert.ok(skill.includes('`notebook/skill-notes/develop.md` at the project root'), `${what}: project skill notes`);
-        assert.ok(skill.includes('`[skill:develop:project]`'), `${what}: the project tag`);
+        assert.ok(skill.includes('under `notebook/skill-notes/` at the project root'), `${what}: project skill notes`);
+        assert.ok(skill.includes('`[skill:develop:general:project]`'), `${what}: the project tag`);
         assert.ok(!skill.includes(`${LAYOUT[host]}/notebook/skill-notes`), `${what}: a prefixed notes path is left`);
         const agent = read(d, LAYOUT[host], 'agents', 'developer.md').replace(/\s+/g, ' ');
         assert.ok(agent.includes(`\`${MACHINE}/agent-notes/<your-name>.md\` and \`${MACHINE}/agent-notes/_general.md\`, `
-          + "then this repo's `notebook/agent-notes/<your-name>.md`, which wins where they disagree"), `${what}: agent step 0`);
-        assert.ok(agent.includes('`[agent:project]`'), `${what}: the agent's project tag`);
+          + "then this repo's `notebook/agent-notes/<your-name>.md` and `_general.md` there, which win where they disagree"), `${what}: agent step 0`);
+        assert.ok(agent.includes('`[general:project]`'), `${what}: the agent's project tag`);
       });
     }
   }
@@ -623,7 +623,7 @@ test('the notes paths a skill and an agent read: machine then project, the same 
     quiet(() => emitGlobalInto('claude', { theme: 'neutral', out: null, cfgDir, footprint: 'lean', sharedRoot: 'C:/T/geneseed' }));
     const skill = read(cfgDir, 'skills', 'develop', 'SKILL.md').replace(/\s+/g, ' ');
     assert.ok(skill.includes('`C:/T/geneseed/notes/skill-notes/develop.md`'), 'a global emit names the tier absolutely');
-    assert.ok(skill.includes('`notebook/skill-notes/develop.md` at the project root'), 'a global emit names the project notes');
+    assert.ok(skill.includes('under `notebook/skill-notes/` at the project root'), 'a global emit names the project notes');
   });
 });
 
