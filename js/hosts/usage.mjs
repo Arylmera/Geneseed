@@ -25,12 +25,15 @@
  *
  * NOT COUNTED, ON PURPOSE:
  *   * a session in an EXCLUDED folder (`sovereignBypass`): the install is dormant there, and its
- *     hooks write nothing — the counter included. This was the whole of the 2026-11 gap between
- *     transcripts and the ledger on the maintainer's machine (one repo excluded for a month).
+ *     hooks write nothing — the counter included. So a repo excluded for a time shows fewer calls
+ *     in the ledger than its transcripts hold, and that is the switch working.
  *   * the GLOBAL install's copy when a live project install of the same host sits in the session's
  *     project dir (`globalHookStandingDown`): both hooks run, both would append, and the console
  *     sums every install's ledger, so each call read twice. The caller passes that test in as
  *     `standingDown`, evaluated only for a call that counts: this module stays builtins-only.
+ *     UNVERIFIED ON BOB: with no project variable, its project dir is the payload's `cwd`. If that
+ *     follows a `cd` into another repo whose Bob project install Bob never loaded, the global
+ *     stands down and the call is counted by neither (adapters/bob/README.md).
  *
  * Off when `GENESEED_NO_USAGE` is set or the install holds a `.usage-off` marker.
  */

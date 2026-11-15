@@ -157,7 +157,10 @@ reports one that does not start.
 Overview: `spawn_subagent` by its `name`, `start_subtask` by its `mode`. A subtask's `title` is
 never recorded: it is free text, and the count keeps no prompt. A message typed as `/<skill>`
 is counted on `UserPromptSubmit` when that skill is installed, from the payload's `prompt` field
-as Claude Code sends it; that field is not verified on a live Bob session.
+as Claude Code sends it; that field is not verified on a live Bob session. Beside a Bob project
+install the global install's count stands down, and it finds the project folder from the payload's
+`cwd`. If that `cwd` follows a `cd` into another repo with a Bob project install that Bob never
+loaded, the call is counted by neither install. This is not verified on a live Bob session either.
 
 **Migration.** A re-emit over an older install unwires Geneseed's groups from the flat
 `~/.bob/settings.json` (your own keys there are kept) and writes the new set to the

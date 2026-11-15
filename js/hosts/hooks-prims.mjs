@@ -557,7 +557,9 @@ export function activityOn(root) {
  * global config dir's `skills/`, and the project's own `<marker>/skills/`. Bob: its UserPromptSubmit payload is read as Claude's
  * (`prompt`), unverified on a live Bob. Always 0: on UserPromptSubmit exit 2 erases the prompt.
  */
-const SLASH_PROMPT_RE = /"prompt"\s*:\s*"\s*\//;
+// Leading blanks as `slashSkillOf` takes them (`^\s*`), spelled as JSON spells them: a raw blank,
+// or an escaped `\n`, `\r`, `\t`. Narrower than that and a prompt it would count is never parsed.
+const SLASH_PROMPT_RE = /"prompt"\s*:\s*"(?:\s|\\[nrt])*\//;
 export async function cmdActivity(args) {
   try {
     if (!args || !args.root || process.env.GENESEED_NO_USAGE || process.env.GENESEED_LEARN_CHILD

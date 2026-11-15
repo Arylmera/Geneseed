@@ -2508,32 +2508,51 @@ function usageOf(tool, args) {
 // WHERE THE LEDGER IS: the install's own `notebook/`. A global install keeps it beside plugins/
 // (`<cfg>/notebook`); a PROJECT install keeps its plugins in `<repo>/.opencode/plugins` and its
 // notebook at `<repo>/notebook`, the root the console reads (js/web/usage-api.mjs). Only the first
-// was tried once, and a project install counted nothing. null: no notebook, no count.
-async function usageHome() {
-  const cfg = path.dirname(PLUGIN_DIR)
-  if (await isDir(path.join(cfg, "notebook"))) return cfg
-  if (path.basename(cfg) === ".opencode" && await isDir(path.join(path.dirname(cfg), "notebook"))) return path.dirname(cfg)
+// was tried once, and a project install counted nothing. null: no notebook, or `.usage-off` there.
+// Sync, because `countingCopy` asks it of other installs' dirs too.
+function usageHome(cfg = path.dirname(PLUGIN_DIR)) {
+  const isDirSync = (p) => { try { return statSync(p).isDirectory() } catch { return false } }
+  let home = null
+  if (isDirSync(path.join(cfg, "notebook"))) home = cfg
+  else if (path.basename(cfg) === ".opencode" && isDirSync(path.join(path.dirname(cfg), "notebook"))) home = path.dirname(cfg)
+  return home && !existsSync(path.join(home, ".usage-off")) ? home : null
+}
+// The twin of `globalHookStandingDown` for the counter only. OpenCode loads the global plugins/
+// AND every project `.opencode/plugins/` from the session's directory up to its worktree (it
+// dedups npm plugins, not local files), so beside a project install several guards see each call,
+// and the console, which sums every install, would read it several times. ONE copy counts: the
+// guard of the NEAREST project dir, from `directory` up to `worktree`, that can count (a guard
+// file and a live `usageHome`). With none, every copy counts as before — the global alone, in the
+// usual case. Nearest, not "any other guard exists": with `repo/` and `repo/pkg/` both installed
+// and a session in pkg, that rule had every copy stand down and nothing counted. A project guard
+// that cannot count (no notebook, `.usage-off`) silences nothing, as a hook a project does not
+// wire silences nothing on the Claude side. `GENESEED_STACK_GLOBAL` stacks them, as for the hooks.
+function countingCopy(here) {
+  const [directory, worktree] = here || []
+  if (!directory) return null
+  const start = path.resolve(directory)
+  const top = worktree ? path.resolve(worktree) : start
+  const rel = path.relative(top, start)
+  // Nearest first. `directory` not under `worktree`: test the two and walk nothing.
+  const dirs = [start]
+  if (rel.startsWith("..") || path.isAbsolute(rel)) dirs.push(top)
+  else for (let d = start; norm(d) !== norm(top) && path.dirname(d) !== d;) { d = path.dirname(d); dirs.push(d) }
+  for (const dir of dirs) {
+    const plugins = path.join(dir, ".opencode", "plugins")
+    if (existsSync(path.join(plugins, "geneseed-guard.js")) && usageHome(path.join(dir, ".opencode"))) return norm(plugins)
+  }
   return null
 }
-// The twin of `globalHookStandingDown` for the counter only: OpenCode loads the global plugins/
-// AND a project's `.opencode/plugins/` (it dedups npm plugins, not local files), so beside a
-// project install both guards count each call and the console, which sums every install, reads
-// it twice. This copy stands down when the session's project carries its own guard and this is
-// not it. `GENESEED_STACK_GLOBAL` stacks them, as it does the hooks.
-function projectCountsIt(here) {
+function anotherCopyCounts(here) {
   if (process.env.GENESEED_STACK_GLOBAL) return false
   try {
-    const mine = norm(PLUGIN_DIR)
-    for (const dir of new Set((here || []).filter(Boolean))) {
-      const theirs = path.join(dir, ".opencode", "plugins")
-      if (norm(theirs) !== mine && existsSync(path.join(theirs, "geneseed-guard.js"))) return true
-    }
-  } catch { /* cannot tell: count */ }
-  return false
+    const winner = countingCopy(here)
+    return winner !== null && winner !== norm(PLUGIN_DIR)
+  } catch { return false /* cannot tell: count */ }
 }
 async function appendUse(use, here) {
-  const home = await usageHome()
-  if (!home || existsSync(path.join(home, ".usage-off")) || projectCountsIt(here)) return
+  const home = usageHome()
+  if (!home || anotherCopyCounts(here)) return
   await fs.appendFile(path.join(home, "notebook", "usage.jsonl"),
     `${JSON.stringify({ ts: new Date().toISOString().slice(0, 10), ...use })}\n`)
 }
