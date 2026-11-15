@@ -8,7 +8,8 @@ that proved wrong, a step you could not execute — end your report with one lin
 harness hook copies each line, dated, into `{{PATH_NOTES}}/agent-notes/<name>.md`, or a
 `general` line into `agent-notes/_general.md` instead — no model call, and never into this
 rendered file, which a rebuild overwrites. Step 0 reads those notes at every later dispatch
-of this {{AGENT}}. The caller writes no note itself, except on a host with no
+of this {{AGENT}}; when a step-0 read is refused, or the brief forbids that path, skip it,
+say so in one line of the report, and go on. The caller writes no note itself, except on a host with no
 subagent-finished hook (Bob), where it copies the line there in the same form. The caller
 weighs the line, and folding a note into the source is the user's call, after the
 skill-forge {{SKILL}}'s probe. The caller records the feedback to {{MEMORY}} only if it
