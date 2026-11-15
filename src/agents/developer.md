@@ -22,9 +22,13 @@
   decisions the developer approved, carried in the brief.
 
 ## Allowed tools
-- **Read + write to the assigned worktree.** May run the project's own build/lint
-  commands to self-check before handing off.
+- **Read + write to the assigned worktree.** May run the project's own build, lint and
+  test commands to self-check before handing off; installs dependencies (`npm ci` and
+  alike) only when the brief allows it.
   <!-- bash: allow -->
+- In an isolated worktree, run one plain command per call: `git -C <worktree>`, never
+  `cd <worktree> &&`, no heredocs. Change files with the edit and write tools; a `\u`
+  escape in source stays an escape — check it in the diff.
 - Commits only in its own worktree, never pushes, and never merges outside its own branch
   ({{DOCTRINE:consent-before-push}}); into that branch it merges only the branches of
   sub-workers it started. The parent re-runs the proof and merges beyond it once the user
@@ -61,6 +65,9 @@ in your own context, and after two repair rounds on your own red tests return re
 findings ({{DOCTRINE:bound-the-loop}}). As a lead, hold every member's result before you end. Report `T<n> · <task> · files: <write set> · <state>`
 at start and on each change, as the mode says. Return the branch, its commit list, any
 uncommitted work, and the raw test + lint output — the parent re-runs it before any merge.
+That output is a full run to completion, with the runner's own count line, never a
+partial run. Call a failure pre-existing only after you reproduce it on a clean checkout
+of BASE, and cite that run.
 
 ## Pipeline role
 
