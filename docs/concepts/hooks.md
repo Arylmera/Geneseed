@@ -23,9 +23,22 @@ Geneseed writes its hooks into the host's settings file. Every hook calls one pr
 | `Stop` | the agent finishes a reply | `geneseed-hook learn` | distils durable facts into the memory store | needs `GENESEED_LLM` |
 | `SubagentStop` | a subagent finishes | `geneseed-hook learn` | copies the `spec-feedback:` lines of its report into `agent-notes/<name>.md` (no model); appends one outcome line to `notebook/agent-runs.jsonl` (see [Agents](agents.md#did-a-spec-change-help)); records a lesson for that agent in the store's `agents/<name>.md` | the copy and the outcome line need nothing (the line is off with `GENESEED_NO_USAGE` or `.usage-off`); the lesson needs `GENESEED_LLM` |
 | `PreCompact` | before auto-compaction | `geneseed-hook learn` | captures memory before the transcript is summarised | needs `GENESEED_LLM` |
-| `UserPromptSubmit` | you send a message | `geneseed-hook activity` | records the turn's start for the web console's Activity view; prints nothing | off with `GENESEED_ACTIVITY=off` |
+| `UserPromptSubmit` | you send a message | `geneseed-hook activity` | records the turn's start for the web console's Activity view; when the message is `/<name>` and `<name>` is an installed skill, records it in the usage count as `via: "slash"`; prints nothing | the Activity record is off with `GENESEED_ACTIVITY=off`; the count is off with `GENESEED_NO_USAGE` or `.usage-off` |
 | `SessionEnd` | the session closes | `geneseed-hook activity` | marks the session ended and archives it | off with `GENESEED_ACTIVITY=off` |
 | `SubagentStart` | a subagent starts | `geneseed-hook context` | injects your `user-rules.md` layers into the subagent (as JSON `additionalContext`, under the same 9 000-character budget), and records the subagent as a branch of its session | the Activity record only, with `GENESEED_ACTIVITY=off` |
+
+### What the usage count records
+
+The web console's "What fires" chart reads `notebook/usage.jsonl` in every install it finds, and adds the counts together. Each line holds the day, `skill` or `agent`, and the name. A line for a typed skill also holds `"via":"slash"`. A line never holds the prompt or the arguments.
+
+- **A skill call and a subagent call.** The `Skill|Agent|Task` hook records one line per call.
+- **A skill that you type as `/<name>`.** A typed skill makes no `Skill` tool call, so the `UserPromptSubmit` hook records it, with `"via":"slash"`. It counts only when `<name>/SKILL.md` exists in the install's `skills/` folder, in the global config folder's `skills/` (`~/.claude/skills/`), or in the project's own `.claude/skills/`. A built-in command such as `/clear` or `/model` is not counted. A plugin skill typed as `/<plugin>:<skill>` is not counted either, because its folder is in the host's plugin cache.
+- **A session in an excluded folder.** It is not counted. In a folder that `geneseed exclude` lists, every hook of that install stays quiet, the counter included. So a repo that was excluded for a time shows fewer calls than its transcripts hold.
+- **A global install beside a project install of the same host.** When the session's project folder holds a live, wired project install, both hooks run. Only the project install counts the call, and the global one stands down, so the console does not count the call twice. `GENESEED_STACK_GLOBAL` makes both count.
+
+On OpenCode the guard plugin counts the same calls. A project install writes to `<repo>/notebook/usage.jsonl`. OpenCode loads the global plugins and every project `.opencode/plugins/` from the session's folder up to its worktree. Only one copy counts a call: the copy of the nearest project that can count (it has a `notebook/` and no `.usage-off`). If no project can count, the global copy counts. A `/<name>` command counts on OpenCode 1 (`command.execute.before`), but not on OpenCode 2, which gives the plugin the expanded command text and no name.
+
+On Bob two parts are not verified on a live Bob session. The typed-skill count reads the payload's `prompt` field as on Claude Code. The global install finds the project folder from the payload's `cwd`, because Bob sets no project variable. If Bob's `cwd` follows a `cd` into another repo that has a Bob project install, which Bob never loaded, the global install stands down and that call is not counted.
 
 Every hook above also feeds the [Activity view](../reference/plugin-activity.md) after it has decided, unless tracking is off: one file per session under `activity/` beside the install. The gates' verdicts never wait on it.
 
