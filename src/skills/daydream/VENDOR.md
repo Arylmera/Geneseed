@@ -41,3 +41,9 @@ it is personal to one vault. Re-apply it on update.
 The cost line in `SKILL.md` reads "0.40-0.50 USD" where upstream writes a dollar sign before the
 number: Claude Code substitutes a dollar sign followed by a digit with the skill's arguments, so
 upstream's text renders mangled. Re-apply it on update.
+
+At emit time the `description:` of `SKILL.md` is replaced with the skill's line in
+`src/skill-descriptions.json` (at most 80 characters: the host's skill listing has a budget), and
+the description written here is kept as the first body line, a blockquote
+(`vendoredWithCatalogueLine`, `js/hosts/native.mjs`). This file is not changed; nothing to
+re-apply on update.
