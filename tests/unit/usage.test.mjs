@@ -345,7 +345,8 @@ test('activity counts a typed /skill silently through the real hook binary', () 
     fs.mkdirSync(path.join(root, 'notebook'), { recursive: true });
     skillAt(path.join(root, 'skills'), 'develop');
     skillAt(path.join(proj, '.claude', 'skills'), 'nas');
-    const env = hookEnv({ CLAUDE_PROJECT_DIR: proj });
+    // An empty global: the machine's own `~/.claude/skills` must not decide a row.
+    const env = hookEnv({ CLAUDE_PROJECT_DIR: proj, CLAUDE_CONFIG_DIR: path.join(sb.path, 'no-global') });
     for (const [event, prompt] of [['UserPromptSubmit', '/develop now'], ['UserPromptSubmit', '/nas restart x'],
       ['UserPromptSubmit', '/clear'], ['UserPromptSubmit', 'run /develop please'], ['SessionEnd', '/develop']]) {
       const r = runHook(['activity', '--root', root], { hook_event_name: event, session_id: 's1', cwd: proj, prompt }, env);
@@ -386,13 +387,13 @@ test('the global install stands its count down beside a wired project install', 
     };
     const ledger = path.join(global, USAGE_LEDGER);
     wire(['context', 'tool-gate', 'activity']);
-    fire(hookEnv({ CLAUDE_PROJECT_DIR: proj }));
+    fire(hookEnv({ CLAUDE_PROJECT_DIR: proj, CLAUDE_CONFIG_DIR: global }));
     assert.deepEqual(lines(ledger), [], 'the project install counts these calls; the global must not');
-    fire(hookEnv({ CLAUDE_PROJECT_DIR: proj, GENESEED_STACK_GLOBAL: '1' }));
+    fire(hookEnv({ CLAUDE_PROJECT_DIR: proj, CLAUDE_CONFIG_DIR: global, GENESEED_STACK_GLOBAL: '1' }));
     assert.deepEqual(noTs(ledger), [{ kind: 'skill', name: 'plan' }, { kind: 'skill', name: 'develop', via: 'slash' }],
       'GENESEED_STACK_GLOBAL stacks the counts');
     wire(['context']);
-    fire(hookEnv({ CLAUDE_PROJECT_DIR: proj }));
+    fire(hookEnv({ CLAUDE_PROJECT_DIR: proj, CLAUDE_CONFIG_DIR: global }));
     assert.equal(lines(ledger).length, 4, 'a project that does not run the counter verbs silences nothing');
   } finally { sb.cleanup(); }
 });
