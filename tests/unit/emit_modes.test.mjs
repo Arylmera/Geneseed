@@ -581,15 +581,16 @@ test('a notebook path names where the notebook is: .claude/notebook/ on a Claude
       'the Foreman ledger lost the .claude/ prefix');
     assert.ok(carrier.includes('[`.claude/notebook/`](.claude/notebook/)'));
     assert.ok(!carrier.includes('`notebook/foreman'), 'an unprefixed Foreman path is left');
+    // A skill's notes path names the skill itself (`{{SKILL_NAME}}`, rendered from its id).
     assert.ok(read(d, '.claude', 'skills', 'develop', 'SKILL.md')
-      .includes('`.claude/notebook/skill-notes/<name>.md`'), "a skill's notes path is unprefixed");
+      .includes('`.claude/notebook/skill-notes/develop.md`'), "a skill's notes path is unprefixed");
     assert.ok(read(d, '.claude', 'agents', 'developer.md')
       .includes('`.claude/notebook/agent-notes/<name>.md`'), "an agent's notes path is unprefixed");
   });
   withDir((d) => {
     quiet(() => buildInto({ theme: 'neutral', out: d, footprint: 'full', mode: 'foreman' }));
     assert.ok(read(d, 'AGENT.md').includes('`notebook/foreman-ledger.md`, one line per live task'));
-    assert.ok(read(d, 'skills', 'develop.md').includes('`notebook/skill-notes/<name>.md`'));
+    assert.ok(read(d, 'skills', 'develop.md').includes('`notebook/skill-notes/develop.md`'));
   });
 });
 

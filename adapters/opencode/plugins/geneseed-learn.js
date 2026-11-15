@@ -316,10 +316,11 @@ async function appendAgentLesson(memDir, agent, lesson) {
   return file
 }
 
-// ---- spec-feedback notes (agent-notes/<name>.md) --------------------------------
+// ---- spec-feedback notes (agent-notes/<name>.md, skill-notes/<name>.md) ----------
 // The `spec-feedback:` lines a subagent ends its report with go into the notes its next dispatch
-// reads, with no model call: the twin of js/hosts/spec-feedback.mjs `captureSpecFeedback`, which
-// the Claude hook runs on SubagentStop. The pure part below is a tool-kept copy.
+// reads, and a skill's `[skill:<name>]` line into the notes that skill reads, with no model call:
+// the twin of js/hosts/spec-feedback.mjs `captureSpecFeedback`, which the Claude hook runs on
+// SubagentStop and Stop. The pure part below is a tool-kept copy.
 // ---- spec-feedback twin: BEGIN — adapters/opencode/plugins/geneseed-learn.js carries everything down
 // to the END marker verbatim, with `export ` dropped (`node tests/twins.mjs --write` after a change).
 
@@ -336,6 +337,20 @@ const FEEDBACK_LINE_RE = /^[ \t]*(?:[-*+][ \t]+)*(\*\*|`)?spec-feedback[ \t]*:(\
 const FENCE_RE = /^[ \t]*(?:```|~~~)/;
 // A bare scope word stands alone: `agent-notes/…` and `general-purpose …` open a body, not a scope.
 const FEEDBACK_SCOPE_RE = /^(?:\[[ \t]*(agent|general)[ \t]*\]|\[[ \t]*agent[ \t]*\|[ \t]*general[ \t]*\]|(agent|general)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+/**
+ * A skill's scope, which always names the skill: `[skill:<name>]` for that skill's own notes,
+ * `[skill:<name>:general]` (or `, general` / ` general`) for the notes every skill shares. The
+ * name is required because the main session's reply, where a skill's line is read, also relays
+ * sub-agents' `[agent]` and `[general]` lines: only a line naming a skill is a skill's. A `|`
+ * before `general` is the template's unchosen alternative, as `[agent|general]` is: own notes.
+ * The bracket's content is taken whole, and a name that is no slug (the template's `<name>`, a
+ * path) drops the line rather than letting `[skill:…]` fall through into an agent's notes. The
+ * brackets may be dropped (`skill:debug — …`), as reports drop them around `agent`.
+ */
+const SKILL_SCOPE_RE = /^(?:\[[ \t]*skill[ \t]*:[ \t]*([^\]|,; \t:]*)[ \t]*(?:([|,;:]|[ \t])[ \t]*(general)[ \t]*)?\]|skill:([a-z][a-z0-9-]*)(?![\w-]))[ \t]*(?:[—–:-][ \t]*)?/i;
+const SKILL_NAME_RE = /^[a-z][a-z0-9-]{0,63}$/;
+// What opens a skill's tag at all, parsed or not.
+const SKILL_OPENING_RE = /^(?:\[[ \t]*skill\b|skill[ \t]*:)/i;
 // "none" as the whole answer, or before punctuation or a dash; "none of the proof commands…" is feedback.
 const FEEDBACK_NONE_RE = /^(?:none|n\/a|nothing|no friction)[ \t]*(?:$|[.,;:!—–-])/i;
 /** The include's own template, which a report may quote: never a note. */
@@ -355,11 +370,16 @@ const GENERAL_NOTES = '_general.md';
 // A bullet's dated tail, `(2026-11-14)` or `(tester, 2026-11-14)`: not part of what it says.
 const DATED_TAIL_RE = /[ \t]*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
 // A bullet in the shape this capture writes: the only kind the caps may drop.
-const HOOK_BULLET_RE = /^- \[(?:agent|general)\] .*\((?:[a-z][a-z0-9-]*, )?\d{4}-\d{2}-\d{2}\)[ \t]*$/;
+// Every bullet the hook writes names its writer beside the date, `(<agent or skill>, date)`: that
+// is what tells it from a line written by hand (the notes were hand-written as `- [skill] … (date)`
+// before the hook), and a hand-written line is never dropped (the owner's ruling, 2026-11-15).
+// `[agent]` bullets written before the name was added read as hand lines now: kept, never pruned.
+const HOOK_BULLET_RE = /^- \[(?:agent|general|skill)\] .*\([a-z][a-z0-9-]*, \d{4}-\d{2}-\d{2}\)[ \t]*$/;
 
 /**
  * Every feedback line in `text` as `{ scope, body }`, in order, each body once. `secret` is Law
- * I's pattern: a line that carries a credential is dropped whole, never written to a note.
+ * I's pattern: a line that carries a credential is dropped whole, never written to a note. A
+ * skill's line also carries `skill: <name>`, its scope `skill` (own notes) or `general`.
  */
 function specFeedbackOf(text, secret) {
   const found = [];
@@ -372,27 +392,65 @@ function specFeedbackOf(text, secret) {
     let body = m[3].trim();
     // `**spec-feedback:** …` closed its wrapper at the colon; `` `spec-feedback: …` `` closes it at the end.
     if (m[1] && !m[2] && body.endsWith(m[1])) body = body.slice(0, -m[1].length).trim();
-    const s = FEEDBACK_SCOPE_RE.exec(body);
-    const scope = s && (s[1] || s[2]) ? (s[1] || s[2]).toLowerCase() : 'agent';
-    if (s) body = body.slice(s[0].length);
+    let scope = 'agent';
+    let skill = null;
+    const k = SKILL_SCOPE_RE.exec(body);
+    if (k) {
+      skill = (k[1] ?? k[4]).toLowerCase();
+      if (!SKILL_NAME_RE.test(skill)) continue;
+      // A skill line wrapped in inline code is an example the reply quotes (a summary of this very
+      // format), not the reply's own line: the main session discusses the format, an agent's
+      // report does not. A whole-line `spec-feedback:` in backticks stays an agent's line.
+      if (m[1] === '`') continue;
+      scope = k[3] && k[2] !== '|' ? 'general' : 'skill';
+      body = body.slice(k[0].length);
+    } else if (SKILL_OPENING_RE.test(body)) {
+      continue; // a skill tag that does not parse (`[skill:a:b]`, `[skill:a, b]`) is no agent's line
+    } else {
+      const s = FEEDBACK_SCOPE_RE.exec(body);
+      if (s && (s[1] || s[2])) scope = (s[1] || s[2]).toLowerCase();
+      if (s) body = body.slice(s[0].length);
+    }
     body = body.replace(/\s+/g, ' ').trim();
     if (body.length < 10 || FEEDBACK_NONE_RE.test(body) || body.includes(FEEDBACK_PLACEHOLDER)) continue;
     if (secret && secret.test(body)) continue;
     if (body.length > MAX_FEEDBACK_CHARS) body = `${body.slice(0, MAX_FEEDBACK_CHARS).trimEnd()}…`;
-    if (!found.some((f) => f.body === body)) found.push({ scope, body });
+    if (found.some((f) => f.body === body && (f.skill ?? null) === skill)) continue;
+    found.push(skill ? { scope, skill, body } : { scope, body });
   }
   return found;
 }
 
 /**
  * The note bullets for one report: an `agent` line goes to the agent's own file, a `general` line
- * to `_general.md` only (with the agent's name), which every agent reads too. One home each.
+ * to `_general.md` only (with the agent's name), which every agent reads too. One home each. A
+ * skill's line is not the agent's: `skillBullets` takes it.
  */
 function feedbackBullets(items, agent, day) {
+  const mine = items.filter((f) => !f.skill);
   return {
-    own: items.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${day})`),
-    general: items.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
+    own: mine.filter((f) => f.scope === 'agent').map((f) => `- [agent] ${f.body} (${agent}, ${day})`),
+    general: mine.filter((f) => f.scope === 'general').map((f) => `- [general] ${f.body} (${agent}, ${day})`),
   };
+}
+
+/**
+ * The same for the skills' lines, into `skill-notes/`: `own` maps each skill to its bullets,
+ * `- [skill] … (<skill>, date)`; a general line goes to `skill-notes/_general.md`, which every
+ * skill reads, in the same shape as `[general]`. The name beside the date is what tells a hook
+ * bullet from the `- [skill] … (date)` lines written by hand before the hook: those are never
+ * dropped, and the duplicate check reads past both tails, so the same words are one note.
+ */
+function skillBullets(items, day) {
+  const own = new Map();
+  const general = [];
+  for (const f of items) {
+    if (!f.skill) continue;
+    if (f.scope === 'general') { general.push(`- [general] ${f.body} (${f.skill}, ${day})`); continue; }
+    if (!own.has(f.skill)) own.set(f.skill, []);
+    own.get(f.skill).push(`- [skill] ${f.body} (${f.skill}, ${day})`);
+  }
+  return { own, general };
 }
 
 /** What a bullet says, for the duplicate check: its date and agent off, spacing and case folded. */
@@ -518,20 +576,62 @@ async function addFeedback(file, bullets, cap) {
   })
 }
 
-// `report` is the child session's final assistant text. Never throws.
-async function captureSpecFeedback(agent, report, notesRoot, day = new Date().toISOString().slice(0, 10)) {
+// A skill this install serves under that name: its SKILL.md names its own notes file. The twin of
+// js/hosts/spec-feedback.mjs `liveSkill`, which says why (an alias folder or an older render does not).
+async function liveSkill(skillsDir, name) {
+  if (!skillsDir) return false
+  try { return (await fs.readFile(path.join(skillsDir, name, "SKILL.md"), "utf8")).includes(`skill-notes/${name}.md`) } catch { return false }
+}
+
+// `report` is a child session's final assistant text (`agent` named), or a session's last reply
+// at a turn's end (`agent` null: only `[skill:<name>]` lines count there). A skill line is kept
+// only for a `liveSkill` of `skillsDir`. The twin of js/hosts/spec-feedback.mjs
+// `captureSpecFeedback`, which says why. Never throws.
+async function captureSpecFeedback(agent, report, notesRoot, day = new Date().toISOString().slice(0, 10), skillsDir = null) {
   try {
-    if (!agent || !notesRoot || !(await isDir(path.dirname(notesRoot)))) return []
-    const items = specFeedbackOf(report, FEEDBACK_SECRET_RE)
+    if (!notesRoot || !(await isDir(path.dirname(notesRoot)))) return []
+    const items = []
+    for (const f of specFeedbackOf(report, FEEDBACK_SECRET_RE)) {
+      if (f.skill ? await liveSkill(skillsDir, f.skill) : agent) items.push(f)
+    }
     if (!items.length) return []
-    const dir = path.join(notesRoot, "agent-notes")
-    await fs.mkdir(dir, { recursive: true })
-    const { own, general } = feedbackBullets(items, agent, day)
     const written = []
-    if (await addFeedback(path.join(dir, `${agent}.md`), own, MAX_FEEDBACK_BULLETS)) written.push(path.join(dir, `${agent}.md`))
-    if (await addFeedback(path.join(dir, GENERAL_NOTES), general, MAX_GENERAL_BULLETS)) written.push(path.join(dir, GENERAL_NOTES))
+    const add = async (dir, name, bullets, cap) => {
+      if (!bullets.length) return
+      await fs.mkdir(dir, { recursive: true })
+      if (await addFeedback(path.join(dir, name), bullets, cap)) written.push(path.join(dir, name))
+    }
+    if (agent) {
+      const { own, general } = feedbackBullets(items, agent, day)
+      await add(path.join(notesRoot, "agent-notes"), `${agent}.md`, own, MAX_FEEDBACK_BULLETS)
+      await add(path.join(notesRoot, "agent-notes"), GENERAL_NOTES, general, MAX_GENERAL_BULLETS)
+    }
+    const skills = skillBullets(items, day)
+    for (const [skill, bullets] of skills.own) await add(path.join(notesRoot, "skill-notes"), `${skill}.md`, bullets, MAX_FEEDBACK_BULLETS)
+    await add(path.join(notesRoot, "skill-notes"), GENERAL_NOTES, skills.general, MAX_GENERAL_BULLETS)
     if (written.length) say(`spec-feedback -> ${written.join(", ")}`, "info")
     return written
+  } catch (err) {
+    say(`spec-feedback skipped: ${err?.message ?? err}`)
+    return []
+  }
+}
+
+// This install's skills (`<cfg>/skills`, `<repo>/.opencode/skills`): the ones whose rendered
+// PATH_NOTES is `notesRootOf()`.
+const SKILLS_DIR = path.join(path.dirname(PLUGIN_DIR), "skills")
+
+// A skill runs in the main context, so its `[skill:<name>]` line is read off a session's last reply
+// at EVERY turn's end (V1 `session.idle`, V2 `session.execution.succeeded`), not after the
+// debounce: a skill runs mid-session, and a process closed inside the quiet window would lose the
+// line. The twin of the Stop hook's capture (js/hosts/hooks-learn.mjs). One message fetch per
+// turn, and none for an install that ships no skills or in an excluded folder. A child session's
+// lines are read here too; the child capture writes the same bullets, which are not added twice.
+// `fetchMessages` is the host's own read. Never throws.
+async function captureTurn(fetchMessages, root) {
+  try {
+    if (!(await isDir(SKILLS_DIR)) || (await sovereignBypass(root))) return []
+    return await captureSpecFeedback(null, finalAssistantText(await fetchMessages()), await notesRootOf(), undefined, SKILLS_DIR)
   } catch (err) {
     say(`spec-feedback skipped: ${err?.message ?? err}`)
     return []
@@ -653,7 +753,7 @@ async function recordAgentRun(sid, agent, messages, cfg = path.dirname(PLUGIN_DI
     const report = finalAssistantText(messages)
     const line = agentRunLine({
       agent, spec: await ownedSpec(cfg, agent), done: null, blocks: null, ...toolCounts(messages),
-      feedback: specFeedbackOf(report, FEEDBACK_SECRET_RE).length, report: Boolean(report.trim()),
+      feedback: specFeedbackOf(report, FEEDBACK_SECRET_RE).filter((f) => !f.skill).length, report: Boolean(report.trim()),
     })
     const file = path.join(home, "notebook", "agent-runs.jsonl")
     return (await withFeedbackLock(file, async () => { await fs.appendFile(file, line); return line })) || null
@@ -955,6 +1055,7 @@ export const GeneseedLearn = async (ctx) => {
   const ours = new Set()       // throwaway distil sessions — never mine our own output
   const timers = new Map()     // sid -> debounce timer, re-armed on each idle
   const inFlight = new Set()   // sid currently being distilled (guards against overlap)
+  const lastReply = new Map()  // sid -> id of its newest assistant message (captureTurn)
   let warnedNoDir = false
 
   // The session root, as guard and context use it — not process.cwd(), which is the
@@ -985,7 +1086,7 @@ export const GeneseedLearn = async (ctx) => {
       let messages = null
       if (isChild) {
         messages = await fetchMessages()
-        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf(), undefined, SKILLS_DIR)
         await recordAgentRun(sid, agentName, messages, undefined, [ctx?.directory, ctx?.worktree])
       }
 
@@ -1055,15 +1156,36 @@ export const GeneseedLearn = async (ctx) => {
         event.payload?.info?.id
       // A deleted session must not distil later from a stale timer (and its entry
       // must not leak in the maps for the life of the process).
+      // The newest assistant message per session, for the turn's capture (`message.updated`'s
+      // `info` is the Message: `id`, `role`, `sessionID`).
+      if (event.type === "message.updated") {
+        const info = event.properties?.info
+        if (info?.role === "assistant" && info.sessionID && info.id) lastReply.set(info.sessionID, info.id)
+        return
+      }
       if (event.type === "session.deleted") {
         const t = timers.get(sid)
         if (t) clearTimeout(t)
         timers.delete(sid)
         ours.delete(sid)
+        lastReply.delete(sid)
         return
       }
       if (event.type !== "session.idle") return
       if (!sid || ours.has(sid)) return
+      // A skill's feedback line, now (captureTurn): not behind the debounce below.
+      // One message, not the session: the newest assistant message `message.updated` named, read
+      // by `session.message`. With none seen (a plugin loaded mid-turn), the whole history once.
+      void captureTurn(async () => {
+        const mid = lastReply.get(sid)
+        if (mid && client.session.message) {
+          const one = await client.session.message({ path: { id: sid, messageID: mid } })
+          const m = one?.data ?? one
+          return m ? [m] : []
+        }
+        const res = await client.session.messages({ path: { id: sid } })
+        return Array.isArray(res) ? res : res?.data ?? []
+      }, root)
       // session.idle fires after every turn — debounce so we distil once, at the real
       // end of the session (see header note). Each idle re-arms the timer.
       const prev = timers.get(sid)
@@ -1077,7 +1199,7 @@ export const GeneseedLearn = async (ctx) => {
 // helpers off the factory instead — reachable via import, invisible to the loader.
 Object.assign(GeneseedLearn, {
   resolveMemoryDir, writeMemories, resolveAgentName, appendAgentLesson, flattenV2,
-  captureSpecFeedback, finalAssistantText, notesRootOf, FEEDBACK_SECRET_RE,
+  captureSpecFeedback, captureTurn, finalAssistantText, notesRootOf, FEEDBACK_SECRET_RE,
   recordAgentRun, toolCounts, isRefusal, specHashOf, agentRunLine,
 })
 
@@ -1132,7 +1254,7 @@ async function setupV2(ctx) {
       let messages = null
       if (isChild) {
         messages = await ctx.session.context({ sessionID: sid })
-        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf())
+        await captureSpecFeedback(agentName, finalAssistantText(messages), await notesRootOf(), undefined, SKILLS_DIR)
         await recordAgentRun(sid, agentName, messages, undefined, [ctx?.location?.directory, ctx?.location?.project?.directory])
       }
 
@@ -1184,6 +1306,8 @@ async function setupV2(ctx) {
         continue
       }
       if (ev.type !== "session.execution.succeeded") continue
+      // Fire and forget: an await here would hold the event stream the distil reads too.
+      void captureTurn(() => ctx.session.context({ sessionID: sid }), root)
       const prev = timers.get(sid)
       if (prev) clearTimeout(prev)
       timers.set(sid, setTimeout(() => { timers.delete(sid); runDistill(sid) }, DEBOUNCE_MS))

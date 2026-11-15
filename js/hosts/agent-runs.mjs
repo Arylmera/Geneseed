@@ -193,7 +193,8 @@ export function recordAgentRun(install, agent, meta, { done = null, report = '',
       agent, spec: specOf(install, agent), done,
       blocks: done === 'ended' && counts ? blocksOf(install, meta, counts.opening) : null,
       tools: counts ? counts.tools : null, refused: counts ? counts.refused : null,
-      feedback: specFeedbackOf(report, SECRET_RE).length, report: Boolean(String(report || '').trim()),
+      // The agent's own lines: a `[skill:…]` line it relays is about a skill, not its spec.
+      feedback: specFeedbackOf(report, SECRET_RE).filter((f) => !f.skill).length, report: Boolean(String(report || '').trim()),
     }, now);
     const file = path.join(install, RUNS_LEDGER);
     // One line in one `appendFileSync` (O_APPEND), as usage.jsonl is written: parallel stops each

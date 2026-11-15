@@ -977,11 +977,11 @@ test('learn on SubagentStop: an inferred check is a stderr line and a ledger ent
 
 // The spec-feedback capture (js/hosts/spec-feedback.mjs) through the real stdin entry, with
 // `$GENESEED_LLM` unset: it writes the note and prints NOTHING on stdout, whether the turn passed or
-// drew an advisory (a sub-agent's advisory is stderr only). A blocked turn is not over, so it
-// captures nothing and its one JSON verdict stays the only stdout document.
+// drew an advisory (a sub-agent's advisory is stderr only). A blocked turn keeps its line as well
+// (the blocked report carries it), and its one JSON verdict stays the only stdout document.
 const report = { type: 'assistant', message: { id: 'fin', role: 'assistant',
   content: [{ type: 'text', text: 'STATUS: OK\nspec-feedback: [agent] name the base ref in the brief — seen: a guess' }] } };
-const NOTE = /^- \[agent\] name the base ref in the brief — seen: a guess \(\d{4}-\d{2}-\d{2}\)\n$/;
+const NOTE = /^- \[agent\] name the base ref in the brief — seen: a guess \(developer, \d{4}-\d{2}-\d{2}\)\n$/;
 test('learn on SubagentStop: spec-feedback is captured with no model, and stdout stays the verdict alone', () => {
   const passed = subagentStop({ rows: [prompt('brief'), editWorker, bash('npm run lint'), report] });
   assert.equal(passed.rc, 0);
@@ -995,10 +995,12 @@ test('learn on SubagentStop: spec-feedback is captured with no model, and stdout
   assert.match(advisory.err, /\[done-gate\] advisory \(sub-agent\)/);
   assert.match(advisory.note ?? '', NOTE);
 
+  // A blocked stop keeps the line too: the report that draws the block carries it, and the report
+  // that finally passes need not repeat it. The verdict stays the one document on stdout.
   const blocked = subagentStop({ rows: [prompt('brief'), editWorker, report] });
   assert.equal(blocked.rc, 0);
   assert.deepEqual(Object.keys(JSON.parse(blocked.out)).sort(), ['decision', 'reason']);
-  assert.equal(blocked.note, null, 'a blocked sub-agent has not ended: nothing captured');
+  assert.match(blocked.note ?? '', NOTE, 'a blocked sub-agent\'s report line was lost');
 });
 
 test('learn on SubagentStop: no agent transcript is not judged, said only where a list exists', () => {
